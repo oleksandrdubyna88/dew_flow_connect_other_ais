@@ -73,10 +73,13 @@ public sealed class HostProcessListTests
     }
 
     [Fact]
-    public void OffWindows_TheListingIsEmpty_SoNoOneIsEverTakenForAForeignKimi()
+    public void OnLinux_TheListingHoldsThisProcess_ByItsExeBasename()
     {
-        Assert.SkipWhen(OperatingSystem.IsWindows(), "Windows answers with its real process table, which ForeignKimiTests reads");
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "the Linux listing reads /proc");
 
-        HostProcessList.Current.Snapshot().Should().BeEmpty();
+        var me = HostProcessList.Current.Snapshot().FirstOrDefault(p => p.Pid == Environment.ProcessId);
+
+        me.Should().NotBeNull("the Linux listing should hold the test host's own pid, but was empty");
+        me!.Name.Should().Be(Path.GetFileName(Environment.ProcessPath), "the name is the exe link's basename, which is stable for the whole run — comm is the kernel's thread name");
     }
 }

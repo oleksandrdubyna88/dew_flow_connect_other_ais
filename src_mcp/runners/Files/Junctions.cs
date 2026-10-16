@@ -43,6 +43,11 @@ public static partial class Junctions
     /// </summary>
     internal static IJunctionShell Shell => _shell.Value ?? JunctionsNative.Instance;
 
+    private static readonly AsyncLocal<Func<string>?> _mountInfo = new();
+
+    /// <summary>TEST ONLY — STUB (A2 §4.3): the table of mounts a test hands the locality rule, per async flow; <see langword="null"/> puts <c>/proc/self/mountinfo</c> back.</summary>
+    internal static void StandInMountInfo(Func<string>? read) => _mountInfo.Value = read;
+
     /// <summary>TEST ONLY: the shell of this async flow — <see langword="null"/> puts the product's back.</summary>
     internal static void StandIn(IJunctionShell? shell) => _shell.Value = shell;
 

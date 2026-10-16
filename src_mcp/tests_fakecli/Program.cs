@@ -302,6 +302,11 @@ switch (args0)
     case ["tree-hold", var mode, var locks, var target, var home]:
         return CoaiMcp.FakeCli.TreeHoldVerb.Run(mode, locks, target, home);
 
+    // S-K3: the PRODUCT's `KimiCredentialsLock.KeyFor` of one path, asked in a child — a `/proc/self/cwd` spelling is only another folder's name from inside its own process.
+    case ["lock-key", var folder]:
+        Console.Out.WriteLine(CoaiMcp.Runners.Kimi.KimiCredentialsLock.KeyFor(folder));
+        return 0;
+
     // L-N1: the PRODUCT's `HeldFile.Take(path, inheritable: true)` on one file, in a child — `hold` keeps it and starts a sleeping grandchild AFTER the take, `try` takes it
     // once and says what came back. The test host never takes an inheritable handle itself.
     case ["hold-file", var mode, var file]:

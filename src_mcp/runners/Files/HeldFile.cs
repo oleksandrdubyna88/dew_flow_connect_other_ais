@@ -60,6 +60,17 @@ public static class HeldFile
         }
     }
 
+    /// <summary>STUB (A2 §2.4) — built red-first: <see cref="TakeWithin"/>, with the hook run once after the open.</summary>
+    public static Hold TakeVerified(string path, TimeSpan within, bool inheritable = false) => TakeVerified(path, within, inheritable, null);
+
+    internal static Hold TakeVerified(string path, TimeSpan within, bool inheritable, Action<string>? afterOpen)
+    {
+        var hold = TakeWithin(path, within, inheritable);
+        afterOpen?.Invoke(path);
+
+        return hold;
+    }
+
     /// <summary>
     /// Whether somebody holds the file RIGHT NOW — asked by trying the exclusive open, non-blocking, and letting
     /// go at once. A file that does not exist is held by nobody; a file this reader cannot open is held, as before.
