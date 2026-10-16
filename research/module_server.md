@@ -3505,7 +3505,7 @@ and stays at twenty-two. The page's ids are bound by `PageIds.Bind`, the helper 
 both readers now share. **Rounds are matched to what is attached by their OWN id, never by list position:** `Attach(db, rounds)`
 (this reader's and `RoundChangesLog.Attach`'s alike) takes each round's id from its cursor (`PageIds.Of`, `started_utc|id`), so
 a reordered or filtered list still gets each source and size on its own round (`ARoundList_InAnotherOrder_OrFiltered_…`). **Not recorded is never empty:** an empty column, JSON that does not parse (the `JsonException` catch
-wraps each row's deserialise ONLY, never the query, so a missing column is still loud) and an `origin` other than `commit`/`text`
+wraps each row's deserialise ONLY, never the query, so a missing column is still loud) and a source that is not well-formed (`PlanSource.IsWellFormed`, one rule shared with the page's `reviewedFrom`: a known `origin`, `bytes` ≥ 0, a text id, a commit that is hex or empty; a `commit` source also a repository-relative path and a hex blob, a `text` source neither path nor blob)
 all read as an absent member; a malformed row never fails the page (`TheLogNamesEachPlansSourceTests`). The extension's parser
 ignores the member (`anOlderExtensionReadsALogPageCarryingASize.test.ts`), and its rounds-log line reads the session file, not this
 (`module_extension.md`).

@@ -123,6 +123,57 @@ public sealed class TheLogNamesEachPlansSourceTests : IDisposable
         rounds.Single(r => r.Number == 2).PlanSource.Should().Be(CommittedAt(2), "the next row's source is still read");
     }
 
+    private const string Sha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    private const string Oid = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+    private static string Stored(string origin = "commit", string commit = Sha, string path = "todo/PLAN_x.md", string blob = Oid,
+        string bytes = "98304", string textId = "0123456789abcdef") =>
+        $$"""{"origin":"{{origin}}","commit":"{{commit}}","path":"{{path}}","blob":"{{blob}}","bytes":{{bytes}},"textId":"{{textId}}"}""";
+
+    public static TheoryData<string, bool> ShapedSources => new()
+    {
+        { Stored(), true },
+        { Stored("text", path: "", blob: "", textId: "fedcba9876543210"), true },
+        { Stored("text", commit: "", path: "", blob: ""), true },
+        { Stored(bytes: "0"), true },
+        { Stored("commit", commit: "", path: "", blob: "", bytes: "-1", textId: ""), false },
+        { Stored(bytes: "-1"), false },
+        { Stored(textId: ""), false },
+        { Stored(path: ""), false },
+        { Stored(path: "/etc/passwd"), false },
+        { Stored(path: "C:/x/PLAN.md"), false },
+        { Stored(path: "../PLAN.md"), false },
+        { Stored(blob: ""), false },
+        { Stored(blob: "zzzzzzzz"), false },
+        { Stored(commit: "not-a-sha"), false },
+        { Stored(commit: "abc"), false },
+        { Stored("text", path: "todo/PLAN_x.md", blob: ""), false },
+        { Stored("text", path: "", blob: Oid), false },
+        { Stored("text", path: "", blob: "", textId: ""), false },
+        { Stored("text", path: "", blob: "", bytes: "-5"), false },
+    };
+
+    [Theory]
+    [MemberData(nameof(ShapedSources))]
+    public void ASourceIsAttachedOnlyWhenItsShapeIsWellFormed(string stored, bool attached)
+    {
+        Record(Round(1, CommittedAt(1)), Round(2, CommittedAt(2)));
+        using (var db = new SqliteConnection($"Data Source={Database};Pooling=False"))
+        {
+            db.Open();
+            using var write = db.CreateCommand();
+            write.CommandText = "UPDATE rounds SET plan_source = $stored WHERE number = 1";
+            write.Parameters.AddWithValue("$stored", stored);
+            write.ExecuteNonQuery();
+        }
+
+        var rounds = RoundsQuery.Read(_dir).Rounds;
+
+        (rounds.Single(r => r.Number == 1).PlanSource is not null).Should().Be(attached,
+            "a well-formed origin-specific shape is attached; a negative size, an empty path, text id or hash, an absolute path or a text round with a path is not recorded");
+        rounds.Single(r => r.Number == 2).PlanSource.Should().Be(CommittedAt(2));
+    }
+
     [Fact]
     public void EachSourceLandsOnItsOwnRound_AcrossPages()
     {

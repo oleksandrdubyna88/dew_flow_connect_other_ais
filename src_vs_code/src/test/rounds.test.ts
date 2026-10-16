@@ -374,8 +374,25 @@ test('a hash is hex, trimmed, and shown as its first seven characters — upperc
   assert.equal(reviewedFrom(committed({ commit: ' ABCDEF1234 ', blob: '0123456' })), 'todo/PLAN_x.md @ ABCDEF1 · blob 0123456 · 98 304 bytes');
 });
 
-test('an empty blob leaves its segment out, as an empty commit leaves out the @', () => {
-  assert.equal(reviewedFrom(committed({ blob: '' })), 'todo/PLAN_x.md @ aaaaaaa · 98 304 bytes');
+// The rule is the SERVER's too (`PlanSource.IsWellFormed`, which `--log` applies): the log and the page agree on what a source is.
+test('a committed source needs its blob and its text id; an empty one is no source, not a line with a hole', () => {
+  assert.equal(reviewedFrom(committed({ blob: '' })), '');
+  assert.equal(reviewedFrom(committed({ textId: '' })), '');
+  assert.equal(reviewedFrom({ ...committed(), textId: undefined }), '');
+});
+
+test('a pasted source has neither a path nor a blob — one that does is not a pasted source', () => {
+  assert.equal(reviewedFrom(pasted({ path: 'todo/PLAN_x.md' })), '');
+  assert.equal(reviewedFrom(pasted({ blob: 'b'.repeat(40) })), '');
+  assert.equal(reviewedFrom({ origin: 'text', commit: '', bytes: 3, textId: 'fedcba9876543210' }), 'pasted planText · text fedcba9876543210 · 3 bytes',
+    'a path and a blob that are absent are as empty as ones that are ""');
+});
+
+test('a committed path is repository-relative: not absolute, not a drive, not climbing out', () => {
+  for (const path of ['/etc/passwd', '\\\\server\\share\\PLAN.md', 'C:/x/PLAN.md', '../PLAN.md', 'a/../../PLAN.md', 'a\\..\\PLAN.md', 'a\0b.md']) {
+    assert.equal(reviewedFrom(committed({ path })), '', path);
+  }
+  assert.equal(reviewedFrom(committed({ path: 'docs/notes;v2.md' })), 'docs/notes;v2.md @ aaaaaaa · blob bbbbbbb · 98 304 bytes');
 });
 
 test('a hash that is not hex of a plausible length makes the whole line unusable', () => {

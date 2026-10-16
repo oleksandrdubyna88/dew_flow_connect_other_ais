@@ -14,8 +14,9 @@ namespace CoaiMcp.Store;
 /// <see cref="RoundsQuery.Read"/> already opened. A database written before schema step 23 has no <c>plan_source</c> column: the
 /// schema is ASKED (<see cref="RoundsQuery.HasColumn"/>, never a version guess) and the answer is an empty map with no query —
 /// those rounds are logged exactly as before, with no source.</para>
-/// <para><b>Not recorded is never empty.</b> An empty column, a value that does not parse and an <c>origin</c> that is neither
-/// <c>commit</c> nor <c>text</c> all read as ABSENT — a malformed row never fails the page. The <see cref="JsonException"/> catch
+/// <para><b>Not recorded is never empty.</b> An empty column, a value that does not parse and a source that is not well-formed
+/// (<see cref="PlanSource.IsWellFormed"/>: an unknown origin, a negative size, no text id, a commit source without a relative path
+/// or a hex blob, a pasted one with a path or blob) all read as ABSENT — a malformed row never fails the page. The <see cref="JsonException"/> catch
 /// wraps each row's deserialise ONLY, never the query: a wider catch would swallow <i>no such column</i> and hide the very failure
 /// the <c>HasColumn</c> guard exists to prevent.</para>
 /// </remarks>
@@ -65,7 +66,7 @@ public static class RoundPlanSources
         return stored;
     }
 
-    /// <summary>One source, or none: the row's JSON when it parses and names an origin this build knows.</summary>
+    /// <summary>One source, or none: the row's JSON when it parses and is a well-formed source.</summary>
     private static IEnumerable<PlanSource> Parsed(string json)
     {
         try
@@ -79,5 +80,5 @@ public static class RoundPlanSources
     }
 
     private static IEnumerable<PlanSource> Known(PlanSource? source) =>
-        source is { Origin: PlanOrigin.Commit or PlanOrigin.Text } ? [source] : [];
+        source is { } read && read.IsWellFormed() ? [read] : [];
 }

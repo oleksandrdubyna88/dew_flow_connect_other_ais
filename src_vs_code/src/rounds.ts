@@ -182,7 +182,7 @@ export function calledBy(caller: CallerDeclaration | undefined): string {
 const HASH = /^[0-9a-f]{7,64}$/iu;
 
 /**
- * A hash as shown: its first seven characters. The empty string stays empty — a segment with nothing to say is not printed —
+ * A hash as shown: its first seven characters. The empty string stays empty (a commit that was never resolved is simply left out)
  * and anything else that is not a hex string is `undefined`, which makes the whole line unusable.
  */
 function shortHash(value: unknown): string | undefined {
@@ -206,11 +206,6 @@ function isByteCount(value: unknown): value is number {
 /** A byte count as `98 304`: grouped by three with a plain space, by a function rather than by the locale. */
 function groupedBytes(bytes: number): string {
   return String(bytes).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-}
-
-/** One ` · label value` segment, or nothing when the value is empty — a segment with nothing to say is not printed. */
-function segment(prefix: string, value: string): string {
-  return value === '' ? '' : ` ${prefix}${value}`;
 }
 
 /**
@@ -249,20 +244,52 @@ function lineByOrigin(source: object, at: string, size: string): string {
   }
 }
 
-/** A pasted plan needs its text id — an empty one is not a line with a hole in it, it is no line. */
-function pastedLine(source: object, at: string, size: string): string {
+/** The text id, or `''` for anything that is not a string — an empty one is no id, and a source without one is no source. */
+function textIdOf(source: object): string {
   const textId = member(source, 'textId');
 
-  return typeof textId === 'string' && textId !== '' ? `pasted planText${at} · text ${textId}${size}` : '';
+  return typeof textId === 'string' ? textId : '';
 }
 
-function committedLine(source: object, at: string, size: string): string {
-  const path = member(source, 'path');
-  const blob = shortHash(member(source, 'blob'));
+/** Whether a member is absent or empty — a pasted source has no path and no blob, written as `""` or not at all. */
+function isEmptyMember(source: object, key: string): boolean {
+  const value = member(source, key);
 
-  return typeof path === 'string' && path !== '' && blob !== undefined
-    ? `${path}${at}${segment('· blob ', blob)}${size}`
+  return value === undefined || value === '';
+}
+
+/** A path inside the repository, decided on the string as `RepoPaths.IsRelative` does: not empty, no NUL, not rooted, no `..`. */
+function isRepoRelative(path: string): boolean {
+  return path !== '' && !path.includes('\0') && !/^(?:[\\/]|[A-Za-z]:)/u.test(path) && !path.split(/[\\/]/u).includes('..');
+}
+
+/** The committed path, or `''` when it is not a string or does not name something inside the repository. */
+function pathOf(source: object): string {
+  const path = member(source, 'path');
+
+  return typeof path === 'string' && isRepoRelative(path) ? path : '';
+}
+
+/** The blob's first seven characters, or `''` when it is empty or not a hex id — a committed source always has one. */
+function blobOf(source: object): string {
+  return shortHash(member(source, 'blob')) ?? '';
+}
+
+/** A pasted plan: its text id, and neither a path nor a blob. Anything else is not the shape a pasted plan has. */
+function pastedLine(source: object, at: string, size: string): string {
+  const textId = textIdOf(source);
+
+  return textId !== '' && isEmptyMember(source, 'path') && isEmptyMember(source, 'blob')
+    ? `pasted planText${at} · text ${textId}${size}`
     : '';
+}
+
+/** A committed plan: a relative path, a blob and a text id — a source without any of the three was never stamped. */
+function committedLine(source: object, at: string, size: string): string {
+  const path = pathOf(source);
+  const blob = blobOf(source);
+
+  return path !== '' && blob !== '' && textIdOf(source) !== '' ? `${path}${at} · blob ${blob}${size}` : '';
 }
 
 /** The default data dir the server uses when `COAI_DATA_DIR` is unset. */

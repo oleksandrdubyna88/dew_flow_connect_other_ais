@@ -6468,13 +6468,15 @@ is left out when the commit is empty) — and `LogRow.reviewedFrom` carries it i
 of a trimmed hex STRING; `bytes` must be a non-negative safe integer and is grouped by three with a plain
 space by a pure function, never `toLocaleString`. **Anything unusable reads as the empty string** — an unknown or missing
 `origin`, a hash that is not hex of seven to sixty-four characters (an EMPTY one is simply left out), bad `bytes`, a committed
-round without its path, a pasted one without its text id — and an empty line renders nothing:
+round without a repository-relative path (not rooted, no `..`, no NUL), a hex blob or a text id, a pasted one without its text
+id or with a path or blob — and an empty line renders nothing:
 a round from before the field, a code round and a server this build does not know all say "not recorded", never a
 half-sentence.
 
 **Read from the SESSION FILE only, never the database.** The row is built from the file, so the line shows on a machine whose
 database predates schema step 23 and for a round the database never saw; `--log`'s own `planSource` member
-(`module_server.md`) is ignored by this page, as `parseLog` reads field by field. `reviewedFromHtml(reviewedFrom, escape)` is
+(`module_server.md`) is ignored by this page — though the two apply ONE rule to what counts as a source
+(`PlanSource.IsWellFormed` on the server, `reviewedFrom` here), as `parseLog` reads field by field. `reviewedFromHtml(reviewedFrom, escape)` is
 exported and embedded by assignment beside `askedByHtml`, uses only its parameters, and returns
 `<div class="reviewer source">reviewed from …</div>` — escaped, because the path is caller-chosen text — or `''`; `detail(row)`
 puts it right after the asked-by line and before the early returns, so a round written without reviewer detail still shows it.
