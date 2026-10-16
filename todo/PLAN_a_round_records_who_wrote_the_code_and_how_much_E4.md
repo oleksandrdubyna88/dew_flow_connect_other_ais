@@ -139,8 +139,9 @@ later test uses, and a structural test that keeps the `Authors` folder pure. No 
 ```csharp
 namespace CoaiMcp.Core.Authors;
 
-public readonly record struct AgentKey(string Id)            // "main" or the agentId
-{ public const string MainId = "main"; public static AgentKey Main => new(MainId); public bool IsMain => Id == MainId; }
+public readonly record struct AgentKey(string Id)            // "main" or the agentId; E5 maps "main" to the parent's empty column in one place
+{ public const string MainId = "main"; public static AgentKey Main => new(MainId);
+  [JsonIgnore] public bool IsMain => Id == MainId; }         // 2026-10-16 (E5 §8.3): a serialised key has exactly one member, `id` — an S1 fact asserts it
 
 public readonly record struct TokenTerms(long Input, long Output, long CacheCreation, long CacheRead);
 
@@ -176,7 +177,8 @@ it; `TranscriptPresent` as is; `UnobservedLaunch` is E3's `UnobservedLaunches`, 
 is; `TokenTerms` from `TokenUsage` term by term. Nothing in the mapping decides anything.
 
 `Peers` are the OTHER gate sessions this caller session served (E5 finds them in the store by
-`rounds.caller`); `Repositories` is the universe of repository roots membership is decided against — which
+`rounds.authors_session`, else `rounds.caller` when it is a UUID — §S2.8 is the rule; *aligned 2026-10-16, E5 §8.5*);
+`Repositories` is the universe of repository roots membership is decided against — which
 roots go into it is S2's decision (S2 decision 6); S1 only implements the lookup.
 
 **`Repositories.RepositoryOf(string path, IReadOnlyList<string> universe)`** → the LONGEST root in the
@@ -270,6 +272,12 @@ sonnet · review: opus.
 > **Spec written by Fable, 2026-10-14.** It replaces the candidates Opus listed; §S2.2 records, per decision, which
 > candidate was taken and which was replaced, with the reason. Everything below is binding for the Sonnet coder; where
 > it needs a member the S1 records do not yet have, §S2.7 names it.
+>
+> **Amended by Fable, 2026-10-16**, in place, against §9 F1–F5 and E5's §8, and consistent with the same day's E3.S4
+> amendment (`feat/round-authors-e3` `165de3bc`): decision 7 is narrowed (F1) and its horizon is stated for a write's
+> MESSAGE (F2); refusing a duplicated round is confirmed (F3); `partial` copies E3's REASONS only, and E3 no longer has
+> `meta without model` (F4); the skip sentence is corrected (F5); the E4-side answers to E5's seven open items are in
+> §S2.2a and applied in S1, S3 and S4; the anchors §8.1 lists are corrected in this story's text.
 
 **Goal.** One pure function, `RoundAttribution.Assign(AttributionInput) → WindowAssignment`, that (a) tiles the gate
 session's journal into half-open windows — `before-open` for the first recorded round, then `round (stage, N)` from
@@ -282,13 +290,15 @@ effort and tokens: S3 sums it, and the two identities (§S2.5) are checked on it
 function: `WindowAssignment.cs` (the output records and the two closed vocabularies), `Windows.cs` (tiling and
 ranking), `AssociationLadder.cs` (the four rungs), `Ownership.cs` (claimants), `RoundAttribution.cs` (`Assign`,
 `ReadFrom`). Tests in `src_mcp/tests/`. The rule this replaces for attribution — not for `agent_log`, which keeps its
-own — is `WhatTheCallerWasDoing`, `src_mcp/src/Server/Rounds/RoundEngine.cs:893-902`: a window from the previous
-round's `CompletedUtc` (`:895`), floored at `OpenedUtc` (`:896`). The journal is every stage in the order it ran
+own — is `WhatTheCallerWasDoing`, `src_mcp/src/Server/Rounds/RoundEngine.cs:898-907` (on main `59463d73`; was
+`:893-902`): a window from the previous round's `CompletedUtc` (`:900`), floored at `OpenedUtc` (`:901`). The journal is every stage in the order it ran
 (`src_mcp/src/Server/RoundNumber.cs:25`); `RoundRecord.StartedUtc` is `SessionStore.cs:92`, stamped by `LiveRound.cs:279`
 for a round that ran and by `RoundSkips.cs:105` for a skip; `PersistedSession.OpenedUtc` is `SessionStore.cs:248`. A skip
-is `Verdict = skipped`, `Status = done`, with a sha (`RoundSkips.cs:102-110`); a repeated skip moves only its
-`CompletedUtc` (`:95-99`). An interrupted round is `Status = interrupted` (`SessionStore.cs:594-597`) and never reaches
-the call site E5 adds inside the record's `with` block (`RoundEngine.cs:483-491`, saved at `:586`). The round's completion
+is `Verdict = skipped`, `Status = done`, with a sha (`RoundSkips.cs:102-110`); a repeated skip moves its
+`CompletedUtc`, its `Repeats` and its `Sha` (`RoundSkips.cs:97`, one `with`) and never its `StartedUtc` — and a skip opens
+no window, so nothing here depends on which of the three moved (*corrected 2026-10-16, F5; the text said "only its
+`CompletedUtc`"*). An interrupted round is `Status = interrupted` (`SessionStore.cs:594-597`) and never reaches
+the call site E5 adds inside the record's `with` block (`RoundEngine.cs:485-496`, saved at `:591`; §8.1). The round's completion
 stamp, `RoundRecord.CompletedUtc` (`SessionStore.cs:84`), is what §S2.3 ranks claims by. The containment rule is S1's
 `Repositories.Contains` / `RepositoryOf` (moved from `AgentLog.cs:304-317`).
 
@@ -312,14 +322,39 @@ repository is `wrote here` here and `wrote elsewhere` from every other gate.
 |---|---|---|---|
 | 1 | **Boundaries.** A window opens for every recorded round (the predicate above) and for nothing else. A recorded round whose `StartedUtc` is null (older than the field) is **blind**: its window has no edge, it is `unobserved: no round start`, and so is the next recorded round, whose window would start at the blind one's unknown start; the round after that is tiled normally. `OpenedUtc` null → the first recorded round is `unobserved: no open time`. An open stamped after the first round's start is clipped to that start (the before-open window ends there, the round-1 window is empty). Feature and document rounds open no window — E5 §3 gives them no snapshot, so a window of theirs would lose its stretch. | kept, extended | D1/D2 settle skips and interruptions; the blind rule keeps the candidate because a window with one unknown edge over-credits the next round with no symptom — the one error this epic exists to avoid — while `unobserved` is counted as excluded by E6. |
 | 2 | **Several callers.** Round N reads its OWN caller's transcript over the whole window. If the previous recorded round's `CallerSessionId` differs → the round window is `partial: caller changed`; if it is empty (an old row, a `repo:` caller) → `partial: prior caller unknown`. The input must carry that caller: `Caller.CallerSessionId == Gate.Rounds[this].CallerSessionId` is a `Validate()` rule. | kept (E4/6) | the other caller's activity after N−1 started is in a transcript this round did not read; the window is a floor and says so. |
-| 3 | **Overlap of two gate sessions.** Every window of the gate and of every peer served by this caller is ranked by `(round.CompletedUtc, gate session id ordinal, kind: before-open before round)`; a null completion ranks last. A message in this round's window whose own association is OWNING (`wrote here`, `child of`, `same-session`, `ambiguous`) is **`claimed by peer`** when a peer window containing its instant ranks BEFORE this round's window and the agent's association in THAT window (by the peer's repository, the peer's window evidence) is owning. A peer window whose round has another caller is never a claimant. | **replaced** (was: earliest-closing by start) | a claim must be decidable from what the store held at the claiming round's own live time. The store learns of rounds in completion order (`Projection.Write`, `RoundEngine.cs:607`, is synchronous at completion); earliest-closing-by-start is not: a peer round that STARTED earlier but completes later, or dies interrupted, is invisible or mutable at this round's live time, so its claim would differ between live and backfill. Under completion rank the later-completing round always defers to the earlier one it can see. |
+| 3 | **Overlap of two gate sessions.** Every window of the gate and of every peer served by this caller is ranked by `(round.CompletedUtc, gate session id ordinal, kind: before-open before round)`; a null completion ranks last. A message in this round's window whose own association is OWNING (`wrote here`, `child of`, `same-session`, `ambiguous`) is **`claimed by peer`** when a peer window containing its instant ranks BEFORE this round's window and the agent's association in THAT window (by the peer's repository, the peer's window evidence) is owning. A peer window whose round has another caller is never a claimant. | **replaced** (was: earliest-closing by start) | a claim must be decidable from what the store held at the claiming round's own live time. The store learns of rounds in completion order (`Projection.Write`, `RoundEngine.cs:612` on main — was `:607`, §8.1 — is synchronous at completion); earliest-closing-by-start is not: a peer round that STARTED earlier but completes later, or dies interrupted, is invisible or mutable at this round's live time, so its claim would differ between live and backfill. Under completion rank the later-completing round always defers to the earlier one it can see. |
 | 4 | **An agent that wrote into two repositories in one window** (here and elsewhere, by this gate's own window). Its association is `ambiguous` with rung `two repositories`; it gets a `wrote here` ROW whose `write_calls` are its writes into this repository and whose turns and tokens are ZERO; its messages are owned once — by this gate (into the ambiguous totals) or by the peer that ranks first (`claimed by peer`); it counts one ambiguous AGENT in every gate whose window sees two repositories. Launches follow the messages. | kept, made exact | D5: counted ambiguous in each candidate, tokens never twice; the row carries the authorship evidence (write calls) so S4 lists it as a contributor of each repository it wrote into without a token being added twice. |
 | 5 | **Rule 2.** Only a SUBAGENT parent propagates, through `ObservedAgent.Parent` where `!Parent.IsMain`, recursively up a chain of subagents, and only when the parent is `wrote here` or `child of` **in the same window**. `main`'s association never propagates. | kept (E4/4) | `toolUseId` makes main the parent of every depth-1 agent, so a main that wrote here would associate every scout of every other repository. |
 | 6 | **Universe.** E5 passes `Repositories` = the gate's `repo_path` ∪ every peer's `repo_path` ∪ every `Checkout` root E3 resolved for a write in this observation (`WriteTarget.Where`). the write's root is `RepositoryOf(write.Where, universe)` for `Kind = Checkout` (the longest containing root, so a submodule or nested worktree resolves to its own root, not its superproject) and for `Unresolved` with a non-empty `Where` (a removed worktree's directory — the root only if some universe root contains it), and `""` for `OutsideAnyCheckout` — the mapping is tested for each kind, including a submodule root, a nested worktree and an unresolved write; `""` is `outside` and is never evidence. A root is `here` when `Contains(gate.RepoPath, root)`; a **destination** (rule 4) is the gate or peer `repo_path` containing a root, else the root itself, so a submodule and its superproject are one destination. | settled (D3) | — |
-| 7 | **Evidence horizon.** This round's windows end at its start, so its own ladder and ownership see only lines stamped before the start (D6). A PEER's claim is evaluated on the peer's own window, which may end after this round's start but always before the peer's completion, hence before this round's live read. Lines at or after this round's COMPLETION never change the result. | **refined** (D6) | truncating the input at this round's start would evaluate a peer's claim on less evidence than the peer itself had: in the overlap of two windows an agent that wrote into the peer's repository only after this round's start reads `elsewhere` to the peer and owning to us — one message in two rows. Exactness across gates needs the peer's evidence as the peer saw it. |
+| 7 | **Evidence horizon.** This round's windows end at its start, so its own ladder and ownership see only ITEMS whose instant is before the start (D6) — and an item's instant is its MESSAGE's first line (E3 S4-8): a message, its launches and its writes are one unit and land in one window, even when the write's own line is stamped after the start (*2026-10-16, F2 (a)*). A PEER's claim is evaluated on the peer's own window, which may end after this round's start but always before the peer's completion, hence before this round's live read. **Lines at or after this round's COMPLETION never change which items are placed or who owns them.** They can change two counted values, and that is the stated limitation of this epic (*narrowed 2026-10-16, F1*): (i) the token terms of a message whose lines were still being written at the completion — E3 takes the per-term maximum over the lines it saw (E3 S4-2; one id's lines span up to 2.01 h, RESULTS Q4); (ii) a write whose `tool_result` had not been written at the live read — live it is unanswered and not a write (E3 S4-7/D23), in a backfill it is a write, and the agent's rung can move from `same-session`/`ambiguous` to `wrote here`. Both are a live-versus-backfill difference, never a backfill-versus-backfill one (E7's idempotence check is unaffected); a result that arrives minutes after its call is an agent that was interrupted between the two, so (ii) is rare by construction. | **refined** (D6), **narrowed** (F1) | truncating the input at this round's start would evaluate a peer's claim on less evidence than the peer itself had: in the overlap of two windows an agent that wrote into the peer's repository only after this round's start reads `elsewhere` to the peer and owning to us — one message in two rows. Exactness across gates needs the peer's evidence as the peer saw it. |
 | 8 | **Edges.** Half-open `[From, To)`; a message at exactly a round's start is in the NEXT window. A launch is the agent's `FirstLineAt`, in that window only; main has no launch; a resumed agent launches nothing again. Association is per (agent, window); decision 4 is the only case where an agent's messages and its row part company. | kept | — |
 | 9 | **A missing child.** An `UnobservedLaunch` (an `Agent` call without a transcript) and an `ObservedAgent` with `TranscriptPresent = false` (a meta without one) are both **unobserved launches** of the window containing their instant: that window is `partial: <why>`, they get no row, no launch placement and no tokens — never a zero. Other windows stay `observed`. | kept, widened to the meta case | a row with zero tokens reads as an observed zero. |
 | 10 | **Clocks.** Transcript instants are the client's clock, round stamps the server's; compared in UTC with no tolerance. Stated limitation: two rounds of two gates completing within the same instant and projected in the other order can make a live record differ from the backfill in which of them owns a contested message; the backfill is the authority and a second backfill changes nothing. | kept, one limitation added | a tolerance is a guess. |
+
+### S2.2a Fable's decisions on §9 and on E5's §8 (2026-10-16)
+
+One line each: the decision, its reason, and the evidence. "E3" means the E3.S4 amendment of the same day
+(`feat/round-authors-e3` `165de3bc`), whose rules this story copies rather than restates.
+
+| # | Decision | Reason | Evidence |
+|---|---|---|---|
+| §9 F1 | **Accepted, narrowed as decision 7 now reads**: placement and ownership never change after completion; a straddling message's tokens and a write answered after the live read are the two stated limitations. `LinesAtOrAfterCompletionChangeNothing` keeps its builder form (one instant per message); S5's replay facts are written for the narrower claim | the per-term maximum (D8) and "no result → no write" (D23) are E3's rules and both read lines after the start; a tolerance or a second read would be a guess | RESULTS Q4 (span max 2.01 h); E3 S4-2, S4-7 |
+| §9 F2 | **(a): keep E3 S4-8.** A write's instant is its message's first line; decision 7's horizon applies to the ITEM, whose instant that is | a turn is the unit of work: its message, launches and writes belong to one window and one association. (b) would place a write in a window where its agent has no placement, which the ladder cannot express, and would split one turn over two rounds. The cost is stated: a write executed after round N's start can be credited to N although its bytes land in N+1's diff; E2's size comes from git and is unaffected | c13 L4 (`Write` at `:04`, round start `:03`, message began `:01`), c15 L4 (`:07` / `:06` / `:04`), c16 L4 (`:06` / `:05` / `:03`) — all into `scratch`, so no cell changes today |
+| §9 F3 | **Confirmed: refuse, never merge.** `Validate()` names the duplicate; `Assign` throws; E5 records `unobserved: invalid input`. S5's `c13` row stands as written (the replay fact runs over ONE copy) | the journal is appended once per round (`RoundNumber.cs:25`); a duplicate is a store defect, and merging "identical" copies would hide it while a non-identical pair has no right answer. E7's idempotence is proven by running the backfill twice, not by this fixture | `c13/rounds.json`: round 1 listed twice, byte-identical; S1 §216-223 |
+| §9 F4 | **S2 copies E3's REASONS verbatim — the `const`s of E3's `ObservationReasons` — and never a diagnostics count.** E3 moved `meta without model` to `Diagnostics.MetasWithoutModel` (E3 S4-17), so it is no E3 reason and no E4 state; §8.3 item 2 is closed | a reason is for a LOSS or an uncertain counted value; a meta that named no model lost nothing — the answering model is on the agent's own lines | RESULTS Q2 (32–98 % of metas carry `model`); `c04` and `c07` now read `observed` in E3 |
+| §9 F5 | **Confirmed and corrected** in the scope paragraph: a repeated skip moves `CompletedUtc`, `Repeats` and `Sha`; `StartedUtc` does not move; a skip opens no window | one `with` expression | `src_mcp/src/Server/Rounds/RoundSkips.cs:97` |
+| E5 §8.1 | **`AuthorRow` and `ActivityTotals` are FINAL as S3 prints them**; E5 persists them as they are inside its own `AuthorsSnapshot`, and `RoundAuthors.WritesOutsideTheGateCheckout` (checkout roots) stays in memory. A later change to either record is an E4 document edit announced to E5 before E5.S1 is coded | one shape, two owners would drift; roots never reach a file | E5 §8 item 1; S3's record block |
+| E5 §8.2 | **`AgentKey.MainId` stays `"main"` in the core; E5 maps it to the parent's empty `agent` column in ONE place** | an empty string as a dictionary key and an ordering key is a smell; the column spelling is the parent's and E6's | E5 §8 item 2 |
+| E5 §8.3 | **`[JsonIgnore]` on `AgentKey.IsMain`** (S1's block below), with an S1 fact that a serialised `AgentKey` has exactly one member, `id` | a computed property that serialises into every row is a stored copy of a rule | E5 §8 item 3; S1 `:143` |
+| E5 §8.4 | **The card is dropped from S4's consumers**: contributors are the report's (E6); the card (E5.S6) shows this round's stored rows only | computing the union in TypeScript would be a second implementation of S4 | E5 §3; S4's consumers sentence |
+| E5 §8.5 | **§S2.8 is the rule**: peers are found by `rounds.authors_session`, else `rounds.caller` when it is a UUID; S1's sentence is aligned | S1's sentence predates §S2.8 | S1 *Peers* paragraph |
+| E5 §8.6 | **No reason contains `", "`**, and S3 proves it: `NoReasonContainsTheJoiner` over `AttributionReasons`, E3's `ObservationReasons` constants and `NoReaderFor(vendor)` (the vendor matches `^[a-z][a-z-]{0,19}$`, E3.S2). E4 reasons carry NO counts (distinct, first-seen order), so E5's `IsWellFormed` need not admit E3's `×N` | E5 joins them with the same two characters | S2.3 *States*; E3 §3 |
+| E5 §8.7 | **Accepted**; the anchors in this story's text are corrected here (`RoundEngine.cs:898-907`/`:900`/`:901`, `:485-496`/`:591`, `:612`) and §8.1 stays the record | nothing in the logic depends on them | §8.1 |
+
+Two facts from the E3 amendment this story must know and needs no rule for: E3's `FirstLineUtc` is the main file's
+first stamped line in FILE order, not a minimum (six fixtures start with a line stamped after the next one) — it is no
+edge here, because the `before-open` window is unbounded below and `PriorEnd` is a read bound; and E3's new diagnostics
+(`MetasWithoutModel`, `ValuesOffShape`, `MessagesDroppedAtBudget`) never become states.
 
 ### S2.3 Windows and ownership — the exact rules
 
@@ -380,7 +415,10 @@ one with `At == null` → `partial: <Why>` on every window; the round window who
 caller → `partial: caller changed` / `partial: prior caller unknown`; none of these → `observed`. Reason words are a
 closed set: `AttributionReasons` holds `NoRoundStart = "no round start"`, `NoOpenTime = "no open time"`,
 `PriorWindowsUnknown = "prior windows unknown"`, `CallerChanged = "caller changed"`,
-`PriorCallerUnknown = "prior caller unknown"`; every other reason is E3's constant, copied verbatim, never composed.
+`PriorCallerUnknown = "prior caller unknown"`; every other reason is E3's constant, copied verbatim, never composed —
+a `const` of E3's `ObservationReasons`, which since 2026-10-16 holds no `meta without model` (that is an E3 diagnostics
+count, F4); a diagnostics count of E3's is never a state here. No reason of either set contains `", "` (E5 joins them;
+S3's `NoReasonContainsTheJoiner` proves it).
 
 **`ReadFrom(AttributionInput) → DateTimeOffset?`** — the lower bound E5 hands E3's reader BEFORE reading (parent §16 D7),
 computable from timelines alone: the minimum `From` over this round's non-blind windows and over their claimants
@@ -657,7 +695,9 @@ Every fact of §S2.10 is green and was first seen red on its assertion; every br
 symptom and restored; identities 1 and 2 hold over every §S2.6 scenario through the builder; `ReadFrom` exists for
 E5; the S1 members of §S2.7 are added and `Validate()` extended; S3's document is told about `ClaimedByPeer` and the
 two-repositories row (§S2.5), S4 about `OwnerGate`; E5.S4 is told §S2.8; the parent records in §16 that decision 3 was
-replaced (completion rank) and decision 7 refined; `CoaiMcp.Tests.exe` green.
+replaced (completion rank) and decision 7 refined and, on 2026-10-16, narrowed (D6's note: "placement and ownership
+never change after completion; a straddling message's tokens and a write answered after the live read are stated
+limitations; a write's instant is its message's first line"); `CoaiMcp.Tests.exe` green.
 
 **Unsettled, by design:** the frequency of the clock race of decision 10 (two completions in one instant) is E1's to
 measure if it ever shows; E5 chooses whether a peer timeline is read from the session file or the database for a
@@ -703,6 +743,12 @@ public sealed record RoundAuthors(
 
 public sealed record CheckoutWrites(string Root, int Calls);   // in memory only — E5 stores counts, never the root
 ```
+
+*(2026-10-16, Fable — E5 §8 items 1 and 6.)* **`AuthorRow` and `ActivityTotals` are final**: E5's `AuthorsSnapshot`
+persists them as they are, so a member change here is an E4 document edit announced to E5 before E5.S1 is coded.
+`Reasons` carries no counts and is joined by E5 with `", "`; S3 adds the fact `NoReasonContainsTheJoiner` over
+`AttributionReasons`, every `const` of E3's `ObservationReasons` (reflection, as E3.S5 does) and
+`ObservationReasons.NoReaderFor(v)` for every `CallerDeclaration` vendor.
 
 `WritesOutsideTheGateCheckout` (plan gate finding 0, parent §7): for every owned `wrote here` write placement whose
 checkout root is NOT `Gate.RepoPath` itself (a submodule or a nested worktree under it), the root and its call count,
@@ -798,8 +844,10 @@ lists the original authors AND the fixers.
 `RoundAuthors` for rounds ≤ N (S3's output, or E6's re-reading of the stored rows into the same records), in
 journal order. The journal is every stage (`RoundNumber.cs:24-26`), so windows of plan rounds are in the
 union; this story TAGS each contributor with (stage, number) and decides nothing about whether a plan round's
-author is a code author — E6's cohorts choose (§7, defect 9). Consumers: the report's *coder mix* (§8, E6) and
-the card line's counts (E5 adds that line beside the caller phrase, `calledBy`, `src_vs_code/src/rounds.ts:168`).
+author is a code author — E6's cohorts choose (§7, defect 9). Consumer: the report's *coder mix* (§8, E6) only. The
+card line (E5.S6, beside `calledBy`, `src_vs_code/src/rounds.ts:168`) shows THIS round's stored rows and never the
+contributor union — computing it in TypeScript would be a second implementation of this story (*2026-10-16, E5 §8.4;
+the card was listed as a consumer before*).
 
 ```csharp
 public sealed record RoundRef(string Stage, int Number, string Window);
@@ -1074,6 +1122,11 @@ is E3's document, not code. Schema step 23 is the plan gate's (`Schema.cs:655`),
    (`RoundEngine.cs:483-491`, `:586`, `:605-625` → the projection block `:612-644`, `:893-902`, `:897` → `:902`;
    `SessionStore.cs:248`, `:578-597`, `:586-600`; `RoundsDb.cs:923-945`; `rounds.ts:156`); and Fable's answers to §9,
    when they come.
+> *2026-10-16, Fable:* items 2, 3 and 6 are **closed** by the E3.S4 amendment (`meta without model` is a count; `StraddleGuard`
+> is 3 h on an exact byte gate; the materialiser puts `.git` on `repo-*`/`other`, never `scratch`, folds separators on a
+> non-Windows host, and takes the submodule marker from a manifest `checkouts` list E1 owes). Item 4 is **owed by E1** as E3
+> §8 item 1 (re-cut c12/c17/c19 with results kept; manifest `checkouts`). Items 1, 5 and 7 stand.
+
 2. **E3 (S4's reasons) and the parent's §5**: `partial: meta without model`. Q2 shows that a meta without `model` is what
    a launch that names no model normally writes — on some versions, up to 68 % of metas. By E3's own principle ("a reason
    is recorded when something was LOST or a COUNTED VALUE is uncertain"), nothing is lost: the request was "no model", and
@@ -1103,10 +1156,11 @@ is E3's document, not code. Schema step 23 is the plan gate's (`Schema.cs:655`),
 
 ## 9. For Fable to confirm
 
-The S2 spec is unchanged. These are the places where E1's measurements or main contradict it, or where it is silent on
-something the shipped fixtures contain. Each item says what, why, and what changes if the answer is yes. Fable's answers
-go into S2 (Fable's text) and the parent's §16. Until then the coder builds S2 as written, and the tests named here stay
-as S2 states them.
+These are the places where E1's measurements or main contradicted the S2 spec, or where it was silent on something the
+shipped fixtures contain. Each item says what, why, and what changes if the answer is yes.
+
+> **Decided 2026-10-16 by Fable** — §S2.2a holds the decision, reason and evidence per item (F1 narrowed decision 7; F2
+> chose (a); F3 confirmed; F4 follows E3's S4-17; F5 corrected). This section stays as the record of the questions.
 
 **F1 — decision 7's last sentence: "Lines at or after this round's COMPLETION never change the result."** It is true
 for placement and ownership. It is NOT true for tokens: a message's tokens are the per-term maximum over ALL its lines
@@ -1155,16 +1209,20 @@ parent's §6 and §16, and `research/RESULTS_caller_transcripts_on_both_sides.md
    should overlapping no-evidence activity go to a shared total that no gate owns?
 2. **The evidence horizon inside one message.** One message's lines span up to 2.01 h. Its instant is its first line
    (placement), its tokens are the maximum over all its lines (D8), and its writes take the first line's instant (E3
-   S4-8). Which of these may cross a round's start or completion before a number stops meaning "the work done before
-   round N started"? (§9 F1, F2.)
+   S4-8). *Decided 2026-10-16 (§S2.2a F1, F2): placement and ownership never move after completion; a straddling
+   message's tokens and a write answered after the live read are the two stated limitations; a turn is the unit, so a
+   write after the start stays with its message.* The question for the consultant is narrower: is "the turn is the
+   unit" the right horizon for a number that means "the work done before round N started", given that such a write's
+   bytes land in round N+1's diff?
 3. **`same-session` and the cheap-model case.** An agent with no write is credited to this repository when exactly one
    destination was written in its window. E1's sampled windows ran 32–3 825 minutes and held 1–6 write roots. Can this
    credit a no-write scout to the strong model's repository, or move a fixer's tokens onto the original author, in the
    consultant's round-3 case? And is `child of` through subagent parents only (main never propagates) right when most
    coders are depth-1 children of main?
-4. **What `partial` should mean.** Should a window be `partial` for a reason that lost nothing (a meta with no `model`,
-   §8.3 item 2), or only when an item or a counted value is missing? Is "a round's state is the weakest of its windows"
-   the right roll-up for the report?
+4. **What `partial` should mean.** *Decided 2026-10-16 (E3 S4-17, §S2.2a F4): only when an item or a counted value is
+   missing or uncertain; a meta with no `model` is a diagnostics count.* The open half: is "a round's state is the
+   weakest of its windows" the right roll-up for the report, when the before-open window of a first round is the one
+   most often `partial`?
 5. **Requested or answered.** The owner asks about a POLICY ("coders moved to Sonnet"), and a policy is a request.
    Attribution counts the model that ANSWERED: a session can fall back (Opus 5.5 → Opus 4.8, scope session, seen
    2026-10-16), and metas often name no request at all. Is storing both and grouping on the answering model the right
