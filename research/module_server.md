@@ -6348,6 +6348,17 @@ sweep never reads a half-written one as a dead owner. Trees
 that older builds left under `{DataDir}/worktrees` are not swept by this one — they block nothing,
 because no path is ever reused.
 
+**A tracked path longer than Windows allows (2026-10-16, `todo/PLAN_review_trees_survive_long_paths.md`).**
+On Windows git refuses to write, read or remove a file whose absolute path passes 259 UTF-16 units unless
+`core.longpaths` is on, and it is on nowhere by default. A round tree's root is 82 characters on a normal
+profile, so a branch tracking a 177-character path failed `review_code` with "Could not reset index file to
+revision 'HEAD'" — a sentence that names the index while the cause is the path. `TreeGit.Argv` now leads the
+argv of every git call in `WorktreeManager`, `ReviewTreeRoot.GitAsync` and `SubmodulePopulator` with
+`-c core.longpaths=true` on Windows, for the whole lifecycle of BOTH kinds of tree: without it `status` reads
+a clean tree as dirty (so a review tree could never be removed from the panel), `worktree remove` drops the
+registration and leaves the files, and a submodule's nested clone fails the same way. It is per command —
+no repository, global or system config is written — and Linux and macOS argv is unchanged.
+
 ### A gate can be run again, and a lost reply read back (S3, issue #490)
 
 A code round CLOSED the session: `Resolve` set `Done`, and `BeginCodeRound` refused `Done` with "this

@@ -167,7 +167,7 @@ public sealed class ReviewTreeRoot(IProcessLauncher launcher, string path)
         }
 
         var result = await launcher.RunAsync(
-            new ProcessRequest("git", args, workingDirectory) { Timeout = budget }, ct);
+            new ProcessRequest("git", TreeGit.Argv(args), workingDirectory) { Timeout = budget }, ct);
 
         return result.TimedOut || result.Cancelled
             ? GitAnswer.Broken
