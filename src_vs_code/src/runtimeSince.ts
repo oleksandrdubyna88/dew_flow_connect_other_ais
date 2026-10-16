@@ -75,9 +75,7 @@ export const RUNTIME_SINCE: Readonly<Record<string, string>> = {
  * on a guess would drop a configured reviewer from a server perfectly able to run it.</p>
  */
 export function runtimeOnServer(runtime: string, installedServerVersion: string): boolean {
-  const since = RUNTIME_SINCE[runtime];
-
-  return since === undefined || installedServerVersion.length === 0 || compareVersions(since, installedServerVersion) <= 0;
+  return sinceMet(RUNTIME_SINCE[runtime], installedServerVersion);
 }
 
 /**
@@ -85,8 +83,14 @@ export function runtimeOnServer(runtime: string, installedServerVersion: string)
  * an UNKNOWN server (the rule of {@link runtimeOnServer}: unknown is not old).
  */
 export function runtimeOnLinuxSide(runtime: string, installedServerVersion: string): boolean {
-  const since = ON_LINUX_SINCE[runtime];
+  return sinceMet(ON_LINUX_SINCE[runtime], installedServerVersion);
+}
 
+/**
+ * The one rule both tables share: a runtime with no entry is met on every server, an UNKNOWN server is not called old, and
+ * otherwise the installed version must have reached the release.
+ */
+function sinceMet(since: string | undefined, installedServerVersion: string): boolean {
   return since === undefined || installedServerVersion.length === 0 || compareVersions(since, installedServerVersion) <= 0;
 }
 
