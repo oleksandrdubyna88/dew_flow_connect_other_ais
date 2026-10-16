@@ -302,6 +302,11 @@ switch (args0)
     case ["tree-hold", var mode, var locks, var target, var home]:
         return CoaiMcp.FakeCli.TreeHoldVerb.Run(mode, locks, target, home);
 
+    // L-N1: the PRODUCT's `HeldFile.Take(path, inheritable: true)` on one file, in a child — `hold` keeps it and starts a sleeping grandchild AFTER the take, `try` takes it
+    // once and says what came back. The test host never takes an inheritable handle itself.
+    case ["hold-file", var mode, var file]:
+        return CoaiMcp.FakeCli.HoldFileVerb.Run(mode, file);
+
     // Takes the REAL EngineLease in its own process, holds it, and prints the window it held it
     // for. Five of these are how the cross-process claim is measured rather than asserted: two
     // objects in one process would prove nothing about two servers on one machine.
