@@ -1,8 +1,9 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **plan only, 2026-10-16 — stories written by the judge (Opus); no code yet.** E5.1 is a measurement (M-K16) that
-> must be recorded before E5.2's code. E5.3 is the proposed cornerstone, and it is past the plan's quota: the operator decides it
-> (§0). Fable writes its spec after that decision.
+> Status: **plan only, 2026-10-16 — stories written by the judge (Opus); the split confirmed by Fable (§0.2); E5.3 carries Fable's
+> security judgement; the plan gate passed (proceed) and its findings are folded (§"Plan gate 2026-10-16"); no code yet.** E5.1 is a
+> measurement (M-K16) that must be recorded before E5.2's code. The coder of each story follows the gate's command (§0.2): E5.3 on
+> Fable, every other story on Opus.
 >
 > Parent plan: [PLAN_vibe_and_kimi_runtimes.md](PLAN_vibe_and_kimi_runtimes.md), §4 **S5** (decisions D1, D6, D15, D19, D20).
 > Built on S4, which is merged and released as coai-mcp 0.57.0: [PLAN_vibe_and_kimi_runtimes_E4.md](PLAN_vibe_and_kimi_runtimes_E4.md)
@@ -22,9 +23,11 @@ extension's half. **Not in S5:** M-K14 (the refresh race — the owner put it la
 them); the Kimi REVIEWER's homes, which still live under TEMP (deviation 68 of E4, left open there); Team server, chat, bench.
 
 **Who does what** ([subagent-models.md](../.agents/conventions/common/subagent-models.md)). For each story: the scenarios and the
-brief are by Opus (this document), or by **Fable for a cornerstone**. The code and tests are by Sonnet. The review is by
-Opus. The fixes are by Sonnet. The measurement of E5.1 is run by a scout (Sonnet), and only with the owner's yes for its
-paid turns.
+brief are by Opus (this document), or by **Fable for a cornerstone**. The review is by Opus. The measurement of E5.1 is run by a
+scout (Sonnet), and only with the owner's yes for its paid turns. **The coder follows the plan gate's command (2026-10-16):** a
+story that touches authentication or security is built on **Fable**, an ordinary story on **Opus** — the marking per story is
+§0.2's table (E5.3 on Fable; E5.1's client code, E5.2, E5.4, E5.5, E5.6 and E5.7 on Opus). The fixes after a review are by the
+same model that built the story.
 
 **Cornerstones — the ledger.** The plan's quota is Q = ⌈2·5/5⌉ = 2 (five epics, S1–S5). The parent's ledger line (§4 S4)
 reads **`Cornerstones: 2 of 2 — E4.1, E4.2`**, so the quota is spent. **E5.3 is the cornerstone this epic needs** (decision J1
@@ -34,7 +37,8 @@ the question consultant was asked (consult 95f08e0b, option B): the quota stands
 Opus writes its spec from the scenario set below. Fable gives E5.3 a **security judgement**, since it handles authentication
 and that role is outside any quota. The judgement covers the owner/sweep races, the lock order, how every disposal stop
 propagates, the row/check fallback paths and the separate `kh-*` root. It is given before any code. No coder starts E5.3
-before its spec and that judgement are final.
+before its spec and that judgement are final — **both are in this document now** (E5.3, decisions j–k and the judgement R1–R11,
+2026-10-16).
 
 **Build order** (strict where an arrow is shown):
 
@@ -146,9 +150,44 @@ loaded session); E5.6 (the planner arm is a table row; the standing is decided h
   cannot (`VibePathBudget`). So S5 adds no `KimiPathBudget`. The one thing that could still fail on a long path is COAI's
   own walk of the home (`KimiHome.Refusal`, `GitScratch`). E5.3 pins it with a test (S5.3.11), not with a refusal.
 
+## 0.2 Split confirmed / changed by Fable, 2026-10-16
+
+**Verdict: the split stands — seven stories, the order and the arrows as drawn; two decisions changed, three things added, nothing
+removed.** Read against the parent's S5 (`PLAN_vibe_and_kimi_runtimes.md:817-854`), E4's record and the code on `origin/main` 02ffd326.
+
+- **The boundaries are right.** E5.2 is the only story that touches the shim, and the only one with a protocol branch. E5.3 is the only
+  one that touches a junction or a lock. E5.4 composes and registers; E5.5 and E5.6 prove two existing paths with a new adapter; E5.7 is
+  the extension. No story edits another story's files, so different coders build them without a merge of logic.
+- **The order is right, and E5.3 first is right.** E5.3 depends on nothing of E5.1 or E5.2, and its one code change (decision g) moves
+  Vibe's one-shot homes too — it should land, and be released, before any Kimi consultant can make a one-shot home. E5.4's dependence
+  on E5.2 is real (`--session` IS the second turn); on E5.3 it is nominal, because the conversation root is already `kh-*`
+  (`KimiRuntime.cs:79`) — E5.4 may START beside E5.3 and merge after it.
+- **What was missing — added:** (1) the per-turn re-resolution of where the sign-in's ancestors lead (E5.3 decision j, S5.3.15): a
+  make-time check that a conversation home, living for hours, never repeated; (2) explicit `session_lost` arms in the shim's two switches,
+  whose DEFAULT arms print `cancelled` and exit 69 (E5.2 decision 9, S5.2.12) — without them E5.2 decision 4's "70" is silently 69;
+  (3) the plan gate's three accepted findings (§"Plan gate 2026-10-16": E5.2 decision 9, E5.3 decision k, E5.4 decisions 11–12).
+- **What changed:** E5.3 decision g, step 3 — the deletion goes UNDER the lock, the lock file and the folder last (judgement R5); E5.3
+  decision d gains the one rule that makes its order safe (R2: every disposer takes with NO wait).
+- **Considered and not changed:** splitting E5.3 into "the conversation home" (tests only) and "the one-shot disposal" (code). Both halves
+  hold a junction to the sign-in and share one lock order; two stories would need the same judgement twice. Kept as one.
+
+**Who builds what — the gate's command, applied.** A story that touches authentication or security is built on Fable, an ordinary one on
+Opus; Opus reviews every story.
+
+| Story | Kind | Built on | Why |
+|---|---|---|---|
+| E5.1 | ordinary — a measurement; the client gains two features | Opus for the client's code; the paid cells by a scout (Sonnet) with the owner's yes | no product code; the client is the probe's own |
+| E5.2 | ordinary | Opus | a protocol branch; the three blocks (refusals, read boundary, tree hold) are PINNED unchanged (S5.2.9, S5.2.10), and S5.2.4 keeps `Diagnosed`'s existing order (`AskAcpMode.cs:292-293`) — nothing about the sign-in changes |
+| E5.3 | **authentication / security** | **Fable** | holds the sign-in's junction across turns; the lock order; a disposal under a live tree signs the person out |
+| E5.4 | ordinary | Opus | composition over `KimiRuntime` — the gate is `inner`'s by construction (decision 1) |
+| E5.5 | ordinary | Opus | an existing path proved with a new adapter |
+| E5.6 | ordinary | Opus | table rows and a planner arm; the STANDINGS are decided in this document (decision 2), not by the coder |
+| E5.7 | ordinary | Opus | the extension |
+
 ## E5.1 — Measured first: M-K16, `session/load` as the shim will use it (and M-K17, the web tools)
 
-`model: sonnet` (a scout runs it; Opus reviews the RESULTS rows). No product code.
+`model: sonnet` (a scout runs the paid cells; Opus reviews the RESULTS rows) · the client's two features (decision 1) are built on
+Opus (ordinary, §0.2). No product code.
 
 **Goal.** Record the facts E5.2's code depends on, 3 of 3 on Windows, Kimi 2.1.1, through the SHIPPED shim for every turn 1
 and through the probe's small client for every load (the shim has no load path yet — the M-K5 arrangement, RESULTS §3).
@@ -217,7 +256,7 @@ its names (the probe's existing guard), and the table above names which branch e
 
 ## E5.2 — The shim's load path: `--session <id>`, `session/load`, the answer marked, `session_lost`
 
-`model: opus` spec (this document) · Sonnet codes · Opus reviews. **Starts only after E5.1's §29 is written.**
+`model: opus` spec (this document) · built on Opus (ordinary, §0.2) · Opus reviews. **Starts only after E5.1's §29 is written.**
 
 **Goal.** `coai-mcp --ask-acp --profile kimi … --session <id>` continues the session `<id>`: `initialize` →
 `session/load {sessionId, cwd, mcpServers: []}` → the model (checked when the load announces it, E5.1 (a)) →
@@ -265,6 +304,13 @@ shim does exactly what it does today, byte for byte.
    existing tail. `TurnAsync` does not grow.
 8. **Docs:** `research/module_runners.md` (the shim: `--session`, the mark, `session_lost`); the type's remarks in
    `AskAcpMode.cs`; the `--help` text. NOT `.agents/PROJECT.md` (its bundle is at its byte budget — E4 deviation 42).
+9. **(Plan gate 2026-10-16, finding (a); Fable) The new end has EXPLICIT arms in both switches, and the contract names it.**
+   `EndExit`'s default arm is `_ => Unavailable` (69) and `EndWord`'s is `_ => "cancelled"` (`AskAcpMode.cs:299-305`, `:354-363`): an
+   `AcpEnd` value added without its arms exits 69 and prints `cancelled`, and decision 4's "70" is silently false. So `EndExit` gains
+   `AcpEnd.SessionLost => Failed` and `EndWord` gains `AcpEnd.SessionLost => AcpWords.SessionLostWord`. The type's remarks (`:8-43`) list
+   `session_lost` under 70 as "the agent no longer holds the session `--session` named"; `KimiReport.End`'s remark (`KimiReport.cs:15`)
+   lists the word; `research/module_runners.md` the same. S5.2.12 pins that NO `AcpEnd` falls to a default arm. The host's side of the
+   contract — classified from the report's `end`, never from text, and what the consultant then does — is E5.4 decision 11.
 
 **BRIEF.**
 1. `tests_fakecli/AcpAgent.cs` learns `session/load` from three script fields, so that every existing script keeps its
@@ -295,15 +341,17 @@ shim does exactly what it does today, byte for byte.
 | S5.2.9 `ALoadedTurn_RefusesEveryPermission_AndServesOnlyItsCwd` | after the load the agent asks `Write` permission and reads an absolute path outside the cwd and `AGENTS.md` inside it | one turn with `--session` | the permission refused (`reject_once`), the outside read and the excluded name refused, not quoted | (green — pins M-K5 on the shim's own load path) |
 | S5.2.10 `TheTreeHold_IsTakenForALoadTurnToo` (`AKimiShimScenarioTests`, the S3.14 shape) | a Kimi-shaped profile on an owned root in the test's folder, `--locks` the test's folder | one turn with `--session` | the agent's `envFile` was written while both tree-hold files probed `Held`; both `Free` within 5 s after the exit | (green — pins that the load path is under the hold) |
 | S5.2.11 `TheHelpNamesSession` | — | `coai-mcp --help` | the `--ask-acp` line contains `[--session <id>]` | *Expected help to contain "[--session <id>]".* |
+| S5.2.12 `EveryEnd_HasItsOwnWordAndExit_NoneFallsToADefaultArm` (decision 9) | every value of `AcpEnd` (`Enum.GetValues`) | `EndWord`, `EndExit` | the words are pairwise distinct; `cancelled` only for `Cancelled`; `SessionLost` → `session_lost` and 70; 69 only for `NotStarted`, `Deadline` and `Cancelled` | *Expected EndWord(SessionLost) to be "session_lost", but found "cancelled".* then *Expected EndExit(SessionLost) to be 70, but found 69.* (against the enum value added without its arms) |
 
 **Done when** every scenario is green, the whole C# suite is green, `dotnet format --verify-no-changes` is clean, and no exit
 path returns 64.
 
 ## E5.3 — The owned homes: a conversation's home kept across turns, and every one-shot Kimi home disposed junction-first
 
-`model: opus` spec plus a `fable` **security judgement**. It is not a cornerstone; the quota stands, see §0 and J1.
-Below are the judge's decisions and the MINIMUM scenario set. The spec extends them with more rows and its own review
-focus. Fable's security judgement may overrule a decision, and when it does, its reason is written down. Anchors verified on `origin/main` 02ffd326.
+`model: opus` spec plus a `fable` **security judgement** (given 2026-10-16, below) · **built on Fable** (authentication/security,
+§0.2) · Opus reviews. It is not a cornerstone; the quota stands, see §0 and J1. Below are the judge's decisions (a–i), Fable's two
+additions (j–k), Fable's judgement (R1–R11, which amends g and d and confirms the rest), and the scenario set — the judge's minimum
+(S5.3.1–S5.3.14) and the judgement's rows (S5.3.15–S5.3.20). Anchors verified on `origin/main` 02ffd326.
 
 **Goal.** A Kimi conversation keeps ONE owned home across all its turns, in its own private folder. The home is made with its
 junction at the first turn and validated before every turn. It never waits for itself. Its turns run one at a time and
@@ -391,9 +439,149 @@ consultant check) is disposed the same way by its owner, and by the six-hour swe
   D20's rules. **Renames are proposed, not done:** `VibeHomes`/`OneShotHome`/`coai-vh` and `VibeHomeTurns` now serve both CLIs
   (`OneShotHomes`, `OwnedHomeTurns` would say so). A rename touches the sweep, `ConsultantPlaces` and the D7 structural test for a
   name alone (E4 deviation 31). The operator decides.
+- **j. (Fable, 2026-10-16) Where the sign-in REALLY is, re-asked before every turn.** `Junctions.Refusal`'s `Resolved` — the person's
+  `credentials` must resolve, through every ancestor link, to a local drive (`Junctions.cs:179-189`) — runs only when the junction is
+  MADE (`Make`, `:114-118`): on turn 1, never again, because `KimiHome.Made` writes nothing on a home that has its junction (`:85`,
+  `:164-165`). Per turn the code re-checks the SPELLING of the person's home (`KimiLaunch.LocalHome`, `:149-152`) and the junction's
+  one-level target (`KimiHome.Credentials`, `:221-233`), and then KEYS A LOCK on the final path (`KimiCredentialsLock.KeyFor`,
+  `:116-121`) — a UNC final path gets a key, not a refusal. `KimiLaunch.Prepare` adds, right after `LocalHome`, the resolved check on
+  `places.Credentials`, refused with `Resolved`'s own sentence BEFORE any lock (reuse-first, move 1: `Junctions.ResolvedRefusal(target)`
+  becomes the public face of `:179-189` — one sentence, two callers). Judgement R8 says why it is worth one handle open. S5.3.15.
+- **k. (Fable, 2026-10-16; the plan gate's finding (c)) How turns never renew the sign-in concurrently — stated.** Every coai Kimi
+  launch on one sign-in — this conversation's turn, another conversation's, a round's reviewer, a question row, a check, on THIS server
+  or on another server of the same machine — passes `KimiLaunch.TakeAsync` and takes the sign-in GATE `<key>.lock` (`:82`, `:98`;
+  `KimiCredentialsLock.TakeAsync` `:134-156`): a FILE under `kimi-locks`, keyed by the credentials folder's identity (`:116-121`), held
+  from before the version probe until the launch has been read (`Attempt`, `:264-284`; `ReviewerExecutor.cs:921`). Inside it the shim
+  takes the sign-in's TREE HOLD, inheritable (`KimiShimHold.cs:40-46`; `KimiCredentialsLock.cs:186-191`), so a tree that outlives its
+  server still holds the sign-in; and before both, the shim waits for the person's OWN `kimi` (`KimiShimHold.cs:29-35`,
+  `ForeignKimi.cs:62-74`). So at most ONE `kimi` that coai started runs on one sign-in at any moment, across conversations, rounds and
+  servers: the peak is 1, and a second turn waits inside its own deadline (decision e). S5 adds nothing to this; S5.3.16 pins it at
+  the service level, and pins that a gate another process holds is waited for.
 
-**SCENARIOS — the judge's minimum set** (Fable's spec adds rows and its own review focus). Every fake person's home is
-`KimiFixture`'s, inside the test's `testsToDelete-kimi-…` folder; the homes root is a second `testsToDelete-` folder.
+**Fable's security judgement (2026-10-16).** Verified on `origin/main` 02ffd326; every anchor below was read, not quoted. The
+consultant's pointers (consult 95f08e0b, option B) — `ConsultantHomeSweep.cs:202`, `KimiHome.cs:312`, `VibeHomes.cs:279` (the owner
+releases its lock BEFORE deleting) and `GitScratch.cs:57` — are confirmed and are R2, R4, R5 and R4 below.
+
+- **R1 — The owned root is never a folder whose turn the caller holds (decision a confirmed; E4.2 decision 8 superseded).**
+  `ConsultantPlaces.HeldAsync` takes `VibeHomeTurns.TakeAsync(turned.Folder)` (`ConsultantPlaces.cs:205`) and the place keeps it until
+  the launch has been read (`ConsultationService.cs:667-668`); `KimiLaunch.TakeAsync` takes `VibeHomeTurns.TakeAsync(places.OwnedRoot)`
+  (`KimiLaunch.cs:81`); the turns are one non-re-entrant `SemaphoreSlim(1, 1)` per full path (`VibeHomeTurns.cs:18`, `:115`). Root ==
+  folder → the launch waits for its own caller until the token cancels, and the person sees a timeout, not a sentence. The cure is in
+  the code: `KimiRuntime.Build` roots at `KimiHome.HomeFor(OwnedScratch, …)` = `<folder>\kh-<10 hex>` (`KimiRuntime.cs:79`), and
+  `OwnedScratch` is the folder (`ConsultationService.cs:824`). Review item (3) is the guard; S5.3.1 the pin.
+- **R2 — The lock order, and the ONE rule that makes it safe: every DISPOSER takes with no wait; every ACQUIRER waits only on something
+  no disposer holds (decision d amended with this rule).** The acquirer's chain for one conversation turn: (A) the folder's in-process
+  turn (`:205`, waited under the token) → (B) the folder's `coai-turn.lock` (`:227`, at most `LockWait` 10 s) → the snapshot → (C) the
+  `kh` root's in-process turn (`KimiLaunch.cs:81`) → (D) the sign-in GATE (`:82`, `:98`; one-second slices under the token,
+  `KimiCredentialsLock.cs:147-155`) → the launch; in the shim: (E) the foreign-`kimi` wait (`KimiShimHold.cs:29`) → (F) the sign-in's
+  tree hold (`KimiCredentialsLock.cs:186-191`, within the deadline) → (G) the per-home `coai-tree.lock` (`:198-210`, `HomeWait` 500 ms,
+  `:72`). D, then C, are given back when the launch has been read (`Attempt`, `KimiLaunch.cs:264-284`; `ReviewerExecutor.cs:921`); B
+  and A when the place is disposed (`:667`). The disposers: `ConsultantHomeSweep.Removed` takes B with `HeldFile.Take` — no wait
+  (`:207`) — then A and every sub-folder's turn with `TryTake` — no wait (`:214`, `:280-293`) — then PROBES G (`KimiHome.Alive`
+  `:339-346` → `HeldFile.Probe` `:85-86`: one exclusive open, let go at once); it never takes D, E or F. `VibeHomes.RemovedUnderItsLock`
+  takes the one-shot folder's lock with no wait (`:189`). So the sweep's order B → A is the REVERSE of the acquirer's A → B — safe only
+  because the sweep never waits: it holds B for the length of one failed `TryTake` and lets go (`using (locked.Stream)`, `:212-226`).
+  Nothing that holds D asks for A, B or any folder lock; nothing that holds F or G asks for anything but the agent's start. No cycle. Two
+  meetings the order leaves, and how each ends: (i) a shim under D that waits for F held by ANOTHER server's tree waits within its own
+  deadline and exits 69 (`KimiShimHold.cs:53-54`), and its server then gives D back — bounded; (ii) a disposal's probe of G and a shim's
+  take of G can meet — the shim retries for 500 ms (`:72`, `:201`), longer than one open; a disposal that meets a shim's take sees `Held`
+  and keeps the home — the safe direction. **Rule for every coder of this story:** a new wait is added only on the acquirer's side, and
+  only on something no disposer ever holds; a disposer that WAITS turns a reversed order into a deadlock.
+- **R3 — PrivateFolder's held handle is not a lock in this order, and must not become one.** `PrivateFolder.Open` holds the `coai-kimi`
+  (or `coai-vh`) folder's handle sharing read and write but never delete (`PrivateFolderWindowsNative.cs:45-53`, `:172`): two holders
+  coexist — the place (`ConsultantPlaces.cs:146-152`), every sweep pass (`ConsultantHomeSweep.cs:105-115`, `:140-150`), every
+  reservation (`VibeHomes.cs:60-66`) and the one-shot sweep (`:137-147`) — and what it denies is a RENAME or DELETE of the homes folder
+  itself while anyone has a place or a pass in it. It never waits and never blocks a child's deletion. Rule: it is held by exactly two
+  owners (the place's held list, the reservation's `Pins` `:96-105`) and by a pass for the pass's length; never across an `await` outside
+  those.
+- **R4 — A stop propagates by VALUE, the walk goes on, and every caller turns ONE stop into "keep the whole folder".** `KimiHome.Dispose`
+  returns the `Stopped` and deletes nothing more (`:127-129`); `DisposeAllUnder` warns each stop and continues with the next `kh-*`
+  (`:143`, `:152-160`) — in a folder with a live `kh-a` and a dead `kh-b`, `kh-b` is unlinked and `kh-a` kept, and the caller sees one
+  stop and keeps the folder: `ConsultantHomeSweep.KimiHomesDisposed` (`:243-253`) returns false before `DeleteAllBut` (`:220-225`);
+  `RoundScratch` (`:142-151`); `PanelService.DeleteIfDue` (`:1467-1472`). The stops, each a sentence: the root or `home/` a link
+  (`:333-336`); a live tree — `Held` AND `Unknown` (`:339-346`); an unlink that threw (`:356-359`); a link still there after its unlink
+  (`:368-371`); a target that lost a name after the 200 ms re-list (`:373-377`; `GitScratch.cs:184-196`); the deleter's
+  `LinkTargetLostException` or IO failure (`:394-403`). What `DisposeAllUnder` leaves to the caller's deleter (steps (1)–(3) only, E4
+  deviation 21) holds NO link any more, and the deleter is still the second belt: its own `Unlink` verifies the target and throws
+  (`GitScratch.cs:57-62`, `:116-133`, `:164-177`). **Rule for g:** the owner's `Dispose` and `SweepOneShot` give the same two-valued
+  answer — a stop keeps the folder AND its lock file (never delete the lock file of a kept folder: `DeleteAllBut` keeps it `:225`,
+  `RemovedUnderItsLock` deletes it last `:196-202`), and the warn carries the stop's own sentence, unparaphrased.
+- **R5 — Decision g, step 3, OVERRULED in part: delete UNDER the lock; give the lock back; THEN the lock file and the folder — the shape
+  `RemovedUnderItsLock` already has (`VibeHomes.cs:187-205`), extracted and shared, never copied.** As written, g gives the lock back
+  and then deletes the whole folder, as today's `Dispose` does (`:286-291`). Between the release and the delete, a `SweepOneShot` pass —
+  this server's or another's on the same root — can take the lock (`:189`) and run its own `DisposeAllUnder` and deleter on the same
+  folder: two deleters on one tree. Not a sign-in risk — in both orders the junction is gone before the release, and both deleters verify
+  the target by name — but a race that ends in an IOException the owner catches as "could not be deleted; the scratch sweep takes it"
+  (`:294-297`) for a folder the sweep just took: noise that WILL be read as a loss once. The order: under the lock, `DisposeAllUnder`; on
+  a stop, release and keep (R4); otherwise every entry but the lock file, under the lock; then the lock and the pin together (`Pins`); then
+  the lock file and the folder — and "the folder is already gone" is silent, only a failure is said. ONE helper for both callers
+  (reuse-first, move 2: the shared half of `RemovedUnderItsLock`). Cost: none — same entries, their order. S5.3.20.
+- **R6 — The row and the check fallbacks: the check's home is one level DOWN.** `QuestionRowLaunch` hands `OwnedScratch = scratch` — the
+  row's own folder when no root is configured (`HomeFolderOf`, `:140`) — so `kh-*` is a direct child and `DisposeAllUnder(scratch)` finds
+  it. `ConsultantCheck` hands `OwnedScratch = place.Folder` = `<scratch>\own` (`:230-233`, `:262`, `:285`), but `ConsultCheckScratch.Delete`
+  is called with the scratch ROOT (`ConsultantCheckMode.cs:307`): `DisposeAllUnder(root)` would look for `kh-*` among the root's direct
+  children, find none, and leave the junction to the bare deleter — which runs NO live-tree probe. **The brief disposes
+  `Path.Combine(root, ConsultantCheck.OwnName)` and the root (the second costs nothing).** S5.3.10's check arm plants exactly
+  `coai-check-…\own\kh-x`, so a `DisposeAllUnder(root)` fails it — keep that shape. Two more facts: `ConsultCheckScratch.Delete` catches
+  `LinkTargetLostException` as a plain IO failure (`:116-119`; it IS one, `LinkTargetLostException.cs:9`) — the sentence reaches the
+  warn, enough; `QuestionRowLaunch.TryRemove` names it apart (`:408`). And in both fallbacks the home's `coai-tree.lock` lives inside the
+  scratch under TEMP, so a scratch kept under a live tree is finished by the six-hour scratch sweep, which asks the same probe
+  (`PanelService.cs:1467-1489`). Nothing else is needed.
+- **R7 — The separate `kh-*` root (confirmed), and what it buys beyond R1.** The conversation folder holds `tree\` (a snapshot: no links,
+  refreshed in place), the stamp and the lock — all coai's; the `kh` root holds the ONLY junction. `DisposeAllUnder`'s "itself" branch is
+  dead for this shape (`Directory.Exists(folder\home)` is false, `:139`) — harmless, as decision a says. `AllTaken` takes `tree`'s turn too
+  (`:282`): nobody holds it, it costs nothing. `LastWrite` reads the folder's DIRECT entries (`:300-308`): the stamp moves on every
+  `Begin`/`End` (`ConsultantPlaces.cs:250`, `:258-260`), so an open conversation is judged by its turns, never by a Kimi write deep in
+  `kh-x` that moves nothing above it — right. The reviewer's `kh-*` under a round's scratch is the same shape (`RoundScratch.cs:142-151`),
+  so one `DisposeAllUnder` serves three callers.
+- **R8 — Re-validating between turns: what is re-checked, what is not, and the one addition (decision j).** Before any lock, per turn:
+  the person's home by SPELLING (`KimiLaunch.LocalHome`, `:149-152`), the credentials folder's existence (`:176-179`), the slot re-read and
+  the config re-rendered (`:168-170`, `:181-185`). Inside the turn, `KimiHome.Refusal`: the junction is a link whose ONE-level reparse
+  target spells the person's `credentials` (`:221-233`; `Junctions.Target` never chases, `:122-134`); `config.toml` byte-equal to the
+  fresh render (`:235-239`); `os\` empty; every other name admitted or refused; no link inside (`:281-301`). The three cases: **(1) a
+  sign-out and sign-in that keeps the folder** — the junction's path is unchanged and the gate's key is the folder's final path
+  (`KimiCredentialsLock.cs:116-121`), also unchanged; the slot's VALUES decide: same values → the turn runs on the new token (Kimi's own
+  refresh, under the gate); changed values → refused with the re-login sentence (decision c, S5.3.4). **Refusing is right:** a re-render
+  would make coai WRITE into a home between turns, which `Made`'s fresh-only rule (`:85`, `:164-165`) exists to forbid; open question 2
+  stays the owner's. **(2) a sign-out that removes the folder** — refused before any lock (`:176-179`); the junction dangles; its
+  disposal reads the target as `Unread` → unlinks → nothing missing → `Clean` (`GitScratch.cs:142-143`, `:207-208`) — nothing is said
+  about a folder that is not there, right. **(3) the target SWAPPED — an ancestor of `~\.kimi-code\credentials` replaced by a link** —
+  the resolved check ran at make time only (decision j); `KeyFor` keys a lock on wherever the chain leads, a network path included. A
+  same-user process is the only one that can do this (E4.2 decision 11's reasoning holds), but a conversation home lives for hours where
+  a reviewer home lives minutes, every turn reads the target's entry NAMES (`Look`, `GitScratch.cs:142-143`) and a network target would be
+  listed on every disposal; the check costs ONE handle open that `KeyFor` already pays. Hence decision j, before the gate, so a refused
+  turn makes no file under `kimi-locks`. S5.3.15.
+- **R9 — PrivateFolder's DACL over a junction INSIDE it: three facts and one pin.** (1) The walk after a re-ACL never enters or touches a
+  reparse point (`PrivateFolderWindows.cs:175-179`), so coai's walk never re-ACLs the person's `credentials`, and a junction's OWN entry
+  is left as it is (an explicit ACE on the junction object is not reset — a limit, harmless: the object carries no data). (2) The protected
+  DACL is applied through the folder's handle with `SetSecurityInfo` (`PrivateFolderWindowsNative.cs:79-91`), its entries inheritable
+  (`PrivateAcl.cs:62`, `:74-75`): Windows propagates to descendants itself, and the code's claim that propagation "does not follow one
+  either" (`PrivateFolderWindows.cs:152`) is a claim about Windows pinned by no test here. If it were false, a re-ACL of `coai-kimi` would
+  replace the DACL on the person's sign-in folder and its files with coai's three entries — narrower, not a leak, but a write into the
+  person's folder that coai promised never to make. (3) The re-ACL runs only when the folder's DACL is wrong (`:122-123`); `coai-kimi` is
+  created atomically WITH the DACL (`:68-71`), so this is the migration path and the wide-root path, not every open — and it runs INSIDE
+  `PrivateFolder.Open`, before any place or turn of this process exists; another server's live home in the same `coai-kimi` is a real folder
+  with a junction — walked, never entered. **The pin is S5.3.17** (Windows-only, beside `PrivateFolderWindowsTests`).
+- **R10 — Owner/sweep races, enumerated: what each side holds, who wins, what is never lost.** (i) `close_consult` during a live turn:
+  `RemoveNow` → `TakeTurn` is `Busy` → false → left to the beat (`:74-75`, `:207-210`); the record is closed; the beat removes the folder
+  once free (record over → due). S5.3.19. (ii) The D20 sweep against a turn starting: the sweep holds B for microseconds; a place waits
+  for B at most 10 s (`:227`); the sweep's `TryTake` of A fails while the place holds it → skip. (iii) Two servers' sweeps on one folder: B
+  is cross-process, one wins, the other skips; a folder of ANOTHER store is judged by age alone (`:185-187`) — never removed inside
+  `ForeignAge` while its owner's conversation is open. (iv) A one-shot owner against `SweepOneShot`: the owner holds the lock for its life
+  (`:85`, `:92`); the sweep takes with no wait (`:189`) → skip; after R5 the only window is between the owner's release and its delete of
+  the lock file and folder, where a sweep may take the lock and delete the (now empty) folder first — the owner's last delete then finds
+  it gone and says nothing. (v) A server crash mid-turn: the kernel releases A (process memory), B and D (non-inheritable handles,
+  `HeldFile.cs:47-61`); F and G stay HELD by the orphan `kimi` (inheritable, E4.2 decision 10) — so every disposer's probe of G says `Held`
+  and the home is kept until `kimi` ends. That is the whole reason G exists; S5.3.8 and S5.3.18 pin it in both shapes. (vi) The sweep at a
+  new server's start is (v) again — after the records, so a lapsed record takes its home with it.
+- **R11 — Nothing of the sign-in in what this story writes.** S5.3.14 (E4.2 decision 12) stands. The collectors this story adds: the
+  one-shot owner's and the one-shot sweep's warns carry `Stopped` sentences, which carry PATHS of the owned tree and the entry NAMES the
+  target lost (`:377`) — names of the person's credential files, never bytes, the bound E4.1's `Look` already set. The sentence of decision
+  j names the resolved path of the sign-in — a path, acceptable under the same bound. No new collector reads a file of the person's.
+
+**SCENARIOS — the judge's minimum set (S5.3.1–S5.3.14) and the judgement's rows (S5.3.15–S5.3.20).** Every fake person's home is
+`KimiFixture`'s, inside the test's `testsToDelete-kimi-…` folder; the homes root is a second `testsToDelete-` folder. No test makes a
+junction to anything outside its own folders; a network path is a SEAM's answer, never a real target.
 
 | # | Given | When | Then | Expected red today |
 |---|---|---|---|---|
@@ -411,18 +599,28 @@ consultant check) is disposed the same way by its owner, and by the six-hour swe
 | S5.3.12 `AConsultTurnAndAReviewerLaunch_OnOneSignIn_NeverOverlap` | a conversation's `kh-a` and a round's `kh-b`, both junctioned to ONE fake `credentials\` | two `KimiLaunch.TakeAsync` in parallel (the S2.27 shape) | the second completes only after the first is disposed; both used `KimiCredentialsLock.PathFor(<fake credentials>)` | (green — pins decision e) |
 | S5.3.13 `ThePathArithmetic_IsTheNumbersTheDocumentStates` (pure) | the homes root `C:\Users\u\AppData\Local`, a 32-hex id, a provider `kimi`, the role `consult` | `KimiHome.HomeFor(ConsultantHomes.ConversationFolder(root, ConsultantHomes.Kimi, id), …)` + `\home` | the length is `root.Length + 62`; the one-shot home is `root.Length + 36` (J3's 85 + u and 59 + u at that root) | (green — keeps J3's numbers honest when a name changes) |
 | S5.3.14 `NothingOfTheSignIn_AppearsInAConversationsRecords` (the `KimiCanaryTests` shape, E4.2 decision 12) | the two canaries of S2.45; a two-turn conversation through `ConsultationService` with a played shim; one `close_consult` | every collector with its liveness check: the record, the ledger lines, the reply, the warn lines, the folder names | no collector holds either canary; the control arm sees a served canary | (a pin — its red, if ever: *Expected the record not to contain "CANARY-REFRESH-7f3a0c", but found it in …*) |
+| S5.3.15 `AnAncestorOfTheSignIn_ResolvingOffTheLocalDrives_RefusesTurnTwo_BeforeAnyLock` (decision j, R8) | turn 1 taken and given back (`FakeKimi`); then the final-path seam answers `\\server\share\.kimi-code\credentials` for the fake person's folder (a seam — no test names a network path for real) | turn 2, `KimiLaunch.TakeAsync` | refused; the sentence holds "resolves to", "not a local drive path" and "D19"; `FakeKimi` started nothing; the test's `kimi-locks` folder gained no file; `VibeHomeTurns.Held(<kh root>)` is false | *Expected the launch to be refused because the sign-in resolves off the local drives, but it was Holding.* |
+| S5.3.16 `TwoConversationsOnOneSignIn_RunOneKimiAtATime_AndWaitForAGateAnotherProcessHolds` (Theory; decision k, the gate's finding (c)) | (i) two consultations on ONE fake person; `PlayedKimi` whose shim records its start and end and holds 300 ms; (ii) one consultation; the gate file `KimiCredentialsLock.PathFor(<fake credentials>)` pre-held by the test (a plain `HeldFile.Take`, not inheritable), released after 1 s | (i) both turns started together through `ConsultationService`; (ii) one turn | (i) the peak of live played shims is 1; the second's start is not before the first's end; both answered; both used ONE gate path; (ii) the shim started only after the release, and within 2 s of it | (a pin of decision k — its red if the gate were skipped: *Expected the peak of live Kimi launches on one sign-in to be 1, but found 2.*; (ii): *Expected the launch to start after the gate was released, but it started while the gate was held.*) |
+| S5.3.17 `AReAclOfCoaiKimi_NeverCrossesTheJunction_IntoTheSignIn` (R9; Windows-only, beside `PrivateFolderWindowsTests`; the fake shell records every path it is asked about) | a `coai-kimi` under the test's root whose DACL was widened (one extra Allow for Authenticated Users), holding `<id>\kh-x\home\credentials` → the test's `persons\credentials` with one file | `PrivateFolder.Open(root, "coai-kimi")` | `Opened`; the one note says "made … private"; the target folder's and its file's security descriptors are byte-equal to before; no `AclOf` or `ResetToInherit` call names a path under `credentials`; the junction itself was skipped | *Expected the DACL of …\persons\credentials to be unchanged after the re-ACL of coai-kimi, but it now holds the three protected entries.* (if Windows' propagation crossed the junction — the code's unpinned claim, `PrivateFolderWindows.cs:152`) |
+| S5.3.18 `TheConversationSweep_KeepsAKhHomeWhoseTreeIsAlive_AndTakesItOnceItEnds` (R10 (v)) | the S5.3.5 folder, its record closed, past the window; `kh-x\coai-tree.lock` held by the test (a plain `HeldFile.Take`) | `ConsultantHomeSweep.Sweep`; the hold released; `Sweep` again | first pass: 0 removed, the junction still a link, the warn holds "still running" and "kept this beat"; second pass: gone junction-first, the recorder never invoked, `persons\` intact | (green on HEAD — pins `KimiHomesDisposed` on the `kh-*` shape; its red if the probe were skipped: *Expected …\kh-x\home\credentials to still be a link because a live tree keeps its home, but it was unlinked.*) |
+| S5.3.19 `CloseConsultDuringALiveTurn_LeavesTheHomeToTheBeat` (R10 (i)) | a conversation folder shaped as S5.3.5 with its `coai-turn.lock` held by the test (the turn "runs" in another process) | `close_consult` (`RemoveNow`); then the lock released; then `Sweep` | the record is `closed`; after `RemoveNow` the folder and the junction are untouched and no warn names a loss; after the sweep the folder is gone junction-first | (green on HEAD — pins `:74-75`, `:207-210`; its red: *Expected the credentials junction to be untouched while the turn lock is held by another process, but it was unlinked.*) |
+| S5.3.20 `AOneShotOwner_DeletesEveryEntryUnderItsLock_TheLockFileAndTheFolderLast` (R5) | a `OneShotHome` holding `kh-x\home\credentials` → the test's `persons\` and a `vh-…` folder; the per-entry delete seam records, for every entry, `HeldFile.Probe(<folder>\coai-turn.lock)` at the moment it is deleted | `Dispose()` | every entry but the lock file was deleted while the probe said `Held`; the lock file and the folder went last, after the release; the recorder never invoked; `persons\` intact | *Expected every entry of …\coai-vh\<8> to be deleted while its lock was still held, but "kh-x" was deleted after the lock was released.* (today's order, `VibeHomes.cs:286-291`) |
 
-**Review focus (Opus, after Fable's spec).** (1) `OneShotHome.Dispose`'s new order: `DisposeAllUnder` while the lock is held; on
+**Review focus (Opus, after Fable's judgement).** (1) `OneShotHome.Dispose`'s new order: `DisposeAllUnder` while the lock is held; on
 a `Stopped`, NOTHING is deleted and the lock is given back. (2) `SweepOneShot` never deletes past a `Stopped`. (3) No caller
 roots a Kimi home at a folder whose turn it holds (grep the diff for `OwnedScratch` and `HomeFor`). (4) The tests' junctions are
 inside their own `testsToDelete-` folders (grep for `Junctions.Make(` and `MakeAsync(`). (5) CC ≤ 4 in every changed method.
+(6) `ConsultCheckScratch.Delete` disposes `<root>\own` — not the root alone (R6). (7) The owner's entries go UNDER the lock, the lock
+file and the folder last, through ONE helper shared with `RemovedUnderItsLock` — no second copy of the loop (R5). (8) `KimiLaunch.Prepare`
+runs the resolved check BEFORE `KimiCredentialsLock.TakeAsync`, so a refused turn leaves no file under `kimi-locks` (decision j). (9) No
+new wait on a disposer's side; every new sentence carries paths and names, never a file's content (R2, R11).
 
 **Docs.** `research/module_server.md` (the conversation's Kimi home, the lock order, the one-shot disposal);
 `research/module_runners.md` (`OneShotHome`, `SweepOneShot`); `research/module_tests.md` (the rows of this table and the reds seen).
 
 ## E5.4 — `KimiConsultant`: the conversation, registered, seeded, and its limitations per side
 
-`model: opus` spec · Sonnet codes · Opus reviews. Needs E5.2 and E5.3.
+`model: opus` spec · built on Opus (ordinary, §0.2) · Opus reviews. Needs E5.2 and E5.3 (may start beside E5.3, merges after it).
 
 **Goal.** A Kimi row answers `consult`. Turn 1 creates a session in the conversation's snapshot, on the conversation's home.
 Every later turn loads that session with `--session`. Each turn is billed its share of Kimi's cumulative total. A session that
@@ -481,6 +679,25 @@ can be kept from reading on each side.
    (`featureAvailability.test.ts:45` holds them equal), and `FeatureAvailabilityTests.cs:78` becomes `Contain("kimi")`.
 10. **Registration:** `OnACli` gains `"kimi" => KimiOn(vendor)`, which is `VibeOn`'s shape: the runtime its row resolves to, else
     a new `KimiRuntime(vendor.Provider)`, never another runtime. `Answering` follows `Consulting` by itself.
+11. **(Plan gate 2026-10-16, finding (a)) A dropped session is REFUSED with its cure — coai never starts a fresh session in its
+    place.** `DroppedTheConversation` is `KimiReport.Parse(stdout).End == AcpWords.SessionLostWord` (decision 5) — the report's END word,
+    never its `Reason` text or the agent's. The service has the shape already: `ConsultFailures.cs:43` → `ConsultFailure.ConversationDropped`
+    → `ConsultationFailing.Terminal` ends the record with its handle cleared, not resumable (`ConsultationFailing.cs:73-77`); the reply
+    carries `What` and `Cure` (`ConsultFailure.cs:266-274`). The cure's sentence is widened for Kimi: "start a new consultation
+    (`close_consult` this one — its home goes with it)". **Why refuse, not restart:** (1) a silent `session/new` answers a FOLLOW-UP without
+    its premise — a wrong answer in the right shape, which the caller cannot tell from a right one; (2) the vendor's cumulative total would
+    restart under the same record, which is exactly the reset decision 12 guards — a restart would trip it on every dropped session;
+    (3) a `Handle` that changes mid-conversation has no status to say so: `interrupted` means "resumable", and this is not. The old home is
+    left to `close_consult` and D20 — its junction is still valid, nothing leaks. S5.4.9 and S5.4.15.
+12. **(Plan gate 2026-10-16, finding (b)) The cumulative delta guards a counter RESET.** `ConsultationUsage.Less` floors every field at 0
+    (`ConsultationUsage.cs:32-42`): a report whose total is BELOW what the conversation was already billed reads as "0 this turn" — a flat
+    row that under-bills the whole turn. New rule, in the core beside the floor: a CAPTURED report (`!NotCaptured`) whose `TokensIn` OR
+    `TokensOut` is below `record.Billed`'s is a reset — the vendor's counter restarted (a session that was not the one loaded, a vendor-side
+    restart) — and this turn's share is the report WHOLE, every field, flags as they are. Both totals are judged together, never per field:
+    a per-field mix would subtract one counter and restart the other. An uncaptured report is `Unknown` — zeros that are not a counter — and
+    is never a reset (decision 4's stated limit stands). The rule is shared: antigravity, the other cumulative vendor, gets the same reading,
+    and a flat row was never right for it either. M-K16 (d) decides whether Kimi can ever trip it; the guard is right whether or not it does.
+    S5.4.14.
 
 **SCENARIOS** (classes `KimiConsultantTests`, `AKimiConsultationScenarioTests` with a `PlayedKimi` launcher that answers each
 shim request with `KimiShimScripts.Report(…)` widened with a session id and a cumulative total; `ConsultantLimitationsTests`).
@@ -500,13 +717,15 @@ shim request with `KimiShimScripts.Report(…)` widened with a session id and a 
 | S5.4.11 `KimiHasALimitationRowOnEverySide` (`ConsultantLimitationsTests.cs:91` and `:112`) | `kimi` in `Consulting` | the existing tests | a row per side; Windows `unconfined` with its `measured` block; the others `unmeasured` with a `source` | *Expected a row of shared/consultant-limitations.json to describe 'kimi' on windows, but … No row … describes 'kimi' on Windows* (the loader's own sentence) |
 | S5.4.12 `TheSeedNamesKimiAsAConsultant` | — | `FeatureAvailabilityTests` (`:78` flipped), `featureAvailability.test.ts:45`, the generator's `--check` | `kimi` in `features.consultant` and in `CONSULTING`; the generated file current | *Expected FeatureAvailability.Builtin.Consultant to contain "kimi".* |
 | S5.4.13 `EveryAdapterRecordsWhatItLaunched` / `ConfinementPlannerTests` consult row | `Adapters()` gains `("kimi", new KimiConsultant(…))` (`ConfinementPlannerTests.cs:459-466`); the consult test's exclusion list (`:446`) gains `kimi` | the existing tests | a Kimi consult launch stands in the snapshot (asserted beside Vibe's, `:451-457`) | *Expected …WorkingDirectory to be "<RowTree>", but found "<Repo>".* |
+| S5.4.14 `ATotalBelowWhatWasBilled_IsAReset_AndTheTurnIsBilledWhatItSaid` (decision 12; pure in `ConsultationUsageTests`, then through the service with `PlayedKimi`; Theory) | (i) billed 20 000/30, the next report 5 000/9 captured; (ii) billed 20 000/30, the next report 25 000/20 (out below, in above); (iii) billed 20 000/30, the next report `notCaptured` | `ConsultationUsage.Less`; the service's second turn | (i) 5 000/9 — not 0/0; (ii) 25 000/20 whole — one counter restarted means the pair did; (iii) `Unknown`, 0 tokens, `NotCaptured`, as decision 4 says — never a reset; the record's `Billed` advances by the share each time | *Expected the second turn's billed TokensIn to be 5000L, but found 0L.* |
+| S5.4.15 `ADroppedSession_NeverStartsAFreshOne` (decision 11) | turn 2's report `end: session_lost`, exit 70 | the follow-up | the played shim was launched exactly twice (turn 1, the follow-up) — no third launch and no `session/new` after the loss; the record is no longer `open` and its `Handle` is empty; the reply's cure names `close_consult` and a new consultation | *Expected the played shim to have been launched 2 times, but it was launched 3 times.* (against an implementation that restarts the session) |
 
 **Done when** every scenario is green through the service where the table says so, both suites are green, and the generator's
 `--check` is clean. The live three-turn consult is the parent's DoD (J2).
 
 ## E5.5 — The consultant check (`--check-consultant`) for Kimi
 
-`model: opus` spec · Sonnet codes · Opus reviews. Needs E5.4 (and E5.3's disposal).
+`model: opus` spec · built on Opus (ordinary, §0.2) · Opus reviews. Needs E5.4 (and E5.3's disposal).
 
 **Goal.** `coai-mcp --check-consultant` runs one paid Kimi turn as a consultation makes it: in a COPY of the check's scratch
 repository, on a ONE-SHOT owned home (junction and all) under `<root>\coai-vh\<8>`, disposed junction-first whatever ended
@@ -539,7 +758,7 @@ the model rebound `:252`), `:265-286` (`LaunchAsync`: `OwnedScratch = homeFolder
 
 ## E5.6 — The question consultant's Kimi row: the matrix, the planner arm, the one-shot row
 
-`model: opus` spec · Sonnet codes · Opus reviews. Needs E5.4 (and E5.3's disposal).
+`model: opus` spec · built on Opus (ordinary, §0.2) · Opus reviews. Needs E5.4 (and E5.3's disposal).
 
 **Goal.** A question-consultant row can run on Kimi with a `none` or a `disk` prompt. Each row is flagged **Can read this
 machine**, because it can. A `web` prompt is refused until a cell measures it. The row's home and its copies are one-shot and gone
@@ -608,7 +827,7 @@ junction-first on success, refusal and cancellation.
 
 ## E5.7 — The extension: the consultant picker, the consultant-runtime gate, and the help in five languages
 
-`model: opus` spec · Sonnet codes · Opus reviews. Written beside E5.4 and E5.6, merged after both (it needs their seeds).
+`model: opus` spec · built on Opus (ordinary, §0.2) · Opus reviews. Written beside E5.4 and E5.6, merged after both (it needs their seeds).
 
 **Goal.** In the extension a Kimi row can be picked as a consultant and as a question-consultant row. An installed `coai-mcp`
 that cannot consult on Kimi is NAMED, never silently routed elsewhere. The help says what a Kimi consultant reads and where its
@@ -697,12 +916,48 @@ homes live, in all five languages.
    the script).
 9. **D16 / E4.5 left no consultant gate**, and S3 shipped the Vibe consultant one release after the Vibe runtime with none. E5.7
    adds the table (with `vibe` in it, unless the operator says no).
+10. **(Fable, 2026-10-16) An end the shim's switches do not name is printed `cancelled` and exits 69** — the default arms of
+    `AskAcpMode.EndWord` (`:354-363`) and `EndExit` (`:299-305`). So `session_lost` needs explicit arms (E5.2 decision 9, S5.2.12), or
+    E5.2 decision 4's "70" is 69 in the binary and the host reads a dropped session as "ended before an answer".
+11. **(Fable, 2026-10-16) Where the sign-in's ancestors lead is resolved at MAKE time only.** `Junctions.Refusal`'s `Resolved`
+    (`Junctions.cs:179-189`) runs inside `Make` (`:114-118`), i.e. on the first turn; the per-turn checks re-read the spellings
+    (`KimiLaunch.LocalHome` `:149-152`, `KimiHome.Credentials` `:221-233`) and then key a lock on the final path
+    (`KimiCredentialsLock.KeyFor` `:116-121`) without judging it. D19 says "the junction's target checked before every turn" — the
+    target's spelling is, where it leads is not. E5.3 decision j closes it; to be recorded in D19 at promotion.
+12. **(Fable, 2026-10-16) The check's `ConsultCheckScratch.Delete` is handed the scratch ROOT** (`ConsultantCheckMode.cs:307`) while
+    the Kimi home sits one level down at `<root>\own\kh-*` (`ConsultantCheck.cs:262`, `:285`) — a `DisposeAllUnder(root)` would find no
+    home. E5.3 judgement R6 names the folder to dispose.
+
+## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
+
+The coai plan gate on this document passed (verdict `proceed`). Its operator commands: the SPLIT is Fable's judgement (§0.2); a story
+that touches authentication or security is built on Fable, an ordinary one on Opus (§0.2's table).
+
+**Accepted, and where each went:**
+- **(a)** `session_lost` (exit 70) mapped EXPLICITLY in the shim's contract and in both switches → E5.2 decision 9, S5.2.12. The host
+  classifies it from the report's `end`, never from text, and the consultant REFUSES with a cure — never a fresh session in its place →
+  E5.4 decision 11, S5.4.15.
+- **(b)** the cumulative-usage delta guards a reset: a captured total below what was billed bills the report WHOLE — never a negative,
+  never a flat 0 → E5.4 decision 12, S5.4.14.
+- **(c)** how turns avoid a concurrent renewal, stated: the per-sign-in gate and the tree hold serialise every coai Kimi launch on one
+  sign-in across conversations, rounds and servers, plus the foreign-`kimi` wait → E5.3 decision k, S5.3.16 (two conversations' turns
+  started together on one sign-in: a peak of 1, the second waiting for the first).
+
+**Rejected, with the reasons given to the gate:**
+- **"Unlink the junction between turns."** Rejected: a junction renews nothing — only a RUNNING `kimi` refreshes the token — and every coai
+  launch is already serialised on the sign-in (decision k; the gate, the tree hold and the foreign wait). Unlinking would add a make and a
+  verify per turn, a write into the home that `Made`'s fresh-only rule (`KimiHome.cs:85`) exists to forbid, and a window in which the home is
+  not what the sweep and the next turn expect — for no renewal avoided.
+- **"Keep the check's home under `coai-kimi`."** Rejected: decision g makes every `coai-vh` owner junction-first, so the check's home is as
+  safe there as a question row's; and `coai-kimi` is D20's RECORD-judged namespace (`ConsultantHomes.All`; the sweep reads a consultation
+  id off each folder's name, `ConsultantHomeSweep.cs:187`) — a check has no record, so its folder would be judged foreign and kept for
+  `ForeignAge` where the one-shot owner deletes it at once.
 
 ## Open questions
 
-1. **The cornerstone mark (operator).** E5.3 is the cornerstone this epic needs, and the plan's quota (2 of 2) is spent. Yes →
-   the ledger line becomes `3 of 2 …` by the operator's decision and Fable writes E5.3's spec. No → Opus writes it from the table
-   above.
+1. **The cornerstone mark — DECIDED 2026-10-16 (§0).** The quota stands at 2 of 2; E5.3 is not a cornerstone. Opus wrote its
+   decisions (a–i); Fable gave its security judgement (R1–R11), added decisions j–k and the rows S5.3.15–S5.3.20, and E5.3 is built on
+   Fable by the plan gate's command (§0.2). Closed.
 2. **A re-login in the middle of a conversation (owner).** As built (D19), turn 2 is refused because `config.toml` no longer
    matches a fresh render, and the cure loses the vendor session. Alternative: when the ONLY difference is the person's slot
    values, coai re-renders `config.toml` before the turn (coai's render is authoritative either way, so a tampered file would be
@@ -719,7 +974,8 @@ homes live, in all five languages.
 ## Definition of Done (this epic)
 
 - [ ] E5.1: §29 (M-K16) written before any E5.2 code, the branch of each E5.2 item named; §30 (M-K17) before any web sentence.
-- [ ] The operator answered §"Open questions" 1 before E5.3's coder starts; E5.3's spec is final (Fable's, or Opus's).
+- [ ] E5.3's spec is final — Opus's decisions a–i, Fable's j–k and judgement R1–R11 (2026-10-16) — and its coder is Fable, every
+      other story's Opus (§0.2, the plan gate's command).
 - [ ] Every scenario of E5.2–E5.7 is a test that was watched red with the message in its table, then green; both suites green;
       `dotnet format --verify-no-changes` clean; both generators' `--check` clean.
 - [ ] No test made a junction outside its own `testsToDelete-` folder, and none holds an inheritable handle in the test host.
