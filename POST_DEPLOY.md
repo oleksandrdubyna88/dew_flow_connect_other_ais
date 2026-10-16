@@ -19,7 +19,17 @@ one of them arriving wrong.
 
 Target: the released **extension** version — `--target 0.33.1`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
 
-Last verified: 2026-10-15 · mcp **0.56.0** and extension **0.76.0** (released) · server **0.12.0** deployed — the box
+Last verified: 2026-10-16 · mcp **0.57.0** and extension **0.77.0** (released) · server **0.12.0** deployed — the box
+serves 0.12.0 · automated items 1, 2, 6, 9 and 10 PASS as the checker printed them. Item 2 passed on the seventh minute,
+after the Marketplace's known lag. Manual items 3, 4, 5, 7, 8, 11 and 12 were not run. Run locally:
+`MCP_VERSION=0.57.0 SERVER_VERSION=0.12.0 node .agents/conventions/tools/post-deploy-check.mjs --target 0.77.0`. The
+`mcp-v0.57.0` and `extension-v0.77.0` release runs succeeded. They contain #817 (Kimi Code as a reviewer on the
+person's own sign-in, the extension row with install and update per OS, and the usage line naming the model that ran)
+and #834 (docs only). Live, on a build of #817's branch: a plan round and a code round with a Kimi row both reached
+`proceed`, and 4 of 4 launches answered (research/RESULTS_kimi_confinement.md §28). The install buttons were not run
+live; the owner runs them.
+
+Previously verified: 2026-10-15 · mcp **0.56.0** and extension **0.76.0** (released) · server **0.12.0** deployed — the box
 serves 0.12.0 · automated items 1, 2, 6, 9 and 10 PASS as the checker printed them; item 2 first read 0.75.0 and passed
 on the seventh minute, the Marketplace's known lag; manual items 3, 4, 5, 7, 8, 11 and 12 were not run. Run locally:
 `MCP_VERSION=0.56.0 SERVER_VERSION=0.12.0 node .agents/conventions/tools/post-deploy-check.mjs --target 0.76.0`. The
