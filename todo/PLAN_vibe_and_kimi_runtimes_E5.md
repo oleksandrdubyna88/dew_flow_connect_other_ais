@@ -1,8 +1,10 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **plan only, 2026-10-16 — stories written by the judge (Opus); the split confirmed by Fable (§0.2); E5.3 carries Fable's
-> security judgement; the plan gate passed (proceed) and its findings are folded (§"Plan gate 2026-10-16"); no code yet.** E5.1 is a
-> measurement (M-K16) that must be recorded before E5.2's code. The coder of each story follows the gate's command (§0.2): E5.3 on
+> Status: **E5.1–E5.2 implemented 2026-10-16** — M-K16 recorded as RESULTS §29 (every fact took the first branch of E5.1's table), the probe
+> client's `loadUpdates` and `endLikeTheShim`, the shim's `--session` with `session_lost` (exit 70); their deviations are in §"Where the parent plan
+> and the code disagree", *E5.1–E5.2 as built*. M-K17 (§30) not run. **The other stories: plan only** — stories written by the judge (Opus); the split
+> confirmed by Fable (§0.2); E5.3 carries Fable's security judgement; the plan gate passed (proceed) and its findings are folded (§"Plan gate
+> 2026-10-16"). E5.1 is a measurement (M-K16) that must be recorded before E5.2's code. The coder of each story follows the gate's command (§0.2): E5.3 on
 > Fable, every other story on Opus.
 >
 > Parent plan: [PLAN_vibe_and_kimi_runtimes.md](PLAN_vibe_and_kimi_runtimes.md), §4 **S5** (decisions D1, D6, D15, D19, D20).
@@ -238,6 +240,8 @@ and through the probe's small client for every load (the shim has no load path y
 | (d) three turns | the same id 3 of 3, totals monotone, delta_out = that turn's `outputTokens` | keeps `UsageIsCumulative = true` (E5.4) as M-K5b found it |
 | | a total FALLS after a turn | stops: the delta floors at 0 (`ConsultationUsage.Less`) and would under-bill. The plan records it and the owner decides before E5.4 |
 | | the session is not found on turn 2 or 3 | stops: the conversation cannot rest on `session/load`. Re-plan S5 with the owner |
+
+**Result (RESULTS §29, 2026-10-16): the FIRST branch of every row.** (a) the load announces the `model` option (the home's one model, 9 of 9 loads) → the in-session check on the load's announcement; (b) Kimi replays the history before the load's response (9 of 9) → the answer is what follows the load; (c) an unknown id is `-32602` `Invalid params: Unknown sessionId: <id>` (3 of 3) → `session_lost` for any refused load no known failure names; (d) the same id, totals that only rise, the delta equal to the turn's own output (6 of 6) → `UsageIsCumulative = true`. Not measured: whether `tool_call` updates are replayed — S5.2.2's fake agent replays one.
 
 **SCENARIOS** (the client's unit tests are red first; the cells are the measurement).
 
@@ -927,6 +931,40 @@ homes live, in all five languages.
 12. **(Fable, 2026-10-16) The check's `ConsultCheckScratch.Delete` is handed the scratch ROOT** (`ConsultantCheckMode.cs:307`) while
     the Kimi home sits one level down at `<root>\own\kh-*` (`ConsultantCheck.cs:262`, `:285`) — a `DisposeAllUnder(root)` would find no
     home. E5.3 judgement R6 names the folder to dispose.
+
+### E5.1–E5.2 as built (Opus, 2026-10-16)
+
+Numbered apart from the list above, so the stories built in parallel do not collide on a number.
+
+- **B1. The replay is kept out by a WINDOW, not a mark** (decision 3). `AcpSession.ReplayedAsync` drops every `session/update` that arrives while
+  `session/load` is open; `Ended` gains no `AnswerFrom` and the three trace lists are not sliced. Same answer, and two things the mark could not give: the
+  replayed tool calls never spend the trace caps (`MaxTraceEntries` 1000, `MaxTraceChars` 1 MiB) that a long conversation's history would otherwise fill
+  before the turn's own trace, and the exclusion survives a turn that throws after the load (`Ended.Of(Failed(…))` would drop a mark held in `Ended`). A
+  `usage_update` during the replay is dropped too. Sound because the pump handles messages in order: every replayed update is handled before the load's
+  response completes the request.
+- **B2. A refused load that a known failure names reports end `agent_failed`, not `session_lost`** (decision 4, made explicit). `AskAcpMode.Named` turns the
+  end with the diagnosis, so a load refused for the sign-in is `not_signed_in`, 77, end `agent_failed` (S5.2.4 asserts it). Without it the report would say
+  `session_lost` with exit 77, and E5.4 decision 5 reads the END word — it would drop a conversation that only needed `kimi login`.
+- **B3. A bare `--session` (no value) is 65 too** — a fifth row of S5.2.5. `Program.Flags` drops a flag whose value is missing, so `--session` last on the
+  argv, or followed by another flag, would have run a NEW session in place of the one asked for.
+- **B4. The `session_lost` reason names the id in coai's words**, then the agent's code and message with its echo of the id written `<id>` (M-K16 (c): do not
+  quote the id from the error). The agent's message stays in the reason, because the known-failure diagnosis reads it (S5.2.4).
+- **B5. The fake agent's script** (brief item 1): `loadModels` absent falls back to `models`, not "none" — Kimi announces the model on a load as on
+  `session/new` (E5.1 (a)), and "none" would make every load scenario 65 under the first branch. `loadError` is an object `{code, message}`. `replay` is a list of
+  the existing steps, so it replays a `tool_call` too (S5.2.2 does).
+- **B6. S5.2.6 keeps branch (i) only**, with `models` offering the asked model and `loadModels` not, so it proves the LOAD's announcement is the one checked.
+- **B7. Where the tests live.** S5.2.1–S5.2.9, S5.2.11 and S5.2.12 are a new class, `AskAcpSessionTests`, rather than additions to `AskAcpModeTests` and
+  `AcpClientTests`; S5.2.10 is in `AKimiShimScenarioTests` as planned. S5.2.8's golden is a literal in the test (the client's lines, the cwd spelled `<cwd>`),
+  recorded on the unchanged client, not a file. `AskAcpMode.EndExit` became `internal` for S5.2.12.
+- **B8. The reds** were watched against a stub that parses `--session` into `AcpAsk.Session` and never loads, so most of them read "found 0" / "answered" /
+  "session/new" rather than the table's predicted wording; S5.2.2's red is exactly the predicted one (against a load without the window); S5.2.4's predicted
+  "77, found 70" was replaced by a teeth run (with `Named` removed: *Expected … "end" … not to be "session_lost"*).
+- **B9. E5.1's cell is not a `--cells M-K16` arm of the probe.** The scout ran M-K16 with a scratch driver (outside the repository) before the client had the
+  two features; `acpTurn` gained them afterwards, unit-tested (S5.1.1–S5.1.2), for the next run. `endLikeTheShim` waits for 250 ms of no output after
+  `session/cancel`, at most 1 s — what the driver measured (251–282 ms) — where the shim waits for no PENDING request (at most 1.5 s). The client's tree
+  kill is by pid on POSIX too (`SIGKILL`; only the unit tests' fake agent runs there). The probe script is not edited, so item 8's stale "~250" label stays.
+  M-K17 (§30) was not run.
+- **B10. `KimiReport` gains no `SessionId`** — E5.4 decision 3 owns that. The shim already prints `sessionId`; on a load it is the asked id on every exit.
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 

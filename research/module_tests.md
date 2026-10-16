@@ -4333,3 +4333,31 @@ The first push's Linux job (same day, deviation 76 (f)): the container run had b
 | `KimiCredentialsLockTests.TheDefaultRoot_IsOutsideTheHomesFoldersAndTemp_AndItsWaitIsCutByTheToken` | the default lock root is an absolute path under `LocalApplicationData` even when that folder does not exist yet | non-root, no `~/.local/share`: *Expected string to end with "/coai-mcp/kimi-locks", but "coai-mcp/kimi-locks" is too short.* |
 | `JunctionsTests.ADrivePath_IsLocalWhenItIsRootedOnAFixedOrRemovableDrive` | the UNC, `\?\`, `\.\` and `\?\UNC\` rows now have their two leading backslashes | (the old rows tested nothing: one backslash is a drive-less relative spelling) |
 | `NoTestHoldsAnInheritableHandleTests.TheScan_SeesWhatItForbids` | the scan also forbids a positional `true` as the last argument of `Take`/`TakeWithin`, with one nested call among the arguments, and does not match an explicit `false` or another call's `true`; no real test matches | *Expected Forbidden.IsMatch("var held = HeldFile.TakeWithin(p, w, true);") to be True … but found False.* |
+
+## The shim's `--session` and the probe client's load features (2026-10-16, E5.1–E5.2 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md`)
+
+The scripted agent (`tests_fakecli/AcpAgent.cs`) learns `session/load` from four script fields, every existing script unchanged: `loadable` (absent: true),
+`loadError` (`{code, message}`, absent: `-32602 "session not found"`), `loadModels` (the LOAD's `model` values; absent: what `models` says, as Kimi announces
+them on a load as on `session/new`) and `replay` (steps run as `session/update` BEFORE a loadable load is answered — a `tool_call` among them, since whether Kimi
+replays tool calls was not measured). The node half starts a fake agent of its own, written into the test's `testsToDelete-kimi-acp-*` folder, which logs
+`cancel`, `eof` and — on a normal exit only — `exited`, so a tree kill is seen as "no `exited` line" on Windows and POSIX alike.
+
+| Suite | What it holds | Seen red as |
+|---|---|---|
+| `kimi.test.mjs` S5.1.1 (2 tests) | `acpTurn({ load })` records `loadUpdates` — `agent_message_chunk` ×2 (`OLD`) and `tool_call` — and a replayed chunk is not the answer; a row keeps the first 120 characters; the answer is only what follows the prompt | *AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal: + undefined - [ { kind: 'agent_message_chunk', text: 'OLD' }, … ]* (both) |
+| `kimi.test.mjs` S5.1.2 | `endLikeTheShim`: cancel → kill, the agent never sees its stdin end | *AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal: actual: [ 'eof', 'killed' ], expected: [ 'cancel', 'killed' ]* |
+| `AskAcpSessionTests.ALoadTurn_SendsSessionLoad_WithTheSameCwd_AndNoMcpServer` (S5.2.1) | `session/load {sessionId, the full cwd, mcpServers: []}`, no `session/new`, then `set_config_option` and `session/prompt`; report `sessionId` the asked id; exit 0 | *Expected agent.ReceivedMethods() {"initialize", "session/new", "session/set_config_option", "session/prompt", "session/prompt", "session/cancel"} to contain "session/load"* |
+| `…AReplayedHistory_IsNeverTheAnswer` (S5.2.2) | a replayed chunk and tool call are not the answer or the trace | against a load without the window: *Expected … answer … to be "NEW" … but they differ at index 0: "OLD ANSWERNEW"* |
+| `…AnUnknownSession_IsSessionLost_Exit70_NothingPrompted` (S5.2.3) | `session_lost`, 70, the reason names the id, nothing configured or prompted | *Expected … "end" … to be "session_lost" … (actual) "answered"* |
+| `…ASessionLostReason_NamesTheIdInItsOwnWords_NotTheAgentsEcho` | Kimi's `Unknown sessionId: <id>` echo is not repeated; the code is | *Expected code to be 70, but found 0* |
+| `…ALoadRefusedForTheSignIn_IsStillNotSignedIn` (S5.2.4) | 77, `failure: not_signed_in`, and the end is NOT `session_lost` | *Expected code to be 77 … but found 0*; teeth: with `AskAcpMode.Named` removed, *Expected … "end" … not to be "session_lost"* |
+| `…AMalformedSessionId_Is65_BeforeAnyProcess` (S5.2.5, 5 rows: `a b`, `../x`, a newline, 101 characters, no value) | 65, the sentence names `--session`, the agent never started | *Expected code to be 65, but found 0* (5 of 5) |
+| `…TheModelOnALoad_FollowsWhatTheLoadAnnounced` (S5.2.6, branch (i) only) | `models` offers the asked model, `loadModels` does not → 65, `model_not_offered`, nothing set or prompted | *Expected code to be 65 … but found 0* |
+| `…ALoadedTurnsUsage_IsTheSessionTotal_AsKimiSaidIt` (S5.2.7) | `tokensIn 40004`, `tokensOut 72`, captured; the `/usage` reply not in the answer | (green before the load existed — it pins that the load path keeps `/usage`) |
+| `…WithoutSession_TheTurnIsByteForByteToday` (S5.2.8) | the client's six lines on a turn without `--session` equal a literal recorded before E5.2 (cwd spelled `<cwd>`) | (green — recorded on the unchanged client) |
+| `…ALoadedTurn_RefusesEveryPermission_AndServesOnlyItsCwd` (S5.2.9) | after a load: `reject_once`; an outside read and `AGENTS.md` refused and their canaries never in the report | *Expected agent.ReceivedMethods() … to contain "session/load"* |
+| `…TheHelpNamesSession` (S5.2.11) | `--help` names `[--session <id>]` | *Expected Program.HelpText … to contain "[--session <id>]"* |
+| `…EveryEnd_HasItsOwnWordAndExit_NoneFallsToADefaultArm` (S5.2.12) | `SessionLost` → `session_lost`, 70; every word distinct; `cancelled` only for `Cancelled`; 69 only for `NotStarted`, `Deadline`, `Cancelled` | with the enum value and no arms: *Expected AskAcpMode.EndWord(AcpEnd.SessionLost) to be the same string … (actual) "cancelled" "session_lost"* |
+| `AKimiShimScenarioTests.TheTreeHold_IsTakenForALoadTurnToo` (S5.2.10, the REAL shim as a child, Windows) | the agent of a `--session` turn starts with both hold files `Held`; both `Free` after the exit | *Expected agent.ReceivedMethods() {… "session/new" …} to contain "session/load" because the turn continued its session.* |
+
+Not covered: a `tool_call_update` after the load for a REPLAYED tool call's id; the M-K16 cell itself as a probe arm (it ran on a scratch driver, §29).
