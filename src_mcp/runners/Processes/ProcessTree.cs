@@ -166,16 +166,16 @@ public static class ProcessTree
         return alive;
     }
 
-    /// <summary>Every process on this Linux box, as pid → parent pid, read from <c>/proc</c> by the one <see cref="ProcStatReader"/>.</summary>
+    /// <summary>Every process on this Linux box, as pid → parent pid, read from <c>/proc</c> by the one <see cref="ProcStat"/> reader.</summary>
     /// <remarks>A process that exited between the directory listing and its read, or one whose line cannot be read, is left out: nothing is known of it.</remarks>
     private static Dictionary<int, int> LinuxParents()
     {
         var parents = new Dictionary<int, int>();
-        foreach (var directory in Directory.EnumerateDirectories("/proc"))
+        foreach (var pid in ProcReads.Real.Pids())
         {
-            if (int.TryParse(Path.GetFileName(directory), out var pid) && ProcStatReader.Read(pid) is ProcStatReading.Read { Stat: var stat })
+            if (ProcStat.ReadFor(pid, ProcReads.Real) is ProcStatRead.Read { Line: var line })
             {
-                parents[pid] = stat.Parent;
+                parents[pid] = line.ParentPid;
             }
         }
 
@@ -192,7 +192,7 @@ public static class ProcessTree
     /// still running" it is gone. Always false off Linux, where the start-time read already fails for an exited process.
     /// </remarks>
     private static bool Exited(int pid) =>
-        OperatingSystem.IsLinux() && ProcStatReader.Read(pid) is ProcStatReading.Read { Stat.State: var state } && ExitedEntry(state, ThreadsOf(pid), pid);
+        OperatingSystem.IsLinux() && ProcStat.ReadFor(pid, ProcReads.Real) is ProcStatRead.Read { Line.State: var state } && ExitedEntry(state, ProcReads.Real.Threads(pid), pid);
 
     /// <summary>Whether a process table entry in <paramref name="state"/>, whose thread group lists <paramref name="threads"/>, has exited.</summary>
     /// <remarks>
@@ -201,20 +201,6 @@ public static class ProcessTree
     /// </remarks>
     internal static bool ExitedEntry(string state, IReadOnlyCollection<int> threads, int pid) =>
         state is "Z" or "X" && threads.All(thread => thread == pid);
-
-    /// <summary>The thread ids of <paramref name="pid"/>'s group, from <c>/proc/&lt;pid&gt;/task</c>.</summary>
-    /// <returns><c>[-1]</c> when the listing cannot be read — a thread nobody can rule out, so the entry is not called exited.</returns>
-    private static int[] ThreadsOf(int pid)
-    {
-        try
-        {
-            return [.. Directory.EnumerateDirectories($"/proc/{pid}/task").Select(path => int.TryParse(Path.GetFileName(path), out var thread) ? thread : -1)];
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return [-1];
-        }
-    }
 
     private const uint SnapshotOfProcesses = 0x00000002;
 
