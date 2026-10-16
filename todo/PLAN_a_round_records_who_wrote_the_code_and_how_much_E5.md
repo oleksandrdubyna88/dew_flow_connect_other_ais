@@ -111,8 +111,14 @@ Each is a choice the main session may overrule before the story starts; §7 list
 - **`--log` follows the log's absence rule.** A round with no recorded state has NO `authorsState` member — the rule `size`
   and `planSource` already follow (`research/module_server.md`, the two `--log` paragraphs). The 2026-10-14 text printed the
   words `not recorded`; one rule for every `--log` member is worth more than the words.
-- **Growth** is the parent's §14 (`round_authors`, `RoundRecord.Authors` — D15) plus the three totals above, ≈ 150 B a round
-  → ≈ 3 MB a year a side in session files; no new surface.
+- **Growth** is the parent's §14 rows for `round_authors` and `RoundRecord.Authors` (D15): the snapshot is ≈ 1.2–4 KB a
+  round in the indented session file (~0.4 KB a row × 3–10 rows) → **22–75 MB a year a side**, and every progress-tick save
+  rewrites the whole file, so the write cost grows with it. The three totals this document adds to the snapshot cost
+  ≈ 150 B a round more (≈ 3 MB a year) — that figure is the ADDITION, not the snapshot. **Retention:** none of its own —
+  session files are kept for ever (parent §14, a decision: they are what the database is rebuilt from), and the snapshot
+  lives and dies with the file it is in. **Interruption:** the snapshot has no write of its own; it rides the round's
+  own `SessionStore.Save` under `SessionClaim` (temp file + move, or in place under `SessionTurn`,
+  `SessionStore.cs:516-582`), so a crash leaves the previous file or the new one, never a half snapshot. No new surface.
 
 ## 4. Order
 
@@ -345,9 +351,11 @@ S6 may run beside S2–S5 once S1 has merged (E2 has). The epic ships as ONE com
        gate's and every peer's `repo_path` ∪ every `WriteTarget.Where` root E3 resolved).
     6. `RoundAttribution.Assign` → `RoundAuthorsBuilder.Build` → the snapshot. From `Build`'s `WritesOutsideTheGateCheckout`
        the step derives `UncoveredWrites` (every call listed) and `SubmoduleWrites` (the calls whose root, relative to
-       `repo_path`, is a `submodule.<name>.path` of the checkout's `.gitmodules` — read once per round, `git config -f
-       .gitmodules --get-regexp`, a failed read counting none as submodule and saying so at Debug); no root is stored (gate
-       finding 0).
+       `repo_path`, is a declared submodule path of the checkout's `.gitmodules`) — read once per round by the SHIPPED
+       parser `CoaiMcp.Runners.Git.GitModules.In(repo_path)` (`src_mcp/runners/Git/GitModules.cs:24-35`, "parsed rather
+       than asked of git" because the worktree populator is on the round's critical path too), so **no process is launched
+       on the answer path**; an absent or unreadable file counts none as submodule and says so at Debug. No root is stored
+       (gate finding 0).
 
     The attributed round's `CallerSessionId` is the id E3's ladder resolved; earlier rounds' come from `authors_session`, else a
     UUID `rounds.caller`, else `""`. An `ArgumentException` from `Assign` (its `Validate()` refused the input) becomes
@@ -361,8 +369,10 @@ S6 may run beside S2–S5 once S1 has merged (E2 has). The epic ships as ONE com
     (`measurement.md` rule 4), observation in the story's summary. The clock is a `TimeProvider` argument. Hitting either limit
     → `partial: read budget`, the rows read so far kept (E6 decides what a partial round counts for). **The 2 s is ONE deadline
     for the whole `For`**, taken from the `TimeProvider` when `For` starts and passed down: E3's `ReadBudget.MaxTime` is the time
-    left at the reader's start, and the peer query, the `.gitmodules` process, E4's attribution and the snapshot construction
-    each check the same deadline between phases; a deadline missed after the read → `partial: read budget` with what is built
+    left at the reader's start, and the peer query, the `.gitmodules` parse, E4's attribution and the snapshot construction
+    each check the same deadline between phases. **Inside** the peer phase the deadline is checked before EACH peer session
+    file is loaded (the files are small — the largest is 190 KB, parent §14 — so one load cannot run long), and the query
+    itself runs with `Default Timeout=1`; no phase starts a process, so nothing can outlive the deadline; a deadline missed after the read → `partial: read budget` with what is built
     so far (no rows when attribution never ran). The 64 MiB stays the reader's own byte limit, and **E3 charges it on the
     SLICE** — `ReadBudget.MaxBytes` against the bytes its byte gate YIELDS (`ScanMeter.BytesYielded`, reported as
     `Diagnostics.BytesInSlice`), never against the bytes it skipped — while `MaxTime` runs over the WHOLE read, skipped
@@ -398,7 +408,8 @@ S6 may run beside S2–S5 once S1 has merged (E2 has). The epic ships as ONE com
     budget with `fromUtc` past all but a slice SMALLER than 1 KiB → `observed` (the byte limit is the slice's, E3 F1 — the
     step passes the bound, it does not re-charge the file); a `FakeTimeProvider` advanced past 2 s mid-read → the
     same `partial: read budget`; the fake clock advanced inside the peer-query phase (not the reader) → `For` stops there and reports `partial: read
-    budget`.
+    budget`; with three peers and the clock advanced past the deadline while the FIRST peer file loads → the second and
+    third are never loaded (a spy on `SessionStore.Load`) and the state is `partial: read budget`.
   - A reader that throws → `unobserved: reader failed`, the round still answers and is saved (through `PanelService`, FakeCli).
   - Any round (not only the first) with a peer gate session of the same caller in the store → E4 is handed that peer, built
     from the peer's session file (its `OpenedUtc` from the file even when `sessions.opened_utc` differs); no database, or a
@@ -464,8 +475,9 @@ S6 may run beside S2–S5 once S1 has merged (E2 has). The epic ships as ONE com
     assertion in code or tests. No snapshot, or a state `IsWellFormed`'s rule refuses (the same rule as S1, restated for
     TypeScript, the `reviewedFrom` ↔ `PlanSource.IsWellFormed` precedent) → `''`; `unobserved` → `authors not observed —
     <reasons>`; else main = the distinct displayed models of `who = main` rows; coders = the DISTINCT `agent` ids of subagent
-    rows with association `wrote here` (a straddler once), grouped by family through `shared/model-display-vectors.json`: one
-    family → *N Family coder(s)*; two → *2 Sonnet + 1 Opus coders* (larger group first, ties by family name); more than two →
+    rows with association `wrote here` (a straddler once), grouped by family through `shared/model-display-vectors.json` —
+    the noun is *coder* when the TOTAL is 1 and *coders* otherwise, in every form below (*1 Sonnet coder*, *3 Sonnet
+    coders*, *1 Sonnet + 1 Opus coders*), a test for the total of 1; one family → *N Family coder(s)* by that rule; two → *2 Sonnet + 1 Opus coders* (larger group first, ties by family name); more than two →
     *N coders (mixed)*; none → *main only* (parent §8, gate finding 2); both windows counted (§3); size = the `delta` scope when
     its `state` is `recorded`, else the `whole` scope when its state is, else no size clause — lines of `shown` + `elided`, files
     of `shown` + `elided` + `binary` (`added`/`removed` absent in a binary cell, never 0); `partial` appends *· partial —
