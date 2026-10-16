@@ -190,11 +190,14 @@ export function builtEnv({ home, pin = true, profile = '', personsBin = '', plat
  * `:`-separated PATH. No Windows name, and no NoDefaultCurrentDirectoryInExePath (a Windows-only variable).
  */
 function unixBuiltEnv({ home, pin, profile, personsBin, parent }) {
-  const env = { ...minimalEnv('linux', parent), KIMI_CODE_HOME: home };
-  if (pin) env.KIMI_CODE_NO_AUTO_UPDATE = '1';
-  if (personsBin) env.PATH = [personsBin, env.PATH ?? ''].filter(Boolean).join(':');
-  if (profile) env.HOME = profile;
-  return env;
+  const minimal = minimalEnv('linux', parent);
+  return {
+    ...minimal,
+    KIMI_CODE_HOME: home,
+    ...(pin && { KIMI_CODE_NO_AUTO_UPDATE: '1' }),
+    ...(personsBin && { PATH: [personsBin, minimal.PATH ?? ''].filter(Boolean).join(':') }),
+    ...(profile && { HOME: profile }),
+  };
 }
 
 function windowsBuiltEnv({ home, pin, profile, personsBin, parent }) {
