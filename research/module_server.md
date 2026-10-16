@@ -3468,9 +3468,21 @@ written empty, and the column's default `not recorded` marks every row from befo
 Reached through both preview-fork shapes as step 21 is, and `--round-counts` on a step-21 file reads and leaves it at
 twenty-one (`TheRoundsSizeIsStepTwentyTwoTests`).
 
+**Schema step 23 — `rounds.plan_source`** (`Schema.ThePlanSource`, appended after step 22; story E2.S1 of
+`todo/PLAN_the_plan_gate_reads_the_committed_plan_E2.md`, contract C1). What a PLAN round reviewed: the JSON of the
+record's `PlanSource` (`origin` `commit`/`text`, `commit`, `path`, `blob`, `bytes`, `textId`), serialised through
+`ServerJsonContext.Default.PlanSource` — camelCase, indented, exactly what the session file holds. `RoundsDb.RecordRoundRow`
+binds it from the record (`$planSource`), and the upsert on `(session, stage, number)` rewrites it with the rest, as it
+does `round_key`: unlike the size there is no separate measurement to protect, so a re-record from the record is correct.
+**Empty means "not recorded"**: every row from before the step, every code/document/feature/skipped round (they carry no
+`PlanSource`), and a plan round that finished before E1 stamped one. No backfill — the session file keeps its own copy.
+Reached through both preview-fork shapes as step 22 is, and a read-only `--log` on a step-22 file reads and leaves it at
+twenty-two (`ThePlanSourceIsStepTwentyThreeTests`). `ThePairsThemselvesTests`' step-12 re-run drops the column with the
+rest.
+
 **`--log` names each round's size** (story E2.S5, contract C3). `LoggedRound` gains an init property `Size`
 (`RoundSize?`, JSON `size`): `{ whole: { state, from, cells[] }, delta: { … }, origin }`, one cell per (coverage, kind) with
-`files`, `added`, `removed`. `RoundsQuery.Rounds` hands the page's ids to `RoundChangesLog.Attach` (its own file, the
+`files`, `added`, `removed`. `RoundsQuery.Rounds` hands the page's rounds to `RoundChangesLog.Attach` (which finds each round's id in its own cursor) (its own file, the
 `QuestionConsultLog` shape, on the read-only connection `Read` already opened), which answers with TWO grouped reads per page —
 `rounds` for the states, `round_changes` for the cells — never one per round. **Absent means not recorded:** a round with no
 `size` member predates step 22, is a plan/document round, or never had a size written; a file still at step 21 is asked for
@@ -3480,8 +3492,23 @@ writes no nulls) and a reader treats absent as *no line count*, never 0 — `Rou
 reader, not `Columns.Number`, which would turn the NULL into 0. `whole.from` is `rounds.base_ref` (the resolved base — a
 backfill never recomputes it), `delta.from` is `delta_from`, `origin` is `size_origin` (`live`/`backfill`). The Team server
 reads neither the session file nor `--log`; the extension's parser ignores members it does not know
-(`anOlderExtensionReadsALogPageCarryingASize.test.ts` — `roundsDb.ts`/`roundsLog.ts` are byte-identical to
-`extension-v0.75.0`'s, so that parser is the released one).
+(`anOlderExtensionReadsALogPageCarryingASize.test.ts` — `roundsDb.ts` is byte-identical to `extension-v0.75.0`'s, so that
+parser is the released one).
+
+**`--log` names each plan round's source** (story E2.S2 of `todo/PLAN_the_plan_gate_reads_the_committed_plan_E2.md`, contract
+C2). `LoggedRound` gains a second init property, `PlanSource` (`Core.Rounds.PlanSource?`, JSON `planSource`: `origin`, `commit`,
+`path`, `blob`, `bytes`, `textId`), absent when null. `RoundsQuery.Rounds` chains `RoundPlanSources.Attach` (its own file, the
+`RoundChangesLog` shape) after `RoundChangesLog.Attach` — one call; the SQL ladder gains no fourth text. It runs ONE query per page,
+`SELECT id, plan_source FROM rounds WHERE plan_source <> '' AND id IN (SELECT value FROM json_each($ids))`, only when the page has
+ids and `HasColumn(db, "rounds", "plan_source")` — a step-22 file is asked, answers with no query, is logged exactly as before
+and stays at twenty-two. The page's ids are bound by `PageIds.Bind`, the helper `RoundChangesLog` used to hold privately and
+both readers now share. **Rounds are matched to what is attached by their OWN id, never by list position:** `Attach(db, rounds)`
+(this reader's and `RoundChangesLog.Attach`'s alike) takes each round's id from its cursor (`PageIds.Of`, `started_utc|id`), so
+a reordered or filtered list still gets each source and size on its own round (`ARoundList_InAnotherOrder_OrFiltered_…`). **Not recorded is never empty:** an empty column, JSON that does not parse (the `JsonException` catch
+wraps each row's deserialise ONLY, never the query, so a missing column is still loud) and a source that is not well-formed (`PlanSource.IsWellFormed`, one rule shared with the page's `reviewedFrom`: a known `origin`, `bytes` ≥ 0, a text id, a commit that is hex or empty; a `commit` source also a repository-relative path and a hex blob, a `text` source neither path nor blob)
+all read as an absent member; a malformed row never fails the page (`TheLogNamesEachPlansSourceTests`). The extension's parser
+ignores the member (`anOlderExtensionReadsALogPageCarryingASize.test.ts`), and its rounds-log line reads the session file, not this
+(`module_extension.md`).
 
 ### The gate's history of a piece of work (`GateHistoryQuery`, 2026-09-26, feature review S2.3)
 

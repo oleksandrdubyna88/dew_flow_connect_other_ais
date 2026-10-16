@@ -7,10 +7,11 @@ import {
   rowMatches,
   rowsFrom,
   askedByHtml,
+  reviewedFromHtml,
 } from '../roundsLog';
 import { Escalation } from '../escalations';
 import { escapeHtml } from '../escapeHtml';
-import { calledBy, CallerDeclaration, RoundRecord, SessionFile } from '../rounds';
+import { calledBy, CallerDeclaration, reviewedFrom, RoundRecord, SessionFile } from '../rounds';
 import { DbFinding, DbLog, DbRound, EMPTY_TOTALS, parseLog } from '../roundsDb';
 
 /**
@@ -583,3 +584,48 @@ test('the page embeds the asked-by builder by assignment, so the tested function
 
   assert.ok(script.includes('var askedByHtml = ' + askedByHtml.toString()), 'bound by assignment, as compareRows is');
 });
+
+// ---------- what a plan round reviewed (E2.S3 of todo/PLAN_the_plan_gate_reads_the_committed_plan_E2.md, contract C3) ----------
+
+const PLAN_SOURCE = {
+  origin: 'commit', commit: 'a'.repeat(40), path: 'todo/PLAN_x.md', blob: 'b'.repeat(40), bytes: 98304, textId: '0123456789abcdef',
+};
+
+test('a plan round row carries what it reviewed, from the session file', () => {
+  const [row] = rowsFrom([session([round({ stage: 'PlanReview', planSource: PLAN_SOURCE })])], NOW) as [LogRow];
+
+  assert.equal(row.reviewedFrom, 'todo/PLAN_x.md @ aaaaaaa · blob bbbbbbb · 98 304 bytes');
+});
+
+test('a round without a recorded source carries the empty string, which is not a source', () => {
+  const [row] = rowsFrom([session([round()])], NOW) as [LogRow];
+
+  assert.equal(row.reviewedFrom, '', 'a code round, or a plan round an older server wrote');
+});
+
+test('the reviewed-from line is built by the function the page runs', () => {
+  assert.equal(
+    reviewedFromHtml('todo/PLAN_x.md @ aaaaaaa · blob bbbbbbb · 98 304 bytes', escapeHtml),
+    '<div class="reviewer source">reviewed from todo/PLAN_x.md @ aaaaaaa · blob bbbbbbb · 98 304 bytes</div>');
+});
+
+test('a round that reviewed nothing recorded renders no line at all, not an empty one', () => {
+  assert.equal(reviewedFromHtml('', escapeHtml), '', 'an empty "reviewed from" would be a claim about a round nobody recorded');
+});
+
+test('a hostile path cannot put markup on the page', () => {
+  // The path is caller-chosen text, and it is rendered.
+  const nasty = '<img src=x onerror=alert(1)>';
+  const line = reviewedFrom({ ...PLAN_SOURCE, path: nasty });
+
+  assert.equal(
+    reviewedFromHtml(line, escapeHtml),
+    '<div class="reviewer source">reviewed from &lt;img src=x onerror=alert(1)&gt; @ aaaaaaa · blob bbbbbbb · 98 304 bytes</div>');
+  assert.ok(
+    !roundsLogHtml(rowsFrom([session([round({ stage: 'PlanReview', planSource: { ...PLAN_SOURCE, path: nasty } })])], NOW), [], 'n')
+      .includes('<img src=x'),
+    'and the row carrying it into the page is escaped there too');
+});
+
+// That the page EMBEDS the builder and DRAWS the line is asserted where the page runs — `bundledPage.test.ts`, "opening a plan
+// round shows what it reviewed" — over the bundled, minified page, not by matching its source text here.
