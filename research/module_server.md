@@ -6343,7 +6343,10 @@ sweep removed EVERY `coai-wt-*` by prefix, including a round running in another 
 `PanelSettings.RoundTreeRoot` is read as the machine-local root (D4); `COAI_ROUND_WORKTREES`
 overrides it — and must itself be a LOCAL path, since the owner check trusts that every process
 touching the root is on this machine — and a settings object built in a test leaves it empty for
-`{DataDir}/worktrees`. The owner marker is written to a temporary name and renamed over, so a
+`{DataDir}/worktrees`. It is also the operator's way out when a git ignores `core.longpaths`: a shorter
+local root (for example `C:\coai-rt`) buys ceiling unit-for-unit, and `WorktreeFailure` names it in its
+message. It moves the ROUND root only — review trees have their own `COAI_REVIEW_ROOT` (an absolute path
+only), so one variable never moves both. The owner marker is written to a temporary name and renamed over, so a
 sweep never reads a half-written one as a dead owner. Trees
 that older builds left under `{DataDir}/worktrees` are not swept by this one — they block nothing,
 because no path is ever reused.
