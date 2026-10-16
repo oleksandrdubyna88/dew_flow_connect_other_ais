@@ -1,10 +1,8 @@
 using System.Buffers.Binary;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using CoaiMcp.Runners.Platform;
 using CoaiMcp.Runners.Snapshots;
-using Microsoft.Win32.SafeHandles;
 
 namespace CoaiMcp.Runners.Files;
 
@@ -35,19 +33,25 @@ public static partial class Junctions
     private const int HeaderBytes = 16;
 
     private const uint MountPointTag = 0xA0000003;
-    private const uint FsctlSetReparsePoint = 0x000900A4;
-    private const uint GenericWrite = 0x40000000;
-    private const uint OpenExisting = 3;
 
-    /// <summary>FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS: open the folder itself, not what it may already point at.</summary>
-    private const uint OpenTheLinkItself = 0x00200000 | 0x02000000;
+    private static readonly AsyncLocal<IJunctionShell?> _shell = new();
+
+    /// <summary>
+    /// What the operating system answers for a junction (D7's shape, as <c>IFolderShell</c> is for a private folder): the product's is
+    /// <c>JunctionsNative</c>, the kernel calls; a test's, per async flow, makes a symbolic link and names paths by their real spelling, so every
+    /// decision below runs on any OS. TEST ONLY — null in the product.
+    /// </summary>
+    internal static IJunctionShell Shell => _shell.Value ?? JunctionsNative.Instance;
+
+    /// <summary>TEST ONLY: the shell of this async flow — <see langword="null"/> puts the product's back.</summary>
+    internal static void StandIn(IJunctionShell? shell) => _shell.Value = shell;
 
     /// <summary>Why a junction at <paramref name="link"/> to <paramref name="target"/> would not be made — the FIRST reason, or empty.</summary>
-    public static string Refusal(HostKind host, string link, string target) => Refusal(host, link, target, DriveTypeOf);
+    public static string Refusal(HostKind host, string link, string target) => Refusal(host, link, target, Shell.DriveOf);
 
     /// <summary>The seam of the drive type, so a test can make a drive look like a mapped network one.</summary>
     internal static string Refusal(HostKind host, string link, string target, Func<string, DriveType> driveType) =>
-        Refusal(host, link, target, driveType, HandleRead.FinalDirectory);
+        Refusal(host, link, target, driveType, Shell.FinalDirectory);
 
     /// <summary>The seam of the final path as well, so a test can make an ancestor link lead off the local drives.</summary>
     internal static string Refusal(HostKind host, string link, string target, Func<string, DriveType> driveType, Func<string, string> final) =>
@@ -69,29 +73,26 @@ public static partial class Junctions
     /// never a share, a device path, a relative name, a mapped network drive — reading one connects out (Windows sends NTLM) or
     /// waits out the SMB timeout. On a Unix host: absolute, and not under the usual network automount folders.
     /// </summary>
-    internal static bool IsLocal(string target) =>
-        OperatingSystem.IsWindows() ? IsLocalDrivePath(target, DriveTypeOf) : IsLocalUnixPath(target);
+    internal static bool IsLocal(string target) => IsLocal(target, Shell.DriveOf);
 
-    /// <summary>A rooted <c>X:/</c> path that is not a UNC or device path and whose drive is not a mapped network drive.</summary>
+    /// <summary>
+    /// The same question with the drive's type given. A drive-rooted spelling on Windows; on any other OS the Unix rule — so the
+    /// decisions that ask it run, and are tested, on a Linux host with a test's shell (D18 keeps the product off every host but Windows).
+    /// </summary>
+    internal static bool IsLocal(string target, Func<string, DriveType> driveType) =>
+        OperatingSystem.IsWindows() ? IsLocalDrivePath(target, driveType) : IsLocalUnixPath(target);
+
+    /// <summary>
+    /// A rooted <c>X:/</c> path that is not a UNC or device path and whose drive is not a mapped network drive. Judged by its SPELLING (a
+    /// letter, a colon and a separator — which is what <see cref="Path.IsPathFullyQualified(string)"/> asks for a drive path on Windows, and
+    /// answers falsely on every other OS, where "C:\" names no root), so a Linux run can say what a Windows one would.
+    /// </summary>
     internal static bool IsLocalDrivePath(string target, Func<string, DriveType> driveType) =>
-        Path.IsPathFullyQualified(target)
-        && !target.StartsWith(@"\\", StringComparison.Ordinal)
+        !target.StartsWith(@"\\", StringComparison.Ordinal)
         && DriveRooted().IsMatch(target)
         && IsLocalDrive(driveType(target[..3]));
 
     private static bool IsLocalDrive(DriveType type) => type is not (DriveType.Network or DriveType.Unknown or DriveType.NoRootDirectory);
-
-    private static DriveType DriveTypeOf(string root)
-    {
-        try
-        {
-            return new DriveInfo(root).DriveType;
-        }
-        catch (ArgumentException)
-        {
-            return DriveType.Unknown;
-        }
-    }
 
     private static bool IsLocalUnixPath(string target) =>
         Path.IsPathRooted(target) && !target.StartsWith("//", StringComparison.Ordinal) && !NetworkFolders.Any(folder => target.StartsWith(folder, StringComparison.Ordinal));
@@ -101,19 +102,18 @@ public static partial class Junctions
 
     /// <summary>The junction made, read back and verified — empty on success, otherwise the sentence, with nothing left at <paramref name="link"/>.</summary>
     public static string Make(HostKind host, string link, string target) => Make(host, link, target, Target);
-
     /// <summary>The seam of the read-back, so a test can make it name another folder.</summary>
     internal static string Make(HostKind host, string link, string target, Func<string, string> readBack) =>
         Make(host, link, target, readBack, RemoveFolder);
 
     /// <summary>The seam of the removal as well, so a test can make taking the half-made link back out fail.</summary>
     internal static string Make(HostKind host, string link, string target, Func<string, string> readBack, Action<string> remove) =>
-        Make(host, link, target, readBack, remove, HandleRead.FinalDirectory);
+        Make(host, link, target, readBack, remove, Shell.FinalDirectory);
 
     /// <summary>The seam of the final path as well, so a test can make the target look like it resolves off the local drives.</summary>
     internal static string Make(HostKind host, string link, string target, Func<string, string> readBack, Action<string> remove, Func<string, string> final)
     {
-        var refusal = Refusal(host, link, target, DriveTypeOf, final);
+        var refusal = Refusal(host, link, target, Shell.DriveOf, final);
 
         return refusal.Length > 0 ? refusal : Verified(link, target, readBack, remove, Built(link, target, remove));
     }
@@ -142,7 +142,7 @@ public static partial class Junctions
         ? string.Empty
         : $"a directory junction is made on Windows only; Kimi is refused on a {HostKinds.Word(host)} host until it is measured there (D18 of todo/PLAN_vibe_and_kimi_runtimes.md)";
 
-    private static string LocalDrive(string target, Func<string, DriveType> driveType) => IsLocalDrivePath(target, driveType)
+    private static string LocalDrive(string target, Func<string, DriveType> driveType) => IsLocal(target, driveType)
         ? string.Empty
         : $"{target} is not a local drive path, and a junction cannot point at a network or roaming location — coai refuses to link the Kimi sign-in from there (D19)";
 
@@ -182,7 +182,7 @@ public static partial class Junctions
 
         return resolved.Length == 0
             ? $"{target} cannot be named by its handle on this host, so coai cannot tell where the Kimi sign-in really is — refused (D19)"
-            : IsLocalDrivePath(resolved, driveType)
+            : IsLocal(resolved, driveType)
                 ? string.Empty
                 : $"{target} resolves to {resolved}, which is not a local drive path — a link on the way to the Kimi sign-in points at a network or roaming location, and coai refuses to link the sign-in from there (D19)";
     }
@@ -213,7 +213,9 @@ public static partial class Junctions
         {
             Directory.CreateDirectory(link);
 
-            return SetReparsePoint(link, target);
+            return ReparseSize(target) > ReparseBufferBytes
+                ? $"the target path is {target.Length} characters, and a reparse point holds {ReparseBufferBytes / 1024} KiB"
+                : Shell.SetReparsePoint(link, target);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
@@ -221,28 +223,8 @@ public static partial class Junctions
         }
     }
 
-    private static string SetReparsePoint(string link, string target)
-    {
-        if (ReparseSize(target) > ReparseBufferBytes)
-        {
-            return $"the target path is {target.Length} characters, and a reparse point holds {ReparseBufferBytes / 1024} KiB";
-        }
-
-        using var handle = HandleRead.CreateFileW(link, GenericWrite, 0, 0, OpenExisting, OpenTheLinkItself, 0);
-        if (handle.IsInvalid)
-        {
-            return Marshal.GetPInvokeErrorMessage(Marshal.GetLastPInvokeError());
-        }
-
-        var buffer = ReparseBuffer(target);
-
-        return DeviceIoControl(handle, FsctlSetReparsePoint, buffer, (uint)buffer.Length, 0, 0, out _, 0)
-            ? string.Empty
-            : Marshal.GetPInvokeErrorMessage(Marshal.GetLastPInvokeError());
-    }
-
     /// <summary>The whole buffer in bytes: the header, then the substitute name (<c>\??\</c> + target) and the print name, each NUL-terminated.</summary>
-    private static int ReparseSize(string target) => HeaderBytes + ((target.Length + 4) * 2) + 2 + (target.Length * 2) + 2;
+    internal static int ReparseSize(string target) => HeaderBytes + ((target.Length + 4) * 2) + 2 + (target.Length * 2) + 2;
 
     /// <summary>
     /// A hand-laid <c>REPARSE_DATA_BUFFER</c> for a mount point: tag, <c>ReparseDataLength</c> (everything after the first eight
@@ -250,7 +232,7 @@ public static partial class Junctions
     /// buffer. The <c>\??\</c> prefix belongs to the substitute name only. Only ever laid for a size under 16 KiB, so the
     /// <see langword="ushort"/> fields cannot wrap.
     /// </summary>
-    private static byte[] ReparseBuffer(string target)
+    internal static byte[] ReparseBuffer(string target)
     {
         var substitute = Encoding.Unicode.GetBytes(@"\??\" + target);
         var print = Encoding.Unicode.GetBytes(target);
@@ -321,9 +303,4 @@ public static partial class Junctions
         : Path.TrimEndingDirectorySeparator(Path.GetFullPath(linkTarget, Path.GetDirectoryName(Path.GetFullPath(link)) ?? string.Empty));
 
     private static string Normalised(string path) => Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
-
-    [LibraryImport("kernel32.dll", EntryPoint = "DeviceIoControl", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool DeviceIoControl(
-        SafeFileHandle handle, uint code, ReadOnlySpan<byte> input, uint inputSize, nint output, uint outputSize, out uint returned, nint overlapped);
 }

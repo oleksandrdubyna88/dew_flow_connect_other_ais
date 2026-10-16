@@ -159,7 +159,16 @@ public static class KimiCredentialsLock
     /// takes it immediately before <c>AcpClient.AskAsync</c>, which is synchronous up to the process start, and must not yield
     /// between the take and the start. <see cref="TreeHolding.Busy"/> after <paramref name="within"/> is the shim's exit 69.
     /// </summary>
-    public static TreeHolding HoldTree(string target, string root, TimeSpan within)
+    public static TreeHolding HoldTree(string target, string root, TimeSpan within) => TakeTreeThrough(target, root, within, Inheritable);
+
+    /// <summary>The one place a hold is asked to be INHERITABLE — the product's take; a test passes <see cref="HeldFile.TakeWithin"/> without it (no test holds an inheritable handle in the host).</summary>
+    private static Hold Inheritable(string path, TimeSpan within) => HeldFile.TakeWithin(path, within, inheritable: true);
+
+    /// <summary>
+    /// <see cref="HoldTree"/>'s decisions over a <paramref name="take"/> of one file: no key, no lock folder, the sign-in's file busy or unusable, the
+    /// home's file taken after it (and the first given back when it cannot be). The seam exists so these run in the test host with the NON-inheriting take.
+    /// </summary>
+    internal static TreeHolding TakeTreeThrough(string target, string root, TimeSpan within, Func<string, TimeSpan, Hold> take)
     {
         var path = TreePathFor(target);
         if (path.Length == 0)
@@ -172,9 +181,9 @@ public static class KimiCredentialsLock
             return new TreeHolding.Unusable(unusable.Cause);
         }
 
-        return HeldFile.TakeWithin(path, within, inheritable: true) switch
+        return take(path, within) switch
         {
-            Hold.Taken signIn => WithHome(signIn.Stream, root),
+            Hold.Taken signIn => WithHome(signIn.Stream, root, take),
             Hold.Unusable bad => new TreeHolding.Unusable(bad.Cause),
             _ => new TreeHolding.Busy(),
         };
@@ -184,10 +193,10 @@ public static class KimiCredentialsLock
     public static LockProbe HomeProbe(string root) => HeldFile.Probe(Path.Combine(root, HomeHoldName));
 
     /// <summary>The per-home file taken after the sign-in's; the first is released when the second cannot be had. Only a disposal's probe ever opens it besides, for a moment, which <see cref="HomeWait"/> waits out; a file still busy after that is answered as unusable.</summary>
-    private static TreeHolding WithHome(FileStream signIn, string root)
+    private static TreeHolding WithHome(FileStream signIn, string root, Func<string, TimeSpan, Hold> take)
     {
         BeforeTheHomeHold?.Invoke(Path.Combine(root, HomeHoldName));
-        var home = HeldFile.TakeWithin(Path.Combine(root, HomeHoldName), HomeWait, inheritable: true);
+        var home = take(Path.Combine(root, HomeHoldName), HomeWait);
         if (home is Hold.Taken taken)
         {
             return new TreeHolding.Taken(new TreeHold(signIn, taken.Stream));

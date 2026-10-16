@@ -46,7 +46,8 @@ public static class KimiShimHold
         return Held(KimiCredentialsLock.HoldTree(target, places.OwnedRoot, within), target);
     }
 
-    private static AcpHolding Held(TreeHolding holding, string target) => holding switch
+    /// <summary>What the lock answered, in the shim's words: held, busy (another tree is alive), or refused because two refreshers could race.</summary>
+    internal static AcpHolding Held(TreeHolding holding, string target) => holding switch
     {
         TreeHolding.Taken taken => new AcpHolding.Held(taken.Hold),
         TreeHolding.Busy => new AcpHolding.Busy(

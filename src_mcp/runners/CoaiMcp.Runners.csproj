@@ -6,11 +6,12 @@
          carries data to and from CoaiMcp.Core and adds no rules of its own. -->
     <IsAotCompatible>true</IsAotCompatible>
     <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
-    <!-- `[LibraryImport]` in `Files/HandleRead` and `Files/PrivateFolderWindowsNative`, which the source generator
+    <!-- `[LibraryImport]` in `Files/HandleRead`, `Files/PrivateFolderWindowsNative`, `Files/JunctionsNative` and `Kimi/HostProcessListNative`, which the source generator
          requires — the same reason ServiceDefaults has it: the generated marshalling is AOT-friendly where
          `[DllImport]` is not. No hand-written code here is `unsafe` (SonarCloud S6640 would say so). The files that
          need the imports say why: .NET has no managed way to ask a kernel what an OPEN handle names, or to read and
-         replace the security of one, and a read that re-opens by path follows a link swapped in after the check. -->
+         replace the security of one, a read that re-opens by path follows a link swapped in after the check, a junction is made by a kernel call and not by cmd, and the
+         process table is listed by a snapshot. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
