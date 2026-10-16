@@ -125,7 +125,7 @@ public sealed class ADeleterLeavesTheVibeSignInUntouchedTests : IDisposable
                 return Removed(Path.Combine(folder, "a1b2c3"), persons,
                     _ => VibeHomes.SweepOneShot(_dir.At("sweep-root"), DateTime.UtcNow.AddHours(1), _ => { }).Should().Be(1, "the old one-shot home is swept"));
             case "oneshot-dispose":
-                var reserved = VibeHomes.ReserveOneShot(_dir.At("dispose-root")).Should().BeOfType<OneShotReservation.Reserved>().Subject;
+                var reserved = VibeHomes.ReserveOneShot(Directory.CreateDirectory(_dir.At("dispose-root")).FullName).Should().BeOfType<OneShotReservation.Reserved>().Subject;
                 return Removed(Path.Combine(reserved.Home.Folder, "x"), persons, _ => reserved.Home.Dispose());
             default:
                 return ConsultSweep(persons, GitScratch.DeleteEvenIfReadOnly);
