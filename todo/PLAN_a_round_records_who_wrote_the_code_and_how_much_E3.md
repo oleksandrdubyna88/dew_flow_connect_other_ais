@@ -24,7 +24,7 @@
 >    private.
 > 5. **E3.S4 (Fable's spec) was amended by Fable on 2026-10-16** against §7 F1–F12, each decided from the fixture bytes
 >    and the RESULTS rows (the table *Fable's decisions on §7* inside E3.S4). §3's contract copy is realigned to it. Coding
->    E3.S4 waits only for the E1 follow-up in §8 (two fixture defects E3 cannot fix by reading differently).
+>    E3.S4 waits only for the E1 follow-up in §8 (two fixture defects E3 cannot fix by reading differently), and only for the c17/c19 rows as intended: §8 item 1 gives an interim (`AnswerCall`, a test-placed marker, test 13a).
 > 6. **No test uses a real date.** The fixtures use a synthetic clock (2000-01-01, one second per rank), and every
 >    clock in a test is taken from the fixture's own instants, never from `DateTime.UtcNow` (§4).
 > 7. **§6 records three new defects in the parent** (items 12–14). The parent itself is not edited here. *(Applied to the
@@ -47,7 +47,7 @@ files, keyed by the session id, never by `cwd`, and never holding a byte of prom
 | Backfill over stored `rounds.caller` ids | the `stored` id source | E7 |
 
 E3.S1–S3 build on synthetic files written by their own tests. E3.S4 and E3.S5 run over E1's fixtures. **E1 has
-landed them** (E1.S5, #828), so no story waits for E1 now. E3.S4 waits only for the answers to §7.
+landed them** (E1.S5, #828), so no story waits for E1 now. §7 is decided (Fable, 2026-10-16); E3.S4 waits only for the E1 follow-up of §8 item 1, and only for its c17/c19 rows as intended (an interim exists).
 
 ## 2. What the reader is built on
 
@@ -65,7 +65,7 @@ landed them** (E1.S5, #828), so no story waits for E1 now. E3.S4 waits only for 
 | Vendor | `src_mcp/src/Server/CallerDeclaration.cs:90-94` (`VendorFor`), `:106-108` (`VendorOf`) | handshake outranks env; the reader is told the vendor, never infers it (S2) |
 | What `rounds.caller` holds | `src_mcp/src/Server/Rounds/RoundCommands.cs:34-35` | the `stored` id source for E7 (S2) |
 | Path key normalisation | `src_mcp/runners/Context/RepositoryIdentity.cs:24` (`Normalised`: trims, folds `\` to `/`, drops a trailing `/`, lower-cases) | the key of a checkout root (S3) — it already folds the separators and the drive case that Q8 measured |
-| "Holds a `.git` file or folder" | `src_mcp/runners/Worktrees/SubmodulePopulator.cs:133-134` (`HasGit`, `internal`; `runners` gives `InternalsVisibleTo` only to `CoaiMcp.Tests` and `FakeCli`, `CoaiMcp.Runners.csproj:44-48`, not to `CoaiMcp`) | widened to `public` and called (S3) — reuse move 1, no copy |
+| "Holds a `.git` file or folder" | `src_mcp/runners/Worktrees/SubmodulePopulator.cs:133-134` (`HasGit`, `internal`; `runners` gives `InternalsVisibleTo` only to `CoaiMcp.Tests` and `FakeCli`, `CoaiMcp.Runners.csproj:44-48`, not to `CoaiMcp`) | *Revised 2026-10-16:* `SubmodulePopulator` itself is an `internal sealed class` (`SubmodulePopulator.cs:24`), so a `public` method on it still does not reach `CoaiMcp`. The body moves to a new `public static class GitMarker` in `src_mcp/runners/Worktrees/GitMarker.cs`, and both callers (`SubmodulePopulator.cs:97`, `Snapshots/SnapshotListing.cs:115`) call it (S3) — reuse move 2, extract the shared half, no copy |
 | `agent_log`'s window | `src_mcp/src/Server/Rounds/RoundEngine.cs:898-907` (`WhatTheCallerWasDoing`; the projects folder picked at `:902`) | untouched; the parent's §3 keeps `agent_log`'s behaviour |
 | `AgentLog`'s guards | `src_mcp/tests/AgentLogTests.cs` (**13** tests; `Days` at `:125-133`; `AHalfWrittenLastLineIsSkipped_NotAFailure` at `:173-182`) | stay green; the `Days` test moves with the code (S1) |
 | Clock seam | `TimeProvider`, `src_mcp/tests/FixedClock.cs` (read-only by design) | the budget's time (S4) |
@@ -281,6 +281,15 @@ a `tool_result` block's `tool_use_id` and `is_error`, and from a write tool's `i
 registry it reads only `sessionId`. Everything else — `message.content` text, `thinking`, `description`, `prompt`,
 `toolUseResult`, any other tool input — is never materialised as a string.
 
+*What "never materialised" covers (2026-10-16, plan gate finding 6).* A yielded line is decoded and parsed whole, so
+for the length of one `TryParse` the line's bytes — text included — sit in that line's buffer and its `JsonDocument`.
+That buffer is transient: it is never kept past the line, never put in a member, never logged, and never handed to a
+caller. The guarantee §3.4 makes, and that E3.S5 tests, is about what LEAVES the reader: no property, rendering,
+`ToString()` or reason carries text, and no text-valued property of the document is read with `GetString()`
+(only the names above are). The cheaper form that also removes the full-line `string` — `TryParse` over the raw UTF-8
+bytes (`JsonDocument.Parse(ReadOnlyMemory<byte>)`), so `ReadSharedFrom` yields bytes and decodes nothing — is listed
+for Fable (§9), because E3.S4's steps 4–5 call `TryParse`.
+
 ## 4. The stories
 
 Cornerstone mark for this epic: **E3.S4** only (the counting rules and the states, the area the parent named). The
@@ -322,8 +331,10 @@ line, watch the named test fail, restore it), and report both observations.
   - `src_mcp/src/Store/AgentLog.cs`: remove `ReadLines` (`:183-207`), `Days` (`:103-112`) and `Mentions`
     (`:157-173`), and call the new unit. `Parse` (`:209-231`) stays in `AgentLog`, because it builds `AgentLog`'s
     `Entry`, but its JSON step goes through the new `TryParse`.
-  - `src_mcp/tests/AgentLogTests.cs:125-133`: the `Days` test moves to the new class unchanged. Nothing else in that
-    file changes.
+  - `src_mcp/tests/AgentLogTests.cs:125-133`: the `Days` test moves to the new class with its three assertions
+    unchanged; it calls `TranscriptLines.Days` and inlines the class's `Opened`/`PlanRound` instants
+    (`AgentLogTests.cs:130-132` uses them), because they do not exist in the new class. Nothing else in that file
+    changes.
   - New `src_mcp/tests/ATranscriptIsReadWhileItIsBeingWrittenTests.cs`.
 - **Brief (Sonnet coder).**
   1. `TranscriptLines.ReadShared(string file) → IEnumerable<string>`: this is `AgentLog.ReadLines` as it stands,
@@ -343,9 +354,12 @@ line, watch the named test fail, restore it), and report both observations.
      - Find EVERY occurrence of the ASCII bytes `"timestamp":` in the line, then skip optional spaces and one `"`.
      - Read the next 19 bytes as `yyyy-MM-ddTHH:mm:ss`. Compare them, ordinal, with the bound in the same form, with the
        bound floored to the second.
-     - Return true when ANY occurrence is at or after the bound. Return false when every occurrence is before it, or
-       when the key does not occur. When the 19 bytes are not in that form, treat them as "at or after", so the line is
-       parsed and the JSON decides.
+     - Return true when ANY occurrence is at or after the bound. Return false only when every occurrence is before it.
+       When the key does not occur, return TRUE: the line is parsed and the JSON decides. *(Revised 2026-10-16, own
+       review: the top-level stamp comes after `message`, so a line torn in the middle usually has no key at all;
+       skipping it would hide every torn MIDDLE line under a bound, and `partial: torn line` could never fire. Lines
+       with no stamp — `last-prompt`, `ai-title`, `mode` — are few and small.)* When the 19 bytes are not in that form,
+       treat them as "at or after" too.
      - Remark why it checks every occurrence: the top-level `timestamp` comes AFTER `message` (237 of 240 fixture lines,
        §2.3). So the first occurrence can be a key in a nested object, and the last can be one inside `toolUseResult`.
        With "any occurrence", a nested key can cost one extra parse. It can never cause the line's own stamp to be
@@ -364,11 +378,22 @@ line, watch the named test fail, restore it), and report both observations.
      - A yielded line is decoded with UTF-8. `meter.BytesYielded` grows by the line's raw byte count plus its
        terminator. These are encoded bytes, so nothing is encoded again and no char count is used.
        `meter.BytesScanned` grows by every byte read.
-     - `meter.Stop` (a `Func<bool>`) is asked after every yielded line and after every 1 MiB scanned. When it returns
-       true, the sequence ends. This is the budget's hook. E3.S4 decides what `Stop` checks (§7 F1).
+     - `meter.Stop` (a `Func<bool>`) is asked after every 1 MiB scanned, and for a line that passes the gate it is asked
+       AFTER the line's bytes are charged to `BytesYielded` and BEFORE the line is decoded or yielded; when it returns
+       true, that line is not yielded and the sequence ends. So the slice never holds a line past the byte budget, and
+       no line is decoded after the budget is spent. This is the budget's hook. E3.S4 decides what `Stop` checks (§7
+       F1). *(Revised 2026-10-16 after plan gate finding 8: asking only after the yield let one line overshoot the
+       budget by its whole length.)*
+     - **A line longer than `meter.MaxLineBytes`** (default 64 MiB, a field of the meter) is never buffered whole: once
+       the line under assembly passes the cap, the rest of it is scanned to the next `\n` without being kept, it is not
+       yielded, and `meter.LinesTooLong++`. The scan bytes still count in `BytesScanned`. *(Plan gate finding 5: a
+       growing buffer had no ceiling.)* How E3.S4 states such a line is listed for Fable (§9).
+     - **A read that fails after the open** (an `IOException` or `UnauthorizedAccessException` from a block read) ends
+       that file's sequence; `meter.ReadFailures++`. It never throws. *(Plan gate finding 9.)* `ReadShared` (item 1)
+       stays `AgentLog.ReadLines` as it stands, so `AgentLog`'s behaviour does not change.
      - It never stops early on a stamp. Each line is judged alone, because stamps are not always in file order (§2.3).
   9. *(added 2026-10-16)* `internal sealed class ScanMeter { long BytesScanned; long BytesYielded; int LinesSkipped;
-     Func<bool> Stop; }`. One instance serves one read, across every file of that read. **Considered and rejected,
+     int LinesTooLong; int ReadFailures; long MaxLineBytes = 64 MiB; Func<bool> Stop; }`. One instance serves one read, across every file of that read. **Considered and rejected,
      with the reason:**
      - A byte-offset bisection, a per-file LAST-stamp skip, and "the first line past the bound ends the file" all need
        a file's stamps to be in order. They are not in order in 11 of 19 fixtures, and E1 did not measure order on
@@ -384,13 +409,21 @@ line, watch the named test fail, restore it), and report both observations.
   - `A_torn_line_is_reported_as_torn_and_the_next_whole_line_still_parses`: `TryParse` returns false, then true on the
     next line. The lines are synthetic: real unparseable lines exist (Q9: 1 on Windows, 3 on WSL), but no fixture holds
     one, because E1 shipped no `torn-last-line` case.
-  - `Only_the_days_a_window_touches_are_listed` (moved from `AgentLogTests.cs:125-133`, unchanged assertions).
+  - `Only_the_days_a_window_touches_are_listed` (moved from `AgentLogTests.cs:125-133`, unchanged assertions, the
+    two instants inlined).
   - `A_file_last_written_before_the_bound_is_skipped`: set the time with `File.SetLastWriteTimeUtc`.
   - All **13** `AgentLogTests` stay green **unchanged** apart from the moved test. That is the behaviour-kept proof.
   - *(added 2026-10-16, items 7–9; synthetic lines, instants chosen by the test, never the real clock)*
-    - `A_line_stamped_before_the_bound_is_skipped`: three lines before the bound and two at or after
-      it. Expect two yielded, `LinesSkipped == 3`, and `BytesYielded` equal to the two lines' byte lengths plus their
-      terminators.
+    - `A_line_stamped_before_the_bound_is_skipped`: line 1 at or after the bound (it is the head), then three lines
+      before the bound, then one at or after it. Expect two yielded, `LinesSkipped == 3`, and `BytesYielded` equal to
+      the two lines' byte lengths plus their terminators. *(Revised 2026-10-16: with a stale line first, the head rule
+      yields it, and the old shape could not give "two yielded".)*
+    - `A_line_without_any_stamp_is_yielded`: after the head, a line with no `"timestamp":` key, and a MIDDLE line cut
+      before its stamp → both yielded, so a torn middle line reaches `TryParse`.
+    - `A_line_longer_than_the_cap_is_skipped_not_buffered`: `MaxLineBytes` = 1 KiB, a 4 KiB in-range line between two
+      short ones → the two short lines yielded, `LinesTooLong == 1`.
+    - `The_stop_hook_is_asked_before_a_line_is_yielded`: `Stop` returns true once `BytesYielded` exceeds the first
+      line's bytes → exactly one line yielded, and the second line is charged but not yielded.
     - `Any_stamp_at_or_after_the_bound_keeps_the_line`: a nested `"timestamp":` before the top-level one, and one after
       it. When either is at or after the bound, the line is yielded. When both are before it, the line is skipped.
     - `A_stamp_written_with_a_space_is_still_seen`: `"timestamp": "…"`.
@@ -398,8 +431,9 @@ line, watch the named test fail, restore it), and report both observations.
       `queue-operation` stamped before the bound, and line 3 is stamped before the bound. Expect lines 1 and 2 yielded
       and line 3 skipped.
     - `An_unterminated_last_line_is_always_yielded`: the last line has no `\n` and no stamp.
-    - `Lines_out_of_order_are_judged_one_by_one`: stamps 10:00, 12:00, 09:00, 11:00 and a bound of 10:30. Expect 12:00
-      and 11:00 yielded. The read does not stop early.
+    - `Lines_out_of_order_are_judged_one_by_one`: stamps 11:00 (the head), 10:00, 12:00, 09:00, 10:45 and a bound of
+      10:30. Expect 11:00, 12:00 and 10:45 yielded, `LinesSkipped == 2`. The read does not stop early. *(Revised
+      2026-10-16: the old first line 10:00 was the head and is always yielded.)*
     - `Bytes_in_the_slice_are_bytes_not_chars`: one yielded line holds a 3-byte character. Expect `BytesYielded` to be
       its UTF-8 length plus 1, not its char count.
     - `A_line_longer_than_a_read_block_is_one_line`: a 200 KiB line.
@@ -416,10 +450,12 @@ line, watch the named test fail, restore it), and report both observations.
   (c) Make `WrittenSince` return true → the last-write test goes red.
   *(added 2026-10-16)* (d) `StampAtOrAfter` reads only the FIRST occurrence → the any-stamp test goes red. (e) End the
   file at the first skipped line after a yielded one → the out-of-order test and the fixture anchor go red. (f) Count
-  `line.Length` → the bytes test goes red. (g) Drop the head rule → the head test goes red. "A skipped line is never
+  `line.Length` → the bytes test goes red. (g) Drop the head rule → the head test goes red. (h) Return false when the
+  key does not occur → the no-stamp test goes red. (i) Ask `Stop` only after the yield → the stop-before-yield test
+  goes red. (j) Drop the line cap → the cap test goes red. "A skipped line is never
   decoded" cannot be seen from outside: a decode of bad bytes does not throw, it substitutes. So the reviewer checks
   that the one UTF-8 decode call comes after the gate, and E5 measures the time.
-- **Done when.** The new class and all `AgentLogTests` are green; the break-its (a)–(g) were observed red and restored;
+- **Done when.** The new class and all `AgentLogTests` are green; the break-its (a)–(j) were observed red and restored;
   `AgentLog.cs` no longer contains a `FileStream` or a `JsonException` catch of its own; the review confirms that
   `ReadSharedFrom` decodes only yielded lines; the whole suite is green.
 - **Depends on.** Nothing. It may run beside E3.S2 and E3.S3.
@@ -537,8 +573,12 @@ line, watch the named test fail, restore it), and report both observations.
   §13).
 - **Scope.**
   - New `src_mcp/src/Store/WriteEvidence.cs` (≤ 200 lines) with `WriteTools`, `WriteTarget` and `CheckoutRoots`.
-  - `src_mcp/runners/Worktrees/SubmodulePopulator.cs:133-134`: `HasGit` goes from `internal` to `public`. Extend its
-    remark (`:132`, which names `Snapshots/SnapshotListing` as the second caller) to name the third.
+  - `src_mcp/runners/Worktrees/SubmodulePopulator.cs:131-134`: `HasGit` moves to a new
+    `src_mcp/runners/Worktrees/GitMarker.cs` (`public static class GitMarker { public static bool HasGit(string path) }`,
+    the same one-line body). `SubmodulePopulator.cs:97` and `Snapshots/SnapshotListing.cs:115` call `GitMarker.HasGit`;
+    the remark at `:132` moves with it and names all three callers. *(Revised 2026-10-16, own review: the class is
+    `internal sealed` at `:24`, and `CoaiMcp.Runners.csproj:44-48` gives `InternalsVisibleTo` only to the tests and
+    FakeCli, so making the method `public` would not compile from `CoaiMcp`.)*
   - New `src_mcp/tests/AWriteIsKnownOnlyByItsPathTests.cs`.
 - **Brief (Sonnet coder).**
   1. `WriteTools.Names` = `["Edit", "Write", "MultiEdit", "NotebookEdit"]` (ordinal, case-sensitive), plus — parent
@@ -565,7 +605,7 @@ line, watch the named test fail, restore it), and report both observations.
        agent's.
      - The file's directory does not exist → `Unresolved(normalised directory)`. Do NOT walk up from a missing
        directory: a removed worktree would walk up into whatever contains it and answer wrongly.
-     - Otherwise walk up from the directory. The FIRST directory where `SubmodulePopulator.HasGit` is true →
+     - Otherwise walk up from the directory. The FIRST directory where `GitMarker.HasGit` is true →
        `Checkout(that directory)`. Reaching the root → `OutsideAnyCheckout`.
      - A submodule or a nested checkout therefore resolves to the INNER root. Whether an inner root under the gate's
        `repo_path` counts as "here" is E4's rule; say so in the remark.
@@ -604,7 +644,7 @@ line, watch the named test fail, restore it), and report both observations.
   - (b) Walk up from a missing directory → the removed-worktree test goes red.
   - (c) Test only `Directory.Exists(".git")` → the worktree and submodule tests go red.
   - (d) Resolve relative paths with `Path.GetFullPath` → the relative-path test goes red.
-- **Done when.** All scenarios and break-its are observed; `HasGit` is public and is the only `.git` test in the new file;
+- **Done when.** All scenarios and break-its are observed; `GitMarker.HasGit` is public, both old callers use it, and it is the only `.git` test in the new file;
   the whole suite is green.
 - **Depends on.** Nothing. It may run beside E3.S1 and E3.S2.
 - **Model.** Brief: Opus (this document) · code + tests: Sonnet · review: Opus · fixes: Sonnet.
@@ -1033,7 +1073,9 @@ but found Observed`), never on a compile error.
 - **Scope.**
   - New `src_mcp/tests/NoTextLeavesTheCallerReaderTests.cs`.
   - `research/module_server.md`: a new subsection right after the `rounds.agent_log` paragraphs (`:3180-3194` on main
-    2026-10-16; `:3007-3021` when this was written). No product code.
+    2026-10-16; `:3007-3021` when this was written).
+  - `src_mcp/src/Server/CallerDeclaration.cs:106-108`: the vendor array lifted to `internal static readonly
+    KnownVendors` (item 5). No other product code.
 - **Brief (Sonnet coder).** *(Items 1–3 revised 2026-10-16 to match what E1 shipped.)*
   1. **Fixtures are enumerated, never listed.** E1's folder is `src_mcp/tests/fixtures/caller-transcripts/`, copied to
      `AppContext.BaseDirectory/fixtures/caller-transcripts` (`ACallerTranscriptFixtureCarriesNoTextTests.cs:98`). Find
@@ -1053,11 +1095,16 @@ but found Observed`), never on a compile error.
      collecting every `string`. Assert none contains the sentinel. Do the same for `ObservationState`'s rendered text
      and for `ObservedSession.ToString()`.
   5. **The vocabulary.** Collect every `ObservationReason.Code` produced over all fixtures and every mutation helper of
-     `CallerTranscriptFixture` (`TruncateLastLine`, `TruncateLine(n)`, `DeleteMeta`, `DeleteAgentFile`, `RemoveMetaKey`,
-     `RewriteEveryCwd`, `SetModelOnLine`, `SetResultError`, `DeleteResult`, `CopyLineInto`, `GrowOutputAcross` — found by
-     reflection, so a helper added later is covered without editing this test). Assert each one is a `const` of
-     `ObservationReasons` — the ONE reason class, found by reflection — or `"no reader for " + <vendor>` from
-     `CallerDeclaration`'s list.
+     `CallerTranscriptFixture` (E3.S4's materialiser list — no copy of it here). Reflection FINDS the helpers but cannot
+     choose their arguments, so this test holds one table, `name → (fixture, invocation)`, with one sample call per
+     helper, and a first assertion that the set of public mutation helpers found by reflection EQUALS the table's keys —
+     a helper added later turns this test red until it gets a row. Assert each produced code is a `const` of
+     `ObservationReasons` — the ONE reason class, found by reflection — or `"no reader for " + v` where `v` is in
+     `CallerDeclaration.KnownVendors` or is `"this vendor"` (E3.S2's fallback). `KnownVendors` is the inline array of
+     `CallerDeclaration.VendorOf` (`CallerDeclaration.cs:106-108`) lifted to an `internal static readonly` field that
+     `VendorOf` reads — the one product edit of this story (reuse move 1; the tests have `InternalsVisibleTo`).
+     *(Revised 2026-10-16, own review: the old list was 11 of the materialiser's 20 helpers, reflection alone could not
+     invoke them, and the vendor list was a private inline array.)*
   6. **The doc.** Write about 25 lines in the style of the surrounding section: the reader is keyed by session id
      (registry → variable → stored) and never by `cwd`. Cover the four states, the counting rules in one sentence each,
      what is read and what never is (§3.4), and the lower bound and budget. State that `agent_log` is unchanged and that
@@ -1083,7 +1130,7 @@ but found Observed`), never on a compile error.
 
 ```
 E3.S1 ─┐
-E3.S2 ─┼─► E3.S4 (Fable spec; E1.S5 shipped; waits for §7) ─► E3.S5
+E3.S2 ─┼─► E3.S4 (Fable spec; E1.S5 shipped; §7 decided; §8 item 1 for c17/c19) ─► E3.S5
 E3.S3 ─┘
 ```
 
@@ -1244,3 +1291,33 @@ the E1 follow-up of §8 is recorded in the parent's E1 entry.*
 | E1 epic *Goal*: *"the read time over 14 MB … ≤ 300 ms p50"* | the prediction | *"measured: the largest session is 650 MB (273 files); a full parse is 30.5 s p50 and a day-gated one 19.9 s — the prediction was refuted by two orders of magnitude (RESULTS Q6); E5 measures the C# reader's slice read again"* | §6 item 14; the goal line still reads as if it held |
 | §5 *Tokens*: *"outputs only grow across the lines of one message"*; D8's reason | last line = maximum implied | *"only `output_tokens` differs across a message's lines (≈ 10 % of ids); the last line is NOT always the maximum (16 WSL ids) — the per-term maximum is the rule"* | Q3; S4-14; c03 |
 | §5 *Writes*, D3: a write's checkout | as is | add: *"a `tool_result` that answers no parsed call is ignored; a repeated `tool_use` id is one call"* | S4-15/S4-16; c05, c17, c07 |
+
+## 9. For Fable — E3.S4 items from the E3 plan gate (2026-10-16)
+
+The coai plan gate ran on this document at `7e5348bd` (verdict `good_enough`; codex, vibe and one Gemini preset answered,
+kimi was cancelled at the 10-minute limit), beside an independent Opus review that re-read the document against the
+code and the fixture bytes. Items that touch E3.S1–S3, S5 and §3.4 were applied above. The items below touch E3.S4,
+Fable's cornerstone, so Opus did not rewrite the spec: each names the defect, the evidence and ONE proposed answer.
+
+| # | Defect | Evidence | Proposed |
+|---|---|---|---|
+| G1 | Step 3 parses every meta but does not say what an unparseable meta is | plan gate finding 3 (accepted) | the meta reads as ABSENT (its file is then `agent without meta`, S4-6), plus a reason — something is lost (the parent link) — e.g. `partial: torn meta` as a new `const` |
+| G2 | E3.S1 now skips a line over `ScanMeter.MaxLineBytes` (64 MiB) and ends a file on a mid-read I/O failure (`LinesTooLong`, `ReadFailures`); S4 does not say what either means | plan gate findings 5, 9 (accepted); E3.S1 item 8 | both LOSE lines → reasons: a too-long line `partial: torn line` (or its own code), a failed read `partial: read failed`; `ReadDiagnostics` gains `LinesTooLong` |
+| G3 | Step 1 says E3.S1 asks `Stop` "after every yielded line"; E3.S1 now charges the line and asks BEFORE it yields, so the slice never passes `MaxBytes` | plan gate finding 8 (accepted) | align step 1's sentence; the `Stop` formula `BytesYielded > MaxBytes` is unchanged; test 31's cut then falls before the line that crosses the budget |
+| G4 | `TryParse(string)` holds a full-line `string`; the cheaper form parses the UTF-8 bytes | plan gate finding 6 (accepted as §3.4's clarification) | `TranscriptLines.TryParse(ReadOnlyMemory<byte>)`, `ReadSharedFrom` yields bytes, no decode at all; `AgentLog` keeps its `string` path |
+| G5 | Step 2 says the gate yields "the head, the tail, and every line with any stamp at or after `bound`"; E3.S1 item 7 now also yields a line with NO stamp key | own review: the top-level stamp comes after `message` (237 of 240 lines), so a line torn in the middle has no key and was skipped silently — `partial: torn line` could never fire under a bound, and E5 always passes one | align step 2's sentence; add a mutation test: `TruncateLine` cutting before the stamp, under a bound → `partial: torn line` |
+| G6 | An unbounded read calls `ReadShared(file)`, which takes no meter, so tests 31–33 (unbounded) have no byte count without a second encode (and lose CRLF) | step 2; E3.S1 item 1 | when `fromUtc` is null call `ReadSharedFrom(file, DateTime.MinValue, meter)` |
+| G7 | The materialiser makes only the ROOT folders; writes in c14 (`repo-a\p2\p3\…`), c17 (`repo-a\p1\p2\…`, `repo-b\p1\p2\…`) and c18 (`repo-a\p1`) go into folders never created, and by S3 a missing folder is `Unresolved` — the c14/c17 rows cannot give `Checkout` | own review, fixture bytes; E3.S3 brief item 3 | create the parent folder of every rewritten `file_path`/`notebook_path` |
+| G8 | With the 3 h guard, "`fromUtc` past every line" skips NOTHING in an 88-second fixture: test 48 stays green with the head rule dropped (its break-it cannot go red), test 51 cannot pass (`BytesScanned` ≈ `BytesInSlice`), and the worked-example row "`MaxBytes` just above the SLICE" has the same flaw | own review | use `fromUtc ≥ largest stamp + StraddleGuard`; test 51 adds a `SetStamp` mutation so the slice is a strict subset while `WrittenSince` still holds |
+| G9 | Two break-its cannot go red: "run 8a after a budget hit → 33" (every `Agent` block in c07 has a meta, so 8a adds nothing); "`Requested = Model` → 7, 24" (in c04 the lines' `requestedModel` equals `model`, agent L10–L25) | own review, fixture bytes | 33 → c11 with the stop between L1 and its error result; drop 24 from the second row |
+| G10 | Test 4 and its row expect `inconsistent transcript` from `CopyLineInto` (main → agent file), but main lines carry no `agentId`, and step 7 makes an id in two files one message; the tie rule for `AgentKey` (same stamp on both copies) is unstated; §3's `InconsistentTranscript` says "the four triggers below" and lists none | own review; S4-4, step 7 | state the trigger (an id seen in two FILES is inconsistent) and the tie (main file wins, then ordinal key); list the four triggers in §3 |
+| G11 | `agentType` is shape-checked against the ALIAS shape `[a-z]{2,12}`, which every value of `allowlist.json`'s `agent-type` vocabulary fails (`general-purpose`, `Explore`, `claude-code-guide`, `custom-<n>`) | step 3; `allowlist.json` `vocabularies.agent-type` | its own closed shape in `TranscriptShapes` (e.g. `^[A-Za-z][A-Za-z0-9:_-]{0,63}\z`, or the vocabulary itself) |
+| G12 | S4-13 "never filtered by the bound" is too strong: an `Agent` call with neither meta nor file more than 3 h before `fromUtc` is never parsed. Step 3 does not say whether the last-write skip applies to the MAIN file; if it does, test 42 (c05) reads only main's head and finds 1 unobserved launch, not 2 | own review | state that the skip is for agent files only, and narrow S4-13 to "metas and agent files are never filtered; an `Agent` call before `bound` is not seen" |
+| G13 | `TranscriptShapes` members are `private static`, so `TranscriptMessages` and `TranscriptLaunches` cannot call them | §*The contract* | `internal static` |
+| G14 | Tests 10/11 strip `effort` from an id's first line while its later lines keep `high`; under S4-14 that difference is `inconsistent transcript` unless an ABSENT value is excluded | own review; S4-14 | state that only two PRESENT values that differ are inconsistent; test 10 asserts `Observed` |
+| G15 | §8 item 1: "Σ writes moves by +3 (c12 +1, c17 +1, c19 +2 minus the interim)" adds to 4; and it is not said whether the E1 re-cut lands inside E3's ONE commit or as E1's own commit before it | own review | write the sum as +4 against the shipped files; say the re-cut is E1's own commit, before E3's |
+
+Rejected in the gate round, with reasons recorded through `resolve`: a "20-byte stamp" (the 19 bytes are the stamp to
+the second), a prerequisites section, `File.Exists` throwing (it never does), a check for the E1 fixtures' presence
+(they are on this branch, and E3.S5's companion test fails when they are not), and the 3 h guard as unsafe (a stated,
+measured assumption; the alternative is the whole-session read the bound exists to avoid).
