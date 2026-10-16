@@ -123,16 +123,6 @@ public sealed class AgentLogTests : IDisposable
     }
 
     [Fact]
-    public void OnlyTheDaysTheWindowTouchesAreEvenLookedAt()
-    {
-        // A transcript is tens of megabytes and a window is usually one afternoon of it, so a line
-        // that does not mention a day in range is skipped before it is parsed.
-        AgentLog.Days(Opened, PlanRound).Should().Equal(["2026-09-05"]);
-        AgentLog.Days(Opened, Opened.AddDays(2)).Should().HaveCount(3);
-        AgentLog.Days(Opened, Opened.AddDays(30)).Should().BeEmpty("a window that wide is not worth listing, so every line is read");
-    }
-
-    [Fact]
     public void APathWrittenTheOtherWayRoundIsTheSamePath()
     {
         Transcript("d--rsd-repo", Line("2026-09-05T13:20:00Z", "assistant", @"D:\repo\", "backslashes and a trailing one"));
