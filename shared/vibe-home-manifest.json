@@ -24,6 +24,7 @@
     "logs/vibe.log",
     "logs/session/active/.registry",
     "logs/session/unified/*/**",
+    "logs/session/unified/.session-index.json",
     "logs/session/plugins/tmp/**"
   ],
   "varyingFolders": [
@@ -282,9 +283,7 @@
           "class": "varies"
         }
       ]
-    }
-  ],
-  "staged": [
+    },
     {
       "version": "2.26.1",
       "measured": "2026-10-16",
@@ -693,5 +692,6 @@
         }
       ]
     }
-  ]
+  ],
+  "staged": []
 }

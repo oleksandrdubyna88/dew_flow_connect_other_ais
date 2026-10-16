@@ -70,16 +70,25 @@ public static class VibeLaunch
     public static readonly TimeSpan VersionTimeout = TimeSpan.FromSeconds(60);
 
     /// <summary>
-    /// D18: Vibe only where it was measured — a Windows host, starting a Windows <c>vibe</c>. Every number in the RESULTS
-    /// is Windows; on Linux Vibe's keyring may fall back to a file inside <c>VIBE_HOME</c>, which would break D17, and
-    /// nothing was measured there. A WSL bridge named as the executable is the Linux side by another door.
+    /// D18, lifted for WSL2 by DL1 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>: Vibe only where it was measured — a Windows host starting a
+    /// Windows <c>vibe</c>, or a WSL2 host. Every number is Windows' or WSL2's. <b>WSL1 is not WSL2</b> (a syscall translation layer),
+    /// and a native Linux host is not measured at all (a desktop keyring Vibe may use instead of <c>.env</c>, other filesystems, other
+    /// packaging) — each is refused with its own sentence. A WSL bridge named as the executable of a WINDOWS host is the Linux side by
+    /// another door, and stays refused (a Windows process cannot take a Linux lock or end a Linux process tree).
     /// </summary>
-    public static string HostRefusal(HostKind host, string executable) =>
-        host != HostKind.Windows
-            ? $"Vibe is refused on a {HostKinds.Word(host)} host until it is measured there (D18 of todo/PLAN_vibe_and_kimi_runtimes.md) — every Vibe measurement coai has is Windows"
-            : HostKinds.RunsInWsl(executable)
-                ? $"'{executable}' would start Vibe on the Linux side, which is refused until it is measured there (D18 of todo/PLAN_vibe_and_kimi_runtimes.md) — point this row at a Windows vibe"
-                : string.Empty;
+    public static string HostRefusal(HostKind host, string executable, WslGeneration wsl) => host switch
+    {
+        HostKind.Windows => HostKinds.RunsInWsl(executable) ? WslBridgeRefusal(executable) : string.Empty,
+        HostKind.Wsl => wsl == WslGeneration.Wsl2 ? string.Empty : Wsl2Only("it is measured on WSL2, and this is WSL1", " — convert the distribution with `wsl --set-version <distro> 2` from Windows"),
+        HostKind.Linux => Wsl2Only("it is measured on WSL2 and not yet on a native Linux host", string.Empty),
+        _ => $"Vibe is refused on a {HostKinds.Word(host)} host until it is measured there (D18 of todo/PLAN_vibe_and_kimi_runtimes.md) — Vibe is measured on Windows and WSL2 only",
+    };
+
+    private static string Wsl2Only(string why, string cure) =>
+        $"Vibe runs on WSL2 only for now — {why} (DL1 of todo/PLAN_kimi_and_vibe_on_linux.md){cure}";
+
+    private static string WslBridgeRefusal(string executable) =>
+        $"'{executable}' would start Vibe on the Linux side, which is refused until it is measured there (D18 of todo/PLAN_vibe_and_kimi_runtimes.md) — point this row at a Windows vibe";
 
     /// <summary>
     /// D17: the launch is the built one — not inheriting this process's environment, keeping only the minimal names, and
@@ -143,10 +152,10 @@ public static class VibeLaunch
     /// The whole check, in order, ending holding the home's turn — or a refusal with nothing held. <paramref name="exportFolder"/>
     /// is the attempt's own, deleted when the turn is given back (D7: no export outlives its read).
     /// </summary>
-    public static async Task<LaunchTurn> TakeAsync(HostKind host, ProcessRequest request, string exportFolder, IProcessLauncher launcher, VibePathBudget budget, CancellationToken ct)
+    public static async Task<LaunchTurn> TakeAsync(VibeHost host, ProcessRequest request, string exportFolder, IProcessLauncher launcher, VibePathBudget budget, CancellationToken ct)
     {
         var before = FirstOf(
-            () => HostRefusal(host, request.Executable),
+            () => HostRefusal(host.Kind, request.Executable, host.Wsl),
             () => EnvironmentRefusal(request),
             () => budget.Refusal(Value(request, HomeVariable)),
             () => ModelRefusal(Value(request, ModelVariable)),
@@ -160,7 +169,7 @@ public static class VibeLaunch
         HomeVerdict inside;
         try
         {
-            inside = await CheckedAsync(request, launcher, ct);
+            inside = await CheckedAsync(host, request, launcher, ct);
         }
         catch
         {
@@ -168,7 +177,7 @@ public static class VibeLaunch
             throw;
         }
 
-        return inside.Refusal.Length > 0 ? Given(turn, inside) : LaunchTurn.Holding(new Attempt(turn, exportFolder), inside.Warning, inside.CliVersion);
+        return inside.Refusal.Length > 0 ? Given(turn, inside) : LaunchTurn.Holding(new Attempt(turn, exportFolder), Joined(inside.Warning, inside.SignInNote), inside.CliVersion);
     }
 
     /// <summary>What the check inside the turn concluded: a refusal, or a go — with a warning when the version was not measured.</summary>
@@ -181,46 +190,65 @@ public static class VibeLaunch
 
         /// <summary>The release the check asked, as the ledger names it (<c>vibe 2.26.1</c>) — empty until it was asked.</summary>
         public string CliVersion { get; init; } = string.Empty;
+
+        /// <summary>What the person is told when the launch goes on without the sign-in link (<see cref="SignInLink.Note"/>); empty when it was linked.</summary>
+        public string SignInNote { get; init; } = string.Empty;
     }
 
+    /// <summary>The non-empty ones of the launch's warnings, one sentence.</summary>
+    private static string Joined(string version, string signIn) => string.Join("; ", new[] { version, signIn }.Where(said => said.Length > 0));
+
     /// <summary>Inside the turn: the manifest this build carries, then the home against it.</summary>
-    private static async Task<HomeVerdict> CheckedAsync(ProcessRequest request, IProcessLauncher launcher, CancellationToken ct) =>
+    private static async Task<HomeVerdict> CheckedAsync(VibeHost host, ProcessRequest request, IProcessLauncher launcher, CancellationToken ct) =>
         VibeHomeManifest.Builtin switch
         {
-            VibeManifestLoad.Loaded { Manifest: var manifest } => await AgainstAsync(manifest, request, launcher, ct),
+            VibeManifestLoad.Loaded { Manifest: var manifest } => await AgainstAsync(host, manifest, request, launcher, ct),
             VibeManifestLoad.Broken broken => HomeVerdict.Refuse(broken.Reason),
             _ => throw new InvalidOperationException("the union is closed"),
         };
 
     /// <summary>
     /// The home's SHAPE first — before anything of Vibe's starts on it, the version probe included, so a <c>hooks.toml</c> or
-    /// a link is never in the home while Vibe runs — then the installed version, then the shape AGAIN on both branches (the
-    /// <c>--version</c> process is Vibe's own and runs on the home, so what it leaves is checked before the review starts —
-    /// risk consultation 6b4726a6, 2026-10-13), then the plugin bytes when that version was measured.
+    /// a link is never in the home while Vibe runs — then, on a host that links the person's sign-in (DL2), the link, then the installed
+    /// version, then the shape AGAIN on both branches (the <c>--version</c> process is Vibe's own and runs on the home, so what it leaves
+    /// is checked before the review starts — risk consultation 6b4726a6, 2026-10-13), then the plugin bytes when that version was measured.
     /// </summary>
-    private static async Task<HomeVerdict> AgainstAsync(VibeHomeManifest manifest, ProcessRequest request, IProcessLauncher launcher, CancellationToken ct)
+    /// <remarks>
+    /// <b>The link is made after the shape check and before <c>--version</c></b>: <c>--version</c> may read the sign-in (harmless), and the
+    /// shape check that follows it must admit the link, which it does only because the admitted link is passed to it. A refusal of the
+    /// link — a target that is not a sign-in coai links — is the launch's, before anything of Vibe's starts.
+    /// </remarks>
+    private static async Task<HomeVerdict> AgainstAsync(VibeHost host, VibeHomeManifest manifest, ProcessRequest request, IProcessLauncher launcher, CancellationToken ct)
     {
         var home = Value(request, HomeVariable);
-        var shape = VibeHome.Refusal(home, manifest);
+        var shape = VibeHome.Refusal(home, manifest, host.SignIn.Admitted);
         if (shape.Length > 0)
         {
             return HomeVerdict.Refuse(shape);
         }
 
-        return AfterTheVersion(manifest, home, await VersionAsync(request, launcher, ct));
+        var link = host.SignIn.Links ? VibeSignInLink.Make(host.SignIn, home) : new SignInLink.Linked();
+        if (link is SignInLink.Refused refused)
+        {
+            return HomeVerdict.Refuse(refused.Sentence);
+        }
+
+        return AfterTheVersion(host, manifest, home, await VersionAsync(request, launcher, ct), link.Note);
     }
 
     /// <summary>The version's own refusal first (carrying whether the CLI was missing), then the home again, then the entry.</summary>
-    private static HomeVerdict AfterTheVersion(VibeHomeManifest manifest, string home, VersionAnswer version)
+    private static HomeVerdict AfterTheVersion(VibeHost host, VibeHomeManifest manifest, string home, VersionAnswer version, string signInNote)
     {
         if (version.Refusal.Length > 0)
         {
             return HomeVerdict.Refuse(version.Refusal) with { CliMissing = version.CliMissing };
         }
 
-        var after = VibeHome.Refusal(home, manifest);
+        var after = VibeHome.Refusal(home, manifest, host.SignIn.Admitted);
 
-        return after.Length > 0 ? HomeVerdict.Refuse(after) : Verdict(manifest, home, version.Version) with { CliVersion = Named(version.Version) };
+        return after.Length > 0
+            ? HomeVerdict.Refuse(after)
+            : Verdict(manifest, home, version.Version, host.Platform, host.SignIn.Admitted) with { CliVersion = Named(version.Version), SignInNote = signInNote };
     }
 
     private static LaunchTurn Given(IDisposable turn, HomeVerdict inside)
@@ -303,9 +331,9 @@ public static class VibeLaunch
     /// (the owner's decision of 2026-10-13: "Vibe must WARN, not refuse — set it up once and it must work if it can"): its
     /// home's SHAPE was already checked before its `--version` started, so its plugin files are admitted by name.
     /// </summary>
-    internal static HomeVerdict Verdict(VibeHomeManifest manifest, string home, string version) => manifest.For(version) switch
+    internal static HomeVerdict Verdict(VibeHomeManifest manifest, string home, string version, string platform, AdmittedLink admitted) => manifest.For(version, platform) switch
     {
-        [var entry] => HomeVerdict.Refuse(VibeHome.Refusal(home, manifest, entry)),
+        [var entry] => HomeVerdict.Refuse(VibeHome.Refusal(home, manifest, entry, admitted)),
         _ => new HomeVerdict(string.Empty, Unmeasured(manifest, version)),
     };
 
@@ -313,13 +341,13 @@ public static class VibeLaunch
     /// The warning for a Vibe version nobody measured — the same sentence on the launch (<see cref="LaunchTurn.Warning"/>)
     /// and on the row's card (<c>VibeRuntime.VersionWarning</c>) — or empty for a measured one.
     /// </summary>
-    public static string VersionWarning(VibeHomeManifest manifest, string version) =>
-        version.Length == 0 || manifest.For(version).Count > 0 ? string.Empty : Unmeasured(manifest, version);
+    public static string VersionWarning(VibeHomeManifest manifest, string version, string platform) =>
+        version.Length == 0 || manifest.For(version, platform).Count > 0 ? string.Empty : Unmeasured(manifest, version);
 
     private static string Unmeasured(VibeHomeManifest manifest, string version) =>
         VersionWarnings.Unmeasured(
             "Vibe", version, manifest.Known,
-            $"its confinement (research/RESULTS_vibe_confinement.md) and its home's plugin hashes are {manifest.Known}'s, and this version's plugin files are admitted by name only",
+            $"its confinement (research/RESULTS_vibe_confinement.md) and its home's plugin hashes belong to {manifest.Known}; this version's plugin files are admitted by name only",
             "re-run `node scripts/vibe-home-manifest.mjs --write` and `node scripts/probe-vibe-confinement.mjs` with this Vibe to measure it");
 
     /// <summary>

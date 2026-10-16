@@ -6,9 +6,15 @@ namespace CoaiMcp.Runners.Vibe;
 /// <summary>One file Vibe writes into an empty home whose bytes are pinned: its home-relative path and its SHA-256.</summary>
 public sealed record VibePinnedFile(string Path, string Sha256);
 
-/// <summary>What one Vibe version writes into an empty coai-owned home — the plugin files it unpacks, by hash.</summary>
+/// <summary>What one Vibe version writes into an empty coai-owned home ON ONE PLATFORM — the plugin files it unpacks, by hash.</summary>
 public sealed record VibeHomeEntry(string Version, IReadOnlyList<VibePinnedFile> Pinned)
 {
+    /// <summary>The platform an entry that names none was measured on — today's only entry was Windows' (DL3 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>).</summary>
+    public const string DefaultPlatform = "win32";
+
+    /// <summary>The platform the entry was measured on, as node spells it (<c>win32</c> | <c>linux</c>); an entry with none reads as <see cref="DefaultPlatform"/>.</summary>
+    public string Platform { get; init; } = DefaultPlatform;
+
     /// <summary>The pinned file at <paramref name="path"/> (forward slashes, ordinal), or none.</summary>
     public IReadOnlyList<VibePinnedFile> At(string path) => [.. Pinned.Where(file => file.Path == path)];
 }
@@ -42,11 +48,18 @@ public sealed record VibeHomeManifest(string PinnedPrefix, IReadOnlyList<string>
     /// <summary>The manifest this build was shipped with, or the sentence that says why it cannot be read.</summary>
     public static VibeManifestLoad Builtin { get; } = Load();
 
-    /// <summary>The entry for exactly <paramref name="version"/>, or none.</summary>
+    /// <summary>The entries for exactly <paramref name="version"/>, on any platform.</summary>
     public IReadOnlyList<VibeHomeEntry> For(string version) => [.. Versions.Where(entry => entry.Version == version)];
 
-    /// <summary>The versions this manifest qualifies, for a refusal that must name them.</summary>
-    public string Known => string.Join(", ", Versions.Select(entry => entry.Version));
+    /// <summary>
+    /// The entry for exactly <paramref name="version"/> measured on <paramref name="platform"/>, or none. A version measured on ANOTHER
+    /// platform only is an unmeasured version here: it is run with a warning, and the warning names where it was measured.
+    /// </summary>
+    public IReadOnlyList<VibeHomeEntry> For(string version, string platform) =>
+        [.. Versions.Where(entry => entry.Version == version && entry.Platform == platform)];
+
+    /// <summary>The versions this manifest qualifies, each with its platform, for a refusal or a warning that must name them.</summary>
+    public string Known => string.Join(", ", Versions.Select(entry => $"{entry.Version} ({entry.Platform})"));
 
     /// <summary>A manifest document, validated — or a refusal naming what is wrong with it.</summary>
     public static VibeManifestLoad Parse(string json)
@@ -72,7 +85,10 @@ public sealed record VibeHomeManifest(string PinnedPrefix, IReadOnlyList<string>
         && version.Pinned.All(file => file is { Path.Length: > 0, Sha256.Length: 64 });
 
     private static VibeHomeEntry Entry(ManifestVersion? version) =>
-        new(version!.Version!, [.. version.Pinned!.Select(file => new VibePinnedFile(file!.Path!, file.Sha256!.ToLowerInvariant()))]);
+        new(version!.Version!, [.. version.Pinned!.Select(file => new VibePinnedFile(file!.Path!, file.Sha256!.ToLowerInvariant()))])
+        {
+            Platform = string.IsNullOrWhiteSpace(version.Platform) ? VibeHomeEntry.DefaultPlatform : version.Platform,
+        };
 
     private static VibeManifestLoad Load()
     {
@@ -115,6 +131,9 @@ internal sealed record ManifestFile
 internal sealed record ManifestVersion
 {
     public string? Version { get; init; }
+
+    /// <summary>As node spells it (<c>win32</c> | <c>linux</c>); absent in an older manifest, which reads as win32.</summary>
+    public string? Platform { get; init; }
 
     public IReadOnlyList<ManifestPinned?>? Pinned { get; init; }
 }
