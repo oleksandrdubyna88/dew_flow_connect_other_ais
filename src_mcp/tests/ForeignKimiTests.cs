@@ -18,11 +18,16 @@ public sealed class ForeignKimiTests
     private static ProcessEntry P(int pid, int parent, string name) => new(pid, parent, name);
 
     /// <summary>A process list that answers the scripted listings in order, the last one for ever.</summary>
-    private sealed class ScriptedList(params IReadOnlyList<ProcessEntry>[] listings) : IProcessList
+    private sealed class ScriptedList(params ProcessListing[] listings) : IProcessList
     {
         public int Asked { get; private set; }
 
-        public IReadOnlyList<ProcessEntry> Snapshot() => listings[Math.Min(Asked++, listings.Length - 1)];
+        public ScriptedList(params IReadOnlyList<ProcessEntry>[] listed)
+            : this([.. listed.Select(processes => (ProcessListing)new ProcessListing.Listed(processes))])
+        {
+        }
+
+        public ProcessListing Snapshot() => listings[Math.Min(Asked++, listings.Length - 1)];
     }
 
     private static KimiPlaces Places() => KimiPlaces.ForShim(Path.Combine(Path.GetTempPath(), "testsToDelete-foreign-kimi-not-made"), Path.GetTempPath());
@@ -80,8 +85,7 @@ public sealed class ForeignKimiTests
         var slept = new List<TimeSpan>();
         var waited = Watch(new ScriptedList([P(1, 0, "explorer.exe")]), slept).Wait(TimeSpan.FromSeconds(30));
 
-        waited.Still.Should().BeEmpty();
-        waited.Waited.Should().Be(TimeSpan.Zero);
+        waited.Should().Be(new ForeignKimiAnswer.Clear(TimeSpan.Zero));
         slept.Should().BeEmpty();
     }
 
@@ -94,8 +98,7 @@ public sealed class ForeignKimiTests
 
         var waited = Watch(new ScriptedList(running, running, gone), slept).Wait(TimeSpan.FromSeconds(30));
 
-        waited.Still.Should().BeEmpty();
-        waited.Waited.Should().Be(TimeSpan.FromSeconds(2));
+        waited.Should().Be(new ForeignKimiAnswer.Clear(TimeSpan.FromSeconds(2)));
         slept.Should().Equal(Poll, Poll);
     }
 
@@ -106,8 +109,9 @@ public sealed class ForeignKimiTests
 
         var waited = Watch(new ScriptedList([P(4242, 2, "kimi.exe")]), slept).Wait(TimeSpan.FromSeconds(3));
 
-        waited.Still.Select(p => p.Pid).Should().Equal(4242);
-        waited.Waited.Should().Be(TimeSpan.FromSeconds(3));
+        var running = waited.Should().BeOfType<ForeignKimiAnswer.Running>().Subject;
+        running.Still.Select(p => p.Pid).Should().Equal(4242);
+        running.Waited.Should().Be(TimeSpan.FromSeconds(3));
         slept.Should().HaveCount(3);
     }
 
@@ -160,11 +164,140 @@ public sealed class ForeignKimiTests
     [Fact]
     public void TheHostsOwnListing_NamesThisProcess_WithItsParent()
     {
-        Assert.SkipUnless(OperatingSystem.IsWindows(), "the host listing is Windows' toolhelp snapshot; other hosts never run Kimi (D18)");
-        var me = HostProcessList.Current.Snapshot().FirstOrDefault(p => p.Pid == Environment.ProcessId);
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "the host listing is Windows' toolhelp snapshot here; Linux's is HostProcessListTests'");
+        var me = HostProcessList.Current.Snapshot().Should().BeOfType<ProcessListing.Listed>().Subject.Processes.FirstOrDefault(p => p.Pid == Environment.ProcessId);
 
         me.Should().NotBeNull();
         me!.ParentPid.Should().BePositive();
         me.Name.Should().NotBeEmpty();
+    }
+
+    // ---------- Linux: the listing over /proc (DL10; S-K7, S-K13, S-K13b) ----------
+
+    private const string KimiExe = "/home/me/.kimi-code/bin/kimi";
+
+    private static ForeignKimiWatch OnLinux(FakeProcReads proc, List<TimeSpan> slept) => new(new LinuxProcessListing(proc, Shim), Shim, Poll, slept.Add);
+
+    /// <summary>The shim, its ancestors, and one stranger's <c>kimi acp</c> (comm <c>MainThread</c>, as measured) under a shell under node.</summary>
+    private static FakeProcReads ATerminalsKimi() => new FakeProcReads()
+        .Running(1, 0, "/sbin/init", "init")
+        .Running(Shim, 1, "/usr/local/bin/coai-mcp", "coai-mcp")
+        .Running(301, 1, "/usr/bin/node", "MainThread")
+        .Running(300, 301, "/usr/bin/bash", "bash")
+        .Running(4242, 300, KimiExe);
+
+    [Fact]
+    public void ALinuxKimiWithNoCoaiMcpInItsChain_MakesTheWaitWait_ThenBusy()
+    {
+        var slept = new List<TimeSpan>();
+
+        var answer = OnLinux(ATerminalsKimi(), slept).Wait(TimeSpan.FromSeconds(3));
+
+        answer.Should().BeOfType<ForeignKimiAnswer.Running>("the Linux listing found no process — the foreign-Kimi wait never waits").Which.Still.Select(p => p.Pid).Should().Equal(4242);
+        slept.Should().HaveCount(3, "a kimi that never ends is waited for the whole deadline");
+    }
+
+    [Fact]
+    public void TheShimsOwnKimi_OnLinux_IsNotForeign()
+    {
+        var proc = new FakeProcReads().Running(1, 0, "/sbin/init", "init").Running(Shim, 1, "/usr/local/bin/coai-mcp", "coai-mcp").Running(200, Shim, KimiExe).Running(201, 200, KimiExe);
+
+        OnLinux(proc, []).Wait(TimeSpan.FromSeconds(3)).Should().BeOfType<ForeignKimiAnswer.Clear>("a kimi whose parent chain reaches this shim is coai's, a grandchild kimi included");
+    }
+
+    [Fact]
+    public void ATuiWhoseCommIsKimi_IsKimiByItsSecondWitness()
+    {
+        var proc = new FakeProcReads().Running(1, 0, "/sbin/init", "init").Running(Shim, 1, "/usr/local/bin/coai-mcp", "coai-mcp").Running(500, 1, "/usr/bin/wrapped-binary", "kimi");
+
+        OnLinux(proc, []).Wait(TimeSpan.Zero).Should().BeOfType<ForeignKimiAnswer.Running>("a process whose comm is kimi is the TUI as the first scout saw it");
+    }
+
+    [Fact]
+    public void AnUnreadableListing_IsBusyWithTheReason_NeverClear()
+    {
+        var proc = ATerminalsKimi();
+        proc.Stats[777] = () => throw new UnauthorizedAccessException("denied");
+        var slept = new List<TimeSpan>();
+
+        var answer = OnLinux(proc, slept).Wait(TimeSpan.FromSeconds(30));
+
+        answer.Should().BeOfType<ForeignKimiAnswer.Unreadable>("an unreadable process listing was read as 'nobody is running'").Which.Reason.Should().Contain("/proc/777/stat");
+        slept.Should().BeEmpty("an unreadable /proc does not become readable by waiting: the wait ends at once");
+    }
+
+    [Fact]
+    public void ASameUserProcessWhoseExeCannotBeRead_MakesTheListingUnreadable()
+    {
+        var proc = ATerminalsKimi();
+        proc.With(888, "S", 1);
+        proc.Exes[888] = () => throw new UnauthorizedAccessException("denied");
+
+        new LinuxProcessListing(proc, Shim).Snapshot().Should().BeOfType<ProcessListing.Unreadable>().Which.Reason.Should().Contain("/proc/888/exe");
+    }
+
+    [Fact]
+    public void AnotherAccountsProcess_IsSkipped_NotCountedUnreadable()
+    {
+        var proc = ATerminalsKimi();
+        proc.With(1000, "S", 1);
+        proc.Owners[1000] = 0;
+        proc.Exes[1000] = () => throw new UnauthorizedAccessException("denied");
+
+        new LinuxProcessListing(proc, Shim).Snapshot().Should().BeOfType<ProcessListing.Listed>("another account's process cannot refresh this person's 0700 folder, and its exe answers EACCES for everyone")
+            .Which.Processes.Select(p => p.Pid).Should().NotContain(1000);
+    }
+
+    [Fact]
+    public void AListingWithoutTheShimsOwnPid_IsUnreadable()
+    {
+        var proc = new FakeProcReads().Running(1, 0, "/sbin/init", "init");
+
+        new LinuxProcessListing(proc, Shim).Snapshot().Should().BeOfType<ProcessListing.Unreadable>().Which.Reason.Should().Contain("own pid");
+    }
+
+    [Fact]
+    public void AProcDirectoryThatCannotBeListed_IsUnreadable()
+    {
+        var proc = new FakeProcReads { Listed = () => throw new IOException("no /proc") };
+
+        new LinuxProcessListing(proc, Shim).Snapshot().Should().BeOfType<ProcessListing.Unreadable>().Which.Reason.Should().Contain("/proc could not be listed").And.Contain("IOException");
+    }
+
+    [Fact]
+    public void ADeletedKimiBinary_IsStillKimi_AndAnUnrelatedZombie_IsSkipped()
+    {
+        var proc = ATerminalsKimi();
+        proc.Exes[4242] = () => KimiExe + " (deleted)";
+        proc.With(999, "Z", 1);
+        proc.Exes[999] = () => throw new UnauthorizedAccessException("a zombie's exe cannot be read");
+
+        var listing = new LinuxProcessListing(proc, Shim).Snapshot().Should().BeOfType<ProcessListing.Listed>("an unrelated zombie made the Kimi launch Busy").Subject;
+
+        listing.Processes.Single(p => p.Pid == 4242).Name.Should().Be("kimi", "a running kimi whose binary was replaced was not seen");
+        listing.Processes.Select(p => p.Pid).Should().NotContain(999);
+        ForeignKimiWatch.Foreign(listing.Processes, Shim).Select(p => p.Pid).Should().Equal(4242);
+    }
+
+    [Fact]
+    public void AProcessThatLeftBetweenTheListingAndTheRead_IsSkipped_AndOnlyOneDeletedSuffixIsStripped()
+    {
+        var proc = new FakeProcReads { Listed = () => [1, 2, Shim, 42] }
+            .Running(1, 0, "/sbin/init", "init")
+            .Running(2, 1, "/x/kimi (deleted) (deleted)")
+            .Running(Shim, 1, "/usr/local/bin/coai-mcp", "coai-mcp");
+
+        var listing = new LinuxProcessListing(proc, Shim).Snapshot().Should().BeOfType<ProcessListing.Listed>("pid 42 left between the listing and the read — never evidence of anything").Subject;
+
+        listing.Processes.Single(p => p.Pid == 2).Name.Should().Be("kimi (deleted)", "ONE trailing ' (deleted)' is stripped, not every one");
+    }
+
+    [Fact]
+    public void AnUnreadableListing_MakesTheShimsHoldBusy_WithTheSentence()
+    {
+        var holding = KimiShimHold.Taken(Places(), TimeSpan.FromSeconds(2), new ForeignKimiWatch(new ScriptedList(new ProcessListing.Unreadable("/proc/9/stat: denied")), Shim, Poll, _ => { }));
+
+        holding.Should().BeOfType<AcpHolding.Busy>().Which.Sentence.Should().Be(ForeignKimiWatch.UnreadableSentence("/proc/9/stat: denied"));
+        ForeignKimiWatch.UnreadableSentence("x").Should().Contain("cannot tell whether your own Kimi Code is running").And.Contain("DL10 of todo/PLAN_kimi_and_vibe_on_linux.md");
     }
 }

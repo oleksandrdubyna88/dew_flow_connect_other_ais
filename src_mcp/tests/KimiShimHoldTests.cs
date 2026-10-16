@@ -1,6 +1,7 @@
 using CoaiMcp.Runners.Acp;
 using CoaiMcp.Runners.Files;
 using CoaiMcp.Runners.Kimi;
+using CoaiMcp.Runners.Platform;
 using FluentAssertions;
 using Xunit;
 
@@ -58,5 +59,98 @@ public sealed class KimiShimHoldTests : IDisposable
     public void AHoldingNobodyNamed_IsRefusedToo_NeverTreatedAsHeld()
     {
         KimiShimHold.Held(null!, @"C:\persons\credentials").Should().BeOfType<AcpHolding.Unusable>().Which.Sentence.Should().Contain("cannot be taken");
+    }
+
+    // ---------- the A2-A3 seam in the shim's hold (§0 of both cornerstone specs) ----------
+
+    private const string Sentence = "a survivor marker stands: pid 4242 of an earlier Kimi tree is still running";
+
+    private static readonly TimeSpan Brief = TimeSpan.FromMilliseconds(80);
+
+    private string Locks => _dir.At("locks");
+
+    private string Persons => _dir.At("persons", "credentials");
+
+    private string Owned => _dir.At("owned", "kh-1");
+
+    private sealed class Standing(string sentence) : IKimiSurvivors
+    {
+        public string MarkerPathAsked { get; private set; } = string.Empty;
+
+        public Task<string> BlockedAsync(string markerPath, CancellationToken ct)
+        {
+            MarkerPathAsked = markerPath;
+
+            return Task.FromResult(sentence);
+        }
+
+        public string KeepsHome(string ownedRoot) => sentence;
+    }
+
+    private sealed class FixedList : IProcessList
+    {
+        public ProcessListing Snapshot() => new ProcessListing.Listed([new ProcessEntry(100, 1, "coai-mcp")]);
+    }
+
+    private static ForeignKimiWatch NobodyForeign() => new(new FixedList(), 100, TimeSpan.FromSeconds(1), _ => { });
+
+    private KimiPlaces MadePlaces()
+    {
+        Directory.CreateDirectory(Persons);
+        Directory.CreateDirectory(Path.Combine(Owned, "home"));
+        var places = KimiPlaces.ForShim(Owned, Path.GetTempPath());
+        Junctions.Make(HostKind.Windows, places.Link, Persons).Should().BeEmpty("the owned home's sign-in link is made first");
+
+        return places;
+    }
+
+    /// <summary>The tree hold's take, NON-inheriting: no test holds an inheritable handle in the test host.</summary>
+    private static TreeHolding NonInheriting(string target, string root, TimeSpan within) => KimiCredentialsLock.TakeTreeThrough(target, root, within, (path, wait) => HeldFile.TakeWithin(path, wait));
+
+    [Fact]
+    public void AStandingMarker_MakesTheShimsHoldBusy_WithTheMarkerSentence_AndGivesTheHoldBack()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        using var rooted = KimiCredentialsLock.RootFor(Locks);
+        var places = MadePlaces();
+        var gate = new Standing(Sentence);
+        using var seam = KimiSurvivors.Using(gate);
+
+        var holding = KimiShimHold.Taken(places, Brief, NobodyForeign(), NonInheriting);
+
+        holding.Should().BeOfType<AcpHolding.Busy>("the shim's hold was Held over a standing survivor marker").Which.Sentence.Should().Be(Sentence);
+        gate.MarkerPathAsked.Should().Be(KimiCredentialsLock.MarkerPathFor(Persons), "the marker is found through the sign-in's own identity key");
+        HeldFile.Probe(KimiCredentialsLock.TreePathFor(Persons)).Should().Be(LockProbe.Free, "the hold is given back when the turn is refused");
+        KimiCredentialsLock.HomeProbe(Owned).Should().Be(LockProbe.Free);
+    }
+
+    [Fact]
+    public void WithNoMarker_TheHoldIsHeld_AsBefore()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        using var rooted = KimiCredentialsLock.RootFor(Locks);
+        var places = MadePlaces();
+
+        var holding = KimiShimHold.Taken(places, Brief, NobodyForeign(), NonInheriting);
+
+        var held = holding.Should().BeOfType<AcpHolding.Held>().Subject;
+        HeldFile.Probe(KimiCredentialsLock.TreePathFor(Persons)).Should().Be(LockProbe.Held);
+        held.Hold.Dispose();
+    }
+
+    [Fact]
+    public async Task TheStandInGate_BlocksOnAMarkerFile_AndKeepsAllHomes_AndPassesWhenThereIsNone()
+    {
+        Directory.CreateDirectory(Locks);
+        using var rooted = KimiCredentialsLock.RootFor(Locks);
+        var marker = Path.Combine(Locks, "0123456789abcdef.survivors.json");
+
+        (await MarkerPresence.Instance.BlockedAsync(marker, TestContext.Current.CancellationToken)).Should().BeEmpty();
+        MarkerPresence.Instance.KeepsHome(Owned).Should().BeEmpty();
+
+        File.WriteAllText(marker, "{}");
+
+        (await MarkerPresence.Instance.BlockedAsync(marker, TestContext.Current.CancellationToken)).Should().Contain(marker).And.Contain("cannot yet verify");
+        MarkerPresence.Instance.KeepsHome(Owned).Should().Contain(marker, "a marker coai cannot read keeps every home: cannot tell is never free");
     }
 }

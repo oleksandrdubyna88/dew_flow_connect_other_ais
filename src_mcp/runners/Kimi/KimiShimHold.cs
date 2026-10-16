@@ -24,18 +24,19 @@ public static class KimiShimHold
     /// person runs beside would race the rotating refresh token. It is waited for within the same deadline (the hold gets what is left), and past the
     /// deadline the turn is busy, naming the process.
     /// </summary>
-    public static AcpHolding Taken(KimiPlaces places, TimeSpan within, ForeignKimiWatch watch)
-    {
-        var foreign = watch.Wait(within);
-        if (foreign.Still.Count > 0)
+    public static AcpHolding Taken(KimiPlaces places, TimeSpan within, ForeignKimiWatch watch) => Taken(places, within, watch, KimiCredentialsLock.HoldTree);
+
+    /// <summary>The same, with the tree hold's take behind a seam — a test hands the NON-inheriting take (no test holds an inheritable handle in the test host).</summary>
+    internal static AcpHolding Taken(KimiPlaces places, TimeSpan within, ForeignKimiWatch watch, Func<string, string, TimeSpan, TreeHolding> hold) =>
+        watch.Wait(within) switch
         {
-            return new AcpHolding.Busy(ForeignKimiWatch.Sentence(foreign.Still[0]));
-        }
+            ForeignKimiAnswer.Running running => new AcpHolding.Busy(ForeignKimiWatch.Sentence(running.Still[0])),
+            ForeignKimiAnswer.Unreadable unreadable => new AcpHolding.Busy(ForeignKimiWatch.UnreadableSentence(unreadable.Reason)),
+            ForeignKimiAnswer.Clear clear => TakenAfterTheLook(places, within - clear.Waited, hold),
+            _ => new AcpHolding.Unusable("the foreign-Kimi wait answered something this shim does not know — refused"),
+        };
 
-        return TakenAfterTheLook(places, within - foreign.Waited);
-    }
-
-    private static AcpHolding TakenAfterTheLook(KimiPlaces places, TimeSpan within)
+    private static AcpHolding TakenAfterTheLook(KimiPlaces places, TimeSpan within, Func<string, string, TimeSpan, TreeHolding> hold)
     {
         var target = Junctions.Target(places.Link);
         if (target.Length == 0)
@@ -43,7 +44,29 @@ public static class KimiShimHold
             return new AcpHolding.Unusable($"the owned Kimi home {places.OwnedRoot} has no credentials junction at {places.Link}, so there is no sign-in to hold — refused (D19)");
         }
 
-        return Held(KimiCredentialsLock.HoldTree(target, places.OwnedRoot, within), target);
+        return WithNoSurvivors(hold(target, places.OwnedRoot, within), target);
+    }
+
+    /// <summary>
+    /// The A2-A3 seam (<see cref="IKimiSurvivors"/>), asked once BOTH tree files are held — the last point that can see a marker the previous shim's teardown wrote: the gate is non-inheritable and dies with the server, so another
+    /// server's launch can pass it before that teardown has written anything. A standing marker gives the hold back and makes the turn Busy with the marker's sentence. Run synchronously: nothing may yield between the take and the agent's start.
+    /// </summary>
+    private static AcpHolding WithNoSurvivors(TreeHolding holding, string target)
+    {
+        if (holding is not TreeHolding.Taken taken)
+        {
+            return Held(holding, target);
+        }
+
+        var standing = KimiSurvivors.Gate.BlockedAsync(KimiCredentialsLock.MarkerPathFor(target), CancellationToken.None).GetAwaiter().GetResult();
+        if (standing.Length == 0)
+        {
+            return Held(holding, target);
+        }
+
+        taken.Hold.Dispose();
+
+        return new AcpHolding.Busy(standing);
     }
 
     /// <summary>What the lock answered, in the shim's words: held, busy (another tree is alive), or refused because two refreshers could race.</summary>

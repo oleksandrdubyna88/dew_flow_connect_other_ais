@@ -555,6 +555,26 @@ public sealed class KimiHomeTests : IDisposable
         KimiHome.Dispose(places.OwnedRoot, _ => { }).Should().BeOfType<Disposal.Stopped>("a kept home costs a beat where a wrong unlink costs a sign-in");
         OwnedPaths.IsLinkIfThere(places.Link).Should().BeTrue();
     }
+    private sealed class Keeping(string sentence) : IKimiSurvivors
+    {
+        public Task<string> BlockedAsync(string markerPath, CancellationToken ct) => Task.FromResult(string.Empty);
+
+        public string KeepsHome(string ownedRoot) => sentence;
+    }
+
+    [Fact]
+    public void AHomeAStandingSurvivorMarkerNames_IsKept_EvenWithItsTreeFileFree()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        var places = Made();
+        using var seam = KimiSurvivors.Using(new Keeping("a Kimi started on this home may still be running (the survivor marker names pid 4242) — the home is kept until the marker is cleared"));
+
+        var disposal = KimiHome.Dispose(places.OwnedRoot, _ => { });
+
+        disposal.Should().BeOfType<Disposal.Stopped>("a survivor marker keeps the home exactly as a held coai-tree.lock does").Which.Reason.Should().Contain("survivor marker");
+        OwnedPaths.IsLinkIfThere(places.Link).Should().BeTrue("nothing was unlinked");
+    }
+
     // ---------- the refusals and stops no other row reaches ----------
 
     [Fact]

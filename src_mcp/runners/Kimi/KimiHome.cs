@@ -335,13 +335,13 @@ public static class KimiHome
             ? $"{link} is a link, and an owned home is never unlinked through one — it is left to the deleter, which removes the link by its own name and never enters it"
             : string.Empty;
 
-    /// <summary>Whether a tree is alive on THIS home — asked of the home's own file, before anything is unlinked and before anything outside coai's tree is opened. Free proceeds; Held or Unknown stop.</summary>
+    /// <summary>Whether a tree is alive on THIS home — asked of the home's own file, before anything is unlinked and before anything outside coai's tree is opened. Free proceeds; Held or Unknown stop. A free file is not a free home while a survivor marker names it (the A2-A3 seam, <see cref="IKimiSurvivors.KeepsHome"/>).</summary>
     private static string Alive(string root)
     {
         var tree = Path.Combine(root, KimiCredentialsLock.HomeHoldName);
 
         return KimiCredentialsLock.HomeProbe(root) == LockProbe.Free
-            ? string.Empty
+            ? KimiSurvivors.Gate.KeepsHome(root)
             : $"a Kimi started on {root} is still running (its tree hold {tree} is held) — the home is kept until it ends";
     }
 

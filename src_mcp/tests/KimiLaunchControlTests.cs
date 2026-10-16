@@ -154,6 +154,30 @@ public sealed class KimiLaunchControlTests : IDisposable
         Directory.Exists(Locks).Should().BeFalse("no lock file was made on a spelling");
     }
 
+    private sealed class Blocking(string sentence) : IKimiSurvivors
+    {
+        public Task<string> BlockedAsync(string markerPath, CancellationToken ct) => Task.FromResult(sentence);
+
+        public string KeepsHome(string ownedRoot) => string.Empty;
+    }
+
+    [Fact]
+    public async Task AStandingSurvivorMarker_RefusesTheLaunch_WithItsSentence_HoldingNothing()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        using var rooted = Rooted();
+        var places = _person.Places();
+        var fake = new FakeKimi();
+        using var seam = KimiSurvivors.Using(new Blocking("a survivor marker stands: pid 4242 of an earlier Kimi tree is still running"));
+
+        var turn = await KimiLaunch.TakeAsync(HostKind.Windows, Request(places), places, fake, TestContext.Current.CancellationToken);
+
+        turn.Refusal.Should().Be("a survivor marker stands: pid 4242 of an earlier Kimi tree is still running", "a free gate is not a free sign-in while a marker stands");
+        fake.Started.Should().BeEmpty("a refusal starts nothing");
+        VibeHomeTurns.Held(places.OwnedRoot).Should().BeFalse("no turn was left held");
+        HeldFile.IsHeld(KimiCredentialsLock.PathFor(places.Credentials)).Should().BeFalse("no gate was left held");
+    }
+
     // ---------- S2.26 ----------
 
     [Fact]

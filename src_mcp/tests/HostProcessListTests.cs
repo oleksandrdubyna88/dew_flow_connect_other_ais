@@ -77,9 +77,30 @@ public sealed class HostProcessListTests
     {
         Assert.SkipUnless(OperatingSystem.IsLinux(), "the Linux listing reads /proc");
 
-        var me = HostProcessList.Current.Snapshot().FirstOrDefault(p => p.Pid == Environment.ProcessId);
+        var me = HostProcessList.Current.Snapshot().Should().BeOfType<ProcessListing.Listed>("the Linux listing should be readable here").Subject.Processes.FirstOrDefault(p => p.Pid == Environment.ProcessId);
 
         me.Should().NotBeNull("the Linux listing should hold the test host's own pid, but was empty");
         me!.Name.Should().Be(Path.GetFileName(Environment.ProcessPath), "the name is the exe link's basename, which is stable for the whole run — comm is the kernel's thread name");
+    }
+
+    [Fact]
+    public void AFailedSnapshot_IsUnreadable_NotEmpty()
+    {
+        HostProcessList.Failed(5).Should().BeOfType<ProcessListing.Unreadable>("a failed Toolhelp snapshot was read as 'nobody is running'").Which.Reason.Should().Contain("Win32 error 5");
+        HostProcessList.Walked([], 5).Should().BeOfType<ProcessListing.Unreadable>("a walk that ended on a real error is not a complete listing");
+    }
+
+    [Theory]
+    [InlineData(18)]
+    [InlineData(0)]
+    public void AWalkThatEndedTheNormalWay_IsTheListing(int lastError) =>
+        HostProcessList.Walked([new ProcessEntry(1, 0, "init")], lastError).Should().BeOfType<ProcessListing.Listed>().Which.Processes.Should().ContainSingle();
+
+    [Fact]
+    public void OnAHostWithNoListing_TheAnswerIsUnreadable_NeverEmpty()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows() || OperatingSystem.IsLinux(), "Windows and Linux have a listing");
+
+        HostProcessList.Current.Snapshot().Should().BeOfType<ProcessListing.Unreadable>();
     }
 }
