@@ -29,10 +29,12 @@ paid turns.
 **Cornerstones — the ledger.** The plan's quota is Q = ⌈2·5/5⌉ = 2 (five epics, S1–S5). The parent's ledger line (§4 S4)
 reads **`Cornerstones: 2 of 2 — E4.1, E4.2`**, so the quota is spent. **E5.3 is the cornerstone this epic needs** (decision J1
 below). By [subagent-models.md](../.agents/conventions/common/subagent-models.md) ("a mark that would make k exceed Q goes to
-the operator, not into the document"), this document does NOT change the ledger line. It marks E5.3 as `model: fable —
-PENDING the operator's yes`. If the operator says yes, the ledger line becomes `3 of 2 — E4.1, E4.2, E5.3 (over the quota by the
-operator's decision of <date>)` in the same commit as Fable's spec. If the operator says no, Opus writes E5.3's spec from the
-scenario set below. Either way, no coder starts E5.3 before its spec is final.
+the operator, not into the document"), this document does NOT change the ledger line. **Decided 2026-10-16, after
+the question consultant was asked (consult 95f08e0b, option B): the quota stands at 2 of 2.** E5.3 is NOT a cornerstone.
+Opus writes its spec from the scenario set below. Fable gives E5.3 a **security judgement**, since it handles authentication
+and that role is outside any quota. The judgement covers the owner/sweep races, the lock order, how every disposal stop
+propagates, the row/check fallback paths and the separate `kh-*` root. It is given before any code. No coder starts E5.3
+before its spec and that judgement are final.
 
 **Build order** (strict where an arrow is shown):
 
@@ -299,9 +301,9 @@ path returns 64.
 
 ## E5.3 — The owned homes: a conversation's home kept across turns, and every one-shot Kimi home disposed junction-first
 
-`model: fable` — **cornerstone, PENDING the operator's yes** (§0, J1). Below are the judge's decisions and the MINIMUM
-scenario set. Fable's spec extends them (more rows, its own review focus) and may overrule a decision with its reason written
-down. Anchors verified on `origin/main` 02ffd326.
+`model: opus` spec plus a `fable` **security judgement**. It is not a cornerstone; the quota stands, see §0 and J1.
+Below are the judge's decisions and the MINIMUM scenario set. The spec extends them with more rows and its own review
+focus. Fable's security judgement may overrule a decision, and when it does, its reason is written down. Anchors verified on `origin/main` 02ffd326.
 
 **Goal.** A Kimi conversation keeps ONE owned home across all its turns, in its own private folder. The home is made with its
 junction at the first turn and validated before every turn. It never waits for itself. Its turns run one at a time and
