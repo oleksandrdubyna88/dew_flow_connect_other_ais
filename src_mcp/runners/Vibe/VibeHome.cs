@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using CoaiMcp.Runners.Files;
 using CoaiMcp.Runners.Snapshots;
 
 namespace CoaiMcp.Runners.Vibe;
@@ -34,7 +35,15 @@ public static class VibeHome
     /// refusal sentence — or empty when the home holds only what Vibe writes. A home not made yet is empty.
     /// </summary>
     public static string Refusal(string home, VibeHomeManifest manifest, VibeHomeEntry entry) =>
-        Checked(home, new Rules(manifest, entry, byHash: true));
+        Refusal(home, manifest, entry, AdmittedLink.None);
+
+    /// <summary>
+    /// <see cref="Refusal(string, VibeHomeManifest, VibeHomeEntry)"/> on a host that admits ONE link in an owned home
+    /// (<paramref name="admitted"/>: DL2 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): the person's sign-in, as <c>.env</c> at the top
+    /// level, compared by its RAW target. Any other link — another name, another target, a folder — is refused as before.
+    /// </summary>
+    public static string Refusal(string home, VibeHomeManifest manifest, VibeHomeEntry entry, AdmittedLink admitted) =>
+        Checked(home, new Rules(manifest, entry, byHash: true, admitted));
 
     /// <summary>
     /// The home's SHAPE alone — every name, folder and link rule, and the trust list — with a file under the pinned prefix
@@ -44,8 +53,11 @@ public static class VibeHome
     /// <c>--version</c> starts; asked again after, because <c>--version</c> runs on the home too; and all that guards an
     /// UNMEASURED version, whose plugin bytes have no hashes.
     /// </summary>
-    public static string Refusal(string home, VibeHomeManifest manifest) =>
-        Checked(home, new Rules(manifest, new VibeHomeEntry(string.Empty, []), byHash: false));
+    public static string Refusal(string home, VibeHomeManifest manifest) => Refusal(home, manifest, AdmittedLink.None);
+
+    /// <summary><see cref="Refusal(string, VibeHomeManifest)"/> admitting the one link of <paramref name="admitted"/> (see the entry overload).</summary>
+    public static string Refusal(string home, VibeHomeManifest manifest, AdmittedLink admitted) =>
+        Checked(home, new Rules(manifest, new VibeHomeEntry(string.Empty, []), byHash: false, admitted));
 
     private static string Checked(string home, Rules rules)
     {
@@ -96,7 +108,7 @@ public static class VibeHome
         var relative = Path.GetRelativePath(home, path).Replace('\\', '/');
         if (SnapshotLinks.IsLink(path))
         {
-            return Sentence(home, relative, "is a link, and an owned home is never reached through one");
+            return Sentence(home, relative, rules.LinkProblem(relative, path));
         }
 
         return Directory.Exists(path) ? Folder(home, path, relative, rules, pending) : Sentence(home, relative, rules.FileProblem(relative, path));
@@ -123,8 +135,24 @@ public static class VibeHome
 
     /// <summary>The manifest's three answers for one home, held together so each check is one call.</summary>
     /// <param name="byHash">False for the shape check: a file or folder under the pinned prefix is admitted by place alone.</param>
-    private sealed class Rules(VibeHomeManifest manifest, VibeHomeEntry entry, bool byHash)
+    /// <param name="admitted">The one link this host admits (the person's sign-in), or none.</param>
+    private sealed class Rules(VibeHomeManifest manifest, VibeHomeEntry entry, bool byHash, AdmittedLink admitted)
     {
+        private const string AnyLink = "is a link, and an owned home is never reached through one";
+
+        /// <summary>
+        /// Why this LINK may not be in the home — or empty when it is the one admitted: the sign-in, named <c>.env</c> at the top level,
+        /// whose target, as the link stores it, is exactly the person's file. The RAW target, never a resolved one: a relative spelling that
+        /// resolves to the same file is refused (<c>OwnedPaths.RawLinkTarget</c>); the maker writes the absolute spelling.
+        /// </summary>
+        public string LinkProblem(string relative, string path) =>
+            admitted.Admits && relative == admitted.Name ? AdmittedLinkProblem(path) : AnyLink;
+
+        private string AdmittedLinkProblem(string path) =>
+            Directory.Exists(path) ? "is a link to a folder, not to the sign-in file"
+            : OwnedPaths.RawLinkTarget(path) != admitted.Target ? $"is a link to somewhere other than the sign-in file {admitted.Target}, and an owned home holds no other link"
+            : string.Empty;
+
         private readonly IReadOnlyList<string[]> _varying = [.. manifest.Varying.Select(glob => glob.Split('/'))];
 
         private readonly IReadOnlyList<string[]> _varyingFolders = [.. manifest.VaryingFolders.Select(glob => glob.Split('/'))];

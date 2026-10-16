@@ -19,39 +19,9 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class DotenvNamesTests
 {
-    private sealed record Vector(string Id, byte[] Bytes, IReadOnlyList<string> Binds, IReadOnlyList<string> NoValue, string Verdict, int Line, string Kind, IReadOnlyList<string> MustNotEcho);
+    public static TheoryData<string> Ids() => [.. DotenvVectors.All.Select(v => v.Id)];
 
-    private static readonly IReadOnlyList<Vector> Vectors = Load();
-
-    private static JsonDocument Document()
-    {
-        var path = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "shared", "dotenv-name-vectors.json"));
-
-        return File.Exists(path)
-            ? JsonDocument.Parse(File.ReadAllBytes(path))
-            : throw new FileNotFoundException($"shared/dotenv-name-vectors.json is not at {path} — E1 of the Kimi-and-Vibe-on-Linux plan writes it; this suite never skips for it");
-    }
-
-    private static List<Vector> Load()
-    {
-        using var document = Document();
-
-        return [.. document.RootElement.GetProperty("vectors").EnumerateArray().Select(v => new Vector(
-            v.GetProperty("id").GetString()!,
-            Convert.FromBase64String(v.GetProperty("inputBase64").GetString()!),
-            Names(v, "binds"),
-            Names(v, "noValue"),
-            v.GetProperty("coai").GetProperty("verdict").GetString()!,
-            v.GetProperty("coai").TryGetProperty("line", out var line) ? line.GetInt32() : 0,
-            v.GetProperty("coai").TryGetProperty("why", out var why) ? why.GetString()! : string.Empty,
-            Names(v, "mustNotEcho")))];
-    }
-
-    private static string[] Names(JsonElement vector, string property) => [.. vector.GetProperty(property).EnumerateArray().Select(n => n.GetString()!)];
-
-    public static TheoryData<string> Ids() => [.. Vectors.Select(v => v.Id)];
-
-    private static Vector Named(string id) => Vectors.Single(v => v.Id == id);
+    private static DotenvVector Named(string id) => DotenvVectors.All.Single(v => v.Id == id);
 
     private static DotenvVerdict Judge(string text) => DotenvNames.Judge(Encoding.UTF8.GetBytes(text));
 
@@ -61,9 +31,10 @@ public sealed class DotenvNamesTests
     [Fact]
     public void TheSharedVectors_Loaded_AndCoverEveryKindOfRefusal()
     {
-        Vectors.Should().NotBeEmpty("a Theory over zero vectors passes for ever");
-        Vectors.Where(v => v.Verdict == "refused").Select(v => v.Kind).Distinct().Should().BeEquivalentTo(Enum.GetNames<DotenvRefusal>(), "each of DL2's four kinds has a vector");
-        Vectors.Count(v => v.Verdict == "admitted").Should().BeGreaterThan(5, "the admitted forms are the positive companion every refusal needs");
+        var vectors = DotenvVectors.All;
+        vectors.Should().NotBeEmpty("a Theory over zero vectors passes for ever");
+        vectors.Where(v => v.Verdict == "refused").Select(v => v.Kind).Distinct().Should().BeEquivalentTo(Enum.GetNames<DotenvRefusal>(), "each of DL2's four kinds has a vector");
+        vectors.Count(v => v.Verdict == "admitted").Should().BeGreaterThan(5, "the admitted forms are the positive companion every refusal needs");
     }
 
     [Theory]
@@ -195,7 +166,7 @@ public sealed class DotenvNamesTests
 
     private static HashSet<int> PythonWhitespace()
     {
-        using var document = Document();
+        using var document = DotenvVectors.Document();
 
         return [.. document.RootElement.GetProperty("oracle").GetProperty("whitespace").EnumerateArray().Select(c => c.GetInt32())];
     }
