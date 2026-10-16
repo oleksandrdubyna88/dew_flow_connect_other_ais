@@ -479,7 +479,7 @@ public sealed class WorktreeManager(IProcessLauncher launcher, string storageRoo
         ?? stderr.Trim();
 
     private Task<ProcessResult> Git(string repoPath, TimeSpan budget, params string[] args) =>
-        launcher.RunAsync(new ProcessRequest("git", args, repoPath)
+        launcher.RunAsync(new ProcessRequest("git", TreeGit.Argv(args), repoPath)
         {
             Timeout = budget,
         });

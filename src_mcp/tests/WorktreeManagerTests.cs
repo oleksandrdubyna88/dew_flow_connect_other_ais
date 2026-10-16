@@ -351,6 +351,73 @@ public sealed class WorktreeManagerTests : IAsyncLifetime
         Directory.GetFiles(_storage, "coai-wt-bad-*").Should().BeEmpty("the owner marker goes with the tree it named");
     }
 
+    /// <summary>
+    /// A tracked path that takes the tree past Windows' 259 units checks out, reads clean and is given
+    /// back by GIT — not by the .NET delete that follows it as a last resort. The symptom this guards:
+    /// <c>review_code</c> failed with "Could not reset index file to revision 'HEAD'", which names the
+    /// index while the real fault was the working-tree file's path.
+    /// </summary>
+    /// <remarks>
+    /// The control makes the FIXTURE independent of the runner's own config: a machine with a
+    /// system-wide <c>core.longpaths</c> would pass the rest with or without the fix, so the test first
+    /// proves, with the flag set false on that one command, that this commit cannot be checked out
+    /// without it. The recorded requests then prove the product asked for the flag on EVERY call.
+    /// </remarks>
+    [Fact]
+    public async Task ARoundTreeChecksOutAPathLongerThanWindowsAllows()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), DeepCommit.WindowsOnly);
+        var relative = DeepCommit.Relative(_storage);
+        var sha = await DeepCommit.CommitAsync(_launcher, _repo, relative);
+        await TheFixtureNeedsTheFlag(sha);
+        var recording = new ExitRecordingLauncher(_launcher);
+        var manager = new WorktreeManager(recording, _storage);
+
+        string treePath;
+        await using (var lease = await manager.AddAsync(_repo, sha, "s1", round: 1))
+        {
+            treePath = lease.Path;
+            var file = Path.Combine(treePath, relative.Replace('/', '\\'));
+            file.Length.Should().BeGreaterThan(259, "the fixture is only worth something past the limit");
+            File.Exists(file).Should().BeTrue("the tree must hold the file git was asked to check out");
+            (await StatusOf(treePath)).Should().BeEmpty("a clean tree must not read as dirty (git status on a long path)");
+        }
+
+        Directory.Exists(treePath).Should().BeFalse("the lease gives the tree back");
+        recording.Calls.Should().NotBeEmpty();
+        recording.Calls.Should().OnlyContain(
+            call => call.Request.Arguments.Take(2).SequenceEqual(new[] { "-c", "core.longpaths=true" }),
+            "every git call that makes, inspects or removes the tree asks for long paths");
+        var removal = recording.Calls.Single(call => call.Request.Arguments.Contains("remove"));
+        removal.Result.ExitCode.Should().Be(0, $"git itself removes the tree: {removal.Result.StdErr}");
+    }
+
+    /// <summary>git without long paths cannot check this commit out — so a pass above is the flag's doing.</summary>
+    private async Task TheFixtureNeedsTheFlag(string sha)
+    {
+        var control = Path.Combine(_storage, "testsToDelete-wt-control-longpaths");
+        var refused = await _launcher.RunAsync(
+            new ProcessRequest(
+                "git",
+                ["-c", "core.longpaths=false", "worktree", "add", "--detach", control, sha],
+                _repo),
+            TestContext.Current.CancellationToken);
+
+        refused.ExitCode.Should().NotBe(0, "the control is a commit this git cannot check out without the flag");
+        refused.StdErr.Should().Contain("Filename too long", "for the reason under test, not for another");
+    }
+
+    /// <summary>The tree's own status, asked WITH long paths — the question a clean tree must answer empty.</summary>
+    private async Task<string> StatusOf(string tree)
+    {
+        var status = await _launcher.RunAsync(
+            new ProcessRequest("git", ["-c", "core.longpaths=true", "status", "--porcelain"], tree),
+            TestContext.Current.CancellationToken);
+        status.ExitCode.Should().Be(0, status.StdErr);
+
+        return status.StdOut.Trim();
+    }
+
     /// <summary>A tree an older build made has no owner marker — nobody is using it now, so it is swept.</summary>
     [Fact]
     public async Task ATreeWithNoOwnerMarker_IsSweptOnOpen()
