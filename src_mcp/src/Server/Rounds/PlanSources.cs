@@ -19,6 +19,15 @@ internal static class PlanSources
             ? (stage.PlanSource ?? Pasted(planText)) with { Commit = sha }
             : null;
 
+    /// <summary>
+    /// What the round was ABOUT: a committed plan has a name — its file — and a pasted one has only its text, which
+    /// <see cref="RoundSubject.From"/> reads a title out of, as it always has.
+    /// </summary>
+    public static string SubjectOf(StageRun stage, string planText) =>
+        stage.PlanSource is { Origin: PlanOrigin.Commit } committed
+            ? RoundSubject.FileNameOf(committed.Path)
+            : RoundSubject.From(planText, File.Exists);
+
     private static PlanSource Pasted(string planText) =>
         new(PlanOrigin.Text, string.Empty, string.Empty, string.Empty, Encoding.UTF8.GetByteCount(planText), DocumentRules.ArtifactIdOf(planText));
 }

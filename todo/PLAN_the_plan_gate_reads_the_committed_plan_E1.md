@@ -306,7 +306,14 @@ The most valuable part of a plan's record. Nothing here changes a contract C1–
   outcome's whole accounting — `EarlierLaunches`, `EarlierTurns`, `Launches`, `Warning`, `CliVersion` — not only `Usage`, so
   `TotalUsage` and the ledger still count a retried reviewer's earlier launches. (3) The prompt marks the start too: a
   `BEGIN OF PLAN <id>` line right under the heading, a one-line reminder just before `END OF PLAN <id>`, and an instruction
-  that names both markers. The parent's D12 and § 5 carry the same amendment.
+  that names both markers. The parent's D12 and § 5 carry the same amendment. A fourth change from the code gate: a token
+  wrapped in backticks, quotes, `*` or `_` still folds (the instruction shows the title in backticks and models copy it).
+- **The code gate's fixes (2026-10-16).** `CommittedPlanReader.ReadAsync` is `internal` (only `ReadGuardedAsync` is public);
+  the root-and-HEAD call runs while the proof runs; `PlanInputs.PrepareAsync` has one overall deadline (45 s, a named
+  constant); `MM` has its own sentence; a stale `expectedCommit` no longer says "leave it out"; one `GitIds.Short`; one
+  `RepoPaths.Canonical` (also used by the cadence's `plan`); the plan's id is computed once (`Ready.TextId`); a committed
+  round's subject is its file name; credential names with trailing dots or spaces match. Stated and not changed:
+  `PlanSources.Pasted` and `PlanIncomplete.Fold` in the engine still hash the text themselves.
 - **E1.S2 (see its spec's report).** Refusal wording follows the spec's meaning, not every letter; `BlobProof` sentences
   name the blob and the reader prefixes `'{path}' at commit {sha12}:`; the "differs from the blob" sentence also names
   UTF-16/UTF-32 (found by review) and the reader checks `RepoPaths.WhyNotRelative` before any git call.

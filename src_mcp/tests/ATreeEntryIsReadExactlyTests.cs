@@ -146,8 +146,8 @@ public sealed class ATreeEntryIsReadExactlyTests
     public void ASizeOfZero_AndOneOverTheCeiling_AreRefusedWithTheNumbers()
     {
         RefusedBy(Listing("100644", "blob", 0)).Should().Contain("empty");
-        RefusedBy(Listing("100644", "blob", 262145)).Should().Contain("262145").And.Contain("262144");
-        PlanEntry.Pick(Listing("100644", "blob", 262144), "plan.md", Sha).Should().BeOfType<EntryVerdict.Accepted>();
+        RefusedBy(Listing("100644", "blob", DocumentRules.MaxBytes + 1)).Should().Contain($"{DocumentRules.MaxBytes + 1}").And.Contain($"{DocumentRules.MaxBytes}");
+        PlanEntry.Pick(Listing("100644", "blob", DocumentRules.MaxBytes), "plan.md", Sha).Should().BeOfType<EntryVerdict.Accepted>();
     }
 
     [Fact]
@@ -165,7 +165,7 @@ public sealed class ATreeEntryIsReadExactlyTests
             Listing("100664", "blob", 7),
             Listing("100644", "tree", 7),
             Listing("100644", "blob", 0),
-            Listing("100644", "blob", 262145),
+            Listing("100644", "blob", DocumentRules.MaxBytes + 1),
         };
 
         foreach (var listing in refusals)

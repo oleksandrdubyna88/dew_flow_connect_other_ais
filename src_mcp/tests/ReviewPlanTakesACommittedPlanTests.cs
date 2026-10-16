@@ -184,7 +184,8 @@ public sealed class ReviewPlanTakesACommittedPlanTests : FakeCliRoundTests
         var first = await CommitAsync(Branch, "plan.md", "a plan\n");
         var tip = await CommitAsync(Branch, "other.md", "a peer's commit\n");
 
-        await AssertRefusedWithNothingSpent(TwoVendors(), Branch, Committed("plan.md", first), tip[..12], first[..12], "expectedCommit");
+        await AssertRefusedWithNothingSpent(TwoVendors(), Branch, Committed("plan.md", first), tip[..12], first[..12], "expectedCommit",
+            $"check what landed (git log {Branch}), then pass expectedCommit = {tip[..12]} or re-read the plan");
     }
 
     [Fact]

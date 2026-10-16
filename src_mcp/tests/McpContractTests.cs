@@ -99,6 +99,7 @@ public sealed class McpContractTests : IDisposable
                 .Should().Contain(["planText", "committedPlan", "expectedCommit"]);
             var description = plan.GetProperty("description").GetString()!;
             description.Should().Contain("committedPlan").And.Contain("expectedCommit").And.Contain("END OF PLAN");
+            description.Should().Contain("when the checkout is on that commit", "the edited-or-staged refusal only applies there");
             description.Should().NotContain("read-only checkout");
         }
         finally

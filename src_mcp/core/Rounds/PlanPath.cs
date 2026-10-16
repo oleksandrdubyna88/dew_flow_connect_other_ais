@@ -25,7 +25,7 @@ public static class PlanPath
 
     public static PlanPathCheck Check(string raw)
     {
-        var path = raw.Trim().Replace('\\', '/');
+        var path = RepoPaths.Canonical(raw);
         var why = RepoPaths.WhyNotRelative(path);
         if (why.Length > 0)
         {

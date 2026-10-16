@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Collecting;
 using CoaiMcp.Core.Rounds;
 using CoaiMcp.Runners.Collecting;
 using CoaiMcp.Runners.Processes;
@@ -19,7 +20,8 @@ internal abstract record PlanInputOutcome
     /// <param name="Source">What was read; <c>null</c> for a pasted plan.</param>
     /// <param name="SourceLine">The line under the prompt's heading that says where the text came from; empty for a pasted plan.</param>
     /// <param name="Unreviewed">What the round did not compare, ready to append to the reviewer line (<c>; …</c>); empty when nothing.</param>
-    public sealed record Ready(string Text, string Head, PlanSource? Source, string SourceLine, string Unreviewed) : PlanInputOutcome;
+    /// <param name="TextId">The id of <paramref name="Text"/> — computed ONCE here (the reader's, or the pasted text's) and used by the prompt and the log line.</param>
+    public sealed record Ready(string Text, string Head, PlanSource? Source, string SourceLine, string Unreviewed, string TextId) : PlanInputOutcome;
 
     public sealed record Refused(string Sentence) : PlanInputOutcome;
 }
@@ -40,18 +42,49 @@ internal abstract record PlanInputOutcome
 /// </remarks>
 internal static class PlanInputs
 {
-    public static Task<PlanInputOutcome> PrepareAsync(
-        PlanInput input, string repoPath, string branch, Func<string, string, Task<string>> resolve, IProcessLauncher launcher, CancellationToken ct)
+    /// <summary>
+    /// How long the whole preparation of a committed plan may take, however many git calls it makes. Each call has its own
+    /// 30-second budget; without this the worst case — resolve, root, entry, blob, status in a row — is minutes with no round yet.
+    /// </summary>
+    public static readonly TimeSpan PreparationDeadline = TimeSpan.FromSeconds(45);
+
+    private const string TooSlow = "git did not answer in time — the round was not started; run the call again when the machine is less busy";
+
+    public static async Task<PlanInputOutcome> PrepareAsync(
+        PlanInput input, string repoPath, string branch, Func<string, string, Task<string>> resolve, IProcessLauncher launcher, CancellationToken ct, TimeSpan? deadline = null)
     {
         var committed = input.Committed.Trim();
         var expected = input.ExpectedCommit.Trim();
 
-        return Shape(input, committed, expected) is { Length: > 0 } refusal
-            ? Task.FromResult<PlanInputOutcome>(new PlanInputOutcome.Refused(refusal))
-            : committed.Length == 0
-                ? Task.FromResult<PlanInputOutcome>(new PlanInputOutcome.Ready(input.Text, string.Empty, null, string.Empty, string.Empty))
-                : ReadCommittedAsync(committed, expected, repoPath, branch, resolve, launcher, ct);
+        return Shape(input, committed, expected) is { Length: > 0 } refusal ? new PlanInputOutcome.Refused(refusal)
+            : committed.Length == 0 ? new PlanInputOutcome.Ready(input.Text, string.Empty, null, string.Empty, string.Empty, DocumentRules.ArtifactIdOf(input.Text))
+            : await WithinTheDeadlineAsync(committed, expected, repoPath, branch, resolve, launcher, deadline ?? PreparationDeadline, ct);
     }
+
+    /// <summary>
+    /// The committed read under ONE overall deadline. A caller that cancels still cancels (that is not a refusal); the
+    /// deadline firing is, and it answers before any round exists.
+    /// </summary>
+    private static async Task<PlanInputOutcome> WithinTheDeadlineAsync(
+        string path, string expected, string repoPath, string branch, Func<string, string, Task<string>> resolve, IProcessLauncher launcher,
+        TimeSpan deadline, CancellationToken ct)
+    {
+        using var limit = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        limit.CancelAfter(deadline);
+        try
+        {
+            var outcome = await ReadCommittedAsync(path, expected, repoPath, branch, resolve, launcher, limit.Token);
+
+            return Expired(limit, ct) ? new PlanInputOutcome.Refused(TooSlow) : outcome;
+        }
+        catch (OperationCanceledException) when (Expired(limit, ct))
+        {
+            return new PlanInputOutcome.Refused(TooSlow);
+        }
+    }
+
+    private static bool Expired(CancellationTokenSource limit, CancellationToken caller) =>
+        limit.IsCancellationRequested && !caller.IsCancellationRequested;
 
     /// <summary>The refusal the arguments themselves earn, or empty — nothing read, nothing resolved.</summary>
     private static string Shape(PlanInput input, string committed, string expected) =>
@@ -70,7 +103,7 @@ internal static class PlanInputs
         string tip;
         try
         {
-            tip = await resolve(repoPath, branch);
+            tip = await resolve(repoPath, branch).WaitAsync(ct);
         }
         catch (WorktreeException e)
         {
@@ -79,21 +112,19 @@ internal static class PlanInputs
 
         return expected.Length > 0 && !expected.Equals(tip, StringComparison.OrdinalIgnoreCase)
             ? new PlanInputOutcome.Refused(
-                $"branch '{branch}' is at commit {Short(tip)}, not the expectedCommit {Short(expected)} — a commit landed after the plan was written; "
-                + "review the tip (leave expectedCommit out), or pass the new commit")
+                $"branch '{branch}' is at commit {GitIds.Short(tip)}, not the expectedCommit {GitIds.Short(expected)} — a commit landed after the plan was written; "
+                + $"check what landed (git log {branch}), then pass expectedCommit = {GitIds.Short(tip)} or re-read the plan")
             : Ready(await CommittedPlanReader.ReadGuardedAsync(new GitHistory(launcher), repoPath, tip, path, ct));
     }
 
     private static PlanInputOutcome Ready(PlanRead read) => read switch
     {
-        PlanRead.Accepted a => new PlanInputOutcome.Ready(a.Text, a.Source.Commit, a.Source, SourceLine(a.Source), a.Note.Length > 0 ? "; " + a.Note : string.Empty),
+        PlanRead.Accepted a => new PlanInputOutcome.Ready(a.Text, a.Source.Commit, a.Source, SourceLine(a.Source), a.Note.Length > 0 ? "; " + a.Note : string.Empty, a.Source.TextId),
         PlanRead.Refused r => new PlanInputOutcome.Refused(r.Sentence),
         _ => throw new InvalidOperationException("a plan read is Accepted or Refused"),
     };
 
     /// <summary>The line the prompt carries under its heading — where the text came from, so a reviewer can tell a plan from a pointer.</summary>
     internal static string SourceLine(PlanSource source) =>
-        $"(read by the server from {source.Path} at commit {Short(source.Commit)}, blob {Short(source.Blob)}, {source.Bytes} bytes)";
-
-    private static string Short(string id) => id[..Math.Min(12, id.Length)];
+        $"(read by the server from {source.Path} at commit {GitIds.Short(source.Commit)}, blob {GitIds.Short(source.Blob)}, {source.Bytes} bytes)";
 }

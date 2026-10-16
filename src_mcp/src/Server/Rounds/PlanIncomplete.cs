@@ -50,8 +50,15 @@ internal static class PlanIncomplete
         return tokens == 0 ? outcome : Failed(ok, ok.Review.Findings.Count() - tokens);
     }
 
+    /// <summary>
+    /// What a model copies from the instruction — which shows the title in backticks — is still the title: backticks, quotes
+    /// (straight or curly), emphasis marks and spaces are stripped from BOTH ends, repeatedly, before the exact compare.
+    /// The compare itself stays exact, so a token for ANOTHER round's id is never this round's.
+    /// </summary>
+    private static readonly char[] Wrapping = ['`', '\'', '"', '\u2018', '\u2019', '\u201C', '\u201D', '*', '_', ' ', '\t', '\r', '\n'];
+
     private static bool IsToken(string findingTitle, string title) =>
-        string.Equals(findingTitle.Trim(), title, StringComparison.OrdinalIgnoreCase);
+        string.Equals(findingTitle.Trim(Wrapping), title, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The failure, carrying EVERYTHING the answer's accounting carried — a billed retry stays billed.</summary>
     private static ReviewerOutcome Failed(ReviewerOutcome.Ok ok, int setAside) =>

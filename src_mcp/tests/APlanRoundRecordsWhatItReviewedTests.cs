@@ -92,6 +92,30 @@ public sealed class APlanRoundRecordsWhatItReviewedTests : FakeCliRoundTests
     }
 
     [Fact]
+    public async Task ACommittedRound_IsAboutItsFile_AndAPastedOneKeepsTodaysTitleRule()
+    {
+        // The round's subject is the line a person reads in the log. A committed plan HAS a name; guessing a title from its text
+        // is what a pasted plan has to do.
+        await CommitPlanAsync("todo/PLAN_x.md", Plan);
+        var service = await OpenedAsync();
+        await service.ReviewPlanAsync(_repo, Branch, Committed("todo/PLAN_x.md"), CadenceArgs.None, TestContext.Current.CancellationToken);
+        RoundOf("PlanReview").Subject.Should().Be("PLAN_x.md");
+
+        var pasted = await OpenedPastedAsync("feature");
+        await pasted.ReviewPlanAsync(_repo, "feature", Plan);
+        Store.Load(_repo, "feature")!.Rounds.Single().Subject.Should().Be("PLAN — recorded");
+    }
+
+    private async Task<PanelService> OpenedPastedAsync(string branch)
+    {
+        var service = ServiceFor(Defaults());
+        await service.OpenAsync(_repo, branch);
+        Script(Clean);
+
+        return service;
+    }
+
+    [Fact]
     public async Task APastedRound_RecordsItsOrigin_AndTheCommitTheBranchWasAt()
     {
         // T14, the record half: a pasted plan is "what was reviewed" too, with the commit the ENGINE resolved.

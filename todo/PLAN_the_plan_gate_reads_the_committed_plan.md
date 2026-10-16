@@ -1,6 +1,6 @@
 # PLAN — The plan gate reads the committed plan itself
 
-> Status: **plan only, nothing implemented yet, 2026-10-15 — plan gate `proceed` and split into two epics the same day
+> Status: **E1 coded and tested on the branch `feat/plan-gate-reads-committed-plan`, 2026-10-16, not merged; E2 not started — the plan gate `proceed`ed and the plan was split into two epics on 2026-10-15
 > (§ Epics), after the question consultant was asked.** Scope: `review_plan` (`src_mcp/src/Tools.cs`,
 > `PanelService.ReviewPlanAsync`), one widening of `GitHistory`, a new committed-plan reader, the round record (session
 > file + one `rounds` column), the plan prompt's end line, and one display line in the extension's rounds log.

@@ -37,7 +37,7 @@ public static class PlanEntry
 
     public static EntryVerdict Pick(TreeListing listing, string path, string sha)
     {
-        var sha12 = Short(sha);
+        var sha12 = GitIds.Short(sha);
         var shape = Shape(listing, path, sha12);
 
         return shape.Length > 0 ? new EntryVerdict.Refused(shape) : One(listing.Entries[0], path, sha12);
@@ -89,5 +89,4 @@ public static class PlanEntry
 
     private static string N(long value) => value.ToString(CultureInfo.InvariantCulture);
 
-    private static string Short(string sha) => sha[..Math.Min(12, sha.Length)];
 }

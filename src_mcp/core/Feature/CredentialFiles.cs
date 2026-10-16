@@ -39,7 +39,8 @@ public static class CredentialFiles
     /// <summary>The pattern <paramref name="path"/> matches — for the refusal that names it — or empty.</summary>
     public static string WhichPattern(string path)
     {
-        var name = BasenameOf(path);
+        // Windows ignores trailing dots and spaces in a file name: `key.pem.` IS `key.pem` there.
+        var name = BasenameOf(path).TrimEnd('.', ' ');
 
         return Patterns.FirstOrDefault(pattern => Matches(name, pattern)) ?? string.Empty;
     }

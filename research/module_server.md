@@ -1612,7 +1612,10 @@ flowchart TD
   checkout written with CRLF under `core.autocrlf=true` is clean. A file re-saved with a different size AFTER the commit
   is reported as modified by git before it hashes anything (measured: a CRLF rewrite of an LF file under autocrlf), so
   such a file is refused as "uncommitted". Blind spots, said not fixed: `skip-worktree` / `assume-unchanged` paths read
-  as clean; a branch checked out in ANOTHER worktree is "not compared".
+  as clean; a branch checked out in ANOTHER worktree is "not compared". A path with BOTH staged and unstaged changes
+  (`MM`) has its own sentence ("git add it again, then git commit"): committing the staged part alone leaves the edit.
+- **One entry point is public**: `CommittedPlanReader.ReadGuardedAsync`. `ReadAsync` (the proof over a canonical path,
+  with no credential refusal) is `internal`, so no caller outside the assembly can read `.env` as a plan.
 - **Credential-shaped names** use the one table in `CredentialFiles` and the one sentence
   (`CredentialFiles.NamedSentence`, shared with `review_feature`'s `planPath`).
 
@@ -1647,6 +1650,12 @@ sequenceDiagram
 - The tip is resolved ONCE and becomes the round's `Head`: the engine resolves `stage.Head`, so the plan text, the
   cadence outline read under the claim and the round's `head_sha` are one commit even if the branch moves.
   `PanelService.TipResolver` is the test seam that proves it.
+- The preparation runs under ONE overall deadline, `PlanInputs.PreparationDeadline` (45 s), because each git call has its
+  own 30-second budget and the sequence (resolve, root and HEAD, entry, blob, status) could otherwise take minutes with no
+  round yet. On expiry it answers "git did not answer in time — the round was not started". The root-and-HEAD call runs
+  WHILE the proof runs. A stale `expectedCommit` is answered with the cure "check what landed (git log), then pass
+  expectedCommit = <the new tip> or re-read the plan" — never "drop the guard".
+- A committed plan's round subject (the line in the log) is its FILE NAME; a pasted plan keeps the title rule.
 - The prompt's source line is `(read by the server from <path> at commit <sha12>, blob <oid12>, <bytes> bytes)`;
   the "working tree was not compared" note rides `RoundWork.Unreviewed`, so it lands on the reviewer line.
 
@@ -1668,6 +1677,44 @@ into "recorded as nothing" on the next save, and a session is saved on every pro
 registered in `ServerJsonContext` so E2's `rounds` column writes it with the same context. A skipped round reviewed
 nothing and is recorded by another road, which never stamps one. `TextId` is the id the prompt's `END OF PLAN` line
 carries, so the end line and the record name one text.
+
+### What every plan reviewer is told, and when one does not count (E1.S4)
+
+`PlanSection.Compose(planText, sourceLine, textId)` builds the plan part of EVERY plan prompt — pasted or committed:
+
+```
+<instruction: the plan is marked by BEGIN OF PLAN <id> and END OF PLAN <id>; if you cannot see BOTH, or there is no plan body,
+ answer with exactly one blocking finding titled PLAN_INCOMPLETE <id> and nothing else>
+
+## The plan under review
+BEGIN OF PLAN <id>
+(read by the server from <path> at commit <sha12>, blob <oid12>, <bytes> bytes)    <- committed reads only
+<the plan>
+
+Reminder: if the first line under the heading was not `BEGIN OF PLAN <id>`, answer … PLAN_INCOMPLETE <id> …
+END OF PLAN <id>
+```
+
+`<id>` is `DocumentRules.ArtifactIdOf(plan)` — the hash of the very text that contains it, so a plan cannot forge it. The
+END line catches a cut tail, the BEGIN line (and the reminder just before END) a cut start. A detector, not a proof.
+
+`PlanIncomplete.Fold` runs on `results` right after the fan-out, before anything reads them (summary, merge, decision,
+notice, live finish, spent lenses). The rule, as amended after the cadence consultation:
+
+- **ANY finding** whose title equals `PLAN_INCOMPLETE <this round's id>` fails the reviewer — never "exactly one": two
+  identical tokens, or the token beside real findings, are no answer. The outcome becomes
+  `Unparseable("…(PLAN_INCOMPLETE); N other finding(s) set aside")`; those other findings are not merged.
+- **A token wrapped in markdown still counts**: backticks, straight and curly quotes, `*`, `_` and spaces are stripped
+  from both ends, repeatedly, before the exact compare (models copy the backticked title from the instruction). A token
+  for ANOTHER id never folds.
+- **Accounting is kept**: the fold carries `Usage`, `EarlierLaunches`, `EarlierTurns`, `Launches`, the warning and the CLI
+  version, so `TotalUsage` and the ledger still count a retried reviewer's earlier launches.
+- Zero answered after the fold → `call_human`.
+
+**Stated mismatch:** the progress callback records each finished reviewer in the spending **ledger** (`_ledger.Record`,
+`RoundEngine.cs`) and shows it in the live view as finished BEFORE the fold runs, so the ledger and the live view hold the
+reviewer's raw result, not the folded one. The ledger row is right as it stands (the tokens were spent); the round's own
+summary, verdict and record read the folded results.
 
 ## Flow of one stage
 

@@ -668,7 +668,7 @@ public sealed class PanelService
                     "context for review: plan {PlanBytes} bytes (id {TextId}); rules {RulesBytes} bytes, "
                     + "{Matched} of {Tier} tier rule(s), {Omitted} omitted",
                     System.Text.Encoding.UTF8.GetByteCount(plan.Text),
-                    DocumentRules.ArtifactIdOf(plan.Text),
+                    plan.TextId,
                     rules.Bytes,
                     rules.MatchedCount(StageRules.Plan),
                     StageRules.Plan.Length,
@@ -693,7 +693,7 @@ public sealed class PanelService
                     _roster.BuildWork(
                         roles, workingDir,
                         RulesText.Section(rules, rules.TierCoverage(StageRules.Plan))
-                            + PlanSection.Compose(plan.Text, plan.SourceLine),
+                            + PlanSection.Compose(plan.Text, plan.SourceLine, plan.TextId),
                         round,
                         stage: Stage.PlanReview, readsCheckout: false,
                         seed: StableSeed(session.State.SessionId, round),

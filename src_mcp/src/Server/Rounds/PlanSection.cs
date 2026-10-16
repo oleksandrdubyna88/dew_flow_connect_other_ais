@@ -28,9 +28,10 @@ internal static class PlanSection
     /// still reads it, restates the rule in one line.
     /// </remarks>
     /// <param name="sourceLine">What the server read the plan from; empty for pasted text.</param>
-    internal static string Compose(string planText, string sourceLine)
+    /// <param name="textId">The text's id when the caller already has it (the reader computed it); empty computes it here.</param>
+    internal static string Compose(string planText, string sourceLine, string textId = "")
     {
-        var id = DocumentRules.ArtifactIdOf(planText);
+        var id = textId.Length > 0 ? textId : DocumentRules.ArtifactIdOf(planText);
         var source = sourceLine.Length > 0 ? sourceLine + "\n" : string.Empty;
 
         return Instruction(id) + "\n\n## The plan under review\n" + BeginLine(id) + "\n" + source + "\n" + planText + "\n\n"

@@ -55,13 +55,14 @@ public static class CommittedPlanReader
     /// <summary>Where the checkout's root is and what HEAD is — then the proof, then (when HEAD is the commit) the status.</summary>
     private static async Task<PlanRead> PlacedAsync(GitHistory git, string repoPath, string sha, string path, CancellationToken ct)
     {
-        var placed = Place(await git.RootAndHeadAsync(repoPath, ct));
+        // The root and HEAD depend on nothing but the repository, so they are asked WHILE the proof runs — not before it.
+        var placing = git.RootAndHeadAsync(repoPath, ct);
+        var read = await ReadAsync(git, repoPath, sha, path, ct);
+        var placed = Place(await placing);
         if (placed.Refusal.Length > 0)
         {
             return new PlanRead.Refused(placed.Refusal);
         }
-
-        var read = await ReadAsync(git, repoPath, sha, path, ct);
 
         return read is PlanRead.Accepted accepted ? await CleanAsync(git, placed, sha, accepted, ct) : read;
     }
@@ -89,10 +90,17 @@ public static class CommittedPlanReader
 
         var entries = PorcelainReader.Read(status.Out);
 
-        return entries.Count == 0 ? string.Empty
-            : entries[0].Code[0] != ' ' ? $"'{path}' has staged changes — the reviewers read the commit, not your edit; commit them (git commit) and call again"
-            : $"'{path}' has uncommitted changes in the working tree — the reviewers read the commit, not your edit; commit them and call again";
+        return entries.Count == 0 ? string.Empty : DirtSentence(entries[0].Code, path);
     }
+
+    /// <summary>One sentence per state, each ending in the cure that actually clears it: <c>MM</c> is not cured by committing what is staged.</summary>
+    private static string DirtSentence(string code, string path) =>
+        (code[0] != ' ', code[1] != ' ') switch
+        {
+            (true, true) => $"'{path}' has staged changes AND further unstaged edits on top of them — the reviewers read the commit, not your edits; git add it again, then git commit, and call again",
+            (true, false) => $"'{path}' has staged changes — the reviewers read the commit, not your edit; commit them (git commit) and call again",
+            _ => $"'{path}' has uncommitted changes in the working tree — the reviewers read the commit, not your edit; commit them and call again",
+        };
 
     private static Placement Place(GitAnswer answer)
     {
@@ -105,11 +113,12 @@ public static class CommittedPlanReader
     }
 
     private static string NotCompared(string head, string sha) =>
-        $"the working tree was not compared: HEAD is {Short(head)} and the plan was read at {Short(sha)}";
+        $"the working tree was not compared: HEAD is {GitIds.Short(head)} and the plan was read at {GitIds.Short(sha)}";
 
     private sealed record Placement(string Root, string Head, string Refusal);
 
-    public static async Task<PlanRead> ReadAsync(
+    /// <summary>The proof over an already-canonical path — internal: it applies no credential refusal, so only <see cref="ReadGuardedAsync"/> is public.</summary>
+    internal static async Task<PlanRead> ReadAsync(
         GitHistory git, string repoPath, string sha, string canonicalPath, CancellationToken ct)
     {
         var unreadable = Unreadable(sha, canonicalPath);
@@ -119,7 +128,7 @@ public static class CommittedPlanReader
         }
 
         var listing = await git.EntryAtAsync(repoPath, sha, canonicalPath, ct);
-        var gate = CaptureGate(listing, $"listing '{canonicalPath}' at commit {Short(sha)}");
+        var gate = CaptureGate(listing, $"listing '{canonicalPath}' at commit {GitIds.Short(sha)}");
 
         return gate.Length > 0
             ? new PlanRead.Refused(gate)
@@ -140,7 +149,7 @@ public static class CommittedPlanReader
         GitHistory git, string repoPath, string sha, string path, TreeEntry entry, CancellationToken ct)
     {
         var answer = await git.BlobAsync(repoPath, entry.Oid, ct);
-        var gate = CaptureGate(answer, $"reading blob {Short(entry.Oid)} of '{path}'");
+        var gate = CaptureGate(answer, $"reading blob {GitIds.Short(entry.Oid)} of '{path}'");
 
         return gate.Length > 0 ? new PlanRead.Refused(gate) : Prove(answer.Out, sha, path, entry);
     }
@@ -149,7 +158,7 @@ public static class CommittedPlanReader
         BlobProof.Prove(captured, entry.Oid, entry.Size) switch
         {
             ProofVerdict.Proved proved => Body(proved.Text, sha, path, entry),
-            ProofVerdict.Refused refused => new PlanRead.Refused($"'{path}' at commit {Short(sha)}: {refused.Sentence}"),
+            ProofVerdict.Refused refused => new PlanRead.Refused($"'{path}' at commit {GitIds.Short(sha)}: {refused.Sentence}"),
             _ => throw new InvalidOperationException("a proof verdict is Proved or Refused"),
         };
 
@@ -158,11 +167,11 @@ public static class CommittedPlanReader
     {
         if (text.All(c => char.IsWhiteSpace(c) || c == '\uFEFF'))
         {
-            return new PlanRead.Refused($"'{path}' at commit {Short(sha)} holds only whitespace — commit the plan's text first");
+            return new PlanRead.Refused($"'{path}' at commit {GitIds.Short(sha)} holds only whitespace — commit the plan's text first");
         }
 
         return LfsPointer.IsPointer(text)
-            ? new PlanRead.Refused($"'{path}' at commit {Short(sha)} is a git-lfs pointer, not the plan — commit the plan's text itself (git lfs untrack), or pass planText")
+            ? new PlanRead.Refused($"'{path}' at commit {GitIds.Short(sha)} is a git-lfs pointer, not the plan — commit the plan's text itself (git lfs untrack), or pass planText")
             : new PlanRead.Accepted(
                 new PlanSource(PlanOrigin.Commit, sha, path, entry.Oid, entry.Size, DocumentRules.ArtifactIdOf(text)), text, string.Empty);
     }
@@ -206,5 +215,4 @@ public static class CommittedPlanReader
     private static string NotSha1(string sha) =>
         $"commit {sha} is {sha.Length} hex characters — committedPlan reads SHA-1 repositories (40-hex ids) only; for a SHA-256 repository pass planText";
 
-    private static string Short(string id) => id[..Math.Min(12, id.Length)];
 }

@@ -43,7 +43,7 @@ public sealed class ACommittedPlanIsReadByItsBlobTests(ACommittedPlanIsReadByIts
             // FF FE + UTF-16LE "plan\n": the launcher's decoder detects the BOM and decodes it WITHOUT a U+FFFD.
             await _git.StageBlobAsync("utf16.md", [0xFF, 0xFE, .. "plan\n"u8.ToArray().SelectMany(b => new byte[] { b, 0 })]);
             await _git.StageBlobAsync("blank.md", "  \n\t\n"u8.ToArray());
-            await _git.StageBlobAsync("big.md", Encoding.ASCII.GetBytes(new string('x', 263169) + "\n"));
+            await _git.StageBlobAsync("big.md", Encoding.ASCII.GetBytes(new string('x', DocumentRules.MaxBytes) + "\n"));
             await _git.StageBlobAsync("lfs.md", Encoding.ASCII.GetBytes(Pointer));
             await _git.StageBlobAsync("replacement.md", Encoding.UTF8.GetBytes("caf\u00e9 \uFFFD end\n"));
             await _git.StageBlobAsync("todo/PLAN x.md", "a plan\n"u8.ToArray());
@@ -162,7 +162,7 @@ public sealed class ACommittedPlanIsReadByItsBlobTests(ACommittedPlanIsReadByIts
     [Theory]
     [InlineData("empty.md", "empty", false)]
     [InlineData("blank.md", "only whitespace", true)]
-    [InlineData("big.md", "262144-byte ceiling", false)]
+    [InlineData("big.md", "-byte ceiling", false)]
     [InlineData("lfs.md", "git-lfs pointer", true)]
     public async Task AnEmptyFile_AWhitespaceFile_A257KiBFile_AnLfsPointer_AreRefused(string path, string word, bool blobIsRead)
     {

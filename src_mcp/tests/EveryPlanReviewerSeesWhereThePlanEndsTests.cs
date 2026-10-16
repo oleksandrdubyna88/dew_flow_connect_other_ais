@@ -154,6 +154,31 @@ public sealed class EveryPlanReviewerSeesWhereThePlanEndsTests : FakeCliRoundTes
     }
 
     [Theory]
+    [InlineData("`PLAN_INCOMPLETE {id}`")]
+    [InlineData("**PLAN_INCOMPLETE {id}**")]
+    [InlineData("\"PLAN_INCOMPLETE {id}\"")]
+    [InlineData("\u201CPLAN_INCOMPLETE {id}\u201D")]
+    [InlineData("'PLAN_INCOMPLETE {id}'")]
+    [InlineData(" _`**PLAN_INCOMPLETE {id}**`_ ")]
+    public void ATokenWrappedInMarkdownOrQuotes_IsStillTheToken(string wrapped)
+    {
+        // The instruction shows the title in backticks and models copy what they are shown.
+        var outcome = Folded(Stage.PlanReview, Answered(Titled(wrapped.Replace("{id}", Id))));
+
+        outcome.Should().BeOfType<ReviewerOutcome.Unparseable>();
+    }
+
+    [Theory]
+    [InlineData("`PLAN_INCOMPLETE {id}`")]
+    [InlineData("**PLAN_INCOMPLETE {id}**")]
+    public void AWrappedTokenForAnotherPlan_IsStillNotThisPlansToken(string wrapped)
+    {
+        var answered = Answered(Titled(wrapped.Replace("{id}", "0000000000000000")));
+
+        Folded(Stage.PlanReview, answered).Should().BeSameAs(answered);
+    }
+
+    [Theory]
     [InlineData("PLAN_INCOMPLETE ")]
     [InlineData("  plan_incomplete ")]
     public void AnAnswerThatIsOnlyTheToken_IsAFailedReviewer_NotAnAnswer(string spelling)

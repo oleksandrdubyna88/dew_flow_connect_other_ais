@@ -95,7 +95,7 @@ internal static class Tools
                     (the repo-relative path of a plan file that is COMMITTED — the server reads it from git at the
                     branch's tip, so a large plan never passes through you). `committedPlan` is refused, before any
                     round is spent, when the file is not in that commit, is not a regular UTF-8 text file of 1 byte to
-                    256 KiB, is a credential-shaped name, or is edited or staged in the checkout; commit it first.
+                    256 KiB, is a credential-shaped name, or is edited or staged in the checkout (when the checkout is on that commit; otherwise nothing is compared and the round notes it); commit it first.
                     `expectedCommit` (40 hex, only with `committedPlan`) refuses the round if the branch tip moved.
                     Every reviewer is told the plan ends at its `END OF PLAN` line; one that did not receive it
                     whole does not count as answering. The reply

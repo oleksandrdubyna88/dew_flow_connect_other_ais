@@ -66,10 +66,8 @@ public static class BlobProof
     }
 
     private static string NotUtf8(string oid) =>
-        $"the file is not UTF-8 — the capture does not re-encode to blob {Short(oid)}; save the plan as UTF-8 and commit it";
+        $"the file is not UTF-8 — the capture does not re-encode to blob {GitIds.Short(oid)}; save the plan as UTF-8 and commit it";
 
     private static string Differs(string oid, int encoded, long size) =>
-        $"the capture of blob {Short(oid)} differs from the blob — {encoded} bytes re-encoded against {size} declared; nothing was reviewed. If the file is UTF-16/UTF-32 (the decoder reads those by their byte-order mark without a replacement character), save it as UTF-8 and commit it; otherwise re-run, and if it repeats report it";
-
-    private static string Short(string id) => id[..Math.Min(12, id.Length)];
+        $"the capture of blob {GitIds.Short(oid)} differs from the blob — {encoded} bytes re-encoded against {size} declared; nothing was reviewed. If the file is UTF-16/UTF-32 (the decoder reads those by their byte-order mark without a replacement character), save it as UTF-8 and commit it; otherwise re-run, and if it repeats report it";
 }
