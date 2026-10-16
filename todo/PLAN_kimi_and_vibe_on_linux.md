@@ -1,9 +1,10 @@
 # PLAN — Kimi Code and Mistral Vibe on Linux and WSL
 
-> Status: **plan only, nothing implemented yet, 2026-10-16.** Scope: lifting D18 of
+> Status: **plan only, nothing implemented yet, 2026-10-16; E4 measured 2026-10-16.** Scope: lifting D18 of
 > [PLAN_vibe_and_kimi_runtimes.md](PLAN_vibe_and_kimi_runtimes.md) for a coai-mcp that runs ON a Linux host (Remote-WSL first) —
 > Vibe first, because it is measured; Kimi after its WSL cells. Touches `src_mcp/runners/{Vibe,Kimi,Files,Processes,Platform}`,
-> `src_mcp/src/Acp`, `shared/vibe-home-manifest.json`, `shared/consultant-limitations.json`, `scripts/` (the probes),
+> `src_mcp/src/Acp`, `src_mcp/src/Program.cs` (the `--kimi-clear-marker` one-shot mode), `src_server/src/Slots`
+> (`ReaderReconcile` moves out of it, DL9 — the plan gate for epics 4–6, 2026-10-16, F9), `shared/vibe-home-manifest.json`, `shared/consultant-limitations.json`, `scripts/` (the probes),
 > `src_vs_code/src` (hints, install lines, help in five languages, `officialSources.ts`, `runtimeSince.ts`), and the RESULTS documents.
 >
 > Related docs: [PLAN_vibe_and_kimi_runtimes.md](PLAN_vibe_and_kimi_runtimes.md) (D17–D20, §4 S4),
@@ -67,7 +68,8 @@ The scout's draft (session scratch, not in git; redacted) is carried into the RE
 | L-K1 live, L-K2, L-K3, L-K4, L-K6, L-K7 (Kimi 2.2.0) | Signed in 8 of 8 through the symlink; one refresh landed in the person's folder (tmp + rename, mode kept, link kept); no `bin/` in the owned home; `os/` gains Kimi's native cache (→ DL11); `rg` in its own session survives a pid or group kill briefly (→ DL9); `comm` of `kimi acp` is `MainThread` (→ DL10); 3 of 3 write arms refused; `session/load` works, the model in `configOptions` (already what the shipped parser reads). | **measured 2026-10-16**, 8 paid turns — RESULTS_kimi_confinement §29 |
 
 The owner's OAuth slot on that machine is `oauth/kimi-code-env-<hex>`, not the default — the D19 rule (the slot READ from the person's
-`config.toml`) already covers it. The scout found the owner's TUI by `comm` = `kimi` (`ps -eo comm=`).
+`config.toml`) already covers it. The scout found the owner's TUI by `comm` = `kimi` (`ps -eo comm=`) — enough for a TUI, not for
+an ACP agent, whose `comm` is `MainThread` (L-K6); §5's guard matches the executable too.
 
 ## 4. Decisions
 
@@ -83,7 +85,8 @@ Numbered DL1–DL14 so they never collide with the parent plan's D-numbers. Ever
   packaging). So 0.58.0 admits `HostKind.Wsl` ONLY; `HostKind.Linux` keeps a refusal whose sentence is new: *"Vibe runs on WSL2 only
   for now — it is measured on WSL2 and not yet on a native Linux host (DL1 of todo/PLAN_kimi_and_vibe_on_linux.md)"*. It lifts when
   at least one native-Linux run of L-V9 is recorded (§5, L-V10). The `linux` limitation rows say exactly that; the `wsl` rows name the
-  WSL2 cells. The host refusal becomes per runtime and per stage: Vibe admits WSL from E2, Kimi from E6 (WSL only, by the same rule).
+  WSL2 cells. The host refusal becomes per runtime and per stage: Vibe admits WSL from E2, Kimi from E6 (WSL only, by the same rule — the same
+  `NamesWsl2` predicate below, so a WSL1 banner is refused for a Kimi row too: the plan gate for epics 4–6, 2026-10-16, F0; S-K20).
   **WSL1 is not WSL2** (cadence consult a3933362, verified against the code): `VendorDiagnosis.NamesWsl`
   (`src_mcp/runners/Reviewers/VendorDiagnosis.cs:256-258`) answers yes for ANY banner holding `microsoft` or `WSL`, so a WSL1
   kernel (`4.4.0-…-Microsoft`, a syscall translation layer with no real `/proc` process tree or `flock` semantics of its own) reads
@@ -109,7 +112,10 @@ Numbered DL1–DL14 so they never collide with the parent plan's D-numbers. Ever
     links, the `SnapshotLinks.IsLink` rule; a FIFO or a device cannot block the open) — then `statx(fd, "", AT_EMPTY_PATH)` for
     type, owner and mode on THAT descriptor: a regular file, owned by the user coai runs as (`geteuid`), not group- or
     other-writable (whoever can write it configures Vibe), and the bytes read from the same descriptor, at most 64 KiB, one byte more
-    refusing. **Ported, not rewritten**: `RegularFiles.ReadOwned` and its Linux leg (`ReadLinuxOwned` → `ReadOpened` → `Judged` →
+    refusing. **A FIFO is a refusal Vibe itself would not make** (A1 spec, 2026-10-16): Vibe 2.26.1 reads a FIFO sign-in on
+    purpose (`vibe/core/config/vibe_schema.py:104-106`, for 1Password-style environment files), and coai still refuses it — it
+    never blocks, and it links only a regular file it can judge — so the sentence says exactly that: Vibe could read this file,
+    coai will not link it. **Ported, not rewritten**: `RegularFiles.ReadOwned` and its Linux leg (`ReadLinuxOwned` → `ReadOpened` → `Judged` →
     `Capped`, wsl_care's `src_daemon/src/WslCare.Core/Files/RegularFiles.cs:68`, `:132-175`, `:253`; `OwnershipProblem` at
     `:121`) — the same owner's MIT code, measured there, `LibraryImport` and so AOT-safe like `AppendOnlyFile.cs:374-383`; it comes
     into `src_mcp/runners/Files/` with a header naming its origin, with one `libc` spelling (coai's). `BeneathFiles.cs` (the
@@ -129,7 +135,13 @@ Numbered DL1–DL14 so they never collide with the parent plan's D-numbers. Ever
     bundles in its own tool environment — over a fixed set of lines (each form above, the `export` and whitespace variants, a bare
     word, a line starting with `=`, a quoted value that continues on the next line) and writes the names it binds as test vectors
     (`shared/dotenv-name-vectors.json`, the shared-vectors pattern of `shared/capability-matrix-vectors.json`); the C# grammar's test
-    reads them. Three refusals, never one:
+    reads them. Until E1 merges, that file is not at HEAD, so S-V13 reads a test-local copy of the same vectors, and on any
+    disagreement between the copy and the shared file python-dotenv's output wins and the copy is corrected (A1 spec, 2026-10-16).
+    **Four refusal kinds, never one** (A1 spec, 2026-10-16 — the gate text said three, the DoD two), each refusing by LINE NUMBER
+    only: `NoBinding` and `OtherName` below; `NotText` — invalid UTF-8 or a NUL byte on that line (python-dotenv cannot decode it
+    either, and Vibe would not start); `ByteOrderMark` — line 1 starts with `EF BB BF`, which python-dotenv's `utf-8` codec (not
+    `utf-8-sig`) keeps as part of the first NAME, so Vibe never finds `MISTRAL_API_KEY` and the sentence says to save the file
+    without one. In detail:
     - a line that does not bind a name — a bare word with no `=` (python-dotenv keeps it with NO value and sets nothing from it, and
       it is how a key pasted on its own line looks), a line starting with `=`, a line python-dotenv itself cannot parse — refuses
       with a GENERIC sentence that quotes nothing from the file but the line number;
@@ -145,47 +157,68 @@ Numbered DL1–DL14 so they never collide with the parent plan's D-numbers. Ever
       bound that coai did not see (`MISTRAL_API_KEY="a` + `"` + `VIBE_X=1` binds `VIBE_X` on its own line, and coai refuses it).
       What coai cannot do is SAY "keep each variable on one line" reliably, so that sentence is not promised; the
       whole-file vectors (L-V6b) pin all three shapes;
-    - **what a "line" is** (cadence consult a3933362, turn 2, verified): python-dotenv's line break is `
-`, `
-` OR a bare ``
+    - **what a "line" is** (cadence consult a3933362, turn 2, verified): python-dotenv's line break is `\n`, `\r\n` OR a bare `\r`
       (`_newline` in `dotenv/parser.py`) — `MISTRAL_API_KEY=x` + bare CR + `VIBE_X=1` binds `VIBE_X`. coai's reader splits on exactly
       those three and nothing else (a vertical tab, form feed or NEL binds no second name — measured, and splitting on them would
-      only refuse more). A reader that splits on `
-` alone would admit that file: this is the one place the soundness argument
+      only refuse more). A reader that splits on `\n` alone would admit that file: this is the one place the soundness argument
       above depends on the implementation, and S-V13 pins it;
     - the cure for both (owner question Q2): keep only `MISTRAL_API_KEY=…` in that file.
 
     A test pins that no sentence, log line or exception message holds a byte of any value;
   - **who makes it**: the launch control, inside the home's turn, after the shape check and before `--version`
-    (`VibeLaunch.TakeAsync`, `VibeLaunch.cs:146-172`), on a non-Windows host only — so the reviewer, retry, consult, question row,
-    consultant check and `providers` probe get it from one place;
+    (`VibeLaunch.TakeAsync`, `VibeLaunch.cs:146-172`), on a non-Windows host only — so the reviewer, retry, consult, question row
+    and consultant check get it from one place. **Not the `providers` probe** (A1 spec, 2026-10-16): `VibeRuntime.ProbeVersionAsync`
+    (`src_mcp/runners/Vibe/VibeRuntime.cs:118-130`) runs `--version` straight through `launcher.RunAsync` on a temp home of its own
+    and never passes `TakeAsync`; `vibe --version` needs no key, so the probe makes no link and needs none;
   - **what is admitted**: in `VibeHome.Judge` (`VibeHome.cs:94-103`) a link named `.env` at the home's top level, on a non-Windows
-    host, whose ONE-level target (`Junctions.Target`, `src_mcp/runners/Files/Junctions.cs:122-134`) string-equals the expected path.
-    Any other link, a `.env` that is a file, a `.env` on Windows, a `.env` one level down — refused as today;
+    host, whose ONE-level RAW target — `FileInfo.LinkTarget` as the link stores it, compared ordinally — equals the expected absolute
+    path. **Not `Junctions.Target`** (A1 spec, 2026-10-16): it normalises through `GetFullPath` (`src_mcp/runners/Files/Junctions.cs:128`,
+    `:301-303`), so a RELATIVE spelling that resolves to the same file would pass, and S-V3 refuses a relative target; the maker
+    writes the absolute spelling and the judge demands exactly it. Any other link, a `.env` that is a file (already refused,
+    `src_mcp/tests/VibeHomeTests.cs:206`), a `.env` on Windows, a `.env` one level down — refused as today;
   - **no `.env`** at the person's home: no link is made and Vibe runs; it exits 1 with L-V1's wording, free, and
-    `VendorDiagnosis.cs:109-112` names it — its cure text becomes per host (Linux and WSL: *run `vibe --setup` in a terminal on this
+    `VendorDiagnosis.cs:109-112` names it — its cure text becomes per host, which needs a `Classify(string, HostKind)` overload:
+    today's `Classify(string text, bool? wsl = null)` (`VendorDiagnosis.cs:173`) knows only WSL-or-not, and its sentence ("kept in
+    the operating system's keyring") is the Windows truth only; the old signature routes through the new one (A1 spec,
+    2026-10-16). Linux and WSL: *run `vibe --setup` in a terminal on this
     side; the sign-in is `~/.vibe/.env`, which coai links into its own homes and never copies*). **The sentence names the keyring
     case** (the plan gate, F10): *a sign-in kept in a desktop keyring is invisible to coai's launches — their built environment
     carries no D-Bus session (`ProcessEnvironment.cs:90-91`) — so coai needs `~/.vibe/.env`*. No pre-check: the run is free and its
     wording is measured;
   - **the link cannot be made** (the plan gate, F3) — a filesystem without symbolic links, `~/.vibe` missing, permission denied:
     nothing is left at `$VIBE_HOME/.env` (a half-made link is removed by its own name), and the launch falls through to the "no
-    `.env`" path above: Vibe runs and exits 1 with L-V1's wording, and the cure states BOTH the setup command and the reason the link
-    could not be made (the system's message, which names a path and never the file's content). Never a copy as a fallback;
+    `.env`" path above: Vibe runs and exits 1 with L-V1's wording, and the person is told BOTH the setup command and the reason the
+    link could not be made (the system's message, which names a path and never the file's content). Never a copy as a fallback.
+    **How the reason travels — a recorded deviation from F3's letter** (A1 spec, 2026-10-16): the cure is
+    `VendorDiagnosis.For(stdErrTail)` inside `Because` (`src_mcp/runners/Reviewers/BoundedScheduler.cs:802`), keyed on the vendor's
+    text with no access to the launch control, and threading a note into it would touch `ReviewerLaunch`/`ReviewerOutcome`/`Because`.
+    So the reason rides as the launch's WARNING (`LaunchTurn.Warning`, `src_mcp/runners/Reviewers/LaunchTurn.cs:64` →
+    `ReviewerOutcome.Warning`, carried however the reviewer ended, `src_mcp/runners/Reviewers/ReviewerExecutor.cs:586-601`), on the
+    same reviewer line and card as the cure;
   - **deletion**: `GitScratch.Unlink` already removes a FILE link by its own name and checks the target after
-    (`src_mcp/runners/Files/GitScratch.cs:55-71`, `:116-133`); E2 adds the red-first Linux test that every deleter (round home,
-    one-shot sweep `VibeHomes.SweepOneShot`, the D20 consult sweep, the test sweeps) leaves the target's bytes, mode and mtime as they
-    were. `Writable` (`GitScratch.cs:85-92`) is never asked of a link — the test pins that a `chmod` never reaches the target.
+    (`src_mcp/runners/Files/GitScratch.cs:55-71`, `:116-133`), and `ConsultantHomeSweep.DeleteAllBut`
+    (`src_mcp/src/Server/Consultation/ConsultantHomeSweep.cs:261-277`) routes links to its delete seam. E2 adds the Linux test that
+    every deleter (round home, one-shot sweep `VibeHomes.SweepOneShot`, the D20 consult sweep, the test sweeps) leaves the target's
+    bytes, mode and mtime as they were. `Writable` (`GitScratch.cs:85-92`) is never asked of a link — the test pins that a `chmod`
+    never reaches the target. **That test is GREEN first, not red** (A1 spec, 2026-10-16): today's deleters already unlink by name,
+    so there is no product defect to observe. Its teeth are proven the testing rule's way for a fix that already landed — a MUTANT
+    deleter in the test (every entry through `File.SetAttributes` then `File.Delete`, no link check) turns the `0400`-target arm red
+    with the real symptom, because a Unix `SetAttributes` through the link `chmod`s the TARGET; both observations go in the summary.
 
-  Why linking the key file into a coai-owned home is acceptable: the home is `0700` (`PrivateFolder`'s Unix leg,
-  `src_mcp/runners/Files/PrivateFolder.cs:80`), so no other user can follow the link; the link is outside the snapshot Vibe reads,
+  Why linking the key file into a coai-owned home is acceptable: the home is `0700` (`PrivateFolder`'s Unix leg — created `0700` at
+  `src_mcp/runners/Files/PrivateFolder.cs:127`, judged at `:160-183`), so no other user can follow the link; the link is outside the snapshot Vibe reads,
   and a read outside the cwd is denied (L-V2) — a prompt-injected branch asking `read_file` for `$VIBE_HOME/.env` meets the same
   refusal as `~/.ssh`; on Windows the same key sits in the Credential Manager, which every Vibe launch reads anyway (RESULTS_vibe §12) — the
   exposure is the same, only its place differs. **One unknown, and it is a RELEASE GATE (L-V8):** whether Vibe also loads a `.env`
   from its WORKING folder — the reviewed branch's own `.env` in the snapshot. If it does, `.env` joins Vibe's snapshot exclusions
-  on every host (the reviewed branch would otherwise set `VIBE_*` through it). The link is a configuration BOUNDARY, not only a
+  on every host (the reviewed branch would otherwise set `VIBE_*` through it). **Code reading predicts "no"** (A1 spec, 2026-10-16;
+  re-checked in Vibe 2.26.1's installed package, python-dotenv 1.2.2): every `load_dotenv_values()` call site (`vibe/cli/cli.py:576`,
+  `vibe/cli/entrypoint.py:436`, `vibe/app_server/stdio.py:126`, `vibe/acp/entrypoint.py:76`, `vibe/acp/auth.py:159`) reads the default
+  `GLOBAL_ENV_FILE`, which is `VIBE_HOME/.env` (`vibe/core/paths/_vibe_home.py:14`), and `find_dotenv` is never called. The cell
+  still runs (E1); a prediction is not a measurement. The link is a configuration BOUNDARY, not only a
   filesystem exception: `VibeHome` exists because hooks, MCP servers and agents in a home change what runs (`VibeHome.cs:12-24`), and
-  the home is judged before every launch, the version probe included and again after it (`VibeLaunch.cs:200-210`, `:213-225`).
+  the home is judged before every launch, the version probe included and again after it (`AgainstAsync`, `VibeLaunch.cs:201-211`;
+  `AfterTheVersion`, `:214-224`).
   A second dotenv the reviewed repository can supply would be that boundary with a hole in it — so 0.58.0 is not tagged until L-V8 is
   recorded (E3's done-when), whatever E2's tests say.
 
@@ -229,7 +262,14 @@ Numbered DL1–DL14 so they never collide with the parent plan's D-numbers. Ever
     `<KIMI_INSTALL_DIR or ~/.kimi-code>/bin/kimi`.
   - Kimi's tools: `KimiTools.FoldersFor` (`src_mcp/runners/Kimi/KimiTools.cs:37-48`) searches the person's bin, then `PATH`; on Linux
     `~/.local/bin` is a third place (where DL12's `fd` link goes), so a found tool's folder joins the built `PATH` through the existing
-    `ToolFolders` (`KimiPlaces.cs:24-27`).
+    `ToolFolders` (`KimiPlaces.cs:24-27`). **Why the third place is load-bearing** (the plan gate for epics 4–6, 2026-10-16, F10): the
+    built `PATH` is `[person's bin, ..ToolFolders]` and then the parent's `PATH` (`KimiEnvironment.Built`,
+    `src_mcp/runners/Kimi/KimiEnvironment.cs:65`; `BuiltPath`, `:74-80`), and `FoldersFor` looks only in the person's bin and that
+    parent `PATH` (`KimiTools.Directories`, `KimiTools.cs:84-87`). The VS Code server's `PATH` often lacks `~/.local/bin` (above), and
+    E4's built `PATH=~/.kimi-code/bin:/usr/bin:/bin` (RESULTS_kimi_confinement §29, "How it ran") is the narrow case: there a
+    `~/.local/bin/fd` is found by nobody and joins nothing, and Kimi downloads into the owned home. So `KimiTools` records the
+    DIRECTORY where it found each of `rg` and `fd` — the existing `FoldersFor` answer — with `~/.local/bin` in its search, and that
+    directory joins the built `PATH` as a `ToolFolders` entry.
 
 - **DL6 — Kimi's credentials link on Linux is a directory symlink.** *Security / authentication.* `Junctions.Refusal` refuses
   first with `WindowsOnly` (`Junctions.cs:60`, `:141-143`). On Linux the same `Make`/`Refusal`/read-back runs over a product Unix
@@ -308,6 +348,16 @@ Numbered DL1–DL14 so they never collide with the parent plan's D-numbers. Ever
     (`alive = alive.Where(IsAlive)`) and never discovers a child born after the first listing. Under a subreaper every orphan of the
     tree is reparented to the shim, so the confirmation loop re-lists `Descendants(shim pid)` on every step until the listing is
     empty or the bound passes — a grandchild born late is found by its new parent, not missed.
+  - *It reaps, and a zombie is never a survivor* (the plan gate for epics 4–6, 2026-10-16, F11 + F15). A subreaper inherits the
+    orphans' EXIT too: an orphan that ends is a zombie of the shim until the shim waits for it, and `/proc` keeps its entry, start
+    time included. Two rules. (1) The shim REAPS: every step of the confirmation loop first drains `waitpid(-1, WNOHANG)` until it
+    answers 0 or `ECHILD`. That is safe here and only here: the loop runs after `EndTreeFirstAsync` has seen the agent's exit, and
+    the shim starts nothing but the agent, so every child left to reap is a reparented orphan, never a `Process` .NET still waits
+    on. (2) `ProcessTree.Descendants`, when used for the confirmation, drops an entry that has exited — the rule `IsAlive` already
+    applies (`Exited` / `ExitedEntry`, `src_mcp/runners/Processes/ProcessTree.cs:202-211`: state `Z` or `X` with no thread but the
+    leader), reused, not a second rule. `Descendants` itself (`ProcessTree.cs:59-67`) lists zombies today, because `LinuxParents`
+    reads only the parent. A grandchild that exits by itself before the teardown is therefore neither listed nor recorded as a
+    survivor, and leaves no marker behind.
   - *It is bounded.* `ProcessLauncher.EndTreeFirstAsync` (`ProcessLauncher.cs:645-650`) waits for the agent's exit with
     `CancellationToken.None`, on purpose (`:628-630`: a cancelled wait returns before the handle is free). The agent's wait stays
     as it is — SIGKILL is not ignored — but the DESCENDANT confirmation has its own bound (`ConfirmationBound`, `:39`), and a member
@@ -319,8 +369,14 @@ Numbered DL1–DL14 so they never collide with the parent plan's D-numbers. Ever
     (wsl_care's `src_daemon/src/WslCare.Core/Processes/ProcessSignals.cs:192-213`, `LibcPidfdCalls` at `:281-332`) come
     over; the shell around it is REWRITTEN on coai's own `ProcessIdentity(Pid, StartedUtc)` and `OrphanSweep.Same` slack
     (`ProcessTree.cs:28-29`: one identity rule for every record here), not wsl_care's start ticks, `Tuning` or `IFileSystem`.
-    glibc's wrappers need 2.36 (Ubuntu 24.04 has 2.39); a missing symbol is answered by the story (raw `syscall` numbers 434/424,
-    which are the same on x86-64 and arm64, or a stated refusal) — never by falling back to a kill by number in silence.
+    **The missing-wrapper path, decided** (the plan gate for epics 4–6, 2026-10-16, F4): glibc's `pidfd_open` and
+    `pidfd_send_signal` wrappers need glibc 2.36 (Ubuntu 24.04 has 2.39; Ubuntu 22.04 has 2.35, and has no wrappers). Where the
+    wrapper symbol is missing, the layer calls the raw `syscall` with numbers **434** (`pidfd_open`) and **424**
+    (`pidfd_send_signal`) — the same on x86-64 and arm64, present in every kernel from 5.3. Where the KERNEL has no pidfd (the raw call
+    answers `ENOSYS`), the Linux Kimi launch is REFUSED before anything starts, with a stated sentence (*"this kernel has no pidfd
+    (`pidfd_open` answered ENOSYS; Linux 5.3 or later is needed), so coai cannot end Kimi's process tree by identity and does not
+    launch it"*) — never a silent fallback to a kill by number. The choice is behind a seam, so a test forces "no libc wrapper" (the
+    raw path is the one used) and "ENOSYS" (refused with the sentence) on any kernel — S-K21.
   - *A survivor changes ELIGIBILITY, not only a report.* Today's text said "reported in the shim's structured report". That is
     not enough: the tree hold is disposed when `AcpClient.AskAsync` returns (`AskAcpMode.cs:127-131`), it is held only by processes
     that INHERITED the descriptor (`HeldFile.cs:25-30`), and L-K5 measured that a `close_fds`/`setsid` grandchild holds nothing — so a
@@ -332,14 +388,31 @@ Numbered DL1–DL14 so they never collide with the parent plan's D-numbers. Ever
     the home while a marker stands. A marker that names nothing it can match (the shim died between the write and the listing) blocks
     too, until a person clears it or the process it would have named is provably gone — the price that precedent accepted (Q6).
     `ReaderReconcile` MOVES from `src_server` to `src_mcp/runners/Processes` (reuse-first step 2.4: both projects need it and the server
-    already references the runners), it is not copied.
-    **The way out is a panel button** (the plan gate, F11; the owner's rule that every action is a button). The Busy sentence names
-    the marker FILE by its full path, the pid(s) it names, and says that it is safe to clear once those processes are gone — and that
-    the Kimi card's *Clear the stuck Kimi marker* button does it. The button runs a one-shot mode of the server
-    (`coai-mcp --kimi-clear-marker <path>`), which re-checks every member by identity first: it clears the marker only when none of
-    them lives, and otherwise answers with the pid that still does — the button can never clear a marker over a living survivor.
-    The mode joins the one-shot list in `.agents/PROJECT.md:51-68` ("adding a one-shot mode means adding it here"), with its own exit
-    codes, never 64. The card shows the button only while the server's providers answer reports a standing marker for that row.
+    already references the runners), it is not copied. **The move touches `src_server`** (the plan gate for epics 4–6, 2026-10-16,
+    F9): `ReaderReconcile` (`src_server/src/Slots/ReaderMarker.cs:97-137`, with the marker record and reasons its signature names)
+    leaves that file; its one product caller, `SlotRegistry` (`src_server/src/Slots/SlotRegistry.cs:99`), and `ServerJsonContext.cs`
+    then reference the moved types. The server's own tests must still pass unchanged: `ReaderBarrierTests`
+    (`src_server/tests/ReaderBarrierTests.cs`, which calls `ReaderReconcile.RunAsync` directly at `:154`, `:172`) and
+    `GaugeReaderCrashHarnessTests` (`src_server/tests/GaugeReaderCrashHarnessTests.cs`, which plants markers the registry reconciles).
+    **The manual way out is ALWAYS in the sentence; the panel button is an addition** (the plan gate, F11; the plan gate for epics
+    4–6, 2026-10-16, F12). The Busy sentence names the marker FILE by its full path, the pid(s) it names, and says that the file is
+    safe to delete once those processes are gone — a sentence a person can act on with no button at all, so an older extension
+    without the button still gets a usable answer. It then adds that the Kimi card's *Clear the stuck Kimi marker* button does it
+    (the owner's rule that every action is a button). The button runs a one-shot mode of the server
+    (`coai-mcp --kimi-clear-marker <path>`), which re-checks every member first and clears the marker ONLY when it can POSITIVELY
+    verify that every named member is gone (the plan gate for epics 4–6, 2026-10-16, F2). "Gone" means `/proc/<pid>` answers
+    `ENOENT`, or the process there has a different start time (a reused number) — or, by DL9's zombie rule above, the entry has
+    exited (`ExitedEntry`). Any other failure — `EACCES`, `EIO`, a `stat` that cannot be read or parsed — is not evidence of
+    anything: the marker stays, and the mode exits non-zero with an exit code of its own, naming the error and the pid. Exit codes
+    (proposed here, fixed in E5's stories): **0** cleared, or no marker at that path; **65** the arguments are wrong (no path, or a
+    path that is not a marker under the Kimi lock root — the mode deletes nothing else); **75** a named member still lives (its pid
+    named); **74** a member could not be verified (the errno named). Never 64: a binary that knows the mode never answers 64
+    (`.agents/PROJECT.md:63`, `:71-73`). The button can never clear a marker over a living — or an unverifiable — survivor.
+    **Budgeted** (the plan gate for epics 4–6, 2026-10-16, F16): E5 owns the mode — its `args[0]` arm in `Classify`
+    (`src_mcp/src/Program.cs:323-366`) and its dispatch beside `--ask-acp`'s (`:427-430`) — and its entry, with those exit codes, in
+    the one-shot list of `.agents/PROJECT.md:51-68` ("adding a one-shot mode means adding it here"). E6 owns the rest: the server's
+    providers answer reports a standing marker per Kimi row, and the Kimi card shows the button, which runs the mode, only while
+    that report stands.
   **The supervisor's own failure is in scope.** A subreaper that is killed cleans nothing up. Verified: the `--ask-acp` mode is
   started with no cancellation token and registers no signal (`Program.cs:430`; `AskAcpMode.RunAsync`'s `ct = default`,
   `AskAcpMode.cs:73-79`), so on a `SIGTERM` the runtime exits without running the `finally` that ends the agent
@@ -398,8 +471,16 @@ Numbered DL1–DL14 so they never collide with the parent plan's D-numbers. Ever
   button) exclude "ask the owner to install them by hand". The line, one press, each step guarded and idempotent:
   - `rg`: skipped when `rg` resolves or `~/.kimi-code/bin/rg` exists; else `sudo apt-get install -y ripgrep` where `apt-get` exists,
     `sudo dnf install -y ripgrep` where `dnf` does — the projects' own README instructions, chosen by `command -v` inside the line;
-  - `fd`: skipped when `fd` resolves or `~/.kimi-code/bin/fd` exists (the owner's case: it does); else the `fd-find` package and,
-    because Debian names the binary `fdfind` and Kimi looks for `fd`, `ln -s "$(command -v fdfind)" ~/.local/bin/fd` (fd's README);
+  - `fd`: skipped when `fd` resolves or `~/.kimi-code/bin/fd` exists (the owner's case: it does); else the `fd-find` package;
+  - the `fd` link, written out (the plan gate for epics 4–6, 2026-10-16, F7 + F17): Debian and Ubuntu name the binary `fdfind` and
+    Kimi looks for `fd` (fd's README), Fedora's `fd-find` installs `/usr/bin/fd` and needs no link. So, after the packages:
+    `mkdir -p ~/.local/bin` first (a fresh account has no such folder, and `ln` into a missing folder fails); then the link ONLY when
+    `command -v fdfind` resolves AND `command -v fd` does not; the step is idempotent — it is skipped when `~/.local/bin/fd` is
+    already a link to that `fdfind`, and otherwise made with `ln -sf "$(command -v fdfind)" ~/.local/bin/fd`, on that exact path
+    only, so a second press neither fails on an existing link nor touches anything else;
+  - the line ENDS by checking its own work (the plan gate for epics 4–6, 2026-10-16, F10): it resolves `rg` and `fd` the way `KimiTools` will look — the person's Kimi
+    `bin`, `~/.local/bin`, then `PATH` (DL5) — and prints which path each one resolved to, or that it did not, so a press that
+    installed nothing usable says so in the terminal rather than at the next launch;
   - any other distribution — neither `apt-get` nor `dnf` resolves — (the plan gate, F2 + F13): the line installs nothing for the
     tools and prints ONE generic instruction, *"install ripgrep and fd with your distribution's package manager, or place them on
     PATH or in ~/.local/bin"*, then continues with Moonshot's script; `KimiTools.Refusal` says the same sentence when it finds
@@ -411,8 +492,8 @@ Numbered DL1–DL14 so they never collide with the parent plan's D-numbers. Ever
   consequence** (consultation c6e42fd3, verified): `fromOfficialSources` refuses a step only when it carries an install word
   (`unknownInstall`, `officialSources.ts:137-140`; the words at `:77`), so a step `sudo rm -rf …` or `sudo chmod …` beside one admitted
   URL is admitted TODAY — S-K10's `sudo rm -rf` is red against the current parser for that reason. The rule added: a step whose first
-  word is `sudo` is refused unless the rest of it is one of the two admitted package steps; `ln -s "$(command -v fdfind)" …` and
-  `command -v` carry no `sudo` and no install word and stay as the parser reads them. *Security (supply chain): Fable's security
+  word is `sudo` is refused unless the rest of it is one of the two admitted package steps; `mkdir -p ~/.local/bin`,
+  `ln -sf "$(command -v fdfind)" ~/.local/bin/fd` and `command -v` carry no `sudo` and no install word and stay as the parser reads them. *Security (supply chain): Fable's security
   judgement, outside the cornerstone quota.* `KimiTools.Refusal` (`KimiTools.cs:51-61`) names the cure
   for the HOST — today it quotes `winget` everywhere (`RipgrepInstall`/`FdInstall`, `:24-27`): on WSL the `apt-get` or `dnf` line
   when that manager resolves, else the generic instruction above. Rejected: a release binary dropped
@@ -447,12 +528,12 @@ a built environment, nothing written into `~/.vibe` or `~/.kimi-code` by the pro
 |---|---|---|---|
 | L-V6 | Which variable NAMES the owner's `~/.vibe/.env` holds (names only, values never read out). | free | E2 (DL2's admitted set) |
 | L-V7 | `scripts/vibe-home-manifest.mjs --write` in WSL: the `linux` entry; a second fresh home agrees on every hash. | 2 tiny turns | E2 (DL3) |
-| L-V8 | Does Vibe load a `.env` from its WORKING folder? (A bogus `MISTRAL_API_KEY` in the cwd, no home `.env`: still L-V1's "Missing" → it does not.) Code reading of Vibe's package first. | free | E2 (snapshot exclusion) **and E3's release** — 0.58.0 is not tagged before it is recorded |
+| L-V8 | Does Vibe load a `.env` from its WORKING folder? (A bogus `MISTRAL_API_KEY` in the cwd, no home `.env`: still L-V1's "Missing" → it does not.) Code reading of Vibe's package first — done, and it predicts "no": every call site reads `VIBE_HOME/.env` only (DL2; A1 spec, 2026-10-16). | free | E2 (snapshot exclusion) **and E3's release** — 0.58.0 is not tagged before it is recorded |
 | L-V6b | python-dotenv — the version in Vibe 2.26.1's own tool environment — over DL2's fixed set of lines AND whole files (the three multi-line shapes of DL2), written as `shared/dotenv-name-vectors.json`: per vector the names python-dotenv binds, and coai's expected verdict (admitted, or refused at line N with no file text). No `.env` of the owner's is read. | free | E2 (DL2's grammar) |
 | L-V9 | L-V1, L-V2/3, L-V4 re-run through the ported probe, 3 of 3. | ~10 turns | E3 (release) |
 | L-V10 | L-V9 once on a NATIVE Linux host (not WSL). | ~10 turns | lifting DL1's native-Linux refusal — not this release |
 | L-N1 | .NET on Linux: `HeldFile.Take(…, inheritable: true)` excludes a second take (inheritable or not), and a child started after it holds the lock after the parent's SIGKILL. A test in the Linux CI job, in a child process (no test holds an inheritable handle in the host). | free | E5 (DL8) |
-| L-N2 | A subreaper shim and a FAKE agent that starts a same-group child and a `setsid` child, then exits first: after the teardown both are gone. Three more arms (DL9): a grandchild born AFTER the first listing is found by the re-listing confirmation; the shim `SIGTERM`ed while the agent lives ends its tree; the shim `SIGKILL`ed leaves a marker the next launch reconciles. A test in the Linux CI job. | free | E5 (DL9) |
+| L-N2 | A subreaper shim and a FAKE agent that starts a same-group child and a `setsid` child, then exits first: after the teardown both are gone. Three more arms (DL9): a grandchild born AFTER the first listing is found by the re-listing confirmation; the shim `SIGTERM`ed while the agent lives ends its tree; the shim `SIGKILL`ed leaves a marker the next launch reconciles. One more arm (the plan gate for epics 4–6, 2026-10-16, F11 + F15): a grandchild that exits by itself BEFORE the teardown is reaped by the shim's drain, is not recorded as a survivor, and no marker remains. A test in the Linux CI job. | free | E5 (DL9) |
 | L-N3 | A survivor marker (a fake agent's `setsid` child that ignores `SIGTERM`, recorded by identity) makes the next launch on that sign-in Busy with the pid named, and the home disposal keeps the home; once the child is gone the next launch clears it. A test in the Linux CI job. | free | E5 (DL9's eligibility rule) |
 | L-K1 | Live: `kimi --version` and `kimi acp --help` in the built environment; `Grep`/`Glob` with `rg` on the built `PATH` → no `bin/` in the owned home (M-K12 (c) on Linux); without `rg` → where the download lands. | free + 1 turn | E6 (DL5, DL12) |
 | L-K2 | The sign-in through a SYMLINK into the `0700` folder: signed in; a refresh lands in the person's folder; Kimi neither replaces the link nor `chmod`s the target; the person's own `kimi` works after. | 3 turns | E5 (DL6) |
@@ -462,8 +543,11 @@ a built environment, nothing written into `~/.vibe` or `~/.kimi-code` by the pro
 | L-K7 | The write arms and `session/load` through the shim on Linux. | 3 turns | E6 |
 | M-K14 | The refresh race — unchanged: later, it gates only lifting the serialisation (D19). | — | none here |
 
-**Every Kimi cell runs only with the owner's yes AND no other `kimi` process on that side** (`ps -eo comm=`): the refresh token
-rotates (D19); a second refresher can sign the owner out. The scout's prepared run is the template.
+**Every Kimi cell runs only with the owner's yes AND no other `kimi` process on that side**: the refresh token rotates (D19); a
+second refresher can sign the owner out. "No other `kimi`" is checked by matching, per process, the basename of `/proc/<pid>/exe`
+= `kimi` OR `comm` = `kimi` — what the E4 run did, both (the plan gate for epics 4–6, 2026-10-16, F8). `ps -eo comm=` alone is not
+enough: L-K6 measured `comm` = `MainThread` for a running `kimi acp`, so a `comm`-only guard misses every ACP agent (DL10). The
+scout's prepared run is the template.
 
 ## 6. Build order
 
@@ -502,8 +586,10 @@ Each red is the assertion message the test fails with before the fix.
 - S-V3 *Given* a home whose `.env` links ANYWHERE else (another file, a relative target, a chain), *then* refused with the path.
   Red: `"a .env link to <path> should refuse the launch, but it was admitted"`.
 - S-V4 *Given* a Windows host and a home holding a `.env` link, *then* refused as today. Red: `"a link in a Windows Vibe home should still refuse"`.
-- S-V5 *Given* `~/.vibe/.env` naming `VIBE_MCP_SERVERS` as well, *then* refused, the sentence lists the names and holds NO value.
-  Red: `"a .env naming VIBE_MCP_SERVERS should refuse"` and `"the refusal must not contain the value 'sk-test-…'"`.
+- S-V5 *Given* `~/.vibe/.env` naming `VIBE_MCP_SERVERS` as well, *then* refused by LINE NUMBER only, and the sentence holds
+  neither the name nor any value (DL2's post-consult rule; A1 spec, 2026-10-16 — this scenario used to say the names are listed).
+  Red: `"a .env naming VIBE_MCP_SERVERS should refuse"`, `"the refusal named VIBE_MCP_SERVERS — a found name may be value text"`
+  and `"the refusal must not contain the value 'sk-test-…'"`.
 - S-V6 *Given* `~/.vibe/.env` is group-writable, or is itself a link, *then* refused with the cure.
 - S-V7 *Given* no `~/.vibe/.env`, *when* Vibe exits 1 with L-V1's wording, *then* the row says *not signed in*, cure `vibe --setup` on
   this side, naming `~/.vibe/.env` AND the keyring sentence (a desktop keyring is invisible to coai's launches, no D-Bus).
@@ -512,32 +598,43 @@ Each red is the assertion message the test fails with before the fix.
 - S-V8 *Given* a Linux host and Vibe 2.26.1 with the `linux` entry's bytes, *then* no warning; with one plugin byte changed, refused with
   the path. Red: `"a Linux 2.26.1 home with its own bytes was refused against the win32 hashes"`.
 - S-V9 *Given* a version with only a `win32` entry, on Linux, *then* it runs with the shared warning naming `win32`.
-- S-V10 *Given* a home with a `.env` link to a `0600` file, *when* each deleter runs, *then* the link is gone and the file's bytes, mode
-  and mtime are unchanged. Red: `"the deleter changed the person's ~/.vibe/.env (mode 600 → …)"`.
+- S-V10 *Given* a home with a `.env` link to a `0600` or a `0400` file, *when* each deleter runs, *then* the link is gone and the
+  file's bytes, mode and mtime are unchanged. **Green first, not red** (A1 spec, 2026-10-16): today's deleters already unlink a link
+  by its name (DL2's deletion bullet), so there is no product defect to observe red. Teeth: a mutant deleter in the test (no link
+  check, `File.SetAttributes` then `File.Delete`) goes red on the `0400` arm with `"the deleter changed the person's ~/.vibe/.env
+  (mode 400 → 600)"`; both observations are recorded.
 - S-V11 (DL5's precedence, one row per step) *Given* `vibe` only in `~/.local/bin` and a `PATH` without it, *then*
   `DefaultExecutable` is that path. Red: `"expected ~/.local/bin/vibe, got vibe"`. *Given* the row's own CLI path is set, *then* it
   wins over all. *Given* `$UV_TOOL_BIN_DIR/vibe` and `~/.local/bin/vibe` both exist, *then* the first. *Given* `~/.local/bin/vibe` and
   another `vibe` on `PATH`, *then* `~/.local/bin/vibe`. *Given* none, *then* bare `vibe` (the `PATH` walk), and a failed start carries
   the install cure.
 - S-V12 *Given* a Windows host whose row names `wsl.exe`, *then* still refused with the D18 sentence (DL1).
-- S-V13 (DL2's grammar, a Theory over `shared/dotenv-name-vectors.json`) *Given* each vector line, *then* the names coai reads equal
+- S-V13 (DL2's grammar, a Theory over `shared/dotenv-name-vectors.json` — over a test-local copy of the same vectors until E1
+  merges, python-dotenv's output winning any disagreement; A1 spec, 2026-10-16) *Given* each vector line, *then* the names coai reads equal
   the names python-dotenv bound. Admitted rows include `MISTRAL_API_KEY=v`, `MISTRAL_API_KEY = "v"`, `export MISTRAL_API_KEY='v'`,
   `  MISTRAL_API_KEY=v  # note` and `'MISTRAL_API_KEY'=v`. Red: `"python-dotenv binds MISTRAL_API_KEY from 'MISTRAL_API_KEY = "v"'
   but coai refused the line as unreadable"`. *Given* a bare key on its own line, a line beginning with `=`, or a quoted value that
   continues on the next line, *then* refused with the generic sentence naming the line number and nothing from the file. Red:
   `"the refusal echoed text from the .env: 'sk-test-…'"`. *Given* the whole files `MISTRAL_API_KEY="dummy` + `LEAK_CANARY=ending"`, *then*
   refused at line 2 and the sentence holds neither `LEAK_CANARY` nor `ending`; `MISTRAL_API_KEY="dummy` + `#ending"`, *then* admitted
-  (python-dotenv binds one name); `MISTRAL_API_KEY="a` + `"` + `VIBE_X=1`, *then* refused at line 3. Red: `"the refusal named
+  (python-dotenv binds one name); `MISTRAL_API_KEY="a` + `"` + `VIBE_X=1`, *then* refused at line **2**, `NoBinding` — the lone `"`
+  is a bare word to the name grammar (an unquoted name is any run without `=`, `#` and whitespace), so coai stops there, before the
+  `VIBE_X` line (A1 spec, 2026-10-16; this scenario used to say line 3; the implication holds either way). *Given* a file whose
+  first bytes are a UTF-8 byte-order mark, *then* refused at line 1, `ByteOrderMark`; *given* an invalid UTF-8 sequence or a NUL on
+  line N, *then* refused at line N, `NotText`. Red: `"the refusal named
   LEAK_CANARY, which is value text"`. *Given* `MISTRAL_API_KEY=x` + bare CR + `VIBE_X=1`, *then* refused at line 2. Red: `"a bare CR
   hid VIBE_X from coai, which python-dotenv binds"`. The Theory asserts the IMPLICATION over every vector, not name equality:
   *coai admits the file ⇒ every name python-dotenv binds is `MISTRAL_API_KEY`*, run through the product's own line reader.
 - S-V14 *Given* `~/.vibe/.env` is a FIFO, a socket, or a file whose owner is another uid, *when* the link maker judges it, *then*
-  refused through the descriptor without blocking (the test's FIFO has no writer). Red: `"the judgement blocked on a FIFO"` /
+  refused through the descriptor without blocking (the test's FIFO has no writer); the FIFO's sentence says Vibe itself could read
+  a FIFO sign-in and coai links only a regular file it can judge (A1 spec, 2026-10-16). Red: `"the judgement blocked on a FIFO"` /
   `"a file owned by uid … was admitted"`.
 - S-V15 (F3) *Given* the link cannot be made — the owned home on a filesystem that refuses symbolic links (a test seam), the person's
   `~/.vibe` missing, or the home not writable — *when* a reviewer launches, *then* nothing is left at `$VIBE_HOME/.env`, Vibe runs and
-  exits 1 with L-V1's wording, and the row's cure names `vibe --setup` AND the reason the link was not made. Red: `"the cure did not
-  say why the .env link could not be made"` / `"a half-made .env was left in the home"` / `"a copy of .env was made as a fallback"`.
+  exits 1 with L-V1's wording, the row's cure names `vibe --setup`, and the reason the link was not made arrives as the launch's
+  WARNING (`LaunchTurn.Warning` → `ReviewerOutcome.Warning`) on the same reviewer line — a recorded deviation from F3's letter, which
+  put the reason in the cure (DL2; A1 spec, 2026-10-16). Red: `"the warning did not say why the .env link could not be made"` /
+  `"a half-made .env was left in the home"` / `"a copy of .env was made as a fallback"`.
 - S-V16 (F6) *Given* a manifest entry with no `platform` field, *then* it reads as `win32`; *given* a Windows host and Vibe 2.26.1,
   *then* the launch, its verdict and its warning are exactly today's (no warning; one changed plugin byte refused with the path).
   Red: `"an entry without a platform was not read as win32"` / `"a Windows 2.26.1 launch changed: …"`.
@@ -588,15 +685,38 @@ Each red is the assertion message the test fails with before the fix.
 - S-K17 (F2 + F13) *Given* a WSL side where neither `apt-get` nor `dnf` resolves (stand-ins), *when* the install line runs, *then*
   it installs no tool, prints the generic instruction and still runs Moonshot's script; *given* `rg` and `fd` missing on such a host,
   *then* `KimiTools.Refusal` holds the same generic sentence and neither `winget` nor `apt-get`. Red: `"on a host without apt-get or
-  dnf the line tried 'sudo apt-get …'"` / `"the refusal named a package manager this host does not have"`.
-- S-K18 (F11) *Given* a standing survivor marker, *when* the next launch is Busy, *then* its sentence holds the marker's full path,
-  the pid(s), "safe to clear once … gone" and the button's name; *when* the button's one-shot mode runs while a named member still
-  lives, *then* the marker stays and the answer names that pid; once none lives, the marker is gone. Red: `"the Busy sentence gave
-  no way out: no marker path"` / `"the clear mode removed a marker over a living survivor (pid …)"`.
+  dnf the line tried 'sudo apt-get …'"` / `"the refusal named a package manager this host does not have"`. Three more arms (the
+  plan gate for epics 4–6, 2026-10-16, F7 + F17 + F10), against stand-ins: *given* the line has already run once, *when* it is
+  pressed again, *then* it succeeds and changes nothing (`~/.local/bin/fd` the same link, no error from `ln`); *given* a fresh
+  account with no `~/.local/bin`, *then* the folder is made and the `fd` link lands in it; *given* a Fedora stand-in where `fd`
+  already resolves (`/usr/bin/fd`), *then* no link is made. Every arm ends with the line printing where `rg` and `fd` resolve. Red:
+  `"the second press failed: ln: … File exists"` / `"ln into a missing ~/.local/bin"` / `"a link was made although fd already
+  resolved"`.
+- S-K18 (F11; the plan gate for epics 4–6, 2026-10-16, F2 + F12) *Given* a standing survivor marker, *when* the next launch is Busy,
+  *then* its sentence holds the marker's full path, the pid(s) and "safe to delete once those processes are gone" — asserted with
+  NO button in play, as an older extension would show it — and names the button as an addition; *when* the button's one-shot mode
+  runs while a named member still lives, *then* the marker stays, the mode exits 75 and names that pid; *given* a member whose
+  `/proc` entry cannot be read (a seam answering `EACCES`, then `EIO`, then an unparseable `stat`), *then* the marker stays and the
+  mode exits 74 naming the error; once every member answers `ENOENT` or another start time, the marker is gone, exit 0. Red: `"the
+  Busy sentence gave no way out: no marker path"` / `"the clear mode removed a marker over a living survivor (pid …)"` / `"a member
+  whose /proc cannot be read was taken as gone, and the marker was cleared"`.
 - S-K19 (F15) *Given* a lock root with a key whose recorded folder no longer exists and nobody holds its files, *when* the sweep runs,
   *then* both files are gone; *given* the same with the gate file held, *then* both stay; *given* a taker whose locked file was
   unlinked by the sweep between its open and its lock, *then* it re-takes on the new file. Red: `"a lock file of a vanished sign-in
   folder outlived the sweep"` / `"two holders of one sign-in lock after a sweep"`.
+- S-K20 (the plan gate for epics 4–6, 2026-10-16, F0) *Given* a Kimi row, *then* the host admission is the same `NamesWsl2`
+  predicate as Vibe's (DL1): a Theory over the same three `/proc/version` banners as S-V17 — WSL2 (`…-microsoft-standard-WSL2`),
+  WSL1 (`4.4.0-19041-Microsoft`), native (`…-generic`) — of which only the first starts a Kimi row; WSL1 is refused with the WSL1
+  sentence. Red: `"a WSL1 banner was admitted as WSL2 for a Kimi row"`.
+- S-K21 (the plan gate for epics 4–6, 2026-10-16, F4) *Given* the pidfd layer's seam answering "no libc wrapper" (glibc < 2.36),
+  *when* the teardown ends a member, *then* the raw `syscall` path (434 / 424) is the one used and the member is ended by identity;
+  *given* the seam answering `ENOSYS` from the raw call, *then* the Linux Kimi launch is refused before anything starts, with DL9's
+  no-pidfd sentence, and nothing is signalled by number. Red: `"with no libc wrapper the layer fell back to a kill by number"` /
+  `"a kernel without pidfd launched Kimi"`.
+- S-K22 (the plan gate for epics 4–6, 2026-10-16, F11 + F15) *Given* a fake agent whose `setsid` grandchild exits by itself before
+  the teardown starts, *when* the transport ends, *then* the grandchild's zombie is reaped by the shim's drain, it is not listed by
+  the confirmation, not recorded as a survivor, and no marker remains. Red: `"an exited grandchild (state Z, pid …) was recorded as
+  a survivor"` / `"a marker remained after a clean teardown"`.
 
 ## 8. Test plan
 
@@ -607,13 +727,16 @@ Each red is the assertion message the test fails with before the fix.
   `HostProcessListTests.cs:75-81` (the empty listing becomes a `/proc` listing), `KimiAcpProfileTests.cs:47-56` (Linux finds
   `~/.kimi-code/bin/kimi`; macOS still guesses nothing); the extension's hint and help pins; the `TheOwnersKimi` skips are re-read
   and each kept or lifted with its reason.
-- **Linux CI runs the real paths.** S-K3, S-K4/5 (L-N1), S-K6/S-K15/S-K16 (L-N2), S-K11 and S-K14 (L-N3) run WITHOUT the
+- **Linux CI runs the real paths.** S-K3, S-K4/5 (L-N1), S-K6/S-K15/S-K16/S-K22 (L-N2), S-K11 and S-K14 (L-N3) run WITHOUT the
   `WindowsStandIn` stand-in on the ubuntu job; the stand-in stays for the Windows-only decisions. The skips at
   `KimiCredentialsLockTests.cs:247`, `:296`, `:314` are lifted on Linux. S-K12 and S-K13 run everywhere over a fake table / fake
-  listing (pure functions), as `ForeignKimiTests` already does.
+  listing (pure functions), as `ForeignKimiTests` already does; S-K20 (a banner Theory) and S-K21 (the pidfd seam) run everywhere.
+- **The server's tests survive the move** (the plan gate for epics 4–6, 2026-10-16, F9): `ReaderBarrierTests` and
+  `GaugeReaderCrashHarnessTests` (`src_server/tests/`) pass unchanged after `ReaderReconcile` moves to the runners.
 - **The ported code keeps its tests.** `RegularFiles`' Linux leg, `MountTable` and the pidfd layer come with the tests wsl_care
   runs on them, re-homed under `src_mcp/tests/`; a port without its tests is a copy.
-- **Deleters around a file link** (S-V10): `GitScratch.DeleteEvenIfReadOnly`, `VibeHomes.SweepOneShot`, the D20 sweep, the test sweeps.
+- **Deleters around a file link** (S-V10): `GitScratch.DeleteEvenIfReadOnly`, `VibeHomes.SweepOneShot`, the D20 sweep, the test sweeps
+  — green first, its teeth shown by the mutant deleter (A1 spec, 2026-10-16).
 - **Extension:** `officialSources` verbs (S-K10); the Linux install line passes `bash -n` and runs against stand-ins for `apt-get`,
   `dnf`, `sudo` (the `kimiWindowsInstallRuns.test.ts` method); the per-host hints and the five help languages (`helpCoverage.test.ts`);
   `VIBE_ON_LINUX_SINCE` / `KIMI_ON_LINUX_SINCE` against an older server.
@@ -624,10 +747,16 @@ Each red is the assertion message the test fails with before the fix.
   (a code round, and a plan round on an unmeasured Vibe; both `Assert.Skip` off Windows at `:189-192`, `:232-235`, "D18"),
   `VibeConsultantTests` and `AVibeConsultationKeepsOneSnapshotTests` (consult), `AVibeQuestionRowReadsACopyOfItsRootsTests` (a
   question row). E2 runs all four flows — **a plan round, a code round, a consult, a question row** — on the Linux CI job with the
-  runtime's host given as WSL (`VibeRuntime(id, host)`, the primary constructor at `VibeRuntime.cs:41`), the `.env` link made against a fake person's
-  `~/.vibe/.env`, and one arm with `HostKind.Linux` refused (S-V17). E6 does the same for a Kimi row. Each flow goes into
+  runtime's host given as WSL, the `.env` link made against a fake person's `~/.vibe/.env`, and one arm with `HostKind.Linux` refused (S-V17). E6 does the same for a Kimi row. Each flow goes into
   `research/module_tests.md` with what the harness does NOT prove: the real Vibe or Kimi (the fake CLI answers), the real
   keyring/D-Bus behaviour, a real WSL kernel's drvfs mount (CI is ubuntu, not WSL), the person's real `~/.vibe/.env`.
+  **How the host is given — a seam the product path does not have yet** (A1 spec, 2026-10-16). The primary constructor
+  `VibeRuntime(id, host)` (`src_mcp/runners/Vibe/VibeRuntime.cs:41`) is NOT what the service calls: the real service builds
+  `new VibeRuntime(vendorId)` (`src_mcp/runners/Reviewers/ReviewerRuntime.cs:922`, the default list at `:867`;
+  `src_mcp/runners/Consultation/ConsultantResolution.cs:53`), whose constructor takes `HostKinds.Current` (`VibeRuntime.cs:51-54`)
+  — `Linux` on the ubuntu job, so every flow would be refused (S-V17). The harness story therefore adds an `AsyncLocal` host seam
+  that this constructor consults, in the shape of `VibePathBudget.Using` (`src_mcp/runners/Vibe/VibePathBudget.cs:35`, `:41-47`:
+  an `internal` per-flow override, disposed to restore the process's value).
 - **Live, after each release:** in WSL through the released binary — a plan round, a code round, a two-turn consult and a question
   row with a Vibe row (E3), the same with a Kimi row (E6); the real `~/.vibe` and `~/.kimi-code` compared before and after.
 - Run as the repository runs tests: the MTP executables and `node --test`, never `dotnet test`.
@@ -639,7 +768,7 @@ Each red is the assertion message the test fails with before the fix.
 | `shared/vibe-home-manifest.json` entries | one entry per Vibe version per platform, ~12 hashes, ~2 KB | git; replaced when a version is re-qualified |
 | The `.env` link | one per Vibe home | gone with its home (round disposal, one-shot sweep, D20) |
 | Kimi lock files on Linux (`~/.local/share/coai-mcp/kimi-locks/`) | two small files per sign-in folder identity; assumed at most 8 identities in a lock root's life — 16 files | the beat and start sweep removes a key's files when nobody holds them and the folder they record is gone or has another identity (DL7, F15); a held or undecidable file is left |
-| Zombies of reaped orphans under the shim | at most the agent's tree, for one turn | reaped by init when the shim exits |
+| Zombies of orphans reparented to the shim | at most the agent's tree, and only between two drain steps | the shim reaps them itself: a `waitpid(-1, WNOHANG)` drain on every step of the confirmation loop (DL9); one that exits after the last drain is reaped by whoever inherits it when the shim exits. Never counted a survivor — the confirmation drops exited entries (`ExitedEntry`) — so a zombie never leaves a marker (the plan gate for epics 4–6, 2026-10-16, F11 + F15) |
 | Probe scratch (`/tmp/testsToDelete-*`) | a few MB per run | the test-leftovers rule; the scout's four folders are the owner's to remove |
 
 Nothing here has an in-flight state of its own; the homes keep D20's sweep.
@@ -654,6 +783,7 @@ Nothing here has an in-flight state of its own; the homes keep D20's sweep.
 | A Windows `coai-mcp` running the WSL side | [PLAN_a_wsl_consultant_is_checked_from_windows.md](PLAN_a_wsl_consultant_is_checked_from_windows.md) | this plan keeps it refused (DL1) |
 | M-K14, the refresh race | the parent plan (later) | unchanged here |
 | macOS | nobody yet | stays refused |
+| `ReaderReconcile` moved from `src_server/src/Slots/ReaderMarker.cs` to `src_mcp/runners/Processes` | this plan (E5, DL9) | the vendor-slot reader barrier ([PLAN_every_round_is_counted.md](PLAN_every_round_is_counted.md) epic 6) keeps its behaviour: `SlotRegistry` calls the moved code, and `ReaderBarrierTests` / `GaugeReaderCrashHarnessTests` pass unchanged (the plan gate for epics 4–6, 2026-10-16, F9) |
 
 Disjoint otherwise: chat, the Team server and the bench are out, as in the parent plan.
 
@@ -664,20 +794,25 @@ Prerequisites: Vibe paid turns for E1 and L-V9 (~12); Kimi paid turns for E4 (~1
 
 - **Q1 — Native Linux too, or WSL only? DECIDED by the plan gate (F10), 2026-10-16: WSL only** until a native-Linux run of L-V9
   (L-V10) is recorded; `HostKind.Linux` keeps a WSL2-only refusal (DL1).
-- **Q2 — A `~/.vibe/.env` with more than `MISTRAL_API_KEY`, or a line the grammar cannot read.** Default: refuse; for a validated
-  name list the names, cure "keep only the key there"; for an unreadable line say only its number, cure "each line is `NAME=value`
-  or a `#` comment" (DL2's grammar — the refusal never quotes the file). The alternative — coai reads the key and passes it in the
+- **Q2 — A `~/.vibe/.env` with more than `MISTRAL_API_KEY`, or a line the grammar cannot read.** Default: refuse, by LINE NUMBER
+  only in both cases — never the name, which may be the continuation of a quoted value (DL2's post-consult rule; A1 spec,
+  2026-10-16: this question used to say the names are listed). Another name: the sentence names the rule (*a `VIBE_*` or any other
+  variable in that file is refused*), cure "keep only the key there"; an unreadable line: cure "each line is `NAME=value` or a `#`
+  comment" (DL2's grammar — the refusal never quotes the file). The alternative — coai reads the key and passes it in the
   environment — is DL2's rejected option.
 - **Q3 — His own `kimi` TUI open in WSL makes every coai Kimi turn wait, then answer busy** (decision 74 of the E4 plan, the same on
-  Windows) until M-K14 is measured. Keep it, or run M-K14 first?
+  Windows) until M-K14 is measured. Keep it, or run M-K14 first? **Default: keep the wait, as on Windows (decision 74)** (the plan
+  gate for epics 4–6, 2026-10-16, F14): the Busy sentence already names the person's own `kimi` as the reason, so the wait is never
+  a mystery. Revisited only if the owner meets it in daily use.
 - **Q4 — `sudo apt-get` in the install terminal** (he types his password there). Default: yes.
 - **Q5 — Release order** if `feat/kimi-consultant` is ready first: it takes 0.58.0 and Vibe-on-Linux 0.59.0 (DL14).
 - **Q6 — A survivor blocks the sign-in for coai** (DL9): while a marker names a process coai could not end — or names nothing it can
   match, because the shim died between the write and the listing — every coai Kimi turn on that sign-in is Busy with the pid (or the
   reason), re-tried on every launch, until the process is gone or a person clears the marker. The person's own `kimi` is never touched.
   Default: accept the availability cost, as the vendor-slot precedent did (`ReaderMarker.cs:89-93`); the alternative — a survivor is
-  only reported — leaves two refreshers possible. The way out is the card's *Clear the stuck Kimi marker* button, which never clears
-  over a living survivor (DL9, F11).
+  only reported — leaves two refreshers possible. The way out is in the Busy sentence itself — the marker's path, the pid(s), safe
+  to delete once those are gone — and, in addition, the card's *Clear the stuck Kimi marker* button, which never clears over a
+  living or an unverifiable survivor (DL9, F11; the plan gate for epics 4–6, 2026-10-16, F2 + F12).
 
 ## Definition of Done
 
@@ -687,19 +822,26 @@ Prerequisites: Vibe paid turns for E1 and L-V9 (~12); Kimi paid turns for E4 (~1
 - [ ] 0.58.0 admits `HostKind.Wsl` only; a native Linux host is refused with the WSL2-only sentence (S-V17) until L-V10 is recorded.
 - [ ] The scenario harness drives a plan round, a code round, a consult and a question row with a Vibe row on the Linux CI job
       (and the same with a Kimi row in E6); each flow and what it does not prove is in `research/module_tests.md`.
-- [ ] A failed link falls through to the signed-out cure with its reason (S-V15); a manifest entry without `platform` is `win32` and a
-      Windows launch is unchanged (S-V16); the names grammar matches python-dotenv's vectors (S-V13).
+- [ ] A failed link falls through to the signed-out cure, its reason carried as the launch's warning (S-V15); a manifest entry
+      without `platform` is `win32` and a Windows launch is unchanged (S-V16); the names grammar matches python-dotenv's vectors
+      (S-V13).
 - [ ] A Kimi row the same through its release; the real `~/.kimi-code` unchanged but for Kimi's own token refresh.
-- [ ] Every D18 pin flipped red-first; a `wsl.exe` row on Windows and a macOS host still refused.
-- [ ] The `.env` link: exactly one admitted link, the target judged through one descriptor, the names grammar with its two refusals,
-      no value or unread line ever in a sentence or log, deleters proven around it; L-V8 recorded before 0.58.0 is tagged.
+- [ ] Every D18 pin flipped red-first; a `wsl.exe` row on Windows and a macOS host still refused; a WSL1 banner refused for a Vibe
+      row (S-V17) and for a Kimi row (S-K20).
+- [ ] The `.env` link: exactly one admitted link (its raw target compared), the target judged through one descriptor, the names
+      grammar with its four refusal kinds (`NoBinding`, `OtherName`, `NotText`, `ByteOrderMark` — each by line number only), no
+      value or unread line ever in a sentence or log, deleters proven around it (green first, teeth by a mutant); L-V8 recorded
+      before 0.58.0 is tagged.
 - [ ] The lock key is identity-based on Linux (aliases and bind mounts one key), the locality rule by mount type, the tree hold proven
       exclusive and inherited (L-N1), an unreadable `/proc` never read as clear, the subreaper teardown proven with its re-listing,
       its bound, its identity signalling and its supervisor-failure arms (L-N2), a survivor blocking the next launch and the home
-      disposal (L-N3).
-- [ ] The install button provisions `rg`/`fd` on Debian/Ubuntu and Fedora and prints the generic instruction elsewhere (S-K17);
-      `OFFICIAL_SOURCES` admits exactly those verbs and packages.
-- [ ] A survivor marker can be cleared from the panel, never over a living survivor (S-K18); the Kimi lock files are retired (S-K19).
+      disposal (L-N3); a self-exited grandchild reaped and never a survivor (S-K22); no pidfd wrapper → the raw syscalls, no
+      pidfd in the kernel → the launch refused with its sentence (S-K21).
+- [ ] The install button provisions `rg`/`fd` on Debian/Ubuntu and Fedora and prints the generic instruction elsewhere, makes
+      `~/.local/bin` first, links `fdfind` only where `fd` does not resolve, is idempotent, and ends by printing where `rg` and `fd`
+      resolve (S-K17); `OFFICIAL_SOURCES` admits exactly those verbs and packages.
+- [ ] The Busy sentence always carries the manual way out; a survivor marker can also be cleared from the panel, never over a
+      living or unverifiable survivor (S-K18); the Kimi lock files are retired (S-K19).
 - [ ] Hints, notes and help in five languages say what each side's server does; `*_ON_LINUX_SINCE` level with the tags.
 - [ ] `research/module_runners.md` and `research/module_extension.md` updated; the parent plan's D18 amended; this plan promoted.
 - [ ] `node .agents/conventions/tools/plan-lifecycle.mjs` clean.
@@ -746,11 +888,20 @@ the next launch's gate sees nothing. A1 has no such seam, and is a cornerstone b
 
 - **A1 — credential ADMISSION: the one admitted `.env` link (E2).** *Boundary:* everything between "the person's sign-in file
   exists" and "Vibe reads it from an owned home" — the expected-path rule; the descriptor-based judgement of the target (type, owner,
-  mode and the capped read on one `O_NOFOLLOW` descriptor, the ported `RegularFiles` leg); the names grammar with its two refusals;
-  the admission of exactly one link in `VibeHome.Judge` (`VibeHome.cs:94-103`); the link maker's place inside the home's turn, before
-  `--version` (`VibeLaunch.cs:200-210`); and every deleter's behaviour around the link (`GitScratch.Unlink`, `GitScratch.cs:116-133`;
-  `VibeHomes.SweepOneShot`; the D20 sweep). Cleanup is INSIDE the area: a deleter that follows the link is the same defect as a
-  maker that admits the wrong one. *Minimum scenarios:* S-V1–S-V6, S-V10, S-V13, S-V14, S-V15, and L-V6b and L-V8 recorded before the release.
+  mode and the capped read on one `O_NOFOLLOW` descriptor, the ported `RegularFiles` leg); the names grammar with its four refusal
+  kinds (DL2); the admission of exactly one link in `VibeHome.Judge` (`VibeHome.cs:94-103`), by its RAW target; the link maker's
+  place inside the home's turn, before `--version` (`AgainstAsync`, `VibeLaunch.cs:201-211`); and every deleter's behaviour around
+  the link (`GitScratch.Unlink`, `GitScratch.cs:116-133`; `VibeHomes.SweepOneShot`; the D20 sweep). Cleanup is INSIDE the area: a
+  deleter that follows the link is the same defect as a maker that admits the wrong one. *Minimum scenarios:* S-V1–S-V6, S-V10,
+  S-V13, S-V14, S-V15, and L-V6b and L-V8 recorded before the release.
+  **Specified 2026-10-16** — A1 spec (session scratch, carried into `todo/PLAN_kimi_and_vibe_on_linux_E2.md` when E2's stories are
+  written). Its plan-versus-code corrections are folded into this plan, each tagged "(A1 spec, 2026-10-16)": the probe makes no
+  link (DL2), the raw link target (DL2), four refusal kinds (DL2, S-V13, the DoD), line numbers only (S-V5, Q2), S-V13's lone `"`
+  refused at line 2, S-V10 green first with a mutant for teeth, the cure's reason as a warning (DL2, S-V15), the `HostKind`
+  overload of `VendorDiagnosis.Classify` (DL2), the FIFO sentence (DL2, S-V14), L-V8 predicted "no" by code reading (DL2, §5),
+  the harness's host seam (§8), the citations, and the test-local vectors until E1 merges (DL2, S-V13). Checked and unchanged: WSL1
+  reads as `HostKind.Wsl` today (`HostKind.cs:53`, through `NamesWsl`), which DL1 already answers; a `.env` FILE is already refused
+  (`VibeHomeTests.cs:206`).
   *Review focus:* no byte of a value or of an unread line in any sentence, log or exception; nothing ever follows a link (the
   maker, the judge, the deleters); the target's bytes, mode and mtime unchanged on every cleanup route; the residual (two opens, the
   person's own account) stated in the code where the check is.
@@ -769,7 +920,8 @@ the next launch's gate sees nothing. A1 has no such seam, and is a cornerstone b
   wait has none, `ProcessLauncher.cs:645-650`), signalling by identity through a `pidfd` (the ported native layer), the shim's own
   failure arms (`SIGTERM` registered into the token — today none, `Program.cs:430`; `SIGKILL` covered by the marker written before
   the start), and the survivor marker reconciled by the next launch's gate and by the home disposal (`ReaderReconcile` MOVED to the
-  runners, `ReaderMarker.cs:114-136`). *Minimum scenarios:* S-K6, S-K14, S-K15, S-K16, L-N2's arms, L-N3. *Review focus:* the A2∩A3
+  runners, `ReaderMarker.cs:114-136`). *Minimum scenarios:* S-K6, S-K14, S-K15, S-K16, S-K18, S-K21, S-K22 (the last three added by the plan gate for epics 4–6,
+  2026-10-16), L-N2's arms, L-N3. *Review focus:* the A2∩A3
   seam above — a survivor must change the eligibility of the next launch and of `KimiHome.Alive` (`KimiHome.cs:338-346`), never
   only a report line; the marker is written BEFORE the signal and cleared only on a confirmed-empty re-listing; a marker that names
   nothing it can match blocks; nothing is ever ended by name.
@@ -779,7 +931,8 @@ the next launch's gate sees nothing. A1 has no such seam, and is a cornerstone b
   the hold is disposed when `AskAsync` returns (`AskAcpMode.cs:127-131`), only inheritors hold it (`HeldFile.cs:25-30`), a
   `close_fds`/`setsid` grandchild inherits nothing (L-K5).
 - The `.env` link is a configuration boundary; `VibeHome` validates before every launch, the version probe included — **taken**;
-  `VibeHome.cs:12-24`, `VibeLaunch.cs:200-210` (shape before `--version`) and `:213-225` (again after).
+  `VibeHome.cs:12-24`, `VibeLaunch.cs:201-211` (shape before `--version`) and `:214-224` (again after) — lines corrected by the A1
+  spec, 2026-10-16.
 - L-V8 as a release gate — **taken**; it gated E2 only; now E3's done-when and §5.
 - Descriptor-based admission (open without following the final link, FIFOs blocked, type/owner/mode on the same descriptor, the
   bytes capped), precedents `RegularFiles.cs` / `BeneathFiles.cs` — **taken for `RegularFiles`** (`ReadOwned` `:68`, `ReadOpened`
@@ -858,6 +1011,33 @@ Rejected, with the reasons recorded:
 
 Also owed from the gate's commands: the cadence consultation for E1–E3 before their code round (§6).
 
+**Plan gate 2026-10-16 (epics 4–6).** coai session 1721dcd4 (branch `feat/wsl-kimi-linux`) reviewed the Kimi epics, E4 measured.
+Accepted, and where each landed:
+- **F0** — Kimi's admission uses Vibe's `NamesWsl2` predicate; a WSL1 banner is refused for a Kimi row. DL1; S-K20; E6; the DoD.
+- **F2** — `--kimi-clear-marker` clears only on POSITIVE proof that every member is gone (`ENOENT`, another start time); any other
+  failure keeps the marker and exits with its own code, naming the error. DL9; S-K18; Q6.
+- **F4** — the pidfd layer without glibc's wrappers: raw syscalls 434/424; `ENOSYS` refuses the Linux Kimi launch with a sentence;
+  both behind a seam. DL9; S-K21; the DoD.
+- **F7 + F17 + F10** — the install line: `mkdir -p ~/.local/bin`, the `fdfind` link only where `fd` does not resolve, idempotent,
+  and a closing check that prints where `rg` and `fd` resolve; `KimiTools` searches `~/.local/bin` and its folder joins the built
+  `PATH`. DL5; DL12; S-K17's three new arms; the DoD.
+- **F8** — §5's "no other `kimi`" guard matches the `exe` basename OR `comm`, not `ps -eo comm=`. §3; §5.
+- **F9** — the `ReaderReconcile` move touches `src_server`; its tests named. Header scope; DL9; §8; §10; E5.
+- **F11 + F15** — the shim reaps its reparented orphans, and the confirmation drops exited entries: a zombie is never a survivor.
+  DL9; §5 L-N2; S-K22; §9.
+- **F12** — the Busy sentence always carries the manual way out; the button is an addition. DL9; S-K18; Q6; the DoD.
+- **F14** — Q3's default: keep the wait, as on Windows (decision 74). §11.
+- **F16** — the button budgeted: the one-shot mode and its `.agents/PROJECT.md` entry in E5, the marker report and the card button
+  in E6. DL9; E5; E6.
+
+Rejected, with the reasons recorded:
+- **F1** — exclusivity is already pinned: L-N1 and S-K4 assert that a second take of the inheritable hold is refused.
+- **F3** — the link path is unique per owned home, and `symlink(2)` at a path that does not exist yet is atomic; there is no window.
+- **F5** — each gating cell already has its branch in §5 and §6 (recorded, or a re-decision to the owner).
+- **F6** — only `kimi` refreshes (L-K4: no descendant of `kimi acp` is another `kimi`); an orphan `kimi` is caught by the
+  foreign-Kimi orphan rule (`ForeignKimi.cs:32-36`); a surviving `rg` is a leak, not a credential risk.
+- **F13** — the merge order is a fact about merges, not about code; it is executed at release (DL14).
+
 ### E1 — Linux probes, and Vibe's Linux cells recorded · M · ordinary (measurement) — built on Opus · depends on nothing
 
 - **Goal.** The probe scripts run on Linux; the scout's Vibe findings become RESULTS with predictions; L-V6, L-V7, L-V8 recorded;
@@ -874,10 +1054,12 @@ Also owed from the gate's commands: the cadence consultation for E1–E3 before 
 
 - **Goal.** §2 item 1 in the server.
 - **Scope.** DL1 for Vibe (`VibeLaunch.cs:77-82`; `VibeRuntime.cs:80-85`); DL2 (the link maker, the ported descriptor-based reader
-  — `RegularFiles`' Linux leg and `FileStatus` into `src_mcp/runners/Files/` with their tests — the names grammar and its two
-  refusals, `VibeHome.Judge`, the deleter tests, `VendorDiagnosis.cs:109-112`'s per-host cure); DL3 (`VibeHomeManifest`,
-  `VibeLaunch.Verdict`/`VersionWarning`, the `.session-index.json` name); DL5's Vibe half; L-V8's outcome (a `.env` snapshot
-  exclusion if needed); `research/module_runners.md`.
+  — `RegularFiles`' Linux leg and `FileStatus` into `src_mcp/runners/Files/` with their tests — the names grammar and its four
+  refusal kinds, `VibeHome.Judge` by the raw link target, the deleter tests, `VendorDiagnosis.cs:109-112`'s per-host cure through a
+  `Classify(string, HostKind)` overload); DL3 (`VibeHomeManifest`, `VibeLaunch.Verdict`/`VersionWarning`, the `.session-index.json`
+  name); DL5's Vibe half; L-V8's outcome (a `.env` snapshot exclusion if needed); the harness's `AsyncLocal` host seam for
+  `VibeRuntime` (§8); `research/module_runners.md` (A1 spec, 2026-10-16, for the four kinds, the raw target, the overload and the
+  seam).
 - **Done when.** S-V1–S-V17 green as MTP executables on Windows and Linux CI; every D18 pin for Vibe flipped red-first; `HostKind.Wsl`
   admitted and `HostKind.Linux` refused with the WSL2-only sentence; the scenario harness runs a plan round, a code round, a consult
   and a question row with a Vibe row on the Linux CI job (§8), each flow and its limits written into `research/module_tests.md`.
@@ -908,12 +1090,18 @@ Also owed from the gate's commands: the cadence consultation for E1–E3 before 
 - **Scope.** DL6 (`Junctions`' Unix shell; the locality rule by mount type over the ported `MountTable`); DL7
   (`KimiCredentialsLock.KeyFor`'s identity from the ported `FileStatus`, the `statx` import); DL8 (L-N1, and the native take if
   needed); DL9 (`AskAcpMode`'s subreaper and `SIGTERM`/`SIGINT` registration, `AcpTransport.EndAsync`'s re-listing bounded descendant
-  end through the ported pidfd layer, the survivor marker, `ReaderReconcile` moved to `src_mcp/runners/Processes` and asked by
-  `KimiLaunch.TakeAsync` and `KimiHome.Alive`); DL10 (the extracted `/proc` reader, `HostProcessList` on Linux answering a closed
-  union).
-- **Done when.** S-K1–S-K7 and S-K11–S-K16 green on the Linux CI job without the stand-in; L-N1, L-N2 (all arms) and L-N3 recorded;
-  the `KimiCredentialsLockTests` skips lifted on Linux; **and E4's gate met** — L-K2, L-K4, L-K6 recorded and DL6/DL8/DL9/DL10
-  confirmed in this plan — before the Kimi-dependent half merges.
+  end through the ported pidfd layer — with its raw-syscall path and its `ENOSYS` refusal — the shim's `waitpid` drain and the
+  confirmation's exited-entry filter, the survivor marker and its Busy sentence, `ReaderReconcile` moved to
+  `src_mcp/runners/Processes` and asked by `KimiLaunch.TakeAsync` and `KimiHome.Alive`); **`src_server`** — `ReaderMarker.cs`,
+  `SlotRegistry.cs`, `ServerJsonContext.cs` follow the move (the plan gate for epics 4–6, 2026-10-16, F9); the
+  `--kimi-clear-marker` one-shot mode — its `Classify` arm and dispatch in `src_mcp/src/Program.cs` and its entry, with its exit
+  codes, in `.agents/PROJECT.md`'s one-shot list (F16); DL10 (the extracted `/proc` reader, `HostProcessList` on Linux answering a
+  closed union).
+- **Done when.** S-K1–S-K7, S-K11–S-K16, S-K21 and S-K22 green on the Linux CI job without the stand-in, and S-K18's Busy-sentence
+  and clear-mode arms (exit 0 / 74 / 75, the marker kept over a living or unverifiable member); L-N1, L-N2 (all arms) and L-N3
+  recorded; the `KimiCredentialsLockTests` skips lifted on Linux; `ReaderBarrierTests` and `GaugeReaderCrashHarnessTests` green
+  unchanged after the move; `--kimi-clear-marker` listed in `.agents/PROJECT.md` with its exit codes; **and E4's gate met** —
+  L-K2, L-K4, L-K6 recorded and DL6/DL8/DL9/DL10 confirmed in this plan — before the Kimi-dependent half merges.
 - **Cornerstone AREAS A2 and A3 (confirmed by Fable, 2026-10-16, re-bounded).** A2 credential ownership for the tree's lifetime —
   the lock as one lifecycle, DL6 + DL7 + DL8 + DL10; A3 the verified teardown and the survivor's effect on eligibility — DL9 whole.
   Boundaries, minimum scenarios and review focus under *The cornerstone areas* above. Two stories of this epic are marked when its
@@ -922,9 +1110,15 @@ Also owed from the gate's commands: the cadence consultation for E1–E3 before 
 ### E6 — Kimi on a Linux host, and its release · M · ordinary — built on Opus; DL12's `OFFICIAL_SOURCES` verbs and the `sudo` rule are a security (supply-chain) judgement on Fable, outside the quota · depends on E5 (DL9's survivor rule included)
 
 - **Goal.** §2 item 2 end to end, and item 3 for Kimi.
-- **Scope.** DL1 for Kimi (`KimiLaunch.cs:28-33`); DL5's Kimi half (`KimiAcpProfile.cs:135-140`, `KimiPlaces.cs:74`, `KimiTools`);
-  DL11 (`KimiEnvironment`); DL12 (`vendorTerminal.ts:528-532`, `:568-572`, `officialSources.ts` — the two verbs, `distroPackages`,
-  and the `sudo` first-word rule — `KimiTools.cs:24-27`, `:51-61`); `vendors.ts:310`, the help, `KIMI_ON_LINUX_SINCE`;
-  `research/module_runners.md`, `module_extension.md`.
-- **Done when.** S-K8–S-K10 green (S-K10's `sudo rm -rf` observed red against the old parser first); the install button run in WSL
-  on a machine (or a `testsToDelete-` prefix) without `rg`; the live Kimi checks of §8 through the release; this plan promoted.
+- **Scope.** DL1 for Kimi (`KimiLaunch.cs:28-33`, through the same `NamesWsl2` predicate as Vibe — F0); DL5's Kimi half
+  (`KimiAcpProfile.cs:135-140`, `KimiPlaces.cs:74`, `KimiTools` with `~/.local/bin` as a searched place — F10);
+  DL11 (`KimiEnvironment`); DL12 (`vendorTerminal.ts:528-532`, `:568-572` — with the `~/.local/bin` folder, the guarded idempotent
+  `fd` link and the closing check, F7 + F17 + F10 — `officialSources.ts` — the two verbs, `distroPackages`, and the `sudo`
+  first-word rule — `KimiTools.cs:24-27`, `:51-61`); the standing-marker report per Kimi row in the server's providers answer and
+  the Kimi card's *Clear the stuck Kimi marker* button that runs E5's one-shot mode (F16); `vendors.ts:310`, the help,
+  `KIMI_ON_LINUX_SINCE`; `research/module_runners.md`, `module_extension.md` (F-numbers here: the plan gate for epics 4–6,
+  2026-10-16).
+- **Done when.** S-K8–S-K10 green (S-K10's `sudo rm -rf` observed red against the old parser first), S-K17 with its three new
+  arms, and S-K20; the providers answer reports a standing marker for its row and the card's button appears only then and runs
+  the mode; the install button run in WSL on a machine (or a `testsToDelete-` prefix) without `rg`; the live Kimi checks of §8
+  through the release; this plan promoted.
