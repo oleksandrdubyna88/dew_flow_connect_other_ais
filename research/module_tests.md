@@ -4360,4 +4360,15 @@ replays tool calls was not measured). The node half starts a fake agent of its o
 | `…EveryEnd_HasItsOwnWordAndExit_NoneFallsToADefaultArm` (S5.2.12) | `SessionLost` → `session_lost`, 70; every word distinct; `cancelled` only for `Cancelled`; 69 only for `NotStarted`, `Deadline`, `Cancelled` | with the enum value and no arms: *Expected AskAcpMode.EndWord(AcpEnd.SessionLost) to be the same string … (actual) "cancelled" "session_lost"* |
 | `AKimiShimScenarioTests.TheTreeHold_IsTakenForALoadTurnToo` (S5.2.10, the REAL shim as a child, Windows) | the agent of a `--session` turn starts with both hold files `Held`; both `Free` after the exit | *Expected agent.ReceivedMethods() {… "session/new" …} to contain "session/load" because the turn continued its session.* |
 
-Not covered: a `tool_call_update` after the load for a REPLAYED tool call's id; the M-K16 cell itself as a probe arm (it ran on a scratch driver, §29).
+The E5.2 review's fixes (2026-10-16), each red first:
+
+| Suite | What it holds | Seen red as |
+|---|---|---|
+| `AskAcpSessionTests.EveryExitOfALoadTurn_NamesTheAskedSession` (3 rows: a busy hold, an executable that cannot start, an `initialize` error) | the report's `sessionId` is `s-1` on each | *Expected Report().GetProperty("sessionId").GetString() to be "s-1" with a length of 3 … but "" has a length of 0* (3 of 3) |
+| `AskAcpSessionTests.AMalformedSessionId_Is65_BeforeAnyProcess("abc\n")` and `ConsultantHandleTests` (`abc\n`, false) | a trailing newline is not a handle | *Expected code to be 65, but found 0*; *Expected ConsultantHandle.IsWellFormed(candidate) to be False, but found True.* |
+| `…ALateUpdateOfAReplayedToolCall_AddsNoTraceEntry` | a `tool_call_update` after the load for an id the replay announced adds no entry | *Expected Report().GetProperty("toolCalls").GetArrayLength() to be 0 … but found 1* |
+| `…AShortSessionId_DoesNotGarbleTheAgentsWords_SoTheKnownFailureStillWins` | id `a`, load refused `Authentication required` → 77 `not_signed_in` | *Expected code to be 77 … Authentic<id>tion required, but found 70* |
+| `…ASessionIdThatSpellsAKnownFailure_IsStillSessionLost` | an id equal to a profile's failure phrase stays `session_lost`, 70, no `failure` | *Expected code to be 70 … quota_gone: the agent no longer holds session quota-gone …, but found 75* |
+| `kimi.test.mjs` "a child is killed by pid only while it is still running" | `stillRunning` is false once the child exited or was killed | *AssertionError [ERR_ASSERTION]: stillRunning is not exported — the probe would kill a pid it no longer owns* |
+
+Not covered: the M-K16 cell itself as a probe arm (it ran on a scratch driver, §29).

@@ -947,8 +947,10 @@ Numbered apart from the list above, so the stories built in parallel do not coll
   `session_lost` with exit 77, and E5.4 decision 5 reads the END word — it would drop a conversation that only needed `kimi login`.
 - **B3. A bare `--session` (no value) is 65 too** — a fifth row of S5.2.5. `Program.Flags` drops a flag whose value is missing, so `--session` last on the
   argv, or followed by another flag, would have run a NEW session in place of the one asked for.
-- **B4. The `session_lost` reason names the id in coai's words**, then the agent's code and message with its echo of the id written `<id>` (M-K16 (c): do not
-  quote the id from the error). The agent's message stays in the reason, because the known-failure diagnosis reads it (S5.2.4).
+- **B4. The `session_lost` reason names the id in coai's words** (`AcpClient.LostLead`), then the agent's code and message, with only Kimi's echo
+  `Unknown sessionId: <the id>` written `Unknown sessionId: <id>` (M-K16 (c): do not quote the id from the error; the review: a short id written over every
+  occurrence garbled `Authentication` into `Authentic<id>tion`). The agent's message stays in the reason, because the known-failure diagnosis reads it (S5.2.4);
+  the diagnosis reads the reason WITHOUT the lead (`AskAcpMode.Diagnosable`), so an id cannot spell a failure.
 - **B5. The fake agent's script** (brief item 1): `loadModels` absent falls back to `models`, not "none" — Kimi announces the model on a load as on
   `session/new` (E5.1 (a)), and "none" would make every load scenario 65 under the first branch. `loadError` is an object `{code, message}`. `replay` is a list of
   the existing steps, so it replays a `tool_call` too (S5.2.2 does).
@@ -964,7 +966,15 @@ Numbered apart from the list above, so the stories built in parallel do not coll
   `session/cancel`, at most 1 s — what the driver measured (251–282 ms) — where the shim waits for no PENDING request (at most 1.5 s). The client's tree
   kill is by pid on POSIX too (`SIGKILL`; only the unit tests' fake agent runs there). The probe script is not edited, so item 8's stale "~250" label stays.
   M-K17 (§30) was not run.
-- **B10. `KimiReport` gains no `SessionId`** — E5.4 decision 3 owns that. The shim already prints `sessionId`; on a load it is the asked id on every exit.
+- **B10. `KimiReport` gains no `SessionId`** — E5.4 decision 3 owns that. The shim prints `sessionId`; on a `--session` turn it is the asked id on every exit
+  that prints a report (fixed in the review: `AcpOutcome.NotStarted(why, session)` at all four sites, and the client reports the asked id when the agent ended
+  before the load — `EveryExitOfALoadTurn_NamesTheAskedSession`).
+- **B11. The review's fixes** (Opus review, 2026-10-16): `ConsultantHandle`'s pattern ends `\z` (`$` let `abc\n` through; the TypeScript twin's `$` has no such
+  hole and is unchanged); a `tool_call_update` after the load for an id the replay announced is dropped (it used to add an entry with an empty title and kind);
+  the probe's tree kill is sent only while the child is `stillRunning`.
+- **Open tail: no `--cells M-K16` arm in the probe.** M-K16 ran on the scout's scratch driver, outside the repository, so the measurement cannot be re-run from the
+  repository. The probe library has the two features it needs (`loadUpdates`, `endLikeTheShim`); the cell itself is owed — before M-K16 is re-run on a new
+  Kimi version, or with the live checks of RESULTS §31.
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 
