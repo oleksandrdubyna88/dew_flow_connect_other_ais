@@ -3532,8 +3532,7 @@ flowchart LR
 
 ## Linux building blocks for Kimi — the Kimi-independent half of E5 (2026-10-16, `todo/PLAN_kimi_and_vibe_on_linux.md` DL6–DL10; A2 and A3 specs)
 
-Mechanical pieces, built before the Kimi launch is opened on Linux (`KimiLaunch.HostRefusal` is NOT lifted — that is E6), **wired into nothing yet**: no `KimiCredentialsLock`, `KimiLaunch`, `AcpTransport`,
-`AskAcpMode`, `ForeignKimi` or `HostProcessList` code calls them. Each file that comes from wsl_care (MIT, the same owner) says so in a header; what was not ported is named there too.
+Mechanical pieces, built before the Kimi launch is opened on Linux (`KimiLaunch.HostRefusal` is NOT lifted — that is E6), **mostly wired into nothing yet**: no `KimiCredentialsLock`, `KimiLaunch`, `ForeignKimi` or `HostProcessList` code calls them (the pidfd layer, the liveness and the signalling are called by the teardown below — A3). Each file that comes from wsl_care (MIT, the same owner) says so in a header; what was not ported is named there too.
 
 | Piece | File (`src_mcp/runners/…`) | What it is | Tests |
 |---|---|---|---|
@@ -3563,6 +3562,57 @@ flowchart LR
 (b) the hold outlives its opener's `SIGKILL` while a child started after the take lives. **Observed here: not yet — on Windows only, where the harness was proven green with the skip lifted.** From .NET's own source
 (`SafeFileHandle.Unix.cs`, v10.0.11): `LOCK_EX` only when `share == FileShare.None` exactly, so `None | Inheritable` is a SHARED `flock` — arm (a, second inheritable take) is predicted RED on Linux, arm (b)
 green (`O_CLOEXEC` is added only when `Inheritable` is absent). The ubuntu CI job decides; A2 §3.3 says what ships.
+
+## The verified teardown, and what a survivor does to the next launch — A3 of E5 (2026-10-16, `todo/PLAN_kimi_and_vibe_on_linux.md` DL9, S-K6, S-K14–S-K16, S-K18, S-K21, S-K22)
+
+The Linux end of a Kimi tree, and the marker that makes a survivor change the next launch's ELIGIBILITY. **Built and tested; the three call sites that consult the marker (`KimiLaunch.TakeAsync`,
+`KimiShimHold.Taken`, `KimiHome.Alive`) are wired in the integration step with A2's work — until then a Kimi tree is still ended by today's `UnsupervisedTree`, and `KimiLaunch.HostRefusal` still refuses Linux (E6).**
+
+| Piece | File (`src_mcp/…`) | What it is |
+|---|---|---|
+| Subreaper | `runners/Processes/LinuxSubreaper.cs` | `prctl(PR_SET_CHILD_SUBREAPER, 1)`, `"libc"` source-generated: `Became` / `Failed(errno)` / `NotLinux`. The FIRST statement of `AskAcpMode.RunAsync` (the overload the product calls, `Program` passes `LinuxSubreaper.Become`); `Failed` → exit 65 with the written sentence, nothing started. An in-process test calls the overload without a reaper — a test host must never become a subreaper. |
+| Supervisor seam | `runners/Processes/ITreeSupervisor.cs` | `ITreeSupervisor { Started(identity); EndAsync(process) → TreeEnd(Survivors) }`; `UnsupervisedTree` = today's `ProcessLauncher.EndTreeFirstAsync`, byte for byte (Windows; a profile without a home). Threaded `AcpHolding.Held(Hold, Supervisor)` → `AcpClient` → `AcpTransport`; `AcpOutcome.Survivors` → the shim report's `"survivors"`. `Held` keeps a one-argument constructor, so A2's `KimiShimHold` compiles unchanged and is unsupervised until it passes the Kimi one. |
+| The teardown | `runners/Processes/SupervisedTeardown.cs` | Order is the contract: list `Descendants(shim)` while the agent lives, exited entries dropped → `onListed` (the marker is written BEFORE any signal) → `SIGKILL` through a pidfd per member (`TreeSignals`, by identity) → every 100 ms re-list, reap, re-signal, up to `ProcessTree.ConfirmationBound` → stdin closed, the agent's exit awaited with no token → `TreeEnd(aliveAtTheBound)`. |
+| Reaping | `runners/Processes/ProcessReaping.cs`, `ReapSelection` | `waitid(P_PID, pid, …, WEXITED \| WNOHANG)` per pid — never `waitpid(-1)`; only LISTED descendants in state `Z` that this process did not start (`startedByUs`: .NET reaps those itself, a status taken from under it can end in the runtime's FailFast). A zombie is never a survivor (`ProcessTree.IsAlive` drops it — the one rule). |
+| Signals into the token | `runners/Processes/StopSignals.cs` | `StopSignals.Into(cts)`: `SIGTERM` + `SIGINT` → cancel (S-K16). In the runners rather than `src/Server/` so the fake CLI's shim uses the very registration; the two older copies (`RefusingServeAsync`, `ConsultantCheckMode`) are NOT replaced — plan Q7, asked. |
+| Marker | `runners/Kimi/KimiSurvivorMarker.cs` | `<lock root>/<key>.survivors.json`, `AtomicFile`, `KimiSurvivorMarkerDto(ReaderMarkerDto Marker, OwnedRoot, SignInFolder)` — the moved `ReaderMarkerDto` reused. `Read` → `Absent` / `Read` / `Unreadable`; `StandingFor(root, ownedRoot)` for the home disposal; source-generated JSON, camelCase. |
+| Kimi supervisor | `runners/Kimi/KimiTreeSupervisor.cs` | The phases: `Begin` writes `spawning` (a failed write → `Refused`, the shim answers 65 and starts nothing); `Started` → `running [agent]` (what a SIGKILLed shim leaves); `onListed` → `running [members]`; no survivors → delete; survivors → kept, now naming the late-born ones too, and the Busy sentence on stderr. A failed write during the teardown never skips the kill. |
+| Gate | `runners/Kimi/KimiSurvivorGate.cs`, `KimiPresence.cs` | `ReconcileAsync(markerPath, IProcessList)` → `None` / `Cleared` / `Blocked(marker, path, code, detail)`: `ReaderReconcile` over the marker with this host's seams (a pidfd, by identity, on Linux), the tri-state on every member afterwards. A `spawning` marker is cleared only over a READABLE listing with no `kimi` in it (a recorded deviation: the vendor-slot precedent blocks a nameless marker for ever). `Sentence(blocked)`: the three Busy sentences, the marker's full path, the pids and "safe to delete once …" FIRST, the card's button as an addition. `KimiPresence.Of(IProcessList)` is the ONE place that reads the listing's shape — an EMPTY list is "cannot tell", never "nobody". |
+| `ReaderReconcile` | `runners/Processes/ReaderMarker.cs` (MOVED from `src_server/src/Slots/`) | `BlockedReasons`, `ReaderPhases`, `ReaderMarkerDto`, `Reconciled`, `ReaderReconcile` — namespace `CoaiMcp.Runners.Processes`. A fifth parameter `Func<ProcessIdentity, Liveness>`; after an empty confirmation every member is asked `Alive` / `Gone` / `Unknown`, and one `Unknown` keeps the marker (`reader-member-unverifiable`, the errno in `Blocked.Detail`, which the server ignores). `ProcessTracking.StartedAt` keeps its two-state answer. |
+| The button's mode | `src/Acp/KimiClearMarkerMode.cs` | `--kimi-clear-marker <path>`: deletes ONE `^[0-9a-f]{16}\.survivors\.json$` file directly under the Kimi lock root, only when every member is `Gone`; never signals. **0** cleared or absent · **65** no path / not a marker under the root · **75** a member alive (beats unknown) · **74** a member or the file cannot be checked. One JSON object on stdout. Listed in `.agents/PROJECT.md`. |
+| Kernel refusal | `runners/Acp/KimiAcpProfile.cs` | `AgentRefusal` also asks `PidfdLayer.Refusal()` (S-K21): a kernel with no pidfd refuses before anything is held or started. `PidfdLayer.Calls` answers `ENOSYS` to everything on such a kernel — never a kill by number. |
+
+```mermaid
+sequenceDiagram
+  participant Shim as shim (subreaper)
+  participant TD as SupervisedTeardown
+  participant M as survivor marker
+  participant K as kernel (pidfd)
+  Shim->>M: spawning (before the agent starts)
+  Shim->>M: running [agent] (right after Process.Start)
+  Note over Shim: turn ends — answer, deadline, SIGTERM, premature EOF
+  Shim->>TD: EndAsync
+  TD->>TD: list Descendants(shim) while the agent lives
+  TD->>M: running [members] (BEFORE any signal)
+  TD->>K: pidfd_open, check identity, SIGKILL through the fd
+  loop every 100 ms up to ConfirmationBound
+    TD->>TD: re-list, reap Z (not startedByUs), re-signal what is alive
+  end
+  alt nobody alive
+    TD->>M: delete
+  else survivors
+    TD->>M: keep, naming them; Busy sentence on stderr
+  end
+  Note over Shim,M: next launch: KimiSurvivorGate.ReconcileAsync (gate, shim hold, home disposal)
+```
+
+**The calls the integration step makes (the callee is built here):** `KimiLaunch.TakeAsync` — after the gate file is held — `await KimiSurvivorGate.ReconcileAsync(KimiCredentialsLock.MarkerPathFor(target), HostProcessList.Current)`;
+`Blocked` → `Given(attempt, KimiSurvivorGate.Sentence(blocked))`. `KimiShimHold.Taken` — after BOTH tree files are held → the same reconcile (`GetAwaiter().GetResult()`, nothing may yield); `Blocked` → dispose the hold →
+`AcpHolding.Busy(Sentence(blocked))`; else `KimiTreeSupervisor.Begin(markerPath, places.OwnedRoot, target)` → `Ready(s)` → `new AcpHolding.Held(hold, s)` on Linux (`UnsupervisedTree.Instance` elsewhere), `Refused(sentence)` → dispose the hold →
+`AcpHolding.Unusable(sentence)`. `KimiHome.Alive(root)` — `KimiSurvivorMarker.StandingFor(KimiCredentialsLock.Root, root)` non-empty → the home is kept. `KimiLaunch.Prepare`'s `FirstOf` — `PidfdLayer.Refusal()` after `HostRefusal`.
+
+**What this does not prove.** A fake agent starts the processes a test names; the real `kimi`'s sub-agents, its background shell and its MCP servers (`research/RESULTS_kimi_confinement.md` §29.8) are other processes in other places of the tree, and a `Grep`'s `rg` in its own
+session is only the one shape measured (L-K4). Nothing here ends a process by name, and `SIGKILL` is the only signal: a survivor means a process the kernel would not let this uid kill (an `EPERM`, a different uid), which is why it blocks the sign-in.
 
 ## The Kimi reviewer — `KimiRuntime` (2026-10-15, E4.4 of `todo/PLAN_vibe_and_kimi_runtimes_E4.md`)
 
