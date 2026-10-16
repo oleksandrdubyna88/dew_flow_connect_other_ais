@@ -75,14 +75,14 @@ internal static partial class KimiClearMarkerMode
 
     private static (int Exit, ClearMarkerReport Report) Cleared(
         string path, MarkerRead read, Func<ProcessIdentity, Liveness> liveness, Func<KimiPresence> presence, Action<string> note) => read switch
-    {
-        MarkerRead.Absent => Said(note, $"no marker at {path} — nothing to clear", Ok, new ClearMarkerReport(path, "absent", Ok, [])),
-        MarkerRead.Unreadable unreadable => Said(
-            note, $"{path} could not be read ({unreadable.Reason}); a marker that cannot be read is not known to be safe to delete", Unverifiable, new ClearMarkerReport(path, "kept", Unverifiable, [])),
-        MarkerRead.Read named when named.Marker.Marker.Unidentified => Nameless(path, presence(), note),
-        MarkerRead.Read named => Named(path, named.Marker.Marker.Tree, liveness, note),
-        _ => Said(note, $"{path} could not be read", Unverifiable, new ClearMarkerReport(path, "kept", Unverifiable, [])),
-    };
+        {
+            MarkerRead.Absent => Said(note, $"no marker at {path} — nothing to clear", Ok, new ClearMarkerReport(path, "absent", Ok, [])),
+            MarkerRead.Unreadable unreadable => Said(
+                note, $"{path} could not be read ({unreadable.Reason}); a marker that cannot be read is not known to be safe to delete", Unverifiable, new ClearMarkerReport(path, "kept", Unverifiable, [])),
+            MarkerRead.Read named when named.Marker.Marker.Unidentified => Nameless(path, presence(), note),
+            MarkerRead.Read named => Named(path, named.Marker.Marker.Tree, liveness, note),
+            _ => Said(note, $"{path} could not be read", Unverifiable, new ClearMarkerReport(path, "kept", Unverifiable, [])),
+        };
 
     /// <summary>A marker that names no process: cleared only over a readable listing with no kimi in it.</summary>
     private static (int Exit, ClearMarkerReport Report) Nameless(string path, KimiPresence presence, Action<string> note) => presence switch
