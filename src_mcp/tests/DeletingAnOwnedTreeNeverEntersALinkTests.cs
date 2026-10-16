@@ -216,20 +216,41 @@ public sealed class DeletingAnOwnedTreeNeverEntersALinkTests : IAsyncLifetime
         await File.WriteAllBytesAsync(writable, Token, TestContext.Current.CancellationToken);
         await DirectoryLink.MakeAsync(new ProcessLauncher(), link, Target);
 
+        var ended = EndOfRawRecursiveDelete(tree);
+        TestContext.Current.SendDiagnosticMessage($"Directory.Delete(recursive) over a junction ended: {ended}");
+
+        // The type is the one thing that differs by machine; the guarantee below does not.
+        ended.Should().BeOneOf("completed", nameof(UnauthorizedAccessException), nameof(IOException));
+        OwnedPaths.IsLinkIfThere(link).Should().BeFalse($"the junction itself is removed, by its own name (the delete ended: {ended})");
+        TheTargetIsUntouched();
+        File.ReadAllBytes(writable).Should().Equal(Token, "a WRITABLE file would have been deleted had .NET entered the link");
+    }
+
+    /// <summary>
+    /// How <c>Directory.Delete(tree, recursive: true)</c> ended over a tree holding a junction: <c>completed</c>, or the NAME of the
+    /// exception it threw. Both exceptions are accepted because the type is a fact about the filesystem and not about coai —
+    /// MEASURED 2026-10-14 on a local NTFS drive, .NET unmounts the junction by its own name and then throws
+    /// <see cref="UnauthorizedAccessException"/> ("Access to the path 'credentials' is denied"); MEASURED 2026-10-16 on the
+    /// <c>windows-latest</c> runner's D: drive it throws <see cref="IOException"/> ("The parameter is incorrect") from
+    /// <c>RemoveDirectoryRecursive</c>. Either way the emptied parent folders are left and the link is not entered — the only
+    /// property the three raw sites need, and what the caller asserts. All three sites swallow BOTH types.
+    /// </summary>
+    private static string EndOfRawRecursiveDelete(string tree)
+    {
         try
         {
             Directory.Delete(tree, recursive: true);
-        }
-        catch (UnauthorizedAccessException)
-        {
-            // MEASURED 2026-10-14 on Windows (the red of this scenario): .NET unmounts the junction by its own name and then
-            // throws "Access to the path 'credentials' is denied" on the way out, leaving the emptied parent folders. It does
-            // not enter the link — which is the only property the three raw sites need, and what is asserted below.
-        }
 
-        OwnedPaths.IsLinkIfThere(link).Should().BeFalse("the junction itself is removed, by its own name");
-        TheTargetIsUntouched();
-        File.ReadAllBytes(writable).Should().Equal(Token, "a WRITABLE file would have been deleted had .NET entered the link");
+            return "completed";
+        }
+        catch (UnauthorizedAccessException e)
+        {
+            return e.GetType().Name;
+        }
+        catch (IOException e)
+        {
+            return e.GetType().Name;
+        }
     }
 
     /// <summary>
