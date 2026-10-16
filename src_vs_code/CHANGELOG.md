@@ -25,6 +25,8 @@ findings. When no reviewer answered, the verdict is `call_human`.
 committed plan, or an id for a pasted one. `status` shows it, and `--log` carries it as `planSource`. The database gains
 one column (schema step 23). An older database is upgraded when the new server first opens it.
 
+## Server 0.57.0 — 2026-10-16
+
 **Added: Kimi Code as a reviewer (Windows).** A `kimi` reviewer row runs Moonshot's Kimi Code CLI on your own sign-in.
 coai never copies that sign-in. Each launch gets a home that coai owns: it holds a link to your sign-in, a configuration
 coai writes, and an environment coai builds. The link is removed before the home is deleted, and never while Kimi still
