@@ -353,7 +353,7 @@ const vibeRow = (platform: string): Row => {
   return row;
 };
 
-test('the Vibe wsl row names the WSL2 cells it rests on, and says how many runs they are', () => {
+test('the Vibe wsl row rests on the L-V9 record: every WSL2 cell 3 of 3, and nothing owed', () => {
   const row = vibeRow('wsl');
 
   assert.equal(row.standing, 'confined');
@@ -361,11 +361,21 @@ test('the Vibe wsl row names the WSL2 cells it rests on, and says how many runs 
   assert.equal(row.measured.cliVersion, 'vibe 2.26.1');
   assert.equal(row.measured.date, '2026-10-16');
   assert.match(row.measured.document, /^research\/RESULTS_vibe_confinement\.md/u);
-  for (const cell of ['WSL2', 'L-V1', 'L-V2', 'L-V3', 'L-V4', 'n = 1']) {
-    assert.ok(row.measured.cells.includes(cell), `the cells do not name ${cell}: ${row.measured.cells}`);
+  const cells = row.measured.cells;
+  for (const cell of ['WSL2', 'Section 31', 'L-V1', 'L-V2', 'L-V3', 'L-V4', 'write_file', 'bash', 'run_typescript', '~/.vibe']) {
+    assert.ok(cells.includes(cell), `the cells do not name ${cell}: ${cells}`);
   }
+  assert.ok((cells.match(/3 of 3/gu) ?? []).length >= 5, `L-V1 (signed-out half), the L-V2 read, L-V3, L-V4 are each 3 of 3: ${cells}`);
+  assert.doesNotMatch(cells + row.text, /n = 1|one run per cell|still owed|owed/u, 'the one-run record this replaces');
   assert.match(row.text, /WSL2/u);
   assert.doesNotMatch(row.text, /refuses it in WSL|only on Windows/u, 'the refusal this release lifts');
+});
+
+test('the Vibe wsl row says what the Windows row says about what Vibe reads: a copy coai makes of the live tree', () => {
+  const copy = /copy coai makes of the live tree, without its \.git, \.vibe\/, skills and AGENTS\.md/u;
+
+  assert.match(vibeRow('windows').text, copy, 'the fixture: the Windows row says it');
+  assert.match(vibeRow('wsl').text, copy, 'the snapshot is the same on WSL');
 });
 
 test('the Vibe linux row says measured on WSL2 only, and claims nothing about native Linux', () => {
