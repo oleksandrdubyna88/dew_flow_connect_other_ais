@@ -18,6 +18,8 @@ internal sealed class JunctionsUnix : IJunctionShell
     {
         try
         {
+            // The Windows shell's folder-making creates missing parents; the link's parent is made here for the same reason (a symlink cannot be made in a folder that is not there).
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(link)) ?? string.Empty);
             Directory.CreateSymbolicLink(link, target);
 
             return string.Empty;

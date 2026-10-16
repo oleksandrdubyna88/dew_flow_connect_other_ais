@@ -32,6 +32,7 @@ public interface IProcReads
 public sealed partial class ProcReads : IProcReads
 {
     private const int NoEntry = 2;
+    private const int NoSuchProcess = 3;
     private const int NoAccess = 13;
     private const int PathBuffer = 4096;
 
@@ -45,7 +46,18 @@ public sealed partial class ProcReads : IProcReads
     public IEnumerable<int> Pids() =>
         Directory.EnumerateDirectories("/proc").Select(directory => (ok: int.TryParse(Path.GetFileName(directory), out var pid), pid)).Where(entry => entry.ok).Select(entry => entry.pid);
 
-    public string StatText(int pid) => File.ReadAllText($"/proc/{pid}/stat");
+    public string StatText(int pid)
+    {
+        try
+        {
+            return File.ReadAllText($"/proc/{pid}/stat");
+        }
+        catch (IOException) when (!Directory.Exists($"/proc/{pid}"))
+        {
+            // A process that exits while its stat is being read answers ESRCH from read(): it LEFT, which is not "could not be read".
+            throw new DirectoryNotFoundException($"/proc/{pid} left while it was being read");
+        }
+    }
 
     public IReadOnlyCollection<int> Threads(int pid)
     {
@@ -88,7 +100,7 @@ public sealed partial class ProcReads : IProcReads
 
     private static string Failed(int errno, int pid) => errno switch
     {
-        NoEntry => string.Empty,
+        NoEntry or NoSuchProcess => string.Empty,
         NoAccess => throw new UnauthorizedAccessException($"/proc/{pid}/exe: errno {errno} (EACCES)"),
         _ => throw new IOException($"/proc/{pid}/exe: errno {errno}"),
     };

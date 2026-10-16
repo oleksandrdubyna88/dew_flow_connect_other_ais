@@ -77,7 +77,8 @@ public sealed class HostProcessListTests
     {
         Assert.SkipUnless(OperatingSystem.IsLinux(), "the Linux listing reads /proc");
 
-        var me = HostProcessList.Current.Snapshot().Should().BeOfType<ProcessListing.Listed>("the Linux listing should be readable here").Subject.Processes.FirstOrDefault(p => p.Pid == Environment.ProcessId);
+        var listing = HostProcessList.Current.Snapshot();
+        var me = listing.Should().BeOfType<ProcessListing.Listed>($"the Linux listing should be readable here ({(listing as ProcessListing.Unreadable)?.Reason})").Subject.Processes.FirstOrDefault(p => p.Pid == Environment.ProcessId);
 
         me.Should().NotBeNull("the Linux listing should hold the test host's own pid, but was empty");
         me!.Name.Should().Be(Path.GetFileName(Environment.ProcessPath), "the name is the exe link's basename, which is stable for the whole run — comm is the kernel's thread name");

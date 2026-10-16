@@ -63,6 +63,7 @@ internal static class WindowsStandIn
 
         public string MakeLink(string link, string target)
         {
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(link)) ?? string.Empty);
             Directory.CreateSymbolicLink(link, target);
 
             return string.Empty;
