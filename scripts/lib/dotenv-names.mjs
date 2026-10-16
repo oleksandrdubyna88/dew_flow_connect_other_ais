@@ -22,6 +22,36 @@ export const PYTHON_WHITESPACE = new Set([
 /** The file's physical lines: split at CRLF, LF or a bare CR, exactly as python-dotenv's `_newline` (and Python's universal newlines) do. */
 export const physicalLines = (text) => String(text).split(/\r\n|\n|\r/u);
 
+const CR = 0x0d;
+const LF = 0x0a;
+const UTF8_BOM = [0xef, 0xbb, 0xbf];
+
+/** The same split over BYTES (CR and LF are single bytes in UTF-8 and never part of a longer sequence), so a line is judged before it is decoded. */
+function physicalByteLines(bytes) {
+  const lines = [];
+  let start = 0;
+  for (let i = 0; i < bytes.length; i++) {
+    if (bytes[i] !== CR && bytes[i] !== LF) continue;
+    lines.push(bytes.subarray(start, i));
+    if (bytes[i] === CR && bytes[i + 1] === LF) i++;
+    start = i + 1;
+  }
+  lines.push(bytes.subarray(start));
+  return lines;
+}
+
+const STRICT_UTF8 = new TextDecoder('utf-8', { fatal: true });
+
+/** A line's text, or null when it is not text python-dotenv could read and Vibe could set: invalid UTF-8, or a NUL byte. */
+function textOf(lineBytes) {
+  if (lineBytes.includes(0x00)) return null;
+  try {
+    return STRICT_UTF8.decode(lineBytes);
+  } catch {
+    return null;
+  }
+}
+
 const isSpace = (ch) => PYTHON_WHITESPACE.has(ch);
 const skipSpace = (line, at) => {
   let i = at;
@@ -58,22 +88,31 @@ export function readLine(line) {
 }
 
 /**
- * coai's verdict on a whole file: `admitted`, or `refused` at the FIRST refused line — `unreadable` (a line that binds no name:
- * a bare word, a pasted key, a line starting with `=`) or `another-variable` (a name that is not MISTRAL_API_KEY). Every refused
- * line is in `refusals`. A sentence built from it names line numbers only — never a name or a byte of the file (DL2).
+ * coai's verdict on a whole file — its BYTES, or a string read as UTF-8: `admitted`, or `refused` at the FIRST refused line, by
+ * DL2's four kinds (the A1 spec's names): `ByteOrderMark` (line 1 starts with EF BB BF, which python-dotenv's `utf-8` codec keeps
+ * as part of the first name), `NotText` (a line that is not valid UTF-8 or holds a NUL), `NoBinding` (a line that binds no name:
+ * a bare word, a pasted key, a line starting with `=`) and `OtherName` (a name that is not MISTRAL_API_KEY). Every refused line
+ * is in `refusals`. A sentence built from it names line numbers only — never a name or a byte of the file (DL2).
  */
-export function coaiVerdict(text) {
+export function coaiVerdict(input) {
+  const all = typeof input === 'string' ? Buffer.from(input, 'utf8') : Buffer.from(input);
+  const bom = UTF8_BOM.every((b, i) => all[i] === b);
   const names = [];
-  const refusals = [];
-  physicalLines(text).forEach((line, index) => {
+  const refusals = bom ? [{ line: 1, why: 'ByteOrderMark' }] : [];
+  physicalByteLines(bom ? all.subarray(UTF8_BOM.length) : all).forEach((lineBytes, index) => {
+    const line = textOf(lineBytes);
+    if (line === null) {
+      refusals.push({ line: index + 1, why: 'NotText' });
+      return;
+    }
     const read = readLine(line);
     if (read.kind === 'skip') return;
     if (read.kind === 'unreadable') {
-      refusals.push({ line: index + 1, why: 'unreadable' });
+      refusals.push({ line: index + 1, why: 'NoBinding' });
       return;
     }
     names.push(read.name);
-    if (read.name !== ADMITTED_NAME) refusals.push({ line: index + 1, why: 'another-variable' });
+    if (read.name !== ADMITTED_NAME) refusals.push({ line: index + 1, why: 'OtherName' });
   });
   return refusals.length === 0
     ? { verdict: 'admitted', refusals: [], names }

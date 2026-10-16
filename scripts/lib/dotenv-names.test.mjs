@@ -31,19 +31,27 @@ test('the forms python-dotenv binds MISTRAL_API_KEY from are admitted (S-V13\'s 
   }
 });
 
-test('a bare key, a line beginning with "=", and a continuation that binds nothing are refused as unreadable at their line', () => {
-  assert.deepEqual(verdictOf('sk-test-abcdef\n'), refused({ line: 1, why: 'unreadable' }));
-  assert.deepEqual(verdictOf('=v\n'), refused({ line: 1, why: 'unreadable' }));
-  assert.deepEqual(verdictOf('MISTRAL_API_KEY="dummy\nending"\n'), refused({ line: 2, why: 'unreadable' }));
+test('a bare key, a line beginning with "=", and a continuation that binds nothing are refused as NoBinding at their line', () => {
+  assert.deepEqual(verdictOf('sk-test-abcdef\n'), refused({ line: 1, why: 'NoBinding' }));
+  assert.deepEqual(verdictOf('=v\n'), refused({ line: 1, why: 'NoBinding' }));
+  assert.deepEqual(verdictOf('MISTRAL_API_KEY="dummy\nending"\n'), refused({ line: 2, why: 'NoBinding' }));
 });
 
 test('the three multi-line shapes of DL2, and a bare CR, refuse or admit by the grammar — the FIRST refused line is the verdict\'s', () => {
-  assert.deepEqual(verdictOf('MISTRAL_API_KEY="dummy\nLEAK_CANARY=ending"\n'), refused({ line: 2, why: 'another-variable' }));
+  assert.deepEqual(verdictOf('MISTRAL_API_KEY="dummy\nLEAK_CANARY=ending"\n'), refused({ line: 2, why: 'OtherName' }));
   assert.deepEqual(verdictOf('MISTRAL_API_KEY="dummy\n#ending"\n'), ADMIT);
   // DL2 and S-V13 say "refused at line 3" here; by DL2's own grammar line 2 (a lone `"`) is already a bare word, so the first
   // refusal is line 2 — and line 3, where python-dotenv binds VIBE_X, is refused too. Both are recorded.
-  assert.deepEqual(verdictOf('MISTRAL_API_KEY="a\n"\nVIBE_X=1\n'), refused({ line: 2, why: 'unreadable' }, { line: 3, why: 'another-variable' }));
-  assert.deepEqual(verdictOf('MISTRAL_API_KEY=x\rVIBE_X=1\n'), refused({ line: 2, why: 'another-variable' }));
+  assert.deepEqual(verdictOf('MISTRAL_API_KEY="a\n"\nVIBE_X=1\n'), refused({ line: 2, why: 'NoBinding' }, { line: 3, why: 'OtherName' }));
+  assert.deepEqual(verdictOf('MISTRAL_API_KEY=x\rVIBE_X=1\n'), refused({ line: 2, why: 'OtherName' }));
+});
+
+test('the BYTES decide two kinds (DL2, the A1 spec): a UTF-8 byte-order mark is ByteOrderMark at line 1; invalid UTF-8 or a NUL is NotText at its line', () => {
+  const bytes = (...parts) => Buffer.concat(parts.map((p) => (typeof p === 'string' ? Buffer.from(p, 'utf8') : Buffer.from(p))));
+  assert.deepEqual(verdictOf(bytes([0xef, 0xbb, 0xbf], 'MISTRAL_API_KEY=sk-test-bom\n')), refused({ line: 1, why: 'ByteOrderMark' }));
+  assert.deepEqual(verdictOf(bytes('MISTRAL_API_KEY=sk-test-ok\n', 'MISTRAL_API_KEY=sk-test-', [0xff], '\n')), refused({ line: 2, why: 'NotText' }));
+  assert.deepEqual(verdictOf(bytes('MISTRAL_API_KEY=sk-test-a', [0x00], 'b\n')), refused({ line: 1, why: 'NotText' }));
+  assert.deepEqual(verdictOf(bytes('MISTRAL_API_KEY=sk-test-ok\n')), ADMIT, 'a Buffer and a string are read alike');
 });
 
 test('every vector: the reference gives the verdict the file records, and an ADMITTED file binds no name but MISTRAL_API_KEY in python-dotenv', () => {
@@ -51,7 +59,8 @@ test('every vector: the reference gives the verdict the file records, and an ADM
   assert.ok(VECTORS.vectors.some((v) => v.coai.verdict === 'admitted') && VECTORS.vectors.some((v) => v.coai.verdict === 'refused'),
     'the file must hold both verdicts, or the implication is checked vacuously');
   for (const v of VECTORS.vectors) {
-    assert.deepEqual(verdictOf(v.input), v.coai, `${v.id}: the reference disagrees with the recorded verdict`);
+    assert.deepEqual(verdictOf(Buffer.from(v.inputBase64, 'base64')), v.coai, `${v.id}: the reference disagrees with the recorded verdict`);
+    if (v.input !== null) assert.equal(Buffer.from(v.input, 'utf8').toString('base64'), v.inputBase64, `${v.id}: input and inputBase64 disagree`);
     if (v.coai.verdict === 'admitted') {
       assert.deepEqual(v.binds.filter((n) => n !== ADMITTED_NAME), [], `${v.id}: admitted, yet python-dotenv binds ${JSON.stringify(v.binds)}`);
     }
@@ -70,5 +79,10 @@ test('the whitespace the reference skips is the set python-dotenv\'s \\s matched
 });
 
 test('no vector input holds a real-looking secret: every value is synthetic (sk-test-… or a short word)', () => {
-  for (const v of VECTORS.vectors) assert.doesNotMatch(v.input, /sk-(?!test-)[A-Za-z0-9]{8,}/u, v.id);
+  for (const v of VECTORS.vectors) assert.doesNotMatch(Buffer.from(v.inputBase64, 'base64').toString('latin1'), /sk-(?!test-)[A-Za-z0-9]{8,}/u, v.id);
+});
+
+test('every refusal kind of DL2 has at least one vector, so E2\'s test meets each', () => {
+  const kinds = new Set(VECTORS.vectors.flatMap((v) => v.coai.refusals.map((r) => r.why)));
+  assert.deepEqual([...kinds].sort(), ['ByteOrderMark', 'NoBinding', 'NotText', 'OtherName']);
 });
