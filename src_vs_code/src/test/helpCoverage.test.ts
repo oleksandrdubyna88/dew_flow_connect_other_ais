@@ -393,7 +393,7 @@ const SETTING_ALIAS: Record<string, string> = {
   'coai.qconsultRows': 'who answers',
   'coai.qconsultPrompts': 'base prompts',
   'coai.qconsultRoots': 'folders a disk row may read',
-  'coai.vibeHomesDirectory': 'vibe homes folder',
+  'coai.vibeHomesDirectory': 'vibe and kimi homes folder',
   'coai.qconsultRowMinutes': 'minutes one row may run',
   'coai.qconsultQuestionsPerSession': 'questions per session',
   'coai.qconsultFreeBatches': 'question batches that reach you first',

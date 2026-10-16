@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { statSync as statSyncForProbe } from 'node:fs';
+import { readFileSync, statSync as statSyncForProbe } from 'node:fs';
+import * as path from 'node:path';
 import { fileAt, useFileProbe } from '../pathFamily';
 import {
   CALLER_KINDS,
@@ -21,6 +22,8 @@ import {
 } from '../consultSettings';
 import { consultPromptWrite } from '../consultPrompt';
 import { consultantBody } from '../consultantView';
+import { HELP } from '../help';
+import { missingTitle } from '../pathFindings';
 import { badEndpoint, endpointAnswer, endpointConflict } from '../consultantWrite';
 import { envBlock, settingWrite, settingsFrom } from '../settingsShape';
 import { Runtime } from '../models';
@@ -675,6 +678,32 @@ test('the Vibe homes folder box shows what is saved, and the server\'s word that
   assert.doesNotMatch(plain, /path-note/u);
   assert.match(marked, /aria-invalid="true"/u);
   assert.match(marked, /class="hint path-note"[^>]*>.*missing — not found on this machine \(Windows\)/su);
+});
+
+test('S5.7.7 theHomesFolderNamesBothCLIs: the label, its help, the manifest and the missing-folder notice say Vibe and Kimi; the key stays', () => {
+  // E5.7 decision 6: Kimi's conversation homes (coai-kimi) and one-shot homes (coai-vh) live under the same folder, each holding a LINK to
+  // the person's Kimi sign-in. The setting key is unchanged — a rename is a migration, and not this epic's.
+  const body = consultantBody(DEFAULT_CONSULT, { vibeHomes: '' }, '');
+  const label = /<label for="vibeHomesDirectory">(?:<[^>]*>[^<]*<\/[^>]*>|<[^>]*>)*([^<]*)<\/label>/u.exec(body)?.[1]?.trim();
+  assert.equal(label, 'Vibe and Kimi homes folder');
+  assert.match(body, /data-setting="vibeHomesDirectory"/u, 'the setting key is unchanged');
+  assert.match(body, /Kimi/u, 'the box’s own hint names Kimi too');
+
+  const said = HELP.vibeHomesDirectory;
+  for (const word of ['Kimi', 'coai-kimi', 'coai-vh', 'link', 'sign-in']) {
+    assert.ok(said.includes(word), `the folder’s help does not say ${word}: ${said}`);
+  }
+  assert.match(said, /156 characters is Vibe’s/u, 'the path rule is said to be Vibe’s — Kimi writes long paths without trouble');
+
+  const manifest = JSON.parse(readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8')) as {
+    contributes: { configuration: { properties: Record<string, { markdownDescription?: string }> } };
+  };
+  const described = manifest.contributes.configuration.properties['coai.vibeHomesDirectory']?.markdownDescription ?? '';
+  assert.match(described, /Kimi/u, 'the Settings editor’s description of the folder names Vibe only');
+  assert.match(described, /coai-kimi/u);
+
+  const finding = { key: 'coai.vibeHomesDirectory', place: 'consultants/consultant', value: 'D:\\homes', family: 'windows', state: 'missing', owner: '' } as const;
+  assert.match(missingTitle(finding), /^The Vibe and Kimi homes folder D:\\homes was not found .* — a Vibe or Kimi launch is refused until it exists/u);
 });
 
 test('the three caps are on screen with the numbers in force', () => {
