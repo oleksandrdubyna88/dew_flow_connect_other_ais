@@ -19,7 +19,24 @@ one of them arriving wrong.
 
 Target: the released **extension** version — `--target 0.33.1`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
 
-Last verified: 2026-10-16 · mcp **0.57.0** and extension **0.77.0** (released) · server **0.12.0** deployed — the box
+Last verified: 2026-10-16 · mcp **0.58.0** and extension **0.78.0** (released) · server **0.12.0** deployed — the box
+serves 0.12.0 · automated items 1, 2, 6, 9 and 10 PASS as the checker printed them. Run locally:
+`MCP_VERSION=0.58.0 SERVER_VERSION=0.12.0 node .agents/conventions/tools/post-deploy-check.mjs --target 0.78.0`. The
+`mcp-v0.58.0` release run needed one rerun: its win-x64 job was cancelled at its 30-minute limit, the rerun of that job
+alone passed, and the draft then published with all six platforms. The `extension-v0.78.0` release run succeeded. In
+these: #837 and #841 (`review_plan` reads a committed plan, proves the reviewers got it whole, and records what it
+reviewed) and #840 (a test only). Manual items, in part:
+- item 8: the installed `coai-mcp.exe` reports 0.58.0, and every running `coai-mcp` process started after that file
+  was written;
+- items 11 and 3: on the installed 0.58.0, a plan round with `committedPlan` over a synthetic 102 235-byte plan, which
+  has planted defects at 2 %, 50 % and 98 %, recorded a `planSource` equal to git's commit, blob, byte count and text id;
+- 3 of 4 reviewers answered. `kimi` was cancelled at the round's 10-minute limit, and the round's reviewers line says
+  so. Two reviewers named the defect at 98 %; the third cited Definition-of-Done items from the file's last 2 %;
+- a symlink and a 306 705-byte file were each refused before any round started.
+
+Manual items 4, 5, 7 and 12 were not run.
+
+Previously verified: 2026-10-16 · mcp **0.57.0** and extension **0.77.0** (released) · server **0.12.0** deployed — the box
 serves 0.12.0 · automated items 1, 2, 6, 9 and 10 PASS as the checker printed them. Item 2 passed on the seventh minute,
 after the Marketplace's known lag. Manual items 3, 4, 5, 7, 8, 11 and 12 were not run. Run locally:
 `MCP_VERSION=0.57.0 SERVER_VERSION=0.12.0 node .agents/conventions/tools/post-deploy-check.mjs --target 0.77.0`. The
