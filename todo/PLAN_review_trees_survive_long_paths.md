@@ -28,7 +28,7 @@ that path passed Windows' path limit, and `core.longpaths` is set nowhere on tha
 | `review_code` returns that message verbatim as the tool's error | `RoundEngine.cs:349-351`, `:663-666` |
 | Submodules of the tree are filled by `git submodule update --init` run IN the tree | `SubmodulePopulator.cs:66-79`, called at `WorktreeManager.cs:139` and `ReviewWorktrees.cs:413` |
 | The second `worktree add` (a person's review tree, `--tree-at`): root `%LOCALAPPDATA%\coai-mcp\review-worktrees`, name `coai-review-<8>-<12>` | `ReviewWorktrees.cs:346`, `ReviewTreeRoot.cs:26`, `:46`, `:93-94` |
-| Every review-tree git call — add, `status` clean checks, unlock, remove, prune, mount discovery — goes through ONE wrapper | `ReviewTreeRoot.GitAsync`, `ReviewTreeRoot.cs:159-175`; callers `ReviewWorktrees.cs:256`, `:308`, `:348`, `ReviewTreeKeeper.cs:275-276`, `:312-314`, `:409-411`, `SubmoduleMounts.cs:23` |
+| Every review-tree git call — add, `status` clean checks, unlock, remove, prune, mount discovery — goes through ONE wrapper | `ReviewTreeRoot.GitAsync`, `ReviewTreeRoot.cs:159-175`; callers include `ReviewWorktrees.cs:151`, `:256`, `:301`, `:308-309`, `:348`, `:365-373`, `ReviewTreeKeeper.cs:156`, `:274-276`, `:312-314`, `:409-411`, `SubmoduleMounts.cs:23` |
 | Round-tree removal: `worktree remove -f -f`, then a .NET delete fallback | `WorktreeManager.cs:218-222` |
 
 The brief said `…\coai-mcp\worktrees\coai-<session>-r<n>-<id>` at ~71 characters and blamed git's
@@ -66,10 +66,12 @@ Arithmetic for this machine: round tree 82 units → longest tracked path that w
    calls), `SubmodulePopulator.OneAsync`.
 2. A tracked path whose absolute length in the tree exceeds 259 UTF-16 units checks out, statuses clean,
    populates in a submodule, and is removed — round tree and review tree alike.
-3. A `worktree add` that still fails NAMES the path git could not write, its length, and the reason
-   git gave; for `Filename too long` it also names the limit (259 without long-path support), says
-   coai already asked for long paths, and names `COAI_ROUND_WORKTREES` as the way to a shorter root.
-   `Could not reset index file` is never the whole message again.
+3. A ROUND-tree `worktree add` (the `review_code` path, where the defect was met) that still fails
+   NAMES the path git could not write, its length, and the reason git gave; for `Filename too long` it
+   also names the limit (259 without long-path support), says coai already asked for long paths, and
+   names `COAI_ROUND_WORKTREES` as the way to a shorter root. `Could not reset index file` is never the
+   whole message again. A REVIEW-tree add keeps its wire word `git_failed` (plan round 1, codex: the
+   requirement is narrowed to what D4 delivers, rather than promising it for both).
 4. On Linux and macOS the argv of every one of those git calls is byte-for-byte what it is today.
 5. `COAI_ROUND_WORKTREES` is documented as the operator's escape hatch, with its LOCAL-path rule.
 
@@ -85,8 +87,11 @@ call in those wrappers, not only the "creating" ones, because P7/P8/P10 show the
 removing ones fail too — a review tree that reads dirty can never be removed from the panel
 (`ReviewTreeKeeper.cs:312-328`), and a failed remove drops the registration and leaves the files, the
 exact state `ReviewTreeKeeper.cs:278-281` says it avoids. `-c` is per command — never a config write.
-Not extended to git calls in a PERSON's checkout (`ContextAssembler`, `FilesystemInvariant`): their
-long-path behaviour is the person's own config, and changing it is outside this defect.
+The same wrappers also run a few read-only calls in the PERSON's repository (`rev-parse` at
+`WorktreeManager.cs:93`, `--git-common-dir` at `ReviewWorktrees.cs:151`, `worktree list` at `:373` and
+`ReviewTreeKeeper.cs:156`); they carry the flag too, harmlessly — it changes nothing a read of a short
+path does. Not extended to the OTHER launchers that work in a person's checkout (`ContextAssembler`,
+`FilesystemInvariant`): their long-path behaviour is the person's own config, outside this defect.
 
 **D2 — Windows only, explicitly.** `core.longpaths` is a Git-for-Windows key; elsewhere git ignores it,
 but "ignored" is a claim about every git a Linux user might run, and (4) wants the argv unchanged, which
@@ -105,12 +110,16 @@ unswept under `{DataDir}/worktrees`. The review tree's `coai-review-<digest>-<sh
 **D4 — the failure names the path, not the index.** New pure `WorktreeFailure.Sentence(string stderr,
 string treePath)` in `runners/Worktrees/`, used at `WorktreeManager.cs:128` in place of the bare
 `FatalLine`. It reads git's own lines — `error: unable to create file <rel>: <reason>` and
-`fatal: cannot create directory at '<rel>': <reason>` (P2, P3, P11) — and says, e.g.:
+`fatal: cannot create directory at '<rel>': <reason>` (P2, P3, P11): the reason is the text after the
+LAST `": "` on the line (git's reasons hold no `": "`; a Windows file name cannot hold `:`), the path is
+what lies between the known prefix and that separator, one pair of surrounding `'` removed; when
+several such lines appear, the first names the path. It says, e.g.:
 `git worktree add: could not write '<tree>\<rel>' (270 characters): Filename too long. Windows allows
 259 without long-path support; coai already passed core.longpaths=true, so this git did not honour it —
 set COAI_ROUND_WORKTREES to a shorter local folder, or shorten the path. git: fatal: Could not reset
 index file to revision 'HEAD'.` A reason other than `Filename too long` (P11's `Invalid argument`) still
-names the path and git's reason, without the limit clause. No such line → today's `FatalLine`, so every
+names the path and git's reason, without the limit clause and without the root advice (a shorter root
+does not cure a 256-unit component). No such line → today's `FatalLine`, so every
 other failure reads exactly as now (`WorktreeManagerTests.cs:349` keeps passing). Lengths are
 `string.Length` — P5's unit. The 259 is ONE named constant (`WindowsMaxPathUnits`), cited to P1/P2,
 used only on Windows; on other platforms the clause is omitted rather than filled with an unmeasured
@@ -127,7 +136,9 @@ failure.
 already honoured and already says LOCAL. Its paragraph in `research/module_server.md:6343` gains one
 sentence (a shorter local root, e.g. `C:\coai-rt`, buys ceiling unit-for-unit, for a git that ignores
 `core.longpaths`), the same sentence goes in `research/module_runners.md`'s worktree section, and D4's
-message names it — the place an operator meets the problem.
+message names it — the place an operator meets the problem. It moves the ROUND root only; review trees
+have their own `COAI_REVIEW_ROOT` (`ReviewTreeRoot.cs:49`, `:62-77`, absolute paths only), and the docs
+say so rather than implying one variable moves both (question consultant, 2026-10-16).
 
 ## Out of scope (named so nobody assumes it was done)
 
@@ -138,6 +149,13 @@ message names it — the place an operator meets the problem.
   repository's own trees stay under the limit on a deep checkout. Unchanged — it guards a different
   thing (our repository) and stays useful for a git that ignores the flag.
 - NTFS's 255-unit component limit (P11): reported by D4, not worked around.
+- git run in a tree by ANYONE ELSE — the person's editor and language server in a review tree, their own
+  `git status`, a reviewer CLI that runs git in a round tree — has no flag and will see a >259 file as
+  ` M` (P7), a change nobody made. Curing that needs a per-worktree config (`extensions.worktreeConfig`
+  written into the person's repository), which this plan does not write. Said, not solved.
+- A submodule that still fails WITH the flag (e.g. a 256-unit component inside it) gets no D4 sentence:
+  `SubmodulePopulator` never throws by design (`SubmodulePopulator.cs:44-56`), and a checkout that
+  stopped part-way leaves a mount that is not empty, so `EmptyMounts` does not name it either.
 
 **Growth surfaces:** none. No file, table, directory or process is added; trees, markers and sweeps are
 unchanged.
@@ -163,7 +181,11 @@ units on any runner, with ≤ 40-unit components, and the test asserts that leng
   --porcelain` in it is empty, and the lease's dispose leaves no directory. **Control in the same test:**
   `git -c core.longpaths=false worktree add` of that commit FAILS (P12) — proof the fixture needs the
   flag whatever the runner's system config says (whether `windows-latest` sets `core.longpaths`
-  system-wide was NOT checked; the control makes it irrelevant).
+  system-wide was NOT checked; the control makes the FIXTURE independent of it). Because a runner
+  with a system-wide `core.longpaths` would pass T1/T2 with or without the fix, T1 and T2 run the real
+  launcher through a RECORDING wrapper (the `WatchedLauncher` pattern, `AFeatureIsReviewedEndToEndTests.cs:706`)
+  and assert that every git request they saw starts `-c core.longpaths=true`, and that the round
+  tree's `worktree remove` itself exited 0 — not merely that the .NET fallback deleted the directory.
 - **T2** `AReviewTreeWithALongPathIsMadeCleanAndGivenBack` (`AReviewTreeTests`, Windows): `PrepareAsync`
   makes it, a second call reuses it, `ReviewTreeKeeper` removes it as `removed` (not `dirty` — P7) and
   the directory is gone. A submodule variant with the deep file inside the mount covers P9/P10.
@@ -186,7 +208,7 @@ units on any runner, with ≤ 40-unit components, and the test asserts that leng
 ## Definition of Done
 
 - [ ] Every git call in `WorktreeManager`, `ReviewTreeRoot.GitAsync` and `SubmodulePopulator` carries
-      `-c core.longpaths=true` on Windows through `TreeGit.Argv`, and nothing else does.
+      `-c core.longpaths=true` on Windows through `TreeGit.Argv`, and no other launcher gains it.
 - [ ] Linux/macOS argv unchanged (T5 on their CI legs).
 - [ ] T1–T5 green; the step-1 RED messages and B1/B2 red→green recorded in the PR.
 - [ ] A failing add names the path, its length in UTF-16 units, git's reason, and (for `Filename too
