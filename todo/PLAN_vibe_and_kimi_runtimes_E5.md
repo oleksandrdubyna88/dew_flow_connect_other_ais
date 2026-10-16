@@ -1,7 +1,8 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **plan only, 2026-10-16 — stories written by the judge (Opus); the split confirmed by Fable (§0.2); E5.3 carries Fable's
-> security judgement; the plan gate passed (proceed) and its findings are folded (§"Plan gate 2026-10-16"); no code yet.** E5.1 is a
+> Status: **in progress, 2026-10-16 — E5.3 implemented 2026-10-16 (Fable; deviations 13–20 of §"Where the parent plan and the code
+> disagree"); E5.1, E5.2, E5.4–E5.7 not started.** The stories were written by the judge (Opus); the split confirmed by Fable (§0.2); E5.3
+> carries Fable's security judgement; the plan gate passed (proceed) and its findings are folded (§"Plan gate 2026-10-16"). E5.1 is a
 > measurement (M-K16) that must be recorded before E5.2's code. The coder of each story follows the gate's command (§0.2): E5.3 on
 > Fable, every other story on Opus.
 >
@@ -927,6 +928,36 @@ homes live, in all five languages.
 12. **(Fable, 2026-10-16) The check's `ConsultCheckScratch.Delete` is handed the scratch ROOT** (`ConsultantCheckMode.cs:307`) while
     the Kimi home sits one level down at `<root>\own\kh-*` (`ConsultantCheck.cs:262`, `:285`) — a `DisposeAllUnder(root)` would find no
     home. E5.3 judgement R6 names the folder to dispose.
+
+**E5.3 as built (Fable, 2026-10-16) — where it deviates from the spec above:**
+
+13. **Decision j's check sits after the credentials folder's EXISTENCE check, not "right after `LocalHome`".** `Junctions.ResolvedRefusal`
+    on a missing folder answers "cannot be named by its handle"; placed before `Rendered`'s existence check it would have replaced the
+    sign-out sentence ("has no credentials folder; run `kimi login`") with it. It is still before the slot is rendered and before any lock
+    (S5.3.15: no file under `kimi-locks`), which is what R8 asked for.
+14. **`OneShotHome.Remove` (a whole-folder seam) became `OneShotHome.Io : HomeIo` (per entry).** S5.3.20 observes the lock at the moment
+    EACH entry goes, which a whole-folder seam cannot show. `HomeIo.Real.Delete` is `GitScratch.DeleteEntry`, made public (reuse move 1):
+    a link by its own name, a folder whole, a FILE as a file — the old `io.Delete(entry)` = `DeleteEvenIfReadOnly(entry)` threw on a file
+    beside the home (a Vibe export), a latent fault of `SweepOneShot` fixed on the way.
+15. **`ConsultantCheck.OwnName` did not exist where the spec named it.** The const was private on `ConsultantCheckTurn`; it now lives on the
+    public static `ConsultantCheck` (the turn reads it from there), so `ConsultCheckScratch` can dispose `<root>\own` by name.
+16. **The `ConsultationService` arms wait for E5.4's `KimiConsultant`:** S5.3.4's "the record is still open; `close_consult` then removes the
+    folder", S5.3.14's two-turn conversation with a played shim, and S5.3.16 (i) "through `ConsultationService`". Each is pinned at the one
+    control instead — `KimiRuntime.TakeTurnAsync` over a place from `ConsultantPlaces.ForConversationAsync` (the HOME-ONLY shape, no snapshot
+    copy: the lock order A → B → C → D is the same) — and S5.3.14's arm covers the collectors THIS story adds (the owner's and the sweep's
+    warns, the decision-j sentence). E5.4 owes the three service arms; the shapes are in `AConversationsKimiHomeTests`.
+17. **S5.3.10 gained the live-tree arm of both fallbacks** (`TheRootlessFallback_KeepsTheScratchUnderALiveTree`): the row's scratch is kept with a
+    WARNING (`a question row's scratch directory at {Path} is kept for the scratch sweep: {Reason}`), the check's with its warn. The brief's
+    "the in-deleter check stays the second belt" implied it; nothing listed it.
+18. **S5.3.16 (ii) is measured at the launch control:** the gate pre-held in the host (a plain `HeldFile.Take`) and released after 1 s — the launch
+    starts after the release and within 2 s of it (the gate waits in one-second slices), where the row said "the shim started".
+19. **S5.3.11 is a pin with no teeth of its own:** .NET's walk read and disposed the 300-character path on Windows (and on Linux in CI); the red the
+    row names would be the platform's, so no deciding line was broken for it. S5.3.17's teeth were the reparse-point skip of
+    `PrivateFolderWindows.SettledEntry` removed: the walk then entered the junction and listed the person's files (red as the row says), while
+    Windows' own propagation left both descriptors byte-equal — the code's claim at `PrivateFolderWindows.cs:152` holds on this machine.
+20. **The sweep's and the owner's kept-home sentences, fixed here:** the one-shot sweep says `one-shot Vibe homes: {folder} is kept this pass: {said}`
+    (the `DeleteIfDue` shape), the owner `the Kimi home in {folder} is kept: {reason}; the scratch sweep takes it once its tree has ended` (decision g's
+    words). Both carry the `Stopped` sentence unparaphrased (R4) — paths and entry names, never a byte (R11, pinned).
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 

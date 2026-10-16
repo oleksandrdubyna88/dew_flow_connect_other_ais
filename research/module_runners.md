@@ -3435,7 +3435,7 @@ flowchart TD
   `42 + u` (60), conversation `68 + u` (34).
 - **`VibeHomes`** (`Vibe/VibeHomes.cs`) makes `<root>\coai-vh\<8 hex>` (the pinned `coai-vh` handle is released on EVERY way out of `ReserveOneShot` that does not move it into the home: a refused lock, a throw while the folder is made; `OneShotSteps` / `HomeIo` are the seams a test uses for a folder that cannot be made, listed or removed). `ReserveOneShot` returns an `OneShotReservation` (`None` for an
   empty root, so settings built by hand keep their old scratch home; `Refused(sentence)`; `Reserved(OneShotHome)`). The `OneShotHome`
-  holds the folder's `coai-turn.lock` and the private folder's handle for its life and deletes the folder on every way out.
+  holds the folder's `coai-turn.lock` and the private folder's handle for its life and, on every way out, empties the folder UNDER the lock (its Kimi homes junction-first — a stop keeps it, said) and deletes the lock file and the folder after the release (E5.3, *The owned Kimi homes* below).
   `SweepOneShot` (called from `PanelService.PruneOldAnswerDirs(homesRoot)`, at most every ten minutes) removes a folder older than six
   hours under its lock; the lock, not the age, protects a live home across two servers on one root, and a link is never entered.
   `coai-vh` is a sibling of `coai-vibe` OUTSIDE `ConsultantHomes.All`, so the D20 conversation sweep never judges it. Home names: round
@@ -3465,6 +3465,51 @@ flowchart TD
 - **M-V18 note (2026-10-15, the judge).** `VibePathBudget` measures `Path.GetFullPath`, which keeps 8.3 short names as written. If Vibe's interpreter resolves the real path, a folder named `RUNNER~1` is longer than the budget counted. M-V18 must measure that before the budget is relaxed or trusted at its edge.
 - **`LaunchTurn.Refused` states its cause** (code gate 2026-10-15): `RefusalCause { LaunchControl, CliMissing }` is REQUIRED, so an adapter's refusal never reads as coai's own launch check by default (Kimi's launch will call it too); `ReviewerExecutor` maps only `LaunchControl` to `NotStarted.ByLaunchControl`.
 - **Install cure is per OS** (`VendorDiagnosis.InstallCure`: `uv tool install mistral-vibe` on Windows, Mistral's script on Linux), so `VibeLaunchControlTests.TheKind_…` compares with the platform's own cure instead of spelling the Windows one. Fixed after: the default was `OperatingSystem.IsLinux()`, which gave macOS the Windows commands (uv, and Google's PowerShell line) although the vendors' scripts serve Linux and macOS; `InstallCure(runtime, HostKind)` is the seam, and only Windows gets the uv and PowerShell forms (`EveryHostButWindows_GetsTheVendorsShellScript`, first red: the `MacOs` case got `install it with uv…`).
+
+## The owned Kimi homes — a conversation's kept across turns, every one-shot disposed junction-first (2026-10-16, E5.3 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md`)
+
+Built on Fable by the plan gate's command (authentication: the home holds a junction to the person's ROTATING sign-in). Two shapes, one disposal:
+
+```mermaid
+flowchart TD
+  subgraph conversation [a conversation: coai-kimi/id — ConsultantPlaces.ForConversationAsync]
+    F[folder: tree/, the stamp, coai-turn.lock] --> K["kh-&lt;10 hex&gt; — KimiHome.HomeFor(OwnedScratch = the folder)"]
+    K --> J[home/credentials → the person's folder, config.toml, os/]
+  end
+  subgraph oneshot [a question row, a check: coai-vh/8 — VibeHomes.ReserveOneShot]
+    O[OneShotHome: coai-turn.lock held for its life] --> K2[kh-* made by KimiLaunch]
+  end
+  T[a turn: KimiRuntime.TakeTurnAsync] -->|A folder turn, B folder lock, C kh turn, D sign-in gate| K
+  D1[OneShotHome.Dispose / SweepOneShot] -->|under the lock: KimiHome.DisposeAllUnder, then every entry| E[release, then the lock file and the folder]
+  D1 -->|a Stopped: a live tree, a lost name| KEEP[kept with its lock file, said; the sweep takes it later]
+```
+
+- **The conversation's root is `<folder>\kh-<10 hex>`, never the folder itself** (decision a, R1). The place holds the FOLDER's in-process turn until the launch has
+  been read (`ConsultantPlaces.cs`), and `KimiLaunch.TakeAsync` takes the ROOT's turn; both are one non-re-entrant `SemaphoreSlim(1, 1)` per path (`VibeHomeTurns`),
+  so a root that were the folder would wait for its own caller until the token cancels. `KimiRuntime.Build` already roots at `KimiHome.HomeFor(OwnedScratch, …)`; E5.3 pins it
+  (`AConversationsKimiHomeTests.AConversationTurn_StartsOnItsKhRoot_AndNeverWaitsForItself`, red against the folder-as-root in 5 s). The home is made at the first turn
+  (`KimiHome.Made`, fresh only) and written by nobody after; a junction retargeted or a re-login between turns is refused before any process starts, the home kept as it is.
+- **The lock order** (decision d, R2): a turn takes (A) the folder's in-process turn → (B) `coai-turn.lock` → (C) the `kh` root's turn → (D) the sign-in GATE → in the shim (E) the
+  foreign-`kimi` wait → (F) the sign-in's tree hold → (G) the per-home `coai-tree.lock`. **Every disposer takes with NO wait** (`HeldFile.Take`, `VibeHomeTurns.TryTake`, one
+  probe of G) and never D, E or F; so the sweep's reversed order B → A is safe, and a new wait may only ever be added on the acquirer's side, on something no disposer holds.
+- **Where the sign-in really is, re-asked before every turn** (decision j, R8): `Junctions.ResolvedRefusal(target)` — the make-time `Resolved` check made public, one sentence,
+  two callers — runs in `KimiLaunch.Rendered` right after the credentials folder's existence check and BEFORE any lock, so an ancestor of `~\.kimi-code\credentials` swapped
+  for a link to a share since the home was made refuses turn 2 ("resolves to … not a local drive path … (D19)") and leaves no file under `kimi-locks`.
+- **Every coai Kimi launch on one sign-in passes the one gate** (decision k): two conversations' turns started together peak at one live launch, the second starting after the
+  first's end; a gate held by another process is waited for in one-second slices and the launch starts within two seconds of its release (`AConversationsKimiHomeTests`, S5.3.16).
+- **A one-shot home ends junction-first, UNDER its lock** (decision g, R5 — the judgement overruled step 3 of the brief): `VibeHomes.EmptiedUnderItsLock(folder, kept, io)` is
+  the ONE helper the owner (`OneShotHome.Dispose`) and the sweep (`SweepOneShot` → `RemovedUnderItsLock`) share: `KimiHome.DisposeAllUnder` first; on any `Stopped` → false, nothing
+  more deleted, the folder KEPT with its lock file and the stop said in its own words (the owner: `the Kimi home in {folder} is kept: {reason}; the scratch sweep takes it once
+  its tree has ended`; the sweep: `one-shot Vibe homes: {folder} is kept this pass: {said}`); otherwise every entry but the lock file, under the lock. Then the lock (and the pin)
+  given back, then `RemovedAfterItsLock`: the lock file and the folder — "already gone" (a sweep took it in the window) is silent. `HomeIo.Delete` is `GitScratch.DeleteEntry`
+  (public since E5.3: a link by its own name, a folder whole, a FILE as a file — the old `DeleteEvenIfReadOnly(entry)` threw on a file beside the home), and `OneShotHome.Io`
+  replaces the old whole-folder `Remove` seam so a test can see the lock's state at the moment each entry goes.
+- **The root-less fallbacks** (R6): `QuestionRowLaunch.RemoveScratch` disposes the scratch's `kh-*` homes before the bare deleter; `ConsultCheckScratch.Delete` disposes
+  `<root>\own` (`ConsultantCheck.OwnName` — the check's home is one level DOWN) and the root. A stop keeps the scratch for the six-hour scratch sweep, which asks the same probe.
+- **No path budget for Kimi** (J3, S5.3.11): coai's walk reads and disposes a home whose `sessions\wd_…\session_…\agents\main\wire.jsonl` passes 300 characters.
+
+Tests: `AConversationsKimiHomeTests`, `AOneShotKimiHomeIsDisposedJunctionFirstTests`, the E5.3 rows of `ConsultantHomeSweepTests`, `KimiHomeTests.AHomeWhoseDataPathPasses260_…`,
+`PrivateFolderWindowsTests.AReAclOfCoaiKimi_NeverCrossesTheJunction_IntoTheSignIn` — [module_tests.md](module_tests.md).
 
 ## The Kimi home, its sign-in locks and its launch control — `src_mcp/runners/Kimi/` (2026-10-15, E4.2 of `todo/PLAN_vibe_and_kimi_runtimes_E4.md`)
 
@@ -3513,7 +3558,8 @@ flowchart LR
   opened), (2) `credentials` unlinked by its own name, (3) the person's folder's entry names verified (200 ms settle, `GitScratch.StillMissing`),
   (4) only then `GitScratch.DeleteEvenIfReadOnly`. A `Stopped` deletes nothing more and every caller LOGS it. `DisposeAllUnder` does steps
   1–3 on a folder's own home and every `kh-*` child and leaves the rest to the caller's deleter; the D20 sweep calls it under its locks
-  (a stop keeps the folder this beat), the round's scratch does (E4.4, *The Kimi reviewer* below: a stop keeps the scratch). **Stated limit:** the deleter's link checks are path checks at one
+  (a stop keeps the folder this beat), the round's scratch does (E4.4, *The Kimi reviewer* below: a stop keeps the scratch), and since E5.3 so do the
+  one-shot owner and sweep (`VibeHomes.EmptiedUnderItsLock`) and the row's and the check's root-less fallbacks (*The owned Kimi homes* above). **Stated limit:** the deleter's link checks are path checks at one
   moment; closing the swap needs handle-based deletion, and a same-user process able to swap folders in coai's tree could touch the
   credentials directly.
 - **An ancestor of the credentials target may be a link** (a relocated profile); the target itself may not. `Junctions.Refusal` asks the
