@@ -1,5 +1,32 @@
 # Changelog
 
+## Server 0.57.0 — 2026-10-16
+
+**Added: Kimi Code as a reviewer (Windows).** A `kimi` reviewer row runs Moonshot's Kimi Code CLI on your own sign-in.
+coai never copies that sign-in. Each launch gets a home that coai owns: it holds a link to your sign-in, a configuration
+coai writes, and an environment coai builds. The link is removed before the home is deleted, and never while Kimi still
+runs.
+
+Kimi's sign-in token changes on every refresh, so two Kimi launches on one sign-in must never run at once. coai keeps
+them apart across rounds and across coai servers, and it also waits while your own `kimi` is running. Kimi reviewers on
+one sign-in therefore run one after another.
+
+Kimi needs `rg` and `fd` on PATH. Kimi Code 2.1.1 is the measured version; any other version shows a warning and still
+runs.
+
+**Fixed: a reviewer's usage line names the model that ran.** Before, a Vibe or Kimi row with no model of its own was
+recorded with an empty model. It now names the default model the CLI was launched on. Vibe consultations, question rows
+and consultant checks record it the same way.
+
+## Extension 0.77.0 — 2026-10-16
+
+**Added: Kimi Code in the reviewer list.** Kimi Code gets a preset, its four models, its own colour, and ▶ to open it
+in a terminal. It also gets Install and Update buttons that fit your system:
+- on Windows, they install Git, ripgrep and fd with winget, then run Moonshot's installer;
+- on Linux, WSL and macOS, they run Moonshot's install script.
+
+It needs coai-mcp 0.57.0; an older server does not offer Kimi. The help explains it in all five languages.
+
 ## Server 0.56.0 — 2026-10-15
 
 **Fixed: a Vibe turn no longer fails on the Windows path limit.** Vibe writes up to 156 characters below its home. A home
