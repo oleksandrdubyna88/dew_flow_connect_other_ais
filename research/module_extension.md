@@ -6458,6 +6458,31 @@ Three states, and keeping them apart is the whole of it:
 line and the database column. Two spellings of one sentence is a drift waiting to happen; the tests
 on both sides assert the same strings against the same inputs.
 
+**An opened PLAN round also says what it reviewed (2026-10-16, story E2.S3 of
+`todo/PLAN_the_plan_gate_reads_the_committed_plan_E2.md`, contract C3).** `RoundRecord.planSource`
+(`PlanSourceRecord` — `origin`, `commit`, `path`, `blob`, `bytes`, `textId`, all optional, read defensively) is the
+session file's copy of what E1 stamped on the round. `reviewedFrom(source)` in `rounds.ts` turns it into one line —
+`todo/PLAN_x.md @ aaaaaaa · blob bbbbbbb · 98 304 bytes` for a committed plan, `pasted planText @ ccccccc · text
+fedcba9876543210 · 512 bytes` for a pasted one (the text id is shown whole so two pastes of one size stay apart; `@ commit`
+is left out when the commit is empty) — and `LogRow.reviewedFrom` carries it into the page. The hashes are `slice(0, 7)`
+of a STRING (a shorter one is shown whole); `bytes` must be a non-negative safe integer and is grouped by three with a plain
+space by a pure function, never `toLocaleString`. **Anything unusable reads as the empty string** — an unknown or missing
+`origin`, a hash that is not a string, bad `bytes`, a committed round without its path — and an empty line renders nothing:
+a round from before the field, a code round and a server this build does not know all say "not recorded", never a
+half-sentence.
+
+**Read from the SESSION FILE only, never the database.** The row is built from the file, so the line shows on a machine whose
+database predates schema step 23 and for a round the database never saw; `--log`'s own `planSource` member
+(`module_server.md`) is ignored by this page, as `parseLog` reads field by field. `reviewedFromHtml(reviewedFrom, escape)` is
+exported and embedded by assignment beside `askedByHtml`, uses only its parameters, and returns
+`<div class="reviewer source">reviewed from …</div>` — escaped, because the path is caller-chosen text — or `''`; `detail(row)`
+puts it right after the asked-by line and before the early returns, so a round written without reviewer detail still shows it.
+`.reviewer.source` is dimmed like `.reviewer.asked`. **No CSV column** in this epic — decided: the export's columns
+(`roundsCsv.ts`) are unchanged, and a source in a spreadsheet is a separate question. No new action, so no new button.
+Tests: `rounds.test.ts` (the function), `roundsLog.test.ts` (the row, the line, a hostile path, the embedding),
+`bundledPage.test.ts` (the page as it ships, opened with and without a source); `LogRow` gained a required field, so the five
+fixtures that build one carry `reviewedFrom: ''`.
+
 ### A reviewer's row is two lines, split at a seam it already had (2026-09-12)
 
 Issue #132. The model name was added to a reviewer's line on 2026-09-08 and doubled its length:

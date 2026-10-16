@@ -90,6 +90,26 @@ export interface RoundRecord {
    * (§4.12). Absent, or below two, reads as one.
    */
   readonly repeats?: number;
+  /**
+   * What a PLAN round reviewed — where its text came from, the commit, the blob and the id of the text sent (E1 of
+   * `todo/PLAN_the_plan_gate_reads_the_committed_plan.md`). Absent for a code, document or feature round, a skipped one,
+   * and every plan round written by a server older than the field.
+   */
+  readonly planSource?: PlanSourceRecord;
+}
+
+/**
+ * The session file's `planSource`, camelCase as the server writes it. Every member is optional and read defensively:
+ * the file is JSON off a disk five processes write, so a value of any type may stand where a string belongs.
+ */
+export interface PlanSourceRecord {
+  /** `commit` or `text`; anything else is a server this build does not know. */
+  readonly origin?: string;
+  readonly commit?: string;
+  readonly path?: string;
+  readonly blob?: string;
+  readonly bytes?: number;
+  readonly textId?: string;
 }
 
 /**
@@ -156,6 +176,72 @@ export function calledBy(caller: CallerDeclaration | undefined): string {
   const model = said(caller.model) || 'model not stated';
 
   return `${client}${version === '' ? '' : ` ${version}`} · ${model}`;
+}
+
+/** The first seven characters of a hash — shown whole when shorter — or `undefined` for a value that is not a string. */
+function shortHash(value: unknown): string | undefined {
+  return typeof value === 'string' ? value.slice(0, 7) : undefined;
+}
+
+/** A size the server could have measured: a non-negative safe integer, never `"x"`, a fraction or a negative. */
+function isByteCount(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+}
+
+/** A byte count as `98 304`: grouped by three with a plain space, by a function rather than by the locale. */
+function groupedBytes(bytes: number): string {
+  return String(bytes).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+}
+
+/** One ` · label value` segment, or nothing when the value is empty — a segment with nothing to say is not printed. */
+function segment(prefix: string, value: string): string {
+  return value === '' ? '' : ` ${prefix}${value}`;
+}
+
+/**
+ * What a plan round reviewed, as one line — or nothing at all for a round that recorded no usable source.
+ *
+ * <p>Committed: `todo/PLAN_x.md @ aaaaaaa · blob bbbbbbb · 98 304 bytes`. Pasted: `pasted planText @ ccccccc · text
+ * fedcba9876543210 · 512 bytes` — the text id is shown whole, so two pastes of one size stay apart. The `@ commit` part is
+ * left out when the commit is empty.</p>
+ *
+ * <p>The empty answer is the load-bearing one, as it is for `calledBy`: a round from before the field, a code round and a
+ * server this build does not know all read as "not recorded", and a half-sentence built from what happened to be there would be
+ * a claim about a plan nobody wrote down. The file is JSON off a disk five processes write, so every member is checked: an
+ * unknown or missing `origin`, a hash that is not a string, `bytes` that is not a non-negative safe integer, and a committed
+ * round without its path are all unusable.</p>
+ */
+export function reviewedFrom(source: PlanSourceRecord | undefined): string {
+  return typeof source !== 'object' || source === null ? '' : lineOf(source);
+}
+
+function lineOf(source: PlanSourceRecord): string {
+  const commit = shortHash(source.commit);
+
+  return commit === undefined || !isByteCount(source.bytes)
+    ? ''
+    : lineByOrigin(source, commit === '' ? '' : ` @ ${commit}`, ` · ${groupedBytes(source.bytes)} bytes`);
+}
+
+/** The origin decides the shape of the line; an origin this build does not know has none. */
+function lineByOrigin(source: PlanSourceRecord, at: string, size: string): string {
+  switch (source.origin) {
+    case 'text': return pastedLine(source, at, size);
+    case 'commit': return committedLine(source, at, size);
+    default: return '';
+  }
+}
+
+function pastedLine(source: PlanSourceRecord, at: string, size: string): string {
+  return typeof source.textId === 'string' ? `pasted planText${at}${segment('· text ', source.textId)}${size}` : '';
+}
+
+function committedLine(source: PlanSourceRecord, at: string, size: string): string {
+  const blob = shortHash(source.blob);
+
+  return typeof source.path === 'string' && source.path !== '' && blob !== undefined
+    ? `${source.path}${at}${segment('· blob ', blob)}${size}`
+    : '';
 }
 
 /** The default data dir the server uses when `COAI_DATA_DIR` is unset. */
