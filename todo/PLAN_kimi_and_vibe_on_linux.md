@@ -362,10 +362,13 @@ Numbered DL1–DL14 so they never collide with the parent plan's D-numbers. Ever
     empty or the bound passes — a grandchild born late is found by its new parent, not missed.
   - *It reaps, and a zombie is never a survivor* (the plan gate for epics 4–6, 2026-10-16, F11 + F15). A subreaper inherits the
     orphans' EXIT too: an orphan that ends is a zombie of the shim until the shim waits for it, and `/proc` keeps its entry, start
-    time included. Two rules. (1) The shim REAPS: every step of the confirmation loop first drains `waitpid(-1, WNOHANG)` until it
-    answers 0 or `ECHILD`. That is safe here and only here: the loop runs after `EndTreeFirstAsync` has seen the agent's exit, and
-    the shim starts nothing but the agent, so every child left to reap is a reparented orphan, never a `Process` .NET still waits
-    on. (2) `ProcessTree.Descendants`, when used for the confirmation, drops an entry that has exited — the rule `IsAlive` already
+    time included. Two rules. (1) The shim REAPS, **per pid, never `waitpid(-1)`** (cadence consult 8df043b8, epics 4–6, verified
+    against .NET 10's `ProcessWaitState.Unix.cs`): .NET reaps the children it started through its own SIGCHLD handling, and a
+    `waitpid(-1)` that takes the status of a child the runtime still tracks can end in the runtime's `FailFast`, not only in a wrong
+    exit code — and "the shim starts nothing but the agent" is a fact about today's code, not a guarantee. So every step of the
+    confirmation loop reaps exactly the descendants it LISTED in state `Z` whose pid is not the agent's (`waitid(P_PID, pid, …,
+    WEXITED | WNOHANG)` each): a reparented orphan is never a `Process` object, and a pid coai did not list is never touched. The
+    L-N2 test asserts the agent's own exit code survives the drain. (2) `ProcessTree.Descendants`, when used for the confirmation, drops an entry that has exited — the rule `IsAlive` already
     applies (`Exited` / `ExitedEntry`, `src_mcp/runners/Processes/ProcessTree.cs:202-211`: state `Z` or `X` with no thread but the
     leader), reused, not a second rule. `Descendants` itself (`ProcessTree.cs:59-67`) lists zombies today, because `LinuxParents`
     reads only the parent. A grandchild that exits by itself before the teardown is therefore neither listed nor recorded as a
@@ -400,7 +403,14 @@ Numbered DL1–DL14 so they never collide with the parent plan's D-numbers. Ever
     the home while a marker stands. A marker that names nothing it can match (the shim died between the write and the listing) blocks
     too, until a person clears it or the process it would have named is provably gone — the price that precedent accepted (Q6).
     `ReaderReconcile` MOVES from `src_server` to `src_mcp/runners/Processes` (reuse-first step 2.4: both projects need it and the server
-    already references the runners), it is not copied. **The move touches `src_server`** (the plan gate for epics 4–6, 2026-10-16,
+    already references the runners), it is not copied. **It does not move unchanged** (cadence consult 8df043b8, verified):
+    `ProcessTracking.StartedAt` (`src_mcp/runners/Processes/ProcessTracking.cs:159-172`) catches every exception and answers `null`
+    — "no such process, or one this account may not look at" — and `ProcessTree.IsAlive` (`ProcessTree.cs:115-116`) reads `null` as
+    not alive. That is the safe answer for a KILL (its comment says so) and the unsafe one for CLEARING a marker: the next launch's
+    reconcile would drop an unreadable member that the clear mode below correctly refuses to drop. So both paths ask one tri-state
+    question — `Liveness { Alive, Gone, Unknown }`: `Gone` only for `ENOENT`, another start time, or an exited entry; `Unknown` for
+    any other failure — and `Unknown` keeps the marker and makes the launch Busy, with the errno named. `StartedAt` keeps its
+    two-state answer for its kill-side callers. **The move touches `src_server`** (the plan gate for epics 4–6, 2026-10-16,
     F9): `ReaderReconcile` (`src_server/src/Slots/ReaderMarker.cs:97-137`, with the marker record and reasons its signature names)
     leaves that file; its one product caller, `SlotRegistry` (`src_server/src/Slots/SlotRegistry.cs:99`), and `ServerJsonContext.cs`
     then reference the moved types. The server's own tests must still pass unchanged: `ReaderBarrierTests`
@@ -460,7 +470,13 @@ Numbered DL1–DL14 so they never collide with the parent plan's D-numbers. Ever
   `kimi` (the TUI, as the first scout saw it). **Only processes of THIS uid are judged**: another account's process answers `EACCES`
   on `exe` (`/proc/1` does, for everyone), and it cannot refresh this person's sign-in — its folder is `0700` — so it is skipped,
   not counted unreadable (otherwise every launch is Busy). A same-uid process whose `exe` cannot be read is *unreadable* → Busy with
-  the reason. `coai-mcp` in the parent chain is matched the same way, by the `exe` basename (`coai-mcp`); its `comm` was not
+  the reason. **Two refinements** (cadence consult 8df043b8, verified against `proc_pid_exe(5)`): the kernel appends ` (deleted)`
+  to the `exe` target once the file is unlinked — which is what a Kimi reinstall or update does to a RUNNING `kimi` — so the basename
+  is compared after that suffix is stripped (a running old `kimi` is still Kimi, and still a refresher); and a same-uid entry that
+  has EXITED (state `Z`/`X`, the `ExitedEntry` rule of DL9) is skipped before its `exe` is read — a zombie's `exe` cannot be read,
+  and an unrelated zombie of any program must not make every Kimi launch Busy. The detection boundary, stated: a `kimi` started
+  under ANOTHER file name, or hosted by an interpreter whose `exe` is not `kimi`, is not recognised — a shell wrapper that ends in
+  the normal `kimi` binary is. `coai-mcp` in the parent chain is matched the same way, by the `exe` basename (`coai-mcp`); its `comm` was not
   measured and is not relied on. The parent-chain rule itself held: the agent's chain reached the driver.
 
 - **DL11 — Kimi's OS-home redirect on Linux is `HOME` alone.** D19 already says so (parent plan, "On Unix the redirect is `HOME`
@@ -682,6 +698,10 @@ Each red is the assertion message the test fails with before the fix.
 - S-K12 *Given* a mountinfo table with a `drvfs`-typed mount at `/data/win` (not under `/mnt/`) and a target below it, *then*
   refused as a Windows filesystem; *given* the same table and a target on the ext4 root, *then* admitted (DL6). Red: `"a sign-in
   folder on a drvfs mount outside /mnt/ was admitted"`.
+- S-K13b (cadence consult 8df043b8) *Given* a same-uid fake process whose `exe` reads `/…/kimi (deleted)` and `comm` `MainThread`,
+  with no `coai-mcp` in its parents, *then* the wait answers Busy; *given* an unrelated same-uid ZOMBIE whose `exe` cannot be read,
+  *then* it is skipped and the launch proceeds. Red: `"a running kimi whose binary was replaced was not seen"` / `"an unrelated
+  zombie made the Kimi launch Busy"`.
 - S-K13 *Given* a Linux listing that cannot be read (a `/proc` the fake cannot open, or one without the shim's own pid), *then*
   the foreign-Kimi wait answers Busy with the reason, and nothing starts (DL10). Red: `"an unreadable process listing was read as
   'nobody is running'"`.
@@ -712,7 +732,9 @@ Each red is the assertion message the test fails with before the fix.
   `/proc` entry cannot be read (a seam answering `EACCES`, then `EIO`, then an unparseable `stat`), *then* the marker stays and the
   mode exits 74 naming the error; once every member answers `ENOENT` or another start time, the marker is gone, exit 0. Red: `"the
   Busy sentence gave no way out: no marker path"` / `"the clear mode removed a marker over a living survivor (pid …)"` / `"a member
-  whose /proc cannot be read was taken as gone, and the marker was cleared"`.
+  whose /proc cannot be read was taken as gone, and the marker was cleared"`. **The same three seam answers through the NEXT LAUNCH's
+  reconcile** (cadence consult 8df043b8): the marker stays and the launch is Busy with the errno named, never cleared by the
+  automatic path where the button would refuse. Red: `"the next launch's reconcile cleared a marker whose member it could not read"`.
 - S-K19 (F15) *Given* a lock root with a key whose recorded folder no longer exists and nobody holds its files, *when* the sweep runs,
   *then* both files are gone; *given* the same with the gate file held, *then* both stay; *given* a taker whose locked file was
   unlinked by the sweep between its open and its lock, *then* it re-takes on the new file. Red: `"a lock file of a vanished sign-in
