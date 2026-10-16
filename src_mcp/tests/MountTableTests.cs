@@ -5,13 +5,12 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// The ported mount table (DL6 and S-K12 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): a sign-in folder on a Windows filesystem is
-/// refused by the TYPE of the mount that holds it, never by a prefix of its path. Pure text — these run on every platform.
+/// The ported mount table (DL6 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): which mount holds a path, and what a mount is. The refusal built on it is
+/// <see cref="MountLocality"/> (<c>MountLocalityTests</c>). Pure text — these run on every platform.
 /// </summary>
 /// <remarks>
-/// The vectors are wsl_care's own (its <c>WindowsSystemDriveTests</c> table, observed on the owner's WSL 2.7.10 machine,
-/// 2026-10-04, unedited; wsl_care has no test file for the parser itself, so the vectors are what is re-homed here, with the
-/// cases its retro rounds added: the escapes decoded, the super-options never decoded, a stacked mount, a short line).
+/// wsl_care has no test file for the parser (only its callers' tests exercise it), so these are written fresh, over kernel-format lines — several are the
+/// lines observed on the owner's WSL 2.7.10 machine, 2026-10-04, as wsl_care's own tests quote them.
 /// </remarks>
 public sealed class MountTableTests
 {
@@ -32,36 +31,14 @@ public sealed class MountTableTests
 
     private static IReadOnlyList<MountEntry> Table(params string[] lines) => MountTable.Parse(string.Concat(lines));
 
-    [Fact]
-    public void ADrvfsMountOutsideMnt_IsRefused_AndTheExt4Root_IsAdmitted()
-    {
-        var table = Table(Root, ObservedC, CustomDrvfs);
-
-        MountTable.OnWindowsFilesystem(table, "/data/win/kimi/credentials")
-            .Should().BeTrue("a sign-in folder on a drvfs mount outside /mnt/ must be refused, and it was admitted");
-        MountTable.OnWindowsFilesystem(table, "/home/me/.kimi-code/credentials")
-            .Should().BeFalse("the same table, a target on the ext4 root: a Linux filesystem, which a Linux lock can see");
-    }
-
-    [Fact]
-    public void TheMntPrefixIsNotTheRule_AMountTypeIs()
-    {
-        var table = Table(Root, ObservedC);
-
-        MountTable.OnWindowsFilesystem(table, "/mnt/c/Users/me/.kimi-code").Should().BeTrue("the 9p/drvfs mount of the system drive holds it");
-        MountTable.OnWindowsFilesystem(Table(Root), "/mnt/c/Users/me/.kimi-code")
-            .Should().BeFalse("with no drvfs mount in the table, /mnt/c is a plain folder on the root: the rule is the mount type, not the spelling");
-    }
-
     [Theory]
-    [InlineData("/data/win", true)]
-    [InlineData("/data/win/", true)]
-    [InlineData("/data/win/x", true)]
-    [InlineData("/data/winter", false)]
-    [InlineData("/data", false)]
-    public void AMountHoldsItsOwnPointAndWhatIsBelowIt_NeverAFolderThatOnlySharesItsPrefix(string path, bool windows) =>
-        MountTable.OnWindowsFilesystem(Table(Root, CustomDrvfs), path).Should().Be(windows, path);
-
+    [InlineData("/data/win", "/data/win")]
+    [InlineData("/data/win/", "/data/win")]
+    [InlineData("/data/win/x", "/data/win")]
+    [InlineData("/data/winter", "/")]
+    [InlineData("/data", "/")]
+    public void AMountHoldsItsOwnPointAndWhatIsBelowIt_NeverAFolderThatOnlySharesItsPrefix(string path, string holder) =>
+        MountTable.Holding(Table(Root, CustomDrvfs), path)!.MountPoint.Should().Be(holder, path);
     [Fact]
     public void TheDeepestMountThatHoldsAPathAnswers_AndTheLastLineOfAStackedMountWins()
     {
@@ -76,13 +53,12 @@ public sealed class MountTableTests
     }
 
     [Fact]
-    public void ATableWithoutARoot_HoldsNothing_AndIsNotJudgedWindows()
+    public void ATableWithoutARoot_HoldsNothing()
     {
         var table = Table(ObservedC);
 
         MountTable.Holding(table, "/home/me").Should().BeNull();
-        MountTable.OnWindowsFilesystem(table, "/home/me").Should().BeFalse();
-        MountTable.OnWindowsFilesystem([], "/data/win").Should().BeFalse("an empty table holds nothing");
+        MountTable.Holding([], "/data/win").Should().BeNull("an empty table holds nothing");
     }
 
     [Theory]
@@ -103,7 +79,7 @@ public sealed class MountTableTests
         var entry = Table(spaced).Should().ContainSingle().Subject;
 
         entry.MountPoint.Should().Be("/my drives/c");
-        MountTable.OnWindowsFilesystem(Table(Root, spaced), "/my drives/c/Users").Should().BeTrue();
+        MountTable.Holding(Table(Root, spaced), "/my drives/c/Users")!.IsDrvfs.Should().BeTrue();
 
         var docker = Table(Docker).Should().ContainSingle().Subject;
         docker.Source.Should().Be(@"C:\Program Files\Docker\Docker\resources", @"\134 is a backslash and \040 a space");

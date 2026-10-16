@@ -3,10 +3,8 @@ using System.Text.RegularExpressions;
 
 namespace CoaiMcp.Runners.Files;
 
-// Ported from wsl_care (src_daemon/src/WslCare.Core/Files/MountTable.cs): same owner, MIT. Ported are the parser, `Holding`
-// and `IsDrvfs` that DL6 of todo/PLAN_kimi_and_vibe_on_linux.md names; wsl_care's `IsWholeDrive` (which mount IS a Windows
-// drive's root, for its system-drive lookup) is not ported: nothing here asks it. The kernel's own rules are unchanged —
-// octal escapes decoded, super-options kept raw — and its vectors come with it (MountTableTests).
+// Ported from wsl_care (MIT, same owner) src_daemon/src/WslCare.Core/Files/MountTable.cs — Parse, Holding, MountEntry.IsDrvfs; the whole-drive half (IsWholeDrive) is not ported: nothing here asks it.
+// wsl_care has no tests of the parser itself (DL6 and §8 of todo/PLAN_kimi_and_vibe_on_linux.md said it had): MountTableTests are written fresh.
 
 /// <summary>One line of <c>/proc/self/mountinfo</c>: <c>id parent major:minor root mount-point options [optional…] - type source
 /// super-options</c>, its root, mount point and source decoded from the kernel's octal escapes (<c>\040</c> space, <c>\011</c> tab,
@@ -39,11 +37,6 @@ public static partial class MountTable
     /// without <c>/</c>).</summary>
     public static MountEntry? Holding(IReadOnlyList<MountEntry> mounts, string path) =>
         mounts.Where(m => IsSameOrUnder(path, m.MountPoint)).OrderBy(m => m.MountPoint.Length).LastOrDefault();
-
-    /// <summary>Whether the mount that holds <paramref name="path"/> is a Windows filesystem. A path no mount holds is not judged one:
-    /// a table without <c>/</c> is a table that could not be read, and the caller decides what that is worth.</summary>
-    public static bool OnWindowsFilesystem(IReadOnlyList<MountEntry> mounts, string path) =>
-        Holding(mounts, path) is { IsDrvfs: true };
 
     private static bool IsSameOrUnder(string path, string mountPoint) =>
         mountPoint == "/" || string.Equals(path, mountPoint, StringComparison.Ordinal) || path.StartsWith(mountPoint.TrimEnd('/') + "/", StringComparison.Ordinal);
