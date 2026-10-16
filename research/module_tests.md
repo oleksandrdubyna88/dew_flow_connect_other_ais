@@ -1197,6 +1197,14 @@ a TIER rule out of every round's bundle, and the canary went red in the whole-su
 started after that edit. The paragraph became one clause (+247 bytes) and the canary is green;
 the headroom itself is worth knowing about.
 
+*Update 2026-10-16:* the operator raised the budget to 90 000 bytes. The canary is now
+`StageRulesTests.TheRotatedTail_CurrentlyFitsAtMostThreeRules` (base + tier 79 944, 10 056 left, tail of
+1–3 rules), joined by `TheRotatedTail_IsReachableAtTheNinetyKilobyteBudget` (at least one — the 80 000
+state was 56 bytes and zero) and `TheTestLeftoversRule_IsShownOnTheBranchesThatDrawIt` (a four-row theory:
+`fix/x` and `feat/e5` draw `common/test-leftovers.md`, `main` and `feat/a` do not), and by
+`RuleFilesTests.TheDefaultBudget_IsTheOperatorsNinetyKilobytes`, which pins the number. The figures in the
+paragraph above are the 80 000-byte history. Numbers: `RESULTS_rules_selection_budget.md`.
+
 **What these still do not prove.** The no-client-IP promise is a deployment fact — a reverse proxy
 writes `remote_addr` before the request reaches any route — and no test in this process can reach
 it. It is verified by reading the deployed stack's logs after a real ingest. The unit's `UMask=0027`

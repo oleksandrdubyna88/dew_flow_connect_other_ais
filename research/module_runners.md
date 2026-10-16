@@ -112,9 +112,13 @@ sequenceDiagram
   given `ForBranch(branch)` — the tier FIXED, the rest of the mount ordered by a SHA-256 of *(branch,
   rule name)*. Two rounds of one fix therefore show identical rules, which is the defect the plan was
   opened for, while different branches order the rest of the corpus differently. **That second half
-  currently reaches almost nothing in this repository** — the base and the tier spend **77 562** of
-  the 80 000-byte budget, and the smallest rule outside the tier is 2 213, so the tail takes ONE rule
-  and the rest are skipped as oversized.
+  reaches one to three rules in this repository since the operator raised the budget to 90 000 bytes
+  (2026-10-16; `RuleFiles.DefaultBudgetBytes`)** — the base and the tier spend **79 944** bytes, which
+  left **56** at the old 80 000 (the tail took nothing, so `common/test-leftovers.md` reached no
+  reviewer) and leave **10 056** now; the smallest rule outside the tier is 2 197. Over 3 000 branch
+  names the tail takes one rule on 30 %, two on 62 %, three on 8 % (mean 1.78), and
+  `common/test-leftovers.md` is drawn on 9.8 % — drawn, not owed: a rule that must reach every reviewer
+  belongs in the tier. Numbers: `research/RESULTS_rules_selection_budget.md` (last section).
 
   **That number is the same on every platform only since 2026-09-18.** Until then `RuleFiles.Read`
   handed the collector whatever the disk held, so a CRLF checkout measured **78 855** — one character
@@ -127,9 +131,12 @@ sequenceDiagram
   somebody pays for. `ACrlfCheckout_ReachesTheSameRulesAsAnLfOne` is the guard, and it runs everywhere
   because it writes both corpora itself rather than depending on the checkout it finds.
 
-  The rotation is correct and all but inert; rule
-  modularization or the resolver is what would give it room, and
-  `StageRulesTests.TheRotatedTail_CurrentlyFitsAtMostOneRule` fails the day that changes.
+  The 1 145 / 77 562 / 78 855 figures in this paragraph are the 2026-09-18 measurements at 80 000 bytes
+  and stay as the history of the CRLF defect. The rotation has room since 2026-10-16;
+  `StageRulesTests.TheRotatedTail_CurrentlyFitsAtMostThreeRules` (the measured maximum),
+  `TheRotatedTail_IsReachableAtTheNinetyKilobyteBudget` (at least one) and
+  `TheTestLeftoversRule_IsShownOnTheBranchesThatDrawIt` pin the facts and fail the day they change;
+  `RuleFilesTests.TheDefaultBudget_IsTheOperatorsNinetyKilobytes` pins the number itself.
   `string.GetHashCode` is unusable here: .NET randomises it per process,
   so it would differ between two rounds on one machine. Measured basis:
   [RESULTS_rules_selection_budget.md](RESULTS_rules_selection_budget.md).
@@ -2271,7 +2278,7 @@ two protections (S3.1) are applied there as well — the pack goes to the same t
   withholds every hunk line rather than serving any.
   (`APrivateKeyBlockIsNeverServedTests.AHunkInsideAKeyBody_WithNoMarkerInView_IsWithheldFromThePack`.)
 - **`StageRules.Feature`** (`runners/Context/StageRules.cs`) — the feature stage's rules tier, collected
-  at the full `RuleFiles.DefaultBudgetBytes` (D18): the code review's order (the language doctrines,
+  at the full `RuleFiles.DefaultBudgetBytes` (D18; 90 000 bytes since 2026-10-16): the code review's order (the language doctrines,
   security, testing, reuse, style, the knowledge base) and then the rules a feature breaks ACROSS
   epics — reliability, scenario tests, planning docs, HTTP contracts, platform limits.
   `StageRulesTests.EveryTierEntry_ResolvesInThePinnedConventionsMount` covers the new tier.

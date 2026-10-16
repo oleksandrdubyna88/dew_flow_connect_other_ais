@@ -1,10 +1,10 @@
-# RESULTS — what a round's 80 KB of rules actually holds
+# RESULTS — what a round's rules budget actually holds (80 KB on 2026-09-15; 90 KB since 2026-10-16, see the last section)
 
 > **Subject:** this repository at `c6ff353f`, conventions pin `126f58d7` (that day's release tip).
 > **Harness:** a byte-count over the mounted corpus applying `RuleOrder`'s documented order, run from
 > the repository root; the same order is asserted by `src_mcp/tests/RuleOrderTests.cs`, and the file
 > sizes come from `find .agents/conventions/{common,csharp,rust,typescript} -name '*.md' | xargs wc -c`.
-> **Date:** 2026-09-15. **Pinned:** budget 80 000 bytes (`RuleFiles.DefaultBudgetBytes`), whole-file
+> **Date:** 2026-09-15 (re-measured at 90 000 bytes on 2026-10-16: last section). **Pinned:** budget 80 000 bytes (`RuleFiles.DefaultBudgetBytes`; 90 000 since 2026-10-16), whole-file
 > selection, no resolver (it cannot run — see condition 2).
 >
 > Evidence for epic 3 of
@@ -144,7 +144,7 @@ What actually would: **rule modularization** (splitting the rules over 15 KB —
 25 082 bytes, 31 % of the budget) or **targeted selection** (the resolver, blocked on E1). Both are
 already recorded as the follow-ups; this measurement is the strongest case yet for the first of them.
 
-`StageRulesTests.TheRotatedTail_CurrentlyFitsAtMostOneRule` pins the fact and fails — as
+`StageRulesTests.TheRotatedTail_CurrentlyFitsAtMostOneRule` (since renamed ...ThreeRules, at 90 000 bytes) pinned the fact and failed — as
 news, not as a defect — the day the tail becomes reachable. Its message carries the re-baselining
 procedure, because a test that fails on GOOD news has to say what to do about it: re-measure this
 file, update the claim in `RuleOrder.ForBranch` and `module_runners.md`, and raise the bound in the
@@ -165,6 +165,53 @@ sites it could not have matched, because they were not prose: the canary's own r
 An identifier asserts as loudly as a sentence and no search for a phrase will find it. Both are
 renamed here, to `TheRotatedTail_CurrentlyFitsAtMostOneRule` and
 `TwoBranches_SeeDifferentTails_OnAFixtureWithRoomForThem`.
+
+## RE-MEASURED, 2026-10-16 — the operator raised the budget to 90 000 bytes
+
+> **Subject:** this repository at `origin/main` `2d98f2f8`, conventions pin `e29883f8`. **Harness:** the
+> production collector (`RuleFiles.Collect`) over the real mounted corpus, driven by a throw-away test
+> (not kept: `StageRulesTests` pins the facts below), 3 000 branch names (`feat/branch-<i>` and
+> `fix/issue-<i>-thing`), the same run at 80 000 and at 90 000. Windows checkout (CRLF on disk); the
+> collector normalises line endings, so the numbers are the same on Linux.
+
+**Why.** The budget above is the 2026-09-15 figure. The corpus and this repository's own files grew
+(`.agents/PROJECT.md` 7 452 -> 10 331 bytes; conventions pin moved on), and the base plus the eight tier
+rules had reached **79 944 of 80 000 bytes — 56 bytes left**. Nothing outside the tier could fit on any
+branch, so the new non-tier rule `common/test-leftovers.md` (4 706 bytes) reached no reviewer. The operator
+(owner decision 2026-10-16, replacing the 80 000-byte budget) set `RuleFiles.DefaultBudgetBytes` to
+**90 000**.
+
+| | at 80 000 (before) | at 90 000 (after) |
+|---|---|---|
+| rule files in the corpus (5 base + 8 tier + 29 tail) / total size | 42 / 333 341 bytes | same |
+| base + all 8 tier rules | 79 944 | 79 944 |
+| **left for the rotated tail** | **56** | **10 056** |
+| smallest rule outside the tier (`common/durable-status.md`) | 2 197 | 2 197 |
+| files shown on the canary branch (`canary/the-tail`) | 13, 79 944 bytes, 29 omitted | 16, 88 666 bytes, 26 omitted |
+| tail rules shown on the canary branch | 0 | 3: `common/gpu-lease.md`, `csharp/nuget-packages.md`, `common/durable-status.md` |
+| tail rules shown, 3 000 branches | 0 on every branch | 1 on 908 (30 %), 2 on 1 847 (62 %), 3 on 245 (8 %); mean **1.78**, max 3 |
+| `common/test-leftovers.md` shown | **0 of 3 000** | **294 of 3 000 (9.8 %)** |
+
+**Reading it.** The budget bought the tail its first room since the base grew: one to three non-tier rules
+on every round. It did **not** make `common/test-leftovers.md` reach reviewers on a typical branch — it is
+outside the tier, so it is drawn, not owed, and it is drawn on about one branch in ten. Reach per rule on the
+3 000 names: `durable-status` 877, `nuget-packages` 729, `gpu-lease` 397, `coai-caller-model` 364,
+**`test-leftovers` 294**, `utc-timestamps` 246, `automated-checks` 229, then the rest at 216 and under. A rule
+that must reach every reviewer belongs in `RuleOrder.TierRules`; that is a separate decision and it spends
+budget (4 706 bytes of the 10 056 left).
+
+**What is pinned.** `StageRulesTests.TheRotatedTail_CurrentlyFitsAtMostThreeRules` (the bound, measured
+maximum 3), `TheRotatedTail_IsReachableAtTheNinetyKilobyteBudget` (at least 1 — "at most 3" alone is
+satisfied by 0, the 80 000 state), and `TheTestLeftoversRule_IsShownOnTheBranchesThatDrawIt` (`fix/x` and
+`feat/e5` draw it; `main` and `feat/a` do not), plus `RuleFilesTests.TheDefaultBudget_IsTheOperatorsNinetyKilobytes`.
+The old canary was named `TheRotatedTail_CurrentlyFitsAtMostOneRule`.
+
+**What this supersedes.** The "80 000", "1 328 spare", "77 562 / 2 438" and "1 of 24" figures above are the
+dated measurements of 2026-09-15 and 2026-09-16 and stay as history. The "D18" of the feature plan named
+the FULL budget (not its size) and still does: the feature stage now collects at 90 000.
+
+**Not measured.** The prompt grows by up to 10 000 bytes a rule-carrying round; no vendor's context or cost
+effect of that was measured here.
 
 ## What this does not settle
 

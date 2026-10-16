@@ -6644,7 +6644,7 @@ same `DocumentReader.IdentityOf` the review was opened with, under the constant 
 files the question under the feature session's id, which is what lets `Escalations.DecisionFor` find
 the person's answer.
 
-**Rules at the full budget (D18).** `StageRules.Feature` is a code review's tier plus the rules a
+**Rules at the full budget (D18; 90 000 bytes since 2026-10-16).** `StageRules.Feature` is a code review's tier plus the rules a
 feature breaks across epics — reliability, the scenario harness, planning docs, the two contract
 rules — collected from the working tree at `RuleFiles.DefaultBudgetBytes`, and rendered through
 `RulesText.Section`: the rules block moved out of `PanelService` unchanged when the feature stage

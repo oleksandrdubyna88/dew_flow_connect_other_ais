@@ -54,24 +54,26 @@ public sealed record RuleOrder
     /// no reviewer at all — and it worked, at the price of a gate whose answer changed between two
     /// rounds of ONE fix. That price is what the whole plan was opened to stop paying.</para>
     /// <para><b>Why the branch, and not simply a fixed order.</b> The tier fills the budget: measured
-    /// against the real corpus at 13 files and 78 672 of 80 000 bytes
+    /// against the real corpus on 2026-09-15 at 13 files and 78 672 of 80 000 bytes
     /// (<c>research/RESULTS_rules_selection_budget.md</c>), which leaves the other 24 rules shown to
     /// nobody, ever, on the path a code round actually takes today. The draw covered them by rotating.
     /// A BRANCH is what a round is about, and it does not change while a developer fixes what the last
     /// round found — so rotating the tail by it removes the instability without giving up the draw's
     /// coverage in principle.</para>
-    /// <para><b>In principle, and measured: in THIS repository the rotation currently reaches almost
-    /// nothing.</b> The base and the tier spend 77 562 of the 80 000-byte budget, leaving 2 438 bytes
-    /// against a smallest non-tier rule of 2 213 — so the tail takes ONE rule and the rest are skipped
-    /// as oversized every round. That is the same number on every platform since 2026-09-18, when
-    /// <c>RuleFiles.Read</c> stopped spending the budget on carriage returns: it read 78 855 on a CRLF
-    /// checkout until then, which left 1 145 bytes, nothing fitting, and a Windows machine handed one
-    /// rule fewer than a Linux one for the same commit. That one is <c>common/durable-status.md</c> on EVERY branch, being the
-    /// only rule small enough to be eligible, so nothing actually rotates even there: the order is
-    /// correct and costs nothing, it simply has no room to act yet. What would give it room is
-    /// rule modularization or the resolver, both recorded as follow-ups.
+    /// <para><b>In principle, and measured: at 80 KB the rotation reached nothing; at 90 KB it
+    /// reaches one to three rules.</b> Until 2026-10-16 the base and the tier spent 79 944 of an 80 000-byte
+    /// budget (77 562 when this was first measured, 2026-09-16), leaving 56 bytes against a smallest
+    /// non-tier rule of 2 197 — so the tail took NO rule on any branch, and the new
+    /// <c>common/test-leftovers.md</c> (4 706 bytes) could not reach a reviewer at all. The operator
+    /// raised the budget to 90 000 that day: the same base and tier now leave 10 056 bytes, and the tail
+    /// takes one rule on 30 % of branches, two on 62 % and three on 8 % (mean 1.78, over 3 000 branch
+    /// names). <c>common/test-leftovers.md</c> is drawn on about 10 % of them — a real but partial
+    /// reach, which is what a rotation over 29 candidates and about 10 KB can give. The number is the
+    /// same on every platform since 2026-09-18, when <c>RuleFiles.Read</c> stopped spending the budget on
+    /// carriage returns. The tail is still a lottery by design: what would make a rule reach EVERY
+    /// reviewer is a place in the tier (<see cref="TierRules"/>), rule modularization or the resolver.
     /// <c>research/RESULTS_rules_selection_budget.md</c> carries the numbers and
-    /// <c>StageRulesTests.TheRotatedTail_CurrentlyFitsAtMostOneRule</c> fails the day this
+    /// <c>StageRulesTests.TheRotatedTail_CurrentlyFitsAtMostThreeRules</c> fails the day this
     /// changes.</para>
     /// <para><b>Why SHA-256 and not <see cref="object.GetHashCode"/>.</b> .NET randomises string
     /// hashing per PROCESS, so a GetHashCode-ordered tail would differ between two rounds of one fix
