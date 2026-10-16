@@ -4,8 +4,9 @@
 > mistral-vibe`), signed in on a Mistral Pro subscription, Windows 11. §1 and §2 were run BY HAND on 2026-10-12, before the
 > probe script existed, because M-V11 decided whether the plan's D6 could stand. §3–§21 come from the script
 > (`scripts/probe-vibe-confinement.mjs`), run the same day: every cell M-V1…M-V14 and M-V3b, 3 runs per arm and one run per
-> positive control, **Windows only**, with the **Python** CLI pinned (`VIBE_CLI=python`, see §3). **WSL: not measured** —
-> `vibe` is not installed there, so no claim below holds for WSL. Every arm ran from a scratch folder under the OS temp dir
+> positive control, **Windows only**, with the **Python** CLI pinned (`VIBE_CLI=python`, see §3). **WSL: not measured** in
+> §1–§29 — `vibe` was not installed there then, so no claim in those sections holds for WSL; **§30 holds the WSL2 cells**
+> (2026-10-16, `todo/PLAN_kimi_and_vibe_on_linux.md`). Every arm ran from a scratch folder under the OS temp dir
 > (except the first M-V2 attempt of §3, in `%LOCALAPPDATA%\Tempvcp1`), never a repository checkout. Every arm that needed a user-level file ran on a short copied `VIBE_HOME` inside that scratch
 > folder. The script never wrote the person's `~/.vibe`, and nothing outside the scratch folders was written or deleted.
 
@@ -1104,3 +1105,213 @@ server's data directory with `usage.jsonl`, `consultations\`, `server-notices.js
 scratch repository, `work\` = the client and the three `out-<step>\result.json` with every reply, the server's `stderr` and
 the watchers' lists) and the homes root `C:\testsToDelete-vh056\` (empty: `coai-vh`, `coai-vibe`). The owner's coai
 installation, its data folder and its running servers were not used.
+
+## 30. Vibe 2.26.1 on Linux (WSL2) — the cells of `todo/PLAN_kimi_and_vibe_on_linux.md` §5 (2026-10-16)
+
+> Two runs, one machine. **(a) The scout run** (cells L-V1 … L-V5, L-V-home, L-V-manifest), by hand from script files, before the
+> probes were ported; its draft lived in session scratch and is carried here, never linked. **(b) Epic E1** (cells L-V6b, L-V7,
+> L-V8), through the repository's own scripts at `cd7d56c7` (`scripts/dotenv-name-vectors.mjs`, `scripts/vibe-home-manifest.mjs`)
+> and, for L-V8, a script file whose every launch is written out in §30.8.
+>
+> Machine: WSL2 Ubuntu, kernel `6.18.33.2-microsoft-standard-WSL2`, x86-64. Vibe **2.26.1** at `~/.local/bin/vibe` (uv tool, its
+> Python 3.12.3 at `~/.local/share/uv/tools/mistral-vibe/bin/python`, python-dotenv 1.2.2), the **Python** CLI pinned
+> (`VIBE_CLI=python`). Every launch: a script FILE, an owned `VIBE_HOME` under a `/tmp/testsToDelete-wsl-*` folder, the BUILT
+> environment (MinimalUnix + `VIBE_HOME`, `VIBE_CLI=python`, `PYTHONUTF8=1`, `VIBE_ACTIVE_MODEL=mistral-medium-3.5`), the SHIPPED
+> flags (`-p --output json --agent plan --enabled-tools read_file --workdir <dir> --time-limit <s> --output-dir <dir>`), the prompt on
+> stdin. The person's `~/.vibe` was LISTED (names, types, sizes, mtimes) before and after and never written; its `.env` was never
+> opened, read, copied or printed — the probes link to it by `lstat` alone. Nothing was deleted in WSL. Paths below write `~` for
+> the home folder; no user name, key or session id appears.
+
+### 30.0 Predictions (written before each run)
+
+| Cell | Prediction | Written |
+|---|---|---|
+| L-V1 | A fresh `VIBE_HOME` is NOT signed in: on Windows the key is in the OS keyring (§12), WSL has none; the sign-in is `~/.vibe/.env`. | scout, before its run |
+| L-V2 / L-V3 | The same confinement as Windows: a write denied, a read outside the cwd denied. | scout |
+| L-V4 | `--resume` works on the same home. | scout |
+| L-V5 | No 259-character budget on Linux. | scout |
+| L-V6b | The plan's own claims (DL2, S-V13): the five admitted forms bind `MISTRAL_API_KEY`; a bare key, a line starting with `=` and a quoted value continuing on the next line refuse; `"dummy` + `LEAK_CANARY=ending"` binds ONE name and refuses at line 2; `"dummy` + `#ending"` admits; `"a` + `"` + `VIBE_X=1` refuses at line 3; a bare CR binds a second name; VT, FF and NEL do not; "a line python-dotenv itself cannot parse" refuses; a byte-order mark becomes part of the first NAME; invalid UTF-8 cannot be decoded. | the plan (and its A1 spec), before E1 |
+| L-V7 | Run 1 classifies everything (no unknown; no `.session-index.json` without a resume); 12 pinned, 11 hashing differently from win32, `600cc68f…` shared; `deepestChild` 156; run 2 on a fresh scratch pins the same 12 paths and hashes; `~/.vibe` unchanged. | E1, before the runs |
+| L-V8 | Code reading (below) says NO: arms A/B/E end with exit 1 and the *Missing MISTRAL_API_KEY* wording, no canary folder; control C is NOT the Missing wording (the bogus key is refused by the API, free) and DOES create its canary folder. | E1, before the run |
+
+### 30.1 L-V1 — a fresh home is signed out; the `.env` LINK signs it in (scout)
+
+| Arm | Result |
+|---|---|
+| `vibe --version`, `VIBE_CLI=python` | `vibe 2.26.1` |
+| `vibe -p --help` (the Python CLI) | `--time-limit`, `--output-dir`, `--prompt-file`, `--enabled-tools`, `--agent`, `--workdir`, `--resume`, `--max-turns`, `--output {text,json,streaming}` — the Windows flag set is accepted as it is |
+| a fresh owned `VIBE_HOME`, no `.env`, the minimal environment | **exit 1, free** (no model call): `Error: Missing MISTRAL_API_KEY environment variable for mistral provider. Set the environment variable (e.g. in ~/.vibe/.env or your shell), or run vibe --setup once interactively.` The home gained `logs/vibe.log`, `trusted_folders.toml`, `vibehistory` |
+| the same home with `.env` a **symlink** to `~/.vibe/.env` (its content never read) | answered, 4 of 4 turns (the turns of §30.2–§30.5); Vibe did not replace the link; the target kept its size and mtime |
+
+**Holds, with one change from Windows:** there is no keyring on WSL, a fresh home is signed out with a known wording, and the
+sign-in is `$VIBE_HOME/.env`. A link from the owned home to the person's `~/.vibe/.env` works and copies nothing. Not measured:
+a key passed in the environment (it would put the secret into the child's environment — DL2's rejected option).
+
+### 30.2 L-V2 / L-V3 — read inside served, read outside and every write denied (scout, n = 1)
+
+One turn, the shipped flags, a scratch repository holding `notes.txt`; the prompt asked to remember a code word, `read_file`
+`notes.txt`, `read_file` an absolute path OUTSIDE the cwd, and create `written.txt` with any tool.
+
+| Item | Outcome |
+|---|---|
+| exit / time / outcome | 0, 11 s, `finished`; usage 28 356 in / 663 out |
+| read inside the cwd | served; the marker (carrying `→`) came back intact |
+| read outside the cwd (absolute path) | **denied** ("denied by the approval callback"); the outside marker was not quoted |
+| `write_file` and `bash` | **both denied**; `written.txt` absent; the outside folder unchanged |
+| the export's `config.mcp_servers` | `[]`; `active_model` empty in the export (the home has no `config.toml`) |
+| `~/.vibe` | listing identical before and after |
+
+**Holds on Linux, n = 1 per arm** (Windows: n = 3, §4, §10). L-V9 re-runs it 3 of 3 through the ported probe (E3).
+
+### 30.3 L-V4 — `--resume` (scout, n = 1)
+
+Turn 2 on the same owned home, `--resume <id>` from turn 1's export: exit 0, 14 s, the answer was the code word, the same
+session, 7 493 input tokens (history included — the shape of §9). **Holds.**
+
+### 30.4 L-V5 — no Windows path budget (scout, n = 1)
+
+A `VIBE_HOME` of **640 characters** (three 200-character folders): a fresh session answered, exit 0, 18 s; 68 entries; the deepest
+absolute path **775 characters**, 135 below the home (Windows: 134 persisted + the 22-character atomic-write wrapper, §27). **The
+102-character home limit of §27 does not apply on Linux**; PATH_MAX 4096 and NAME_MAX 255 are the kernel's limits (DL4: no bound added).
+
+### 30.5 L-V-home — `HOME` redirected to an empty folder (scout, n = 1)
+
+`HOME` an empty folder, an owned `VIBE_HOME` with the `.env` link: answered; **nothing** was written into the empty `HOME`; the
+real `~/.vibe` was unchanged; the top level of the real home held 95 entries before and after. **Holds** — and not adopted (DL13).
+
+### 30.6 L-V-manifest (scout) and L-V7 (E1) — the home manifest is per platform
+
+**The scout's comparison** (after turns 1 and 2, 39 files, checked by name and SHA-256 against the `win32` entry): names match
+the Windows inventory; 26 `varying`; of 12 pinned files **1** hashed as in the manifest (blob `600cc68f…`) and **11** did not — on
+Linux the plugin package id is `908d8430…`, on Windows `6bb638…`; two unknown names, `.env` (the sign-in link) and
+`logs/session/unified/.session-index.json` (it appeared at the RESUME turn). So the Windows entry does not hold on Linux, and
+without DL3 every Linux launch of a KNOWN 2.26.1 would be refused over its plugin bytes.
+
+**L-V7, through `scripts/vibe-home-manifest.mjs` (E1)**, twice, each run on its own fresh scratch, from a copy of `cd7d56c7`'s
+`scripts/` and `shared/`: run 1 `--write --stage`, run 2 without `--write`. Each run: `vibe --version` on home A, one tiny turn
+on A, `--version` on A again, `--version` on a fresh home B; homes A and B signed in by the `.env` link, which the inventory names
+and never reads, and which the script leaves out of what Vibe wrote.
+
+| | Run 1 | Run 2 |
+|---|---|---|
+| exit | 0 | 0 |
+| unknown paths / drift / appeared | 0 / 0 / 0 | 0 / 0 / 0 |
+| pinned / admitted by name | 12 / 55 | 12 / 55 |
+| deepestChild (persisted + 22) | 156 (`logs/session/unified/<id>/chunks/<64 hex>.json`) | 156 |
+| a bare `--version` wrote | `vibehistory` only | `vibehistory` only |
+| the turn | `finished`, `mistral-medium-3.5`, 6 762 in / 55 out | `finished`, 6 762 in / 43 out |
+
+- **Run 1 and run 2 agree on every hash**: the same 12 paths, the same 12 SHA-256s — the plugin bytes are the package's, not the home's.
+- **Against `win32`**: 11 of 12 hash differently, the blob `600cc68f…` is the one shared hash and the one shared path; the Linux
+  package is `908d8430…` (its manifest, `plugin.json` and the four skills `create-plugin`, `skill-creator`, `vibe`, `worktree`).
+- `.session-index.json` did not appear (no resume in the script's run) — DL3 still adds it to `varying` (E2).
+- `~/.vibe`: 71 entries before and after both runs, 0 differing.
+
+**Every prediction held.** The entry is committed in `shared/vibe-home-manifest.json` — **under `staged`, not `versions`**, a
+deviation from the plan's E1 text: coai-mcp reads `versions` by version alone and `VibeLaunch.Verdict` matches exactly ONE entry
+(`VibeLaunch.cs:306-310`), so a second 2.26.1 in `versions` makes a Windows 2.26.1 launch "unmeasured". Measured, not argued: with
+the entry moved into `versions` (`--unstage linux`) and the runtime rebuilt, `CoaiMcp.Tests --filter-class "*Vibe*"` went from
+226 passed to **4 failed** — `AMeasuredVibe_WithATamperedPluginFile_IsStillRefused` among them (a tampered Windows plugin file
+was ADMITTED), the shipped-manifest pins, and a warning reading *"Vibe 2.26.1 is not a version coai has measured (it measured
+2.26.1, 2.26.1)"*. Restored, rebuilt: 226 passed. E2 moves it (`node scripts/vibe-home-manifest.mjs --unstage linux`) in the
+change that makes `VibeHomeEntry` read `platform`.
+
+### 30.7 L-V6b — python-dotenv's own names, as test vectors (E1)
+
+`node scripts/dotenv-name-vectors.mjs --write` ran `dotenv_values(path)` — how Vibe 2.26.1 reads `$VIBE_HOME/.env`
+(`vibe/core/config/vibe_schema.py`, `load_dotenv_values`: it sets every name whose value is NON-EMPTY, unless the environment
+already has one) — in Vibe's own interpreter (`-I`), over **48 synthetic vectors**, each written as a FILE of exact bytes
+(python-dotenv opens a path in text mode, so Python's universal newlines are part of what a line is). The file,
+`shared/dotenv-name-vectors.json`, records per vector the bytes, what python-dotenv binds (a value, empty included), the bare
+names it keeps with NO value, what Vibe sets, the lines it could not parse, a decode error, a NUL in a value, and the verdict of
+DL2's grammar by the plan's four refusal kinds — `ByteOrderMark`, `NotText`, `NoBinding`, `OtherName` (the A1 spec's names) —
+from `scripts/lib/dotenv-names.mjs`, the reference E2's C# is held to. Written on Windows (Python 3.14.6); regenerated in WSL
+with `--check` (Python 3.12.3, Vibe's Linux tool environment): **48 vectors, no drift**. Python's `\s` — the whitespace
+python-dotenv's grammar is built on — is recorded too: 29 code points (U+0009–000D, U+001C–001F, space, NEL, NBSP, U+1680,
+U+2000–200A, U+2028/2029, U+202F, U+205F, U+3000).
+
+| Shape | python-dotenv binds | DL2's verdict |
+|---|---|---|
+| `KEY=v`, `KEY = "v"`, `export KEY='v'`, `  KEY=v  # note`, `'KEY'=v`, `export`+TAB, TABs around `=`, NBSP before `=`, VT leading, CRLF, no final newline, an empty value, `${OTHER}` | `MISTRAL_API_KEY` | admitted |
+| a pasted key alone, `MISTRAL_API_KEY` alone, `export MISTRAL_API_KEY`, `KEY#x=…` | nothing (a name with NO value) | refused, line 1, `NoBinding` |
+| `=v`, `export =v`, `'KEY=v` (unterminated quoted name), `MISTRAL<VT>API_KEY=…` | nothing (a parse error) | refused, line 1, `NoBinding` |
+| `VIBE_MCP_SERVERS=[]`; `exportMISTRAL_API_KEY=…`; a lowercase name | that other name | refused, line 1, `OtherName` |
+| a UTF-8 byte-order mark before the name (and, in a second vector, `VIBE_X=1` on line 2) | `<BOM>MISTRAL_API_KEY` — never `MISTRAL_API_KEY` | refused, line 1, `ByteOrderMark` (and line 2, `OtherName`) |
+| a NUL inside the value | `MISTRAL_API_KEY`, with a value Vibe cannot put in the environment | refused, line 1, `NotText` |
+| a byte that is not UTF-8 on line 2 | nothing — `UnicodeDecodeError`, Vibe would not start | refused, line 2, `NotText` |
+| `KEY=…` + `VIBE_ACTIVE_MODEL=…`; + NEL or U+001C then `VIBE_X=1` on line 2 | both names | refused, line 2, `OtherName` |
+| `"dummy` + `LEAK_CANARY=ending"` | `MISTRAL_API_KEY` only | refused, line 2, `OtherName` (the sentence names neither `LEAK_CANARY` nor `ending`) |
+| `"dummy` + `#ending"` | `MISTRAL_API_KEY` only | admitted |
+| `"dummy` + `ending"`; `'dummy` + `VIBE_X=1'` | `MISTRAL_API_KEY` only | refused, line 2 |
+| `"a` + `"` + `VIBE_X=1` | `MISTRAL_API_KEY`, `VIBE_X` | refused, **line 2** (`NoBinding`) and line 3 (`OtherName`) |
+| `KEY=x` + bare CR + `VIBE_X=1` (with and without any LF in the file) | `MISTRAL_API_KEY`, `VIBE_X` | refused, line 2, `OtherName` |
+| `KEY=x` + VT / FF / NEL / LINE SEPARATOR + `VIBE_X=1` | `MISTRAL_API_KEY` only | admitted |
+| `KEY="v" junk`; `KEY="unterminated` | **nothing** (a parse error in the VALUE) | **admitted** |
+
+**The implication the plan's soundness argument rests on holds on all 48**: whatever DL2's grammar admits, python-dotenv binds no
+name but `MISTRAL_API_KEY` there (the generator refuses to write otherwise; `scripts/lib/dotenv-names.test.mjs` re-checks it,
+and checks that every one of the four kinds has a vector).
+Against the predictions, two differences — both in the plan's TEXT, not in the safety:
+- `"a` + `"` + `VIBE_X=1` refuses at **line 2**, not 3: by DL2's own grammar a lone `"` is a bare word. Line 3 is refused too, and
+  the vectors list every refused line, so E2 can word its sentence either way.
+- "A line python-dotenv itself cannot parse" refuses only when the parse fails in the NAME part. A failure in the VALUE part
+  (`KEY="v" junk`, an unterminated quote) is ADMITTED by a grammar that never parses values — and python-dotenv binds NOTHING
+  there, so Vibe meets L-V1's *Missing* wording. Sound, but not the refusal the plan names.
+- `NotText` for a NUL: the A1 spec says python-dotenv "cannot decode it either". It can: python-dotenv reads the NUL and binds
+  `MISTRAL_API_KEY` with it (`nulInValue: true`); what fails is Vibe putting that value into its environment (Python refuses an
+  embedded NUL in `os.environ` — not run here). The refusal stands; its reason is Vibe's, not python-dotenv's. Invalid UTF-8 is
+  as the spec says: `UnicodeDecodeError`, nothing bound.
+
+### 30.8 L-V8 — does Vibe load a `.env` from its WORKING folder? **No.** (E1, the release gate)
+
+**Code reading first** (Vibe 2.26.1): Vibe reads ONE dotenv, `dotenv_values(GLOBAL_ENV_FILE.path)`, and `GLOBAL_ENV_FILE` is
+`VIBE_HOME.path / ".env"` (`vibe/core/paths/_vibe_home.py`); no `find_dotenv` or `load_dotenv` call exists in `vibe/`; its
+pydantic-settings classes set no `env_file` (the environment layer is `env_prefix="VIBE_"` only). Two packages in Vibe's tool
+environment can read a `.env` of the cwd — `mcp`'s FastMCP server settings (`env_file=".env"`) and `uvicorn` (only when given
+`--env-file`) — and `vibe/` imports neither the FastMCP server nor `uvicorn` (searched: no `from mcp.server`, no `uvicorn` in
+`vibe/`). Then the cell, **free**: no home here holds a real key; the one key used is synthetic and bogus.
+
+Each arm's `.env` (synthetic): `MISTRAL_API_KEY=sk-test-lv8-bogus-not-a-key` and `VIBE_SESSION_LOGGING__SAVE_DIR=<the arm's canary
+folder>` — Vibe's session logger `mkdir`s its `save_dir` (`vibe/core/session/session_logger.py`) when it starts with that
+configuration, so the folder appears only if that file was read (the control below shows it does then). Each launch:
+`cd <cwd> && printf 'Reply with exactly: OK' | timeout --kill-after=10 150 env -i <MinimalUnix> VIBE_HOME=<owned home>
+VIBE_CLI=python PYTHONUTF8=1 VIBE_ACTIVE_MODEL=mistral-medium-3.5 ~/.local/bin/vibe -p --output json --agent plan
+--enabled-tools read_file --workdir <workdir> --time-limit 60 --output-dir <export>`; every owned home EMPTY except C's.
+
+| Arm | Where the `.env` is | cwd / `--workdir` | Exit | Wording | Canary folder |
+|---|---|---|---|---|---|
+| A1, A2, A3 | the working folder | the working folder / the same | 1, 1, 1 | *Missing MISTRAL_API_KEY …* (3 of 3) | **not made** (3 of 3) |
+| B | the `--workdir` folder | a neutral folder / the folder with the `.env` | 1 | *Missing MISTRAL_API_KEY …* | **not made** |
+| E | the PARENT of the working folder | the working folder / the same | 1 | *Missing MISTRAL_API_KEY …* | **not made** |
+| C (control) | a real FILE `$VIBE_HOME/.env` | a working folder with no `.env` | 1 | `Error: Invalid API key (from env var MISTRAL_API_KEY). Please check your API key and try again.` | **made** |
+
+**Vibe 2.26.1 does not load a `.env` from its working folder, from the `--workdir` folder, or from the working folder's parent**
+(A 3 of 3, B, E). The control proves the observables are sensitive: a loaded file changes the wording AND creates the canary.
+The exit code alone does NOT tell the two apart (1 in every arm). `~/.vibe`: 71 entries before and after, 0 differing. So
+`.env` does NOT need to join Vibe's snapshot exclusions for this version (DL2's contingency stays unused); the claim is for
+2.26.1 with the Python CLI — a new Vibe version is re-read by the same code search before it is trusted with the link.
+
+### 30.9 L-V6 — NOT run
+
+L-V6 (which variable NAMES the owner's `~/.vibe/.env` holds) was not run: E1 was told never to read the owner's `.env` or any
+real `.env`, names included. Consequence for E2: the admitted set stays DL2's `{MISTRAL_API_KEY}`; if the owner's file holds
+another name, his first WSL launch is refused by line number with DL2's cure (the safe direction), and the cell can be answered
+then by the refusal itself.
+
+### 30.10 What this does not show
+
+- Every Vibe cell here is WSL2 (DL1): nothing about a native Linux host (L-V10), a desktop keyring, or WSL1.
+- The scout's cells are n = 1 per arm; L-V9 (3 of 3 through the ported probe, E3) is still owed. L-V8 is 3 of 3 for the
+  product's shape (A) and n = 1 for B, E and C.
+- The Rust CLI was not measured (the shipped launch pins the Python one).
+- L-V6b's vectors are what python-dotenv 1.2.2 binds; the grammar is pinned to that version's behaviour, and a Vibe that bundles
+  another python-dotenv is re-checked with `--check` before it is trusted.
+
+### 30.11 Spend, and the folders left for the owner
+
+Spend: the scout's 4 answered turns (L-V2/3, L-V4, L-V5, L-V-home) plus a free signed-out launch; E1's **2** tiny turns (L-V7:
+6 762 / 55 and 6 762 / 43 tokens) and 6 free launches (L-V8: no model answered). Folders in WSL, nothing deleted, for the owner to
+remove by hand: the scout's `/tmp/testsToDelete-wsl-vibe-r1` (its `deep/…` branch is a 640-character path: remove it from the top),
+and E1's `/tmp/testsToDelete-wsl-vibe-e1-tests`, `/tmp/testsToDelete-wsl-vibe-e1-dotenv`, `/tmp/testsToDelete-wsl-vibe-e1-checkout`,
+`/tmp/testsToDelete-wsl-vibe-e1-lv7` (the steps of both manifest runs) and `/tmp/testsToDelete-wsl-vibe-e1-lv8` (each arm's
+stdout, stderr, export and home).

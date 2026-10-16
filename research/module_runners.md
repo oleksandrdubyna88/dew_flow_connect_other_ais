@@ -3049,7 +3049,11 @@ sequenceDiagram
   must not reach the review (the risk consultation 6b4726a6 of 2026-10-13 found the unmeasured branch launched without
   this re-check); for a version WITH an entry in `shared/vibe-home-manifest.json` the home is then checked with the
   plugin files' hashes — a mismatch is tampered bytes of a measured version, and refused. Every refusal is `NotStarted` with the path and its cure (delete the
-  home; the next launch starts from an empty one).
+  home; the next launch starts from an empty one). The manifest is read by VERSION alone and the verdict needs exactly ONE
+  entry (`VibeLaunch.Verdict`'s `[var entry]`), so the Linux entry of 2.26.1 (L-V7, E1 of `todo/PLAN_kimi_and_vibe_on_linux.md`,
+  2026-10-16) sits under a top-level `staged` key the C# does not read — measured: moved into `versions`, four `*Vibe*` tests go
+  red, a tampered Windows plugin file among them. E2 makes the entry per platform (DL3) and moves it with
+  `node scripts/vibe-home-manifest.mjs --unstage linux`.
 - **A version nobody measured is RUN, with a warning** (the owner's decision of 2026-10-13: "Vibe must WARN, not refuse —
   set it up once and it must work if it can"; it replaced the refusal S2 first shipped). Its home's shape is still
   checked before its `--version` starts, so a forbidden name, a link, a trust entry, a `config.toml`, `hooks.toml`,
