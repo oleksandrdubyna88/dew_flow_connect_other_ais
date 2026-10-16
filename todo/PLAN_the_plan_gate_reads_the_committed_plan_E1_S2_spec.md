@@ -1,6 +1,6 @@
 # PLAN — E1.S2 spec: the reader's integrity proof (CORNERSTONE)
 
-> Status: **plan only, nothing implemented yet, 2026-10-15 — cornerstone spec by Fable, written before its code.** Story
+> Status: **coded and tested on the branch `feat/plan-gate-reads-committed-plan`, 2026-10-16 — not merged; cornerstone spec by Fable, written before its code.** Story
 > E1.S2 of [PLAN_the_plan_gate_reads_the_committed_plan_E1.md](PLAN_the_plan_gate_reads_the_committed_plan_E1.md) (parent
 > [PLAN_the_plan_gate_reads_the_committed_plan.md](PLAN_the_plan_gate_reads_the_committed_plan.md) §4 steps 3–5, D5–D7).
 > Its own file because the stories document is sent whole to a review gate and must stay short; it is promoted with E1's.

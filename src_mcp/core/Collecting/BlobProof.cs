@@ -10,6 +10,9 @@ namespace CoaiMcp.Core.Collecting;
 /// </remarks>
 public static class BlobId
 {
+    [System.Diagnostics.CodeAnalysis.SuppressMessage(
+        "Security", "S4790:Use a stronger hashing algorithm",
+        Justification = "git's blob id is SHA-1 by definition — this computes object identity, not a security digest")]
     public static string Sha1Of(ReadOnlySpan<byte> bytes)
     {
         var header = Encoding.ASCII.GetBytes($"blob {bytes.Length}\0");

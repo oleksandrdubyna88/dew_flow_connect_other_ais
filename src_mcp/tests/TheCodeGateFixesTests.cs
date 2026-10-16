@@ -97,6 +97,31 @@ public sealed class TheCodeGateFixesTests : IAsyncLifetime
         GitIds.Short("abc").Should().Be("abc");
     }
 
+    [Theory]
+    [InlineData("pasted", "", "", "")]
+    [InlineData("", "", "", "pass the plan")]
+    [InlineData("", "  ", "", "pass the plan")]
+    [InlineData("pasted", "plan.md", "", "not both")]
+    [InlineData("pasted", "plan.md", "1a2b", "not both")]
+    [InlineData("", "", "0123456789012345678901234567890123456789", "means nothing without committedPlan")]
+    [InlineData("pasted", "", "0123456789012345678901234567890123456789", "means nothing without committedPlan")]
+    [InlineData("", "plan.md", "1a2b", "full 40-hex commit id")]
+    public async Task TheInputRefusals_AreDecidedInOneFixedOrder(string text, string committed, string expected, string refusal)
+    {
+        // Both, then expectedCommit alone, then neither, then a malformed expectedCommit — the first that applies wins.
+        var outcome = await PlanInputs.PrepareAsync(
+            new PlanInput(text, committed, expected), _repo.Path, "main", (_, _) => Task.FromResult(_sha), _launcher, TestContext.Current.CancellationToken);
+
+        if (refusal.Length == 0)
+        {
+            outcome.Should().BeOfType<PlanInputOutcome.Ready>();
+        }
+        else
+        {
+            outcome.Should().BeOfType<PlanInputOutcome.Refused>().Which.Sentence.Should().Contain(refusal);
+        }
+    }
+
     [Fact]
     public void ACanonicalRelativePath_IsTrimmed_AndUsesForwardSlashes()
     {

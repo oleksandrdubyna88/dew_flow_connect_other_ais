@@ -1608,6 +1608,8 @@ flowchart TD
 - **A cut capture is refused on the flag alone** (`GitAnswer.Truncated`), even when the id would match. Order of the
   gate: did it finish, did it succeed, was it whole — a cut capture of a command that failed is a failed command.
 - **A SHA-256 repository is refused first** (its blob ids are SHA-256; the proof is SHA-1 only): pass `planText` there.
+  `BlobId.Sha1Of` carries a `SuppressMessage` for Sonar S4790 ("use a stronger hashing algorithm"): the SHA-1 there is
+  git's object identity by definition, not a security digest — the repository has no other suppression to follow.
 - **The checkout guard** (`git status`, compared through the clean filters) runs only when HEAD IS the commit read. A
   checkout written with CRLF under `core.autocrlf=true` is clean. A file re-saved with a different size AFTER the commit
   is reported as modified by git before it hashes anything (measured: a CRLF rewrite of an LF file under autocrlf), so

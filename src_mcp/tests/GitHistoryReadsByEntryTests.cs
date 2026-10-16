@@ -77,8 +77,34 @@ public sealed class GitHistoryReadsByEntryTests : IAsyncLifetime
         answer.Ok.Should().BeTrue();
         answer.Lines.Should().HaveCount(2);
         answer.Lines[1].Should().Be(sha);
-        Path.GetFullPath(answer.Lines[0]).TrimEnd('\\', '/')
-            .Should().BeEquivalentTo(Path.GetFullPath(_repo.Path).TrimEnd('\\', '/'));
+        // Git answers the REAL path. A temp directory behind a link (macOS: /var is /private/var) is spelled differently by
+        // GetFullPath, which follows no links — so the expectation is the repo's path with its links resolved, the way the
+        // worktree manager already compares what git lists against what it holds.
+        Path.TrimEndingDirectorySeparator(Path.GetFullPath(answer.Lines[0]))
+            .Should().BeEquivalentTo(Path.TrimEndingDirectorySeparator(CoaiMcp.Runners.Worktrees.WorktreeManager.Resolved(_repo.Path)));
+    }
+
+    [Fact]
+    public async Task ARepositoryReachedThroughALink_IsAnsweredByItsRealPath()
+    {
+        // The shape of macOS's /var → /private/var, made on every platform (a junction on Windows, a symlink elsewhere): git
+        // answers the real path, and a comparison with the spelling the caller used is a claim about link-free paths.
+        var holder = Directory.CreateTempSubdirectory("coai-link-holder-").FullName;
+        var link = Path.Combine(holder, "repo-link");
+        await DirectoryLink.MakeAsync(_launcher, link, _repo.Path);
+        try
+        {
+            var answer = await new GitHistory(_launcher).RootAndHeadAsync(link, TestContext.Current.CancellationToken);
+
+            var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(answer.Lines[0]));
+            root.Should().BeEquivalentTo(Path.TrimEndingDirectorySeparator(CoaiMcp.Runners.Worktrees.WorktreeManager.Resolved(link)));
+            root.Should().NotBeEquivalentTo(Path.TrimEndingDirectorySeparator(Path.GetFullPath(link)), "git does not answer the spelling it was given");
+        }
+        finally
+        {
+            DirectoryLink.Remove(link);
+            Directory.Delete(holder, recursive: true);
+        }
     }
 
     [Fact]

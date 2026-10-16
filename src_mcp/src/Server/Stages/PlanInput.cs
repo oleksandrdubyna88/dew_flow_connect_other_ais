@@ -87,15 +87,34 @@ internal static class PlanInputs
         limit.IsCancellationRequested && !caller.IsCancellationRequested;
 
     /// <summary>The refusal the arguments themselves earn, or empty — nothing read, nothing resolved.</summary>
-    private static string Shape(PlanInput input, string committed, string expected) =>
-        (input.Text.Length > 0, committed.Length > 0, expected.Length > 0) switch
-        {
-            (true, true, _) => "pass planText OR committedPlan, not both — planText is the plan verbatim, committedPlan is the path of a committed plan file the server reads itself",
-            (false, false, true) or (true, false, true) => "expectedCommit pins the commit committedPlan is read at — it means nothing without committedPlan; pass both, or neither",
-            (false, false, false) => "pass the plan: planText (the plan verbatim) or committedPlan (the repo-relative path of a committed plan file) — a reviewer that cannot see the plan reviews its own guess",
-            (_, true, true) when !GitHistory.IsCommitish(expected) => $"expectedCommit must be a full 40-hex commit id — '{expected}' is not one",
-            _ => string.Empty,
-        };
+    /// <remarks>One small predicate per refusal, asked in this order — both, expectedCommit alone, neither, malformed — and the first sentence wins.</remarks>
+    private static string Shape(PlanInput input, string committed, string expected)
+    {
+        var (text, path) = (input.Text.Length > 0, committed.Length > 0);
+
+        return new[] { Both(text, path), PinWithoutPath(path, expected), Neither(text, path), Malformed(path, expected) }
+            .FirstOrDefault(sentence => sentence.Length > 0) ?? string.Empty;
+    }
+
+    private static string Both(bool text, bool path) =>
+        text && path
+            ? "pass planText OR committedPlan, not both — planText is the plan verbatim, committedPlan is the path of a committed plan file the server reads itself"
+            : string.Empty;
+
+    private static string PinWithoutPath(bool path, string expected) =>
+        !path && expected.Length > 0
+            ? "expectedCommit pins the commit committedPlan is read at — it means nothing without committedPlan; pass both, or neither"
+            : string.Empty;
+
+    private static string Neither(bool text, bool path) =>
+        !text && !path
+            ? "pass the plan: planText (the plan verbatim) or committedPlan (the repo-relative path of a committed plan file) — a reviewer that cannot see the plan reviews its own guess"
+            : string.Empty;
+
+    private static string Malformed(bool path, string expected) =>
+        path && expected.Length > 0 && !GitHistory.IsCommitish(expected)
+            ? $"expectedCommit must be a full 40-hex commit id — '{expected}' is not one"
+            : string.Empty;
 
     private static async Task<PlanInputOutcome> ReadCommittedAsync(
         string path, string expected, string repoPath, string branch, Func<string, string, Task<string>> resolve, IProcessLauncher launcher, CancellationToken ct)
