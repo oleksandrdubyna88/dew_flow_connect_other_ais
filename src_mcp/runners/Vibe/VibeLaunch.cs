@@ -79,10 +79,17 @@ public static class VibeLaunch
     public static string HostRefusal(HostKind host, string executable, WslGeneration wsl) => host switch
     {
         HostKind.Windows => HostKinds.RunsInWsl(executable) ? WslBridgeRefusal(executable) : string.Empty,
-        HostKind.Wsl => wsl == WslGeneration.Wsl2 ? string.Empty : Wsl2Only("it is measured on WSL2, and this is WSL1", " — convert the distribution with `wsl --set-version <distro> 2` from Windows"),
+        HostKind.Wsl => WslRefusal(wsl),
         HostKind.Linux => Wsl2Only("it is measured on WSL2 and not yet on a native Linux host", string.Empty),
-        _ => $"Vibe is refused on a {HostKinds.Word(host)} host until it is measured there (D18 of todo/PLAN_vibe_and_kimi_runtimes.md) — Vibe is measured on Windows and WSL2 only",
+        _ => NothingMeasured(host),
     };
+
+    /// <summary>WSL2 is admitted; a WSL1 kernel (which reads as a WSL host) is refused with its cure.</summary>
+    private static string WslRefusal(WslGeneration wsl) =>
+        wsl == WslGeneration.Wsl2 ? string.Empty : Wsl2Only("it is measured on WSL2, and this is WSL1", " — convert the distribution with `wsl --set-version <distro> 2` from Windows");
+
+    private static string NothingMeasured(HostKind host) =>
+        $"Vibe is refused on a {HostKinds.Word(host)} host until it is measured there (D18 of todo/PLAN_vibe_and_kimi_runtimes.md) — Vibe is measured on Windows and WSL2 only";
 
     private static string Wsl2Only(string why, string cure) =>
         $"Vibe runs on WSL2 only for now — {why} (DL1 of todo/PLAN_kimi_and_vibe_on_linux.md){cure}";

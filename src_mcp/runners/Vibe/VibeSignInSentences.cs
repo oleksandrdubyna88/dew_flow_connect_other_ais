@@ -35,13 +35,15 @@ internal static class VibeSignInSentences
         $"the Vibe sign-in file {path} was not linked ({reason}) — coai links a sign-in only when it is a regular file, owned by the user coai runs as, "
         + $"that only that user can write ({Plan}); {Cure(path, reason)}";
 
-    private static string Cure(string path, string reason) => reason switch
-    {
-        _ when reason.Contains("writable by group or others", StringComparison.Ordinal) => $"run `chmod 600 {path}`",
-        _ when reason.StartsWith("a symbolic link", StringComparison.Ordinal) => $"make {path} the file itself, not a link — coai never chains links",
-        _ when reason.Contains("a FIFO", StringComparison.Ordinal) =>
-            "Vibe itself can read a FIFO sign-in (a 1Password-style environment file), but coai links only a regular file it can judge",
-        _ when reason.StartsWith("larger than", StringComparison.Ordinal) => $"keep only `{DotenvNames.Admitted}=…` in it",
-        _ => "check the file's owner and type",
-    };
+    /// <summary>One cure per kind of reason, asked in order: what the reason says, and the cure it has (as a table, so no method branches per kind).</summary>
+    private static readonly (string Says, Func<string, string> Cure)[] Cures =
+    [
+        ("writable by group or others", path => $"run `chmod 600 {path}`"),
+        ("a symbolic link", path => $"make {path} the file itself, not a link — coai never chains links"),
+        ("a FIFO", _ => "Vibe itself can read a FIFO sign-in (a 1Password-style environment file), but coai links only a regular file it can judge"),
+        ("larger than", _ => $"keep only `{DotenvNames.Admitted}=…` in it"),
+    ];
+
+    private static string Cure(string path, string reason) =>
+        Cures.FirstOrDefault(known => reason.Contains(known.Says, StringComparison.Ordinal)).Cure?.Invoke(path) ?? "check the file's owner and type";
 }
