@@ -246,7 +246,10 @@ Numbered DL1–DL14 so they never collide with the parent plan's D-numbers. Ever
   parser with its tests, the kernel's octal escapes decoded and the super-options kept raw as the kernel prints them). The sentence
   still names `/mnt/<letter>/` as the example; the rule is the mount type. On a native Linux without drvfs the rule is inert (Q1).
   It is judged on the real path (`Resolved`, `Junctions.cs:179`). coai never `chmod`s the target (Kimi keeps it `0700`, RESULTS_kimi
-  §11). **Waits for L-K2.**
+  §11). **Confirmed by L-K2 (RESULTS_kimi_confinement §29):** signed in 8 of 8 through the symlink; the one refresh wrote
+  `<slot>.json.tmp.<pid>.<rand>` INSIDE the person's folder and renamed it over the slot (new inode, same name, size and mode `600`, no
+  leftover); the link kept its inode, the folder kept `700`, the rest of `~/.kimi-code` was untouched. One consequence: the folder
+  must stay writable by its owner (Kimi's temp-and-rename needs it), and a `*.tmp.*` name there is Kimi's, never coai's to judge.
 
 - **DL7 — The Linux lock key is the folder's identity: `(st_dev, st_ino)` from `statx`.** *Security / authentication.*
   `KimiCredentialsLock.KeyFor` (`src_mcp/runners/Kimi/KimiCredentialsLock.cs:116-120`) hashes `HandleRead.FinalDirectory`, which is
@@ -286,6 +289,8 @@ Numbered DL1–DL14 so they never collide with the parent plan's D-numbers. Ever
   enough for its purpose, one refresher at a time, IF the refresher is `kimi` itself: **L-K4** checks that no descendant of `kimi acp`
   is another `kimi`. If one is, `ForeignKimiWatch`'s orphan rule (a `kimi` whose parent ended counts as the person's,
   `src_mcp/runners/Kimi/ForeignKimi.cs:32-36`) is the only net, and the plan goes back to the owner before E5 ships.
+  **L-K4 (RESULTS_kimi_confinement §29): no descendant of `kimi acp` was another `kimi`; only the agent held the inherited lock
+  descriptor** (`rg` and a transient `env` child held nothing). The premise holds; L-N1 (.NET's share mode on Linux) is still owed.
 
 - **DL9 — The teardown on Linux: the shim is a child SUBREAPER and ends its own descendants by identity.** The parent plan's S4
   condition (`PLAN_vibe_and_kimi_runtimes.md` §4, "Before the shim launches Kimi on any host but Windows") asks the transport to own
