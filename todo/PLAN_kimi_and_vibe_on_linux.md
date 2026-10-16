@@ -145,6 +145,14 @@ Numbered DL1–DL14 so they never collide with the parent plan's D-numbers. Ever
       bound that coai did not see (`MISTRAL_API_KEY="a` + `"` + `VIBE_X=1` binds `VIBE_X` on its own line, and coai refuses it).
       What coai cannot do is SAY "keep each variable on one line" reliably, so that sentence is not promised; the
       whole-file vectors (L-V6b) pin all three shapes;
+    - **what a "line" is** (cadence consult a3933362, turn 2, verified): python-dotenv's line break is `
+`, `
+` OR a bare ``
+      (`_newline` in `dotenv/parser.py`) — `MISTRAL_API_KEY=x` + bare CR + `VIBE_X=1` binds `VIBE_X`. coai's reader splits on exactly
+      those three and nothing else (a vertical tab, form feed or NEL binds no second name — measured, and splitting on them would
+      only refuse more). A reader that splits on `
+` alone would admit that file: this is the one place the soundness argument
+      above depends on the implementation, and S-V13 pins it;
     - the cure for both (owner question Q2): keep only `MISTRAL_API_KEY=…` in that file.
 
     A test pins that no sentence, log line or exception message holds a byte of any value;
@@ -492,7 +500,9 @@ Each red is the assertion message the test fails with before the fix.
   `"the refusal echoed text from the .env: 'sk-test-…'"`. *Given* the whole files `MISTRAL_API_KEY="dummy` + `LEAK_CANARY=ending"`, *then*
   refused at line 2 and the sentence holds neither `LEAK_CANARY` nor `ending`; `MISTRAL_API_KEY="dummy` + `#ending"`, *then* admitted
   (python-dotenv binds one name); `MISTRAL_API_KEY="a` + `"` + `VIBE_X=1`, *then* refused at line 3. Red: `"the refusal named
-  LEAK_CANARY, which is value text"`.
+  LEAK_CANARY, which is value text"`. *Given* `MISTRAL_API_KEY=x` + bare CR + `VIBE_X=1`, *then* refused at line 2. Red: `"a bare CR
+  hid VIBE_X from coai, which python-dotenv binds"`. The Theory asserts the IMPLICATION over every vector, not name equality:
+  *coai admits the file ⇒ every name python-dotenv binds is `MISTRAL_API_KEY`*, run through the product's own line reader.
 - S-V14 *Given* `~/.vibe/.env` is a FIFO, a socket, or a file whose owner is another uid, *when* the link maker judges it, *then*
   refused through the descriptor without blocking (the test's FIFO has no writer). Red: `"the judgement blocked on a FIFO"` /
   `"a file owned by uid … was admitted"`.
