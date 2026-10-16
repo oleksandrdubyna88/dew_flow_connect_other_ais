@@ -24,7 +24,7 @@ import { type BusySnapshot, IDLE } from './busySnapshot';
 import type { Phrase } from './phrases';
 import { phraseColours } from './phrases';
 import { ROLE_TONE_CSS, roleTone } from './roleTone';
-import { runtimeSkewNote } from './runtimeSince';
+import { runtimeOnServer, runtimeSkewNote } from './runtimeSince';
 import { availabilityOf, ProviderHealth, ProvidersAnswer } from './providers';
 import { ChatSettings, chatSettingsFrom } from './chatSettings';
 import { consultantBody } from './consultantView';
@@ -1184,6 +1184,8 @@ export function cardContextFor(state: PanelState): (vendor: Vendor) => CardConte
     reported: state.providers?.reported ?? {},
     // Per card, so the sentence names THIS row (`runtimeOnServer` decides whether there is one).
     runtimeNote: runtimeSkewNote(serverVersion, [v], host),
+    // WHAT switches the controls off: the server does not know the runtime. A note about the host rides `runtimeNote` too.
+    runtimeHeld: !runtimeOnServer(v.runtime, serverVersion),
     // Per card too: a Team server row and an older server switch the feature box off for different
     // reasons, and the card says which (`featureNote`, story S3.3).
     featureNote: featureNote(v, serverVersion),
@@ -1277,12 +1279,19 @@ export interface CardContext {
   /** This vendor's colour, already decided against every other configured vendor. */
   readonly colour: string;
   /**
-   * For a row of a runtime newer than the installed server (`api`, `vibe` — `runtimeSince.ts`): the sentence naming
-   * that server as too old to run it — or empty. Non-empty DISABLES
-   * the card's controls and is shown on it; the writer keeps the same row out of the settings file
-   * (`vendorsEnv`), so the card and the file agree about what the old server will run.
+   * What this card says about the installed server and the host (`runtimeSince.ts`), or empty: for a row of a runtime
+   * newer than the server (`api`, `vibe`) the sentence naming that server as too old to run it, and for a Vibe row on
+   * Linux or WSL the sentence about the HOST (update on WSL2, a refusal on native Linux and WSL1). It is SHOWN on the
+   * card; it does not decide the controls — {@link runtimeHeld} does.
    */
   readonly runtimeNote: string;
+  /**
+   * True when the installed server does not know this row's runtime (`!runtimeOnServer`). Only this DISABLES the card's
+   * controls; the writer keeps the same row out of the settings file (`vendorsEnv`), so the card and the file agree
+   * about what the old server will run. A note about the host is not this: a row that is merely refused at launch keeps
+   * its ticks.
+   */
+  readonly runtimeHeld: boolean;
   /**
    * Why this card's "reviews features" box is off — a Team server row (D10), or an installed server
    * older than `FEATURE_SINCE` — or empty when the box is live. The writer holds the same tick back
