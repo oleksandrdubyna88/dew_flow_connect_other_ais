@@ -13,18 +13,18 @@
 before any story. E6 carries no cornerstone AREA (the parent's `## Epics`, *"an arithmetic §8 fixes as exact-cell tests"*), so
 no story here is marked; the parent's ledger reads `Cornerstones: 3 of 3 — E2.S1, E3.S4, E4.S2` (parent §16 D21).
 
-**Inputs E6 reads, and from whom.** E6 depends on E5.S2 (step 23) and E2.S3 (step 22), on E4.S4 for contributors and on
+**Inputs E6 reads, and from whom.** E6 depends on E5.S2 (step 24 (step 23 was taken by the plan-gate E2, 2026-10-16)) and E2.S3 (step 22), on E4.S4 for contributors and on
 E5.S6 for `shared/model-display-vectors.json`. None of their schema steps exists today
 (`Schema.cs:31-37` ends at step 21, `TheRoundsKey`, `:614-616`), so the names below are the parent's (§7, §11 step 4) and
-**the coder of E6.S1 opens `Schema.cs` steps 22 and 23 as E2 and E5 shipped them and uses THEIR names** — where they differ
+**the coder of E6.S1 opens `Schema.cs` steps 22 and 24 as E2 and E5 shipped them (step 23 was taken by the plan-gate E2, 2026-10-16) and uses THEIR names** — where they differ
 from this list, the shipped schema wins and the story's summary says so.
 
 | Read | From | Columns this document assumes |
 |---|---|---|
 | `round_changes` | E2.S3, step 22 | `round_id, scope (whole\|delta), coverage (shown\|elided\|excluded\|binary), kind (code\|test\|docs\|config\|unknown), files, added, removed`; `delta`'s `unavailable: <why>` as E2 records it |
 | `reviewers.effort` | E2.S3, step 22 | `not recorded` = a row from before step 22; `''` = no effort applied (D7, parent §16 D11) |
-| `round_authors` | E5.S2, step 23 | `round_id, who (main\|subagent), agent (opaque id, '' for main), requested, model, effort, agent_type, association, window, launches, turns, <4 token terms>, write_calls` |
-| `rounds.authors_state`, `authors_session`, `authors_id_source`, `authors_reader`, ambiguous totals | E5.S2, step 23 | state `''` (not recorded) \| `observed` \| `partial: <why>` \| `unobserved: <why>` (§5) |
+| `round_authors` | E5.S2, step 24 | `round_id, who (main\|subagent), agent (opaque id, '' for main), requested, model, effort, agent_type, association, window, launches, turns, <4 token terms>, write_calls` |
+| `rounds.authors_state`, `authors_session`, `authors_id_source`, `authors_reader`, ambiguous totals | E5.S2, step 24 | state `''` (not recorded) \| `observed` \| `partial: <why>` \| `unobserved: <why>` (§5) |
 | `rounds` (existing) | `Schema.cs:52-78` | `id, session_id, stage, number, status, started_utc, accepted` (`-1` = `resolve` never ran, `:71-73`), `gating` (the gate's own count — the `gate_count` numerator, D8) |
 | `sessions` (existing) | `Schema.cs:45-50` | `id, repo_path, branch` |
 | `reviewers` (existing) | `Schema.cs:80-88,597-600` | `round_id, provider, status, model` |
@@ -96,10 +96,10 @@ Not a cornerstone.
 ### E6.S1 — The read: every round of a stage as text-free facts, read-only
 
 - **Goal.** One read-only open of `coai.db` returns, per round, everything S2 needs and nothing it does not — no text column is
-  ever selected — and a database from before steps 22/23 is read, not migrated, with its absences as *not recorded*.
+  ever selected — and a database from before steps 22/24 (step 23 was taken by the plan-gate E2, 2026-10-16) is read, not migrated, with its absences as *not recorded*.
 - **Scope (verified).** New `RoundAuthorsModels.cs`, `RoundAuthorsQuery.cs`, test seed `RoundAuthorsSeed.cs`. Reused, not
   copied: the read-only open string `RoundCounts.cs:87`; `RoundsQuery.HasColumn` (`RoundsQuery.cs:895-902`) for every column of
-  steps 22/23 and a `sqlite_master` lookup for each new table; `Columns.Text/Number/Id` (`Columns.cs:30-40`); the missing-file
+  steps 22/24 and a `sqlite_master` lookup for each new table; `Columns.Text/Number/Id` (`Columns.cs:30-40`); the missing-file
   answer `RoundCounts.cs:81-85`. Stage names are `nameof(Stage.CodeReview)` / `nameof(Stage.PlanReview)` as stored
   (`RoundCounts.cs:159-160`).
 - **Brief (for the Sonnet coder).**
@@ -142,7 +142,7 @@ Not a cornerstone.
      only as `InWindow = false` context.
   6. *A step-21 file* (`OlderFile` stopped before step 22): rounds read, authors `NotRecorded`, size not recorded,
      `EffortRecorded = false`; the file's SHA-256 and `PRAGMA user_version` (21) unchanged afterwards.
-  7. *A step-22 file* (stopped before 23): size read, authors `NotRecorded`.
+  7. *A step-22 or step-23 file* (stopped before 24 (step 23 was taken by the plan-gate E2, 2026-10-16)): size read, authors `NotRecorded`.
   8. *Missing database* → `[]`, the data directory holds no `coai.db` afterwards.
   9. *No text crosses*: a sentinel (`SENTINEL-7f3a`) written into `plan_text`, `agent_log`, `subject`, `note`, and every
      finding's `title/why/fix/reason` → no `RoundFacts.ToString()` of the read contains it; companion (`testing.md`, *a
@@ -152,7 +152,7 @@ Not a cornerstone.
   `f.title` into a field → scenario 9; use `<=` for `until` → scenario 4.
 - **Done when.** Scenarios 1–9 green, the four break-its observed; the reader is read-only (scenario 6) and text-free
   (scenario 9); suite green.
-- **Depends on.** E2.S3 (step 22), E5.S2 (step 23), E4.S4 (contributors), E5.S6 (the vectors file). **Model:** brief Opus → code Sonnet → review Opus → fixes Sonnet.
+- **Depends on.** E2.S3 (step 22), E5.S2 (step 24 (step 23 was taken by the plan-gate E2, 2026-10-16)), E4.S4 (contributors), E5.S6 (the vectors file). **Model:** brief Opus → code Sonnet → review Opus → fixes Sonnet.
 
 ---
 

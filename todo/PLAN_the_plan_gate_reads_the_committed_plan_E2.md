@@ -1,6 +1,6 @@
 # PLAN — E2 stories: plan provenance in history and in the rounds log
 
-> Status: **plan only, nothing implemented yet, 2026-10-16** — written 2026-10-15 with E1's stories, revised 2026-10-16
+> Status: **coded and tested on the branch `feat/plan-gate-e2`, 2026-10-16 — not merged; it moves to `research/` with the parent plan and E1's stories** — written 2026-10-15 with E1's stories, revised 2026-10-16
 > against `main` at `03ec1c1a` (E1 merged as #837; the round-size step 22 merged as #829). Epic E2 of
 > [PLAN_the_plan_gate_reads_the_committed_plan.md](PLAN_the_plan_gate_reads_the_committed_plan.md).
 >

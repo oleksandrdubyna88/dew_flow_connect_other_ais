@@ -1019,7 +1019,7 @@ code is in; S5 needs only S3; S4 is last. The epic lands as ONE commit on its ow
    `RoundEngine.cs:605-625`; the size is set on the finished record at `RoundEngine.cs:483-491` and `RecordRound` reads it
    from there, as it reads `Caller`.
 6. `TheRoundKeyIsStepTwentyOneTests.cs:79` pins `Steps.Length == 21`; step 22 relaxes it to `≥ 21` (S3), as step 21 did to
-   step 20's test. E5's step 23 will do the same to S3's test.
+   step 20's test. E5's step 24 (step 23 was taken by the plan-gate E2, 2026-10-16) will do the same to S3's test.
 7. "Code = the repository's tree-sitter languages" has two candidate maps (`OutlineLanguages.Of`, 7 languages;
    `TreeSitterNormalizer.LanguageOf`, 3). S1 takes `OutlineLanguages` ("the one mapping"); `.ps1`, `.sh`, `.razor`, `.html`,
    `.css` are `unknown` and outside the default `code`+`test` denominator of parent §8 — a choice E6 should print.

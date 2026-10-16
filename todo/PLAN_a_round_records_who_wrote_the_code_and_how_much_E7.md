@@ -46,7 +46,7 @@ following the `RoundRecord.Caller` precedent (`src_mcp/src/Server/SessionStore.c
 | E2.S1 (the predecessor rule), E2.S2 (the numstats), E2.S3 (`round_changes` writer, `RoundRecord.Size`) | `ReadCounted`, `ChangeSize` (scope × coverage × kind), the delta's predecessor rule ("the gate session's last CODE round with status `done` and a `Sha`", parent §7, `SessionStore.cs:96-104`) and `merge-base --is-ancestor`; the `round_changes` row writer; `RoundRecord.Size` | S2, S3 |
 | E3.S2 (`LocateStored`, `NoReaderFor`), E3.S4 (`ObservedSession`, `ReaderVersion`, states, the byte budget) | `CallerTranscript` → `ObservedSession`; the reader's version constant (`authors_reader`); the `partial: <why>` / `unobserved: <why>` reasons; the byte budget | S1, S2 |
 | E4.S2, E4.S3, E4.S4 | `RoundAttribution` — pure: an `ObservedSession` + the gate session's rounds → windows, association, ambiguous totals, contributors | S2 |
-| E5.S1 (`RoundRecord.Authors`), E5.S2 (step 23, `RoundAuthorsTable`), E5.S4 (the live call site) | schema step 23 (`round_authors`, `rounds.authors_state`, `authors_session`, `authors_reader`, the ambiguous totals); the row writer for one round's authors; the function that decides `no session id` / `no reader for <vendor>`; the live call site in `RoundEngine.cs:605-625`; `RoundRecord.Authors` | S1, S2, S3 |
+| E5.S1 (`RoundRecord.Authors`), E5.S2 (step 24 (step 23 was taken by the plan-gate E2, 2026-10-16), `RoundAuthorsTable`), E5.S4 (the live call site) | schema step 24 (`round_authors`, `rounds.authors_state`, `authors_session`, `authors_reader`, the ambiguous totals); the row writer for one round's authors; the function that decides `no session id` / `no reader for <vendor>`; the live call site in `RoundEngine.cs:605-625`; `RoundRecord.Authors` | S1, S2, S3 |
 | E6.S4 (the JSON of sums, `--add`), E6.S5 (the mode) | `coai-mcp --round-authors` with `--add`, `--table`, cohorts and the JSON of sums | S4 (the "no totals changed" oracle), O4 |
 | E1.S5 (fixtures), E1.S4 (the WSL measurements) | the sanitised fixtures (every text field a sentinel) and the WSL-side measurements in its `research/RESULTS_` file | S2, S3, S4, O1 |
 
@@ -116,7 +116,7 @@ Each was settled by opening the file; the line it rests on is given.
 | E7.O4 | The answer — `--round-authors` over both sides, the `RESULTS_` file | operation | — | J1 passed |
 | E7.O5 | Docs and promotion | operation | — | O4 |
 
-Build order: S1 as soon as E3.S4's state vocabulary and E5.S2's step 23 exist; S2 once E4.S3 and E5.S4 exist; S3 after
+Build order: S1 as soon as E3.S4's state vocabulary and E5.S2's step 24 exist; S2 once E4.S3 and E5.S4 exist; S3 after
 S1 and E5.S2's row writer; S4 last of the code. Then O1 → O2 and O3 (either order, one at a time) → J1 → O4 → O5. A defect J1
 finds sends the work back through a new RED-test story before O4 (J1's rule).
 
@@ -164,7 +164,7 @@ finds sends the work back through a new RED-test story before O4 (J1's rule).
     ("expected keep, found compute"); the strength guard removed → `AWeakerResult_…` red naming the downgraded state.
 - **Done when.** Every cell of the table passes; both break-its observed red and restored green; no reason sentence
   contains a path.
-- **Depends on.** E3.S4 (states, reader version), E3.S2 (`LocateStored`, the no-reader reason), E5.S2 (step 23's column meanings).
+- **Depends on.** E3.S4 (states, reader version), E3.S2 (`LocateStored`, the no-reader reason), E5.S2 (step 24's column meanings (step 23 was taken by the plan-gate E2, 2026-10-16)).
 - **Model.** scenarios + brief **opus** → code + tests **sonnet** → review **opus** → fixes **sonnet**.
 
 ### E7.S2 — A stored round's history, rebuilt exactly as the live path sees it
@@ -270,7 +270,7 @@ finds sends the work back through a new RED-test story before O4 (J1's rule).
   - Sentinels absent from the database bytes and the session files.
 - **Done when.** All pass; the three break-its observed red with the named symptom and restored green.
 - **Depends on.** S1, E2.S3 (`round_changes` writer, `RoundRecord.Size`/`Gitlinks`), E5.S1 (`RoundRecord.Authors`), E5.S2
-  (step 23, the authors writer).
+  (step 24, the authors writer (step 23 was taken by the plan-gate E2, 2026-10-16)).
 - **Model.** scenarios + brief **opus** → code + tests **sonnet** → review **opus** → fixes **sonnet**.
 
 ### E7.S4 — `coai-mcp --backfill-authors`: the mode, its backup, its summary, its scenario
