@@ -17,7 +17,12 @@ namespace CoaiMcp.Runners.Kimi;
 /// <param name="Reason">The shim's own sentence for how the turn ended.</param>
 /// <param name="Answer">The agent's answer — empty unless the turn was answered.</param>
 /// <param name="Usage">The session's tokens when <c>/usage</c> gave them; unknown otherwise, never a guess and never a cost (D9).</param>
-public sealed record KimiReport(string End, string Failure, string Reason, string Answer, Usage Usage)
+/// <param name="SessionId">
+/// The session the turn ran in (<c>sessionId</c>): the one the agent minted on a first turn, the one <c>--session</c> asked for on a continued
+/// one — on EVERY exit that prints a report (E5.2's review). What a consultation continues next turn (E5.4 decision 3); empty when the report
+/// named none or is unreadable.
+/// </param>
+public sealed record KimiReport(string End, string Failure, string Reason, string Answer, Usage Usage, string SessionId = "")
 {
     /// <summary>A stdout that is not the shim's report (a crash before it printed, a launcher's own text).</summary>
     public static KimiReport Unreadable { get; } = new(string.Empty, string.Empty, string.Empty, string.Empty, Usage.Unknown);
@@ -55,7 +60,7 @@ public sealed record KimiReport(string End, string Failure, string Reason, strin
 
         return end.Length == 0
             ? Unreadable
-            : new KimiReport(end, Text(root, "failure"), Text(root, "reason"), Text(root, "answer"), UsageOf(root, end));
+            : new KimiReport(end, Text(root, "failure"), Text(root, "reason"), Text(root, "answer"), UsageOf(root, end), Text(root, "sessionId"));
     }
 
     /// <summary>

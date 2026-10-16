@@ -24,7 +24,7 @@ public sealed class OnlyARuntimeThatAsksGetsASanitisedSnapshotTests
     }
 
     [Fact]
-    public void EveryConsultantButVibe_StillRunsInTheCheckout_AndVibeAsksForACopy()
+    public void EveryConsultantButVibeAndKimi_StillRunsInTheCheckout_AndThoseTwoAskForACopy()
     {
         var consultants = ConsultantResolution.Consulting
             .Select(runtime => ConsultantResolution.For(new VendorIdentity(runtime, runtime, string.Empty)))
@@ -33,7 +33,8 @@ public sealed class OnlyARuntimeThatAsksGetsASanitisedSnapshotTests
             .ToList();
 
         consultants.Should().NotBeEmpty();
-        consultants.Where(consultant => consultant.NeedsASanitisedSnapshot).Should().ContainSingle()
-            .Which.Should().BeOfType<VibeConsultant>("S3: Vibe consults from a copy of the live tree, every other consultant from the checkout");
+        consultants.Where(consultant => consultant.NeedsASanitisedSnapshot).Select(consultant => consultant.GetType()).Should()
+            .BeEquivalentTo([typeof(VibeConsultant), typeof(Runners.Kimi.KimiConsultant)],
+                "S3: Vibe, and since E5.4 Kimi (decision 6), consult from a copy of the live tree; every other consultant from the checkout");
     }
 }

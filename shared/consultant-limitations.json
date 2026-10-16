@@ -268,6 +268,39 @@
       "standing": "unmeasured",
       "text": "Not run here: coai launches Vibe only on Windows, where it was measured, and refuses it on macOS.",
       "source": "Not measured: no macOS machine has run Vibe for this product (D18 of todo/PLAN_vibe_and_kimi_runtimes.md); the launch is refused until the probe runs there."
+    },
+    {
+      "runtime": "kimi",
+      "platform": "windows",
+      "standing": "unconfined",
+      "text": "Reads coai's copy of the live tree (without its .git, .kimi-code/, skills, sub-agents, .mcp.json and AGENTS.md) through Read, but Grep and Glob search the disk directly and can read any file this user can; every write and shell command was refused - measured on kimi 2.1.1.",
+      "measured": {
+        "date": "2026-10-13",
+        "cliVersion": "kimi 2.1.1",
+        "cells": "M-K6: Read bounded to the working folder 3 of 3, Grep and Glob took a file outside it 3 of 3; M-K3: 0 of 9 writes; M-K4: 0 of 6 writes; M-K5: a loaded session kept every refusal 3 of 3; M-K5b: /usage is the session's cumulative total",
+        "document": "research/RESULTS_kimi_confinement.md"
+      }
+    },
+    {
+      "runtime": "kimi",
+      "platform": "linux",
+      "standing": "unmeasured",
+      "text": "Not run here: coai launches Kimi only on Windows, where it was measured, and refuses it on Linux.",
+      "source": "Not measured: every Kimi cell is Windows (D18 of todo/PLAN_vibe_and_kimi_runtimes.md); the launch is refused until the probe runs on this side."
+    },
+    {
+      "runtime": "kimi",
+      "platform": "wsl",
+      "standing": "unmeasured",
+      "text": "Not run here: coai launches Kimi only on Windows, where it was measured, and refuses it in WSL.",
+      "source": "Not measured: every Kimi cell is Windows, and a kimi named through a WSL bridge is the Linux side by another door (D18 of todo/PLAN_vibe_and_kimi_runtimes.md); the launch is refused until the probe runs there."
+    },
+    {
+      "runtime": "kimi",
+      "platform": "macos",
+      "standing": "unmeasured",
+      "text": "Not run here: coai launches Kimi only on Windows, where it was measured, and refuses it on macOS.",
+      "source": "Not measured: no macOS machine has run Kimi for this product (D18 of todo/PLAN_vibe_and_kimi_runtimes.md); the launch is refused until the probe runs there."
     }
   ]
 }
