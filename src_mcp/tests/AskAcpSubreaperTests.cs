@@ -70,7 +70,12 @@ public sealed class AskAcpSubreaperTests
     {
         LinuxSubreaper.Sentence(13).Should().Be(
             "coai could not make this process the reaper of its own tree (prctl(PR_SET_CHILD_SUBREAPER) answered errno 13), so it cannot verify Kimi's teardown and does not launch it (DL9 of todo/PLAN_kimi_and_vibe_on_linux.md)");
-        LinuxSubreaper.Become().Should().Match(result => OperatingSystem.IsLinux() || result is SubreaperResult.NotLinux, "off Linux there is no subreaper to become");
+        // The real Become() is NEVER called here on Linux: this host would become a subreaper and collect every other test's orphans (as zombies it never reaps).
+        // Its Linux arm is the supervise-tree / shim-acp children of SupervisedTeardownLinuxTests, which exit 65 unless it answered Became.
+        if (!OperatingSystem.IsLinux())
+        {
+            LinuxSubreaper.Become().Should().BeOfType<SubreaperResult.NotLinux>("off Linux there is no subreaper to become");
+        }
     }
 
     // ---------- S-K21: a kernel without pidfd refuses the Kimi launch, before anything starts ----------

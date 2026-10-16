@@ -65,9 +65,6 @@ node .agents/conventions/tools/pin-check.mjs
   request fault that presented as an old binary would send the client down the fallback and hide the
   fault behind a successful-looking export. Reviewers read this list literally, and have
   been right to (2026-09-07, 2026-09-15).
-  `--kimi-clear-marker <path>` answers **0** cleared or no marker, **65** a path that is not a marker under the Kimi lock
-  root (nothing else is ever deleted), **75** a named member still lives, **74** a member could not be verified (or the marker
-  could not be read) — and never 64. It signals nothing; it only deletes one survivor marker once every process it names is gone.
   **Adding a one-shot mode means adding it here — in THIS file.** Inside `ServeAsync`
   the rule is unchanged and absolute.
 
