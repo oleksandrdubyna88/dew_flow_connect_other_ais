@@ -59,7 +59,7 @@ public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary, Ti
         var request = profile.AgentRequest(ask);
         if (Refusal(ask, request) is { Length: > 0 } refused)
         {
-            return AcpOutcome.NotStarted(refused);
+            return AcpOutcome.NotStarted(refused, ask.Session);
         }
 
         AcpTransport transport;
@@ -69,7 +69,7 @@ public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary, Ti
         }
         catch (Exception e) when (e is Win32Exception or InvalidOperationException or IOException)
         {
-            return AcpOutcome.NotStarted($"could not start `{ask.Executable}`: {e.Message}");
+            return AcpOutcome.NotStarted($"could not start `{ask.Executable}`: {e.Message}", ask.Session);
         }
 
         using (transport)
@@ -110,12 +110,15 @@ public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary, Ti
         }
 
         return new AcpOutcome(
-            ended.End, Cut(session.Answer, ended.AnswerChars), ended.Reason, ended.Stop, session.SessionId, session.Usage, session.Refusals, session.ToolCalls, session.Reads,
+            ended.End, Cut(session.Answer, ended.AnswerChars), ended.Reason, ended.Stop, Named(session, ask), session.Usage, session.Refusals, session.ToolCalls, session.Reads,
             transport.StdErr, transport.Pid, session.DroppedTraceEntries, session.TruncatedTraceFields)
         {
             Tokens = ended.Tokens,
         };
     }
+
+    /// <summary>The session the report names: the one the agent minted or loaded — else, for a turn that ended before it, the one <c>--session</c> asked for.</summary>
+    private static string Named(AcpSession session, AcpAsk ask) => session.SessionId.Length > 0 ? session.SessionId : ask.Session;
 
     /// <summary><c>initialize</c>, the session opened (new, or loaded for <c>--session</c>), the model found among what it announced (D10) — and only then the prompt.</summary>
     private async Task<Ended> ConverseAsync(AcpSession session, AcpAsk ask)
@@ -164,9 +167,21 @@ public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary, Ti
         }
     }
 
-    /// <summary>The sentence for a refused load: the id in coai's own words, the agent's code and message — its echo of the id written <c>&lt;id&gt;</c>, never repeated.</summary>
+    /// <summary>
+    /// The sentence for a refused load: <see cref="LostLead"/> (the id in coai's own words), then the agent's code and message — with Kimi's own echo of the
+    /// id (<c>Unknown sessionId: &lt;id&gt;</c>, RESULTS §29) written <c>&lt;id&gt;</c>. Only that phrase is rewritten: a short id written over every one of its
+    /// occurrences would garble the agent's words (an id <c>a</c> turned <c>Authentication</c> into <c>Authentic&lt;id&gt;tion</c>, E5.2 review).
+    /// </summary>
     private static string LostReason(string session, AcpAgentException refused) =>
-        $"the agent no longer holds session {session} — it answered session/load with an error ({refused.Code}): {refused.Message.Replace(session, "<id>", StringComparison.Ordinal)}";
+        $"{LostLead(session)}it answered session/load with an error ({refused.Code}): {refused.Message.Replace(KimisEcho + session, KimisEcho + "<id>", StringComparison.Ordinal)}";
+
+    private const string KimisEcho = "Unknown sessionId: ";
+
+    /// <summary>
+    /// The start of a <see cref="AcpEnd.SessionLost"/> reason — coai's words, naming the id. The shim leaves it out of the text a known failure is looked for
+    /// in, so an id cannot spell a failure (<c>AskAcpMode.Diagnosable</c>).
+    /// </summary>
+    public static string LostLead(string session) => $"the agent no longer holds session {session} — ";
 
     /// <summary>
     /// Why the asked model cannot be set — the session does not offer it, or offers no such option at all — or empty. Found out in the

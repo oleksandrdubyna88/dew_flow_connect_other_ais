@@ -228,3 +228,13 @@ test('S5.1.2 endLikeTheShim cancels, waits, kills, then closes stdin', async () 
   assert.deepEqual(order, ['cancel', 'killed']);
   assert.equal(state.sessionId, 's-new');
 });
+
+// The E5.2 review (M3): the probe kills a child by pid only while that child has neither exited nor been killed — after it has, its pid may
+// already be another process's on POSIX.
+test('a child is killed by pid only while it is still running', async () => {
+  const kimi = await import('./kimi.mjs');
+  assert.equal(typeof kimi.stillRunning, 'function', 'stillRunning is not exported — the probe would kill a pid it no longer owns');
+  assert.equal(kimi.stillRunning({ exitCode: null, signalCode: null }), true);
+  assert.equal(kimi.stillRunning({ exitCode: 0, signalCode: null }), false, 'it exited on its own');
+  assert.equal(kimi.stillRunning({ exitCode: null, signalCode: 'SIGKILL' }), false, 'it was killed already');
+});

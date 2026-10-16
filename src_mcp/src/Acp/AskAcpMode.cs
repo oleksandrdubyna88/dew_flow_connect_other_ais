@@ -149,7 +149,7 @@ internal static class AskAcpMode
     {
         if (profile.AgentRefusal(profile.AgentRequest(ask), ask) is { Length: > 0 } refused)
         {
-            return await NotStartedAsync(refused, BadRequest, note, output);
+            return await NotStartedAsync(refused, BadRequest, ask, note, output);
         }
 
         var waiting = Stopwatch.StartNew();
@@ -158,7 +158,7 @@ internal static class AskAcpMode
         {
             var (sentence, exit) = Declined(holding);
 
-            return await NotStartedAsync(sentence, exit, note, output);
+            return await NotStartedAsync(sentence, exit, ask, note, output);
         }
 
         return await HeldAsync(profile, ask, held, ask.Deadline - waiting.Elapsed, note, output, ct);
@@ -175,7 +175,7 @@ internal static class AskAcpMode
         {
             held.Hold.Dispose();
 
-            return await NotStartedAsync(LateSentence(ask.Deadline), Unavailable, note, output);
+            return await NotStartedAsync(LateSentence(ask.Deadline), Unavailable, ask, note, output);
         }
 
         AcpOutcome outcome;
@@ -184,7 +184,7 @@ internal static class AskAcpMode
             outcome = await new AcpClient(profile, new FolderReadBoundary(ask.Cwd, profile.ExcludedNames)).AskAsync(ask with { Deadline = left }, ct);
         }
 
-        return await ReportedAsync(profile, outcome, note, output);
+        return await ReportedAsync(profile, outcome, ask.Session, note, output);
     }
 
     private static string LateSentence(TimeSpan deadline) =>
@@ -198,24 +198,31 @@ internal static class AskAcpMode
         _ => ("the sign-in hold came to an answer this shim has no word for — refused rather than started without it (D19)", BadRequest),
     };
 
-    /// <summary>A turn that never started an agent, said as every other end is: the report on stdout, the sentence on stderr, the exit.</summary>
-    private static async Task<int> NotStartedAsync(string sentence, int exit, Action<string> note, TextWriter output)
+    /// <summary>A turn that never started an agent, said as every other end is: the report on stdout (naming the asked session, if any), the sentence on stderr, the exit.</summary>
+    private static async Task<int> NotStartedAsync(string sentence, int exit, AcpAsk ask, Action<string> note, TextWriter output)
     {
         note(sentence);
-        await output.WriteLineAsync(Report(AcpOutcome.NotStarted(sentence), AcpDiagnosis.None));
+        await output.WriteLineAsync(Report(AcpOutcome.NotStarted(sentence, ask.Session), AcpDiagnosis.None));
 
         return exit;
     }
 
     /// <summary>The report printed, the exit made from the outcome.</summary>
-    private static async Task<int> ReportedAsync(IAcpProfile profile, AcpOutcome outcome, Action<string> note, TextWriter output)
+    private static async Task<int> ReportedAsync(IAcpProfile profile, AcpOutcome outcome, string session, Action<string> note, TextWriter output)
     {
-        var diagnosis = AcpDiagnosis.Of(outcome.Reason + "\n" + outcome.StdErr, profile.KnownFailures);
+        var diagnosis = AcpDiagnosis.Of(Diagnosable(outcome, session), profile.KnownFailures);
         var named = Named(outcome, diagnosis);
         await output.WriteLineAsync(Report(named, diagnosis));
 
         return Exit(named, diagnosis, note);
     }
+
+    /// <summary>
+    /// The text a known failure is looked for in: the reason and the agent's stderr — without coai's own lead of a lost session (<see cref="AcpClient.LostLead"/>),
+    /// so the id it names can never spell a failure and turn a lost session into a refusal or a spent allowance (E5.2 review).
+    /// </summary>
+    private static string Diagnosable(AcpOutcome outcome, string session) =>
+        outcome.Reason.Replace(AcpClient.LostLead(session), string.Empty, StringComparison.Ordinal) + "\n" + outcome.StdErr;
 
     /// <summary>
     /// A refused load that a known failure names is that failure, not a lost session (E5.2 decision 4): its end is the agent's own failure, so the

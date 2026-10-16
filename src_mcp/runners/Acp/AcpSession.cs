@@ -77,6 +77,9 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
     /// <summary>True while a <see cref="ReplayedAsync"/> request is open: every <c>session/update</c> then is history, not this turn's.</summary>
     private volatile bool _replaying;
 
+    /// <summary>The tool-call ids the replay announced: a later update of one of them is history too, never a new entry of this turn's trace (E5.2 review).</summary>
+    private readonly HashSet<string> _replayedToolCalls = new(StringComparer.Ordinal);
+
     /// <summary>The id <c>session/new</c> answered with — empty until it has. Set by the client; the teardown's <c>session/cancel</c> names it.</summary>
     public string SessionId { get; set; } = string.Empty;
 
@@ -466,12 +469,36 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
 
     private Task Noted(AcpIncoming notification)
     {
-        if (notification.Method == "session/update" && !_replaying)
+        if (notification.Method == "session/update")
         {
-            Update(AcpMessages.Child(notification.Params, "update"));
+            Heard(AcpMessages.Child(notification.Params, "update"));
         }
 
         return Task.CompletedTask;
+    }
+
+    /// <summary>An update of this turn — or, while a replay is open, a piece of history: only its tool-call id is kept, to recognise its later updates.</summary>
+    private void Heard(JsonElement update)
+    {
+        if (_replaying)
+        {
+            Remembered(update);
+
+            return;
+        }
+
+        Update(update);
+    }
+
+    private void Remembered(JsonElement update)
+    {
+        if (AcpMessages.Text(update, "toolCallId") is { Length: > 0 } id)
+        {
+            lock (_traceGate)
+            {
+                _replayedToolCalls.Add(id);
+            }
+        }
     }
 
     private void Update(JsonElement update)
@@ -522,7 +549,10 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
         var id = Bounded(AcpMessages.Text(update, "toolCallId"), ref cuts);
         lock (_traceGate)
         {
-            Merged(update, id, cuts);
+            if (!_replayedToolCalls.Contains(AcpMessages.Text(update, "toolCallId")))
+            {
+                Merged(update, id, cuts);
+            }
         }
     }
 

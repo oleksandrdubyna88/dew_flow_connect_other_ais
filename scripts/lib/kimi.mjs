@@ -412,6 +412,12 @@ function killTree(pid) {
   try { process.kill(pid, 'SIGKILL'); } catch { /* already gone */ }
 }
 
+/**
+ * Whether a child may still be killed by its pid: it has neither exited nor been killed. After either, the pid may already be another
+ * process's on POSIX (the E5.2 review, M3) — so a kill that comes late is skipped, never sent to whoever holds the number now.
+ */
+export const stillRunning = (child) => child.exitCode === null && child.signalCode === null;
+
 /** How much of a replayed text chunk a `loadUpdates` row keeps — enough to recognise an earlier answer, small enough to keep a row small. */
 export const LOAD_TEXT_CHARS = 120;
 
@@ -459,7 +465,7 @@ export function acpTurn({ exe, args = ['acp'], cwd, env, deadlineMs, model = '',
     // The probe's own ending (M-K5): stdin closed, 1.5 s for the agent to leave, then the tree kill.
     const stdinFirst = () => new Promise((ended) => {
       try { child.stdin.end(); } catch { /* already closed */ }
-      setTimeout(() => { killTree(child.pid); setTimeout(ended, 300); }, 1500);
+      setTimeout(() => { if (stillRunning(child)) killTree(child.pid); setTimeout(ended, 300); }, 1500);
     });
     // The shim's ending (AcpClient + AcpTransport.EndAsync): session/cancel when a session exists, a short quiet, the tree kill while the agent
     // is still alive, and only then stdin closed — so an agent that would leave on EOF never takes its children out of the kill's reach.
@@ -469,7 +475,7 @@ export function acpTurn({ exe, args = ['acp'], cwd, env, deadlineMs, model = '',
         lastOutput = Date.now();
         await quiet(() => lastOutput);
       }
-      killTree(child.pid);
+      if (stillRunning(child)) killTree(child.pid);
       try { child.stdin.end(); } catch { /* already closed */ }
       await exitedWithin(exited, 5000);
     };

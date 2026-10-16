@@ -121,6 +121,7 @@ public sealed class AskAcpSessionTests
     [InlineData("a b")]
     [InlineData("../x")]
     [InlineData("a\nb")]
+    [InlineData("abc\n")]
     [InlineData("TOO-LONG")]
     [InlineData("")]
     public async Task AMalformedSessionId_Is65_BeforeAnyProcess(string id)
@@ -138,6 +139,91 @@ public sealed class AskAcpSessionTests
         code.Should().Be(65, Stderr);
         Stderr.Should().Contain("--session");
         File.Exists(agent.Log).Should().BeFalse("nothing was started for an id the shim will not put on a wire");
+    }
+
+    // ---------- the review of E5.2: the asked id on EVERY exit ----------
+
+    /// <summary>
+    /// A <c>--session</c> turn names its session on every exit the host can read a report from — the hold busy past the deadline, an agent that cannot be
+    /// started, an agent that fails before the load — so the host never takes an empty handle for "the conversation is gone".
+    /// </summary>
+    [Theory]
+    [InlineData("busy")]
+    [InlineData("no-executable")]
+    [InlineData("initialize")]
+    public async Task EveryExitOfALoadTurn_NamesTheAskedSession(string how)
+    {
+        using var agent = new FakeAcpAgent([FakeAcpAgent.Chunk("NEW")], how == "initialize" ? ""","initializeError":"boom" """ : string.Empty);
+        IAcpProfile profile = how == "busy" ? new BusyProfile(agent.Profile()) : agent.Profile();
+        string[] executable = how == "no-executable" ? ["--executable", agent.Inside("no-such-cli")] : [];
+
+        var code = await AskAcpMode.RunAsync(
+            ["--ask-acp", "--profile", profile.Name, "--model", "m-1", "--cwd", agent.Cwd, "--deadline-seconds", "30", "--session", "s-1", .. executable],
+            new StringReader("say hello"), _stderr.Add, _stdout, [profile]);
+
+        code.Should().NotBe(0, Stderr);
+        Report().GetProperty("sessionId").GetString().Should().Be("s-1", $"the {how} exit of a --session turn still names the session it was asked to continue");
+    }
+
+    /// <summary>The fake profile with a sign-in held elsewhere past the deadline.</summary>
+    private sealed class BusyProfile(IAcpProfile inner) : IAcpProfile
+    {
+        public string Name => "busy";
+
+        public string DefaultExecutable => inner.DefaultExecutable;
+
+        public IReadOnlyList<string> Arguments => inner.Arguments;
+
+        public string ModelOptionId => inner.ModelOptionId;
+
+        public IReadOnlyList<string> ExcludedNames => inner.ExcludedNames;
+
+        public IReadOnlyList<AcpKnownFailure> KnownFailures => inner.KnownFailures;
+
+        public AcpHolding Hold(AcpAsk ask, TimeSpan within) => new AcpHolding.Busy("another Kimi started on this sign-in is still running");
+    }
+
+    // ---------- the review of E5.2: a replayed tool call stays history (M1) ----------
+
+    [Fact]
+    public async Task ALateUpdateOfAReplayedToolCall_AddsNoTraceEntry()
+    {
+        using var agent = new FakeAcpAgent(
+            [FakeAcpAgent.ToolCallUpdate("t-old", "completed"), FakeAcpAgent.Chunk("NEW")],
+            $$""","replay":[{{FakeAcpAgent.ToolCall("t-old", "Read old", "read", "pending")}}]""");
+
+        var code = await LoadAsync(agent);
+
+        code.Should().Be(0, Stderr);
+        Report().GetProperty("toolCalls").GetArrayLength().Should().Be(0, "an update of a tool call the replay announced belongs to the history, not to this turn's trace");
+    }
+
+    // ---------- the review of E5.2: the id cannot change the diagnosis (M2) ----------
+
+    [Fact]
+    public async Task AShortSessionId_DoesNotGarbleTheAgentsWords_SoTheKnownFailureStillWins()
+    {
+        using var agent = new FakeAcpAgent(
+            [FakeAcpAgent.Chunk("NEW")], ""","loadable":false,"loadError":{"code":-32000,"message":"Authentication required"}""");
+
+        var code = await LoadAsync(agent, session: "a", failures: new KimiAcpProfile().KnownFailures);
+
+        code.Should().Be(77, "a one-letter id must not be written over the letters of the agent's sentence: " + Stderr);
+        Report().GetProperty("failure").GetString().Should().Be("not_signed_in");
+    }
+
+    [Fact]
+    public async Task ASessionIdThatSpellsAKnownFailure_IsStillSessionLost()
+    {
+        using var agent = new FakeAcpAgent(
+            [FakeAcpAgent.Chunk("NEW")], ""","loadable":false,"loadError":{"code":-32602,"message":"Invalid params: Unknown sessionId: quota-gone"}""");
+        AcpKnownFailure[] failures = [new("quota-gone", "quota_gone", "wait", AcpFailureKind.Spent)];
+
+        var code = await LoadAsync(agent, session: "quota-gone", failures: failures);
+
+        code.Should().Be(70, "the id is coai's own word for the session, never the agent's failure: " + Stderr);
+        Report().GetProperty("end").GetString().Should().Be("session_lost");
+        Report().TryGetProperty("failure", out _).Should().BeFalse();
     }
 
     // ---------- S5.2.6 (E5.1 (a) took the first branch: the load announces the model, RESULTS §29) ----------

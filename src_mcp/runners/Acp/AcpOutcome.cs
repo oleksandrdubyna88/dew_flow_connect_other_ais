@@ -102,7 +102,7 @@ public sealed record AcpOutcome(
     /// <summary>The session's input/output token totals from <c>/usage</c>, asked after an answered turn only — unknown otherwise.</summary>
     public AcpTokens Tokens { get; init; } = AcpTokens.Unknown;
 
-    /// <summary>A turn that never started an agent: only the reason, and nothing from a session that did not exist.</summary>
-    public static AcpOutcome NotStarted(string why) =>
-        new(AcpEnd.NotStarted, string.Empty, why, string.Empty, string.Empty, AcpUsage.Unknown, [], [], [], string.Empty, 0);
+    /// <summary>A turn that never started an agent: only the reason — and the session a <c>--session</c> turn was asked to continue, so even this exit names it (E5.2 review).</summary>
+    public static AcpOutcome NotStarted(string why, string session = "") =>
+        new(AcpEnd.NotStarted, string.Empty, why, string.Empty, session, AcpUsage.Unknown, [], [], [], string.Empty, 0);
 }

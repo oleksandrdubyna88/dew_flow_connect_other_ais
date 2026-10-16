@@ -23,6 +23,7 @@ namespace CoaiMcp.FakeCli;
 ///   "omitSessionId": false,       true: session/new answers with no sessionId at all
 ///   "ignoreCancel": false,        true: a session/cancel changes nothing
 ///   "models": ["m-1"],            the values of the "model" config option session/new announces; absent: ["m-1"]; []: no config option at all (E4.3)
+///   "initializeError": "…",       answer initialize with this JSON-RPC error
 ///   "loadable": true,             session/load (E5.2): true or absent — answered with the load's config options; false — answered with loadError
 ///   "loadError": {"code":-32602,"message":"session not found"},   the error a refused load is answered with (absent: this one)
 ///   "loadModels": ["m-1"],        the values the LOAD's result announces for "model" (absent: what "models" says — Kimi announces them on a load
@@ -123,6 +124,9 @@ internal static class AcpAgent
         var hasId = message.TryGetProperty("id", out var id);
         switch (method)
         {
+            case "initialize" when Text(script, "initializeError") is { Length: > 0 } refused:
+                Error(id, -32000, refused);
+                break;
             case "initialize":
                 Reply(id, new JsonObject
                 {
