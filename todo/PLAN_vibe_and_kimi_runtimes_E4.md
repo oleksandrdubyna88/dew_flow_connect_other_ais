@@ -1769,6 +1769,16 @@ projects and Moonshot publish, a Kimi row never reaches a server that cannot run
     Measured in a `mcr.microsoft.com/dotnet/sdk:10.0-noble` container under `dotnet-coverage collect`, counting the diff's added lines against `origin/main` that the report covers:
     **before 337 uncovered of 1 191 = 71.7 %** (Sonar said 299, 75.3 %); **after 34 uncovered of 1 175 = 97.1 %** with the two shells excluded (59 of 1 201 = 95.1 % with them counted).
     The 34 left are defensive catches no unprivileged Linux run reaches (an unlinkable folder as root, a deleter's `IOException`, an embedded resource that is missing, a regex timeout).
+    (f) **What the first push found (the Linux job, same day; the container run had been ROOT).** `JunctionsTests.ATempDirWhoseLinkLostItsTarget_ThrowsOnTheWayOut_NeverALeftover` threw
+    nothing. Root cause, by reproduction (`docker run --user 1000:1000`, the person's folder renamed to `p1`, which this ext4 enumerates before `home`): the test kept the person's folder INSIDE the tree
+    it deletes, so whether the deleter met the link before its target was the file system's directory order. NTFS lists `home` before `persons`; ext4 orders by name hash, per file system. A target
+    deleted first is simply gone — `Look` reads nothing, so there is no loss to see. It was not a product gap (the sign-in is never inside coai's tree; D19's links-first order holds among siblings) and not
+    the stand-in being unable to model a loss: the fixture was order-dependent on Windows too, by luck. The person's folder is its own `TempDir` now (the pattern of 17); the assertion is unchanged, and the
+    test stays on every OS. Red as *Expected a LinkTargetLostException to be thrown because in a test a lost target is a failing test, but no exception was thrown.* (non-root, hostile name), green with the folder outside.
+    The same non-root run found a second thing: `KimiCredentialsLock`'s default root asked `GetFolderPath(LocalApplicationData)` WITH verification, which off Windows answers `""` for a folder that does not exist
+    (a fresh account has no `~/.local/share`) — a RELATIVE `coai-mcp/kimi-locks`. It asks `DoNotVerify` now (the folder is made by `MadeRoot` before anything is taken in it); red as *Expected string to end with "/coai-mcp/kimi-locks", but
+    "coai-mcp/kimi-locks" is too short.* Also: the UNC and device rows of the drive-path theory had ONE backslash (now `\\server`, `\\?\`, `\\.\`, `\\?\UNC\`), and `NoTestHoldsAnInheritableHandleTests` forbids the positional
+    `Take(path, true)` / `TakeWithin(p, w, true)` too (red first on a planted spelling in `TheScan_SeesWhatItForbids`).
 
 **Stated limit of E4.1's deleter (risk consultation 7de9430b, 2026-10-15).** The deleter's link checks are path checks at one
 moment: a directory swapped for a junction between `IsLink(dir)` and the enumeration that follows can still be entered. Closing
