@@ -85,7 +85,7 @@ import { vaultKeyOf } from './vaultKey';
 import { Vendor } from './vendors';
 import { qconsultBody } from './qconsultView';
 import { QCONSULT_COMMANDS, type RootPlaces } from './qconsultWrite';
-import { hostFamily } from './hostSide';
+import { hostFamily, isLinuxSide } from './hostSide';
 import { storedForThisSide, type PathFamily } from './pathFamily';
 import { type PathFinding, findingFor } from './pathFindings';
 import { markAttributes, markClass, markNote } from './pathMark';
@@ -1167,7 +1167,7 @@ export function cardContextFor(state: PanelState): (vendor: Vendor) => CardConte
     allowedRemote: allowedModelsFor(v, state.teamServers ?? []),
     reported: state.providers?.reported ?? {},
     // Per card, so the sentence names THIS row (`runtimeOnServer` decides whether there is one).
-    runtimeNote: runtimeSkewNote(serverVersion, [v]),
+    runtimeNote: runtimeSkewNote(serverVersion, [v], isLinuxSide(family)),
     // Per card too: a Team server row and an older server switch the feature box off for different
     // reasons, and the card says which (`featureNote`, story S3.3).
     featureNote: featureNote(v, serverVersion),

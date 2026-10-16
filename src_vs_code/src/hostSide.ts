@@ -134,3 +134,24 @@ async function answered(underWsl: () => Promise<boolean>): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * Whether a side is a Linux or WSL one — the sides whose coai-mcp refuses a runtime until its `*_ON_LINUX_SINCE` release
+ * (`runtimeSince.ts`). A POSIX family is not enough: a Mac is POSIX too, and updating coai-mcp does not make it run Vibe, so
+ * the card must not say it does. Pure — the family is what the page is drawn for, the platform this host's.
+ */
+export function isLinuxSide(family: PathFamily, platform: Platform = hostPlatform()): boolean {
+  return family === 'posix' && platform !== 'darwin';
+}
+
+/**
+ * Whether THIS host is a WSL one — the question a Vibe note needs, because WSL2 runs Vibe and a native Linux host is
+ * refused for now (DL1 of todo/PLAN_kimi_and_vibe_on_linux.md). It is {@link windowsReach}'s own answer — `interop` is
+ * "Linux, and WSL" — so the WSL question is asked in one place, and it never rejects.
+ */
+export async function hostIsWsl(
+  platform: string = process.platform,
+  underWsl: () => Promise<boolean> = runningUnderWsl,
+): Promise<boolean> {
+  return (await windowsReach(platform, underWsl)).kind === 'interop';
+}

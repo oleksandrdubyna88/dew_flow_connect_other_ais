@@ -96,7 +96,7 @@ import * as os from 'node:os';
 import { inCatalogTurn, MIGRATION_TRIGGERS } from './catalogMigrationHost';
 import { isReviewerRow } from './catalogRules';
 import { promptChosen } from './promptsPerRound';
-import { hostExecutableSide, hostFamily, hostPlatform, Platform } from './hostSide';
+import { hostExecutableSide, hostFamily, hostIsWsl, hostPlatform, Platform } from './hostSide';
 import { cliBoxFamily, cliPathRefusal, vendorFieldWrite } from './cliPathSave';
 import type { DroppedValue } from './cliPathKeep';
 import { otherSideDataDirectories } from './otherSideValues';
@@ -1930,7 +1930,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   private async openCliTerminal(
     id: string,
     verb: 'install' | 'update',
-    commandFor: (vendor: Vendor, platform: Platform) => VendorInstall,
+    commandFor: (vendor: Vendor, platform: Platform, underWsl?: boolean) => VendorInstall,
   ): Promise<void> {
     const vendor = this.vendorsHere().find((v) => v.id === id);
     if (vendor === undefined) {
@@ -1940,7 +1940,9 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // The extension HOST's platform, which is the one that matters here: the terminal this opens
     // runs on this side, so a WSL window wants the linux instructions. `hostSide.ts` is where that
     // doctrine and its narrowing now live, in one place — this used to be one of three copies.
-    const install = commandFor(vendor, hostPlatform());
+    // WSL is a Linux host to the extension, and Vibe's note differs between WSL2 and a native Linux box (DL1 of
+    // todo/PLAN_kimi_and_vibe_on_linux.md), so this terminal's own side is asked once, here.
+    const install = commandFor(vendor, hostPlatform(), await hostIsWsl());
     if (install.command.length === 0) {
       const open = 'Open the instructions';
       const choice = await notifyAndAsk({

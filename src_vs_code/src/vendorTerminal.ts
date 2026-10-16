@@ -1,6 +1,7 @@
 import { CliStatus, updateAvailable } from './cliVersions';
 import { Platform, hostExecutableSide } from './hostSide';
 import { executableOf, type ExecutableSide } from './pathFamily';
+import { VIBE_ON_LINUX_SINCE } from './runtimeSince';
 import { Vendor } from './vendors';
 
 /**
@@ -114,12 +115,12 @@ function vibeTerminalEnv(vendor: Vendor): Readonly<Record<string, string>> {
  *
  * @param installed the version the probe read off the installed CLI, `''` when it could not
  */
-export function vendorUpdate(vendor: Vendor, platform: Platform, installed = ''): VendorInstall {
+export function vendorUpdate(vendor: Vendor, platform: Platform, installed = '', underWsl?: boolean): VendorInstall {
   const self = SELF_UPDATE[vendor.runtime];
 
   return self !== undefined && updatesItself(vendor.runtime, installed)
     ? selfUpdate(vendor, self, platform)
-    : installAgain(vendor, platform);
+    : installAgain(vendor, platform, underWsl);
 }
 
 /** The CLI's own update subcommand, run through the binary the reviews actually run. */
@@ -134,12 +135,12 @@ function selfUpdate(vendor: Vendor, subcommand: string, platform: Platform): Ven
 }
 
 /** The installer, again — the update for a CLI that cannot update itself, or a version too old or unread to know. */
-function installAgain(vendor: Vendor, platform: Platform): VendorInstall {
+function installAgain(vendor: Vendor, platform: Platform, underWsl?: boolean): VendorInstall {
   const own = OWN_UPDATE[vendor.runtime];
   if (own !== undefined) {
-    return own(platform);
+    return own(platform, underWsl);
   }
-  const install = vendorInstall(vendor, platform);
+  const install = vendorInstall(vendor, platform, underWsl);
   const npmPackage = PACKAGE[vendor.runtime];
 
   // npm installs the newest by default, but `@latest` says so out loud in a command somebody is
@@ -157,8 +158,8 @@ function installAgain(vendor: Vendor, platform: Platform): VendorInstall {
  */
 export function updateFor(
   status: Readonly<Record<string, CliStatus>>,
-): (vendor: Vendor, platform: Platform) => VendorInstall {
-  return (vendor, platform) => vendorUpdate(vendor, platform, status[vendor.id]?.installed ?? '');
+): (vendor: Vendor, platform: Platform, underWsl?: boolean) => VendorInstall {
+  return (vendor, platform, underWsl) => vendorUpdate(vendor, platform, status[vendor.id]?.installed ?? '', underWsl);
 }
 
 /** The vendors whose CLI updates ITSELF, and the subcommand that does it. */
@@ -342,10 +343,10 @@ const NODE_PREREQUISITE: Record<Platform, string> = {
  * may only ever offer what the vendor itself publishes — `OFFICIAL_SOURCES` and its test are that
  * rule in a form a future change cannot quietly break.</p>
  */
-export function vendorInstall(vendor: Vendor, platform: Platform): VendorInstall {
+export function vendorInstall(vendor: Vendor, platform: Platform, underWsl?: boolean): VendorInstall {
   const own = OWN_INSTALLER[vendor.runtime];
   if (own !== undefined) {
-    return own(platform);
+    return own(platform, underWsl);
   }
 
   const runtime = PACKAGE[vendor.runtime] !== undefined ? vendor.runtime : 'codex';
@@ -412,10 +413,10 @@ function antigravityInstall(platform: Platform): VendorInstall {
  * These are the commands `VendorDiagnosis.InstallCure` names when a round finds no Vibe, held level by
  * `vibeRuntime.test.ts`; `vibeWindowsInstall.test.ts` holds the Windows line to PowerShell's own parser.</p>
  */
-function vibeInstall(platform: Platform): VendorInstall {
+function vibeInstall(platform: Platform, underWsl?: boolean): VendorInstall {
   return platform === 'win32'
     ? { command: withUv(VIBE_UV_INSTALL), prerequisite: '', docs: DOCS['vibe']!, note: VIBE_NOTE_WINDOWS }
-    : { command: VIBE_SCRIPT, prerequisite: '', docs: DOCS['vibe']!, note: VIBE_NOTE_POSIX };
+    : { command: VIBE_SCRIPT, prerequisite: '', docs: DOCS['vibe']!, note: vibePosixNote(platform, underWsl) };
 }
 
 /**
@@ -423,8 +424,8 @@ function vibeInstall(platform: Platform): VendorInstall {
  * `uv tool upgrade mistral-vibe`, the command that script runs, because `uv tool install` on an installed tool
  * changes nothing. It meets a missing uv the way the install does.
  */
-function vibeUpdate(platform: Platform): VendorInstall {
-  return platform === 'win32' ? { ...vibeInstall(platform), command: withUv(VIBE_UV_UPGRADE) } : vibeInstall(platform);
+function vibeUpdate(platform: Platform, underWsl?: boolean): VendorInstall {
+  return platform === 'win32' ? { ...vibeInstall(platform), command: withUv(VIBE_UV_UPGRADE) } : vibeInstall(platform, underWsl);
 }
 
 /**
@@ -474,8 +475,16 @@ const UV_INSTALL_WINDOWS = 'powershell -ExecutionPolicy ByPass -c "irm https://a
 const UV_INSTALLED_IN = '$(if ($env:UV_INSTALL_DIR) { $env:UV_INSTALL_DIR } elseif ($env:XDG_BIN_HOME) { $env:XDG_BIN_HOME } '
   + "elseif ($env:XDG_DATA_HOME) { Join-Path $env:XDG_DATA_HOME '..\\bin' } else { Join-Path $HOME '.local\\bin' })";
 
-/** Where the sign-in is kept — said in both notes. */
+/** Where the sign-in is kept on Windows — the one host whose keyring every coai launch of Vibe reads. */
 const VIBE_KEYRING = 'The sign-in is kept in the operating system’s keyring, which every coai launch of Vibe reads.';
+
+/**
+ * Where the sign-in is kept on a Linux host (DL2 of todo/PLAN_kimi_and_vibe_on_linux.md): a FILE, because WSL has no keyring
+ * and coai's launches carry no desktop session to reach one. coai links the file into its own homes and never copies it.
+ */
+const VIBE_ENV_FILE =
+  ' The sign-in coai uses is the file `~/.vibe/.env`, which `vibe --setup` makes; coai links it into its own homes and '
+  + 'never copies it. A sign-in kept in a keyring is invisible to coai.';
 
 const VIBE_NOTE_WINDOWS =
   'One press: if this machine has no uv, Astral’s own installer runs first (the route Mistral’s README gives for '
@@ -485,12 +494,32 @@ const VIBE_NOTE_WINDOWS =
   + 'or set this row’s CLI path to that folder’s `vibe.exe`. Then sign in, which only you can do: run `vibe --setup` '
   + 'here, or press ▶ after the restart — Vibe asks for its sign-in the first time it starts. ' + VIBE_KEYRING;
 
-const VIBE_NOTE_POSIX =
+/** What WSL2, a native Linux box and macOS share: Mistral's one script, and the sign-in that only the person can make. */
+const VIBE_SCRIPT_NOTE =
   'Mistral’s own installer, from mistral.ai. It is a piped script — read it first if that matters to you. It '
   + 'installs uv itself when it is missing, then Vibe, and prints the PATH line to add if uv’s tool folder is not on '
   + 'yours. Then sign in, which only you can do: press ▶ on this card — Vibe asks for its sign-in the first time it '
-  + 'starts — or run `vibe --setup`. ' + VIBE_KEYRING + ' coai-mcp does not run Vibe on Linux, WSL or macOS yet — none '
-  + 'of them is measured — so a reviewer on this side waits for that.';
+  + 'starts — or run `vibe --setup`.';
+
+const VIBE_NOTE_WSL =
+  VIBE_SCRIPT_NOTE + VIBE_ENV_FILE + ` Vibe runs on this side, WSL2, from coai-mcp ${VIBE_ON_LINUX_SINCE}.`;
+
+const VIBE_NOTE_LINUX =
+  VIBE_SCRIPT_NOTE + VIBE_ENV_FILE + ' Native Linux: measured on WSL2 only for now, so coai-mcp refuses a Vibe row on '
+  + 'this side until it is measured here.';
+
+const VIBE_NOTE_MACOS =
+  VIBE_SCRIPT_NOTE + ' coai-mcp does not run Vibe on macOS — nothing is measured there — so a reviewer on this side '
+  + 'waits for that.';
+
+/** The note for a POSIX host: WSL2 runs Vibe, a native Linux host is refused for now, macOS is not measured (DL1). */
+function vibePosixNote(platform: Platform, underWsl?: boolean): string {
+  if (platform === 'darwin') {
+    return VIBE_NOTE_MACOS;
+  }
+
+  return underWsl === true ? VIBE_NOTE_WSL : VIBE_NOTE_LINUX;
+}
 
 /**
  * Kimi Code: Moonshot's own installer, per operating system (todo/PLAN_vibe_and_kimi_runtimes_E4.md E4.5, D16; the owner's
@@ -572,14 +601,14 @@ const KIMI_NOTE_POSIX =
   + 'this side waits for that; this line installs Kimi only, not the ripgrep and fd it will need.';
 
 /** The CLIs a person installs from their vendor's own installer rather than from npm. */
-const OWN_INSTALLER: Record<string, (platform: Platform) => VendorInstall> = {
+const OWN_INSTALLER: Record<string, (platform: Platform, underWsl?: boolean) => VendorInstall> = {
   antigravity: antigravityInstall,
   vibe: vibeInstall,
   kimi: kimiInstall,
 };
 
 /** The CLIs whose update is neither a subcommand of their own nor npm's `@latest`. */
-const OWN_UPDATE: Record<string, (platform: Platform) => VendorInstall> = {
+const OWN_UPDATE: Record<string, (platform: Platform, underWsl?: boolean) => VendorInstall> = {
   vibe: vibeUpdate,
   // Re-running Moonshot's script installs the latest over the old one, and the tool steps skip what is there: the update IS the install.
   kimi: kimiInstall,

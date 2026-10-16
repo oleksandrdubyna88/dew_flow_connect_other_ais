@@ -2,7 +2,7 @@ import { DEFAULT_API_DIALECT } from './apiRuntime';
 import { storedApiSettings } from './apiSettings';
 import { reviewsFeatures } from './featureGate';
 import { KIMI_MODELS, Runtime, RUNTIMES, VIBE_MODELS } from './models';
-import { KIMI_RUNTIME_SINCE, VIBE_RUNTIME_SINCE } from './runtimeSince';
+import { KIMI_RUNTIME_SINCE, VIBE_ON_LINUX_SINCE, VIBE_RUNTIME_SINCE } from './runtimeSince';
 import { saidText } from './saidText';
 import { catalogFields, CatalogUse, type FastSetting } from './catalogFields';
 import { bySideOf, type ExecutableBySide } from './pathFamily';
@@ -287,11 +287,13 @@ export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })
     pricePerMillionOut: 0,
   },
   // Mistral's own CLI on the person's own Mistral subscription (todo/PLAN_vibe_and_kimi_runtimes.md S2). A preset and
-  // never a default (D11). The hint carries the two limits a person meets first: coai-mcp runs it on Windows only until
-  // Linux and WSL are measured (D18), and an older coai-mcp does not know the runtime (D13 — `runtimeSince.ts`).
+  // never a default (D11). The hint carries what a person meets first: coai-mcp runs it on Windows, and on WSL2 from
+  // VIBE_ON_LINUX_SINCE with the sign-in in `~/.vibe/.env`, while a native Linux host is refused until it is measured (DL1 of
+  // todo/PLAN_kimi_and_vibe_on_linux.md, which lifts D18 for WSL2), and an older coai-mcp does not know the runtime (D13 —
+  // `runtimeSince.ts`).
   {
     label: 'Mistral Vibe',
-    hint: `Mistral’s own Vibe CLI on your Mistral subscription, signed in as itself — no key in the vault. coai-mcp runs it on Windows only for now (Linux and WSL are not measured yet) and needs coai-mcp ${VIBE_RUNTIME_SINCE} or later.`,
+    hint: `Mistral’s own Vibe CLI on your Mistral subscription, signed in as itself — no key in the vault. coai-mcp runs it on Windows, and on WSL2 from coai-mcp ${VIBE_ON_LINUX_SINCE}: there the sign-in is ~/.vibe/.env, made by vibe --setup, which coai links into its own homes and never copies. Native Linux: measured on WSL2 only for now. It needs coai-mcp ${VIBE_RUNTIME_SINCE} or later.`,
     id: 'vibe',
     runtime: 'vibe',
     model: VIBE_MODELS[0]!.id,

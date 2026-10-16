@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { after, test } from 'node:test';
 
 import { compareVersions } from '../coaiInstall';
-import { RUNTIME_SINCE } from '../runtimeSince';
+import { ON_LINUX_SINCE, RUNTIME_SINCE } from '../runtimeSince';
 
 /**
  * A runtime's "first server that knows it" is a release that must NOT already exist without it (the release-guards family: `releaseAnchors`,
@@ -83,6 +83,15 @@ test('every exemption states its reason, and only a runtime that has actually sh
     assert.ok(reason.length > 20, `${runtime}: an exemption with no reason is a way of turning the guard off`);
     assert.ok(compareVersions(RUNTIME_SINCE[runtime] ?? '999', releasedMcp) <= 0, `${runtime}: not released yet — it has no business being exempt`);
   }
+});
+
+test('every entry of ON_LINUX_SINCE is held to the same guard: ahead of the newest released coai-mcp, or named in its release', () => {
+  const rows = Object.entries(ON_LINUX_SINCE);
+  assert.ok(rows.length >= 1, 'the table is empty — the loop would check nothing');
+
+  const refusals = rows.map(([runtime, since]) => refusal(runtime, since, releasedMcp, sectionOf(since, realChangelog))).filter((said) => said.length > 0);
+
+  assert.deepEqual(refusals, []);
 });
 
 // ---------------------------------------------------------------- the guard's own teeth
