@@ -2,6 +2,15 @@
 
 > Status: **plan only, nothing implemented yet, 2026-10-14.** Epic E4 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
 >
+> **Revised 2026-10-16 against main** (`59463d73`: E1 #828, E2 #829 and the plan-gate fix #837/#841 shipped since the
+> first text; E3 is not built). Every `path:line` re-verified — the drift is §8.1, and the S2 text keeps the numbers Fable
+> wrote, mapped there. §2 says that instants are an ORDER (E1's fixtures run on a synthetic rank clock) and that a row's
+> model is the model that ANSWERED (RESULTS Q2). S1 gains the Q7/Q8 rules. S3 gains the answered-model rule. S4's card
+> reference moves. S5 is rewritten against the twenty shipped fixtures `c01`–`c20`: it names which test uses which case,
+> and what no fixture can show. §8.3 lists the edits other documents need. §9 lists what contradicts Fable's S2 spec, for
+> Fable to confirm; the spec itself is not changed. §10 is the risk-consultation brief owed before E4's code round. Nothing
+> is implemented, so the status stays.
+>
 > Scope: `src_mcp/core/Authors/` (new, pure) and `src_mcp/tests/` (new test classes). No schema step, no
 > call site, no I/O — those are E5's. Related docs: [module_server.md](../research/module_server.md),
 > [PLAN_local_db.md](../research/PLAN_local_db.md).
@@ -12,7 +21,7 @@
 round journal into, per round: associated activity per window and agent, the round's **ambiguous** totals,
 what was credited **elsewhere**, the round's authors **state**, and — derived — the **contributors** to the
 change under review (§6 of the parent). It reads no file, starts no process, reads no clock and stores
-nothing; E5.S4 calls it before the round is saved (`RoundEngine.cs:483-491`, saved at `:586`), E5.S1/E5.S2 store
+nothing; E5.S4 calls it before the round is saved (`RoundEngine.cs:485-496`, saved at `:591`), E5.S1/E5.S2 store
 what it returns, E6 reads the stored result, E7.S2 runs it again over old rounds.
 
 **Home: `src_mcp/core/Authors/`, namespace `CoaiMcp.Core.Authors` — a deliberate deviation** from the epic's
@@ -25,7 +34,7 @@ would be a habit. The parent records this deviation on promotion.
 
 | E3 delivers | E4 needs from it |
 |---|---|
-| E3.S4: the reader's value, `ObservedSession` | one record per `message.id` with ONE instant (E3's rule), its agent, observed `model`, `requested`, `effort` (absent = unknown) and the four token terms |
+| E3.S4: the reader's value, `ObservedSession` | one record per `message.id` with ONE instant — its earliest line (E3 S4-8; one id's lines span up to 2.01 h, RESULTS Q4) — its agent, observed `model` (the model that answered), `requested`, `effort` (absent = unknown) and the four token terms (the per-term maximum over ALL the id's lines, parent §16 D8) |
 | E3.S4: the counting rules (tokens once per `message.id`, launches once per `agentId`) | each agent's FIRST-LINE instant, its parent (main via `toolUseId`, or `parentAgentId`), `agentType`, the meta's requested alias |
 | E3.S3: the write test (`WriteTarget`) | **each write as an instant plus its path** — not only a boolean per (agent, repository); see defect 1 in §7, settled by parent §16 D4 |
 | E3.S4: the four states | the session-level state and every `partial` reason, with the instant it concerns where there is one (an `Agent` call without a transcript has one; a torn last line does not) |
@@ -72,6 +81,21 @@ test, S5 runs the cases end to end — each is caught by S2's identities if it i
   `src/Bench.Domain/Sessions/SessionTrace.cs` — `MutationEvidence.NotChecked` is "never a synonym for
   `Unchanged`"; `ToolTaxonomy.cs` — an unknown tool "is never guessed into" a class). Its shell-command
   heuristic is NOT carried over: `Bash`/`PowerShell` are never write evidence here.
+- **Instants are an order, not a time** (added 2026-10-16). Every rule in this epic COMPARES instants (half-open
+  windows, minimum, maximum, rank) and none subtracts them — no tolerance, no duration, no "within N minutes". E1's
+  fixtures depend on this: their sanitiser redraws every instant as a rank, `2000-01-01T00:00:00Z` plus one second per
+  distinct real instant, with ties kept and `rounds.json` on the same clock; it also redraws every usage count as its
+  rank among the fixture's values at that path (`allowlist.json` notes; `scripts/lib/transcript-sanitise.mjs:21-22`). So
+  no test may assert a duration, a date or a token magnitude read from a fixture. The S1 builder's base
+  `2026-10-14T12:00:00Z` is synthetic as well, and S5 adds the fact that attribution is unchanged when every instant is
+  mapped through a strictly increasing function.
+- **The model is the one that ANSWERED** (added 2026-10-16, RESULTS Q2). A meta names the REQUEST, and it often names
+  nothing: metas with `model` are 100 % only on 2.1.283–2.1.285 (Windows) and 2.1.300 (both sides); on the other
+  versions they are 70–98 % on Windows and as low as 32 % on WSL. Also, a session can be answered by another model than
+  it requested: an Opus 5.5 → Opus 4.8 `model_refusal_fallback`, scope `session`, was seen on 2026-10-16, after which the
+  stream's `message.model` changed and the request, the metas and the totals did not. So every count here is grouped on
+  `ObservedMessage.Model` (`message.model` of the agent's own assistant lines), and `Requested` is carried beside it and
+  never used in its place. `ObservedAgent.Requested` is for display only; no rule reads it to fill a model.
 - **No text.** E4 holds paths in memory only to test membership; no output record carries a path, a prompt,
   a description, a tool input or a message. Output identities are: the gate's `repo_path` (already stored),
   the caller session id (already stored as `rounds.caller`), and opaque agent ids.
@@ -97,14 +121,14 @@ test, S5 runs the cases end to end — each is caught by S2's identities if it i
 **Goal.** The input records of attribution, one pure repository-membership function, a scenario builder every
 later test uses, and a structural test that keeps the `Authors` folder pure. No attribution logic.
 
-**Scope (verified 2026-10-14).**
+**Scope (verified 2026-10-14; re-verified against main `59463d73`, 2026-10-16).**
 
 | Where | What |
 |---|---|
 | `src_mcp/core/Authors/AttributionInput.cs` (new) | the input records below |
 | `src_mcp/core/Authors/Repositories.cs` (new) | `RepositoryOf(path, universe)` — longest containing root, or none |
 | `src_mcp/src/Store/AgentLog.cs:304-317` | `InRepo` + `Normalise`: the separator-aware, case-insensitive containment test that exists today. **Reuse, don't copy**: move the rule into `Repositories` as a public static and have `AgentLog.InRepo` call it (reuse-first move 2: extract the shared half). `AgentLog`'s behaviour is unchanged (§3 of the parent) |
-| `src_mcp/src/Server/SessionStore.cs:78-92,104,193,236,248` | `RoundRecord(Stage, Number, …)`, `Status`, `StartedUtc`, `Sha`, `Caller`; `PersistedSession.Rounds`, `OpenedUtc` — the sources of `GateTimeline`, mapped by E5, not here |
+| `src_mcp/src/Server/SessionStore.cs:78-92,104,193,266,278` | `RoundRecord(Stage, Number, …)`, `Status`, `StartedUtc`, `Sha`, `Caller`; `PersistedSession.Rounds`, `OpenedUtc` — the sources of `GateTimeline`, mapped by E5, not here |
 | `src_mcp/core/Rounds/SessionState.cs:382-386` | `SessionState.SessionId`, `RepoPath` — the gate session's identity |
 | `src_mcp/src/Server/RoundNumber.cs:24-26` | "the session's rounds as persisted — every stage, in the order they ran": the journal `GateTimeline.Rounds` mirrors |
 | `src_mcp/tests/AttributionScenario.cs` (new) | the builder |
@@ -163,15 +187,37 @@ trailing slash trimmed); equality or `StartsWith(root + "/")`, `OrdinalIgnoreCas
 working directory, which would be I/O). A WSL `/mnt/d/…` path and a `D:\…` root are NOT equated — no
 translation is guessed; E5 passes the universe in the spelling the transcript uses, and S5 checks it.
 
+**What the paths look like, and the rules that follow** (RESULTS Q8, added 2026-10-16). Every write path E1 measured is
+absolute on both sides. On Windows, 90 % use backslashes, separators are mixed inside one path, and the drive letter is
+kept as typed (lowercase on 219 subagent writes). WSL uses `/` only. A write under the session's `cwd` was 0 % on Windows
+(where it could be decided) and 5 % on WSL. So:
+
+- Separators are folded and case is ignored ordinally, on both sides of the test — `D:\x/y\z.cs`, `d:/X/y/z.cs` and
+  `D:/x/y/z.cs` are one path. E3's `WriteTarget.Where` comes lower-cased (`RepositoryIdentity.Normalised`,
+  `runners/Context/RepositoryIdentity.cs:24`) and the gate's `repo_path` comes as typed. `OrdinalIgnoreCase` makes the two
+  agree, for non-ASCII folder names too (S1 has a test with one).
+- A path or a universe root that has a `.` or `..` segment is in NO repository: `RepositoryOf` returns `""`, so it is
+  never evidence. Nothing is resolved, because resolving needs the disk or a working directory. **Checked:** Q8 measured
+  absoluteness, separators and drive case. It did NOT measure dot segments, so how often they occur is unknown, and this
+  rule makes them cost evidence, never a wrong attribution. `Contains` stays exactly the rule moved from `AgentLog`
+  (`AgentLog` keeps its behaviour); the dot-segment refusal lives in `RepositoryOf` only.
+- No `cwd` is an input. Q8 is why: a subagent's `cwd` is the session's folder, and its writes land somewhere else.
+
 **The scenario builder** (`AttributionScenario`, tests only): a fluent value that builds an `AttributionInput`
 from short statements — `.Opened(t)`, `.Round("CodeReview", 1, startedAt: t)`,
 `.Main(at: t, model: "claude-opus-5-5", tokens: …)`, `.Agent("a1", parent: main, launchedAt: t, requested: "sonnet")`,
-`.Message("a1", at, model, effort)`, `.Write("a1", at, path)`, `.MissingChild(parent, at, why)`,
+`.Message("a1", at, model, effort, requested: …)` (a requested value apart from the model, so a fallback or an empty
+meta alias can be built), `.Write("a1", at, path)`, `.MissingChild(parent, at, why)`,
 `.Peer(timeline)`. Every instant is ONE fixed base `2026-10-14T12:00:00Z` plus minutes, never `now`
 (testing.md, *A test that reads the clock expires*). Message ids are generated deterministically (`m-0001`, …).
 S1 adds `AttributionInput.Validate()` returning the list of contract violations (a message whose agent is not
 declared, a write by an undeclared agent, rounds out of journal order, a `(Stage, Number)` not in
-`Gate.Rounds`, the caller's `CallerSessionId` differing from the attributed round's, a `MessageId` twice), and the
+`Gate.Rounds`, the caller's `CallerSessionId` differing from the attributed round's, a `MessageId` twice — and, added
+2026-10-16, a `(Stage, Number)` listed twice in one journal (E1's `replay-same-round-twice` fixture, `c13`, has exactly
+that; tiled, the copy would open an empty window and the round would be looked up twice), and a parent chain that does not
+end at `main` or at an empty parent (a loop; Q7 measured nesting to depth 3, and S2's rule 5 climbs the chain). An agent
+whose `Parent` is empty — E3's `ParentKey = ""` for an agent file without a meta, S4-6 — or names an agent that is not
+declared is NOT a violation: it has no parent, and it propagates nothing), and the
 builder asserts it is empty — so no later test can pass on a fixture the code quietly declines (testing.md, *A fixture
 the code REJECTS proves nothing*). `RoundAttribution.Assign` throws `ArgumentException` naming the first violation when
 `Validate()` is not empty; E5.S4 maps that to `unobserved: invalid input`.
@@ -195,9 +241,9 @@ the code REJECTS proves nothing*). `RoundAttribution.Assign` throws `ArgumentExc
 
 | Class | Facts | Asserts |
 |---|---|---|
-| `APathBelongsToTheLongestRepositoryThatHoldsItTests` | `AFileUnderTheRoot_IsInIt` / `TheRootItself_IsInIt` / `ASiblingWithTheRootAsPrefix_IsNot` (`/repo-two` vs `/repo`) / `BackslashesAndATrailingSlash_DoNotMatter` / `CaseDoesNotMatter` / `ANestedWorktree_BelongsToTheInnerRoot` / `ARelativeOrEmptyPath_IsInNone` / `AWslSpellingIsNotTranslated` | the exact root or `""` |
+| `APathBelongsToTheLongestRepositoryThatHoldsItTests` | `AFileUnderTheRoot_IsInIt` / `TheRootItself_IsInIt` / `ASiblingWithTheRootAsPrefix_IsNot` (`/repo-two` vs `/repo`) / `BackslashesAndATrailingSlash_DoNotMatter` / `CaseDoesNotMatter` / `ANestedWorktree_BelongsToTheInnerRoot` / `ARelativeOrEmptyPath_IsInNone` / `AWslSpellingIsNotTranslated`; added 2026-10-16 (Q8): `MixedSeparatorsInsideOnePath_DoNotMatter` (`D:\x/y\z.cs` under `D:/x`) / `ALowercaseDriveAgainstAnUppercaseRoot_IsInIt` (`d:\x\a.cs` under `D:/x`, and the reverse) / `ANonAsciiFolderMatchesAcrossCase` (`d:/проект/a.cs` under `D:/Проект`) / `ADotSegment_IsInNone` (`D:/x/../y/a.cs` and `D:/x/./a.cs` against root `D:/x` → `""`; a root `D:/x/..` matches nothing) | the exact root or `""` |
 | `AgentLogTests` (existing) | unchanged | `InRepo`'s behaviour kept through the move |
-| `TheAttributionInputSaysWhatIsWrongWithItTests` | one fact per violation above (the caller-mismatch and the duplicate `MessageId` included), plus `AWellFormedScenario_HasNoViolations` (the positive one) | the violation list |
+| `TheAttributionInputSaysWhatIsWrongWithItTests` | one fact per violation above (the caller-mismatch, the duplicate `MessageId`, the round listed twice and the looping parent chain included), plus `AWellFormedScenario_HasNoViolations` and `AnAgentWithNoParentOrAnUndeclaredOne_IsNoViolation` (the positive ones) | the violation list |
 | `ARoundStartFromASessionFileIsReadAsUtcTests` | `AnUnspecifiedKind_KeepsItsHourAndGetsZeroOffset`; `TheDefaultInstant_IsNotRecorded` | `UtcInstant.From` |
 | `TheAttributionCoreTouchesNoClockAndNoDiskTests` | `NoAuthorsSourceNamesTheClockTheDiskOrTheEnvironment` — reads `src_mcp/core/Authors/*.cs` through `ProductionSources` and asserts none contains `DateTime.Now`, `DateTime.UtcNow`, `DateTimeOffset.Now`, `DateTimeOffset.UtcNow`, `TimeProvider`, `File.`, `Directory.`, `Environment.`, `Guid.NewGuid`, `new Random`; and `TheScannerSeesTheAuthorsFolder` — at least one file was read (testing.md, *A structural test that matches nothing passes forever*) | the source text |
 
@@ -206,7 +252,9 @@ FIRST containing root instead of the longest → `ANestedWorktree_BelongsToTheIn
 `DateTime.UtcNow` to any `Authors` file → the purity test red. (d) Implement `UtcInstant.From` with
 `value.ToUniversalTime()` → `AnUnspecifiedKind_KeepsItsHourAndGetsZeroOffset` red on any machine not at
 +00:00. It cannot go red on a UTC machine; the test's summary says so, and the break-it is watched on this
-operator's machine (not at +00:00).
+operator's machine (not at +00:00). (e) Remove the dot-segment refusal from `RepositoryOf` →
+`ADotSegment_IsInNone` red: `D:/x/../y/a.cs` reads as inside `D:/x`. (f) Drop the duplicate-round rule →
+`ARoundListedTwice_IsAViolation` red.
 
 **Done when.** The records, `Repositories` and the builder exist; `AgentLog` calls the moved rule and its
 tests are green; every fact above is green and every break-it was watched red; `CoaiMcp.Tests.exe` green.
@@ -630,7 +678,7 @@ over the rows, not only over the assignment.
 `requested`, `model`, `effort`, `agent_type`, `association`, `window`, `launches`, `turns`, the four token
 terms, `write_calls`; `rounds.authors_state`, `authors_session`, `authors_reader`, the ambiguous totals
 (parent, lines 301-303). The state words are §5's (parent, lines 150-153). The precedent for
-"delete-then-insert per round" is `RoundsDb.cs:923-945` — E5's, cited so the grain here fits it.
+"delete-then-insert per round" is `RecordReviewers`, `RoundsDb.cs:928-954` — E5's, cited so the grain here fits it.
 
 **The records.**
 
@@ -677,6 +725,14 @@ writes into this repository, `Turns`, `Launches` and every token term ZERO (its 
 claimed by a peer). Rows are ordered by (window, stage, number, who, agent id, model, effort, association),
 ordinal — equal inputs give equal outputs, byte for byte.
 
+**`Model` and `Requested` on a row** (added 2026-10-16, §2 and RESULTS Q2). A row's `Model` is the placements'
+`ObservedMessage.Model`, the model that answered. Its `Requested` is the placements' `Requested`, which for a meta with
+no alias is E3's fallback (the line's `requestedModel`). The only `"unknown"` model is the launch-only row above. Neither
+value is ever taken from `ObservedAgent.Requested`. So a session that fell back from the model it asked for shows the
+model that answered, and keeps the request beside it, for E6 to show where they differ. An agent whose only assistant line
+is synthetic (E3 S4-11; fixture `c08`) has no message: if it was launched in the window, it is a launch-only row when it
+is owned with a row association, and otherwise it is a launch in the ambiguous totals.
+
 **State.**
 
 | Observation / window | `State` | `Reasons` | Totals |
@@ -712,13 +768,16 @@ the `-1` sentinel and record the choice (reuse-first).
 | `EveryWindowAccountsForEveryMessageTests` | local completeness over ROWS: Σ row turns + ambiguous turns + elsewhere turns + claimed-by-peer turns = the window's distinct message ids, and the same per token term — over every S2 acceptance scenario, through one `[Theory]` fed by the builder |
 | `TheAuthorsStateSaysWhatWasNotSeenTests` | each row of the state table, including `AnObservedSessionWithNoSubagents_IsObservedZero` and `AnUnobservedRound_NeverReadsAsZero` |
 | `NoEffortIsUnknownNotHighTests` | absent effort → `unknown` on the row |
+| `TheModelOnARowIsTheOneThatAnsweredTests` (added 2026-10-16) | `ASessionAnsweredByAFallbackModel_CountsTheAnsweringModel` (main requests `claude-opus-5-5[1m]`, its messages carry `claude-opus-4-8` → the row's `Model` is `claude-opus-4-8`, `Requested` is `claude-opus-5-5[1m]`); `AMetaWithNoAlias_NeverBlanksTheModel` (an agent whose `ObservedAgent.Requested` is `""` → `Model` from its messages, `Requested` from theirs); `ASwitchMidWindowAfterAFallback_IsTwoRows` |
 | `TheSameRoundBuiltTwiceIsIdenticalTests` | `Build` twice → equal by value AND equal `ToString()`; the input's message order permuted → identical output |
 
 **Break-its.** (a) Count `Launches` on every row of the agent → `ALaunchIsCountedOnceAndNeverLostTests` red.
 (b) Emit a row for ambiguous activity → `AmbiguousAndElsewhereActivityHasNoRowsTests` red, and completeness
 double-counts. (c) Default effort to `"high"` → `NoEffortIsUnknownNotHighTests` red. (d) Return zero totals for
 an unobserved round → `AnUnobservedRound_NeverReadsAsZero` red. (e) Drop the final `OrderBy` → the permuted-input
-fact red.
+fact red. (f) Take a row's `Model` from `ObservedAgent.Requested` when it is non-empty →
+`ASessionAnsweredByAFallbackModel_CountsTheAnsweringModel` red for subagents (main's twin: from the message's
+`Requested`).
 
 **Done when.** Every fact green, every break-it watched red; local completeness holds over all S2 scenarios;
 `CoaiMcp.Tests.exe` green.
@@ -740,7 +799,7 @@ lists the original authors AND the fixers.
 journal order. The journal is every stage (`RoundNumber.cs:24-26`), so windows of plan rounds are in the
 union; this story TAGS each contributor with (stage, number) and decides nothing about whether a plan round's
 author is a code author — E6's cohorts choose (§7, defect 9). Consumers: the report's *coder mix* (§8, E6) and
-the card line's counts (E5, `src_vs_code/src/rounds.ts:156`).
+the card line's counts (E5 adds that line beside the caller phrase, `calledBy`, `src_vs_code/src/rounds.ts:168`).
 
 ```csharp
 public sealed record RoundRef(string Stage, int Number, string Window);
@@ -808,53 +867,110 @@ rounds silently → `AnUnobservedRoundIsNamedNotSilentTests` red.
 real reader — so a disagreement between what E3 emits and what E4 assumes (field spellings, instants, the
 `toolUseId` join, a WSL path) fails here and not in the report.
 
-**Scope (verified 2026-10-14).** Tests only, in `src_mcp/tests/`. Fixtures under `src_mcp/tests/fixtures/`
-(the folder exists; E1 adds one sub-folder per case — §11 step 0: model switch, repeated message records, a
-resumed agent, a background agent completing after a round starts, nested agents, two repositories in one
-session, persistence off), each with the gate timeline(s) it was cut against (E1's done-when: one fixture per
-§6 acceptance case). The reader: E3's `CallerTranscript` (`src_mcp/src/Store/CallerTranscript.cs`, new in E3).
-Precedent for shared fixture access: `tests/SharedFixtures.cs`.
+**Scope (rewritten 2026-10-16 against the fixtures E1 shipped in #828).** Tests only, in `src_mcp/tests/`. The inputs are
+the twenty folders `src_mcp/tests/fixtures/caller-transcripts/c01`–`c20`. Their case names are in `manifest.json`, the
+folders are short because no tracked path may be longer than 160 characters, they are copied to the output by
+`CoaiMcp.Tests.csproj:36`, and they are kept text-free by `ACallerTranscriptFixtureCarriesNoTextTests`. Each folder has one
+`rounds.json` in a CLOSED schema: `callerSessionId`; `gateSessions[]` with `id`, `repoPath` (a fixture root), `openedUtc`
+and `rounds[]` with `number`, `startedUtc`, `completedUtc`, `status` and `headSha`. There is no stage, no verdict and no
+caller per round. E1 wrote no expectation files: the manifest holds counts only. So the cells below are a hand-read of
+the fixtures (2026-10-16), and they go into the test as data (measurement.md rule 2: the hand-read IS the check). The
+reader is E3's `CallerTranscript`, which is not on main yet. The materialiser is E3.S4's
+`CallerTranscriptFixture.Materialise`, with the two requirements of §8.3 item 6.
+
+**Rules every S5 test follows.**
+
+- **The clock is a rank clock** (§2). Assert order relations and the cells below. Never assert a duration, a date or a
+  token magnitude. The reader's `now` (E3 S4-9's day-gate span) is a fixed instant on `2000-01-01`, never
+  `TimeProvider.System`: a real clock would make the gate span 26 years of days.
+- **`rounds.json` → `GateTimeline`** goes through a test-side loader, `FixtureRounds`, because `rounds.json` is a fixture
+  format and not E5's session file. Every round gets `Stage = "CodeReview"` (E1's export holds code rounds only) and
+  `Verdict = ""`. `Status` and `CompletedUtc` are copied as given. `CallerSessionId` is the file's `callerSessionId` on
+  every round. Every other gate session of the file is a peer, and `PeersKnown = true` — the file is taken as the
+  caller's complete set of gate sessions, and this assumption is stated in the class summary. The loader decides nothing
+  else. The universe is E5's rule (S2 decision 6) over the materialised roots.
+- **The positive first** (testing.md, *A fixture the code REJECTS proves nothing*). Before any attribution assertion,
+  assert that E3's reader returned the expected state and a non-zero message count (except `c10`), and that every
+  answered write of the case whose fixture path lies under `repo-a` or `repo-b` resolves to a `Checkout` on THIS host.
+  CI runs this suite on Linux, macOS and Windows (`.github/workflows/ci.yml:58,282,317`). A host that reads a re-pointed
+  path differently must fail by case name, never as a wrong cell.
+- **One test-side extension, labelled.** `c01` and `c14` have activity after the start of their only round. To show the
+  NEXT window on real data, the test adds a round 2 in memory: its start is one synthetic second after the case's last
+  instant, and its completion is one second after that. No fixture file changes, and the guard is not touched.
+- Map the reader's `ObservedSession` to `AttributionInput` through the ONE mapping E3/E5 own (§0), never through a
+  mapping written in the test.
+
+**Which test uses which case** (`H` = `AttributionHoldsOnTheRecordedSessionsTests`, one `[Theory]` row per case; `I` =
+the identities; `R` = replay; every case also feeds `NoSentinelLeavesAttributionTests` and the order fact). "Ambiguous"
+below means `ambiguous · no evidence` unless the row says otherwise.
+
+| Case | Name (manifest) | Test | Cells (hand-read) | What it cannot show — and where that is tested |
+|---|---|---|---|---|
+| `c01` | background-agent-across-round-start | H, I, R | Round 1's window holds main's one message and two of the background agent's messages, and 1 launch. No write: all ambiguous (agents 2, launches 1, turns 3). One message has lines on both sides of the start: it is placed by its FIRST line, and its tokens are the maximum over every line, after the start included (D8). With the extension, round 2 holds the agent's two later messages and 0 launches | a write (the agent only reads). Builder: S2 case 2 |
+| `c02`, `c03` | message-as-several-lines, message-last-line-below-max | H, I | Round 1 holds main's one message only. The agent's first line comes after the start: no launch and no message of the agent in round 1 (S2 decision 8: a launch requested before the start whose first line follows it belongs to the next window) | the token rule itself is E3's; its message lies after round 1's start |
+| `c04` | meta-without-model | H, I | Round 1 holds main 1 + the agent 1 message, 1 launch, all ambiguous. The agent's `Requested` is the line's (the meta has no alias) and its `Model` is `claude-sonnet-5-5`. The window state is the state E3 gives (`partial: meta without model` as E3.S4 stands; see §8.3 item 2) | a row: there is no write, so the model shows only on placements |
+| `c05` | missing-child-transcripts | H, I | Round 1 is `partial: agent call without transcript, meta without transcript`. There are two unobserved launches at main's message instant (all three `Agent` calls sit in one message; E3 S4-8), 1 launch (the agent whose file exists), and no tokens and no launch placement for the missing two | — |
+| `c06` | model-switch-in-window | H, I | Main has two messages on `claude-opus-5-5`, then `claude-fable-5-1`: two placements, each carrying its own model. The only write goes into `scratch` → outside → ambiguous, and no row | the model switch on a ROW: the ambiguous totals carry no model (§8.3 item 7). Builder: S2 case 3, S3 `ARowIsOne…`. This is also the shape a `model_refusal_fallback` takes |
+| `c07` | nested-agents | H, I | Main's message comes before open → `before-open`. Round 1: 2 launches (= the manifest's `agentFiles`, not its 3 `agentToolUses`). The depth-2 agent's parent is the depth-1 agent, not main. The depth-2 meta has no alias → its `Requested` is from its lines, its `Model` is `claude-sonnet-5-5`. No write → no `child of`; all ambiguous | `child of` on data: no fixture has a subagent parent that writes. Builder: S2 `OnlyASubagentParentPropagatesTests` |
+| `c08` | no-effort-lines | H, I | The agent's only assistant line is synthetic → no message (E3 S4-11). Its first line follows the start → no launch in round 1. Round 1 = main's 1 message, ambiguous | `effort = unknown`: no real line lacks effort (the manifest says so). Builder: S3 `NoEffortIsUnknownNotHighTests` |
+| `c09` | no-evidence-two-repositories | H, I | One main message, whose lines run past both starts, is inside gate A's AND gate B's round windows. There is no write, so it is ambiguous in both. A completes first → A owns it (ambiguous turns 1), and B labels it `claimed by peer (A)`. Global uniqueness: it is owned once | — |
+| `c10` | persistence-off | H | `unobserved: transcript not found`: no placements, no rows, `ActivityTotals.Unknown`, contributors empty, the round in `NotSeen` | — |
+| `c11` | refused-agent-call | H, I | The refused call (error result, no meta) is no launch and no unobserved launch. Round 1 is `observed`, with 0 launches | — |
+| `c12` | registry-and-variable-disagree | H | Whatever state E3.S2 resolves, carried through unchanged | E4 has no cell of its own here |
+| `c13` | replay-same-round-twice | H, R | The journal lists round 1 twice: `Validate()` names the duplicate (S1). Round 1 attributed twice from a journal with ONE copy → equal by value and by text. `AssignEvery` owns main's one message once | — |
+| `c14` | resumed-agent | H, I, R | Round 1: the agent `wrote here` (1 write call into `repo-a`, 11 turns before the start, 1 launch), and main `same-session` (destinations {`repo-a`}). Lines after the start are not placed. With the extension, round 2 holds the agent's later messages with 0 launches, ambiguous (no write in that window): one launch over both windows | the same agent `wrote here` → `same-session` across windows. Builder: S2 case 4 |
+| `c15` | second-gate-session-same-caller | H, I | Gate 2's `before-open` starts at `PriorEnd` = gate 1's round start and holds nothing. Main's one message is in gate 2's round window, ambiguous (its write goes into `scratch`). Gate 1 owns nothing. The owned set is equal with `.WithoutPriorEnd()` | — |
+| `c16` | skipped-round-between-recorded | H, I | The journal is 1, 3 (round 2 is ABSENT): round 3's window = [round 1's start, round 3's start) and holds main's message | a SKIP record (`Verdict = skipped`): `rounds.json` has no verdict (§8.3 item 5). Builder: S2 `ASkippedRound_OpensNoWindow` |
+| `c17` | two-repositories-one-session | H, I | The `repo-b` `Edit` has no `tool_result` (it is the file's last line) → not a write (D23). Main wrote only into `repo-a`: gate A owns its 3 messages `wrote here` (write calls 1), and gate B labels all 3 `wrote elsewhere`. Each is owned once | `ambiguous · two repositories`: it needs the `repo-b` result (§8.3 item 4). Builder: S2 `TwoRepositoriesOneAgentTests` |
+| `c18` | work-before-open | H, I | The `before-open` window: main `wrote here` (1 write call, 1 turn). The round window is empty. Contributors are none with `withBeforeOpen: false` and main with `true` | — |
+| `c19` | write-into-submodule-and-scratchpad | H, I | Both writes are unanswered → no write (D23). Main is ambiguous | the submodule write and the scratchpad write, until §8.3 item 4. After that fix: the submodule write is `wrote here` and is listed in `WritesOutsideTheGateCheckout`, and the scratchpad write is outside |
+| `c20` | writes-only-elsewhere | H, I | The only write goes into `scratch` → outside (D3), NOT elsewhere. Main is ambiguous, and the `Elsewhere` totals are zero | The name says "elsewhere", but under D3 a scratchpad is outside. `wrote elsewhere` on data is `c17`'s gate B |
+
+**No fixture shows these** (builder only, through S2's and S3's tests): `child of`; `ambiguous · two repositories`; a
+submodule or nested-worktree write; a skip record; an interrupted round; a caller change; a blind round; `effort =
+unknown`; a model switch on a row; `claimed by peer` where the peer's ladder is `wrote here`.
 
 **The coder's brief (Sonnet).**
 
-1. `AttributionHoldsOnTheRecordedSessionsTests`, one `[Theory]` row per fixture folder. For each:
-   - **The positive first** (testing.md, *A fixture the code REJECTS proves nothing*): assert E3's reader
-     returned the state the fixture declares and a non-zero message count, before any attribution assertion.
-     A fixture the reader declines fails HERE, by name.
-   - Map the reader's `ObservedSession` to `AttributionInput` through the ONE mapping E3/E5 own (§0) — never a
-     mapping written in the test.
-   - Run `Assign` → `Build` → `Contributors.Of` and assert the exact cells of the fixture's expectation file
-     (rows, totals, state, contributors). Where E1 wrote none, write them by hand-reading the fixture and say so
-     in the summary (measurement.md rule 2: the hand-read IS the check).
-2. `TheRecordedSessionsKeepBothIdentitiesTests`: local completeness and global uniqueness (E4.S2 §S2.5, whose
-   association list includes `claimed by peer`) over every fixture, through the real reader.
-3. `AttributionOfARecordedRoundIsStableUnderReplayTests`: for the background-agent fixture, attributing round N
-   from the transcript truncated at round N's completion equals attributing it from the full transcript — the
-   live record against the backfill (S2 decision 7).
-4. `NoSentinelLeavesAttributionTests`: serialise every `RoundAuthors` and `ContributorSet` produced above
-   (`ToString()`, and E5's JSON context if one exists by then) and assert E1's sentinel occurs nowhere; plus the
-   positive half — the sentinel IS present in the fixture bytes the test read, so a fixture without sentinels
+1. `FixtureRounds` (the loader above) and the `[Theory]` data: one row per case of the table, with its cells as data.
+2. `AttributionHoldsOnTheRecordedSessionsTests`: the positive half, then `Assign` → `Build` → `Contributors.Of`, then the
+   case's cells (rows, totals, state, contributors).
+3. `TheRecordedSessionsKeepBothIdentitiesTests`: local completeness and global uniqueness (E4.S2 §S2.5, whose
+   association list includes `claimed by peer`) over every case through the real reader. `c09`, `c15` and `c17` are the
+   cases with more than one gate session.
+4. `AttributionOfARecordedRoundIsStableUnderReplayTests`:
+   - `c01` and `c14`: round 1 attributed from the transcript truncated at round 1's COMPLETION equals round 1 attributed
+     from the full transcript — placements, owners, states and tokens — the live record against the backfill.
+   - `c01` truncated at round 1's START: the placed message ids and their owners are equal, but the straddling message's
+     tokens are LOWER. This fact pins D8 (tokens over every line of the id) beside D6 (placement by the first line); see
+     §9 F1.
+   - `c13`: the replay above.
+5. `NoSentinelLeavesAttributionTests`: serialise every `RoundAuthors` and `ContributorSet` produced above (`ToString()`,
+   and E5's JSON context if one exists by then), and assert that E1's sentinel `COAI-FIXTURE-SENTINEL` occurs nowhere.
+   Add the positive half: the sentinel IS present in the fixture bytes the test read, so a fixture without sentinels
    cannot pass vacuously.
-5. A fixture whose path spelling the universe does not match (a WSL `/mnt/…` path against a Windows root) fails
-   by fixture name; do NOT add a translation — report it to the reviewer as a finding for E5's universe.
+6. `AttributionDependsOnlyOnTheOrderOfInstantsTests`: every S2 builder scenario, with each instant replaced by its rank on
+   the fixtures' synthetic clock (as E1's sanitiser does), gives the same placements, owners, states and rows, apart
+   from the instants themselves. This is why rank-clock fixtures are valid inputs (§2).
+7. A case whose path spelling the universe does not match (a WSL `/mnt/…` path against a Windows root) fails by case
+   name. Do NOT add a translation; report it to the reviewer as a finding for E5's universe. (Every shipped fixture is
+   `side: windows`; RESULTS *What E1 leaves open* says why no WSL session could be published.)
 
-**Test scenarios.** The seven acceptance cases — two repositories in one caller session, background work across
-rounds, a model switch, a resumed agent, missing child transcripts, replay without double counting, before-open
-work — plus a second gate session of the same caller and persistence off (`unobserved: transcript not found` →
-`State == unobserved`, no rows, `Unknown` totals).
+**Break-its.** (a) Swap two cases' cells in the theory data → those rows go red by case name. (b) Add a `Description`
+member to `AuthorRow`, filled from the agent's meta → the negative half of the sentinel test goes red, with the positive
+half green (proof that the sentinel was there to leak). (c) Make the replay compare tokens after truncating `c01` at the
+START → red on the straddling message's tokens. Truncate before that message's first line → red on placements.
+(d) Materialise without folding separators on a non-Windows host → the `Checkout` precondition goes red by case name, not
+a cell. (e) Give `Window.Contains` a one-minute tolerance → the order fact goes red.
 
-**Break-its.** (a) Swap two fixtures' expectation files → those theory rows go red by fixture name (each row
-reads its own expectation). (b) Add a `Description` member to `AuthorRow` filled from the agent's meta → the
-sentinel test's negative half red (with the positive half green, proving the sentinel was there to leak).
-(c) Truncate the background fixture at round N's START instead of its completion → still equal (the horizon is
-the start); truncate it one minute before the start → red.
+**Done when.** One theory row per fixture, all green. Both identities and the replay facts are green on the real
+fixtures. The sentinel test is green with its positive half. The order fact is green. Every break-it was watched red.
+`CoaiMcp.Tests.exe` is green on Windows and in CI on Linux and macOS. The epic's summary says that every cell is a
+hand-read.
 
-**Done when.** One theory row per E1 fixture, all green; both identities and the replay fact green on the real
-fixtures; the sentinel test green with its positive half; every break-it watched red; `CoaiMcp.Tests.exe` green;
-any expectation written by hand-reading is named in the epic's summary.
-
-**Dependencies.** E4.S3 and E4.S4; E3.S2 + E3.S4 (the reader) and the mapping to `AttributionInput`; E1.S5's fixtures
-and their `rounds.json` files. **Model:** brief by opus (this document) · code: sonnet · review: opus.
+**Dependencies.** E4.S3 and E4.S4; E3.S2 + E3.S4 (the reader and its materialiser, with §8.3 item 6) and the mapping to
+`AttributionInput`; E1.S5's fixtures (shipped, #828) — `c17` and `c19` give their full cells only after §8.3 item 4.
+**Model:** brief by opus (this document) · code: sonnet · review: opus.
 
 ---
 
@@ -869,6 +985,11 @@ and their `rounds.json` files. **Model:** brief by opus (this document) · code:
 - [ ] The parent's ledger line names `E4.S2`, its E4 links this document, `todo/README.md` has this document's
       row, and the parent records the home deviation (§0) and which candidate each S2 decision took.
 - [ ] `CoaiMcp.Tests.exe` green; `node .agents/conventions/tools/plan-lifecycle.mjs` clean.
+- [ ] (added 2026-10-16) Every S5 cell is backed by its `c01`–`c20` case, and the cells are named as hand-reads; no test
+      asserts a duration, a date or a token magnitude read from a fixture; the order fact is green.
+- [ ] (added 2026-10-16) Fable answered every item of §9 before S2's code, and each answer is in S2 or in the parent's §16.
+- [ ] (added 2026-10-16) The risk consultation of §10 was taken, verified and closed (`close_consult`) before the epic's
+      code round, and what it changed is recorded.
 
 ## 7. Defects found in the parent plan while splitting (not fixed here)
 
@@ -912,3 +1033,139 @@ and their `rounds.json` files. **Model:** brief by opus (this document) · code:
     writing only through those has no evidence. E3's to decide; noted because it moves association.
 13. **Clocks.** Window edges compare the client's transcript clock with the server's `StartedUtc`; a Windows/WSL
     skew moves activity across a boundary. Not addressed; S2 decision 10 states it.
+
+## 8. Against E1's measurements and main (revised 2026-10-16)
+
+### 8.1 Reference drift — the lines to read on main `59463d73`
+
+The S2 text is Fable's and is not edited. Where it cites a line that has moved, read the right-hand column. The other
+stories are corrected in place.
+
+| Cited (where) | On main | What is there |
+|---|---|---|
+| `RoundEngine.cs:483-491`, saved at `:586` (§0, S2 scope) | the `with` block `:485-496`; saved at `:591` | the record E5 adds the snapshot to, and its save |
+| `RoundEngine.cs:607`, `Projection.Write` (S2.2 decision 3) | `:612` (`RecordRound` at `:614`; the block ends at `:644`); `:607` is now `audit.Closing` | the synchronous projection at completion — decision 3's premise holds |
+| `RoundEngine.cs:893-902`, `:895`, `:896` (S2 scope, case 2, S2.11) | `WhatTheCallerWasDoing` `:898-907`; the previous round's `CompletedUtc` `:900`; floored at `OpenedUtc` `:901`; the transcripts folder `:902`; the slice `:906` | the `agent_log` window this epic does not reuse |
+| `SessionStore.cs:248` (S2 scope) | `PersistedSession.OpenedUtc` `:278` (the record `:266`) | — |
+| `SessionStore.cs:594-597` (S2 scope), `:578-597` (§7 item 7) | `SweepOrphanedRounds` `:608-631`; the rewrite to `interrupted` `:626` | the sweep also stamps `CompletedUtc` with the SWEEP's time; an interrupted round opens no window, so that stamp ranks nothing |
+| `RoundSkips.cs:95-99`, "a repeated skip moves only its `CompletedUtc`" (S2 scope) | `:95-99`: it moves `CompletedUtc`, `Repeats` and `Sha` (`:97`); `StartedUtc` does not move | no effect on the windows (a skip opens none) — §9 F5 |
+| `RoundsDb.cs:923-945` (S3) | `RecordReviewers` `:928-954` | corrected in S3 |
+| `rounds.ts:156` (S4) | `calledBy` `:168` | corrected in S4 |
+| unchanged | `AgentLog.cs:304-317` (`InRepo` 304-315, `Normalise` 317); `ArchitectureTests.cs:17-24`; `SessionStore.cs:78-92, 84, 88, 92, 104, 121, 193`; `SessionState.cs:264-267, 382-386`; `RoundNumber.cs:24-26`; `LiveRound.cs:279`; `RoundSkips.cs:102-110, 105`; `GateHistoryQuery.cs:77`; `ProductionSources.cs:38`; `CoaiMcp.Tests.csproj:36` | — |
+
+E3 is not built: `CallerTranscript.cs`, `ObservedSession.cs` and `WriteEvidence.cs` are not on main, so §0's E3 contract
+is E3's document, not code. Schema step 23 is the plan gate's (`Schema.cs:655`), and the authors schema is step 24, as
+§7 items 1 and 8 already say.
+
+### 8.2 What E1 measured, and what this epic does with it
+
+| RESULTS | Measured | Here |
+|---|---|---|
+| Q2 | metas with `model`: 100 % only on 2.1.283–2.1.285 (Windows) and 2.1.300; otherwise 70–98 % on Windows and as low as 32 % on WSL. `effort` on ≥ 99.5 % of assistant lines | §2: counts are grouped on the model that answered. S3 has the rule and its test: an empty meta alias never blanks a model. The state E3 gives such a meta is §8.3 item 2 |
+| Q4 | one `message.id`'s lines span p50 1.7–1.9 s, p99 50–52 s, max 2.01 h; the instant used for attribution is the id's FIRST line | placement by the first line (E3 S4-8) agrees with the windows. But a placed message's tokens include its lines after the start (D8), and a write on a late line gets the first line's instant (§9 F1, F2). S5's replay facts are written for this |
+| Q7 | Windows: 587 `Agent` tool uses against 778 metas, and the 191 extra are exactly the nested metas (depth 2–3). WSL: 844 against 857, 17 nested, 4 tool uses with no meta (refused launches) | launches come from `ObservedAgent`, one per `agentId`, depth 1 and nested alike — never from a count of `Agent` tool uses (S5 `c07`: 2 launches, 3 tool uses). Rule 5 climbs subagent parents recursively. S1 refuses a looping chain, and an empty parent propagates nothing. A refused launch (error result, no meta) reaches E4 as NOTHING: no launch, no unobserved launch, and the window stays `observed` (`c11`). An `Agent` call with no meta whose result is not an error is E3's `agent call without transcript` → `partial` (`c05`) |
+| Q8 | every write path is absolute. Windows: backslashes 90 %, mixed separators, drive case as typed. WSL: `/` only. Writes under `cwd`: 0 % / 5 % | S1's normalisation rules; no `cwd` anywhere (S2.4's break-it keeps it so) |
+| the sanitiser | instants → ranks on `2000-01-01`, ties kept, `rounds.json` on the same clock; usage counts → ranks per path | §2 *instants are an order*; S5's rules and its order fact |
+| the three-round check | each of the six sampled windows held several models or several write roots | expect most activity to be `ambiguous` — §10's first question |
+
+### 8.3 Edits other documents need (not made here — this task edits only this document)
+
+1. **The parent**: the line references of §8.1, in its §6, §13, §16 (D1, D14, D17) and the E4/E5 scopes
+   (`RoundEngine.cs:483-491`, `:586`, `:605-625` → the projection block `:612-644`, `:893-902`, `:897` → `:902`;
+   `SessionStore.cs:248`, `:578-597`, `:586-600`; `RoundsDb.cs:923-945`; `rounds.ts:156`); and Fable's answers to §9,
+   when they come.
+2. **E3 (S4's reasons) and the parent's §5**: `partial: meta without model`. Q2 shows that a meta without `model` is what
+   a launch that names no model normally writes — on some versions, up to 68 % of metas. By E3's own principle ("a reason
+   is recorded when something was LOST or a COUNTED VALUE is uncertain"), nothing is lost: the request was "no model", and
+   the model that answered is on the lines. As written, the reason would mark most rounds `partial` and empty the word —
+   the argument D22 made for torn tails. Proposal: make it a diagnostics count. E4 copies E3's reasons verbatim (S2.3
+   *States*), so E4's states follow what E3 decides.
+3. **E3 S4-9**: `StraddleGuard = 1 h` rests on "one message never spans an hour". Q4 measured 3 ids per side over 1 h,
+   the longest 2.01 h. A message that starts before midnight and runs past a bound set early on the next day is then
+   counted from a later line, at a wrong instant.
+4. **E1's fixtures `c17` and `c19`**: their write calls have no `tool_result`. In `c17` the `Edit` into `repo-b` is the
+   file's last line, and `c19` has no result line at all. Under D23 (E3 S4-7) these are not writes, so `c17` does not show
+   `ambiguous · two repositories`, and `c19` shows neither the submodule nor the scratchpad. E3's worked-example row for
+   `write-into-submodule-and-scratchpad` expects writes that S4-7 drops. The fix: re-cut with the window past the results,
+   or a `derived:` edit that adds them (E1.S3's tool), then the guard's pinned prose and counts.
+5. **E1's `rounds.json`** has no `stage`, no `verdict` and no caller per round (a closed schema in the guard). So no data
+   holds a skip record, a plan round, an interrupted round or a caller change; `c16` shows a numbering GAP, not a skip.
+   Widening the schema is a privacy decision in the guard.
+6. **E3.S4's materialiser** (`CallerTranscriptFixture.Materialise`) "creates one directory with a `.git` marker per
+   fixture root". E4 needs a plan instead: a `.git` for `repo-a` and `repo-b`; NONE for `other` and `scratch` (else the
+   scratchpad is a checkout and D3's `outside` is never exercised); and for `c19`, a `.git` FILE at the submodule root the
+   write was moved into. Also, on a non-Windows host the materialiser must fold the separators after the re-pointed
+   prefix: `D:\fixture\repo-a\p1\p2.md`, re-pointed with its backslashes kept, is ONE file name on Linux, so its directory
+   is the temp root and the write reads `outside`. CI runs the suite on all three systems.
+7. **The parent's §6 acceptance case "a model switch inside one window"**: on `c06` the switch is in the ambiguous
+   totals (main writes only into `scratch`), and those carry no model, so the stored record cannot show it there. S2 case
+   3 and S3's rows show it (builder), and so do the placements on `c06`.
+
+## 9. For Fable to confirm
+
+The S2 spec is unchanged. These are the places where E1's measurements or main contradict it, or where it is silent on
+something the shipped fixtures contain. Each item says what, why, and what changes if the answer is yes. Fable's answers
+go into S2 (Fable's text) and the parent's §16. Until then the coder builds S2 as written, and the tests named here stay
+as S2 states them.
+
+**F1 — decision 7's last sentence: "Lines at or after this round's COMPLETION never change the result."** It is true
+for placement and ownership. It is NOT true for tokens: a message's tokens are the per-term maximum over ALL its lines
+(D8), and one id's lines span up to 2.01 h (Q4), so a message still being written at the completion has fewer lines in
+the live read than in a backfill (E3 states this limitation as S4-2). The same holds for a write whose `tool_result`
+arrives after the live read: live, it is unanswered and therefore not a write (S4-7); in a backfill it is a write, and an
+association can change. Proposal: "never change which items are placed or who owns them; the token terms of a message
+still being written at the completion, and a write answered after it, are the stated limitation of E3 S4-2/S4-7".
+`LinesAtOrAfterCompletionChangeNothing` keeps its builder form (a builder message has one instant), and S5's replay facts
+are written for the narrower claim (S5 brief 4).
+
+**F2 — a write's instant is its MESSAGE's first line (E3 S4-8), not its own line.** Decision 7 says that this round's
+ladder "sees only lines stamped before the start" (D6). With S4-8, a write on a line AFTER the start, in a message that
+began before it, is evidence for this round. `c13`, `c15` and `c16` have exactly this shape: the `Write` line comes after
+the round's start, and its message began before it. Their targets are `scratch`, so no cell changes today. Choose:
+(a) keep S4-8 and say in decision 7 that the horizon applies to a write's message, not to the write's own line; or
+(b) E3 stamps a write by its own line, so a write after the start goes into the next window, where its message may not
+be — and the ladder then sees a write in a window where the agent has no placement. (a) keeps a message and its writes
+together; (b) keeps D6 literal. Both keep the two identities.
+
+**F3 — a round listed twice in one journal.** `AssignEvery` and identity 2 assume that each recorded `(Stage, Number)` is
+unique. `c13` lists round 1 twice; tiled, the copy opens an empty window and the round is looked up twice. S1 now refuses
+it in `Validate()`, so `Assign` throws and E5 records `unobserved: invalid input`. Confirm that S2 needs nothing more, and
+that refusing (not merging identical copies) is the right answer.
+
+**F4 — a state whose reason lost nothing.** S2.3 *States* copies every E3 reason as `partial: <why>`. If E3 keeps `meta
+without model` as `partial` (§8.3 item 2), most windows of most rounds will be `partial` for a value that was observed.
+Confirm whether S2 copies every E3 reason or only those E3 marks as a loss. The fix belongs to E3; if E3 makes it, S2's
+text does not change.
+
+**F5 — a fact in S2's scope paragraph.** "A repeated skip moves only its `CompletedUtc` (`:95-99`)": it also moves
+`Repeats` and `Sha` (`RoundSkips.cs:97`). `StartedUtc` does not move, and a skip opens no window, so no rule changes.
+Confirm, and correct the wording when S2 is next edited.
+
+## 10. Risk consultation brief (owed before E4's code round)
+
+The cadence named risk item **4/4.2** — epic 4, story E4.S2: *attribution decides what every number means*. Under
+`coai-consultant.md` trigger 7 this is a consultation of its own: `kind: risk`, `plan:
+todo/PLAN_a_round_records_who_wrote_the_code_and_how_much.md`, `epics: "4"`. It is taken before E4's code round and
+closed with `close_consult` after the advice is verified. Files to name: this document (§S2.2–§S2.6, §8, §9), the
+parent's §6 and §16, and `research/RESULTS_caller_transcripts_on_both_sides.md`. The questions:
+
+1. **Who owns ambiguous activity that two gate sessions both see?** Completion rank (D24) gives it to the
+   earliest-completed window. All six windows E1 sampled held several models or several write roots, so ambiguous
+   activity will be common, and its owner decides which gate's totals carry it. Is a rank rule defensible here, or
+   should overlapping no-evidence activity go to a shared total that no gate owns?
+2. **The evidence horizon inside one message.** One message's lines span up to 2.01 h. Its instant is its first line
+   (placement), its tokens are the maximum over all its lines (D8), and its writes take the first line's instant (E3
+   S4-8). Which of these may cross a round's start or completion before a number stops meaning "the work done before
+   round N started"? (§9 F1, F2.)
+3. **`same-session` and the cheap-model case.** An agent with no write is credited to this repository when exactly one
+   destination was written in its window. E1's sampled windows ran 32–3 825 minutes and held 1–6 write roots. Can this
+   credit a no-write scout to the strong model's repository, or move a fixer's tokens onto the original author, in the
+   consultant's round-3 case? And is `child of` through subagent parents only (main never propagates) right when most
+   coders are depth-1 children of main?
+4. **What `partial` should mean.** Should a window be `partial` for a reason that lost nothing (a meta with no `model`,
+   §8.3 item 2), or only when an item or a counted value is missing? Is "a round's state is the weakest of its windows"
+   the right roll-up for the report?
+5. **Requested or answered.** The owner asks about a POLICY ("coders moved to Sonnet"), and a policy is a request.
+   Attribution counts the model that ANSWERED: a session can fall back (Opus 5.5 → Opus 4.8, scope session, seen
+   2026-10-16), and metas often name no request at all. Is storing both and grouping on the answering model the right
+   default for E6, and what must the report show where the two differ?
