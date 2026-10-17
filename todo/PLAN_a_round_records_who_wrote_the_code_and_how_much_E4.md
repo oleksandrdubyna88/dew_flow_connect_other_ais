@@ -877,7 +877,7 @@ and their `rounds.json` files. **Model:** brief by opus (this document) · code:
 > every `round_authors` row) accepted as resolved here — E4.S2's spec may still replace 4 and 6 with a reason.
 
 1. **Writes have no instant.** §5 keeps writes "as a boolean per (agent, repository)", but §6 associates per
-   agent IN A WINDOW, and step 23's `write_calls` is a count. E3 must expose each write's instant and path.
+   agent IN A WINDOW, and step 24's `write_calls` (step 23 was taken by the plan-gate E2, 2026-10-16) is a count. E3 must expose each write's instant and path.
 2. **The repository universe is undefined.** A write outside `repo_path` into a memory folder, a scratchpad or
    temp is "another repository" by §6's wording, which makes rule 4's "exactly ONE repository" fail for nearly
    every main session (S2 decision 6).
@@ -896,7 +896,7 @@ and their `rounds.json` files. **Model:** brief by opus (this document) · code:
    interrupted rounds are swept without passing the attribution call site (`SessionStore.cs:578-597`), and old
    rounds have no `StartedUtc`; §6 does not say whether they start windows, and activity in a window whose round
    records no authors is lost (S2 decision 1).
-8. **No agent identity in step 23.** Contributors as a union over stored rows need an agent key, and "3 Sonnet
+8. **No agent identity in step 24** (step 23 was taken by the plan-gate E2, 2026-10-16). Contributors as a union over stored rows need an agent key, and "3 Sonnet
    coders" needs distinct agents — `launches` is 0 for a straddler in its writing window. The listed columns
    carry neither; E4.S3 emits per-agent rows, so E5 must store an opaque agent key (or an `agents` count per
    aggregated row). At per-agent grain §14's "≤ 10 rows a round" may be low.

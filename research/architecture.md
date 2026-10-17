@@ -775,6 +775,13 @@ anything. A second absent value — `null` alongside `''` — was proposed in th
 declined for that reason: two spellings of absence are two things to keep in step, and the first
 place they diverge is a round reported as decided in no time at all.
 
+**One more field, the same rule (2026-10-16): `LoggedRound.PlanSource`.** What a plan round reviewed
+(`rounds.plan_source`, schema step 23, plan-gate E2) rides `--log` as an optional member `planSource`, an init property like
+`Size`, read by a page-scoped reader (`RoundPlanSources`) after `RoundChangesLog`. A round from before the step, one that is not a
+plan round, and a step-22 database all send NO member — never an empty one — and a value that does not parse is dropped, so a
+malformed row cannot fail the page. An older extension ignores it (`parseLog` reads field by field); the extension's own
+rounds-log line reads the SESSION FILE's copy, not this member (`module_extension.md`).
+
 ### The second one: the review ROLES (2026-09-12)
 
 The same shape, arrived at the same way. `coai-mcp` held five roles and twenty-five prompts as a C#

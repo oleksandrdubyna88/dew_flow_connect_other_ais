@@ -5,7 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 import {
-  bundledPage, clickInRow, COMPLETED, firstRenderedKey, LOG, PRICED, ROOT, runningPage, STARTED,
+  bundledPage, clickInRow, COMPLETED, firstRenderedKey, LOG, PRICED, ROOT, runningPage, SESSION, STARTED,
   stub, type Stub,
 } from './roundsLogPageHarness';
 
@@ -26,7 +26,7 @@ import {
  */
 
 /** Every function the page embeds by its SOURCE TEXT, and therefore every one this file guards. */
-const EMBEDDED = ['compareRows', 'rowMatches', 'inView', 'money', 'cost3', 'costTitle', 'asInstant'];
+const EMBEDDED = ['compareRows', 'rowMatches', 'inView', 'money', 'cost3', 'costTitle', 'asInstant', 'reviewedFromHtml'];
 
 test('the minified bundle still defines the functions the page calls', () => {
   const { script } = bundledPage();
@@ -1211,4 +1211,48 @@ test('the shipped page opens the Questions tab on a press, and a push replaces i
   const table = log.qconsultLogHtml(log.parseLog(JSON.stringify(QUESTIONS_LOG), true).questions ?? []);
   for (const fn of messages) { fn({ data: { type: 'qconsults', html: table } }); }
   assert.equal(seen['qconsults-body']?.innerHTML, table, 'a push of the tab did not reach its body');
+});
+
+/* ------------------------------------------------------------------------------------------------
+ * What a PLAN round reviewed, run rather than matched (E2.S3 of
+ * todo/PLAN_the_plan_gate_reads_the_committed_plan_E2.md, contract C3).
+ *
+ * The line is built by `reviewedFromHtml`, embedded in the page by its source text — so only the page as it SHIPS can say
+ * whether the minifier left the function standing and whether opening a row draws it. A round with no recorded source draws
+ * no `source` element at all: an empty "reviewed from" would be a claim about a round that recorded nothing.
+ * --------------------------------------------------------------------------------------------- */
+
+const PLAN_SESSION = {
+  ...SESSION,
+  state: { ...SESSION.state, stage: 'PlanReview' },
+  rounds: [{
+    ...SESSION.rounds[0]!,
+    stage: 'PlanReview',
+    planSource: {
+      origin: 'commit', commit: 'a'.repeat(40), path: 'todo/PLAN_x.md', blob: 'b'.repeat(40), bytes: 98304, textId: '0123456789abcdef',
+    },
+  }],
+};
+
+function openedRows(sessions: unknown[]): string {
+  const page = runningPage(sessions);
+  const key = firstRenderedKey(page.seen['rows']?.innerHTML ?? '');
+  page.click(clickInRow('tr[data-key]', 'data-key', key));
+
+  return page.seen['rows']?.innerHTML ?? '';
+}
+
+test('opening a plan round shows what it reviewed, in the page as it ships', () => {
+  const rows = openedRows([PLAN_SESSION]);
+
+  assert.match(rows, /class="detail"/, 'the row did not open');
+  assert.match(rows, /class="reviewer source">reviewed from todo\/PLAN_x\.md @ aaaaaaa · blob bbbbbbb · 98 304 bytes</,
+    'the line is not on the opened row');
+});
+
+test('opening a round with no recorded source draws no source element at all', () => {
+  const rows = openedRows([SESSION]);
+
+  assert.match(rows, /class="detail"/, 'the row did not open');
+  assert.doesNotMatch(rows, /class="reviewer source"/, 'a round that recorded no source drew a "reviewed from" line');
 });
