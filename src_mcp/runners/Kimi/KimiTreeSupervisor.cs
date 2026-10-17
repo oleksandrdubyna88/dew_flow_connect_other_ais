@@ -121,8 +121,15 @@ public sealed class KimiTreeSupervisor : ITreeSupervisor
         _note(KimiSurvivorGate.Sentence(new SurvivorVerdict.Blocked(MarkerOf(ReaderPhases.Running, survivors), _markerPath, BlockedReasons.ReaderTerminationFailed, string.Empty)));
     }
 
+    /// <summary>
+    /// The ONE decision "does this host supervise a Kimi tree" (a child subreaper, a pidfd, a survivor marker): Linux — and so WSL, which is Linux. <c>KimiShimHold</c> asks it to decide whether the hold carries a supervisor,
+    /// and the teardown below asks it to decide whether to run one; two <c>IsLinux()</c> calls could drift apart, one half supervising what the other never ends.
+    /// </summary>
+    [System.Runtime.Versioning.SupportedOSPlatformGuard("linux")]
+    internal static bool IsSupervisedHost() => OperatingSystem.IsLinux();
+
     private static Teardown ThisHost => static (agent, shimPid, started, onListed) =>
-        OperatingSystem.IsLinux() ? SupervisedTeardown.EndAsync(agent, shimPid, started, PidfdLayer.Calls, onListed) : UnsupervisedTree.Instance.EndAsync(agent);
+        IsSupervisedHost() ? SupervisedTeardown.EndAsync(agent, shimPid, started, PidfdLayer.Calls, onListed) : UnsupervisedTree.Instance.EndAsync(agent);
 
     private KimiSurvivorMarkerDto MarkerOf(string phase, IReadOnlyList<ProcessIdentity> tree) =>
         new(new ReaderMarkerDto(phase, _shimPid, _shimStartedUtc, DateTimeOffset.UtcNow, tree), _ownedRoot, _signInFolder);

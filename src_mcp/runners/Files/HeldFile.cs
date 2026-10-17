@@ -1,4 +1,6 @@
 using System.Runtime.Versioning;
+using Microsoft.Win32.SafeHandles;
+using CoaiMcp.Runners.Platform;
 
 namespace CoaiMcp.Runners.Files;
 
@@ -49,12 +51,12 @@ public static class HeldFile
     /// violation, on Unix the advisory <c>flock</c> .NET takes.
     /// </remarks>
     public static Hold Take(string path, bool inheritable = false) =>
-        inheritable && !InheritableSupported(OperatingSystem.IsWindows(), OperatingSystem.IsLinux())
+        inheritable && !InheritableSupported(HostKinds.Of(OperatingSystem.IsWindows(), OperatingSystem.IsLinux(), OperatingSystem.IsMacOS(), wsl: false))
             ? UnsupportedInheritable()
             : inheritable && OperatingSystem.IsLinux() ? LinuxHeldFile.TakeInheritable(path) : TakenByDotNet(path, inheritable);
 
-    /// <summary>Whether an EXCLUSIVE inheritable hold exists on this host: Windows (the share mode is the kernel's) and Linux (the native <c>flock</c>). Nowhere else — .NET's own combined share mode is a shared lock on Unix.</summary>
-    internal static bool InheritableSupported(bool windows, bool linux) => windows || linux;
+    /// <summary>Whether an EXCLUSIVE inheritable hold exists on <paramref name="host"/>: Windows (the share mode is the kernel's), Linux and WSL (the native <c>flock</c>) — <see cref="HostKinds.HasKimiLockFamily"/>, the one predicate. Nowhere else: .NET's own combined share mode is a shared lock on Unix.</summary>
+    internal static bool InheritableSupported(HostKind host) => HostKinds.HasKimiLockFamily(host);
 
     /// <summary>The answer on a host with no exclusive inheritable hold: unusable, never .NET's shared lock (two holders of the sign-in would be let in — two refreshers of a rotating token).</summary>
     internal static Hold UnsupportedInheritable() =>
@@ -116,7 +118,7 @@ public static class HeldFile
         }
 
         afterOpen?.Invoke(path);
-        if (StillTheFile(taken.Stream, path))
+        if (StillTheFile(taken.Stream.SafeFileHandle, path))
         {
             return (hold, false);
         }
@@ -127,8 +129,8 @@ public static class HeldFile
     }
 
     [SupportedOSPlatform("linux")]
-    private static bool StillTheFile(FileStream stream, string path) =>
-        LinuxStatx.OfHandle(stream.SafeFileHandle, LinuxStatx.StatxBasic) is StatxRead.Read held
+    internal static bool StillTheFile(SafeFileHandle handle, string path) =>
+        LinuxStatx.OfHandle(handle, LinuxStatx.StatxBasic) is StatxRead.Read held
         && LinuxStatx.OfPath(path, LinuxStatx.AtSymlinkNoFollow, LinuxStatx.StatxBasic) is StatxRead.Read named
         && held.Status.SameFileAs(named.Status);
 

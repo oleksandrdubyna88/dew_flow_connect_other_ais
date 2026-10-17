@@ -17,6 +17,7 @@ internal interface IJunctionShell
     /// <summary>
     /// Makes the link at <paramref name="link"/> — a path that does NOT exist yet — to <paramref name="target"/> (a full path, no trailing separator, whose
     /// reparse buffer is known to fit); empty on success, otherwise the system's message. Atomic where the system allows it: never a delete-then-create window.
+    /// <b>The link's PARENT folder is created when it is missing</b> (both shells; <c>Junctions.Make</c> relies on it for a fresh owned home) — a caller never makes it, and a shell that did not would fail on the first launch of a new home.
     /// </summary>
     string MakeLink(string link, string target);
 }

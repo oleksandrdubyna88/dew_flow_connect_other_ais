@@ -19,18 +19,19 @@ namespace CoaiMcp.Runners.Files;
 [SupportedOSPlatform("linux")]
 internal static partial class LinuxHeldFile
 {
-    // No O_CLOEXEC: the child must inherit the descriptor.
-    private const int ReadWrite = 2;
-    private const int Create = 0x40;
-    private const int NoControllingTerminal = 0x100;
-    private const int OwnerReadWrite = 0x180;
-    private const int LockExclusive = 2;
-    private const int LockNonBlocking = 4;
-    private const int NoEntry = 2;
-    private const int NoAccess = 13;
-    private const int WouldBlock = 11;
-    private const int IsADirectory = 21;
-    private const int NameTooLong = 36;
+    // The libc names, so a reader checks them against <fcntl.h>, <sys/stat.h>, <sys/file.h> and <errno.h> and not against a comment. No O_CLOEXEC: the child must inherit the descriptor.
+    private const int O_RDWR = 0x0002;
+    private const int O_CREAT = 0x0040;
+    private const int O_NOCTTY = 0x0100;
+    private const int S_IRUSR = 0x0100;
+    private const int S_IWUSR = 0x0080;
+    private const int LOCK_EX = 2;
+    private const int LOCK_NB = 4;
+    private const int ENOENT = 2;
+    private const int EACCES = 13;
+    private const int EWOULDBLOCK = 11;
+    private const int EISDIR = 21;
+    private const int ENAMETOOLONG = 36;
 
     /// <summary><c>open(path, O_RDWR|O_CREAT|O_NOCTTY, 0600)</c> and <c>flock(LOCK_EX|LOCK_NB)</c>: taken over a stream on the descriptor, <c>Busy</c> on <c>EWOULDBLOCK</c>, otherwise <c>Unusable</c> naming the errno.</summary>
     public static Hold TakeInheritable(string path) => TakeInheritable(path, handle => new FileStream(handle, FileAccess.ReadWrite, bufferSize: 0));
@@ -38,13 +39,13 @@ internal static partial class LinuxHeldFile
     /// <summary>The same, with the stream over the descriptor behind a seam — a test makes its construction fail.</summary>
     internal static Hold TakeInheritable(string path, Func<SafeFileHandle, FileStream> stream)
     {
-        var descriptor = Open(path, ReadWrite | Create | NoControllingTerminal, OwnerReadWrite);
+        var descriptor = Open(path, O_RDWR | O_CREAT | O_NOCTTY, S_IRUSR | S_IWUSR);
         if (descriptor < 0)
         {
             return new Hold.Unusable(Failure(path, Marshal.GetLastPInvokeError()));
         }
 
-        return Flock(descriptor, LockExclusive | LockNonBlocking) == 0 ? Held(descriptor, stream) : Refused(descriptor, path, Marshal.GetLastPInvokeError());
+        return Flock(descriptor, LOCK_EX | LOCK_NB) == 0 ? Held(descriptor, stream) : Refused(descriptor, path, Marshal.GetLastPInvokeError());
     }
 
     /// <summary>The stream over the descriptor; when the stream cannot be made, the handle that owns the descriptor is disposed — the descriptor is closed exactly once, and the flock goes with it and the failure is the take's.</summary>
@@ -67,15 +68,15 @@ internal static partial class LinuxHeldFile
     {
         _ = Close(descriptor);
 
-        return errno == WouldBlock ? new Hold.Busy() : new Hold.Unusable(Failure(path, errno));
+        return errno == EWOULDBLOCK ? new Hold.Busy() : new Hold.Unusable(Failure(path, errno));
     }
 
     /// <summary>The exception <see cref="HeldFile.Take"/> would have answered for the same refusal, where .NET names one; an <see cref="IOException"/> naming the errno otherwise.</summary>
     private static Exception Failure(string path, int errno) => errno switch
     {
-        NoEntry => new DirectoryNotFoundException($"{path}: errno {errno} (ENOENT)"),
-        NoAccess or IsADirectory => new UnauthorizedAccessException($"{path}: errno {errno}"),
-        NameTooLong => new PathTooLongException($"{path}: errno {errno} (ENAMETOOLONG)"),
+        ENOENT => new DirectoryNotFoundException($"{path}: errno {errno} (ENOENT)"),
+        EACCES or EISDIR => new UnauthorizedAccessException($"{path}: errno {errno}"),
+        ENAMETOOLONG => new PathTooLongException($"{path}: errno {errno} (ENAMETOOLONG)"),
         _ => new IOException($"the lock file {path} cannot be taken: errno {errno}"),
     };
 

@@ -39,6 +39,22 @@ public abstract record MarkerRead
 public sealed record StandingMarker(string Path, KimiSurvivorMarkerDto Marker);
 
 /// <summary>
+/// What a look for the markers that name one home came to — a closed union, so "none stands" and "cannot tell whether one stands" are never one answer: only the first lets a home be disposed.
+/// </summary>
+public abstract record StandingMarkers
+{
+    private StandingMarkers()
+    {
+    }
+
+    /// <summary>These markers name the home (none, when the lock root holds no marker of it and every marker there was read).</summary>
+    public sealed record Found(IReadOnlyList<StandingMarker> Markers) : StandingMarkers;
+
+    /// <summary>A marker or the lock root could not be read, so whether one names the home cannot be told: the home is kept.</summary>
+    public sealed record Unverifiable(string Reason) : StandingMarkers;
+}
+
+/// <summary>
 /// The survivor marker FILE: <c>&lt;KimiCredentialsLock.Root&gt;/&lt;key&gt;.survivors.json</c>, written whole or not at all (<see cref="AtomicFile"/>), in three phases by
 /// <see cref="KimiTreeSupervisor"/> — <c>spawning</c> before the agent starts, <c>running [agent]</c> right after, <c>running [members]</c> before any signal — and deleted only on a
 /// confirmed-empty re-listing.
@@ -60,27 +76,19 @@ public static class KimiSurvivorMarker
         AtomicFile.Write(path, JsonSerializer.Serialize(marker, KimiSurvivorJsonContext.Default.KimiSurvivorMarkerDto));
     }
 
-    /// <summary>Reads the marker at <paramref name="path"/>.</summary>
-    public static MarkerRead Read(string path)
-    {
-        if (path.Length == 0)
+    /// <summary>
+    /// Reads the marker at <paramref name="path"/> WITHOUT trusting the path (<see cref="BoundedFile"/>): a link is never followed, more than 64 KiB is never read, and a failure is said by its type and code — never by a
+    /// resolved path. Each of those is <see cref="MarkerRead.Unreadable"/>, which keeps the sign-in blocked and the home kept.
+    /// </summary>
+    public static MarkerRead Read(string path) => path.Length == 0
+        ? new MarkerRead.Unreadable("no path: the sign-in folder could not be keyed, so there is no marker file to name")
+        : BoundedFile.ReadRegular(path) switch
         {
-            return new MarkerRead.Unreadable("no path: the sign-in folder could not be keyed, so there is no marker file to name");
-        }
-
-        try
-        {
-            return Parsed(File.ReadAllText(path));
-        }
-        catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException)
-        {
-            return new MarkerRead.Absent();
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return new MarkerRead.Unreadable($"{e.GetType().Name}: {e.Message}");
-        }
-    }
+            BoundedRead.Absent => new MarkerRead.Absent(),
+            BoundedRead.Text text => Parsed(text.Value),
+            BoundedRead.Refused refused => new MarkerRead.Unreadable(refused.Why),
+            _ => new MarkerRead.Unreadable("a read this marker reader has no word for"),
+        };
 
     /// <summary>The report <c>--kimi-clear-marker</c> prints, as the one JSON object on stdout.</summary>
     public static string Json(ClearMarkerReport report) => JsonSerializer.Serialize(report, KimiSurvivorJsonContext.Default.ClearMarkerReport);
@@ -88,25 +96,58 @@ public static class KimiSurvivorMarker
     /// <summary>Deletes the marker (a file already gone is fine).</summary>
     public static void Clear(string path) => File.Delete(path);
 
-    /// <summary>The markers under <paramref name="lockRoot"/> that name <paramref name="ownedRoot"/> — at most a handful of files, and never the sign-in folder; an unreadable file is skipped here (the launch's own gate refuses it). <b>That is the safe direction:</b> a home that only an unreadable marker names can be disposed, but its sign-in is never launched on while that file stands — the gate reads the same file, cannot parse it, and is Blocked — so a skipped marker never lets a second Kimi in; at worst it lets an owned home (which holds no sign-in of its own, only the junction to it) be deleted.</summary>
-    public static IReadOnlyList<StandingMarker> StandingFor(string lockRoot, string ownedRoot) =>
-        [.. FilesUnder(lockRoot).Select(path => (Path: path, Read: Read(path)))
-            .Where(found => found.Read is MarkerRead.Read read && SameRoot(read.Marker.OwnedRoot, ownedRoot))
-            .Select(found => new StandingMarker(found.Path, ((MarkerRead.Read)found.Read).Marker))];
+    /// <summary>
+    /// The markers under <paramref name="lockRoot"/> that name <paramref name="ownedRoot"/> — at most a handful of files, and never the sign-in folder. <b>Fail-closed</b> (the coai code gate, E5): when a candidate marker
+    /// cannot be read, or the lock root cannot be listed, the answer is <see cref="StandingMarkers.Unverifiable"/> and <c>KimiHome.Alive</c> KEEPS the home — a marker coai cannot read may name any home, and the gate's
+    /// refusal of the sign-in does not protect a home from a cleanup. A missing lock root, or a file that vanished between the listing and the read, is no marker.
+    /// </summary>
+    public static StandingMarkers StandingFor(string lockRoot, string ownedRoot) => FilesUnder(lockRoot) switch
+    {
+        LockFiles.Listed listed => Standing([.. listed.Paths.Select(path => new Candidate(path, Read(path)))], ownedRoot),
+        LockFiles.Unlistable unlistable => new StandingMarkers.Unverifiable($"the lock root could not be listed ({unlistable.Why})"),
+        _ => new StandingMarkers.Unverifiable("the lock root could not be judged"),
+    };
+
+    private sealed record Candidate(string Path, MarkerRead Read);
+
+    private static StandingMarkers Standing(IReadOnlyList<Candidate> candidates, string ownedRoot)
+    {
+        var named = candidates.Where(candidate => candidate.Read is MarkerRead.Read read && SameRoot(read.Marker.OwnedRoot, ownedRoot))
+            .Select(candidate => new StandingMarker(candidate.Path, ((MarkerRead.Read)candidate.Read).Marker)).ToList();
+
+        return named.Count > 0 ? new StandingMarkers.Found(named) : Unverified(candidates);
+    }
+
+    /// <summary>None names the home: unless a marker could not be read — then it might, and nothing can be said.</summary>
+    private static StandingMarkers Unverified(IReadOnlyList<Candidate> candidates) =>
+        candidates.FirstOrDefault(candidate => candidate.Read is MarkerRead.Unreadable) is { Read: MarkerRead.Unreadable unreadable } stuck
+            ? new StandingMarkers.Unverifiable($"{System.IO.Path.GetFileName(stuck.Path)} could not be read ({unreadable.Reason})")
+            : new StandingMarkers.Found([]);
 
     /// <summary>The ordinal comparison <c>KimiHome.Alive</c> makes: trailing separators trimmed, case as written.</summary>
     internal static bool SameRoot(string a, string b) =>
         a.Length > 0 && string.Equals(Path.TrimEndingDirectorySeparator(a), Path.TrimEndingDirectorySeparator(b), StringComparison.Ordinal);
 
-    private static IEnumerable<string> FilesUnder(string lockRoot)
+    private abstract record LockFiles
+    {
+        private LockFiles()
+        {
+        }
+
+        public sealed record Listed(IReadOnlyList<string> Paths) : LockFiles;
+
+        public sealed record Unlistable(string Why) : LockFiles;
+    }
+
+    private static LockFiles FilesUnder(string lockRoot)
     {
         try
         {
-            return Directory.Exists(lockRoot) ? Directory.GetFiles(lockRoot, "*" + Suffix) : [];
+            return new LockFiles.Listed(Directory.Exists(lockRoot) ? Directory.GetFiles(lockRoot, "*" + Suffix) : []);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return [];
+            return new LockFiles.Unlistable(e.GetType().Name);
         }
     }
 

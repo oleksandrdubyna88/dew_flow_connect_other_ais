@@ -42,9 +42,11 @@ public abstract record ForeignKimiAnswer
 /// covered — nothing here can stop a process it does not own — and neither is a person's Kimi that refreshes in the seconds between the last poll and
 /// the agent's start.</para>
 /// </remarks>
-public sealed class ForeignKimiWatch(IProcessList processes, int ownPid, TimeSpan poll, Action<TimeSpan> pause)
+public sealed class ForeignKimiWatch(IProcessList processes, int ownPid, TimeSpan poll, Action<TimeSpan> pause, Action<string>? note = null)
 {
     private const int MostAncestors = 64;
+
+    private readonly Action<string> _note = note ?? (_ => { });
 
     /// <summary>The names a Kimi runs under: <c>kimi.exe</c> on Windows, and on Linux the basename of its <c>exe</c> link (<c>kimi</c>) — a running <c>kimi acp</c>'s <c>comm</c> is <c>MainThread</c> (L-K6), so the executable is the primary witness.</summary>
     private static readonly string[] KimiNames = ["kimi", "kimi.exe"];
@@ -55,7 +57,7 @@ public sealed class ForeignKimiWatch(IProcessList processes, int ownPid, TimeSpa
     private static readonly string[] CoaiNames = ["coai-mcp", "coai-mcp.exe"];
 
     /// <summary>This process, the host's process listing, polled every second, sleeping the thread.</summary>
-    public static ForeignKimiWatch Real() => new(HostProcessList.Current, Environment.ProcessId, TimeSpan.FromSeconds(1), Thread.Sleep);
+    public static ForeignKimiWatch Real() => new(HostProcessList.Current, Environment.ProcessId, TimeSpan.FromSeconds(1), Thread.Sleep, Console.Error.WriteLine);
 
     /// <summary>The <c>kimi</c> processes in <paramref name="all"/> that are not coai's own (see the remarks): pure, over one listing.</summary>
     public static IReadOnlyList<ProcessEntry> Foreign(IReadOnlyList<ProcessEntry> all, int ownPid)
@@ -70,6 +72,7 @@ public sealed class ForeignKimiWatch(IProcessList processes, int ownPid, TimeSpa
     {
         var waited = TimeSpan.Zero;
         var look = Looked();
+        Told(look, within);
         while (look is ForeignKimiAnswer.Running && waited + poll <= within)
         {
             pause(poll);
@@ -83,6 +86,15 @@ public sealed class ForeignKimiWatch(IProcessList processes, int ownPid, TimeSpa
             ForeignKimiAnswer.Unreadable unreadable => unreadable,
             _ => new ForeignKimiAnswer.Clear(waited),
         };
+    }
+
+    /// <summary>The one line the shim says when it is about to wait for a foreign Kimi — said once, on the channel of its other notes, so a person watching knows why nothing starts.</summary>
+    private void Told(ForeignKimiAnswer look, TimeSpan within)
+    {
+        if (look is ForeignKimiAnswer.Running { Still.Count: > 0 } running && poll <= within)
+        {
+            _note($"coai is waiting up to {within.TotalSeconds:F0} s for your own Kimi Code (pid {running.Still[0].Pid}) to end before it starts another on the same sign-in; it gives the turn up if it has not ended by then");
+        }
     }
 
     /// <summary>One look at the machine: who is foreign, or that it could not be told. The waited time is the caller's to fill in.</summary>

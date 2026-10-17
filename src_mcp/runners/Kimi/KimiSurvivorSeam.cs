@@ -9,7 +9,7 @@ namespace CoaiMcp.Runners.Kimi;
 /// <remarks>
 /// <para><b>Blocking is the reconcile's verdict, never the file's presence.</b> A marker whose every member is confirmed gone is cleared (the file deleted) and the launch goes on; a marker that cannot be
 /// reconciled keeps the sign-in, with <see cref="KimiSurvivorGate.Sentence"/> — the manual way out first. A marker file that cannot be read is Blocked by the gate itself, so nothing here treats "cannot tell" as free.</para>
-/// <para><b>A home is kept by what a marker NAMES</b>, not by any marker under the lock root: only a marker whose <c>OwnedRoot</c> is this home keeps it (<see cref="KimiSurvivorMarker.StandingFor"/>). Asking never reconciles and
+/// <para><b>A home is kept by what a marker NAMES</b> — and by a marker that cannot be read (<see cref="KimiSurvivorMarker.StandingFor"/> is fail-closed): an unreadable file may name any home. Asking never reconciles and
 /// never signals — a home disposal is not the place to end a process.</para>
 /// <para>The reconcile is awaited by the server's gate and BLOCKED on by the shim (<c>KimiShimHold</c>), which must not yield between the two tree files being held and the agent's start.</para>
 /// </remarks>
@@ -25,8 +25,13 @@ public sealed class ReconcilingSurvivors(IProcessList listing, Func<string> lock
         return await KimiSurvivorGate.ReconcileAsync(markerPath, listing) is SurvivorVerdict.Blocked blocked ? KimiSurvivorGate.Sentence(blocked) : string.Empty;
     }
 
-    public string KeepsHome(string ownedRoot) =>
-        KimiSurvivorMarker.StandingFor(lockRoot(), ownedRoot) is { Count: > 0 } standing ? Kept(ownedRoot, standing[0]) : string.Empty;
+    public string KeepsHome(string ownedRoot) => KimiSurvivorMarker.StandingFor(lockRoot(), ownedRoot) switch
+    {
+        StandingMarkers.Found { Markers.Count: > 0 } found => Kept(ownedRoot, found.Markers[0]),
+        StandingMarkers.Found => string.Empty,
+        StandingMarkers.Unverifiable unverifiable => $"coai cannot tell whether a survivor marker names {ownedRoot} ({unverifiable.Reason}) — the home is kept until the marker is cleared or removed",
+        _ => $"coai cannot tell whether a survivor marker names {ownedRoot} — the home is kept",
+    };
 
     private static string Kept(string ownedRoot, StandingMarker standing) =>
         $"a Kimi started on {ownedRoot} may still be running (the survivor marker {standing.Path} names pid {Pids(standing.Marker)}) — the home is kept until the marker is cleared";

@@ -176,6 +176,21 @@ public sealed class KimiLockRetirementTests : IDisposable
     }
 
     [Fact]
+    public void AnOversizedRecord_IsNotRead_AndTheLockIsLeft_AndSaid()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "the sweep is Linux's");
+        Directory.CreateDirectory(Locks);
+        var big = Path.Combine(Locks, "0123456789abcdef.lock");
+        var record = JsonSerializer.Serialize(new KimiLockRecord("1:1:1", Path.Combine(_dir.Path, "a-folder-that-is-gone"), DateTimeOffset.UtcNow), KimiLockJsonContext.Default.KimiLockRecord);
+        File.WriteAllText(big, record + new string(' ', BoundedFile.MaxBytes));
+
+        Swept().Should().Be(0, "a record larger than 64 KiB is not read: its first bytes would have said 'retire me'");
+
+        File.Exists(big).Should().BeTrue();
+        _notes.Should().Contain(note => note.Contains("0123456789abcdef.lock") && note.Contains("no readable record"));
+    }
+
+    [Fact]
     public void AFileThatIsNotAKeysLock_IsNeverTouched_AndAMissingRootIsNothingToDo()
     {
         Assert.SkipUnless(OperatingSystem.IsLinux(), "the sweep is Linux's");
