@@ -375,24 +375,32 @@ public sealed class VibeLaunchRulesTests
     [InlineData(WslGeneration.None)]
     public void AWsl1Host_IsRefused_WithTheWsl1Sentence(WslGeneration generation)
     {
-        VibeLaunch.HostRefusal(HostKind.Wsl, "vibe", generation).Should().Contain("WSL2 only").And.Contain("this is WSL1").And.Contain("wsl --set-version",
+        VibeLaunch.HostRefusal(HostKind.Wsl, "vibe", generation).Should().Contain("WSL2 only").And.Contain("this is WSL1").And.Contain("Run this from Windows (not inside WSL):").And.Contain("`wsl --set-version <distro> 2`",
             "a WSL1 banner was admitted as WSL2");
     }
 
-    /// <summary>S-V17: three real /proc/version banners through the generation predicate — only the first is WSL2, so only it starts.</summary>
+    /// <summary>
+    /// S-V17: every banner of <c>shared/wsl-banner-vectors.json</c> — the ONE rule for which WSL a kernel is, which the extension's tests read
+    /// too — through the generation predicate; only a WSL2 banner starts Vibe. A WSL2 kernel with no marker reads as none (the vector says so).
+    /// </summary>
     [Theory]
-    [InlineData("Linux version 5.15.167.4-microsoft-standard-WSL2 (root@1234) (gcc (GCC) 11.2.0) #1 SMP", WslGeneration.Wsl2, true)]
-    [InlineData("Linux version 4.4.0-19041-Microsoft (Microsoft@Microsoft.com) (gcc version 5.4.0 (GCC)) #1237-Microsoft Sat Sep 11 14:32:00 PST 2021", WslGeneration.Wsl1, false)]
-    [InlineData("Linux version 6.8.0-45-generic (buildd@lcy02-amd64-001) (x86_64-linux-gnu-gcc-13) #45-Ubuntu SMP", WslGeneration.None, false)]
-    [InlineData("", WslGeneration.None, false)]
-    public void OnlyAWsl2Banner_StartsVibe(string banner, WslGeneration generation, bool starts)
+    [MemberData(nameof(WslBannerVectors.Ids), MemberType = typeof(WslBannerVectors))]
+    public void OnlyAWsl2Banner_StartsVibe(string id)
     {
-        WslGenerations.Of(banner).Should().Be(generation, "a WSL1 banner was admitted as WSL2");
-        var kind = HostKinds.Of(windows: false, linux: true, macOs: false, wsl: VendorDiagnosis.NamesWsl(banner));
+        var vector = WslBannerVectors.Named(id);
+        var generation = WslGenerations.Of(vector.Banner);
 
-        (VibeLaunch.HostRefusal(kind, "vibe", generation).Length == 0).Should().Be(starts);
+        generation.Should().Be(vector.Generation, $"vector '{id}': a WSL1 banner was admitted as WSL2, or the extension's rule and the server's differ");
+        var kind = HostKinds.Of(windows: false, linux: true, macOs: false, wsl: VendorDiagnosis.NamesWsl(vector.Banner));
+
+        (VibeLaunch.HostRefusal(kind, "vibe", generation).Length == 0).Should().Be(vector.Generation == WslGeneration.Wsl2);
     }
 
+    [Fact]
+    public void TheSharedBannerVectors_Loaded_AndCoverEveryGeneration()
+    {
+        WslBannerVectors.All.Select(vector => vector.Generation).Distinct().Should().BeEquivalentTo(Enum.GetValues<WslGeneration>(), "none, WSL1 and WSL2 each have a vector");
+    }
     [Theory]
     [InlineData("wsl")]
     [InlineData(@"C:\Windows\System32\wsl.exe")]
