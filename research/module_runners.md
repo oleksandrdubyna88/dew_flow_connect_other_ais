@@ -3090,8 +3090,14 @@ sequenceDiagram
   account puts there between the check and the link is removed with it.
 - **Where the host comes from.** `VibeHost(Kind, Wsl, SignIn)`: the product's adapter takes `VibeHost.Current` (this process: `HostKinds.Current`,
   `WslGenerations.Current` — `NamesWsl2`: the banner holds `WSL2` or `microsoft-standard`; WSL1 is `NamesWsl` but not that — and
-  `VibeSignIn.ForThisProcess`); an adapter built with a `HostKind` (a test) carries NO sign-in and no WSL unless told, so a test never reads the
-  person's real `~/.vibe/.env`. A per-flow `AsyncLocal` seam (`VibeHost.Using`, the shape of `VibePathBudget.Using`) lets a scenario give the host
+  `VibeSignIn.ForThisProcess`). The constructor that takes a bare `HostKind` is INTERNAL (a test's: it carries NO sign-in and, unset, this
+  machine's WSL generation — a product caller on it would run Vibe signed out on WSL2 without a word); the public ways in are the id alone
+  and a `VibeHost`. **One banner rule for both halves:** `shared/wsl-banner-vectors.json` (banner → none | wsl1 | wsl2, a WSL2 kernel with no
+  marker reads as none — stated in the file) is read by the server's `WslGenerations` tests and, in E3's branch, by the extension's. A manifest
+  entry's `Platform` is normalised in its setter (null or blank → `win32`). The legacy `Classify(text, bool? wsl)` flag means WSL-or-not:
+  `false` is this process's own host kind (a WSL process asked as not-WSL is plain Linux), never Windows (`VendorDiagnosis.HostFor`). A failed
+  `open` is named by what a person can do — no read permission (`EACCES`/`EPERM`), path too long (`ENAMETOOLONG`), the link text (`ELOOP`),
+  each with its errno. A per-flow `AsyncLocal` seam (`VibeHost.Using`, the shape of `VibePathBudget.Using`) lets a scenario give the host
   the real service's own `new VibeRuntime(id)` takes.
 - **The CLI is found where uv puts it** (DL5): the row's own path first; then, on WSL, the folders `uv tool install` uses, in uv's own order —
   `$UV_TOOL_BIN_DIR`, `$XDG_BIN_HOME`, `$XDG_DATA_HOME/../bin`, `~/.local/bin` (read from `uv tool dir --bin`, uv 0.13.0), each only when
