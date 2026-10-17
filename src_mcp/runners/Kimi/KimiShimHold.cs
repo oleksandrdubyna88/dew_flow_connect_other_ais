@@ -30,7 +30,7 @@ public static class KimiShimHold
 
     /// <summary>The same, with the tree hold's take behind a seam — a test hands the NON-inheriting take (no test holds an inheritable handle in the test host).</summary>
     internal static AcpHolding Taken(KimiPlaces places, TimeSpan within, ForeignKimiWatch watch, Func<string, string, TimeSpan, TreeHolding> hold) =>
-        Taken(places, within, watch, hold, OperatingSystem.IsLinux());
+        Taken(places, within, watch, hold, KimiTreeSupervisor.IsSupervisedHost());
 
     /// <summary>The same, with the supervision named: on Linux (<paramref name="supervised"/>) the agent's tree is ended under a subreaper with a survivor marker (DL9); elsewhere it is ended as it always was.</summary>
     internal static AcpHolding Taken(KimiPlaces places, TimeSpan within, ForeignKimiWatch watch, Func<string, string, TimeSpan, TreeHolding> hold, bool supervised) =>

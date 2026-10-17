@@ -160,7 +160,7 @@ public static partial class Junctions
         a.Length > 0 && b.Length > 0
         && string.Equals(Normalised(a), Normalised(b), OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
-    private static string HostAdmitted(HostKind host) => host is HostKind.Windows or HostKind.Linux or HostKind.Wsl
+    private static string HostAdmitted(HostKind host) => HostKinds.HasKimiLockFamily(host)
         ? string.Empty
         : $"a sign-in link is made on windows, linux and wsl hosts only; Kimi is refused on a {HostKinds.Word(host)} host until it is measured there (D18 of todo/PLAN_vibe_and_kimi_runtimes.md)";
 

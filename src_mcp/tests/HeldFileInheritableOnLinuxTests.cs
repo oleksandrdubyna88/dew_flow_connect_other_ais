@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using CoaiMcp.Runners.Files;
+using CoaiMcp.Runners.Platform;
 using FluentAssertions;
 using Xunit;
 
@@ -102,9 +103,9 @@ public sealed class HeldFileInheritableOnLinuxTests : IDisposable
     [Fact]
     public void AnInheritableHold_IsOnlyEverWindowsOrLinuxs_NeverDotNetsSharedFlockOnAnotherHost()
     {
-        HeldFile.InheritableSupported(windows: true, linux: false).Should().BeTrue();
-        HeldFile.InheritableSupported(windows: false, linux: true).Should().BeTrue();
-        HeldFile.InheritableSupported(windows: false, linux: false).Should().BeFalse("on any other host .NET's FileShare.None | Inheritable is a SHARED flock (L-N1): two holders, not one");
+        HeldFile.InheritableSupported(HostKind.Windows).Should().BeTrue();
+        HeldFile.InheritableSupported(HostKind.Linux).Should().BeTrue();
+        HeldFile.InheritableSupported(HostKind.MacOs).Should().BeFalse("on any other host .NET's FileShare.None | Inheritable is a SHARED flock (L-N1): two holders, not one");
 
         var refused = HeldFile.UnsupportedInheritable().Should().BeOfType<Hold.Unusable>().Subject;
 
