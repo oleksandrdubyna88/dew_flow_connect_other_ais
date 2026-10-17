@@ -16,22 +16,21 @@ public abstract record KimiPresence
     /// <summary>The listing could not be read: not evidence that no Kimi runs.</summary>
     public sealed record Unreadable(string Reason) : KimiPresence;
 
-    private static readonly string[] KimiNames = ["kimi", "kimi.exe"];
-
     /// <summary>
-    /// The presence in the host's listing. This is the ONE place that reads <see cref="IProcessList"/>'s shape: today a listing is a list, and an EMPTY one is read as unreadable (a real
-    /// machine's list always holds at least this process, so an empty one means "the host cannot say" — fail closed). When the listing becomes a closed union (DL10, A2) this method's body is
-    /// the only thing that changes.
+    /// The presence in the host’s listing. This is the ONE place that reads <see cref="IProcessList"/>’s shape: an <see cref="ProcessListing.Unreadable"/> listing is "cannot tell", and so is a
+    /// <see cref="ProcessListing.Listed"/> one with nothing in it (a real machine’s list always holds at least this process) — fail closed, never "nobody".
     /// </summary>
-    public static KimiPresence Of(IProcessList listing)
+    public static KimiPresence Of(IProcessList listing) => listing.Snapshot() switch
     {
-        var processes = listing.Snapshot();
-        if (processes.Count == 0)
-        {
-            return new Unreadable("the host's process list is empty or could not be read");
-        }
+        ProcessListing.Listed { Processes.Count: > 0 } listed => Judged(listed.Processes),
+        ProcessListing.Listed => new Unreadable("the host’s process list is empty"),
+        ProcessListing.Unreadable unreadable => new Unreadable(unreadable.Reason),
+        _ => new Unreadable("a listing this check has no word for"),
+    };
 
-        var pids = processes.Where(entry => KimiNames.Contains(entry.Name, StringComparer.OrdinalIgnoreCase)).Select(entry => entry.Pid).ToList();
+    private static KimiPresence Judged(IReadOnlyList<ProcessEntry> processes)
+    {
+        var pids = processes.Where(ForeignKimiWatch.IsKimi).Select(entry => entry.Pid).ToList();
 
         return pids.Count == 0 ? new NoKimi() : new Running(pids);
     }

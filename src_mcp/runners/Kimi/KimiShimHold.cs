@@ -15,6 +15,8 @@ namespace CoaiMcp.Runners.Kimi;
 /// for the turn (<see cref="KimiCredentialsLock.RootFor"/>) and which is never derived here.</para>
 /// <para><b>The person's own Kimi is looked for first</b> (decision 74): see <see cref="ForeignKimiWatch"/>. <b>It gates.</b> Busy past the time given is the shim's exit 69, a hold that cannot be taken at all its 65 — there is no
 /// warning-only fallback, because the alternative to a refused turn is two refreshers on a rotating token.</para>
+/// <para><b>The order once both tree files are held is fixed, and runs without yielding:</b> the previous turn's survivor marker is reconciled (<see cref="IKimiSurvivors"/>), then — on Linux — this turn's own
+/// <c>spawning</c> marker is written (<see cref="KimiTreeSupervisor.Begin"/>) and the supervisor rides in the hold. A marker that stands, or one that cannot be written, gives the hold back.</para>
 /// </remarks>
 public static class KimiShimHold
 {
@@ -28,15 +30,19 @@ public static class KimiShimHold
 
     /// <summary>The same, with the tree hold's take behind a seam — a test hands the NON-inheriting take (no test holds an inheritable handle in the test host).</summary>
     internal static AcpHolding Taken(KimiPlaces places, TimeSpan within, ForeignKimiWatch watch, Func<string, string, TimeSpan, TreeHolding> hold) =>
+        Taken(places, within, watch, hold, OperatingSystem.IsLinux());
+
+    /// <summary>The same, with the supervision named: on Linux (<paramref name="supervised"/>) the agent's tree is ended under a subreaper with a survivor marker (DL9); elsewhere it is ended as it always was.</summary>
+    internal static AcpHolding Taken(KimiPlaces places, TimeSpan within, ForeignKimiWatch watch, Func<string, string, TimeSpan, TreeHolding> hold, bool supervised) =>
         watch.Wait(within) switch
         {
             ForeignKimiAnswer.Running running => new AcpHolding.Busy(ForeignKimiWatch.Sentence(running.Still[0])),
             ForeignKimiAnswer.Unreadable unreadable => new AcpHolding.Busy(ForeignKimiWatch.UnreadableSentence(unreadable.Reason)),
-            ForeignKimiAnswer.Clear clear => TakenAfterTheLook(places, within - clear.Waited, hold),
+            ForeignKimiAnswer.Clear clear => TakenAfterTheLook(places, within - clear.Waited, hold, supervised),
             _ => new AcpHolding.Unusable("the foreign-Kimi wait answered something this shim does not know — refused"),
         };
 
-    private static AcpHolding TakenAfterTheLook(KimiPlaces places, TimeSpan within, Func<string, string, TimeSpan, TreeHolding> hold)
+    private static AcpHolding TakenAfterTheLook(KimiPlaces places, TimeSpan within, Func<string, string, TimeSpan, TreeHolding> hold, bool supervised)
     {
         var target = Junctions.Target(places.Link);
         if (target.Length == 0)
@@ -44,29 +50,40 @@ public static class KimiShimHold
             return new AcpHolding.Unusable($"the owned Kimi home {places.OwnedRoot} has no credentials junction at {places.Link}, so there is no sign-in to hold — refused (D19)");
         }
 
-        return WithNoSurvivors(hold(target, places.OwnedRoot, within), target);
+        var holding = hold(target, places.OwnedRoot, within);
+
+        return holding is TreeHolding.Taken taken ? WithNoSurvivors(taken, places.OwnedRoot, target, supervised) : Held(holding, target);
     }
 
     /// <summary>
     /// The A2-A3 seam (<see cref="IKimiSurvivors"/>), asked once BOTH tree files are held — the last point that can see a marker the previous shim's teardown wrote: the gate is non-inheritable and dies with the server, so another
     /// server's launch can pass it before that teardown has written anything. A standing marker gives the hold back and makes the turn Busy with the marker's sentence. Run synchronously: nothing may yield between the take and the agent's start.
     /// </summary>
-    private static AcpHolding WithNoSurvivors(TreeHolding holding, string target)
+    private static AcpHolding WithNoSurvivors(TreeHolding.Taken taken, string ownedRoot, string target, bool supervised)
     {
-        if (holding is not TreeHolding.Taken taken)
+        var marker = KimiCredentialsLock.MarkerPathFor(target);
+        var standing = KimiSurvivors.Gate.BlockedAsync(marker, CancellationToken.None).GetAwaiter().GetResult();
+        if (standing.Length > 0)
         {
-            return Held(holding, target);
+            taken.Hold.Dispose();
+
+            return new AcpHolding.Busy(standing);
         }
 
-        var standing = KimiSurvivors.Gate.BlockedAsync(KimiCredentialsLock.MarkerPathFor(target), CancellationToken.None).GetAwaiter().GetResult();
-        if (standing.Length == 0)
+        return supervised ? Supervised(taken, KimiTreeSupervisor.Begin(marker, ownedRoot, target)) : new AcpHolding.Held(taken.Hold);
+    }
+
+    /// <summary>This turn's own <c>spawning</c> marker is on disk and the supervisor rides in the hold (DL9) — or the marker that makes a crash safe could not be written: the hold is given back and the shim refuses (exit 65).</summary>
+    private static AcpHolding Supervised(TreeHolding.Taken taken, SupervisorBegin begun)
+    {
+        if (begun is SupervisorBegin.Ready ready)
         {
-            return Held(holding, target);
+            return new AcpHolding.Held(taken.Hold, ready.Supervisor);
         }
 
         taken.Hold.Dispose();
 
-        return new AcpHolding.Busy(standing);
+        return new AcpHolding.Unusable(begun is SupervisorBegin.Refused refused ? refused.Sentence : "the survivor marker could not be started — refused (DL9)");
     }
 
     /// <summary>What the lock answered, in the shim's words: held, busy (another tree is alive), or refused because two refreshers could race.</summary>

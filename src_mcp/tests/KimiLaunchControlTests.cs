@@ -178,6 +178,45 @@ public sealed class KimiLaunchControlTests : IDisposable
         HeldFile.IsHeld(KimiCredentialsLock.PathFor(places.Credentials)).Should().BeFalse("no gate was left held");
     }
 
+    /// <summary>A marker as the shim of an earlier turn left it: naming one agent that is long gone (no process has this number).</summary>
+    private static KimiSurvivorMarkerDto AMarkerNamingAGoneMember(string ownedRoot) =>
+        new(new ReaderMarkerDto(ReaderPhases.Running, 424242, DateTime.UtcNow.AddHours(-1), DateTimeOffset.UtcNow, [new ProcessIdentity(2_000_000_011, DateTime.UtcNow.AddHours(-1))]), ownedRoot, "/people/sign-in");
+
+    [Fact]
+    public async Task AStandingMarkerWhoseMemberIsGone_IsClearedByTheLaunch_AndTheLaunchProceeds()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        using var rooted = Rooted();
+        var places = _person.Places();
+        var marker = KimiCredentialsLock.MarkerPathFor(places.Credentials);
+        KimiSurvivorMarker.Write(marker, AMarkerNamingAGoneMember(places.OwnedRoot));
+
+        var turn = await KimiLaunch.TakeAsync(HostKind.Windows, Request(places), places, new FakeKimi(), TestContext.Current.CancellationToken);
+
+        turn.Refusal.Should().BeEmpty("a marker whose every member is confirmed gone is cleared by the launch that finds it, and the launch goes on");
+        File.Exists(marker).Should().BeFalse("the reconcile deletes the marker it cleared");
+        turn.Dispose();
+    }
+
+    [Fact]
+    public async Task AKernelWithNoPidfd_RefusesTheLaunch_BeforeAnythingIsTaken()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        using var rooted = Rooted();
+        var places = _person.Places();
+        var fake = new FakeKimi();
+        LaunchTurn turn;
+        using (PidfdLayer.Using(wrapperPresent: false, new AskAcpSubreaperTests.EnosysCalls()))
+        {
+            turn = await KimiLaunch.TakeAsync(HostKind.Windows, Request(places), places, fake, TestContext.Current.CancellationToken);
+        }
+
+        turn.Refusal.Should().Contain(PidfdLayer.NoPidfdSentence, "a launch on a kernel that cannot end the tree by identity was allowed");
+        fake.Started.Should().BeEmpty("a refusal starts nothing");
+        VibeHomeTurns.Held(places.OwnedRoot).Should().BeFalse("no turn was left held");
+        Directory.Exists(Locks).Should().BeFalse("no lock was taken for a launch that was refused first");
+    }
+
     // ---------- S2.26 ----------
 
     [Fact]

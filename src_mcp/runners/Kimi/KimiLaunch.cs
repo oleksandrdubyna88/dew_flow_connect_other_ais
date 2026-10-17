@@ -191,6 +191,7 @@ public static class KimiLaunch
     {
         var first = FirstOf(
             () => HostRefusal(host, places.Executable),
+            PidfdLayer.Refusal,
             () => places.ToolsRefusal,
             () => LocalHome(places),
             () => ModelRefusal(ModelOf(request)),

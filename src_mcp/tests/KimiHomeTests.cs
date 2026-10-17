@@ -575,6 +575,19 @@ public sealed class KimiHomeTests : IDisposable
         OwnedPaths.IsLinkIfThere(places.Link).Should().BeTrue("nothing was unlinked");
     }
 
+    [Fact]
+    public void AMarkerThatNamesAnotherHome_DoesNotKeepThisOne()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        var places = Made();
+        using var rooted = KimiCredentialsLock.RootFor(Path.Combine(_person.Folder, "locks"));
+        var marker = KimiCredentialsLock.MarkerPathFor(places.Credentials);
+        KimiSurvivorMarker.Write(marker, new KimiSurvivorMarkerDto(new ReaderMarkerDto(ReaderPhases.Running, 424242, DateTime.UtcNow, DateTimeOffset.UtcNow, [new ProcessIdentity(2_000_000_011, DateTime.UtcNow)]), Path.Combine(_person.Folder, "owned", "another-home"), "/people/sign-in"));
+
+        KimiHome.Dispose(places.OwnedRoot, _ => { }).Should().Be(new Disposal.Clean(true), "a marker names the home it was written for, and no other");
+        File.Exists(marker).Should().BeTrue("a home disposal reconciles nothing: it only asks whether a marker names its home");
+    }
+
     // ---------- the refusals and stops no other row reaches ----------
 
     [Fact]

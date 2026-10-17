@@ -238,14 +238,23 @@ public sealed class KimiSurvivorGateTests : IDisposable
 
     private static CoaiMcp.Runners.Kimi.ProcessEntry Entry(int pid, int parent, string name) => new(pid, parent, name);
 
-    private sealed class FixedListing(params CoaiMcp.Runners.Kimi.ProcessEntry[] entries) : IProcessList
+    private sealed class FixedListing(ProcessListing listing) : IProcessList
     {
-        public IReadOnlyList<CoaiMcp.Runners.Kimi.ProcessEntry> Snapshot() => entries;
+        public FixedListing(params CoaiMcp.Runners.Kimi.ProcessEntry[] entries)
+            : this(new ProcessListing.Listed(entries))
+        {
+        }
+
+        public ProcessListing Snapshot() => listing;
     }
 
     [Fact]
     public void AnEmptyListing_IsUnreadable_NotNoKimi() =>
         KimiPresence.Of(new FixedListing()).Should().BeOfType<KimiPresence.Unreadable>("an empty process list was read as 'no kimi runs here'");
+
+    [Fact]
+    public void AnUnreadableListing_IsUnreadable_WithItsReason_NeverNoKimi() =>
+        KimiPresence.Of(new FixedListing(new ProcessListing.Unreadable("/proc/4242/exe: denied"))).Should().BeOfType<KimiPresence.Unreadable>().Which.Reason.Should().Contain("/proc/4242/exe");
 
     [Fact]
     public void AListingWithAKimi_NamesItsPid_AndOneWithout_IsNoKimi()

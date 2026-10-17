@@ -80,7 +80,7 @@ public sealed class AskAcpSubreaperTests
 
     // ---------- S-K21: a kernel without pidfd refuses the Kimi launch, before anything starts ----------
 
-    private sealed class EnosysCalls : IPidfdCalls
+    internal sealed class EnosysCalls : IPidfdCalls
     {
         public int Open(int pid) => -38;
 

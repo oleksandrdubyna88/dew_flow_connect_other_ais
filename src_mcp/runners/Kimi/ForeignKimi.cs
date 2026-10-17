@@ -99,7 +99,8 @@ public sealed class ForeignKimiWatch(IProcessList processes, int ownPid, TimeSpa
     public static string Sentence(ProcessEntry running) =>
         $"your own Kimi Code is running (pid {running.Pid}); coai does not start a second Kimi on the same sign-in while it runs, so two refreshes never race — close it or wait";
 
-    private static bool IsKimi(ProcessEntry entry) => KimiNames.Contains(entry.Name, StringComparer.OrdinalIgnoreCase) || entry.Comm == KimiComm;
+    /// <summary>Whether this entry is a Kimi: its name (the executable, or <c>argv[0]</c> when the executable is hidden — DL10) or its <c>comm</c> says so. The ONE rule: the foreign-Kimi wait and the survivor rules read it.</summary>
+    internal static bool IsKimi(ProcessEntry entry) => KimiNames.Contains(entry.Name, StringComparer.OrdinalIgnoreCase) || entry.Comm == KimiComm;
 
     /// <summary>The sentence when the machine's process list cannot be read: the turn is given up, never started on a sign-in coai cannot see.</summary>
     public static string UnreadableSentence(string reason) =>
