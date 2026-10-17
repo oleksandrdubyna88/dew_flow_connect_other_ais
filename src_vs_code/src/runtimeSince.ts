@@ -1,5 +1,6 @@
 import { API_RUNTIME_SINCE, apiRuntimeSkewNote, type ApiRow } from './apiRuntime';
 import { compareVersions } from './coaiInstall';
+import type { HostKind } from './hostSide';
 
 /**
  * Which `coai-mcp` first knows each runtime that NOT every released server knows — and the gate that keeps a row of
@@ -42,6 +43,25 @@ export const VIBE_RUNTIME_SINCE = '0.53.0';
  */
 export const KIMI_RUNTIME_SINCE = '0.57.0';
 
+/**
+ * The first `coai-mcp` that RUNS a Vibe row on a Linux host — on WSL2 only, in that release (DL1 of
+ * todo/PLAN_kimi_and_vibe_on_linux.md). `RUNTIME_SINCE` answers "does this server know the runtime"; this answers "does it
+ * run it on THIS host", and they are different questions: a 0.57.0 server on WSL knows `vibe` and still refuses the row at
+ * launch with the D18 sentence (DL14). The release that carries E2 and E3 is the next `src_mcp` minor after the newest
+ * released one (0.57.0 when this was written, `.release-please-manifest.json`), so 0.58.0. <b>Whoever cuts the release keeps
+ * it level with the tag</b>; `runtimeSinceIsAhead.test.ts` holds this table to the same guard as `RUNTIME_SINCE`.
+ */
+export const VIBE_ON_LINUX_SINCE = '0.58.0';
+
+/**
+ * Which `coai-mcp` first runs each runtime on a Linux or WSL host. A runtime with no entry runs on every host its server
+ * knows it on. Kimi's entry (`KIMI_ON_LINUX_SINCE`) comes with the release that lifts Kimi's own host refusal (E6), not
+ * before: Kimi on Linux is a later release, and an entry for it now would call a refusal a feature.
+ */
+export const ON_LINUX_SINCE: Readonly<Record<string, string>> = {
+  vibe: VIBE_ON_LINUX_SINCE,
+};
+
 /** Every runtime some released server does not know, with the release that first knows it. */
 export const RUNTIME_SINCE: Readonly<Record<string, string>> = {
   api: API_RUNTIME_SINCE,
@@ -56,8 +76,22 @@ export const RUNTIME_SINCE: Readonly<Record<string, string>> = {
  * on a guess would drop a configured reviewer from a server perfectly able to run it.</p>
  */
 export function runtimeOnServer(runtime: string, installedServerVersion: string): boolean {
-  const since = RUNTIME_SINCE[runtime];
+  return sinceMet(RUNTIME_SINCE[runtime], installedServerVersion);
+}
 
+/**
+ * Whether the installed server runs this runtime on a Linux or WSL host — true for a runtime with no Linux entry, and for
+ * an UNKNOWN server (the rule of {@link runtimeOnServer}: unknown is not old).
+ */
+export function runtimeOnLinuxSide(runtime: string, installedServerVersion: string): boolean {
+  return sinceMet(ON_LINUX_SINCE[runtime], installedServerVersion);
+}
+
+/**
+ * The one rule both tables share: a runtime with no entry is met on every server, an UNKNOWN server is not called old, and
+ * otherwise the installed version must have reached the release.
+ */
+function sinceMet(since: string | undefined, installedServerVersion: string): boolean {
   return since === undefined || installedServerVersion.length === 0 || compareVersions(since, installedServerVersion) <= 0;
 }
 
@@ -65,13 +99,63 @@ export function runtimeOnServer(runtime: string, installedServerVersion: string)
  * The sentence on a card whose row the installed server would run as the wrong vendor — or nothing when there is no
  * such row, the server is new enough, or its version is unknown. An `api` row keeps its own sentence, which names the
  * endpoint it would be sent to.
+ *
+ * <p>The HOST adds one more case (DL1, DL14), and what it says depends on the host kind: on WSL2 a server that KNOWS the
+ * runtime but is older than `ON_LINUX_SINCE` is told to update; a native Linux host and WSL1 are told they are refused, at
+ * any server version, because an update would not change that ({@link hostNote}). A server that does not know the runtime
+ * at all has already said so — never two notes for one row.</p>
  */
-export function runtimeSkewNote(installedServerVersion: string, vendors: readonly ApiRow[]): string {
+export function runtimeSkewNote(installedServerVersion: string, vendors: readonly ApiRow[], host: HostKind = 'windows'): string {
   const api = apiRuntimeSkewNote(installedServerVersion, vendors);
-  const held = vendors.filter((vendor) => vendor.enabled && vendor.runtime !== 'api' && !runtimeOnServer(vendor.runtime, installedServerVersion));
+  const switchedOn = vendors.filter((vendor) => vendor.enabled && vendor.runtime !== 'api');
+  const held = switchedOn.filter((vendor) => !runtimeOnServer(vendor.runtime, installedServerVersion));
+  // Only a runtime that has a Linux entry is ever refused by its HOST; one the server does not know at all has said so above.
+  const hostRuntimes = switchedOn.filter((vendor) => !held.includes(vendor) && ON_LINUX_SINCE[vendor.runtime] !== undefined);
 
-  return [api, ...held.map((vendor) => heldNote(installedServerVersion, vendor))].filter((note) => note.length > 0).join(' ');
+  return [
+    api,
+    ...held.map((vendor) => heldNote(installedServerVersion, vendor)),
+    ...hostRuntimes.map((vendor) => hostNote(host, installedServerVersion, vendor)),
+  ].filter((note) => note.length > 0).join(' ');
 }
+
+/**
+ * What a card says about the HOST its row runs on (DL1, DL14 of todo/PLAN_kimi_and_vibe_on_linux.md) — one arm per host
+ * kind, and the arm is what a person is told to DO, so it must be something that works:
+ * <ul>
+ *   <li><b>wsl2</b>: runs the row from `ON_LINUX_SINCE`, so a server older than that is told to update;</li>
+ *   <li><b>linux</b>: refused at ANY server version — 0.58.0 still refuses a native host — so never "update coai-mcp";</li>
+ *   <li><b>wsl1</b>: refused at any version too; what helps is moving the distro to WSL2;</li>
+ *   <li><b>windows</b> and <b>darwin</b>: nothing here (Windows runs it from the runtime's own release; a Mac's refusal is
+ *       the server's own sentence, and updating would not change it).</li>
+ * </ul>
+ */
+function hostNote(host: HostKind, installedServerVersion: string, vendor: ApiRow): string {
+  return HOST_NOTES[host]?.(installedServerVersion, vendor) ?? '';
+}
+
+/** One arm per host kind that has something to say; a kind with no arm says nothing. */
+const HOST_NOTES: Readonly<Partial<Record<HostKind, (installedServerVersion: string, vendor: ApiRow) => string>>> = {
+  wsl2: (version, vendor) => (runtimeOnLinuxSide(vendor.runtime, version) ? '' : updateNote(version, vendor)),
+  linux: (_version, vendor) =>
+    `coai-mcp refuses a ${vendor.id} row on a native Linux host for now — ${labelOf(vendor.runtime)} is measured on WSL2 only.`,
+  wsl1: (_version, vendor) =>
+    `This is WSL1, and coai-mcp runs ${labelOf(vendor.runtime)} on WSL2 only: a ${vendor.id} row is refused here. `
+    + 'Move this distro to WSL2 with `wsl --set-version <distro> 2`, run in Windows.',
+};
+
+/** The WSL2 card's sentence for a server that is too old to run the row here. */
+function updateNote(installedServerVersion: string, vendor: ApiRow): string {
+  return `Update coai-mcp to run ${labelOf(vendor.runtime)} here: the coai-mcp you have installed (${installedServerVersion}) `
+    + `refuses a ${vendor.id} row on Linux and WSL, and ${ON_LINUX_SINCE[vendor.runtime]} is the first release that runs it (on WSL2) — the MCP server tab.`;
+}
+
+/** The name a person knows a runtime by, where the runtime's own word reads wrong in a sentence. */
+function labelOf(runtime: string): string {
+  return RUNTIME_LABEL[runtime] ?? runtime;
+}
+
+const RUNTIME_LABEL: Readonly<Record<string, string>> = { vibe: 'Vibe' };
 
 /**
  * What the card says, and deliberately not what the server would do instead: measured 2026-10-13, the released mcp

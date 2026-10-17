@@ -12645,6 +12645,14 @@ flowchart LR
   B --> I{"host platform"}
   I -->|win32| U["one line: Astral's uv installer if uv is missing, uv tool install mistral-vibe, uv tool update-shell"]
   I -->|"linux, darwin"| S["mistral.ai/vibe/install.sh piped to bash"]
+  S --> N{"vibeNoteFor(hostKind)"}
+  N -->|"wsl2"| NW["runs here from 0.58.0; sign-in ~/.vibe/.env, linked, never copied"]
+  N -->|"wsl1"| N1["refused; wsl --set-version <distro> 2"]
+  N -->|"linux"| NL["refused for now; measured on WSL2 only"]
+  N -->|"darwin"| NM["not measured"]
+  R --> L{"cardContextFor: state.hostKind"}
+  L -->|"wsl2 and server < VIBE_ON_LINUX_SINCE 0.58.0"| LN["card: Update coai-mcp to run Vibe here"]
+  L -->|"linux or wsl1, ANY server"| LR["card: the refusal sentence, never update"]
 ```
 
 - **The runtime list.** `RUNTIMES` gains `vibe` (last, so it equals `shared/feature-availability.json`'s `runtimes`,
@@ -12655,8 +12663,11 @@ flowchart LR
   `unmeasured`) instead of being stored and not applied. `KNOWS_ITS_OWN_ENDPOINT` has `vibe` (no base-URL box), and
   `vendorColour.ANCHORED` pins it to slot 2, amber (the manifest's colour 2 says `vibe`).
 - **The preset** (`VENDOR_PRESETS`, D11): `Mistral Vibe`, id `vibe`, model `mistral-medium-3.5`, no endpoint, no key.
-  Never in `DEFAULT_VENDORS`. Its hint names the two limits a person meets first — Windows only for now (D18) and the
-  coai-mcp release that knows the runtime.
+  Never in `DEFAULT_VENDORS`. Its hint names what a person meets first: Windows, and WSL2 from coai-mcp 0.58.0
+  (when coai-mcp itself runs there — a VS Code window attached to WSL; the sign-in there is `~/.vibe/.env`, made by
+  `vibe --setup`, linked by coai and never copied), "On a native Linux host coai-mcp refuses Vibe for now — it is measured on
+  WSL2 only" (E3 of `todo/PLAN_kimi_and_vibe_on_linux.md`, which lifted D18 for WSL2), and the coai-mcp release that
+  knows the runtime. Kimi's hint is unchanged: Windows only.
 - **The models** (D10): `VIBE_MODELS` is the curated list coai-mcp's `VibeModels.Curated` launches on —
   `mistral-medium-3.5` (Vibe's default) and `glm-5-3`, seen accepted on Vibe 2.26.1 (`VIBE_MODELS_SEEN_ON`).
   `modelsFor('vibe')` offers it (an unknown runtime used to fall to the Gemini list); a typed alias stays in its own
@@ -12720,9 +12731,16 @@ flowchart LR
   handled.
 
   The side is the extension host's (`hostPlatform()`): a WSL window gets the script. The sign-in stays the person's —
-  the note after the command says to run `vibe --setup` or press ▶ (Vibe asks for it on its first start). On Linux,
-  WSL and macOS the note also says coai-mcp does not run Vibe there yet (D18): installing it is what the later
-  measurement needs. `OFFICIAL_SOURCES` is no longer a list of command PREFIXES — a prefix check passes a line of
+  the note after the command says to run `vibe --setup` or press ▶ (Vibe asks for it on its first start). The note
+  is per host since E3: `vendorInstall(vendor, platform, host)` takes the host KIND (`hostSide.hostKind()` — read from the
+  kernel banner once per panel, `panelProvider.hostKindHere`; the panel's `commandFor` REQUIRES it, so a dropped argument
+  is a compile error rather than the native-Linux note shown on WSL), and `vibeNoteFor(host)` — pure, a record over the whole
+  `HostKind` union — picks one of five notes:
+  **WSL2** (Vibe runs on this side from coai-mcp 0.58.0; the sign-in coai uses is the file `~/.vibe/.env`, which
+  `vibe --setup` makes; coai links it into its own homes and never copies it; a sign-in kept in a keyring is invisible to coai),
+  **WSL1** (refused; the cure is `wsl --set-version <distro> 2`), **native Linux** (the same sign-in sentence, then "On a native
+  Linux host coai-mcp refuses Vibe for now — it is measured on WSL2 only"), **macOS** (nothing measured). Windows keeps its keyring
+  sentence. The command is one for all of them. `OFFICIAL_SOURCES` is no longer a list of command PREFIXES — a prefix check passes a line of
   several steps on its first one, whatever follows. It is `{ urls, packages }`: the hosts a command may fetch from
   (`https://antigravity.google/`, `https://mistral.ai/vibe/`, and `https://astral.sh/uv/` — the uv installer Mistral's
   README gives for Windows and Mistral's own script runs elsewhere) and the packages `npm install -g`, `uv tool
@@ -12927,3 +12945,34 @@ flowchart LR
   on a machine without `kimi` — or a `testsToDelete-` `KIMI_INSTALL_DIR` — and one in WSL); Kimi as a consultant or question row (S5); chat; a
   live round through the product with the version warning shown; a `live-kimi-runtime-compat.mjs` beside Vibe's (that a released 0.55.0 refuses a
   kimi row by name is inferred from the Vibe measurement, not measured).
+
+## Vibe on Linux and WSL, on the panel's side (2026-10-16, E3 of `todo/PLAN_kimi_and_vibe_on_linux.md`)
+
+The extension's half of lifting D18 for WSL2 (DL1, DL2, DL14); the server's half is E2 (`module_runners.md`). Kimi's texts are
+untouched: Kimi on Linux is a later release.
+
+- **`VIBE_ON_LINUX_SINCE = '0.58.0'`** (`runtimeSince.ts`), in a second table `ON_LINUX_SINCE` beside `RUNTIME_SINCE`. The first
+  answers "does this server know the runtime", the second "does it run it on THIS host" — a 0.57.0 server on WSL knows `vibe`
+  and refuses the row at launch. `runtimeOnLinuxSide(runtime, serverVersion)` is true for a runtime with no entry and for an unknown
+  server. `runtimeSkewNote(version, vendors, host)` adds a sentence per HOST KIND for a switched-on row whose runtime has an entry:
+  **wsl2** with a server older than the entry — *Update coai-mcp to run Vibe here: …*; **linux** and **wsl1** at ANY server version — a
+  refusal (*coai-mcp refuses a vibe row on a native Linux host for now — Vibe is measured on WSL2 only*; *This is WSL1 … move this
+  distro to WSL2 with `wsl --set-version <distro> 2`*), because 0.58.0 still refuses both and an update would not help; Windows and
+  macOS say nothing. A server that does not know the runtime keeps the old sentence (one note per row). The host kind is ONE source,
+  `PanelState.hostKind` (`hostKindOfState`: else this platform's — Linux alone is a native host), never mixed with the path family;
+  `namesWsl2` (`wslNetwork.ts`: the banner holds `WSL2` or `microsoft-standard`) is the server's `NamesWsl2` rule, so a
+  WSL1 kernel is not WSL2. The card's boxes are switched off by `CardContext.runtimeHeld` (`!runtimeOnServer`) alone, not by any
+  note. The row is NOT withheld from the settings file for this (the Windows side, which
+  shares the file, may run it); only the card says so. `runtimeSinceIsAhead.test.ts` holds `ON_LINUX_SINCE` to the same guard as
+  `RUNTIME_SINCE`.
+- **The help** (`helpContent.ts`, `helpDe/Es/Ru/Uk.ts`): the choose-reviewers and question-consultant articles say, in all five
+  languages, that Vibe runs on Windows and on WSL2 from 0.58.0, the `~/.vibe/.env` sign-in that coai links and never copies, that a
+  keyring sign-in is invisible to coai, and that on a native Linux host coai-mcp refuses Vibe for now (measured on WSL2 only), and that WSL2 applies when coai-mcp itself
+  runs there (a VS Code window attached to WSL).
+- **`shared/consultant-limitations.json`**: the Vibe `wsl` row is `confined`, *measured* 2026-10-16 on vibe 2.26.1 — L-V9 of
+  `RESULTS_vibe_confinement.md` §31, WSL2, 3 of 3 on every cell (L-V1, the L-V2 read, L-V3 with `write_file`, `bash` and
+  `run_typescript`, L-V4), worded like the Windows row (a copy coai makes of the live tree); the `linux` row stays
+  `unmeasured` and says *measured on WSL2 only*; `windows` and `macos` are as before.
+- **Tests**: `vibeOnLinux.test.ts` (32) — the table, `namesWsl2` over eight banners, the host kind, the card note per host kind
+  against 0.57.0 / 0.58.0 / unknown servers, the note per host kind, the hint, the five languages, the JSON rows;
+  `vibeStageBoxes.test.ts` (2) — a host note does not grey the boxes, a server that does not know Vibe does.

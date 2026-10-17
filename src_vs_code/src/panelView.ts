@@ -24,7 +24,7 @@ import { type BusySnapshot, IDLE } from './busySnapshot';
 import type { Phrase } from './phrases';
 import { phraseColours } from './phrases';
 import { ROLE_TONE_CSS, roleTone } from './roleTone';
-import { runtimeSkewNote } from './runtimeSince';
+import { runtimeOnServer, runtimeSkewNote } from './runtimeSince';
 import { availabilityOf, ProviderHealth, ProvidersAnswer } from './providers';
 import { ChatSettings, chatSettingsFrom } from './chatSettings';
 import { consultantBody } from './consultantView';
@@ -85,7 +85,7 @@ import { vaultKeyOf } from './vaultKey';
 import { Vendor } from './vendors';
 import { qconsultBody } from './qconsultView';
 import { QCONSULT_COMMANDS, type RootPlaces } from './qconsultWrite';
-import { hostFamily } from './hostSide';
+import { hostFamily, type HostKind, hostKindOfPlatform, hostPlatform } from './hostSide';
 import { storedForThisSide, type PathFamily } from './pathFamily';
 import { type PathFinding, findingFor } from './pathFindings';
 import { markAttributes, markClass, markNote } from './pathMark';
@@ -192,6 +192,13 @@ export interface PanelState {
    * test names it, so a page is the same on any machine.
    */
   readonly hostFamily?: PathFamily | undefined;
+  /**
+   * What this window runs on — Windows, WSL2, WSL1, a native Linux host or a Mac — read from the kernel once by the host
+   * (`hostKind`). It decides what a Vibe card says about the host (DL1 of todo/PLAN_kimi_and_vibe_on_linux.md): "update
+   * coai-mcp" on WSL2 only, a refusal on WSL1 and a native host. Absent is this extension host's own platform's, which on a
+   * Linux platform is a native host — the answer that only ever refuses; a test names it so a page is the same on any machine.
+   */
+  readonly hostKind?: HostKind | undefined;
   /**
    * The ids of the reviewer rows whose CLI path this side skips as the other side's — `otherSideClis`, decided by the host
    * with the disk (`pathForThisSide`), because this page's modules ask none. Absent draws no note.
@@ -1139,6 +1146,14 @@ function updateLabel(id: string, cli: CliStatus): string {
 }
 
 /**
+ * The host the page is drawn for: the kind the window read from its kernel, else this platform's own. ONE source — never
+ * mixed with the path family, which cannot tell WSL from a desktop Linux or either from a Mac.
+ */
+export function hostKindOfState(state: Pick<PanelState, 'hostKind'>): HostKind {
+  return state.hostKind ?? hostKindOfPlatform(hostPlatform());
+}
+
+/**
  * What each Models card needs beyond its row (PLAN_one_model_catalog.md E3.2).
  */
 export function cardContextFor(state: PanelState): (vendor: Vendor) => CardContext {
@@ -1149,6 +1164,7 @@ export function cardContextFor(state: PanelState): (vendor: Vendor) => CardConte
   const serverVersion = state.server.kind === 'known' ? state.server.version : '';
   // The host's disk and drive, in the family the page is drawn for (a test names it; absent is this host's).
   const family = state.hostFamily ?? hostFamily();
+  const host = hostKindOfState(state);
   const otherSides = state.otherSideClis ?? [];
   // Once for the page: every card draws one field or two by the same decision (E4.1, E2's `twoPathFields`).
   const sides = pathSidesOf(state.sides, family);
@@ -1167,7 +1183,9 @@ export function cardContextFor(state: PanelState): (vendor: Vendor) => CardConte
     allowedRemote: allowedModelsFor(v, state.teamServers ?? []),
     reported: state.providers?.reported ?? {},
     // Per card, so the sentence names THIS row (`runtimeOnServer` decides whether there is one).
-    runtimeNote: runtimeSkewNote(serverVersion, [v]),
+    runtimeNote: runtimeSkewNote(serverVersion, [v], host),
+    // WHAT switches the controls off: the server does not know the runtime. A note about the host rides `runtimeNote` too.
+    runtimeHeld: !runtimeOnServer(v.runtime, serverVersion),
     // Per card too: a Team server row and an older server switch the feature box off for different
     // reasons, and the card says which (`featureNote`, story S3.3).
     featureNote: featureNote(v, serverVersion),
@@ -1261,12 +1279,19 @@ export interface CardContext {
   /** This vendor's colour, already decided against every other configured vendor. */
   readonly colour: string;
   /**
-   * For a row of a runtime newer than the installed server (`api`, `vibe` — `runtimeSince.ts`): the sentence naming
-   * that server as too old to run it — or empty. Non-empty DISABLES
-   * the card's controls and is shown on it; the writer keeps the same row out of the settings file
-   * (`vendorsEnv`), so the card and the file agree about what the old server will run.
+   * What this card says about the installed server and the host (`runtimeSince.ts`), or empty: for a row of a runtime
+   * newer than the server (`api`, `vibe`) the sentence naming that server as too old to run it, and for a Vibe row on
+   * Linux or WSL the sentence about the HOST (update on WSL2, a refusal on native Linux and WSL1). It is SHOWN on the
+   * card; it does not decide the controls — {@link runtimeHeld} does.
    */
   readonly runtimeNote: string;
+  /**
+   * True when the installed server does not know this row's runtime (`!runtimeOnServer`). Only this DISABLES the card's
+   * controls; the writer keeps the same row out of the settings file (`vendorsEnv`), so the card and the file agree
+   * about what the old server will run. A note about the host is not this: a row that is merely refused at launch keeps
+   * its ticks.
+   */
+  readonly runtimeHeld: boolean;
   /**
    * Why this card's "reviews features" box is off — a Team server row (D10), or an installed server
    * older than `FEATURE_SINCE` — or empty when the box is live. The writer holds the same tick back

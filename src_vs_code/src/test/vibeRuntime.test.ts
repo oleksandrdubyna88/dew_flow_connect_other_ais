@@ -332,7 +332,7 @@ test('the Setup tab’s CLI table lists the Vibe CLI', () => {
 
 // ---------------------------------------------------------------- the help, in five languages
 
-test('every language’s choose-reviewers article names Mistral Vibe and that it is Windows-only for now', () => {
+test('every language’s choose-reviewers article names Mistral Vibe, its sign-in and how it is installed and updated', () => {
   const article = HELP_ARTICLES.find((one) => one.id === 'choose-reviewers');
   assert.ok(article !== undefined, 'the reviewers article has been renamed, and this test is now asserting nothing');
 

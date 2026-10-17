@@ -1,5 +1,5 @@
 import { familyOf, installedFileProbe, systemDriveOf, type ExecutableSide, type PathFamily } from './pathFamily';
-import { runningUnderWsl } from './wslNetwork';
+import { isWsl, namesWsl2, readProcVersion, runningUnderWsl } from './wslNetwork';
 
 /**
  * Which side this extension host is on, and what it can reach from there.
@@ -132,5 +132,59 @@ async function answered(underWsl: () => Promise<boolean>): Promise<boolean> {
     return await underWsl();
   } catch {
     return false;
+  }
+}
+
+/**
+ * Which host this extension runs on, as far as a Vibe row cares (DL1 of todo/PLAN_kimi_and_vibe_on_linux.md): WSL2 runs it,
+ * a native Linux host and WSL1 are refused, macOS is not measured, Windows is as it always was. One union, one source —
+ * `process.platform` alone cannot tell WSL from a desktop Linux, and a POSIX path family cannot tell either from a Mac.
+ */
+export type HostKind = 'windows' | 'wsl2' | 'wsl1' | 'linux' | 'darwin';
+
+/**
+ * The host kind from what is known without asking the disk: Windows and macOS are what they say, and a Linux host is taken
+ * to be a native one — the safe answer, since it only ever shows a refusal. {@link hostKindOf} narrows it by the banner.
+ */
+export function hostKindOfPlatform(platform: Platform): HostKind {
+  if (platform === 'win32') {
+    return 'windows';
+  }
+
+  return platform === 'darwin' ? 'darwin' : 'linux';
+}
+
+/**
+ * The host kind from the platform and this kernel's banner — pure. Only a Linux host reads the banner: WSL2 is the banner
+ * naming `WSL2` or `microsoft-standard`, WSL1 any other that still names Microsoft or WSL, and the rest is native Linux.
+ */
+export function hostKindOf(platform: Platform, procVersion: string): HostKind {
+  const kind = hostKindOfPlatform(platform);
+  if (kind !== 'linux' || !isWsl(procVersion)) {
+    return kind;
+  }
+
+  return namesWsl2(procVersion) ? 'wsl2' : 'wsl1';
+}
+
+/**
+ * {@link hostKindOf} for THIS host, reading the banner itself — injected for the tests, and it never rejects: a banner that
+ * cannot be read is an empty one, which is a native Linux host (a refusal, never a promise).
+ */
+export async function hostKind(
+  platform: string = process.platform,
+  readBanner: () => Promise<string> = readProcVersion,
+): Promise<HostKind> {
+  const here = hostPlatform(platform);
+
+  return here === 'linux' ? hostKindOf(here, await bannerOf(readBanner)) : hostKindOfPlatform(here);
+}
+
+/** The banner, with every way of not reading it collapsed into the empty one. */
+async function bannerOf(readBanner: () => Promise<string>): Promise<string> {
+  try {
+    return await readBanner();
+  } catch {
+    return '';
   }
 }
