@@ -17,7 +17,7 @@ import { KIMI_ON_LINUX_SINCE } from './runtimeSince';
  *   <li><b>The `fd` link</b> (the plan gate for epics 4–6, 2026-10-16, F7 + F17): Debian and Ubuntu name fd's program `fdfind`
  *       and Kimi looks for `fd`; Fedora's `fd-find` installs `fd` itself. So `mkdir -p ~/.local/bin` first (a fresh account has
  *       none, and `ln` into a missing folder fails), then the link only when `fdfind` resolves and `fd` does not, only when
- *       `~/.local/bin/fd` is not already a link to that `fdfind` (`-ef`: the same file), made with `ln -sf` on that exact path
+ *       `~/.local/bin/fd` is not already a link to that `fdfind` (`-ef`: the same file), made with `ln -sfn` (never `-sf` alone: it follows a planted symlink to a DIRECTORY and writes inside it) on that exact path
  *       alone. <b>One addition to the plan's text:</b> a REAL file at `~/.local/bin/fd` is left alone — the link replaces a link,
  *       never somebody's file.</li>
  *   <li><b>The one sentence for any other distribution</b>: when a tool was missing and neither `apt-get` nor `dnf` resolves
@@ -52,6 +52,15 @@ const KIMI_BIN = '~/.kimi-code/bin';
 const LOCAL_BIN = '~/.local/bin';
 
 /**
+ * A look-up that must end in a FILE (and that sets aliases aside — inside the substitution only, the person's terminal keeps its own): `command -v` answers the TEXT of an alias in an interactive terminal (`alias fd='fdfind'`), the name
+ * of a function or a builtin, and a path that may be a directory — none of which `KimiTools` will find on disk. So the answer goes into
+ * a variable and must be a regular file that is executable (`-x` alone accepts a directory); an alias-only `fd` is a MISSING `fd`.
+ */
+function found(name: string, variable: string): string {
+  return `{ ${variable}=$(unalias -a 2>/dev/null; command -v ${name} 2>/dev/null) && [ -f "$${variable}" ] && [ -x "$${variable}" ]; }`;
+}
+
+/**
  * One tool's step: skipped when it is there, else the distribution's package for it, else the flag.
  *
  * @param tool the program Kimi looks for
@@ -59,7 +68,7 @@ const LOCAL_BIN = '~/.local/bin';
  * @param alsoThere further ways the tool can already be there, each a complete `||` operand
  */
 function toolStep(tool: string, distroPackage: string, alsoThere: readonly string[]): string {
-  const there = [`command -v ${tool} ${QUIET}`, `[ -e ${KIMI_BIN}/${tool} ]`, ...alsoThere];
+  const there = [found(tool, 'coai_f'), `[ -f ${KIMI_BIN}/${tool} ]`, ...alsoThere];
 
   return `{ ${there.join(' || ')} || if command -v apt-get ${QUIET}; then sudo apt-get install -y ${distroPackage}; `
     + `elif command -v dnf ${QUIET}; then sudo dnf install -y ${distroPackage}; else ${NO_MANAGER}=1; fi; }`;
@@ -68,8 +77,8 @@ function toolStep(tool: string, distroPackage: string, alsoThere: readonly strin
 /** The link `~/.local/bin/fd` → `fdfind`: made only where Debian's name resolves and nothing named `fd` does, never over a file. */
 const FD_LINK = [
   `mkdir -p ${LOCAL_BIN}`,
-  `{ ! command -v fdfind ${QUIET} || command -v fd ${QUIET} || [ ${LOCAL_BIN}/fd -ef "$(command -v fdfind)" ] `
-    + `|| { [ -e ${LOCAL_BIN}/fd ] && [ ! -L ${LOCAL_BIN}/fd ]; } || ln -sf "$(command -v fdfind)" ${LOCAL_BIN}/fd; }`,
+  `{ coai_d=$(unalias -a 2>/dev/null; command -v fdfind 2>/dev/null); ! { [ -f "$coai_d" ] && [ -x "$coai_d" ]; } || ${found('fd', 'coai_g')} `
+    + `|| [ ${LOCAL_BIN}/fd -ef "$coai_d" ] || { [ -e ${LOCAL_BIN}/fd ] && [ ! -L ${LOCAL_BIN}/fd ]; } || ln -sfn "$coai_d" ${LOCAL_BIN}/fd; }`,
 ].join(' && ');
 
 /** The one sentence for a host with neither manager — printed once, only when a tool was missing and nothing could provide it. */
@@ -77,13 +86,13 @@ const NO_MANAGER_NOTE = `{ [ -z "\${${NO_MANAGER}-}" ] || echo "${KIMI_NO_PACKAG
 
 /** Where `rg` and `fd` resolved, in the order `KimiTools` looks: Kimi's own bin, `~/.local/bin`, PATH. */
 const CHECK = '{ for coai_t in rg fd; do coai_p=; '
-  + `for coai_c in ${KIMI_BIN}/$coai_t ${LOCAL_BIN}/$coai_t "$(command -v $coai_t)"; do [ -x "$coai_c" ] && { coai_p=$coai_c; break; }; done; `
-  + 'echo "$coai_t: ${coai_p:-not found}"; done; unset coai_no_pm coai_t coai_p coai_c; }';
+  + `for coai_c in ${KIMI_BIN}/$coai_t ${LOCAL_BIN}/$coai_t "$(unalias -a 2>/dev/null; command -v $coai_t 2>/dev/null)"; do [ -f "$coai_c" ] && [ -x "$coai_c" ] && { coai_p=$coai_c; break; }; done; `
+  + 'echo "$coai_t: ${coai_p:-not found}"; done; unset coai_no_pm coai_t coai_p coai_c coai_f coai_g coai_d; }';
 
 /** The whole line: tools, link, the sentence, Moonshot's script, the check. */
 export const KIMI_LINUX_LINE = [
   toolStep('rg', 'ripgrep', []),
-  toolStep('fd', 'fd-find', [`command -v fdfind ${QUIET}`, `[ -e ${LOCAL_BIN}/fd ]`]),
+  toolStep('fd', 'fd-find', [found('fdfind', 'coai_f'), `[ -f ${LOCAL_BIN}/fd ]`]),
   FD_LINK,
   NO_MANAGER_NOTE,
   'curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash',
@@ -94,7 +103,7 @@ export const KIMI_LINUX_LINE = [
 export const KIMI_TOOLS_NOTE =
   'One press: where ripgrep (`rg`) or fd is missing — coai-mcp refuses a Kimi launch without them — it installs them from your '
   + 'distribution’s own packages with `sudo apt-get` or `sudo dnf` (you type your password in this terminal). A step is skipped '
-  + 'when the tool is already there, and a step that fails stops the line. Debian and Ubuntu name fd’s program `fdfind`, so the '
+  + 'when the tool is already there, and a failed tool step stops the line. Debian and Ubuntu name fd’s program `fdfind`, so the '
   + 'line links `~/.local/bin/fd` to it. On any other distribution it installs nothing for the tools, says so — install ripgrep '
   + 'and fd with your package manager, or place them on PATH or in `~/.local/bin` — and goes on. Then Moonshot’s own installer, '
   + 'from code.kimi.com, puts Kimi in `~/.kimi-code/bin` and edits one shell rc file so that folder is on your PATH (open a new '

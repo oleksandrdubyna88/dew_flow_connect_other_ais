@@ -45,7 +45,8 @@ function findBash(): string {
     return roots.map((root) => join(root, 'Git', 'bin', 'bash.exe')).find((candidate) => existsSync(candidate)) ?? '';
   }
 
-  return spawnSync('bash', ['--version'], { timeout: 30_000 }).status === 0 ? 'bash' : '';
+  // ABSOLUTE: node looks a command up in the PATH of the env it is given, and the sealed PATH below has no bash in it.
+  return spawnSync('sh', ['-c', 'command -v bash'], { encoding: 'utf8', timeout: 30_000 }).stdout.trim();
 }
 
 const BASH = findBash();
@@ -114,6 +115,10 @@ interface World {
   readonly pmExit?: number;
   /** A file somebody already has at `~/.local/bin/fd`. */
   readonly fdFile?: string;
+  /** Aliases an interactive terminal has: `command -v` answers their TEXT, not a path (S3 of the security judge). */
+  readonly aliases?: readonly string[];
+  /** `~/.local/bin/fd` is a symlink to a DIRECTORY somebody planted (S2): `ln -sf` would write inside it. */
+  readonly fdDirLink?: boolean;
 }
 
 interface Place {
@@ -175,6 +180,8 @@ interface Pressed {
   readonly linkedToFdfind: boolean;
   /** The names in `~/.local/bin`, space-separated. */
   readonly localBin: string;
+  /** The names that landed inside the planted directory (S2) — none when the link replaced the link. */
+  readonly planted: string;
 }
 
 const PATH_SEPARATOR = WINDOWS ? ';' : ':';
@@ -202,7 +209,18 @@ const PROBE = [
   'coai_list=',
   'for coai_f in ~/.local/bin/*; do { [ -e "$coai_f" ] || [ -L "$coai_f" ]; } && coai_list="$coai_list ${coai_f##*/}"; done',
   'echo "COAI-BINLIST=$coai_list"',
+  'coai_in=',
+  'for coai_f in "$HOME/planted dir"/*; do { [ -e "$coai_f" ] || [ -L "$coai_f" ]; } && coai_in="$coai_in ${coai_f##*/}"; done',
+  'echo "COAI-PLANTED=$coai_in"',
 ].join('\n');
+
+/** What the world has before the line runs: aliases, and a planted directory link. Built by the shell itself, so the link is the one `ln` makes. */
+function prelude(world: World): string {
+  const aliases = (world.aliases ?? []).length === 0 ? [] : ['shopt -s expand_aliases', ...(world.aliases ?? []).map((one) => `alias ${one.replace('=', "='")}'`)];
+  const plant = world.fdDirLink === true ? ['mkdir -p "$HOME/.local/bin" "$HOME/planted dir" && ln -s "$HOME/planted dir" "$HOME/.local/bin/fd"'] : [];
+
+  return [...aliases, ...plant].join('\n');
+}
 
 /** The shelf folders of what earlier presses installed — a real install outlives the shell that ran it. */
 function installedBefore(where: Place): readonly string[] {
@@ -214,7 +232,7 @@ function installedBefore(where: Place): readonly string[] {
 /** One press of the line on a machine: `bash -c` of the stand-ins, the line and the probe, a deadline on it, the stand-in log read back. */
 function press(where: Place, line: string): Promise<Pressed> {
   writeFileSync(where.log, '');
-  const script = `${standIns(where.world.managers)}\n${line}\n${PROBE}`;
+  const script = `${standIns(where.world.managers)}\n${prelude(where.world)}\n${line}\n${PROBE}`;
   const env = envFor(where, [...installedBefore(where), posix(where.stub), CORE].join(PATH_SEPARATOR));
 
   return new Promise((resolve, reject) => {
@@ -234,6 +252,7 @@ function press(where: Place, line: string): Promise<Pressed> {
         isLink: has('ISLINK'),
         linkedToFdfind: has('LINKED'),
         localBin: /^COAI-BINLIST=(.*)$/mu.exec(stdout)?.[1]?.trim() ?? '',
+        planted: /^COAI-PLANTED=(.*)$/mu.exec(stdout)?.[1]?.trim() ?? '',
       });
     });
   });
@@ -261,8 +280,11 @@ const ownersCase = started(() => press(place({ managers: ['apt-get'], kimiBin: [
 const managerFails = started(() => press(place({ managers: ['apt-get'], pmExit: 1 }), LINE));
 const realFilePlace = BASH === '' ? undefined : place({ managers: ['apt-get'], onPath: ['rg', 'fdfind'], fdFile: 'mine\n' });
 const realFile = started(() => press(realFilePlace!, LINE));
+const dirLink = started(() => press(place({ managers: ['apt-get'], onPath: ['rg', 'fdfind'], fdDirLink: true }), LINE));
+const aliasFd = started(() => press(place({ managers: ['apt-get'], onPath: ['rg', 'fdfind'], aliases: ['fd=fdfind'] }), LINE));
+const aliasRg = started(() => press(place({ managers: ['apt-get'], onPath: ['fdfind'], aliases: ['rg=grep'] }), LINE));
 // The pressed worlds, to be read: a rejected press is reported by the test that awaits it, never as an unhandled rejection.
-for (const pending of [debianFresh, debianSecond, debianInstalled, fedoraFdThere, noManager, noManagerToolsThere, ownersCase, managerFails, realFile]) {
+for (const pending of [debianFresh, debianSecond, debianInstalled, fedoraFdThere, noManager, noManagerToolsThere, ownersCase, managerFails, realFile, dirLink, aliasFd, aliasRg]) {
   pending.catch(() => undefined);
 }
 
@@ -295,7 +317,7 @@ test('the line names the two packages, both managers, and sudo only in front of 
   assert.equal(LINE.match(/sudo /gu)?.length, 4, 'sudo appears in front of exactly the four package steps');
   assert.ok(LINE.includes('mkdir -p ~/.local/bin'), 'the folder is made before the link (a fresh account has none)');
   assert.ok(LINE.includes('command -v fdfind'), 'the link is made only when Debian’s name for fd resolves');
-  assert.ok(LINE.includes('ln -sf'), 'the link is made with ln -sf, on that exact path');
+  assert.ok(LINE.includes('ln -sfn') && !LINE.includes('ln -sf "'), 'the link is made with ln -sfn (never -sf: it follows a planted directory link), on that exact path');
 });
 
 test('the line parses: bash -n accepts it, and refuses a broken one (the check has teeth)', { skip }, () => {
@@ -416,4 +438,28 @@ test('a real file at ~/.local/bin/fd is left alone: the link replaces a link, ne
   assert.equal(pressed.isLink, false, 'the person’s own file was replaced by a link');
   assert.equal(readFileSync(join(realFilePlace!.home, '.local', 'bin', 'fd'), 'utf8'), 'mine\n', 'the person’s own file was overwritten');
   assert.deepEqual(moonshotSteps(pressed.log), MOONSHOT_RAN);
+});
+
+test('a symlink at ~/.local/bin/fd that points to a DIRECTORY is replaced by the link, and nothing lands in that directory (S2: ln -sfn)', { skip }, async () => {
+  const pressed = await dirLink;
+
+  assert.equal(pressed.status, 0, `${pressed.out}${pressed.err}`);
+  assert.equal(pressed.planted, '', `ln followed the planted directory link and wrote inside it: ${pressed.planted}`);
+  assert.equal(pressed.isLink && pressed.linkedToFdfind, true, '~/.local/bin/fd must be the link to fdfind, not the planted directory');
+});
+
+test('an alias-only fd is a missing fd: the link is still made, to the FILE fdfind resolves to (S3)', { skip }, async () => {
+  const pressed = await aliasFd;
+
+  assert.equal(pressed.status, 0, `${pressed.out}${pressed.err}`);
+  assert.equal(pressed.isLink && pressed.linkedToFdfind, true, 'an alias named fd was read as the program: no link was made');
+  assert.match(pressed.out, /^fd: .*\/\.local\/bin\/fd$/mu, 'the check finds the link, not the alias');
+});
+
+test('an alias-only rg is a missing rg: the package is installed, and the check names the file (S3)', { skip }, async () => {
+  const pressed = await aliasRg;
+
+  assert.equal(pressed.status, 0, `${pressed.out}${pressed.err}`);
+  assert.deepEqual(sudoLines(pressed.log), ['sudo apt-get install -y ripgrep'], 'an alias named rg was read as the program: nothing was installed');
+  assert.match(pressed.out, /^rg: .*\/rg$/mu);
 });
