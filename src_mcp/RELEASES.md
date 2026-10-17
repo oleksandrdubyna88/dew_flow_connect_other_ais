@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.59.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.58.0...mcp-v0.59.0) (2026-10-17)
+
+
+### Features
+
+* **rules:** raise the reviewer-rules budget to 90 KB ([#848](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/848)) ([37084e6](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/37084e672b91456052cf92404fad3d55bc76e4ae))
+* **vibe:** Vibe on WSL2 — the sign-in link, host admission, extension texts ([#842](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/842)) ([30bdc7c](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/30bdc7cc54ab34d7787d0de3d0aea229af480be8))
+
 ## [0.58.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.57.0...mcp-v0.58.0) (2026-10-16)
 
 
