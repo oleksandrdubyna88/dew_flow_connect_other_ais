@@ -95,9 +95,9 @@ public sealed class HostProcessListTests
 
         public IReadOnlyCollection<int> Threads(int pid) => inner.Threads(pid);
 
-        public uint OwnerUid(int pid) => inner.OwnerUid(pid);
-
         public string Cmdline(int pid) => inner.Cmdline(pid);
+
+        public string StatusText(int pid) => inner.StatusText(pid);
 
         public string ExeTarget(int pid) => inner.ExeTarget(pid);
 

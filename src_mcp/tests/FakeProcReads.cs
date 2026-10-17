@@ -13,6 +13,9 @@ internal sealed class FakeProcReads : IProcReads
 
     public Dictionary<int, Func<string>> Exes { get; } = [];
 
+    /// <summary>The <c>status</c> text of a pid, or the exception reading it throws; a pid with none reads a status whose uids are the directory owner's (what a plain process looks like).</summary>
+    public Dictionary<int, Func<string>> Statuses { get; } = [];
+
     /// <summary>The <c>cmdline</c> text of a pid (NUL-separated), or the exception reading it throws; a pid with none is a process that left.</summary>
     public Dictionary<int, Func<string>> Cmdlines { get; } = [];
 
@@ -33,6 +36,19 @@ internal sealed class FakeProcReads : IProcReads
     public string ExeTarget(int pid) => Exes.TryGetValue(pid, out var read) ? read() : string.Empty;
 
     public string Cmdline(int pid) => Cmdlines.TryGetValue(pid, out var read) ? read() : throw new DirectoryNotFoundException($"/proc/{pid}");
+
+    public string StatusText(int pid) => Statuses.TryGetValue(pid, out var read) ? read() : Status(OwnerUid(pid));
+
+    private static string Status(uint uid) => $"Name:\tworker\nUmask:\t0022\nState:\tS (sleeping)\nUid:\t{uid}\t{uid}\t{uid}\t{uid}\nGid:\t0\t0\t0\t0\n";
+
+    /// <summary>A process whose <c>/proc/&lt;pid&gt;</c> directory belongs to <paramref name="directoryOwner"/> (root, for a non-dumpable one) while its own <c>status</c> says it runs as <paramref name="real"/>.</summary>
+    public FakeProcReads WithStatusUid(int pid, uint directoryOwner, uint real)
+    {
+        Owners[pid] = directoryOwner;
+        Statuses[pid] = () => Status(real);
+
+        return this;
+    }
 
     public uint OwnUid() => Me;
 

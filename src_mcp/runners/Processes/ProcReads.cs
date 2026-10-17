@@ -17,8 +17,11 @@ public interface IProcReads
     /// <summary>The thread ids of <c>/proc/&lt;pid&gt;/task</c>; <c>[-1]</c> when the listing cannot be read — a thread nobody can rule out, so the entry is not called exited.</summary>
     IReadOnlyCollection<int> Threads(int pid);
 
-    /// <summary>The uid that owns <c>/proc/&lt;pid&gt;</c> (<c>statx</c>, <c>STATX_UID</c>). Throws <see cref="IOException"/> on failure.</summary>
-    uint OwnerUid(int pid);
+    /// <summary>
+    /// The text of <c>/proc/&lt;pid&gt;/status</c> — world-readable, and the one place a process's REAL and effective uids are written even when its <c>/proc/&lt;pid&gt;</c> DIRECTORY is owned by root (a non-dumpable process's is).
+    /// Throws <see cref="FileNotFoundException"/> / <see cref="DirectoryNotFoundException"/> when the process is not there (gone), <see cref="UnauthorizedAccessException"/> / <see cref="IOException"/> for any other failure.
+    /// </summary>
+    string StatusText(int pid);
 
     /// <summary><c>readlink</c> of <c>/proc/&lt;pid&gt;/exe</c>: the raw target (it ends in <c> (deleted)</c> once the file is unlinked), <c>""</c> for <c>ENOENT</c> (no executable: a kernel
     /// thread), and <see cref="UnauthorizedAccessException"/> for <c>EACCES</c> (another account's process), <see cref="IOException"/> for any other errno.</summary>
@@ -65,6 +68,18 @@ public sealed partial class ProcReads : IProcReads
         }
     }
 
+    public string StatusText(int pid)
+    {
+        try
+        {
+            return File.ReadAllText($"/proc/{pid}/status");
+        }
+        catch (IOException) when (!Directory.Exists($"/proc/{pid}"))
+        {
+            throw new DirectoryNotFoundException($"/proc/{pid} left while it was being read");
+        }
+    }
+
     public string Cmdline(int pid)
     {
         try
@@ -87,18 +102,6 @@ public sealed partial class ProcReads : IProcReads
         {
             return [-1];
         }
-    }
-
-    public uint OwnerUid(int pid)
-    {
-        if (!OperatingSystem.IsLinux())
-        {
-            throw new PlatformNotSupportedException("/proc is Linux's");
-        }
-
-        return LinuxStatx.OfPath($"/proc/{pid}", 0, LinuxStatx.StatxUid) is StatxRead.Read read
-            ? read.Status.OwnerUid
-            : throw new IOException($"the owner of /proc/{pid} could not be read");
     }
 
     public string ExeTarget(int pid)

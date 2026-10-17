@@ -129,12 +129,12 @@ public sealed class ProcStatTests
         Assert.SkipUnless(OperatingSystem.IsLinux(), "/proc is Linux's");
         var reads = ProcReads.Real;
 
-        reads.OwnerUid(Environment.ProcessId).Should().Be(reads.OwnUid(), "this process is owned by the account it runs as");
+        ProcStatus.RunsAs(reads.StatusText(Environment.ProcessId), reads.OwnUid()).Should().BeTrue("this process runs as the account it runs as, by its own status");
         reads.Threads(Environment.ProcessId).Should().Contain(Environment.ProcessId, "the leader is one of its own threads");
         reads.Threads(int.MaxValue).Should().Equal(-1);
         Path.GetFileName(reads.ExeTarget(Environment.ProcessId)).Should().NotBeEmpty("a running test host has an executable: dotnet, or its own apphost");
         reads.ExeTarget(int.MaxValue).Should().BeEmpty("ENOENT: no executable");
-        FluentActions.Invoking(() => reads.OwnerUid(int.MaxValue)).Should().Throw<IOException>();
+        FluentActions.Invoking(() => reads.StatusText(int.MaxValue)).Should().Throw<IOException>("a pid that is not there is gone");
     }
 
     [Fact]
