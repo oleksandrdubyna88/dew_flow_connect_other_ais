@@ -88,7 +88,7 @@ public abstract record CallerTranscriptLocation
 /// </remarks>
 public static class CallerTranscriptLocator
 {
-    private const long MaxRegistryBytes = 64 * 1024;
+    private const int MaxRegistryBytes = 64 * 1024;
     private const int MaxVendorWord = 20;
 
     public static CallerTranscriptLocation Locate(string vendor, Func<string, string?> env, ClaudeHome home)
@@ -152,14 +152,27 @@ public static class CallerTranscriptLocator
         try
         {
             using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-            if (stream.Length > MaxRegistryBytes)
-            {
-                return CallerSessionId.None;
-            }
 
-            using var document = JsonDocument.Parse(stream);
+            return ReadRegistry(stream);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return CallerSessionId.None;
+        }
+    }
 
-            return SessionIdOf(document.RootElement);
+    /// <summary>
+    /// The registry entry's <c>sessionId</c>, from at most 64 KiB + 1 bytes actually READ. The bound is on what is read, not on
+    /// <c>Length</c>: a file appended to after its length was measured would otherwise be parsed whole. Full means over the cap.
+    /// </summary>
+    internal static CallerSessionId ReadRegistry(Stream stream)
+    {
+        try
+        {
+            var buffer = new byte[MaxRegistryBytes + 1];
+            var read = stream.ReadAtLeast(buffer, buffer.Length, throwOnEndOfStream: false);
+
+            return read > MaxRegistryBytes ? CallerSessionId.None : SessionIdIn(buffer.AsMemory(0, read));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException)
         {
@@ -167,13 +180,12 @@ public static class CallerTranscriptLocator
         }
     }
 
-    private static CallerSessionId SessionIdOf(JsonElement root) => Named(StringProperty(root, "sessionId"), CallerSessionId.Registry);
+    private static CallerSessionId SessionIdIn(ReadOnlyMemory<byte> json)
+    {
+        using var document = JsonDocument.Parse(json);
 
-    /// <summary>One property of an object, only when it is a string; anything else is empty. Nothing else of the file is read.</summary>
-    private static string StringProperty(JsonElement root, string name) =>
-        root.ValueKind == JsonValueKind.Object && root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
-            ? value.GetString() ?? string.Empty
-            : string.Empty;
+        return Named(JsonText.StringProperty(document.RootElement, "sessionId"), CallerSessionId.Registry);
+    }
 
     private static CallerTranscriptLocation Lookup(CallerSessionId session, ClaudeHome home)
     {

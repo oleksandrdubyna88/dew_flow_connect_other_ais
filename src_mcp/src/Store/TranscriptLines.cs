@@ -6,34 +6,6 @@ using System.Text.Json;
 namespace CoaiMcp.Store;
 
 /// <summary>
-/// What one read of transcript files counted, across EVERY file of that read. The caller's budget is a delegate on it, so the
-/// reader never knows what a budget is.
-/// </summary>
-/// <remarks>
-/// <see cref="BytesScanned"/> is every byte read from disk; <see cref="BytesYielded"/> is only the bytes of lines handed on (the
-/// SLICE — parent D7: the budget applies to what is kept, because a 650 MB session is scanned whole every time).
-/// <see cref="Stop"/> is asked after every MiB scanned, and once per line that passed the gate AFTER the line is charged and
-/// BEFORE it is yielded, so the slice never holds a line past the byte budget.
-/// </remarks>
-internal sealed class ScanMeter
-{
-    public long BytesScanned { get; set; }
-
-    public long BytesYielded { get; set; }
-
-    public int LinesSkipped { get; set; }
-
-    public int LinesTooLong { get; set; }
-
-    public int ReadFailures { get; set; }
-
-    /// <summary>A line over this is never buffered whole (64 MiB: the biggest real line is far below it).</summary>
-    public long MaxLineBytes { get; set; } = 64L * 1024 * 1024;
-
-    public Func<bool> Stop { get; set; } = static () => false;
-}
-
-/// <summary>
 /// Reading a transcript its CLI is still appending to — shared by <see cref="AgentLog"/> and the caller-transcript reader, so the
 /// two cannot drift (E3.S1 of <c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E3.md</c>).
 /// </summary>
@@ -268,9 +240,14 @@ internal static class TranscriptLines
 
     /// <summary>True only for a value in the stamp form that is ordinally before the bound.</summary>
     private static bool IsBefore(ReadOnlySpan<byte> value, ReadOnlySpan<byte> boundStamp) =>
-        value.Length >= StampForm.Length
-        && InStampForm(value[..StampForm.Length])
-        && value[..StampForm.Length].SequenceCompareTo(boundStamp) < 0;
+        HasStampForm(value) && value[..StampForm.Length].SequenceCompareTo(boundStamp) < 0;
+
+    /// <summary>
+    /// <c>yyyy-MM-ddTHH:mm:ss</c> followed by a fraction or <c>Z</c>. A stamp with an offset (<c>-05:00</c>) is NOT in the form:
+    /// its text is local time, and comparing it with a UTC bound would skip a line that is after the bound.
+    /// </summary>
+    private static bool HasStampForm(ReadOnlySpan<byte> value) =>
+        value.Length > StampForm.Length && InStampForm(value[..StampForm.Length]) && value[StampForm.Length] is (byte)'.' or (byte)'Z';
 
     private static bool InStampForm(ReadOnlySpan<byte> value)
     {

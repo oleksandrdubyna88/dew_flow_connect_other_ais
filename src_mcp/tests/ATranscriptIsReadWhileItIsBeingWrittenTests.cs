@@ -487,6 +487,45 @@ public sealed class ATranscriptIsReadWhileItIsBeingWrittenTests
         }
     }
 
+    [Fact]
+    public void A_bom_at_the_file_start_is_not_part_of_the_first_line()
+    {
+        // StreamReader (ReadShared) skips a UTF-8 BOM; JsonDocument.Parse over bytes does not, and would call line 1 torn. The two
+        // readers must not drift, so the byte reader skips it too — at stream offset 0 only, and the bytes still count as scanned.
+        using var dir = TempDir.For("testsToDelete-coai-transcript-bom-");
+        var file = dir.At("t.jsonl");
+        string[] lines = [Stamped(At(10, 0)), Stamped(At(10, 1))];
+        File.WriteAllBytes(file, [0xEF, 0xBB, 0xBF, .. Utf8(Joined(lines))]);
+        var meter = new ScanMeter();
+
+        var viaStrings = TranscriptLines.ReadShared(file).ToList();
+        var viaBytes = Read(file, DateTime.MinValue, meter);
+
+        viaStrings.Should().Equal(lines, "the string reader has always skipped the BOM");
+        viaBytes.Should().Equal(lines, "and the byte reader reads the same lines");
+        TranscriptLines.TryParse(Utf8(viaBytes[0]), out var first).Should().BeTrue("the first line parses, so it is not reported torn");
+        first?.Dispose();
+        meter.BytesScanned.Should().Be(new FileInfo(file).Length, "the BOM bytes were read, so they are scanned");
+        meter.BytesYielded.Should().Be(Bytes(lines[0]) + 1 + Bytes(lines[1]) + 1, "and they are not in the slice");
+    }
+
+    [Theory]
+    [InlineData("2000-01-01T05:00:00-05:00")]
+    [InlineData("2000-01-01T05:00:00+02:00")]
+    [InlineData("2000-01-01T05:00:00")]
+    public void A_stamp_without_a_Z_or_fraction_is_not_the_expected_form_so_the_line_is_kept(string stamp)
+    {
+        // 05:00 at -05:00 is 10:00 UTC. Compared as text it would read as 05:00 and be skipped under a 10:30 bound.
+        TranscriptLines.StampAtOrAfter(Utf8("{\"timestamp\":\"" + stamp + "\"}"), At(10, 30)).Should().BeTrue("the JSON decides, not the text");
+    }
+
+    [Fact]
+    public void A_stamp_in_the_expected_form_with_no_fraction_is_still_compared()
+    {
+        TranscriptLines.StampAtOrAfter(Utf8("{\"timestamp\":\"2000-01-01T09:00:00Z\"}"), At(10, 30)).Should().BeFalse();
+        TranscriptLines.StampAtOrAfter(Utf8("{\"timestamp\":\"2000-01-01T11:00:00Z\"}"), At(10, 30)).Should().BeTrue();
+    }
+
     /// <summary>Delivers its bytes in one read, then fails the next one the way a vanishing share does.</summary>
     private sealed class FailingStream(byte[] first, Exception failure) : Stream
     {

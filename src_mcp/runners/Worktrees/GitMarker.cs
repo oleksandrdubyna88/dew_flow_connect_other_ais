@@ -11,6 +11,9 @@ namespace CoaiMcp.Runners.Worktrees;
 /// <c>SnapshotListing</c> (is this gitlink populated) and <c>CheckoutRoots</c> in <c>CoaiMcp.Store</c> (which checkout did a
 /// write land in). It was <c>SubmodulePopulator.HasGit</c>, <c>internal</c> on an <c>internal</c> class, which
 /// <c>CoaiMcp</c> cannot see; the body moved here unchanged (E3.S3, reuse move 2: extract the shared half, never copy it).</para>
+/// <para><b>A fourth, older copy remains:</b> <c>ConsultantPlaces.HoldsGit</c> (<c>src_mcp/src/Server/Consultation</c>) is the same test written
+/// out again. It was not switched in E3 — whether it should be is an open question for the owner — so "three callers" above means
+/// the three that use this class.</para>
 /// </remarks>
 public static class GitMarker
 {

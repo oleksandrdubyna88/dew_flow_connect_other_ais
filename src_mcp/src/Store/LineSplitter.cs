@@ -28,7 +28,10 @@ internal sealed class LineSplitter(Stream stream, ScanMeter meter)
     private bool _discarding;
     private bool _atEnd;
     private bool _clean = true;
+    private bool _atOffsetZero = true;
     private long _sinceStopCheck;
+
+    private static ReadOnlySpan<byte> Utf8Bom => [0xEF, 0xBB, 0xBF];
 
     public bool TryNext(out RawLine line)
     {
@@ -125,8 +128,31 @@ internal sealed class LineSplitter(Stream stream, ScanMeter meter)
 
         _end += read;
         meter.BytesScanned += read;
+        SkipBom();
+        if (AskedToStop(read))
+        {
+            return End(clean: false);
+        }
 
-        return !AskedToStop(read) || End(clean: false);
+        return true;
+    }
+
+    /// <summary>
+    /// A UTF-8 byte order mark at stream offset 0 is not part of the first line: <c>StreamReader</c> (so <c>ReadShared</c>) drops it
+    /// and <c>JsonDocument.Parse</c> over bytes rejects it, which would call line 1 torn. The bytes stay counted as scanned.
+    /// </summary>
+    private void SkipBom()
+    {
+        if (!_atOffsetZero)
+        {
+            return;
+        }
+
+        _atOffsetZero = false;
+        if (_buffer.AsSpan(_start, _end - _start).StartsWith(Utf8Bom))
+        {
+            _start += Utf8Bom.Length;
+        }
     }
 
     private bool End(bool clean)
@@ -194,64 +220,5 @@ internal sealed class LineSplitter(Stream stream, ScanMeter meter)
         _probed = 0;
 
         return keep;
-    }
-}
-
-/// <summary>
-/// The byte gate in front of the splitter: which lines are handed on, and what each one costs the meter.
-/// </summary>
-/// <remarks>
-/// <para><b>The head</b> — every line up to and including the first whose bytes hold <c>"timestamp":</c> — is yielded whatever its
-/// stamp: it is what gives <c>FirstLineUtc</c> and <c>LaunchedUtc</c>, and a file can start with an <c>ai-title</c>, which has none.
-/// <b>The tail</b> — an unterminated last line — is always yielded. Every other line is yielded only when
-/// <see cref="TranscriptLines.StampAtOrAfter(ReadOnlySpan{byte}, ReadOnlySpan{byte})"/> says so; otherwise it is counted
-/// skipped and its bytes are never touched again.</para>
-/// <para><b>Charge, ask, then yield.</b> A line that passes is charged to <see cref="ScanMeter.BytesYielded"/> (its bytes plus
-/// its terminator), then <see cref="ScanMeter.Stop"/> is asked, and only then is it handed on. When the budget says stop, that
-/// line is charged and not yielded, so the slice never holds a line past the budget (plan gate finding 8).</para>
-/// </remarks>
-internal sealed class GatedLines(Stream stream, byte[] boundStamp, ScanMeter meter)
-{
-    private readonly LineSplitter _lines = new(stream, meter);
-    private bool _headDone;
-
-    public bool TryNext(out ReadOnlyMemory<byte> line)
-    {
-        line = default;
-        while (_lines.TryNext(out var raw))
-        {
-            if (!Passes(raw))
-            {
-                meter.LinesSkipped++;
-                continue;
-            }
-
-            meter.BytesYielded += raw.Text.Length + raw.Terminator;
-            line = raw.Text;
-
-            return !meter.Stop();
-        }
-
-        return false;
-    }
-
-    private bool Passes(RawLine raw)
-    {
-        var text = raw.Text.Span;
-        var inHead = InHead(text);
-
-        return inHead || raw.Terminator == 0 || TranscriptLines.StampAtOrAfter(text, boundStamp);
-    }
-
-    private bool InHead(ReadOnlySpan<byte> text)
-    {
-        if (_headDone)
-        {
-            return false;
-        }
-
-        _headDone = TranscriptLines.HasStampKey(text);
-
-        return true;
     }
 }

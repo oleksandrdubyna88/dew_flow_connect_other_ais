@@ -380,6 +380,63 @@ public sealed class TheCallersTranscriptIsFoundByItsSessionIdTests
     }
 
     [Fact]
+    public void A_registry_that_grows_after_the_length_check_is_still_bounded()
+    {
+        // The stream says it is small and then delivers more than 64 KiB, as a file appended to after the check would. A read
+        // that trusts Length parses it whole; the read must be bounded by what it READS.
+        var json = "{\"sessionId\":\"" + A + "\",\"pad\":\"" + new string('x', 70 * 1024) + "\"}";
+        using var stream = new UnderstatedLengthStream(System.Text.Encoding.UTF8.GetBytes(json));
+
+        CallerTranscriptLocator.ReadRegistry(stream).Should().Be(CallerSessionId.None);
+    }
+
+    [Fact]
+    public void A_ten_digit_pid_is_accepted()
+    {
+        using var dir = TempDir.For("testsToDelete-coai-locator-pid10-");
+        var home = HomeIn(dir);
+        Plant(home, "any-folder", A);
+        Register(home, "1234567890", RegistryEntry(A));
+
+        Found(CallerTranscriptLocator.Locate("claude", Env(("CLAUDE_PID", "1234567890")), home)).Session
+            .Should().Be(new CallerSessionId(A, CallerSessionId.Registry));
+    }
+
+    [Theory]
+    [InlineData(64 * 1024, true)]
+    [InlineData(64 * 1024 + 1, false)]
+    public void A_registry_of_exactly_64_KiB_is_read_and_one_byte_more_is_refused(int size, bool read)
+    {
+        using var dir = TempDir.For("testsToDelete-coai-locator-edge-");
+        var home = HomeIn(dir);
+        Plant(home, "any-folder", A);
+        Plant(home, "any-folder", B);
+        var entry = RegistryEntry(A);
+        Register(home, Pid, entry + new string(' ', size - entry.Length));
+
+        var found = Found(CallerTranscriptLocator.Locate("claude", Env(("CLAUDE_PID", Pid), ("CLAUDE_CODE_SESSION_ID", B)), home));
+
+        found.Session.Source.Should().Be(read ? CallerSessionId.Registry : CallerSessionId.Environment);
+    }
+
+    [Theory]
+    [InlineData("abcdefghijklmnopqrst", "no reader for abcdefghijklmnopqrst")]
+    [InlineData("abcdefghijklmnopqrstu", "no reader for this vendor")]
+    [InlineData("a", "no reader for a")]
+    public void A_vendor_word_of_one_to_twenty_letters_is_kept(string vendor, string reason)
+    {
+        using var dir = TempDir.For("testsToDelete-coai-locator-vendoredge-");
+
+        Refused(CallerTranscriptLocator.Locate(vendor, Env(("CLAUDE_CODE_SESSION_ID", A)), HomeIn(dir))).Reason.Should().Be(reason);
+    }
+
+    /// <summary>Reports a small <see cref="Length"/> and delivers all its bytes — a file that grew after it was measured.</summary>
+    private sealed class UnderstatedLengthStream(byte[] content) : MemoryStream(content)
+    {
+        public override long Length => 10;
+    }
+
+    [Fact]
     public void No_test_reads_the_developers_profile()
     {
         // Parent §16 D17: the assembly fixture (TestClaudeHome) points the one default at an empty temp home for the whole run.

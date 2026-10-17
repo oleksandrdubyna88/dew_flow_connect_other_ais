@@ -230,6 +230,7 @@ public sealed class AWriteIsKnownOnlyByItsPathTests
     public void One_instance_answers_the_same_directory_from_its_cache()
     {
         using var root = TempDir.For("testsToDelete-coai-write-cache-");
+        AssertNoGitAbove(root.Path);
         Directory.CreateDirectory(root.At("repo", ".git"));
         var one = MakeFile(root, "repo", "src", "a.cs");
         var two = MakeFile(root, "repo", "src", "b.cs");
@@ -240,6 +241,51 @@ public sealed class AWriteIsKnownOnlyByItsPathTests
 
         roots.Resolve(two).Kind.Should().Be(WriteTargetKind.Checkout, "the directory was answered once for this read, and one instance serves one read");
         new CheckoutRoots().Resolve(two).Kind.Should().Be(WriteTargetKind.OutsideAnyCheckout, "a new instance asks the filesystem again");
+    }
+
+    [Fact]
+    public void A_dot_dot_segment_is_resolved_before_the_walk()
+    {
+        // The walk went up the path TEXT: `repo/../other/a.cs` climbed through `repo` and answered Checkout(repo) for a file
+        // that is in `other`, which is no checkout.
+        using var root = TempDir.For("testsToDelete-coai-write-dotdot-");
+        AssertNoGitAbove(root.Path);
+        Directory.CreateDirectory(root.At("repo", ".git"));
+        Directory.CreateDirectory(root.At("other"));
+        MakeFile(root, "repo", "src", "a.cs");
+        var roots = new CheckoutRoots();
+
+        roots.Resolve(Path.Combine(root.At("repo"), "..", "other", "a.cs"))
+            .Should().Be(new WriteTarget(WriteTargetKind.OutsideAnyCheckout, string.Empty), "the file is in other, not in repo");
+        roots.Resolve(Path.Combine(root.At("other"), "..", "repo", "src", "a.cs"))
+            .Should().Be(new WriteTarget(WriteTargetKind.Checkout, Key(root.At("repo"))), "and the other way round the file IS in repo");
+    }
+
+    [Fact]
+    public void The_cache_key_keeps_case_where_the_file_system_does()
+    {
+        // The key was RepositoryIdentity.Normalised, which lower-cases: on a case-sensitive file system /work/App (a checkout) and
+        // /work/app (a plain folder) shared one cache entry and the first answer won.
+        var app = Path.Combine(Path.GetTempPath(), "work", "App");
+        var lower = Path.Combine(Path.GetTempPath(), "work", "app");
+
+        CheckoutRoots.CacheKey(app, caseSensitive: true).Should().NotBe(CheckoutRoots.CacheKey(lower, caseSensitive: true), "two directories that differ by case are two directories here");
+        CheckoutRoots.CacheKey(app, caseSensitive: false).Should().Be(CheckoutRoots.CacheKey(lower, caseSensitive: false), "and on a case-insensitive file system they are one");
+    }
+
+    [Fact]
+    public void Case_distinct_directories_are_two_answers_on_a_case_sensitive_file_system()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows() || OperatingSystem.IsMacOS(), "this needs a case-sensitive file system (WSL, Linux CI)");
+        using var root = TempDir.For("testsToDelete-coai-write-case-");
+        AssertNoGitAbove(root.Path);
+        Directory.CreateDirectory(root.At("work", "App", ".git"));
+        var withGit = MakeFile(root, "work", "App", "a.cs");
+        var plain = MakeFile(root, "work", "app", "a.cs");
+        var roots = new CheckoutRoots();
+
+        roots.Resolve(withGit).Kind.Should().Be(WriteTargetKind.Checkout);
+        roots.Resolve(plain).Kind.Should().Be(WriteTargetKind.OutsideAnyCheckout, "work/app is not work/App");
     }
 
     [Fact]
