@@ -1,6 +1,6 @@
 # PLAN — E1 stories: review a committed plan safely, and record what was reviewed
 
-> Status: **coded and tested on the branch `feat/plan-gate-reads-committed-plan`, 2026-10-16 — not merged; it moves to `research/` with the parent plan and E2** (§ 10 records what shipped differently). Epic E1 of
+> Status: **E1 merged as #837 on `main`, 2026-10-16; this document moves to `research/` together with the parent plan and E2** (§ 10 records what shipped differently). Epic E1 of
 > [PLAN_the_plan_gate_reads_the_committed_plan.md](PLAN_the_plan_gate_reads_the_committed_plan.md) (its `## Epics`).
 >
 > Scope: `src_mcp` only — `runners/Collecting` (`GitHistory` widened, the new `CommittedPlanReader`), pure units in

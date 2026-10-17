@@ -30,6 +30,7 @@ const state = (phrases: readonly Phrase[] = PHRASES): PanelState => ({
   codexModels: [],
   localEngines: {},
   server: { kind: 'absent', version: '', remembered: false, updateOffered: false },
+  hostKind: 'windows',
   side: '',
   perSide: false,
   questions: [],

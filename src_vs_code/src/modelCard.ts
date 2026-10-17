@@ -203,7 +203,8 @@ function top(vendor: Vendor, id: string, facts: ModelCardFacts): string {
 }
 
 function useFor(vendor: Vendor, id: string, facts: ModelCardFacts): string {
-  const on = vendor.enabled && facts.context.runtimeNote.length === 0;
+  // The held RUNTIME switches the boxes off — not any note: a host note (refused on native Linux) leaves the ticks alone.
+  const on = vendor.enabled && !facts.context.runtimeHeld;
   const stage = (kind: 'plan' | 'code', text: string): string => stageBox(kind, id, vendor[kind], on && !facts.lastFor.includes(kind), text, '',
     facts.lastFor.includes(kind) ? lockLineId(vendor) : '');
 

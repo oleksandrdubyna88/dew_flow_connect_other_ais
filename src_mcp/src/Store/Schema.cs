@@ -34,7 +34,7 @@ internal static class Schema
         TheRunsThemselves, ThePairsThemselves, WhatWasSent, HowItEnded, WhoSaidSo,
         TheSendsThemselves, WhatAPersonSaid, WhatItWasTold, WhatTheCadenceCounts,
         WhyARoundDidNotRun, TheQuestionsAsked, SecurityEvidence, WhyAConsultationFailed,
-        TheReviewersModel, TheRoundsKey, TheRoundsSize,
+        TheReviewersModel, TheRoundsKey, TheRoundsSize, ThePlanSource,
     ];
 
     internal const string SecurityEvidence = """
@@ -649,5 +649,22 @@ internal static class Schema
         ALTER TABLE rounds ADD COLUMN size_origin TEXT NOT NULL DEFAULT '';
         ALTER TABLE rounds ADD COLUMN size_gitlinks INTEGER NOT NULL DEFAULT -1;
         ALTER TABLE reviewers ADD COLUMN effort TEXT NOT NULL DEFAULT 'not recorded';
+        """;
+
+    /// <summary>
+    /// Step 23: what a PLAN round reviewed — where its text came from, the commit, the blob and the id of the text sent
+    /// (<c>todo/PLAN_the_plan_gate_reads_the_committed_plan_E2.md</c>, story E2.S1, contract C1).
+    /// </summary>
+    /// <remarks>
+    /// <para><c>rounds.plan_source</c> holds the JSON of the round's <c>PlanSource</c>, written through
+    /// <c>ServerJsonContext.Default.PlanSource</c> (camelCase, indented). <b>Empty means "not recorded"</b>: every round
+    /// written before this step, every code, document, feature or skipped round, and a plan round that finished before the
+    /// plan gate stamped one. No backfill — the session file keeps its own copy. The projection rewrites the value from the
+    /// record on every re-record, as it does <c>round_key</c> (step 21): there is no separate measurement to protect.</para>
+    /// <para>Appended, never inserted, for the reason step 20 records; a reader opened read-only (<c>--log</c>) runs no step
+    /// and asks the schema whether the column is there instead.</para>
+    /// </remarks>
+    internal const string ThePlanSource = """
+        ALTER TABLE rounds ADD COLUMN plan_source TEXT NOT NULL DEFAULT '';
         """;
 }

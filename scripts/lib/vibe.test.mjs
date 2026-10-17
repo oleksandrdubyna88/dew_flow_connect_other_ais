@@ -210,3 +210,42 @@ test('the home listing is names, sizes and mtimes — taken by lstat, so a link 
   assert.equal(listing.find((e) => e.path === 'logs/vibe.log').bytes, 3);
   assert.equal(typeof statSync(dir).mtimeMs, 'number');
 });
+
+// The probe script runs on import (it reads argv and may exit), so no test can import it: the pure core of its childEnv is cut out of
+// the source by its first and last line and run here with minimalEnv in scope. A rename or a reshaped function fails this loudly.
+function probeChildEnvFor() {
+  const source = readFileSync(join(repo, 'scripts', 'probe-vibe-confinement.mjs'), 'utf8').replaceAll('\r\n', '\n');
+  const start = source.indexOf('function childEnvFor(');
+  const end = source.indexOf('\n}\n', start);
+  assert.ok(start >= 0 && end > start, 'childEnvFor is no longer a top-level function of the probe');
+  return new Function('minimalEnv', `${source.slice(start, end + 2)}\nreturn childEnvFor;`)(minimalEnv);
+}
+
+const PIN = { VIBE_CLI: 'python', PYTHONUTF8: '1' };
+
+test('on Linux the probe hands a child the minimal environment, never the operator\'s whole shell (RESULTS §31.4, cell L-V9)', () => {
+  const childEnvFor = probeChildEnvFor();
+  const shell = { PATH: '/usr/bin', HOME: '/home/op', LANG: 'C.UTF-8', SECRET: 'hunter2', GITHUB_TOKEN: 'x', AWS_PROFILE: 'p' };
+  const env = childEnvFor({ home: '/h/1', env: { VIBE_ACTIVE_MODEL: 'm' } }, { cli: 'python', platform: 'linux', env: shell });
+  assert.equal(env.SECRET, undefined, 'SECRET reached the child');
+  assert.deepEqual(Object.keys(env).filter((k) => !(k in minimalEnv('linux', shell))).sort(),
+    ['NoDefaultCurrentDirectoryInExePath', 'PYTHONUTF8', 'VIBE_ACTIVE_MODEL', 'VIBE_CLI', 'VIBE_HOME'], 'a variable beyond the minimal list reached the child');
+  assert.equal(env.PATH, '/usr/bin');
+  assert.equal(env.VIBE_HOME, '/h/1');
+});
+
+test('on Windows the probe still starts from the whole environment — the RESULTS cells there were measured with it', () => {
+  const childEnvFor = probeChildEnvFor();
+  const shell = { Path: 'C:\\x', SECRET: 'hunter2' };
+  const env = childEnvFor({ home: 'H', env: { A: 'b' } }, { cli: 'python', platform: 'win32', env: shell });
+  assert.deepEqual(env, { ...shell, NoDefaultCurrentDirectoryInExePath: '1', VIBE_HOME: 'H', A: 'b', ...PIN });
+});
+
+test('a replaced environment is the arm\'s own plus the pin on every platform, and `--cli inherit` drops the pin', () => {
+  const childEnvFor = probeChildEnvFor();
+  const shell = { SECRET: 'hunter2' };
+  for (const platform of ['linux', 'win32']) {
+    assert.deepEqual(childEnvFor({ replaceEnv: { A: '1' } }, { cli: 'python', platform, env: shell }), { A: '1', ...PIN });
+    assert.equal('VIBE_CLI' in childEnvFor({ home: 'H' }, { cli: 'inherit', platform, env: { VIBE_CLI: 'rust' } }), false);
+  }
+});

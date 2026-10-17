@@ -44,8 +44,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolved } from '../.github/scripts/lib/resolved.mjs';
-import { builtEnv as builtEnvFor, classOf as classOfIn, deepestChild, linkSignIn, run, vibeArgs } from './lib/vibe.mjs';
-import { inventoryOf, unstaged, withEntry } from './lib/vibe-manifest.mjs';
+import { builtEnv as builtEnvFor, classOf as classOfIn, deepestChild, linkSignIn, personsVibeHome, run, vibeArgs } from './lib/vibe.mjs';
+import { inventoryOf, unstaged, withEntry, withoutSignInLink } from './lib/vibe-manifest.mjs';
 
 const argv = process.argv.slice(2);
 const flag = (name, fallback) => {
@@ -91,6 +91,8 @@ const VARYING = [
   'logs/vibe.log',
   'logs/session/active/.registry',
   'logs/session/unified/*/**',
+  // Vibe's session index, one file beside the session folders (L-V-manifest, 2.26.1 on WSL2: it appears on a resumed home) - session data on every platform.
+  'logs/session/unified/.session-index.json',
   // Vibe's plugin store stages an unpack here (vibe/plugins/_store.py:204): re-digested before it is renamed into packages/,
   // swept by Vibe itself, never loaded as a package - so it is admitted by name even though it lies under the pinned prefix.
   'logs/session/plugins/tmp/**',
@@ -114,8 +116,11 @@ const classIn = (inventoryOfAHome) => {
 
 /** The home's files and folders (lib/vibe-manifest.mjs inventoryOf: a link named, never read through). */
 const inventory = (home) => inventoryOf(home);
-/** The `.env` sign-in link this script made is coai's, not Vibe's: it is left out of what Vibe wrote. Any OTHER link stays in, as unknown. */
-const vibesOwn = (listing) => listing.filter((entry) => !(entry.link && entry.path === '.env'));
+/**
+ * The `.env` sign-in link this script made is coai's, not Vibe's: it is left out of what Vibe wrote — only a link whose target is exactly
+ * the one linkSignIn makes (the person's Vibe home's `.env`). Any OTHER link, and a changed `.env` link, stays in, as unknown.
+ */
+const vibesOwn = (listing) => withoutSignInLink(listing, join(personsVibeHome(), '.env'));
 
 /** The built environment of D17, for `home` — lib/vibe.mjs's, the product's (VibeLaunch.Built). */
 const builtEnv = (home) => builtEnvFor(home, MODEL);

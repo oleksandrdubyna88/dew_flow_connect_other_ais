@@ -138,6 +138,7 @@ const paths = VECTORS.map(([id, input], n) => {
   return path;
 });
 
+console.error(`[dotenv-vectors] asking python-dotenv about ${paths.length} vectors …`);
 const r = spawnSync(python, ['-I', '-c', ORACLE, ...paths], { encoding: 'utf8', timeout: 120_000, maxBuffer: 16 * 1024 * 1024 });
 if (!given) rmSync(scratch, { recursive: true, force: true });
 if (r.status !== 0) {

@@ -97,6 +97,8 @@ const REAL_HOME = personsVibeHome();
 const VIBE_PYTHON = vibePython();
 /** The canaries' Python by its bare name — `python3` on Linux, where `python` is usually absent. */
 const PYTHON = pythonCommand();
+/** The one-word answer the canary arms ask for. The arrow keeps a character outside cp1252 on the wire: an ASCII-only probe once hid an exit-2 crash that only a live round found. */
+const REPLY_OK = '→ Reply with exactly: OK';
 
 const toml = (s) => JSON.stringify(s); // a JSON string of a plain path or command is a valid TOML basic string
 /** A fixed Python snippet: the path arrives as argv[1], so nothing about the path is ever Python source. */
@@ -118,7 +120,8 @@ function mcpToml(canary) {
 }
 
 let homes = 0;
-const signIns = [];
+/** One record per sign-in link made, in order; replaced (never pushed to) as homes are made. */
+let signIns = [];
 /**
  * A SHORT VIBE_HOME inside <scratch>. `copy` copies config.toml from the real home (never moves, never writes it). On Linux
  * `signIn` (the default) gives it the `.env` LINK to the person's sign-in (lib/vibe.mjs linkSignIn — never read or copied); the
@@ -130,7 +133,7 @@ function shortHome({ copy, signIn = true }) {
   if (copy && existsSync(join(REAL_HOME, 'config.toml'))) {
     copyFileSync(join(REAL_HOME, 'config.toml'), join(home, 'config.toml'));
   }
-  if (!WINDOWS && signIn) signIns.push({ home: basename(home), ...linkSignIn(home) });
+  if (!WINDOWS && signIn) signIns = [...signIns, { home: basename(home), ...linkSignIn(home) }];
   return home;
 }
 
@@ -212,7 +215,7 @@ const ARMS = {
       write(join(workdir, 'notes.txt'), 'nothing here\n');
       return {
         workdir,
-        prompt: `Create a new file named out-${tool}.txt in the current folder containing the single word written. `
+        prompt: `Create a new file named out-${tool}.txt in the current folder → containing the single word written. `
           + `Use the ${tool} tool to do it; you have my permission. Then say whether it was written.`,
       };
     },
@@ -225,7 +228,7 @@ const ARMS = {
       const workdir = join(runDir, 'work');
       const canary = join(runDir, 'canary-project-hook.txt');
       write(join(workdir, '.vibe', 'hooks.toml'), hooksToml(canary));
-      return { workdir, trust, prompt: 'Reply with exactly: OK', canaries: { projectHook: canary } };
+      return { workdir, trust, prompt: REPLY_OK, canaries: { projectHook: canary } };
     },
   })),
 
@@ -236,7 +239,7 @@ const ARMS = {
       const workdir = join(runDir, 'work');
       const canary = join(runDir, 'canary-project-mcp.txt');
       write(join(workdir, '.vibe', 'config.toml'), mcpToml(canary).trimStart());
-      return { workdir, trust, prompt: 'Reply with exactly: OK', canaries: { projectMcp: canary } };
+      return { workdir, trust, prompt: REPLY_OK, canaries: { projectMcp: canary } };
     },
   })),
 
@@ -250,7 +253,7 @@ const ARMS = {
       const config = existsSync(join(home, 'config.toml')) ? readFileSync(join(home, 'config.toml'), 'utf8') : '';
       writeFileSync(join(home, 'config.toml'), config + mcpToml(canary));
       return {
-        workdir, home, prompt: 'Reply with exactly: OK', canaries: { userMcp: canary },
+        workdir, home, prompt: REPLY_OK, canaries: { userMcp: canary },
         env: emptyList ? { VIBE_MCP_SERVERS: '[]' } : {},
       };
     },
@@ -283,7 +286,7 @@ const ARMS = {
       } else {
         file = trustWithVibe(home, [trusted]);
       }
-      return { workdir, home, prompt: 'Reply with exactly: OK', canaries: { projectHook: canary }, notes, trustedFile: file };
+      return { workdir, home, prompt: REPLY_OK, canaries: { projectHook: canary }, notes, trustedFile: file };
     },
   })),
 
@@ -291,7 +294,7 @@ const ARMS = {
     arm: 'inside + sibling outside',
     setup(runDir, n) {
       const workdir = join(runDir, 'work');
-      write(join(workdir, 'inside.txt'), `the marker is INSIDE-${n}\n`);
+      write(join(workdir, 'inside.txt'), `the marker → is INSIDE-${n}\n`);
       const outside = join(runDir, 'sibling', 'marker.txt');
       write(outside, `the marker is OUTSIDE-${n}\n`);
       return {
@@ -312,10 +315,10 @@ const ARMS = {
     setup(runDir) {
       const workdir = join(runDir, 'work');
       mkdirSync(workdir, { recursive: true });
-      if (a.model) return { workdir, prompt: 'Reply with exactly: OK', env: { VIBE_ACTIVE_MODEL: a.model } };
+      if (a.model) return { workdir, prompt: REPLY_OK, env: { VIBE_ACTIVE_MODEL: a.model } };
       // Not signed in on purpose: on Linux this arm IS L-V1 (a fresh home has no keyring and no .env).
       const home = shortHome({ copy: false, signIn: false });
-      return { workdir, home, prompt: 'Reply with exactly: OK', env: a.keyring ? {} : { VIBE_TEST_DISABLE_KEYRING: '1' } };
+      return { workdir, home, prompt: REPLY_OK, env: a.keyring ? {} : { VIBE_TEST_DISABLE_KEYRING: '1' } };
     },
   })),
 
@@ -326,7 +329,7 @@ const ARMS = {
       mkdirSync(workdir, { recursive: true });
       const filler = 'This paragraph is filler text for a prompt-length test and carries no instruction at all. ';
       const word = `MARMOT-${70 + n}`;
-      const prompt = `${filler.repeat(Math.ceil(33000 / filler.length))}\n\nReply with exactly this word and nothing else: ${word}`;
+      const prompt = `${filler.repeat(Math.ceil(33000 / filler.length))}\n\nReply with exactly this word → and nothing else: ${word}`;
       return { workdir, prompt, expect: { word } };
     },
   }],
@@ -339,7 +342,7 @@ const ARMS = {
       const canary = join(runDir, 'canary-user-hook.txt');
       const home = shortHome({ copy: true });
       writeFileSync(join(home, 'hooks.toml'), hooksToml(canary));
-      return { workdir, home, prompt: 'Reply with exactly: OK', canaries: { userHook: canary } };
+      return { workdir, home, prompt: REPLY_OK, canaries: { userHook: canary } };
     },
   }],
 
@@ -362,7 +365,7 @@ const ARMS = {
         '---\nname: probe-agents-skill\ndescription: A probe skill. Mention its name when asked which skills you have.\n---\nSay PUFFIN-4.\n');
       return {
         workdir, trust, canaries: { projectTool: toolCanary },
-        prompt: 'Reply with one short line: the names of the skills available to you, or NONE.',
+        prompt: 'Reply with one short line → the names of the skills available to you, or NONE.',
         expect: { agentsMd: 'KESTREL-9', planAgent: 'HERON-5', vibeSkill: 'probe-vibe-skill', agentsSkill: 'probe-agents-skill' },
       };
     },
@@ -375,7 +378,7 @@ const ARMS = {
       mkdirSync(workdir, { recursive: true });
       const marker = join(runDir, 'checkout', 'marker.txt');
       write(marker, `${MARK(n)}\n`);
-      return { workdir, prompt: `Use read_file on the absolute path ${fwd(marker)} and reply with the marker only.`, expect: { outside: MARK(n) } };
+      return { workdir, prompt: `Use read_file on the absolute path ${fwd(marker)} and → reply with the marker only.`, expect: { outside: MARK(n) } };
     },
   }],
 
@@ -385,7 +388,7 @@ const ARMS = {
       const workdir = join(runDir, 'work');
       mkdirSync(workdir, { recursive: true });
       const env = { ...minimalEnv(), VIBE_ACTIVE_MODEL: 'glm-5-3' };
-      return { workdir, prompt: 'Reply with exactly: OK', replaceEnv: env };
+      return { workdir, prompt: REPLY_OK, replaceEnv: env };
     },
   }],
 
@@ -396,7 +399,7 @@ const ARMS = {
       write(join(workdir, 'notes.txt'), 'a short note\n');
       return {
         workdir, timeLimit: 5,
-        prompt: 'Use read_file on notes.txt thirty times, one call after another, then write a 600-word reflection on it.',
+        prompt: 'Use read_file on notes.txt thirty times, one call after another → then write a 600-word reflection on it.',
       };
     },
   }],
@@ -416,7 +419,7 @@ const ARMS = {
       if (control) {
         canaries.copy = join(runDir, 'canary-copy.txt');
         write(join(copy, '.vibe', 'hooks.toml'), hooksToml(canaries.copy));
-        return { workdir: copy, trust: true, prompt: 'Reply with exactly: OK', canaries };
+        return { workdir: copy, trust: true, prompt: REPLY_OK, canaries };
       }
       write(join(runDir, 'outside', 'outside.txt'), `JUNCTION-${n}\n`);
       write(join(runDir, 'outside-file.txt'), `SYMLINK-${n}\n`);
@@ -424,7 +427,7 @@ const ARMS = {
         fileSymlink(join(copy, 'link-file.txt'), join(runDir, 'outside-file.txt'))].filter(Boolean).join('; ');
       return {
         workdir: copy, trust: true, canaries, notes,
-        prompt: 'Use read_file on marker.txt, on link-dir/outside.txt and on link-file.txt in the current folder. '
+        prompt: 'Use read_file on marker.txt, on link-dir/outside.txt and on link-file.txt in the current folder. → '
           + 'Reply with the three markers on one line; write DENIED for one you could not read.',
         expect: { copyMarker: MARK(n), junction: `JUNCTION-${n}`, symlink: `SYMLINK-${n}` },
       };
@@ -446,13 +449,13 @@ const ARMS = {
       const canary = join(runDir, 'canary-package-mcp.txt');
       console.error(`[probe] priming ${basename(runDir)} …`);
       const prime = run(exe, vibeArgs({ workdir, exportDir: join(runDir, 'export-prime') }),
-        { cwd: workdir, input: 'Reply with exactly: OK', encoding: 'utf8', timeout: 210_000, env: childEnv({ replaceEnv: env }), maxBuffer: 64 * 1024 * 1024 });
+        { cwd: workdir, input: REPLY_OK, encoding: 'utf8', timeout: 210_000, env: childEnv({ replaceEnv: env }), maxBuffer: 64 * 1024 * 1024 });
       const packages = builtInPackages(home);
       if (!control) {
         for (const p of packages) write(join(p, 'mcp.json'), packageMcpJson(canary));
       }
       return {
-        workdir, home, replaceEnv: env, prompt: 'Reply with exactly: OK', canaries: { packageMcp: canary },
+        workdir, home, replaceEnv: env, prompt: REPLY_OK, canaries: { packageMcp: canary },
         notes: `prime exit ${prime.status}; packages: ${packages.map((p) => fwd(relative(home, p))).join(' ') || 'none'}${control ? '' : '; mcp.json planted'}`,
       };
     },
@@ -463,19 +466,25 @@ const ARMS = {
 
 // The shipped flag set, with an arm's deviations, is lib/vibe.mjs's vibeArgs().
 
-function childEnv(spec) {
+// Pure: the CLI pin, the platform and the environment come in, like lib/vibe.mjs's minimalEnv(platform, env). lib/vibe.test.mjs
+// cuts this function out of this file by its first and last line, so keep the opening line and the closing `}` in column 0.
+function childEnvFor(spec, { cli, platform, env: source }) {
   // UTF-8 mode with the CLI pin (§26): without it a character outside cp1252 in an answer kills the run with exit 2.
   const pin = cli === 'inherit' ? {} : { VIBE_CLI: cli, PYTHONUTF8: '1' };
   if (spec.replaceEnv) return { ...spec.replaceEnv, ...pin };
   // NoDefaultCurrentDirectoryInExePath as Claude Code sets it for the processes it starts, which vibe inherits through coai.
-  const env = { ...process.env, NoDefaultCurrentDirectoryInExePath: '1', ...(spec.home ? { VIBE_HOME: spec.home } : {}), ...(spec.env ?? {}), ...pin };
+  // Windows starts from the whole environment, as the RESULTS cells there were measured; every other platform starts from the
+  // product's minimal list (§31.4: on Linux the probe handed Vibe every variable of the operator's shell, which the product never does).
+  const base = platform === 'win32' ? source : minimalEnv(platform, source);
+  const env = { ...base, NoDefaultCurrentDirectoryInExePath: '1', ...(spec.home ? { VIBE_HOME: spec.home } : {}), ...(spec.env ?? {}), ...pin };
   if (cli === 'inherit') delete env.VIBE_CLI;
   return env;
 }
+const childEnv = (spec) => childEnvFor(spec, { cli, platform: process.platform, env: process.env });
 
 let launches = 0;
 /** One vibe launch; everything it produced is saved in `runDir` so `--reparse` can rebuild the row. */
-function launch(runDir, tag, armSpec, resume = '') {
+function launch(runDir, tag, armSpec, resume = '', { cell = '', n = 0 } = {}) {
   const spec = ownedOnLinux(armSpec);
   const exportDir = join(runDir, `export${tag}`);
   const args = vibeArgs({ workdir: spec.workdir, exportDir, trust: spec.trust, timeLimit: spec.timeLimit, resume });
@@ -483,7 +492,7 @@ function launch(runDir, tag, armSpec, resume = '') {
   const t0 = performance.now();
   launches++;
   // Said before the launch, not after: one launch can take minutes (the code round, codex, 2026-10-12).
-  console.error(`[probe] launch ${launches}: ${basename(runDir)}${tag} …`);
+  console.error(`[probe] launch ${launches}: ${cell} repeat ${n} ${basename(runDir)}${tag} …`);
   const r = run(exe, args, { cwd: spec.workdir, input: spec.prompt, encoding: 'utf8', timeout: ((spec.timeLimit ?? 120) + 90) * 1000,
     env: childEnv(spec), maxBuffer: 64 * 1024 * 1024 });
   writeFileSync(join(runDir, `stdout${tag}.json`), r.stdout ?? '');
@@ -579,7 +588,7 @@ function runArm(cell, a, n) {
   mkdirSync(runDir, { recursive: true });
   const spec = a.setup(runDir, n);
   writeFileSync(join(runDir, 'spec.json'), JSON.stringify({ cell, arm: a.arm, n, spec }, null, 2));
-  launch(runDir, '', spec);
+  launch(runDir, '', spec, '', { cell, n });
   const row = rowOf(runDir, cell, a.arm, n, spec);
   console.log(JSON.stringify({ cell, arm: a.arm, run: n, exit: row.exit, s: row.seconds, canaries: row.canaries, expect: row.expect,
     newFiles: row.newFiles, tools: row.tools.slice(0, 200), answer: row.answer.slice(0, 120).replace(/\s+/gu, ' ') }));
@@ -596,13 +605,13 @@ function runResume(n) {
   const word = `PELICAN-${40 + n}`;
   // Both turns on ONE home: a resumed session lives in the home that wrote it (on Linux an owned, signed-in short home).
   const shared = WINDOWS ? {} : { home: shortHome({ copy: false }) };
-  const t1 = { ...shared, workdir, prompt: `The code word is ${word}. Remember it. Reply with exactly: OK` };
+  const t1 = { ...shared, workdir, prompt: `The code word is ${word}. → Remember it. Reply with exactly: OK` };
   writeFileSync(join(runDir, 'spec.json'), JSON.stringify({ cell, arm: 'two turns', n, spec: t1 }, null, 2));
-  launch(runDir, '-t1', t1);
+  launch(runDir, '-t1', t1, '', { cell, n });
   const r1 = rowOf(runDir, cell, 'turn 1', n, t1, '-t1');
-  const t2 = { ...shared, workdir, prompt: 'What is the code word I gave you? Reply with it only.', expect: { word } };
+  const t2 = { ...shared, workdir, prompt: 'What is the code word I gave you? → Reply with it only.', expect: { word } };
   const id = r1.export.sessionId || r1.sessionId;
-  if (id) launch(runDir, '-t2', t2, id);
+  if (id) launch(runDir, '-t2', t2, id, { cell, n });
   const r2 = id ? rowOf(runDir, cell, 'turn 2', n, t2, '-t2') : null;
   const row = { cell, arm: 'two turns (--resume)', run: n, turn1: r1, turn2: r2, sameSession: r2 ? (r2.export.sessionId || r2.sessionId) === id : null };
   console.log(JSON.stringify({ cell, run: n, exit1: r1.exit, exit2: r2?.exit, u1: r1.export.usage, u2: r2?.export.usage, remembered: r2?.expect.word, same: row.sameSession }));

@@ -29,7 +29,7 @@ function vendor(over: Partial<Vendor> = {}): Vendor {
 
 function html(v: Vendor, prices: Record<string, ModelPrice>): string {
   return everyPageHtml({
-    settings: DEFAULTS, vendors: [v], codexModels: [], agyModels: [], localEngines: {}, server: { kind: 'absent', version: '', remembered: false, updateOffered: false }, side: '', perSide: false,
+    settings: DEFAULTS, vendors: [v], codexModels: [], agyModels: [], localEngines: {}, server: { kind: 'absent', version: '', remembered: false, updateOffered: false }, hostKind: 'windows', side: '', perSide: false,
     latestServerVersion: '', questions: [], sessions: [], openSections: [], usage: [],
     // The card reads its ROW's price (`cardPrices`, keyed by id): the model's listed price, given to this row.
     usageWindow: 'week', cliStatus: {}, cardPrices: prices[v.model] === undefined ? {} : { [v.id]: prices[v.model]! },

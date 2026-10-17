@@ -136,6 +136,26 @@ public sealed class TheLogNamesEachRoundsSizeTests : IDisposable
     }
 
     [Fact]
+    public void ARoundList_InAnotherOrder_OrFiltered_StillGetsEachSizeOnItsOwnRound()
+    {
+        Record([.. Enumerable.Range(1, 6).Select(n => (Round(n, SizeWithAdded(n)), "origin/main"))]);
+        var page = RoundsQuery.Read(_dir).Rounds.Select(r => r with { Size = null }).ToList();
+        var shuffled = page.Where(r => r.Number != 3).OrderBy(r => r.Number % 2).ThenBy(r => r.Number).ToList();
+
+        using var db = new SqliteConnection($"Data Source={Database};Pooling=False;Mode=ReadOnly");
+        db.Open();
+        var attached = RoundChangesLog.Attach(db, shuffled);
+
+        attached.Select(r => r.Number).Should().Equal(shuffled.Select(r => r.Number), "attaching changes no round and no order");
+        foreach (var round in attached)
+        {
+            round.Size.Should().NotBeNull();
+            round.Size!.Whole.Cells.Should().ContainSingle().Which.Added.Should().Be(round.Number,
+                "each size is found by the round's own id — a list in another order, or one round short, is not paired by position");
+        }
+    }
+
+    [Fact]
     public void AStepTwentyOneFile_IsLoggedAsBefore()
     {
         var steps = Schema.Steps[..Array.FindIndex(Schema.Steps, step => step.Contains("round_changes", StringComparison.Ordinal))];
