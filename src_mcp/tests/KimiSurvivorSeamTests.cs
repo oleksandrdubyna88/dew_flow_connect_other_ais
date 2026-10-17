@@ -120,6 +120,35 @@ public sealed class KimiSurvivorSeamTests : IDisposable
     }
 
     [Fact]
+    public void AHome_IsKept_WhenAMarkerUnderTheRootCannotBeRead_WhateverHomeItNames()
+    {
+        Directory.CreateDirectory(Locks);
+        File.WriteAllText(MarkerPath, "{ this is not json");
+
+        var kept = Over(Machine()).KeepsHome("/owned/kh-1");
+
+        kept.Should().Contain("/owned/kh-1").And.Contain("cannot tell").And.Contain("kept", "a marker coai cannot read may name any home; the gate's refusal of that sign-in does not protect the home from a cleanup");
+    }
+
+    [Fact]
+    public void AHome_IsKept_WhenAnOversizedMarkerSitsUnderTheRoot()
+    {
+        Directory.CreateDirectory(Locks);
+        File.WriteAllText(MarkerPath, new string('x', 70 * 1024));
+
+        Over(Machine()).KeepsHome("/owned/kh-1").Should().Contain("cannot tell");
+    }
+
+    [Fact]
+    public void AHome_IsNotKept_WhenTheLockRootIsAbsent_OrHoldsOnlyReadableMarkersOfOtherHomes()
+    {
+        Over(Machine()).KeepsHome("/owned/kh-1").Should().BeEmpty("no lock root: no marker can exist");
+        KimiSurvivorMarker.Write(MarkerPath, NamingAGoneAgent("/owned/kh-2"));
+
+        Over(Machine()).KeepsHome("/owned/kh-1").Should().BeEmpty();
+    }
+
+    [Fact]
     public void ANamelessMarker_KeepsItsHome_AndSaysThatNoPidIsNamed()
     {
         KimiSurvivorMarker.Write(MarkerPath, Spawning("/owned/kh-1"));

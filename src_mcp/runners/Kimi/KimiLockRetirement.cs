@@ -104,10 +104,11 @@ public static partial class KimiLockRetirement
     }
 
     /// <summary>The record the gate holds, read from the start of the held stream — none (empty) when there is nothing a record can be read from.</summary>
-    private static IReadOnlyList<KimiLockRecord> RecordIn(FileStream stream)
+    private static IReadOnlyList<KimiLockRecord> RecordIn(FileStream stream) =>
+        BoundedFile.ReadStream(stream) is BoundedRead.Text text ? Parsed(text.Value) : [];
+
+    private static IReadOnlyList<KimiLockRecord> Parsed(string text)
     {
-        stream.Position = 0;
-        var text = new StreamReader(stream, leaveOpen: true).ReadToEnd();
         try
         {
             return JsonSerializer.Deserialize(text, KimiLockJsonContext.Default.KimiLockRecord) is { Identity.Length: > 0, Folder.Length: > 0 } record ? [record] : [];

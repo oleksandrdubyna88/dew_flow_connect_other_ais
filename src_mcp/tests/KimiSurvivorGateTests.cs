@@ -1,3 +1,4 @@
+using CoaiMcp.Runners.Files;
 using CoaiMcp.Runners.Kimi;
 using CoaiMcp.Runners.Processes;
 using FluentAssertions;
@@ -127,6 +128,76 @@ public sealed class KimiSurvivorGateTests : IDisposable
     [Fact]
     public void AMarkerWithNoPath_IsUnreadable_NeverAThrow() =>
         KimiSurvivorMarker.Read(string.Empty).Should().BeOfType<MarkerRead.Unreadable>("an empty path (the folder could not be keyed) was read as a file name").Which.Reason.Should().Contain("no path");
+
+    // ---------- a marker is read without trusting its path (the coai code gate, E5) ----------
+
+    [Fact]
+    public void AnOversizedMarker_IsUnreadable_NeverParsed_NeverBuffered()
+    {
+        Directory.CreateDirectory(_dir.Path);
+        var padded = "{\"marker\":{\"phase\":\"running\",\"ownerPid\":1,\"tree\":[]},\"ownedRoot\":\"/o\",\"signInFolder\":\"" + new string('x', 70 * 1024) + "\"}";
+        File.WriteAllText(MarkerPath, padded);
+
+        var read = KimiSurvivorMarker.Read(MarkerPath);
+
+        read.Should().BeOfType<MarkerRead.Unreadable>("a 70 KiB marker was read whole: a file grown for a denial of service is not a marker").Which.Reason.Should().Contain("larger than 65536 bytes");
+    }
+
+    [Fact]
+    public void AMarkerThatIsALink_IsUnreadable_NeverFollowed()
+    {
+        var elsewhere = _dir.At("elsewhere.json");
+        KimiSurvivorMarker.Write(elsewhere, Running(Member(424243)));
+        try
+        {
+            File.CreateSymbolicLink(MarkerPath, elsewhere);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Assert.Skip($"this account cannot make a symbolic link here ({e.GetType().Name})");
+        }
+
+        var read = KimiSurvivorMarker.Read(MarkerPath);
+
+        read.Should().BeOfType<MarkerRead.Unreadable>("a symlinked marker was followed to a file the person never put there").Which.Reason.Should().Contain("link").And.NotContain("elsewhere", "the reason never carries a resolved path");
+    }
+
+    [Fact]
+    public void AnUnreadableMarkersReason_NamesTheFailure_NeverAPath()
+    {
+        Directory.CreateDirectory(MarkerPath);
+
+        var read = KimiSurvivorMarker.Read(MarkerPath);
+
+        read.Should().BeOfType<MarkerRead.Unreadable>().Which.Reason.Should().NotContain(_dir.Path, "an exception's own message carries the path it was given").And.Contain("code 0x");
+    }
+
+    [Fact]
+    public void AMarkerOfExactlyTheCeiling_IsStillRead()
+    {
+        var read = BoundedFile.ReadRegular(WriteBytes(BoundedFile.MaxBytes));
+
+        read.Should().BeOfType<BoundedRead.Text>().Which.Value.Length.Should().Be(BoundedFile.MaxBytes);
+        BoundedFile.ReadRegular(WriteBytes(BoundedFile.MaxBytes + 1)).Should().BeOfType<BoundedRead.Refused>();
+    }
+
+    private string WriteBytes(int count)
+    {
+        var path = _dir.At($"bytes-{count}.json");
+        File.WriteAllText(path, new string('a', count));
+
+        return path;
+    }
+
+    [Fact]
+    public void AHeldStreamOverTheCeiling_IsRefused_AndOneUnderIsRead()
+    {
+        using var big = new FileStream(WriteBytes(BoundedFile.MaxBytes + 10), FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        using var small = new FileStream(WriteBytes(10), FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+
+        BoundedFile.ReadStream(big).Should().BeOfType<BoundedRead.Refused>();
+        BoundedFile.ReadStream(small).Should().BeOfType<BoundedRead.Text>().Which.Value.Should().Be("aaaaaaaaaa");
+    }
 
     // ---------- the marker's OWNER is asked first: a live turn's marker is never an orphan's ----------
 
@@ -264,14 +335,23 @@ public sealed class KimiSurvivorGateTests : IDisposable
     {
         KimiSurvivorMarker.Write(MarkerPath, Running(Member(424243)));
         KimiSurvivorMarker.Write(_dir.At("fedcba9876543210.survivors.json"), Running(Member(1)) with { OwnedRoot = "/some/other/root" });
-        File.WriteAllText(_dir.At("aaaaaaaaaaaaaaaa.survivors.json"), "not json");
 
-        var standing = KimiSurvivorMarker.StandingFor(_dir, "/owned/kimi-root/");
+        var standing = KimiSurvivorMarker.StandingFor(_dir, "/owned/kimi-root/").Should().BeOfType<StandingMarkers.Found>().Subject.Markers;
 
         standing.Should().ContainSingle().Which.Path.Should().Be(MarkerPath);
         standing[0].Marker.Marker.Tree.Single().Pid.Should().Be(424243);
-        KimiSurvivorMarker.StandingFor(_dir, "/owned/kimi").Should().BeEmpty("a prefix of the root is not the root");
-        KimiSurvivorMarker.StandingFor(_dir.At("no-such-folder"), "/owned/kimi-root").Should().BeEmpty();
+        KimiSurvivorMarker.StandingFor(_dir, "/owned/kimi").Should().BeOfType<StandingMarkers.Found>().Which.Markers.Should().BeEmpty("a prefix of the root is not the root");
+        KimiSurvivorMarker.StandingFor(_dir.At("no-such-folder"), "/owned/kimi-root").Should().BeOfType<StandingMarkers.Found>().Which.Markers.Should().BeEmpty("no lock root: no marker can exist");
+    }
+
+    [Fact]
+    public void AnUnreadableMarkerUnderTheRoot_MakesTheAnswerUnverifiable_NeverNone()
+    {
+        KimiSurvivorMarker.Write(MarkerPath, Running(Member(424243)));
+        File.WriteAllText(_dir.At("aaaaaaaaaaaaaaaa.survivors.json"), "not json");
+
+        KimiSurvivorMarker.StandingFor(_dir, "/owned/kimi").Should().BeOfType<StandingMarkers.Unverifiable>("a marker that cannot be read may name any home: nothing can be said").Which.Reason.Should().Contain("aaaaaaaaaaaaaaaa.survivors.json");
+        KimiSurvivorMarker.StandingFor(_dir, "/owned/kimi-root").Should().BeOfType<StandingMarkers.Found>("a marker that DOES name the home keeps it, whatever else is unreadable");
     }
 
     [Fact]
