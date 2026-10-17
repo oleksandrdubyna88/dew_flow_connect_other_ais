@@ -1,3 +1,5 @@
+using System.Runtime.Versioning;
+
 namespace CoaiMcp.Runners.Files;
 
 /// <summary>
@@ -16,11 +18,15 @@ public static class MountLocality
 
     private const string Plan = "DL6 of todo/PLAN_kimi_and_vibe_on_linux.md";
 
-    /// <summary>Empty when the real path lies on a non-Windows filesystem; else the sentence. <paramref name="mountInfo"/> reads the table (a test hands a string).</summary>
-    public static string Refusal(string target, string realPath, Func<string> mountInfo) =>
+    /// <summary>Empty when the real path lies on a non-Windows filesystem; else the sentence. <paramref name="mountInfo"/> reads the table (a test hands a string). The mount is found by the KERNEL's
+    /// own answer for the path (<see cref="Identify"/>), so a mount laid over another cannot hide the one that really holds it.</summary>
+    public static string Refusal(string target, string realPath, Func<string> mountInfo) => Refusal(target, realPath, mountInfo, Identify);
+
+    /// <summary><see cref="Refusal(string, string, Func{string})"/> with the kernel's answer handed in — the seam: a test hands a <see cref="MountIdentity"/>, the product hands <see cref="Identify"/>.</summary>
+    public static string Refusal(string target, string realPath, Func<string> mountInfo, Func<string, MountIdentity> identify) =>
         Table(mountInfo) switch
         {
-            ({ } text, _) => Judged(target, realPath, MountTable.Parse(text)),
+            ({ } text, _) => Judged(target, realPath, MountTable.Find(MountTable.Parse(text), realPath, identify(realPath))),
             (_, var reason) => $"{target}: coai could not read {MountInfoPath} ({reason}), so it cannot tell which filesystem holds the Kimi sign-in — refused ({Plan})",
         };
 
@@ -37,11 +43,36 @@ public static class MountLocality
         }
     }
 
-    private static string Judged(string target, string realPath, IReadOnlyList<MountEntry> mounts) =>
-        MountTable.Holding(mounts, realPath) switch
+    /// <summary>What the kernel says about the mount that holds <paramref name="realPath"/>: <c>statx</c> with <c>STATX_MNT_ID</c> (Linux 5.8 and later); without that bit, the device alone; off Linux, nothing asked.
+    /// A call that fails is not "local" — it is <see cref="MountIdentity.Unreadable"/>, which refuses.</summary>
+    public static MountIdentity Identify(string realPath) => OperatingSystem.IsLinux() ? Statx(realPath) : new MountIdentity.NotAsked();
+
+    [SupportedOSPlatform("linux")]
+    private static MountIdentity Statx(string realPath) =>
+        LinuxStatx.OfPath(realPath, 0, LinuxStatx.StatxType | LinuxStatx.StatxIno | LinuxStatx.StatxMntId) switch
         {
-            null => $"{target}: no mount in {MountInfoPath} holds {realPath}, so coai cannot tell which filesystem the Kimi sign-in is on — refused ({Plan})",
-            { IsDrvfs: true } entry => Windows(target, entry),
+            StatxRead.Read { Status: var status } => new MountIdentity.Mounted(status.MountId, status.DeviceMajor, status.DeviceMinor),
+            StatxRead.Failed { Errno: 0 } => DeviceOnly(realPath),
+            StatxRead.Failed failed => new MountIdentity.Unreadable($"statx answered errno {failed.Errno}"),
+            _ => new MountIdentity.Unreadable("statx answered nothing"),
+        };
+
+    /// <summary>The kernel answered without a field it was asked for — a kernel before 5.8 has no mount id — so ask again for the device alone.</summary>
+    [SupportedOSPlatform("linux")]
+    private static MountIdentity DeviceOnly(string realPath) =>
+        LinuxStatx.OfPath(realPath, 0, LinuxStatx.StatxType | LinuxStatx.StatxIno) switch
+        {
+            StatxRead.Read { Status: var status } => new MountIdentity.Device(status.DeviceMajor, status.DeviceMinor),
+            StatxRead.Failed failed => new MountIdentity.Unreadable($"statx answered errno {failed.Errno}"),
+            _ => new MountIdentity.Unreadable("statx answered nothing"),
+        };
+
+    private static string Judged(string target, string realPath, MountHolder holder) =>
+        holder switch
+        {
+            MountHolder.NoMount => $"{target}: no mount in {MountInfoPath} holds {realPath}, so coai cannot tell which filesystem the Kimi sign-in is on — refused ({Plan})",
+            MountHolder.Unproven unproven => $"{target}: coai cannot prove which mount holds {realPath} ({unproven.Why}), so it cannot tell which filesystem the Kimi sign-in is on — refused ({Plan})",
+            MountHolder.Found { Entry.IsDrvfs: true } found => Windows(target, found.Entry),
             _ => string.Empty,
         };
 

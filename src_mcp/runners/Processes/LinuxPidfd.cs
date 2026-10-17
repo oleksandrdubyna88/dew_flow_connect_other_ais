@@ -149,7 +149,7 @@ public abstract record PidfdSupport
     /// <summary>No libc wrappers: <c>syscall(434)</c> and <c>syscall(424)</c> — every kernel from 5.3.</summary>
     public sealed record Raw(IPidfdCalls Calls) : PidfdSupport;
 
-    /// <summary>The kernel has no pidfd (the call answered <c>ENOSYS</c>): the launch is refused with this reason before anything starts.</summary>
+    /// <summary>The probe did not prove the road — the kernel has no pidfd (<c>ENOSYS</c>), or a filter refuses the call (<c>EPERM</c>), or it answers any other errno: the launch is refused with this reason before anything starts.</summary>
     public sealed record Missing(string Reason) : PidfdSupport;
 }
 
@@ -178,7 +178,7 @@ public static class PidfdLayer
         _ => NoPidfdCalls.Instance,
     };
 
-    /// <summary>Empty when Kimi may be launched on this kernel; else <see cref="NoPidfdSentence"/>. Off Linux: empty — pidfd is a Linux question.</summary>
+    /// <summary>Empty when Kimi may be launched on this host; else the refusal — <see cref="NoPidfdSentence"/> for ENOSYS, <see cref="RefusalFor"/> for any other errno of the probe. Off Linux: empty — pidfd is a Linux question.</summary>
     public static string Refusal() =>
         Overridden.Value is null && !OperatingSystem.IsLinux() ? string.Empty : Current is PidfdSupport.Missing missing ? missing.Reason : string.Empty;
 
@@ -208,21 +208,48 @@ public static class PidfdLayer
     }
 
     /// <summary>Whether libc exports BOTH wrappers — looked up by name, which works under Native AOT; the imports themselves stay "libc".</summary>
+    /// <remarks>"libc.so.6" here (the file name <c>NativeLibrary.TryLoad</c> needs) and <c>"libc"</c> in every <c>LibraryImport</c> are the same library on glibc: the runtime resolves the short name to <c>libc.so.6</c>.</remarks>
     [SupportedOSPlatform("linux")]
-    private static bool WrapperPresent() =>
+    internal static bool WrapperPresent() =>
         NativeLibrary.TryLoad("libc.so.6", out var libc) && NativeLibrary.TryGetExport(libc, "pidfd_open", out _) && NativeLibrary.TryGetExport(libc, "pidfd_send_signal", out _);
 
-    /// <summary>The road on <paramref name="calls"/>, unless the kernel answers <c>ENOSYS</c> to pinning this very process; any other answer (a descriptor, closed at once, or another errno) keeps it.</summary>
+    /// <summary>
+    /// The road on <paramref name="calls"/>, only when the probe PROVES it: a descriptor for this very process AND <c>signal 0</c> sent through it answered 0. Anything else — <c>ENOSYS</c> (no pidfd),
+    /// <c>EPERM</c> from a seccomp filter on either call, any other errno — is <see cref="PidfdSupport.Missing"/> with the errno named: a road that cannot open or signal fails every kill after Kimi was launched.
+    /// </summary>
     private static PidfdSupport Probed(bool wrapperPresent, IPidfdCalls calls)
     {
         var fd = calls.Open(Environment.ProcessId);
-        if (fd >= 0)
+        if (fd < 0)
+        {
+            return new PidfdSupport.Missing(-fd == NoSystemCall ? NoPidfdSentence : RefusalFor("pidfd_open", -fd));
+        }
+
+        try
+        {
+            return calls.Signal(fd, 0) is var errno and not 0
+                ? new PidfdSupport.Missing(RefusalFor("pidfd_send_signal", errno))
+                : wrapperPresent ? new PidfdSupport.Wrapper(calls) : new PidfdSupport.Raw(calls);
+        }
+        finally
         {
             calls.Close(fd);
         }
-
-        return -fd == NoSystemCall ? new PidfdSupport.Missing(NoPidfdSentence) : wrapperPresent ? new PidfdSupport.Wrapper(calls) : new PidfdSupport.Raw(calls);
     }
+
+    /// <summary>The refusal for a probe that did not prove the road (DL9, widened 2026-10-16 by the E5 judge: only ENOSYS used to refuse, so a sandbox that answers EPERM kept the road open and every kill failed).</summary>
+    public static string RefusalFor(string call, int errno) =>
+        $"this host does not let coai use pidfd (`{call}` answered {ErrnoName(errno)} on coai's own process), so coai cannot end Kimi's process tree by identity and does not launch it";
+
+    private static string ErrnoName(int errno) => errno switch
+    {
+        1 => "errno 1 (EPERM)",
+        3 => "errno 3 (ESRCH)",
+        13 => "errno 13 (EACCES)",
+        22 => "errno 22 (EINVAL)",
+        NoSystemCall => "errno 38 (ENOSYS)",
+        _ => $"errno {errno}",
+    };
 
     private sealed class Restore(Action undo) : IDisposable
     {

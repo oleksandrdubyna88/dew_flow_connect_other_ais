@@ -17,14 +17,14 @@ public abstract record StatxRead
     /// <summary>The kernel answered, and filled in every field the request asked for that this reader trusts.</summary>
     public sealed record Read(FileStatus Status) : StatxRead;
 
-    /// <summary>The call failed with this <c>errno</c> (<see cref="LinuxStatx.NoEntry"/>: the path names nothing), or answered without a field it was asked for (errno 0).</summary>
+    /// <summary>The call failed with this <c>errno</c> (<see cref="LinuxStatx.NoEntry"/>: the path names nothing), or answered without a trusted field it was asked for — type, owner, inode or mount id (errno 0).</summary>
     public sealed record Failed(int Errno) : StatxRead;
 }
 
 /// <summary>
 /// The ONE <c>statx</c> import and decoder for the runners. <c>struct statx</c> has one layout on every Linux architecture (unlike <c>struct stat</c>), so
 /// the same offsets read it on x86-64 and arm64. The constants are the same on both: <c>AT_FDCWD</c> -100, <c>AT_EMPTY_PATH</c> 0x1000,
-/// <c>AT_SYMLINK_NOFOLLOW</c> 0x100, <c>STATX_TYPE</c> 1, <c>STATX_MODE</c> 2, <c>STATX_UID</c> 8, <c>STATX_INO</c> 0x100, <c>STATX_BASIC_STATS</c> 0x7ff, <c>ENOENT</c> 2.
+/// <c>AT_SYMLINK_NOFOLLOW</c> 0x100, <c>STATX_TYPE</c> 1, <c>STATX_MODE</c> 2, <c>STATX_UID</c> 8, <c>STATX_INO</c> 0x100, <c>STATX_BASIC_STATS</c> 0x7ff, <c>STATX_MNT_ID</c> 0x1000, <c>ENOENT</c> 2.
 /// </summary>
 [SupportedOSPlatform("linux")]
 internal static partial class LinuxStatx
@@ -37,6 +37,9 @@ internal static partial class LinuxStatx
     public const uint StatxUid = 8;
     public const uint StatxIno = 0x100;
     public const uint StatxBasic = 0x7FF;
+
+    /// <summary><c>STATX_MNT_ID</c> (Linux 5.8 and later): the id of the mount the path lies on — the first field of that mount's <c>/proc/self/mountinfo</c> line.</summary>
+    public const uint StatxMntId = 0x1000;
     public const int StatxSize = 256;
 
     /// <summary><c>ENOENT</c>.</summary>
@@ -48,6 +51,7 @@ internal static partial class LinuxStatx
     private const int InodeOffset = 32;
     private const int DeviceMajorOffset = 136;
     private const int DeviceMinorOffset = 140;
+    private const int MountIdOffset = 144;
     private const int TypeMask = 0xF000;
 
     /// <summary><c>statx</c> of a PATH (a final link followed unless <paramref name="flags"/> say otherwise): the status, or the errno.</summary>
@@ -81,9 +85,15 @@ internal static partial class LinuxStatx
         }
     }
 
-    /// <summary>The answer, unless the kernel did not fill the inode it was asked for (the first u32 of the struct is the mask of what it filled): an inode of zero is not an identity.</summary>
+    /// <summary>The fields this reader decodes and trusts only when the kernel says it filled them: a field that was not filled reads as zero, and a zero inode, owner or mount id is not an identity.</summary>
+    private const uint Trusted = StatxType | StatxUid | StatxIno | StatxMntId;
+
+    /// <summary>The answer, unless the kernel did not fill ANY trusted field it was asked for (the first u32 of the struct is the mask of what it filled): a missing type, owner, inode or mount id is
+    /// a failure (errno 0), never a zero that reads as a value.</summary>
     internal static StatxRead Answered(byte[] statx, uint asked) =>
-        (asked & StatxIno) != 0 && (BitConverter.ToUInt32(statx, MaskOffset) & StatxIno) == 0 ? new StatxRead.Failed(0) : new StatxRead.Read(Status(statx));
+        (asked & Trusted & ~BitConverter.ToUInt32(statx, MaskOffset)) != 0
+            ? new StatxRead.Failed(0)
+            : new StatxRead.Read(Status(statx) with { MountId = (asked & StatxMntId) != 0 ? BitConverter.ToUInt64(statx, MountIdOffset) : 0 });
 
     /// <summary><c>stx_mode</c> (u16 at 28: type and permission bits), <c>stx_uid</c> (u32 at 20), <c>stx_ino</c> (u64 at 32), <c>stx_dev_major</c> / <c>stx_dev_minor</c> (u32 at 136 / 140),
     /// in the machine's own byte order, as the kernel wrote them.</summary>

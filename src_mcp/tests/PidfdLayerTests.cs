@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using CoaiMcp.Runners.Processes;
 using FluentAssertions;
@@ -72,7 +73,7 @@ public sealed class PidfdLayerTests
             PidfdLayer.Refusal().Should().BeEmpty();
         }
 
-        calls.Log.Should().Equal($"open:{Environment.ProcessId}", $"close:{Environment.ProcessId}");
+        calls.Log.Should().Equal($"open:{Environment.ProcessId}", $"signal:{Environment.ProcessId}:0", $"close:{Environment.ProcessId}");
     }
 
     [Fact]
@@ -104,12 +105,61 @@ public sealed class PidfdLayerTests
         PidfdLayer.NoPidfdSentence.Should().Contain("`pidfd_open` answered ENOSYS").And.Contain("Linux 5.3 or later").And.Contain("does not launch it");
     }
 
-    [Fact]
-    public void AnyOtherAnswerOfTheProbe_KeepsTheRoad()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void TheProbeProvesTheRoad_ADescriptorOfItsOwnProcess_AndSignalZeroThroughIt(bool wrapper)
     {
-        using (PidfdLayer.Using(wrapperPresent: true, new FakeCalls { OpenAnswer = Eperm }))
+        var calls = new FakeCalls();
+
+        using (PidfdLayer.Using(wrapper, calls))
         {
-            PidfdLayer.Current.Should().BeOfType<PidfdSupport.Wrapper>("only ENOSYS says the kernel has no pidfd; a filtered call fails per member, with its errno");
+            PidfdLayer.Current.Should().BeOfType(wrapper ? typeof(PidfdSupport.Wrapper) : typeof(PidfdSupport.Raw));
+            PidfdLayer.Refusal().Should().BeEmpty();
+        }
+
+        calls.Log.Should().Equal($"open:{Environment.ProcessId}", $"signal:{Environment.ProcessId}:0", $"close:{Environment.ProcessId}");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AFilterThatRefusesThePidfdOpen_ClosesTheRoad_NamingTheErrno(bool wrapper)
+    {
+        var calls = new FakeCalls { OpenAnswer = Eperm };
+
+        using (PidfdLayer.Using(wrapper, calls))
+        {
+            PidfdLayer.Current.Should().BeOfType<PidfdSupport.Missing>("a seccomp EPERM kept the road open, and then every kill failed after Kimi was launched anyway");
+            PidfdLayer.Refusal().Should().Contain("`pidfd_open` answered errno 1 (EPERM)").And.Contain("does not launch it");
+            PidfdLayer.Refusal().Should().NotBe(PidfdLayer.NoPidfdSentence, "ENOSYS has its own sentence; this one names the errno it really got");
+        }
+
+        calls.Log.Should().NotContain(call => call.StartsWith("signal:", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AFilterThatRefusesTheSignal_ClosesTheRoad_NamingTheErrno_AndTheDescriptorIsClosed(bool wrapper)
+    {
+        var calls = new FakeCalls { SignalAnswer = Eperm };
+
+        using (PidfdLayer.Using(wrapper, calls))
+        {
+            PidfdLayer.Current.Should().BeOfType<PidfdSupport.Missing>("a descriptor that cannot be signalled is not a road");
+            PidfdLayer.Refusal().Should().Contain("`pidfd_send_signal` answered errno 1 (EPERM)").And.Contain("does not launch it");
+        }
+
+        calls.Log.Should().Equal($"open:{Environment.ProcessId}", $"signal:{Environment.ProcessId}:0", $"close:{Environment.ProcessId}");
+    }
+
+    [Fact]
+    public void AnUnnamedErrno_IsStillNamedByItsNumber()
+    {
+        using (PidfdLayer.Using(wrapperPresent: true, new FakeCalls { OpenAnswer = 99 }))
+        {
+            PidfdLayer.Refusal().Should().Contain("`pidfd_open` answered errno 99");
         }
     }
 
@@ -223,6 +273,48 @@ public sealed class PidfdLayerTests
         calls.Log.Where(call => call.StartsWith("close:", StringComparison.Ordinal)).Should().Equal("close:30", "close:20");
     }
 
+    // ---------- by EXACT start ticks: one read of the stat line, no slack ----------
+
+    private static IReadOnlyList<Signalled> KillByTicks(FakeCalls calls, FakeProcReads proc, ulong recorded) =>
+        TreeSignals.Kill([new PinnedMember(Member(10), recorded)], calls, pinned => LivenessCheck.Linux(pinned.Identity, pinned.StartTicks, proc));
+
+    [Fact]
+    public void AMemberWhoseStartTicksMatch_IsSignalled_AndOneTickApart_IsAStrangerLeftAlone()
+    {
+        var proc = new FakeProcReads().With(10, "S");
+        var same = new FakeCalls();
+        var other = new FakeCalls();
+
+        KillByTicks(same, proc, 4000).Should().Equal(new Signalled.Sent(Member(10)));
+        var answers = KillByTicks(other, proc, 4001);
+
+        answers.Should().ContainSingle().Which.Should().BeOfType<Signalled.Gone>().Which.Why.Should().Contain("the pid is reused");
+        other.Log.Should().NotContain(call => call.StartsWith("signal:", StringComparison.Ordinal), "a pid whose start ticks differ by ONE is another process: the 1 s identity slack is not the rule here");
+    }
+
+    [Fact]
+    public void APinnedMember_IsPinnedFirst_ThenChecked_ThenSignalled()
+    {
+        var calls = new FakeCalls();
+
+        TreeSignals.Kill([new PinnedMember(Member(10), 4000)], calls, pinned =>
+        {
+            calls.Log.Add($"check:{pinned.Identity.Pid}:{pinned.StartTicks}");
+
+            return new Liveness.Alive();
+        }).Should().Equal(new Signalled.Sent(Member(10)));
+        calls.Log.Should().Equal("open:10", "check:10:4000", $"signal:10:{SigKill}", "close:10");
+    }
+
+    [Fact]
+    public void ThePinnedMemberOfAProcess_CarriesTheTicksOfItsOwnStatLine()
+    {
+        var proc = new FakeProcReads().With(10, "S");
+
+        PinnedMember.Of(Member(10), proc).StartTicks.Should().Be(4000);
+        PinnedMember.Of(Member(11), proc).StartTicks.Should().Be(0, "an unreadable stat records no ticks: the identity's start time decides");
+    }
+
     // ---------- the real kernel (Linux CI) ----------
 
     private static Process Sleeper()
@@ -261,9 +353,11 @@ public sealed class PidfdLayerTests
         var process = Sleeper();
         try
         {
-            var answers = TreeSignals.Kill([IdentityOf(process)], calls);
+            var identity = IdentityOf(process);
 
-            answers.Should().Equal(new Signalled.Sent(IdentityOf(process)));
+            var answers = TreeSignals.Kill([identity], calls);
+
+            answers.Should().Equal(new Signalled.Sent(identity));
             await process.WaitForExitAsync(TestContext.Current.CancellationToken);
             process.ExitCode.Should().Be(128 + SigKill, "it was ended by SIGKILL, through the descriptor");
         }
@@ -285,10 +379,72 @@ public sealed class PidfdLayerTests
         calls.Open(int.MaxValue).Should().Be(-Esrch, "no process has that number: -ESRCH, never a descriptor");
 
         var fd = calls.Open(Environment.ProcessId);
-        fd.Should().BeGreaterThanOrEqualTo(0, "pinning this process works on any kernel from 5.3 (errno " + -fd + ")");
-        calls.Signal(fd, 0).Should().Be(0, "signal 0 only asks whether the pinned process can be signalled");
-        calls.Poll([fd], new bool[1], 0).Should().Be(0, "this process has not ended");
-        calls.Close(fd);
+        try
+        {
+            fd.Should().BeGreaterThanOrEqualTo(0, "pinning this process works on any kernel from 5.3 (errno " + -fd + ")");
+            calls.Signal(fd, 0).Should().Be(0, "signal 0 only asks whether the pinned process can be signalled");
+            calls.Poll([fd], new bool[1], 0).Should().Be(0, "this process has not ended");
+        }
+        finally
+        {
+            if (fd >= 0)
+            {
+                calls.Close(fd);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The wrapper road is chosen by whether libc exports BOTH wrappers; glibc added them in 2.36. The probe is by name (works under Native AOT), so it is compared here with what libc says its version is.
+    /// "libc.so.6" in the probe and "libc" in the imports are the same library on glibc.
+    /// </summary>
+    [Fact]
+    public void TheWrapperProbe_AgreesWithGlibcsVersion_TwoThirtySixOrLater()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "glibc is a Linux library");
+        var version = GlibcVersion();
+        Assert.SkipWhen(version.Length == 0, "this libc is not glibc (musl has no gnu_get_libc_version): the wrappers cannot be compared with a version");
+
+        PidfdLayer.WrapperPresent().Should().Be(Version.Parse(version) >= new Version(2, 36), $"glibc {version}: pidfd_open and pidfd_send_signal came in 2.36");
+    }
+
+    private static string GlibcVersion()
+    {
+        if (!NativeLibrary.TryLoad("libc.so.6", out var libc) || !NativeLibrary.TryGetExport(libc, "gnu_get_libc_version", out var export))
+        {
+            return string.Empty;
+        }
+
+        return Marshal.PtrToStringUTF8(Marshal.GetDelegateForFunctionPointer<GnuGetLibcVersion>(export)()) ?? string.Empty;
+    }
+
+    /// <summary><c>const char *gnu_get_libc_version(void)</c>, called through its exported address: the test project does not allow the unsafe code a <c>LibraryImport</c> needs.</summary>
+    private delegate nint GnuGetLibcVersion();
+
+    [Fact]
+    public async Task ARealMember_IsEndedByItsExactStartTicks_AndAStrangersTicksLeaveItAlone()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "pidfd is a Linux call");
+        using var road = PidfdLayer.Using(wrapperPresent: false);
+        var process = Sleeper();
+        try
+        {
+            var identity = IdentityOf(process);
+            var member = PinnedMember.Of(identity, ProcReads.Real);
+            var calls = ((PidfdSupport.Raw)PidfdLayer.Current).Calls;
+
+            member.StartTicks.Should().BeGreaterThan(0, "the real stat line carries field 22");
+            TreeSignals.Kill([member with { StartTicks = member.StartTicks + 1 }], calls).Should().ContainSingle().Which.Should().BeOfType<Signalled.Gone>();
+            process.HasExited.Should().BeFalse("one tick apart is a stranger's number: it was never signalled");
+
+            TreeSignals.Kill([member], calls).Should().Equal(new Signalled.Sent(identity));
+            await process.WaitForExitAsync(TestContext.Current.CancellationToken);
+            process.ExitCode.Should().Be(128 + SigKill);
+        }
+        finally
+        {
+            EndAnyway(process);
+        }
     }
 
     [Fact]

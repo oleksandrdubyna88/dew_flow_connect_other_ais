@@ -39,6 +39,58 @@ public sealed class MountTableTests
     [InlineData("/data", "/")]
     public void AMountHoldsItsOwnPointAndWhatIsBelowIt_NeverAFolderThatOnlySharesItsPrefix(string path, string holder) =>
         MountTable.Holding(Table(Root, CustomDrvfs), path)!.MountPoint.Should().Be(holder, path);
+
+    private const string Ext4Linux = "601 523 8:97 / /data/linux rw,relatime - ext4 /dev/sdh rw\n";
+
+    /// <summary>A drvfs mounted LATER over <c>/data</c>, which hides the ext4 at <c>/data/linux</c> while the table still lists it.</summary>
+    private const string DrvfsOverData =
+        @"700 523 0:230 / /data rw,relatime - 9p D:\134 rw,aname=drvfs;path=D:\;uid=1000;gid=1000;symlinkroot=/mnt/,cache=0x5,access=client,msize=65536,trans=fd,rfd=6,wfd=6" + "\n";
+
+    [Fact]
+    public void TheMountId_IsTheFirstFieldOfTheLine()
+    {
+        var table = Table(Root, ObservedC, Ext4Linux);
+
+        table.Select(e => e.Id).Should().Equal([523ul, 487ul, 601ul], "stx_mnt_id names a mount by this number");
+        Table("x 523 8:96 / / rw - ext4 /dev/sdg rw\n").Should().BeEmpty("a line whose mount id is not a number is not a mountinfo line");
+    }
+
+    [Fact]
+    public void AMountLaidOverAnother_DoesNotHideItFromTheKernelsAnswer_TheMountIsFoundByIdentity()
+    {
+        var table = Table(Root, Ext4Linux, DrvfsOverData);
+
+        MountTable.Holding(table, "/data/linux/credentials")!.Type.Should().Be("ext4", "the TEXT rule still names the hidden ext4 — the reason the kernel is asked");
+
+        var found = MountTable.Find(table, "/data/linux/credentials", new MountIdentity.Mounted(700, 0, 230)).Should().BeOfType<MountHolder.Found>().Subject.Entry;
+
+        found.IsDrvfs.Should().BeTrue("the path really lies on the drvfs mounted over /data: fail OPEN was the defect");
+        found.Id.Should().Be(700);
+    }
+
+    [Fact]
+    public void AMountIdTheTableDoesNotList_IsUnproven_NeverGuessed() =>
+        MountTable.Find(Table(Root, Ext4Linux), "/data/linux/x", new MountIdentity.Mounted(9999, 8, 97)).Should().BeOfType<MountHolder.Unproven>().Which.Why.Should().Contain("mount 9999");
+
+    [Fact]
+    public void WithoutAMountId_TheTextRuleStands_OnlyWhenTheDeviceAgrees()
+    {
+        var table = Table(Root, Ext4Linux, DrvfsOverData);
+
+        MountTable.Find(table, "/data/linux/x", new MountIdentity.Device(0, 230)).Should().BeOfType<MountHolder.Unproven>("the text names ext4 8:97, the kernel says the file is on 0:230: a mount hides it")
+            .Which.Why.Should().Contain("0:230").And.Contain("/data/linux");
+        MountTable.Find(table, "/data/linux/x", new MountIdentity.Device(8, 97)).Should().BeOfType<MountHolder.Found>().Which.Entry.Type.Should().Be("ext4");
+        MountTable.Find(Table(Root), "/home/me", new MountIdentity.Device(8, 96)).Should().BeOfType<MountHolder.Found>();
+        MountTable.Find(Table(ObservedC), "/home/me", new MountIdentity.Device(8, 96)).Should().BeOfType<MountHolder.NoMount>("no mount holds it: nothing to compare");
+    }
+
+    [Fact]
+    public void AnUnreadableKernelAnswer_ProvesNothing()
+    {
+        MountTable.Find(Table(Root), "/home/me", new MountIdentity.Unreadable("statx answered errno 13")).Should().BeOfType<MountHolder.Unproven>().Which.Why.Should().Contain("errno 13");
+        MountTable.Find(Table(Root), "/home/me", new MountIdentity.NotAsked()).Should().BeOfType<MountHolder.Found>("nobody asked: the text rule, as before");
+    }
+
     [Fact]
     public void TheDeepestMountThatHoldsAPathAnswers_AndTheLastLineOfAStackedMountWins()
     {

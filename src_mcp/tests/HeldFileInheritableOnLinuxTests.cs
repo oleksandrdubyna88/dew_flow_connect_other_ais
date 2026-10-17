@@ -119,6 +119,39 @@ public sealed class HeldFileInheritableOnLinuxTests : IDisposable
         }
     }
 
+    /// <summary>One <c>FLOCK</c> line of <c>/proc/locks</c> for the file: <c>1: FLOCK  ADVISORY  WRITE 1234 08:01:131073 0 EOF</c> — class, kind (<c>READ</c> shared, <c>WRITE</c> exclusive), and device:inode (hex, hex, decimal).</summary>
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    private static string[] FlockKindsOf(string path)
+    {
+        var status = ((StatxRead.Read)LinuxStatx.OfPath(path, 0, LinuxStatx.StatxType | LinuxStatx.StatxIno)).Status;
+
+        return [.. File.ReadAllLines("/proc/locks")
+            .Select(line => line.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            .Where(fields => fields is [_, "FLOCK", "ADVISORY", _, _, var device, ..] && IsDevice(device, status))
+            .Select(fields => fields[3])];
+    }
+
+    private static bool IsDevice(string field, FileStatus status) =>
+        field.Split(':') is [var major, var minor, var inode]
+        && Convert.ToUInt32(major, 16) == status.DeviceMajor && Convert.ToUInt32(minor, 16) == status.DeviceMinor && ulong.Parse(inode, System.Globalization.CultureInfo.InvariantCulture) == status.Inode;
+
+    /// <summary>The DIRECT observation behind (a): not "was the second take busy" but what kind of lock the kernel's own table says the inheritable hold is.</summary>
+    [Fact]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public async Task L_N1a_ProcLocks_NamesTheKindOfFlockTheInheritableHoldTook()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "L-N1 asks what .NET does on Linux; /proc/locks is Linux's");
+        await HolderAsync();
+
+        var kinds = FlockKindsOf(LockFile);
+
+        kinds.Should().ContainSingle("one open file description holds the hold, however many processes inherited it: /proc/locks lists ONE FLOCK ADVISORY line for the file")
+            .Which.Should().BeOneOf("READ", "WRITE");
+        TestContext.Current.SendDiagnosticMessage($"L-N1: .NET took FLOCK ADVISORY {kinds[0]} for the inheritable HeldFile take — READ is shared (LOCK_SH), WRITE is exclusive (LOCK_EX)");
+        kinds[0].Should().Be("READ", "OBSERVED on the ubuntu CI job (2026-10-16): /proc/locks lists FLOCK ADVISORY READ — .NET took LOCK_SH for FileShare.None | Inheritable, so the hold is SHARED, as SafeFileHandle.Unix.cs predicted. "
+            + "DL8 needs it exclusive, which is why a second inheritable take succeeds and A2 §3.3's native flock take is required; when that lands this line becomes WRITE");
+    }
+
     [Fact]
     public async Task L_N1a_ASecondInheritableTake_IsBusy_TheLockIsExclusive()
     {

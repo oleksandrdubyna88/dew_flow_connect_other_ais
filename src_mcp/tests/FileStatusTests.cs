@@ -15,9 +15,10 @@ public sealed class FileStatusTests
     private const uint TypeAndInode = 0x101;
 
     /// <summary>A <c>struct statx</c> as the kernel lays it out: mask at 0, uid at 20, mode at 28, inode at 32, device at 136 / 140.</summary>
-    private static byte[] Statx(uint mask, uint uid, ushort mode, ulong inode, uint major, uint minor)
+    private static byte[] Statx(uint mask, uint uid, ushort mode, ulong inode, uint major, uint minor, ulong mountId = 0)
     {
         var statx = new byte[256];
+        BitConverter.TryWriteBytes(statx.AsSpan(144), mountId);
         BitConverter.TryWriteBytes(statx.AsSpan(0), mask);
         BitConverter.TryWriteBytes(statx.AsSpan(20), uid);
         BitConverter.TryWriteBytes(statx.AsSpan(28), mode);
@@ -68,7 +69,25 @@ public sealed class FileStatusTests
         LinuxStatx.Answered(Statx(mask: 0x7FF, 0, 0x41ED, 5, 8, 1), TypeAndInode).Should().BeOfType<StatxRead.Read>();
         LinuxStatx.Answered(Statx(mask: 0x7FF & ~0x100u, 0, 0x41ED, 0, 8, 1), TypeAndInode)
             .Should().Be(new StatxRead.Failed(0), "a filesystem that did not fill stx_ino has no identity to key on, and a zero inode must not become one");
-        LinuxStatx.Answered(Statx(mask: 1, 1000, 0x41ED, 0, 8, 1), LinuxStatx.StatxUid).Should().BeOfType<StatxRead.Read>("an inode nobody asked for is not required");
+        LinuxStatx.Answered(Statx(mask: LinuxStatx.StatxUid, 1000, 0x41ED, 0, 8, 1), LinuxStatx.StatxUid).Should().BeOfType<StatxRead.Read>("an inode nobody asked for is not required");
+    }
+
+    [Theory]
+    [InlineData(LinuxStatx.StatxType | LinuxStatx.StatxIno, LinuxStatx.StatxIno, "the type")]
+    [InlineData(LinuxStatx.StatxType | LinuxStatx.StatxIno, LinuxStatx.StatxType, "the inode")]
+    [InlineData(LinuxStatx.StatxUid, 0u, "the owner")]
+    [InlineData(LinuxStatx.StatxType | LinuxStatx.StatxIno | LinuxStatx.StatxMntId, LinuxStatx.StatxType | LinuxStatx.StatxIno, "the mount id")]
+    public void AnAnswerWithoutAnyTrustedFieldItWasAskedFor_IsAFailure(uint asked, uint filled, string missing) =>
+        LinuxStatx.Answered(Statx(filled, 1000, 0x41ED, 5, 8, 1, mountId: 77), asked)
+            .Should().Be(new StatxRead.Failed(0), $"the kernel did not fill {missing}, so its zero is not a value (only the inode was checked before)");
+
+    [Fact]
+    public void TheMountId_IsReadOnlyWhenItWasAskedForAndFilled()
+    {
+        var asked = LinuxStatx.StatxType | LinuxStatx.StatxIno | LinuxStatx.StatxMntId;
+
+        LinuxStatx.Answered(Statx(asked, 0, 0x41ED, 5, 8, 1, mountId: 700), asked).Should().BeOfType<StatxRead.Read>().Which.Status.MountId.Should().Be(700);
+        LinuxStatx.Answered(Statx(asked, 0, 0x41ED, 5, 8, 1, mountId: 700), LinuxStatx.StatxType | LinuxStatx.StatxIno).Should().BeOfType<StatxRead.Read>().Which.Status.MountId.Should().Be(0, "not asked, not read");
     }
 
     // ---------- the real call: Linux only ----------
