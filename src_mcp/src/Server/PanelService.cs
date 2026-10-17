@@ -293,6 +293,7 @@ public sealed class PanelService
             Api = ApiReportOf(provider),
             Fast = FastReportOf(provider),
             Warning = WarningOf(health),
+            MaxPromptKib = provider.MaxPromptKib > 0 ? provider.MaxPromptKib : null,
         };
     }
 
