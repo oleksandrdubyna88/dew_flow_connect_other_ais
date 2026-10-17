@@ -119,6 +119,48 @@ public sealed class KimiTreeSupervisorTests : IDisposable
         _notes.Should().NotBeEmpty().And.OnlyContain(note => note.Contains(MarkerPath));
     }
 
+    // ---------- a start time is never invented (the E5 risk consultant, gap 2) ----------
+
+    [Fact]
+    public void AShimWhoseOwnStartTimeCannotBeRead_RefusesTheTurn_AndWritesNoMarker()
+    {
+        var begin = KimiTreeSupervisor.Begin(MarkerPath, "/o", "/s", 4242, _ => null, Teardown([], []), _notes.Add);
+
+        begin.Should().BeOfType<SupervisorBegin.Refused>("a marker that names its owner by an invented start time makes a live owner read as gone").Which.Sentence.Should().Contain("start time").And.Contain("4242");
+        File.Exists(MarkerPath).Should().BeFalse("nothing is written, so nothing can be reconciled wrongly");
+    }
+
+    [Fact]
+    public async Task AMarkerNamesItsShimByTheStartTimeReallyRead_SoALaterCorrectReadStillFindsItAlive_AndNothingIsEnded()
+    {
+        var realStart = DateTime.UtcNow.AddSeconds(-10);
+        var proc = new FakeProcReads().With(4242, "S");
+        _ = KimiTreeSupervisor.Begin(MarkerPath, "/o", "/s", 4242, _ => realStart, Teardown([], []), _notes.Add).Should().BeOfType<SupervisorBegin.Ready>();
+        var terminated = new List<ProcessIdentity>();
+        var seams = new ReconcileSeams(
+            member => { terminated.Add(member); return true; },
+            members => Task.FromResult(members),
+            _ => [],
+            member => LivenessCheck.Linux(member, proc, _ => realStart));
+
+        var verdict = await KimiSurvivorGate.ReconcileAsync(MarkerPath, () => new KimiPresence.NoKimi(), seams);
+
+        verdict.Should().BeOfType<SurvivorVerdict.Blocked>("the shim is alive and its marker says so").Which.Code.Should().Be(BlockedReasons.ReaderOwnerAlive);
+        terminated.Should().BeEmpty("a made-up start time would have made the live shim read as gone, and the reconcile would have ended an active turn's agent");
+        File.Exists(MarkerPath).Should().BeTrue("and the marker is not cleared");
+    }
+
+    [Fact]
+    public void AnAgentWhoseStartTimeCannotBeRead_IsToldAsAPidOnly_AndTheMarkerStaysAsItWas()
+    {
+        var supervisor = Ready(Teardown([], []));
+
+        supervisor.StartedUnidentified(31337);
+
+        OnDisk().Marker.Phase.Should().Be(ReaderPhases.Spawning, "no identity was made up: the nameless marker stays, and it is blocking while a kimi runs");
+        OnDisk().Marker.Tree.Should().BeEmpty();
+    }
+
     // ---------- through the ACP client: the supervisor is told, in order, and the survivors reach the outcome ----------
 
     private sealed class Recording : ITreeSupervisor
@@ -128,6 +170,8 @@ public sealed class KimiTreeSupervisorTests : IDisposable
         public IReadOnlyList<ProcessIdentity> Survivors { get; init; } = [];
 
         public void Started(ProcessIdentity agent) => Calls.Add($"started:{agent.Pid}");
+
+        public void StartedUnidentified(int pid) => Calls.Add($"unidentified:{pid}");
 
         public async Task<TreeEnd> EndAsync(Process agent)
         {
