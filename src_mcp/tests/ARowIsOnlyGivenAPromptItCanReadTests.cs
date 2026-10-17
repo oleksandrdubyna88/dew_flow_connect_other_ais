@@ -7,7 +7,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// S2 of <c>todo/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md</c> (D3, D4, D5), at the roster: a reviewer whose first
+/// S2 of <c>research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md</c> (D3, D4, D5), at the roster: a reviewer whose first
 /// prompt is larger than its row's <c>maxPromptKib</c> is not built, a dealt lens goes only to a row whose cap fits it, and the
 /// roster says which row was left out, with the size, the cap and the cure.
 /// </summary>
@@ -30,7 +30,7 @@ public sealed class ARowIsOnlyGivenAPromptItCanReadTests : IDisposable
     public void Dispose() => _data.Dispose();
 
     /// <summary>Two rows on one runtime, so one prompt is composed for both — only the cap tells them apart.</summary>
-    private static ProviderSettings Row(string id, int capKib = 0) => new(id) { Enabled = true, Runtime = "codex", MaxPromptKib = capKib };
+    private static ProviderSettings Row(string id, int capKib = 0) => new(id) { Enabled = true, Runtime = "codex", PromptCap = CoaiMcp.Core.Catalog.PromptCap.OfKib(capKib) };
 
     private PanelService ServiceOf(RoleCatalog catalog, params ProviderSettings[] rows)
     {
@@ -119,7 +119,7 @@ public sealed class ARowIsOnlyGivenAPromptItCanReadTests : IDisposable
         left.Provider.Should().Be("alpha");
         left.Role.Should().Be(RoleCatalog.ArchitectureRole);
         left.Reason.Should().Contain($"its prompt is {bytes:N0} bytes", "the size, as the round audit counts it")
-            .And.Contain("this row reads at most 1,024 (maxPromptKib 1)", "the cap, in bytes and as the operator typed it")
+            .And.Contain("this row reads at most 1,024 bytes (maxPromptKib 1)", "the cap, in bytes - said as bytes - and as the operator typed it")
             .And.Contain("send the plan in parts (one epic per round), or raise the row's cap", "the cure");
     }
 
@@ -155,6 +155,21 @@ public sealed class ARowIsOnlyGivenAPromptItCanReadTests : IDisposable
 
         work.Reviewers.Select(w => w.Invocation.Provider).Distinct().Should().Equal("beta");
         work.Excluded.Should().ContainSingle().Which.Reason.Should().Contain("send a smaller change, or raise the row's cap");
+    }
+
+    /// <summary>
+    /// A document round's cure is the document stage's own: a too-large document is "reviewed in parts" (<c>DocumentRules</c>),
+    /// so the sentence says that, not the generic "send less".
+    /// </summary>
+    [Fact]
+    public void ADocumentRoundSaysToSendTheDocumentInParts()
+    {
+        var work = ServiceOf(Catalog(), Row("alpha", capKib: 1), Row("beta")).Roster.BuildWork(
+            [RoleCatalog.ArchitectureRole], string.Empty, new string('x', 5000), round: 1, stage: Stage.DocumentReview,
+            readsCheckout: false, codexTiers: CodexTiers.None);
+
+        work.Excluded.Should().ContainSingle().Which.Reason.Should()
+            .Contain("send the document in parts, or raise the row's cap");
     }
 
     /// <summary>

@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Catalog;
 using CoaiMcp.Core.Findings;
 using CoaiMcp.Core.Rounds;
 using CoaiMcp.Runners.Reviewers;
@@ -369,7 +370,7 @@ internal sealed class RosterBuilder(
     /// <summary>
     /// The text a reviewer's FIRST launch is handed, composed once for everybody who needs it: <see cref="ReviewerFor"/> sends it
     /// and the prompt cap (<see cref="WhyOverTheCap"/>) counts it — two sizes that must agree are one value (D3 of
-    /// <c>todo/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md</c>).
+    /// <c>research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md</c>).
     /// </summary>
     /// <remarks>
     /// The row's instruction is read ONCE here, for the body AND for the redaction list: two calls that must agree are one value.
@@ -396,7 +397,7 @@ internal sealed class RosterBuilder(
     /// </remarks>
     private bool FitsTheCap(RosterFrame frame, ProviderSettings provider, (string Role, string PromptId) item)
     {
-        if (provider.MaxPromptKib == 0 || _runtimeFor(provider) is not { } runtime)
+        if (!provider.PromptCap.IsSet || _runtimeFor(provider) is not { } runtime)
         {
             return true;
         }
@@ -412,29 +413,31 @@ internal sealed class RosterBuilder(
     /// </summary>
     private string WhyOverTheCap(RosterFrame frame, ProviderSettings provider, IReviewerRuntime runtime, PromptChoice choice)
     {
-        if (provider.MaxPromptKib == 0)
+        if (!provider.PromptCap.IsSet)
         {
             return string.Empty;
         }
 
         var bytes = System.Text.Encoding.UTF8.GetByteCount(FirstPrompt(frame, provider, runtime, choice).Prompt);
 
-        return bytes > provider.MaxPromptBytes ? OverTheCap(frame.Stage, bytes, provider) : string.Empty;
+        return provider.PromptCap.Admits(bytes) ? string.Empty : OverTheCap(frame.Stage, bytes, provider.PromptCap);
     }
 
     /// <summary>The sentence for a reviewer left out because its prompt is over its row's cap: the size, the cap, and what cures it.</summary>
-    private static string OverTheCap(Stage stage, int bytes, ProviderSettings provider)
+    private static string OverTheCap(Stage stage, int bytes, PromptCap cap)
     {
         var culture = System.Globalization.CultureInfo.InvariantCulture;
         var cure = stage switch
         {
             Stage.PlanReview => "send the plan in parts (one epic per round)",
             Stage.CodeReview => "send a smaller change",
+            // The document stage's own cure (`DocumentRules` sends a too-large document to "reviewed in parts").
+            Stage.DocumentReview => "send the document in parts",
             _ => "send less in one round",
         };
 
-        return $"its prompt is {bytes.ToString("N0", culture)} bytes and this row reads at most {provider.MaxPromptBytes.ToString("N0", culture)} "
-            + $"(maxPromptKib {provider.MaxPromptKib}) — {cure}, or raise the row's cap";
+        return $"its prompt is {bytes.ToString("N0", culture)} bytes and this row reads at most {cap.Bytes.ToString("N0", culture)} bytes "
+            + $"(maxPromptKib {cap.Kib}) — {cure}, or raise the row's cap";
     }
 
     /// <summary>

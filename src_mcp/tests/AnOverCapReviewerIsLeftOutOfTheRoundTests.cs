@@ -7,7 +7,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// S2 of <c>todo/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md</c>, as a real <c>review_plan</c> / <c>review_code</c>
+/// S2 of <c>research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md</c>, as a real <c>review_plan</c> / <c>review_code</c>
 /// round against FakeCli: a reviewer whose first prompt is over its row's <c>maxPromptKib</c> is never launched, writes no
 /// ledger line, is named in the reply, and — when every reviewer is over — the stage refuses before it records a round.
 /// </summary>
@@ -41,9 +41,9 @@ public sealed class AnOverCapReviewerIsLeftOutOfTheRoundTests : FakeCliRoundTest
         await Git("commit", "-m", "the change");
     }
 
-    private ProviderSettings Codex(int capKib = 0) => new("codex") { ExecutablePath = FakeCliExe, MaxPromptKib = capKib };
+    private ProviderSettings Codex(int capKib = 0) => new("codex") { ExecutablePath = FakeCliExe, PromptCap = CoaiMcp.Core.Catalog.PromptCap.OfKib(capKib) };
 
-    private ProviderSettings Gemini(int capKib = 0) => new("gemini") { ExecutablePath = FakeCliExe, MaxPromptKib = capKib };
+    private ProviderSettings Gemini(int capKib = 0) => new("gemini") { ExecutablePath = FakeCliExe, PromptCap = CoaiMcp.Core.Catalog.PromptCap.OfKib(capKib) };
 
     private PanelService Rows(params ProviderSettings[] rows) => ServiceFor(Defaults() with { Providers = rows });
 

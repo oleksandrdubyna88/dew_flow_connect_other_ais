@@ -229,7 +229,7 @@ public sealed class AFeatureIsReviewedEndToEndTests : IAsyncLifetime
                 Providers = secondVendor
                     ? [new("codex") { ExecutablePath = FakeCliExe, Feature = ticked },
                        new("grok") { Runtime = "codex", ExecutablePath = FakeCliExe, Model = FailingModel, Feature = ticked }]
-                    : [new("codex") { ExecutablePath = FakeCliExe, Feature = ticked, MaxPromptKib = promptCapKib }],
+                    : [new("codex") { ExecutablePath = FakeCliExe, Feature = ticked, PromptCap = CoaiMcp.Core.Catalog.PromptCap.OfKib(promptCapKib) }],
                 Rounds = new PanelConfig(PanelConfig.AllRoles.ToDictionary(r => r, _ => gate ?? new RoleGate(2, 5)), StagePolicy.Human),
                 DataDir = _data,
                 ReviewerTimeout = reviewerTimeout ?? TimeSpan.FromSeconds(30),
@@ -764,7 +764,7 @@ public sealed class AFeatureIsReviewedEndToEndTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// T9b of <c>todo/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md</c>: every feature reviewer over its row's
+    /// T9b of <c>research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md</c>: every feature reviewer over its row's
     /// <c>maxPromptKib</c> is the same state as nobody ticked — a skip recorded with the reason, not a refusal and not a launch.
     /// </summary>
     [Fact]
