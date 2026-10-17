@@ -400,8 +400,7 @@ function withIncluded(wanted, loaded, include) {
   return loaded.filter((a) => chain.has(a));
 }
 
-/** The one line (anywhere) that launched each wanted agent: kept even outside the window so the meta's toolUseId still joins. */
-/** The tools whose call is a write (their file_path decides where the work happened): a kept call keeps its answer. */
+/** The tools whose call is a write (their path argument decides where the work happened): a kept call keeps its answer. */
 const WRITE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
 
 const writeCallIdsOf = (line) => (Array.isArray(line?.message?.content) ? line.message.content : [])
@@ -425,6 +424,7 @@ function withAnswers(kept, fileLines, keep) {
   return answers.size === 0 ? kept : keep(answers);
 }
 
+/** The one line (anywhere) that launched each wanted agent: kept even outside the window so the meta's toolUseId still joins. */
 function launchLines(wanted, allLines) {
   const wantedIds = new Set(wanted.map((a) => a.meta?.toolUseId).filter(Boolean));
   return new Set(allLines.filter((line) => toolUseIdsOf(line).some((id) => wantedIds.has(id))));
