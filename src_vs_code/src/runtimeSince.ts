@@ -50,15 +50,66 @@ export const RUNTIME_SINCE: Readonly<Record<string, string>> = {
 };
 
 /**
+ * The first `coai-mcp` that CONSULTS on `runtime: "kimi"` — the release that carries S5 of todo/PLAN_vibe_and_kimi_runtimes.md
+ * (`KimiConsultant` and its question row, E5.4–E5.6 of todo/PLAN_vibe_and_kimi_runtimes_E5.md).
+ *
+ * <p><b>Which version, and why.</b> The newest RELEASED `src_mcp` when this was written (2026-10-16) is 0.57.0
+ * (`.release-please-manifest.json`), and it is the release that first REVIEWS with Kimi — so the first release that can carry the
+ * consultant is the next minor, 0.58.0 (release-please bumps the minor for a `feat` below 1.0). <b>Whoever cuts the release keeps it
+ * level with the tag</b> — if another minor ships before S5, raise it: the `KIMI_RUNTIME_SINCE` rule, and the same guard
+ * (`runtimeSinceIsAhead.test.ts`) holds the part a test can.</p>
+ */
+export const KIMI_CONSULTANT_SINCE = '0.58.0';
+
+/**
+ * Every runtime some released server REVIEWS with but cannot hold a consultation on, with the release that first consults on it.
+ *
+ * <p>A second table rather than a second meaning of {@link RUNTIME_SINCE}: knowing a runtime and consulting on it ship in different
+ * releases. `vibe` is here because S3 shipped the Vibe consultant in 0.54.0 (#811; the changelog's `## Server 0.54.0` names it), one
+ * release after the Vibe runtime, with no gate — one table that tells the truth for both costs one line (E5.7 decision 1; the operator
+ * may drop it, the plan's open question 3).</p>
+ *
+ * <p><b>What it gates is a NOTE, never the entry</b> (E5.7 decision 2). An older server refuses a consultant on a runtime it cannot
+ * consult with, by name (`ConsultantResolution.CannotConsult`); withholding the `COAI_CONSULTANTS` entry instead would make that server
+ * consult with the shipped default pair, silently — worse than the refusal. So, unlike the runtime gate, nothing is kept out of the
+ * file: {@link consultantRuntimeNote} is said where the consultant is picked.</p>
+ */
+export const CONSULTANT_SINCE: Readonly<Record<string, string>> = {
+  vibe: '0.54.0',
+  kimi: KIMI_CONSULTANT_SINCE,
+};
+
+/**
  * Whether the installed server reads this runtime — true for a runtime every server knows, and for an UNKNOWN server.
  *
  * <p>Unknown is not old: every other skew gate here stays silent on a server it cannot version, and withholding rows
  * on a guess would drop a configured reviewer from a server perfectly able to run it.</p>
  */
 export function runtimeOnServer(runtime: string, installedServerVersion: string): boolean {
-  const since = RUNTIME_SINCE[runtime];
+  return onServer(RUNTIME_SINCE, runtime, installedServerVersion);
+}
+
+/** Whether the installed server can hold a consultation on this runtime — {@link runtimeOnServer}'s rule over {@link CONSULTANT_SINCE}. */
+export function consultantOnServer(runtime: string, installedServerVersion: string): boolean {
+  return onServer(CONSULTANT_SINCE, runtime, installedServerVersion);
+}
+
+/** The one rule both tables are read by: outside the table, or an unknown server, is never old. */
+function onServer(table: Readonly<Record<string, string>>, runtime: string, installedServerVersion: string): boolean {
+  const since = table[runtime];
 
   return since === undefined || installedServerVersion.length === 0 || compareVersions(since, installedServerVersion) <= 0;
+}
+
+/**
+ * The sentence beside a consultant (the Consultant section) or a question row on a runtime the installed server cannot consult on
+ * — or nothing: a server KNOWN and strictly older than the runtime's {@link CONSULTANT_SINCE}, the sibling rule of every skew note.
+ */
+export function consultantRuntimeNote(installedServerVersion: string, runtime: string): string {
+  return consultantOnServer(runtime, installedServerVersion)
+    ? ''
+    : `The coai-mcp you have installed (${installedServerVersion}) cannot consult on ${runtime}; update it to `
+      + `${CONSULTANT_SINCE[runtime]} or later — the MCP server tab.`;
 }
 
 /**

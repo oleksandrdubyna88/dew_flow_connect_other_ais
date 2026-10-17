@@ -269,7 +269,13 @@ public abstract record ConsultFailure
 
         public override string What(string vendor) => $"the consultant ({vendor}) no longer holds this conversation — its own store dropped the thread";
 
-        public override string Cure => "start a new consultation";
+        /// <remarks>
+        /// Widened for a consultant with a coai-owned home (E5.4 decision 11 of <c>todo/PLAN_vibe_and_kimi_runtimes_E5.md</c>): this consultation has
+        /// ENDED (failed), so <c>close_consult</c> would refuse it — the home goes with the consultation sweep's next pass (D20), and nothing need be
+        /// closed by hand. coai never starts a fresh session in its place.
+        /// </remarks>
+        public override string Cure =>
+            "start a new consultation — this one has ended, and whatever coai kept for it (a consultant's home) goes with the next sweep";
     }
 
     /// <summary>The answer — or the failure — could not be written to the record.</summary>

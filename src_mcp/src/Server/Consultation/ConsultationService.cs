@@ -725,7 +725,7 @@ public sealed class ConsultationService(
             var looked = await ConsultationLookups.RunAsync(executor, consultant.Runtime, ready.Launch, launch, t => ChangesSinceAsync(before, repo, t), launched.Add, turn.Token);
             var result = looked.Result;
             var changes = await ChangesOverTheTurnAsync(result, () => ChangesSinceAsync(before, repo, turn.Token));
-            decided = FailedTurns.Decided(asking, consultant, result, changes, ConsultationFailing.KilledAs(ct.IsCancellationRequested, turn.IsCancellationRequested, deadline));
+            decided = FailedTurns.Decided(asking, consultant, result, changes, ConsultationFailing.KilledAs(ct.IsCancellationRequested, turn.IsCancellationRequested, deadline), record.Status);
 
             return decided is null
                 ? Settle(asking, consultant, looked, problem, nonce, started.Elapsed)

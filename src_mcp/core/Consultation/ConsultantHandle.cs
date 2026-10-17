@@ -14,7 +14,8 @@ namespace CoaiMcp.Core.Consultation;
 /// </remarks>
 public static partial class ConsultantHandle
 {
-    [GeneratedRegex("^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$")]
+    // `\z`, never `$`: .NET's `$` also matches before a FINAL newline, so "abc\n" passed (E5.2 review). The extension's JS `$` has no such hole.
+    [GeneratedRegex(@"^[A-Za-z0-9][A-Za-z0-9_-]{0,99}\z")]
     private static partial Regex WellFormed();
 
     public static bool IsWellFormed(string? handle) => handle is not null && WellFormed().IsMatch(handle);

@@ -443,17 +443,19 @@ public sealed class ConfinementPlannerTests
             "--model", "m", "--add-dir", Repo);
         agy.WorkingDirectory.Should().Be(AntigravityReadOnly.Home());
 
-        foreach (var (_, consultant) in Adapters().Where(a => a.Runtime is not "local" and not "antigravity" and not "vibe"))
+        foreach (var (_, consultant) in Adapters().Where(a => a.Runtime is not "local" and not "antigravity" and not "vibe" and not "kimi"))
         {
             consultant.Build(launch).Request.WorkingDirectory.Should().Be(Repo, consultant.Vendor);
             consultant.Build(launch).Role.Should().Be(ConsultantRoles.Consult, consultant.Vendor);
         }
 
-        // Vibe never stands in the checkout (D6): the conversation's snapshot, which the service makes.
-        var vibe = new Runners.Vibe.VibeConsultant(new Runners.Vibe.VibeRuntime()).Build(
-            launch with { Workdir = RowTree, Settings = launch.Settings with { OwnedScratch = RowFolder } });
-        vibe.Request.WorkingDirectory.Should().Be(RowTree);
-        vibe.Role.Should().Be(ConsultantRoles.Consult);
+        // Vibe and Kimi never stand in the checkout (D6): the conversation's snapshot, which the service makes (S5.4.13 for Kimi).
+        var inTheSnapshot = launch with { Workdir = RowTree, Settings = launch.Settings with { OwnedScratch = RowFolder } };
+        foreach (var (_, consultant) in Adapters().Where(a => a.Runtime is "vibe" or "kimi"))
+        {
+            consultant.Build(inTheSnapshot).Request.WorkingDirectory.Should().Be(RowTree, consultant.Vendor);
+            consultant.Build(inTheSnapshot).Role.Should().Be(ConsultantRoles.Consult, consultant.Vendor);
+        }
     }
 
     private static IEnumerable<(string Runtime, IConsultantRuntime Consultant)> Adapters() =>
@@ -462,5 +464,8 @@ public sealed class ConfinementPlannerTests
         ("codex", new CodexConsultant(new CodexRuntime())),
         ("antigravity", new AntigravityConsultant(new AntigravityRuntime())),
         ("vibe", new Runners.Vibe.VibeConsultant(new Runners.Vibe.VibeRuntime("vibe", Runners.Platform.HostKind.Windows))),
+        // A fake person's paths, so building reads nothing of this machine: the request names the places, it does not open them.
+        ("kimi", new Runners.Kimi.KimiConsultant(new Runners.Kimi.KimiRuntime("kimi", Runners.Platform.HostKind.Windows,
+            new Runners.Kimi.KimiSeams(root => Runners.Kimi.KimiPlaces.ForShim(root, Path.Combine(RowFolder, "persons-bin")), () => ("coai-mcp", []))))),
     ];
 }

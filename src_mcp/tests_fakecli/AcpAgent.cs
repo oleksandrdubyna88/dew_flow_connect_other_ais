@@ -23,6 +23,12 @@ namespace CoaiMcp.FakeCli;
 ///   "omitSessionId": false,       true: session/new answers with no sessionId at all
 ///   "ignoreCancel": false,        true: a session/cancel changes nothing
 ///   "models": ["m-1"],            the values of the "model" config option session/new announces; absent: ["m-1"]; []: no config option at all (E4.3)
+///   "initializeError": "…",       answer initialize with this JSON-RPC error
+///   "loadable": true,             session/load (E5.2): true or absent — answered with the load's config options; false — answered with loadError
+///   "loadError": {"code":-32602,"message":"session not found"},   the error a refused load is answered with (absent: this one)
+///   "loadModels": ["m-1"],        the values the LOAD's result announces for "model" (absent: what "models" says — Kimi announces them on a load
+///                                 as on session/new, RESULTS §29); []: no config option at all
+///   "replay": [ steps ],          run as session/update BEFORE a loadable load is answered — the history Kimi replays (RESULTS §29)
 ///   "usageReply": "…",            the text of the one chunk a session/prompt whose text is exactly "/usage" is answered with (RESULTS §5);
 ///                                 absent: that prompt is answered end_turn at once, with no chunk and none of the steps — as a real agent answers it itself
 ///   "promptErrorOnUsage": "…",    answer the "/usage" prompt with this JSON-RPC error
@@ -118,6 +124,9 @@ internal static class AcpAgent
         var hasId = message.TryGetProperty("id", out var id);
         switch (method)
         {
+            case "initialize" when Text(script, "initializeError") is { Length: > 0 } refused:
+                Error(id, -32000, refused);
+                break;
             case "initialize":
                 Reply(id, new JsonObject
                 {
@@ -132,6 +141,9 @@ internal static class AcpAgent
                 Reply(id, script.TryGetProperty("omitSessionId", out var noId) && noId.ValueKind == JsonValueKind.True
                     ? new JsonObject { ["configOptions"] = ConfigOptions(script) }
                     : new JsonObject { ["sessionId"] = _sessionId, ["configOptions"] = ConfigOptions(script) });
+                break;
+            case "session/load":
+                Load(script, id, message);
                 break;
             case "session/set_config_option":
                 SetConfigOption(script, id);
@@ -152,10 +164,36 @@ internal static class AcpAgent
         }
     }
 
-    /// <summary>The <c>model</c> option the session announces: the script's <c>models</c> (absent: <c>m-1</c>, what the stand-in has always been asked for); an empty list announces no option at all.</summary>
-    private static JsonArray ConfigOptions(JsonElement script)
+    /// <summary>
+    /// <c>session/load</c> (E5.2): the session named becomes this agent's; a loadable one replays its <c>replay</c> steps BEFORE the answer — the order
+    /// Kimi was measured to use (RESULTS §29) — and is answered with the load's own config options; a refused one is answered with <c>loadError</c>.
+    /// </summary>
+    private static void Load(JsonElement script, JsonElement id, JsonElement message)
     {
-        var models = script.TryGetProperty("models", out var listed) && listed.ValueKind == JsonValueKind.Array
+        _sessionId = message.TryGetProperty("params", out var parameters) ? Text(parameters, "sessionId") : string.Empty;
+        if (script.TryGetProperty("loadable", out var loadable) && loadable.ValueKind == JsonValueKind.False)
+        {
+            var refusal = script.TryGetProperty("loadError", out var error) ? error : default;
+            Error(id, refusal.ValueKind == JsonValueKind.Object ? (int)Number(refusal, "code") : -32602, Text(refusal, "message") is { Length: > 0 } said ? said : "session not found");
+
+            return;
+        }
+
+        foreach (var step in Steps(script, "replay"))
+        {
+            Step(step);
+        }
+
+        Reply(id, new JsonObject { ["configOptions"] = ConfigOptions(script, script.TryGetProperty("loadModels", out _) ? "loadModels" : "models") });
+    }
+
+    private static IEnumerable<JsonElement> Steps(JsonElement script, string field) =>
+        script.TryGetProperty(field, out var steps) && steps.ValueKind == JsonValueKind.Array ? steps.EnumerateArray() : [];
+
+    /// <summary>The <c>model</c> option the session announces: the script's <c>models</c> (absent: <c>m-1</c>, what the stand-in has always been asked for); an empty list announces no option at all.</summary>
+    private static JsonArray ConfigOptions(JsonElement script, string field = "models")
+    {
+        var models = script.TryGetProperty(field, out var listed) && listed.ValueKind == JsonValueKind.Array
             ? listed.EnumerateArray().Select(model => model.GetString() ?? string.Empty).ToArray()
             : ["m-1"];
 

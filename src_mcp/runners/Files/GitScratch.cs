@@ -72,9 +72,10 @@ public static class GitScratch
 
     /// <summary>
     /// The links of a folder before anything else in it — D19's order ("the junction first"), so that a link whose target lost a
-    /// file stops the deletion BEFORE the folder's own files are gone, not after the ones that sort ahead of it by name.
+    /// file stops the deletion BEFORE the folder's own files are gone, not after the ones that sort ahead of it by name. Public since
+    /// E5.3's review (M5): a one-shot home's owner deletes its folder's top-level entries one by one and keeps this order.
     /// </summary>
-    private static IEnumerable<string> LinksFirst(IEnumerable<string> entries) =>
+    public static IEnumerable<string> LinksFirst(IEnumerable<string> entries) =>
         entries.OrderByDescending(Snapshots.SnapshotLinks.IsLink);
 
     /// <summary>
@@ -91,8 +92,12 @@ public static class GitScratch
         }
     }
 
-    /// <summary>One entry of a real directory: a link unlinked, a directory descended, a file deleted whatever its attribute.</summary>
-    private static void DeleteEntry(string entry)
+    /// <summary>
+    /// One entry of a real directory: a link unlinked (never entered), a directory descended, a file deleted whatever its attribute.
+    /// Public since E5.3 (<c>todo/PLAN_vibe_and_kimi_runtimes_E5.md</c>): a one-shot home's owner and its sweep delete ENTRIES under
+    /// their lock, and an entry that is a file has to be deleted as one — the same three cases, one place.
+    /// </summary>
+    public static void DeleteEntry(string entry)
     {
         if (Snapshots.SnapshotLinks.IsLink(entry))
         {

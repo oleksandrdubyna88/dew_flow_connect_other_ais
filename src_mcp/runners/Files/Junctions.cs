@@ -100,6 +100,14 @@ public static partial class Junctions
     /// <summary>Where Unix hosts automount network shares: the autofs <c>/net</c> and <c>/misc</c>, macOS's <c>/Network</c>.</summary>
     private static readonly string[] NetworkFolders = ["/net/", "/misc/", "/Network/"];
 
+    /// <summary>
+    /// Where <paramref name="target"/>'s ancestors REALLY lead, asked again of the kernel — the one check of <see cref="Refusal(HostKind, string, string)"/>
+    /// that a home living for hours must repeat before every turn (E5.3 decision j of <c>todo/PLAN_vibe_and_kimi_runtimes_E5.md</c>): the
+    /// junction keeps a spelling, and an ancestor swapped for a link since the home was made would lead the sign-in's lock, and every
+    /// disposal's read of the target's names, to a network path. The sentence of the make-time check, or empty.
+    /// </summary>
+    public static string ResolvedRefusal(string target) => Resolved(target, Shell.DriveOf, Shell.FinalDirectory);
+
     /// <summary>The junction made, read back and verified — empty on success, otherwise the sentence, with nothing left at <paramref name="link"/>.</summary>
     public static string Make(HostKind host, string link, string target) => Make(host, link, target, Target);
     /// <summary>The seam of the read-back, so a test can make it name another folder.</summary>

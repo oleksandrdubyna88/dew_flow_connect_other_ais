@@ -403,6 +403,84 @@ public sealed class PrivateFolderWindowsTests : IDisposable
         DirectoryLink.Remove(link);
     }
 
+    /// <summary>The real shell with every path it is asked about written down — what proves the walk never crossed the junction.</summary>
+    private sealed class Recording(IFolderShell inner) : IFolderShell
+    {
+        public List<string> Asked { get; } = [];
+
+        public Sid Me => inner.Me;
+
+        public void Create(string path, AclFacts wanted) => inner.Create(path, wanted);
+
+        public ShellOpen Open(string path) => inner.Open(path);
+
+        public string FinalPathOf(IDisposable handle) => inner.FinalPathOf(handle);
+
+        public AclFacts Read(IDisposable handle) => inner.Read(handle);
+
+        public bool Replace(IDisposable handle, AclFacts wanted) => inner.Replace(handle, wanted);
+
+        public string Name(Sid who) => inner.Name(who);
+
+        public AclFacts AclOf(string entry, bool isFolder)
+        {
+            Asked.Add(entry);
+
+            return inner.AclOf(entry, isFolder);
+        }
+
+        public void ResetToInherit(string entry, bool isFolder)
+        {
+            Asked.Add(entry);
+            inner.ResetToInherit(entry, isFolder);
+        }
+    }
+
+    /// <summary>
+    /// E5.3 S5.3.17 (judgement R9 of <c>todo/PLAN_vibe_and_kimi_runtimes_E5.md</c>): a re-ACL of <c>coai-kimi</c> — its inheritable entries
+    /// propagated by Windows — never crosses the <c>kh-x\home\credentials</c> junction into the person's sign-in: the target folder's and
+    /// its file's descriptors are byte-equal before and after, no walk call names a path under <c>credentials</c>, and the junction itself is skipped.
+    /// The code's claim at <c>PrivateFolderWindows.MadePrivateBelow</c> ("propagation does not follow one either"), pinned.
+    /// </summary>
+    [Fact]
+    public void AReAclOfCoaiKimi_NeverCrossesTheJunction_IntoTheSignIn()
+    {
+        OnWindows();
+        using var person = new KimiFixture();
+        var kimi = Directory.CreateDirectory(Path.Combine(_root, ConsultantHomes.Kimi)).FullName;
+        var wide = Security(kimi);
+        wide.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(WellKnownSidType.AuthenticatedUserSid, null), FileSystemRights.ReadAndExecute,
+            InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow));
+        Reset(kimi, wide);
+        var home = Path.Combine(kimi, ConsultationStore.NewId(), "kh-x", "home");
+        Directory.CreateDirectory(home);
+        File.WriteAllText(Path.Combine(home, "config.toml"), "coai's render");
+        var link = Path.Combine(home, "credentials");
+        Junctions.Make(Runners.Platform.HostKind.Windows, link, person.Credentials).Should().BeEmpty();
+        var file = Path.Combine(person.Credentials, "kimi-code.json");
+        var targetBefore = new DirectoryInfo(person.Credentials).GetAccessControl().GetSecurityDescriptorBinaryForm();
+        var fileBefore = new FileInfo(file).GetAccessControl().GetSecurityDescriptorBinaryForm();
+        var shell = new Recording(new PrivateFolderWindowsNative());
+        var notes = new List<string>();
+
+        var opened = PrivateFolderWindows.Open(shell, new PrivateFolderWindows.Target(_root, ConsultantHomes.Kimi, kimi, notes.Add));
+
+        using (Opened(opened).Held)
+        {
+            notes.Should().ContainSingle().Which.Should().Contain("made").And.Contain("private");
+            ShouldBeExactlyThePersonSystemAndAdministrators(kimi);
+            new DirectoryInfo(person.Credentials).GetAccessControl().GetSecurityDescriptorBinaryForm().Should().Equal(targetBefore,
+                $"the DACL of {person.Credentials} must be unchanged after the re-ACL of coai-kimi");
+            new FileInfo(file).GetAccessControl().GetSecurityDescriptorBinaryForm().Should().Equal(fileBefore);
+            shell.Asked.Should().NotBeEmpty("the re-ACL walked coai-kimi's own descendants");
+            shell.Asked.Should().NotContain(asked => asked.StartsWith(link, StringComparison.OrdinalIgnoreCase), "no AclOf or ResetToInherit names the junction or anything under it");
+            shell.Asked.Should().NotContain(asked => asked.StartsWith(person.Credentials, StringComparison.OrdinalIgnoreCase));
+            shell.Asked.Should().Contain(Path.Combine(home, "config.toml"), "the walk did reach the junction's siblings");
+        }
+
+        DirectoryLink.Remove(link);
+    }
+
     /// <summary>The documented limit: the children are walked only when the parent itself needed the re-ACL.</summary>
     [Fact]
     public void E3e_ASecondOpenOfAnAlreadyPrivateParent_DoesNotWalkItsChildren()

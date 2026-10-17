@@ -204,13 +204,34 @@ public sealed class CumulativeUsageTests
     }
 
     [Fact]
-    public void AVendorReportingLESSThanBeforeFloorsAtZero_NeverNegative()
+    public void ACountBelowWhatWasBilled_FloorsAtZero_NeverNegative()
     {
-        // A number this arithmetic does not understand; a negative spending row would be worse than
-        // a flat one — and every field is floored, the cached and reasoning counts included.
-        var share = ConsultationUsage.Less(new Usage(500, 10, null, TokensCached: 3, TokensReasoning: 1), new ConsultationBilled(9_000, 100, 0, 40, 5));
+        // The totals moved on, the cached and reasoning counts did not: a number this arithmetic does not understand, and a
+        // negative spending row would be worse than a flat one — every field is floored.
+        var share = ConsultationUsage.Less(new Usage(9_500, 110, null, TokensCached: 3, TokensReasoning: 1), new ConsultationBilled(9_000, 100, 0, 40, 5));
 
-        share.Should().Be(new Usage(0, 0, null));
+        share.Should().Be(new Usage(500, 10, null));
+    }
+
+    /// <summary>
+    /// S5.4.14 (decision 12 of E5.4, <c>todo/PLAN_vibe_and_kimi_runtimes_E5.md</c>): a CAPTURED total below what the conversation was already
+    /// billed is a counter that RESTARTED — this turn is billed what the report said, whole, never a flat zero. Both totals are judged together
+    /// (one counter below means the pair restarted); an uncaptured report is zeros that are not a counter, never a reset.
+    /// </summary>
+    [Theory]
+    [InlineData(5_000, 9, false, 5_000, 9)]
+    [InlineData(25_000, 20, false, 25_000, 20)]
+    [InlineData(0, 0, true, 0, 0)]
+    public void ATotalBelowWhatWasBilled_IsAReset_AndTheTurnIsBilledWhatItSaid(long reportedIn, long reportedOut, bool notCaptured, long shareIn, long shareOut)
+    {
+        var reported = notCaptured ? Usage.Unknown : new Usage(reportedIn, reportedOut, null, TokensCached: 7);
+
+        var share = ConsultationUsage.Less(reported, new ConsultationBilled(20_000, 30, 0, 100));
+
+        share.TokensIn.Should().Be(shareIn, "Expected the second turn's billed TokensIn to be the reset report's own");
+        share.TokensOut.Should().Be(shareOut);
+        share.NotCaptured.Should().Be(notCaptured, "the flags travel as the report has them");
+        share.TokensCached.Should().Be(notCaptured ? 0 : 7, "a reset bills every field whole");
     }
 
     [Fact]

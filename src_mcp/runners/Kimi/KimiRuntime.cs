@@ -19,7 +19,33 @@ public sealed record KimiSeams(Func<string, KimiPlaces> PlacesFor, Func<(string 
     public static KimiSeams Real(HostKind host) => new(
         root => KimiPlaces.Resolve(root, host, Environment.GetEnvironmentVariable, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), File.Exists),
         LocalRuntime.SelfInvocation);
+
+    private static readonly AsyncLocal<KimiStandIn?> StoodIn = new();
+
+    /// <summary>The host and the seams a Kimi adapter built BY NAME gets (<c>new KimiRuntime(id)</c>): this machine's — unless a test stood in on this async flow.</summary>
+    internal static KimiStandIn ForThisFlow => StoodIn.Value ?? new KimiStandIn(HostKinds.Current, Real(HostKinds.Current));
+
+    /// <summary>
+    /// A test's seam, per logical flow (the <c>VibePathBudget.Using</c> precedent): a scenario that drives the real consultation service cannot
+    /// hand the <see cref="KimiRuntime"/> it builds a fake person (the service builds it by name), and the host must be the measured one for the
+    /// launch control to run at all (D18). Dispose restores what the flow had.
+    /// </summary>
+    internal static IDisposable Using(HostKind host, KimiSeams seams)
+    {
+        var before = StoodIn.Value;
+        StoodIn.Value = new KimiStandIn(host, seams);
+
+        return new Restore(() => StoodIn.Value = before);
+    }
+
+    private sealed class Restore(Action undo) : IDisposable
+    {
+        public void Dispose() => undo();
+    }
 }
+
+/// <summary>What a Kimi adapter built by name runs with: the host it judges (D18) and what it reads from the machine.</summary>
+internal sealed record KimiStandIn(HostKind Host, KimiSeams Seams);
 
 /// <summary>
 /// Kimi Code (<c>kimi</c> on the person's own Kimi Code plan) as a reviewer — S4's code half (E4.4 of
@@ -47,9 +73,14 @@ public sealed class KimiRuntime(string id, HostKind host, KimiSeams seams, Seril
     {
     }
 
-    /// <summary>The adapter for this machine's host.</summary>
+    /// <summary>The adapter for this machine's host (or, in a test, what the flow stood in: <see cref="KimiSeams.Using"/>).</summary>
     public KimiRuntime(string id = "kimi")
-        : this(id, HostKinds.Current)
+        : this(id, KimiSeams.ForThisFlow)
+    {
+    }
+
+    private KimiRuntime(string id, KimiStandIn standIn)
+        : this(id, standIn.Host, standIn.Seams)
     {
     }
 

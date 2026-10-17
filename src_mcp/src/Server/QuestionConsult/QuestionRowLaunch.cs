@@ -389,7 +389,11 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
 
     private void Remove(string scratch) => RemoveScratch(scratch, log);
 
-    /// <summary>A question row's scratch removed through the shared deleter; a failure is logged, a lost link target as a warning.</summary>
+    /// <summary>
+    /// A question row's scratch removed: its Kimi homes junction-first (the row-less fallback keeps the home HERE, so this caller knows it may
+    /// hold one — E5.3 decision g, judgement R6), then the shared deleter; a failure is logged, a lost link target as a warning, and a Kimi stop
+    /// (a live tree) keeps the scratch for the six-hour scratch sweep, which asks the same probe.
+    /// </summary>
     internal static void RemoveScratch(string scratch, Serilog.ILogger log)
     {
         if (scratch.Length > 0)
@@ -402,6 +406,11 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
     {
         try
         {
+            if (!KimiHomesDisposed(scratch, log))
+            {
+                return;
+            }
+
             // The shared deleter: a home's read-only files go too, and a link in the folder is unlinked, never entered.
             Runners.Files.GitScratch.DeleteEvenIfReadOnly(scratch);
         }
@@ -413,5 +422,18 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
         {
             log.Debug("a question row's scratch directory at {Path} could not be removed yet: {Reason}", scratch, e.Message);
         }
+    }
+
+    /// <summary>D19's order for the Kimi homes a row's scratch may hold: every <c>kh-*</c> child disposed by <see cref="Runners.Kimi.KimiHome.DisposeAllUnder"/>; a stop is a warning and keeps the scratch whole.</summary>
+    private static bool KimiHomesDisposed(string scratch, Serilog.ILogger log)
+    {
+        var stopped = false;
+        Runners.Kimi.KimiHome.DisposeAllUnder(scratch, said =>
+        {
+            stopped = true;
+            log.Warning("a question row's scratch directory at {Path} is kept for the scratch sweep: {Reason}", scratch, said);
+        });
+
+        return !stopped;
     }
 }

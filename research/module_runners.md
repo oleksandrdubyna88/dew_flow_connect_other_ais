@@ -3435,7 +3435,7 @@ flowchart TD
   `42 + u` (60), conversation `68 + u` (34).
 - **`VibeHomes`** (`Vibe/VibeHomes.cs`) makes `<root>\coai-vh\<8 hex>` (the pinned `coai-vh` handle is released on EVERY way out of `ReserveOneShot` that does not move it into the home: a refused lock, a throw while the folder is made; `OneShotSteps` / `HomeIo` are the seams a test uses for a folder that cannot be made, listed or removed). `ReserveOneShot` returns an `OneShotReservation` (`None` for an
   empty root, so settings built by hand keep their old scratch home; `Refused(sentence)`; `Reserved(OneShotHome)`). The `OneShotHome`
-  holds the folder's `coai-turn.lock` and the private folder's handle for its life and deletes the folder on every way out.
+  holds the folder's `coai-turn.lock` and the private folder's handle for its life and, on every way out, empties the folder UNDER the lock (its Kimi homes junction-first — a stop keeps it, said) and deletes the lock file and the folder after the release (E5.3, *The owned Kimi homes* below).
   `SweepOneShot` (called from `PanelService.PruneOldAnswerDirs(homesRoot)`, at most every ten minutes) removes a folder older than six
   hours under its lock; the lock, not the age, protects a live home across two servers on one root, and a link is never entered.
   `coai-vh` is a sibling of `coai-vibe` OUTSIDE `ConsultantHomes.All`, so the D20 conversation sweep never judges it. Home names: round
@@ -3465,6 +3465,53 @@ flowchart TD
 - **M-V18 note (2026-10-15, the judge).** `VibePathBudget` measures `Path.GetFullPath`, which keeps 8.3 short names as written. If Vibe's interpreter resolves the real path, a folder named `RUNNER~1` is longer than the budget counted. M-V18 must measure that before the budget is relaxed or trusted at its edge.
 - **`LaunchTurn.Refused` states its cause** (code gate 2026-10-15): `RefusalCause { LaunchControl, CliMissing }` is REQUIRED, so an adapter's refusal never reads as coai's own launch check by default (Kimi's launch will call it too); `ReviewerExecutor` maps only `LaunchControl` to `NotStarted.ByLaunchControl`.
 - **Install cure is per OS** (`VendorDiagnosis.InstallCure`: `uv tool install mistral-vibe` on Windows, Mistral's script on Linux), so `VibeLaunchControlTests.TheKind_…` compares with the platform's own cure instead of spelling the Windows one. Fixed after: the default was `OperatingSystem.IsLinux()`, which gave macOS the Windows commands (uv, and Google's PowerShell line) although the vendors' scripts serve Linux and macOS; `InstallCure(runtime, HostKind)` is the seam, and only Windows gets the uv and PowerShell forms (`EveryHostButWindows_GetsTheVendorsShellScript`, first red: the `MacOs` case got `install it with uv…`).
+
+## The owned Kimi homes — a conversation's kept across turns, every one-shot disposed junction-first (2026-10-16, E5.3 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md`)
+
+Built on Fable by the plan gate's command (authentication: the home holds a junction to the person's ROTATING sign-in). Two shapes, one disposal:
+
+```mermaid
+flowchart TD
+  subgraph conversation [a conversation: coai-kimi/id — ConsultantPlaces.ForConversationAsync]
+    F[folder: tree/, the stamp, coai-turn.lock] --> K["kh-&lt;10 hex&gt; — KimiHome.HomeFor(OwnedScratch = the folder)"]
+    K --> J[home/credentials → the person's folder, config.toml, os/]
+  end
+  subgraph oneshot [a question row, a check: coai-vh/8 — VibeHomes.ReserveOneShot]
+    O[OneShotHome: coai-turn.lock held for its life] --> K2[kh-* made by KimiLaunch]
+  end
+  T[a turn: KimiRuntime.TakeTurnAsync] -->|A folder turn, B folder lock, C kh turn, D sign-in gate| K
+  D1[OneShotHome.Dispose / SweepOneShot] -->|under the lock: KimiHome.DisposeAllUnder, then every entry| E[release, then the lock file and the folder]
+  D1 -->|a Stopped: a live tree, a lost name| KEEP[kept with its lock file, said; the sweep takes it later]
+```
+
+- **The conversation's root is `<folder>\kh-<10 hex>`, never the folder itself** (decision a, R1). The place holds the FOLDER's in-process turn until the launch has
+  been read (`ConsultantPlaces.cs`), and `KimiLaunch.TakeAsync` takes the ROOT's turn; both are one non-re-entrant `SemaphoreSlim(1, 1)` per path (`VibeHomeTurns`),
+  so a root that were the folder would wait for its own caller until the token cancels. `KimiRuntime.Build` already roots at `KimiHome.HomeFor(OwnedScratch, …)`; E5.3 pins it
+  (`AConversationsKimiHomeTests.AConversationTurn_StartsOnItsKhRoot_AndNeverWaitsForItself`, red against the folder-as-root in 5 s). The home is made at the first turn
+  (`KimiHome.Made`, fresh only) and written by nobody after; a junction retargeted or a re-login between turns is refused before any process starts, the home kept as it is.
+- **The lock order** (decision d, R2): a turn takes (A) the folder's in-process turn → (B) `coai-turn.lock` → (C) the `kh` root's turn → (D) the sign-in GATE → in the shim (E) the
+  foreign-`kimi` wait → (F) the sign-in's tree hold → (G) the per-home `coai-tree.lock`. **Every disposer takes with NO wait** (`HeldFile.Take`, `VibeHomeTurns.TryTake`, one
+  probe of G) and never D, E or F; so the sweep's reversed order B → A is safe, and a new wait may only ever be added on the acquirer's side, on something no disposer holds.
+- **Where the sign-in really is, re-asked before every turn** (decision j, R8): `Junctions.ResolvedRefusal(target)` — the make-time `Resolved` check made public, one sentence,
+  two callers — runs twice per turn, both BEFORE any lock: on the person's HOME as the last check of `KimiLaunch.Prepare`'s pre-read list, before their
+  `config.toml` is read from it (the review's M1 — a swapped ancestor gets no read from the share, not one; asked only of a folder that exists, so a
+  sign-out keeps its own sentence), and on the `credentials` folder in `KimiLaunch.Rendered` right after its existence check. An ancestor swapped for a
+  link to a share since the home was made refuses the turn ("resolves to … not a local drive path … (D19)") and leaves no file under `kimi-locks`.
+- **Every coai Kimi launch on one sign-in passes the one gate** (decision k): two conversations' turns started together peak at one live launch, the second starting after the
+  first's end; a gate held by another process is waited for in one-second slices and the launch starts within two seconds of its release (`AConversationsKimiHomeTests`, S5.3.16).
+- **A one-shot home ends junction-first, UNDER its lock** (decision g, R5 — the judgement overruled step 3 of the brief): `VibeHomes.EmptiedUnderItsLock(folder, kept, io)` is
+  the ONE helper the owner (`OneShotHome.Dispose`) and the sweep (`SweepOneShot` → `RemovedUnderItsLock`) share: `KimiHome.DisposeAllUnder` first; on any `Stopped` → false, nothing
+  more deleted, the folder KEPT with its lock file and the stop said in its own words (the owner: `the Kimi home in {folder} is kept: {reason}; the scratch sweep takes it once
+  its tree has ended`; the sweep: `one-shot Vibe homes: {folder} is kept this pass: {said}`); otherwise every entry but the lock file, under the lock. Then the lock (and the pin)
+  given back, then `RemovedAfterItsLock`: the lock file and the folder — "already gone" (a sweep took it in the window) is silent. `HomeIo.Delete` is `GitScratch.DeleteEntry`
+  (public since E5.3: a link by its own name, a folder whole, a FILE as a file — the old `DeleteEvenIfReadOnly(entry)` threw on a file beside the home), and `OneShotHome.Io`
+  replaces the old whole-folder `Remove` seam so a test can see the lock's state at the moment each entry goes.
+- **The root-less fallbacks** (R6): `QuestionRowLaunch.RemoveScratch` disposes the scratch's `kh-*` homes before the bare deleter; `ConsultCheckScratch.Delete` disposes
+  `<root>\own` (`ConsultantCheck.OwnName` — the check's home is one level DOWN) and the root. A stop keeps the scratch for the six-hour scratch sweep, which asks the same probe.
+- **No path budget for Kimi** (J3, S5.3.11): coai's walk reads and disposes a home whose `sessions\wd_…\session_…\agents\main\wire.jsonl` passes 300 characters.
+
+Tests: `AConversationsKimiHomeTests`, `AOneShotKimiHomeIsDisposedJunctionFirstTests`, the E5.3 rows of `ConsultantHomeSweepTests`, `KimiHomeTests.AHomeWhoseDataPathPasses260_…`,
+`PrivateFolderWindowsTests.AReAclOfCoaiKimi_NeverCrossesTheJunction_IntoTheSignIn` — [module_tests.md](module_tests.md).
 
 ## The Kimi home, its sign-in locks and its launch control — `src_mcp/runners/Kimi/` (2026-10-15, E4.2 of `todo/PLAN_vibe_and_kimi_runtimes_E4.md`)
 
@@ -3513,7 +3560,8 @@ flowchart LR
   opened), (2) `credentials` unlinked by its own name, (3) the person's folder's entry names verified (200 ms settle, `GitScratch.StillMissing`),
   (4) only then `GitScratch.DeleteEvenIfReadOnly`. A `Stopped` deletes nothing more and every caller LOGS it. `DisposeAllUnder` does steps
   1–3 on a folder's own home and every `kh-*` child and leaves the rest to the caller's deleter; the D20 sweep calls it under its locks
-  (a stop keeps the folder this beat), the round's scratch does (E4.4, *The Kimi reviewer* below: a stop keeps the scratch). **Stated limit:** the deleter's link checks are path checks at one
+  (a stop keeps the folder this beat), the round's scratch does (E4.4, *The Kimi reviewer* below: a stop keeps the scratch), and since E5.3 so do the
+  one-shot owner and sweep (`VibeHomes.EmptiedUnderItsLock`) and the row's and the check's root-less fallbacks (*The owned Kimi homes* above). **Stated limit:** the deleter's link checks are path checks at one
   moment; closing the swap needs handle-based deletion, and a same-user process able to swap folders in coai's tree could touch the
   credentials directly.
 - **An ancestor of the credentials target may be a link** (a relocated profile); the target itself may not. `Junctions.Refusal` asks the
@@ -3595,3 +3643,111 @@ flowchart LR
 
 Tests: `KimiRuntimeTests`, `KimiIsClassifiedFromItsReportTests`, `OneKimiLaunchAtATimeTests`, `KimiIsDiagnosedInItsOwnWordsTests`, `AKimiReviewerRunsThroughTheShimTests`,
 `TheRoundsScratchDisposesItsKimiHomeJunctionFirstTests`, and the S2.45 canary re-run through the round's records in `KimiCanaryTests` — listed in [module_tests.md](module_tests.md).
+
+## The shim continues a session — `--ask-acp … --session <id>` (2026-10-16, E5.1–E5.2 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md`)
+
+The second turn of a Kimi conversation is a `session/load` of the session the first turn's report named, run by the same shim, under the same three
+blocks (every permission refused, reads served only from the cwd, the tree hold) and in the same built environment. What the load does was measured
+first (M-K16, `research/RESULTS_kimi_confinement.md` §29, Kimi 2.1.1): the load's RESULT announces the `model` option like `session/new`'s; Kimi REPLAYS
+the history as `session/update` (the earlier user and agent chunks, verbatim) BEFORE it answers the load; an id it does not hold is JSON-RPC `-32602`
+`Invalid params: Unknown sessionId: <id>`; and `/usage` stays cumulative over three turns, the output delta equal to that turn's own output tokens.
+
+```mermaid
+sequenceDiagram
+  participant H as host (E5.4)
+  participant S as coai-mcp --ask-acp --session id
+  participant A as kimi acp
+  H->>S: argv: --session id, the SAME --cwd · prompt on stdin
+  Note over S: id not a vendor handle (ConsultantHandle.IsWellFormed),<br/>or --session with no value → 65, nothing started
+  S->>A: initialize
+  S->>A: session/load {sessionId, cwd, mcpServers: []}
+  A-->>S: session/update × n (the replayed history — dropped)
+  alt the load answered with an error
+    A-->>S: error (code, message)
+    S-->>H: end session_lost, exit 70 — or the known failure (not_signed_in 77, end agent_failed)
+  else the load answered
+    A-->>S: result {configOptions: model …}
+    Note over S: model not among the LOAD's values → model_not_offered, 65
+    S->>A: session/set_config_option model → session/prompt → /usage
+    A-->>S: the turn's chunks (the answer) · Session total (cumulative)
+    S-->>H: report: answer, end answered, sessionId = id, usage = the SESSION's totals
+  end
+```
+
+- **The flag.** `AcpWords.SessionFlag` (`--session`) is the shim's own (parsed apart from `--findings`'s by `Program.Flags` from the mode on). `AcpAsk.Session`
+  carries it (empty = a new session, byte for byte what the shim did before — S5.2.8 pins the client's lines). `AskAcpMode.SessionRefusal` refuses, 65 and before
+  any process, an id that `ConsultantHandle.IsWellFormed` refuses (its pattern ends `\z`, not `$`: .NET's `$` also matches before a final newline, so `abc\n` passed), and `WithBareSession` keeps a `--session` with no value as an EMPTY id so it is refused too —
+  `Program.Flags` drops a flag whose value is missing, and a continuation that lost its id must never quietly become a new session. The refused value is not echoed.
+- **The load.** `AcpClient.OpenedAsync` chooses `CreatedAsync` (`session/new`, unchanged) or `LoadedAsync`: `session.SessionId = ask.Session` first (the result
+  need not repeat it, and the teardown's `session/cancel` names it), then `session/load` through `AcpSession.ReplayedAsync`, whose window drops every
+  `session/update` that arrives while the request is open — not the answer, not the trace, not the usage. The pump handles messages in order, so every replayed
+  update is handled before the load's response completes the request; nothing of the turn's own can arrive before its prompt is sent. The model check
+  (`NotOffered`, D10) then runs on the LOAD's announcement, exactly as on a new session's (E5.1 (a), the first branch).
+- **The lost session.** Any `AcpAgentException` on `session/load` becomes `AcpSessionLostException` → `AcpEnd.SessionLost`, word `AcpWords.SessionLostWord`
+  (`session_lost`), exit 70 — never keyed on the code (a bad `cwd` is the same `-32602`). Its reason is `AcpClient.LostLead` (the id in coai's words), then the
+  agent's code and message, with only Kimi's own echo `Unknown sessionId: <the id>` rewritten `Unknown sessionId: <id>` — a short id written over every
+  occurrence would garble the agent's words. The diagnosis reads the reason WITHOUT that lead (`AskAcpMode.Diagnosable`), so an id can never spell a known failure
+  and turn a lost session into a refusal or a spent allowance; it still reads the agent's message: `AskAcpMode.Named` turns a `SessionLost` that a known failure names into
+  `AgentFailed` with that failure (a load refused with `Authentication required` is `not_signed_in`, 77, end `agent_failed`), because the host reads `session_lost` as
+  "the conversation is gone" and a sign-in failure is not that. Nothing is prompted after a refused load.
+- **Every end has its own arms** (decision 9). `EndWord` and `EndExit` (now `internal`) name every `AcpEnd` explicitly — `Answered` → 0, `SessionLost` → 70,
+  `NotStarted`/`Deadline`/`Cancelled` → 69 — and keep a default arm only for a value nobody named; `EveryEnd_HasItsOwnWordAndExit_NoneFallsToADefaultArm` fails
+  when a new value falls to it (the default prints `cancelled` and exits 69). `KimiReport.End`'s remark lists `session_lost`.
+- **What the report carries for E5.4.** `sessionId` is the asked id on EVERY exit of a `--session` turn that prints a report — an agent refusal (65), a hold busy past
+  the deadline or taken too late (69), an executable that cannot start (69), a failure before or during the load, `session_lost`, a known failure — through
+  `AcpOutcome.NotStarted(why, session)` and the client's `Named` (the id the agent minted or loaded, else the asked one); a refusal of the argv (65 before any report)
+  prints none. `usage.tokensIn/tokensOut` are
+  the SESSION's totals from `/usage`, cumulative over every turn so far (the per-turn share is the host's, `ConsultationUsage.Less`); `end` is `session_lost` only when no
+  known failure named the refused load. `KimiReport` has no `SessionId` field yet — E5.4 decision 3 widens it.
+- **The probe's client** (`scripts/lib/kimi.mjs`, `acpTurn`) gained the two features M-K16 needed, after the measurement ran on a scratch driver: `loadUpdates`
+  (every `session/update` between the load request and its response — its kind, and for a text chunk the first 120 characters) and `endLikeTheShim`
+  (`session/cancel`, a quiet of 250 ms with no output and at most 1 s, the tree kill while the agent lives, and only then stdin closed). Its tree kill is by pid on
+  every host (`taskkill /T /F` on Windows; the pid's `SIGKILL` on POSIX, where only the unit tests' fake agent runs), and only while `stillRunning(child)` — neither
+  exited nor killed — so a late kill never reaches a pid another process holds now. `args` (default `['acp']`) lets a test start a node fake agent.
+- **A replayed tool call stays history.** While the replay window is open, `AcpSession` keeps only the tool-call ids it hears; a later `tool_call` or
+  `tool_call_update` of one of those ids is dropped, never merged into the turn's trace as an entry with an empty title and kind.
+
+Not covered by a test: a live load through the released binary (owed after the code, RESULTS §31), and the probe's M-K16 cell as a `--cells` arm (it ran on a
+scratch driver outside the repository, so it cannot be re-run from the repository yet). Tests: `AskAcpSessionTests`,
+`AKimiShimScenarioTests.TheTreeHold_IsTakenForALoadTurnToo`, and `scripts/lib/kimi.test.mjs` (S5.1.1–S5.1.2) — listed in [module_tests.md](module_tests.md).
+
+## The Kimi consultant — `KimiConsultant` (2026-10-16, E5.4 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md`)
+
+A `kimi` row answers `consult`. `ConsultantResolution.OnACli` gains `"kimi" => KimiOn(vendor)` — `VibeOn`'s shape: the `KimiRuntime` the row resolves to, else a
+new one, never another runtime — and `features.consultant` names `kimi`, so `Consulting` and `QuestionResolution.Answering` hold it (a question row on Kimi is
+still refused by the capability matrix until E5.6).
+
+```mermaid
+flowchart LR
+  L[ConsultantLaunch<br/>Workdir = coai-kimi/id/tree<br/>OwnedScratch = coai-kimi/id<br/>Handle = sessionId or empty] --> B[KimiConsultant.Build]
+  B -->|MustBeLaunchable · model = row's or KimiModels.Default| R[KimiRuntime.Build<br/>role consult · cwd = the snapshot]
+  R --> Q["--ask-acp --profile kimi --model m --cwd tree --home coai-kimi/id/kh-&lt;10 hex&gt; … [--session id]"]
+  Q -->|adapter = KimiRuntime| X[executor → KimiLaunch.TakeAsync → the shim]
+  X --> P[report] -->|sessionId| H[ReadHandle]
+  P -->|end = session_lost| D[DroppedTheConversation]
+  P -->|usage = the SESSION's totals| U[UsageIsCumulative → ConsultationUsage.Less]
+```
+
+- **Composed, never a second builder** (decision 1). `Build` validates the launch (`ConsultantLaunches.MustBeLaunchable`), resolves the model (the row's, else
+  `KimiModels.Default`, so the shim, the invocation's `Model` and the ledger name the same one — E4 decision 75), calls `inner.Build(RoleOf(launch), prompt, cwd, "",
+  OutputDir, settings)` and appends `AcpWords.SessionFlag <handle>` LAST when the launch carries a handle. The invocation's adapter is `inner`, so the executor asks
+  `KimiLaunch` (the host, the tools, the model, the built environment, the sign-in, the home's shape, the gate) exactly as for a reviewer. A planned launch goes through
+  `ConsultantLaunches.ForQuestion` (idempotent on Kimi's built environment) and stands where its plan says — E5.6's business.
+- **The cwd and the home are both required** (decision 2). The cwd is `Workdir` — the conversation's ONE stable snapshot (D6; a loaded session resolves paths against the
+  folder it was made in, M-K5) — and the home is `KimiHome.HomeFor(OwnedScratch, …)` = `<folder>\kh-<10 hex>`, never the folder itself (E5.3 decision a). A missing
+  `Workdir` or `OwnedScratch` is an `ArgumentException` naming it: never the checkout, never TEMP or the answers folder (D19).
+- **Memory, handle, usage, drop** (decisions 3–5). `Memory = VendorRemembers`; `ReadHandle` is `KimiReport.SessionId` — the report's `sessionId`, which `KimiReport`
+  now reads (a trailing, defaulted field: widened, not copied) — when `ConsultantHandle.IsWellFormed`, else empty. `UsageIsCumulative = true` (M-K5b): the service bills
+  each turn `ConsultationUsage.Less` of the session's total. `DroppedTheConversation` is the report's END word `AcpWords.SessionLostWord` — never its `reason`, never the
+  agent's text, so a reason that SAYS `session_lost` is not a drop.
+- **Declared, not decided by name** (decisions 6–7): `NeedsASanitisedSnapshot = true`, `HomesFolder = ConsultantHomes.Kimi`; `Toolbox` names `Read` inside the copy and
+  `Grep`/`Glob`, says writes and shell commands are refused, and never calls `Grep` or `Glob` bounded (M-K6: they read the disk directly).
+- **A test's seam for a runtime built BY NAME** — `KimiSeams.Using(host, seams)`, per async flow (the `VibePathBudget.Using` precedent): `new KimiRuntime(id)` reads
+  `KimiSeams.ForThisFlow` (this machine's host and seams unless a test stood in), so a scenario that drives the real `ConsultationService` runs the real launch control
+  over a fake person on any OS. `null` in the product; nothing else reads it.
+- **The limitation rows** (decision 8, `shared/consultant-limitations.json`): Windows `unconfined` — `Read` bounded to coai's copy, `Grep`/`Glob` read any file this user
+  can, every write and shell command refused — `measured` 2026-10-13 on kimi 2.1.1 (M-K6, M-K3, M-K4, M-K5, M-K5b); Linux, WSL and macOS `unmeasured` with a `source`
+  naming D18, as Vibe's rows do.
+
+Tests: `KimiConsultantTests` (S5.4.1–S5.4.6 and the declarations), `ConfinementPlannerTests` (S5.4.13), `ConsultantLimitationsTests` (S5.4.11), `FeatureAvailabilityTests`
+(S5.4.12), `CumulativeUsageTests` (S5.4.14, pure) and the service arms in `AKimiConsultationScenarioTests` — listed in [module_tests.md](module_tests.md).
