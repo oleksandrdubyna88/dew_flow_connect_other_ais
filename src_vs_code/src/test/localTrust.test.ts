@@ -30,6 +30,7 @@ function html(vendor: Vendor): string {
   return everyPageHtml({
     settings: DEFAULTS, vendors: [vendor], codexModels: [], agyModels: [], localEngines: { [vendor.id]: LOCAL },
     server: { kind: 'absent', version: '', remembered: false, updateOffered: false },
+    hostKind: 'windows',
     side: '',
     perSide: false, latestServerVersion: '', questions: [], sessions: [],
     openSections: ['reviewers'],

@@ -12976,3 +12976,12 @@ untouched: Kimi on Linux is a later release.
 - **Tests**: `vibeOnLinux.test.ts` (32) — the table, `namesWsl2` over eight banners, the host kind, the card note per host kind
   against 0.57.0 / 0.58.0 / unknown servers, the note per host kind, the hint, the five languages, the JSON rows;
   `vibeStageBoxes.test.ts` (2) — a host note does not grey the boxes, a server that does not know Vibe does.
+- **Code-gate follow-ups (2026-10-17).** `runtimeSkewNote(version, vendors, host)` and `PanelState.hostKind` are REQUIRED — no
+  default, no fallback; both are type properties held by `@ts-expect-error` tests (`runtimeSkewNoteHostRequired.test.ts`,
+  `panelStateHostKindRequired.test.ts`), and every `PanelState` fixture names `hostKind`. The host sentences interpolate the row's id and
+  runtime, which come from editable settings; the card draws the note through `escapeHtml` (`modelCard.ignoredNote`), and
+  `vibeNoteEscaped.test.ts` renders an id of `<img src=x onerror=alert(1)>` on WSL2, native Linux and WSL1 and holds that the page carries
+  no raw tag (teeth shown: with the escape removed it fails). `readProcVersion` rejects when `/proc/version` cannot be read
+  (`runningUnderWsl` still answers "not WSL"); `hostKind` logs ONE line through `console.warn` (the extension has no output channel;
+  its host-side diagnostics carry the `ConnectOtherAIs:` prefix into the extension-host log) naming the cause and that the host is treated as
+  native Linux (`hostKindLogsAnUnreadableBanner.test.ts`).

@@ -104,8 +104,11 @@ function sinceMet(since: string | undefined, installedServerVersion: string): bo
  * runtime but is older than `ON_LINUX_SINCE` is told to update; a native Linux host and WSL1 are told they are refused, at
  * any server version, because an update would not change that ({@link hostNote}). A server that does not know the runtime
  * at all has already said so — never two notes for one row.</p>
+ *
+ * <p>The host is REQUIRED. It used to default to Windows, so a caller that forgot it gave a WSL2 or native-Linux card no host
+ * note at all — silently the Windows answer. A missing argument is a compile error now.</p>
  */
-export function runtimeSkewNote(installedServerVersion: string, vendors: readonly ApiRow[], host: HostKind = 'windows'): string {
+export function runtimeSkewNote(installedServerVersion: string, vendors: readonly ApiRow[], host: HostKind): string {
   const api = apiRuntimeSkewNote(installedServerVersion, vendors);
   const switchedOn = vendors.filter((vendor) => vendor.enabled && vendor.runtime !== 'api');
   const held = switchedOn.filter((vendor) => !runtimeOnServer(vendor.runtime, installedServerVersion));

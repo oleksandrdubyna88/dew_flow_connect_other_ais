@@ -256,16 +256,16 @@ test('the version gate knows each runtime by its own release, and an unknown ser
 });
 
 test('the card’s note names the row and the release, and is silent when the row will run', () => {
-  assert.match(runtimeSkewNote(OLDER, [VIBE]), /vibe/u);
-  assert.ok(runtimeSkewNote(OLDER, [VIBE]).includes(VIBE_RUNTIME_SINCE));
-  assert.ok(runtimeSkewNote(OLDER, [VIBE]).includes(OLDER));
+  assert.match(runtimeSkewNote(OLDER, [VIBE], 'windows'), /vibe/u);
+  assert.ok(runtimeSkewNote(OLDER, [VIBE], 'windows').includes(VIBE_RUNTIME_SINCE));
+  assert.ok(runtimeSkewNote(OLDER, [VIBE], 'windows').includes(OLDER));
   // Measured 2026-10-13 (scripts/live-vibe-runtime-compat.mjs): the released 0.52.0 REFUSES the row by name — it does
   // not run it as codex, which only a server older than 0.44.0 did. The note claims only what is true of both.
-  assert.doesNotMatch(runtimeSkewNote(OLDER, [VIBE]), /Codex CLI/u);
-  assert.equal(runtimeSkewNote(VIBE_RUNTIME_SINCE, [VIBE]), '');
-  assert.equal(runtimeSkewNote('', [VIBE]), '', 'an unknown server is not called old');
-  assert.equal(runtimeSkewNote(OLDER, [{ ...VIBE, enabled: false }]), '', 'a switched-off row does not cross anyway');
-  assert.equal(runtimeSkewNote(OLDER, DEFAULT_VENDORS), '');
+  assert.doesNotMatch(runtimeSkewNote(OLDER, [VIBE], 'windows'), /Codex CLI/u);
+  assert.equal(runtimeSkewNote(VIBE_RUNTIME_SINCE, [VIBE], 'windows'), '');
+  assert.equal(runtimeSkewNote('', [VIBE], 'windows'), '', 'an unknown server is not called old');
+  assert.equal(runtimeSkewNote(OLDER, [{ ...VIBE, enabled: false }], 'windows'), '', 'a switched-off row does not cross anyway');
+  assert.equal(runtimeSkewNote(OLDER, DEFAULT_VENDORS, 'windows'), '');
 });
 
 test('an older build stands down before a settings file a newer build wrote with a vibe row in it', async () => {
