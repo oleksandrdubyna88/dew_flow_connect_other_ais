@@ -3532,7 +3532,6 @@ flowchart LR
 
 ## Linux building blocks for Kimi — the Kimi-independent half of E5 (2026-10-16, `todo/PLAN_kimi_and_vibe_on_linux.md` DL6–DL10; A2 and A3 specs)
 
-<<<<<<< HEAD
 Mechanical pieces, built before the Kimi launch is opened on Linux (`KimiLaunch.HostRefusal` is NOT lifted — that is E6), **the pieces were built first and wired into nothing; A2 (below) wires the lock, the listing and the junction shell, A3 (below) built the teardown and the survivor marker, and the integration step joins them to A2’s seam**: before A2 no `KimiCredentialsLock`, `KimiLaunch`, `AcpTransport`,
 `AskAcpMode`, `ForeignKimi` or `HostProcessList` code calls them. Each file that comes from wsl_care (MIT, the same owner) says so in a header; what was not ported is named there too.
 
