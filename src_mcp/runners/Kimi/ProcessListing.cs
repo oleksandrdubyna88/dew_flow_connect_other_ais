@@ -1,7 +1,7 @@
 namespace CoaiMcp.Runners.Kimi;
 
 /// <summary>One running process, as a read-only listing gives it: nothing here can end it.</summary>
-/// <remarks><see cref="Name"/> is the image name on Windows and the basename of the <c>/proc/&lt;pid&gt;/exe</c> link on Linux; <see cref="Comm"/> is Linux's <c>comm</c> (the kernel's thread name, empty on Windows).</remarks>
+/// <remarks><see cref="Name"/> is the image name on Windows and the basename of the <c>/proc/&lt;pid&gt;/exe</c> link on Linux — or, where that link is hidden from this account, the basename of <c>argv[0]</c> (DL10); <see cref="Comm"/> is Linux's <c>comm</c> (the kernel's thread name, empty on Windows).</remarks>
 public sealed record ProcessEntry(int Pid, int ParentPid, string Name, string Comm = "");
 
 /// <summary>What a look at the machine's processes produced — a closed union, so "the host could not say" is never an empty list (DL10 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>).</summary>

@@ -120,4 +120,17 @@ public sealed class ProcStatTests
         reads.ExeTarget(int.MaxValue).Should().BeEmpty("ENOENT: no executable");
         FluentActions.Invoking(() => reads.OwnerUid(int.MaxValue)).Should().Throw<IOException>();
     }
+
+    [Fact]
+    public void TheRealCmdline_OfThisProcess_HoldsItsArgvZero_AndAGonePidIsGone()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "/proc is Linux's");
+
+        var cmdline = ProcReads.Real.Cmdline(Environment.ProcessId);
+
+        cmdline.Split((char)0)[0].Should().NotBeEmpty("a running test host was started with an argv[0]");
+        cmdline.Should().EndWith(((char)0).ToString(), "every argument of a cmdline is NUL-ended");
+        FluentActions.Invoking(() => ProcReads.Real.Cmdline(int.MaxValue)).Should().Throw<IOException>("a pid that is not there is gone (a DirectoryNotFoundException or a FileNotFoundException)")
+            .Which.GetType().Should().Match(type => type == typeof(DirectoryNotFoundException) || type == typeof(FileNotFoundException));
+    }
 }

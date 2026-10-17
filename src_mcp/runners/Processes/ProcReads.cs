@@ -24,6 +24,12 @@ public interface IProcReads
     /// thread), and <see cref="UnauthorizedAccessException"/> for <c>EACCES</c> (another account's process), <see cref="IOException"/> for any other errno.</summary>
     string ExeTarget(int pid);
 
+    /// <summary>
+    /// The text of <c>/proc/&lt;pid&gt;/cmdline</c>: the arguments, each ended by NUL (empty for a kernel thread). Read when a same-account <c>exe</c> is denied — DL10's fall-back to <c>argv[0]</c>. Throws
+    /// <see cref="FileNotFoundException"/> / <see cref="DirectoryNotFoundException"/> when the process is not there (gone), <see cref="UnauthorizedAccessException"/> / <see cref="IOException"/> for any other failure.
+    /// </summary>
+    string Cmdline(int pid);
+
     /// <summary>This process's effective uid (<c>geteuid</c>).</summary>
     uint OwnUid();
 }
@@ -55,6 +61,18 @@ public sealed partial class ProcReads : IProcReads
         catch (IOException) when (!Directory.Exists($"/proc/{pid}"))
         {
             // A process that exits while its stat is being read answers ESRCH from read(): it LEFT, which is not "could not be read".
+            throw new DirectoryNotFoundException($"/proc/{pid} left while it was being read");
+        }
+    }
+
+    public string Cmdline(int pid)
+    {
+        try
+        {
+            return File.ReadAllText($"/proc/{pid}/cmdline");
+        }
+        catch (IOException) when (!Directory.Exists($"/proc/{pid}"))
+        {
             throw new DirectoryNotFoundException($"/proc/{pid} left while it was being read");
         }
     }

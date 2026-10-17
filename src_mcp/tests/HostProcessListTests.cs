@@ -97,6 +97,8 @@ public sealed class HostProcessListTests
 
         public uint OwnerUid(int pid) => inner.OwnerUid(pid);
 
+        public string Cmdline(int pid) => inner.Cmdline(pid);
+
         public string ExeTarget(int pid) => inner.ExeTarget(pid);
 
         public uint OwnUid() => inner.OwnUid();
@@ -115,7 +117,9 @@ public sealed class HostProcessListTests
             return;
         }
 
-        // DL10 makes a same-account process whose exe cannot be read an unreadable listing (so Busy): an environment fact, not a defect of the reader. Said with what the kernel says about that process.
+        // A same-account process hiding its exe is NOT enough (DL10, re-decided 2026-10-17: argv[0] and comm name it): only one whose cmdline is hidden too may make the machine's listing unreadable —
+        // an environment fact, said with what the kernel says about that process. Any other unreadable listing is a defect of the reader.
+        unreadable.Reason.Should().Contain("/cmdline", "a hidden exe alone made the listing unreadable: the argv[0] fall-back did not run");
         Assert.Skip($"this machine's process list is unreadable by DL10's rule: {unreadable.Reason} — {Describe(unreadable.Reason)}");
     }
 

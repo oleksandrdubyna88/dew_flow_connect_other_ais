@@ -227,13 +227,14 @@ public sealed class ForeignKimiTests
     }
 
     [Fact]
-    public void ASameUserProcessWhoseExeCannotBeRead_MakesTheListingUnreadable()
+    public void ASameUserProcessWhoseExeAndCmdlineCannotBeRead_MakesTheListingUnreadable()
     {
         var proc = ATerminalsKimi();
         proc.With(888, "S", 1);
         proc.Exes[888] = () => throw new UnauthorizedAccessException("denied");
+        proc.Cmdlines[888] = () => throw new UnauthorizedAccessException("denied");
 
-        new LinuxProcessListing(proc, Shim).Snapshot().Should().BeOfType<ProcessListing.Unreadable>().Which.Reason.Should().Contain("/proc/888/exe");
+        new LinuxProcessListing(proc, Shim).Snapshot().Should().BeOfType<ProcessListing.Unreadable>().Which.Reason.Should().Contain("/proc/888/exe").And.Contain("/proc/888/cmdline");
     }
 
     [Fact]
