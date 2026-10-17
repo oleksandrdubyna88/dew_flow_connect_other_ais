@@ -42,6 +42,12 @@ export const FEATURES = {
    * that lists it; an older one gets the generic toast and the page's own stat, as before.
    */
   settingProblems: 'settingProblems',
+  /**
+   * A row's `maxPromptKib`: the most its reviewer is sent in a first prompt; an over-cap reviewer is left out of the round, said
+   * in the reply (todo/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md D6). An older binary skips the member and would
+   * launch the reviewer anyway, so the field crosses only to a binary that lists this.
+   */
+  maxPromptKib: 'maxPromptKib',
 } as const;
 
 export interface BinaryFeatures {
