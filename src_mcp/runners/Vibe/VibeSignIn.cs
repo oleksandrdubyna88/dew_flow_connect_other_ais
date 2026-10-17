@@ -31,9 +31,14 @@ public sealed record VibeSignIn(string PersonsEnvFile)
             ? None
             : new(Path.GetFullPath(Path.Combine(PersonsHome(environment(VibeLaunch.HomeVariable), userProfile), LinkName)));
 
-    /// <summary>The person's Vibe home: <c>VIBE_HOME</c> when it names one, else <c>~/.vibe</c>.</summary>
+    /// <summary>
+    /// The person's Vibe home: <c>VIBE_HOME</c> when it names an ABSOLUTE folder, else <c>~/.vibe</c>. A relative (<c>.vibe</c>) or unexpanded
+    /// (<c>~/.vibe</c>, <c>$HOME/.vibe</c>) value would be resolved by <see cref="Path.GetFullPath(string)"/> against coai-mcp's working
+    /// folder — often the reviewed repository, whose committed <c>.vibe/.env</c> would then be linked. (<c>VibeRuntime</c>'s uv-folder
+    /// rule takes absolute variables only, for the same reason.)
+    /// </summary>
     private static string PersonsHome(string? fromEnvironment, string userProfile) =>
-        string.IsNullOrWhiteSpace(fromEnvironment) ? Path.Combine(userProfile, ".vibe") : fromEnvironment;
+        fromEnvironment is { Length: > 0 } && Path.IsPathRooted(fromEnvironment) ? fromEnvironment : Path.Combine(userProfile, ".vibe");
 
     /// <summary>This process's: from its own environment and profile folder, on this host.</summary>
     public static VibeSignIn ForThisProcess(HostKind host) =>

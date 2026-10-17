@@ -50,6 +50,53 @@ public sealed class VibeSignInLinkTests : IDisposable
         disk.RemoveCalls.Should().Be(0);
     }
 
+    /// <summary>
+    /// The A1 spec §3.2 step 2 said the right link on a second turn is `Linked` with nothing touched. It is not safe: the person's file can
+    /// change between turns (a variable appended, chmod 666, replaced by a FIFO) and the second turn would run un-judged. The target is
+    /// judged again on EVERY turn; the link is not remade.
+    /// </summary>
+    [Theory]
+    [InlineData("content", "VIBE_MCP_SERVERS=[]\nMISTRAL_API_KEY=sk-test-canary\n", "line 1")]
+    [InlineData("content", "MISTRAL_API_KEY=sk-test-canary\nVIBE_X=1\n", "line 2")]
+    [InlineData("unreadable", "writable by group or others (mode 666)", "chmod 600")]
+    [InlineData("unreadable", "not a regular file (a FIFO)", "Vibe itself can read a FIFO sign-in")]
+    [InlineData("unreadable", "a symbolic link, never followed", "never chains links")]
+    public void TheSameHomesSecondTurn_JudgesTheTargetAgain_AndRefusesWhatChangedUnderIt(string how, string what, string said)
+    {
+        var disk = new FakeSignInDisk();
+        Make(disk).Should().BeOfType<SignInLink.Linked>();
+        disk.Judged = how == "content" ? new FileReadResult.Content(System.Text.Encoding.UTF8.GetBytes(what)) : new FileReadResult.Unreadable(what);
+
+        var second = Make(disk);
+
+        second.Should().BeOfType<SignInLink.Refused>("a second turn ran on a sign-in nobody judged: the person's file changed between the turns").Which.Sentence.Should().Contain(said);
+        disk.LinkCalls.Should().Be(1, "the link is not remade");
+        disk.RemoveCalls.Should().Be(0, "and not removed: it is the person's file that changed, not coai's link");
+    }
+
+    [Fact]
+    public void TheSameHomesSecondTurn_AdmitsAKeyTheyRotated_WithoutRemakingTheLink_AndZeroesTheBuffer()
+    {
+        var disk = new FakeSignInDisk();
+        Make(disk);
+        disk.Judged = new FileReadResult.Content(System.Text.Encoding.UTF8.GetBytes("MISTRAL_API_KEY=sk-test-rotated\n"));
+
+        Make(disk).Should().BeOfType<SignInLink.Linked>("legitimate key rotation stays admitted");
+
+        disk.LinkCalls.Should().Be(1);
+        disk.LastBuffer.Should().NotBeEmpty().And.OnlyContain(b => b == 0, "the second turn's buffer is zeroed too");
+    }
+
+    [Fact]
+    public void TheSameHomesSecondTurn_WhenThePersonsFileIsGone_FallsThroughSignedOut()
+    {
+        var disk = new FakeSignInDisk();
+        Make(disk);
+        disk.Judged = new FileReadResult.Missing();
+
+        Make(disk).Should().BeOfType<SignInLink.NoSignIn>();
+    }
+
     /// <summary>S-V3, the maker's half: the shape check owns every other `.env`; one the maker meets is not its to delete.</summary>
     [Fact]
     public void ALinkThatIsAlreadyThere_ToAnotherTarget_IsRefused_AndNothingIsDeleted()
@@ -176,12 +223,11 @@ public sealed class VibeSignInLinkTests : IDisposable
     {
         foreach (var text in new[] { "MISTRAL_API_KEY=sk-test-canary\n", "VIBE_X=sk-test-canary\n" })
         {
-            var bytes = System.Text.Encoding.UTF8.GetBytes(text);
-            var disk = new FakeSignInDisk { Judged = new FileReadResult.Content(bytes) };
+            var disk = new FakeSignInDisk { Judged = new FileReadResult.Content(System.Text.Encoding.UTF8.GetBytes(text)) };
 
             Make(disk);
 
-            bytes.Should().OnlyContain(b => b == 0, $"the file's bytes must not outlive the scan ({text.Split('=')[0]})");
+            disk.LastBuffer.Should().NotBeEmpty().And.OnlyContain(b => b == 0, $"the file's bytes must not outlive the scan ({text.Split('=')[0]})");
         }
     }
 

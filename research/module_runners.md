@@ -3062,8 +3062,11 @@ sequenceDiagram
   (`Known`: `2.26.1 (win32), 2.26.1 (linux)`). `logs/session/unified/.session-index.json` joined `varying` on every platform (session data).
 - **The sign-in is LINKED, never copied** (DL2; A1 spec; the cornerstone area): on a host that links one (`VibeSignIn.Links` — WSL2; never
   Windows, where the sign-in is the keyring) the launch control makes `HOME/.env` → the person's `<VIBE_HOME or ~/.vibe>/.env` between the
-  first shape check and `--version` (`VibeSignInLink.Make`). In order: something already at the name → the right link (the same home's second
-  turn) is `Linked`, anything else is refused and never deleted; else the target is read through ONE descriptor (`RegularFiles.ReadOwned`,
+  first shape check and `--version` (`VibeSignInLink.Make`). In order: something at the name that is not the right link is refused and
+  never deleted; then the target is judged on EVERY turn, the same home's second included (this corrects the A1 spec §3.2 step 2, which
+  answered `Linked` for the right link without looking: the person's file can change between turns — a `VIBE_*` appended, `chmod 666`, a FIFO —
+  and the turn would run un-judged; an admitted file on a second turn is `Linked` without remaking the link, and a rotated key stays
+  admitted): the target is read through ONE descriptor (`RegularFiles.ReadOwned`,
   ported from wsl_care's Linux leg: `open(O_NOFOLLOW|O_NONBLOCK|O_CLOEXEC)`, then `statx` of THAT descriptor for type, owner = `geteuid`,
   no group/other write bit, then at most 64 KiB, one byte more refused; a link, FIFO, socket or device is refused, never waited on) — missing →
   `NoSignIn` (no link, Vibe runs signed out); then its variable NAMES are scanned (`DotenvNames.Judge`: python-dotenv's name grammar over BYTES,
@@ -3079,6 +3082,12 @@ sequenceDiagram
   own account (or root) able to swap the file between them. L-V8 (recorded, RESULTS §30.8): Vibe does not load a `.env` from its working
   folder, so none joins the snapshot exclusions. **Deleters** (S-V10): the existing ones already unlink a file link by its own name; a Linux
   test pins that the person's file keeps bytes, mode and mtime on every route.
+- **Three hardenings of the same link** (the E2 security review): `VIBE_HOME` is the person's Vibe home only when it is ABSOLUTE (a relative
+  or unexpanded value would resolve against coai-mcp's cwd — often the reviewed repository — and link ITS `.vibe/.env`); `RegularFiles.Capped`
+  zeroes the array it reads into after a success, an oversized file and a read that throws (the copy handed out is the caller's to zero); and a
+  libc without `statx` (glibc before 2.28: `EntryPointNotFoundException`, `DllNotFoundException`) is a refusal with a reason, not an exception.
+  Stated residual: `VibeSignInLink.LeftOver` removes by name what is at the link path after a failed step, so something the person's own
+  account puts there between the check and the link is removed with it.
 - **Where the host comes from.** `VibeHost(Kind, Wsl, SignIn)`: the product's adapter takes `VibeHost.Current` (this process: `HostKinds.Current`,
   `WslGenerations.Current` — `NamesWsl2`: the banner holds `WSL2` or `microsoft-standard`; WSL1 is `NamesWsl` but not that — and
   `VibeSignIn.ForThisProcess`); an adapter built with a `HostKind` (a test) carries NO sign-in and no WSL unless told, so a test never reads the

@@ -8,6 +8,7 @@
 // Kimi's sign-in too (Junctions.Resolved); only the FINAL component is coai's to judge.
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using System.Security.Cryptography;
 using Microsoft.Win32.SafeHandles;
 
 namespace CoaiMcp.Runners.Files;
@@ -38,20 +39,28 @@ public static partial class RegularFiles
     /// </summary>
     public static FileReadResult ReadOwned(string path, int maxBytes, uint owner)
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return new FileReadResult.Unreadable(LinuxOnly);
-        }
+        return Guarded(() => OperatingSystem.IsLinux() ? ReadLinuxOwned(path, maxBytes, owner) : new FileReadResult.Unreadable(LinuxOnly));
+    }
 
+    /// <summary>Runs one read and turns what a file's state or this libc can throw into a result — a seam, so a host with no <c>statx</c> is a test.</summary>
+    internal static FileReadResult Guarded(Func<FileReadResult> read)
+    {
         try
         {
-            return ReadLinuxOwned(path, maxBytes, owner);
+            return read();
+        }
+        catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException)
+        {
+            return new FileReadResult.Unreadable(NoStatx);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
         {
             return e is FileNotFoundException or DirectoryNotFoundException ? new FileReadResult.Missing() : new FileReadResult.Unreadable(e.Message);
         }
     }
+
+    /// <summary>glibc before 2.28 has no <c>statx</c>: the judgement cannot be made, so there is no link — and the reason says so.</summary>
+    public const string NoStatx = "statx is not available in this libc — Vibe on this distribution is unmeasured";
 
     /// <summary>This process's effective uid on Linux — whose sign-in coai links; 0 elsewhere.</summary>
     public static uint EffectiveUid() => OperatingSystem.IsLinux() ? Native.GetEffectiveUid() : 0;
@@ -116,14 +125,22 @@ public static partial class RegularFiles
     internal static FileReadResult Capped(Stream stream, int maxBytes)
     {
         var buffer = new byte[maxBytes + 1];
-        var total = 0;
-        int read;
-        while (total < buffer.Length && (read = stream.Read(buffer, total, buffer.Length - total)) > 0)
+        try
         {
-            total += read;
-        }
+            var total = 0;
+            int read;
+            while (total < buffer.Length && (read = stream.Read(buffer, total, buffer.Length - total)) > 0)
+            {
+                total += read;
+            }
 
-        return total > maxBytes ? new FileReadResult.Unreadable(FileReadResult.TooLarge(maxBytes)) : new FileReadResult.Content(buffer[..total]);
+            return total > maxBytes ? new FileReadResult.Unreadable(FileReadResult.TooLarge(maxBytes)) : new FileReadResult.Content(buffer[..total]);
+        }
+        finally
+        {
+            // The array the stream filled may hold a credential: the copy handed out is the caller's to zero, this one is ours.
+            CryptographicOperations.ZeroMemory(buffer);
+        }
     }
 
     private static string Describe(int type) => type switch

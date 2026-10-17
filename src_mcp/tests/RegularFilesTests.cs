@@ -58,6 +58,98 @@ public sealed class RegularFilesTests : IDisposable
         RegularFiles.Capped(over, DotenvNames.MaxBytes).Should().BeOfType<FileReadResult.Unreadable>().Which.Reason.Should().Be("larger than 65536 bytes");
     }
 
+    /// <summary>
+    /// The credential-bearing array the cap reads INTO is erased, not just the copy handed out: after a success, after an oversized file and
+    /// after a read that throws, the array the stream was given holds no byte of what it served.
+    /// </summary>
+    [Fact]
+    public void The_array_the_cap_reads_into_is_zeroed_after_a_success()
+    {
+        using var stream = new KeepingStream("MISTRAL_API_KEY=sk-test-canary\n"u8.ToArray());
+
+        var read = RegularFiles.Capped(stream, 1024).Should().BeOfType<FileReadResult.Content>().Subject;
+
+        read.Bytes.Should().Equal("MISTRAL_API_KEY=sk-test-canary\n"u8.ToArray(), "the copy handed out holds the file");
+        stream.Given.Should().NotBeEmpty().And.OnlyContain(b => b == 0, "the array the cap read into must not keep the credential");
+    }
+
+    [Fact]
+    public void The_array_the_cap_reads_into_is_zeroed_after_an_oversized_file()
+    {
+        using var stream = new KeepingStream(Enumerable.Repeat((byte)'k', 2048).ToArray());
+
+        RegularFiles.Capped(stream, 1024).Should().BeOfType<FileReadResult.Unreadable>();
+
+        stream.Given.Should().NotBeEmpty().And.OnlyContain(b => b == 0);
+    }
+
+    [Fact]
+    public void The_array_the_cap_reads_into_is_zeroed_when_a_read_throws()
+    {
+        using var stream = new KeepingStream("MISTRAL_API_KEY=sk-test-canary\n"u8.ToArray()) { ThrowAfterFirstRead = true };
+
+        var capped = () => RegularFiles.Capped(stream, 1024);
+
+        capped.Should().Throw<IOException>();
+        stream.Given.Should().NotBeEmpty().And.OnlyContain(b => b == 0, "an exception in the middle of a read must not leave the credential behind");
+    }
+
+    /// <summary>glibc before 2.28 has no <c>statx</c> (and a libc may be missing altogether): a refusal with a reason, never an exception out of the launch.</summary>
+    [Theory]
+    [InlineData(typeof(EntryPointNotFoundException))]
+    [InlineData(typeof(DllNotFoundException))]
+    public void A_libc_without_statx_is_a_refusal_never_an_exception(Type failure)
+    {
+        var read = RegularFiles.Guarded(() => throw (Exception)Activator.CreateInstance(failure)!);
+
+        read.Should().BeOfType<FileReadResult.Unreadable>().Which.Reason.Should().Be("statx is not available in this libc — Vibe on this distribution is unmeasured");
+    }
+
+    /// <summary>Serves its bytes in two reads and keeps the array it was handed.</summary>
+    private sealed class KeepingStream(byte[] content) : Stream
+    {
+        private int _at;
+
+        public byte[] Given { get; private set; } = [];
+
+        public bool ThrowAfterFirstRead { get; init; }
+
+        public override bool CanRead => true;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => false;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position { get => _at; set => throw new NotSupportedException(); }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            Given = buffer;
+            if (ThrowAfterFirstRead && _at > 0)
+            {
+                throw new IOException("Input/output error");
+            }
+
+            var n = Math.Min(Math.Min(count, ThrowAfterFirstRead ? 10 : count), content.Length - _at);
+            Array.Copy(content, _at, buffer, offset, n);
+            _at += n;
+
+            return n;
+        }
+
+        public override void Flush()
+        {
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
     /// <summary>A file coai links is its owner's alone: another uid, or a group / other write bit, is a refusal naming which.</summary>
     [Theory]
     [InlineData(1000u, 0x81A4, 1000u, "")]
