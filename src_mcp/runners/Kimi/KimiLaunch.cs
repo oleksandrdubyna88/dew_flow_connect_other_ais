@@ -104,7 +104,8 @@ public static class KimiLaunch
     {
         try
         {
-            var standing = await KimiSurvivors.Gate.BlockedAsync(KimiCredentialsLock.MarkerPathFor(places.Credentials), ct);
+            var marker = KimiCredentialsLock.MarkerPathFor(places.Credentials);
+            var standing = marker.Length == 0 ? KimiCredentialsLock.Unnamed(places.Credentials) : await KimiSurvivors.Gate.BlockedAsync(marker, ct);
             if (standing.Length > 0)
             {
                 Given(gate, turn);

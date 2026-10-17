@@ -62,6 +62,13 @@ public static class KimiShimHold
     private static AcpHolding WithNoSurvivors(TreeHolding.Taken taken, string ownedRoot, string target, bool supervised)
     {
         var marker = KimiCredentialsLock.MarkerPathFor(target);
+        if (marker.Length == 0)
+        {
+            taken.Hold.Dispose();
+
+            return new AcpHolding.Unusable(KimiCredentialsLock.Unnamed(target));
+        }
+
         var standing = KimiSurvivors.Gate.BlockedAsync(marker, CancellationToken.None).GetAwaiter().GetResult();
         if (standing.Length > 0)
         {

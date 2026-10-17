@@ -220,6 +220,34 @@ public sealed class KimiShimHoldTests : IDisposable
     }
 
     [Fact]
+    public void AFolderThatVanishesAfterTheTreeHold_RefusesWithTheKeySentence_AndGivesTheHoldBack()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        using var rooted = KimiCredentialsLock.RootFor(Locks);
+        var places = MadePlaces();
+        TreeHolding Vanishing(string target, string root, TimeSpan within)
+        {
+            var taken = NonInheriting(target, root, within);
+            KimiCredentialsLock.Final = _ => string.Empty;
+
+            return taken;
+        }
+
+        AcpHolding holding;
+        try
+        {
+            holding = KimiShimHold.Taken(places, Brief, NobodyForeign(), Vanishing, supervised: true);
+        }
+        finally
+        {
+            KimiCredentialsLock.Final = null;
+        }
+
+        holding.Should().BeOfType<AcpHolding.Unusable>("an empty marker path was handed to the reconcile").Which.Sentence.Should().Contain("cannot be named by its handle").And.Contain(Persons);
+        HeldFile.Probe(KimiCredentialsLock.TreePathFor(Persons)).Should().Be(LockProbe.Free, "the hold is given back");
+    }
+
+    [Fact]
     public void OnLinux_TheShimsHold_IsSupervised_WithoutAnyFlag()
     {
         Assert.SkipUnless(OperatingSystem.IsLinux(), "the survivor supervision is Linux's");

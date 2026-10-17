@@ -224,6 +224,31 @@ public sealed class KimiLaunchControlTests : IDisposable
     }
 
     [Fact]
+    public async Task AFolderThatVanishesAfterTheGateWasTaken_RefusesWithTheKeySentence_NeverThrows_AndHoldsNothing()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        using var rooted = Rooted();
+        var places = _person.Places();
+        var fake = new FakeKimi();
+        var asked = 0;
+        KimiCredentialsLock.Final = _ => asked++ == 0 ? "the-folders-identity-at-the-take" : string.Empty;
+        LaunchTurn turn;
+        try
+        {
+            turn = await KimiLaunch.TakeAsync(HostKind.Windows, Request(places), places, fake, TestContext.Current.CancellationToken);
+        }
+        finally
+        {
+            KimiCredentialsLock.Final = null;
+        }
+
+        turn.Refusal.Should().Contain("cannot be named by its handle").And.Contain(places.Credentials, "a folder that vanished after the take has no marker path: the launch is refused, not thrown at");
+        fake.Started.Should().BeEmpty();
+        VibeHomeTurns.Held(places.OwnedRoot).Should().BeFalse("the turn taken first was given back");
+        HeldFile.IsHeld(KimiCredentialsLock.PathFor(places.Credentials)).Should().BeFalse("the gate was given back");
+    }
+
+    [Fact]
     public async Task AKernelWithNoPidfd_RefusesTheLaunch_BeforeAnythingIsTaken()
     {
         using var standIn = WindowsStandIn.Begin();

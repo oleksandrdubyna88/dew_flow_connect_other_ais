@@ -63,6 +63,11 @@ public static class KimiSurvivorMarker
     /// <summary>Reads the marker at <paramref name="path"/>.</summary>
     public static MarkerRead Read(string path)
     {
+        if (path.Length == 0)
+        {
+            return new MarkerRead.Unreadable("no path: the sign-in folder could not be keyed, so there is no marker file to name");
+        }
+
         try
         {
             return Parsed(File.ReadAllText(path));
@@ -83,7 +88,7 @@ public static class KimiSurvivorMarker
     /// <summary>Deletes the marker (a file already gone is fine).</summary>
     public static void Clear(string path) => File.Delete(path);
 
-    /// <summary>The markers under <paramref name="lockRoot"/> that name <paramref name="ownedRoot"/> — at most a handful of files, and never the sign-in folder; an unreadable file is skipped here (the launch's own gate refuses it).</summary>
+    /// <summary>The markers under <paramref name="lockRoot"/> that name <paramref name="ownedRoot"/> — at most a handful of files, and never the sign-in folder; an unreadable file is skipped here (the launch's own gate refuses it). <b>That is the safe direction:</b> a home that only an unreadable marker names can be disposed, but its sign-in is never launched on while that file stands — the gate reads the same file, cannot parse it, and is Blocked — so a skipped marker never lets a second Kimi in; at worst it lets an owned home (which holds no sign-in of its own, only the junction to it) be deleted.</summary>
     public static IReadOnlyList<StandingMarker> StandingFor(string lockRoot, string ownedRoot) =>
         [.. FilesUnder(lockRoot).Select(path => (Path: path, Read: Read(path)))
             .Where(found => found.Read is MarkerRead.Read read && SameRoot(read.Marker.OwnedRoot, ownedRoot))

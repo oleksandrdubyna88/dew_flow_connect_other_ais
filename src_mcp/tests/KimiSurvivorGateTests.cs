@@ -124,6 +124,10 @@ public sealed class KimiSurvivorGateTests : IDisposable
         KimiSurvivorGate.Sentence(blocked).Should().Contain(MarkerPath).And.Contain("could not be read");
     }
 
+    [Fact]
+    public void AMarkerWithNoPath_IsUnreadable_NeverAThrow() =>
+        KimiSurvivorMarker.Read(string.Empty).Should().BeOfType<MarkerRead.Unreadable>("an empty path (the folder could not be keyed) was read as a file name").Which.Reason.Should().Contain("no path");
+
     // ---------- the marker's OWNER is asked first: a live turn's marker is never an orphan's ----------
 
     private const int Owner = 424242;

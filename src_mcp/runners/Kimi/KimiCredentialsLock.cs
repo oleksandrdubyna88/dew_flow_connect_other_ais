@@ -253,7 +253,8 @@ public static class KimiCredentialsLock
     private static string Named(string target, string suffix) =>
         KeyFor(target) is { Length: > 0 } key ? Path.Combine(Root, key + suffix) : string.Empty;
 
-    private static string Unnamed(string target) =>
+    /// <summary>The refusal for a folder that has no key (it vanished, or was never keyable) — the one sentence every caller of <see cref="KeyFor"/> says.</summary>
+    internal static string Unnamed(string target) =>
         $"the Kimi sign-in folder {target} cannot be named by its handle, so coai cannot key its lock — refused (D19)";
 
     /// <summary>The lock folder made; the unusable answer when it cannot be (a file where it should be, no access).</summary>
