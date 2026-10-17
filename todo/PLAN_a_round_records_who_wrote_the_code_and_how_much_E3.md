@@ -1,6 +1,6 @@
 # PLAN — E3: the caller's own transcript, read text-free (`CallerTranscript` → `ObservedSession`)
 
-> Status: **plan only, nothing implemented yet, 2026-10-14.** Epic E3 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
+> Status: **E3.S1–S3 coded on `feat/round-authors-e3` (b24c81ae, 64ee32a6, f9da2839), 2026-10-17; E3.S4 (the cornerstone) and E3.S5 are open — S4 is coded after PR #851 merges.** Epic E3 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
 > Scope: `src_mcp/src/Store` — a new reader keyed by the caller's session id, the text-free read helpers lifted out of
 > `AgentLog.cs` (its behaviour kept), and one helper in `src_mcp/runners` widened. No schema step, no call site in
 > `RoundEngine.cs`/`PanelService.cs`, nothing persisted: E5 stores, E4 attributes. Five stories; ONE cornerstone,
@@ -30,6 +30,18 @@
 >    clock in a test is taken from the fixture's own instants, never from `DateTime.UtcNow` (§4).
 > 7. **§6 records three new defects in the parent** (items 12–14). The parent itself is not edited here. *(Applied to the
    parent by the main session on 2026-10-16, with the rest of §8.2 and the E1 follow-up recorded in its E1 entry.)*
+> 8. **Revised 2026-10-17 by Fable, after E3.S1–S3 were coded on this branch** (b24c81ae, 64ee32a6, f9da2839; the code is
+>    not touched) **and after E4's S2 was decided** (E4 §S2.2b and its *Cross-epic consequences*, `30362785`). Documents
+>    only. E3.S4 gains `ObservedWrite.AnsweredUtc` (S4-22), the state of a present agent file with no stamped line
+>    (S4-23), the facts the S1–S3 code settled (the table *What the S1–S3 code settled*, C1–C7), tests 55–58 and three
+>    break-its; E3.S2's two fixture checks move into S4's test list (tests 57–58), because they need S4's materialiser.
+>    §8 items 1 and 2 are **delivered by PR #851** (`fix/e1-fixture-results`, open, not merged on 2026-10-17); S4 tests 7,
+>    13 and 43 run on its fixtures once it merges. The mapping onto E4's records is E4.S5's `AttributionMapping.cs`
+>    (E4 Resolutions II, B1): E3 describes it and builds nothing of it. **The Opus judge's review of S1–S3** (same day;
+>    no blocker) is applied to the briefs where it changed a rule: S3 caches by the exact full directory after
+>    `Path.GetFullPath` (H1, M2 — the brief's lower-cased cache key was a defect on Linux), S1 skips a UTF-8 BOM at
+>    offset 0 (M1), the splitter types get their own files (L1), and `Where` is a text key with stated limits for E4
+>    (L8, §3.3 and C6).
 
 ## 1. The goal, and where this epic stops
 
@@ -49,7 +61,8 @@ files, keyed by the session id, never by `cwd`, and never holding a byte of prom
 
 E3.S1–S3 build on synthetic files written by their own tests. E3.S4 and E3.S5 run over E1's fixtures. **E1 has
 landed them** (E1.S5, #828). §7 and §9 are decided (Fable, 2026-10-16); E3.S4 is coded after E1's re-cut PR (§8 item 1,
-`fix/e1-fixture-results`) is merged (G15, the coordinator's decision) — no interim.
+`fix/e1-fixture-results` — **PR #851, open on 2026-10-17**) is merged (G15, the coordinator's decision) — no interim.
+E3.S1–S3 are coded on this branch (2026-10-17, status block item 8).
 
 ## 2. What the reader is built on
 
@@ -80,7 +93,11 @@ landed them** (E1.S5, #828). §7 and §9 are decided (Fable, 2026-10-16); E3.S4 
 
 No code reads the Claude session registry today: there is no `CLAUDE_PID` in any `.cs` file under `src_mcp` (checked
 again 2026-10-16). S2 adds that read. Nothing of E3 exists on main yet (no `TranscriptLines`, `CallerTranscriptLocator`
-or `ObservedSession`).
+or `ObservedSession`). *(2026-10-17: on this branch, S1–S3 exist — `src_mcp/src/Store/TranscriptLines.cs` and the
+splitter (`TranscriptLineSplitter.cs` at b24c81ae; `LineSplitter.cs` + `GatedLines.cs` after the judge's L1),
+`CallerTranscriptLocator.cs` and `src_mcp/tests/TestClaudeHome.cs` (64ee32a6), `WriteEvidence.cs` and
+`src_mcp/runners/Worktrees/GitMarker.cs` (f9da2839, with the judge's H1/M2 fixes after it). `ObservedSession` still
+does not. What their code settled for S4 is the table *What the S1–S3 code settled* inside E3.S4.)*
 
 ### 2.2 In one transcript folder (this machine, 2026-10-14; field names and counts only, no content)
 
@@ -149,12 +166,12 @@ Source: `research/RESULTS_caller_transcripts_on_both_sides.md`, measured 2026-10
 | c09 | `no-evidence-two-repositories` | 1 · 0 · 0 · 0 | no write |
 | c10 | `persistence-off` | — · — · — · — | no `projects/`; `sessions/41017.json` names the caller id |
 | c11 | `refused-agent-call` | 1 · 0 · 0 · 1 | the call's `tool_result` has `is_error: true` |
-| c12 | `registry-and-variable-disagree` | 1 · 0 · 0 · 0 | `sessions/52044.json` names an id that has NO transcript; 2 writes, 1 without a `tool_result` |
+| c12 | `registry-and-variable-disagree` | 1 · 0 · 0 · 0 | `sessions/52044.json` names an id that has NO transcript; 2 writes, 1 without a `tool_result` *(before #851; after it both are answered: L1 at L3 `:04`, L9 at L10 `:09`)* |
 | c13, c15, c16 | `replay-same-round-twice`, `second-gate-session-same-caller`, `skipped-round-between-recorded` | 1 · 0 · 0 · 0 | rounds-file cases (E4's); 1 answered write each |
 | c14 | `resumed-agent` | 1 · 1 · 1 · 1 | 21 ids; the `Agent` call has no `tool_result`, but its meta joins it |
-| c17 | `two-repositories-one-session` | 1 · 0 · 0 · 0 | 2 writes (`repo-a`, `repo-b`); the `repo-b` write has **no `tool_result`** |
+| c17 | `two-repositories-one-session` | 1 · 0 · 0 · 0 | 2 writes (`repo-a`, `repo-b`); the `repo-b` write has **no `tool_result`** *(before #851; after it L9 is answered at L10 `:11`, and `rounds.json` moves by +1 s — round 1 starts `:12`)* |
 | c18 | `work-before-open` | 1 · 0 · 0 · 0 | 1 answered write into `repo-a` |
-| c19 | `write-into-submodule-and-scratchpad` | 1 · 0 · 0 · 0 | 2 assistant lines only: **neither write has a `tool_result`**; the submodule dir `repo-a/p1000` is not a manifest root |
+| c19 | `write-into-submodule-and-scratchpad` | 1 · 0 · 0 · 0 | 2 assistant lines only: **neither write has a `tool_result`**; the submodule dir `repo-a/p1000` is not a manifest root *(before #851; after it the file has 4 lines — L1 `:01` and L2 `:02` unchanged, answered at L3 `:03` and L4 `:04` — the manifest's `checkouts` names `D:/fixture/repo-a/p1000`, and `rounds.json` moves by +2 s, round 1 starting `:05`)* |
 | c20 | `writes-only-elsewhere` | 1 · 0 · 0 · 0 | 1 answered write into `scratch` |
 
 The facts that hold across all twenty, and that every E3 test must respect:
@@ -177,15 +194,20 @@ The facts that hold across all twenty, and that every E3 test must respect:
 - **A text field is the sentinel.** That includes a line `type` off the allowlist (c04–c06, c08, c09, c12, c13, c15, c16,
   c18 and c20 have such lines), a synthetic line's `message.id`, and the main lines' `requestedModel`
   (`claude-opus-5-5[1m]` is not in `allowlist.json`'s `model-ref` list): it is the sentinel in c02, c03, c04, c07, c11,
-  c12, c14 and c17. In the other fixtures (versions 2.1.284–2.1.288) no line has a `requestedModel`.
+  c12, c14 and c17. In the other fixtures (versions 2.1.284–2.1.288) no line has a `requestedModel`. *(Until #851
+  merges: it re-cuts those eight cases with `claude-opus-5-5[1m]` kept — checked on its branch 2026-10-17, c02 main L1,
+  c12 L1, c14 L1, c17 L1 — and the manifest gains per-case `checkouts`. Every other fact in this list holds after it.)*
 
 ## 3. The contract E4 reads — `ObservedSession`
 
 These names are the interface between this epic and E4. E3.S4's spec may ADD members but may not rename or remove one
 without updating E4's stories document. **Realigned 2026-10-14 to E3.S4's spec, and again 2026-10-16 to Fable's
-amendment** (F1, F4, F6, F7): the block below is a copy of the spec's contract; members the spec added are marked
-*added*. What changed on 2026-10-16: `ReadDiagnostics` has new members and lost `BytesRead`/`LinesSkippedByDayGate`;
-`meta without model` is a COUNT, not a reason; `Requested`, `Model` and `Effort` are shape-gated.
+amendment** (F1, F4, F6, F7), **and again 2026-10-17 to S4-22 and S4-23**: the block below is a copy of the spec's
+contract; members the spec added are marked *added*. What changed on 2026-10-16: `ReadDiagnostics` has new members and
+lost `BytesRead`/`LinesSkippedByDayGate`; `meta without model` is a COUNT, not a reason; `Requested`, `Model` and
+`Effort` are shape-gated. What changed on 2026-10-17: `ObservedWrite.AnsweredUtc` (the member E4 §S2.2b G3 owes to —
+E4's `AnsweredAt`), `ReadDiagnostics.AgentFilesEmpty`, and `TranscriptPresent` redefined as "a stamped line was read",
+so `TranscriptPresent ⇒ LaunchedUtc != null` is an invariant E4's `Validate()` may rely on.
 
 ```csharp
 // src_mcp/src/Store/ObservedSession.cs
@@ -205,9 +227,9 @@ public sealed record ObservedSession(
 
 public sealed record ObservedAgent(string Key /* "main" | agentId (from the FILE name) */, string ParentKey /* "main" | agentId | "" */,
     string ToolUseId, string AgentType, string RequestedAlias /* meta.model when it is on the alias shape | "" */,
-    DateTime? LaunchedUtc /* the agent file's first parseable line WITH a timestamp; null for main and for a meta without a file */,
+    DateTime? LaunchedUtc /* the agent file's first parseable line WITH a timestamp; null for main and whenever TranscriptPresent is false */,
     DateTime? CalledUtc   /* added: the launching Agent call's message instant, when that call was parsed */,
-    bool TranscriptPresent /* added: false for a meta whose agent-<id>.jsonl is missing */);
+    bool TranscriptPresent /* added: true only when the agent's file yielded a parseable stamped line (S4-23); false for a meta whose agent-<id>.jsonl is missing or empty of such lines. TranscriptPresent ⇒ LaunchedUtc != null */);
 
 public sealed record ObservedMessage(string AgentKey, string MessageId, DateTime Utc /* earliest line */,
     string Requested /* meta alias, else the earliest line's requestedModel when it is on the model-ref shape, else "" */,
@@ -217,13 +239,16 @@ public sealed record ObservedMessage(string AgentKey, string MessageId, DateTime
     bool UsageSeen /* added: false when no line of the id carried a usage object; Tokens are then zeros, not evidence */);
 
 public sealed record TokenUsage(long Input, long CacheCreation, long CacheRead, long Output);
-public sealed record ObservedWrite(string AgentKey, DateTime Utc /* its message's instant */, string Tool, WriteTarget Target);
-public sealed record UnobservedLaunch(string ParentKey, string ToolUseId, DateTime? Utc, string Reason); // added
+public sealed record ObservedWrite(string AgentKey, DateTime Utc /* its message's instant (S4-8) */,
+    DateTime AnsweredUtc /* added 2026-10-17 (S4-22): the stamp of the user line whose tool_result answered it; E4's AnsweredAt */,
+    string Tool, WriteTarget Target);
+public sealed record UnobservedLaunch(string ParentKey, string ToolUseId, DateTime? Utc, string Reason); // added; exactly ONE per meta without a readable file (S4-23, step 8a)
 public sealed record ReadDiagnostics(                                                                   // added; all counts
     int FilesRead, int FilesSkippedByLastWrite, long BytesScanned, long BytesInSlice, int LinesSkippedBeforeParse,
     int LinesTooLong, int ReadFailures,                                                                 // G2: mirrored from ScanMeter; each also a reason
     int TornTails, int SyntheticLines, int MetasWithoutModel, int ValuesOffShape,
-    int WriteCallsRefused, int WriteCallsUnanswered, int MessagesWithoutUsage, int MessagesDroppedAtBudget);
+    int WriteCallsRefused, int WriteCallsUnanswered, int MessagesWithoutUsage, int MessagesDroppedAtBudget,
+    int AgentFilesEmpty);                                                                               // S4-23: a present agent file with no parseable stamped line
 
 public sealed record ObservationState(ObservationKind Kind, IReadOnlyList<ObservationReason> Reasons)
 { public string Render() => …; }   // "observed" | "partial: <code>[ ×N][, <code>…]" | "unobserved: <code>"
@@ -277,14 +302,24 @@ become a reason. E3.S5 tests this by reflection.
 value is uncertain — G10): (1) an `assistant` line that carries an `agentId` different from its file's key (S4-4);
 (2) one `message.id` seen in two FILES — kept once, keyed to the file that saw it first in read order, main first then
 agent files ordinal (S4-21); (3) the `toolUseId` join and a meta's `parentAgentId` naming different parents (S4-5);
-(4) an `assistant` line with no parseable `timestamp` (step 4); (5) two PRESENT values of `message.model`,
-`requestedModel` or `effort` differing across one id's lines (S4-14; an absent value never differs, G14).
+(4) an `assistant` line with no parseable `timestamp` (step 4) — *widened 2026-10-17 (S4-22)*: or a `user` line with
+none whose `tool_result` answers a parsed write call (the result is then dropped and the call reads unanswered); (5) two
+PRESENT values of `message.model`, `requestedModel` or `effort` differing across one id's lines (S4-14; an absent value
+never differs, G14).
 
 ### 3.3 Identities stay apart (parent §4)
 
 The reader knows a Claude session id and a folder of files. It does not know a gate session, a branch or a
 `repo_path`, and it never reads `cwd`. A write's checkout root is a fact about the path. Whether that root is the
 gate's repository is E4's question.
+
+*(2026-10-17, judge L8 — for E4 and E5.)* `WriteTarget.Where` is a **text key** (`RepositoryIdentity.Normalised` of the
+root: separators folded, no trailing slash, lower-cased), never resolved against the filesystem. So two spellings of
+ONE folder are two keys — macOS `/var/…` and `/private/var/…`, a Windows `\\?\` prefix, a junction or symlink, an 8.3
+short name — and two folders differing only by case are ONE key on Linux. When E4 compares `Where` with
+`Normalised(repo_path)` it inherits exactly these limits; it must compare keys, never resolve one side and not the
+other. No real write path in E1's data had any of these shapes (Q8); the first one that does changes
+`RepositoryIdentity`, for both epics at once (C6 in E3.S4).
 
 ### 3.4 Never text
 
@@ -412,6 +447,11 @@ line, watch the named test fail, restore it), and report both observations.
        that file's sequence; `meter.ReadFailures++`. It never throws. *(Plan gate finding 9.)* `ReadShared` (item 1)
        stays `AgentLog.ReadLines` as it stands, so `AgentLog`'s behaviour does not change.
      - It never stops early on a stamp. Each line is judged alone, because stamps are not always in file order (§2.3).
+     - *(added 2026-10-17, judge M1)* **A UTF-8 BOM (`EF BB BF`) at stream offset 0 is skipped** — it is not part of
+       line 1 — and its 3 bytes count in `BytesScanned`. `StreamReader` skips it for `ReadShared`, and
+       `JsonDocument.Parse(ReadOnlyMemory<byte>)` refuses `0xEF` as a start of a value, so without this the two readers
+       drift: the byte reader would call line 1 torn. Test `A_bom_at_the_file_start_is_not_part_of_the_first_line`
+       compares both readers over one BOM-prefixed file.
   9. *(added 2026-10-16)* `internal sealed class ScanMeter { long BytesScanned; long BytesYielded; int LinesSkipped;
      int LinesTooLong; int ReadFailures; long MaxLineBytes = 64 MiB; Func<bool> Stop; }`. One instance serves one read, across every file of that read. **Considered and rejected,
      with the reason:**
@@ -559,15 +599,10 @@ line, watch the named test fail, restore it), and report both observations.
     finds.
   - Positive anchor (testing.md, *a file full of negatives needs one positive*): the first test above must assert
     `Found`, so a fixture the locator rejects cannot pass every test.
-  - *(added 2026-10-16)* **Two checks over E1's fixtures.** They go through `CallerTranscriptFixture.Materialise`, which
-    E3.S4 adds; the epic is one commit, so they are written when it exists. They need it to copy `sessions/` too
-    (§7 F9).
-    - `The_registry_wins_even_when_only_the_variables_transcript_exists` — `c12` (`registry-and-variable-disagree`).
-      `CLAUDE_PID=52044`, and `CLAUDE_CODE_SESSION_ID` is the `rounds.json` `callerSessionId`, which is the id that has
-      a transcript. The registry names another id. Expect `NotObservable(TranscriptNotFound)` with source `registry`.
-      This is the `/clear` shape that rule 7 decides.
-    - `Persistence_off_is_transcript_not_found_from_a_real_registry_entry` — `c10` (`persistence-off`).
-      `CLAUDE_PID=41017`, and `projects/` is absent. Expect `TranscriptNotFound` with source `registry`.
+  - *(added 2026-10-16; moved 2026-10-17)* **Two checks over E1's fixtures** (`c12`, `c10`) go through
+    `CallerTranscriptFixture.Materialise`, which E3.S4 adds, so S2 was coded without them (64ee32a6 reads no fixture).
+    They are **E3.S4's tests 57 and 58**, written in THIS class (`TheCallersTranscriptIsFoundByItsSessionIdTests`) when
+    the materialiser exists; their text is in S4's test list.
   - *(added 2026-10-16, E1 Q4/Q5)* What the probes settled: in a headless session the registry `sessionId` EQUALS the
     variable, a nested `claude -p` gets its own id, `--resume` keeps the id and the file, and
     `--no-session-persistence` leaves a registry entry and no file. **`/clear` is still open** (RESULTS `:82`). The
@@ -619,10 +654,15 @@ line, watch the named test fail, restore it), and report both observations.
      - `OutsideAnyCheckout`: `Where` is empty. A scratchpad, a temp file or a memory file is not "another repository".
      - `Unresolved`: `Where` is the normalised DIRECTORY of the file when the path was absolute and that directory no
        longer exists (a removed worktree), else empty.
-  3. `public sealed class CheckoutRoots` holds a per-instance `Dictionary<string, WriteTarget>` keyed by directory; one
-     instance serves one read. `Resolve(string path) → WriteTarget`:
+  3. `public sealed class CheckoutRoots` holds a per-instance `Dictionary<string, WriteTarget>` keyed by the EXACT full
+     directory (*2026-10-17, judge M2*: not by `Normalised`, which lower-cases and would merge `/work/App` and
+     `/work/app` on a case-sensitive filesystem; `Normalised` is for the `Where` OUTPUT only); one instance serves one
+     read. `Resolve(string path) → WriteTarget`:
      - Not `Path.IsPathFullyQualified` → `Unresolved("")`. Never resolve against this process's cwd, which is not the
        agent's.
+     - *(2026-10-17, judge H1)* Then `path = Path.GetFullPath(path)`, so a `..` segment is resolved BEFORE the walk:
+       `<root>/repo/../other/a.cs` is a write into `other`, not into `repo`. For a fully qualified path `GetFullPath`
+       never reads the cwd, so the relative-path rule above and break-it (d) stand.
      - The file's directory does not exist → `Unresolved(normalised directory)`. Do NOT walk up from a missing
        directory: a removed worktree would walk up into whatever contains it and answer wrongly.
      - Otherwise walk up from the directory. The FIRST directory where `GitMarker.HasGit` is true →
@@ -657,8 +697,14 @@ line, watch the named test fail, restore it), and report both observations.
     host, `D:\x\a.cs` is not fully qualified, so expect `Unresolved("")`. Skip on Windows. (E1 found no
     Windows-shaped path on WSL. The test fixes the outcome in case one appears.)
   - The fixture cases with writes (`c06`, `c12`–`c20`) are read through E3.S4's materialiser, not here. S3's trees
-    stay synthetic. The CACHE key in `CheckoutRoots` is the `Normalised` directory, so `D:\X` and `d:/x` share one
-    entry.
+    stay synthetic. ~~The CACHE key in `CheckoutRoots` is the `Normalised` directory, so `D:\X` and `d:/x` share one
+    entry.~~ *(Withdrawn 2026-10-17, judge M2: that key merged two case-distinct directories on Linux. The cache is
+    keyed by the exact full directory; `Where` alone is `Normalised`.)*
+  - *(added 2026-10-17, judge H1 and M2)* `A_dot_dot_segment_is_resolved_before_the_walk`: `<root>/repo/.git/`,
+    `<root>/other/` with no `.git`; the write `<root>/repo/../other/a.cs` → `OutsideAnyCheckout`, never
+    `Checkout(repo)`. `Two_directories_that_differ_only_by_case_are_two_answers`: `<root>/App/.git` and `<root>/app/`
+    (plain); a write into each → `Checkout(App)` and `OutsideAnyCheckout`; runs only where the filesystem is
+    case-sensitive (skip when `<root>/App` and `<root>/app` are the same directory).
 - **Break-its.**
   - (a) Add `"Bash"` to `Names` → the shell test goes red.
   - (b) Walk up from a missing directory → the removed-worktree test goes red.
@@ -719,9 +765,14 @@ line, watch the named test fail, restore it), and report both observations.
     Agent-count check.
   - New `src_mcp/src/Store/TranscriptWrites.cs` (≤ 100): write candidates and their results.
   - New tests: `src_mcp/tests/CallerTranscriptFixture.cs` (the materialiser, reused by E3.S5, E4.S5, E5.S5),
-    `src_mcp/tests/SteppingClock.cs` (≤ 15 lines), and the four test classes of §*Tests*.
-  - Uses E3.S1 (`TranscriptLines`), E3.S2 (`CallerTranscriptLocation`, `CallerTranscriptLocator.LocateStored`,
-    `ClaudeHome`) and E3.S3 (`WriteTools`, `CheckoutRoots`). No call site, no schema, nothing persisted.
+    `src_mcp/tests/SteppingClock.cs` (≤ 15 lines), and the four test classes of §*Tests*. *(2026-10-17)* Plus two
+    tests added to E3.S2's existing class `src_mcp/tests/TheCallersTranscriptIsFoundByItsSessionIdTests.cs` (tests
+    57–58: the `c12`/`c10` checks S2 left for the materialiser).
+  - Uses E3.S1 (`TranscriptLines.ReadSharedFrom`, `TryParse(ReadOnlyMemory<byte>)`, `WrittenSince`, `ScanMeter` — as
+    coded in b24c81ae, table *What the S1–S3 code settled*), E3.S2 (`CallerTranscriptLocation`,
+    `CallerTranscriptLocator.LocateStored`, `ClaudeHome`) and E3.S3 (`WriteTools`, `CheckoutRoots`). No call site, no
+    schema, nothing persisted. **Not built here:** the mapping onto E4's core records — `AttributionMapping.cs` is
+    E4.S5's (below, *Mapping*).
   - Complexity ≤ 4 per function (the family's `coding-style`): every rule below is its own `private static` function
     over already-parsed values; the only mutable objects are the per-read `ReadMeter`, the message table and S3's
     `CheckoutRoots`.
@@ -765,9 +816,14 @@ synthetic marker (S4-11) and is tested before the shape.
 (`2 agent calls without transcript`) is superseded — grammar over a closed vocabulary is text manipulation, and E3.S5
 checks that every code is a `const`. E5 renders the card from the same method.
 
-**Mapping onto E4's core records** (E4.S1, `CoaiMcp.Core.Authors`): `FirstLineAt = LaunchedUtc ?? CalledUtc`;
-`TranscriptPresent` as is; E4's `UnobservedLaunch` list is `UnobservedLaunches` as is; `Effort` `"unknown"` as is;
-`TokenTerms` from `TokenUsage` term by term. Nothing in the mapping decides anything.
+**Mapping onto E4's core records** (E4.S1, `CoaiMcp.Core.Authors`) — **described here, built by E4.S5** *(2026-10-17;
+E4's Resolutions II, B1)*: the file is `src_mcp/src/Store/AttributionMapping.cs`, E4.S5's, called by E5.S4 step 5 and
+E7.S2, and it is the one place that sees both E3's `src/Store` records and E4's core records — E3 cannot build it
+(E4's types do not exist when E3 ships) and builds nothing of it. What it copies: `FirstLineAt = LaunchedUtc ??
+CalledUtc`; `TranscriptPresent` as is (S4-23: true ⇒ `FirstLineAt` is never null for a present agent);
+E4's `UnobservedLaunch` list is `UnobservedLaunches` as is (one per meta without a readable file — E4 §S2.2b G4);
+E4's `AnsweredAt` is `ObservedWrite.AnsweredUtc` as is (S4-22 — E4 §S2.2b G3's write horizon); `Effort` `"unknown"` as
+is; `TokenTerms` from `TokenUsage` term by term. Nothing in the mapping decides anything.
 *(2026-10-16)* **`FirstLineUtc` is positional, not a minimum.** It is the first stamped line in FILE order, because
 under a bound only the head is read whole. Six fixtures start with a line stamped AFTER the next one (c06 L1 is `:04`,
 L2 is `:01`; also c09, c13, c15, c16, c20). E4's before-open window must therefore open at
@@ -799,6 +855,8 @@ L2 is `:01`; also c09, c13, c15, c16, c20). E4's before-open window must therefo
 | S4-19 | *(added 2026-10-16, G1)* **A meta file that does not parse is `partial: torn meta`** and reads as ABSENT: its file, if present, is keyed with `ParentKey = ""`, `RequestedAlias = ""`, `AgentType = ""` and gets NO second `agent without meta` reason; without a file nothing else is recorded (its `toolUseId` is unknowable) | The parent link and the alias are LOST, so a reason; one loss, one reason. Reading the file as `agent without meta` too would count the same loss twice |
 | S4-20 | *(added 2026-10-16, G2)* **A line over `MaxLineBytes` is `partial: line too long`; a file whose read fails after the open is `partial: read failed`.** Both counts come from `ScanMeter` (`LinesTooLong`, `ReadFailures`) at step 10 and are mirrored in `ReadDiagnostics`. `ReadBudget.MaxLineBytes` (default 64 MiB) is handed to the meter | Both LOSE lines the reader never saw (a skipped line may hold a message, a write or a launch); `torn line` would hide the cause, and the cause decides the remedy (a cap is a policy, a read failure is the disk) |
 | S4-21 | *(added 2026-10-16, G10)* **One `message.id` seen in two FILES is `partial: inconsistent transcript`**; the message is kept once, keyed to the file that saw it first in read order (main, then agent files ordinal); its tokens are still the per-term maximum over every line | §2.2 and Q4: no id appears in two files and `--resume` replays none, so a second file holding an id is a layout break and the agent of that message is uncertain. Test 4's `CopyLineInto` is this trigger; main lines carry no `agentId`, so S4-4 alone could never have fired on it |
+| S4-22 | *(added 2026-10-17, for E4 §S2.2b G3)* **`ObservedWrite.AnsweredUtc` is the stamp of the `user` line that carried the answering `tool_result`** — that line's own `timestamp`, parsed as step 4 parses one. S4-8 is unchanged for the write's `Utc` (its CALL's message instant). A `user` line carries no `message.id` (only `assistant` lines do — *What the folder showed*), so "its message's instant" for a result IS the line's own stamp; a result re-logged on two lines (the S4-16 shape) answers at the earliest. A `user` line that answers a parsed write call and has no parseable `timestamp` → the result is dropped (the call reads `WriteCallsUnanswered`) and `inconsistent transcript` count++ (trigger 4, §3.2, widened). `AnsweredUtc` is never null: under S4-7 an unanswered call is no write | E4 places a write by `At` and admits it as evidence for a round only when `AnsweredAt < that round's CompletedUtc`, live and backfilled alike (E4 §S2.2b G3, its *Cross-epic* item E3 (1)); without the instant E4 cannot apply the horizon and the late-answered-write hazard returns. The two instants differ in real data — a `tool_result` lands after the call's thinking turn — and in the fixtures: c06 main L4 `Write` (message instant `:01` at L2, the block's line `:03`) is answered at L5 `:05`; c14 agent L54 `Edit` (message `:51` at L53) at L55 `:53`. 0 of 102 `user` lines in the twenty fixtures lack a stamp. `ReaderVersion` stays 1: a member added, no count changed |
+| S4-23 | *(added 2026-10-17, for E4 §S2.2b G4 and its *Cross-epic* item E3 (2))* **`TranscriptPresent` means "the agent's file yielded at least one parseable stamped line"**, not "the file exists". A present agent file with no such line — 0 bytes, blank lines only (C1), stamp-less lines only, a torn tail only, or torn/too-long throughout — reads as ABSENT: `TranscriptPresent = false`, `LaunchedUtc = null`, `Diagnostics.AgentFilesEmpty++`; WITH a parsed meta → exactly one `UnobservedLaunch(ParentKey, ToolUseId, CalledUtc, MetaWithoutTranscript)` and `MetaWithoutTranscript` count++, exactly as for a missing file; WITHOUT one → the key is listed (`ParentKey = ""`, `RequestedAlias = ""`, `AgentType = ""`) and `AgentWithoutMeta` count++ (S4-6). Its torn tail still counts in `TornTails`; its torn or too-long middle lines still give their reasons. **Invariant:** `TranscriptPresent ⇒ LaunchedUtc != null`, asserted over every fixture (test 56) | E4's `Validate()` refuses a present agent with no `FirstLineAt`, and `transcript empty` (S4-10) is main-only. Nothing was observed of such an agent, so "present" would claim a read that did not happen; and E4's "one missing transcript is one item and one reason" (G4) holds because the state IS the missing-file state. Stated cost: a live read that lands between the CLI's create and its first stamped write of an agent file marks that round `partial: meta without transcript` — the same race as a torn tail, one step earlier (E1: 0 torn tails in 9 379 live samples; `FirstLineUtc`'s head line is written with the file). No fixture has such a file; test 56 is an `EmptyAgentFile` mutation |
 
 **The principle behind `partial`**: a reason is recorded when something was LOST (a line, a child, a parent link) or a
 COUNTED VALUE is uncertain; a diagnostics count is enough when the reader could choose between readings and lost
@@ -845,10 +903,26 @@ as written; a deviation is spelled out.
 | F11 | **Accepted.** "(= the last line)" is dropped; test 1 is renamed `…_with_its_maximum_usage`; new test 45 over c03 with the break-it "take the last line's usage"; test 2 asserts `Output < sum` only where the id's maximum output rank is above 0 | The last line is below the maximum on 16 WSL ids; the fixtures hold that shape | RESULTS Q3; `c03/…/agent-f6f8c73bdde437cb3.jsonl` L22–L23: id `msg_872a…` outputs 3 then 1 |
 | F12 | **Accepted.** Test 8 names the depth-1 key (`207bc560f3fb5a452`, meta alias `fable`, `Model` `claude-fable-5-1`); the depth-2 key (`2553a2f49d265a4e3`) asserts the fallback `Requested == "claude-sonnet-5-5"` from its lines | The depth-2 meta has no `model`, so the alias rule holds only for one of the two agents | `c07/…/agent-207bc560f3fb5a452.meta.json` (`model: fable`), `c07/…/agent-2553a2f49d265a4e3.meta.json` (no `model`, `parentAgentId` = the depth-1 key), c07 agent L10 `requestedModel` `claude-sonnet-5-5` |
 
+#### What the S1–S3 code settled (Fable, 2026-10-17 — read from the branch code, not from the briefs)
+
+The S1–S3 coder found seven things the briefs did not state or stated differently. S4 follows the CODE; each row says
+how, and where the fact is in the files. None of them changes a counting rule, so `ReaderVersion` stays 1.
+
+| # | Fact in the code | What S4 does with it | Where |
+|---|---|---|---|
+| C1 | **An EMPTY line is not a line.** A line of 0 bytes before its terminator (`\n` or `\r\n`) is dropped by the splitter before the gate: never yielded, never counted in `LinesSkipped`, never a torn line; only `BytesScanned` grows | A clean file with a blank line never reads `partial: torn line` (the splitter's own remark says why). Step 6's "the LAST line a file yielded" is the last NON-EMPTY one. A file whose only content is blank lines yields nothing: main → `unobserved: transcript empty` (S4-10), an agent file → S4-23 | `TranscriptLineSplitter.cs:78` (`text > 0`), `:191` (`held > 0`), remark `:14-15` |
+| C2 | **`BytesYielded` charges the REAL terminator**: the line's bytes plus 2 for `\r\n`, 1 for `\n`, 0 for an unterminated tail | Tests 31, 50 and 51 compute `MaxBytes` from the raw lines with EACH line's own terminator length — never a flat `+1` per line — and `BytesInSlice` is exactly that sum. A fixture copied by the materialiser keeps its bytes as they are, so the test reads the terminator from the file | `:79` (`length - text + 1`), `:229` (`raw.Text.Length + raw.Terminator`) |
+| C3 | **`ScanMeter`'s members are auto-properties** (`{ get; set; }`); `Stop` defaults to `static () => false`, `MaxLineBytes` to 64 MiB | `ReadMeter` creates ONE `ScanMeter` and SETS `meter.Stop` and `meter.MaxLineBytes` after construction (step 1); `Diagnostics` reads the properties at step 10. No subclass, no constructor arguments | `TranscriptLines.cs:18-34` |
+| C4 | **`TryParse(ReadOnlyMemory<byte>)` keeps the memory**: the `JsonDocument` reads the enumerator's buffer for its whole life, and that buffer is valid only until the next `MoveNext` | Steps 4–5 dispose each document BEFORE asking for the next line (`using var document` inside the loop body), and nothing from the document outlives it except the values S4-18 admits as `string`s/numbers/booleans. A `JsonElement` kept past the line reads another line's bytes — the review checks that no `JsonElement` is stored in a field, a table or a candidate; write candidates (step 9) hold the PATH string, not the block | `TranscriptLines.cs:93-95`, `:144-159` |
+| C5 | **S1 is more than one file, and has one extra seam.** At b24c81ae: `TranscriptLines.cs` (304 lines) and `TranscriptLineSplitter.cs` (257 lines holding `RawLine`, `LineSplitter`, `GatedLines` — a file name that matches no type in it). `internal static TranscriptLines.ReadFrom(Stream, DateTime, ScanMeter)` reads a stream the caller owns (the seam S1's tests use to make a read fail mid-way). The S1 brief said one file of ≤ 220 lines. **The judge's review (2026-10-17, L1) splits the splitter types into their own files, `LineSplitter.cs` and `GatedLines.cs`**, applied by the coder after f9da2839; `TranscriptLines.cs` stays over 220 lines — a recorded deviation, not undone | S4 calls `ReadSharedFrom` only, never `ReadFrom` or the splitter. `partial: read failed` has no S4 test that makes a disk fail: S1's seam test pins `ReadFailures`, and S4's rule is the mirroring (step 6, S4-20) — the review checks that `meter.ReadFailures` reaches `ReadDiagnostics.ReadFailures` and the reason | `TranscriptLines.cs:117-124` (at b24c81ae); the splitter files as the judge's fix names them |
+| C6 | **The `CheckoutRoots` cache key.** At f9da2839 it was `RepositoryIdentity.Normalised(directory)`, which lower-cases — so on a case-sensitive filesystem `/work/App` (a checkout) and `/work/app` (plain) shared one entry and the first answer won. **The judge's review (2026-10-17, M2) calls this a defect of the S3 brief and fixes it: the cache is keyed by the EXACT full directory (after `Path.GetFullPath`, H1), and `Normalised` is used only for the `Where` output**; a test with case-distinct directories runs where the filesystem is case-sensitive. The S3 brief and its test list are changed to match (below) | **Decided: the fix stands; the S3 brief's "`D:\X` and `d:/x` share one entry" was wrong on Linux and is withdrawn.** What remains, and is accepted with its cost stated (**L8, for E4 and E5**): `WriteTarget.Where` is a TEXT key, never resolved against the filesystem. Two spellings of ONE folder give two keys — macOS `/var/…` against `/private/var/…`, a Windows `\\?\` prefix, a junction or symlink, an 8.3 short name — and two folders that differ only by case give ONE key on Linux. E4 compares `Where` with `RepositoryIdentity.Normalised(repo_path)` (E4.S1); it inherits exactly these limits, and §3.3 says so. Q8 saw none of these shapes (every write path absolute, one spelling per root on both sides); no fixture has one. If one appears in real data, the KEY is what changes — in `RepositoryIdentity`, for E4 too | `WriteEvidence.cs:87`, `:97-102` (at f9da2839, before the fix); `RepositoryIdentity.cs:24` |
+| C7 | **E3.S2's two fixture checks were not written** (c12 `registry-and-variable-disagree`, c10 `persistence-off`): they need `CallerTranscriptFixture.Materialise`, which is S4's | They are tests 57 and 58 below, written in S2's class | `TheCallersTranscriptIsFoundByItsSessionIdTests.cs` reads no fixture (64ee32a6) |
+
 #### The read algorithm
 
 *(Rewritten 2026-10-16 for F1, F2, F4, F5, F6, F7 and S4-15/S4-16. The order changed: files and metas are listed
-BEFORE any line is read, so a budget stop never leaves a launch unlisted.)*
+BEFORE any line is read, so a budget stop never leaves a launch unlisted. Steps 4, 5, 6, 8a and 9 amended 2026-10-17
+for S4-22, S4-23 and C1.)*
 
 0. **Unobservable location.** `where` is `NotObservable(session, reason)` → `Unobserved(reason)`, `Session` carried
    through, every list empty, `FirstLineUtc` null, diagnostics zero. **Nothing is opened.**
@@ -884,17 +958,23 @@ BEFORE any line is read, so a budget stop never leaves a launch unlisted.)*
 4. **The main file**, line by line as step 2 yields them: `TryParse(ReadOnlyMemory<byte>)` (G4); a torn line → step 6. The first parseable line
    with a parseable `timestamp` sets `FirstLineUtc` whatever its `type` (S4-10; positional — six fixtures start with a
    line stamped after the next one). Then by `type`: `assistant` → step 7 and the block scan (steps 8a, 9); `user` →
-   the block scan for `tool_result` only; every other type, a sentinel `type` included → nothing more. A `timestamp`
-   is parsed as `AgentLog.Parse` does (`AdjustToUniversal | AssumeUniversal`); an `assistant` line without one is
-   `inconsistent transcript` and dropped.
+   the block scan for `tool_result` only, the line's own stamp kept with each result (S4-22); every other type, a
+   sentinel `type` included → nothing more. A `timestamp` is parsed as `AgentLog.Parse` does (`AdjustToUniversal |
+   AssumeUniversal`); an `assistant` line without one is `inconsistent transcript` and dropped, and so is a `user`
+   line without one whose `tool_result` answers a parsed write call (its result is dropped; S4-22). Each line's
+   `JsonDocument` is disposed before the next line is asked for (C4).
 5. **The agent files**, in name order after main (the order a budget stop truncates in). Per file: the first parsed
    line WITH a timestamp → `LaunchedUtc` (F5); the first parsed line that carries an `agentId` must equal the key (else
    `inconsistent transcript`; c07's clipped agent file starts with an `assistant` line that carries it, Q1's files start
    with a `user` line that does). A file skipped by last-write ends after its head. Otherwise it is read as step 4 with
-   the file's key as the agent.
+   the file's key as the agent. **When the file is done and no parseable stamped line was seen** (S4-23): it reads as
+   absent — `TranscriptPresent = false`, `LaunchedUtc = null`, `AgentFilesEmpty++`; its meta, if parsed, is treated by
+   step 8a exactly as a meta with no file; with no meta the key stays listed and `AgentWithoutMeta` was already counted
+   in step 3.
 6. **Torn lines** (S4-1): `TryParse` false. The LAST line a file yielded → `TornTails++`, read ends normally. Any other
-   → `TornLine` count++, read on. **Lost lines** (S4-20): after every file, `meter.LinesTooLong` and `meter.ReadFailures`
-   grown since the file began become `LineTooLong` and `ReadFailed` counts.
+   → `TornLine` count++, read on. An EMPTY line never reaches here: the splitter drops it (C1), so "the last line
+   yielded" is the last non-empty one. **Lost lines** (S4-20): after every file, `meter.LinesTooLong` and
+   `meter.ReadFailures` grown since the file began become `LineTooLong` and `ReadFailed` counts.
 7. **The message table** (`TranscriptMessages`): per `message.id`, across every file — earliest `timestamp`; the
    agent key (the file's; S4-4, S4-12); `Model`, `Requested`, `Effort` from the earliest line through the shapes of
    S4-18 (`Effort`: one of the five levels, else `unknown`; `perTurnEffort` is never read; `Requested` for a subagent
@@ -913,14 +993,17 @@ BEFORE any line is read, so a budget stop never leaves a launch unlisted.)*
      joined to a meta by `toolUseId` → *launched* (a missing `tool_result` does not matter: c01, c07 and c14's main
      calls have none). Else its `tool_result` has `is_error: true` → *refused*: nothing recorded. Else → *missing*:
      `AgentCallWithoutTranscript` count++ and `UnobservedLaunch(the file's key, id, the call's instant,
-     AgentCallWithoutTranscript)`. Every meta with no file (step 3) →
-     `UnobservedLaunch(ParentKey, ToolUseId, CalledUtc, MetaWithoutTranscript)`.
-9. **Writes** (S4-7, S4-8): each `tool_use` block for which `WriteTools.TryPath(name, input, out path)` is true is a
-   candidate `(agentKey, messageInstant, tool, path, id)`. When the file is done: no `tool_result` for `id` →
-   `WriteCallsUnanswered++`; `is_error: true` → `WriteCallsRefused++`; else
-   `ObservedWrite(agentKey, instant, tool, CheckoutRoots.Resolve(path))`. ONE `CheckoutRoots` per read. Only a
-   candidate whose message is in range (S4-13) becomes a write. After a budget stop the stopped file's candidates are
-   dropped without a count.
+     AgentCallWithoutTranscript)`. Every meta with no file (step 3), or whose file yielded no parseable stamped line
+     (step 5, S4-23) → **exactly ONE** `UnobservedLaunch(ParentKey, ToolUseId, CalledUtc, MetaWithoutTranscript)`; the
+     `ObservedAgent` listed for the same key with `TranscriptPresent = false` is NOT a second one — E4 reads the launch
+     and the reason from the `UnobservedLaunch` alone and treats that agent record as inert (E4 §S2.2b G4, G5).
+9. **Writes** (S4-7, S4-8, S4-22): each `tool_use` block for which `WriteTools.TryPath(name, input, out path)` is true
+   is a candidate `(agentKey, messageInstant, tool, path, id)` — the path as a `string`, never the block (C4). When
+   the file is done: no `tool_result` for `id` → `WriteCallsUnanswered++`; `is_error: true` → `WriteCallsRefused++`;
+   else `ObservedWrite(agentKey, instant, answeredUtc, tool, CheckoutRoots.Resolve(path))`, where `answeredUtc` is
+   the stamp of the `user` line that carried the result (the earliest such line for a re-logged result). ONE
+   `CheckoutRoots` per read. Only a candidate whose message is in range (S4-13) becomes a write. After a budget stop
+   the stopped file's candidates are dropped without a count.
 10. **The state**: `Unobserved(TranscriptEmpty)` when the main file yielded no parseable timestamped line (S4-10);
     else `Partial(reasons)` when any REASON count is above zero, reasons ordered by code (ordinal); else `Observed`.
     Diagnostics never make a state.
@@ -942,22 +1025,23 @@ never opened. `sessions/` is E3.S2's.
 |---|---|---|---|---|---|---|
 | `message-as-several-lines` (c02) | `observed` | `1 + A` = 2 | `M` = 4 messages, each id once; `Tokens` = per-term max of its lines; `Output` < the sum over lines for every multi-line id whose maximum output rank is above 0 (three of them: L13–14, L22–23, L26–27) | one launch | — | `FirstLineUtc` = main L1's stamp; main's `Requested` is `""` (its `requestedModel` is the sentinel and fails the shape, S4-18; `ValuesOffShape == 1` for main's id); the agent's `Requested` is `opus` (the meta's alias) |
 | `message-last-line-below-max` (c03) *(added 2026-10-16, F11)* | `observed` | 2 | id `msg_872a…` (agent L22–L23): outputs 3 then 1 → `Output == 3`; inputs identical across both lines | one launch | — | the shape Q3 saw on 16 WSL ids; the one fixture a "last line" rule fails on |
-| `model-switch-in-window` (c06) | `observed` | 1 only (`IsObservedZero`) | two messages with distinct `Model` values (`claude-opus-5-5`, `claude-fable-5-1`); `Requested == ""` on both (2.1.286 writes no `requestedModel`) | — | one `Write` into `scratch` → `OutsideAnyCheckout` (answered at L5) | `FirstLineUtc` = L1's stamp `:04`, although L2 is stamped `:01` — positional, by design |
-| `resumed-agent` (c14) | `observed` | the resumed key appears ONCE, `LaunchedUtc` = its first line | 21 messages; its messages span the gap in `rounds.json` | one launch (the main `Agent` call has no `tool_result`; the meta joins it) | one `Edit` into `repo-a` (L54, answered) | `Bash` results with `is_error: true` (L62) are not writes and not counted |
+| `model-switch-in-window` (c06) | `observed` | 1 only (`IsObservedZero`) | two messages with distinct `Model` values (`claude-opus-5-5`, `claude-fable-5-1`); `Requested == ""` on both (2.1.286 writes no `requestedModel`) | — | one `Write` into `scratch` → `OutsideAnyCheckout`; `Utc` `:01` (its message's earliest line, L2; the block is on L4 `:03`), `AnsweredUtc` `:05` (L5, S4-22) | `FirstLineUtc` = L1's stamp `:04`, although L2 is stamped `:01` — positional, by design |
+| `resumed-agent` (c14) | `observed` | the resumed key `2edf3ddec8861a853` appears ONCE, `LaunchedUtc` = its first line | 21 messages; its messages span the gap in `rounds.json` | one launch (the main `Agent` call has no `tool_result`; the meta joins it) | one `Edit` into `repo-a` (agent L54; `Utc` `:51` = its message's first line L53, `AnsweredUtc` `:53` = L55) | `Bash` results with `is_error: true` (L62) are not writes and not counted |
 | `background-agent-across-round-start` (c01) | `observed` | one key, `LaunchedUtc` before the round start in `rounds.json` | 5 messages on both sides of that start; agent L33 is synthetic → `SyntheticLines == 1`, its sentinel id absent | one launch | — | E4 splits them; E3 does not |
 | `nested-agents` (c07) | `observed` *(was `partial: meta without model` by the old step 7; S4-17)* | depth-1 key `207bc…`: `ParentKey = "main"`, `RequestedAlias = "fable"`; depth-2 key `2553a…`: `ParentKey` = `207bc…`, `CalledUtc` = that agent's call instant (`:02`), `RequestedAlias = ""` | 7 messages; depth-1's `Requested == "fable"` ≠ `Model == "claude-fable-5-1"`; depth-2's `Requested == "claude-sonnet-5-5"` (the lines' `requestedModel`, through the shape) | `K` = 2 launched — main L1 and L5 carry ONE block id (S4-16), so the manifest's `agentToolUses` 3 is 2 calls; `UnobservedLaunches` empty; `MetasWithoutModel == 1` | — | — |
 | `missing-child-transcripts` (c05) | `partial: agent call without transcript, meta without transcript` | the meta-only key `953030…` present with `TranscriptPresent = false`, `LaunchedUtc = null`, `CalledUtc` set | `M` = 6; agent L36 synthetic | `UnobservedLaunches.Count == 2` (`…dbe7d8` missing; `…2f5916`'s meta has no file), each with its instant and reason | — | main L4 answers `…2acc10`, a block the cut did not keep → ignored (S4-15); reading went on: every other agent and message is present |
 | `refused-agent-call` (c11) | `observed` | `main` only → `IsObservedZero == true` | 1 | 0 launches, not `C` = 1; `UnobservedLaunches` empty | — | the break-it's target |
 | `meta-without-model` (c04) | `observed` *(was `partial: meta without model`; S4-17)* | that key's `RequestedAlias == ""`; `MetasWithoutModel == 1` | that key's messages: `Requested == "claude-sonnet-5-5"` (the lines', through the shape), `Model == "claude-sonnet-5-5"` | one launch | — | main L9 is a sentinel-typed line WITH a stamp: parsed, contributes nothing |
 | `no-effort-lines` (c08) | `observed` | 2 | 1 message (main's); the agent's only assistant line is synthetic → no `unknown` effort is observable on this fixture (F10) | one launch | — | test 10 strips `effort` by mutation; test 44 pins the synthetic id out |
-| `write-into-submodule-and-scratchpad` (c19), **after E1's re-cut PR (§8 item 1, merged before E3)** | `observed` | 1 | 1 | — | one `Checkout(<repo-a/p1000>)`, one `OutsideAnyCheckout`; no `Tool == "Bash"` | **As shipped on main today: neither call has a `tool_result`, so `Writes` is EMPTY and `WriteCallsUnanswered == 2`** (F8); this row depends on that PR (G15) |
+| `write-into-submodule-and-scratchpad` (c19), **after PR #851 (§8 item 1, merged before E3.S4 is coded)** | `observed` | 1 | 1 | — | one `Checkout(<repo-a/p1000>)` (L1 `:01`, `AnsweredUtc` `:03`), one `OutsideAnyCheckout` (L2, `Utc` `:01` — same message — `AnsweredUtc` `:04`); no `Tool == "Bash"` | **As shipped on main today: neither call has a `tool_result`, so `Writes` is EMPTY and `WriteCallsUnanswered == 2`** (F8); this row depends on #851 (G15), checked against its branch 2026-10-17 |
 | `writes-only-elsewhere` (c20) | `observed` | 1 | 1 | — | one `Write` into `scratch` → `OutsideAnyCheckout`; the `Bash` call is not a write | *(the old row said `Checkout(other root)`: `scratch` is a fixture root but never a checkout — F8)* |
-| `two-repositories-one-session` (c17), **after E1's re-cut PR** | `observed` | 1 | 3 | — | two distinct `Where` values (`repo-a`, `repo-b`); both directories exist because the materialiser creates every write's parent folder (G7) | **As shipped on main today: ONE write (`repo-a`, L1, answered at L3); the `repo-b` `Edit` at L9 has no result → `WriteCallsUnanswered == 1`**; L2's result `…3dba83` is orphan → ignored |
-| `registry-and-variable-disagree` (c12), read by its transcript id | `observed` | 1 | 2 | — | as shipped ONE write (`scratch`, L1); L9's `Write` has no result | the registry case itself is E3.S2's |
+| `two-repositories-one-session` (c17), **after PR #851** | `observed` | 1 | 3 | — | two distinct `Where` values (`repo-a`: L1 `:02` answered L3 `:04`; `repo-b`: L9 `:10` answered L10 `:11`); both directories exist because the materialiser creates every write's parent folder (G7) | **As shipped on main today: ONE write (`repo-a`, L1, answered at L3); the `repo-b` `Edit` at L9 has no result → `WriteCallsUnanswered == 1`**; L2's result `…3dba83` is orphan → ignored (before and after #851) |
+| `registry-and-variable-disagree` (c12), read by its transcript id, **after PR #851** | `observed` | 1 | 2 | — | two `Write`s into `scratch` → `OutsideAnyCheckout` (L1 `:01` answered L3 `:04`; L9 `:07` answered L10 `:09`) | as shipped on main today ONE write (L1); L9's `Write` has no result → `WriteCallsUnanswered == 1`. The registry case itself is E3.S2's (test 57) |
 | `persistence-off` (c10, no transcript) | `unobserved: transcript not found` (from S2) | empty | empty | — | — | `FirstLineUtc == null`; nothing opened |
 | `torn-last-line` (if E1 ships it) and *mutation: last line truncated, no newline* | `observed` | — | the in-flight message, if any, counted from its parsed lines | — | — | `Diagnostics.TornTails == 1` (S4-1) |
 | *mutation: a MIDDLE line truncated* | `partial: torn line` | — | `M − 1` or `M` (the torn line's id may survive on its other lines) | — | — | lines after it are read |
-| *mutation: a meta deleted* | `partial: agent without meta` | that key: `ParentKey == ""`, `RequestedAlias == ""` | its `Requested` = the lines' `requestedModel` | the launch counts | — | — |
+| *mutation: a meta deleted* (c02) | `partial: agent call without transcript, agent without meta` *(corrected 2026-10-17: the main `Agent` call `…5d66b6` has a non-error result at L2 and no meta joins it any more, so step 8a reads it as *missing* too — the reader cannot know the file and the call are one agent)* | that key: `ParentKey == ""`, `RequestedAlias == ""` | its `Requested` = the lines' `requestedModel` | the file's launch counts; `UnobservedLaunches.Count == 1` (the call) | — | — |
+| *mutation: an agent file emptied* (`EmptyAgentFile`, c02) | `partial: meta without transcript` | that key: `TranscriptPresent == false`, `LaunchedUtc == null`, `CalledUtc` set | main's message only | `UnobservedLaunches.Count == 1`, reason `meta without transcript`, `ToolUseId` = the meta's | — | `AgentFilesEmpty == 1` (S4-23, test 56) |
 | *mutation: an assistant line copied from main into an agent file, same id* | `partial: inconsistent transcript` (agentId ≠ file) | — | that id ONCE, agent = the main file | — | — | the break-it's target for per-file dedup |
 | *mutation: `output_tokens` growing across one id's lines* | `observed` | — | that id's `Output` = the largest line's value | — | — | the 162-id shape |
 | *mutation: `message.model` = `<synthetic>` on one line* | `observed` | — | that line absent; `SyntheticLines == 1` | — | — | — |
@@ -1015,9 +1099,11 @@ but found Observed`), never on a compile error.
   stamped one second after the file's largest stamp), `CopyLineInto(n, agentId)`, `GrowOutputAcross(id)`,
   `TruncateBeforeStamp(f, n)` (G5: cuts line `n` just before its `"timestamp":` key, so the line has no stamp and does
   not parse), `CorruptMeta(id)` (G1: overwrites the meta with half of its bytes), `PutLongLine(f, n, bytes)` (G2:
-  pads a renamed `k<n>` string value of line `n` to the given byte length). Every helper edits the parsed JSON of one
-  line and re-serialises it (the two truncating helpers and `CorruptMeta` cut bytes); none writes a string a test typed
-  into a text field.
+  pads a renamed `k<n>` string value of line `n` to the given byte length), `EmptyAgentFile(id)` (S4-23: truncates
+  `agent-<id>.jsonl` to 0 bytes, the meta untouched). Every helper edits the parsed JSON of one line and re-serialises
+  it (the two truncating helpers, `CorruptMeta` and `EmptyAgentFile` cut bytes); none writes a string a test typed into
+  a text field. A helper that re-serialises a line writes it with the terminator the file already uses (C2: the
+  fixtures are `\n`; a `\r\n` file would otherwise change its slice bytes).
 - `SteppingClock(start, step)` is a `TimeProvider` that advances `step` per `GetUtcNow()` call — `FixedClock` is
   read-only by design and the time budget needs a clock that moves mid-read. Every clock and bound in these tests is
   derived from the fixture's own stamps (§4).
@@ -1030,13 +1116,13 @@ but found Observed`), never on a compile error.
 4. `The_same_message_id_in_two_files_is_one_message_and_the_first_file_wins` — `CopyLineInto(n, agentId)` copies a main `assistant` line into an agent file; the id once, `AgentKey == "main"` (main is read first), `Tokens` the per-term max over both copies, state `partial: inconsistent transcript ×1` (trigger 2, S4-21 — the copied line carries no `agentId`, so trigger 1 is not what fires; G10).
 5. `A_resumed_agent_is_one_launch_with_later_messages` — `resumed-agent`; one `ObservedAgent` with that key; its messages span the gap.
 6. `A_background_agent_running_across_a_round_start_is_one_launch` — `background-agent-across-round-start`; one launch; messages before and after the `rounds.json` start.
-7. `Requested_and_observed_are_two_fields_and_mains_1m_suffix_shows_it` — `message-as-several-lines` with `SetRequestedModel(Main, 1, "claude-opus-5-5[1m]")` (the shipped value is the sentinel, F7; when §8 item 2 lands the mutation is dropped and the shipped line is used); `Requested` ends with `[1m]`, `Model` does not, `Model != Requested`.
+7. `Requested_and_observed_are_two_fields_and_mains_1m_suffix_shows_it` — `message-as-several-lines`, the shipped c02 main L1 **as re-cut by PR #851** (§8 item 2: `requestedModel` is `claude-opus-5-5[1m]` on its branch, checked 2026-10-17; S4 is coded after #851 merges, so no `SetRequestedModel` mutation is needed any more — it stays a helper for test 49); `Requested == "claude-opus-5-5[1m]"`, `Model == "claude-opus-5-5"`, `Model != Requested`.
 8. `A_subagents_requested_model_is_the_metas_alias` — `nested-agents`, the depth-1 key `207bc560f3fb5a452`; `Requested == "fable"` (its meta's `model`) and `Model == "claude-fable-5-1"`. The depth-2 key `2553a2f49d265a4e3` (no `model` in its meta) reads `Requested == "claude-sonnet-5-5"`, its lines' `requestedModel`. *(F12)*
 9. `A_model_switch_inside_one_agent_yields_messages_of_both_models` — `model-switch-in-window`.
 10. `No_effort_on_a_line_is_unknown_not_high` — `message-as-several-lines`, `SetEffort(Agent(key), n, null)` on the first line of two real ids; those two messages read `unknown`, every other one `high`; the state is `Observed` (G14: the later lines' `high` is a present value against an absent one, not a difference). *(F10: `no-effort-lines`' only effort-less line is synthetic and is dropped by S4-11.)*
 11. `Effort_is_never_carried_from_the_previous_line` — mutation: alternate lines with and without `effort`; the stripped ones read `unknown`.
 12. `A_nested_agent_names_its_parent_and_a_depth_one_agent_names_main` — `nested-agents`; `CalledUtc` set on both.
-13. `A_write_call_is_one_write_at_its_messages_instant_in_its_checkout` — `write-into-submodule-and-scratchpad` as re-cut by E1's PR (§8 item 1; `checkouts` names `repo-a/p1000`); `Checkout(repo-a/p1000)` + `OutsideAnyCheckout`; `Utc` = the message's earliest line (`:01`), the second block's line is `:02`. *(G15: no interim — E3.S4 is coded after that PR is merged.)*
+13. `A_write_call_is_one_write_at_its_messages_instant_in_its_checkout` — `write-into-submodule-and-scratchpad` as re-cut by PR #851 (§8 item 1; its manifest `checkouts` names `D:/fixture/repo-a/p1000`, checked 2026-10-17); `Checkout(repo-a/p1000)` + `OutsideAnyCheckout`; both `Utc` = the message's earliest line (`:01`) although the second block's line is `:02`; `AnsweredUtc` `:03` and `:04` (L3, L4). *(G15: no interim — E3.S4 is coded after #851 is merged.)*
 14. `A_shell_command_is_never_a_write` — any fixture with `Bash`; no `Tool` outside `WriteTools.Names`.
 15. `A_refused_or_unanswered_write_is_not_a_write` — `SetResultError`, `DeleteResult`; `Writes` shorter by two, both diagnostics counts 1 (S4-7).
 16. `A_synthetic_line_is_no_message_and_no_tokens` — `SetModelOnLine(n, "<synthetic>")`.
@@ -1049,7 +1135,7 @@ but found Observed`), never on a compile error.
 20. `Every_agent_call_is_launched_refused_or_missing` — `missing-child-transcripts`: `Partial` with `AgentCallWithoutTranscript ×1` and `MetaWithoutTranscript ×1`; `UnobservedLaunches.Count == 2` with instants; the other agents all present. The positive anchor of this class.
 21. `A_refused_agent_call_is_not_a_launch_and_not_partial` — `refused-agent-call`: `Observed`; `Agents.Count == 1 + A`.
 22. `A_meta_without_its_transcript_is_listed_as_not_present` — `missing-child-transcripts`: that key `TranscriptPresent == false`, `LaunchedUtc == null`, `CalledUtc != null`.
-23. `An_agent_file_without_a_meta_is_a_launch_with_no_parent_and_partial` — `DeleteMeta`; `ParentKey == ""`, `partial: agent without meta`.
+23. `An_agent_file_without_a_meta_is_a_launch_with_no_parent_and_partial` — `message-as-several-lines`, `DeleteMeta(303b2866f0b3022b2)`; that key listed with `ParentKey == ""`, `TranscriptPresent == true`, its messages counted; the state is `partial: agent call without transcript ×1, agent without meta ×1` *(corrected 2026-10-17: with the meta gone nothing joins main's `Agent` call `…5d66b6`, whose result at L2 is not an error, so step 8a reads the call as *missing* — one `UnobservedLaunch` with reason `agent call without transcript`. The reader cannot know that the file and the call are one agent, and must not guess it)*.
 24. `A_meta_without_model_is_counted_not_partial_and_the_model_comes_from_the_lines` — `meta-without-model`: `Observed`, `MetasWithoutModel == 1`, that key's `RequestedAlias == ""`, its messages' `Model == "claude-sonnet-5-5"` and `Requested == "claude-sonnet-5-5"`. *(F6)*
 25. `A_torn_middle_line_is_partial_and_the_rest_is_read` — `TruncateLine(n)` with n before the last; `partial: torn line ×1`; lines after n counted.
 26. `A_torn_last_line_is_a_tail_not_partial` — `TruncateLastLine`; `Observed`; `Diagnostics.TornTails == 1` (S4-1). Also over `torn-last-line` when E1 ships it.
@@ -1095,6 +1181,13 @@ but found Observed`), never on a compile error.
 53. `A_meta_that_does_not_parse_is_partial_torn_meta_and_its_file_still_counts` (*says what it did not see*) — `nested-agents`, `CorruptMeta(207bc560f3fb5a452)`: `partial: torn meta ×1` and no `agent without meta`; that key present with `ParentKey == ""`, `RequestedAlias == ""`; its messages counted; the depth-2 agent's `ParentKey` still `207bc…` (its own meta names it).
 54. `A_line_over_the_cap_is_a_lost_line_and_says_so` (*says what it did not see*) — `resumed-agent`, `PutLongLine(Agent(key), n, 4 KiB)` on an assistant line, `ReadBudget { MaxLineBytes = 1 KiB }`: `partial: line too long ×1`, `Diagnostics.LinesTooLong == 1`, that line's id absent (or counted from its other lines), every other message present.
 
+**Added 2026-10-17 (S4-22, S4-23, C7) — tests 55–56 in the classes named; 57–58 in E3.S2's class:**
+
+55. `A_write_carries_the_instant_of_its_answer` (*counts once*) — `model-switch-in-window` (c06): the one `Write` has `Utc == :01` (its message's earliest line, L2; the block is on L4 `:03`) and `AnsweredUtc == :05` (L5's stamp); `resumed-agent` (c14), agent `2edf3ddec8861a853`: the `Edit` has `Utc == :51` (L53) and `AnsweredUtc == :53` (L55). Then `DeleteResult(Main, …4da200)` + `AnswerCall(Main, …4da200)` on c06: the write is back with `AnsweredUtc` = the file's old largest stamp + 1 s, `Utc` unchanged. The instants are read from the fixture's lines by the test, never typed. Break-it: `AnsweredUtc = Utc` → red on both fixtures.
+56. `A_present_agent_file_with_no_stamped_line_reads_as_absent` (*says what it did not see*) — `message-as-several-lines`, `EmptyAgentFile(303b2866f0b3022b2)`: `partial: meta without transcript ×1`; that key `TranscriptPresent == false`, `LaunchedUtc == null`, `CalledUtc == :01`; `UnobservedLaunches.Count == 1` with the meta's `ToolUseId` (`…5d66b6`) and reason `meta without transcript`; `AgentFilesEmpty == 1`; main's message intact. Then also `DeleteMeta(303b2866f0b3022b2)`: `partial: agent call without transcript ×1, agent without meta ×1`, the key still listed with `TranscriptPresent == false`, `UnobservedLaunches.Count == 1` (the CALL, reason `agent call without transcript`). **The positive half, over EVERY fixture in the manifest** (count asserted > 0): every `ObservedAgent` with `TranscriptPresent == true` has `LaunchedUtc != null`, and `AgentFilesEmpty == 0` — the invariant E4's `Validate()` relies on (S4-23). Break-it: list an empty file as present → red (`LaunchedUtc` null with `TranscriptPresent` true).
+57. `The_registry_wins_even_when_only_the_variables_transcript_exists` (E3.S2's class, moved here 2026-10-17 — C7) — `registry-and-variable-disagree` (c12) materialised (its `sessions/52044.json` copied, F9b). `CLAUDE_PID=52044`, and `CLAUDE_CODE_SESSION_ID` is the `rounds.json` `callerSessionId`, which is the id that HAS a transcript. The registry names another id. Expect `NotObservable(TranscriptNotFound)` with source `registry`. This is the `/clear` shape that S2's rule 7 decides, on E1's real registry bytes.
+58. `Persistence_off_is_transcript_not_found_from_a_real_registry_entry` (E3.S2's class, moved here — C7) — `persistence-off` (c10) materialised: `CLAUDE_PID=41017`, and `projects/` is absent. Expect `TranscriptNotFound` with source `registry`.
+
 #### Break-its (plant the mutation, watch the named test go red, restore, report both messages)
 
 | Plant (production code) | Red test(s) |
@@ -1139,19 +1232,27 @@ but found Observed`), never on a compile error.
 | Key `tool_use` blocks by position instead of `id` | 47 |
 | Absorb a synthetic line into the table | 44, 16 |
 | Ordinal file order replaced by `EnumerateFiles` order | 17 (on a platform whose enumeration order is not ordinal; on Windows NTFS it is — the summary says which was observed) |
+| `AnsweredUtc = Utc` (the call's instant instead of the answer line's stamp) | 55 |
+| An empty agent file listed with `TranscriptPresent = true` | 56 (`LaunchedUtc` null beside `TranscriptPresent` true; the invariant half) |
+| A second `UnobservedLaunch` emitted for the inert agent record (two per missing or empty file) | 20 (`Count == 3`), 56 (`Count == 2`) |
+| A `DeleteMeta` file joined to main's call by guessing | 23 (`Observed`-ish: one reason where two are expected) |
 
-- **Done when.** Every numbered test (1–54) is green over E1's fixtures and the listed mutations through
-  `CoaiMcp.Tests.exe`; every break-it row was observed red and restored, with both messages in the summary;
+- **Done when.** Every numbered test (1–58; 57–58 live in E3.S2's class) is green over E1's fixtures **as merged
+  from PR #851** and the listed mutations through `CoaiMcp.Tests.exe`; every break-it row was observed red and
+  restored, with both messages in the summary; `TranscriptPresent ⇒ LaunchedUtc != null` holds over every fixture
+  (test 56) and every `ObservedWrite` carries an `AnsweredUtc` (S4-22); every `JsonDocument` is disposed before the
+  next `MoveNext` and no `JsonElement` is stored (C4 — the review's check);
   `ObservationReasons` holds every code the reader can produce and no longer holds `MetaWithoutModel` (E3.S5 will
   reflect over it); `TranscriptShapes` (`internal static`) is the only place a transcript string is admitted into a
   member; no `string` holds a transcript line in any new file (the reader parses `ReadOnlyMemory<byte>`, G4);
   `ReaderVersion == 1` with its totals filled; no `Directory.EnumerateFiles(…, AllDirectories)`, no `cwd`, no
   `description`, no `prompt`, no `toolUseResult`, no `DateTime.UtcNow`, no `Days(`/`Mentions(` in any new file; the
   whole suite is green.
-- **Depends on.** E1.S5 (fixtures and the manifest) **plus E1's re-cut PR (§8, branch `fix/e1-fixture-results`),
-  merged before E3.S4 is coded** — the c17/c19 rows, tests 7 and 13 and test 43's totals are written against it (G15);
-  E1.S4 (RESULTS: Q2–Q4, Q6, Q7, Q9); E3.S1 (items 7–9 are what steps 1–2 call, with the byte-yielding form of G4);
-  E3.S2; E3.S3.
+- **Depends on.** E1.S5 (fixtures and the manifest) **plus PR #851 (`fix/e1-fixture-results`, §8 — open, not merged
+  on 2026-10-17), merged before E3.S4 is coded** — the c12/c17/c19 rows, tests 7 and 13 and test 43's totals are
+  written against it (G15); E1.S4 (RESULTS: Q2–Q4, Q6, Q7, Q9); E3.S1 as coded in b24c81ae (items 7–9 are what
+  steps 1–2 call, in the byte-yielding form of G4, with C1–C5); E3.S2 as coded in 64ee32a6; E3.S3 as coded in
+  f9da2839 (C6). E4's S2 decisions of 2026-10-16/17 are what S4-22 and S4-23 answer.
 - **Model.** Spec (scenarios + brief): **Fable** (this entry; amended by Fable 2026-10-16) · code + tests: Sonnet ·
   review: Opus · fixes: Sonnet.
 
@@ -1222,11 +1323,13 @@ but found Observed`), never on a compile error.
 
 ```
 E3.S1 ─┐
-E3.S2 ─┼─► E3.S4 (Fable spec; E1.S5 shipped; §7 decided; §8 item 1 for c17/c19) ─► E3.S5
+E3.S2 ─┼─► E3.S4 (Fable spec; E1.S5 shipped; §7, §9 decided; waits for PR #851 — §8) ─► E3.S5
 E3.S3 ─┘
 ```
 
-One branch and ONE commit for the epic. The coai gate runs once, over the whole epic (parent, `## Epics`).
+One branch and ONE commit for the epic. The coai gate runs once, over the whole epic (parent, `## Epics`). *(2026-10-17:
+S1–S3 landed as three commits on the branch — b24c81ae, 64ee32a6, f9da2839 — with the judge's fixes after them; the
+"one commit" is what reaches main, squashed, after S4 and S5.)*
 
 | Parent's E3 done-when | Met by |
 |---|---|
@@ -1235,7 +1338,7 @@ One branch and ONE commit for the epic. The coai gate runs once, over the whole 
 | meta without transcript, `Agent` call with neither, a torn MIDDLE line → `partial: <why>`, reading on; a torn LAST line → NOT partial, counted in `Diagnostics.TornTails` (S4-1, parent §16 D22); **a meta with no `model` → `observed`, counted in `Diagnostics.MetasWithoutModel`** (S4-17, F6 — the parent's done-when said `partial`; edited 2026-10-16, §8.2) | E3.S4 tests 20, 22 (`c05`), 24 (`c04`), 25, 26 (mutations) |
 | no `effort` → `unknown` | E3.S4 tests 10 (a `SetEffort` mutation — `c08`'s only effort-less line is synthetic, F10), 11, 44 |
 | persistence off → `unobserved: transcript not found` | E3.S2, carried through by E3.S4 test 30 |
-| the registry beats the variable, recorded | E3.S2 |
+| the registry beats the variable, recorded | E3.S2, and E3.S4 tests 57–58 over E1's real registry bytes (`c12`, `c10`) |
 | no sentinel in any rendering | E3.S5 (E5 adds the `.db` bytes and `--log`) |
 | helpers lifted, `AgentLog` behaviour kept | E3.S1 |
 
@@ -1328,17 +1431,36 @@ and changes a count bumps `ReaderVersion`. It is still 1, and nothing has shippe
 Nothing in Q1, Q5, Q7, Q8, Q9 or the `is_error` facts disagrees with the spec. S4-1 and D22 (a torn tail is not
 `partial`) stand: E1 saw 0 torn tails in 9 379 samples.
 
-## 8. E1 follow-up owed before E3.S4 is coded (Fable, 2026-10-16)
+## 8. E1 follow-up owed before E3.S4 is coded (Fable, 2026-10-16) — delivered by PR #851 (open, 2026-10-17)
+
+> **Status 2026-10-17.** Both items are in **PR #851** — *test(e1): the caller-transcript fixtures keep the result of
+> every write they keep*, branch `fix/e1-fixture-results` → `main`, **open and not merged** when this was written. Its
+> own record is `research/PLAN_e1_fixtures_keep_the_write_results.md` on that branch (status IMPLEMENTED 2026-10-17;
+> plan gate `good_enough`, code gate `proceed`). Checked against the branch, file by file: the cutter rule in
+> `scripts/lib/transcript-sanitise.mjs` with four node tests; nine cases re-cut (c02, c03, c04, c07, c11, c12, c14,
+> c17, c19); `manifest.json` with per-case `checkouts` (c19: `D:/fixture/other`, `D:/fixture/repo-a`,
+> `D:/fixture/repo-a/p1000`; `scratch` in none); `allowlist.json` `model-ref` with exactly the seven `[1m]` ids named
+> in item 2; `ApprovedAllowlistSha256` updated (`ACallerTranscriptFixtureCarriesNoTextTests.cs:32`); the guards
+> `EveryCheckoutIsAFixtureRootOrUnderOne` (`:681`) and `EveryKeptWriteCallHasItsResult` (`:685`), plus a new
+> `TheCuttersWriteToolsAreTheGuardsTests` that holds the cutter's write-tool list equal to the guard's.
+> **Deviations #851 records, and what they change here:** (1) the `serves`-declared unanswered-write exemption was not
+> built — no case needs it, the guard refuses every unanswered write; (2) "every other byte unchanged" is not literally
+> true: instants are ranks, so the added answer lines move the later instants of c12/c17/c19 and their `rounds.json`
+> (c17 +1 s, round 1 starts `:12`; c19 +2 s, round 1 starts `:05`; c19's L1 `:01`/L2 `:02` that test 13 cites are
+> unchanged, its answers are L3 `:03` and L4 `:04`; c12 L9 is answered at L10 `:09`, c17 L9 at L10 `:11`); (3) the
+> cutter no longer mutates the agent records. **E3.S4 tests 7, 13 and 43 run on these fixtures after #851 merges**
+> (G15: no interim); test 43's Σ writes is +4 against main today (c12 +1, c17 +1, c19 +2), as item 1 predicted.
 
 Two things E3 cannot fix by reading differently, because they are about what the fixtures CLAIM to show. Each names
 the case, the change, the tool that makes it, and the test that proves it. **How it lands (decided by the coordinator,
-2026-10-16, G15): as E1's OWN pull request — branch `fix/e1-fixture-results`, in progress — merged to main BEFORE
-E3.S4 is coded, never inside E3's one commit.** E3.S4's c17/c19 rows, tests 7 and 13 and test 43's totals are written
-against that PR's fixtures; there is no interim. Fixtures are published data: the Opus
+2026-10-16, G15): as E1's OWN pull request — branch `fix/e1-fixture-results`, now PR #851 — merged to main BEFORE
+E3.S4 is coded, never inside E3's one commit.** E3.S4's c12/c17/c19 rows, tests 7 and 13 and test 43's totals are
+written against that PR's fixtures; there is no interim. Fixtures are published data: the Opus
 reviewer reads every re-cut file before the commit, as E1.S5 requires. The `ApprovedAllowlistSha256` pin in
 `ACallerTranscriptFixtureCarriesNoTextTests.cs:32` changes only for item 2 and is updated in the same diff, deliberately.
 
 1. **Writes without their results, and roots without their kind** (F8). *Blocking* for the c17/c19 rows as intended.
+   **Delivered by #851** (the status box above).
    - **What.** Re-cut `c12` (`registry-and-variable-disagree`), `c17` (`two-repositories-one-session`) and `c19`
      (`write-into-submodule-and-scratchpad`) so that every write-tool `tool_use` the cut keeps has its `tool_result`
      line kept too. Rule for the cutter (`scripts/lib/transcript-sanitise.mjs`, beside `launchLines` at `:403-404`):
@@ -1359,7 +1481,8 @@ reviewer reads every re-cut file before the commit, as E1.S5 requires. The `Appr
      **+4** after the PR: c12 +1, c17 +1, c19 +2 (G15; the earlier "+3 minus the interim" was wrong arithmetic and the
      interim is gone).
 2. **`requestedModel` on the main lines** (F7). *Not blocking*: S4-18 keeps the reader text-free whatever the fixture
-   holds, and test 7 runs over a mutation.
+   holds. **Delivered by #851** with exactly the seven ids below (checked on its branch 2026-10-17); test 7 reads the
+   shipped c02 main L1 once it merges, and no longer runs over a mutation.
    - **What.** Widen `allowlist.json`'s `model-ref` vocabulary with the long-context form of each listed model id —
      `claude-opus-5-5[1m]`, `claude-opus-4-8[1m]`, `claude-opus-4-1[1m]`, `claude-fable-5-1[1m]`,
      `claude-sonnet-5-5[1m]`, `claude-sonnet-5[1m]`, `claude-haiku-4-5-20251001[1m]` — the same seven the `alias`
@@ -1369,8 +1492,8 @@ reviewer reads every re-cut file before the commit, as E1.S5 requires. The `Appr
    - **Guard.** The existing probe that every vocabulary REJECTS private-looking strings is re-run; `model-ref` must still
      refuse `claude-opus-5-5[1m] please` and `D:/x[1m]`. `TheSentinelIsActuallyPresent` stays green (the Agent input's
      `description`/`prompt` keep the sentinel on every re-cut main file).
-   - **Proof on the E3 side.** E3.S4 test 7 drops `SetRequestedModel` and asserts the shipped c02 main L1:
-     `Requested == "claude-opus-5-5[1m]"`, `Model == "claude-opus-5-5"`.
+   - **Proof on the E3 side.** E3.S4 test 7 asserts the shipped c02 main L1 (as re-cut in #851):
+     `Requested == "claude-opus-5-5[1m]"`, `Model == "claude-opus-5-5"`. `SetRequestedModel` stays a helper for test 49.
 
 Not asked of E1: a `torn-last-line` fixture (it cannot pass E1's JSON guard; S4-1 stays a mutation), a multibyte
 fixture (`PutMultibyte` covers it), an older metaless layout (Q1: not on disk).
