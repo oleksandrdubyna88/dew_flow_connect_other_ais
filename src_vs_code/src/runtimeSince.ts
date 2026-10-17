@@ -54,12 +54,22 @@ export const KIMI_RUNTIME_SINCE = '0.57.0';
 export const VIBE_ON_LINUX_SINCE = '0.58.0';
 
 /**
+ * The first `coai-mcp` that RUNS a Kimi row on a Linux host — on WSL2 only, in that release (DL1 of
+ * todo/PLAN_kimi_and_vibe_on_linux.md, E6). Kimi follows Vibe by one minor (DL14): Vibe is 0.58.0 (E1–E3), and the release that
+ * carries E4–E6 is the first minor after it, <b>0.59.0</b> — set by E6 as that plan says, and kept level with the tag by whoever
+ * cuts the release. The unreleased Kimi-consultant branch (`feat/kimi-consultant`) sets `KIMI_CONSULTANT_SINCE` to 0.58.0 too:
+ * whichever of the two merges SECOND bumps its constant to the next minor (DL14), so 0.59.0 here assumes Vibe-on-Linux takes
+ * 0.58.0 alone. `runtimeSinceIsAhead.test.ts` holds this table to the same guard as `RUNTIME_SINCE`.
+ */
+export const KIMI_ON_LINUX_SINCE = '0.59.0';
+
+/**
  * Which `coai-mcp` first runs each runtime on a Linux or WSL host. A runtime with no entry runs on every host its server
- * knows it on. Kimi's entry (`KIMI_ON_LINUX_SINCE`) comes with the release that lifts Kimi's own host refusal (E6), not
- * before: Kimi on Linux is a later release, and an entry for it now would call a refusal a feature.
+ * knows it on.
  */
 export const ON_LINUX_SINCE: Readonly<Record<string, string>> = {
   vibe: VIBE_ON_LINUX_SINCE,
+  kimi: KIMI_ON_LINUX_SINCE,
 };
 
 /** Every runtime some released server does not know, with the release that first knows it. */
@@ -155,7 +165,7 @@ function labelOf(runtime: string): string {
   return RUNTIME_LABEL[runtime] ?? runtime;
 }
 
-const RUNTIME_LABEL: Readonly<Record<string, string>> = { vibe: 'Vibe' };
+const RUNTIME_LABEL: Readonly<Record<string, string>> = { vibe: 'Vibe', kimi: 'Kimi' };
 
 /**
  * What the card says, and deliberately not what the server would do instead: measured 2026-10-13, the released mcp
