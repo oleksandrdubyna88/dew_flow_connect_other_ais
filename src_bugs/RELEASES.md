@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.5.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/bugs-v0.4.0...bugs-v0.5.0) (2026-10-17)
+
+
+### Features
+
+* **tests:** local test runs take at most 8 workers, at lowered CPU priority ([#757](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/757)) ([328703f](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/328703faf67d84ebb55944922215925157dc85aa))
+
+
+### Bug Fixes
+
+* a port somebody else holds ends both HTTP hosts with exit 75 and one line, never a crash ([8cc4f49](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/8cc4f49216f8e33da5b1fc4e8f5744ce36d524a5))
+* the bind-failure line is one ASCII line on stderr, with no stack and no dropped log call ([e21d4bc](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/e21d4bc57d0515c82e706e9d769e81f265631b00))
+
 ## [0.4.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/bugs-v0.3.0...bugs-v0.4.0) (2026-09-23)
 
 
