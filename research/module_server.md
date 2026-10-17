@@ -6351,7 +6351,7 @@ sweep never reads a half-written one as a dead owner. Trees
 that older builds left under `{DataDir}/worktrees` are not swept by this one — they block nothing,
 because no path is ever reused.
 
-**A tracked path longer than Windows allows (2026-10-16, `todo/PLAN_review_trees_survive_long_paths.md`).**
+**A tracked path longer than Windows allows (2026-10-16, `research/PLAN_review_trees_survive_long_paths.md`).**
 On Windows git refuses to write, read or remove a file whose absolute path passes 259 UTF-16 units unless
 `core.longpaths` is on, and it is on nowhere by default. A round tree's root is 82 characters on a normal
 profile, so a branch tracking a 177-character path failed `review_code` with "Could not reset index file to
