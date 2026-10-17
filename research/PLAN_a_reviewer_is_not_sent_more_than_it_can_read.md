@@ -1,14 +1,44 @@
 # PLAN — A reviewer is not sent more than it can read, and the ledger says when it did not read
 
-> Status: **plan only, nothing implemented yet, 2026-10-16.** Scope: one optional field on a vendor row
-> (`maxPromptKib`), a check in `RosterBuilder.AddReviewer` before the fan-out, ONE place where the plan-stage
-> `PLAN_INCOMPLETE` fold settles a reviewer's outcome (inside the scheduler, so the ledger, the live view, the audit
-> line and the local stand-down all read the same outcome), the model card's one input, and the docs.
+> Status: **IMPLEMENTED, 2026-10-17 (S1–S5; S6 extracted).** Scope: one optional field on a vendor row
+> (`maxPromptKib`), a check in `RosterBuilder` before the fan-out, ONE place where the plan-stage `PLAN_INCOMPLETE` fold
+> settles a reviewer's outcome (inside the scheduler, so the ledger, the live view, the audit line and the local stand-down
+> all read the same outcome), the model card's one input, and the docs. Plan gate: `proceed` (session 3c28e0dd, round 1);
+> code gate: `proceed` (same session, round 1 of the code stage, 12 of 16 reviewers — kimi not signed in).
 >
-> Related: [PLAN_the_plan_gate_reads_the_committed_plan.md](PLAN_the_plan_gate_reads_the_committed_plan.md) (D12, D13 —
-> this plan amends D12's "accepted mismatch", see § 4), [module_server.md](../research/module_server.md),
-> [module_extension.md](../research/module_extension.md),
-> [RESULTS_reviewer_input_sizes.md](../research/RESULTS_reviewer_input_sizes.md).
+> **Deviations from the plan, as shipped:**
+>
+> 1. **T2 is at scheduler level** — `TheLocalReviewerStandsDownTests.ACloudReviewerThatDidNotGetThePlan_IsNotAQuietCloud`
+>    passes `PlanIncomplete.Settle` as the scheduler's `settle`, the fallback § 7 allowed. The RoundEngine
+>    wiring is held by T1 and B2.
+> 2. **The `--features` entry landed in S2**, the commit that made the cap honoured, not in S1.
+> 3. **`VendorDto.MaxPromptKib` is a `JsonElement?`, not an `int?`**: `ParseVendors` returns `[]` on any `JsonException`,
+>    so a typed `int?` turned one hand-edited `"180"` into NO vendors at all. Read as a value, it is no cap for that row only.
+>    The same exposure stands for `timeoutMinutes` (`int?`) and the other typed row members; not changed here.
+> 4. **The check is in `PlaceOf`**, after `WhyNotCarried` and the api refusal and before the launch place — not after
+>    `ReviewerFor` builds the work. Nothing is built for an over-cap reviewer.
+> 5. **The cure follows the stage**: plan — send the plan in parts (one epic per round); code — send a smaller change;
+>    document — send the document in parts; any other — send less in one round. The sentence says the cap in bytes
+>    (`… reads at most 184,320 bytes (maxPromptKib 180) …`), a code-gate finding.
+> 6. **The extension's limit lives in `promptCap.ts`** (an import cycle otherwise), and the card input shows on every
+>    runtime, api rows included — the server leaves out any over-cap reviewer whatever it runs on.
+> 7. **`test:host` (the real-editor harness) was not run**: no command or contribution was added; the card page is run by
+>    the page tests, and the vendor write rides the settings-mirror path that `test:host` already covers.
+> 8. **The cap is a typed value**, `Core.Catalog.PromptCap` (`src_mcp/core/Catalog/PromptCap.cs`), not a bare `int` on
+>    `ProviderSettings` (D1 said `int`, 0 = unset): it owns the range, the KiB-to-bytes unit and the inclusive boundary. A
+>    code-gate finding (the family's no-primitive-obsession rule).
+> 9. **Found by the judge's review**: the carrier test composed the prompt of a dealt lens that has NO text, which throws,
+>    before the leaf could say "not asked". `FitsTheCap` now leaves such an item to the leaf (red/green test
+>    `ADealtLensWithNoPromptText_IsSaidAsNotAsked_WhenARowHasACap_AndTheRoundIsStillBuilt`).
+>
+> **Open tail:** S6 (measure this row's real limit, 160–210 KB, three runs per step) is extracted into
+> [PLAN_the_agy_flash_low_prompt_window_is_measured.md](../todo/PLAN_the_agy_flash_low_prompt_window_is_measured.md).
+> The owner's R1 (set 150 KiB on `chat-preset-mtwxbymp-4` after the release) is a setting on that machine, still open.
+>
+> Related: [PLAN_the_plan_gate_reads_the_committed_plan.md](../todo/PLAN_the_plan_gate_reads_the_committed_plan.md) (D12, D13 —
+> this plan amends D12's "accepted mismatch", see § 4), [module_server.md](module_server.md),
+> [module_extension.md](module_extension.md),
+> [RESULTS_reviewer_input_sizes.md](RESULTS_reviewer_input_sizes.md).
 
 ## 1. The symptom (measured by a scout, 2026-10-16, `coai-mcp` 0.58.0)
 
@@ -51,7 +81,7 @@ What went wrong around it, each verified on `origin/main` (`ce9cd298`):
 Out of scope, and said here so it is not lost: **Kimi is cancelled at the 10-minute round limit on prompts of ANY size**
 (9 KB and 12 KB too, same scout). That is a slowness or a hang in that runtime, not a size issue; a cap would not touch
 it. It needs its own measurement, and its home is the open
-[PLAN_vibe_and_kimi_runtimes.md](PLAN_vibe_and_kimi_runtimes.md): a diagnosis story under its S4, whose completion
+[PLAN_vibe_and_kimi_runtimes.md](../todo/PLAN_vibe_and_kimi_runtimes.md): a diagnosis story under its S4, whose completion
 criterion is "a Kimi row reviews plans and code" (decision C4, § 10).
 
 ## 2. The goal — what must be true when this is done
@@ -94,7 +124,7 @@ ceiling stays as it is, the product's own bound.
 
 | Item | Built by | The other plan's part |
 |---|---|---|
-| The sentinel, the instruction, `PlanIncomplete` and its rule (any token for this id folds) | [PLAN_the_plan_gate_reads_the_committed_plan.md](PLAN_the_plan_gate_reads_the_committed_plan.md) D12 — shipped in E1 (#837) | none: this plan does not change the rule or the prompt |
+| The sentinel, the instruction, `PlanIncomplete` and its rule (any token for this id folds) | [PLAN_the_plan_gate_reads_the_committed_plan.md](../todo/PLAN_the_plan_gate_reads_the_committed_plan.md) D12 — shipped in E1 (#837) | none: this plan does not change the rule or the prompt |
 | WHERE the fold is applied: once, at the scheduler's terminal point, read by ledger, live view, audit, stand-down and results | **this plan**, S3 | D12's "accepted mismatch" (progress, audit and ledger saw the raw `Ok`) is superseded. D12's "the ledger row is right as it stands (the tokens were spent)" is kept for the TOKENS — only the outcome word changes |
 | Any size check | **this plan**, S1–S2 (a per-row operator cap, bytes) | D13 "no token preflight" stands: no model capability, no tokens |
 | The `rounds` column, `--log`, the rounds-log line (E2) | the committed-plan plan, E2 | disjoint — this plan adds no column and no `--log` field |
@@ -193,7 +223,7 @@ T13.
 ## 8. Out of scope — named, not silently left
 
 - **Kimi's ten-minute cancellations** (§ 1) — a diagnosis story under S4 of
-  [PLAN_vibe_and_kimi_runtimes.md](PLAN_vibe_and_kimi_runtimes.md) (C4); this branch does not edit that plan.
+  [PLAN_vibe_and_kimi_runtimes.md](../todo/PLAN_vibe_and_kimi_runtimes.md) (C4); this branch does not edit that plan.
 - **The repair launch and feature follow-up turns** are not checked against the cap (D4). A follow-up only appends to
   a prompt that already passed; if a feature reviewer is found over its window on a follow-up, that is its own story.
 - **The security lane** builds its own work (`src_mcp/src/Server/SecurityRoster.cs:159`) and has its own bounds

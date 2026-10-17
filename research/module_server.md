@@ -1717,7 +1717,7 @@ as amended after the cadence consultation:
   version, so `TotalUsage` and the ledger still count a retried reviewer's earlier launches.
 - Zero answered after the fold → `call_human`.
 
-**The old "stated mismatch" is gone** (`todo/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md` S3, D8–D9). The fold used to
+**The old "stated mismatch" is gone** (`research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md` S3, D8–D9). The fold used to
 run on `results` after the fan-out, so the progress callback had already written the ledger line as `ok`, shown the reviewer
 as done, logged it as answered — and the local stand-down (issue #485) had counted its token finding as one quiet remark, so
 a cloud that answered ONLY the token could keep the one reviewer that could still read the plan from starting. Now the ledger
@@ -7063,15 +7063,17 @@ Listed today: `bugzRuntime` (`--collect-bugs --runtime`, E2.1). In PROJECT.md's 
 CLI row in place of `ReviewerTimeout`; an api row keeps the round's launch timeout, its own limit being the whole review
 (`reviewMinutes`). `--features` lists `timeoutMinutes` (`ARowsOwnTimeoutTests`, RED first).
 
-## A row's prompt cap (2026-10-17, `todo/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md` S1-S2)
+## A row's prompt cap (2026-10-17, `research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md` S1-S2)
 
 **Symptom it answers.** A reviewer that reads a fixed window loses the end of a long prompt (a measured antigravity row
 answered `PLAN_INCOMPLETE` at 212 KB and 234 KB, normally at 107-157 KB). The sentinel (above) detects it AFTER the launch was
 paid for; the cap keeps the launch from being made.
 
 - **The field.** `VendorDto.MaxPromptKib` (a `JsonElement?`, so a hand-edited `"180"` is no cap and costs the row's neighbours
-  nothing) -> `ProviderSettings.MaxPromptKib` (`int`, 0 = unset): a JSON number that is a whole KiB from 1 to
-  `CatalogLimits.MaxPromptKib` (4096), else unset. `MaxPromptBytes` is exactly KiB x 1024. **An operator's number, in bytes,
+  nothing) -> `ProviderSettings.PromptCap` (`Core.Catalog.PromptCap`, `None` = unset): a JSON number that is a whole KiB from 1
+  to `CatalogLimits.MaxPromptKib` (4096), else `None`. The type owns the three facts that must agree — the range
+  (`PromptCap.OfKib`, which never throws), the unit (`Bytes` is exactly KiB x 1024) and the inclusive boundary
+  (`Admits(bytes)`); a bare `int` carried them as conventions of every reader (a code-gate finding). **An operator's number, in bytes,
   no default and no per-model table** — `DocumentRules.cs:26-29` still defers model windows, and D13 of the committed-plan plan
   ("no token preflight") stands. Not `maxPromptBytes`: that name already means the row's SYSTEM prompt.
 - **The check, asked in two places** (like `WhyNotCarried`): `RosterBuilder.WhyOverTheCap` compares the UTF-8 bytes of the
@@ -7084,8 +7086,9 @@ paid for; the cap keeps the launch from being made.
   composes the prompt `ReviewerFor` sends (moved out of `ReviewerFor`, not copied), so the number compared is
   `ReviewerWork.PromptBytes`.
 - **What it says.** The exclusion reaches the reply, the audit's "left out" line and each stage's nobody policy through the
-  existing path: `its prompt is 212,310 bytes and this row reads at most 184,320 (maxPromptKib 180) - send the plan in parts
-  (one epic per round) | send a smaller change | send less in one round, or raise the row's cap` (the cure follows the stage).
+  existing path: `its prompt is 212,310 bytes and this row reads at most 184,320 bytes (maxPromptKib 180) - send the plan
+  in parts (one epic per round) | send a smaller change | send the document in parts | send less in one round, or raise the
+  row's cap` (the cure follows the stage: plan, code, document, any other).
   Every reviewer over -> plan and code refuse before any round is recorded; the feature stage records a skip.
   `Exclude` keeps one line per (vendor, role), so a row holding two lenses of a role is named once, not per lens.
 - **Every stage, first prompt only (D4).** The repair launch (smaller than the review) and a feature follow-up turn (a tail
