@@ -2877,7 +2877,7 @@ flowchart TD
 ```
 
 - **Two sources, one copy.** `SnapshotSource.Pinned(worktree)` copies what `git ls-files --stage` lists in the round's
-  pinned tree, descending into every populated submodule (the populator's own `HasGit` answers "populated"); never
+  pinned tree, descending into every populated submodule (`GitMarker.HasGit` in `Worktrees/GitMarker.cs`, shared with the populator and the caller-transcript `CheckoutRoots`, answers "populated"); never
   `git archive`, whose `export-ignore` / `export-subst` attributes would drop or rewrite reviewed bytes
   (`AnExportIgnoredOrSubstitutedFile_KeepsItsReviewedBytes`). `SnapshotSource.Live(checkout)` adds the untracked-not-
   ignored files, copies the bytes as they are now, and leaves a deleted path absent; an untracked NESTED REPOSITORY,
