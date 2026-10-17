@@ -1,6 +1,7 @@
 # PLAN — Test leftovers, E5: the tests move to `testsToDelete-coai-…` and the product's `coai-*` directories stay untouched
 
-> Status: **plan only, nothing implemented yet, 2026-10-16; blocked on the E1 release of `dew_flow_conventions`.**
+> Status: **plan only, nothing implemented yet, 2026-10-16; plan-gate round 1 findings applied 2026-10-17; blocked
+> on the E1 release of `dew_flow_conventions`.**
 > Stories of epic E5 of `dew_flow_conventions · todo/PLAN_test_leftovers_rollout.md` (§ *Epics*, E5). Scope: the
 > shared sweep rule `shared/temp-sweep.json`, the two test sweeps that read it (`src_vs_code/scripts/sweepTemp.mjs`
 > through `run-tests.mjs`, and the assembly fixture `src_mcp/tests/TempDirsAreSwept.cs`), one C# and one Node
@@ -16,7 +17,7 @@
 epics and stories*): its row in `todo/README.md` under *Currently open* —
 
 ```
-| [PLAN_test_leftovers_E5.md](PLAN_test_leftovers_E5.md) | Stories of epic E5 of the family's test-leftovers rollout — **plan only, 2026-10-16; blocked on the E1 release of the conventions.** Tests create only `testsToDelete-coai-<what>-<id>` folders, claimed by a sibling `.owner`; both test sweeps collect them on owner liveness and keep the old `coai-` test names only until a written end date; the product's `coai-*` runtime directories and their own six-hour sweep are untouched and proven so. Five stories: the pin, the sweep (**S2 is a cornerstone**, spec by Fable), the two helpers, the C# sites, the Node sites and the guard. |
+| [PLAN_test_leftovers_E5.md](PLAN_test_leftovers_E5.md) | Stories of epic E5 of the family's test-leftovers rollout — **plan only, 2026-10-16; plan-gate round 1 findings applied 2026-10-17; blocked on the E1 release of the conventions.** Tests create only `testsToDelete-coai-<what>-<id>` folders, claimed by a sibling `.owner`; both test sweeps collect them on owner liveness and keep the old `coai-` test names only until a written end date; the product's `coai-*` runtime directories and their own six-hour sweep are untouched and proven so. Five stories: the pin, the sweep (**S2 is a cornerstone**, spec by Fable), the two helpers, the C# sites, the Node sites and the guard. |
 ```
 
 and, in `dew_flow_conventions` (a separate commit there, by the parent's owner), the parent's ledger line becomes
@@ -258,7 +259,7 @@ the janitor only if the owner runs it — they never carried the prefix.
 | **S2 — the sweep: rule file, owner liveness, both sweeps — cornerstone** | **Fable** (spec) · Sonnet · Opus | S1 | after S1 |
 | S3 — the two helpers, the per-suite fixtures, the editor-host run | Opus · Sonnet · Opus | S2 (its owner module) | after S2 |
 | S4 — the C# sites | Opus · Sonnet · Opus | S3 | after S3, parallel with S5 |
-| S5 — the Node sites, the guard, CI | Opus · Sonnet · Opus | S3 | after S3; its guard merges last (red until S4 and S5's sites are done) |
+| S5 — the Node sites, the guard, CI | Opus · Sonnet · Opus | S3 | after S3; its guard merges last — after S4's C# sites and S5's Node sites, every token-less `testsToDelete-<x>-` name among them, are merged (plan-gate round 1) |
 
 S2's spec decides; where this document and S2's spec differ, the spec wins and the difference is a defect of this
 document. Where this document and the contract differ, the contract wins: report it to the parent, do not resolve it
@@ -329,7 +330,12 @@ in code.
    case-insensitively per rule §1, against `prefix`'s case-sensitive `startsWith` today); the old test prefix (`coai-`)
    and its END DATE (a calendar date in the file; how long — the rule's premise "nothing live makes such a name any
    more" is FALSE here while older checkouts and agent worktrees keep running the old suites, so the date counts from
-   when old branches stop running, not from the merge); what each reader does on and after the date (stop matching
+   when old branches stop running, not from the merge — **plan-gate round 1:** the date is a VERIFIABLE condition,
+   *no branch and no agent worktree still runs the old suites*, and the spec records the evidence it checked (for
+   example: the open PRs and remote branches whose merge base is older than S2's merge, the agent worktrees of the
+   family's machines and the commit each one is on, the last CI runs per branch) and the concrete calendar date it
+   computed from that evidence; until the condition holds, the date is moved forward by a one-line PR and the old
+   branch stays); what each reader does on and after the date (stop matching
    and say so in one report line — never a test that turns red on a calendar day and blocks unrelated PRs); whether
    `prefix` is renamed or a new key added (two runners and old checkouts read the file — an old checkout's
    `SweepRule` reading a renamed key must not crash or widen); `keepMinutes` and `neverSwept` unchanged in value.
@@ -337,7 +343,12 @@ in code.
    and `toSweep`'s deny-list (Node) with the same arguments as on 1fe25d19 — prefix, version-cache exclusion,
    `neverSwept`, 10 minutes — and that the new branch can never match a name that does not start with the new prefix.
    Whether the old branch also stops at a `testsToDelete-` name (it does today only because `startsWith("coai-")` is
-   false for it — the spec says whether that is enough).
+   false for it — the spec says whether that is enough). **Plan-gate round 1:** "the same arguments" is proven by a
+   TEST, not by reading — the old branch is driven with an injected clock and controlled ages (Node: the pure
+   `toSweep(entries, now, rule)` with fixed `lastWriteMs`; C#: the `cutoff` argument of `PruneOldScratchDirs` with
+   `Directory.SetLastWriteTimeUtc` on folders in a private root), never with a real wait, and it collects exactly the
+   names today's code collects at the same `now`: one minute either side of the 10-minute boundary, a version cache,
+   every `neverSwept` entry, a `testsToDelete-coai-` name (never the old branch's).
 3. **Owner liveness, in both languages, three-valued.** The owner string `<host>@<os>:<pid>[:<start>]` per rule §3;
    the host is the **DNS host name** — Node `os.hostname()`, C# `System.Net.Dns.GetHostName()`, the janitor's
    `hostname` — compared case-insensitively, **never C#'s `Environment.MachineName`** (the NetBIOS name: upper-case,
@@ -360,7 +371,11 @@ in code.
    spec cites or re-measures `sweepTemp.test.mjs:181-200`), plus whether the new branch must call
    `KimiHome.DisposeAllUnder` first as the product sweep does (`PanelService.cs:1502-1512`): a test leftover can hold
    a Kimi home whose `credentials` is a junction — to a fake person's folder in every test today; the spec states the
-   guarantee that it can never be the real one, or makes the sweep safe if it were.
+   guarantee that it can never be the real one, or makes the sweep safe if it were. **Plan-gate round 1:** a folder or
+   marker that is already gone when the new branch deletes it is NOT a failure — C# swallows
+   `DirectoryNotFoundException` and `FileNotFoundException` silently (no report line, nothing counted as failed), Node
+   swallows `ENOENT` silently (`rmSync`'s `force` covers the folder; the marker's `unlinkSync` needs its own catch),
+   so two suites that sweep the same temp root at once never fail and never report each other's removals.
 6. **Where the C# sweep runs and who calls it.** The assembly fixture in `src_mcp/tests` today; whether the three
    other C# suites get the same fixture (rule §4: every run that creates the kind sweeps it at its start) and how —
    an `[assembly: AssemblyFixture]` is per assembly, the sweep code is the library's; whether `TempDirsAreSwept` keeps
@@ -371,7 +386,13 @@ in code.
 8. **"Provably unchanged" as a check, not a sentence.** `git diff --exit-code origin/main -- src_mcp/src/Server/PanelService.cs`
    in every E5 PR (or the spec's narrower form); the product sweep's own tests (`ScratchDirsTests`,
    `TheScratchSweepNeverDeletesAKimiHomeUnderALiveTreeTests`, `ConsultCheckSweepTests`, `ConsultantHomeSweepTests`,
-   `AScratchSweepRunsOnTheConsultationBeatTests`, `chatStoreSweep.test.ts`) unchanged and green.
+   `AScratchSweepRunsOnTheConsultationBeatTests`, `chatStoreSweep.test.ts`) unchanged and green. **Plan-gate round 1:**
+   the diff check alone is not the proof — a CHARACTERIZATION test of `PanelService.PruneOldScratchDirs`
+   (`PanelService.cs:1449-1462`, read on `origin/main` ce9cd298) lands on `main` FIRST, before any other S2 change: a
+   private root with controlled inputs — the default `ScratchPrefixes` and an explicit prefix list, an `except` list,
+   a version cache, a folder each side of the cutoff set by `Directory.SetLastWriteTimeUtc`, a read-only file — driven
+   through the function's own `cutoff` argument (its injected clock), asserting exactly which names remain. It stays
+   green, unchanged, in every E5 PR.
 9. **The scenarios with their RED symptoms**, at least: a `testsToDelete-coai-…` folder OLDER than the window whose
    marker names a live process (this test process) survives — the case age alone gets wrong; one with a
    foreign-host marker and one with an unreadable marker survive; a probe-`gone` owner's folder and marker go; an old
@@ -380,8 +401,11 @@ in code.
    an old `coai-panel-…` goes before the end date and survives after it; `TESTSTODELETE-COAI-x-abc123` and
    `teststodelete_coai_x_abc123` are considered; `testsToDelete-kimi-x` and `testsToDelete-mcp-x-abc123` are not
    looked at; a junction inside a gone owner's folder is removed by its own name and its target keeps its bytes; a
-   sweep error is one line and the suite still runs. Never the REAL probe on a dead child's pid (Windows hands exited
-   pids to the next process — E1 met it mid-suite): a kill is simulated with an injected probe.
+   sweep error is one line and the suite still runs; *(plan-gate round 1)* a gone owner's folder or marker removed by
+   another sweep between the listing and the delete (an injected `io`/deleter that removes it first, and once two
+   real sweeps over one private root at once) ⇒ no failure, no report line, no throw; the old branch at an injected
+   `now` collects exactly what today's code collects (item 2). Never the REAL probe on a dead child's pid (Windows hands
+   exited pids to the next process — E1 met it mid-suite): a kill is simulated with an injected probe.
 10. **Break-its**, each observed red: `neverSwept` emptied; the new prefix unanchored (`includes`); the old prefix in
     the new branch; the end date in the past; the probe's `unknown` mapped to `gone`; the case-insensitive match made
     case-sensitive.
@@ -389,8 +413,11 @@ in code.
 - **Commands** (the spec may add): the `src_mcp` suite as in S1 with `--filter-class "*TempDirsAreSwept"` then whole;
   the server, ingest-server and bench executables; `cd src_vs_code && npm test`; on Windows, inside WSL, and the macOS
   CI leg for the C# start time.
-- **DoD.** The spec's scenarios RED then GREEN on Windows and Linux; the break-its red; `PanelService.cs` unchanged;
-  the three product-prefix scans unchanged and green; `module_tests.md` describes the two branches and the end date.
+- **DoD.** The spec's scenarios RED then GREEN on Windows and Linux; the break-its red; `PanelService.cs` unchanged
+  AND the `PruneOldScratchDirs` characterization test (item 8) merged on `main` before the rest of S2 and green
+  unchanged in every E5 PR; the old branch's equivalence proven with an injected clock (item 2); the end date's
+  evidence and computed date written in the spec (item 1); concurrent sweeps silent on not-found (item 5); the three
+  product-prefix scans unchanged and green; `module_tests.md` describes the two branches and the end date.
 
 ## S3 — The two helpers, the per-suite fixtures, the editor-host run
 
@@ -411,9 +438,14 @@ it ACCEPTS the old call shape — a trailing `-` is stripped, and a leading `coa
 it, so `TempDir.For("coai-panel-")` makes `testsToDelete-coai-panel-<id>` and no call site has to change in this
 story (S4 then rewrites the literals and S5's guard forbids the old shape in literals). Creation:
 `Directory.CreateTempSubdirectory("testsToDelete-coai-" + what + "-")` (atomic, random id) → the `TempDir` object
-exists and owns it (the caller's `using` is the registration) → write `<path>.owner` with S2's owner string, to a
-temp name in the same folder and `File.Move` over (the `WorktreeManager.WriteOwner` shape, `:431-440` — a reader never
-sees half a marker; the temp name never matches the sweep). A claim that cannot be written: delete the folder, throw.
+exists and owns it (the caller's `using` is the registration) → write `<path>.owner` with S2's owner string through
+`new FileStream(path + ".owner", FileMode.CreateNew, FileAccess.Write, FileShare.None)` — the C# twin of Node's `wx`:
+a claim that already exists is somebody else's, and the helper never overwrites it (*plan-gate round 1*: no temp name
+and `File.Move` over, the `WorktreeManager.WriteOwner` shape — a move replaces whatever claim is there; a reader that
+meets a half-written claim reads it as unreadable ⇒ `unknown` ⇒ kept, the safe side). A claim that cannot be written —
+`IOException` because it exists, or any other failure: delete the folder, throw. `TempDir.Root` is the library's ONE
+`Path.GetTempPath()` call (the parent of every `TempDir`, and the root a test passes where the product only READS a
+temp root — S4).
 `Dispose`: `GitScratch.DeleteEvenIfReadOnly(path)` up to **5 tries 100 ms apart** (rule §2), the marker only after the
 folder is gone; on giving up, ONE line through `TestContext.Current.SendDiagnosticMessage` (the `src_bugs`
 `Scratch.cs:31-33` shape) naming the path, folder and marker left prefixed and claimed; `LinkTargetLostException`
@@ -451,6 +483,9 @@ the scenario says so and is fixed — no scenario may depend on a previous run's
    closed, a second `Dispose` removes both. (Linux twin: a parent made read-only, the premise asserted.)
 5. `ALostLinkTarget_StillFailsTheTest` — the existing junction case keeps re-throwing (the E4.1 guarantee survives the
    move).
+5a. *(plan-gate round 1)* `AClaimThatAlreadyExists_IsNeverOverwritten` — through an injected name source, the helper
+   is handed a name whose `<path>.owner` already holds another owner: the helper throws, removes only the folder it
+   made, and the existing claim keeps its bytes. RED with a `File.Move`/`File.WriteAllText` claim (it overwrites).
 6. Node `owned.test.mjs`: the same five in Node idiom (name and claim; invalid `what`; throw inside `t` scope via a
    subtest; held file on Windows with an exclusive open; `ownedDirSync` removed on `exit` by a child process run with
    `node -e`), plus `the claim is never inside the folder`.
@@ -465,7 +500,8 @@ the scenario says so and is fixed — no scenario may depend on a previous run's
 
 - **Commands.** As S2, plus `npm run test:host` once on Windows and once under `xvfb-run` in WSL, listing
   `coai-host-*`/`testsToDelete-coai-host-*` in the temp root before and after (counts in the PR).
-- **DoD.** Every scenario RED then GREEN; the 119 `TempDir.For` callers compile unchanged and the four suites are
+- **DoD.** Every scenario RED then GREEN; the C# claim is written with `FileMode.CreateNew`/`FileShare.None` and
+  never overwrites (sc. 5a); the 119 `TempDir.For` callers compile unchanged and the four suites are
   green; `npm run test:host` leaves nothing in temp and passes `--user-data-dir`; `module_tests.md` names both helpers.
 
 ## S4 — The C# sites move to the helper
@@ -486,13 +522,21 @@ the scenario says so and is fixed — no scenario may depend on a previous run's
 | `Directory.CreateTempSubdirectory("coai-x-").FullName` with a `Dispose`/`finally` delete (the "forty classes", `TempDir.cs:9-10`) | a `TempDir` field or `using var` + `.Path`; the hand-written delete goes |
 | the same with NO delete (the 43 files of the Facts) | the same — this is the leak fix; each file's test that proves it is scenario 1 |
 | `Path.Combine(Path.GetTempPath(), "<fixed or guid name>")` used as a folder or file the test writes (e.g. `FilesystemInvariantTests.cs:189`, `:597`, `CadenceStoreTests.cs:161`, `AReviewTreeTests.cs:556`, `KimiAcpProfileTests.cs:92-93`) | a path INSIDE the test's own `TempDir` (`dir.At("linked")`) — nested, so no name and no claim of its own (rule §1) |
-| `Path.GetTempPath()` passed as an argument the product only READS as a root and never writes under (e.g. `ForeignKimiTests.cs:28`, `:155`) | stays, with `// testsToDelete-exempt: raw-temp — <what the product does with it; why nothing is created>` — or an owned folder when the reviewer cannot confirm "never writes" |
+| `Path.GetTempPath()` passed as an argument the product only READS as a root and never writes under (e.g. `ForeignKimiTests.cs:28`, `:155`) | `TempDir.Root` (S3) — *plan-gate round 1:* no `Path.GetTempPath` stays outside the library, so S5's guard needs no exemption for it — or an owned folder when the reviewer cannot confirm "never writes" |
 | a linked worktree as a top-level temp leaf (the four `coai-linked-`/`coai-cadence-wt-` sites) | a path inside the test's own `TempDir` (nested; rule §1 — no lock needed); a test whose subject is a worktree OUTSIDE the repository's folder keeps that by placing both under one owned folder |
 | `src_bugs/tests` own `Scratch.Delete` callers | `TempDir` (S3 rewired `Scratch` to the library) |
 | `tests_fakecli` fixed file names in `GetTempPath()` | the path comes from an environment variable the test sets to a file inside its `TempDir`; the fake CLI refuses to start without it (a fixed name in the shared root is how two parallel runs collide) |
 
-Every `CreateTempSubdirectory` and `GetTempPath` left in a C# test tree after this story is either inside the
-library or carries an inline exemption the reviewer accepted. The existing junction and Kimi fixtures keep their
+Every `CreateTempSubdirectory` left in a C# test tree after this story is either inside the library or carries an
+inline exemption the reviewer accepted; every `GetTempPath` is inside the library.
+
+**The token-less names go first** (*plan-gate round 1*). Every C# creation site of a token-less
+`testsToDelete-<x>-` name — 46 of the ~53 on 1fe25d19 (`KimiFixture.cs:29`, `JunctionsTests.cs:27`, `:337-338`,
+`:376-377`, `KimiCredentialsLockTests.cs:25`, `AVibeHomesNeverLiveUnderTempTests.cs:23-24`, `:97`,
+`TempDirsAreSwept.cs:187`, the fixed `testsToDelete-profile-owned` of `KimiAcpProfileTests.cs:92-93`, …), recounted
+by `git grep` on the `main` the story starts from — becomes `testsToDelete-coai-<x>-<id>` through the helper in THIS
+story, and the PR lists the count before and after (zero). S5's guard flags a token-less name (its `tokenless-name`
+class) and lands only after S4 and S5's own Node sites are merged, so it never lands red. The existing junction and Kimi fixtures keep their
 fake-person folders INSIDE their own `TempDir` (as `KimiFixture.cs:9-29` already promises).
 
 **Scenarios** (RED first — scenario 1 is written and run on `main` before any site moves):
@@ -513,8 +557,9 @@ fake-person folders INSIDE their own `TempDir` (as `KimiFixture.cs:9-29` already
 
 - **Commands.** Build `dotnet build dew_flow_connect_other_ais.slnx -c Debug -m:4`; the four executables through
   `node .agents/conventions/tools/low-priority.mjs`; `dotnet format dew_flow_connect_other_ais.slnx --verify-no-changes`.
-- **DoD.** Scenario 1 RED then GREEN; 2–4 recorded; the follow-up plan in `todo/` with its README row; S5's guard
-  (when it lands) finds nothing in the C# trees.
+- **DoD.** Scenario 1 RED then GREEN; 2–4 recorded; zero token-less `testsToDelete-<x>-` creation sites and zero
+  `GetTempPath` outside the library in the C# trees (counts before/after in the PR); the follow-up plan in `todo/` with
+  its README row; S5's guard (when it lands) finds nothing in the C# trees.
 
 ## S5 — The Node sites, the guard, the CI wiring
 
@@ -529,7 +574,8 @@ fake-person folders INSIDE their own `TempDir` (as `KimiFixture.cs:9-29` already
 
 **The change — sites.** `fs.mkdtempSync(path.join(os.tmpdir(), '<old>-'))` → `ownedDir(t, '<what>')` inside a test,
 `ownedDirSync('<what>')` at module level, `what` per D1 — including the ~24 foreign-prefix sites of the Facts and the
-4 + 3 token-less ones. A `try/finally` or `t.after` that only removed the folder goes. `dataDirWriters.ts` and
+4 + 3 token-less ones (recounted on the `main` the story starts from; *plan-gate round 1:* every token-less Node site
+is migrated to `testsToDelete-coai-…` in this story's site PR, which merges BEFORE the guard's PR). A `try/finally` or `t.after` that only removed the folder goes. `dataDirWriters.ts` and
 `testDiscovery.test.mjs` (no cleanup) get one. The runners in `src_vs_code/scripts` and `http/run-contracts.mjs` use
 `ownedDirSync` and remove in a `finally` that runs BEFORE any `process.exit` (S3's run-host lesson — the reviewer
 checks every runner for the same `then(exit)…finally` order). `release.yml`'s two `mktemp -d` run on a GitHub-hosted
@@ -558,6 +604,17 @@ listed by name in the guard's frozen exclusion list with the reason.
   prefix); `shared-store`; `ryuk-off`; plus this repository's own `old-prefix` — a string literal starting
   `coai-`/`testsToDelete-` passed to `TempDir.For`, `ownedDir` or `ownedDirSync` (the helper still accepts it, the
   guard does not).
+- **Plan-gate round 1 additions.** `raw-temp` also refuses, in every test file outside `src_vs_code/scripts/owned.cjs`,
+  IMPORTING `tmpdir` from `os` or `node:os` under any alias (`import { tmpdir } from 'node:os'`,
+  `import { tmpdir as t } from 'os'`, `const { tmpdir: t } = require('node:os')`) and a bare `os.tmpdir` reference
+  passed without a call; and every `Path.GetTempPath` (qualified, `System.IO.Path.GetTempPath`, or through
+  `using static System.IO.Path`) outside `src_mcp/tests_owned/` — S4 leaves none (`TempDir.Root`). A new repository
+  class **`tokenless-name`**: a string literal matching `^teststodelete[-_]` case-insensitively whose next segment is
+  not `coai` followed by `-` or `_` (the exemption marker `testsToDelete-exempt:` and the label key
+  `testsToDelete.owner` are not names); the sweep tests' deliberate foreign-token cases (`testsToDelete-kimi-x`,
+  `testsToDelete-mcp-x-abc123`) are built from parts or listed in the frozen exclusion list with their reason.
+  **Ordering:** S4's C# PR(s) and S5's site PR merge first; the guard's PR is rebased on them and lands with
+  `tokenless-name` at zero on the real tree.
 - **Exemptions and the token** through the mounted `readExemptions` and `tokenFindings`
   (`.agents/conventions/tools/leftovers-check.mjs`); the token is read from the two helper constants (exactly one in
   `src_mcp/tests_owned/**/*.cs`, one in `owned.cjs`, equal) and must be a row of the mounted `## Tokens` table; the
@@ -575,7 +632,11 @@ moved):
    ⇒ 1; `TempDir.For("coai-x-")` ⇒ 1 `old-prefix`; `ownedDir(t, 'testsToDelete-x')` ⇒ 1; `TempDir.For("x")` ⇒ 0;
    `TESTCONTAINERS_RYUK_DISABLED=true` with an exemption ⇒ still 1; `testsToDelete-exempt: raw-temp — needed` ⇒ 1
    `exemption`; a commented-out `// Directory.CreateTempSubdirectory("x")` ⇒ 0; the same call inside
-   `src_mcp/tests_owned/TempDir.cs` ⇒ 0.
+   `src_mcp/tests_owned/TempDir.cs` ⇒ 0; *(plan-gate round 1)* `import { tmpdir as t } from 'node:os'` in a test
+   `.ts` ⇒ 1 `raw-temp`, the same in `owned.cjs` ⇒ 0; `System.IO.Path.GetTempPath()` in `src_server/tests/X.cs` ⇒ 1,
+   inside `src_mcp/tests_owned/` ⇒ 0; `TempDir.For("testsToDelete-kimi-")` ⇒ 1 `tokenless-name` (and 1 `old-prefix`);
+   `mkdtempSync(join(tmpdir(), 'testsToDelete-vh-x-'))` ⇒ 1 `tokenless-name`; `testsToDelete-coai-x` ⇒ 0;
+   `// testsToDelete-exempt: raw-temp — …` ⇒ no `tokenless-name`.
 3. `a scan of nothing is red` — an empty listing, one with no `src_mcp/tests` file, one with no workflow ⇒ red each.
 4. `the token is a registered row and written once` — the real mount: `coai` ⇒ none; fixture rule texts without the
    table, with the token only in the repository column, or listed twice ⇒ 1 each; the two helper constants different
@@ -587,8 +648,9 @@ moved):
 
 - **Commands.** `cd src_vs_code && npm ci && npm test` (the guard runs inside it); `node --test "scripts/**/*.test.mjs"`;
   `npm run test:contract`, `test:seam` once each; `actionlint` on `release.yml` (the `workflows` job).
-- **DoD.** Scenario 1 red with the recorded counts, then green; every break-it red; the extension job green WITH the
-  guard; after a full run of every suite `bash .agents/conventions/tools/janitor.sh --token coai --dry-run` on Windows
+- **DoD.** Scenario 1 red with the recorded counts, then green; every break-it red; the guard merged only after S4's
+  and S5's site PRs, with zero `tokenless-name`, zero `tmpdir` imports and zero `GetTempPath` outside the helpers on
+  the real tree; the extension job green WITH the guard; after a full run of every suite `bash .agents/conventions/tools/janitor.sh --token coai --dry-run` on Windows
   (Git for Windows' bash) and in WSL finds only folders of a live run; `module_tests.md` updated.
 
 ## Test plan
@@ -614,13 +676,51 @@ moved):
 - [ ] Every C# and Node test folder is made by a helper, named `testsToDelete-coai-<what>-<id>`, claimed beside
       itself, removed on every path, never throwing (but the lost-link re-throw); every C# suite sweeps at its start;
       `npm run test:host` leaks nothing and passes its own `--user-data-dir` (S3–S5).
-- [ ] The guard is red on every class, on `old-prefix`, on an unregistered token and on a scan of nothing (S5).
+- [ ] The guard is red on every class, on `old-prefix`, on `tokenless-name`, on a `tmpdir` import or a `GetTempPath`
+      outside the helpers, on an unregistered token and on a scan of nothing; it landed after every token-less site
+      was migrated (S4, S5).
+- [ ] The product sweep's characterization test landed first and stayed green; the old branch is proven equal to
+      today's with an injected clock; the end date rests on recorded evidence; concurrent sweeps never fail (S2).
 - [ ] `research/module_tests.md` describes the helpers, both branches of the sweep, the end date and the guard; the
       D5 follow-up plan is in `todo/`.
 - [ ] When the last story merges, this document's status becomes `E5 shipped, <date>; promotes with its parent` —
       never *implemented* while it sits in `todo/` — and the parent's E5 entry gets the same sentence. Parent and
       stories documents promote together, after E7. A separate dated item is left open for the END DATE: on that
       date a one-line PR removes the old branch from `temp-sweep.json` and both readers.
+
+## Plan-gate round 1 (2026-10-17)
+
+The coai plan gate over this document; the judge (Opus) accepted seven findings and rejected five.
+
+**Accepted** (each applied where it belongs):
+
+1. Every token-less `testsToDelete-<x>-` creation site (~53) moves to `testsToDelete-coai-…` in S4 (C#) and S5 (Node)
+   before the guard lands; the guard flags token-less names (`tokenless-name`) — S4, S5, Order, DoD.
+2. A characterization test pins `PanelService.PruneOldScratchDirs` on `main` before S2 changes anything, through its
+   `cutoff` argument, and stays green — not only `git diff --exit-code` — S2 item 8, S2 DoD.
+3. The old `coai-` branch is proven equal to today's by a test with an injected clock and controlled ages, never a
+   real wait — S2 items 2 and 9.
+4. The old-prefix end date is a verifiable condition (no branch or agent worktree runs the old suites), with the
+   evidence recorded and a concrete date; until then the old branch stays — S2 item 1.
+5. The C# claim is written with `FileMode.CreateNew`/`FileShare.None`, like Node's `wx` — no temp name and
+   `File.Move` — S3 (change, sc. 5a, DoD).
+6. The guard also refuses importing `tmpdir` from `os`/`node:os` under any alias outside the helper, and
+   `Path.GetTempPath` outside the helper library (`TempDir.Root` replaces the read-only-root exemption) — S3, S4, S5.
+7. Sweep deletions swallow `DirectoryNotFoundException`/`FileNotFoundException` (C#) and `ENOENT` (Node) silently, so
+   two concurrent sweeps never fail — S2 items 5 and 9.
+
+**Rejected:**
+
+1. Claim before the folder exists (no unmarked window) — the contract's folder order is create → register teardown →
+   claim, and an unmarked new-form folder is collected only after the 10-minute minimum age, which covers the window.
+2. A Node start time off Linux — the contract makes the start optional, only where readable without spawning; an
+   owner without a start is judged `live` while its pid exists, the safe side.
+3. WSL and Windows confusing one host — the owner carries `@<os>`; a foreign `host@os` is `unknown` and kept.
+4. A timeout on the liveness probe — the probes are non-blocking system calls (`Process.GetProcessById`,
+   `process.kill(pid, 0)`, a `/proc` read) and never spawn, so there is nothing to time out.
+5. A `Dispose` that throws on a leak — it contradicts the contract's never-throwing teardown; a leak is left prefixed
+   and claimed with one warning line, and the audit surfaces it (S4 sc. 1, S4 sc. 3 and S5's DoD:
+   `janitor.sh --token coai --dry-run` after a full run).
 
 ## Notes for the parent (`dew_flow_conventions · todo/PLAN_test_leftovers_rollout.md`, E5 entry)
 
