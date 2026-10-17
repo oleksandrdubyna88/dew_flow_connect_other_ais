@@ -18,6 +18,12 @@ public static class BlockedReasons
     /// marker stays (DL9 of todo/PLAN_kimi_and_vibe_on_linux.md, A3 §6.2).
     /// </summary>
     public const string ReaderMemberUnverifiable = "reader-member-unverifiable";
+
+    /// <summary>
+    /// The coai shim that wrote the marker is still running: its turn is not over, so the marker is not an orphan's and nothing it names may be signalled — the launch WAITS (gives the turn up), it never ends
+    /// another turn's agent (the E5 security judge, 2026-10-17).
+    /// </summary>
+    public const string ReaderOwnerAlive = "reader-owner-alive";
 }
 
 /// <summary>Where a reader marker is in its life.</summary>

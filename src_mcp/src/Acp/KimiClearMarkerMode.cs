@@ -79,10 +79,23 @@ internal static partial class KimiClearMarkerMode
             MarkerRead.Absent => Said(note, $"no marker at {path} — nothing to clear", Ok, new ClearMarkerReport(path, "absent", Ok, [])),
             MarkerRead.Unreadable unreadable => Said(
                 note, $"{path} could not be read ({unreadable.Reason}); a marker that cannot be read is not known to be safe to delete", Unverifiable, new ClearMarkerReport(path, "kept", Unverifiable, [])),
-            MarkerRead.Read named when named.Marker.Marker.Unidentified => Nameless(path, presence(), note),
-            MarkerRead.Read named => Named(path, named.Marker.Marker.Tree, liveness, note),
+            MarkerRead.Read named => KimiSurvivorGate.OwnerLiveness(named.Marker, liveness) switch
+            {
+                Liveness.Alive => Said(
+                    note, $"{path} is kept: the coai shim pid {named.Marker.Marker.OwnerPid} that wrote it is still running — its turn is not over; this mode never ends a process — wait for the turn to end, then press again",
+                    StillRunning, new ClearMarkerReport(path, "kept", StillRunning, [])),
+                Liveness.Unknown unknown => Said(
+                    note, $"{path} is kept: the coai shim pid {named.Marker.Marker.OwnerPid} that wrote it could not be checked ({unknown.Reason}); a process that cannot be checked is not known to be gone",
+                    Unverifiable, new ClearMarkerReport(path, "kept", Unverifiable, [])),
+                _ => Judged(path, named.Marker, liveness, presence, note),
+            },
             _ => Said(note, $"{path} could not be read", Unverifiable, new ClearMarkerReport(path, "kept", Unverifiable, [])),
         };
+
+    /// <summary>The owner is gone (the marker is an orphan's): a nameless marker by the listing, a named one by its members.</summary>
+    private static (int Exit, ClearMarkerReport Report) Judged(
+        string path, KimiSurvivorMarkerDto marker, Func<ProcessIdentity, Liveness> liveness, Func<KimiPresence> presence, Action<string> note) =>
+        marker.Marker.Unidentified ? Nameless(path, presence(), note) : Named(path, marker.Marker.Tree, liveness, note);
 
     /// <summary>A marker that names no process: cleared only over a readable listing with no kimi in it.</summary>
     private static (int Exit, ClearMarkerReport Report) Nameless(string path, KimiPresence presence, Action<string> note) => presence switch

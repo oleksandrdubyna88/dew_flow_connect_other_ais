@@ -68,7 +68,7 @@ public sealed class KimiSurvivorGateTests : IDisposable
 
         var verdict = await ReconcileAsync(Seams(
             terminate: member => { ended.Add(member); return true; },
-            liveness: member => ended.Contains(member) ? new Liveness.Gone("exited") : new Liveness.Alive()));
+            liveness: member => member.Pid == 424242 || ended.Contains(member) ? new Liveness.Gone("exited") : new Liveness.Alive()));
 
         ended.Should().ContainSingle().Which.Should().Be(Member(424243), "the member the marker names is terminated by its identity — pid AND start");
         verdict.Should().BeOfType<SurvivorVerdict.Cleared>();
@@ -122,6 +122,56 @@ public sealed class KimiSurvivorGateTests : IDisposable
         blocked.Code.Should().Be(BlockedReasons.ReaderMemberUnverifiable);
         File.Exists(MarkerPath).Should().BeTrue();
         KimiSurvivorGate.Sentence(blocked).Should().Contain(MarkerPath).And.Contain("could not be read");
+    }
+
+    // ---------- the marker's OWNER is asked first: a live turn's marker is never an orphan's ----------
+
+    private const int Owner = 424242;
+
+    private static Func<ProcessIdentity, Liveness> OwnerIs(Liveness owner, Liveness others) => member => member.Pid == Owner ? owner : others;
+
+    [Fact]
+    public async Task AMarkerWhoseOwnerShimIsAlive_IsNeverTerminated_AndIsBlockedWithAWaitSentence()
+    {
+        var terminated = new List<ProcessIdentity>();
+        KimiSurvivorMarker.Write(MarkerPath, Running(Member(424243)));
+
+        var verdict = await ReconcileAsync(Seams(terminate: member => { terminated.Add(member); return true; }, liveness: OwnerIs(new Liveness.Alive(), new Liveness.Alive())));
+
+        var blocked = verdict.Should().BeOfType<SurvivorVerdict.Blocked>("a live turn's marker was reconciled as an orphan's").Subject;
+        blocked.Code.Should().Be(BlockedReasons.ReaderOwnerAlive);
+        terminated.Should().BeEmpty("the agent of a turn whose shim still runs was SIGKILLed by another launch");
+        File.Exists(MarkerPath).Should().BeTrue();
+        KimiSurvivorGate.Sentence(blocked).Should().Contain("a Kimi turn is still running under coai shim pid 424242").And.Contain("it ends when its agent does").And.Contain("the turn is given up");
+    }
+
+    [Fact]
+    public async Task ANamelessMarkerWhoseOwnerShimIsAlive_IsBlocked_EvenOverAListingWithNoKimi()
+    {
+        KimiSurvivorMarker.Write(MarkerPath, Spawning());
+
+        var verdict = await ReconcileAsync(Seams(liveness: OwnerIs(new Liveness.Alive(), new Liveness.Gone("no such process"))), () => new KimiPresence.NoKimi());
+
+        verdict.Should().BeOfType<SurvivorVerdict.Blocked>("the shim is between writing its marker and starting the agent — clearing it would let a second Kimi start").Which.Code.Should().Be(BlockedReasons.ReaderOwnerAlive);
+        File.Exists(MarkerPath).Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AMarkerWhoseOwnerCannotBeChecked_IsBlockedUnverifiable_AndNothingIsTerminated(bool nameless)
+    {
+        var terminated = new List<ProcessIdentity>();
+        KimiSurvivorMarker.Write(MarkerPath, nameless ? Spawning() : Running(Member(424243)));
+
+        var verdict = await ReconcileAsync(
+            Seams(terminate: member => { terminated.Add(member); return true; }, liveness: OwnerIs(new Liveness.Unknown("EACCES reading /proc/424242/stat"), new Liveness.Gone("no such process"))),
+            () => new KimiPresence.NoKimi());
+
+        var blocked = verdict.Should().BeOfType<SurvivorVerdict.Blocked>("an owner that cannot be checked was taken as gone").Subject;
+        blocked.Code.Should().Be(BlockedReasons.ReaderMemberUnverifiable);
+        terminated.Should().BeEmpty();
+        KimiSurvivorGate.Sentence(blocked).Should().Contain("424242").And.Contain("EACCES reading /proc/424242/stat").And.Contain(MarkerPath).And.Contain("safe to delete once");
     }
 
     // ---------- a marker that names nothing (spawning): cleared only when no kimi runs, and the listing is readable ----------

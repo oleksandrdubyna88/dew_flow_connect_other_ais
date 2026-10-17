@@ -81,7 +81,7 @@ public sealed class KimiClearMarkerModeTests : IDisposable
     {
         KimiSurvivorMarker.Write(MarkerPath, Running(Member(424243)));
 
-        var exit = await ClearAsync(_ => new Liveness.Alive());
+        var exit = await ClearAsync(OwnerIs(new Liveness.Gone("no such process"), new Liveness.Alive()));
 
         exit.Should().Be(75, "the clear mode removed a marker over a living survivor (pid 424243)");
         File.Exists(MarkerPath).Should().BeTrue();
@@ -94,10 +94,43 @@ public sealed class KimiClearMarkerModeTests : IDisposable
     {
         KimiSurvivorMarker.Write(MarkerPath, Running(Member(424243), Member(424244)));
 
-        var exit = await ClearAsync(member => member.Pid == 424243 ? new Liveness.Unknown("EACCES") : new Liveness.Alive());
+        var exit = await ClearAsync(member => member.Pid == 424242 ? new Liveness.Gone("no such process") : member.Pid == 424243 ? new Liveness.Unknown("EACCES") : new Liveness.Alive());
 
         exit.Should().Be(75, "a living survivor is the stronger fact");
         File.Exists(MarkerPath).Should().BeTrue();
+    }
+
+    // ---------- the marker's OWNER: a live turn's marker is never cleared, whatever its members say ----------
+
+    private static Func<ProcessIdentity, Liveness> OwnerIs(Liveness owner, Liveness others) => member => member.Pid == 424242 ? owner : others;
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AMarkerWhoseOwnerShimIsAlive_IsKept_Exits75_NamingTheShim(bool nameless)
+    {
+        KimiSurvivorMarker.Write(MarkerPath, nameless ? Spawning() : Running(Member(424243)));
+
+        var exit = await ClearAsync(OwnerIs(new Liveness.Alive(), new Liveness.Gone("no such process")), () => new KimiPresence.NoKimi());
+
+        exit.Should().Be(75, "the clear mode removed the marker of a turn whose shim still runs");
+        File.Exists(MarkerPath).Should().BeTrue();
+        Notes.Should().Contain("shim pid 424242").And.Contain("still running").And.Contain("never ends a process");
+        Report().GetProperty("outcome").GetString().Should().Be("kept");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AMarkerWhoseOwnerCannotBeChecked_IsKept_Exits74(bool nameless)
+    {
+        KimiSurvivorMarker.Write(MarkerPath, nameless ? Spawning() : Running(Member(424243)));
+
+        var exit = await ClearAsync(OwnerIs(new Liveness.Unknown("EACCES"), new Liveness.Gone("no such process")), () => new KimiPresence.NoKimi());
+
+        exit.Should().Be(74);
+        File.Exists(MarkerPath).Should().BeTrue();
+        Notes.Should().Contain("shim pid 424242").And.Contain("could not be checked").And.Contain("EACCES");
     }
 
     // ---------- 74: cannot be checked ----------
@@ -110,7 +143,7 @@ public sealed class KimiClearMarkerModeTests : IDisposable
     {
         KimiSurvivorMarker.Write(MarkerPath, Running(Member(424243)));
 
-        var exit = await ClearAsync(_ => new Liveness.Unknown(reason));
+        var exit = await ClearAsync(OwnerIs(new Liveness.Gone("no such process"), new Liveness.Unknown(reason)));
 
         exit.Should().Be(74, "a member whose /proc cannot be read was taken as gone, and the marker was cleared");
         File.Exists(MarkerPath).Should().BeTrue();

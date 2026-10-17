@@ -15,8 +15,11 @@ public abstract record SurvivorVerdict
     /// <summary>A marker stood, and every process it named is confirmed gone: the file is deleted and the launch may proceed.</summary>
     public sealed record Cleared(KimiSurvivorMarkerDto Was) : SurvivorVerdict;
 
-    /// <summary>The sign-in stays unavailable: <paramref name="Code"/> is a <see cref="BlockedReasons"/> code, <paramref name="Detail"/> what could not be ended or checked.</summary>
-    public sealed record Blocked(KimiSurvivorMarkerDto Marker, string MarkerPath, string Code, string Detail) : SurvivorVerdict;
+    /// <summary>
+    /// The sign-in stays unavailable: <paramref name="Code"/> is a <see cref="BlockedReasons"/> code, <paramref name="Detail"/> what could not be ended or checked. <paramref name="ByOwner"/> is true when the answer
+    /// is about the shim that WROTE the marker (alive, or not checkable) rather than about a process the marker names.
+    /// </summary>
+    public sealed record Blocked(KimiSurvivorMarkerDto Marker, string MarkerPath, string Code, string Detail, bool ByOwner = false) : SurvivorVerdict;
 }
 
 /// <summary>The process control a reconcile uses, as seams: the product's (by identity through a pidfd on Linux) or a test's.</summary>
@@ -64,10 +67,28 @@ public static class KimiSurvivorGate
             MarkerRead.Absent => new SurvivorVerdict.None(),
             MarkerRead.Unreadable unreadable => new SurvivorVerdict.Blocked(
                 KimiSurvivorMarkerDto.Unreadable, markerPath, BlockedReasons.ReaderMemberUnverifiable, $"the marker file could not be read ({unreadable.Reason})"),
-            MarkerRead.Read read when read.Marker.Marker.Unidentified => Judged(read.Marker, markerPath, presence()),
-            MarkerRead.Read read => Judged(read.Marker, markerPath, await ReaderReconcile.RunAsync(read.Marker.Marker, seams.Terminate, seams.ConfirmGone, seams.Descendants, seams.Liveness)),
+            MarkerRead.Read read => await AfterTheOwnerAsync(read.Marker, markerPath, presence, seams),
             _ => new SurvivorVerdict.None(),
         };
+
+    /// <summary>
+    /// The shim that wrote the marker is asked FIRST (the E5 security judge, 2026-10-17): alive → its turn is not over and nothing it names is signalled — Blocked, to WAIT; not checkable → Blocked, unverifiable;
+    /// gone → the orphan fail-safe, today's reconcile. The owner is a pid AND a start time, so a reused number reads as gone.
+    /// </summary>
+    private static async Task<SurvivorVerdict> AfterTheOwnerAsync(KimiSurvivorMarkerDto marker, string path, Func<KimiPresence> presence, ReconcileSeams seams) =>
+        OwnerLiveness(marker, seams.Liveness) switch
+        {
+            Liveness.Alive => new SurvivorVerdict.Blocked(marker, path, BlockedReasons.ReaderOwnerAlive, marker.Marker.OwnerPid.ToString(System.Globalization.CultureInfo.InvariantCulture), ByOwner: true),
+            Liveness.Unknown unknown => new SurvivorVerdict.Blocked(
+                marker, path, BlockedReasons.ReaderMemberUnverifiable, $"the coai shim pid {marker.Marker.OwnerPid} that wrote it could not be checked ({unknown.Reason})", ByOwner: true),
+            _ => marker.Marker.Unidentified
+                ? Judged(marker, path, presence())
+                : Judged(marker, path, await ReaderReconcile.RunAsync(marker.Marker, seams.Terminate, seams.ConfirmGone, seams.Descendants, seams.Liveness)),
+        };
+
+    /// <summary>The liveness of the shim that wrote <paramref name="marker"/>; Gone for a marker that records no owner (nothing to wait for).</summary>
+    public static Liveness OwnerLiveness(KimiSurvivorMarkerDto marker, Func<ProcessIdentity, Liveness> liveness) =>
+        marker.Marker.OwnerPid > 0 ? liveness(new ProcessIdentity(marker.Marker.OwnerPid, marker.Marker.OwnerStartedUtc)) : new Liveness.Gone("the marker records no owner");
 
     private static SurvivorVerdict Judged(KimiSurvivorMarkerDto marker, string path, Reconciled reconciled) => reconciled switch
     {
@@ -104,9 +125,18 @@ public static class KimiSurvivorGate
     /// The Busy sentence for a blocked verdict (A3 §6.5): the marker's FULL path, the pid(s) and "safe to delete once …" come FIRST — asserted with no button in play, as an older extension would show it —
     /// and the card's button is named as an addition.
     /// </summary>
-    public static string Sentence(SurvivorVerdict.Blocked blocked) => IsNameless(blocked)
-        ? Unidentified(blocked)
-        : blocked.Code == BlockedReasons.ReaderMemberUnverifiable ? Unverifiable(blocked) : Alive(blocked);
+    public static string Sentence(SurvivorVerdict.Blocked blocked) => blocked switch
+    {
+        { Code: BlockedReasons.ReaderOwnerAlive } => OwnerAlive(blocked),
+        { ByOwner: true } => Unverifiable(blocked),
+        _ when IsNameless(blocked) => Unidentified(blocked),
+        { Code: BlockedReasons.ReaderMemberUnverifiable } => Unverifiable(blocked),
+        _ => Alive(blocked),
+    };
+
+    private static string OwnerAlive(SurvivorVerdict.Blocked blocked) =>
+        $"a Kimi turn is still running under coai shim pid {blocked.Detail} — it ends when its agent does; the turn is given up. coai does not start another Kimi on this sign-in while that turn runs, and it never ends another turn's agent "
+        + $"(the marker {blocked.MarkerPath} is that turn's own and is removed when it ends cleanly)";
 
     /// <summary>A marker that names no process — but not the one a file that could not be read stands for, whose sentence is the unverifiable one.</summary>
     private static bool IsNameless(SurvivorVerdict.Blocked blocked) =>
