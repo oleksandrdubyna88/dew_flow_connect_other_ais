@@ -1,6 +1,4 @@
-using CoaiMcp.Runners.Processes;
-
-namespace CoaiServer;
+namespace CoaiMcp.Runners.Processes;
 
 /// <summary>The fixed codes a slot is blocked with — unavailable until recovery proves it safe.</summary>
 /// <remarks>
@@ -14,6 +12,12 @@ public static class BlockedReasons
 
     /// <summary>A reader named by the marker was still alive after the kill and the confirmation bound.</summary>
     public const string ReaderTerminationFailed = "reader-termination-failed";
+
+    /// <summary>
+    /// A member the marker names could not be CHECKED after the confirmation (<c>EACCES</c>, <c>EIO</c>, an unparseable <c>stat</c>): that is not evidence it is gone, so the
+    /// marker stays (DL9 of todo/PLAN_kimi_and_vibe_on_linux.md, A3 §6.2).
+    /// </summary>
+    public const string ReaderMemberUnverifiable = "reader-member-unverifiable";
 }
 
 /// <summary>Where a reader marker is in its life.</summary>
@@ -77,8 +81,11 @@ public abstract record Reconciled
     /// <summary>Every process the marker named is confirmed gone; the lease may be used.</summary>
     public sealed record Cleared : Reconciled;
 
-    /// <summary>The slot stays unavailable, for this <see cref="BlockedReasons"/> code.</summary>
-    public sealed record Blocked(string Code) : Reconciled;
+    /// <summary>
+    /// The slot stays unavailable, for this <see cref="BlockedReasons"/> code. <paramref name="Detail"/> says what could not be checked (the errno sentence) — empty for the other
+    /// codes, and ignored by the server.
+    /// </summary>
+    public sealed record Blocked(string Code, string Detail = "") : Reconciled;
 }
 
 /// <summary>
@@ -97,11 +104,19 @@ public abstract record Reconciled
 public static class ReaderReconcile
 {
     /// <summary>
-    /// With the real process control: <see cref="ProcessTree.DescendantsOf"/>, <see cref="ProcessTree.Terminate"/> and
-    /// <see cref="ProcessTree.ConfirmGoneAsync"/>.
+    /// With the real process control: <see cref="ProcessTree.DescendantsOf"/>, <see cref="ProcessTree.Terminate"/>, <see cref="ProcessTree.ConfirmGoneAsync"/> and the tri-state
+    /// <see cref="LivenessCheck.Of"/>.
     /// </summary>
     public static Task<Reconciled> RunAsync(ReaderMarkerDto marker) =>
-        RunAsync(marker, ProcessTree.Terminate, ProcessTree.ConfirmGoneAsync, ProcessTree.DescendantsOf);
+        RunAsync(marker, ProcessTree.Terminate, ProcessTree.ConfirmGoneAsync, ProcessTree.DescendantsOf, LivenessCheck.Of);
+
+    /// <summary>The four-seam form the server's tests call — the real tri-state liveness behind it.</summary>
+    public static Task<Reconciled> RunAsync(
+        ReaderMarkerDto marker,
+        Func<ProcessIdentity, bool> terminate,
+        Func<IReadOnlyList<ProcessIdentity>, Task<IReadOnlyList<ProcessIdentity>>> confirmGone,
+        Func<ProcessIdentity, IReadOnlyList<ProcessIdentity>> descendants) =>
+        RunAsync(marker, terminate, confirmGone, descendants, LivenessCheck.Of);
 
     /// <param name="marker">The previous holder's marker.</param>
     /// <param name="terminate">Kills the process an identity names, its tree included, when it is still that process.</param>
@@ -111,11 +126,16 @@ public static class ReaderReconcile
     /// parent's children are reparented and a later listing finds nothing of theirs. The marker names what was recorded;
     /// a member may have started children after its record, and a tree is confirmed gone, not its recorded part.
     /// </param>
+    /// <param name="liveness">
+    /// The tri-state question asked of every member AFTER the confirmation: <c>ProcessTracking.StartedAt</c> answers <c>null</c> for every failure and <c>ProcessTree.IsAlive</c>
+    /// reads that as "not alive" — the safe answer for a KILL, the unsafe one for CLEARING — so one member that cannot be checked keeps the marker (DL9).
+    /// </param>
     public static async Task<Reconciled> RunAsync(
         ReaderMarkerDto marker,
         Func<ProcessIdentity, bool> terminate,
         Func<IReadOnlyList<ProcessIdentity>, Task<IReadOnlyList<ProcessIdentity>>> confirmGone,
-        Func<ProcessIdentity, IReadOnlyList<ProcessIdentity>> descendants)
+        Func<ProcessIdentity, IReadOnlyList<ProcessIdentity>> descendants,
+        Func<ProcessIdentity, Liveness> liveness)
     {
         if (marker.Unidentified)
         {
@@ -130,8 +150,25 @@ public static class ReaderReconcile
 
         var survivors = await confirmGone(tree);
 
-        return survivors.Count == 0
-            ? new Reconciled.Cleared()
-            : new Reconciled.Blocked(BlockedReasons.ReaderTerminationFailed);
+        return survivors.Count > 0 ? new Reconciled.Blocked(BlockedReasons.ReaderTerminationFailed) : Verified(tree, liveness);
     }
+
+    /// <summary>
+    /// The confirmation said nobody is left; every member is now asked the tri-state question. One <see cref="Liveness.Unknown"/> keeps the marker (<see cref="BlockedReasons.ReaderMemberUnverifiable"/>,
+    /// the errno named); one <see cref="Liveness.Alive"/> after an empty confirmation is a contradiction, and keeps it too.
+    /// </summary>
+    private static Reconciled Verified(IReadOnlyList<ProcessIdentity> tree, Func<ProcessIdentity, Liveness> liveness)
+    {
+        var answers = tree.Select(member => new Asked(member, liveness(member))).ToList();
+        if (answers.Find(asked => asked.Answer is Liveness.Alive) is { } alive)
+        {
+            return new Reconciled.Blocked(BlockedReasons.ReaderTerminationFailed, $"pid {alive.Member.Pid} is still running");
+        }
+
+        return answers.Find(asked => asked.Answer is Liveness.Unknown) is { Answer: Liveness.Unknown unknown } unverified
+            ? new Reconciled.Blocked(BlockedReasons.ReaderMemberUnverifiable, $"pid {unverified.Member.Pid} could not be checked ({unknown.Reason})")
+            : new Reconciled.Cleared();
+    }
+
+    private sealed record Asked(ProcessIdentity Member, Liveness Answer);
 }

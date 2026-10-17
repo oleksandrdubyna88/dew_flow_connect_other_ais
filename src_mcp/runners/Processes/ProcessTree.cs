@@ -38,7 +38,8 @@ public static class ProcessTree
     /// </remarks>
     public static readonly TimeSpan ConfirmationBound = TimeSpan.FromSeconds(2);
 
-    private static readonly TimeSpan ConfirmationStep = TimeSpan.FromMilliseconds(100);
+    /// <summary>How often a confirmation re-checks (and re-kills) — also the re-listing step of the supervised teardown.</summary>
+    internal static readonly TimeSpan ConfirmationStep = TimeSpan.FromMilliseconds(100);
 
     /// <summary>How often the descendants of a child that a request ends itself are listed while it runs.</summary>
     /// <remarks>Short enough that a grandchild that lives for seconds is seen; long enough that listing the process table stays negligible beside a vendor CLI.</remarks>
@@ -148,7 +149,10 @@ public static class ProcessTree
     /// and answers with the ones that survived.
     /// </summary>
     /// <returns>Empty when the whole tree is confirmed gone; otherwise the members still alive at the bound.</returns>
-    public static async Task<IReadOnlyList<ProcessIdentity>> ConfirmGoneAsync(IReadOnlyList<ProcessIdentity> members)
+    public static Task<IReadOnlyList<ProcessIdentity>> ConfirmGoneAsync(IReadOnlyList<ProcessIdentity> members) => ConfirmGoneAsync(members, Terminate);
+
+    /// <summary><see cref="ConfirmGoneAsync(IReadOnlyList{ProcessIdentity})"/> with the kill handed in — the Linux survivor gate ends a member through a pidfd, by identity, where this class's own kill is by handle.</summary>
+    public static async Task<IReadOnlyList<ProcessIdentity>> ConfirmGoneAsync(IReadOnlyList<ProcessIdentity> members, Func<ProcessIdentity, bool> terminate)
     {
         var deadline = DateTime.UtcNow + ConfirmationBound;
         var alive = members.Where(IsAlive).ToList();
@@ -156,7 +160,7 @@ public static class ProcessTree
         {
             foreach (var member in alive)
             {
-                Terminate(member);
+                terminate(member);
             }
 
             await Task.Delay(ConfirmationStep);

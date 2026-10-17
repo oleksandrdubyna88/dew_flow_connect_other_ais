@@ -252,6 +252,32 @@ switch (args0)
         Thread.Sleep(int.Parse(ms));
         return 0;
 
+    // The Linux teardown (DL9, A3), in real processes. `sleep --own-session` calls setsid() first — what rg does in a Grep turn (L-K4); `exit-after` is a managed child that exits with its
+    // own code; the others make orphans for a subreaper, and `supervise-tree` / `shim-acp` ARE that subreaper (a test host must never become one).
+    case ["sleep", "--own-session", var ownMs]:
+        CoaiMcp.FakeCli.SupervisionVerbs.OwnSession();
+        Thread.Sleep(int.Parse(ownMs));
+        return 0;
+
+    case ["exit-after", var afterMs, var afterCode]:
+        Thread.Sleep(int.Parse(afterMs));
+        return int.Parse(afterCode);
+
+    case ["orphan-maker", var orphanDir]:
+        return CoaiMcp.FakeCli.SupervisionVerbs.OrphanMaker(orphanDir);
+
+    case ["spawn-then-exit", var childPidFile, var childMs]:
+        return CoaiMcp.FakeCli.SupervisionVerbs.SpawnThenExit(childPidFile, childMs);
+
+    case ["late-spawn", var trigger, var latePidFile]:
+        return CoaiMcp.FakeCli.SupervisionVerbs.LateSpawn(trigger, latePidFile);
+
+    case ["supervise-tree", var superviseMode, var superviseDir]:
+        return CoaiMcp.FakeCli.SupervisionVerbs.SuperviseTree(superviseMode, superviseDir).GetAwaiter().GetResult();
+
+    case ["shim-acp", var shimScript, var shimMarker, var shimCwd, var shimDeadline]:
+        return CoaiMcp.FakeCli.SupervisionVerbs.ShimAcp(shimScript, shimMarker, shimCwd, int.Parse(shimDeadline)).GetAwaiter().GetResult();
+
     // Reads all of stdin and writes it back, byte for byte. The POSITIVE companion to `sleep`: one
     // proves a child that never reads is still killed on time, this one proves the launcher still
     // delivers every byte to a child that does. Raw streams on both sides, because a decoder in the

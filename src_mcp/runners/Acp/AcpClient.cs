@@ -28,7 +28,7 @@ namespace CoaiMcp.Runners.Acp;
 /// session exists, stdin closed, a short wait, the tree kill by pid, the wait. A test with a fake agent that spawns
 /// a heartbeat grandchild checks both pids are gone on each of those paths.</para>
 /// </remarks>
-public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary, TimeSpan usageBound)
+public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary, TimeSpan usageBound, ITreeSupervisor supervisor)
 {
     /// <summary>The prompt that asks the agent for the session's token totals — its own command, answered without a model call.</summary>
     private const string UsagePrompt = "/usage";
@@ -54,6 +54,12 @@ public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary, Ti
     {
     }
 
+    /// <summary>The client with today's end of the agent's tree (<see cref="UnsupervisedTree"/>).</summary>
+    public AcpClient(IAcpProfile profile, IAcpReadBoundary boundary, TimeSpan usageBound)
+        : this(profile, boundary, usageBound, UnsupervisedTree.Instance)
+    {
+    }
+
     public async Task<AcpOutcome> AskAsync(AcpAsk ask, CancellationToken ct = default)
     {
         var request = profile.AgentRequest(ask);
@@ -65,7 +71,7 @@ public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary, Ti
         AcpTransport transport;
         try
         {
-            transport = AcpTransport.Start(request);
+            transport = AcpTransport.Start(request, supervisor);
         }
         catch (Exception e) when (e is Win32Exception or InvalidOperationException or IOException)
         {
@@ -74,6 +80,8 @@ public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary, Ti
 
         using (transport)
         {
+            supervisor.Started(new ProcessIdentity(transport.Pid, ProcessTracking.StartedAt(transport.Pid) ?? DateTime.UtcNow));
+
             return await TurnAsync(transport, ask, ct);
         }
     }
@@ -114,6 +122,7 @@ public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary, Ti
             transport.StdErr, transport.Pid, session.DroppedTraceEntries, session.TruncatedTraceFields)
         {
             Tokens = ended.Tokens,
+            Survivors = transport.Survivors,
         };
     }
 

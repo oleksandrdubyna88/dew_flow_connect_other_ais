@@ -118,6 +118,24 @@ internal static partial class PidfdPoll
     private static partial int CloseNative(int fd);
 }
 
+/// <summary>The calls of a kernel with no pidfd: every one answers <c>ENOSYS</c>, so a teardown on such a host signals nothing and reports its members as survivors.</summary>
+internal sealed class NoPidfdCalls : IPidfdCalls
+{
+    private const int NoSystemCall = 38;
+
+    public static NoPidfdCalls Instance { get; } = new();
+
+    public int Open(int pid) => -NoSystemCall;
+
+    public int Signal(int fd, int signal) => NoSystemCall;
+
+    public int Poll(IReadOnlyList<int> fds, bool[] ready, int milliseconds) => -NoSystemCall;
+
+    public void Close(int fd)
+    {
+    }
+}
+
 /// <summary>Which road ends a process by identity on this host — a closed union, so "this kernel cannot" always carries the sentence to show.</summary>
 public abstract record PidfdSupport
 {
@@ -151,6 +169,14 @@ public static class PidfdLayer
 
     /// <summary>This process's pidfd layer: resolved once on Linux (the probe is one <c>pidfd_open</c> of this process); a test's override per async flow.</summary>
     public static PidfdSupport Current => Overridden.Value ?? Resolved.Value;
+
+    /// <summary>The calls of this host's road — and, on a kernel with no pidfd, calls that answer <c>ENOSYS</c> to everything, so nothing is ever signalled by number (the launch was refused before this is asked).</summary>
+    public static IPidfdCalls Calls => Current switch
+    {
+        PidfdSupport.Wrapper wrapper => wrapper.Calls,
+        PidfdSupport.Raw raw => raw.Calls,
+        _ => NoPidfdCalls.Instance,
+    };
 
     /// <summary>Empty when Kimi may be launched on this kernel; else <see cref="NoPidfdSentence"/>. Off Linux: empty — pidfd is a Linux question.</summary>
     public static string Refusal() =>

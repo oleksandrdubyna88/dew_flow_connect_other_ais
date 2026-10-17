@@ -94,8 +94,12 @@ public sealed class KimiAcpProfile(ForeignKimiWatch watch) : IAcpProfile
     /// </summary>
     public ProcessRequest AgentRequest(AcpAsk ask) => KimiEnvironment.Built(new ProcessRequest(ask.Executable, Arguments, ask.Cwd), PlacesOf(ask));
 
-    /// <summary>The launch control's own check (<see cref="KimiEnvironment.Refusal"/>) on the request about to start, against the places the argv named.</summary>
-    public string AgentRefusal(ProcessRequest request, AcpAsk ask) => KimiEnvironment.Refusal(request, PlacesOf(ask));
+    /// <summary>
+    /// The launch control's own check (<see cref="KimiEnvironment.Refusal"/>) on the request about to start, against the places the argv named — then the kernel's: a Linux with no pidfd cannot have
+    /// its tree ended by identity, so nothing is held or started (<see cref="PidfdLayer.Refusal"/>, S-K21; empty off Linux). Never a kill by number as a fallback.
+    /// </summary>
+    public string AgentRefusal(ProcessRequest request, AcpAsk ask) =>
+        KimiEnvironment.Refusal(request, PlacesOf(ask)) is { Length: > 0 } refused ? refused : PidfdLayer.Refusal();
 
     /// <summary>The sign-in's tree hold and the home's (<see cref="KimiShimHold"/>), taken immediately before the agent starts — once the person's own Kimi is not running (decision 74).</summary>
     public AcpHolding Hold(AcpAsk ask, TimeSpan within) => KimiShimHold.Taken(PlacesOf(ask), within, Watch);
