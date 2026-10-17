@@ -418,10 +418,15 @@ function answerLines(keptLines, fileLines) {
   return wanted.size === 0 ? new Set() : new Set(fileLines.filter((line) => answeredIdsOf(line).some((id) => wanted.has(id))));
 }
 
-/** Both passes of one file: the lines the window and the launch pins keep, plus the answers to the writes among them. */
-function withAnswers(kept, fileLines, keep) {
+/**
+ * Cuts ONE file, and cuts it AGAIN when it must: `cut(extra)` keeps the window's lines plus the pinned ones and `extra`. When the
+ * first cut keeps a write call whose answering line it dropped, the file is re-cut with those lines pinned too. One hop is the
+ * fixpoint: an answering line is a `user` line of `tool_result` blocks, so pinning it adds no new write call to answer.
+ */
+function cutWithAnswers(fileLines, cut) {
+  const kept = cut(new Set());
   const answers = answerLines(kept, fileLines);
-  return answers.size === 0 ? kept : keep(answers);
+  return answers.size === 0 ? kept : cut(answers);
 }
 
 /** The one line (anywhere) that launched each wanted agent: kept even outside the window so the meta's toolUseId still joins. */
@@ -561,12 +566,12 @@ export function cutSession({ sessionFile, outDir, allowlist, salt, repos = [], o
   const inWindow = loaded.filter((a) => window.unbounded || window.has(launchedAt.get(a.meta?.toolUseId)) || window.has(timestampOf(a.lines[0])));
   const wanted = withIncluded(inWindow, loaded, includeAgents);
   const pinned = clipAgents || includeAgents.length > 0 ? launchLines(wanted, [...main.parsed, ...loaded.flatMap((a) => a.lines)]) : new Set();
-  for (const a of wanted) { a.full = a.lines; a.lines = keepAgentLines(a.lines, window, clipAgents, pinned); }
+  const pinnedWith = (extra) => (extra.size === 0 ? pinned : new Set([...pinned, ...extra]));
 
-  const keptMain = withAnswers(keepMainLines(main.parsed, window, pinned), main.parsed, (answers) => keepMainLines(main.parsed, window, new Set([...pinned, ...answers])));
-  for (const a of wanted) a.lines = withAnswers(a.lines, a.full, (answers) => keepAgentLines(a.full, window, clipAgents, new Set([...pinned, ...answers])));
-  const writtenAgents = wanted.filter((w) => w.file && !dropAgentFiles.includes(w.id));
-  const writtenMetas = wanted.filter((w) => w.meta && !dropMetas.includes(w.id));
+  const keptMain = cutWithAnswers(main.parsed, (extra) => keepMainLines(main.parsed, window, pinnedWith(extra)));
+  const cutAgents = wanted.map((a) => ({ ...a, lines: cutWithAnswers(a.lines, (extra) => keepAgentLines(a.lines, window, clipAgents, pinnedWith(extra))) }));
+  const writtenAgents = cutAgents.filter((w) => w.file && !dropAgentFiles.includes(w.id));
+  const writtenMetas = cutAgents.filter((w) => w.meta && !dropMetas.includes(w.id));
   sanitiser.prepare([...keptMain, ...writtenAgents.flatMap((a) => a.lines), ...writtenMetas.map((a) => a.meta)], caseSpec ? roundInstants(caseSpec.rounds) : []);
   const sanitisedMain = keptMain.map((l) => sanitiser.sanitiseValue(l));
   const cwd = sanitisedMain.find((l) => typeof l.cwd === 'string')?.cwd;

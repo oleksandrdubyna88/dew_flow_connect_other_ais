@@ -653,11 +653,17 @@ public sealed partial class ACallerTranscriptFixtureCarriesNoTextTests
 
     private static bool IsResult(JsonElement block) => Prop(block, "type") == "tool_result";
 
-    /// <summary>The write calls of one transcript file that no tool_result in THE SAME file answers (a call is answered in the file it was made in).</summary>
+    /// <summary>
+    /// The write calls of one transcript file that no tool_result in THE SAME file answers (a call is answered in the file it was made in).
+    /// A write call with no id is reported too: nothing can answer it, so skipping it would pass the very shape this guard refuses.
+    /// </summary>
     private static IEnumerable<string> UnansweredWrites(Case c, string file)
     {
         var answered = BlockIds(c, file, IsResult, "tool_use_id").ToHashSet();
-        return BlockIds(c, file, IsWriteCall, "id").Where(id => !answered.Contains(id)).Select(id => $"{c.Name}/{file}: write call {Clip(id)} has no tool_result in its file").ToList();
+        var calls = c.Lines(file).SelectMany(d => ContentBlocks(d.RootElement)).Where(IsWriteCall).Select(b => Prop(b, "id")).ToList();
+        return calls.Where(id => !answered.Contains(id)).Select(id => id.Length == 0
+            ? $"{c.Name}/{file}: a write call has no id, so no tool_result can answer it"
+            : $"{c.Name}/{file}: write call {Clip(id)} has no tool_result in its file").ToList();
     }
 
     private static string RootOf(string checkout) => string.Join('/', checkout.Split('/').Take(3));
@@ -735,7 +741,8 @@ public sealed partial class ACallerTranscriptFixtureCarriesNoTextTests
         .Select(d => new Line(Prop(d.RootElement, "timestamp"), d.RootElement))
         .Where(l => string.CompareOrdinal(l.At, w.Lo) >= 0 && string.CompareOrdinal(l.At, w.Hi) < 0).ToList();
 
-    private static readonly string[] WriteTools = ["Write", "Edit", "MultiEdit", "NotebookEdit"];
+    /// <summary>The write tools: the cutter's <c>WRITE_TOOLS</c> in <c>scripts/lib/transcript-sanitise.mjs</c> is held equal to this list by <see cref="TheCuttersWriteToolsAreTheGuardsTests"/>.</summary>
+    internal static readonly string[] WriteTools = ["Write", "Edit", "MultiEdit", "NotebookEdit"];
 
     private static IEnumerable<string> WritesIn(IEnumerable<Line> lines) => lines.SelectMany(l => ContentBlocks(l.Json))
         .Where(b => Prop(b, "type") == "tool_use" && WriteTools.Contains(Prop(b, "name")))

@@ -222,7 +222,9 @@ written — the prediction precedes every observation, including an exploratory 
     case `checkouts` — the fixture roots that are git checkouts when materialised (`repo-<x>`, `other`, never `scratch`), and for
     c19 the submodule root `D:/fixture/repo-a/p1000`. The `model-ref` vocabulary admits the seven long-context ids
     (`claude-opus-5-5[1m]` …), an exact list like the rest; only `claude-opus-5-5[1m]` occurs in the eight sources, the others mirror
-    the `alias` vocabulary's `[1m]` forms. Guard: `EveryKeptWriteCallHasItsResult`, `EveryCheckoutIsAFixtureRootOrUnderOne`.
+    the `alias` vocabulary's `[1m]` forms. Guard: `EveryKeptWriteCallHasItsResult` (a write call with no id is reported, never
+    skipped), `EveryCheckoutIsAFixtureRootOrUnderOne`, and `TheCuttersWriteToolsAreTheGuardsTests` (the cutter's `WRITE_TOOLS`
+    equals the guard's list). The record: [PLAN_e1_fixtures_keep_the_write_results.md](../research/PLAN_e1_fixtures_keep_the_write_results.md).
 - **Test scenarios** (`node --test`, synthetic inputs in temp dirs):
   - `everyStringOffTheAllowlistBecomesTheSentinel` — markers in prompt, `thinking`, `signature`, `toolUseResult`,
     `Bash.command`, `description`, `gitBranch` → none survive; the line count and the key order are unchanged.
