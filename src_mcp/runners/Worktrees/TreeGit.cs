@@ -11,7 +11,7 @@ namespace CoaiMcp.Runners.Worktrees;
 /// reset index file", which names the index while the cause is the path. Nothing about it is
 /// confined to the checkout: <c>status</c> reads a clean tree as dirty, <c>worktree remove</c> drops the
 /// registration and leaves the files, and a submodule's nested clone fails the same way
-/// (<c>todo/PLAN_review_trees_survive_long_paths.md</c>, probes P1-P10).</para>
+/// (<c>research/PLAN_review_trees_survive_long_paths.md</c>, probes P1-P10).</para>
 /// <para><b>Per command, never a config write.</b> The flag travels as <c>-c</c> on the git process we
 /// start, so no repository, no global and no system file is touched — the person's own git keeps the
 /// setting it had. Every launch point that works on one of OUR trees goes through here, which is why a

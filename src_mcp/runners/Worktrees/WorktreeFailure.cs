@@ -8,7 +8,7 @@ namespace CoaiMcp.Runners.Worktrees;
 /// &lt;rel&gt;: &lt;reason&gt;</c> or <c>fatal: cannot create directory at '&lt;rel&gt;': &lt;reason&gt;</c> — and
 /// then closes with a <c>fatal:</c> line about the INDEX ("Could not reset index file to revision
 /// 'HEAD'"). Keeping only that last line is what made a path longer than Windows allows read like a
-/// corrupt repository (probes P2, P3, P11 of <c>todo/PLAN_review_trees_survive_long_paths.md</c>).</para>
+/// corrupt repository (probes P2, P3, P11 of <c>research/PLAN_review_trees_survive_long_paths.md</c>).</para>
 /// <para>The reason is the text after the LAST <c>": "</c> on the line: git's reasons hold none, and a
 /// Windows file name cannot hold a colon. Lengths are <see cref="string.Length"/> — UTF-16 units, which is
 /// what Windows counts (P5), never bytes.</para>

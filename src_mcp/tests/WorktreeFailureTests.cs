@@ -10,7 +10,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 /// <remarks>
 /// The stderr samples are git 2.55 for Windows, copied from the probe in
-/// <c>todo/PLAN_review_trees_survive_long_paths.md</c> (P2, P3, P11) with the long paths shortened: the
+/// <c>research/PLAN_review_trees_survive_long_paths.md</c> (P2, P3, P11) with the long paths shortened: the
 /// bare <c>fatal:</c> line of P2 and P11 names the INDEX ("Could not reset index file"), which is the
 /// sentence that made a path problem read as a corrupt repository.
 /// </remarks>

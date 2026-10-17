@@ -1,11 +1,35 @@
 # PLAN — a round tree and a review tree survive a tracked path longer than Windows' MAX_PATH
 
-> Status: **plan only, nothing implemented yet, 2026-10-16.** Scope: `src_mcp/runners/Worktrees/`
-> (`WorktreeManager`, `ReviewTreeRoot`, `SubmodulePopulator`, one new helper), their tests, and two
-> docs (`research/module_runners.md`, `research/module_server.md`).
+> Status: **IMPLEMENTED, 2026-10-17** — on branch `fix/review-tree-long-paths`, through the coai plan round
+> (`proceed`, 2026-10-16) and code round (`proceed`, 2026-10-17, session `cf94e570`); the pull request is opened from
+> that branch and was NOT merged or released when this plan was promoted. What shipped differently is under
+> *Deviations* below. Open tail: none extracted — everything under *Out of scope* stays out by decision; the
+> Linux/macOS legs of T5 run in the PR's CI. Scope: `src_mcp/runners/Worktrees/` (`WorktreeManager`,
+> `ReviewTreeRoot`, `SubmodulePopulator`, `TreeGit`, `WorktreeFailure`), their tests, and two docs
+> (`module_runners.md`, `module_server.md`).
 >
-> Related docs: [module_runners.md](../research/module_runners.md),
-> [module_server.md](../research/module_server.md), [architecture.md](../research/architecture.md).
+> Related docs: [module_runners.md](module_runners.md),
+> [module_server.md](module_server.md), [architecture.md](architecture.md).
+
+## Deviations (what shipped differently, 2026-10-17)
+
+- **A folder has its own limit: 247, not 259.** The judge's review probed git 2.55 for Windows without the flag: a
+  247-unit folder was made, 248 was refused with `fatal: cannot create directory at '<rel>': Filename too long`
+  while the file inside it was only 250. D4 as written would have said "Windows allows 259" beside a length under
+  259. `WorktreeFailure` keeps the KIND of path git named and quotes `WindowsMaxFolderUnits` (247) for a folder,
+  `WindowsMaxPathUnits` (259) for a file — one named constant each (commit `0bf1b068`, red→green→red with
+  `ADirectoryThatIsTooLong_IsHeldAgainstTheFolderLimit_NotTheFileLimit`).
+- **The sentence names the unit and the kind:** "Windows allows a file path of 259 characters without long-path
+  support" instead of D4's "Windows allows 259 without long-path support".
+- **T2 lives in its own class,** `AReviewTreeWithALongPathTests`, not in `AReviewTreeTests`; T3 is named
+  `AnAddThatStillFailsNamesThePathAndTheReason` — a component failure carries no limit clause, by D4.
+- **The recording wrapper is new,** `ExitRecordingLauncher`: `WatchedLauncher` keeps requests only, and T1 must
+  prove that git's own `worktree remove` exited 0.
+- **The long-path test teardown clears read-only flags** before deleting its own `testsToDelete-` folders — git's
+  object files are read-only on Windows, and a delete that stopped at the first one left a folder on every run.
+- **Code-round decisions:** 13 findings; accepted 2 (this promotion and its `todo/README.md` row), rejected 11 with
+  reasons checked in the code (among them: `FatalLine` is `internal`, `ProcessResult.StdErr` is non-nullable, and
+  the non-Windows root advice is unreachable because Linux/macOS say "File name too long", with a space).
 
 ## The symptom (measured 2026-10-15)
 
@@ -207,16 +231,16 @@ units on any runner, with ≤ 40-unit components, and the test asserts that leng
 
 ## Definition of Done
 
-- [ ] Every git call in `WorktreeManager`, `ReviewTreeRoot.GitAsync` and `SubmodulePopulator` carries
+- [x] Every git call in `WorktreeManager`, `ReviewTreeRoot.GitAsync` and `SubmodulePopulator` carries
       `-c core.longpaths=true` on Windows through `TreeGit.Argv`, and no other launcher gains it.
-- [ ] Linux/macOS argv unchanged (T5 on their CI legs).
-- [ ] T1–T5 green; the step-1 RED messages and B1/B2 red→green recorded in the PR.
-- [ ] A failing add names the path, its length in UTF-16 units, git's reason, and (for `Filename too
+- [ ] Linux/macOS argv unchanged (T5 on their CI legs). — pending the PR's Linux and macOS CI legs at promotion.
+- [x] T1–T5 green; the step-1 RED messages and B1/B2 red→green recorded in the PR.
+- [x] A failing add names the path, its length in UTF-16 units, git's reason, and (for `Filename too
       long`) the 259 limit and `COAI_ROUND_WORKTREES`; the limit is one named constant.
-- [ ] No tree name, prefix or root changed (D3).
-- [ ] `module_server.md` and `module_runners.md` document the escape hatch; `todo/README.md` row moved
+- [x] No tree name, prefix or root changed (D3).
+- [x] `module_server.md` and `module_runners.md` document the escape hatch; `todo/README.md` row moved
       on promotion.
-- [ ] `node .agents/conventions/tools/plan-lifecycle.mjs` clean.
+- [x] `node .agents/conventions/tools/plan-lifecycle.mjs` clean.
 
 ## Stories
 
