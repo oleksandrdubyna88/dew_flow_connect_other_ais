@@ -177,6 +177,30 @@ public sealed class ARowIsOnlyGivenAPromptItCanReadTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// The carrier test measures a prompt BEFORE the leaf asks whether the prompt has any text — and a prompt with no text is
+    /// not a size, it is a sentence the leaf says (<c>TheRoundSaysWhatItCouldNotAskTests</c>). Composing it for the measure threw
+    /// out of the whole roster the moment one row had a cap and one dealt lens had never been written.
+    /// </summary>
+    [Fact]
+    public void ADealtLensWithNoPromptText_IsSaidAsNotAsked_WhenARowHasACap_AndTheRoundIsStillBuilt()
+    {
+        const string unwritten = "brief-unwritten";
+        var catalog = RoleComposition.Compose([
+            new RoleEntry(Brief, Name: "The brief", Stage: RoleStages.Plan,
+                Prompts: [.. ((string[])[.. Lenses, unwritten]).Select(id => new PromptEntry(id, id, "What the brief says."))]),
+        ]);
+        var service = ServiceOf(catalog, Row("alpha"), Row("beta", capKib: 1));
+
+        var work = service.Roster.BuildWork(
+            [Brief], string.Empty, new string('x', 5000), round: 1, stage: Stage.PlanReview, readsCheckout: false,
+            codexTiers: CodexTiers.None, seed: 0, planPrompts: [.. Lenses, unwritten], deal: true);
+
+        work.NotAsked.Should().ContainSingle().Which.Reason.Should().Contain(unwritten).And.Contain("no text");
+        work.Reviewers.Select(w => w.Prompt).Order().Should().Equal(Lenses, "every lens that has text is still asked");
+        work.Reviewers.Should().OnlyContain(w => w.Invocation.Provider == "alpha", "only the row whose cap fits");
+    }
+
     [Fact]
     public void WhenEveryRowIsCappedUnderThePrompt_NoLensSilentlyDisappears_EachRowAndRoleIsNamed()
     {

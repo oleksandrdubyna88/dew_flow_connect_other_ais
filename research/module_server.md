@@ -7054,7 +7054,9 @@ paid for; the cap keeps the launch from being made.
 - **The check, asked in two places** (like `WhyNotCarried`): `RosterBuilder.WhyOverTheCap` compares the UTF-8 bytes of the
   composed first prompt with the cap (inclusive: exactly KiB x 1024 is read). *Before the deal*, `FitsTheCap` is part of the
   carrier test — widened from (row, role) to the dealt item (row, role, prompt id) — so a lens goes only to a row that can
-  read it. *In the leaf*, `PlaceOf` refuses the (row, role) when over the cap, ahead of making a launch place, so nothing is
+  read it. The carrier test measures nothing for an item whose prompt has NO text: composing it would throw, and the leaf
+  already says the role was not asked and why (the judge's review found the throw; the roster test with an unwritten lens pins
+  it). *In the leaf*, `PlaceOf` refuses the (row, role) when over the cap, ahead of making a launch place, so nothing is
   built, launched, billed or written to the ledger. The size comes from `RosterBuilder.FirstPrompt`, the one helper that
   composes the prompt `ReviewerFor` sends (moved out of `ReviewerFor`, not copied), so the number compared is
   `ReviewerWork.PromptBytes`.

@@ -390,11 +390,21 @@ internal sealed class RosterBuilder(
     /// <remarks>
     /// The same question <see cref="PlaceOf"/> asks in the leaf (<see cref="WhyOverTheCap"/>), the way <see cref="CanCarry"/> is "one
     /// rule, asked in two places": dealing first and excluding in the leaf is what cost a custom role its whole round. A row this
-    /// round cannot run at all (no runtime) fits — the leaf already says why it is not used.
+    /// round cannot run at all (no runtime) fits — the leaf already says why it is not used. So does an item whose prompt has
+    /// no text: there is nothing to measure, composing it throws, and the leaf says the role was not asked and why (the
+    /// question <see cref="AddReviewer"/> asks BEFORE the place, kept in that order here).
     /// </remarks>
-    private bool FitsTheCap(RosterFrame frame, ProviderSettings provider, (string Role, string PromptId) item) =>
-        _runtimeFor(provider) is not { } runtime
-        || WhyOverTheCap(frame, provider, runtime, ChoiceOf(item.Role, item.PromptId)).Length == 0;
+    private bool FitsTheCap(RosterFrame frame, ProviderSettings provider, (string Role, string PromptId) item)
+    {
+        if (provider.MaxPromptKib == 0 || _runtimeFor(provider) is not { } runtime)
+        {
+            return true;
+        }
+
+        var choice = ChoiceOf(item.Role, item.PromptId);
+
+        return !_prompts.Has(choice) || WhyOverTheCap(frame, provider, runtime, choice).Length == 0;
+    }
 
     /// <summary>
     /// Why this row cannot be sent this prompt — its size, the row's cap and the cure — or empty when it can (D1-D5): the first
