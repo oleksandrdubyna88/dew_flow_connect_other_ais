@@ -407,7 +407,7 @@ internal sealed class RoundEngine(
             // operator asked for a bound after one passed ten minutes.
             //
             // What a plan reviewer's answer is READ AS is settled once, where the reviewer finishes — before the ledger, the
-            // live view, the audit and the stand-down below are told (D8 of todo/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md).
+            // live view, the audit and the stand-down below are told (D8 of research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md).
             var results = await _scheduler.RunAllAsync(work, _executor, roundClock.Token, progress =>
             {
                 live.Report(progress);

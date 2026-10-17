@@ -157,7 +157,7 @@ public sealed class ThePromptSaysWhatTheReviewerHasTests
         // Since the 2026-10-13 split of RosterBuilder.BuildWork (complexity 4): the round's frame — where it launches and
         // whether that is a checkout — is RosterFrame.Directories in RosterAssembly.cs, and one reviewer's prompt is
         // ReviewerFor's. The same properties are held; the two lines that carry the mode across the split are new asserts.
-        // Since the prompt cap (todo/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md D3) the composing lines live in
+        // Since the prompt cap (research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md D3) the composing lines live in
         // RosterBuilder.FirstPrompt — one helper for what is SENT and what the cap COUNTS — and ReviewerFor calls it; the lines
         // below moved with them, unchanged but for the names of their parameters.
         var source = File.ReadAllText(Path.Combine(RepoPaths.Root(), "src_mcp", "src", "Server", "PanelService.cs"))

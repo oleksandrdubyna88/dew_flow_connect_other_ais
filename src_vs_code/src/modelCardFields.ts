@@ -144,7 +144,7 @@ export function streamField(vendor: Vendor, id: string, mark = ''): string {
 }
 
 /**
- * The most the row's reviewer is sent in one prompt — empty is no cap (todo/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md D1).
+ * The most the row's reviewer is sent in one prompt — empty is no cap (research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md D1).
  * A setting, not an action: the server leaves an over-cap reviewer out of the round and says so in the reply.
  */
 export function maxPromptField(vendor: Vendor, id: string): string {

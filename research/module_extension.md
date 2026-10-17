@@ -11626,7 +11626,7 @@ sequenceDiagram
 `vendorsEnv` writes a CLI row's `timeoutMinutes` when the binary lists `timeoutMinutes` (`FEATURES.timeoutMinutes`); an
 api row carries none — it keeps `reviewMinutes` (`timeoutOnTheWire.test.ts`).
 
-## A row's prompt cap on its Models card (2026-10-17, `todo/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md` S4)
+## A row's prompt cap on its Models card (2026-10-17, `research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md` S4)
 
 One number input beside the time limit — *Largest prompt it reads, KiB*, empty is no cap — writes `maxPromptKib` through the
 panel's one vendor write (a number box posts a number; an emptied box posts 0, which reads back as no cap). It is a setting, not

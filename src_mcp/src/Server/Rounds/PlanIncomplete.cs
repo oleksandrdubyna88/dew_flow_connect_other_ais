@@ -12,7 +12,7 @@ namespace CoaiMcp.Server;
 /// stand-down count and the round's <c>results</c> — the summary, the merge (which keeps only <see cref="ReviewerOutcome.Ok"/>),
 /// the decision, the notice and the spent lenses — all read the same outcome. It used to run on <c>results</c> after the
 /// fan-out, which left the first four saying <c>ok</c>: the "accepted mismatch" D12 recorded, superseded by
-/// <c>todo/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md</c> (D8). The tokens the reviewer spent are kept (D9).</para>
+/// <c>research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md</c> (D8). The tokens the reviewer spent are kept (D9).</para>
 /// <para><b>Any</b> finding titled with THIS round's token folds the reviewer, whatever else it answered. The token is a
 /// statement that the plan did not arrive whole; a reviewer that makes it did not review the plan, and "exactly one
 /// finding" let two identical tokens — or the token beside others — stay an answer and carry a round past the plan

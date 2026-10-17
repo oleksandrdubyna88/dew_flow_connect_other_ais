@@ -1,6 +1,6 @@
 /**
  * A row's prompt cap — `maxPromptKib`, whole KiB, the most its reviewer is sent in a first prompt
- * (todo/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md D1).
+ * (research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md D1).
  *
  * <p>A module of its own because it is read by `catalogFields.ts` (which `vendors.ts` imports) and by the card, and
  * `catalogRules.ts` imports `vendors.ts`: the limit lives where neither import graph gains a cycle.</p>

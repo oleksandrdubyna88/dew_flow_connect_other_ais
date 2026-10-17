@@ -463,7 +463,7 @@ public sealed class BoundedScheduler(
         try
         {
             // Settled HERE, before anybody is told: the ledger, the live view, the audit, the stand-down count and the
-            // round's results all read this one outcome (D8 of todo/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md).
+            // round's results all read this one outcome (D8 of research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md).
             var outcome = settle(await loop.RunAsync(w, ct));
             Report(onProgress, w.Invocation, outcome is ReviewerOutcome.Ok ? "done" : "failed", outcome, watch.Elapsed, TurnLoop.Note(outcome));
             return (w.Invocation, outcome);

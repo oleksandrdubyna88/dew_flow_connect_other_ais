@@ -10,7 +10,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// S3 of <c>todo/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md</c> (D8, D9): a plan reviewer that answered only
+/// S3 of <c>research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md</c> (D8, D9): a plan reviewer that answered only
 /// <c>PLAN_INCOMPLETE &lt;id&gt;</c> is ONE failed outcome everywhere — the spending ledger, the live view, the audit, the
 /// local stand-down and the round's own results — never <c>ok</c> in four places and a failure in the fifth.
 /// </summary>

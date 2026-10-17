@@ -13,7 +13,7 @@ import { lastWrite, panelState, runPanel, type Page } from './panelPageHarness';
 import { type PageNode, pageTree } from './pageTree';
 
 /**
- * A row's `maxPromptKib` is set on its Models card (todo/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md S4, D1 and D6):
+ * A row's `maxPromptKib` is set on its Models card (research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md S4, D1 and D6):
  * one number input, a setting and not an action — and the field crosses to coai-mcp only when the installed binary lists
  * `maxPromptKib` in `--features`, because an older one skips the member and would launch the reviewer the cap was meant to
  * leave out while the card said the row was capped.
