@@ -1700,8 +1700,12 @@ END OF PLAN <id>
 `<id>` is `DocumentRules.ArtifactIdOf(plan)` — the hash of the very text that contains it, so a plan cannot forge it. The
 END line catches a cut tail, the BEGIN line (and the reminder just before END) a cut start. A detector, not a proof.
 
-`PlanIncomplete.Fold` runs on `results` right after the fan-out, before anything reads them (summary, merge, decision,
-notice, live finish, spent lenses). The rule, as amended after the cadence consultation:
+`PlanIncomplete.Settle` is applied to each reviewer's outcome **once, inside the scheduler** — `BoundedScheduler.RunAllAsync`'s
+`settle`, applied in `LaunchAsync` right after the turn loop returns, BEFORE the outcome is reported, counted by the
+stand-down or returned (`RoundEngine` passes `PlanIncomplete.Settler(stage, planText)`; the title is worked out once per
+round, and not at all for a stage with no plan). So the spending ledger, the live view, the audit line, the local
+stand-down count and the round's `results` (summary, merge, decision, notice, spent lenses) all read ONE outcome. The rule,
+as amended after the cadence consultation:
 
 - **ANY finding** whose title equals `PLAN_INCOMPLETE <this round's id>` fails the reviewer — never "exactly one": two
   identical tokens, or the token beside real findings, are no answer. The outcome becomes
@@ -1713,10 +1717,19 @@ notice, live finish, spent lenses). The rule, as amended after the cadence consu
   version, so `TotalUsage` and the ledger still count a retried reviewer's earlier launches.
 - Zero answered after the fold → `call_human`.
 
-**Stated mismatch:** the progress callback records each finished reviewer in the spending **ledger** (`_ledger.Record`,
-`RoundEngine.cs`) and shows it in the live view as finished BEFORE the fold runs, so the ledger and the live view hold the
-reviewer's raw result, not the folded one. The ledger row is right as it stands (the tokens were spent); the round's own
-summary, verdict and record read the folded results.
+**The old "stated mismatch" is gone** (`research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md` S3, D8–D9). The fold used to
+run on `results` after the fan-out, so the progress callback had already written the ledger line as `ok`, shown the reviewer
+as done, logged it as answered — and the local stand-down (issue #485) had counted its token finding as one quiet remark, so
+a cloud that answered ONLY the token could keep the one reviewer that could still read the plan from starting. Now the ledger
+line reads `unparseable: the plan did not reach this reviewer whole (PLAN_INCOMPLETE)` with every token the reviewer spent
+kept (D9), the live view and the audit say failed, and the stand-down counts a failed cloud row. Tests:
+`APlanReviewerThatDidNotGetThePlanIsOneFailedOutcomeTests` (RED first: the ledger said `ok`, the live view `done`, the audit
+`answered`), `TheLocalReviewerStandsDownTests.ACloudReviewerThatDidNotGetThePlan_IsNotAQuietCloud`.
+
+A round-level stand-down test is not written: a local row starts at once when it is the only one, so the stand-down is only
+reachable with two local rows and a held card, which the scheduler-level harness (`CardLauncher`) does deterministically.
+Breaking the engine's call (`settle` passed as null) is therefore caught by the ledger, live-view and reply tests, not by the
+stand-down test.
 
 ## Flow of one stage
 
@@ -7026,6 +7039,46 @@ Listed today: `bugzRuntime` (`--collect-bugs --runtime`, E2.1). In PROJECT.md's 
 (1440, the extension's `isMinutes`), anything else unset. `RosterBuilder.TimeoutFor` makes it the launch timeout of a
 CLI row in place of `ReviewerTimeout`; an api row keeps the round's launch timeout, its own limit being the whole review
 (`reviewMinutes`). `--features` lists `timeoutMinutes` (`ARowsOwnTimeoutTests`, RED first).
+
+## A row's prompt cap (2026-10-17, `research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md` S1-S2)
+
+**Symptom it answers.** A reviewer that reads a fixed window loses the end of a long prompt (a measured antigravity row
+answered `PLAN_INCOMPLETE` at 212 KB and 234 KB, normally at 107-157 KB). The sentinel (above) detects it AFTER the launch was
+paid for; the cap keeps the launch from being made.
+
+- **The field.** `VendorDto.MaxPromptKib` (a `JsonElement?`, so a hand-edited `"180"` is no cap and costs the row's neighbours
+  nothing) -> `ProviderSettings.PromptCap` (`Core.Catalog.PromptCap`, `None` = unset): a JSON number that is a whole KiB from 1
+  to `CatalogLimits.MaxPromptKib` (4096), else `None`. The type owns the three facts that must agree — the range
+  (`PromptCap.OfKib`, which never throws), the unit (`Bytes` is exactly KiB x 1024) and the inclusive boundary
+  (`Admits(bytes)`); a bare `int` carried them as conventions of every reader (a code-gate finding). **An operator's number, in bytes,
+  no default and no per-model table** — `DocumentRules.cs:26-29` still defers model windows, and D13 of the committed-plan plan
+  ("no token preflight") stands. Not `maxPromptBytes`: that name already means the row's SYSTEM prompt.
+- **The check, asked in two places** (like `WhyNotCarried`): `RosterBuilder.WhyOverTheCap` compares the UTF-8 bytes of the
+  composed first prompt with the cap (inclusive: exactly KiB x 1024 is read). *Before the deal*, `FitsTheCap` is part of the
+  carrier test — widened from (row, role) to the dealt item (row, role, prompt id) — so a lens goes only to a row that can
+  read it. The carrier test measures nothing for an item whose prompt has NO text: composing it would throw, and the leaf
+  already says the role was not asked and why (the judge's review found the throw; the roster test with an unwritten lens pins
+  it). *In the leaf*, `PlaceOf` refuses the (row, role) when over the cap, ahead of making a launch place, so nothing is
+  built, launched, billed or written to the ledger. The size comes from `RosterBuilder.FirstPrompt`, the one helper that
+  composes the prompt `ReviewerFor` sends (moved out of `ReviewerFor`, not copied), so the number compared is
+  `ReviewerWork.PromptBytes`.
+- **What it says.** The exclusion reaches the reply, the audit's "left out" line and each stage's nobody policy through the
+  existing path: `its prompt is 212,310 bytes and this row reads at most 184,320 bytes (maxPromptKib 180) - send the plan
+  in parts (one epic per round) | send a smaller change | send the document in parts | send less in one round, or raise the
+  row's cap` (the cure follows the stage: plan, code, document, any other).
+  Every reviewer over -> plan and code refuse before any round is recorded; the feature stage records a skip.
+  `Exclude` keeps one line per (vendor, role), so a row holding two lenses of a role is named once, not per lens.
+- **Every stage, first prompt only (D4).** The repair launch (smaller than the review) and a feature follow-up turn (a tail
+  added later) are not checked; the security lane builds its own work and is not capped.
+- **`providers`** carries `maxPromptKib` on a capped row (`ProviderStatus.MaxPromptKib`, absent when unset), so a caller learns
+  a cap before it sends a round. **`--features` lists `maxPromptKib`**, in the commit that made the cap true.
+- **Tests.** `ARowCarriesAPromptCapTests` (parse incl. out of range and a string, bytes = KiB x 1024, `providers`),
+  `ARowIsOnlyGivenAPromptItCanReadTests` (the roster: sizes read back from an uncapped row, the cap inclusive, a lens dealt
+  only to a row that fits over ten seeds, every row over cap names each row and role), `AnOverCapReviewerIsLeftOutOfTheRoundTests`
+  (real rounds against FakeCli: never launched, named in the reply, no ledger line, refused before a round is recorded for
+  plan and code, a roomy cap changes nothing), `AFeatureIsReviewedEndToEndTests` (the feature skip). Break-its, each observed red
+  and restored: `>=` for `>` (the inclusive test), skipping the check for a capped row (the roster and round tests), reading the
+  KiB as bytes (the byte and inclusive tests), and dropping the size from the carrier test (the dealt-lens test).
 
 ## A CLI row's effort (2026-10-05, PLAN_one_model_catalog.md E2.2)
 

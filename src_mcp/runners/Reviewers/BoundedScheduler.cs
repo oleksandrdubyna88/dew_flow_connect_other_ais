@@ -206,12 +206,20 @@ public sealed class BoundedScheduler(
     /// Called as each reviewer is queued, starts and ends. Invoked from the fan-out's threads, so
     /// the handler must be thread-safe and quick — a slow one delays the reviewer it reports on.
     /// </param>
+    /// <param name="settle">
+    /// What a finished reviewer's outcome is READ AS — applied once, in <see cref="LaunchAsync"/>, to the outcome the turn loop
+    /// returns and BEFORE it is reported, counted by <paramref name="standDown"/> or returned. Null leaves it as the turn loop
+    /// made it. It is the round's own rule (the plan stage's <c>PLAN_INCOMPLETE</c> fold), passed in because the scheduler knows
+    /// nothing of stages; applying it here, rather than on the results afterwards, is what makes the ledger, the live view, the
+    /// audit, the stand-down and the results one outcome. Pure and quick: it runs on the fan-out's threads.
+    /// </param>
     public async Task<IReadOnlyList<(ReviewerInvocation Invocation, ReviewerOutcome Outcome)>> RunAllAsync(
         IReadOnlyList<ReviewerWork> work,
         ReviewerExecutor executor,
         CancellationToken ct = default,
         Action<ReviewerProgress>? onProgress = null,
-        StandDown? standDown = null)
+        StandDown? standDown = null,
+        Func<ReviewerOutcome, ReviewerOutcome>? settle = null)
     {
         PeakConcurrency = 0;
         _peakPerProvider.Clear();
@@ -243,13 +251,14 @@ public sealed class BoundedScheduler(
             // A cloud reviewer's outcome is recorded as it finishes, so a local row that reaches the card
             // afterwards can see whether the cloud was quiet (issue #485). Null when the switch is off.
             var cloudProgress = Recording(onProgress, standDown);
+            var settled = settle ?? (outcome => outcome);
             var tasks = work.Select(w =>
             {
                 var engineStandDown = w.IsSecurity ? null : standDown;
                 var progress = w.IsSecurity ? onProgress : cloudProgress;
                 return w.Invocation.IsOnEngine
-                    ? EngineLaneAsync(w, executor, onProgress, engineStandDown, ct)
-                    : MachineLaneAsync(w, global, perProvider[w.Invocation.Provider], runningPerProvider, executor, progress, ct);
+                    ? EngineLaneAsync(w, executor, onProgress, engineStandDown, settled, ct)
+                    : MachineLaneAsync(w, global, perProvider[w.Invocation.Provider], runningPerProvider, executor, progress, settled, ct);
             });
             return await Task.WhenAll(tasks);
         }
@@ -275,6 +284,7 @@ public sealed class BoundedScheduler(
         Dictionary<string, int> runningPerProvider,
         ReviewerExecutor executor,
         Action<ReviewerProgress>? onProgress,
+        Func<ReviewerOutcome, ReviewerOutcome> settle,
         CancellationToken ct)
     {
         var queued = System.Diagnostics.Stopwatch.StartNew();
@@ -293,7 +303,7 @@ public sealed class BoundedScheduler(
                 Entered(w.Invocation.Provider, runningPerProvider);
                 try
                 {
-                    return await LaunchAsync(w, executor, onProgress, ct);
+                    return await LaunchAsync(w, executor, onProgress, settle, ct);
                 }
                 finally
                 {
@@ -347,6 +357,7 @@ public sealed class BoundedScheduler(
         ReviewerExecutor executor,
         Action<ReviewerProgress>? onProgress,
         StandDown? standDown,
+        Func<ReviewerOutcome, ReviewerOutcome> settle,
         CancellationToken ct)
     {
         var engine = w.Invocation.SharedResource;
@@ -369,7 +380,7 @@ public sealed class BoundedScheduler(
         EnteredResource(engine);
         try
         {
-            return await LaunchAsync(w, executor, onProgress, ct);
+            return await LaunchAsync(w, executor, onProgress, settle, ct);
         }
         finally
         {
@@ -443,6 +454,7 @@ public sealed class BoundedScheduler(
         ReviewerWork w,
         ReviewerExecutor executor,
         Action<ReviewerProgress>? onProgress,
+        Func<ReviewerOutcome, ReviewerOutcome> settle,
         CancellationToken ct)
     {
         Report(onProgress, w.Invocation, "running");
@@ -450,7 +462,9 @@ public sealed class BoundedScheduler(
         var loop = new TurnLoop((turn, token) => RunWithLadderAsync(turn, executor, onProgress, token), onProgress);
         try
         {
-            var outcome = await loop.RunAsync(w, ct);
+            // Settled HERE, before anybody is told: the ledger, the live view, the audit, the stand-down count and the
+            // round's results all read this one outcome (D8 of research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md).
+            var outcome = settle(await loop.RunAsync(w, ct));
             Report(onProgress, w.Invocation, outcome is ReviewerOutcome.Ok ? "done" : "failed", outcome, watch.Elapsed, TurnLoop.Note(outcome));
             return (w.Invocation, outcome);
         }

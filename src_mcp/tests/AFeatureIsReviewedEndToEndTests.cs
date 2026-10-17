@@ -222,14 +222,14 @@ public sealed class AFeatureIsReviewedEndToEndTests : IAsyncLifetime
     /// <param name="secondVendor">A second vendor on the same fake CLI, told apart by its model — for a round that partly fails.</param>
     private PanelService Service(
         bool ticked = true, int minEpics = 3, TimeSpan? escalationBudget = null, IProcessLauncher? launcher = null, RoleGate? gate = null,
-        int followUps = 3, TimeSpan? reviewerTimeout = null, bool secondVendor = false) =>
+        int followUps = 3, TimeSpan? reviewerTimeout = null, bool secondVendor = false, int promptCapKib = 0) =>
         new(
             new PanelSettings
             {
                 Providers = secondVendor
                     ? [new("codex") { ExecutablePath = FakeCliExe, Feature = ticked },
                        new("grok") { Runtime = "codex", ExecutablePath = FakeCliExe, Model = FailingModel, Feature = ticked }]
-                    : [new("codex") { ExecutablePath = FakeCliExe, Feature = ticked }],
+                    : [new("codex") { ExecutablePath = FakeCliExe, Feature = ticked, PromptCap = CoaiMcp.Core.Catalog.PromptCap.OfKib(promptCapKib) }],
                 Rounds = new PanelConfig(PanelConfig.AllRoles.ToDictionary(r => r, _ => gate ?? new RoleGate(2, 5)), StagePolicy.Human),
                 DataDir = _data,
                 ReviewerTimeout = reviewerTimeout ?? TimeSpan.FromSeconds(30),
@@ -761,6 +761,22 @@ public sealed class AFeatureIsReviewedEndToEndTests : IAsyncLifetime
         git.Should().NotContain(a => a[0] == "cat-file", "no blob is read for a round nobody can review");
         git.Where(a => a[0] == "diff").Should().ContainSingle("the refs' reviewable-range check is the only diff")
             .Which.Should().Contain("--numstat").And.NotContain("-U0").And.NotContain("-U3");
+    }
+
+    /// <summary>
+    /// T9b of <c>research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md</c>: every feature reviewer over its row's
+    /// <c>maxPromptKib</c> is the same state as nobody ticked — a skip recorded with the reason, not a refusal and not a launch.
+    /// </summary>
+    [Fact]
+    public async Task WhenEveryFeatureReviewerIsOverItsCap_TheReviewIsSkipped_AndTheSentenceNamesTheCap_AndNobodyIsLaunched()
+    {
+        var answer = Parse(await ReviewAsync(Service(promptCapKib: 1)));
+
+        answer.TryGetProperty("error", out var error).Should().BeFalse($"a skip, not a refusal, as for nobody configured: {error}");
+        answer.GetProperty("verdict").GetString().Should().Be("skipped");
+        answer.GetProperty("reviewers").GetString().Should().Contain("codex").And.Contain("maxPromptKib 1").And.Contain("raise the row's cap");
+        Prompts().Should().BeEmpty("nobody was launched");
+        FeatureRounds().Should().ContainSingle().Which.Verdict.Should().Be("skipped", "the skip is on the trail");
     }
 
     // ---------- a person's answer belongs to the hold it answered ----------
