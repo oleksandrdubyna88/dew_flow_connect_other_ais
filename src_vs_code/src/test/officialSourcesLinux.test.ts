@@ -79,3 +79,51 @@ test('a step "sudo rm -rf …" beside an admitted URL was admitted by the parser
   // against the old parser; it stays as a test because it is the reason the rule exists.
   assert.equal(fromOfficialSources(`${MOONSHOT}; sudo rm -rf ~/x`), false, 'a step \'sudo rm -rf …\' beside an admitted URL was admitted');
 });
+
+// ---------------------------------------------------------------- the other escalators, and the honest boundary (S1 of the security judge)
+
+const ESCALATORS: readonly (readonly [string, string])[] = [
+  [`${MOONSHOT}; su -c 'rm -rf ~/x'`, 'su, plainly spelled'],
+  [`${MOONSHOT}; /usr/bin/su -c "rm -rf ~/x"`, 'su by its path'],
+  [`${MOONSHOT}; doas rm -rf ~/x`, 'doas'],
+  [`${MOONSHOT}; /usr/bin/doas rm -rf ~/x`, 'doas by its path'],
+  [`${MOONSHOT}; pkexec rm -rf ~/x`, 'pkexec'],
+  [`${MOONSHOT}; /usr/bin/pkexec rm -rf ~/x`, 'pkexec by its path'],
+  [`${MOONSHOT}; run0 rm -rf ~/x`, 'run0'],
+  [`${MOONSHOT}; echo $(doas rm -rf /)`, 'doas inside a command substitution'],
+  [`${MOONSHOT}; echo \`su -c id\``, 'su inside backticks'],
+  ['doas apt-get install -y ripgrep', 'doas in front of the admitted distro shape: only sudo may carry it'],
+  ['pkexec apt-get install -y ripgrep', 'pkexec in front of the admitted distro shape'],
+  ['su -c "apt-get install -y ripgrep"', 'su in front of the admitted distro shape'],
+  [`sudo su - && ${MOONSHOT}`, 'sudo handing the step to su'],
+  [`then doas dnf install -y fd-find; ${MOONSHOT}`, 'doas after a step-opening word'],
+];
+
+test('su, doas, pkexec and run0 refuse the step as sudo does, by name and by path — only sudo may carry the admitted distro shape (S1)', () => {
+  assert.ok(ESCALATORS.length >= 14, 'the table has shrunk');
+  for (const [command, why] of ESCALATORS) {
+    assert.equal(fromOfficialSources(command), false, `${why}: ${command}`);
+  }
+  assert.equal(fromOfficialSources(`pseudo ok && ${MOONSHOT}`), true, 'a word that merely ends in "su…" or "…sudo" is not an escalator');
+  assert.equal(fromOfficialSources(`visudo -c; ${MOONSHOT}`), true, 'visudo is not sudo');
+});
+
+/**
+ * The boundary of the rule, written down as rows: it reads a word as PLAINLY spelled. A quote or an escape INSIDE the word, a
+ * `$'…'` string or a variable that holds the word is a spelling the splitter hands back as something else, and this check does not
+ * read it. The rows pin that these ARE admitted today — a documented NOT-caught list, not a claim of safety. The check runs only in
+ * tests over coai's own constants (officialSources.ts, header): a command composed from runtime data would not be checked at all.
+ */
+const NOT_CAUGHT: readonly (readonly [string, string])[] = [
+  [`${MOONSHOT}; s\\udo rm -rf ~/x`, 'a backslash inside the word'],
+  [`${MOONSHOT}; su'do' rm -rf ~/x`, 'a quoted tail inside the word'],
+  [`${MOONSHOT}; su""do rm -rf ~/x`, 'an empty string inside the word'],
+  [`${MOONSHOT}; $'sudo' rm -rf ~/x`, 'an ANSI-C string'],
+  [`s=sudo && $s rm -rf ~/x && ${MOONSHOT}`, 'a variable holding the word'],
+];
+
+test('NOT caught, documented: sudo spelled with a quote, an escape or a variable is not read — the rule reads the plain word only (S1)', () => {
+  for (const [command, why] of NOT_CAUGHT) {
+    assert.equal(fromOfficialSources(command), true, `${why} is now caught — good: move this row to the refused table: ${command}`);
+  }
+});

@@ -12,6 +12,10 @@
  * vendor scripts, one PowerShell line of several steps); a recipe check would vouch for the recipe and stay silent
  * about a renderer that wrote something else. So the artefact itself is held to the list, step by step, and refused
  * whole on anything it cannot read as an official step.</p>
+ *
+ * <p><b>What it is run over.</b> This check runs only in tests, over coai's own constants (the lines `vendorTerminal.ts` builds). A
+ * command composed from RUNTIME data — a path a person typed, a value read from settings — would not be checked by it at all, and
+ * its `sudo` rule reads a word as plainly spelled (see {@link SUDO}).</p>
  */
 
 export const OFFICIAL_SOURCES = {
@@ -151,6 +155,9 @@ type Verb = (typeof VERBS)[number];
  */
 function stepPackages(words: readonly string[]): number {
   const sudo = words.findIndex((word) => SUDO.test(word));
+  if (words.some((word) => OTHER_ESCALATOR.test(word))) {
+    return -1;
+  }
 
   return sudo < 0 ? unprivilegedStep(words) : privilegedStep(words, sudo);
 }
@@ -165,8 +172,20 @@ function unprivilegedStep(words: readonly string[]): number {
 /**
  * `sudo` as a shell reads it — alone, by its path (`/usr/bin/sudo`), or opening a command substitution (`$(sudo`, a backtick,
  * a parenthesis). A WORD that ends in `sudo` and is anything else (`pseudo`) is not it.
+ *
+ * <p><b>The honest boundary of this rule, and of {@link OTHER_ESCALATOR}.</b> They read a word as PLAINLY spelled. A quote or an
+ * escape inside the word (a backslash, `su'do'`, `su""do`), a `$'sudo'` string, or a variable that holds the word (`s=sudo; $s …`) is
+ * a spelling this check does not read — `officialSourcesLinux.test.ts` pins those as documented NOT-caught rows. What stands behind
+ * the rule is where the text comes from: the check runs only over coai's own constants.</p>
  */
 const SUDO = /^[$(`\\]*(?:[^/\s]*\/)*sudo$/u;
+
+/**
+ * The other plain privilege escalators — `su`, `doas`, `pkexec`, `run0` — by name or by path, anywhere in a step. Unlike `sudo` they
+ * are never admitted: only `sudo` carries the distribution shape (the plan's DL12 names only it), so any step with one of these words
+ * is refused whole.
+ */
+const OTHER_ESCALATOR = /^[$(`\\]*(?:[^/\s]*\/)*(?:su|doas|pkexec|run0)$/u;
 
 /** The shell words that may open a step without being a command: `then sudo …` inside an `if`, `do sudo …` inside a loop. */
 const OPENS_A_STEP: ReadonlySet<string> = new Set(['then', 'else', 'do', '!']);
