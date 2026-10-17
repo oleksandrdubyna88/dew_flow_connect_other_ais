@@ -437,6 +437,37 @@ public sealed class TheCallersTranscriptIsFoundByItsSessionIdTests
     }
 
     [Fact]
+    public void The_registry_wins_even_when_only_the_variables_transcript_exists()
+    {
+        // E3.S2's fixture check, moved to E3.S4's materialiser (plan C7): E1's real registry bytes for the /clear shape.
+        using var dir = TempDir.For("testsToDelete-coai-locator-c12-");
+        var fixture = CallerTranscriptFixture.Materialise("registry-and-variable-disagree", dir);
+        var registry = Directory.EnumerateFiles(fixture.Home.SessionsDir, "*.json").Single();
+        var pid = Path.GetFileNameWithoutExtension(registry);
+
+        var refused = Refused(CallerTranscriptLocator.Locate("claude", Env(("CLAUDE_PID", pid), ("CLAUDE_CODE_SESSION_ID", fixture.Rounds.CallerSessionId)), fixture.Home));
+
+        refused.Reason.Should().Be(CallerTranscriptLocation.TranscriptNotFound);
+        refused.Session.Source.Should().Be(CallerSessionId.Registry);
+        refused.Session.Id.Should().NotBe(fixture.Rounds.CallerSessionId, "the registry names another id, which is the one with no transcript");
+        Found(CallerTranscriptLocator.LocateStored(fixture.Rounds.CallerSessionId, fixture.Home)).MainFile.Should().Be(fixture.MainFile, "the variable's id DOES have a transcript");
+    }
+
+    [Fact]
+    public void Persistence_off_is_transcript_not_found_from_a_real_registry_entry()
+    {
+        using var dir = TempDir.For("testsToDelete-coai-locator-c10-");
+        var fixture = CallerTranscriptFixture.Materialise("persistence-off", dir);
+        var pid = Path.GetFileNameWithoutExtension(Directory.EnumerateFiles(fixture.Home.SessionsDir, "*.json").Single());
+
+        var refused = Refused(CallerTranscriptLocator.Locate("claude", Env(("CLAUDE_PID", pid)), fixture.Home));
+
+        Directory.Exists(fixture.Home.ProjectsDir).Should().BeFalse("persistence was off: no projects folder at all");
+        refused.Reason.Should().Be(CallerTranscriptLocation.TranscriptNotFound);
+        refused.Session.Source.Should().Be(CallerSessionId.Registry);
+    }
+
+    [Fact]
     public void No_test_reads_the_developers_profile()
     {
         // Parent §16 D17: the assembly fixture (TestClaudeHome) points the one default at an empty temp home for the whole run.
