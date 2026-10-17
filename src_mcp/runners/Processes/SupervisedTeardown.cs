@@ -32,7 +32,7 @@ public static class SupervisedTeardown
         var agentIdentity = IdentityOf(agent);
         var members = Listed(shimPid, agentIdentity);
         onListed(members);
-        _ = TreeSignals.Kill(members, calls);
+        _ = Ended(members, calls);
 
         var survivors = await ConfirmedAsync(shimPid, agentIdentity, startedByUs, calls);
 
@@ -41,6 +41,10 @@ public static class SupervisedTeardown
 
         return new TreeEnd(survivors);
     }
+
+    /// <summary>Ends <paramref name="members"/> by identity through the pidfd road, each pinned with the EXACT start ticks of its own <c>/proc</c> line (read now, one comparison on the pinned process) rather than the one-second slack of a start time.</summary>
+    private static IReadOnlyList<Signalled> Ended(IReadOnlyList<ProcessIdentity> members, IPidfdCalls calls) =>
+        TreeSignals.Kill([.. members.Select(member => PinnedMember.Of(member, ProcReads.Real))], calls);
 
     /// <summary>The agent's identity: its pid and the start the kernel reports — or "now" when that cannot be read a moment after it started, a process that is already gone.</summary>
     private static ProcessIdentity IdentityOf(Process agent) => new(agent.Id, ProcessTracking.StartedAt(agent.Id) ?? DateTime.UtcNow);
@@ -66,7 +70,7 @@ public static class SupervisedTeardown
                 return alive;
             }
 
-            _ = TreeSignals.Kill(alive, calls);
+            _ = Ended(alive, calls);
             await Task.Delay(ProcessTree.ConfirmationStep);
         }
     }

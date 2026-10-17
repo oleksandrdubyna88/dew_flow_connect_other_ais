@@ -576,6 +576,22 @@ public sealed class KimiHomeTests : IDisposable
     }
 
     [Fact]
+    public void AHomeAStandingMarkerNames_IsKeptByTheProductsGate_NamingThePid_AndNothingIsUnlinked()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        var places = Made();
+        using var rooted = KimiCredentialsLock.RootFor(Path.Combine(_person.Folder, "locks"));
+        var marker = KimiCredentialsLock.MarkerPathFor(places.Credentials);
+        KimiSurvivorMarker.Write(marker, new KimiSurvivorMarkerDto(new ReaderMarkerDto(ReaderPhases.Running, 424242, DateTime.UtcNow, DateTimeOffset.UtcNow, [new ProcessIdentity(2_000_000_011, DateTime.UtcNow)]), places.OwnedRoot, "/people/sign-in"));
+
+        var disposal = KimiHome.Dispose(places.OwnedRoot, _ => { });
+
+        disposal.Should().BeOfType<Disposal.Stopped>("a marker that names this home keeps it exactly as a held coai-tree.lock does").Which.Reason.Should().Contain(marker).And.Contain("pid 2000000011");
+        OwnedPaths.IsLinkIfThere(places.Link).Should().BeTrue("nothing was unlinked");
+        File.Exists(marker).Should().BeTrue("a home disposal never clears a marker");
+    }
+
+    [Fact]
     public void AMarkerThatNamesAnotherHome_DoesNotKeepThisOne()
     {
         using var standIn = WindowsStandIn.Begin();

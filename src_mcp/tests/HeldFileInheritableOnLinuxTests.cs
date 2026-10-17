@@ -147,9 +147,9 @@ public sealed class HeldFileInheritableOnLinuxTests : IDisposable
 
         kinds.Should().ContainSingle("one open file description holds the hold, however many processes inherited it: /proc/locks lists ONE FLOCK ADVISORY line for the file")
             .Which.Should().BeOneOf("READ", "WRITE");
-        TestContext.Current.SendDiagnosticMessage($"L-N1: .NET took FLOCK ADVISORY {kinds[0]} for the inheritable HeldFile take — READ is shared (LOCK_SH), WRITE is exclusive (LOCK_EX)");
-        kinds[0].Should().Be("READ", "OBSERVED on the ubuntu CI job (2026-10-16): /proc/locks lists FLOCK ADVISORY READ — .NET took LOCK_SH for FileShare.None | Inheritable, so the hold is SHARED, as SafeFileHandle.Unix.cs predicted. "
-            + "DL8 needs it exclusive, which is why a second inheritable take succeeds and A2 §3.3's native flock take is required; when that lands this line becomes WRITE");
+        TestContext.Current.SendDiagnosticMessage($"L-N1: the inheritable HeldFile take is FLOCK ADVISORY {kinds[0]} — READ is shared (LOCK_SH), WRITE is exclusive (LOCK_EX)");
+        kinds[0].Should().Be("WRITE", "the inheritable hold is HeldFile's native flock(LOCK_EX) (A2 §3.3, LinuxHeldFile): /proc/locks must list FLOCK ADVISORY WRITE. It listed READ on the ubuntu CI job (2026-10-16) while .NET's own take "
+            + "(FileShare.None | Inheritable is LOCK_SH there) was in use, which is what made a second inheritable take succeed — DL8 needs it exclusive");
     }
 
     [Fact]

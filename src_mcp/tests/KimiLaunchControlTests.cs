@@ -198,6 +198,31 @@ public sealed class KimiLaunchControlTests : IDisposable
         turn.Dispose();
     }
 
+    private sealed class Machine(params ProcessEntry[] entries) : IProcessList
+    {
+        public ProcessListing Snapshot() => new ProcessListing.Listed([new ProcessEntry(100, 1, "coai-mcp"), .. entries]);
+    }
+
+    [Fact]
+    public async Task AStandingMarkerThatCannotBeCleared_RefusesTheLaunch_NamingThePid_KeepsTheMarker_AndHoldsNothing()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        using var rooted = Rooted();
+        var places = _person.Places();
+        var marker = KimiCredentialsLock.MarkerPathFor(places.Credentials);
+        KimiSurvivorMarker.Write(marker, new KimiSurvivorMarkerDto(new ReaderMarkerDto(ReaderPhases.Spawning, 424242, DateTime.UtcNow.AddHours(-1), DateTimeOffset.UtcNow), places.OwnedRoot, "/people/sign-in"));
+        var fake = new FakeKimi();
+        using var seam = KimiSurvivors.Using(new ReconcilingSurvivors(new Machine(new ProcessEntry(77, 1, "kimi")), () => Locks));
+
+        var turn = await KimiLaunch.TakeAsync(HostKind.Windows, Request(places), places, fake, TestContext.Current.CancellationToken);
+
+        turn.Refusal.Should().Contain(marker).And.Contain("pid 77").And.Contain("safe to delete", "the way out is in the sentence, before any button");
+        File.Exists(marker).Should().BeTrue("a marker the reconcile could not clear stands");
+        fake.Started.Should().BeEmpty("a refusal starts nothing");
+        VibeHomeTurns.Held(places.OwnedRoot).Should().BeFalse("no turn was left held");
+        HeldFile.IsHeld(KimiCredentialsLock.PathFor(places.Credentials)).Should().BeFalse("no gate was left held");
+    }
+
     [Fact]
     public async Task AKernelWithNoPidfd_RefusesTheLaunch_BeforeAnythingIsTaken()
     {
