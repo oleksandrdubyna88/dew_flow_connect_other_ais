@@ -3434,6 +3434,9 @@ export const PANEL_COMMANDS = [
   'toggleUse',
   'duplicateModel',
   'removeModel',
+  // A Kimi card's *Clear the stuck Kimi marker* (E6 of todo/PLAN_kimi_and_vibe_on_linux.md): drawn only while the server reports a
+  // standing marker for the row. Its id is the ROW; the host asks the server again and runs the one-shot mode on the path it names.
+  'clearKimiMarker',
   // ✓ Check on a Models card: one paid turn of that row, asked first by the host (D10), kept as `model-<id>`.
   'checkModel',
   // Try it on the Settings page's Security lane tab: the id is the sample, put to `coai-mcp --check-security` on stdin (E4.2).
