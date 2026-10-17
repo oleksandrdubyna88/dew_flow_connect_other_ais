@@ -36,8 +36,7 @@ public static class AgentLog
     private const int MaxTextPerEntry = 600;
 
     /// <summary>Where the CLI keeps its transcripts, for this machine's user.</summary>
-    public static string DefaultProjectsDir =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude", "projects");
+    public static string DefaultProjectsDir => ClaudeHome.Default.ProjectsDir;
 
     /// <summary>
     /// Everything the agent did between two instants, as a compact JSON array.
