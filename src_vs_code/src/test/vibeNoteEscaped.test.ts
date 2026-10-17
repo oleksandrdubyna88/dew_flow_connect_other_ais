@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import { catalogHtml } from '../catalogPage';
 import type { HostKind } from '../hostSide';
 import type { PanelState } from '../panelView';
+import { VIBE_ON_LINUX_SINCE } from '../runtimeSince';
 import { DEFAULT_VENDORS, type Vendor } from '../vendors';
 import { panelState, runPanel } from './panelPageHarness';
 
@@ -17,6 +18,8 @@ import { panelState, runPanel } from './panelPageHarness';
  * page as markup.</p>
  */
 
+/** A coai-mcp released without Vibe on Linux (the newest one, 0.58.0, when this was written). */
+const BEFORE_LINUX = '0.58.0';
 const HOSTILE = '<img src=x onerror=alert(1)>';
 const ESCAPED = '&lt;img src=x onerror=alert(1)&gt;';
 
@@ -38,9 +41,9 @@ function pageFor(host: HostKind, version: string): string {
 
 test('a vendor id that is a tag never reaches the page as markup, in any note a host can draw', () => {
   for (const [host, version, said] of [
-    ['wsl2', '0.57.0', /Update coai-mcp to run Vibe here/u],
-    ['linux', '0.58.0', /native Linux host/u],
-    ['wsl1', '0.58.0', /This is WSL1/u],
+    ['wsl2', BEFORE_LINUX, /Update coai-mcp to run Vibe here/u],
+    ['linux', VIBE_ON_LINUX_SINCE, /native Linux host/u],
+    ['wsl1', VIBE_ON_LINUX_SINCE, /This is WSL1/u],
   ] as const) {
     const html = pageFor(host, version);
     const note = /<p class="skew">([^]*?)<\/p>/u.exec(html);

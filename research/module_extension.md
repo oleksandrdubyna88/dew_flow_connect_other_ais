@@ -12674,12 +12674,12 @@ flowchart LR
   I -->|win32| U["one line: Astral's uv installer if uv is missing, uv tool install mistral-vibe, uv tool update-shell"]
   I -->|"linux, darwin"| S["mistral.ai/vibe/install.sh piped to bash"]
   S --> N{"vibeNoteFor(hostKind)"}
-  N -->|"wsl2"| NW["runs here from 0.58.0; sign-in ~/.vibe/.env, linked, never copied"]
+  N -->|"wsl2"| NW["runs here from 0.59.0; sign-in ~/.vibe/.env, linked, never copied"]
   N -->|"wsl1"| N1["refused; wsl --set-version <distro> 2"]
   N -->|"linux"| NL["refused for now; measured on WSL2 only"]
   N -->|"darwin"| NM["not measured"]
   R --> L{"cardContextFor: state.hostKind"}
-  L -->|"wsl2 and server < VIBE_ON_LINUX_SINCE 0.58.0"| LN["card: Update coai-mcp to run Vibe here"]
+  L -->|"wsl2 and server < VIBE_ON_LINUX_SINCE 0.59.0"| LN["card: Update coai-mcp to run Vibe here"]
   L -->|"linux or wsl1, ANY server"| LR["card: the refusal sentence, never update"]
 ```
 
@@ -12691,7 +12691,7 @@ flowchart LR
   `unmeasured`) instead of being stored and not applied. `KNOWS_ITS_OWN_ENDPOINT` has `vibe` (no base-URL box), and
   `vendorColour.ANCHORED` pins it to slot 2, amber (the manifest's colour 2 says `vibe`).
 - **The preset** (`VENDOR_PRESETS`, D11): `Mistral Vibe`, id `vibe`, model `mistral-medium-3.5`, no endpoint, no key.
-  Never in `DEFAULT_VENDORS`. Its hint names what a person meets first: Windows, and WSL2 from coai-mcp 0.58.0
+  Never in `DEFAULT_VENDORS`. Its hint names what a person meets first: Windows, and WSL2 from coai-mcp 0.59.0
   (when coai-mcp itself runs there — a VS Code window attached to WSL; the sign-in there is `~/.vibe/.env`, made by
   `vibe --setup`, linked by coai and never copied), "On a native Linux host coai-mcp refuses Vibe for now — it is measured on
   WSL2 only" (E3 of `todo/PLAN_kimi_and_vibe_on_linux.md`, which lifted D18 for WSL2), and the coai-mcp release that
@@ -12764,7 +12764,7 @@ flowchart LR
   kernel banner once per panel, `panelProvider.hostKindHere`; the panel's `commandFor` REQUIRES it, so a dropped argument
   is a compile error rather than the native-Linux note shown on WSL), and `vibeNoteFor(host)` — pure, a record over the whole
   `HostKind` union — picks one of five notes:
-  **WSL2** (Vibe runs on this side from coai-mcp 0.58.0; the sign-in coai uses is the file `~/.vibe/.env`, which
+  **WSL2** (Vibe runs on this side from coai-mcp 0.59.0; the sign-in coai uses is the file `~/.vibe/.env`, which
   `vibe --setup` makes; coai links it into its own homes and never copies it; a sign-in kept in a keyring is invisible to coai),
   **WSL1** (refused; the cure is `wsl --set-version <distro> 2`), **native Linux** (the same sign-in sentence, then "On a native
   Linux host coai-mcp refuses Vibe for now — it is measured on WSL2 only"), **macOS** (nothing measured). Windows keeps its keyring
@@ -12979,13 +12979,13 @@ flowchart LR
 The extension's half of lifting D18 for WSL2 (DL1, DL2, DL14); the server's half is E2 (`module_runners.md`). Kimi's texts are
 untouched: Kimi on Linux is a later release.
 
-- **`VIBE_ON_LINUX_SINCE = '0.58.0'`** (`runtimeSince.ts`), in a second table `ON_LINUX_SINCE` beside `RUNTIME_SINCE`. The first
+- **`VIBE_ON_LINUX_SINCE = '0.59.0'`** (`runtimeSince.ts`), in a second table `ON_LINUX_SINCE` beside `RUNTIME_SINCE`. The first
   answers "does this server know the runtime", the second "does it run it on THIS host" — a 0.57.0 server on WSL knows `vibe`
   and refuses the row at launch. `runtimeOnLinuxSide(runtime, serverVersion)` is true for a runtime with no entry and for an unknown
   server. `runtimeSkewNote(version, vendors, host)` adds a sentence per HOST KIND for a switched-on row whose runtime has an entry:
   **wsl2** with a server older than the entry — *Update coai-mcp to run Vibe here: …*; **linux** and **wsl1** at ANY server version — a
   refusal (*coai-mcp refuses a vibe row on a native Linux host for now — Vibe is measured on WSL2 only*; *This is WSL1 … move this
-  distro to WSL2 with `wsl --set-version <distro> 2`*), because 0.58.0 still refuses both and an update would not help; Windows and
+  distro to WSL2 with `wsl --set-version <distro> 2`*), because 0.59.0 still refuses both and an update would not help; Windows and
   macOS say nothing. A server that does not know the runtime keeps the old sentence (one note per row). The host kind is ONE source,
   `PanelState.hostKind` (`hostKindOfState`: else this platform's — Linux alone is a native host), never mixed with the path family;
   `namesWsl2` (`wslNetwork.ts`: the banner holds `WSL2` or `microsoft-standard`) is the server's `NamesWsl2` rule, so a
@@ -12994,7 +12994,7 @@ untouched: Kimi on Linux is a later release.
   shares the file, may run it); only the card says so. `runtimeSinceIsAhead.test.ts` holds `ON_LINUX_SINCE` to the same guard as
   `RUNTIME_SINCE`.
 - **The help** (`helpContent.ts`, `helpDe/Es/Ru/Uk.ts`): the choose-reviewers and question-consultant articles say, in all five
-  languages, that Vibe runs on Windows and on WSL2 from 0.58.0, the `~/.vibe/.env` sign-in that coai links and never copies, that a
+  languages, that Vibe runs on Windows and on WSL2 from 0.59.0, the `~/.vibe/.env` sign-in that coai links and never copies, that a
   keyring sign-in is invisible to coai, and that on a native Linux host coai-mcp refuses Vibe for now (measured on WSL2 only), and that WSL2 applies when coai-mcp itself
   runs there (a VS Code window attached to WSL).
 - **`shared/consultant-limitations.json`**: the Vibe `wsl` row is `confined`, *measured* 2026-10-16 on vibe 2.26.1 — L-V9 of
@@ -13002,7 +13002,7 @@ untouched: Kimi on Linux is a later release.
   `run_typescript`, L-V4), worded like the Windows row (a copy coai makes of the live tree); the `linux` row stays
   `unmeasured` and says *measured on WSL2 only*; `windows` and `macos` are as before.
 - **Tests**: `vibeOnLinux.test.ts` (32) — the table, `namesWsl2` over eight banners, the host kind, the card note per host kind
-  against 0.57.0 / 0.58.0 / unknown servers, the note per host kind, the hint, the five languages, the JSON rows;
+  against 0.58.0 / 0.59.0 / unknown servers, the note per host kind, the hint, the five languages, the JSON rows;
   `vibeStageBoxes.test.ts` (2) — a host note does not grey the boxes, a server that does not know Vibe does.
 - **Code-gate follow-ups (2026-10-17).** `runtimeSkewNote(version, vendors, host)` and `PanelState.hostKind` are REQUIRED — no
   default, no fallback; both are type properties held by `@ts-expect-error` tests (`runtimeSkewNoteHostRequired.test.ts`,

@@ -48,10 +48,10 @@ export const KIMI_RUNTIME_SINCE = '0.57.0';
  * todo/PLAN_kimi_and_vibe_on_linux.md). `RUNTIME_SINCE` answers "does this server know the runtime"; this answers "does it
  * run it on THIS host", and they are different questions: a 0.57.0 server on WSL knows `vibe` and still refuses the row at
  * launch with the D18 sentence (DL14). The release that carries E2 and E3 is the next `src_mcp` minor after the newest
- * released one (0.57.0 when this was written, `.release-please-manifest.json`), so 0.58.0. <b>Whoever cuts the release keeps
+ * released one (0.58.0 when this was written, `.release-please-manifest.json`), so 0.59.0. <b>Whoever cuts the release keeps
  * it level with the tag</b>; `runtimeSinceIsAhead.test.ts` holds this table to the same guard as `RUNTIME_SINCE`.
  */
-export const VIBE_ON_LINUX_SINCE = '0.58.0';
+export const VIBE_ON_LINUX_SINCE = '0.59.0';
 
 /**
  * Which `coai-mcp` first runs each runtime on a Linux or WSL host. A runtime with no entry runs on every host its server
@@ -127,7 +127,7 @@ export function runtimeSkewNote(installedServerVersion: string, vendors: readonl
  * kind, and the arm is what a person is told to DO, so it must be something that works:
  * <ul>
  *   <li><b>wsl2</b>: runs the row from `ON_LINUX_SINCE`, so a server older than that is told to update;</li>
- *   <li><b>linux</b>: refused at ANY server version — 0.58.0 still refuses a native host — so never "update coai-mcp";</li>
+ *   <li><b>linux</b>: refused at ANY server version — 0.59.0 still refuses a native host — so never "update coai-mcp";</li>
  *   <li><b>wsl1</b>: refused at any version too; what helps is moving the distro to WSL2;</li>
  *   <li><b>windows</b> and <b>darwin</b>: nothing here (Windows runs it from the runtime's own release; a Mac's refusal is
  *       the server's own sentence, and updating would not change it).</li>
