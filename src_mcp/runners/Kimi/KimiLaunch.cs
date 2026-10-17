@@ -22,15 +22,11 @@ public static class KimiLaunch
     public static string ModelRefusal(string model) => KimiModels.RefusalFor(model, KimiModels.Curated);
 
     /// <summary>
-    /// D18: Kimi only where it was measured — a Windows host, starting a Windows <c>kimi</c>. Every number in the RESULTS is
-    /// Windows; a WSL bridge named as the executable is the Linux side by another door. <c>VibeLaunch</c>'s two sentences, for Kimi.
+    /// D18, lifted for WSL2 by DL1 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c> (E6): Kimi only where it was measured — a Windows host starting a Windows <c>kimi</c>, or a WSL2 host. WSL1 is not WSL2 and a native
+    /// Linux host is not measured at all, each refused with its own sentence; a WSL bridge named as the executable of a Windows host is the Linux side by another door. The very sentences Vibe's launch control
+    /// answers (<see cref="HostAdmission"/>), with Kimi's name.
     /// </summary>
-    public static string HostRefusal(HostKind host, string executable) =>
-        host != HostKind.Windows
-            ? $"Kimi is refused on a {HostKinds.Word(host)} host until it is measured there (D18 of todo/PLAN_vibe_and_kimi_runtimes.md) — every Kimi measurement coai has is Windows"
-            : HostKinds.RunsInWsl(executable)
-                ? $"'{executable}' would start Kimi on the Linux side, which is refused until it is measured there (D18 of todo/PLAN_vibe_and_kimi_runtimes.md) — point this row at a Windows kimi"
-                : string.Empty;
+    public static string HostRefusal(HostKind host, string executable, WslGeneration wsl) => HostAdmission.Refusal("Kimi", host, executable, wsl);
 
     /// <summary>The model the request names (<c>--model</c>).</summary>
     public static string ModelOf(ProcessRequest request) => KimiEnvironment.FlagOf(request, AcpWords.ModelFlag);
@@ -55,6 +51,10 @@ public static class KimiLaunch
         public static Prepared Refuse(string refusal) => new(refusal, []);
     }
 
+    /// <summary>A test's way in with a bare kind of host — the kernel's generation is this machine's when the kind is WSL (<see cref="KimiHost.Of"/>).</summary>
+    internal static Task<LaunchTurn> TakeAsync(HostKind host, ProcessRequest request, KimiPlaces places, IProcessLauncher launcher, CancellationToken ct) =>
+        TakeAsync(KimiHost.Of(host), request, places, launcher, ct);
+
     /// <summary>
     /// The whole check, in order, ending holding the home's turn and the sign-in's gate — or a refusal with nothing held.
     /// </summary>
@@ -70,7 +70,7 @@ public static class KimiLaunch
     /// <para>Never reads <c>SpecialFolder.UserProfile</c> or a location from the environment: every path arrives in
     /// <paramref name="places"/>, resolved once in the unredirected parent (decision 4). The one environment read is <see cref="KimiEnvironment.Built(ProcessRequest, KimiPlaces)"/>'s fallback to this process's <c>PATH</c> — a list to keep, never a place to find.</para>
     /// </remarks>
-    public static async Task<LaunchTurn> TakeAsync(HostKind host, ProcessRequest request, KimiPlaces places, IProcessLauncher launcher, CancellationToken ct)
+    public static async Task<LaunchTurn> TakeAsync(KimiHost host, ProcessRequest request, KimiPlaces places, IProcessLauncher launcher, CancellationToken ct)
     {
         var prepared = Prepare(host, request, places);
         if (prepared.Refusal.Length > 0)
@@ -188,10 +188,10 @@ public static class KimiLaunch
             : $"the Kimi sign-in folder '{places.Credentials}' is not on a local drive — coai reads and links the sign-in from a local drive only, and never connects out to a network or roaming location (D19)";
 
     /// <summary>Everything that can be said before any lock is taken, in order — the first refusal wins; the config bytes the home must hold otherwise.</summary>
-    private static Prepared Prepare(HostKind host, ProcessRequest request, KimiPlaces places)
+    private static Prepared Prepare(KimiHost host, ProcessRequest request, KimiPlaces places)
     {
         var first = FirstOf(
-            () => HostRefusal(host, places.Executable),
+            () => HostRefusal(host.Kind, places.Executable, host.Wsl),
             PidfdLayer.Refusal,
             () => places.ToolsRefusal,
             () => LocalHome(places),
@@ -208,7 +208,7 @@ public static class KimiLaunch
     }
 
     /// <summary>The slot is read: the credentials folder, the model block and the render, then the home made.</summary>
-    private static Prepared Rendered(HostKind host, string model, KimiPlaces places, KimiOauthSlot slot)
+    private static Prepared Rendered(KimiHost host, string model, KimiPlaces places, KimiOauthSlot slot)
     {
         if (!Directory.Exists(places.Credentials))
         {
@@ -221,7 +221,7 @@ public static class KimiLaunch
             return expected;
         }
 
-        var made = KimiHome.Made(host, places, expected.Expected);
+        var made = KimiHome.Made(host.Kind, places, expected.Expected);
 
         return made.Length > 0 ? Prepared.Refuse(made) : expected;
     }

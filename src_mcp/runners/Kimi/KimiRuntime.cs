@@ -37,25 +37,37 @@ public sealed record KimiSeams(Func<string, KimiPlaces> PlacesFor, Func<(string 
 /// <para><b>Classified from the report, never from text</b> (<see cref="KimiReport"/>): a spent balance is exit 75 with the report's
 /// <c>failure: balance_spent</c> and nothing else; every other exit is an ordinary failure whatever words its trace holds.</para>
 /// </remarks>
-public sealed class KimiRuntime(string id, HostKind host, KimiSeams seams, Serilog.ILogger log) : IReviewerRuntime
+public sealed class KimiRuntime(string id, KimiHost host, KimiSeams seams, Serilog.ILogger log) : IReviewerRuntime
 {
     private const string DeadlineFlag = "--deadline-seconds";
 
     /// <summary>The adapter with the process's own logger (the host configures it before anything is built).</summary>
-    public KimiRuntime(string id, HostKind host, KimiSeams seams)
+    public KimiRuntime(string id, KimiHost host, KimiSeams seams)
         : this(id, host, seams, Serilog.Log.ForContext<KimiRuntime>())
     {
     }
 
-    /// <summary>The adapter for this machine's host.</summary>
+    /// <summary>A test's way in with a bare kind of host (<see cref="KimiHost.Of"/>: a WSL kind is judged by THIS machine's kernel unless the test names one).</summary>
+    internal KimiRuntime(string id, HostKind host, KimiSeams seams)
+        : this(id, KimiHost.Of(host), seams)
+    {
+    }
+
+    /// <summary>A test's way in with a bare kind of host, and a logger it can read.</summary>
+    internal KimiRuntime(string id, HostKind host, KimiSeams seams, Serilog.ILogger log)
+        : this(id, KimiHost.Of(host), seams, log)
+    {
+    }
+
+    /// <summary>The adapter for this machine's host — or the host a scenario's flow gave it (<see cref="KimiHost.Using"/>).</summary>
     public KimiRuntime(string id = "kimi")
-        : this(id, HostKinds.Current)
+        : this(id, KimiHost.Current)
     {
     }
 
     /// <summary>The adapter for a given host, reading the real machine.</summary>
-    public KimiRuntime(string id, HostKind host)
-        : this(id, host, KimiSeams.Real(host))
+    public KimiRuntime(string id, KimiHost host)
+        : this(id, host, KimiSeams.Real(host.Kind))
     {
     }
 

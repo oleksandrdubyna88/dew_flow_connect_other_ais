@@ -61,7 +61,7 @@ public sealed class KimiLaunchControlTests : IDisposable
 
     public static TheoryData<string> Refusals => new()
     {
-        "a Linux host", "the tools missing", "a model outside the plan", "an inherited request", "a config with no slot",
+        "a native Linux host", "a WSL1 host", "the tools missing", "a model outside the plan", "an inherited request", "a config with no slot",
         "a credentials folder that is not there", "a credentials folder that is a link", "a block on moonshot-ai",
         "a UNC sign-in home",
     };
@@ -73,14 +73,18 @@ public sealed class KimiLaunchControlTests : IDisposable
         using var standIn = WindowsStandIn.Begin();
         using var rooted = Rooted();
         var places = _person.Places();
-        var host = HostKind.Windows;
+        var host = KimiHost.Of(HostKind.Windows);
         var request = Request(places);
         var expected = "";
         switch (row)
         {
-            case "a Linux host":
-                host = HostKind.Linux;
-                expected = "Kimi is refused on a linux host";
+            case "a native Linux host":
+                host = KimiHost.Of(HostKind.Linux);
+                expected = "Kimi runs on WSL2 only for now — it is measured on WSL2 and not yet on a native Linux host";
+                break;
+            case "a WSL1 host":
+                host = new KimiHost(HostKind.Wsl, WslGeneration.Wsl1);
+                expected = "this is WSL1";
                 break;
             case "the tools missing":
                 places = places with { ToolsRefusal = KimiTools.Refusal(true, places.PersonsBin, string.Empty, ".EXE", _ => false) };

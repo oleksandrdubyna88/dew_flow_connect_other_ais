@@ -1,6 +1,7 @@
 using CoaiMcp.Runners.Kimi;
 using CoaiMcp.Runners.Platform;
 using CoaiMcp.Runners.Processes;
+using CoaiMcp.Runners.Reviewers;
 using FluentAssertions;
 using Xunit;
 
@@ -179,19 +180,59 @@ public sealed class KimiLaunchChecksTests
         KimiEnvironment.FlagOf(Raw("--model"), "--model").Should().BeEmpty("a flag with no value after it has none");
     }
 
-    // ---------- S2.24 ----------
+    // ---------- S2.24, lifted for WSL2 by DL1 of todo/PLAN_kimi_and_vibe_on_linux.md (E6) ----------
 
     [Theory]
-    [InlineData(HostKind.Linux, "linux")]
-    [InlineData(HostKind.Wsl, "wsl")]
-    [InlineData(HostKind.MacOs, "macos")]
-    [InlineData(HostKind.Other, "other")]
-    public void HostRefusal_IsVibesShape_ForKimi_OnAnyHostButWindows(HostKind host, string word)
+    [InlineData(HostKind.MacOs)]
+    [InlineData(HostKind.Other)]
+    public void AHostNothingWasMeasuredOn_IsRefused_NamingThePlanAndTheTwoMeasuredHosts(HostKind host)
     {
-        KimiLaunch.HostRefusal(host, "kimi").Should()
-            .Contain("Kimi is refused on a " + word + " host")
+        KimiLaunch.HostRefusal(host, "kimi", WslGeneration.None).Should()
+            .Contain("Kimi is refused on a " + HostKinds.Word(host) + " host")
             .And.Contain("D18")
-            .And.Contain("every Kimi measurement coai has is Windows");
+            .And.Contain("Windows and WSL2 only");
+    }
+
+    /// <summary>DL1: a native Linux host stays refused, with the sentence that says Kimi is measured on WSL2 only.</summary>
+    [Fact]
+    public void ANativeLinuxHost_IsRefused_WithTheWsl2OnlySentence()
+    {
+        KimiLaunch.HostRefusal(HostKind.Linux, "kimi", WslGeneration.None).Should()
+            .Contain("Kimi runs on WSL2 only for now — it is measured on WSL2 and not yet on a native Linux host", "a native Linux host should still be refused with the WSL2-only sentence, but Kimi started")
+            .And.Contain("DL1");
+    }
+
+    [Fact]
+    public void AWsl2Host_IsAdmitted()
+    {
+        KimiLaunch.HostRefusal(HostKind.Wsl, "kimi", WslGeneration.Wsl2).Should().BeEmpty("a Kimi launch on a wsl2 host should start, but was refused");
+    }
+
+    /// <summary>S-K20: a WSL1 kernel reads as <see cref="HostKind.Wsl"/> and is refused with the WSL1 variant of the sentence — and its cure.</summary>
+    [Theory]
+    [InlineData(WslGeneration.Wsl1)]
+    [InlineData(WslGeneration.None)]
+    public void AWsl1Host_IsRefused_WithTheWsl1Sentence(WslGeneration generation)
+    {
+        KimiLaunch.HostRefusal(HostKind.Wsl, "kimi", generation).Should()
+            .Contain("Kimi runs on WSL2 only").And.Contain("this is WSL1")
+            .And.Contain("Run this from Windows (not inside WSL):").And.Contain("`wsl --set-version <distro> 2`", "a WSL1 banner was admitted as WSL2 for a Kimi row");
+    }
+
+    /// <summary>
+    /// S-K20: every banner of <c>shared/wsl-banner-vectors.json</c> — the ONE rule for which WSL a kernel is, which Vibe's admission and the extension's tests read too — through the generation predicate;
+    /// only a WSL2 banner starts a Kimi row. A WSL2 kernel with no marker reads as none (the vector says so).
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(WslBannerVectors.Ids), MemberType = typeof(WslBannerVectors))]
+    public void OnlyAWsl2Banner_StartsKimi(string id)
+    {
+        var vector = WslBannerVectors.Named(id);
+        var generation = WslGenerations.Of(vector.Banner);
+        var kind = HostKinds.Of(windows: false, linux: true, macOs: false, wsl: VendorDiagnosis.NamesWsl(vector.Banner));
+
+        generation.Should().Be(vector.Generation, $"vector '{id}': the server's rule and the shared vectors differ");
+        (KimiLaunch.HostRefusal(kind, "kimi", generation).Length == 0).Should().Be(vector.Generation == WslGeneration.Wsl2, $"vector '{id}': only a WSL2 banner starts a Kimi row: a WSL1 banner was admitted as WSL2 for a Kimi row, or a WSL2 banner was refused");
     }
 
     [Theory]
@@ -202,7 +243,7 @@ public sealed class KimiLaunchChecksTests
     public void OnWindows_AnExecutableThatStartsTheLinuxSide_IsRefused(string executable)
     {
         HostKinds.RunsInWsl(executable).Should().BeTrue();
-        KimiLaunch.HostRefusal(HostKind.Windows, executable).Should()
+        KimiLaunch.HostRefusal(HostKind.Windows, executable, WslGeneration.None).Should()
             .Contain($"'{executable}' would start Kimi on the Linux side")
             .And.Contain("D18")
             .And.Contain("point this row at a Windows kimi");
@@ -214,6 +255,6 @@ public sealed class KimiLaunchChecksTests
     public void OnWindows_AWindowsKimi_IsNotRefusedByTheHost(string executable)
     {
         HostKinds.RunsInWsl(executable).Should().BeFalse();
-        KimiLaunch.HostRefusal(HostKind.Windows, executable).Should().BeEmpty();
+        KimiLaunch.HostRefusal(HostKind.Windows, executable, WslGeneration.None).Should().BeEmpty();
     }
 }
