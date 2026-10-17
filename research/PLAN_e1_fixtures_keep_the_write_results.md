@@ -1,11 +1,20 @@
 # PLAN — the E1 caller-transcript fixtures keep the result of every write they keep
 
-> Status: **plan, with its code on branch `fix/e1-fixture-results` under review, 2026-10-17.** Scope: the cutter
-> `scripts/lib/transcript-sanitise.mjs`, its node tests, the committed fixtures under
+> Status: **IMPLEMENTED, 2026-10-17** (branch `fix/e1-fixture-results`; plan gate `good_enough`, code gate `proceed`). Scope:
+> the cutter `scripts/lib/transcript-sanitise.mjs`, its node tests, the committed fixtures under
 > `src_mcp/tests/fixtures/caller-transcripts/`, and their guard `ACallerTranscriptFixtureCarriesNoTextTests`. No product code.
 >
-> Parent: [PLAN_a_round_records_who_wrote_the_code_and_how_much_E1.md](PLAN_a_round_records_who_wrote_the_code_and_how_much_E1.md)
-> (epic E1). Asked by [PLAN_a_round_records_who_wrote_the_code_and_how_much_E3.md](PLAN_a_round_records_who_wrote_the_code_and_how_much_E3.md)
+> **Deviations.** (1) E3 §8 allows a write left unanswered when a case's `serves` declares it; no case does, so that
+> exemption was not built — the guard refuses every unanswered write. (2) E3 §8 says "every other byte of the three cases is
+> unchanged"; that is not literally true: instants are ranks, so the added lines move the later instants of c12/c17/c19, and
+> `rounds.json` of c17 (+1 s) and c19 (+2 s) moved with them (still `2000-01-01`). (3) From the code round: the cutter no
+> longer mutates the agent records (`cutWithAnswers` returns new ones); `TheCuttersWriteToolsAreTheGuardsTests` holds the
+> cutter's `WRITE_TOOLS` equal to the guard's list; the guard reports a write call with NO id instead of skipping it.
+> **Open tail:** the E3 plan's §8 (on the E3 branch, not on main) still reads "in progress" for this branch, and E3.S4
+> tests 7 and 13 and test 43's totals are to be run against these fixtures once merged.
+>
+> Parent: [PLAN_a_round_records_who_wrote_the_code_and_how_much_E1.md](../todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E1.md)
+> (epic E1). Asked by [PLAN_a_round_records_who_wrote_the_code_and_how_much_E3.md](../todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E3.md)
 > §8, items 1 and 2, which says this lands as E1's own pull request, merged before E3.S4 is coded.
 
 ## 1. The symptom
@@ -90,9 +99,9 @@ The fixtures are published data that E3's transcript reader is tested against. T
 
 ## 6. Definition of Done
 
-- [ ] Every kept write call in every fixture file has its `tool_result` in the same file.
-- [ ] `manifest.json` names each case's checkouts; c19 names `D:/fixture/repo-a/p1000`; `scratch` is in none.
-- [ ] `model-ref` admits exactly the seven long-context ids; the hash pin matches; the probes are still refused.
-- [ ] The node tests and the C# guard class pass; the break-its were seen red.
-- [ ] The privacy scan finds nothing real.
-- [ ] The E1 plan and `research/module_tests.md` record the change; this plan is promoted when the PR ships.
+- [x] Every kept write call in every fixture file has its `tool_result` in the same file.
+- [x] `manifest.json` names each case's checkouts; c19 names `D:/fixture/repo-a/p1000`; `scratch` is in none.
+- [x] `model-ref` admits exactly the seven long-context ids; the hash pin matches; the probes are still refused.
+- [x] The node tests and the C# guard class pass; the break-its were seen red.
+- [x] The privacy scan finds nothing real.
+- [x] The E1 plan and `research/module_tests.md` record the change; this plan is promoted in the same PR.
