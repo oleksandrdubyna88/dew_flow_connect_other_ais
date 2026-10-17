@@ -1,3 +1,4 @@
+using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Kimi;
 using FluentAssertions;
 using Xunit;
@@ -66,6 +67,43 @@ public sealed class LinuxOwnershipTests
         var reason = Listing(proc).Should().BeOfType<ProcessListing.Unreadable>("a process whose uid could not be read was skipped, so a refresher could be read as absent").Subject.Reason;
 
         reason.Should().Contain("/proc/4245/status");
+    }
+
+    private sealed class Counting(IProcReads inner) : IProcReads
+    {
+        public List<int> StatusReads { get; } = [];
+
+        public IEnumerable<int> Pids() => inner.Pids();
+
+        public string StatText(int pid) => inner.StatText(pid);
+
+        public IReadOnlyCollection<int> Threads(int pid) => inner.Threads(pid);
+
+        public string ExeTarget(int pid) => inner.ExeTarget(pid);
+
+        public string Cmdline(int pid) => inner.Cmdline(pid);
+
+        public string StatusText(int pid)
+        {
+            StatusReads.Add(pid);
+
+            return inner.StatusText(pid);
+        }
+
+        public uint OwnUid() => inner.OwnUid();
+    }
+
+    [Fact]
+    public void AnUnreadableProcess_EndsTheListingAtOnce_TheRestAreNeverJudged()
+    {
+        var proc = Machine().Running(200, 1, "/usr/bin/a").Running(300, 1, "/usr/bin/b").Running(400, 1, "/usr/bin/c");
+        proc.Statuses[200] = () => throw new IOException("EIO");
+        var counting = new Counting(proc);
+
+        var listing = new LinuxProcessListing(counting, Shim).Snapshot();
+
+        listing.Should().BeOfType<ProcessListing.Unreadable>().Which.Reason.Should().Contain("/proc/200/status");
+        counting.StatusReads.Should().Equal(1, Shim, 200).And.NotContain(300).And.NotContain(400);
     }
 
     [Fact]

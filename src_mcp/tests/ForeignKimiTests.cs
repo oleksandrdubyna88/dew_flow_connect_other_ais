@@ -172,6 +172,35 @@ public sealed class ForeignKimiTests
         me.Name.Should().NotBeEmpty();
     }
 
+    // ---------- the waiting line (the coai code gate, E5): the shim says on stderr that it is waiting, and for whom ----------
+
+    private static ForeignKimiWatch Telling(IProcessList list, List<string> notes) => new(list, Shim, Poll, _ => { }, notes.Add);
+
+    [Fact]
+    public void WhenAForeignKimiIsFirstFound_OneLineSaysWhoIsWaitedForAndForHowLong_NeverMore()
+    {
+        var notes = new List<string>();
+        var running = new[] { P(1, 0, "explorer.exe"), P(4242, 2, "kimi.exe") };
+        var gone = new[] { P(1, 0, "explorer.exe") };
+
+        var answer = Telling(new ScriptedList(running, running, running, gone), notes).Wait(TimeSpan.FromSeconds(30));
+
+        answer.Should().BeOfType<ForeignKimiAnswer.Clear>();
+        notes.Should().ContainSingle("a wait of several polls said nothing, or said it every second").Which.Should().Contain("4242").And.Contain("30 s").And.Contain("waiting");
+    }
+
+    [Fact]
+    public void AWaitThatNeverHappens_SaysNothing_Clear_Unreadable_OrNoTimeToWait()
+    {
+        var notes = new List<string>();
+
+        Telling(new ScriptedList([P(1, 0, "explorer.exe")]), notes).Wait(TimeSpan.FromSeconds(30));
+        Telling(new ScriptedList(new ProcessListing.Unreadable("denied")), notes).Wait(TimeSpan.FromSeconds(30));
+        Telling(new ScriptedList([P(4242, 2, "kimi.exe")]), notes).Wait(TimeSpan.Zero);
+
+        notes.Should().BeEmpty("a line about waiting is said only when the shim is about to wait");
+    }
+
     // ---------- Linux: the listing over /proc (DL10; S-K7, S-K13, S-K13b) ----------
 
     private const string KimiExe = "/home/me/.kimi-code/bin/kimi";

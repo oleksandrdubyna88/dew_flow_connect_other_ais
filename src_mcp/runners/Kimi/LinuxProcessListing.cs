@@ -43,13 +43,24 @@ public sealed class LinuxProcessListing(IProcReads reads, int ownPid) : IProcess
         }
     }
 
+    /// <summary>Judges the processes in order and stops at the FIRST one that cannot be judged: the listing is unreadable whatever the rest say, and judging them costs a read each.</summary>
     private ProcessListing Walked(List<int> pids, uint own)
     {
-        var judged = pids.Select(pid => Judged(pid, own)).ToList();
+        var found = new List<ProcessEntry>();
+        foreach (var verdict in pids.Select(pid => Judged(pid, own)))
+        {
+            if (verdict is Verdict.Failed failed)
+            {
+                return new ProcessListing.Unreadable(failed.Reason);
+            }
 
-        return judged.OfType<Verdict.Failed>().FirstOrDefault() is { } failed
-            ? new ProcessListing.Unreadable(failed.Reason)
-            : Complete([.. judged.OfType<Verdict.Found>().Select(found => found.Entry)]);
+            if (verdict is Verdict.Found entry)
+            {
+                found.Add(entry.Entry);
+            }
+        }
+
+        return Complete(found);
     }
 
     private ProcessListing Complete(IReadOnlyList<ProcessEntry> found) =>
