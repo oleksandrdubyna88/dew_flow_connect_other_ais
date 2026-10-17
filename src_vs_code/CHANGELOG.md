@@ -1,5 +1,23 @@
 # Changelog
 
+## Extension 0.79.0 — 2026-10-17
+
+**Added: the Vibe card says, for each host, what the server does.** The card now tells you what coai-mcp does with Vibe
+on the host it runs on. On a WSL2 host it runs Vibe. On native Linux and on WSL1 it says that Vibe is refused there.
+Before, the card did not say this per host.
+
+## Server 0.59.0 — 2026-10-17
+
+**Added: Mistral Vibe works on a WSL2 host.** On a WSL2 host, coai-mcp now runs Vibe as a reviewer, as a consultant and
+as a question row. Before, this was not possible on WSL2.
+
+**Added: the Vibe sign-in on WSL2 is your own `~/.vibe/.env` file.** coai links this file into the private Vibe home of
+the run. It never copies the file, so your key stays in one place. coai checks the sign-in again at every turn, so a
+file that was removed or changed is seen at the next turn.
+
+**Added: native Linux and WSL1 are refused with a sentence.** On these hosts coai does not run Vibe. The refusal says
+why, in one sentence, and does not start Vibe.
+
 ## Team server 0.13.0 — 2026-10-16
 
 **Added: the server reads the codex quota gauge after each codex job, inside the slot's lease.** It asks
