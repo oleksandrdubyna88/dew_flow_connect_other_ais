@@ -44,7 +44,7 @@ public static class LivenessCheck
     /// line, one exact comparison — no clock and no slack. <paramref name="startTicks"/> 0 (none recorded) falls back to <see cref="Of(ProcessIdentity)"/>; off Linux there are no ticks to compare.
     /// </summary>
     public static Liveness Of(ProcessIdentity identity, ulong startTicks) =>
-        OperatingSystem.IsLinux() && startTicks != 0 ? Linux(identity, startTicks, ProcReads.Real) : Of(identity);
+        OperatingSystem.IsLinux() && startTicks != 0 ? Linux(identity, startTicks, ProcReads.Real, ProcessTracking.StartedAt) : Of(identity);
 
     /// <summary>The Linux rule over a <c>/proc</c> and a start-time read — the seam, so every answer is a unit test on any platform.</summary>
     internal static Liveness Linux(ProcessIdentity identity, IProcReads reads, Func<int, DateTime?> startedAt) =>
@@ -56,15 +56,23 @@ public static class LivenessCheck
             _ => Started(identity, reads, startedAt),
         };
 
-    /// <summary>The Linux rule on EXACT start ticks: <c>/proc/&lt;pid&gt;/stat</c> is read ONCE, and its <c>starttime</c> must equal the recorded one.</summary>
-    internal static Liveness Linux(ProcessIdentity identity, ulong startTicks, IProcReads reads) =>
+    /// <summary>
+    /// The Linux rule on EXACT start ticks: <c>/proc/&lt;pid&gt;/stat</c> is read ONCE, and its <c>starttime</c> must equal the recorded one. The recorded ticks are read when a member is PINNED, which can be after
+    /// it was listed, so the identity's own start time — the listing's — must agree too (within <see cref="OrphanSweep.Same"/>'s slack): a pid reused between the listing and the pin has the ticks just read and a
+    /// different start time, and is not signalled.
+    /// </summary>
+    internal static Liveness Linux(ProcessIdentity identity, ulong startTicks, IProcReads reads, Func<int, DateTime?> startedAt) =>
         ProcStat.ReadFor(identity.Pid, reads) switch
         {
             ProcStatRead.Gone => new Liveness.Gone("no such process"),
             ProcStatRead.Unreadable unreadable => new Liveness.Unknown(unreadable.Reason),
-            ProcStatRead.Read read => Exited(read, reads) ? new Liveness.Gone("exited (zombie)") : SameTicks(read.Line.StartTicks, startTicks),
+            ProcStatRead.Read read => Exited(read, reads) ? new Liveness.Gone("exited (zombie)") : Confirmed(identity, SameTicks(read.Line.StartTicks, startTicks), reads, startedAt),
             _ => new Liveness.Unknown("an unknown stat read"),
         };
+
+    /// <summary>The ticks agreed: the listing's start time must agree as well. Anything but a match stands as it is.</summary>
+    private static Liveness Confirmed(ProcessIdentity identity, Liveness byTicks, IProcReads reads, Func<int, DateTime?> startedAt) =>
+        byTicks is Liveness.Alive ? Started(identity, reads, startedAt) : byTicks;
 
     private static Liveness SameTicks(ulong found, ulong recorded) => found switch
     {

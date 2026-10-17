@@ -276,7 +276,7 @@ public sealed class PidfdLayerTests
     // ---------- by EXACT start ticks: one read of the stat line, no slack ----------
 
     private static IReadOnlyList<Signalled> KillByTicks(FakeCalls calls, FakeProcReads proc, ulong recorded) =>
-        TreeSignals.Kill([new PinnedMember(Member(10), recorded)], calls, pinned => LivenessCheck.Linux(pinned.Identity, pinned.StartTicks, proc));
+        TreeSignals.Kill([new PinnedMember(Member(10), recorded)], calls, pinned => LivenessCheck.Linux(pinned.Identity, pinned.StartTicks, proc, _ => Started));
 
     [Fact]
     public void AMemberWhoseStartTicksMatch_IsSignalled_AndOneTickApart_IsAStrangerLeftAlone()

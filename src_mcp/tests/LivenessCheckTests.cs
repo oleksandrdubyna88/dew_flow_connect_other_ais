@@ -125,7 +125,23 @@ public sealed class LivenessCheckTests
 
     // ---------- exact start ticks: one read of the stat line, one exact comparison ----------
 
-    private static Liveness Exact(FakeProcReads proc, ulong ticks) => LivenessCheck.Linux(Member(), ticks, proc);
+    private static Liveness Exact(FakeProcReads proc, ulong ticks, Func<int, DateTime?>? startedAt = null) => LivenessCheck.Linux(Member(), ticks, proc, startedAt ?? (_ => Started));
+
+    [Fact]
+    public void ExactTicks_ThatMatch_ButTheListingsStartTimeDoesNot_IsAReusedPid_NeverPinned()
+    {
+        var proc = new FakeProcReads().With(500, "S");
+
+        Exact(proc, 4000, _ => Started + TimeSpan.FromHours(1)).Should().BeOfType<Liveness.Gone>("the pid was reused between the listing and the pin: the new process has the ticks just read, and not the listed start time")
+            .Which.Why.Should().Contain("reused");
+        Exact(proc, 4000, _ => Started + TimeSpan.FromMilliseconds(400)).Should().BeOfType<Liveness.Alive>("within the identity slack it is the same process");
+    }
+
+    [Fact]
+    public void ExactTicks_WhenTheStartTimeCannotBeRead_IsUnknown_NotASilentMatch()
+    {
+        Exact(new FakeProcReads().With(500, "S"), 4000, _ => null).Should().BeOfType<Liveness.Unknown>().Which.Reason.Should().Contain("start time");
+    }
 
     [Fact]
     public void ExactTicks_TheSameStartTicks_IsAlive_AnyOtherIsAReusedPid()
