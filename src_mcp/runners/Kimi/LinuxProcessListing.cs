@@ -15,7 +15,10 @@ namespace CoaiMcp.Runners.Kimi;
 /// <c>(sd-pam)</c> on the owner's WSL2), so the identity is read in this order: (1) the <c>exe</c> basename; (2) when <c>exe</c> is denied, the basename of <c>argv[0]</c> from <c>cmdline</c> — <c>comm</c> is read beside it, and
 /// <c>kimi</c> in either is Kimi; (3) only when BOTH are unreadable is the listing <see cref="ProcessListing.Unreadable"/>, naming the pid and what could not be read. A process that left between the
 /// reads (<c>ESRCH</c>/<c>ENOENT</c>) is skipped. <i>Residual, stated:</i> a non-dumpable <c>kimi</c> started under another <c>argv[0]</c> is not recognised — the same boundary as a <c>kimi</c> started under another file name;
-/// <c>argv[0]</c> is the process's own claim, and the threat here is the person's own <c>kimi</c>, not a process hiding from coai.</para>
+/// <c>argv[0]</c> is the process's own claim, and the threat here is the person's own <c>kimi</c>, not a process hiding from coai. <i>And a second boundary the uid filter draws:</i> the kernel makes
+/// <c>/proc/&lt;pid&gt;</c> of a NON-DUMPABLE process owned by <c>root</c>, not by its account, so such a process fails the owner test below and is skipped — it is never reached by the <c>exe</c> / <c>cmdline</c> fall-back
+/// at all (the 2026-10-17 measurement on the owner's WSL2 saw <c>(sd-pam)</c> through <c>cmdline</c> only because the runner's account owned it). A non-dumpable <c>kimi</c> of the person's own is therefore a third unrecognised shape,
+/// with the same answer: the threat model is the person's own ordinary <c>kimi</c>.</para>
 /// <para> An exited entry (<c>Z</c>/<c>X</c>) is skipped before its <c>exe</c> is read: a zombie's cannot be, and an unrelated zombie must not
 /// make every Kimi launch Busy (S-K13b). A process that left between the listing and the read is skipped (<see cref="ProcStatRead.Gone"/>), never evidence of anything.</para>
 /// <para><b>An unreadable or incomplete <c>/proc</c> is never "nobody is running":</b> any failure above makes the whole listing <see cref="ProcessListing.Unreadable"/>, and a listing that does not hold this process's own pid is not a
