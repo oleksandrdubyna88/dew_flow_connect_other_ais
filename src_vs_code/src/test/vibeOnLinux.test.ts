@@ -89,7 +89,7 @@ test('the host kind of THIS host reads the banner only on Linux, and an unreadab
   assert.equal(await hostKind('linux', async () => WSL2_BANNER), 'wsl2');
   assert.equal(await hostKind('linux', async () => WSL1_BANNER), 'wsl1');
   assert.equal(await hostKind('linux', async () => NATIVE_BANNER), 'linux');
-  assert.equal(await hostKind('linux', async () => { throw new Error('no /proc/version'); }), 'linux');
+  assert.equal(await hostKind('linux', async () => { throw new Error('no /proc/version'); }, () => undefined), 'linux');
   assert.equal(await hostKind('win32', async () => WSL2_BANNER), 'windows');
   assert.equal(await hostKind('darwin', async () => WSL2_BANNER), 'darwin');
   assert.equal(await hostKind('freebsd', async () => WSL2_BANNER), 'wsl2', 'an unknown platform narrows to linux, as hostPlatform says');

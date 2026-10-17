@@ -143,16 +143,19 @@ export function previewOf(text: string, maxLines = 40): string {
 
 /** Whether the process is running under WSL. False on anything that cannot answer. */
 export async function runningUnderWsl(): Promise<boolean> {
-  return isWsl(await readProcVersion());
+  try {
+    return isWsl(await readProcVersion());
+  } catch {
+    return false;
+  }
 }
 
-/** This kernel's banner, or the empty string on anything that cannot answer (a Windows host has no /proc/version). */
+/**
+ * This kernel's banner. REJECTS when it cannot be read (a Windows host has no /proc/version): the caller decides what an
+ * unreadable banner means — `runningUnderWsl` says "not WSL", `hostKind` says so out loud and treats the host as native Linux.
+ */
 export async function readProcVersion(): Promise<string> {
-  try {
-    return await readFile('/proc/version', 'utf8');
-  } catch {
-    return '';
-  }
+  return readFile('/proc/version', 'utf8');
 }
 
 /**
