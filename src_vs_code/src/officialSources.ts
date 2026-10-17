@@ -35,6 +35,13 @@ export const OFFICIAL_SOURCES = {
    * own, 10.5.0). Their installers are the projects' own GitHub release assets — nobody's repackaging.
    */
   wingetIds: ['Git.Git', 'BurntSushi.ripgrep.MSVC', 'sharkdp.fd'],
+  /**
+   * What `apt-get install` and `dnf install` may be handed — the Linux Kimi line provisions the same two tools the Windows
+   * line does (DL12 of todo/PLAN_kimi_and_vibe_on_linux.md), from the distribution's OWN packages, named as the projects'
+   * READMEs name them: `ripgrep`, and `fd-find` (Debian and Ubuntu install its program as `fdfind`, Fedora as `fd`). Nothing
+   * else: a package of the caller's own, a local `.deb` and a pinned release are each outside the list.
+   */
+  distroPackages: ['ripgrep', 'fd-find'],
 } as const;
 
 const URL_IN_A_COMMAND = /https?:\/\/[^\s"'|;)]+/gu;
@@ -49,12 +56,15 @@ const STEP_BREAK = /;|&&|\|\||\||\{|\}|\r?\n/u;
  * which npm reads as ALIASES of other code. uv: `name` or `name==1.2.3`, and no flag at all — `--from`, `--with`,
  * `--index-url` each bring in code from somewhere else.</p>
  */
+/** A distribution package argument: a plain name — never `name=version`, `name/release`, a path or a URL. */
+const DISTRO_PACKAGE = /^([a-z0-9][a-z0-9.+-]*)$/u;
+
 const VERBS: readonly {
   readonly words: readonly [string, string];
   readonly flags: readonly string[];
   readonly spec: RegExp;
   /** Which list of {@link OFFICIAL_SOURCES} the verb's arguments are drawn from. */
-  readonly admitted: 'packages' | 'wingetIds';
+  readonly admitted: 'packages' | 'wingetIds' | 'distroPackages';
   /** The most arguments one step may carry — one for winget, whose second id is a second thing to install. */
   readonly most: number;
   /** Flag-and-value pairs admitted EXACTLY as written: `--source winget` pins winget's community repository, any other value is a different source. */
@@ -71,6 +81,11 @@ const VERBS: readonly {
   // more than one. --id itself is a flag here; its value is the one argument.
   { words: ['winget', 'install'], flags: ['--id', '-e', '--exact', '--accept-source-agreements', '--accept-package-agreements', '--silent', '-h'], spec: /^([A-Za-z0-9][A-Za-z0-9.+-]*)$/u, admitted: 'wingetIds', most: 1,
     pairs: [['--source', 'winget']], required: [['-e', '--exact']] },
+  // The distribution's own package manager, for the two tools Kimi needs (DL12): `-y` is the only flag, and the arguments are the
+  // package names of `distroPackages` — a version pin (`ripgrep=1.0`, `ripgrep/unstable`), a local file or URL, `-o`,
+  // `--allow-unauthenticated`, `--nogpgcheck` and `--repofrompath` are each outside the list by construction, as winget's flags are.
+  { words: ['apt-get', 'install'], flags: ['-y'], spec: DISTRO_PACKAGE, admitted: 'distroPackages', most: 2, pairs: [], required: [] },
+  { words: ['dnf', 'install'], flags: ['-y'], spec: DISTRO_PACKAGE, admitted: 'distroPackages', most: 2, pairs: [], required: [] },
 ];
 
 /** A word that means "install something" — a step carrying one that no verb above reads is refused, not skipped. */
@@ -127,11 +142,45 @@ function quotesFrom(word: string, from: number, step: 1 | -1, limit: number): nu
 
 type Verb = (typeof VERBS)[number];
 
-/** How many official packages a step installs: 0 for a step that installs nothing, -1 for one this check refuses. */
+/**
+ * How many official packages a step installs: 0 for a step that installs nothing, -1 for one this check refuses.
+ *
+ * <p>A step that runs through `sudo` is read by {@link privilegedStep} instead, and that is a rule of its own: until it
+ * existed `sudo` was invisible here, because a step is refused only when it carries an install word — so `sudo rm -rf …` or
+ * `sudo chmod …` beside one admitted URL was ADMITTED (S-K10 of todo/PLAN_kimi_and_vibe_on_linux.md, red against that parser).</p>
+ */
 function stepPackages(words: readonly string[]): number {
+  const sudo = words.findIndex((word) => SUDO.test(word));
+
+  return sudo < 0 ? unprivilegedStep(words) : privilegedStep(words, sudo);
+}
+
+/** A step with no `sudo` in it: an install verb this check reads, or nothing it needs to read. */
+function unprivilegedStep(words: readonly string[]): number {
   const at = VERBS.map((verb) => ({ verb, index: verbAt(words, verb.words) })).find((found) => found.index >= 0);
 
   return at === undefined ? unknownInstall(words) : packagesAfter(words.slice(at.index + 2), at.verb);
+}
+
+/**
+ * `sudo` as a shell reads it — alone, by its path (`/usr/bin/sudo`), or opening a command substitution (`$(sudo`, a backtick,
+ * a parenthesis). A WORD that ends in `sudo` and is anything else (`pseudo`) is not it.
+ */
+const SUDO = /^[$(`\\]*(?:[^/\s]*\/)*sudo$/u;
+
+/** The shell words that may open a step without being a command: `then sudo …` inside an `if`, `do sudo …` inside a loop. */
+const OPENS_A_STEP: ReadonlySet<string> = new Set(['then', 'else', 'do', '!']);
+
+/**
+ * A step that runs through `sudo`: refused unless what follows it is one of the two distribution package steps — `apt-get
+ * install` or `dnf install` for the packages of {@link OFFICIAL_SOURCES} — and nothing but a step-opening shell word stands
+ * in front of it. `sudo -u root …`, `sudo rm …`, `sudo npm install …` and a second `sudo` all fail the first half.
+ */
+function privilegedStep(words: readonly string[], at: number): number {
+  const rest = words.slice(at + 1);
+  const carriesADistroVerb = VERBS.some((verb) => verb.admitted === 'distroPackages' && rest[0] === verb.words[0] && rest[1] === verb.words[1]);
+
+  return carriesADistroVerb && words.slice(0, at).every((word) => OPENS_A_STEP.has(word)) ? unprivilegedStep(rest) : -1;
 }
 
 /** A step no verb above reads: refused when it still says "install", nothing otherwise. */
