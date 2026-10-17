@@ -65,7 +65,11 @@ The fixtures are published data that E3's transcript reader is tested against. T
 
 1. Cutter rule and its node tests (red against the old cutter, then green).
 2. The allowlist entries, the hash pin, and the probes.
-3. Re-cut the eight + three cases with the same salt; add `checkouts` to the manifest.
+3. Re-cut the nine cases (c02, c03, c04, c07, c11, c12, c14, c17, c19 — c12 and c17 serve both items) with the same salt;
+   add `checkouts` to the manifest. Then a leaf-level diff of every changed fixture against `2d98f2f8` must show only
+   `requestedModel` values, the added answering lines, and the moved synthetic instants of c12/c17/c19 — no other field.
+   The salt is a secret kept outside the repository (`scripts/cut-transcript-fixtures.mjs:72`), so it is never echoed;
+   the same salt is proven by every remapped id staying the same in that diff.
 4. The two guard tests and the c19 assertion (red against the old fixtures, then green).
 5. The E1 plan's S3 entry and `research/module_tests.md` record the change.
 
@@ -73,12 +77,16 @@ The fixtures are published data that E3's transcript reader is tested against. T
 
 - `scripts/lib/transcript-sanitise.test.mjs`: `aKeptWriteCallKeepsTheLineThatAnswersItEvenWhenTheWindowEndsFirst`,
   `aWriteCallOutsideTheWindowIsNotKeptSoItsAnswerIsNotPulledIn`, `anAnswerThatIsAlreadyInsideTheWindowIsKeptOnceAndNothingElseMoves`,
-  `aClippedAgentFileKeepsTheAnswerToItsWriteToo`.
+  `aClippedAgentFileKeepsTheAnswerToItsWriteToo`. The first and the last need the rule, so they are run against the OLD
+  cutter first and must be red (expected: 1 line instead of 3; no `tool_result` in the clipped agent file), then green.
 - `ACallerTranscriptFixtureCarriesNoTextTests` (the whole class) via the MTP executable, never `dotnet test`.
 - Break-its, each seen red then green after restore: drop one answering line from c19; put `D:/fixture/scratch` in a
   checkout list; remove c19's `p1000`; turn the exact list into a pattern; remove one long-context id.
-- A privacy scan over all 62 fixture files: every string is an allowlisted value, a fixture path, a remapped id or a
-  synthetic instant; no number above the synthetic ranks.
+- The repeatable privacy check is the guard class itself: it walks EVERY field of every fixture file against the
+  allowlist's schema (nested tool results included), and its probes (`:819`) and break-its prove it refuses a planted
+  private value. On top of it, a one-off scan over all 62 fixture files: every string is an allowlisted value, a fixture
+  path, a remapped id or a synthetic instant; no number above the synthetic ranks. **Any finding of either blocks the
+  PR** until the fixture is re-cut or the value is proven synthetic.
 
 ## 6. Definition of Done
 
