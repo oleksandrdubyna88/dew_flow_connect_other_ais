@@ -216,6 +216,13 @@ written — the prediction precedes every observation, including an exploratory 
     `EPERM` "permission denied" (74), `EISDIR`, `ENOSPC`, not-valid-JSON (65). The allowlist's `version` is a closed list of
     the measured Claude Code versions (2.1.283-2.1.300), so a new release is a deliberate edit of the allowlist and of the
     C# guard's hash pin.
+  - **Added by the E3 follow-up (E3 plan §8).** A write-tool call the cut keeps keeps its answer too: the `user` line holding the
+    matching `tool_result` is pinned into the cut like a launching line, in the same file, so a window (or a clip) that ends
+    between a call and its answer no longer leaves a write a reader cannot tell from a refused one. `manifest.json` carries per
+    case `checkouts` — the fixture roots that are git checkouts when materialised (`repo-<x>`, `other`, never `scratch`), and for
+    c19 the submodule root `D:/fixture/repo-a/p1000`. The `model-ref` vocabulary admits the seven long-context ids
+    (`claude-opus-5-5[1m]` …), an exact list like the rest; only `claude-opus-5-5[1m]` occurs in the eight sources, the others mirror
+    the `alias` vocabulary's `[1m]` forms. Guard: `EveryKeptWriteCallHasItsResult`, `EveryCheckoutIsAFixtureRootOrUnderOne`.
 - **Test scenarios** (`node --test`, synthetic inputs in temp dirs):
   - `everyStringOffTheAllowlistBecomesTheSentinel` — markers in prompt, `thinking`, `signature`, `toolUseResult`,
     `Bash.command`, `description`, `gitBranch` → none survive; the line count and the key order are unchanged.
