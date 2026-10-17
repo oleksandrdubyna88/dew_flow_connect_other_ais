@@ -1260,6 +1260,22 @@ Rejected, with the reasons recorded:
 - **Cornerstone AREA A1 (confirmed by Fable, 2026-10-16).** Credential admission: the one admitted link — see *The cornerstone
   areas* above for its boundary, minimum scenarios and review focus. One story of this epic is marked when its stories document is
   written.
+- **Outcome (2026-10-17).** Built on `feat/wsl-vibe-host`, merged into PR #842; coai code gate epic 2 `proceed` (17 findings: 7
+  accepted and fixed, 10 rejected with reasons); a Fable security judgement found A1 MET after three fixes; the epic-2 risk consult
+  (aa853ecc) closed solved. Linux CI green on every job. **Deviations from the plan's letter, recorded:**
+  - **A1 spec §3.2 step 2 was wrong** (found independently by Fable and the risk consultant): the same home's second turn did not
+    re-judge the target. Now the target is judged through the one descriptor and its names scanned on EVERY turn; a target changed
+    between turns is refused before `--version`; a rotated key stays admitted.
+  - The read array is zeroed in a `finally` (the copy `buffer[..total]` had left the original uncleared); a relative or unexpanded
+    `VIBE_HOME` is ignored (only an absolute one is the person's Vibe home); a libc without `statx` is a refusal sentence, not an
+    exception; a failed open is named by what a person can do (no read permission / path too long / a symbolic link).
+  - `VibeLaunch.TakeAsync` takes a `VibeHost(Kind, Wsl, SignIn)`; the `(id, HostKind)` constructor is internal (test-only — it
+    carries no sign-in); the manifest platform is normalised where it is set (null or blank → `win32`).
+  - DL5 follows uv's own folder order (`UV_TOOL_BIN_DIR`, `XDG_BIN_HOME`, `XDG_DATA_HOME/../bin`, `~/.local/bin`), absolute
+    values only, a candidate counts only if it is an executable file.
+  - One WSL-banner rule for the server and the extension: `shared/wsl-banner-vectors.json`, read by both test suites.
+  - The WSL1 cure says to run `wsl --set-version <distro> 2` from Windows; the legacy `Classify(text, wsl: false)` names the
+    process's own host, never Windows.
 
 ### E3 — Vibe on Linux in the extension, and the 0.58.0 release · S · ordinary — built on Opus · depends on E2, and on L-V8 recorded
 
@@ -1275,6 +1291,12 @@ Rejected, with the reasons recorded:
   Release clean-up owed by E2/E3: three texts still describe Vibe as Windows-only — `research/architecture.md:39` ("the Python
   CLI, Windows only"), `research/README.md` (its Vibe RESULTS rows, "Windows only"), and the `coai.vibeHomesDirectory` help text in
   `src_vs_code/package.json` (it speaks only of the Windows 259-character path budget).
+- **Outcome (2026-10-17).** The extension half on `feat/wsl-vibe-extension`, merged into PR #842; an Opus judge (8 findings, one
+  BLOCKING) and the coai code gate epic 3 `proceed` (12 findings: 5 accepted and fixed, 7 rejected with reasons). The card knows FIVE
+  host kinds (windows | wsl2 | wsl1 | linux | darwin), read once from the kernel banner and required in `PanelState`: the "update
+  coai-mcp" note shows on WSL2 only; native Linux and WSL1 get the server's refusal at any version; a host note never greys the stage
+  boxes; the card note is proven escaped. L-V9 is recorded 3 of 3 (RESULTS_vibe §31), so the WSL row is `confined` on that record,
+  not on n = 1. The release itself (tag, post-deploy, live WSL check) is the open tail of this epic.
 
 ### E4 — Kimi measured on WSL · M · ordinary (measurement) — built on Opus, **runs on the owner's live, rotating sign-in** · depends on E1 (its Kimi probes); may run beside E2–E3; gates E5's Kimi-dependent half
 
