@@ -85,9 +85,15 @@ export function clearMarkerSaid(code: number, output: string): MarkerSaid {
 
 const warning = (title: string): MarkerSaid => ({ as: 'warning', title });
 
+/** Exit 0 means cleared OR no marker there, and only the mode's own report says which — so a report that cannot be read says neither. */
+const UNREADABLE_SUCCESS: MarkerSaid = { as: 'information', title: 'coai-mcp ended the clear mode with success, but its report could not be read, so this does not say whether a marker was cleared. The card shows what stands.' };
+
+const ZERO_BY_OUTCOME: Readonly<Record<string, MarkerSaid>> = { cleared: CLEARED, absent: ABSENT };
+
 /** One arm per exit code the mode fixes (A3 spec §7); a code with no arm is {@link unknownCode}. */
 const SAID_BY_CODE: Readonly<Record<number, (answer: ClearAnswer, code: number) => MarkerSaid>> = {
-  0: (answer) => (answer.outcome === 'absent' ? ABSENT : CLEARED),
+  0: (answer) => ZERO_BY_OUTCOME[answer.outcome] ?? UNREADABLE_SUCCESS,
+  [-1]: () => warning('coai-mcp did not answer within 20 seconds, so nothing is known about the marker: the card shows what stands.'),
   75: (answer) => warning(`The marker stays: ${memberIn(answer, 'alive')} is still running. coai never ends a process for you — close it (or wait for it to end), then press the button again.`),
   74: (answer) => warning(`The marker stays: coai-mcp could not check ${memberIn(answer, 'unknown')}, and a process that cannot be checked is not known to be gone. Check it yourself, then press the button again.`),
   65: () => warning('coai-mcp refused the request: the file is not a Kimi marker under its lock folder. Nothing was deleted.'),
@@ -96,6 +102,9 @@ const SAID_BY_CODE: Readonly<Record<number, (answer: ClearAnswer, code: number) 
 function unknownCode(_answer: ClearAnswer, code: number): MarkerSaid {
   return warning(`coai-mcp could not run the clear mode (exit ${code}) — it may be too old for it. The marker stays. The Busy sentence names the file: it is safe to delete once the processes it names are gone.`);
 }
+
+/** The providers question itself got no answer — a non-zero exit, a timeout, an unparseable body: what stands is unknown, and nothing was run. */
+export const NOT_ANSWERED: MarkerSaid = { as: 'warning', title: 'coai-mcp did not answer the providers question, so nothing was run. If a marker stands it still stands — the Busy sentence names the file.' };
 
 /** The button's place: what a host needs to run it. */
 export interface MarkerPorts {
@@ -115,7 +124,11 @@ export function standingMarker(answer: ProvidersAnswer, rowId: string): Survivor
  * stale (another window cleared it, or the processes ended and the next launch did) — said, and nothing is run.
  */
 export async function pressClearMarker(rowId: string, ports: MarkerPorts): Promise<MarkerSaid> {
-  const marker = standingMarker(await ports.providers(), rowId);
+  const answer = await ports.providers();
+  if (!answer.answered) {
+    return NOT_ANSWERED;
+  }
+  const marker = standingMarker(answer, rowId);
   if (marker === undefined) {
     return ABSENT;
   }

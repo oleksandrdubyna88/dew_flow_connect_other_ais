@@ -99,7 +99,13 @@ test('exit 0 says the marker is cleared; a 0 for no marker says there was none',
   assert.match(clearMarkerSaid(0, JSON.stringify({ outcome: 'cleared', members: [] })).title, /cleared: every process it named is gone/u);
   assert.equal(clearMarkerSaid(0, JSON.stringify({ outcome: 'cleared', members: [] })).as, 'information');
   assert.match(clearMarkerSaid(0, JSON.stringify({ outcome: 'absent', members: [] })).title, /no marker to clear/u);
-  assert.match(clearMarkerSaid(0, '').title, /cleared/u, 'the code alone decides when stdout is unreadable');
+  // N1: 0 also means "no marker there", so an unreadable report may not claim the processes are gone.
+  for (const unreadable of ['', 'not json', '{}', JSON.stringify({ outcome: 'kept', members: [] })]) {
+    const said = clearMarkerSaid(0, unreadable);
+
+    assert.doesNotMatch(said.title, /every process it named is gone|is cleared/u, `exit 0 with ${JSON.stringify(unreadable)} claimed a clear`);
+    assert.match(said.title, /report could not be read/u);
+  }
 });
 
 test('exit 75 names the living pid and that coai ends nothing; the marker stays', () => {
@@ -120,7 +126,7 @@ test('exit 74 names the process that could not be checked, with the reason, and 
 
 test('exit 65 says nothing was deleted; an unknown code (64 from an old coai-mcp) says the manual way out still works', () => {
   assert.match(clearMarkerSaid(65, '').title, /Nothing was deleted/u);
-  for (const code of [64, 1, -1]) {
+  for (const code of [64, 1]) {
     const said = clearMarkerSaid(code, '');
 
     assert.equal(said.as, 'warning');
@@ -168,4 +174,24 @@ test('the press hands the server’s path for THIS row, not another row’s', as
   await pressClearMarker('kimi-2', fake.ports);
 
   assert.deepEqual(fake.ran, [other]);
+});
+
+test('a press when the providers question was NOT answered says so — never "no marker" — and runs nothing (S4)', async () => {
+  const fake = ports(answer({ kimi: row({ survivorMarker: { path: MARKER, pids: [1] } }) }, false), { code: 0, output: '' });
+  const said = await pressClearMarker('kimi', fake.ports);
+
+  assert.deepEqual(fake.ran, []);
+  assert.equal(said.as, 'warning');
+  assert.match(said.title, /did not answer the providers question, so nothing was run/u);
+  assert.match(said.title, /If a marker stands it still stands — the Busy sentence names the file/u);
+  assert.doesNotMatch(said.title, /no marker|no longer/u, 'an unanswered question is not an absent marker');
+  assert.match((await pressClearMarker('kimi', ports(answer({}), { code: 0, output: '' }).ports)).title, /no marker to clear/u, 'while an ANSWERED question with no marker still says so');
+});
+
+test('a clear mode that never answered (code -1: a timeout or a spawn that failed) says nothing is known and the card shows what stands (N1)', () => {
+  const said = clearMarkerSaid(-1, '');
+
+  assert.equal(said.as, 'warning');
+  assert.match(said.title, /did not answer within 20 seconds/u);
+  assert.match(said.title, /the card shows what stands/u);
 });
