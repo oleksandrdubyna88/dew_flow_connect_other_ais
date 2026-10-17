@@ -1,6 +1,6 @@
 # PLAN — E3: the caller's own transcript, read text-free (`CallerTranscript` → `ObservedSession`)
 
-> Status: **E3.S1–S3 coded on `feat/round-authors-e3` (b24c81ae, 64ee32a6, f9da2839), 2026-10-17; E3.S4 (the cornerstone) and E3.S5 are open — S4 is coded after PR #851 merges.** Epic E3 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
+> Status: **E3.S1–S3 coded on `feat/round-authors-e3` (b24c81ae, 64ee32a6, f9da2839; judge fixes 32ad19be), 2026-10-17; E3.S4 (the cornerstone) and E3.S5 are open — S4 is coded after PR #851 merges.** Epic E3 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
 > Scope: `src_mcp/src/Store` — a new reader keyed by the caller's session id, the text-free read helpers lifted out of
 > `AgentLog.cs` (its behaviour kept), and one helper in `src_mcp/runners` widened. No schema step, no call site in
 > `RoundEngine.cs`/`PanelService.cs`, nothing persisted: E5 stores, E4 attributes. Five stories; ONE cornerstone,
@@ -39,9 +39,11 @@
 >    13 and 43 run on its fixtures once it merges. The mapping onto E4's records is E4.S5's `AttributionMapping.cs`
 >    (E4 Resolutions II, B1): E3 describes it and builds nothing of it. **The Opus judge's review of S1–S3** (same day;
 >    no blocker) is applied to the briefs where it changed a rule: S3 caches by the exact full directory after
->    `Path.GetFullPath` (H1, M2 — the brief's lower-cased cache key was a defect on Linux), S1 skips a UTF-8 BOM at
->    offset 0 (M1), the splitter types get their own files (L1), and `Where` is a text key with stated limits for E4
->    (L8, §3.3 and C6).
+>    `Path.GetFullPath`, case-folded only where the file system folds case (H1, M2 — the brief's always-lower-cased
+>    cache key was a defect on Linux), S1 skips a UTF-8 BOM at offset 0 (M1) and keeps a stamp with a non-`Z` suffix
+>    (L2), S2 bounds the registry read by bytes read (L3), the splitter types and the shared `JsonText.StringProperty`
+>    get their own files (L1, M3), and `Where` is a text key with stated limits for E4 (L8, §3.3 and C6). The fixes are
+>    commit 32ad19be; the status line's three SHAs are the stories, that one is the review.
 
 ## 1. The goal, and where this epic stops
 
@@ -93,11 +95,12 @@ E3.S1–S3 are coded on this branch (2026-10-17, status block item 8).
 
 No code reads the Claude session registry today: there is no `CLAUDE_PID` in any `.cs` file under `src_mcp` (checked
 again 2026-10-16). S2 adds that read. Nothing of E3 exists on main yet (no `TranscriptLines`, `CallerTranscriptLocator`
-or `ObservedSession`). *(2026-10-17: on this branch, S1–S3 exist — `src_mcp/src/Store/TranscriptLines.cs` and the
-splitter (`TranscriptLineSplitter.cs` at b24c81ae; `LineSplitter.cs` + `GatedLines.cs` after the judge's L1),
-`CallerTranscriptLocator.cs` and `src_mcp/tests/TestClaudeHome.cs` (64ee32a6), `WriteEvidence.cs` and
-`src_mcp/runners/Worktrees/GitMarker.cs` (f9da2839, with the judge's H1/M2 fixes after it). `ObservedSession` still
-does not. What their code settled for S4 is the table *What the S1–S3 code settled* inside E3.S4.)*
+or `ObservedSession`). *(2026-10-17: on this branch, S1–S3 exist — in `src_mcp/src/Store/`: `TranscriptLines.cs`,
+`LineSplitter.cs`, `GatedLines.cs`, `ScanMeter.cs`, `JsonText.cs` (S1, b24c81ae and the judge's split in 32ad19be),
+`CallerTranscriptLocator.cs` and `src_mcp/tests/TestClaudeHome.cs` (S2, 64ee32a6), `WriteEvidence.cs` and
+`src_mcp/runners/Worktrees/GitMarker.cs` (S3, f9da2839); the judge's fixes to all three are 32ad19be.
+`ObservedSession` still does not exist. What their code settled for S4 is the table *What the S1–S3 code settled*
+inside E3.S4.)*
 
 ### 2.2 In one transcript folder (this machine, 2026-10-14; field names and counts only, no content)
 
@@ -378,6 +381,10 @@ line, watch the named test fail, restore it), and report both observations.
   (parent D7), not to the whole file.
 - **Scope.**
   - New `src_mcp/src/Store/TranscriptLines.cs` (`internal static class`, ≤ 220 lines; was ≤ 120 before items 7–9).
+    *(As coded — b24c81ae, then the judge's L1/M3 split in 32ad19be: five files in `src_mcp/src/Store/` —
+    `TranscriptLines.cs` 281 lines (still over the target; recorded, not undone), `LineSplitter.cs` (`RawLine`,
+    `LineSplitter`; 224), `GatedLines.cs` (60), `ScanMeter.cs` (29) and `JsonText.cs` (24; the one `StringProperty`
+    helper S2 and S3 share, M3). The interim `TranscriptLineSplitter.cs` no longer exists.)*
   - `src_mcp/src/Store/AgentLog.cs`: remove `ReadLines` (`:183-207`), `Days` (`:103-112`) and `Mentions`
     (`:157-173`), and call the new unit. `Parse` (`:209-231`) stays in `AgentLog`, because it builds `AgentLog`'s
     `Entry`, but its JSON step goes through the new `TryParse`.
@@ -412,7 +419,10 @@ line, watch the named test fail, restore it), and report both observations.
        review: the top-level stamp comes after `message`, so a line torn in the middle usually has no key at all;
        skipping it would hide every torn MIDDLE line under a bound, and `partial: torn line` could never fire. Lines
        with no stamp — `last-prompt`, `ai-title`, `mode` — are few and small.)* When the 19 bytes are not in that form,
-       treat them as "at or after" too.
+       treat them as "at or after" too. *(2026-10-17, judge L2, coded in 32ad19be:)* a value is "in that form" only
+       when its 19 characters are followed by `.` or `Z` (`2000-01-01T00:00:01.000Z`, `…:01Z`). Any other suffix —
+       `-05:00`, `+02:00`, nothing — is NOT in form: the text compare would mis-order an offset stamp, so the line is
+       kept and the JSON decides. Test `A_stamp_without_a_Z_or_fraction_is_not_the_expected_form_so_the_line_is_kept`.
      - Remark why it checks every occurrence: the top-level `timestamp` comes AFTER `message` (237 of 240 fixture lines,
        §2.3). So the first occurrence can be a key in a nested object, and the last can be one inside `toolUseResult`.
        With "any occurrence", a nested key can cost one extra parse. It can never cause the line's own stamp to be
@@ -561,7 +571,11 @@ line, watch the named test fail, restore it), and report both observations.
        otherwise use `NoReaderFor("this vendor")`.
      - Registry: if `env("CLAUDE_PID")` is 1–10 ASCII digits, read **exactly** `<SessionsDir>/<pid>.json` (shared read,
        refuse files over 64 KiB), parse it, and take `sessionId` only. **Never list `SessionsDir`**: a `<pid>.<hash>.key`
-       sits beside every registry file. If the id is valid → source `registry`.
+       sits beside every registry file. If the id is valid → source `registry`. *(2026-10-17, judge L3, coded in
+       32ad19be:)* the cap is on the bytes actually READ — at most 64 KiB + 1 through `Stream.ReadAtLeast`, and a full
+       buffer means "over the cap" — never on `Length`, which a file appended to after the check would outgrow. The
+       read over an open stream is the internal seam `CallerTranscriptLocator.ReadRegistry(Stream)`; tests
+       `A_registry_file_over_64_KiB_is_not_read` and `A_registry_of_exactly_64_KiB_is_read_and_one_byte_more_is_refused`.
      - Otherwise, if `env("CLAUDE_CODE_SESSION_ID")` holds a valid id → source `environment`. `COAI_CALLER_SESSION`,
        `CODEX_SESSION_ID` and `GEMINI_CLI_SESSION_ID` are not sources here.
      - Otherwise, if `env("COAI_CALLER_SESSION")` is set → `StatedId`: a stated id names no transcript (parent §16 D9).
@@ -585,6 +599,11 @@ line, watch the named test fail, restore it), and report both observations.
   - `The_registry_is_chosen_by_the_pid_never_by_a_listing`: `SessionsDir` holds `<otherpid>.json` naming A and no
     `<pid>.json` → source `environment` (B). A listing implementation would find A.
   - `A_stated_session_alone_is_a_stated_id`: only `COAI_CALLER_SESSION` set → `stated id`, and no file is opened.
+    *(2026-10-17, judge L4: the second half is NOT asserted — the test plants a transcript for that id and checks the
+    reason and `CallerSessionId.None`, but the locator has no I/O seam that would show "no open". Decided by Fable:
+    S4 adds no seam for it. The observable that matters sits one level up — S4's test 30 asserts
+    `Diagnostics.FilesRead == 0` for an unobservable location — and the locator's own "no open on a stated id" is a
+    review check: `Locate` returns before any `Path.Combine` when the ladder ends at `StatedId`.)*
   - `A_codex_caller_has_no_reader`: vendor `codex` with a valid Claude variable present → `no reader for codex`. The
     vendor decides first.
   - `An_id_that_is_not_a_uuid_never_reaches_a_path`: `..\\..\\x`, `a/b` and empty → `no session id`, and no file outside
@@ -655,14 +674,19 @@ line, watch the named test fail, restore it), and report both observations.
      - `Unresolved`: `Where` is the normalised DIRECTORY of the file when the path was absolute and that directory no
        longer exists (a removed worktree), else empty.
   3. `public sealed class CheckoutRoots` holds a per-instance `Dictionary<string, WriteTarget>` keyed by the EXACT full
-     directory (*2026-10-17, judge M2*: not by `Normalised`, which lower-cases and would merge `/work/App` and
-     `/work/app` on a case-sensitive filesystem; `Normalised` is for the `Where` OUTPUT only); one instance serves one
-     read. `Resolve(string path) → WriteTarget`:
+     directory after `Path.GetFullPath`, lower-cased ONLY where the file system folds case (*2026-10-17, judge M2,
+     coded in 32ad19be*: `CacheKey(fullDirectory, caseSensitive)`, with `caseSensitive = !(Windows || macOS)`). So
+     `D:\X` and `d:/x` still share one entry on Windows (`Backslashes_and_case_give_one_key` holds), while `/work/App`
+     and `/work/app` stay two entries on Linux — the brief's old "always `Normalised`" key merged them and the first
+     answer won. `Normalised` is for the `Where` OUTPUT only; one instance serves one read. `Resolve(string path) →
+     WriteTarget`:
      - Not `Path.IsPathFullyQualified` → `Unresolved("")`. Never resolve against this process's cwd, which is not the
        agent's.
      - *(2026-10-17, judge H1)* Then `path = Path.GetFullPath(path)`, so a `..` segment is resolved BEFORE the walk:
        `<root>/repo/../other/a.cs` is a write into `other`, not into `repo`. For a fully qualified path `GetFullPath`
-       never reads the cwd, so the relative-path rule above and break-it (d) stand.
+       never reads the cwd, so the relative-path rule above and break-it (d) stand. An `ArgumentException`,
+       `NotSupportedException` or `IOException` from `GetFullPath` (an invalid or device path) → `Unresolved("")`,
+       never a throw.
      - The file's directory does not exist → `Unresolved(normalised directory)`. Do NOT walk up from a missing
        directory: a removed worktree would walk up into whatever contains it and answer wrongly.
      - Otherwise walk up from the directory. The FIRST directory where `GitMarker.HasGit` is true →
@@ -698,13 +722,15 @@ line, watch the named test fail, restore it), and report both observations.
     Windows-shaped path on WSL. The test fixes the outcome in case one appears.)
   - The fixture cases with writes (`c06`, `c12`–`c20`) are read through E3.S4's materialiser, not here. S3's trees
     stay synthetic. ~~The CACHE key in `CheckoutRoots` is the `Normalised` directory, so `D:\X` and `d:/x` share one
-    entry.~~ *(Withdrawn 2026-10-17, judge M2: that key merged two case-distinct directories on Linux. The cache is
-    keyed by the exact full directory; `Where` alone is `Normalised`.)*
-  - *(added 2026-10-17, judge H1 and M2)* `A_dot_dot_segment_is_resolved_before_the_walk`: `<root>/repo/.git/`,
-    `<root>/other/` with no `.git`; the write `<root>/repo/../other/a.cs` → `OutsideAnyCheckout`, never
-    `Checkout(repo)`. `Two_directories_that_differ_only_by_case_are_two_answers`: `<root>/App/.git` and `<root>/app/`
-    (plain); a write into each → `Checkout(App)` and `OutsideAnyCheckout`; runs only where the filesystem is
-    case-sensitive (skip when `<root>/App` and `<root>/app` are the same directory).
+    entry.~~ *(Corrected 2026-10-17, judge M2: that key merged two case-distinct directories on Linux. The cache is
+    keyed by the exact full directory, case-folded only where the file system folds case — so the sentence is true
+    on Windows and false on Linux, by design; `Where` alone is always `Normalised`.)*
+  - *(added 2026-10-17, judge H1 and M2; coded in 32ad19be)* `A_dot_dot_segment_is_resolved_before_the_walk`:
+    `<root>/repo/.git/`, `<root>/other/` with no `.git`; the write `<root>/repo/../other/a.cs` → `OutsideAnyCheckout`,
+    never `Checkout(repo)`. `The_cache_key_keeps_case_where_the_file_system_does`: `CacheKey` is unchanged when
+    `caseSensitive` is true and lower-cased when it is false. `Case_distinct_directories_are_two_answers_on_a_case_sensitive_file_system`:
+    `<root>/App/.git` and `<root>/app/` (plain); a write into each → `Checkout(App)` and `OutsideAnyCheckout`; runs
+    only where the file system is case-sensitive.
 - **Break-its.**
   - (a) Add `"Bash"` to `Names` → the shell test goes red.
   - (b) Walk up from a missing directory → the removed-worktree test goes red.
@@ -910,12 +936,12 @@ how, and where the fact is in the files. None of them changes a counting rule, s
 
 | # | Fact in the code | What S4 does with it | Where |
 |---|---|---|---|
-| C1 | **An EMPTY line is not a line.** A line of 0 bytes before its terminator (`\n` or `\r\n`) is dropped by the splitter before the gate: never yielded, never counted in `LinesSkipped`, never a torn line; only `BytesScanned` grows | A clean file with a blank line never reads `partial: torn line` (the splitter's own remark says why). Step 6's "the LAST line a file yielded" is the last NON-EMPTY one. A file whose only content is blank lines yields nothing: main → `unobserved: transcript empty` (S4-10), an agent file → S4-23 | `TranscriptLineSplitter.cs:78` (`text > 0`), `:191` (`held > 0`), remark `:14-15` |
-| C2 | **`BytesYielded` charges the REAL terminator**: the line's bytes plus 2 for `\r\n`, 1 for `\n`, 0 for an unterminated tail | Tests 31, 50 and 51 compute `MaxBytes` from the raw lines with EACH line's own terminator length — never a flat `+1` per line — and `BytesInSlice` is exactly that sum. A fixture copied by the materialiser keeps its bytes as they are, so the test reads the terminator from the file | `:79` (`length - text + 1`), `:229` (`raw.Text.Length + raw.Terminator`) |
-| C3 | **`ScanMeter`'s members are auto-properties** (`{ get; set; }`); `Stop` defaults to `static () => false`, `MaxLineBytes` to 64 MiB | `ReadMeter` creates ONE `ScanMeter` and SETS `meter.Stop` and `meter.MaxLineBytes` after construction (step 1); `Diagnostics` reads the properties at step 10. No subclass, no constructor arguments | `TranscriptLines.cs:18-34` at b24c81ae; its own file `src_mcp/src/Store/ScanMeter.cs` after the judge's L1 split (with `LineSplitter.cs` and `GatedLines.cs`) |
-| C4 | **`TryParse(ReadOnlyMemory<byte>)` keeps the memory**: the `JsonDocument` reads the enumerator's buffer for its whole life, and that buffer is valid only until the next `MoveNext` | Steps 4–5 dispose each document BEFORE asking for the next line (`using var document` inside the loop body), and nothing from the document outlives it except the values S4-18 admits as `string`s/numbers/booleans. A `JsonElement` kept past the line reads another line's bytes — the review checks that no `JsonElement` is stored in a field, a table or a candidate; write candidates (step 9) hold the PATH string, not the block | `TranscriptLines.cs:93-95`, `:144-159` |
-| C5 | **S1 is more than one file, and has one extra seam.** At b24c81ae: `TranscriptLines.cs` (304 lines) and `TranscriptLineSplitter.cs` (257 lines holding `RawLine`, `LineSplitter`, `GatedLines` — a file name that matches no type in it). `internal static TranscriptLines.ReadFrom(Stream, DateTime, ScanMeter)` reads a stream the caller owns (the seam S1's tests use to make a read fail mid-way). The S1 brief said one file of ≤ 220 lines. **The judge's review (2026-10-17, L1) splits the splitter types into their own files, `LineSplitter.cs` and `GatedLines.cs`**, applied by the coder after f9da2839; `TranscriptLines.cs` stays over 220 lines — a recorded deviation, not undone | S4 calls `ReadSharedFrom` only, never `ReadFrom` or the splitter. `partial: read failed` has no S4 test that makes a disk fail: S1's seam test pins `ReadFailures`, and S4's rule is the mirroring (step 6, S4-20) — the review checks that `meter.ReadFailures` reaches `ReadDiagnostics.ReadFailures` and the reason | `TranscriptLines.cs:117-124` (at b24c81ae); the splitter files as the judge's fix names them |
-| C6 | **The `CheckoutRoots` cache key.** At f9da2839 it was `RepositoryIdentity.Normalised(directory)`, which lower-cases — so on a case-sensitive filesystem `/work/App` (a checkout) and `/work/app` (plain) shared one entry and the first answer won. **The judge's review (2026-10-17, M2) calls this a defect of the S3 brief and fixes it: the cache is keyed by the EXACT full directory (after `Path.GetFullPath`, H1), and `Normalised` is used only for the `Where` output**; a test with case-distinct directories runs where the filesystem is case-sensitive. The S3 brief and its test list are changed to match (below) | **Decided: the fix stands; the S3 brief's "`D:\X` and `d:/x` share one entry" was wrong on Linux and is withdrawn.** What remains, and is accepted with its cost stated (**L8, for E4 and E5**): `WriteTarget.Where` is a TEXT key, never resolved against the filesystem. Two spellings of ONE folder give two keys — macOS `/var/…` against `/private/var/…`, a Windows `\\?\` prefix, a junction or symlink, an 8.3 short name — and two folders that differ only by case give ONE key on Linux. E4 compares `Where` with `RepositoryIdentity.Normalised(repo_path)` (E4.S1); it inherits exactly these limits, and §3.3 says so. Q8 saw none of these shapes (every write path absolute, one spelling per root on both sides); no fixture has one. If one appears in real data, the KEY is what changes — in `RepositoryIdentity`, for E4 too | `WriteEvidence.cs:87`, `:97-102` (at f9da2839, before the fix); `RepositoryIdentity.cs:24` |
+| C1 | **An EMPTY line is not a line.** A line of 0 bytes before its terminator (`\n` or `\r\n`) is dropped by the splitter before the gate: never yielded, never counted in `LinesSkipped`, never a torn line; only `BytesScanned` grows. So is a UTF-8 BOM at offset 0 (judge M1): 3 bytes scanned, not part of line 1 | A clean file with a blank line never reads `partial: torn line` (the splitter's own remark says why). Step 6's "the LAST line a file yielded" is the last NON-EMPTY one. A file whose only content is blank lines yields nothing: main → `unobserved: transcript empty` (S4-10), an agent file → S4-23 | `LineSplitter.cs:81` (`text > 0`), `:217` (`held > 0`), remark `:14-15`; the BOM at `:34`, `:144-154` (all at 32ad19be) |
+| C2 | **`BytesYielded` charges the REAL terminator**: the line's bytes plus 2 for `\r\n`, 1 for `\n`, 0 for an unterminated tail | Tests 31, 50 and 51 compute `MaxBytes` from the raw lines with EACH line's own terminator length — never a flat `+1` per line — and `BytesInSlice` is exactly that sum. A fixture copied by the materialiser keeps its bytes as they are, so the test reads the terminator from the file | `LineSplitter.cs:82` (`length - text + 1`), `GatedLines.cs:32` (`raw.Text.Length + raw.Terminator`) |
+| C3 | **`ScanMeter`'s members are auto-properties** (`{ get; set; }`); `Stop` defaults to `static () => false`, `MaxLineBytes` to 64 MiB | `ReadMeter` creates ONE `ScanMeter` and SETS `meter.Stop` and `meter.MaxLineBytes` after construction (step 1); `Diagnostics` reads the properties at step 10. No subclass, no constructor arguments | `src_mcp/src/Store/ScanMeter.cs:13-29` (32ad19be; was `TranscriptLines.cs:18-34` at b24c81ae) |
+| C4 | **`TryParse(ReadOnlyMemory<byte>)` keeps the memory**: the `JsonDocument` reads the enumerator's buffer for its whole life, and that buffer is valid only until the next `MoveNext` | Steps 4–5 dispose each document BEFORE asking for the next line (`using var document` inside the loop body), and nothing from the document outlives it except the values S4-18 admits as `string`s/numbers/booleans. A `JsonElement` kept past the line reads another line's bytes — the review checks that no `JsonElement` is stored in a field, a table or a candidate; write candidates (step 9) hold the PATH string, not the block | `TranscriptLines.cs:66-67`, `:117-119` (32ad19be) |
+| C5 | **S1 is five files, and has one extra seam.** At b24c81ae: `TranscriptLines.cs` (304 lines) and `TranscriptLineSplitter.cs` (257 lines holding `RawLine`, `LineSplitter`, `GatedLines` — a file name that matched no type in it). **The judge's review (2026-10-17, L1 and M3), coded in 32ad19be:** `TranscriptLines.cs` (281 lines — still over the ≤ 220 target, a recorded deviation, not undone), `LineSplitter.cs` (`RawLine`, `LineSplitter`; 224), `GatedLines.cs` (60), `ScanMeter.cs` (29) and `JsonText.cs` (24 — the one `StringProperty` helper that S2's locator and S3's `WriteTools` share; `AgentLog.Text` is left alone pending the owner). `TranscriptLineSplitter.cs` no longer exists. `internal static TranscriptLines.ReadFrom(Stream, DateTime, ScanMeter)` reads a stream the caller owns (the seam S1's tests use to make a read fail mid-way) | S4 calls `ReadSharedFrom` only, never `ReadFrom` or the splitter. `partial: read failed` has no S4 test that makes a disk fail: S1's seam test pins `ReadFailures`, and S4's rule is the mirroring (step 6, S4-20) — the review checks that `meter.ReadFailures` reaches `ReadDiagnostics.ReadFailures` and the reason. S4's own one-property reads (`toolUseId`, `agentId`, …) go through `JsonText.StringProperty` too — no third copy | `TranscriptLines.cs:89` (`ReadFrom`); `JsonText.cs:13-24`; all five files under `src_mcp/src/Store/` |
+| C6 | **The `CheckoutRoots` cache key.** At f9da2839 it was `RepositoryIdentity.Normalised(directory)`, which ALWAYS lower-cases — so on a case-sensitive file system `/work/App` (a checkout) and `/work/app` (plain) shared one entry and the first answer won. **The judge's review (2026-10-17, M2), coded in 32ad19be: the cache is keyed by the EXACT full directory (after `Path.GetFullPath`, H1), lower-cased only where the file system folds case — `CacheKey(fullDirectory, caseSensitive)`, `caseSensitive = !(Windows || macOS)`.** On Windows `D:\X` and `d:/x` still share an entry; on Linux `/work/App` and `/work/app` are two. `Normalised` is used only for the `Where` output. The S3 brief and its test list are changed to match | **Decided: the fix stands; the S3 brief's "share one entry" sentence is true on Windows only and now says so.** What remains, and is accepted with its cost stated (**L8, for E4 and E5**): `WriteTarget.Where` is a TEXT key, never resolved against the file system. Two spellings of ONE folder give two keys — macOS `/var/…` against `/private/var/…`, a Windows `\\?\` prefix, a junction or symlink, an 8.3 short name — and two folders that differ only by case give ONE `Where` even on Linux (the cache now tells them apart; the KEY does not). E4 compares `Where` with `RepositoryIdentity.Normalised(repo_path)` (E4.S1); it inherits exactly these limits, and §3.3 says so. Q8 saw none of these shapes (every write path absolute, one spelling per root on both sides); no fixture has one. If one appears in real data, the KEY is what changes — in `RepositoryIdentity`, for E4 too | `WriteEvidence.cs:85` (`CaseSensitiveFileSystem`), `:94-95` (`CacheKey`), `:105`, `:124-126` (`GetFullPath` and its catch), `:135`, `:143` (`Normalised` for `Where`) — all at 32ad19be; `RepositoryIdentity.cs:24` |
 | C7 | **E3.S2's two fixture checks were not written** (c12 `registry-and-variable-disagree`, c10 `persistence-off`): they need `CallerTranscriptFixture.Materialise`, which is S4's | They are tests 57 and 58 below, written in S2's class | `TheCallersTranscriptIsFoundByItsSessionIdTests.cs` reads no fixture (64ee32a6) |
 
 #### The read algorithm
@@ -1252,7 +1278,8 @@ but found Observed`), never on a compile error.
   on 2026-10-17), merged before E3.S4 is coded** — the c12/c17/c19 rows, tests 7 and 13 and test 43's totals are
   written against it (G15); E1.S4 (RESULTS: Q2–Q4, Q6, Q7, Q9); E3.S1 as coded in b24c81ae (items 7–9 are what
   steps 1–2 call, in the byte-yielding form of G4, with C1–C5); E3.S2 as coded in 64ee32a6; E3.S3 as coded in
-  f9da2839 (C6). E4's S2 decisions of 2026-10-16/17 are what S4-22 and S4-23 answer.
+  f9da2839 (C6); the judge's fixes to all three in 32ad19be. E4's S2 decisions of 2026-10-16/17 are what S4-22 and
+  S4-23 answer.
 - **Model.** Spec (scenarios + brief): **Fable** (this entry; amended by Fable 2026-10-16) · code + tests: Sonnet ·
   review: Opus · fixes: Sonnet.
 
@@ -1328,7 +1355,7 @@ E3.S3 ─┘
 ```
 
 One branch and ONE commit for the epic. The coai gate runs once, over the whole epic (parent, `## Epics`). *(2026-10-17:
-S1–S3 landed as three commits on the branch — b24c81ae, 64ee32a6, f9da2839 — with the judge's fixes after them; the
+S1–S3 landed as three commits on the branch — b24c81ae, 64ee32a6, f9da2839 — with the judge's fixes in 32ad19be; the
 "one commit" is what reaches main, squashed, after S4 and S5.)*
 
 | Parent's E3 done-when | Met by |
