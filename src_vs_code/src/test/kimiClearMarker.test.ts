@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { catalogHtml } from '../catalogPage';
+import { KIMI_ON_LINUX_SINCE } from '../runtimeSince';
 import { clearMarkerSaid, markerLine, pressClearMarker, type MarkerPorts } from '../kimiMarker';
 import { PANEL_COMMANDS, type PanelState } from '../panelView';
 import { parseProviders, type ProviderHealth, type ProvidersAnswer } from '../providers';
@@ -23,7 +24,7 @@ const KIMI: Vendor = {
   baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0,
 };
 const MARKER = '/home/p/.kimi-locks/0123456789abcdef.survivors.json';
-const KNOWN = { kind: 'known' as const, version: '0.59.0', remembered: false, updateOffered: false };
+const KNOWN = { kind: 'known' as const, version: KIMI_ON_LINUX_SINCE, remembered: false, updateOffered: false };
 
 function answer(reported: Record<string, ProviderHealth>, answered = true): ProvidersAnswer {
   return { reported, asked: true, answered, notes: { unrecognised: [], vaultNote: '', vaultKeys: [], vault: 'not-reported', settingProblems: [] } };

@@ -7,7 +7,7 @@ import { catalogHtml } from '../catalogPage';
 import { HELP_ARTICLES, HELP_LANGUAGES, bodyFor } from '../helpContent';
 import { type HostKind, hostKind, hostKindOf, hostKindOfPlatform } from '../hostSide';
 import { cardContextFor, type PanelState } from '../panelView';
-import { ON_LINUX_SINCE, VIBE_ON_LINUX_SINCE, VIBE_RUNTIME_SINCE, runtimeOnLinuxSide, runtimeSkewNote } from '../runtimeSince';
+import { KIMI_ON_LINUX_SINCE, ON_LINUX_SINCE, VIBE_ON_LINUX_SINCE, VIBE_RUNTIME_SINCE, runtimeOnLinuxSide, runtimeSkewNote } from '../runtimeSince';
 import { vendorInstall, vendorUpdate, vibeNoteFor } from '../vendorTerminal';
 import { namesWsl2 } from '../wslNetwork';
 import { DEFAULT_VENDORS, VENDOR_PRESETS, type Vendor } from '../vendors';
@@ -40,7 +40,8 @@ const repo = (...parts: string[]): string => join(__dirname, '..', '..', '..', .
 
 test('the Vibe-on-Linux release is its own table, beside the one that says which server knows the runtime', () => {
   assert.equal(VIBE_ON_LINUX_SINCE, '0.58.0');
-  assert.deepEqual(ON_LINUX_SINCE, { vibe: '0.58.0', kimi: '0.59.0' }, 'Kimi on Linux is the release after Vibe (DL14): E6 added its entry');
+  assert.equal(ON_LINUX_SINCE['kimi'], KIMI_ON_LINUX_SINCE, 'Kimi on Linux is the release after Vibe (DL14): E6 added its entry');
+  assert.deepEqual(Object.keys(ON_LINUX_SINCE).sort(), ['kimi', 'vibe']);
 });
 
 test('a Linux or WSL side whose server is older than 0.58.0 does not run Vibe; a newer or an unknown server does', () => {
@@ -51,7 +52,7 @@ test('a Linux or WSL side whose server is older than 0.58.0 does not run Vibe; a
   assert.equal(runtimeOnLinuxSide('vibe', '1.0.0'), true);
   assert.equal(runtimeOnLinuxSide('vibe', ''), true, 'an unknown server is not called old');
   assert.equal(runtimeOnLinuxSide('codex', '0.1.0'), true, 'a runtime with no entry runs on every host');
-  assert.equal(runtimeOnLinuxSide('kimi', '0.58.0'), false, 'Kimi runs on Linux from 0.59.0: a 0.58.0 server refuses a Kimi row there');
+  assert.equal(runtimeOnLinuxSide('kimi', '0.58.0'), false, `Kimi runs on Linux from ${KIMI_ON_LINUX_SINCE}: a 0.58.0 server refuses a Kimi row there`);
 });
 
 // ---------------------------------------------------------------- the host kind (DL1): WSL2, WSL1, native Linux

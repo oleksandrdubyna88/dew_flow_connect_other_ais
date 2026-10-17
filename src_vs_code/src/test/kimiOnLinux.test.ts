@@ -29,16 +29,17 @@ const repo = (...parts: string[]): string => join(__dirname, '..', '..', '..', .
 
 // ---------------------------------------------------------------- DL14: the table
 
-test('KIMI_ON_LINUX_SINCE is 0.59.0 — the first minor after Vibe’s 0.58.0 — and is in the table beside it', () => {
-  assert.equal(KIMI_ON_LINUX_SINCE, '0.59.0');
+test('KIMI_ON_LINUX_SINCE is 0.60.0 — 0.58.0 was released without Vibe-on-Linux, which ships in 0.59.0 — and is in the table beside it', () => {
+  assert.equal(KIMI_ON_LINUX_SINCE, '0.60.0');
   assert.equal(ON_LINUX_SINCE['kimi'], KIMI_ON_LINUX_SINCE);
   assert.ok(compareVersions('0.58.0', KIMI_ON_LINUX_SINCE) < 0, 'one minor after Vibe’s release');
 });
 
-test('a Linux or WSL side whose server is older than 0.59.0 does not run Kimi; a newer or an unknown server does; Windows is untouched', () => {
+test('a Linux or WSL side whose server is older than KIMI_ON_LINUX_SINCE does not run Kimi; a newer or an unknown server does; Windows is untouched', () => {
   assert.equal(runtimeOnLinuxSide('kimi', '0.58.0'), false);
   assert.equal(runtimeOnLinuxSide('kimi', KIMI_RUNTIME_SINCE), false, 'knowing the runtime is not running it on this host');
-  assert.equal(runtimeOnLinuxSide('kimi', '0.59.0'), true);
+  assert.equal(runtimeOnLinuxSide('kimi', '0.59.0'), false, 'the release Vibe-on-Linux ships in does not run Kimi');
+  assert.equal(runtimeOnLinuxSide('kimi', KIMI_ON_LINUX_SINCE), true);
   assert.equal(runtimeOnLinuxSide('kimi', '1.0.0'), true);
   assert.equal(runtimeOnLinuxSide('kimi', ''), true, 'an unknown server is not called old');
 
@@ -46,16 +47,16 @@ test('a Linux or WSL side whose server is older than 0.59.0 does not run Kimi; a
   assert.match(note, /update coai-mcp to run Kimi here/iu);
   assert.ok(note.includes('0.58.0') && note.includes(KIMI_ON_LINUX_SINCE), note);
   assert.equal(runtimeSkewNote('0.58.0', [KIMI], 'windows'), '', 'on Windows a 0.58.0 server runs Kimi');
-  assert.equal(runtimeSkewNote(KIMI_ON_LINUX_SINCE, [KIMI], 'wsl2'), '', 'a 0.59.0 server runs it on WSL2');
-  assert.match(runtimeSkewNote('0.59.0', [KIMI], 'linux'), /refuses a kimi row on a native Linux host for now — Kimi is measured on WSL2 only/u, 'native Linux: refused at ANY version, never "update"');
-  assert.match(runtimeSkewNote('0.59.0', [KIMI], 'wsl1'), /This is WSL1, and coai-mcp runs Kimi on WSL2 only/u);
+  assert.equal(runtimeSkewNote(KIMI_ON_LINUX_SINCE, [KIMI], 'wsl2'), '', 'a server at KIMI_ON_LINUX_SINCE runs it on WSL2');
+  assert.match(runtimeSkewNote(KIMI_ON_LINUX_SINCE, [KIMI], 'linux'), /refuses a kimi row on a native Linux host for now — Kimi is measured on WSL2 only/u, 'native Linux: refused at ANY version, never "update"');
+  assert.match(runtimeSkewNote(KIMI_ON_LINUX_SINCE, [KIMI], 'wsl1'), /This is WSL1, and coai-mcp runs Kimi on WSL2 only/u);
   assert.match(runtimeSkewNote('0.56.0', [KIMI], 'wsl2'), new RegExp(KIMI_RUNTIME_SINCE.replaceAll('.', '\\.'), 'u'), 'a server that does not know Kimi at all speaks first, once');
   assert.doesNotMatch(runtimeSkewNote('0.56.0', [KIMI], 'wsl2'), /run Kimi here/iu);
 });
 
 // ---------------------------------------------------------------- the card hint
 
-test('the Kimi hint names Windows, WSL2 from 0.59.0, native Linux as measured on WSL2 only, and the wait for your own open kimi', () => {
+test('the Kimi hint names Windows, WSL2 from KIMI_ON_LINUX_SINCE, native Linux as measured on WSL2 only, and the wait for your own open kimi', () => {
   const hint = VENDOR_PRESETS.find((one) => one.runtime === 'kimi')?.hint ?? '';
 
   assert.doesNotMatch(hint, /Windows only/u);
@@ -122,11 +123,11 @@ test('⤓ and ⟳ take the host kind: the note follows it, the line is one for e
 
 /** What each language must say about Kimi on Linux, in its own words. */
 const SAID: Record<string, readonly string[]> = {
-  en: ['WSL2', '0.59.0', 'native Linux host', 'WSL1', '`kimi` is open', '`sudo apt-get`', '`sudo dnf`', '`~/.local/bin/fd`', '`fdfind`', '`rg` and `fd`'],
-  de: ['WSL2', '0.59.0', 'nativen Linux', 'WSL1', '`kimi` offen', '`sudo apt-get`', '`sudo dnf`', '`~/.local/bin/fd`', '`fdfind`', '`rg` und `fd`'],
-  es: ['WSL2', '0.59.0', 'Linux nativo', 'WSL1', '`kimi` esté abierto', '`sudo apt-get`', '`sudo dnf`', '`~/.local/bin/fd`', '`fdfind`', '`rg` y `fd`'],
-  ru: ['WSL2', '0.59.0', 'нативном Linux', 'WSL1', '`kimi`, ходы', '`sudo apt-get`', '`sudo dnf`', '`~/.local/bin/fd`', '`fdfind`', '`rg` и `fd`'],
-  uk: ['WSL2', '0.59.0', 'нативному Linux', 'WSL1', '`kimi`, ходи', '`sudo apt-get`', '`sudo dnf`', '`~/.local/bin/fd`', '`fdfind`', '`rg` і `fd`'],
+  en: ['WSL2', KIMI_ON_LINUX_SINCE, 'native Linux host', 'WSL1', '`kimi` is open', '`sudo apt-get`', '`sudo dnf`', '`~/.local/bin/fd`', '`fdfind`', '`rg` and `fd`'],
+  de: ['WSL2', KIMI_ON_LINUX_SINCE, 'nativen Linux', 'WSL1', '`kimi` offen', '`sudo apt-get`', '`sudo dnf`', '`~/.local/bin/fd`', '`fdfind`', '`rg` und `fd`'],
+  es: ['WSL2', KIMI_ON_LINUX_SINCE, 'Linux nativo', 'WSL1', '`kimi` esté abierto', '`sudo apt-get`', '`sudo dnf`', '`~/.local/bin/fd`', '`fdfind`', '`rg` y `fd`'],
+  ru: ['WSL2', KIMI_ON_LINUX_SINCE, 'нативном Linux', 'WSL1', '`kimi`, ходы', '`sudo apt-get`', '`sudo dnf`', '`~/.local/bin/fd`', '`fdfind`', '`rg` и `fd`'],
+  uk: ['WSL2', KIMI_ON_LINUX_SINCE, 'нативному Linux', 'WSL1', '`kimi`, ходи', '`sudo apt-get`', '`sudo dnf`', '`~/.local/bin/fd`', '`fdfind`', '`rg` і `fd`'],
 };
 
 /** The sentences this release replaced: none may survive in any language. */
@@ -138,7 +139,7 @@ const GONE: Record<string, readonly string[]> = {
   uk: ['поки що запускає його лише на Windows, йому потрібен coai-mcp 0.57.0', 'скрипт Moonshot на Linux і macOS, а на Windows — один рядок'],
 };
 
-test('the five languages say the same about Kimi on Linux: WSL2 from 0.59.0, native Linux and WSL1 not, the wait for your own kimi, the install line', () => {
+test('the five languages say the same about Kimi on Linux: WSL2 from KIMI_ON_LINUX_SINCE, native Linux and WSL1 not, the wait for your own kimi, the install line', () => {
   const article = HELP_ARTICLES.find((one) => one.id === 'choose-reviewers');
   assert.ok(article !== undefined, 'the reviewers article has been renamed, and this test is now asserting nothing');
   assert.deepEqual([...HELP_LANGUAGES].sort(), Object.keys(SAID).sort(), 'a language was added: say what it must say');

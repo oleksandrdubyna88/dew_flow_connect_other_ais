@@ -12982,12 +12982,12 @@ The extension's half of lifting D18 for Kimi on WSL2 (DL1, DL12, DL14, Q3, S-K9,
 (`module_runners.md`). It reuses the Vibe section's host-kind shape above — `HostKind` (`windows | wsl2 | wsl1 | linux | darwin`),
 `PanelState.hostKind`, `hostKindOfPlatform`, `runtimeSkewNote(version, vendors, host)` — and adds no second one.
 
-- **`KIMI_ON_LINUX_SINCE = '0.59.0'`** (`runtimeSince.ts`), the first minor after Vibe's 0.58.0 (DL14), joins `ON_LINUX_SINCE`; the
+- **`KIMI_ON_LINUX_SINCE = '0.60.0'`** (`runtimeSince.ts`), one minor after Vibe's (0.58.0 was released from main without either; Vibe-on-Linux ships in 0.59.0 — DL14, whoever merges second bumps), joins `ON_LINUX_SINCE`; the
   per-host-kind sentences of `runtimeSkewNote` therefore apply to a Kimi row with no new code (only the label *Kimi*): *Update coai-mcp
-  to run Kimi here* on WSL2 below 0.59.0, a refusal at any version on a native Linux host and on WSL1. The unreleased Kimi-consultant
+  to run Kimi here* on WSL2 below 0.60.0, a refusal at any version on a native Linux host and on WSL1. The unreleased Kimi-consultant
   branch sets `KIMI_CONSULTANT_SINCE` to 0.58.0: whichever of the two merges second bumps its constant (DL14).
 - **`kimiNoteFor(host)`** (`vendorTerminal.ts`) is Vibe's `vibeNoteFor` for Kimi: a `Record<HostKind, string>`, so a host kind added later
-  is a compile error. WSL2 *runs on this side from coai-mcp 0.59.0* and says that while the person's own `kimi` is open coai's turns
+  is a compile error. WSL2 *runs on this side from coai-mcp 0.60.0* and says that while the person's own `kimi` is open coai's turns
   wait and then answer busy (Q3); native Linux and WSL1 carry Vibe's two refusal sentences with Kimi's name; macOS is not measured;
   Windows is as it was. `vendorInstall(vendor, platform, host?)` takes the host kind; without one Linux is native (the safe answer).
 - **The Linux ⤓/⟳ line** (`kimiLinuxLine.ts`, DL12) provisions `rg` and `fd` and ends with Moonshot's script and a check. One line,
@@ -13019,7 +13019,7 @@ The extension's half of lifting D18 for Kimi on WSL2 (DL1, DL12, DL14, Q3, S-K9,
   checked (reason named, the marker stays), 65 refused (nothing deleted), anything else (an old coai-mcp's 64, a timeout) says the file the
   Busy sentence names is still safe to delete by hand. The state is the server's marker file, re-read by the providers probe after the
   press, so a reload shows what is true.
-- **The help** (`helpContent.ts`, `helpDe/Es/Ru/Uk.ts`, `choose-reviewers`): Kimi runs on Windows and on WSL2 from 0.59.0 when coai-mcp itself
+- **The help** (`helpContent.ts`, `helpDe/Es/Ru/Uk.ts`, `choose-reviewers`): Kimi runs on Windows and on WSL2 from 0.60.0 when coai-mcp itself
   runs there; native Linux is refused for now; WSL1 is refused; the person's own open `kimi` makes coai's turns wait; the Linux ⤓ line.
 - **`shared/consultant-limitations.json`**: Kimi `wsl` is `unconfined` — *measured* 2026-10-16 on kimi 2.2.0, §29 of
   `RESULTS_kimi_confinement.md`, n = 1 per cell: writes 3 of 3 refused, `Read` served only inside the working folder, but `Grep` and `Glob`
