@@ -1,7 +1,8 @@
 # PLAN — Test leftovers, E5: the tests move to `testsToDelete-coai-…` and the product's `coai-*` directories stay untouched
 
-> Status: **plan only, nothing implemented yet, 2026-10-16; plan-gate round 1 findings applied 2026-10-17; blocked
-> on the E1 release of `dew_flow_conventions`.**
+> Status: **plan only, nothing implemented yet, 2026-10-16; plan-gate round 1 findings applied 2026-10-17; the
+> 2026-10-17 risk decision applied (the age-only `coai-` test branch is retired in S2, not kept until an end date);
+> blocked on the E1 release of `dew_flow_conventions`.**
 > Stories of epic E5 of `dew_flow_conventions · todo/PLAN_test_leftovers_rollout.md` (§ *Epics*, E5). Scope: the
 > shared sweep rule `shared/temp-sweep.json`, the two test sweeps that read it (`src_vs_code/scripts/sweepTemp.mjs`
 > through `run-tests.mjs`, and the assembly fixture `src_mcp/tests/TempDirsAreSwept.cs`), one C# and one Node
@@ -17,14 +18,17 @@
 epics and stories*): its row in `todo/README.md` under *Currently open* —
 
 ```
-| [PLAN_test_leftovers_E5.md](PLAN_test_leftovers_E5.md) | Stories of epic E5 of the family's test-leftovers rollout — **plan only, 2026-10-16; plan-gate round 1 findings applied 2026-10-17; blocked on the E1 release of the conventions.** Tests create only `testsToDelete-coai-<what>-<id>` folders, claimed by a sibling `.owner`; both test sweeps collect them on owner liveness and keep the old `coai-` test names only until a written end date; the product's `coai-*` runtime directories and their own six-hour sweep are untouched and proven so. Five stories: the pin, the sweep (**S2 is a cornerstone**, spec by Fable), the two helpers, the C# sites, the Node sites and the guard. |
+| [PLAN_test_leftovers_E5.md](PLAN_test_leftovers_E5.md) | Stories of epic E5 of the family's test-leftovers rollout — **plan only, 2026-10-16; plan-gate round 1 findings applied 2026-10-17; the age-only `coai-` test branch retired (risk decision 2026-10-17); blocked on the E1 release of the conventions.** Tests create only `testsToDelete-coai-<what>-<id>` folders, claimed by a sibling `.owner`; both test sweeps take ONLY those names, on owner liveness — no `coai-*` name is reachable by a test sweep, and old-prefix test leftovers go by a documented one-off clean-up a person runs; the product's `coai-*` runtime directories and their own six-hour sweep are untouched and proven so. Five stories: the pin, the sweep (**S2 is a cornerstone**, spec by Fable), the two helpers, the C# sites, the Node sites and the guard. |
 ```
 
 and, in `dew_flow_conventions` (a separate commit there, by the parent's owner), the parent's ledger line becomes
 
 ```
-Cornerstones: 2 of 3 — E1.S1 (the contract text in common/test-leftovers.md, model: fable), E5.S2 (coai's test sweep: temp-sweep.json, both sweeps, owner liveness, model: fable); reserved, not yet marked: E7 (rag_qln's shared store).
+Cornerstones: 3 of 3 — E1.S1 (the contract text, model: fable), E5.S2 (coai's test sweep: temp-sweep.json, both sweeps, owner liveness, model: fable), E7.S2 (rag_qln's corpus ownership and drop protocol, model: fable).
 ```
+
+(The 2-of-3 form this document first proposed, with E7 only reserved, was replaced on 2026-10-17 once E7's stories
+marked its S2.)
 
 **Parent and contract are cited as paths, never links** (the shared `common/planning-docs.md` § *Across
 repositories*): the parent `dew_flow_conventions · todo/PLAN_test_leftovers_rollout.md`; the contract
@@ -38,13 +42,15 @@ once S1 moves the pin); the Node reference helper and sweep `dew_flow_convention
 Every folder a coai test, test script or test-run CI step creates is named `testsToDelete-coai-<what>-<id>` by one
 of two helpers (C# for the four .NET test suites, Node for the extension and the scripts), claimed by a sibling
 `<folder>.owner`, removed by its scope on every path, and — when a run was killed — collected by the next run's
-start-of-run sweep, which removes it only when its owner is provably gone. During a migration window with a written
-end date the sweeps still collect the OLD `coai-` test names exactly as they do today. The product's own `coai-*`
-working directories (a live chat, a round's answers, a Team server job) are never reachable by the new branch of
-the sweep at all, and the old branch is today's code, unchanged.
+start-of-run sweep, which removes it only when its owner is provably gone. The test sweeps take ONLY
+`testsToDelete-coai-…` names: the age-only `coai-` test branch they run today is retired in S2 (risk decision
+2026-10-17, § *Risk decision* below), so the product's own `coai-*` working directories (a live chat, a round's
+answers, a Team server job) — and every `coai-*` name, including product prefixes not invented yet — are never
+reachable by a test sweep at all. Old-prefix test leftovers are left for a documented one-off clean-up that a person
+runs, listing first.
 
-**Done when:** the pin carries the E1 contract (S1); `temp-sweep.json` names the new test prefix, the old one with
-its end date, and the unchanged `neverSwept` list, and both sweeps follow it with owner liveness (S2); the helpers
+**Done when:** the pin carries the E1 contract (S1); `temp-sweep.json` names the new test prefix and the unchanged
+`neverSwept` list, no test sweep matches a `coai-` name, and both sweeps follow owner liveness (S2); the helpers
 exist with their unwind, kill, open-handle and claim proofs, and the editor-host run leaks nothing (S3); no C# test
 site creates a temp path outside the helper (S4); no Node site does, and the guard is red on every class of rule §7,
 on an unregistered token and on a scan of nothing (S5).
@@ -86,7 +92,7 @@ on an unregistered token and on a scan of nothing (S5).
 | `TempDirsAreSwept.cs:65` `Rule.Prefix.Should().Be("coai-")` | the TEST prefix, read from the file | moves (S2) |
 | `TempDirsAreSwept.cs:60`, `:112` `[$"{Rule.Prefix}*"]` | the TEST prefix, read from the file | moves (S2) |
 | `src_vs_code/src/test/sweepTemp.test.mjs:32` `assert.equal(rule.prefix, 'coai-')` | the TEST prefix | moves (S2) |
-| `sweepTemp.test.mjs:54-73`, `:99-130`, `:170` (`coai-old-1`, `coai-panel-abc`, an inline `{ prefix: 'coai-' … }`) | the TEST prefix in fixtures | move or stay as old-branch cases (S2) |
+| `sweepTemp.test.mjs:54-73`, `:99-130`, `:170` (`coai-old-1`, `coai-panel-abc`, an inline `{ prefix: 'coai-' … }`) | the TEST prefix in fixtures | move to the new prefix, or are deleted with the retired `coai-` selection (S2 item 7) |
 | `TempDirsAreSwept.cs:91` regex `CreateTempSubdirectory\(\s*"(coai-[a-z-]+)"\s*\)` over `src`, `runners`, `core` | the PRODUCT's prefixes | **stays `coai-`** — it proves `neverSwept` covers the product |
 | `sweepTemp.test.mjs:46` regex `mkdtemp…(coai-[a-z-]+)` over the extension's non-test sources | the PRODUCT's prefixes | **stays** |
 | `src_server/tests/TheTestSweepLeavesAJobAloneTests.cs:27` regex over `src_server/src`; reads only `neverSwept` (`:33-37`) | the PRODUCT's prefix `coai-server-job-` | **stays** — it never reads `prefix` |
@@ -224,9 +230,17 @@ helper (a CommonJS test cannot `require` ESM on every Node 22 a developer may ru
 scripts and the root `scripts/lib` tests could not load it without a compile). `owned.mjs` of the conventions is the
 shape; its code is not imported (its token is `conventions`).
 
-**D4 — The old names are collected, not renamed in place.** The OLD `coai-` test leftovers keep today's age-only
-collection — through the SAME code that collects them today — until the end date S2's spec writes into
-`temp-sweep.json`. The token-less `testsToDelete-<x>-` leftovers (Facts) are NOT this repository's sweep's business
+**D4 — The old names are cleaned up once, by a person; no sweep collects them.** *(Rewritten 2026-10-17 by the risk
+decision; the first version kept today's age-only collection of the OLD `coai-` test names until an end date.)* No
+test sweep matches a `coai-` name after S2: an idle folder of a live OLD suite is indistinguishable from an abandoned
+one by age, and one product prefix missing from the exclusions deletes a person's chat. The old-prefix test leftovers
+go through a **documented one-off command a person runs** (S2 item 1 writes it into `research/module_tests.md`):
+it LISTS first, and removes only the exact names the person picked from that list. The janitor is not a route for
+them — it matches only `^teststodelete[-_]` names and never a `coai-` one — so nothing here is delegated to it.
+**Known residual risk:** an old checkout or agent worktree still on pre-S2 code keeps its old age-only sweeper and can
+still delete a product directory the old exclusion list omits; the mitigation is to update or rebase those checkouts,
+or to run their suites with a private temp root (`TEMP`, `TMP` and `TMPDIR` pointed at a folder of their own).
+The token-less `testsToDelete-<x>-` leftovers (Facts) are NOT this repository's sweep's business
 (rule §4: own token only; `kimi`/`vh`/`junc` may be some other repository's token one day): S4/S5 list them before
 and after, and the owner decides whether `bash .agents/conventions/tools/janitor.sh --dry-run` then a real run removes
 them. `janitor.sh --token coai` is the post-suite check of the new names (Test plan).
@@ -248,8 +262,8 @@ conventions' layout and its patterns miss `CreateTempSubdirectory` — reported 
 creation sites, a few thousand folders per full run of all suites (measured before E5 by S4/S5: today's counts); each
 carries one marker of ~50 bytes. Retired by the scope's teardown on every path; after a kill by the next run's
 start-of-run sweep in any of the five suites (10 minutes, owner `gone`); by `janitor.sh --token coai` (one hour) when
-no suite runs again. The old `coai-` test leftovers retire through the old branch until the end date, then through
-the janitor only if the owner runs it — they never carried the prefix.
+no suite runs again. The old `coai-` test leftovers retire only through D4's one-off clean-up a person runs — no sweep
+and not the janitor (they never carried the prefix).
 
 ## Order
 
@@ -313,10 +327,11 @@ in code.
   of `PLAN_the_plan_gate_reads_the_committed_plan_E1_S2_spec.md`); code by a Sonnet coder from the spec; review by
   Opus against the spec and rule §3–§4.
 - **Goal.** One rule file, read by both test sweeps, under which (a) the new `testsToDelete-coai-` branch removes a
-  folder only when it is old enough AND its owner is provably gone, and preserves on `live` and `unknown`; (b) the old
-  `coai-` test branch behaves exactly as today until a written end date and not at all after it; (c) no product
-  directory can be removed by either branch that today's code would not remove, and the product's own sweep is
-  byte-for-byte unchanged — so that being wrong here can never delete a live chat, a round's answers, a Team server
+  folder only when it is old enough AND its owner is provably gone, and preserves on `live` and `unknown`; (b) the
+  age-only `coai-` test branch is REMOVED in this story — both test sweeps take ONLY `testsToDelete-coai-…` names
+  (risk decision 2026-10-17); (c) the invariant **every `coai-*` name is outside the test sweep** holds structurally,
+  not through the exclusion list — so it also covers product prefixes not invented yet — and the product's own sweep
+  is byte-for-byte unchanged — so that being wrong here can never delete a live chat, a round's answers, a Team server
   job or a person's credentials behind a junction.
 - **Files (expected; the spec fixes them).** `shared/temp-sweep.json`; `src_vs_code/scripts/sweepTemp.mjs`,
   `run-tests.mjs`; the owner/liveness half of `src_vs_code/scripts/owned.cjs` + `owned.d.cts`; the new
@@ -327,28 +342,39 @@ in code.
 **What the Fable spec must settle** (nothing below is decided by this document):
 
 1. **The shape of `temp-sweep.json`.** The new test prefix (`testsToDelete-coai-`, matched `^teststodelete[-_]coai[-_]`
-   case-insensitively per rule §1, against `prefix`'s case-sensitive `startsWith` today); the old test prefix (`coai-`)
-   and its END DATE (a calendar date in the file; how long — the rule's premise "nothing live makes such a name any
-   more" is FALSE here while older checkouts and agent worktrees keep running the old suites, so the date counts from
-   when old branches stop running, not from the merge — **plan-gate round 1:** the date is a VERIFIABLE condition,
-   *no branch and no agent worktree still runs the old suites*, and the spec records the evidence it checked (for
-   example: the open PRs and remote branches whose merge base is older than S2's merge, the agent worktrees of the
-   family's machines and the commit each one is on, the last CI runs per branch) and the concrete calendar date it
-   computed from that evidence; until the condition holds, the date is moved forward by a one-line PR and the old
-   branch stays); what each reader does on and after the date (stop matching
-   and say so in one report line — never a test that turns red on a calendar day and blocks unrelated PRs); whether
-   `prefix` is renamed or a new key added (two runners and old checkouts read the file — an old checkout's
-   `SweepRule` reading a renamed key must not crash or widen); `keepMinutes` and `neverSwept` unchanged in value.
-2. **The old branch is today's code.** The spec proves the old branch reaches `PanelService.PruneOldScratchDirs` (C#)
-   and `toSweep`'s deny-list (Node) with the same arguments as on 1fe25d19 — prefix, version-cache exclusion,
-   `neverSwept`, 10 minutes — and that the new branch can never match a name that does not start with the new prefix.
-   Whether the old branch also stops at a `testsToDelete-` name (it does today only because `startsWith("coai-")` is
-   false for it — the spec says whether that is enough). **Plan-gate round 1:** "the same arguments" is proven by a
-   TEST, not by reading — the old branch is driven with an injected clock and controlled ages (Node: the pure
-   `toSweep(entries, now, rule)` with fixed `lastWriteMs`; C#: the `cutoff` argument of `PruneOldScratchDirs` with
-   `Directory.SetLastWriteTimeUtc` on folders in a private root), never with a real wait, and it collects exactly the
-   names today's code collects at the same `now`: one minute either side of the 10-minute boundary, a version cache,
-   every `neverSwept` entry, a `testsToDelete-coai-` name (never the old branch's).
+   case-insensitively per rule §1, against `prefix`'s case-sensitive `startsWith` today) and NO old test prefix and
+   NO end date — *decided 2026-10-17 (risk decision), superseding plan-gate round 1's end date*: the age-only `coai-`
+   branch does not ship; whether `prefix` is renamed or a new key added (two runners and old checkouts read the file —
+   an old checkout's `SweepRule` reading a renamed key must not crash or widen); `keepMinutes` and `neverSwept`
+   unchanged in value. `neverSwept` stays the documented list of product prefixes the three product-prefix scans keep
+   complete — but no test sweep relies on it for safety any more (item 2). The spec also writes the **one-off
+   clean-up of old-prefix test leftovers** (D4) into `research/module_tests.md`: a command a person runs that first
+   LISTS the temp root's `coai-*` directories with their last-write times, leaving out every protected product prefix
+   and the version cache (below), and a second command that removes only the exact names the person picked from that
+   list, run with no coai session or VS Code window open on that machine. Never wired into a runner, never a sweep,
+   never delegated to the janitor (it does not match `coai-` names). It records the known residual risk: old checkouts
+   keep their old age-only sweepers until they are updated or rebased, or run with a private temp root.
+2. **The legacy branch is removed, and every `coai-*` name is outside the test sweep.** *(Rewritten 2026-10-17; the
+   first version proved the old branch equal to today's code with an injected clock — moot now that it does not
+   ship.)* Both test sweeps select a name only when it matches `^teststodelete[-_]coai[-_]` case-insensitively; the
+   Node `sweep`/`toSweep` and the C# fixture stop matching `coai-` at all, and `TempDirsAreSwept` stops calling
+   `PanelService.PruneOldScratchDirs` (the test sweep is the library's own, item 6). **The invariant, stated and
+   tested:** EVERY `coai-*` name is outside the test sweep, at any age, whatever `neverSwept` holds — which covers
+   product prefixes not invented yet. The protected product prefixes today, verified on `origin/main` 30bdc7cc5
+   (`shared/temp-sweep.json` `neverSwept` plus `sweepTemp.mjs`'s fourth filter `versionCache`, `:24-27`):
+   `coai-answers-`, `coai-repair-`, `coai-noworkspace-`, `coai-plan-`, `coai-server-job-`, `coai-chat-` (which covers
+   `coai-chat-fast-`), `coai-question-`, `coai-check-`, and `^coai-[0-9]` (the downloaded server's version cache). The
+   invariant test feeds each of them, an old test name (`coai-panel-x`), and an invented future product prefix
+   (`coai-futurething-x`) to both selectors at ten days old with `neverSwept` injected EMPTY ⇒ none selected.
+   **The RED-first scenario, in BOTH implementations (C# and Node)**, written and observed failing before the change:
+   a private fake temp root; an UNMARKED `coai-chat-live` folder holding a file with sentinel bytes, its last write
+   set 11 minutes ago; the rule injected with `coai-chat-` deliberately OMITTED from the exclusions; run the COMPLETE
+   test startup sweep (Node: `sweep(root, now, rule)` as `sweepFirst` calls it; C#: the assembly fixture's sweep entry
+   point with the root and rule injected) ⇒ the sentinel survives byte for byte. Positive control in the same run: an
+   old `testsToDelete-coai-gone-abc123` folder whose `.owner` names a provably gone owner (an `UnmatchablePid`, the
+   premise asserted) disappears with its marker. Today's selector fails it: `toSweep` selects `coai-chat-live` (the
+   consultant ran it: `coai-panel-live` at 11 minutes is selected, and so is `coai-chat-live` once `coai-chat-` is
+   absent from the rule), and `PruneOldScratchDirs` with the same `except` list deletes it.
 3. **Owner liveness, in both languages, three-valued.** The owner string `<host>@<os>:<pid>[:<start>]` per rule §3;
    the host is the **DNS host name** — Node `os.hostname()`, C# `System.Net.Dns.GetHostName()`, the janitor's
    `hostname` — compared case-insensitively, **never C#'s `Environment.MachineName`** (the NetBIOS name: upper-case,
@@ -363,7 +389,8 @@ in code.
 4. **The new branch, step by step** (rule §4): one listing; minimum age 10 minutes by LAST WRITE (Windows hands a
    recreated name its predecessor's creation time — `sweepTemp.mjs:41-42`); claim read from the sibling `.owner`;
    `gone` → remove folder then marker; `live`/`unknown` → keep with one reason line; unmarked and old → `gone` (the
-   helper claims within milliseconds or does not create); an orphan `.owner` without its folder; a prefixed folder
+   helper claims within milliseconds or does not create); an orphan `.owner` without its folder, old enough ⇒ judged
+   by its OWNER, never by age alone (rule §2: `gone` removes the claim; `live` and `unknown` keep it); a prefixed folder
    holding a `.git` FILE (a linked worktree of some clone — never judged as unmarked); a FILE with the prefix (not a
    directory); a name of another token or a token-less `testsToDelete-x-`; never failing the run.
 5. **How it deletes.** Through the link-safe deleters only — C# `GitScratch.DeleteEvenIfReadOnly` with
@@ -378,11 +405,12 @@ in code.
    so two suites that sweep the same temp root at once never fail and never report each other's removals.
 6. **Where the C# sweep runs and who calls it.** The assembly fixture in `src_mcp/tests` today; whether the three
    other C# suites get the same fixture (rule §4: every run that creates the kind sweeps it at its start) and how —
-   an `[assembly: AssemblyFixture]` is per assembly, the sweep code is the library's; whether `TempDirsAreSwept` keeps
-   calling `PruneOldScratchDirs` for the old branch only.
+   an `[assembly: AssemblyFixture]` is per assembly, the sweep code is the library's. *Decided 2026-10-17:*
+   `TempDirsAreSwept` no longer calls `PruneOldScratchDirs` at all — there is no old branch for it to serve.
 7. **All pinning tests in one change** — the Facts table: the four TEST-prefix lines move; the three PRODUCT-prefix
    scans (`TempDirsAreSwept.cs:91`, `sweepTemp.test.mjs:46`, `TheTestSweepLeavesAJobAloneTests.cs:27`) stay
-   `coai-` and green; the spec names which existing fixture tests become old-branch tests and which are rewritten.
+   `coai-` and green; the spec names which existing fixture tests are rewritten for the new prefix and which, pinning
+   only the retired age-only `coai-` selection, are deleted (none becomes an "old-branch" test).
 8. **"Provably unchanged" as a check, not a sentence.** `git diff --exit-code origin/main -- src_mcp/src/Server/PanelService.cs`
    in every E5 PR (or the spec's narrower form); the product sweep's own tests (`ScratchDirsTests`,
    `TheScratchSweepNeverDeletesAKimiHomeUnderALiveTreeTests`, `ConsultCheckSweepTests`, `ConsultantHomeSweepTests`,
@@ -392,32 +420,39 @@ in code.
    private root with controlled inputs — the default `ScratchPrefixes` and an explicit prefix list, an `except` list,
    a version cache, a folder each side of the cutoff set by `Directory.SetLastWriteTimeUtc`, a read-only file — driven
    through the function's own `cutoff` argument (its injected clock), asserting exactly which names remain. It stays
-   green, unchanged, in every E5 PR.
+   green, unchanged, in every E5 PR. *(2026-10-17)* It stays as SCOPE CONTROL — it proves the product's sweep did not
+   move — but it does not prove the test sweep safe; item 2's RED-first scenario and the invariant test do.
 9. **The scenarios with their RED symptoms**, at least: a `testsToDelete-coai-…` folder OLDER than the window whose
    marker names a live process (this test process) survives — the case age alone gets wrong; one with a
    foreign-host marker and one with an unreadable marker survive; a probe-`gone` owner's folder and marker go; an old
    unmarked new-form folder goes; one touched within the window is not considered; `coai-chat-…`, `coai-answers-…`,
-   `coai-server-job-…`, `coai-check-…` (every `neverSwept` entry) and `coai-0.58.0` of any age survive both branches;
-   an old `coai-panel-…` goes before the end date and survives after it; `TESTSTODELETE-COAI-x-abc123` and
+   `coai-server-job-…`, `coai-check-…` (every `neverSwept` entry) and `coai-0.58.0` of any age survive the test
+   sweep; an old `coai-panel-…` (an old TEST name) survives it too — no test sweep takes a `coai-` name (item 2); an
+   old orphan claim with a live, a foreign-host and an unreadable owner survives and one with a gone owner goes
+   (item 4); item 2's RED-first scenario and invariant test; `TESTSTODELETE-COAI-x-abc123` and
    `teststodelete_coai_x_abc123` are considered; `testsToDelete-kimi-x` and `testsToDelete-mcp-x-abc123` are not
    looked at; a junction inside a gone owner's folder is removed by its own name and its target keeps its bytes; a
    sweep error is one line and the suite still runs; *(plan-gate round 1)* a gone owner's folder or marker removed by
    another sweep between the listing and the delete (an injected `io`/deleter that removes it first, and once two
-   real sweeps over one private root at once) ⇒ no failure, no report line, no throw; the old branch at an injected
-   `now` collects exactly what today's code collects (item 2). Never the REAL probe on a dead child's pid (Windows hands
+   real sweeps over one private root at once) ⇒ no failure, no report line, no throw. Never the REAL probe on a dead
+   child's pid (Windows hands
    exited pids to the next process — E1 met it mid-suite): a kill is simulated with an injected probe.
-10. **Break-its**, each observed red: `neverSwept` emptied; the new prefix unanchored (`includes`); the old prefix in
-    the new branch; the end date in the past; the probe's `unknown` mapped to `gone`; the case-insensitive match made
-    case-sensitive.
+10. **Break-its**, each observed red: a `coai-` match restored in either selector (the legacy branch back) ⇒ item 2's
+    RED-first scenario and the invariant test red; `neverSwept` emptied ⇒ the three product-prefix scans red (the
+    invariant test stays GREEN — that is the point of it); the new prefix unanchored (`includes`); the probe's
+    `unknown` mapped to `gone`; an orphan claim removed by age alone ⇒ the live-owner orphan scenario red; the
+    case-insensitive match made case-sensitive.
 
 - **Commands** (the spec may add): the `src_mcp` suite as in S1 with `--filter-class "*TempDirsAreSwept"` then whole;
   the server, ingest-server and bench executables; `cd src_vs_code && npm test`; on Windows, inside WSL, and the macOS
   CI leg for the C# start time.
 - **DoD.** The spec's scenarios RED then GREEN on Windows and Linux; the break-its red; `PanelService.cs` unchanged
   AND the `PruneOldScratchDirs` characterization test (item 8) merged on `main` before the rest of S2 and green
-  unchanged in every E5 PR; the old branch's equivalence proven with an injected clock (item 2); the end date's
-  evidence and computed date written in the spec (item 1); concurrent sweeps silent on not-found (item 5); the three
-  product-prefix scans unchanged and green; `module_tests.md` describes the two branches and the end date.
+  unchanged in every E5 PR; the age-only `coai-` branch removed from both sweeps, item 2's RED-first scenario observed
+  red on today's selector in C# AND Node and then green, and the invariant test green with `neverSwept` empty;
+  concurrent sweeps silent on not-found (item 5); the three product-prefix scans unchanged and green;
+  `module_tests.md` describes the one test branch, the invariant, the one-off old-prefix clean-up and the residual
+  risk of old checkouts (item 1).
 
 ## S3 — The two helpers, the per-suite fixtures, the editor-host run
 
@@ -658,7 +693,7 @@ moved):
 | The parent's "proven by" | Where |
 |---|---|
 | Concurrent-owner survival: an old `testsToDelete-coai-…` with a live owner, a foreign-host and an unreadable marker survive | S2 (spec scenario list, item 9) |
-| A fresh `testsToDelete-coai-…` and a `coai-chat-…` of any age survive; an old `testsToDelete-coai-…` and an old `coai-panel-…` go | S2 item 9 — the `coai-panel-…` only BEFORE the end date |
+| A fresh `testsToDelete-coai-…` and a `coai-chat-…` of any age survive; an old `testsToDelete-coai-…` and an old `coai-panel-…` go | S2 items 2 and 9 — **corrected 2026-10-17:** the old `testsToDelete-coai-…` goes only on a gone owner; the old `coai-panel-…` does NOT go — no test sweep takes a `coai-` name (D4's one-off clean-up does, by a person); the RED-first scenario is an unmarked `coai-chat-live` with `coai-chat-` omitted from the exclusions, which must survive |
 | The product dirs' own sweep is separate and unchanged | S2 item 8 (a diff check plus the product sweep's own tests) |
 | The three pinning tests go RED on the config change and GREEN with the list | S2 item 7 — corrected: four TEST-prefix pins move; the three PRODUCT-prefix scans must stay green throughout |
 | The guard's break-it on an extension test with a new un-prefixed `mkdtemp` | S5 sc. 2, 6 |
@@ -670,23 +705,25 @@ moved):
 
 - [ ] The pin carries the E1 release; the mounted rule lists `coai`; the copied settings and hooks are byte-identical;
       the reviewer-rules canary is green on the tree that carries both S1 and #848 (S1).
-- [ ] `temp-sweep.json` names the new test prefix, the old one with its end date, and the unchanged `neverSwept`;
-      both test sweeps remove a `testsToDelete-coai-` folder only on owner `gone`; the old branch is today's code
-      until the end date; `PanelService.cs` and the product sweep's tests are unchanged (S2).
+- [ ] `temp-sweep.json` names the new test prefix and the unchanged `neverSwept`, and no old test prefix or end date;
+      both test sweeps take ONLY `testsToDelete-coai-` names and remove one only on owner `gone`; no test sweep matches
+      a `coai-*` name at any age, proven in C# and Node with `neverSwept` empty; `PanelService.cs` and the product
+      sweep's tests are unchanged (S2).
 - [ ] Every C# and Node test folder is made by a helper, named `testsToDelete-coai-<what>-<id>`, claimed beside
       itself, removed on every path, never throwing (but the lost-link re-throw); every C# suite sweeps at its start;
       `npm run test:host` leaks nothing and passes its own `--user-data-dir` (S3–S5).
 - [ ] The guard is red on every class, on `old-prefix`, on `tokenless-name`, on a `tmpdir` import or a `GetTempPath`
       outside the helpers, on an unregistered token and on a scan of nothing; it landed after every token-less site
       was migrated (S4, S5).
-- [ ] The product sweep's characterization test landed first and stayed green; the old branch is proven equal to
-      today's with an injected clock; the end date rests on recorded evidence; concurrent sweeps never fail (S2).
-- [ ] `research/module_tests.md` describes the helpers, both branches of the sweep, the end date and the guard; the
+- [ ] The product sweep's characterization test landed first and stayed green (scope control only); the RED-first
+      `coai-chat-live` scenario was observed red on today's selector in both implementations and is green; concurrent
+      sweeps never fail (S2).
+- [ ] `research/module_tests.md` describes the helpers, the one test branch of the sweep and its invariant, the
+      one-off old-prefix clean-up a person runs (listing first), the residual risk of old checkouts, and the guard; the
       D5 follow-up plan is in `todo/`.
 - [ ] When the last story merges, this document's status becomes `E5 shipped, <date>; promotes with its parent` —
       never *implemented* while it sits in `todo/` — and the parent's E5 entry gets the same sentence. Parent and
-      stories documents promote together, after E7. A separate dated item is left open for the END DATE: on that
-      date a one-line PR removes the old branch from `temp-sweep.json` and both readers.
+      stories documents promote together, after E7. (No end-date item is left open: the legacy branch is removed in S2.)
 
 ## Plan-gate round 1 (2026-10-17)
 
@@ -699,9 +736,15 @@ The coai plan gate over this document; the judge (Opus) accepted seven findings 
 2. A characterization test pins `PanelService.PruneOldScratchDirs` on `main` before S2 changes anything, through its
    `cutoff` argument, and stays green — not only `git diff --exit-code` — S2 item 8, S2 DoD.
 3. The old `coai-` branch is proven equal to today's by a test with an injected clock and controlled ages, never a
-   real wait — S2 items 2 and 9.
+   real wait — S2 items 2 and 9. **Moot since 2026-10-17:** there is no old branch to prove equal (finding 4's
+   supersession below); the injected-clock discipline carries over to item 2's RED-first scenario.
 4. The old-prefix end date is a verifiable condition (no branch or agent worktree runs the old suites), with the
-   evidence recorded and a concrete date; until then the old branch stays — S2 item 1.
+   evidence recorded and a concrete date; until then the old branch stays — S2 item 1. **SUPERSEDED 2026-10-17 by the
+   risk decision** (§ *Risk decision* below): the "keep an old-prefix branch until an end date" approach does not
+   ship. Reason: an idle folder of a live OLD suite is indistinguishable by age from an abandoned one, and one
+   product prefix missing from the exclusions deletes a person's chat — measured by the consultant on today's
+   `toSweep`: `coai-panel-live` at 11 minutes is selected, and without `coai-chat-` in the rule, `coai-chat-live` is
+   selected. No end date can make an age-only rule safe against either.
 5. The C# claim is written with `FileMode.CreateNew`/`FileShare.None`, like Node's `wx` — no temp name and
    `File.Move` — S3 (change, sc. 5a, DoD).
 6. The guard also refuses importing `tmpdir` from `os`/`node:os` under any alias outside the helper, and
@@ -721,6 +764,25 @@ The coai plan gate over this document; the judge (Opus) accepted seven findings 
 5. A `Dispose` that throws on a leak — it contradicts the contract's never-throwing teardown; a leak is left prefixed
    and claimed with one warning line, and the audit surfaces it (S4 sc. 1, S4 sc. 3 and S5's DoD:
    `janitor.sh --token coai --dry-run` after a full run).
+
+## Risk decision (2026-10-17)
+
+The coordinator's decision from the gate-ordered risk consultation on S2 (coai consultation `a70b0f8c…`), applied in
+D4, S2 (goal, items 1, 2, 4, 6–10, DoD), the Test plan and the DoD of this document:
+
+- **The age-only legacy `coai-` test branch does not ship.** Both test sweeps take ONLY `testsToDelete-coai-…`
+  names, judged by owner; the legacy branch is removed in S2. Old-prefix test leftovers are left for an explicit
+  clean-up — a documented one-off command a person runs, listing first. The janitor matches only `^teststodelete[-_]`
+  names, so nothing is delegated to it.
+- **The invariant:** every `coai-*` name is outside the test sweep — structurally, not through `neverSwept` — so a
+  product prefix invented tomorrow is covered on the day it is invented. Stated and tested in S2 item 2.
+- **The RED-first scenario, in C# and Node:** an unmarked `coai-chat-live` with sentinel bytes, 11 minutes old, with
+  `coai-chat-` omitted from the injected exclusions, survives the complete startup sweep byte for byte; an old
+  `testsToDelete-coai-*` folder with a provably gone owner disappears. Today's selector fails it.
+- **Known residual risk:** old checkouts and agent worktrees on pre-S2 code keep their old age-only sweepers.
+  Mitigation: update or rebase them, or run their suites with a private temp root.
+- **Scope control is not safety:** the `PanelService.PruneOldScratchDirs` characterization test stays, and proves
+  only that the product's sweep did not move.
 
 ## Notes for the parent (`dew_flow_conventions · todo/PLAN_test_leftovers_rollout.md`, E5 entry)
 
@@ -756,8 +818,10 @@ The coai plan gate over this document; the judge (Opus) accepted seven findings 
    `CreateTempSubdirectory` and no `GetTempFileName` — .NET's main temp APIs, and E3's nineteen sites are all
    `CreateTempSubdirectory`; rule §7's example list has the same gap. And rule §4's premise for the old-prefix
    branch ("nothing live makes such a name any more") is false in a repository whose older checkouts keep running
-   the old suites — harmless here (the old branch is today's behaviour, test folders only), but the end date has to
-   be counted from when old branches stop running.
+   the old suites. *(2026-10-17)* coai no longer uses the clause at all: its old prefix `coai-` IS the product's
+   prefix, so an age-only old-prefix branch reaches live product directories whenever one exclusion is missing — E5
+   retires the branch in S2 and cleans old names by a one-off person-run command (§ *Risk decision*). The contract
+   may want to say that the old-prefix clause is forbidden where the old prefix is shared with product names.
 10. **"~49 sites with no cleanup"** is, at file level on 1fe25d19, 43 C# test files and 2 Node files with no removal
     call at all (an upper bound — some only pass `GetTempPath()` as a root); the per-site figure is S4's and S5's
     RED count.
