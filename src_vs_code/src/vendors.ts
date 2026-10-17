@@ -2,7 +2,7 @@ import { DEFAULT_API_DIALECT } from './apiRuntime';
 import { storedApiSettings } from './apiSettings';
 import { reviewsFeatures } from './featureGate';
 import { KIMI_MODELS, Runtime, RUNTIMES, VIBE_MODELS } from './models';
-import { KIMI_RUNTIME_SINCE, VIBE_ON_LINUX_SINCE, VIBE_RUNTIME_SINCE } from './runtimeSince';
+import { KIMI_ON_LINUX_SINCE, KIMI_RUNTIME_SINCE, VIBE_ON_LINUX_SINCE, VIBE_RUNTIME_SINCE } from './runtimeSince';
 import { saidText } from './saidText';
 import { catalogFields, CatalogUse, type FastSetting } from './catalogFields';
 import { bySideOf, type ExecutableBySide } from './pathFamily';
@@ -304,12 +304,13 @@ export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })
     pricePerMillionOut: 0,
   },
   // Moonshot's own CLI on the person's own Kimi Code plan (todo/PLAN_vibe_and_kimi_runtimes_E4.md E4.5). A preset and never a
-  // default (D11). The hint carries what a person meets first: the sign-in is Kimi's own, coai-mcp runs it on Windows only
-  // for now (D18), an older coai-mcp does not know the runtime (D13 — `runtimeSince.ts`), and the three reviewers of a round
+  // default (D11). The hint carries what a person meets first: the sign-in is Kimi's own, coai-mcp runs it on Windows and on
+  // WSL2 from KIMI_ON_LINUX_SINCE (DL1 of todo/PLAN_kimi_and_vibe_on_linux.md lifts D18 for WSL2 only), the person's own open kimi
+  // makes coai's turns wait (Q3), an older coai-mcp does not know the runtime (D13 — `runtimeSince.ts`), and the three reviewers of a round
   // run one after another because they share one sign-in (D19).
   {
     label: 'Kimi Code',
-    hint: `Moonshot’s own Kimi CLI on your Kimi Code plan, signed in as itself (kimi login) — no key in the vault. coai-mcp runs it on Windows only for now, needs coai-mcp ${KIMI_RUNTIME_SINCE} or later, and a Kimi row’s reviewers run one after another because they share one sign-in.`,
+    hint: `Moonshot’s own Kimi CLI on your Kimi Code plan, signed in as itself (kimi login) — no key in the vault. coai-mcp runs it on Windows, and on WSL2 from coai-mcp ${KIMI_ON_LINUX_SINCE} when coai-mcp itself runs there (a VS Code window attached to WSL). On a native Linux host coai-mcp refuses Kimi for now — it is measured on WSL2 only. It needs coai-mcp ${KIMI_RUNTIME_SINCE} or later, and a Kimi row’s reviewers run one after another because they share one sign-in. While your own kimi is open, coai’s Kimi turns wait for it and then answer busy.`,
     id: 'kimi',
     runtime: 'kimi',
     model: KIMI_MODELS[0]!.id,
