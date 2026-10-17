@@ -86,7 +86,7 @@ public static class VibeLaunch
 
     /// <summary>WSL2 is admitted; a WSL1 kernel (which reads as a WSL host) is refused with its cure.</summary>
     private static string WslRefusal(WslGeneration wsl) =>
-        wsl == WslGeneration.Wsl2 ? string.Empty : Wsl2Only("it is measured on WSL2, and this is WSL1", " — convert the distribution with `wsl --set-version <distro> 2` from Windows");
+        wsl == WslGeneration.Wsl2 ? string.Empty : Wsl2Only("it is measured on WSL2, and this is WSL1", "; Run this from Windows (not inside WSL): `wsl --set-version <distro> 2`");
 
     private static string NothingMeasured(HostKind host) =>
         $"Vibe is refused on a {HostKinds.Word(host)} host until it is measured there (D18 of todo/PLAN_vibe_and_kimi_runtimes.md) — Vibe is measured on Windows and WSL2 only";

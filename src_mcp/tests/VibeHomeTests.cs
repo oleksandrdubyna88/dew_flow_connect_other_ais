@@ -491,6 +491,31 @@ public sealed class VibeHomeManifestTests
         manifest.Known.Should().Be("2.26.1 (win32), 2.26.1 (linux)", "the warning and the refusal name each measured version with its platform");
     }
 
+    /// <summary>
+    /// A field the client omitted is NULL whatever its initializer says (doctrine 4a): an explicit <c>"platform": null</c>, a blank one and a
+    /// hand-made entry given null all read as win32 — the normalisation is where the value is READ, not at one call site.
+    /// </summary>
+    [Theory]
+    [InlineData(""" "platform": null, """)]
+    [InlineData(""" "platform": "", """)]
+    [InlineData(""" "platform": "  ", """)]
+    [InlineData("")]
+    public void AnEntryWhosePlatformIsNullBlankOrAbsent_ReadsAsWin32(string field)
+    {
+        var json = $$"""{"pinnedPrefix":"logs/session/plugins/","varying":["vibehistory"],"versions":[{"version":"2.26.1",{{field}}"pinned":[{"path":"a","sha256":"1111111111111111111111111111111111111111111111111111111111111111"}]}]}""";
+
+        var manifest = VibeHomeManifest.Parse(json).Should().BeOfType<VibeManifestLoad.Loaded>().Subject.Manifest;
+
+        manifest.For("2.26.1", "win32").Should().ContainSingle("an entry whose platform is null or blank was not read as win32");
+        manifest.Known.Should().Be("2.26.1 (win32)");
+    }
+
+    [Fact]
+    public void AnEntryHandedANullPlatform_ReadsAsWin32()
+    {
+        new VibeHomeEntry("2.26.1", []) { Platform = null! }.Platform.Should().Be("win32");
+    }
+
     /// <summary>S-V16 (DL3): an entry with no platform reads as win32, so an older manifest or a hand-made entry keeps its meaning.</summary>
     [Fact]
     public void AnEntryWithNoPlatform_ReadsAsWin32_AndTheShippedLinuxHashesDifferFromWindows()

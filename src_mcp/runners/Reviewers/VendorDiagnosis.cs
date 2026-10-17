@@ -172,7 +172,10 @@ public static class VendorDiagnosis
     /// readings of one sentence that could disagree are how a cure and a classification would drift.
     /// </remarks>
     public static Diagnosis? Classify(string text, bool? wsl = null) =>
-        Classify(text, wsl switch { true => HostKind.Wsl, false => HostKind.Windows, null => HostKinds.Current });
+        Classify(text, HostFor(wsl, HostKinds.Current));
+
+    /// <summary>The host the legacy WSL-or-not flag names, given this process's own host: pure. `false` is "not WSL" — never "Windows" — so it keeps this process's own kind (a WSL process, asked as not-WSL, is plain Linux).</summary>
+    internal static HostKind HostFor(bool? wsl, HostKind process) => wsl switch { true => HostKind.Wsl, false => process == HostKind.Wsl ? HostKind.Linux : process, null => process };
 
     /// <summary>
     /// <see cref="Classify(string, bool?)"/> for a stated HOST (DL2 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): a cure that differs

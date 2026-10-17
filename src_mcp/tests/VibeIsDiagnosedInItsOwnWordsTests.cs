@@ -53,8 +53,34 @@ public sealed class VibeIsDiagnosedInItsOwnWordsTests
         var windows = VendorDiagnosis.Classify(SignedOut, HostKind.Windows)!.Cure;
 
         windows.Should().Contain("vibe --setup").And.Contain("operating system's keyring").And.NotContain("~/.vibe/.env", "on Windows the sign-in is in the Credential Manager, which every launch reads");
-        VendorDiagnosis.Classify(SignedOut, wsl: false)!.Cure.Should().Be(windows, "the old bool spelling means Windows-or-not, and `false` still gets the Windows sentence");
+        VendorDiagnosis.Classify(SignedOut, wsl: false)!.Cure.Should().Be(VendorDiagnosis.Classify(SignedOut, VendorDiagnosis.HostFor(wsl: false, HostKinds.Current))!.Cure, "the old bool spelling means not-WSL on THIS process's host, not Windows");
         VendorDiagnosis.Classify(SignedOut, wsl: true)!.Cure.Should().Be(VendorDiagnosis.Classify(SignedOut, HostKind.Wsl)!.Cure);
+    }
+
+    /// <summary>
+    /// The legacy `wsl: false` means "not WSL", never "Windows": on a native Linux host it must not hand out the keyring cure of a machine it is
+    /// not. WSL-or-not is the only thing the flag says; the rest is this process's own host.
+    /// </summary>
+    [Theory]
+    [InlineData(false, HostKind.Linux, HostKind.Linux)]
+    [InlineData(false, HostKind.Windows, HostKind.Windows)]
+    [InlineData(false, HostKind.MacOs, HostKind.MacOs)]
+    [InlineData(false, HostKind.Wsl, HostKind.Linux)]
+    [InlineData(true, HostKind.Linux, HostKind.Wsl)]
+    [InlineData(true, HostKind.Windows, HostKind.Wsl)]
+    [InlineData(null, HostKind.Linux, HostKind.Linux)]
+    [InlineData(null, HostKind.Wsl, HostKind.Wsl)]
+    public void TheLegacyWslFlag_NamesTheProcessesOwnHost_WhenItIsNotWsl(bool? wsl, HostKind process, HostKind expected)
+    {
+        VendorDiagnosis.HostFor(wsl, process).Should().Be(expected);
+    }
+
+    [Fact]
+    public void OnANativeLinuxHost_TheLegacyNotWslFlag_GetsTheEnvFileCure_NotTheKeyringOne()
+    {
+        var cure = VendorDiagnosis.Classify(SignedOut, VendorDiagnosis.HostFor(wsl: false, HostKind.Linux))!.Cure;
+
+        cure.Should().Contain("~/.vibe/.env").And.Contain("keyring").And.Contain("D-Bus");
     }
 
     [Fact]

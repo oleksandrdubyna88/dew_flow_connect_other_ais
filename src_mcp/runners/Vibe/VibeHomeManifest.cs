@@ -13,7 +13,15 @@ public sealed record VibeHomeEntry(string Version, IReadOnlyList<VibePinnedFile>
     public const string DefaultPlatform = "win32";
 
     /// <summary>The platform the entry was measured on, as node spells it (<c>win32</c> | <c>linux</c>); an entry with none reads as <see cref="DefaultPlatform"/>.</summary>
-    public string Platform { get; init; } = DefaultPlatform;
+    /// <remarks>
+    /// Normalised where it is SET, so every read — <c>For</c>, <c>Known</c>, equality — sees one value: a deserializer does not run an
+    /// initializer (an omitted or <c>null</c> field arrives null, doctrine 4a) and a caller can hand in null or blank.
+    /// </remarks>
+    public string Platform
+    {
+        get;
+        init => field = string.IsNullOrWhiteSpace(value) ? DefaultPlatform : value;
+    } = DefaultPlatform;
 
     /// <summary>The pinned file at <paramref name="path"/> (forward slashes, ordinal), or none.</summary>
     public IReadOnlyList<VibePinnedFile> At(string path) => [.. Pinned.Where(file => file.Path == path)];
