@@ -6366,7 +6366,7 @@ When a round-tree add STILL fails over a path, `WorktreeFailure.Sentence` (used 
 git's own `error: unable to create file …` or `fatal: cannot create directory at …` line and says which path,
 how long it is (UTF-16 units, what Windows counts) and git's reason — e.g. `Invalid argument` for a single
 path component of 256 units, which `core.longpaths` does not lift because NTFS caps a component at 255. For
-`Filename too long` it also names the 259 limit, says coai already asked for long paths, and names
+`Filename too long` it also names the limit — 259 for a file, 247 for a folder, which Windows refuses 12 units sooner (probed 2026-10-17: a 248-unit folder failed while the file in it was 250) — says coai already asked for long paths, and names
 `COAI_ROUND_WORKTREES`; for any other reason it names no root advice, because a shorter root does not cure
 it. git's closing `fatal:` line follows, as the last word rather than the only one. A failure with no such
 line reads as it always did, and a review tree's add keeps its wire word `git_failed`.

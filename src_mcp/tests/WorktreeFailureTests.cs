@@ -72,10 +72,38 @@ public sealed class WorktreeFailureTests
         }
     }
 
+    /// <summary>
+    /// A FOLDER is refused 12 units sooner than a file: git for Windows made a 247-unit folder and refused
+    /// 248 while the file inside it was only 250 (probed 2026-10-17). A folder git could not make is
+    /// therefore never told "259 is allowed" beside a length under 259.
+    /// </summary>
+    [Fact]
+    public void ADirectoryThatIsTooLong_IsHeldAgainstTheFolderLimit_NotTheFileLimit()
+    {
+        var said = WorktreeFailure.Sentence("fatal: cannot create directory at 'a/b': Filename too long", Tree);
+
+        if (OperatingSystem.IsWindows())
+        {
+            said.Should().Contain("247", "a folder path stops at 247 units on Windows, not at a file's 259");
+            said.Should().NotContain("259", "the file limit is not the one this folder crossed");
+            said.Should().Contain("COAI_ROUND_WORKTREES");
+        }
+        else
+        {
+            said.Should().NotContain("247").And.NotContain("259");
+        }
+    }
+
     [Fact]
     public void TheWindowsLimitIsOneNamedConstant_259()
     {
         WorktreeFailure.WindowsMaxPathUnits.Should().Be(259, "P1 accepted 259 units and P2 refused 260");
+    }
+
+    [Fact]
+    public void TheWindowsFolderLimitIsOneNamedConstant_247()
+    {
+        WorktreeFailure.WindowsMaxFolderUnits.Should().Be(247, "git made a 247-unit folder and refused 248");
     }
 
     /// <summary>A name longer than NTFS allows is not cured by a shorter root, so no advice about a root.</summary>
