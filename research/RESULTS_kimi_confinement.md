@@ -931,3 +931,22 @@ Both predictions held: the inheritable take is a SHARED lock (a second shim on t
 **After the native take** (CI run 38960351979, the first with all of A2; ubuntu job): `HeldFileInheritableOnLinuxTests` (3), `TheTreeHoldIsExclusiveAndInheritedOnLinuxTests` (3) and the three lifted `KimiCredentialsLockTests` (`TheTreeHold_OutlivesItsOpener_WhileAChildLives`, `AShimThatMeetsADisposalsProbe_WaitsItOut_AndTakesItsHold`, `TheGateAlone_DoesNotOutliveItsOpener_…`) were green, with `TwoSpellingsOfOneFolder_GiveOneKey_…` (S-K3), `ABindMountedSpelling_IsTheSameKey` (S-K11) and every `KimiLockRetirementTests` arm. The two ubuntu failures of that run were this work's own and are fixed in the next commit: the Linux listing read `ESRCH` from a process that exited mid-read as "unreadable", and `JunctionsUnix.MakeLink` did not make a missing parent folder.
 
 What the hold covers on Linux is unchanged from §29: the shim and `kimi`, the direct child that inherited the descriptor; not a grandchild `kimi` starts the ordinary way (L-K5). That is enough while the refresher is `kimi` itself (L-K4); what the hold cannot see, A3's survivor marker must.
+
+**L-N1 after the join, and L-N2 / L-N3 (E5 integration, 2026-10-17).** The `/proc/locks` pin (`L_N1a_ProcLocks_NamesTheKindOfFlockTheInheritableHoldTook`) read `READ` while .NET took the lock; with `LinuxHeldFile` in the tree it now asserts `WRITE` (`LOCK_EX`), and it is green on Linux.
+
+L-N2 and L-N3 were measured by A3's Linux tests, which run in a CHILD that is the subreaper (`FakeCli supervise-tree`, `FakeCli shim-acp`) because a test host must never become one. On A3's own branch (CI run 38969031489, ubuntu job `build · test · family checks`: 10831 tests, 1 failed, 82 skipped) the ONLY red was the L-N1 test that A2's `LinuxHeldFile` fixes; every `SupervisedTeardownLinuxTests` arm ran (none skipped) and was green:
+
+| Cell | What ran | Result |
+|---|---|---|
+| L-N2, arm 1 | a subreaper shim, a fake agent that starts a same-group child and a `setsid` child and exits first: after the teardown both are gone | green |
+| L-N2, re-listing | a grandchild born AFTER the first listing is found by the re-listing confirmation (deterministic: the spawn is held until the listing is written) | green |
+| L-N2, zombie | a grandchild that exits by itself before the teardown is reaped by the drain, is not a survivor, and leaves no marker | green |
+| L-N2, signals | the shim `SIGTERM`ed while the agent lives ends its tree; the shim `SIGKILL`ed leaves its `running` marker naming the agent | green |
+| L-N3, real-process arms | gone → cleared; alive → ended by identity → cleared | green |
+| L-N3, still-there-at-the-bound | through the reconcile seam only (nothing ignores `SIGKILL`, so no real process can stage a survivor) | green, everywhere |
+
+After the join (this branch, CI run 39028293182, dispatched on `feat/wsl-kimi-e5` with A2, A3 and the port-fix merged): ubuntu 10957 tests, **0 failed**, 81 skipped (Windows-only arms); the Windows, macOS and extension jobs green. The joined seam is exercised on Linux by `OnLinux_TheShimsHold_IsSupervised_WithoutAnyFlag` and by the A2 `KimiShimHold` tests running over the product's own gate.
+
+What the first join run on Linux found (one red, fixed): `JunctionsTests.ATargetOnADrvfsMount_IsRefused_AndNothingIsMade` named a fake mount point, but the port-fix's `MountLocality` now asks the real `statx` for the mount of the path (id 27, not in the stand-in table) and refuses what it cannot prove — correct for the product, wrong for the stand-in. `Junctions.StandInMountInfo` takes the identity the kernel would give; the test passes `NotAsked`.
+
+DL10, re-decided 2026-10-17 on the owner's WSL2 (`systemd` and `(sd-pam)` hide `/proc/<pid>/exe` from their own account): the three shapes are pinned on the fake `/proc` (`LinuxHiddenExeTests`, 10 red before the fix); on the ubuntu job the real listing of the whole runner was readable (`HostProcessListTests.OnLinux_TheWholeMachinesListing…` no longer skips for a hidden `exe`).
