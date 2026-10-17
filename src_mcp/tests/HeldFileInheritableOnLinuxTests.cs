@@ -100,6 +100,30 @@ public sealed class HeldFileInheritableOnLinuxTests : IDisposable
     }
 
     [Fact]
+    public void AnInheritableHold_IsOnlyEverWindowsOrLinuxs_NeverDotNetsSharedFlockOnAnotherHost()
+    {
+        HeldFile.InheritableSupported(windows: true, linux: false).Should().BeTrue();
+        HeldFile.InheritableSupported(windows: false, linux: true).Should().BeTrue();
+        HeldFile.InheritableSupported(windows: false, linux: false).Should().BeFalse("on any other host .NET's FileShare.None | Inheritable is a SHARED flock (L-N1): two holders, not one");
+
+        var refused = HeldFile.UnsupportedInheritable().Should().BeOfType<Hold.Unusable>().Subject;
+
+        refused.Cause.Should().BeOfType<PlatformNotSupportedException>().Which.Message.Should().Contain("Windows and Linux");
+    }
+
+    [Fact]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public void ATakeWhoseStreamCannotBeMade_ClosesItsDescriptor_AndLeavesTheFileFree()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "the native take is Linux's");
+
+        var hold = LinuxHeldFile.TakeInheritable(LockFile, _ => throw new IOException("the stream could not be made"));
+
+        hold.Should().BeOfType<Hold.Unusable>().Which.Cause.Message.Should().Contain("the stream could not be made");
+        HeldFile.Probe(LockFile).Should().Be(LockProbe.Free, "the descriptor leaked with its flock: nobody else can take the file until this process exits");
+    }
+
+    [Fact]
     public async Task L_N1a_ANonInheritableTake_BesideAnInheritableHold_IsBusy()
     {
         Assert.SkipUnless(OperatingSystem.IsLinux(), "L-N1 asks what .NET does on Linux; the Windows share mode is the kernel's");

@@ -49,7 +49,16 @@ public static class HeldFile
     /// violation, on Unix the advisory <c>flock</c> .NET takes.
     /// </remarks>
     public static Hold Take(string path, bool inheritable = false) =>
-        inheritable && OperatingSystem.IsLinux() ? LinuxHeldFile.TakeInheritable(path) : TakenByDotNet(path, inheritable);
+        inheritable && !InheritableSupported(OperatingSystem.IsWindows(), OperatingSystem.IsLinux())
+            ? UnsupportedInheritable()
+            : inheritable && OperatingSystem.IsLinux() ? LinuxHeldFile.TakeInheritable(path) : TakenByDotNet(path, inheritable);
+
+    /// <summary>Whether an EXCLUSIVE inheritable hold exists on this host: Windows (the share mode is the kernel's) and Linux (the native <c>flock</c>). Nowhere else — .NET's own combined share mode is a shared lock on Unix.</summary>
+    internal static bool InheritableSupported(bool windows, bool linux) => windows || linux;
+
+    /// <summary>The answer on a host with no exclusive inheritable hold: unusable, never .NET's shared lock (two holders of the sign-in would be let in — two refreshers of a rotating token).</summary>
+    internal static Hold UnsupportedInheritable() =>
+        new Hold.Unusable(new PlatformNotSupportedException("an exclusive inheritable hold exists on Windows and Linux only; .NET's FileShare.None | Inheritable is a shared lock on any other host (L-N1)"));
 
     private static Hold TakenByDotNet(string path, bool inheritable)
     {

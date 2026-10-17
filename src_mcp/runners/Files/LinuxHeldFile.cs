@@ -33,7 +33,10 @@ internal static partial class LinuxHeldFile
     private const int NameTooLong = 36;
 
     /// <summary><c>open(path, O_RDWR|O_CREAT|O_NOCTTY, 0600)</c> and <c>flock(LOCK_EX|LOCK_NB)</c>: taken over a stream on the descriptor, <c>Busy</c> on <c>EWOULDBLOCK</c>, otherwise <c>Unusable</c> naming the errno.</summary>
-    public static Hold TakeInheritable(string path)
+    public static Hold TakeInheritable(string path) => TakeInheritable(path, handle => new FileStream(handle, FileAccess.ReadWrite, bufferSize: 0));
+
+    /// <summary>The same, with the stream over the descriptor behind a seam — a test makes its construction fail.</summary>
+    internal static Hold TakeInheritable(string path, Func<SafeFileHandle, FileStream> stream)
     {
         var descriptor = Open(path, ReadWrite | Create | NoControllingTerminal, OwnerReadWrite);
         if (descriptor < 0)
@@ -41,11 +44,24 @@ internal static partial class LinuxHeldFile
             return new Hold.Unusable(Failure(path, Marshal.GetLastPInvokeError()));
         }
 
-        return Flock(descriptor, LockExclusive | LockNonBlocking) == 0 ? Held(descriptor) : Refused(descriptor, path, Marshal.GetLastPInvokeError());
+        return Flock(descriptor, LockExclusive | LockNonBlocking) == 0 ? Held(descriptor, stream) : Refused(descriptor, path, Marshal.GetLastPInvokeError());
     }
 
-    private static Hold.Taken Held(int descriptor) =>
-        new(new FileStream(new SafeFileHandle(descriptor, ownsHandle: true), FileAccess.ReadWrite, bufferSize: 0));
+    /// <summary>The stream over the descriptor; when the stream cannot be made, the handle that owns the descriptor is disposed — the descriptor is closed exactly once, and the flock goes with it and the failure is the take's.</summary>
+    private static Hold Held(int descriptor, Func<SafeFileHandle, FileStream> stream)
+    {
+        var handle = new SafeFileHandle(descriptor, ownsHandle: true);
+        try
+        {
+            return new Hold.Taken(stream(handle));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            handle.Dispose();
+
+            return new Hold.Unusable(e);
+        }
+    }
 
     private static Hold Refused(int descriptor, string path, int errno)
     {
