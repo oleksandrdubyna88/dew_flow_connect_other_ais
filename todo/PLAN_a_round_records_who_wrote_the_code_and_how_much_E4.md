@@ -23,6 +23,15 @@
 > and the caller-level shared total is rejected with reasons (G11). The cross-epic consequences for E3/E5/E6/E7 and the
 > parent are listed at the end of §11; no other document is edited here.
 >
+> **Judge review 2026-10-17** (an independent Opus judge over `7c3bf469` and E5 `f4dcc003`: 1 blocker, 2 high, 8 medium,
+> 10 low; the report is the coordinator's). Every point touching E4 is resolved in §11 *Resolutions II*, each verified in
+> the code first; none rejected. The cornerstone choice **B1**: the ONE `ObservedSession → AttributionInput` mapping is
+> `src_mcp/src/Store/AttributionMapping.cs`, **built by E4.S5** (which already depends on E3.S4) and CALLED by E5.S4 and
+> E7.S2 — so E4 reaches Done before E5. Also: a round is **final** when `done` or `interrupted` (M7, the `peer running`
+> repair trigger); E7 has TWO exceptions to "equal reader → keep" (L10); `WindowAuthors` is final (L1); an unobserved
+> round's `UnobservedLaunches` is `-1` (M1); no round that is skipped, interrupted or running ever gets a snapshot or a
+> state, live or backfilled (M6). The E5 side of the same review is in the E5 document (its §10 item 11, §11.4).
+>
 > Scope: `src_mcp/core/Authors/` (new, pure) and `src_mcp/tests/` (new test classes). No schema step, no
 > call site, no I/O — those are E5's. Related docs: [module_server.md](../research/module_server.md),
 > [PLAN_local_db.md](../research/PLAN_local_db.md).
@@ -51,9 +60,13 @@ would be a habit. The parent records this deviation on promotion.
 | E3.S3: the write test (`WriteTarget`) | **each write as an instant plus its path** — not only a boolean per (agent, repository); see defect 1 in §7, settled by parent §16 D4 — **and, since §S2.2b G3, the instant its `tool_result` was written** (`AnsweredUtc`): the round's completion is the evidence horizon for writes, and E4 cannot apply it without that stamp |
 | E3.S4: the four states | the session-level state and every `partial` reason. **E3's reasons carry NO instant** (`ObservationReason(Code, Count)`, E3 `:231`): every one of them reaches E4 as a `StateReason` with `At = null` and marks every window, EXCEPT the two transcript-missing codes, whose instants ride on E3's `UnobservedLaunches` and which are therefore never mapped as reasons (§S2.2b G4, G5) |
 
-If E3's `ObservedSession` lives in the core, E4.S1 consumes it directly and adds only what is missing. If it
-lives in `src/Store`, E4.S1's input records are the core contract and ONE mapping in `src/Store` (E5's call
-site or E3's reader) fills them — never a second reader.
+E3's `ObservedSession` lives in `src/Store` (E3 `:191`, `:712`), so E4.S1's input records are the core contract and
+**ONE mapping in `src/Store` fills them: `src_mcp/src/Store/AttributionMapping.cs`, built by E4.S5** (B1, 2026-10-17 —
+it was "E5's call site or E3's reader", which left E4.S5 without a unit to call and E5 built after E4). It is a pure
+static class — `Observation(ObservedSession) → CallerObservation`, `Timeline(gateSessionId, repoPath, OpenedUtc,
+IReadOnlyList<RoundRecord>, Func<RoundRecord, string> callerOf) → GateTimeline`, `Universe(gate, peers, observation)`
+(decision 6) — that decides nothing and is CALLED by E5.S4 (step 5) and E7.S2; never a second reader, never a second
+mapping. S5 specifies and tests it.
 
 ## 1. The stories
 
@@ -183,7 +196,8 @@ public sealed record AttributionInput(CallerObservation Caller, GateTimeline Gat
     bool PeersKnown);                                                                      // false → partial: prior windows unknown, Peers empty
 ```
 
-**Mapping from E3** (E3.S4's contract, done by the ONE mapping E5.S4 owns): `ObservedAgent.FirstLineAt =
+**Mapping from E3** (E3.S4's contract, done by the ONE mapping `AttributionMapping`, which E4.S5 builds and E5.S4 / E7.S2
+call — B1): `ObservedAgent.FirstLineAt =
 LaunchedUtc ?? CalledUtc` — null only for a meta without a transcript whose launching call E3 did not parse (such an
 agent is inert, §S2.2b G4: its launch is the `UnobservedLaunch` E3 emits for it); `TranscriptPresent` as is;
 `UnobservedLaunch` is E3's `UnobservedLaunches`, one for one; `ObservedWrite.AnsweredAt` is E3's `AnsweredUtc` (the
@@ -245,8 +259,8 @@ declared is NOT a violation: it has no parent, and it propagates nothing). Added
 file without one is E3's to name — §11 cross-epic list); a write whose `AnsweredAt` precedes its `At` (a result cannot
 precede its call's message); and the attributed `(Stage, Number)` not being **recorded and settled** — `Stage ∈ {PlanReview,
 CodeReview}`, `Verdict ≠ skipped`, `Status == done` (a running round has no completion to be the horizon of §S2.4, and a
-skipped or interrupted round opens no window; E5.S4 never calls `Assign` for one, E7 writes its own `unobserved` reason
-for one). The builder asserts the list is empty — so no later test can pass on a fixture the code quietly declines
+skipped or interrupted round opens no window; neither E5.S4 nor E7 calls `Assign` for one — such a round has no
+snapshot and an empty `authors_state`, *not recorded*, live and backfilled alike; M6, 2026-10-17). The builder asserts the list is empty — so no later test can pass on a fixture the code quietly declines
 (testing.md, *A fixture the code REJECTS proves nothing*). `RoundAttribution.Assign` throws `ArgumentException` naming the
 first violation when `Validate()` is not empty; E5.S4 maps that to `unobserved: invalid input`.
 
@@ -341,13 +355,14 @@ no window, so nothing here depends on which of the three moved (*corrected 2026-
 `CompletedUtc`"*). An interrupted round is `Status = interrupted`, written by the startup sweep `SweepOrphanedRounds`
 (`SessionStore.cs:608-631`, the rewrite at `:626` — *was cited `:594-597`, corrected 2026-10-16, G12e*; it is `IsOrphaned`,
 `:718-719`, that selects a `running` row whose pid is dead) and never reaches
-the call site E5 adds inside the record's `with` block (`RoundEngine.cs:485-496`, saved at `:591`; §8.1). The round's completion
+the call site E5 adds right AFTER the record's `with` block (`RoundEngine.cs:485-496`) — one statement before the save
+(`:591`); an initializer cannot name the record it is building (L2, 2026-10-17; §8.1). The round's completion
 stamp, `RoundRecord.CompletedUtc` (`SessionStore.cs:84`), is what §S2.3 ranks claims by — **but only on a `done` round**
 (§S2.2b G1): the stamp is POSITIONAL, so every record carries one — the running row `LiveRound.Persist` saves on each
 progress event goes through `Record()` (`LiveRound.cs:256`), whose sixth argument is `DateTime.UtcNow` (`:276`); `Finish`
 overwrites it with the completion (`:235-237`) and the sweep with the sweep's own time (`SessionStore.cs:626`). So "a running
 peer has no completion" is false on disk, and the rule reads the status, not the stamp. The horizon of §S2.4 is the same
-stamp of THIS round: `Finish` stamps it (`:237`) before E5's step runs inside the `with` block (`RoundEngine.cs:485-496`), so
+stamp of THIS round: `Finish` stamps it (`:237`) before E5's step runs, one statement after the `with` block (`RoundEngine.cs:485-496`), so
 the completion precedes the live read by construction. The containment rule is S1's
 `Repositories.Contains` / `RepositoryOf` (moved from `AgentLog.cs:304-317`).
 
@@ -423,7 +438,7 @@ One row per item: the decision, its reason, the evidence, and where the rule now
 |---|---|---|---|---|
 | G1 | **A completion ranks only on a `done` round.** `Windows.Of` sets `Window.CompletedUtc = r.Status == done ? r.CompletedUtc : null`; E5's mapping applies the same rule (belt and braces); a running peer that carries a stamp ranks last and claims nothing | the stamp is positional and every row has one: the running row goes through `Record()`, whose sixth argument is `DateTime.UtcNow`; `Finish` and the sweep overwrite it. A rule that read the stamp would rank a running peer by the time of its last progress tick | `LiveRound.cs:256`, `:269-276`; `:235-237`; `SessionStore.cs:84`, `:626`; E5 `:65` says a running peer "is in the file with no completion" — false, listed for E5 | §S2.3 *Tiling*, *Rank*; fact `ARunningPeerWithAStamp_RanksLast` |
 | G2 | **`PriorEnd` is the end of the SETTLED PREFIX, and only settled windows claim.** Walk the peer's recorded rounds in journal order while each is settled (`done`), non-blind, of this caller and started at or before the gate's open; `PriorEnd` = the last such round's start, null when the walk stops at once. `ClaimantsOf` admits settled windows only | the equality "owned set with `PriorEnd` = owned set without it" needs every message before `PriorEnd` to lie in a window that WILL claim it; a running round's window may vanish (interrupted), a blind one places nothing, another caller's claims nothing — so the walk stops at the first of them instead of skipping it (an orphaned `running` row can sit before a `done` one in a journal: the sweep runs at startup, `IsOrphaned` `SessionStore.cs:718-719`) | risk consultation turn 1 item 2 (A starts `+60` running, B opens `+100`, message `+30`); case 7 | §S2.3 *Prior end*, *Claimants*; case 8c; fact `APriorEndStopsAtTheFirstUnsettledPeerRound` |
-| G3 | **The owner of stored uniqueness is E7's backfill; E4 makes the two hazards decidable.** (i) *Late-answered write:* a write is evidence for a round only when `AnsweredAt < that round's CompletedUtc` — THIS round's completion for the own ladder, the CLAIMANT round's for a claimant's ladder — applied live and backfilled alike, so the live view is reproducible exactly and the hazard is gone (`ObservedWrite.AnsweredAt`, a member E3 owes). (ii) *Concurrent completion:* a window overlapped by a not-settled same-caller peer window is `partial: peer running` — ownership was decided from an unsettled store and is PROVISIONAL; E5 stores it as it is and never repairs another gate's rows live (it holds no claim on that session); E7 recomputes exactly the rows whose reasons include `peer running` once every peer named has settled — the ONE exception to "equal reader → keep" — and writes the result under that session's claim. (iii) The assignment names the peer gates it saw (`PeerGates`, ids only) so a backfill can tell a round whose peer set grew (a peer whose projection failed, `Projection.Write` is best-effort) and recompute it too | uniqueness of STORED rows is a property across gate sessions, which only a process that sees them all after they settled can hold; a live cross-gate repair would write another session's file mid-round without its claim. Without a marker the backfill cannot tell a provisional row from a final one, and the no-overwrite rule would freeze the duplicate | `SessionClaim.cs:32-38` (the key is repo + branch + document + feature, never the caller); `LiveRound.cs:237` (stamp) → `RoundEngine.cs:485-496` (E5's step) → `:591` (save) → `:612` (projection); `Projection.cs:24-38`; parent §9 ("never overwrites an `observed`/`partial` row produced by a newer or equal reader version"); E7 `:165-174` rule (2) | §S2.3 *States*, *Claimants*; §S2.4 *WriteRung*; §S2.5 `PeerGates`, `RoundAttribution.Version`; §11 cross-epic list (E3, E5, E7, parent) |
+| G3 | **The owner of stored uniqueness is E7's backfill; E4 makes the two hazards decidable.** (i) *Late-answered write:* a write is evidence for a round only when `AnsweredAt < that round's CompletedUtc` — THIS round's completion for the own ladder, the CLAIMANT round's for a claimant's ladder — applied live and backfilled alike, so the live view is reproducible exactly and the hazard is gone (`ObservedWrite.AnsweredAt`, a member E3 owes). (ii) *Concurrent completion:* a window overlapped by a not-settled same-caller peer window is `partial: peer running` — ownership was decided from an unsettled store and is PROVISIONAL; E5 stores it as it is and never repairs another gate's rows live (it holds no claim on that session); E7 recomputes exactly the rows whose reasons include `peer running` once no overlapping round of a named peer is still `running` (done or interrupted — *final*, M7) — one of the TWO exceptions to "equal reader → keep" (the other is E5's lost-snapshot recompute, E5 §10 item 11; L10) — and writes the result under that session's claim. (iii) The assignment names the peer gates it saw (`PeerGates`, ids only) so a backfill can tell a round whose peer set grew (a peer whose projection failed, `Projection.Write` is best-effort) and recompute it too | uniqueness of STORED rows is a property across gate sessions, which only a process that sees them all after they settled can hold; a live cross-gate repair would write another session's file mid-round without its claim. Without a marker the backfill cannot tell a provisional row from a final one, and the no-overwrite rule would freeze the duplicate | `SessionClaim.cs:32-38` (the key is repo + branch + document + feature, never the caller); `LiveRound.cs:237` (stamp) → `RoundEngine.cs:485-496` (the record; E5's step is the statement after it) → `:591` (save) → `:612` (projection); `Projection.cs:24-38`; parent §9 ("never overwrites an `observed`/`partial` row produced by a newer or equal reader version"); E7 `:165-174` rule (2) | §S2.3 *States*, *Claimants*; §S2.4 *WriteRung*; §S2.5 `PeerGates`, `RoundAttribution.Version`; §11 cross-epic list (E3, E5, E7, parent) |
 | G4 | **One missing transcript is one item and one reason.** Only `UnobservedLaunch`es make unobserved-launch items and `partial: <why>`; an `ObservedAgent` with `TranscriptPresent = false` is inert (declared, no launch, no item, no reason; `FirstLineAt` nullable and read by no rule). `c05` → 2 | E3 emits BOTH records for one meta without a file: the key goes into `Agents` with `TranscriptPresent = false`, and step 8a emits `UnobservedLaunch(ParentKey, ToolUseId, CalledUtc, MetaWithoutTranscript)`; the reason text lives on the launch, not on the agent | E3 `:206-210`, `:880-881`, `:916-917`; E3 test 20 (`:1049`): `UnobservedLaunches.Count == 2` on `c05`; test 22 (`:1051`) | decision 9; §S2.3 *What is placed*, *States*; S1's record comment; fact `AMetaWithoutATranscript_IsOneUnobservedLaunchNotTwo` |
 | G5 | **Every E3 reason arrives with `At = null` and marks every window of the round.** The mapping turns each `ObservationReason` into `StateReason(Code, null)` — except `agent call without transcript` and `meta without transcript`, which are not mapped as reasons at all: their instants ride on the `UnobservedLaunch`es (G4), so a missing child marks only ITS window and decision 9's "other windows stay observed" holds. S3's state table is corrected: the "read budget hit before the window's end" row is gone — a read budget marks every window | `ObservationReason(Code, Count)` has no instant; placing a reason by guessing an instant would be inference. A whole-session reason (torn middle line, read budget, inconsistent transcript) IS about every window — nothing is lost by saying so | E3 `:231`; E3 step 10 (`:924-926`): reasons are counts ordered by code | §0 table; §S2.3 *States*; S3 *State*; fact `AnE3ReasonWithoutAnInstant_MarksEveryWindow` |
 | G6 | **`AssignEvery` runs over the SETTLED rounds of the observation's caller only**, in every timeline; a round of another caller or a running round is skipped (both would fail `Validate()`); the `PeersKnown = false` scenario of case 7 is outside identity 2 by design (it duplicates and says so). `Validate()` refuses attributing a round that is not recorded and settled | identity 2 is a statement about what THIS caller's transcript lets the settled rounds own; another caller's rounds read another transcript | §S2.5 identity 2; S1 `Validate()`; case 8b (B C1 by `c9`), *Caller changed* | §S2.5; §S2.9 item 2 |
@@ -441,7 +456,11 @@ One row per item: the decision, its reason, the evidence, and where the rule now
 `RoundRecord.Skipped` and `RoundRecord.Interrupted` (`SessionStore.cs:88,121`). **Settled** (`Windows.IsSettled(r)`, *2026-10-16,
 G1/G2*): `IsRecorded(r)` ∧ `r.Status == "done"` (`RoundRecord.Done`, `SessionStore.cs:87`). A recorded round that is not
 settled is `running` (`:86`): it tiles its own gate's journal like any recorded round, but it ranks last, claims nothing and
-bounds no `PriorEnd`. The round being attributed is always settled (`Validate()`, S1).
+bounds no `PriorEnd`. The round being attributed is always settled (`Validate()`, S1). **Final** (*2026-10-17, M7*):
+`r.Status is "done" or "interrupted"` — a round that will never change again; `running` is neither settled nor final.
+Settled is the CLAIM condition (an interrupted round opens no window and claims nothing); final is the REPAIR condition:
+E7 recomputes a `peer running` row once every overlapping round of every gate it names is final — an interrupted peer
+round never becomes settled, and waiting for that would leave the row provisional for ever (case 8b).
 
 **Tiling** (`Windows.Of(GateTimeline g, DateTimeOffset? priorEnd) → ImmutableArray<Window>`), over the recorded rounds
 `r_1 … r_n` in journal order:
@@ -503,8 +522,8 @@ distinct in first-seen order: `Caller.State.Kind == unobserved` → every window
 window → `unobserved: no round start` (`no open time` when it is the open that is missing); `PeersKnown == false` →
 `partial: prior windows unknown` on every window; an `UnobservedLaunch` with `At` in the window → `partial: <its Why>`
 (one with `At == null` → every window); a not-settled same-caller peer window `P`, not blind, with `P ∩ W ≠ ∅` →
-`partial: peer running` on `W` (*G3*: the ownership decided for `W` is provisional until that round settles — E7
-recomputes exactly these); a `StateReason` of the observation — every E3 reason arrives with `At == null` (*G5*) →
+`partial: peer running` on `W` (*G3*: the ownership decided for `W` is provisional until that round is FINAL — done or
+interrupted, M7 — and E7 recomputes exactly these); a `StateReason` of the observation — every E3 reason arrives with `At == null` (*G5*) →
 `partial: <Why>` on every window (the `At`-inside-the-window branch stays for a reason that one day carries an
 instant); the round window whose previous recorded round has another
 caller → `partial: caller changed` / `partial: prior caller unknown`; none of these → `observed`. Reason words are a
@@ -536,7 +555,7 @@ order — no hash-order output). Four private statics, one rung each, complexity
 `CompletedUtc` when the ladder runs for this gate's own window, the CLAIMANT round's `CompletedUtc` when it runs for a
 claimant's window (a claimant is settled, so it has one). A write answered at or after the horizon did not exist for that
 round's live read and is not evidence for it in a backfill either; applied live, the test drops at most a result stamped
-between the stamp (`LiveRound.cs:237`) and the read (E5's step inside `RoundEngine.cs:485-496`), which is the price of a
+between the stamp (`LiveRound.cs:237`) and the read (E5's step, the statement after `RoundEngine.cs:485-496`), which is the price of a
 live run and a backfill that agree exactly. The same filtered write set feeds the `WritePlacement`s and S3's `write_calls`,
 so a row's write calls and its association come from one evidence set.
 
@@ -594,8 +613,8 @@ window `w` of the assignment, the set of `message.id`s with `w.Contains(message.
 `Window.Contains(At)`. Likewise for subagent launches (`FirstLineAt`, over `TranscriptPresent = true` agents) and for
 writes (over the writes with `AnsweredAt` before this round's completion — *G3*).
 
-**Identity 2 — global uniqueness** (`RoundAttribution.AssignEvery(gate, peers, observation, repositories, peersKnown)`
-— a test-side helper over the same `Assign`: it builds an `AttributionInput` for every **settled**, non-blind round
+**Identity 2 — global uniqueness** (`AttributionScenario.AssignEvery()` — a TEST-SIDE helper on the S1 builder, not a
+member of `RoundAttribution` (L9, 2026-10-17); it runs the same `Assign`: it builds an `AttributionInput` for every **settled**, non-blind round
 **of the observation's caller** in every timeline, with the others as peers — a round of another caller or a running
 round is skipped, since `Validate()` refuses both (*G6*); the `PeersKnown = false` variant of case 7 is outside this
 identity by design): over all those assignments, the multiset of `MessageId` from placements
@@ -708,7 +727,8 @@ owned by A C2 as `ambiguous`; B's window is still a tiling boundary for B. And *
 `Status = running` — on disk it CARRIES a stamp, the time of its last progress tick, say `+105`; the tiling ignores it,
 G1): B C1 ranks last, A C2 owns s2 `+80` and is `partial: peer running` (G3: B's window `[+30,+100)` overlaps A C2's
 `[+60,+120)` and B is not settled); marking B C1 `interrupted` afterwards gives the same OWNED set for A C2 and the
-state `observed` — the backfill of A C2 keeps every row and drops the provisional reason; marking it `done @110`
+state `observed` — the backfill of A C2 keeps every row and drops the provisional reason (E7's trigger is FINAL, not
+settled, so an interrupted peer round releases the repair — M7); marking it `done @110`
 instead gives s2 `+80` to B (`claimed by peer (B)`), which is what E7's recomputation of the `peer running` row
 records. `AssignEvery` over the running variant covers A's rounds only (G6) and owns `+80` once.
 
@@ -763,7 +783,8 @@ turns. Tokens once; w2 a contributor of both.
 ### S2.8 What E5 must hand over (reported to E5.S4, not built here)
 
 1. **Peers on EVERY round**, not only the first (E5 §3 said first only): gate sessions other than this one holding a round
-   whose `rounds.caller` or `authors_session` equals this caller, each as a `GateTimeline` — `OpenedUtc` from the peer's
+   whose `rounds.authors_session` — else `rounds.caller`, when it is a UUID (L4: one spelling, §S2.8 item 1 and E4.S1 agree) —
+   equals this caller, each as a `GateTimeline` — `OpenedUtc` from the peer's
    SESSION FILE (`PersistedSession.OpenedUtc`, never `sessions.opened_utc`, parent §6), its journal from the file,
    `CallerSessionId` per round from `rounds.authors_session`, else `rounds.caller` when it is a UUID, else `""`.
    `PeersKnown = false` when that read fails. One read-only connection, the `GateHistoryQuery.cs:77` shape.
@@ -774,11 +795,23 @@ turns. Tokens once; w2 a contributor of both.
 5. *(2026-10-16, §S2.2b)* **`CompletedUtc` by status** (G1): `GateRound.CompletedUtc` is filled only for a `done` row — E5
    §3's sentence "a peer round still `running` is in the file with no completion" is false on disk (`LiveRound.cs:256`,
    `:276`) and must go. **`AnsweredAt`** on every write, from E3's `AnsweredUtc` (G3). **Only settled rounds are attributed**:
-   `Assign` is called for a `done` `PlanReview`/`CodeReview` round with `Verdict ≠ skipped` and for nothing else (E7 writes
-   its own `unobserved` reason for the rest). **`partial: peer running` is stored as it is** and never repaired live — the
+   `Assign` is called for a `done` `PlanReview`/`CodeReview` round with `Verdict ≠ skipped` and for nothing else — a
+   skipped, interrupted, running, feature or document round has NO snapshot and an EMPTY `authors_state` (*not recorded*),
+   live and in E7's backfill alike; E7 computes nothing for it (M6, 2026-10-17 — the text said E7 writes its own reason).
+   **`partial: peer running` is stored as it is** and never repaired live — the
    repair is E7's (G3). **`RoundAttribution.Version`** is stored beside `authors_reader` (a column of step 24, or E5's
    choice; E7's "equal reader → keep" compares both). **`PeerGates`** goes into the snapshot (ids only). **Per-window
    `WindowAuthors`** (G9) goes into the snapshot; the columns stay the parent's.
+6. *(2026-10-17, judge review)* **The mapping is `AttributionMapping`** (B1, E4.S5): E5.S4 step 5 and E7.S2 call its
+   `Observation`, `Timeline` and `Universe` and write no mapping of their own. **The gate timeline must hold the round being
+   attributed** (M4): at the live call site `session.Rounds` does not yet — the save appends the record
+   (`RoundEngine.cs:594`, `Rounds = [.. session.Rounds, record]`), and `LiveRound.Persist` saves its OWN `_session`
+   (`LiveRound.cs:257`) — so E5 hands `Timeline` `[.. session.Rounds, record]`; `Validate()` refuses a `(Stage, Number)` that
+   is not in `Gate.Rounds`, and would otherwise make every live round `unobserved: invalid input`. Earlier rounds'
+   `CallerSessionId` come from the file's own snapshots (`Authors.Session`, rounds after E5), else `rounds.authors_session`,
+   else a UUID `rounds.caller`, else `""` (→ `partial: prior caller unknown`, decision 2) — `RoundRecord.Caller` is a
+   `CallerDeclaration(Vendor, Client, ClientVersion, Model)` (`CallerDeclaration.cs:34-38`) and holds no session id, and
+   `rounds.caller` is `RoundCommands.CallerFor` (`RoundCommands.cs:34-35`: the stated id, else `repo:<path>`).
 
 ### S2.9 The coder's brief (Sonnet)
 
@@ -910,7 +943,7 @@ public sealed record RoundAuthors(
     string Stage, int Number,   // added by the 2026-10-16 plan gate: S4's NotSeen and FixersOf need them for a round with no rows; announced to E5
     string CallerSessionId, string State, ImmutableArray<string> Reasons,   // the roll-up: the WORST window state; reasons distinct, in window order
     ImmutableArray<AuthorRow> Rows,
-    ActivityTotals Ambiguous, ActivityTotals Elsewhere, ActivityTotals ClaimedByPeer, int UnobservedLaunches,   // the roll-up: sums; Unknown when any window is unobserved
+    ActivityTotals Ambiguous, ActivityTotals Elsewhere, ActivityTotals ClaimedByPeer, int UnobservedLaunches,   // the roll-up: sums; Unknown (and UnobservedLaunches = -1, M1) when any window is unobserved
     ImmutableArray<WindowAuthors> Windows,                            // G9: the per-window state and totals E6 needs when it leaves before-open out
     ImmutableArray<string> PeerGates,                                 // G3 (iii): carried from WindowAssignment; ids only
     ImmutableArray<CheckoutWrites> WritesOutsideTheGateCheckout);   // gate finding 0, below
@@ -918,9 +951,9 @@ public sealed record RoundAuthors(
 public sealed record CheckoutWrites(string Root, int Calls);   // in memory only — E5 stores counts, never the root
 ```
 
-*(2026-10-16, Fable — E5 §8 items 1 and 6.)* **`AuthorRow` and `ActivityTotals` are final**: E5's `AuthorsSnapshot`
-persists them as they are, so a member change here is an E4 document edit announced to E5 before E5.S1 is coded.
-`RoundAuthors` was not declared final, and §S2.2b adds two members to it — `Windows` (G9) and `PeerGates` (G3) — which
+*(2026-10-16, Fable — E5 §8 items 1 and 6.)* **`AuthorRow`, `ActivityTotals` and — since 2026-10-17 (L1) — `WindowAuthors`
+are final**: E5's `AuthorsSnapshot` persists them as they are, so a member change in any of the three is an E4 document
+edit announced to E5 before E5.S1 is coded. `RoundAuthors` was not declared final, and §S2.2b adds two members to it — `Windows` (G9) and `PeerGates` (G3) — which
 E5's snapshot must carry (≈ +300 B a round for two windows; the columns of step 24 are unchanged); this is announced in
 §11's cross-epic list.
 `Reasons` carries no counts and is joined by E5 with `", "`; S3 adds the fact `NoReasonContainsTheJoiner` over
@@ -977,11 +1010,11 @@ partial < unobserved`, *G12a*), reasons distinct in window order, totals summed 
 
 | Observation / window | `State` | `Reasons` | Totals |
 |---|---|---|---|
-| E3's state `unobserved: <why>` | `unobserved` on every window | `[why]` | no rows; `Ambiguous`, `Elsewhere` and `ClaimedByPeer` = `ActivityTotals.Unknown`, never zeros |
+| E3's state `unobserved: <why>` | `unobserved` on every window | `[why]` | no rows; `Ambiguous`, `Elsewhere` and `ClaimedByPeer` = `ActivityTotals.Unknown`, `UnobservedLaunches = -1` (M1, 2026-10-17: a count nothing measured is unknown, never 0), `WritesOutsideTheGateCheckout = []` — E5 writes `-1` for the two write counts it derives from it |
 | an unobserved launch with an instant inside the window (a missing child — `agent call without transcript`, `meta without transcript`; *G4/G5*: these are the only reasons that carry an instant) | `partial` | each, in order | as counted — a floor |
 | every E3 reason (a torn MIDDLE line, a read budget, an inconsistent transcript, …; a torn LAST line is not a reason at all, parent §16 D22) — none carries an instant (*G5*) | `partial` | for every window | as counted |
 | a not-settled same-caller peer round whose window overlaps this one (*G3*) | `partial` | `peer running` | as counted — provisional until E7 recomputes |
-| S2's window-level unobserved (no round start) | `unobserved` | `no round start` | `Unknown` for that window; the other windows as they are |
+| S2's window-level unobserved (no round start) | `unobserved` | `no round start` | `Unknown` and `UnobservedLaunches = -1` for that window; the other windows as they are; the round roll-up is `Unknown`/`-1` (M1) |
 | none of the above, with or without subagents | `observed` | `[]` | as counted — an observed session with no subagents is an observed ZERO |
 
 If E3 or E5 already carries an unknown-count value type (a `Captured`/`Figure` analogue), use it instead of
@@ -1129,6 +1162,36 @@ the fixtures (2026-10-16), and they go into the test as data (measurement.md rul
 reader is E3's `CallerTranscript`, which is not on main yet. The materialiser is E3.S4's
 `CallerTranscriptFixture.Materialise`, with the two requirements of §8.3 item 6 (closed by E3.S4's 2026-10-16 amendment).
 
+**The ONE mapping is built here** (B1, 2026-10-17). New `src_mcp/src/Store/AttributionMapping.cs`, a pure `internal static`
+class beside E3's `ObservedSession.cs` (it is the only place that sees both E3's `src/Store` records and E4's core records;
+E3 cannot build it — E4's types do not exist when E3 ships — and E5 is built after E4, so E4.S5, which already depends on
+E3.S4, builds it and is its first caller; E5.S4 step 5 and E7.S2 are the other two, and neither writes a mapping of its own):
+
+- `Observation(ObservedSession s) → CallerObservation`: `FirstLineAt = LaunchedUtc ?? CalledUtc` (null only for a
+  `TranscriptPresent = false` agent, G4); `TranscriptPresent` as is; `UnobservedLaunches` one for one; `ObservedWrite.At` =
+  E3's `Utc`, `AnsweredAt` = E3's `AnsweredUtc` (G3), `Kind`/`Where` = `Target.Kind`/`Target.Where`; `Effort` and
+  `Requested`/`Model` as is; `TokenTerms` term by term; `State.Kind` as E3's word; every `ObservationReason` → `StateReason(Code,
+  At: null)` EXCEPT `agent call without transcript` and `meta without transcript`, which are never mapped as reasons (G5,
+  L8 — their instants ride on the launches). Every `DateTime` through `UtcInstant.From`.
+- `Timeline(string gateSessionId, string repoPath, DateTime openedUtc, IReadOnlyList<RoundRecord> rounds, Func<RoundRecord,
+  string> callerOf) → GateTimeline`: journal order kept; `StartedUtc`/`OpenedUtc` through `UtcInstant.From` (default → null);
+  `CompletedUtc` = `UtcInstant.From(CompletedUtc)` ONLY when `Status == RoundRecord.Done`, else null (G1); `Stage`, `Number`,
+  `Status`, `Verdict` verbatim; `CallerSessionId = callerOf(round)` — the caller rule is the CALLER's (E5 §S2.8 item 6 order;
+  the fixture loader's constant id here). The ROUNDS list is the caller's too: E5 passes `[.. session.Rounds, record]` (M4).
+- `Universe(GateTimeline gate, ImmutableArray<GateTimeline> peers, CallerObservation o) → ImmutableArray<string>`: decision 6
+  — the gate's and every peer's `RepoPath` ∪ every `Checkout` root in `o.Writes`, in the spelling each arrives in (no
+  WSL ↔ Windows translation, L6; `RepositoryOf` folds case and separators), distinct under `Normalise` + `OrdinalIgnoreCase`,
+  ordinal order.
+
+Nothing in it decides anything, and `TheMappingDecidesNothingTests` (one class, in `src_mcp/tests/`) proves each rule on
+built `ObservedSession`s and `RoundRecord`s: `ARunningRoundsStamp_IsNotItsCompletion` (a `running` record with a stamp →
+`CompletedUtc == null`; `done` keeps it); `TheTwoTranscriptMissingCodes_AreNeverStateReasons` (L8: an `ObservedSession` whose
+`State.Reasons` holds both codes and `read budget` → one `StateReason("read budget", null)`); `EveryOtherReasonArrivesWithoutAnInstant`;
+`AMetaWithoutAFileAndNoCall_HasNoFirstLine` and `APresentAgent_HasOne`; `AnsweredAtIsTheResultLinesInstant`;
+`TheUniverseKeepsEachSpellingAndDropsNoRoot` (L6); `TheJournalOrderIsKept`. Break-its: map `CompletedUtc` without the status
+check → the first red; map every reason → the second red (two extra `StateReason`s). The S5 `[Theory]` rows below run
+through `Observation` + `Timeline`, so a field spelling E3 changes fails here by name — the reason S5 exists.
+
 **Rules every S5 test follows.**
 
 - **The clock is a rank clock** (§2). Assert order relations and the cells below. Never assert a duration, a date or a
@@ -1148,8 +1211,9 @@ reader is E3's `CallerTranscript`, which is not on main yet. The materialiser is
 - **One test-side extension, labelled.** `c01` and `c14` have activity after the start of their only round. To show the
   NEXT window on real data, the test adds a round 2 in memory: its start is one synthetic second after the case's last
   instant, and its completion is one second after that. No fixture file changes, and the guard is not touched.
-- Map the reader's `ObservedSession` to `AttributionInput` through the ONE mapping E3/E5 own (§0), never through a
-  mapping written in the test.
+- Map the reader's `ObservedSession` to `AttributionInput` through `AttributionMapping` (§0; built in THIS story, B1),
+  never through a mapping written in the test. `FixtureRounds` builds `RoundRecord`s from `rounds.json` and hands them to
+  `AttributionMapping.Timeline`, so the production rule (`CompletedUtc` only on `done`) runs on the data too.
 
 **Which test uses which case** (`H` = `AttributionHoldsOnTheRecordedSessionsTests`, one `[Theory]` row per case; `I` =
 the identities; `R` = replay; every case also feeds `NoSentinelLeavesAttributionTests` and the order fact). "Ambiguous"
@@ -1219,8 +1283,9 @@ fixtures. The sentinel test is green with its positive half. The order fact is g
 `CoaiMcp.Tests.exe` is green on Windows and in CI on Linux and macOS. The epic's summary says that every cell is a
 hand-read.
 
-**Dependencies.** E4.S3 and E4.S4; E3.S2 + E3.S4 (the reader and its materialiser, with §8.3 item 6) and the mapping to
-`AttributionInput`; E1.S5's fixtures (shipped, #828) — `c17` and `c19` give their full cells only after §8.3 item 4.
+**Dependencies.** E4.S3 and E4.S4; E3.S2 + E3.S4 (the reader, its `ObservedSession` in `src/Store`, and its materialiser,
+with §8.3 item 6) — the mapping to `AttributionInput` is THIS story's `AttributionMapping` (B1), so E4 reaches Done with
+no E5 story built; E1.S5's fixtures (shipped, #828) — `c17` and `c19` give their full cells only after §8.3 item 4.
 **Model:** brief by opus (this document) · code: sonnet · review: opus.
 
 ---
@@ -1242,6 +1307,9 @@ hand-read.
       *(Done 2026-10-16: §S2.2a.)*
 - [x] (added 2026-10-16) The risk consultation of §10 was taken, verified and closed (`close_consult`) before the epic's
       code round, and what it changed is recorded. *(Done 2026-10-16: §10's note, §11.)*
+- [ ] (added 2026-10-17, B1) `src_mcp/src/Store/AttributionMapping.cs` exists, built by S5, with `TheMappingDecidesNothingTests`
+      green; it is the one `ObservedSession → AttributionInput` mapping, and E5.S4 and E7.S2 call it.
+- [x] (added 2026-10-17) Every point of the judge review of `7c3bf469` that touches E4 is resolved in §11 *Resolutions II*.
 - [x] (added 2026-10-16, plan gate) Fable answered every item of §11 before S2's code. *(Done 2026-10-16: §S2.2b G1–G12;
       the cross-epic consequences are listed in §11 and are owed to E3, E5, E6, E7 and the parent before their code rounds.)*
 
@@ -1480,7 +1548,7 @@ parent's §6 and §16, and `research/RESULTS_caller_transcripts_on_both_sides.md
 |---|---|---|
 | G1 | a completion ranks only on a `done` round — the tiling nulls it otherwise, the E5 mapping too; verified `LiveRound.cs:256` → `:276` (stamp on the running row), `:235-237` (`Finish`), `SessionStore.cs:84`, `:626` | §S2.3 *Tiling*, *Rank*; §S2.7; §S2.8 item 5; fact `ARunningPeerWithAStamp_RanksLast` |
 | G2 | `PriorEnd` = the end of each peer's SETTLED PREFIX (the walk stops at the first unsettled, blind, other-caller or post-open round); claimants are settled windows only | §S2.3 *Prior end*, *Claimants*; cases 8c, 8d; facts `APriorEndStopsAtTheFirstUnsettledPeerRound`, `ASettledPrefixEndsBeforeTheRunningRound` |
-| G3 | owner of stored uniqueness: **E7's backfill**. E4 makes it decidable: a write is evidence only when `AnsweredAt < the round's completion` (own ladder: this round; claimant's ladder: the claimant's round), live and backfilled alike — the late-answered write cannot differ; a window overlapped by a not-settled same-caller peer round is `partial: peer running` — provisional, E5 stores it unchanged, E7 recomputes exactly these (the one exception to "equal reader → keep"); `PeerGates` names the peers seen so a grown peer set (a failed projection) is recomputed too. Decision 7's limitation (ii) withdrawn; decision 10's "the backfill is the authority" made true | decision 3, 7, 10; §S2.3 *States*; §S2.4 *The horizon*; §S2.5 `PeerGates`, `Version`; case 6 (a)–(c), 8b; facts `AWriteAnsweredAfterTheCompletion_IsNotEvidence_LiveOrBackfilled`, `APeersLadderSeesOnlyWritesAnsweredBeforeThePeerCompleted`, `AWindowOverlappedByARunningPeer_IsPartialPeerRunning` |
+| G3 | owner of stored uniqueness: **E7's backfill**. E4 makes it decidable: a write is evidence only when `AnsweredAt < the round's completion` (own ladder: this round; claimant's ladder: the claimant's round), live and backfilled alike — the late-answered write cannot differ; a window overlapped by a not-settled same-caller peer round is `partial: peer running` — provisional, E5 stores it unchanged, E7 recomputes exactly these once the overlapping peer rounds are final (one of two exceptions to "equal reader → keep", L10/M7); `PeerGates` names the peers seen so a grown peer set (a failed projection) is recomputed too. Decision 7's limitation (ii) withdrawn; decision 10's "the backfill is the authority" made true | decision 3, 7, 10; §S2.3 *States*; §S2.4 *The horizon*; §S2.5 `PeerGates`, `Version`; case 6 (a)–(c), 8b; facts `AWriteAnsweredAfterTheCompletion_IsNotEvidence_LiveOrBackfilled`, `APeersLadderSeesOnlyWritesAnsweredBeforeThePeerCompleted`, `AWindowOverlappedByARunningPeer_IsPartialPeerRunning` |
 | G4 | only `UnobservedLaunch`es make items and reasons; a `TranscriptPresent = false` agent is inert (declared, no launch, no item, no reason; `FirstLineAt` nullable); `c05` → 2. E3 owns: one `UnobservedLaunch(…, MetaWithoutTranscript)` per meta without a file (E3 `:880-881`, `:916-917`) | decision 9; §S2.3 *What is placed*, *States*; S1 records and mapping; fact `AMetaWithoutATranscript_IsOneUnobservedLaunchNotTwo` |
 | G5 | every E3 reason → `StateReason(Code, At: null)` → every window `partial`; the two transcript-missing codes are never mapped as reasons (their instants ride on the launches); S3's state table corrected | §0 table; S1 mapping; §S2.3 *States*; S3 *State*; fact `AnE3ReasonWithoutAnInstant_MarksEveryWindow` |
 | G6 | `AssignEvery` covers the settled rounds of the observation's caller only; `PeersKnown = false` scenarios are outside identity 2; `Validate()` refuses attributing a round that is not recorded and settled | §S2.5 identity 2; S1 `Validate()`; §S2.9 item 2; fact `AssignEverySkipsRunningRoundsAndOtherCallers` |
@@ -1490,6 +1558,24 @@ parent's §6 and §16, and `research/RESULTS_caller_transcripts_on_both_sides.md
 | G10 | agent counts per total, not a partition (`Ambiguous.Agents` includes every `two repositories` association); the fact moves to S3; the two-repositories row is `Model = Requested = Effort = "unknown"` | S3 *Grain*, *Agent counts*; `ATwoRepositoryAgentKeepsItsWritesAndAddsNoTokenTests` |
 | G11 | **completion rank kept; caller-level shared total rejected** (no store entity, not decidable live, decides a number no conclusion reads, rank is what keeps live = backfill); E6 states the allocation in one sentence and never reads it as repository or model evidence | §S2.2b G11; decision 3; cross-epic list (E6) |
 | G12 | (a) "worst wins", one word; (b) `P.Contains(t)`; (c) destinations over every gate in the input; (d) the two positives are proven by their break-its; (e) the four anchors corrected in place, the §11 E3 anchors re-cited | §S2.3, §S2.4, §S2.5, §S2.10, §S2.11, the S2 scope paragraph |
+
+### Resolutions II — the judge review of 2026-10-17 (every point checked in the code first; none rejected)
+
+| # | Point | Checked against | Resolved as (E4 side) |
+|---|---|---|---|
+| B1 | E4.S5 needed a mapping only E5.S4 built, after E4 | E3 `:191`, `:712` (`ObservedSession` in `src/Store`); E4 §0 and S5 as they stood | **`src_mcp/src/Store/AttributionMapping.cs`, built by E4.S5**, called by E5.S4 step 5 and E7.S2: `Observation`, `Timeline`, `Universe`, each a rule-free copy, with `TheMappingDecidesNothingTests`. Reason: it is the one place that sees E3's `src/Store` records and E4's core records; E3 cannot build it (E4's types do not exist yet), E5 is built after E4, and E4.S5 already depends on E3.S4 — so E4 reaches Done before E5. §0, S1 *Mapping*, S5, §S2.8 item 6, DoD |
+| H1/H2/M2/M7 | E7's rule order (E5 §10 item 11) | E7 `:167-174`; `SessionStore.cs:626`, `:718-719` | E5's to write (its §10 item 11); E4's part: **final** = `done` or `interrupted` (M7), the `peer running` trigger reads it (§S2.3 *Settled/Final*, *States*, case 8b, G3 row) |
+| M1 | an unobserved round's `UnobservedLaunches` undefined | S3 *State* | `UnobservedLaunches = -1` whenever the window or the round is `unobserved`; E5 derives `-1` for its two write counts (S3 records and table) |
+| M4 | `session.Rounds` lacks the round at the call site | `RoundEngine.cs:594`, `LiveRound.cs:257`; `CallerDeclaration.cs:34-38`, `RoundCommands.cs:34-35` | §S2.8 item 6: E5 passes `[.. session.Rounds, record]`; earlier rounds' callers from the file's snapshots, then `authors_session`, then a UUID `rounds.caller`, then `""` |
+| M6 | two owners for skipped/interrupted rounds | E5 §3, E7 `:178` | one sentence: no snapshot, empty `authors_state`, live and backfilled; E7 computes nothing for them; `interrupted` = `RoundRecord.Interrupted`, the sweep's word (S1 `Validate()` text, §S2.8 item 5) |
+| L1 | `WindowAuthors` not declared final | S3 | declared final beside `AuthorRow`, `ActivityTotals` |
+| L2 | "inside the `with` block" | `RoundEngine.cs:485-496`, `:591` (an initializer cannot name its record) | "one statement after the block, before the save" in the scope paragraph, §S2.4 *The horizon*, G3's evidence |
+| L4 | two spellings of the peer key | §S2.8 item 1 vs S1 | `authors_session`, else a UUID `rounds.caller` — everywhere |
+| L6 | the universe's spelling only in S1 | S1 `:205-206` | `AttributionMapping.Universe` states it and `TheUniverseKeepsEachSpellingAndDropsNoRoot` tests it |
+| L8 | no test for the G5 mapping rule | S1 mapping sentence | `TheTwoTranscriptMissingCodes_AreNeverStateReasons` in S5 (the mapping's home) |
+| L9 | `AssignEvery` had two homes | §S2.5, §S2.9 | `AttributionScenario.AssignEvery()`, test-side only |
+| L10 | "the ONE exception" | E5 §10 item 11 (b) | "one of two exceptions" in G3's row and the E7 list; the second is E5's lost-snapshot recompute |
+| M3, M5, M8, L3, L5, L7 | E5-only points | — | resolved in the E5 document (its §11.4); nothing in E4 changes |
 
 ### Cross-epic consequences (owed by the other documents; nothing here edits them)
 
@@ -1507,7 +1593,8 @@ parent's §6 and §16, and `research/RESULTS_caller_transcripts_on_both_sides.md
   no other gate's rows. (4) The snapshot carries `RoundAuthors.Windows` (per-window state and totals, G9) and `PeerGates`
   (ids only, G3) — `AuthorRow` and `ActivityTotals` unchanged; §14's growth row gains ≈ +300 B a round. (5) Store
   `RoundAttribution.Version` beside `authors_reader` (E5 §7 item 19 asked E4 to say so before S2 is coded — said). (6) The
-  `IsWellFormed` vocabulary admits `peer running`; no E4 reason contains `", "` still holds.
+  `IsWellFormed` vocabulary admits `peer running`; no E4 reason contains `", "` still holds. *Applied in the E5 document on
+  2026-10-17 (its §11.2), together with the judge review's E5 points (B1, M1–M8, L3, L5–L7 — its §10 item 11, §11.4).*
 - **E6** (`feat/round-authors-e6`): (1) state in one sentence that contested activity is allocated to the first-completed
   gate (completion rank) and labelled `claimed by peer` on the other side, and never read the allocation as evidence of a
   repository or a model (G11). (2) D2/D3 may read the per-window state and totals (`Windows`) when `before-open` is left
@@ -1515,12 +1602,15 @@ parent's §6 and §16, and `research/RESULTS_caller_transcripts_on_both_sides.md
   E6 states the limit. (3) A round whose state carries `peer running` is provisional: count it as `partial` (D3) and say
   that E7's backfill finalises it. (4) The two-repositories row's `unknown` model is a row with write calls and no model
   claim — the coder mix must not read it as a model (G10).
-- **E7** (`feat/round-authors-e7`): (1) the ONE exception to "a non-empty state written by a reader ≥ the current one is
-  kept" (`BackfillDecision` rule (2)): a row whose reasons include `peer running` is **recomputed** once every gate in its
-  `PeerGates` has settled, and so is a row whose caller now has a settled gate session that is NOT in its `PeerGates` (a
-  failed projection, G3); the result is written under that session's claim, and a second run then changes nothing. (2)
-  "Equal reader" compares E3's `ReaderVersion` AND `RoundAttribution.Version`. (3) Non-recorded or unsettled rounds are
-  never handed to `Assign` (G6).
+- **E7** (`feat/round-authors-e7`): (1) one of TWO exceptions to "a non-empty state written by a reader ≥ the current one
+  is kept" (`BackfillDecision` rule (2); the other is E5's lost-snapshot recompute): a row whose reasons include `peer
+  running` is **recomputed** once every overlapping round of every gate in its `PeerGates` is FINAL (done or interrupted,
+  M7), and so is a row whose caller now has a settled gate session that is NOT in its `PeerGates` (a failed projection,
+  G3; never for a healed snapshot, whose peer set is unknown); the result is written under that session's claim, and a
+  second run then changes nothing. (2) "Equal reader" compares E3's `ReaderVersion` AND `RoundAttribution.Version`. (3)
+  Non-recorded or unsettled rounds are never handed to `Assign` and get NO state (M6). (4) E7.S2 calls
+  `AttributionMapping` (B1) and E5's `AuthorPeers`, and stops reading `before-open` from its own database join. **The
+  complete, ordered list of E7 changes is E5 §10 item 11** (written 2026-10-17 for the E7 gate to apply).
 - **The parent**: §6's *Evidence cutoff* and §16 D6/D24 as §S2.12 states them — a write is evidence only when its result
   was written before the round completed, live and backfilled alike (D6); D24 ranks SETTLED rounds only and a provisional
   ownership is `partial: peer running`, repaired by E7; §9's "never overwrites an `observed`/`partial` row produced by a
