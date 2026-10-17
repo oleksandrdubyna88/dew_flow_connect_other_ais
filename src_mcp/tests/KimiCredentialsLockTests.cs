@@ -90,6 +90,85 @@ public sealed class KimiCredentialsLockTests : IDisposable
         ((Hold.Taken)taken).Stream.Dispose();
     }
 
+    // ---------- S-K3 / S-K11 (DL7: the Linux key is the folder's identity — device and inode — never a spelling) ----------
+
+    /// <summary><c>KeyFor</c> of <paramref name="path"/> in a CHILD whose working folder is <paramref name="cwd"/> — a <c>/proc/self/cwd</c> spelling can only be asked from inside the process whose cwd it is (the test host's is process-wide).</summary>
+    private static async Task<string> KeyInAChildAsync(string cwd, string path)
+    {
+        var exe = Path.Combine(AppContext.BaseDirectory, "FakeCli");
+        using var child = Process.Start(new ProcessStartInfo(exe, ["lock-key", path]) { WorkingDirectory = cwd, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false })!;
+        var key = await child.StandardOutput.ReadToEndAsync().WaitAsync(Patience, TestContext.Current.CancellationToken);
+        await child.WaitForExitAsync(TestContext.Current.CancellationToken);
+        child.ExitCode.Should().Be(0, await child.StandardError.ReadToEndAsync());
+
+        return key.Trim();
+    }
+
+    [Fact]
+    public async Task TwoSpellingsOfOneFolder_GiveOneKey_AndADeletedFolder_NoKey()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "the Windows key is the final path of the opened handle (TheLockKey_IsTheFoldersIdentity_NotItsSpelling); this is the Linux one, with no stand-in");
+        var real = Path.Combine(_dir.At("a"), "real");
+        Directory.CreateDirectory(real);
+        Directory.CreateSymbolicLink(_dir.At("b"), _dir.At("a"));
+        var elsewhere = Directory.CreateDirectory(_dir.At("other", "real")).FullName;
+
+        var key = KimiCredentialsLock.KeyFor(real);
+
+        key.Should().NotBeEmpty("a folder that exists is named by its device and inode");
+        KimiCredentialsLock.KeyFor(Path.Combine(_dir.At("b"), "real")).Should().Be(key, "two spellings of one sign-in folder gave two lock keys (a symlinked parent)");
+        (await KeyInAChildAsync(_dir.At("a"), "/proc/self/cwd/real")).Should().Be(key, "two spellings of one sign-in folder gave two lock keys (/proc/self/cwd)");
+        KimiCredentialsLock.KeyFor(elsewhere).Should().NotBe(key, "two folders are two keys");
+
+        Directory.Delete(real);
+
+        KimiCredentialsLock.KeyFor(real).Should().BeEmpty("a deleted folder has no key — never its spelling");
+    }
+
+    [Fact]
+    public void AFileWhereTheFolderShouldBe_HasNoKey_OnLinux()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "the Linux identity names a DIRECTORY only");
+        var file = _dir.At("not-a-folder");
+        File.WriteAllText(file, "x");
+
+        KimiCredentialsLock.KeyFor(file).Should().BeEmpty("a file has an inode too — and must not be keyed as if it were the sign-in folder");
+    }
+
+    [Fact]
+    public async Task ABindMountedSpelling_IsTheSameKey()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "a bind mount is Linux's");
+        var real = Directory.CreateDirectory(Path.Combine(_dir.At("a"), "real")).FullName;
+        var mount = Directory.CreateDirectory(_dir.At("mnt")).FullName;
+        var ct = TestContext.Current.CancellationToken;
+        if (await Sudo(ct, "true") != 0)
+        {
+            Assert.SkipWhen(Environment.GetEnvironmentVariable("CI") is null, "a bind mount needs passwordless sudo, which this machine has not — a silently skipped check is a deleted one, so CI fails instead");
+            Assert.Fail("bind-mount test needs passwordless sudo on the runner");
+        }
+
+        (await Sudo(ct, "mount", "--bind", _dir.At("a"), mount)).Should().Be(0, "the bind mount was made");
+        try
+        {
+            KimiCredentialsLock.KeyFor(real).Should().NotBeEmpty("the folder has a key at all — two empty keys are not 'the same key'");
+            KimiCredentialsLock.KeyFor(Path.Combine(mount, "real")).Should().Be(KimiCredentialsLock.KeyFor(real), "a bind-mounted spelling of one sign-in folder gave a second lock key");
+        }
+        finally
+        {
+            (await Sudo(CancellationToken.None, "umount", mount)).Should().Be(0, "the bind mount was taken away again");
+        }
+    }
+
+    private static async Task<int> Sudo(CancellationToken ct, params string[] command)
+    {
+        using var sudo = Process.Start(new ProcessStartInfo("sudo", ["-n", .. command]) { RedirectStandardError = true, RedirectStandardOutput = true, UseShellExecute = false })!;
+        await Task.WhenAll(sudo.StandardOutput.ReadToEndAsync(ct), sudo.StandardError.ReadToEndAsync(ct));
+        await sudo.WaitForExitAsync(ct);
+
+        return sudo.ExitCode;
+    }
+
     // ---------- S2.42 ----------
 
     [Fact]
@@ -183,80 +262,22 @@ public sealed class KimiCredentialsLockTests : IDisposable
 
     // ---------- S2.43 ----------
 
-    /// <summary>The shim as a child: <c>held &lt;grandchild pid&gt;</c> on stdout once it has taken <paramref name="mode"/>'s lock.</summary>
-    internal static async Task<(Process Shim, Process Grandchild)> StartShimAsync(string mode, string locks, string target, string home)
-    {
-        var exe = Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "FakeCli.exe" : "FakeCli");
-        var shim = Process.Start(new ProcessStartInfo(exe, ["tree-hold", mode, locks, target, home]) { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false })!;
-        var line = await shim.StandardOutput.ReadLineAsync().WaitAsync(Patience, TestContext.Current.CancellationToken);
-        if (line is null)
-        {
-            await shim.WaitForExitAsync(TestContext.Current.CancellationToken);
-            Assert.Fail($"the child ended (exit {shim.ExitCode}) without taking its lock: {await shim.StandardError.ReadToEndAsync()}");
-        }
-
-        line.Should().StartWith("held ", "the child takes its lock before it says so");
-
-        return (shim, Process.GetProcessById(int.Parse(line![5..])));
-    }
-
-    /// <summary>The shim as a child that is expected NOT to take its lock: its exit code and what it said on stderr.</summary>
-    private static async Task<(int Exit, string Error)> ShimThatFailsAsync(string mode, string locks, string target, string home)
-    {
-        var exe = Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "FakeCli.exe" : "FakeCli");
-        using var shim = Process.Start(new ProcessStartInfo(exe, ["tree-hold", mode, locks, target, home]) { RedirectStandardError = true, UseShellExecute = false })!;
-        var error = await shim.StandardError.ReadToEndAsync().WaitAsync(Patience, TestContext.Current.CancellationToken);
-        await shim.WaitForExitAsync(TestContext.Current.CancellationToken);
-
-        return (shim.ExitCode, error);
-    }
-
-    /// <summary>
-    /// Whether the file is Held at EVERY probe for 1.5 s. Never one probe: handle rundown after a process exit takes a moment, so a
-    /// single probe right after a kill proves nothing in either direction.
-    /// </summary>
-    private static async Task<bool> StaysHeldAsync(string path)
-    {
-        var until = DateTime.UtcNow.AddMilliseconds(1500);
-        while (DateTime.UtcNow < until)
-        {
-            if (HeldFile.Probe(path) != LockProbe.Held)
-            {
-                return false;
-            }
-
-            await Task.Delay(100, TestContext.Current.CancellationToken);
-        }
-
-        return true;
-    }
-
-    internal static async Task EndAsync(Process process)
-    {
-        if (!process.HasExited)
-        {
-            process.Kill();
-        }
-
-        await process.WaitForExitAsync(TestContext.Current.CancellationToken);
-    }
-
     [Fact]
     public async Task TheTreeHold_OutlivesItsOpener_WhileAChildLives()
     {
-        Assert.SkipUnless(OperatingSystem.IsWindows(), "the child process names the sign-in folder by the kernel's handle, which a test's stand-in cannot reach (D18)");
+        Assert.SkipUnless(OperatingSystem.IsWindows() || OperatingSystem.IsLinux(), "the child names the sign-in folder with the product's own key, and macOS has no folder-identity rule (a Kimi launch is refused there, D18) — a test's stand-in cannot reach into the child");
         var home = _dir.At("owned", "kh-x");
         Directory.CreateDirectory(home);
         var tree = In(() => KimiCredentialsLock.TreePathFor(Persons));
         var homeHold = Path.Combine(home, KimiCredentialsLock.HomeHoldName);
-        var (shim, grandchild) = await StartShimAsync("tree", Locks, Persons, home);
+        var (shim, grandchild) = await ShimChild.StartAsync("tree", Locks, Persons, home);
         try
         {
-            await EndAsync(shim);
+            await ShimChild.EndAsync(shim);
 
-            (await StaysHeldAsync(tree)).Should().BeTrue("the sleeping grandchild inherited the sign-in hold, so it stays Held after the opener is gone");
-            (await StaysHeldAsync(homeHold)).Should().BeTrue("and the per-home one");
-            var second = await ShimThatFailsAsync("tree", Locks, Persons, home);
+            (await ShimChild.StaysHeldAsync(tree)).Should().BeTrue("the sleeping grandchild inherited the sign-in hold, so it stays Held after the opener is gone");
+            (await ShimChild.StaysHeldAsync(homeHold)).Should().BeTrue("and the per-home one");
+            var second = await ShimChild.FailsAsync("tree", Locks, Persons, home);
             second.Exit.Should().Be(69, "a second shim on the same sign-in waits its second, then gives up");
             second.Error.Should().Contain("Busy");
             using (Rooted())
@@ -264,7 +285,7 @@ public sealed class KimiCredentialsLockTests : IDisposable
                 KimiCredentialsLock.HomeProbe(home).Should().Be(LockProbe.Held);
             }
 
-            await EndAsync(grandchild);
+            await ShimChild.EndAsync(grandchild);
 
             (await Polls.Until(() => HeldFile.Probe(tree) == LockProbe.Free && HeldFile.Probe(homeHold) == LockProbe.Free, Patience))
                 .Should().BeTrue("both holds are free once the last process that inherited them is gone");
@@ -274,15 +295,15 @@ public sealed class KimiCredentialsLockTests : IDisposable
         }
         finally
         {
-            await EndAsync(grandchild);
-            await EndAsync(shim);
+            await ShimChild.EndAsync(grandchild);
+            await ShimChild.EndAsync(shim);
         }
     }
 
     [Fact]
     public async Task AShimOnAFolderTheKernelCannotName_TakesNoHold_AndSaysSo()
     {
-        var shim = await ShimThatFailsAsync("tree", Locks, _dir.At("persons", "never-made"), _dir.At("owned", "kh-z"));
+        var shim = await ShimChild.FailsAsync("tree", Locks, _dir.At("persons", "never-made"), _dir.At("owned", "kh-z"));
 
         shim.Exit.Should().Be(69);
         shim.Error.Should().Contain("Unusable").And.Contain("named by its handle");
@@ -293,29 +314,29 @@ public sealed class KimiCredentialsLockTests : IDisposable
     [Fact]
     public async Task AShimThatMeetsADisposalsProbe_WaitsItOut_AndTakesItsHold()
     {
-        Assert.SkipUnless(OperatingSystem.IsWindows(), "the child process names the sign-in folder by the kernel's handle, which a test's stand-in cannot reach (D18)");
+        Assert.SkipUnless(OperatingSystem.IsWindows() || OperatingSystem.IsLinux(), "the child names the sign-in folder with the product's own key, and macOS has no folder-identity rule (a Kimi launch is refused there, D18) — a test's stand-in cannot reach into the child");
         var home = _dir.At("owned", "kh-p");
         Directory.CreateDirectory(home);
-        var (shim, grandchild) = await StartShimAsync("tree-probed", Locks, Persons, home);
+        var (shim, grandchild) = await ShimChild.StartAsync("tree-probed", Locks, Persons, home);
         try
         {
-            (await StaysHeldAsync(Path.Combine(home, KimiCredentialsLock.HomeHoldName))).Should().BeTrue("the shim took the per-home hold once the probe let go");
+            (await ShimChild.StaysHeldAsync(Path.Combine(home, KimiCredentialsLock.HomeHoldName))).Should().BeTrue("the shim took the per-home hold once the probe let go");
         }
         finally
         {
-            await EndAsync(grandchild);
-            await EndAsync(shim);
+            await ShimChild.EndAsync(grandchild);
+            await ShimChild.EndAsync(shim);
         }
     }
 
     [Fact]
     public async Task TheGateAlone_DoesNotOutliveItsOpener_SoItIsNotWhatKeepsTheTreeSafe()
     {
-        Assert.SkipUnless(OperatingSystem.IsWindows(), "the child process names the sign-in folder by the kernel's handle, which a test's stand-in cannot reach (D18)");
-        var (shim, grandchild) = await StartShimAsync("gate", Locks, Persons, _dir.At("owned", "kh-y"));
+        Assert.SkipUnless(OperatingSystem.IsWindows() || OperatingSystem.IsLinux(), "the child names the sign-in folder with the product's own key, and macOS has no folder-identity rule (a Kimi launch is refused there, D18) — a test's stand-in cannot reach into the child");
+        var (shim, grandchild) = await ShimChild.StartAsync("gate", Locks, Persons, _dir.At("owned", "kh-y"));
         try
         {
-            await EndAsync(shim);
+            await ShimChild.EndAsync(shim);
 
             var gate = In(() => KimiCredentialsLock.PathFor(Persons));
             (await Polls.Until(() => HeldFile.Probe(gate) == LockProbe.Free, Patience))
@@ -324,8 +345,8 @@ public sealed class KimiCredentialsLockTests : IDisposable
         }
         finally
         {
-            await EndAsync(grandchild);
-            await EndAsync(shim);
+            await ShimChild.EndAsync(grandchild);
+            await ShimChild.EndAsync(shim);
         }
     }
     // ---------- the tree hold's decisions, with the NON-inheriting take (no test holds an inheritable handle) ----------

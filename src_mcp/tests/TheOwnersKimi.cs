@@ -13,7 +13,9 @@ internal static class TheOwnersKimi
     public static void SkipUnlessWindowsAndFree(string windowsOnlyReason)
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), windowsOnlyReason);
-        var running = ForeignKimiWatch.Foreign(HostProcessList.Current.Snapshot(), Environment.ProcessId);
+        var listing = HostProcessList.Current.Snapshot();
+        Assert.SkipWhen(listing is ProcessListing.Unreadable, $"this machine's process list cannot be read ({(listing as ProcessListing.Unreadable)?.Reason}), so the shim would give the turn up (DL10)");
+        var running = ForeignKimiWatch.Foreign(((ProcessListing.Listed)listing).Processes, Environment.ProcessId);
         Assert.SkipWhen(running.Count > 0, $"a real Kimi is running on this machine (pid {running.FirstOrDefault()?.Pid}): the shim waits for the person's own Kimi (decision 74), so this scenario would wait out its deadline");
     }
 }

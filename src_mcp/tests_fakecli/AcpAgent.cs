@@ -44,6 +44,9 @@ namespace CoaiMcp.FakeCli;
 ///     {"kind":"hang"}                                  never returns: the kill path
 ///     {"kind":"exit","code":3}                         leaves mid-turn: the premature EOF
 ///     {"kind":"grandchild","pidFile":"…"}              spawns a sleeping FakeCli and writes its pid there
+///     {"kind":"grandchildSetsid","pidFile":"…"}        the same, but the sleeper calls setsid() first — it leaves the agent's session and group (what `rg` does, L-K4)
+///     {"kind":"grandchildLateSetsid","pidFile":"…","trigger":"…"}   a child that polls for the file `trigger` and only THEN starts the setsid sleeper and writes its pid
+///     {"kind":"grandchildExits","pidFile":"…"}         a child that writes its pid and exits 0 at once
 ///   ]
 /// }
 /// </code>
@@ -318,6 +321,16 @@ internal static class AcpAgent
             case "grandchild":
                 Grandchild(Text(step, "pidFile"));
                 break;
+            case "grandchildSetsid":
+                SpawnedInto(Text(step, "pidFile"), "sleep", "--own-session", "600000");
+                break;
+            case "grandchildLateSetsid":
+                // Not the pid file of the sleeper's own: the late child writes THAT file when it spawns.
+                Spawned("late-spawn", Text(step, "trigger"), Text(step, "pidFile"));
+                break;
+            case "grandchildExits":
+                SpawnedInto(Text(step, "pidFile"), "exit-after", "0", "0");
+                break;
         }
     }
 
@@ -355,6 +368,12 @@ internal static class AcpAgent
         var child = Process.Start(info)!;
         File.WriteAllText(pidFile, child.Id.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
+
+    /// <summary>A FakeCli child with every stream of its own, its pid written to the file.</summary>
+    private static void SpawnedInto(string pidFile, params string[] arguments) =>
+        File.WriteAllText(pidFile, Spawned(arguments).Id.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+    private static Process Spawned(params string[] arguments) => SupervisionVerbs.StartChild(arguments);
 
     /// <summary>Reads stdin, logging every line, until a <c>session/cancel</c> arrives — the prompt then ends <c>cancelled</c>.</summary>
     private static void AwaitCancel()

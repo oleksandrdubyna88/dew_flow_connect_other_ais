@@ -154,6 +154,119 @@ public sealed class KimiLaunchControlTests : IDisposable
         Directory.Exists(Locks).Should().BeFalse("no lock file was made on a spelling");
     }
 
+    private sealed class Blocking(string sentence) : IKimiSurvivors
+    {
+        public Task<string> BlockedAsync(string markerPath, CancellationToken ct) => Task.FromResult(sentence);
+
+        public string KeepsHome(string ownedRoot) => string.Empty;
+    }
+
+    [Fact]
+    public async Task AStandingSurvivorMarker_RefusesTheLaunch_WithItsSentence_HoldingNothing()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        using var rooted = Rooted();
+        var places = _person.Places();
+        var fake = new FakeKimi();
+        using var seam = KimiSurvivors.Using(new Blocking("a survivor marker stands: pid 4242 of an earlier Kimi tree is still running"));
+
+        var turn = await KimiLaunch.TakeAsync(HostKind.Windows, Request(places), places, fake, TestContext.Current.CancellationToken);
+
+        turn.Refusal.Should().Be("a survivor marker stands: pid 4242 of an earlier Kimi tree is still running", "a free gate is not a free sign-in while a marker stands");
+        fake.Started.Should().BeEmpty("a refusal starts nothing");
+        VibeHomeTurns.Held(places.OwnedRoot).Should().BeFalse("no turn was left held");
+        HeldFile.IsHeld(KimiCredentialsLock.PathFor(places.Credentials)).Should().BeFalse("no gate was left held");
+    }
+
+    /// <summary>A marker as the shim of an earlier turn left it: naming one agent that is long gone (no process has this number).</summary>
+    private static KimiSurvivorMarkerDto AMarkerNamingAGoneMember(string ownedRoot) =>
+        new(new ReaderMarkerDto(ReaderPhases.Running, 424242, DateTime.UtcNow.AddHours(-1), DateTimeOffset.UtcNow, [new ProcessIdentity(2_000_000_011, DateTime.UtcNow.AddHours(-1))]), ownedRoot, "/people/sign-in");
+
+    [Fact]
+    public async Task AStandingMarkerWhoseMemberIsGone_IsClearedByTheLaunch_AndTheLaunchProceeds()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        using var rooted = Rooted();
+        var places = _person.Places();
+        var marker = KimiCredentialsLock.MarkerPathFor(places.Credentials);
+        KimiSurvivorMarker.Write(marker, AMarkerNamingAGoneMember(places.OwnedRoot));
+
+        var turn = await KimiLaunch.TakeAsync(HostKind.Windows, Request(places), places, new FakeKimi(), TestContext.Current.CancellationToken);
+
+        turn.Refusal.Should().BeEmpty("a marker whose every member is confirmed gone is cleared by the launch that finds it, and the launch goes on");
+        File.Exists(marker).Should().BeFalse("the reconcile deletes the marker it cleared");
+        turn.Dispose();
+    }
+
+    private sealed class Machine(params ProcessEntry[] entries) : IProcessList
+    {
+        public ProcessListing Snapshot() => new ProcessListing.Listed([new ProcessEntry(100, 1, "coai-mcp"), .. entries]);
+    }
+
+    [Fact]
+    public async Task AStandingMarkerThatCannotBeCleared_RefusesTheLaunch_NamingThePid_KeepsTheMarker_AndHoldsNothing()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        using var rooted = Rooted();
+        var places = _person.Places();
+        var marker = KimiCredentialsLock.MarkerPathFor(places.Credentials);
+        KimiSurvivorMarker.Write(marker, new KimiSurvivorMarkerDto(new ReaderMarkerDto(ReaderPhases.Spawning, 424242, DateTime.UtcNow.AddHours(-1), DateTimeOffset.UtcNow), places.OwnedRoot, "/people/sign-in"));
+        var fake = new FakeKimi();
+        using var seam = KimiSurvivors.Using(new ReconcilingSurvivors(new Machine(new ProcessEntry(77, 1, "kimi")), () => Locks));
+
+        var turn = await KimiLaunch.TakeAsync(HostKind.Windows, Request(places), places, fake, TestContext.Current.CancellationToken);
+
+        turn.Refusal.Should().Contain(marker).And.Contain("pid 77").And.Contain("safe to delete", "the way out is in the sentence, before any button");
+        File.Exists(marker).Should().BeTrue("a marker the reconcile could not clear stands");
+        fake.Started.Should().BeEmpty("a refusal starts nothing");
+        VibeHomeTurns.Held(places.OwnedRoot).Should().BeFalse("no turn was left held");
+        HeldFile.IsHeld(KimiCredentialsLock.PathFor(places.Credentials)).Should().BeFalse("no gate was left held");
+    }
+
+    [Fact]
+    public async Task AFolderThatVanishesAfterTheGateWasTaken_RefusesWithTheKeySentence_NeverThrows_AndHoldsNothing()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        using var rooted = Rooted();
+        var places = _person.Places();
+        var fake = new FakeKimi();
+        var asked = 0;
+        KimiCredentialsLock.Final = _ => asked++ == 0 ? "the-folders-identity-at-the-take" : string.Empty;
+        LaunchTurn turn;
+        try
+        {
+            turn = await KimiLaunch.TakeAsync(HostKind.Windows, Request(places), places, fake, TestContext.Current.CancellationToken);
+        }
+        finally
+        {
+            KimiCredentialsLock.Final = null;
+        }
+
+        turn.Refusal.Should().Contain("cannot be named by its handle").And.Contain(places.Credentials, "a folder that vanished after the take has no marker path: the launch is refused, not thrown at");
+        fake.Started.Should().BeEmpty();
+        VibeHomeTurns.Held(places.OwnedRoot).Should().BeFalse("the turn taken first was given back");
+        HeldFile.IsHeld(KimiCredentialsLock.PathFor(places.Credentials)).Should().BeFalse("the gate was given back");
+    }
+
+    [Fact]
+    public async Task AKernelWithNoPidfd_RefusesTheLaunch_BeforeAnythingIsTaken()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        using var rooted = Rooted();
+        var places = _person.Places();
+        var fake = new FakeKimi();
+        LaunchTurn turn;
+        using (PidfdLayer.Using(wrapperPresent: false, new AskAcpSubreaperTests.EnosysCalls()))
+        {
+            turn = await KimiLaunch.TakeAsync(HostKind.Windows, Request(places), places, fake, TestContext.Current.CancellationToken);
+        }
+
+        turn.Refusal.Should().Contain(PidfdLayer.NoPidfdSentence, "a launch on a kernel that cannot end the tree by identity was allowed");
+        fake.Started.Should().BeEmpty("a refusal starts nothing");
+        VibeHomeTurns.Held(places.OwnedRoot).Should().BeFalse("no turn was left held");
+        Directory.Exists(Locks).Should().BeFalse("no lock was taken for a launch that was refused first");
+    }
+
     // ---------- S2.26 ----------
 
     [Fact]

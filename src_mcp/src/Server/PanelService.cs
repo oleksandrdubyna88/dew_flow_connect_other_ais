@@ -177,6 +177,7 @@ public sealed class PanelService
         // And the person's cards (A4, S3): answered and expired questions, orphans and temp files older than seven
         // days go; a question a live session still holds is kept. The phase records they count into go after thirty.
         _log.Debug("swept {Count} escalation file(s) and phase record(s)", SweepEscalations());
+        _log.Debug("retired {Count} Kimi lock key(s)", SweepKimiLocks());
 
         // And the reviewers those rounds left RUNNING, which is the more expensive half of the
         // same failure. The timeout kill is performed by the parent, so a server that dies takes
@@ -1822,6 +1823,12 @@ public sealed class PanelService
     /// minute after a round's build walks nothing.
     /// </remarks>
     public void SweepScratch() => PruneOldAnswerDirs(_settings.ConsultantHomesRoot, _log);
+
+    /// <summary>
+    /// The Kimi lock files of a sign-in folder that is gone or is another folder now, retired (DL7 / F15 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): at server start and on every beat. Linux only — elsewhere
+    /// <see cref="Runners.Kimi.KimiLockRetirement.Sweep"/> answers 0 at once — and it never throws: a key it cannot decide about is left and logged.
+    /// </summary>
+    public int SweepKimiLocks() => Runners.Kimi.KimiLockRetirement.Sweep(Runners.Kimi.KimiCredentialsLock.Root, note => _log.Debug("{Note}", note));
 
     /// <summary>
     /// The twelfth tool (todo/PLAN_question_consultant.md, S2): the question consultant — every active row answers
