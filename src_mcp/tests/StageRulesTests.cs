@@ -217,9 +217,7 @@ public sealed class StageRulesTests : IDisposable
             + "RuleOrder.ForBranch, RuleFiles.DefaultBudgetBytes and research/module_runners.md, (3) re-pin "
             + "this list and the bound below.");
 
-        var widest = TheFixedBranches
-            .Select(branch => (Branch: branch, Tail: TailOf(CollectTheRealCorpus(branch, out _))))
-            .MaxBy(entry => entry.Tail.Count);
+        var widest = TailsOfTheFixedBranches.Value.MaxBy(entry => entry.Tail.Count);
 
         widest.Tail.Should().HaveCountLessThanOrEqualTo(3,
             $"branch '{widest.Branch}' reached [{string.Join(", ", widest.Tail)}] and at most three rules can "
@@ -241,9 +239,7 @@ public sealed class StageRulesTests : IDisposable
     [Fact]
     public void AtNinetyKilobytes_EveryBranchReachesAtLeastOneTailRule()
     {
-        var emptiest = TheFixedBranches
-            .Select(branch => (Branch: branch, Tail: TailOf(CollectTheRealCorpus(branch, out _))))
-            .MinBy(entry => entry.Tail.Count);
+        var emptiest = TailsOfTheFixedBranches.Value.MinBy(entry => entry.Tail.Count);
 
         emptiest.Tail.Should().HaveCountGreaterThanOrEqualTo(1,
             $"branch '{emptiest.Branch}' reached no tail rule. The tier leaves about 10 KB of a 90 000-byte "
@@ -285,6 +281,22 @@ public sealed class StageRulesTests : IDisposable
     /// </summary>
     private static IEnumerable<string> TheFixedBranches =>
         Enumerable.Range(0, 100).Select(i => i % 2 == 0 ? $"feat/branch-{i}" : $"fix/issue-{i}-thing");
+
+    /// <summary>
+    /// The tail the PRODUCTION collector selects for each of <see cref="TheFixedBranches"/>, worked out ONCE
+    /// for the class.
+    /// </summary>
+    /// <remarks>
+    /// The bound test and the reachability test both ask the same hundred questions of the same corpus, and
+    /// each question is a full read of every rule file. Neither <c>RuleFiles</c> nor <c>RuleOrder</c> takes
+    /// the files' text from memory, and a production seam added only for a test is the wrong trade, so the
+    /// saving is taken at this level: one pass shared by both tests (a hundred collections instead of two
+    /// hundred) with every assertion unchanged. <c>PublicationOnly</c> so that a failure — or the skip a
+    /// missing mount raises — is not cached for the tests that follow.
+    /// </remarks>
+    private static readonly Lazy<IReadOnlyList<(string Branch, IReadOnlyList<string> Tail)>> TailsOfTheFixedBranches =
+        new(() => [.. TheFixedBranches.Select(branch => (Branch: branch, Tail: TailOf(CollectTheRealCorpus(branch, out _))))],
+            LazyThreadSafetyMode.PublicationOnly);
 
     /// <summary>
     /// The real corpus this repository mounts, through the PRODUCTION collector at the default budget.

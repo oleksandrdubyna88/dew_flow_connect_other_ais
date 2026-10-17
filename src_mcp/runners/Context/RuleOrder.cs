@@ -54,9 +54,9 @@ public sealed record RuleOrder
     /// no reviewer at all — and it worked, at the price of a gate whose answer changed between two
     /// rounds of ONE fix. That price is what the whole plan was opened to stop paying.</para>
     /// <para><b>Why the branch, and not simply a fixed order.</b> The tier fills the budget: measured
-    /// against the real corpus on 2026-09-15 at 13 files and 78 672 of 80 000 bytes
-    /// (<c>research/RESULTS_rules_selection_budget.md</c>), which leaves the other 24 rules shown to
-    /// nobody, ever, on the path a code round actually takes today. The draw covered them by rotating.
+    /// against the real corpus on 2026-09-15, at 13 files and 78 672 of the then-80 000-byte budget
+    /// (<c>research/RESULTS_rules_selection_budget.md</c>), which left the other 24 rules shown to
+    /// nobody, ever, on the path a code round took then. The draw covered them by rotating.
     /// A BRANCH is what a round is about, and it does not change while a developer fixes what the last
     /// round found — so rotating the tail by it removes the instability without giving up the draw's
     /// coverage in principle.</para>

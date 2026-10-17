@@ -4,8 +4,9 @@
 > **Harness:** a byte-count over the mounted corpus applying `RuleOrder`'s documented order, run from
 > the repository root; the same order is asserted by `src_mcp/tests/RuleOrderTests.cs`, and the file
 > sizes come from `find .agents/conventions/{common,csharp,rust,typescript} -name '*.md' | xargs wc -c`.
-> **Date:** 2026-09-15 (re-measured at 90 000 bytes on 2026-10-16: last section). **Pinned:** budget 80 000 bytes (`RuleFiles.DefaultBudgetBytes`; 90 000 since 2026-10-16), whole-file
-> selection, no resolver (it cannot run — see condition 2).
+> **Date:** 2026-09-15 (re-measured at 90 000 bytes on 2026-10-16: last section). **Pinned:** budget
+> 90 000 bytes (`RuleFiles.DefaultBudgetBytes`, raised from 80 000 on 2026-10-16; the 2026-09-15 sections
+> below were measured at 80 000), whole-file selection, no resolver (it cannot run — see condition 2).
 >
 > Evidence for epic 3 of
 > [PLAN_the_rules_a_round_shows_are_drawn_at_random.md](PLAN_the_rules_a_round_shows_are_drawn_at_random.md)
