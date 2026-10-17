@@ -543,6 +543,20 @@ Numbered DL1–DL14 so they never collide with the parent plan's D-numbers. Ever
   under ANOTHER file name, or hosted by an interpreter whose `exe` is not `kimi`, is not recognised — a shell wrapper that ends in
   the normal `kimi` binary is. `coai-mcp` in the parent chain is matched the same way, by the `exe` basename (`coai-mcp`); its `comm` was not
   measured and is not relied on. The parent-chain rule itself held: the agent's chain reached the driver.
+  **Re-decided 2026-10-17 — a hidden `exe` falls back to `argv[0]`, measured on the owner's WSL** (question consultant a2fa7b43; A2's
+  report). Linux reads `/proc/<pid>/exe` under PTRACE_MODE_READ_FSCREDS, so a SAME-uid process can still hide it: one with extra
+  capabilities, or one that is non-dumpable. The ubuntu CI runner has `systemd --user` hiding it (CapPrm 0x800000000), and so does
+  the owner's WSL2 (read-only check 2026-10-17): `systemd` (CapPrm 0x800000000) AND `(sd-pam)` (CapPrm 0 — non-dumpable, so a
+  capability exception alone would not admit it). Under the rule above every Kimi launch on that machine would be Busy — not a
+  usable product, and "refuse only what cannot be made safe" (owner) says the check must be precise, not blanket. Both processes'
+  `/proc/<pid>/cmdline` stay readable (same check). So the identity is read in this order, per same-uid process: (1) the `exe`
+  basename (with the ` (deleted)` strip); (2) when `exe` is denied, the basename of `argv[0]` from `cmdline` (and `comm` — `kimi`
+  in either is Kimi); (3) only when BOTH `exe` and `cmdline` are unreadable is the process *unreadable* → Busy, naming the pid and
+  what could not be read (the consultant's actionable diagnostic). A process gone between the listing and the read (ESRCH/ENOENT) is
+  skipped. Residual, stated in the code: a non-dumpable `kimi` started under another `argv[0]` is not recognised — the same boundary
+  as "a `kimi` started under another file name" above; `argv[0]` is the process's own claim, and the threat here is the person's own
+  `kimi`, not a process hiding from coai. Tests: the three `/proc` shapes measured (hidden `exe` + readable `cmdline` naming
+  `systemd` → skipped; the same naming `kimi` → Running; both unreadable → Unreadable with the pid), on the fake `IProcReads`.
 
 - **DL11 — Kimi's OS-home redirect on Linux is `HOME` alone.** D19 already says so (parent plan, "On Unix the redirect is `HOME`
   alone, when D18 lifts"). `KimiEnvironment.Built` sets `HOME` → `os/` on Unix and not the three Windows names; its refusal checks
