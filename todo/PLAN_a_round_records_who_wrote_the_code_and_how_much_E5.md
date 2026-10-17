@@ -4,7 +4,9 @@
 > 2026-10-16 for the E4/E5 reconciliation Fable decided (§8, E4 at `244d953c`) and the points E6 (`3c50a78c`) and E7
 > (`740d1a4f`) raised for E5 (§10); and again 2026-10-17 for the independent review of `2af746b3` (eight points) and the
 > E5 consequences of E4's §S2.2b (G1–G12, E4 at `7c3bf469`) — §11 records both, against `origin/main` `ce9cd298`, whose
-> `src_mcp` is byte-identical to `59463d73`.** Epic E5 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
+> `src_mcp` is byte-identical to `59463d73`; and again 2026-10-17 for the independent judge review of `f4dcc003` and E4
+> `7c3bf469` (B1, H1–H2, M1–M8, L1–L10 — §11.4; E7's corrected rule order and its full change list in §10 item 11; the one
+> `ObservedSession → AttributionInput` mapping is E4.S5's `AttributionMapping`, which S4 and E7.S2 call — B1).** Epic E5 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
 >
 > Scope: parent §11 step 4. The round's authors as a nullable snapshot on `RoundRecord` (the session file), **schema step 24**
 > (array index 23, `user_version` 24 — step 22 is the round's size, #829; step 23 the plan source, #841) and its projection
@@ -49,6 +51,7 @@ Three consequences every story obeys:
 | The reader's entry point and states | E3.S2 (`ClaudeHome`, `CallerTranscriptLocator`, the test home), E3.S4 (`ObservedSession`, `ReadBudget`, `fromUtc`) | `Locate(vendor, env, home)` → `Found` / `NotObservable(reason)`; `CallerTranscript.Read(where, ReadBudget(MaxBytes, MaxTime, Clock), fromUtc)` → `ObservedSession` with `ObservationState` (E3 doc §3, E3.S2 brief 1–6) | not started. The seams E5 needs are in E3's contract; S4 widens nothing unless E3 ships without one, and never adds a second reader |
 | The two versions | E3.S4 (`ObservedSession.ReaderVersion = 1`); E4.S2 (`RoundAttribution.Version = 1`, E4 §S2.5, `7c3bf469`) | `authors_reader` (parent §9) and `authors_attribution` (§11, E4 G3) — E7's "equal reader → keep" compares both | in E3's and E4's contracts; S1 adds no constant |
 | Attribution of ONE round | E4.S1 (`AttributionInput`, `UtcInstant.From`, `ObservedWrite.AnsweredAt`), E4.S2 (`RoundAttribution.ReadFrom`, `Assign`), E4.S3 (`RoundAuthorsBuilder.Build` → `RoundAuthors`, with `Stage`, `Number`, `Windows`, `PeerGates` since §S2.2b) | pure, in `src_mcp/core/Authors/`; `Assign` throws `ArgumentException` when `Validate()` refuses the input — and it refuses a round that is not recorded and SETTLED (E4 G6) | not started |
+| The ONE mapping | E4.S5 (`src_mcp/src/Store/AttributionMapping.cs`, B1 2026-10-17) | `Observation(ObservedSession) → CallerObservation`, `Timeline(gateSessionId, repoPath, openedUtc, rounds, callerOf) → GateTimeline` (`CompletedUtc` only on `done`), `Universe(gate, peers, observation)` — rule-free, tested by E4.S5's `TheMappingDecidesNothingTests` | not started. S4 step 5 and E7.S2 CALL it; neither writes a mapping of its own |
 | Sanitised fixtures with sentinels | E1.S5 (#828) | 20 cases under `src_mcp/tests/fixtures/caller-transcripts/c01`–`c20`, each `projects/<slug>/<id>.jsonl` (+ `<id>/` subagents) and a `rounds.json`; `manifest.json` names each case's `fixtureRoots` (`D:/fixture/*`); instants at `2000-01-01` | **merged.** Re-pointable roots and one-offset instants are E1's own contract (E1 doc `:204-205`), so defect 13 is closed |
 | The measured read time | E1.S4 (#828) | `research/RESULTS_caller_transcripts_on_both_sides.md` Q6: Node, largest Windows session 650 MB, day-gated parse p50 **19.9 s** — the prediction (≤ 300 ms) refuted by two orders of magnitude | **merged.** The budget stands on the `fromUtc` slice (D7) and on S4's own C# measurement, never on the whole session |
 
@@ -56,11 +59,14 @@ Three consequences every story obeys:
 
 Each is a choice the main session may overrule before the story starts; §7 lists them as parent defects.
 
-- **Which rounds.** `PlanReview` and `CodeReview` rounds finished by the engine get a snapshot. Skipped rounds
-  (`src_mcp/src/Server/Rounds/RoundSkips.cs:75-80`) and every other stage (feature, document) get none — they read *not recorded*.
-  **`Assign` runs for a SETTLED round only** (E4 §S2.2b G6, §S2.8 item 5): status `done`, verdict not `skipped`, stage
-  `PlanReview`/`CodeReview`. The engine's own round is always that at the call site — `live.Finish` records it `done`
-  (`src_mcp/src/Server/LiveRound.cs:235`) — so the guard is one condition in the step, and a round that fails it gets no snapshot.
+- **Which rounds — one sentence, one owner** (M6, 2026-10-17). A `PlanReview` or `CodeReview` round that is SETTLED —
+  status `done`, verdict not `skipped` (E4 §S2.2b G6) — gets a snapshot; **every other round gets none and keeps an EMPTY
+  `authors_state`, which reads *not recorded*: a skipped round** (`src_mcp/src/Server/Rounds/RoundSkips.cs:75-80`), **an
+  interrupted round** (`RoundRecord.Interrupted`, written by the startup sweep over a `running` row whose pid is dead,
+  `src_mcp/src/Server/SessionStore.cs:608-631`, `:626`, `:718-719`), **a running round, and every feature or document
+  round — live here and in E7's backfill alike; E7 computes nothing for them and writes no reason.** The engine's own round
+  is always settled at the call site — `live.Finish` records it `done` (`src_mcp/src/Server/LiveRound.cs:235`) — so the guard
+  is one condition in the step.
 - **The peers** (E4.S2 §S2.8). On EVERY round, not only the first: the gate sessions other than this one holding a round whose
   `rounds.authors_session` or `rounds.caller` equals this caller, found by one read-only query on the projection; each peer is
   then built as a `GateTimeline` from its SESSION FILE (`SessionStore.Load(repo_path, branch)`, `SessionStore.cs:461`, with
@@ -74,12 +80,28 @@ Each is a choice the main session may overrule before the story starts; §7 list
   **A window overlapped by a running same-caller peer is `partial: peer running`** (E4 G3): E5 stores it as it is, never
   repairs it live and writes no row of another gate session — it holds no claim on that session (the claim key is repo +
   branch + document + feature, never the caller, `src_mcp/src/Server/SessionClaim.cs:32-38`). E7's backfill recomputes
-  those rows once the peers have settled (§10 item 11).
+  those rows once every overlapping peer round is FINAL — `done` or `interrupted` (E4 §S2.3, M7; §10 item 11).
   A store that cannot answer (absent, locked, older than step 24 → no column, a peer file unreadable or naming another
   session id) → `PeersKnown = false`, `Peers` empty, and every window `partial: prior windows unknown`. Step 24 indexes
   `rounds(authors_session)`.
-- **The id source is persisted** (`authors_id_source`, E3's `CallerSessionId.Source`: `registry` / `environment`; `stored` is
-  E7's): parent §5 requires it, §11 step 4's column list omits it.
+  **The query sees projected rounds only** (M3, 2026-10-17): `RecordRound` runs at completion (`RoundEngine.cs:612-614`) and
+  on a skip (`RoundSkips.cs:79`), never for a running round, so a peer gate session whose only same-caller round is still
+  running is INVISIBLE to the live lookup; it is found when that round completes, and E7's grown-peer-set rule (§10 item 11
+  (3)) recomputes this round then — the stated limit. E4's case 8b is therefore set up in S4 with a peer that also holds a
+  projected `done` or skipped round.
+  **The gate's own timeline** (M4): at the call site `session.Rounds` does NOT hold the round being attributed — the save
+  appends it (`RoundEngine.cs:594`, `Rounds = [.. session.Rounds, record]`) and `LiveRound.Persist` saves its OWN
+  `_session` (`LiveRound.cs:257`) — so the step hands E4.S5's `AttributionMapping.Timeline` the list `[.. session.Rounds,
+  record]`; E4's `Validate()` refuses a `(Stage, Number)` absent from `Gate.Rounds`, and without this every live round
+  would be `unobserved: invalid input`. An EARLIER round's `CallerSessionId` is its own snapshot's `Session` when the file
+  has one (a round after E5), else `rounds.authors_session`, else a UUID `rounds.caller`, else `""` (E4 decision 2:
+  `partial: prior caller unknown`) — read by the SAME read-only query, over `rounds WHERE session_id = this` beside the
+  peer lookup (`RoundRecord.Caller` is a `CallerDeclaration(Vendor, Client, ClientVersion, Model)`, `CallerDeclaration.cs:34-38`,
+  and holds no session id; `rounds.caller` is `RoundCommands.CallerFor`, `RoundCommands.cs:34-35`). When the store cannot
+  answer, the file's snapshots are used and the rest is `""`, beside `PeersKnown = false`.
+- **The id source is persisted** (`authors_id_source`, E3's `CallerSessionId.Source`: `registry` / `environment`; `stored`
+  and — since 2026-10-17, H1 — `healed` are E7's: `healed` marks a snapshot copied FROM the database, whose peer set is
+  unknown, never `[]`): parent §5 requires it, §11 step 4's column list omits it.
 - **`open`/`status` do not carry the snapshot.** `SessionAnswerFor` sends `session.Rounds` to the calling AI on every reply
   (`src_mcp/src/Server/PanelService.cs:1878-1894`, the list at `:1888`); the rows would cost the caller up to several KB of
   context per round. The answer strips `Authors` (null is omitted, `src_mcp/src/Server/ServerJsonContext.cs:339-344`); the file
@@ -97,7 +119,14 @@ Each is a choice the main session may overrule before the story starts; §7 list
   an input `Validate()` refuses, a reader that throws, and a deadline missed before attribution ran. One factory gives every
   member no attribution measured its unknown value — `Ambiguous`, `Elsewhere`, `ClaimedByPeer` = `ActivityTotals.Unknown`,
   `UnobservedLaunches`, `SubmoduleWrites`, `UncoveredWrites` = `-1`, `Rows`, `Windows`, `PeerGates` = `[]` — so no such round
-  reads as a measured zero (an `uncovered_writes` of `0` would say "covered").
+  reads as a measured zero (an `uncovered_writes` of `0` would say "covered"). **Its two versions say which component ran**
+  (H2, 2026-10-17): `Reader = 0` when E3's reader produced no `ObservedSession` (a `NotObservable` location, a reader that
+  threw, a deadline missed before the read), else `ObservedSession.ReaderVersion`; `Attribution = 0` when `Assign` did not
+  run (`invalid input`, `reader failed`, a deadline missed before attribution), else `RoundAttribution.Version` — so E7 never
+  keeps such a row as current (§10 item 11 (5)). **A snapshot E4 itself built as `unobserved`** (E3's `transcript empty`
+  after a `Found` location; a blind round) is not `Unknown(...)` — it is E4's record, which carries `-1` in
+  `UnobservedLaunches` (E4 S3, M1) — and the step writes `-1` for `SubmoduleWrites`/`UncoveredWrites` on it too, never
+  the `0` an empty `WritesOutsideTheGateCheckout` would give (M1).
 - **The card line describes THIS round's windows** (`before-open` + `round`), with the `delta` size when its state is
   `recorded` and the `whole` size otherwise — so the authors and the size describe the same stretch of work. Contributors
   (the union over rounds, parent §6) are the report's (E6), not the card's: computing them in TypeScript would be a second
@@ -124,8 +153,9 @@ Each is a choice the main session may overrule before the story starts; §7 list
     stripped file whose database row is current (every live E5 round's is) is never reached by the heal. And rule 3 copies the
     snapshot FROM THE DATABASE ROWS, which cannot restore the five members above and needs an inverse of S2's `AgentColumn`.
     The repair E5 needs is therefore stated as a requirement on E7 in §10 item 11: recompute from the transcript while it
-    exists (equal versions give equal rows and restore every member); heal from the database only when the transcript is
-    gone, through S2's ONE inverse and with `AuthorsSnapshot.Unknown`'s values for the members the database lacks. A round
+    exists (equal versions give back the same placed ids, owners and associations and restore every member; what MAY
+    differ is named there — M2); heal from the database only when the transcript is gone, through S2's ONE inverse, with
+    `AuthorsSnapshot.Unknown`'s values for the members the database lacks and `authors_id_source = 'healed'` (H1). A round
     whose transcript is gone (Claude Code deletes them after 30 days by default) therefore comes back with its rows, state
     and columns, and with those five members unknown for ever. The window closes when every server on that side runs E5's
     release; E7's O1 gates on exactly that.
@@ -134,9 +164,10 @@ Each is a choice the main session may overrule before the story starts; §7 list
     `open`/`status` answer unless S1's strip removed it too, and it is a change to the two types every stage saves, owed to
     every field since `Caller`, not to this one. §7 item 18 hands it to the main session as its own change.
   - **Measured, not assumed** (the `module_server.md` precedent, *"What an older server does with the tick"*): S1 runs the
-    released `coai-mcp` 0.58.0 once, `open` on a THROWAWAY repository over a copied data dir whose session file carries a
-    snapshot, and records the observation and the code paths the run exercised in its summary — prediction: `authors` gone
-    from every round of the file. `open` itself never opens `coai.db` (`PanelService.cs:474-515`: load `:497`, save `:511`),
+    released `coai-mcp` 0.58.0 once, `open` on a THROWAWAY repository (a temp `git init` with one commit — `open` prunes the
+    repository it is given, `PanelService.cs:490`, so never the real one) over a copied data dir whose session file carries
+    a snapshot, and records the observation and the code paths the run exercised in its summary — prediction: `authors` gone
+    from every round of the file. This paragraph is the one place the run is specified; S1, §10 item 1 and the DoD point here. `open` itself never opens `coai.db` (`PanelService.cs:474-515`: load `:497`, save `:511`),
     so the database half of the prediction is S2's suite test, and the run says whether the startup re-projections
     (`:164`, `:176`) opened the file at all.
 - **Uniqueness of STORED ownership across gate sessions is not E5's** (E4 G3: E7's backfill owns it; nothing in this
@@ -202,7 +233,9 @@ S6 may run beside S2–S5 once S1 has merged (E2 has). The epic ships as ONE com
   - **`AuthorsSnapshot.Unknown(stage, number, session, state, reasons, idSource, reader, attribution)`** (review point 4) is
     the one constructor for a snapshot E5 builds without E4 (§3): `Rows`, `Windows`, `PeerGates` = `[]`; `Ambiguous`,
     `Elsewhere`, `ClaimedByPeer` = `ActivityTotals.Unknown`; `UnobservedLaunches`, `SubmoduleWrites`, `UncoveredWrites` =
-    `-1`. No caller spells those values itself.
+    `-1`. No caller spells those values itself. `reader` and `attribution` are `0` when that component did not run (H2,
+    §3) — the caller passes `0` on those paths, never the constant. `IdSource` is one of `registry`, `environment` (E3's),
+    `stored`, `healed` (E7's, §10 item 11); the snapshot keeps it as a string, as the column does.
   - `Render()` — a method, so the JSON gains no member — gives the column and card text: `State` when `Reasons` is empty, else
     `State + ": " + string.Join(", ", Reasons)` (E3's `ObservationState.Render()` format, E3 doc §3). `IsWellFormed(string)`
     is the one rule for a stored state — S3 and S6 apply it, as `PlanSource.IsWellFormed` (`src_mcp/core/Rounds/PlanSource.cs:29`)
@@ -230,7 +263,9 @@ S6 may run beside S2–S5 once S1 has merged (E2 has). The epic ships as ONE com
     minus `WritesOutsideTheGateCheckout` (`CallerSessionId` as `Session`) plus E5's five; and `From(authors, …)` copies
     every one of them (a `RoundAuthors` with a distinct value in every member round-trips).
   - `AnUnknownSnapshot_HasNoMeasuredZero`: `Unknown(...)` has `-1` in `UnobservedLaunches`, `SubmoduleWrites`,
-    `UncoveredWrites` and every term of the three totals, and empty `Rows`, `Windows`, `PeerGates`.
+    `UncoveredWrites` and every term of the three totals, and empty `Rows`, `Windows`, `PeerGates`;
+    `AnUnknownSnapshotNamesWhichComponentRan` (H2): built for a `NotObservable` location it has `Reader = 0` and
+    `Attribution = 0`; built for `invalid input` it has `Reader = ReaderVersion` and `Attribution = 0`.
   - A session file written by today's binary (no `authors` key) loads `Authors == null`, and saving it again writes no
     `authors` key — the precedent's failure mode, stated as a test (the `TheGitlinkCount_RoundTripsThroughTheSessionFile_AndOneWithoutReadsNull`
     shape, `src_mcp/tests/TheRoundsSizeIsStepTwentyTwoTests.cs:155-167`).
@@ -252,13 +287,9 @@ S6 may run beside S2–S5 once S1 has merged (E2 has). The epic ships as ONE com
     restore. Break-it: remove the strip in `SessionAnswerFor` → the `status` test goes red. Break-it: set `InvalidInput` to
     `"invalid, input"` → the joiner fact goes red. Break-it: drop `PeerGates` from the snapshot → the reflection fact goes red
     naming it. Break-it: let the C# rule admit a digit → the vectors test goes red on `partial: read budget 2`.
-  - **The older server, measured once** (§3, not a suite test — it needs the released binary): the released `coai-mcp`
-    0.58.0, `open` on a THROWAWAY repository (a temp `git init` with one commit on the branch — `open` runs
-    `PruneOursAsync` on the repository it is given, `PanelService.cs:490`, so never the real one) whose session file this
-    build wrote with a snapshot, in a copied data dir. The summary records the observation (members left in the file) and
-    the paths the run exercised: `open`'s load and save (`:497`, `:511`), and whether the startup re-projections
-    (`:164`, `:176`) opened `coai.db` — `open` itself never does (`:474-515`), so if neither did, the summary says the
-    database was not exercised and S2's suite test is the only evidence for it.
+  - **The older server, measured once** — §3 *Measured, not assumed* specifies the run (the released 0.58.0, a throwaway
+    repository, the paths recorded: `open`'s load and save `:497`/`:511`, the startup re-projections `:164`/`:176`); it is
+    not a suite test, and when the database was not exercised the summary says so and S2's suite test is the only evidence.
 - **Done when.** Tests green; no change to any existing session-file test.
 - **Depends on.** E4.S3 (`AuthorRow`, `ActivityTotals`, `WindowAuthors`, `RoundAuthors` with `Windows`/`PeerGates`), E4.S2
   (`RoundAttribution.Version`). E2 has merged.
@@ -311,7 +342,7 @@ S6 may run beside S2–S5 once S1 has merged (E2 has). The epic ships as ONE com
     simply be missing. The remarks say so, naming E7 as the second caller.
   - `src_mcp/tests/ThePairsThemselvesTests.cs`: its step-12 re-run drop list (`:529-554`) gains `DROP INDEX
     rounds_by_authors_session;` **first** — SQLite refuses `DROP COLUMN` on an indexed column — then `ALTER TABLE rounds DROP
-    COLUMN` for the fourteen columns above, after `plan_source` (`:552`); `round_authors` and the index are `IF NOT EXISTS`, so
+    COLUMN` for the fourteen columns above, after `plan_source` (`:553`; `:552` is the `effort` drop — L5); `round_authors` and the index are `IF NOT EXISTS`, so
     nothing else. The comment (`:518-528`) names step 24. Without it the reopen meets an existing column, `RoundsDb.Open`
     answers null and the test fails on `db.Pairs` — how step 21 was first seen there.
 - **The brief.** Parameterised SQL only; `RecordRoundRow`'s upsert (`RoundsDb.cs:842-926`) is NOT widened — the authors
@@ -359,7 +390,8 @@ S6 may run beside S2–S5 once S1 has merged (E2 has). The epic ships as ONE com
     released binary's and is measured once (S1), not simulated here.
   - `AnUnknownTotal_IsMinusOneNeverZero`: an `unobserved` snapshot writes `-1` in all seven `ambiguous_*` columns, an
     `observed` one with a zero-agent ambiguous total writes `0` — the two never coincide (E6 D17); an
-    `AuthorsSnapshot.Unknown(...)` snapshot writes `-1` in `submodule_writes` and `uncovered_writes` too.
+    `AuthorsSnapshot.Unknown(...)` snapshot writes `-1` in `submodule_writes` and `uncovered_writes` too, and so does an
+    `unobserved` snapshot E4 built (its `UnobservedLaunches` is `-1` as well — M1).
   - `AgentKeyOf_IsTheInverseOfAgentColumn`: for `AgentKey.Main` and two subagent ids, `AgentKeyOf(AgentColumn(k)) == k`,
     and `AgentKeyOf("")` is main.
   - `TheTwoVersionsAreStored`: `authors_reader` = the snapshot's `Reader`, `authors_attribution` = its `Attribution`.
@@ -436,23 +468,32 @@ S6 may run beside S2–S5 once S1 has merged (E2 has). The epic ships as ONE com
        `Environment.GetEnvironmentVariable`. A `NotObservable` location ends the step: `AuthorsSnapshot.Unknown(…,
        "unobserved", [its reason])` (`no session id`, `stated id`, `transcript not found`, `transcript in two folders`,
        `no reader for <vendor>`), no peer query.
-    2. **The peers** (§3; one read-only connection `Mode=ReadOnly;Pooling=False;Default Timeout=1`, the
-       `src_mcp/src/Store/GateHistoryQuery.cs:77` shape — that one waits 5 s, this one 1 s — on EVERY round). The lookup and
-       the build of each peer's `GateTimeline` from its session file are ONE unit of their own
-       (`src_mcp/src/Server/Rounds/AuthorPeers.cs`, handed the read-only connection and a `load` delegate whose default is
-       `SessionStore.Load`, `src_mcp/src/Server/SessionStore.cs:461` — the store is a sealed class with a non-virtual `Load`,
-       so the delegate is the seam a test spies on), so E7.S2's backfill hands E4 the same peers by calling it rather than by
-       a second query (E7 §10 item 5). Each peer round's `GateRound.CompletedUtc` is its `CompletedUtc` ONLY when its status
-       is `done`, else null (§3, E4 G1).
+    2. **The peers and the gate's own timeline** (§3; one read-only connection `Mode=ReadOnly;Pooling=False;Default
+       Timeout=1`, the `src_mcp/src/Store/GateHistoryQuery.cs:77` shape — that one waits 5 s, this one 1 s — on EVERY round).
+       The lookup, the earlier-caller read of §3 and the build of each peer's `GateTimeline` from its session file are ONE
+       unit of their own: `AuthorPeers.Find(connection, load, deadline)` (`src_mcp/src/Server/Rounds/AuthorPeers.cs`) — the
+       read-only connection; a `load` delegate whose default is `SessionStore.Load` (`src_mcp/src/Server/SessionStore.cs:461`;
+       the store is sealed with a non-virtual `Load`, so the delegate is the seam a test spies on); and a `deadline`
+       (`DateTimeOffset?`, null = unbounded, which is what E7 passes — M5) checked before each peer file is loaded. Each
+       peer timeline is built by E4.S5's `AttributionMapping.Timeline` (B1), so `CompletedUtc` is filled ONLY for a `done`
+       round (§3, E4 G1), and E7.S2 hands E4 the same peers by calling `Find` rather than by a second query (E7 §10 item 5;
+       §10 item 8). The gate's own timeline is `AttributionMapping.Timeline(session.State.SessionId, RepoPath,
+       session.OpenedUtc, [.. session.Rounds, record], callerOf)` — the record appended (M4, §3), the earlier rounds'
+       callers from §3's order. A peer whose only same-caller round is still running is not in the store and not found
+       (M3, §3).
     3. `RoundAttribution.ReadFrom(input without the observation)` → E3's `fromUtc` (`DateTimeOffset?` → `UtcDateTime`).
     4. E3's read with `ReadBudget(64 MiB, time left, clock)` over that `fromUtc`.
-    5. The ONE mapping of `ObservedSession` onto E4's records (E4.S1's *Mapping from E3*: `FirstLineAt = LaunchedUtc ??
-       CalledUtc`, `TokenTerms` term by term, `AnsweredAt` from E3's `ObservedWrite.AnsweredUtc` — E4 G3's evidence horizon
-       — instants through `UtcInstant.From`), with the universe of E4.S2 decision 6 (the gate's and every peer's `repo_path`
-       ∪ every `WriteTarget.Where` root E3 resolved).
-    6. `RoundAttribution.Assign` → `RoundAuthorsBuilder.Build` → `AuthorsSnapshot.From(authors, idSource, reader:
+    5. **`AttributionMapping.Observation(observedSession)`** and **`AttributionMapping.Universe(gate, peers, observation)`**
+       (E4.S5's, B1 — this step writes NO mapping of its own): E4.S1's *Mapping from E3* as E4 states it — `FirstLineAt =
+       LaunchedUtc ?? CalledUtc`, `TokenTerms` term by term, `AnsweredAt` from E3's `ObservedWrite.AnsweredUtc` (E4 G3's
+       evidence horizon), instants through `UtcInstant.From`, every E3 reason as a `StateReason` with `At = null` EXCEPT the
+       two transcript-missing codes, which ride on the launches (E4 G5; tested in E4.S5, L8) — and the universe of E4.S2
+       decision 6 (the gate's and every peer's `repo_path` ∪ every `WriteTarget.Where` root E3 resolved), each root in the
+       spelling it arrives in: no WSL ↔ Windows translation (L6; E4.S1's `RepositoryOf` folds case and separators).
+    6. `RoundAttribution.Assign` (through the `assign` delegate — M5) → `RoundAuthorsBuilder.Build` → `AuthorsSnapshot.From(authors, idSource, reader:
        ObservedSession.ReaderVersion, attribution: RoundAttribution.Version, …)` — `Windows`, `PeerGates` and the
-       `partial: peer running` reason are taken as E4 returns them and never repaired here (§3). From `Build`'s `WritesOutsideTheGateCheckout`
+       `partial: peer running` reason are taken as E4 returns them and never repaired here (§3). When E4's result is
+       `unobserved`, the two write counts are `-1` (M1, §3). From `Build`'s `WritesOutsideTheGateCheckout`
        the step derives `UncoveredWrites` (every call listed) and `SubmoduleWrites` (the calls whose root, relative to
        `repo_path`, is a declared submodule path of the checkout's `.gitmodules`) — read once per round by the SHIPPED
        parser `CoaiMcp.Runners.Git.GitModules.In(repo_path)` (`src_mcp/runners/Git/GitModules.cs:24-35`, "parsed rather
@@ -466,9 +507,12 @@ S6 may run beside S2–S5 once S1 has merged (E2 has). The epic ships as ONE com
     confirmed by E4 (§S2.2a row *§9 F3*: a duplicated journal round is refused, never merged; E4 doc `:225`, `:615`). Every
     other exception is caught, logged as a warning with its type (never a transcript fragment), and becomes
     `unobserved: reader failed` (`AuthorsSnapshot.ReaderFailed`). Both are built by `AuthorsSnapshot.Unknown` (S1).
-  - **The seams** (review point 3): the step's constructor takes, beside the `TimeProvider`, the `env` delegate (step 1),
-    the peer source (a delegate whose default is `AuthorPeers.Find`, step 2) and the reader (a delegate whose default is
-    E3's static `CallerTranscript.Read`, step 4); `AuthorPeers` takes the `load` delegate (step 2). Production passes the
+  - **The seams** (review point 3; completed 2026-10-17, M5): the step's constructor takes, beside the `TimeProvider`, the
+    `env` delegate (step 1), the peer source (a delegate whose default is `AuthorPeers.Find`, step 2), the reader (a
+    delegate whose default is E3's static `CallerTranscript.Read`, step 4), the **`assign` delegate** (default
+    `RoundAttribution.Assign`, step 6 — the "spy on `Assign`" of the tests below is this delegate, never a hook on the
+    static) and an **`AuthorsBudget`** (default `AuthorsBudget.Default`; the 1 KiB test passes its own instance, never a
+    changed constant); `AuthorPeers.Find` takes the `load` delegate and the `deadline` (step 2). Production passes the
     statics; the tests pass spies, a reader that throws, and a reader that records its `fromUtc`. No interface is added
     for one implementation.
   - The budget as one named value, `AuthorsBudget.Default = (2 s, 64 MiB)`, with a remark citing
@@ -527,7 +571,7 @@ S6 may run beside S2–S5 once S1 has merged (E2 has). The epic ships as ONE com
     test process holds (run inside Claude Code, it holds a real `CLAUDE_CODE_SESSION_ID` — the case the guard is for); handed
     a real-looking id and the empty test home, it records `unobserved: transcript not found` and the reader spy is never
     called. Neither test touches the process environment.
-  - Byte budget of 1 KiB over a 2 MB fixture whose `fromUtc` slice is larger than 1 KiB → `partial: read budget`; the same
+  - An `AuthorsBudget(1 KiB, 2 s)` passed to the step (M5) over a 2 MB fixture whose `fromUtc` slice is larger than 1 KiB → `partial: read budget`; the same
     budget with `fromUtc` past all but a slice SMALLER than 1 KiB → `observed` (the byte limit is the slice's, E3 F1 — the
     step passes the bound, it does not re-charge the file); a `FakeTimeProvider` advanced past 2 s mid-read → the
     same `partial: read budget`; the fake clock advanced inside the peer-query phase (not the reader) → `For` stops there and reports `partial: read
@@ -536,7 +580,16 @@ S6 may run beside S2–S5 once S1 has merged (E2 has). The epic ships as ONE com
   - A reader that throws → `unobserved: reader failed`, the round still answers and is saved (through `PanelService`, FakeCli).
   - Any round (not only the first) with a peer gate session of the same caller in the store → E4 is handed that peer, built
     from the peer's session file (its `OpenedUtc` from the file even when `sessions.opened_utc` differs); no database, or a
-    step-23 database (no column) → `PeersKnown = false` → `partial: prior windows unknown`, not an error.
+    step-23 database (no column) → `PeersKnown = false` → `partial: prior windows unknown`, not an error. The peer of every
+    such test holds a projected `done` or skipped round (M3); `ARunningOnlyPeer_IsNotFound_AndTheLimitIsStated`: a peer
+    whose only same-caller round is `running` in its file and absent from `rounds` → not in `Peers`, not in `PeerGates`,
+    the round `observed` — the limit §3 states, repaired by E7's grown-peer-set rule once that round is projected.
+  - `TheGateTimelineHoldsTheRoundBeingAttributed` (M4): the `GateTimeline` handed to E4 ends with `(record.Stage,
+    record.Number)` although `session.Rounds` does not hold it; without the append `Assign` would refuse (`invalid input`).
+  - `AnEarlierRoundsCaller_ComesFromItsSnapshotThenTheStore` (M4): a session file whose round 1 carries a snapshot with
+    `Session = c1` and whose round 2 has none while `rounds.authors_session = c2` for it, and a round 3 with neither and a
+    UUID `rounds.caller` → `c1`, `c2`, that UUID; a `repo:` caller → `""`; the store locked → round 1 still `c1`, the rest
+    `""` and `PeersKnown = false`.
   - `ARunningPeersStamp_IsNotItsCompletion` (E4 G1): a peer file whose last round is `running` WITH a `CompletedUtc` stamp
     (as `LiveRound.cs:256`/`:276` writes it) → the `GateRound` handed to E4 has `CompletedUtc == null`; a `done` peer round
     keeps its stamp.
@@ -547,7 +600,8 @@ S6 may run beside S2–S5 once S1 has merged (E2 has). The epic ships as ONE com
     from E3's `AnsweredUtc` for every write; the decision is E4's and is not re-tested here.
   - `AFailedProjection_KeepsTheSnapshotInTheFile` (E4 G3 (iii)): with `coai.db` locked so `Projection.Write` warns, the round
     answers, and the session file holds the snapshot with its `PeerGates`.
-  - A round that is not settled is never handed to `Assign` (a spy on it): the step returns null for it.
+  - A round that is not settled is never handed to `Assign` (the `assign` delegate records no call — M5): the step returns
+    null for it.
   - `ReadFrom` is called before the read and its bound reaches E3's `fromUtc` (a spy on the reader's argument).
   - An input `Validate()` refuses (a caller mismatch planted in the session file) → `unobserved: invalid input`; the round still
     answers and is saved.
@@ -556,8 +610,10 @@ S6 may run beside S2–S5 once S1 has merged (E2 has). The epic ships as ONE com
     `SubmoduleWrites = 1`, `UncoveredWrites = 2` on the snapshot and the columns; the rows still `wrote here`.
   - The suite guard: a `PanelService` round built with `environment: _ => null` records `unobserved: no session id`; one
     built with a real-looking `CLAUDE_CODE_SESSION_ID` in its `environment` (never on the process) records
-    `unobserved: transcript not found` against the test home — and the whole suite's wall time is within 5 % of the run
-    before this story (measured both, numbers in the summary).
+    `unobserved: transcript not found` against the test home — both opened with `OpenAsync(…, client: "claude-code")`,
+    because the round's VENDOR comes from `CallerIdentity.Current()` at `open` (`PanelService.cs:509`), and a test process
+    holding only `CODEX_SESSION_ID` would otherwise record `unobserved: no reader for codex` (L7) — and the whole suite's
+    wall time is within 5 % of the run before this story (measured both, numbers in the summary).
   - Break-its: move the statement after `_store.Save` → the session-file assertion goes red (the snapshot only in the
     database); remove the `catch` → the throwing-reader round fails; remove the byte check → the budget test reads the whole
     file; let a `NotObservable` location fall through to the peer query → the spy test goes red; read the identity from
@@ -580,8 +636,10 @@ S6 may run beside S2–S5 once S1 has merged (E2 has). The epic ships as ONE com
   `src_mcp/tests/fixtures/caller-transcripts/<case>/projects/` into a temp projects root as `<slug>/<sessionId>.jsonl` (+ the
   `<sessionId>/` subagents folder), its `manifest.json` `fixtureRoots` re-pointed at the temp repository and its instants
   shifted by ONE offset (the fixtures sit at `2000-01-01`) so the writes fall between the plan round's start and the code
-  round's start (fixture derived from now — `testing.md` § *A test that reads the clock expires*); the session id stated
-  through the variable; a `ListSink` (`src_mcp/tests/RoundAuditTests.cs:16`) on the logger. No production code.
+  round's start (fixture derived from now — `testing.md` § *A test that reads the clock expires*); the session id handed
+  through `PanelService(environment: …)` as `CLAUDE_CODE_SESSION_ID` (M8) — NEVER through `COAI_CALLER_SESSION`, which E3's
+  `Locate` reads as `stated id` (E3 `:527`) and which would fail the positive control, and never on the process (S4); a
+  `ListSink` (`src_mcp/tests/RoundAuditTests.cs:16`) on the logger. No production code.
 - **Tests:**
   - **Positive control first:** the code round's snapshot is `observed` with a `wrote here` row — proving the fixture was read
     and accepted, not rejected (`testing.md` § *A fixture the code REJECTS*). And `rounds.agent_log` DOES contain the sentinel:
@@ -669,17 +727,16 @@ S6 may run beside S2–S5 once S1 has merged (E2 has). The epic ships as ONE com
 
 ## 6. Definition of Done (the epic)
 
-- [ ] A plan or code round finished after E5 carries `authors` in its session file and the same in `coai.db`; a skipped,
-      feature or document round and every older round read *not recorded*.
+- [ ] A settled plan or code round finished after E5 carries `authors` in its session file and the same in `coai.db`; a
+      skipped, interrupted, running, feature or document round and every older round read *not recorded* — live and in E7's
+      backfill (M6).
 - [ ] A database at step 21, 22 or 23 opens at 24; read-only `--log` and `--round-counts` on a step-23 file answer and leave it
       byte for byte; both preview forks reach the head; `ThePairsThemselvesTests`' drop list carries step 24.
 - [ ] Deleting `coai.db` and re-projecting the session file gives back the same authors (S2, S5); recording a round twice adds
       nothing.
 - [ ] What an older server runs on a step-24 file — its 23-step migrator, both preview forks and its unwidened upsert —
-      leaves `user_version` 24 and the projected authors byte-equal (S2); the released 0.58.0 was run once on a throwaway
-      repository and the observation, with the paths it exercised, is in S1's summary; the limit (file snapshot, card line
-      and rebuild lost for those rounds until E7 recomputes them from the transcript, or heals them from the database with
-      the never-projected members unknown — §10 item 11) is written in `research/module_server.md`'s step-24 paragraph.
+      leaves `user_version` 24 and the projected authors byte-equal (S2); the 0.58.0 run of §3 *Measured, not assumed* is
+      in S1's summary; the limit §3 states (repair by E7 per §10 item 11) is in `research/module_server.md`'s step-24 paragraph.
 - [ ] `RoundAuthorsTable.Record` opens no transaction and leaves nothing behind a fault after it (S2's two tests); `main` →
       `""` and its one inverse `AgentKeyOf` live in that file only; every unknown total and count is `-1` in the snapshot
       and the columns, and every snapshot E5 builds without E4 comes from `AuthorsSnapshot.Unknown`.
@@ -687,6 +744,10 @@ S6 may run beside S2–S5 once S1 has merged (E2 has). The epic ships as ONE com
       included — the reflection fact), plus `IdSource`, `Reader`, `Attribution` and the two write counts; step 24 stores
       both versions (`authors_reader`, `authors_attribution`); `Assign` is called for settled rounds only; a running peer's
       stamp is never its completion; `partial: peer running` is stored as E4 returns it, and no other gate's rows are written.
+- [ ] (2026-10-17) S4 maps through E4.S5's `AttributionMapping` only (B1); the gate timeline handed to E4 holds the round
+      being attributed (M4); `Unknown(...)` carries `Reader = 0` / `Attribution = 0` for the component that did not run
+      (H2); `-1` for the write counts of an `unobserved` result (M1); `authors_id_source` admits `healed` (H1); the seams
+      of S4 are the five delegates/parameters named there (M5).
 - [ ] `IsWellFormed` is one written rule, and `shared/authors-state-vectors.json` holds C# and TypeScript to it.
 - [ ] The budget path records `partial: read budget`; a failing reader never fails a round; the suite reads no developer's
       transcript, no test sets a caller-identity variable on the process for this epic (the step's `env` is injected), and
@@ -704,32 +765,20 @@ S6 may run beside S2–S5 once S1 has merged (E2 has). The epic ships as ONE com
 > were added on 2026-10-16 and are not settled by the parent (17 is fixed in this document's commit; 19 is closed for E5 on
 > 2026-10-17 by E4's `RoundAttribution.Version`). Items 20–21 were added on 2026-10-17.
 
-1. **"The sentinel is absent from the `.db` bytes" cannot hold** (E5 done-when, §12): `agent_log` keeps its behaviour (§3) and
-   stores transcript TEXT in `rounds.agent_log` (`AgentLog.cs:238-294`, written via `RoundEngine.cs:620` → `RoundsDb.cs:887`).
-   S5 blanks that column before the byte check and uses it as the positive control.
-2. **The card line's scope is undefined** — contributors or this round's window; `whole` or `delta`; which coverages and kinds.
-   §3 decides: this round's windows, a `recorded` `delta` else `whole`, `shown` + `elided` lines.
-3. **The id source is required (§5) but has no column (§11 step 4)** — `authors_id_source` added.
-4. **`write_calls` (§11, a count) vs "kept as a boolean per (agent, repository)" (§5)** — E5 stores what E4 hands over.
-5. **`before-open` needs a cross-gate-session lookup with no named source**; E4 is pure, so the wiring supplies it (§3).
-6. **§14 has no growth row for `RoundRecord.Authors` in session files** after the snapshot decision: at ~0.4 KB per indented
-   row × 3–10 rows ≈ 1.2–4 KB a round, ~700 rounds per two weeks → **≈ 22–75 MB a year** in session files (today 1 743 files,
-   28 MB on Windows), and every progress-tick save rewrites the whole file.
-7. **`open`/`status` would send the snapshot to the calling AI** (`PanelService.cs:1878-1894`); the plan does not mention it.
-8. **Skipped rounds and the feature/document stages** — whether they get authors, and whether a skipped round tiles a window
-   (E4's question), is not said.
-9. **Backfill (§9, E7) upserts only the database**; under the snapshot decision it must also write `RoundRecord.Authors` into the
-   session file, or a rebuild loses every backfilled round. E5 only guarantees a null snapshot never erases rows.
-10. **No rounds re-projection exists** — only consultations and question consultations re-project at startup
-    (`PanelService.cs:164,176`); "rebuild" is `Schema.cs:7-10`'s "delete the file and write it again", which E5's tests simulate.
-11. **§4 cites `CLAUDE_CODE_SESSION_ID` at `CallerSessions.cs:47` as the fallback**, but `COAI_CALLER_SESSION` precedes it
-    (`:45-51`) and `RoundCommands.CallerFor` falls back to `repo:<path>` (`RoundCommands.cs:34-35`), which is no session id — E3's.
-12. **Tests already read the developer's real transcripts**: `WhatTheCallerWasDoing` uses `AgentLog.DefaultProjectsDir` when
-    `AgentLogDir` is empty (`RoundEngine.cs:902`), so every FakeCli round test slices the real `~/.claude/projects` today.
-13. **E1's fixtures** must have re-pointable write paths and shiftable timestamps for an end-to-end round — closed by E1 as
-    shipped (#828): `fixtureRoots` per case, instants at `2000-01-01`, one offset (E1 doc `:204-205`).
-14. **One model-family rule is needed on both sides** (card in TypeScript, report in C#); the plan names neither — S6 adds the
-    shared vectors file both read.
+1. **"No sentinel in the `.db` bytes" cannot hold**: `rounds.agent_log` keeps transcript TEXT by design (`AgentLog.cs:238-294`) — S5 blanks it first and uses it as the positive control.
+2. **The card line's scope was undefined** — §3: this round's windows, a `recorded` `delta` else `whole`, `shown` + `elided` lines.
+3. **The id source is required (§5) but had no column** — `authors_id_source`.
+4. **`write_calls` (a count) vs "a boolean per (agent, repository)"** — E5 stores what E4 hands over.
+5. **`before-open` needs a cross-gate-session lookup with no named source** — the wiring supplies it (§3, `AuthorPeers`).
+6. **No §14 growth row for `RoundRecord.Authors`** — ≈ 1.2–4 KB a round, ≈ 22–75 MB a year a side; every progress-tick save rewrites the file.
+7. **`open`/`status` would send the snapshot to the calling AI** (`PanelService.cs:1878-1894`) — stripped (S1).
+8. **Skipped rounds and the feature/document stages** were not placed — §3 *Which rounds* (not recorded; E4 D1 for the window).
+9. **The backfill upserts only the database** — it must write the file's snapshot too (E7, parent D14).
+10. **No rounds re-projection exists** (`PanelService.cs:164,176` re-project consultations only) — "rebuild" is delete-and-write, which E5's tests simulate.
+11. **§4's id fallback order is wrong** (`CallerSessions.cs:45-51`; `RoundCommands.cs:34-35` falls back to `repo:<path>`) — E3's.
+12. **Tests already read the developer's real transcripts** (`RoundEngine.cs:902`) — the test home, parent D17.
+13. **E1's fixtures** needed re-pointable paths and shiftable instants — closed by E1 as shipped (#828).
+14. **One model-family rule is needed on both sides** — S6's shared vectors file.
 15. **The parent's E5 anchors have drifted** with steps 22–23: `RoundEngine.cs:586` (the save) is `:591`; "call sites only in
     `RoundEngine.cs:605-625`" is `:612-630` and the call site that matters is the record at `:485-496`; `RoundsDb.cs:923-945`
     is `:928-953`; the card anchors `rounds.ts:156` and `roundsLog.ts:519` are `rounds.ts:168` (`calledBy`) / `:225`
@@ -759,96 +808,37 @@ S6 may run beside S2–S5 once S1 has merged (E2 has). The epic ships as ONE com
 
 ## 8. Open with E4 — where this document and E4's contract disagreed (RESOLVED 2026-10-16)
 
-> **All seven resolved by Fable, 2026-10-16** (E4 doc §S2.2a, rows *E5 §8.1*–*§8.7*, `feat/round-authors-e4` `244d953c`).
-> The decision is under each item; the stories above carry it. Nothing in E5 changed for items 4, 5 and 7.
+> **All seven resolved by Fable, 2026-10-16** (E4 doc §S2.2a, rows *E5 §8.1*–*§8.7*, `feat/round-authors-e4` `244d953c`);
+> the full question-and-answer text is in that E4 section. Condensed 2026-10-17 to the decisions E5 carries.
 
-Each item was E4's to confirm or E5's to change; none blocked S1's tests, which are written against the shapes below.
-
-1. **`RoundAuthors` is E4's name, so the snapshot is `AuthorsSnapshot`.** E4.S3 puts `RoundAuthors` and `AuthorRow` in
-   `src_mcp/core/Authors/RoundAuthors.cs` (E4 doc `:628-656`); the 2026-10-14 version of this document put a second
-   `RoundAuthors` and `AuthorRow` in `src_mcp/src/Store/`. E5 now persists E4's `AuthorRow` and `ActivityTotals` as they are and
-   wraps them in its own record, because E4's `RoundAuthors.WritesOutsideTheGateCheckout` holds checkout roots that must never
-   reach a file (E4 doc `:656`, `:662`). E4 to confirm `AuthorRow`'s members are final; a rename there renames the session
-   file's JSON, so it must land before S1.
-   **Decided:** `AuthorRow` and `ActivityTotals` are FINAL as E4.S3 prints them (E4 doc `:726-736`); `AuthorsSnapshot` wraps
-   them unchanged; a later member change is an E4 edit announced to E5 before S1 is coded; the roots stay in memory.
-2. **`main`'s agent id.** E4's `AgentKey.MainId = "main"` (E4 doc `:118-119`); the parent's `round_authors.agent` is empty for main
-   (§11 step 4) and E6 reads it so (E6 doc `:26`). S2 maps at the column; the snapshot keeps E4's `"main"`. If E4 would rather
-   spell main `""`, S2's mapping goes — one place either way.
-   **Decided:** `MainId` stays `"main"` in the core; the `"main"` → `""` mapping is S2's `AgentColumn`, in
-   `RoundAuthorsTable` only, and E6 D18 is its one inverse.
-3. **`AgentKey.IsMain` is a computed PROPERTY** (E4 doc `:118-119`): the source-generated context serialises it, so every row in a
-   session file would carry `"isMain": …` beside the id. E5 asks E4 for `[JsonIgnore]` on it (the core already references
-   `System.Text.Json`, `src_mcp/core/Api/`), or to make it a method; S1's test fails until one of them is done.
-   **Decided:** E4.S1 puts `[JsonIgnore]` on `IsMain` with its own fact (E4 doc `:143-144`); S1 KEEPS its file-shape test
-   (no `isMain`, an `agent` object of one member) — it guards the file, E4's guards the key.
-4. **The card does not consume E4.S4's contributors.** E4.S4 names "the card line's counts (E5, `rounds.ts:156`)" as a consumer
-   of `ContributorSet` (E4 doc `:743`); this document's §3 (accepted in the parent's §16, *writers' resolutions*, row `E5 §3`)
-   has the card describe THIS round's stored rows only, in TypeScript, and leaves contributors to E6. E4.S4 should drop the
-   card from its consumers; `rounds.ts:156` is no longer a function boundary either (`calledBy` is `:168`).
-   **Decided:** the card is dropped from E4.S4's consumers. Nothing to change in E5.
-5. **The peer lookup key.** E4.S1 says E5 finds peers "by `rounds.caller`" (E4 doc `:154-155`); E4.S2 §S2.8 says
-   `rounds.caller` or `authors_session` (`:533-537`). E5 follows §S2.8; E4.S1's sentence is older than its own §S2.8.
-   **Decided:** §S2.8 is the rule (`authors_session`, else a UUID `rounds.caller`) and E4.S1's sentence is aligned. Nothing
-   to change in E5.
-6. **The state string.** E4.S3 returns `State` plus a `Reasons` array (E4 doc `:650-651`); the column, `--log` and the card
-   need one string. S1's `Render()` joins them as E3's `ObservationState.Render()` does (`kind: r1, r2`). E4 to confirm no
-   reason it emits contains `", "`.
-   **Decided:** no E4 reason contains `", "`, proven by E4.S3's `NoReasonContainsTheJoiner`; E4's reasons are count-free,
-   so S1's `IsWellFormed` admits no `×N`. `Render()` joins with `", "`; S1's `E5sReasonsContainNoJoiner` covers E5's own two.
-7. **E4's own anchors** cite `RoundEngine.cs:483-491` / `:586` / `:607` (E4 doc `:15`, `:243`, `:265`) and `RoundsDb.cs:923-945`
-   (`:633`); on `main` they are `:485-496`, `:591`, `:612` and `:928-953`. Nothing in E4's logic depends on them.
-   **Decided:** accepted; E4 corrected its anchors in its §8.1. Nothing to change in E5.
+| # | Question | Decided | Carried by |
+|---|---|---|---|
+| 1 | two `RoundAuthors`/`AuthorRow` types (E4's core, E5's `src/Store`) | `AuthorRow`, `ActivityTotals` (and `WindowAuthors`, E4 L1) are final as E4.S3 prints them; E5 wraps them unchanged in `AuthorsSnapshot`; the checkout roots stay in memory | S1 |
+| 2 | `main` as `"main"` (E4) vs `""` (the column) | `MainId` stays `"main"` in the core; the ONE mapping is S2's `AgentColumn`, its ONE inverse `AgentKeyOf` beside it — E6 D18 and E7's heal call it (L3, 2026-10-17: the row used to name E6 D18 as the inverse) | S2 |
+| 3 | `AgentKey.IsMain` would serialise into every row | E4.S1 puts `[JsonIgnore]` on it with its own fact; S1 keeps the file-shape test | S1 |
+| 4 | the card consuming E4.S4's contributors | dropped from E4.S4's consumers; the card reads this round's stored rows | S6 |
+| 5 | the peer lookup key | `authors_session`, else a UUID `rounds.caller` (E4 §S2.8) | §3, S4 |
+| 6 | the state string | `Render()` joins with `", "`; no E3/E4/E5 reason contains it (E4's `NoReasonContainsTheJoiner`, S1's `E5sReasonsContainNoJoiner`) | S1 |
+| 7 | E4's drifted anchors | corrected in E4's §8.1 | — |
 
 ## 9. Revised 2026-10-16 against `main` — what changed since 2026-10-14
 
-Verified at `59463d73` (E1 #828, E2 #829, the plan-gate E1 #837 and E2 #841 merged). Every `path:line` above was re-read.
-
-- **Step 24, index 23, `user_version` 24** — `Schema.Steps` holds 23 entries ending in `TheRoundsSize`, `ThePlanSource`
-  (`Schema.cs:31-38`), and the migrator stamps the count of steps run (`SqliteMigrator.cs:80-90`). §2's "numbered at merge
-  time" became a fact with a fallback.
-- **No step test is relaxed.** Steps 20–23 already pin `>=` (§S2's list); E2 §10 item 6's foreseen relaxation was made by
-  step 23. What step 24 must extend instead is `ThePairsThemselvesTests`' drop list — with a `DROP INDEX` first, because step
-  24 is the first step to index a column that list drops.
-- **The writer follows `RoundChangesTable`** (step 22), not `QuestionConsultTable`: same seam, same "null writes nothing", and
-  it is called after `RoundChangesTable.Record` at `RoundsDb.cs:200`. The `plan_source` upsert precedent is named and
-  rejected for the backfill reason.
-- **`--log` follows the shipped readers:** an init property on `LoggedRound` like `Size`/`PlanSource`; a reader in its own file
-  chained after `RoundPlanSources.Attach`; matching by `PageIds.Of`, binding by `PageIds.Bind`; the `HasColumn` guard; a per-row
-  well-formedness check standing in for the per-row `JsonException` catch, since the column is text. Absent now means *not
-  recorded* (§3), which changed S3's goal and tests from printing the words.
-- **The extension follows `reviewedFrom`:** `unknown` parameters, `member()`, a shared well-formedness rule, `writtenWithHtml`
-  using only its parameters and listed in `EMBEDDED`, a CSS rule, the five `LogRow` fixtures, the `openedRows` page test, and the
-  older-extension `parseLog` case for `authorsState` (S3). E2 added no `size` to `rounds.ts`, so S6 adds it.
-- **The snapshot is `AuthorsSnapshot` in `core/Authors`**, persisting E4's `AuthorRow` and `ActivityTotals` (E4.S3's shapes are
-  now written down), and keeping `Elsewhere`, `ClaimedByPeer` and `UnobservedLaunches` too; `ambiguous_agents` joins the columns
-  (§3, §8 items 1–3, §7 item 16).
-- **S4 follows E3's and E4's written contracts:** `ClaudeHome.With` for the root, `CallerTranscriptLocator.Locate` first (a
-  `NotObservable` location ends the step with no peer query), `ReadBudget(MaxBytes, MaxTime, Clock)`, `UtcInstant.From`, and
-  the budget remark citing E1's RESULTS (the Node read-time prediction was refuted; the C# value is measured in S4 first).
-- **The call site is one statement after the `with` block**, not inside it — the 2026-10-14 text placed `_authors.For(session,
-  record)` in the initializer of `record` itself, which does not compile.
-- **E1's fixtures exist** (`c01`–`c20`, `manifest.json`, `2000-01-01` instants), so §2 cites them and §7 item 13 is closed.
-- **Drifted anchors updated:** `RoundEngine.cs` 910 → 915 lines (save `:591`, projection `:612`, agent log `:620`, root `:902`,
-  constructor `:23-39`); `PanelService.cs` 1 849 → 1 915 (`SessionAnswerFor` `:1878-1894`, engine `:134-136`, re-projections
-  `:164,176`); `RoundsDb.cs` 1 285 → 1 293 (`Command` `:172-181`, `RecordRound` `:190-202`, `RecordRoundRow` `:842-926`,
-  `RecordReviewers` `:928-953`, agent-log bind `:887`); `RoundsQuery.cs` 991 → 1 006 (`LoggedRound` `:27-117`, ladder `:502-504`,
-  its comment `:494-501`, `HasColumn` `:910-913`); `AgentLog.cs:246-287` → `:238-294`; `CallerSessions.cs:46-52` → `:45-51`;
-  `rounds.ts` `RoundRecord` `:51-99`; `roundsLog.ts` `:384` → `:391`, `:519` → `:541`, `:1637` → `:1662`, `:1737` → `:1762`;
-  the migration-test shape is now `ThePlanSourceIsStepTwentyThreeTests.cs` (forks `:176-192`).
-- **New sections:** §8 *Open with E4*; §7 items 15–17.
+Verified at `59463d73` (E1 #828, E2 #829, the plan-gate E1 #837 and E2 #841 merged); every `path:line` above was re-read
+and the drifted anchors updated in place (the stories cite the current lines). What the revision changed: step 24 is index
+23 / `user_version` 24 with no step test relaxed and `ThePairsThemselvesTests`' drop list extended (`DROP INDEX` first); the
+writer follows `RoundChangesTable`, `--log` the shipped readers, the extension `reviewedFrom`; the snapshot is
+`AuthorsSnapshot` in `core/Authors` wrapping E4's records; S4 follows E3's and E4's written contracts; the call site is one
+statement AFTER the `with` block (the 2026-10-14 text put it inside the initializer, which does not compile); E1's fixtures
+exist. *(Condensed 2026-10-17; the decisions live in §3 and the stories.)*
 
 ## 10. What E6 and E7 asked of E5 — answered 2026-10-16, amended 2026-10-17
 
 E6 `3c50a78c` §4 and E7 `740d1a4f` §10 (*Open with E3–E5*). Each answer is in the story named; nothing here edits E6 or E7.
 
-1. **An older server strips the snapshot** (E6 §4 item 8, E7 §10 item 1). Verified on `main` `1fe25d19`; decided in §3: the
-   database is the durable copy of step 24's columns (S2's `AnOlderServersReSave_LeavesTheProjectedAuthorsInPlace`), the
-   file's snapshot, card line and rebuild are lost for the stripped rounds until E7 repairs them — which E7 as written
-   does not do; item 11 states what it must (*amended 2026-10-17*, review point 1) — the released 0.58.0 is measured once
-   (S1), and `JsonExtensionData` is declined here and handed on as
-   §7 item 18. `Size` and `PlanSource` carry the same exposure and shipped without a word about it. E7's O1 version gate
-   stays the operational guard; E5 adds no gate of its own — the writer that strips is the OLD binary, which E5 cannot reach.
+1. **An older server strips the snapshot** (E6 §4 item 8, E7 §10 item 1). §3's older-server bullet is the one place this is
+   decided and specified (the database is the durable copy; what is lost; `JsonExtensionData` declined → §7 item 18; the
+   0.58.0 run); E7's repair is item 11. E7's O1 version gate stays the operational guard — the writer that strips is the
+   OLD binary, which E5 cannot reach.
 2. **`-1` for unknown totals** (E6 §4 item 2). The contract E6 reads: S2's `-1` in every `ambiguous_*` term E4 left
    unknown, in the snapshot and the columns, never `0` (`AnUnknownTotal_IsMinusOneNeverZero`). E4.S3 kept `-1`
    (`ActivityTotals.Unknown`, final — §8 item 1), so no `Captured`-style type ships and D17 maps `-1` as written.
@@ -868,33 +858,86 @@ E6 `3c50a78c` §4 and E7 `740d1a4f` §10 (*Open with E3–E5*). Each answer is i
 7. **One `"main"` ↔ `""` mapping** (E6 §4 item 4). S2's `AgentColumn` writes it. *Amended 2026-10-17* (review point 1):
    E7's heal from the database needs the inverse too, so the one inverse is S2's `RoundAuthorsTable.AgentKeyOf`, beside
    the mapping; **E6 D18 calls it** instead of spelling `"" → main` itself (a note owed to E6, item 13).
-8. **Peers on every round, the same for the backfill** (E7 §10 item 5). S4's peer build is one unit, `AuthorPeers`, which
-   E7.S2 calls; parity follows from there being one implementation.
+8. **Peers on every round, the same for the backfill** (E7 §10 item 5). S4's peer build is one unit,
+   `AuthorPeers.Find(connection, load, deadline)` (deadline null for E7), which E7.S2 calls; and the ONE
+   `ObservedSession → AttributionInput` mapping is **E4.S5's `AttributionMapping`** (`Observation`, `Timeline`, `Universe`;
+   B1, 2026-10-17), which S4 and E7.S2 call — E7.S2 stops reading `before-open` from a database join of its own (E7
+   `:223-225`) and hands E4 what `Find` + `Timeline` give. Parity follows from there being one implementation of each.
 9. **Step-24 names** (E6 §4 item 1). Unchanged by this revision; the shipped schema wins.
 10. **The 60 s ceiling** (E7 §10 item 7) is E7's number; S4's 2 s is fixed only after its own C# measurement.
 
 *Added 2026-10-17 — what E5 now owes E6 and E7 in turn (review points 1 and 4, E4 §11 Cross-epic). Notes only; nothing
 here edits E6 or E7.*
 
-11. **To E7 — the lost-snapshot repair and E4's `peer running` exception, as ONE rule order** (review point 1 with E4 G3).
-    E7.S1 at `740d1a4f` (`:167-174`) applies rule (2) *keep* before rule (3) *heal*, and its heal copies from the database.
-    Together with E4 §11's E7 items, E5 needs `BackfillDecision` to decide, first match after rule (1) `--since`:
-    - **(a) Recompute a provisional round** — reasons include `peer running`, or the caller now has a settled gate session
-      not in the snapshot's `PeerGates` — once every peer it names has settled (E4 G3, E7 item 1). `PeerGates` exists only in
-      the snapshot (§3): when the file has none, the peer set is unknown and the round is recomputed as if it had grown.
-    - **(b) Recompute a round whose file lost its snapshot** while its transcript exists — whatever the database's
-      versions say. At equal `authors_reader` AND `authors_attribution` the projected members come back equal, and the
-      members the database never held (`Elsewhere`, `ClaimedByPeer`, `UnobservedLaunches`, `Windows`, `PeerGates`) come
-      back at all. Rule (2) must therefore require `SnapshotPresence.HasAuthors` before it keeps.
-    - **(c) Heal from the database only when the transcript is gone** (E7's rule 3, kept for that case): rows through
-      S2's ONE inverse `RoundAuthorsTable.AgentKeyOf` — never a second spelling of `"" → main`; state and reasons from
-      `authors_state` (split on `": "` and `", "`, exact by §10 item 4); `Session`, `IdSource`, `Reader`, `Attribution`, the
-      ambiguous totals and the two write counts from their columns; `Elsewhere`, `ClaimedByPeer` = `ActivityTotals.Unknown`,
-      `UnobservedLaunches` = `-1`, `Windows` = `[]`, `PeerGates` = `[]` — `AuthorsSnapshot.Unknown`'s values for every member
-      step 24 does not project. Such a round that carries `peer running` cannot be finalised (no transcript): it stays
-      provisional for ever, and E7 states that limit.
-    - **(d) Keep** (rule 2) only when the file holds a snapshot, both versions are ≥ the current ones, and (a) does not apply.
-    The heal path's `Stage`/`Number` are the round's own. A second run then writes nothing (E7's idempotence fact).
+11. **To E7 — the corrected `BackfillDecision`: inputs, rule order and the change list** (review point 1 with E4 G3; corrected
+    2026-10-17 by the judge review — H1, H2, M2, M6, M7; written here so the E7 gate can apply it). E7.S1 at `740d1a4f`
+    (`:167-174`) applies rule (2) *keep* before rule (3) *heal*, its heal copies from the database, and the first text of this
+    item ran its (a) before (c), so a file with no snapshot was "recomputed as grown" and, with the transcript gone, the heal
+    was never reached while `PeerGates = []` re-triggered (a) on every run (H1).
+
+    **Inputs beyond `740d1a4f`'s `:161-164`.** `StoredRound` gains `AuthorsAttribution`; `SnapshotPresence` gains
+    `AuthorsAttribution`, `PeerGates` and `IdSource` (a `healed` snapshot has an UNKNOWN peer set — never read as "no
+    peers"); **`TranscriptPresent`** — `CallerTranscriptLocator.LocateStored(authors_session, else a UUID rounds.caller)`
+    run BEFORE the decision (or a two-phase decision); **peer status** — for every gate in `PeerGates`, whether a round of
+    it that overlaps this round's windows is still `running` (a round is FINAL when `done` or `interrupted`, E4 §S2.3 —
+    an interrupted peer never becomes `done`, so waiting for "settled" would leave the row provisional for ever, M7), and
+    whether the caller has a gate session holding a settled round that is NOT in `PeerGates`; the two version constants
+    (`ObservedSession.ReaderVersion`, `RoundAttribution.Version`), read from the types.
+
+    **Rules, first match** (authors; sizes stay rule (5), decided apart):
+    1. `StartedUtc` before `--since` → not selected. Authors are decided for SETTLED `PlanReview`/`CodeReview` rounds only;
+       a skipped, interrupted, running, feature or document round is not selected for authors and gets NO state (M6 — §3
+       *Which rounds* is the one sentence; E7 `:179-182`'s "every selected round gets a state" is about CALLERS, not stages).
+    2. **Transcript GONE.** The file holds a snapshot → `3a re-project` when the database's authors are empty or of an older
+       reader/attribution, else `keep: transcript gone`. The file holds none → **`(c) heal`** from the database when its
+       state is non-empty: rows through S2's ONE inverse `RoundAuthorsTable.AgentKeyOf` (never a second spelling of
+       `"" → main`); state and reasons from `authors_state`, split on `": "` then `", "` (exact by item 4); `Session`,
+       `Reader`, `Attribution`, the ambiguous totals and the two write counts from their columns; `Elsewhere`,
+       `ClaimedByPeer` = `ActivityTotals.Unknown`, `UnobservedLaunches` = `-1`, `Windows` = `[]`, `PeerGates` = `[]`;
+       **`IdSource = "healed"`** (so (a) never retries it); `Stage`/`Number` the round's own. Database state empty too →
+       `(4) compute`, which ends `unobserved: transcript not found` through `LocateStored` (every selected round gets a
+       state). A `peer running` row without a transcript stays provisional for ever — E7 states that limit.
+    3. **Transcript PRESENT — `(a) recompute: provisional`**: the state's reasons include `peer running` and every
+       overlapping round of every gate in `PeerGates` is final; or the caller has a settled gate session not in `PeerGates`
+       and `IdSource ≠ healed` (a healed snapshot's peer set is unknown, not empty, and never triggers (a) — H1).
+    4. **`(b) recompute: snapshot lost`**: `HasAuthors` is false (the file lost it to an older server) — whatever the
+       database's versions say. "Equal rows" is NOT promised (M2): at equal versions the placed ids, their owners, the
+       associations and the rows come back equal, but a straddling message's tokens may be higher (E4 decision 7, the
+       stated limitation), `partial: read budget` may become `observed` (the live budget is 2 s, E7's 60 s, item 10), and the
+       five never-projected members come back at all; **`authors_id_source` keeps the LIVE value** (`registry`/
+       `environment`) — `stored` is written only where the row had none. When the recompute is WEAKER than the database's
+       state (a transcript partly gone) → `(c) heal` instead, so the file gets its snapshot back (`healed`); never `keep:
+       stronger existing` with the file still empty.
+    5. **`(d) keep: equal or newer`**: `HasAuthors`, the database's state `observed` or `partial` — never `unobserved` (H2:
+       its `Reader`/`Attribution` are `0` when the component did not run, S1, and a present transcript is worth a recompute
+       even at current versions) — `authors_reader ≥ ReaderVersion` AND `authors_attribution ≥ RoundAttribution.Version`.
+    6. **`3a re-project`**: the file's snapshot at both versions ≥ current, the database empty or older → rows FROM the
+       snapshot, the transcript not read.
+    7. **`(4) compute`**: empty, older, or `unobserved` → compute; written when its strength ≥ the existing one, else `keep:
+       stronger existing`.
+    8. **`(5) size`**, decided apart, unchanged.
+    A second run then writes nothing (E7's idempotence fact): every path above ends in a row the same path reads as `keep`.
+
+    **What E7 must change** (the judge's list of 2026-10-17, corrected by the decisions above):
+    1. `StoredRound` gains `AuthorsAttribution`; `SnapshotPresence` gains `AuthorsAttribution`, `PeerGates` and `IdSource`.
+    2. New inputs: `TranscriptPresent` (`LocateStored` before the decision, or a two-phase decision); peer status (no
+       overlapping `running` round of a named peer — FINAL, not settled; a settled caller gate session not in `PeerGates`).
+    3. The order above: `--since` → transcript gone (3a / keep / (c) heal / compute) → (a) → (b) → (d) keep only with
+       `HasAuthors`, an `observed`/`partial` state and both versions ≥ current → 3a → (4) → (5).
+    4. The heal: only without a transcript; `AgentKeyOf`; `Unknown` values for `Elsewhere`/`ClaimedByPeer`/
+       `UnobservedLaunches`/`Windows`/`PeerGates`; `authors_state` split on `": "` and `", "`; `IdSource = "healed"`.
+    5. When the (b) recompute is weaker → heal; keep the live `authors_id_source`.
+    6. E7.S2 calls `AuthorPeers.Find(connection, load, deadline: null)` and E4.S5's `AttributionMapping` (B1), and stops
+       reading `before-open` from a database join on caller/`repo_path` (`:223-225`). Never hand `Assign` an unsettled or
+       non-recorded round; such rounds get no state (M6).
+    7. Tests: the generated table adds both versions, `PeerGates`, `IdSource` and transcript presence;
+       `AFilledRowWithoutItsSnapshot_IsHealedNotRecomputed` splits into a without-transcript case (healed) and a
+       with-transcript case (recomputed, (b)); `ASnapshotLostToAConcurrentOpen_IsHealedOnTheNextRun` now recomputes while
+       the transcript exists; new tests for `peer running` (final → recompute; still running → keep), a grown peer set, an
+       interrupted peer, a healed snapshot that does not retrigger (a), an `unobserved` row at current versions (not kept),
+       and a weaker (b) recompute (healed); `TheReaderVersionIsOnEveryWrittenRound` also covers `authors_attribution`.
+    8. The E7.S1 goal sentence names the TWO exceptions to "never overwrite a newer or equal reader": a provisional row
+       (`peer running` / a grown peer set) and a lost snapshot while the transcript exists.
 12. **To E6 — a snapshot E5 builds itself carries `-1`, not `0`** (review point 4). `AuthorsSnapshot.Unknown` writes `-1`
     in `submodule_writes`, `uncovered_writes` (and in every `ambiguous_*`) for `unobserved` rounds and for a `partial: read
     budget` round whose attribution never ran. E6 D12's `uncovered_writes > 0` must treat `-1` as *unknown*, never as
@@ -906,9 +949,12 @@ here edits E6 or E7.*
     backfill. (ii) `partial: peer running` is stored as E4 returns it (provisional until E7's recompute, item 11): count it
     as `partial` (D3). (iii) D18 calls `RoundAuthorsTable.AgentKeyOf` (item 7). (iv) A healed round (item 11 c) has empty
     `Windows` and `-1` in the totals it never measured — the same `Unknown` reading as item 12.
-14. **To E7 — the rest of E4's list as E5 provides it.** `AuthorPeers` fills `GateRound.CompletedUtc` only for `done` rounds
-    (E4 G1) and is the one peer build E7.S2 calls (item 8); `Assign` sees settled rounds only (E4 G6); both versions are
-    columns (item 5); the writer leaves nothing behind a fault in its caller's transaction (item 3).
+14. **To E7 — the rest of E4's list as E5 provides it.** `AuthorPeers.Find` builds each peer through E4.S5's
+    `AttributionMapping.Timeline`, so `GateRound.CompletedUtc` is filled only for `done` rounds (E4 G1), and it is the one
+    peer build E7.S2 calls (item 8); the gate's own timeline is `Timeline(…, [.. rounds, record], callerOf)` with §3's
+    earlier-caller order (M4); `Assign` sees settled rounds only and no other round gets a state (E4 G6, M6); both
+    versions are columns (item 5); `authors_id_source` admits `healed` (H1); the writer leaves nothing behind a fault in its
+    caller's transaction (item 3).
 
 ## 11. Revised 2026-10-17 — the independent review of `2af746b3` and E4's §S2.2b
 
@@ -929,22 +975,39 @@ at `740d1a4f`. Nothing here edits E4, E6 or E7.
 | 7 | `IsWellFormed` did not exclude `×2` by its words, and TypeScript can drift | S1's rule text; S6's restatement | the whole rule written once (S1), with `peer running` admitted; `shared/authors-state-vectors.json` read by the C# and TypeScript tests |
 | 8 | the rollback test used a raw `BEGIN`, not the callers' `SqliteTransaction` | `RecordRound` `RoundsDb.cs:196-202`; `RecordFindings` runs after the writer (`:200-201`) | `AFaultAfterTheWriter_LeavesNoAuthors` through `RecordRound` with a planted `findings` trigger, plus an early-`COMMIT` break-it |
 
-### 11.2 E4 §S2.2b's E5 list — each resolution
+### 11.2 E4 §S2.2b's E5 list — all six applied, plus the G3 ownership note
 
-| E4 item | Resolution in this document |
-|---|---|
-| (1) G1: "a running peer has no completion" is false on disk | §3 corrected (`LiveRound.cs:256`, `:276`; `SessionStore.cs:84`); `AuthorPeers` fills `CompletedUtc` for `done` rounds only; S4 test `ARunningPeersStamp_IsNotItsCompletion` |
-| (2) G6: `Assign` for settled rounds only | §3 *Which rounds*; S4's `For` returns null for a round that is not settled, with a spy test; the engine's round is `done` at the call site (`LiveRound.cs:235`) |
-| (3) G3: store `partial: peer running` unchanged, never repair live | §3 *The peers*; S4 test `APeerRunningRound_IsStoredAsItIs` (peer file and rows byte-equal); E7 repairs, §10 item 11 (a) |
-| (4) G9 + G3: the snapshot carries `Windows` and `PeerGates` | S1's snapshot is now every text-free member of `RoundAuthors` (adds `Stage`, `Number`, `Windows`, `PeerGates`; `Elsewhere`/`ClaimedByPeer` kept) plus E5's five, held by a reflection fact — no hand-kept twin; growth ≈ +300 B (§3, §7 item 20) |
-| (5) G3: store `RoundAttribution.Version` beside `authors_reader` | column `authors_attribution` in step 24 and `Attribution` in the snapshot; §7 item 19 and §10 item 5 closed |
-| (6) `IsWellFormed` admits `peer running` | S1's written rule and its vectors; S3 and S6 tests carry it |
-| (G3) stored-ownership uniqueness is E7's | §3 says E5 does not own it; E5 keeps only its own tests: persisted interleaving, late result (`AnsweredAt` mapped), failed projection (snapshot and `PeerGates` in the file) |
+(1) G1 → §3 *The peers*, `AuthorPeers` + `AttributionMapping.Timeline`, S4 `ARunningPeersStamp_IsNotItsCompletion`; (2) G6
+→ §3 *Which rounds*, S4's null for an unsettled round; (3) G3 → stored unchanged, `APeerRunningRound_IsStoredAsItIs`, E7
+repairs (§10 item 11); (4) G9 + G3 → the snapshot is every text-free member of `RoundAuthors` plus E5's five, a reflection
+fact, ≈ +300 B (§7 item 20); (5) → `authors_attribution` / `Attribution`; (6) → `IsWellFormed` admits `peer running`.
+Stored-ownership uniqueness is E7's (§3); E5 tests only what it owns (interleaving, `AnsweredAt` mapped, failed projection).
 
-### 11.3 Notes now owed to the other documents
+### 11.3 Notes owed to the other documents
 
-- **E6:** §10 items 12 and 13 — `-1` is unknown in `uncovered_writes`/`submodule_writes` (D12), `Windows` is snapshot-only
-  (D2/D3), `peer running` counts as `partial`, D18 calls `AgentKeyOf`.
-- **E7:** §10 items 11 and 14 — the rule order (provisional recompute, lost-snapshot recompute, database heal only without
-  a transcript, keep only with a snapshot), the one inverse, the heal's unknown values, both versions compared.
-- **The parent:** §7 items 20 and 21.
+E6: §10 items 12–13. E7: §10 items 11 and 14 (the complete change list is item 11). The parent: §7 items 20–21. E4: nothing —
+B1 is written into E4 by Fable (`AttributionMapping`, E4.S5).
+
+### 11.4 The judge review of 2026-10-17 (`f4dcc003` and E4 `7c3bf469`) — every point checked in the code first
+
+| # | Point | Checked against | Resolved as |
+|---|---|---|---|
+| B1 | E4.S5 needed the mapping only S4 step 5 built, and E5 is built after E4; E7.S2 needs it too | E3 `:191`/`:712` (`ObservedSession` in `src/Store`); E4 §0, S5 | **Decided (Fable): `src_mcp/src/Store/AttributionMapping.cs`, built by E4.S5** — the one place that sees E3's `src/Store` records and E4's core records; E3 cannot build it (E4's types do not exist yet), E5 comes after E4, and E4.S5 already depends on E3.S4. S4 step 5 and E7.S2 call `Observation`/`Timeline`/`Universe`; §2 row, §3, S4 steps 2 and 5, §10 items 8 and 14 |
+| H1 | item 11 ran (a) before (c): a file with no snapshot was "recomputed as grown", the heal never reached, `PeerGates = []` retriggered (a) | the first text of item 11; E7 `:167-174` | item 11 rewritten: transcript presence decided first; (c) heal only when gone and no snapshot; `IdSource = "healed"` marks a healed snapshot whose peer set is unknown, so (a) never retries it |
+| H2 | `Unknown` snapshots carried versions no rule set; E7 (2) kept any non-empty state ≥ current, `unobserved` included | S1 `Unknown(...)`; E7 `:167-168`; parent §9 protects observed/partial only | `Reader = 0` when the reader did not run, `Attribution = 0` when `Assign` did not (§3, S1, `AnUnknownSnapshotNamesWhichComponentRan`); item 11 (5): keep applies to `observed`/`partial` only |
+| M1 | an `unobserved` result from E4 got `0` write counts, and `UnobservedLaunches` was undefined | S4 step 6 (derived from an empty list); E4 S3 table | `-1` for both counts when E4's result is `unobserved` (§3, S4 step 6, S2's `AnUnknownTotal_…`); E4 states `UnobservedLaunches = -1` |
+| M2 | (b) promised "equal rows"; the live budget is 2 s, E7's 60 s; E7 writes `id_source = stored`; a weaker recompute left the file empty | E4 decision 7; item 10; E7 `:229`, `:299` | item 11 (4): what may differ is named, the live `authors_id_source` is kept, a weaker recompute heals |
+| M3 | a running peer round is never in `rounds` | `RecordRound` at `RoundEngine.cs:612-614` and `RoundSkips.cs:79` only; `open` opens no database | the limit stated in §3; S4's peer tests hold a projected `done`/skipped round; `ARunningOnlyPeer_IsNotFound_AndTheLimitIsStated`; E7's grown-peer-set rule repairs later |
+| M4 | `session.Rounds` lacks this round at the call site; the earlier-caller query and its failure state were unnamed | `RoundEngine.cs:594`, `LiveRound.cs:257`; `CallerDeclaration.cs:34-38`, `RoundCommands.cs:34-35` | `Timeline(…, [.. session.Rounds, record], callerOf)`; the earlier-caller order (snapshot → `authors_session` → UUID `caller` → `""`) in the same read-only query, with its failure state; tests `TheGateTimelineHoldsTheRoundBeingAttributed`, `AnEarlierRoundsCaller_ComesFromItsSnapshotThenTheStore` |
+| M5 | undeclared seams: a spy on the static `Assign`, the 1 KiB budget as the constant, the deadline not passed to `AuthorPeers` | S4 scope and tests | an `assign` delegate, an `AuthorsBudget` constructor parameter, `AuthorPeers.Find(connection, load, deadline)` with null = unbounded for E7 |
+| M6 | two owners for skipped/interrupted rounds; interrupted undefined | E4 S1/§S2.8 vs §3/DoD/E7 `:178` | one sentence in §3 *Which rounds* (no snapshot, empty `authors_state`, live and backfilled; `interrupted` = the sweep's `RoundRecord.Interrupted`); E4's sentence rewritten by Fable; item 11 rule 1 |
+| M7 | the repair waited for "settled", which an interrupted peer never becomes | E4 §S2.3, case 8b | trigger = no overlapping round of a named peer still `running` (FINAL: `done` or `interrupted`); E4 defines *final*; item 11 inputs and rule 3 |
+| M8 | S5 stated the id "through the variable" | E3 `:527` (`COAI_CALLER_SESSION` → `stated id`); S4's rule | S5 passes it through `PanelService(environment: …)` as `CLAUDE_CODE_SESSION_ID`, never on the process |
+| L3 | §8 item 2 named E6 D18 as the inverse | S2, §10 item 7 | §8 row 2: `AgentKeyOf` |
+| L5 | "after `plan_source` (`:552`)" | `ThePairsThemselvesTests.cs:552-553` on `ce9cd298`: `:552` drops `effort`, `:553` `plan_source` | S2: `:553` |
+| L6 | the universe's spelling only in E4.S1 | E4 S1 `:205-206` | S4 step 5 states it; `AttributionMapping.Universe` carries it (E4) |
+| L7 | the suite guard's vendor comes from `CallerIdentity.Current()` at open | `PanelService.cs:509` | the guard tests open with `client: "claude-code"` |
+| L8 | no test for E4 G5's mapping rule | S4 step 5 | the rule is in the mapping (E4.S5) and tested there (`TheTwoTranscriptMissingCodes_AreNeverStateReasons`); S4 step 5 names it |
+| L10 | "the ONE exception" | item 11 (b) | the two exceptions named (item 11 list 8); E4's G3 row says "one of two" |
+| L1, L2, L4, L9 | E4-only points | — | resolved in E4 by Fable (its §11 *Resolutions II*) |
+| size | ≈ 15 KB of restatement | §7 items 1–14, §8, §9, §11.2–11.3, the S1/§10 older-server duplicates | condensed as the judge proposed; the decisions stand in §3 and the stories; the one older-server specification is §3's |
