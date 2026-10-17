@@ -38,15 +38,8 @@ namespace CoaiMcp.Runners.Vibe;
 /// the export's <c>active_model</c> (<see cref="Disowned"/>) — an alias Vibe does not know exits 0 on its routed default
 /// (§11).</para>
 /// </remarks>
-public sealed class VibeRuntime(string id, HostKind host, VibePathBudget? budget = null, VibeSignIn? signIn = null, WslGeneration? wsl = null) : IReviewerRuntime
+public sealed class VibeRuntime(string id, VibeHost host, VibePathBudget? budget = null) : IReviewerRuntime
 {
-    /// <summary>
-    /// What this adapter's launches are judged against (<see cref="VibeLaunch.TakeAsync"/>), resolved ONCE, where the adapter is made.
-    /// An adapter given a <see cref="HostKind"/> directly (a test) carries NO sign-in unless it is given one — it never reads the
-    /// person's own <c>~/.vibe/.env</c> — and is on WSL2 only when it is told so or this very kernel is; the product's adapter takes
-    /// <see cref="VibeHost.Current"/>, which resolves both from the machine.
-    /// </summary>
-    private readonly VibeHost _host = new(host, wsl ?? (host == HostKind.Wsl ? WslGenerations.Current : WslGeneration.None), signIn ?? VibeSignIn.None);
 
     /// <summary>
     /// Resolved ONCE, where the adapter is made: the PROCESS's platform budget (<see cref="VibePathBudget.ForThisProcess"/>), not
@@ -61,9 +54,14 @@ public sealed class VibeRuntime(string id, HostKind host, VibePathBudget? budget
     {
     }
 
-    /// <summary>The adapter for a stated host: its kind, its WSL generation and the person's sign-in.</summary>
-    public VibeRuntime(string id, VibeHost host, VibePathBudget? budget = null)
-        : this(id, host.Kind, budget, host.SignIn, host.Wsl)
+    /// <summary>
+    /// <b>A test's way in — internal on purpose.</b> An adapter given a bare <see cref="HostKind"/> carries NO sign-in unless it is handed one
+    /// (so a test never reads the person's real <c>~/.vibe/.env</c>) and, when <paramref name="wsl"/> is unset, THIS machine's WSL generation.
+    /// A product caller on it would run Vibe signed out on a WSL2 host without a word, or judge a WSL host by the wrong kernel. The public ways
+    /// in are the id alone (the machine's host, <see cref="VibeHost.Current"/>) and a <see cref="VibeHost"/>.
+    /// </summary>
+    internal VibeRuntime(string id, HostKind host, VibePathBudget? budget = null, VibeSignIn? signIn = null, WslGeneration? wsl = null)
+        : this(id, new VibeHost(host, wsl ?? (host == HostKind.Wsl ? WslGenerations.Current : WslGeneration.None), signIn ?? VibeSignIn.None), budget)
     {
     }
 
@@ -78,7 +76,7 @@ public sealed class VibeRuntime(string id, HostKind host, VibePathBudget? budget
     /// <c>~/.local/bin</c>. See <see cref="InstalledExecutableFor(HostKind, string, Func{string, string?}, Func{string, bool})"/> for the order.
     /// </summary>
     public string DefaultExecutable =>
-        InstalledExecutableFor(host, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), Environment.GetEnvironmentVariable, IsInstalledFile);
+        InstalledExecutableFor(host.Kind, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), Environment.GetEnvironmentVariable, IsInstalledFile);
 
     /// <summary>A file that exists and, off Windows, carries an execute bit: what a candidate must be to count (DL5 — a stray file named <c>vibe</c> is not an install).</summary>
     private static bool IsInstalledFile(string path) =>
@@ -273,7 +271,7 @@ public sealed class VibeRuntime(string id, HostKind host, VibePathBudget? budget
 
     /// <summary>The one launch control (D8b, D10, D17, D18) — <see cref="VibeLaunch.TakeAsync"/>.</summary>
     public Task<LaunchTurn> TakeTurnAsync(ReviewerInvocation invocation, IProcessLauncher launcher, CancellationToken ct) =>
-        VibeLaunch.TakeAsync(_host, invocation.Request, ExportFolderOf(invocation), launcher, _budget, ct);
+        VibeLaunch.TakeAsync(host, invocation.Request, ExportFolderOf(invocation), launcher, _budget, ct);
 
     /// <summary>The last assistant message of <c>--output json</c>'s array (D7).</summary>
     public string? ReadAnswer(ReviewerInvocation invocation, ProcessResult result) => VibeStdout.Answer(result.StdOut);
@@ -285,7 +283,7 @@ public sealed class VibeRuntime(string id, HostKind host, VibePathBudget? budget
     /// </summary>
     public string VersionWarning(string printedVersion) =>
         VibeHomeManifest.Builtin is VibeManifestLoad.Loaded { Manifest: var manifest }
-            ? VibeLaunch.VersionWarning(manifest, VibeLaunch.VersionIn(printedVersion), _host.Platform)
+            ? VibeLaunch.VersionWarning(manifest, VibeLaunch.VersionIn(printedVersion), host.Platform)
             : string.Empty;
 
     /// <summary>The export's usage; unknown, never zero, when it is missing or null (D8, D9).</summary>

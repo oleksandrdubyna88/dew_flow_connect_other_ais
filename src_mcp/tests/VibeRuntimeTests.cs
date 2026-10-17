@@ -274,6 +274,21 @@ public sealed class VibeRuntimeTests : IDisposable
         RuntimeResolution.For(new VendorIdentity("my-mistral", "vibe", string.Empty)).Should().BeOfType<VibeRuntime>();
     }
 
+    /// <summary>
+    /// The constructor that takes a bare <see cref="HostKind"/> is a test's: it gives the adapter NO sign-in (so a test never reads the
+    /// person's real <c>~/.vibe/.env</c>) and, unset, this machine's WSL generation. A product caller on it would run Vibe signed out on a
+    /// WSL2 host without a word — so the public ways in are the id alone (the machine's host) and a <see cref="VibeHost"/>.
+    /// </summary>
+    [Fact]
+    public void TheConstructorThatTakesABareHostKind_IsNotPublic()
+    {
+        var publicOnes = typeof(VibeRuntime).GetConstructors().Select(constructor => constructor.GetParameters().Select(parameter => parameter.ParameterType).ToArray()).ToList();
+
+        publicOnes.Should().NotContain(parameters => parameters.Contains(typeof(HostKind)), "a bare HostKind carries no sign-in and no WSL generation: a test-only way in");
+        publicOnes.Should().Contain(parameters => parameters.SequenceEqual(new[] { typeof(string) }), "the machine's host");
+        publicOnes.Should().Contain(parameters => parameters.Length > 1 && parameters[1] == typeof(VibeHost), "a stated host");
+    }
+
     [Theory]
     [InlineData(true, @"C:\Users\p\.local\bin\vibe.exe")]
     [InlineData(false, "vibe")]
