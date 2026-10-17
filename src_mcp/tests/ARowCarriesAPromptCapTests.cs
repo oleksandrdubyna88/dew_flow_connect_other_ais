@@ -6,7 +6,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// S1 of <c>todo/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md</c> (D1, D6, D7): a vendor row may carry
+/// S1 of <c>research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md</c> (D1, D6, D7): a vendor row may carry
 /// <c>maxPromptKib</c> — an operator's number, whole KiB, 1 to 4096 — and reports it from <c>providers</c> when it is set.
 /// </summary>
 /// <remarks>
@@ -30,13 +30,13 @@ public sealed class ARowCarriesAPromptCapTests : IDisposable
     public void TheRowsKib_AreParsed_OutOfRangeIsUnset(string kib, int expected)
     {
         PanelSettings.ParseVendors($$"""[{"id":"codex","runtime":"codex","maxPromptKib":{{kib}}}]""")[0]
-            .MaxPromptKib.Should().Be(expected);
+            .PromptCap.Kib.Should().Be(expected);
     }
 
     [Fact]
     public void AnAbsentCap_IsUnset()
     {
-        PanelSettings.ParseVendors("""[{"id":"codex","runtime":"codex"}]""")[0].MaxPromptKib.Should().Be(0);
+        PanelSettings.ParseVendors("""[{"id":"codex","runtime":"codex"}]""")[0].PromptCap.Should().Be(CoaiMcp.Core.Catalog.PromptCap.None);
     }
 
     [Fact]
@@ -45,7 +45,7 @@ public sealed class ARowCarriesAPromptCapTests : IDisposable
         var rows = PanelSettings.ParseVendors(
             """[{"id":"codex","runtime":"codex","maxPromptKib":"180"},{"id":"gemini","runtime":"gemini","maxPromptKib":150}]""");
 
-        rows.Select(row => (row.Provider, row.MaxPromptKib)).Should().Equal(("codex", 0), ("gemini", 150));
+        rows.Select(row => (row.Provider, row.PromptCap.Kib)).Should().Equal(("codex", 0), ("gemini", 150));
     }
 
     [Fact]
@@ -57,8 +57,35 @@ public sealed class ARowCarriesAPromptCapTests : IDisposable
     [Fact]
     public void TheCapInBytes_IsExactlyKibTimes1024_AndZeroWhenUnset()
     {
-        new ProviderSettings("codex") { MaxPromptKib = 150 }.MaxPromptBytes.Should().Be(153_600);
-        new ProviderSettings("codex").MaxPromptBytes.Should().Be(0);
+        CoaiMcp.Core.Catalog.PromptCap.OfKib(150).Bytes.Should().Be(153_600);
+        new ProviderSettings("codex").PromptCap.Bytes.Should().Be(0, "a row with no cap has no bytes to compare");
+    }
+
+    /// <summary>The boundary lives in the type: exactly the cap is read, one byte more is not, and no cap admits anything.</summary>
+    [Fact]
+    public void TheCapAdmitsExactlyItsBytes_AndNotOneMore_AndNoCapAdmitsEverything()
+    {
+        var cap = CoaiMcp.Core.Catalog.PromptCap.OfKib(1);
+
+        cap.Admits(1024).Should().BeTrue("the cap is inclusive");
+        cap.Admits(1025).Should().BeFalse("one byte over the cap is over it");
+        CoaiMcp.Core.Catalog.PromptCap.None.Admits(int.MaxValue).Should().BeTrue("a row with no cap is sent what it always was");
+    }
+
+    [Theory]
+    [InlineData(0L)]
+    [InlineData(-1L)]
+    [InlineData(4097L)]
+    [InlineData(5_000_000_000L)]
+    public void AKibOutOfRange_IsNoCap(long kib)
+    {
+        CoaiMcp.Core.Catalog.PromptCap.OfKib(kib).Should().Be(CoaiMcp.Core.Catalog.PromptCap.None);
+    }
+
+    [Fact]
+    public void AFractionOfAKib_IsNoCap()
+    {
+        PanelSettings.ParseVendors("""[{"id":"codex","runtime":"codex","maxPromptKib":180.5}]""")[0].PromptCap.IsSet.Should().BeFalse();
     }
 
     [Fact]
