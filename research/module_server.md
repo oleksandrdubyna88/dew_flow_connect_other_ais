@@ -6343,10 +6343,33 @@ sweep removed EVERY `coai-wt-*` by prefix, including a round running in another 
 `PanelSettings.RoundTreeRoot` is read as the machine-local root (D4); `COAI_ROUND_WORKTREES`
 overrides it — and must itself be a LOCAL path, since the owner check trusts that every process
 touching the root is on this machine — and a settings object built in a test leaves it empty for
-`{DataDir}/worktrees`. The owner marker is written to a temporary name and renamed over, so a
+`{DataDir}/worktrees`. It is also the operator's way out when a git ignores `core.longpaths`: a shorter
+local root (for example `C:\coai-rt`) buys ceiling unit-for-unit, and `WorktreeFailure` names it in its
+message. It moves the ROUND root only — review trees have their own `COAI_REVIEW_ROOT` (an absolute path
+only), so one variable never moves both. The owner marker is written to a temporary name and renamed over, so a
 sweep never reads a half-written one as a dead owner. Trees
 that older builds left under `{DataDir}/worktrees` are not swept by this one — they block nothing,
 because no path is ever reused.
+
+**A tracked path longer than Windows allows (2026-10-16, `research/PLAN_review_trees_survive_long_paths.md`).**
+On Windows git refuses to write, read or remove a file whose absolute path passes 259 UTF-16 units unless
+`core.longpaths` is on, and it is on nowhere by default. A round tree's root is 82 characters on a normal
+profile, so a branch tracking a 177-character path failed `review_code` with "Could not reset index file to
+revision 'HEAD'" — a sentence that names the index while the cause is the path. `TreeGit.Argv` now leads the
+argv of every git call in `WorktreeManager`, `ReviewTreeRoot.GitAsync` and `SubmodulePopulator` with
+`-c core.longpaths=true` on Windows, for the whole lifecycle of BOTH kinds of tree: without it `status` reads
+a clean tree as dirty (so a review tree could never be removed from the panel), `worktree remove` drops the
+registration and leaves the files, and a submodule's nested clone fails the same way. It is per command —
+no repository, global or system config is written — and Linux and macOS argv is unchanged.
+
+When a round-tree add STILL fails over a path, `WorktreeFailure.Sentence` (used where `AddAsync` throws) reads
+git's own `error: unable to create file …` or `fatal: cannot create directory at …` line and says which path,
+how long it is (UTF-16 units, what Windows counts) and git's reason — e.g. `Invalid argument` for a single
+path component of 256 units, which `core.longpaths` does not lift because NTFS caps a component at 255. For
+`Filename too long` it also names the limit — 259 for a file, 247 for a folder, which Windows refuses 12 units sooner (probed 2026-10-17: a 248-unit folder failed while the file in it was 250) — says coai already asked for long paths, and names
+`COAI_ROUND_WORKTREES`; for any other reason it names no root advice, because a shorter root does not cure
+it. git's closing `fatal:` line follows, as the last word rather than the only one. A failure with no such
+line reads as it always did, and a review tree's add keeps its wire word `git_failed`.
 
 ### A gate can be run again, and a lost reply read back (S3, issue #490)
 
