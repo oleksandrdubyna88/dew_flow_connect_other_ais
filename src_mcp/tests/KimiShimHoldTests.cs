@@ -219,6 +219,87 @@ public sealed class KimiShimHoldTests : IDisposable
         HeldFile.Probe(KimiCredentialsLock.TreePathFor(Persons)).Should().Be(LockProbe.Free);
     }
 
+    // ---------- two servers, one sign-in: the second agent cannot start before the first refresher is gone (the E5 risk consultant) ----------
+
+    /// <summary>The product's reconcile over process seams a test controls (no process is ever really ended).</summary>
+    private sealed class Seamed(ReconcileSeams seams) : IKimiSurvivors
+    {
+        public async Task<string> BlockedAsync(string markerPath, CancellationToken ct) =>
+            await KimiSurvivorGate.ReconcileAsync(markerPath, () => new KimiPresence.NoKimi(), seams) is SurvivorVerdict.Blocked blocked ? KimiSurvivorGate.Sentence(blocked) : string.Empty;
+
+        public string KeepsHome(string ownedRoot) => string.Empty;
+    }
+
+    [Fact]
+    public async Task AFirstShimPausedBetweenItsHoldAndItsMarker_KeepsTheSecondOut_UntilTheFirstHasEnded()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        using var rooted = KimiCredentialsLock.RootFor(Locks);
+        var places = MadePlaces();
+        var marker = KimiCredentialsLock.MarkerPathFor(Persons);
+        using var paused = new ManualResetEventSlim();
+        using var resume = new ManualResetEventSlim();
+        TreeHolding PausedAfterTheTake(string target, string root, TimeSpan within)
+        {
+            var taken = NonInheriting(target, root, within);
+            paused.Set();
+            _ = resume.Wait(TimeSpan.FromSeconds(60));
+
+            return taken;
+        }
+
+        var first = Task.Run(() => KimiShimHold.Taken(places, TimeSpan.FromSeconds(60), NobodyForeign(), PausedAfterTheTake, supervised: true));
+        paused.Wait(TimeSpan.FromSeconds(30)).Should().BeTrue("the first shim took both tree files");
+
+        KimiShimHold.Taken(places, Brief, NobodyForeign(), NonInheriting, supervised: true).Should().BeOfType<AcpHolding.Busy>("the first shim holds the sign-in before it has published anything: a second agent started here would be a second refresher");
+        File.Exists(marker).Should().BeFalse("the first shim is paused BEFORE its marker");
+
+        resume.Set();
+        var firstHeld = (await first).Should().BeOfType<AcpHolding.Held>().Subject;
+        KimiShimHold.Taken(places, Brief, NobodyForeign(), NonInheriting, supervised: true).Should().BeOfType<AcpHolding.Busy>("the first agent is running");
+
+        firstHeld.Hold.Dispose();
+        KimiShimHold.Taken(places, Brief, NobodyForeign(), NonInheriting, supervised: true).Should().BeOfType<AcpHolding.Busy>("the hold is free but the first shim is alive and its marker stands: its turn is not over, and nothing of it is ended")
+            .Which.Sentence.Should().Contain("still running under coai shim pid");
+
+        KimiSurvivorMarker.Clear(marker);
+        var second = KimiShimHold.Taken(places, Brief, NobodyForeign(), NonInheriting, supervised: true);
+
+        second.Should().BeOfType<AcpHolding.Held>("the first turn ended cleanly: its marker is gone and its hold is free");
+        ((AcpHolding.Held)second).Hold.Dispose();
+    }
+
+    [Fact]
+    public void ARefresherThatOutlivesItsShimAndItsServer_KeepsTheSecondShimBusy_UntilItIsGone()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        using var rooted = KimiCredentialsLock.RootFor(Locks);
+        var places = MadePlaces();
+        var marker = KimiCredentialsLock.MarkerPathFor(Persons);
+        var refresher = new ProcessIdentity(2_000_000_011, DateTime.UtcNow.AddMinutes(-2));
+        KimiSurvivorMarker.Write(marker, new KimiSurvivorMarkerDto(new ReaderMarkerDto(ReaderPhases.Running, 424242, DateTime.UtcNow.AddMinutes(-3), DateTimeOffset.UtcNow, [refresher]), Owned, "/people/sign-in"));
+        var refresherRuns = true;
+        var seams = new ReconcileSeams(
+            _ => false,
+            members => Task.FromResult<IReadOnlyList<ProcessIdentity>>(refresherRuns ? members : []),
+            _ => [],
+            member => member.Pid == 424242 || !refresherRuns ? new Liveness.Gone("no such process") : new Liveness.Alive());
+        using var seam = KimiSurvivors.Using(new Seamed(seams));
+
+        var blocked = KimiShimHold.Taken(places, Brief, NobodyForeign(), NonInheriting, supervised: true);
+
+        blocked.Should().BeOfType<AcpHolding.Busy>("the old shim and its server are dead, its tree files are free, and its refresher still runs: the second agent must not start").Which.Sentence.Should().Contain("2000000011").And.Contain(marker);
+        File.Exists(marker).Should().BeTrue();
+        HeldFile.Probe(KimiCredentialsLock.TreePathFor(Persons)).Should().Be(LockProbe.Free, "the second shim gave its hold back");
+
+        refresherRuns = false;
+        var proceeding = KimiShimHold.Taken(places, Brief, NobodyForeign(), NonInheriting, supervised: true);
+
+        proceeding.Should().BeOfType<AcpHolding.Held>("the refresher is gone: only now does the second agent start");
+        File.Exists(marker).Should().BeTrue("and the marker now is the second turn's own, spawning");
+        ((AcpHolding.Held)proceeding).Hold.Dispose();
+    }
+
     [Fact]
     public void AFolderThatVanishesAfterTheTreeHold_RefusesWithTheKeySentence_AndGivesTheHoldBack()
     {
