@@ -25,7 +25,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class VibeLaunchControlTests : IDisposable
 {
-    private const string Answer = """[{"type":"message","role":"assistant","content":[{"type":"text","text":"{\"findings\": []}"}]}]""";
+    private const string Answer = FakeVibe.Answer;
 
     private readonly TempDir _scratch = TempDir.For("coai-answers-vibectl-");
     private readonly TempDir _out = TempDir.For("coai-answers-vibeout-");
@@ -44,72 +44,7 @@ public sealed class VibeLaunchControlTests : IDisposable
 
     private static string HomeOf(ReviewerInvocation invocation) => invocation.Request.Environment[VibeLaunch.HomeVariable]!;
 
-    private static string ExportOf(ProcessRequest request) => request.Arguments[request.Arguments.ToList().IndexOf("--output-dir") + 1];
-
-    /// <summary>A Vibe on this "machine": its version, and what one review launch does.</summary>
-    private sealed class FakeVibe(string version = "2.26.1") : IProcessLauncher
-    {
-        public ConcurrentQueue<ProcessRequest> Started { get; } = new();
-
-        public Func<ProcessRequest, ProcessResult> Review { get; set; } = request => Answered(request);
-
-        public TimeSpan ReviewTakes { get; set; } = TimeSpan.Zero;
-
-        /// <summary>What the `--version` process does to the home while it runs — nothing, unless a test says so.</summary>
-        public Action<ProcessRequest> WhileTheVersionIsAsked { get; set; } = _ => { };
-
-        /// <summary>When set, `--version` cannot even be started: the OS refuses, with this exception.</summary>
-        public Exception? VersionThrows { get; set; }
-
-        /// <summary>When set, `--version` starts and prints this instead of a release.</summary>
-        public string? VersionPrints { get; set; }
-
-        private int _inReview;
-
-        public int MostAtOnce { get; private set; }
-
-        public IReadOnlyList<ProcessRequest> Reviews => [.. Started.Where(r => !r.Arguments.SequenceEqual(["--version"]))];
-
-        public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
-        {
-            Started.Enqueue(request);
-            if (request.Arguments.SequenceEqual(["--version"]))
-            {
-                WhileTheVersionIsAsked(request);
-                if (VersionThrows is not null)
-                {
-                    throw VersionThrows;
-                }
-
-                return new ProcessResult(0, VersionPrints ?? $"python.exe C:\\Users\\p\\.local\\bin\\vibe {version}\r\n", string.Empty, TimedOut: false);
-            }
-
-            MostAtOnce = Math.Max(MostAtOnce, Interlocked.Increment(ref _inReview));
-            try
-            {
-                await Task.Delay(ReviewTakes, ct);
-                return Review(request);
-            }
-            finally
-            {
-                Interlocked.Decrement(ref _inReview);
-            }
-        }
-
-        /// <summary>What Vibe 2.26.1 does on a finished turn: the export, the model it ran on, the array on stdout.</summary>
-        public static ProcessResult Answered(ProcessRequest request, string? ranOn = null, int exit = 0, string outcome = "finished", string usage = """{"input_tokens":6911,"output_tokens":38,"cached_input_tokens":0,"total_tokens":6949}""")
-        {
-            var export = ExportOf(request);
-            Directory.CreateDirectory(export);
-            var model = ranOn ?? request.Environment[VibeLaunch.ModelVariable];
-            File.WriteAllText(Path.Combine(export, VibeExport.FileName),
-                $$$"""{"outcome":"{{{outcome}}}","usage":{{{usage}}},"cost_usd":0.009,"config":{"active_model":"{{{model}}}"}}""");
-            // Vibe makes its home when it is not there (§24: a bare start writes vibehistory into it).
-            File.WriteAllText(Path.Combine(Directory.CreateDirectory(request.Environment[VibeLaunch.HomeVariable]!).FullName, "vibehistory"), "Hello Vibe!\r\n");
-
-            return new ProcessResult(exit, exit == 0 ? Answer : "[]", exit == 3 ? "Stopped: deadline\r\n" : string.Empty, TimedOut: false);
-        }
-    }
+    private static string ExportOf(ProcessRequest request) => FakeVibe.ExportOf(request);
 
     [Fact]
     public async Task AFreshHome_OnAQualifiedVibe_IsAdmitted_AndTheReviewIsRead()
@@ -155,7 +90,7 @@ public sealed class VibeLaunchControlTests : IDisposable
         var request = VibeLaunch.Built(new ProcessRequest("vibe", ["-p"], _work), home, "glm-5-3");
         var vibe = new FakeVibe();
 
-        using var turn = await VibeLaunch.TakeAsync(HostKind.Windows, request, _out.At("export"), vibe, VibePathBudget.Windows, TestContext.Current.CancellationToken);
+        using var turn = await VibeLaunch.TakeAsync(VibeHost.Of(HostKind.Windows), request, _out.At("export"), vibe, VibePathBudget.Windows, TestContext.Current.CancellationToken);
 
         turn.Refusal.Should().Contain("120 characters long").And.Contain("COAI_CONSULTANT_HOMES");
         Directory.Exists(home).Should().BeFalse("refused before the home was made");
@@ -170,7 +105,7 @@ public sealed class VibeLaunchControlTests : IDisposable
         var request = VibeLaunch.Built(new ProcessRequest("vibe", ["-p"], _work), Path.Combine(parent, "h"), "glm-5-3");
         var vibe = new FakeVibe();
 
-        using var turn = await VibeLaunch.TakeAsync(HostKind.Windows, request, _out.At("export"), vibe, VibePathBudget.None, TestContext.Current.CancellationToken);
+        using var turn = await VibeLaunch.TakeAsync(VibeHost.Of(HostKind.Windows), request, _out.At("export"), vibe, VibePathBudget.None, TestContext.Current.CancellationToken);
 
         turn.Refusal.Should().Contain(parent).And.Contain("never the chain above");
         Directory.Exists(Path.Combine(_scratch, "not-made")).Should().BeFalse();
@@ -187,7 +122,7 @@ public sealed class VibeLaunchControlTests : IDisposable
         Directory.CreateDirectory(Path.Combine(home, "logs", "session", "plugins", "data", "193149ad-d8e5-069e-8f34-aece24b2623d", "vibe"));
         Directory.CreateDirectory(Path.Combine(home, "logs", "session", "plugins", "tmp"));
 
-        using var turn = await VibeLaunch.TakeAsync(HostKind.Windows, invocation.Request, ExportOf(invocation.Request), new FakeVibe(), VibePathBudget.None, TestContext.Current.CancellationToken);
+        using var turn = await VibeLaunch.TakeAsync(VibeHost.Of(HostKind.Windows), invocation.Request, ExportOf(invocation.Request), new FakeVibe(), VibePathBudget.None, TestContext.Current.CancellationToken);
 
         turn.Refusal.Should().BeEmpty();
     }
@@ -214,7 +149,7 @@ public sealed class VibeLaunchControlTests : IDisposable
         var vibe = new FakeVibe { VersionThrows = new Win32Exception(nativeError, "the OS said so") };
         var invocation = Invocation();
 
-        using var turn = await VibeLaunch.TakeAsync(HostKind.Windows, invocation.Request, ExportOf(invocation.Request), vibe, VibePathBudget.None, TestContext.Current.CancellationToken);
+        using var turn = await VibeLaunch.TakeAsync(VibeHost.Of(HostKind.Windows), invocation.Request, ExportOf(invocation.Request), vibe, VibePathBudget.None, TestContext.Current.CancellationToken);
 
         turn.Refusal.Should().Contain("the OS said so");
         turn.CliMissing.Should().Be(cliMissing);
@@ -230,7 +165,7 @@ public sealed class VibeLaunchControlTests : IDisposable
         var vibe = new FakeVibe { VersionPrints = "no version here" };
         var invocation = Invocation();
 
-        using var turn = await VibeLaunch.TakeAsync(HostKind.Windows, invocation.Request, ExportOf(invocation.Request), vibe, VibePathBudget.None, TestContext.Current.CancellationToken);
+        using var turn = await VibeLaunch.TakeAsync(VibeHost.Of(HostKind.Windows), invocation.Request, ExportOf(invocation.Request), vibe, VibePathBudget.None, TestContext.Current.CancellationToken);
 
         turn.CliMissing.Should().BeFalse("a CLI that started is installed");
         turn.Refusal.Should().Contain("uv tool install --force mistral-vibe").And.Contain("this coai is older than that Vibe");
@@ -254,16 +189,16 @@ public sealed class VibeLaunchControlTests : IDisposable
         failure.Cure.Contains(installCure, StringComparison.Ordinal).Should().Be(kind == "cli-not-found", "only a CLI that is not there is told to install it");
     }
 
-    [Theory]
-    [InlineData(HostKind.Linux)]
-    [InlineData(HostKind.Wsl)]
-    public async Task ALinuxOrWslHost_IsRefused_BeforeAnythingStarts(HostKind host)
+    /// <summary>S-V17 (DL1 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): D18 lifts for WSL2 only — a native Linux host stays refused, with a sentence that says so.</summary>
+    [Fact]
+    public async Task ANativeLinuxHost_IsRefused_BeforeAnythingStarts_WithTheWsl2OnlySentence()
     {
         var vibe = new FakeVibe();
 
-        var outcome = await new ReviewerExecutor(vibe).RunAsync(Invocation(host: host), ct: TestContext.Current.CancellationToken);
+        var outcome = await new ReviewerExecutor(vibe).RunAsync(Invocation(host: HostKind.Linux), ct: TestContext.Current.CancellationToken);
 
-        outcome.Should().BeOfType<ReviewerOutcome.NotStarted>().Which.Reason.Should().Contain("D18");
+        outcome.Should().BeOfType<ReviewerOutcome.NotStarted>("a native Linux host should still be refused with the WSL2-only sentence, but Vibe started")
+            .Which.Reason.Should().Contain("DL1").And.Contain("WSL2 only").And.Contain("native Linux");
         vibe.Started.Should().BeEmpty();
     }
 
@@ -370,7 +305,7 @@ public sealed class VibeLaunchControlTests : IDisposable
     {
         var vibe = new FakeVibe();
         var invocation = Invocation();
-        var pinned = ((VibeManifestLoad.Loaded)VibeHomeManifest.Builtin).Manifest.For("2.26.1")[0].Pinned[0].Path;
+        var pinned = ((VibeManifestLoad.Loaded)VibeHomeManifest.Builtin).Manifest.For("2.26.1", "win32")[0].Pinned[0].Path;
         var file = Path.Combine([HomeOf(invocation), .. pinned.Split('/')]);
         Directory.CreateDirectory(Path.GetDirectoryName(file)!);
         await File.WriteAllTextAsync(file, "tampered", TestContext.Current.CancellationToken);

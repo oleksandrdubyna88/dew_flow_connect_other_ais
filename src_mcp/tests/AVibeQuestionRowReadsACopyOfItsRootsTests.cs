@@ -106,10 +106,13 @@ public sealed class AVibeQuestionRowReadsACopyOfItsRootsTests : IAsyncLifetime
     private static string RowFolderOf(ProcessRequest request) =>
         Path.GetDirectoryName(request.Environment[VibeLaunch.HomeVariable])!;
 
-    [Fact]
-    public async Task ASubFolderGrant_CopiesOnlyThatSubFolder_WithoutTheBranchsConfiguration_AndThePromptNamesTheCopy()
+    /// <summary>The question-row flow, as a Windows host and as a WSL2 host (E2 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>).</summary>
+    [Theory]
+    [InlineData(VibeFlowHost.Windows)]
+    [InlineData(VibeFlowHost.Wsl2)]
+    public async Task ASubFolderGrant_CopiesOnlyThatSubFolder_WithoutTheBranchsConfiguration_AndThePromptNamesTheCopy(string mode)
     {
-        Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Vibe is refused on every host but Windows");
+        using var flow = VibeFlowHost.Enter(mode, _dir.At("flow"));
         using var noBudget = VibePathBudget.Using(VibePathBudget.None);
         var vibe = new PlayedVibe(_launcher, Advice);
         var granted = Path.Combine(Repo, "src");
@@ -124,6 +127,7 @@ public sealed class AVibeQuestionRowReadsACopyOfItsRootsTests : IAsyncLifetime
         turn.Request.StdIn.Should().Contain(copy, "the prompt names the copy Vibe can read");
         turn.Request.StdIn.Should().NotContain(granted, "never the original, which it cannot read (M-V11)");
         Directory.Exists(RowFolderOf(turn.Request)).Should().BeFalse("the row's home and copy are gone once it answered");
+        flow.AssertLinked(mode);
     }
 
     [Fact]

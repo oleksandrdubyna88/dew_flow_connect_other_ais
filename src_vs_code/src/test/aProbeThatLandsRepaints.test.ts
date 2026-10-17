@@ -51,6 +51,7 @@ function state(over: Partial<PanelState> = {}): PanelState {
     agyModels: [],
     localEngines: {},
     server: { kind: 'known', version: '0.40.2', remembered: false, updateOffered: false },
+    hostKind: 'windows',
     side: '',
     perSide: false,
     questions: [],

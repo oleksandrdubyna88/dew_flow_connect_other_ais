@@ -28,6 +28,7 @@ function html(vendors: readonly Vendor[]): string {
     settings: DEFAULTS, vendors, codexModels: [], agyModels: [],
     localEngines: Object.fromEntries(vendors.filter((v) => v.runtime === 'local').map((v) => [v.id, ENGINE])),
     server: { kind: 'absent', version: '', remembered: false, updateOffered: false },
+    hostKind: 'windows',
     side: '',
     perSide: false, latestServerVersion: '', questions: [], sessions: [],
     openSections: ['reviewers'],

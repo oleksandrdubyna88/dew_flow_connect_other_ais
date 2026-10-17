@@ -39,6 +39,7 @@ function html(vendors: readonly Vendor[], cliStatus: Record<string, CliStatus>):
     codexModels: [], agyModels: [],
     localEngines: {},
     server: { kind: 'absent', version: '', remembered: false, updateOffered: false },
+    hostKind: 'windows',
     side: '',
     perSide: false,
     latestServerVersion: '',

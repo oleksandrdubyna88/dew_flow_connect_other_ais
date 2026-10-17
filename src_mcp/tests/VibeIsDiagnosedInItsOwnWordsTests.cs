@@ -26,6 +26,71 @@ public sealed class VibeIsDiagnosedInItsOwnWordsTests
         diagnosis.Cure.Should().Contain("vibe --setup").And.Contain("keyring");
     }
 
+    private const string SignedOut = "Error: Missing MISTRAL_API_KEY environment variable for mistral provider. Set the environment variable "
+        + "(e.g. in ~/.vibe/.env or your shell), or run `vibe --setup` once interactively.";
+
+    /// <summary>
+    /// S-V7 (DL2 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>; L-V1): off Windows the sign-in is the file <c>~/.vibe/.env</c> — which coai LINKS into
+    /// its own homes, never copies — and a sign-in kept in a desktop keyring is invisible to coai's launches (no D-Bus session in their
+    /// built environment). The word <c>keyring</c> MUST be in the sentence: it is the case a person with a desktop Linux would be in.
+    /// </summary>
+    [Theory]
+    [InlineData(HostKind.Wsl)]
+    [InlineData(HostKind.Linux)]
+    public void TheSignedOutCure_OffWindows_NamesTheEnvFileTheSetupAndTheKeyring(HostKind host)
+    {
+        var diagnosis = VendorDiagnosis.Classify(SignedOut, host);
+
+        diagnosis.Should().NotBeNull();
+        diagnosis!.Kind.Should().Be(DiagnosisKind.Refused);
+        diagnosis.Cure.Should().Contain("~/.vibe/.env").And.Contain("vibe --setup").And.Contain("keyring").And.Contain("D-Bus").And.Contain("never copies",
+            $"the WSL cure should name ~/.vibe/.env and say a keyring sign-in is invisible to coai, but said: {diagnosis.Cure}");
+    }
+
+    [Fact]
+    public void TheSignedOutCure_OnWindows_IsTheKeyringsAndIsUnchanged()
+    {
+        var windows = VendorDiagnosis.Classify(SignedOut, HostKind.Windows)!.Cure;
+
+        windows.Should().Contain("vibe --setup").And.Contain("operating system's keyring").And.NotContain("~/.vibe/.env", "on Windows the sign-in is in the Credential Manager, which every launch reads");
+        VendorDiagnosis.Classify(SignedOut, wsl: false)!.Cure.Should().Be(VendorDiagnosis.Classify(SignedOut, VendorDiagnosis.HostFor(wsl: false, HostKinds.Current))!.Cure, "the old bool spelling means not-WSL on THIS process's host, not Windows");
+        VendorDiagnosis.Classify(SignedOut, wsl: true)!.Cure.Should().Be(VendorDiagnosis.Classify(SignedOut, HostKind.Wsl)!.Cure);
+    }
+
+    /// <summary>
+    /// The legacy `wsl: false` means "not WSL", never "Windows": on a native Linux host it must not hand out the keyring cure of a machine it is
+    /// not. WSL-or-not is the only thing the flag says; the rest is this process's own host.
+    /// </summary>
+    [Theory]
+    [InlineData(false, HostKind.Linux, HostKind.Linux)]
+    [InlineData(false, HostKind.Windows, HostKind.Windows)]
+    [InlineData(false, HostKind.MacOs, HostKind.MacOs)]
+    [InlineData(false, HostKind.Wsl, HostKind.Linux)]
+    [InlineData(true, HostKind.Linux, HostKind.Wsl)]
+    [InlineData(true, HostKind.Windows, HostKind.Wsl)]
+    [InlineData(null, HostKind.Linux, HostKind.Linux)]
+    [InlineData(null, HostKind.Wsl, HostKind.Wsl)]
+    public void TheLegacyWslFlag_NamesTheProcessesOwnHost_WhenItIsNotWsl(bool? wsl, HostKind process, HostKind expected)
+    {
+        VendorDiagnosis.HostFor(wsl, process).Should().Be(expected);
+    }
+
+    [Fact]
+    public void OnANativeLinuxHost_TheLegacyNotWslFlag_GetsTheEnvFileCure_NotTheKeyringOne()
+    {
+        var cure = VendorDiagnosis.Classify(SignedOut, VendorDiagnosis.HostFor(wsl: false, HostKind.Linux))!.Cure;
+
+        cure.Should().Contain("~/.vibe/.env").And.Contain("keyring").And.Contain("D-Bus");
+    }
+
+    [Fact]
+    public void AnotherVendorsCure_DoesNotChangeByHost()
+    {
+        const string said = "error: unexpected argument '--time-limit' found";
+
+        VendorDiagnosis.Classify(said, HostKind.Wsl)!.Cure.Should().Be(VendorDiagnosis.Classify(said, HostKind.Windows)!.Cure);
+    }
+
     [Fact]
     public void TheRustCli_RefusingTheShippedFlags_IsNamedAsSuch()
     {

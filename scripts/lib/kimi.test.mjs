@@ -8,10 +8,10 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, rmdirSync, 
 import { homedir, tmpdir } from 'node:os';
 import { join, parse } from 'node:path';
 import { after, test } from 'node:test';
-import { CredentialGuard, copyHome, parseStreamJson, scratchRefusal, withoutTrailingSeparators } from './kimi.mjs';
+import { CredentialGuard, canaryCommand, copyHome, homeBin, kimiExecutable, parseStreamJson, scratchRefusal, scrubHome, withoutTrailingSeparators } from './kimi.mjs';
 
 const WINDOWS = process.platform === 'win32';
-const base = mkdtempSync(join(realpathSync.native(tmpdir()), 'kimi-scratch-test-'));
+const base = mkdtempSync(join(realpathSync.native(tmpdir()), 'testsToDelete-kimi-scratch-test-'));
 after(() => rmSync(base, { recursive: true, force: true }));
 
 /** A junction on Windows (no privilege needed); a plain symlink on POSIX, where the type argument is ignored. */
@@ -128,6 +128,37 @@ test('the credential guard: a copy that refreshed is written back unless the rea
   assert.equal(guardSteady.rotates, false, 'the real home refreshed and kept its refresh token');
   assert.equal(guardSteady.afterCopiedRun(homeWith('copy-steady', 'R5'), 'c'), false, 'no rotation: nothing written back');
   assert.equal(refreshIn(steady), 'R1');
+});
+
+// ------------------------------------------------------------------------------------------------- Linux (plan §5, E1)
+
+test('kimi is found where Moonshot\'s installer puts it, per platform (DL5: <KIMI_INSTALL_DIR or ~/.kimi-code>/bin/kimi)', () => {
+  assert.equal(kimiExecutable('linux', {}, '/home/u'), '/home/u/.kimi-code/bin/kimi');
+  assert.equal(kimiExecutable('linux', { KIMI_INSTALL_DIR: '/opt/kimi' }, '/home/u'), '/opt/kimi/bin/kimi');
+  assert.equal(kimiExecutable('win32', {}, 'C:\\Users\\u'), 'C:\\Users\\u\\.kimi-code\\bin\\kimi.exe');
+});
+
+test('the bundled tools a copied home takes are the platform\'s: rg/fd on Linux, rg.exe/fd.exe on Windows', () => {
+  assert.deepEqual(homeBin('linux'), ['rg', 'fd']);
+  assert.deepEqual(homeBin('win32'), ['rg.exe', 'fd.exe']);
+});
+
+test('a canary hook runs the platform\'s Python by its bare name: python3 on Linux (Ubuntu has no bare `python`)', () => {
+  assert.match(canaryCommand('/tmp/c.txt', 'linux'), /^python3 -c "/u);
+  assert.match(canaryCommand('C:\\t\\c.txt', 'win32'), /^python -c "/u);
+  assert.ok(canaryCommand('C:\\t\\c.txt', 'win32').endsWith('"C:/t/c.txt"'), 'the path still arrives as argv, forward slashes');
+});
+
+test('the scrub removes a credentials SYMLINK by its own name on Linux and never what it points at', { skip: WINDOWS && 'the Windows junction arm is the existing M-K8b path' }, () => {
+  const person = join(base, 'person-creds');
+  mkdirSync(join(person, 'credentials'), { recursive: true });
+  writeFileSync(join(person, 'credentials', 'kimi.json'), '{"refresh_token":"keep"}');
+  const home = join(base, 'copied-with-link');
+  mkdirSync(home);
+  symlinkSync(join(person, 'credentials'), join(home, 'credentials'), 'dir');
+  const gone = scrubHome(home);
+  assert.deepEqual(gone, ['credentials (link)']);
+  assert.equal(readFileSync(join(person, 'credentials', 'kimi.json'), 'utf8'), '{"refresh_token":"keep"}');
 });
 
 // SonarCloud S3776 on #803: parseStreamJson was split at a cognitive complexity of 20; what it reads must not move.
