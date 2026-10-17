@@ -29,12 +29,11 @@ public static class SupervisedTeardown
     public static async Task<TreeEnd> EndAsync(
         Process agent, int shimPid, IReadOnlySet<int> startedByUs, IPidfdCalls calls, Action<IReadOnlyList<ProcessIdentity>> onListed)
     {
-        var agentIdentity = IdentityOf(agent);
-        var members = Listed(shimPid, agentIdentity);
+        var members = Listed(shimPid, AgentIdentity(agent));
         onListed(members);
         _ = Ended(members, calls);
 
-        var survivors = await ConfirmedAsync(shimPid, agentIdentity, startedByUs, calls);
+        var survivors = await TeardownRounds.ConfirmedAsync(members, Rounds(shimPid, startedByUs, calls));
 
         ProcessLauncher.Close(agent.StandardInput);
         await agent.WaitForExitAsync(CancellationToken.None);
@@ -42,38 +41,34 @@ public static class SupervisedTeardown
         return new TreeEnd(survivors);
     }
 
+    /// <summary>This host's confirmation: the process table, the zombie drain, the three-state liveness, the pidfd kill, a step of <see cref="ProcessTree.ConfirmationStep"/> and the bound of <see cref="ProcessTree.ConfirmationBound"/>.</summary>
+    private static RoundSeams Rounds(int shimPid, IReadOnlySet<int> startedByUs, IPidfdCalls calls)
+    {
+        var deadline = DateTime.UtcNow + ProcessTree.ConfirmationBound;
+
+        return new RoundSeams(
+            () => ProcessTree.Descendants(shimPid),
+            descendants => Reap(descendants, startedByUs),
+            LivenessCheck.Of,
+            members => Ended(members, calls),
+            () => Task.Delay(ProcessTree.ConfirmationStep),
+            () => DateTime.UtcNow >= deadline);
+    }
+
     /// <summary>Ends <paramref name="members"/> by identity through the pidfd road, each pinned with the EXACT start ticks of its own <c>/proc</c> line (read now, one comparison on the pinned process) rather than the one-second slack of a start time.</summary>
     private static IReadOnlyList<Signalled> Ended(IReadOnlyList<ProcessIdentity> members, IPidfdCalls calls) =>
         TreeSignals.Kill([.. members.Select(member => PinnedMember.Of(member, ProcReads.Real))], calls);
 
-    /// <summary>The agent's identity: its pid and the start the kernel reports — or "now" when that cannot be read a moment after it started, a process that is already gone.</summary>
-    private static ProcessIdentity IdentityOf(Process agent) => new(agent.Id, ProcessTracking.StartedAt(agent.Id) ?? DateTime.UtcNow);
+    /// <summary>
+    /// The agent's identity from a REAL read of its start time — or none. An agent whose start time cannot be read is never given a made-up one: it is not a listed member, its exit is awaited by the caller (no bound),
+    /// and the marker names it only if the descendants listing can identify it.
+    /// </summary>
+    private static IReadOnlyList<ProcessIdentity> AgentIdentity(Process agent) =>
+        ProcessTracking.StartedAt(agent.Id) is { } started ? [new ProcessIdentity(agent.Id, started)] : [];
 
-    /// <summary>The shim's live descendants plus the agent when it is alive, de-duplicated by pid — an exited entry is dropped by the one rule, <see cref="ProcessTree.IsAlive"/>.</summary>
-    private static IReadOnlyList<ProcessIdentity> Listed(int shimPid, ProcessIdentity agent) =>
-        [.. AliveOf(ProcessTree.Descendants(shimPid), agent)];
-
-    private static IEnumerable<ProcessIdentity> AliveOf(IEnumerable<ProcessIdentity> descendants, ProcessIdentity agent) =>
-        descendants.Append(agent).Where(ProcessTree.IsAlive).DistinctBy(member => member.Pid);
-
-    /// <summary>Step 4: re-list, reap, and end again, until nothing is alive or the bound — the members alive then are the survivors.</summary>
-    private static async Task<IReadOnlyList<ProcessIdentity>> ConfirmedAsync(int shimPid, ProcessIdentity agent, IReadOnlySet<int> startedByUs, IPidfdCalls calls)
-    {
-        var deadline = DateTime.UtcNow + ProcessTree.ConfirmationBound;
-        while (true)
-        {
-            var descendants = ProcessTree.Descendants(shimPid);
-            Reap(descendants, startedByUs);
-            var alive = AliveOf(descendants, agent).ToList();
-            if (alive.Count == 0 || DateTime.UtcNow >= deadline)
-            {
-                return alive;
-            }
-
-            _ = Ended(alive, calls);
-            await Task.Delay(ProcessTree.ConfirmationStep);
-        }
-    }
+    /// <summary>The shim's live descendants plus the agent when it is identified, kept unless provably gone: an exited entry is Gone by the one rule (<see cref="LivenessCheck"/>), an entry that cannot be checked stays.</summary>
+    private static IReadOnlyList<ProcessIdentity> Listed(int shimPid, IReadOnlyList<ProcessIdentity> agent) =>
+        TeardownRounds.Kept([.. ProcessTree.Descendants(shimPid), .. agent], LivenessCheck.Of);
 
     /// <summary>Takes the status of each LISTED descendant in state <c>Z</c> that this process did not start; a pid that is not ours to reap (ECHILD) is no error — the next listing decides.</summary>
     private static void Reap(IReadOnlyList<ProcessIdentity> descendants, IReadOnlySet<int> startedByUs)

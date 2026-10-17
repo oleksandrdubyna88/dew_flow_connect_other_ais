@@ -80,9 +80,22 @@ public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary, Ti
 
         using (transport)
         {
-            supervisor.Started(new ProcessIdentity(transport.Pid, ProcessTracking.StartedAt(transport.Pid) ?? DateTime.UtcNow));
+            Told(supervisor, transport.Pid);
 
             return await TurnAsync(transport, ask, ct);
+        }
+    }
+
+    /// <summary>The supervisor is told of the agent by its REAL identity; a start time that cannot be read is told as an unidentified pid, never a made-up time.</summary>
+    private static void Told(ITreeSupervisor supervisor, int pid)
+    {
+        if (ProcessTracking.StartedAt(pid) is { } started)
+        {
+            supervisor.Started(new ProcessIdentity(pid, started));
+        }
+        else
+        {
+            supervisor.StartedUnidentified(pid);
         }
     }
 

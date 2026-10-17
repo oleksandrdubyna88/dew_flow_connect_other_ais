@@ -57,7 +57,18 @@ public sealed class KimiTreeSupervisor : ITreeSupervisor
     /// Called by <c>KimiShimHold.Taken</c> after both tree files are held and the previous marker was reconciled.
     /// </summary>
     public static SupervisorBegin Begin(string markerPath, string ownedRoot, string signInFolder) =>
-        Begin(markerPath, ownedRoot, signInFolder, Environment.ProcessId, ProcessTracking.StartedAt(Environment.ProcessId) ?? DateTime.UtcNow, ThisHost, Console.Error.WriteLine);
+        Begin(markerPath, ownedRoot, signInFolder, Environment.ProcessId, ProcessTracking.StartedAt, ThisHost, Console.Error.WriteLine);
+
+    /// <summary>
+    /// With the shim's start time read through a seam. <b>A start time that cannot be read refuses the turn</b> (nothing starts): the marker names its owner by pid AND start, and an invented start disagrees with the real
+    /// one on every later read — a live owner would read as Gone, and the next launch would end an active turn's agent.
+    /// </summary>
+    internal static SupervisorBegin Begin(
+        string markerPath, string ownedRoot, string signInFolder, int shimPid, Func<int, DateTime?> startedAt, Teardown teardown, Action<string> note) =>
+        startedAt(shimPid) is { } started
+            ? Begin(markerPath, ownedRoot, signInFolder, shimPid, started, teardown, note)
+            : new SupervisorBegin.Refused(
+                $"coai cannot read the start time of its own shim (pid {shimPid}), so the survivor marker could not name its owner; coai does not start Kimi without it (DL9 of todo/PLAN_kimi_and_vibe_on_linux.md)");
 
     internal static SupervisorBegin Begin(
         string markerPath, string ownedRoot, string signInFolder, int shimPid, DateTime shimStartedUtc, Teardown teardown, Action<string> note)
@@ -81,6 +92,8 @@ public sealed class KimiTreeSupervisor : ITreeSupervisor
         _ = _started.Add(agent.Pid);
         TryWrite(ReaderPhases.Running, [agent]);
     }
+
+    public void StartedUnidentified(int pid) => _ = _started.Add(pid);
 
     public async Task<TreeEnd> EndAsync(Process agent)
     {
