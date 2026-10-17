@@ -1191,11 +1191,20 @@ rather than a setup error.
 
 **And one guard in the mcp suite caught this story's own documentation.**
 `StageRulesTests.TheRotatedTail_CurrentlyFitsAtMostOneRule` collects the REAL repository's
-instruction files and tier rules under the gate's 80 000-byte budget, which they fill to within
+instruction files and tier rules under the gate's then 80 000-byte budget (2026-09-18), which they fill to within
 1 145 bytes on a CRLF checkout. A kilobyte added to `.agents/PROJECT.md` for the new variable pushed
 a TIER rule out of every round's bundle, and the canary went red in the whole-suite run that
 started after that edit. The paragraph became one clause (+247 bytes) and the canary is green;
 the headroom itself is worth knowing about.
+
+*Update 2026-10-16:* the operator raised the budget to 90 000 bytes. The canary is now
+`StageRulesTests.AtNinetyKilobytes_TheRotatedTail_FitsAtMostThreeRules` (10 056 left; on the canary branch exactly
+`gpu-lease`, `nuget-packages`, `durable-status`; no branch of the first hundred reaches more than three), backed by
+`AtNinetyKilobytes_TheBaseAndTheTier_SpendExactly79944Bytes` (base 17 883 + tier 62 061, the drift guard), joined by `AtNinetyKilobytes_EveryBranchReachesAtLeastOneTailRule` (at least one — the 80 000
+state was 56 bytes and zero) and `AtNinetyKilobytes_TheTestLeftoversRule_IsShownOnTheBranchesThatDrawIt` (a four-row theory:
+`fix/x` and `feat/e5` draw `common/test-leftovers.md`, `main` and `feat/a` do not), and by
+`RuleFilesTests.TheDefaultBudget_IsTheOperatorsNinetyKilobytes`, which pins the number. The figures in the
+paragraph above are the 80 000-byte history. Numbers: `RESULTS_rules_selection_budget.md`.
 
 **What these still do not prove.** The no-client-IP promise is a deployment fact — a reverse proxy
 writes `remote_addr` before the request reaches any route — and no test in this process can reach
