@@ -87,6 +87,13 @@ test('⤓ for Kimi says, per host kind, whether coai-mcp runs the row there', ()
   assert.equal(new Set(HOSTS.map(note)).size, HOSTS.length, 'five host kinds, five different notes');
 });
 
+test('the notes say a FAILED TOOL step stops the line — not that every step does: Moonshot’s piped script has no pipefail (N4)', () => {
+  for (const host of ['wsl2', 'wsl1', 'linux'] as const) {
+    assert.match(kimiNoteFor(host), /a failed tool step stops the line/u, host);
+    assert.doesNotMatch(kimiNoteFor(host), /a step that fails stops the line/u, host);
+  }
+});
+
 test('every Linux host note says what the button does: sudo, the distribution’s packages, the fdfind link, the generic sentence, the check', () => {
   for (const host of ['wsl2', 'wsl1', 'linux'] as const) {
     const note = kimiNoteFor(host);
@@ -175,7 +182,7 @@ test('the Kimi wsl row is measured on WSL2 and says what section 29 measured —
   assert.equal(row.measured.cliVersion, 'kimi 2.2.0');
   assert.equal(row.measured.date, '2026-10-16');
   assert.match(row.measured.document, /^research\/RESULTS_kimi_confinement\.md/u);
-  for (const cell of ['WSL2', 'L-K7', 'L-K2', 'L-K1', 'n = 1']) {
+  for (const cell of ['WSL2', 'L-K7', 'L-K2', 'L-K1', 'n = 1', 'Glob', 'Windows section 9', 'assumed']) {
     assert.ok(row.measured.cells.includes(cell), `the cells do not name ${cell}: ${row.measured.cells}`);
   }
   assert.match(row.text, /Grep and Glob search the disk directly/u);

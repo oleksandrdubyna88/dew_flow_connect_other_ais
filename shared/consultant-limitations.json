@@ -289,7 +289,7 @@
       "measured": {
         "date": "2026-10-16",
         "cliVersion": "kimi 2.2.0",
-        "cells": "Section 29, WSL2, one run per cell (n = 1): L-K7: write arms 3 of 3 refused with nothing written, Read served only inside the working folder, a Grep of a path outside it was not stopped; L-K2: the sign-in through a symlink into the 0700 folder 8 of 8, refreshed in place; L-K1: rg on the built PATH, no bin/ in the owned home; the 3-of-3 repeat is still owed",
+        "cells": "Section 29, WSL2, one run per cell (n = 1): L-K7: write arms 3 of 3 refused with nothing written, Read served only inside the working folder, a Grep of a path outside it was not stopped; L-K2: the sign-in through a symlink into the 0700 folder 8 of 8, refreshed in place; L-K1: rg on the built PATH, no bin/ in the owned home; the Grep arm outside the working folder ran on WSL2, but Glob's direct disk read is the Windows section 9 (M-K6) measurement, assumed to take the same code path on Linux; the 3-of-3 repeat is still owed",
         "document": "research/RESULTS_kimi_confinement.md"
       }
     }
