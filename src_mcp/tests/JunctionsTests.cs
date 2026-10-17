@@ -349,7 +349,7 @@ public sealed class JunctionsTests : IDisposable
         Directory.CreateDirectory(Target);
         var mountPoint = WorktreePaths.Real(_dir.Path);
         using var standIn = WindowsStandIn.Begin();
-        Junctions.StandInMountInfo(() => $"36 25 0:32 / {mountPoint} rw,noatime - 9p C:\\134 rw,aname=drvfs;path=C:\\134;uid=1000\n25 1 8:1 / / rw - ext4 /dev/sda1 rw");
+        Junctions.StandInMountInfo(() => $"36 25 0:32 / {mountPoint} rw,noatime - 9p C:\\134 rw,aname=drvfs;path=C:\\134;uid=1000\n25 1 8:1 / / rw - ext4 /dev/sda1 rw", _ => new MountIdentity.NotAsked());
         try
         {
             var refusal = Junctions.Refusal(HostKind.Wsl, Link, Target);

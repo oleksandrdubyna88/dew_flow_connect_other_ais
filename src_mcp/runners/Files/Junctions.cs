@@ -46,13 +46,19 @@ public static partial class Junctions
 
     private static readonly AsyncLocal<Func<string>?> _mountInfo = new();
 
+    private static readonly AsyncLocal<Func<string, MountIdentity>?> _mountIdentity = new();
+
     /// <summary>The table of mounts the locality rule reads: <c>/proc/self/mountinfo</c> in the product, a test's, per async flow.</summary>
     private static Func<string> MountInfo => _mountInfo.Value ?? ReadMountInfo;
 
     private static string ReadMountInfo() => File.ReadAllText(MountLocality.MountInfoPath);
 
-    /// <summary>TEST ONLY: the table of mounts of this async flow — <see langword="null"/> puts <c>/proc/self/mountinfo</c> back.</summary>
-    internal static void StandInMountInfo(Func<string>? read) => _mountInfo.Value = read;
+    /// <summary>TEST ONLY: the table of mounts of this async flow, and — when a test names a mount point that does not exist — the identity the kernel would have given the path (default: the real <c>statx</c>). <see langword="null"/> puts <c>/proc/self/mountinfo</c> and the real question back.</summary>
+    internal static void StandInMountInfo(Func<string>? read, Func<string, MountIdentity>? identify = null)
+    {
+        _mountInfo.Value = read;
+        _mountIdentity.Value = identify;
+    }
 
     /// <summary>TEST ONLY: the shell of this async flow — <see langword="null"/> puts the product's back.</summary>
     internal static void StandIn(IJunctionShell? shell) => _shell.Value = shell;
@@ -163,7 +169,7 @@ public static partial class Junctions
     /// Asked of the HOST the launch is for, not of the operating system running the code, so a test that plays a Windows host on any OS never reads a Unix table.
     /// </summary>
     private static string Mounted(HostKind host, string target, string real) =>
-        host is HostKind.Linux or HostKind.Wsl && real.Length > 0 ? MountLocality.Refusal(target, real, MountInfo) : string.Empty;
+        host is HostKind.Linux or HostKind.Wsl && real.Length > 0 ? MountLocality.Refusal(target, real, MountInfo, _mountIdentity.Value ?? MountLocality.Identify) : string.Empty;
 
     private static string LocalDrive(string target, Func<string, DriveType> driveType) => IsLocal(target, driveType)
         ? string.Empty
