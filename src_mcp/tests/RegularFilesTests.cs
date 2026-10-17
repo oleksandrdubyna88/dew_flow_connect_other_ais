@@ -94,6 +94,29 @@ public sealed class RegularFilesTests : IDisposable
         stream.Given.Should().NotBeEmpty().And.OnlyContain(b => b == 0, "an exception in the middle of a read must not leave the credential behind");
     }
 
+    /// <summary>
+    /// What a failed <c>open</c> is called, in words a person can act on, with the errno kept in parentheses (pure — every host proves it):
+    /// no read permission, a name too long, a link never followed, a socket; a file that is not there is `Missing`, not a refusal.
+    /// </summary>
+    [Theory]
+    [InlineData(13, "no read permission (errno 13)")]
+    [InlineData(1, "no read permission (errno 1)")]
+    [InlineData(36, "path too long (errno 36)")]
+    [InlineData(40, "a symbolic link, never followed (errno 40)")]
+    [InlineData(6, "not a regular file (a socket)")]
+    [InlineData(5, "could not be opened (errno 5)")]
+    public void A_failed_open_is_named_by_what_a_person_can_do_about_it(int errno, string reason)
+    {
+        RegularFiles.OwnedErrno(errno).Should().BeOfType<FileReadResult.Unreadable>().Which.Reason.Should().Be(reason);
+    }
+
+    [Theory]
+    [InlineData(2)]
+    [InlineData(20)]
+    public void A_name_that_is_not_there_is_Missing_by_errno(int errno)
+    {
+        RegularFiles.OwnedErrno(errno).Should().BeOfType<FileReadResult.Missing>();
+    }
     /// <summary>glibc before 2.28 has no <c>statx</c> (and a libc may be missing altogether): a refusal with a reason, never an exception out of the launch.</summary>
     [Theory]
     [InlineData(typeof(EntryPointNotFoundException))]
@@ -238,7 +261,7 @@ public sealed class RegularFilesTests : IDisposable
         var link = _root.At("link");
         File.CreateSymbolicLink(link, target);
 
-        RegularFiles.ReadOwned(link, DotenvNames.MaxBytes, Me).Should().BeOfType<FileReadResult.Unreadable>().Which.Reason.Should().Be("a symbolic link, never followed");
+        RegularFiles.ReadOwned(link, DotenvNames.MaxBytes, Me).Should().BeOfType<FileReadResult.Unreadable>().Which.Reason.Should().StartWith("a symbolic link, never followed");
         RegularFiles.ReadOwned(target, DotenvNames.MaxBytes, Me).Should().BeOfType<FileReadResult.Content>("the positive companion: the same bytes, read by the file's own name");
     }
 

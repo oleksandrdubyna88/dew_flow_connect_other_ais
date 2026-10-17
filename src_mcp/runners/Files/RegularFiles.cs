@@ -113,9 +113,11 @@ public static partial class RegularFiles
     /// What a failed <c>open</c> means. <c>ELOOP</c> is a final symbolic link, never followed; <c>ENOENT</c> and <c>ENOTDIR</c> are a file
     /// that is not there (the person has not signed in); <c>ENXIO</c> is a socket. The errno NUMBER, never <c>strerror</c> text.
     /// </summary>
-    private static FileReadResult OwnedErrno(int errno) => errno switch
+    internal static FileReadResult OwnedErrno(int errno) => errno switch
     {
-        Native.TooManyLinks => new FileReadResult.Unreadable("a symbolic link, never followed"),
+        Native.TooManyLinks => new FileReadResult.Unreadable($"a symbolic link, never followed (errno {errno})"),
+        Native.AccessDenied or Native.NotPermitted => new FileReadResult.Unreadable($"no read permission (errno {errno})"),
+        Native.NameTooLong => new FileReadResult.Unreadable($"path too long (errno {errno})"),
         Native.NoEntry or Native.NotADirectory => new FileReadResult.Missing(),
         Native.NoSuchDevice => new FileReadResult.Unreadable($"{NotRegular} (a socket)"),
         _ => new FileReadResult.Unreadable($"could not be opened (errno {errno})"),
@@ -156,8 +158,8 @@ public static partial class RegularFiles
     /// <summary>
     /// glibc, by coai's one spelling (<c>"libc"</c>, as <c>AppendOnlyFile</c>'s). The constants are the same on x86-64 and arm64 except
     /// <c>O_NOFOLLOW</c>: <c>O_NONBLOCK</c> 0x800, <c>O_CLOEXEC</c> 0x80000, <c>O_NOCTTY</c> 0x100 (<c>O_RDONLY</c> is 0),
-    /// <c>AT_EMPTY_PATH</c> 0x1000, <c>STATX_TYPE</c> 1, <c>STATX_MODE</c> 2, <c>STATX_UID</c> 8, <c>ENOENT</c> 2, <c>ENXIO</c> 6,
-    /// <c>ENOTDIR</c> 20, <c>ELOOP</c> 40.
+    /// <c>AT_EMPTY_PATH</c> 0x1000, <c>STATX_TYPE</c> 1, <c>STATX_MODE</c> 2, <c>STATX_UID</c> 8, <c>EPERM</c> 1, <c>ENOENT</c> 2, <c>ENXIO</c> 6, <c>EACCES</c> 13,
+    /// <c>ENOTDIR</c> 20, <c>ENAMETOOLONG</c> 36, <c>ELOOP</c> 40.
     /// </summary>
     private static partial class Native
     {
@@ -170,7 +172,10 @@ public static partial class RegularFiles
         /// <summary><c>S_IWGRP | S_IWOTH</c>.</summary>
         public const int GroupOrOtherWrite = 0x12;
 
+        public const int NotPermitted = 1;
         public const int NoEntry = 2;
+        public const int AccessDenied = 13;
+        public const int NameTooLong = 36;
         public const int NoSuchDevice = 6;
         public const int NotADirectory = 20;
         public const int TooManyLinks = 40;
