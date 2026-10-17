@@ -160,13 +160,22 @@ public sealed class AReviewTreeWithALongPathTests : IAsyncLifetime
         result.ExitCode.Should().Be(0, $"git {string.Join(' ', args)} must succeed: {result.StdErr}");
     }
 
+    /// <summary>
+    /// Read-only flags cleared first: git's object files are read-only on Windows, and a delete that
+    /// stops at the first one leaves a <c>testsToDelete-</c> folder behind on every run.
+    /// </summary>
     private static void TryDelete(string path)
     {
         try
         {
+            foreach (var file in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
+            {
+                File.SetAttributes(file, FileAttributes.Normal);
+            }
+
             Directory.Delete(path, recursive: true);
         }
         catch (IOException) { /* a straggling handle on a temp dir is not a test failure */ }
-        catch (UnauthorizedAccessException) { /* read-only .git files on Windows */ }
+        catch (UnauthorizedAccessException) { /* a file that stayed read-only is the next sweep's */ }
     }
 }
