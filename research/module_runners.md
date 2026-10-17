@@ -3559,10 +3559,11 @@ flowchart LR
   LS --> PR
 ```
 
-**L-N1 (`HeldFileInheritableOnLinuxTests`, `FakeCli hold-file`).** Three Linux-only tests, one per premise of DL8: (a) a non-inheritable take beside an inheritable hold is Busy; (a) a second inheritable take is Busy;
-(b) the hold outlives its opener's `SIGKILL` while a child started after the take lives. **Observed here: not yet — on Windows only, where the harness was proven green with the skip lifted.** From .NET's own source
-(`SafeFileHandle.Unix.cs`, v10.0.11): `LOCK_EX` only when `share == FileShare.None` exactly, so `None | Inheritable` is a SHARED `flock` — arm (a, second inheritable take) is predicted RED on Linux, arm (b)
-green (`O_CLOEXEC` is added only when `Inheritable` is absent). The ubuntu CI job decides; A2 §3.3 says what ships.
+**L-N1 (`HeldFileInheritableOnLinuxTests`, `FakeCli hold-file`).** Four Linux-only tests, one per premise of DL8: (a) a non-inheritable take beside an inheritable hold is Busy; (a) a second inheritable take is Busy;
+(a) `/proc/locks` names the kind of `flock` the hold took (the direct observation, added by the E5 judge's fix); (b) the hold outlives its opener's `SIGKILL` while a child started after the take lives.
+**Observed on the ubuntu CI job, 2026-10-16:** `/proc/locks` lists `FLOCK ADVISORY READ` for the inheritable hold — .NET took `LOCK_SH` for `None | Inheritable`, as `SafeFileHandle.Unix.cs` (v10.0.11: `LOCK_EX` only
+when `share == FileShare.None` exactly) predicted — so the hold is SHARED, a second inheritable take SUCCEEDS (arm (a, second take) is RED on Linux by design of the prediction), and the non-inheritable take beside it is Busy
+(`LOCK_EX` against `LOCK_SH`) and (b) holds. DL8 needs an exclusive inheritable hold, so the native `flock(LOCK_EX)` take is required (A2 §3.3, `HeldFile.cs`, not built here); the red arm and the `READ` pin flip with it.
 
 ## The Kimi reviewer — `KimiRuntime` (2026-10-15, E4.4 of `todo/PLAN_vibe_and_kimi_runtimes_E4.md`)
 
