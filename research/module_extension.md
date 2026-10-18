@@ -13034,12 +13034,12 @@ The extension's half of lifting D18 for Kimi on WSL2 (DL1, DL12, DL14, Q3, S-K9,
 (`module_runners.md`). It reuses the Vibe section's host-kind shape above — `HostKind` (`windows | wsl2 | wsl1 | linux | darwin`),
 `PanelState.hostKind`, `hostKindOfPlatform`, `runtimeSkewNote(version, vendors, host)` — and adds no second one.
 
-- **`KIMI_ON_LINUX_SINCE = '0.60.0'`** (`runtimeSince.ts`), one minor after Vibe's (0.58.0 was released from main without either; Vibe-on-Linux ships in 0.59.0 — DL14, whoever merges second bumps), joins `ON_LINUX_SINCE`; the
+- **`KIMI_ON_LINUX_SINCE = '0.61.0'`** (`runtimeSince.ts`): 0.58.0 was released from main without either runtime, Vibe-on-Linux shipped in 0.59.0, and main then released 0.60.0 without Kimi, so Kimi on Linux ships in 0.61.0 (DL14, whoever merges second bumps). It joins `ON_LINUX_SINCE`; the
   per-host-kind sentences of `runtimeSkewNote` therefore apply to a Kimi row with no new code (only the label *Kimi*): *Update coai-mcp
-  to run Kimi here* on WSL2 below 0.60.0, a refusal at any version on a native Linux host and on WSL1. The unreleased Kimi-consultant
+  to run Kimi here* on WSL2 below 0.61.0, a refusal at any version on a native Linux host and on WSL1. The unreleased Kimi-consultant
   branch sets `KIMI_CONSULTANT_SINCE` to 0.58.0: whichever of the two merges second bumps its constant (DL14).
 - **`kimiNoteFor(host)`** (`vendorTerminal.ts`) is Vibe's `vibeNoteFor` for Kimi: a `Record<HostKind, string>`, so a host kind added later
-  is a compile error. WSL2 *runs on this side from coai-mcp 0.60.0* and says that while the person's own `kimi` is open coai's turns
+  is a compile error. WSL2 *runs on this side from coai-mcp 0.61.0* and says that while the person's own `kimi` is open coai's turns
   wait and then answer busy (Q3); native Linux and WSL1 carry Vibe's two refusal sentences with Kimi's name; macOS is not measured;
   Windows is as it was. `vendorInstall(vendor, platform, host?)` takes the host kind; without one Linux is native (the safe answer).
 - **The Linux ⤓/⟳ line** (`kimiLinuxLine.ts`, DL12) provisions `rg` and `fd` and ends with Moonshot's script and a check. One line,
@@ -13071,8 +13071,22 @@ The extension's half of lifting D18 for Kimi on WSL2 (DL1, DL12, DL14, Q3, S-K9,
   checked (reason named, the marker stays), 65 refused (nothing deleted), anything else (an old coai-mcp's 64, a timeout) says the file the
   Busy sentence names is still safe to delete by hand. The state is the server's marker file, re-read by the providers probe after the
   press, so a reload shows what is true.
-- **The help** (`helpContent.ts`, `helpDe/Es/Ru/Uk.ts`, `choose-reviewers`): Kimi runs on Windows and on WSL2 from 0.60.0 when coai-mcp itself
+- **The help** (`helpContent.ts`, `helpDe/Es/Ru/Uk.ts`, `choose-reviewers`): Kimi runs on Windows and on WSL2 from 0.61.0 when coai-mcp itself
   runs there; native Linux is refused for now; WSL1 is refused; the person's own open `kimi` makes coai's turns wait; the Linux ⤓ line.
+- **The network sign-in setting** (`coai.kimiAllowNetworkSignIn`, boolean, default OFF; DL6, Q7). The server half refuses a Kimi sign-in folder on
+  network storage (nfs, cifs, sshfs …), because a Kimi on ANOTHER machine that shares the home can refresh the same rotating token and sign this
+  one out; this setting is the person's way to say they never run Kimi elsewhere. `settingsShape.ts` reads only a stored boolean `true` (a string,
+  a number or null stays OFF) and `envBlock` writes `COAI_KIMI_ALLOW_NETWORK_SIGNIN=true` **only when ON**, like every switch there — the key
+  `PanelSettings.KimiAllowNetworkSignIn` reads from the data directory's `settings.json`. It is in `OVERLAID_SETTINGS` (the home is THIS side's:
+  a WSL home is not a Windows one) and in `NEVER_TRANSFERRED` (a config export must not switch the refusal off on a machine whose home is somebody
+  else's share). The control is a panel tick-box, not only a settings-editor entry: `modelCardWorld.kimiNetworkSignInField`, in the Kimi card's
+  *Connection* fold, drawn only for a `kimi` row in a WSL2 or Linux window (`CardContext.kimiAllowNetworkSignIn` is `undefined` on Windows,
+  WSL1 and macOS — no mount table to judge), a plain `data-setting` with no `data-vendor`, with the sign-out risk written beside it. The help
+  names it in the `choose-reviewers` article in all five languages (`help.ts` key `kimiAllowNetworkSignIn`; `helpCoverage.test.ts`
+  `SETTING_ALIAS`). Needs `coai-mcp` 0.61.0 (the same release that runs Kimi on Linux at all, so no separate skew note).
+- **The card's warning and marker** need no new code: the server's network-storage line (admitted by the setting) arrives as the row's generic
+  `providers[].warning`, which `versionWarningNote` already draws as *Runs with a warning:*; the survivor marker is `kimiMarkerNote` above.
+  `kimiNetworkSignInSetting.test.ts` pins that a Kimi row's network line is said on the card.
 - **`shared/consultant-limitations.json`**: Kimi `wsl` is `unconfined` — *measured* 2026-10-16 on kimi 2.2.0, §29 of
   `RESULTS_kimi_confinement.md`, n = 1 per cell: writes 3 of 3 refused, `Read` served only inside the working folder, but `Grep` and `Glob`
   read the disk directly (the Windows finding, held on Linux); `linux` is `unmeasured` — *measured on WSL2 only*. Kimi's `windows` and
@@ -13081,7 +13095,8 @@ The extension's half of lifting D18 for Kimi on WSL2 (DL1, DL12, DL14, Q3, S-K9,
   Git Bash / bash against `sudo`/`apt-get`/`dnf`/`curl` stand-ins in a `testsToDelete-` folder with spaces: Debian fresh, a second press,
   Fedora with `fd` there, no manager (one sentence), the owner's case, a failing manager, a regular file at `~/.local/bin/fd`;
   `kimiOnLinux.test.ts` (9) — the table, the per-host-kind notes, the hint, the five languages, the JSON rows; `kimiClearMarker.test.ts`
-  (15) — the providers field, the button only while a marker stands, the four exit codes, a press against a fake server.
+  (15) — the providers field, the button only while a marker stands, the four exit codes, a press against a fake server;
+  `kimiNetworkSignInSetting.test.ts` (9) — the default and the wire key, only boolean `true` is ON, the per-side and never-transferred lists, the manifest entry, the one card tick-box on WSL2 and Linux (and none on Windows, WSL1, macOS or another row) writing a plain setting, and the server's warning on the card.
 - **Not here / open**: the owner's live press in WSL (the install line against a machine without `rg`) and a recorded run of the
   marker button against a real marker; whether the providers field is named as proposed (server half); `KimiTools.Refusal` must say the
   same generic sentence (lower-case first letter); the three texts E3 listed as still Windows-only (`architecture.md:39`,

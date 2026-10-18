@@ -626,13 +626,13 @@ Numbered DL1–DL14 so they never collide with the parent plan's D-numbers. Ever
   no such redirect and the two sides stay one shape.
 
 - **DL14 — Release order and versions.** Vibe ships first: E1–E3 in the next `src_mcp` minor, **0.59.0**, with an extension minor.
-  Kimi follows in the first minor after E4–E6 (0.60.0 at the earliest). The per-runtime gate `RUNTIME_SINCE`
+  Kimi follows in the first minor after E4–E6 (0.60.0 at the earliest — and see the 2026-10-18 note at the end of this decision: main released 0.60.0 without it, so it is **0.61.0**). The per-runtime gate `RUNTIME_SINCE`
   (`src_vs_code/src/runtimeSince.ts:46-50`) answers "does this server know the runtime", not "does it run it on THIS host", so a
   second table joins it: `VIBE_ON_LINUX_SINCE = '0.59.0'`, `KIMI_ON_LINUX_SINCE` set by E6 — a Linux/WSL side whose server is older
   shows "update coai-mcp to run Vibe here" instead of a row that is refused at launch. **The unreleased Kimi-consultant branch
   (`feat/kimi-consultant`) sets `KIMI_CONSULTANT_SINCE` to 0.58.0. Whichever of the two merges SECOND bumps its constant to the next
   minor** (`runtimeSinceIsAhead.test.ts` guards the table, not unreleased commits — the reason `KIMI_RUNTIME_SINCE` once said 0.56.0,
-  `runtimeSince.ts:30-42`). 2026-10-17: mcp 0.58.0 shipped first from main (the plan-gate round history, #844), so Vibe on WSL2 takes 0.59.0 and Kimi on Linux 0.60.0 at the earliest.
+  `runtimeSince.ts:30-42`). 2026-10-17: mcp 0.58.0 shipped first from main (the plan-gate round history, #844), so Vibe on WSL2 takes 0.59.0 and Kimi on Linux 0.60.0 at the earliest. **2026-10-18:** main released mcp 0.60.0 (#857, the prompt-cap work) without Kimi on Linux, so by the second-merger rule Kimi on Linux ships in **0.61.0**: `KIMI_ON_LINUX_SINCE` is `'0.61.0'`, the help says 0.61.0 in five languages, and the release PR — not this branch — moves the manifests and the changelog.
 
 ## 5. The measurement cells, and who waits for them
 
@@ -1364,3 +1364,5 @@ Rejected, with the reasons recorded:
   arms, and S-K20; the providers answer reports a standing marker for its row and the card's button appears only then and runs
   the mode; the install button run in WSL on a machine (or a `testsToDelete-` prefix) without `rg`; the live Kimi checks of §8
   through the release; this plan promoted.
+
+- **Outcome of the integration (2026-10-18).** The server half (`feat/wsl-kimi-e6-server`), the extension half (`feat/wsl-kimi-extension`) and main (mcp 0.60.0) are merged on `feat/wsl-kimi-linux`; the only conflict was main's `MaxPromptKib` field beside E6's `SurvivorMarker` field on the providers row (both kept). Three things the two halves left open are closed here. (1) **The setting `coai.kimiAllowNetworkSignIn`** (DL6, Q7) had a server reader (`COAI_KIMI_ALLOW_NETWORK_SIGNIN`) and no writer: it is now a boolean, default off, in `package.json`, written to the data directory's `settings.json` only when on, per side, never carried by a config export, with a tick-box on the Kimi card (*Connection*) in a WSL2 or Linux window and a help sentence in five languages. (2) **The card's two server fields were already covered** by the extension half: the survivor marker (`kimiMarkerNote`, the *Clear the stuck Kimi marker* button) and the row `warning` (`versionWarningNote`, which draws the network-storage line); a Kimi-row test for the warning was added. (3) **The version**: `KIMI_ON_LINUX_SINCE` 0.60.0 → 0.61.0 (DL14).
