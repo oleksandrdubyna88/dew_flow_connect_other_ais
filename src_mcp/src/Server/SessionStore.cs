@@ -62,6 +62,18 @@ public sealed record ReviewerState(
     /// </summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public string? Warning { get; init; }
+
+    /// <summary>
+    /// Members of this reviewer row in the file that THIS build does not know, kept so that a save by an older build does not
+    /// strip what a newer build wrote. Null when the file had none.
+    /// </summary>
+    /// <remarks>
+    /// Set by the deserialiser, by the save scrub (<c>SessionScrub</c>) and by the answer strip — nothing changes the dictionary
+    /// itself, because <c>with</c> copies share it. <c>internal set</c> with <c>[JsonInclude]</c>, never <c>init</c> (the
+    /// generator binds it to a constructor parameter and the first load throws) and never <c>private set</c> (SYSLIB1038).
+    /// </remarks>
+    [System.Text.Json.Serialization.JsonExtensionData, System.Text.Json.Serialization.JsonInclude]
+    public Dictionary<string, JsonElement>? Unknown { get; internal set; }
 }
 
 /// <summary>
@@ -260,6 +272,18 @@ public sealed record RoundRecord(
     /// <see cref="CostUsd"/>, which are then a FLOOR: the unknown share is not in them, and it is not zero.
     /// </remarks>
     public string UsageNote { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Members of this round in the file that THIS build does not know, kept so that a save by an older build does not
+    /// strip what a newer build wrote. Null when the file had none.
+    /// </summary>
+    /// <remarks>
+    /// Set by the deserialiser, by the save scrub (<c>SessionScrub</c>) and by the answer strip — nothing changes the dictionary
+    /// itself, because <c>with</c> copies share it. <c>internal set</c> with <c>[JsonInclude]</c>, never <c>init</c> (the
+    /// generator binds it to a constructor parameter and the first load throws) and never <c>private set</c> (SYSLIB1038).
+    /// </remarks>
+    [System.Text.Json.Serialization.JsonExtensionData, System.Text.Json.Serialization.JsonInclude]
+    public Dictionary<string, JsonElement>? Unknown { get; internal set; }
 }
 
 /// <summary>What the store persists: the state machine's state plus the human-readable trail.</summary>
@@ -365,6 +389,18 @@ public sealed record PersistedSession(SessionState State, List<RoundRecord> Roun
         get => field ??= [];
         init => field = value ?? [];
     }
+
+    /// <summary>
+    /// Members of this session file in the file that THIS build does not know, kept so that a save by an older build does not
+    /// strip what a newer build wrote. Null when the file had none.
+    /// </summary>
+    /// <remarks>
+    /// Set by the deserialiser, by the save scrub (<c>SessionScrub</c>) and by the answer strip — nothing changes the dictionary
+    /// itself, because <c>with</c> copies share it. <c>internal set</c> with <c>[JsonInclude]</c>, never <c>init</c> (the
+    /// generator binds it to a constructor parameter and the first load throws) and never <c>private set</c> (SYSLIB1038).
+    /// </remarks>
+    [System.Text.Json.Serialization.JsonExtensionData, System.Text.Json.Serialization.JsonInclude]
+    public Dictionary<string, JsonElement>? Unknown { get; internal set; }
 }
 
 /// <summary>
