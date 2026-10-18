@@ -213,6 +213,36 @@ public sealed class AgentLogTests : IDisposable
         first.GetProperty("utc").GetString().Should().StartWith("2026-09-05T13:20:00");
     }
 
+    [Fact]
+    public void ANonStringFieldReadsEmpty_AndTheRestOfTheLineIsKept()
+    {
+        // A number where a string belongs is a field with nothing to say, not a reason to lose the line:
+        // the entry stays, the real text next to the numbers stays, and the numbers add nothing.
+        var odd = JsonSerializer.Serialize(new Dictionary<string, object>
+        {
+            ["timestamp"] = "2026-09-05T13:20:00Z",
+            ["type"] = "assistant",
+            ["cwd"] = 7351,
+            ["message"] = new Dictionary<string, object>
+            {
+                ["content"] = new object[]
+                {
+                    new Dictionary<string, object> { ["type"] = "text", ["text"] = 7351 },
+                    new Dictionary<string, object> { ["type"] = "text", ["text"] = "the real string" },
+                },
+            },
+        });
+        Transcript("d--rsd-repo", odd);
+
+        var slice = AgentLog.Slice(_dir, Opened, PlanRound, "D:/repo");
+
+        var entries = JsonDocument.Parse(slice).RootElement;
+        entries.GetArrayLength().Should().Be(1);
+        entries[0].GetProperty("kind").GetString().Should().Be("assistant");
+        entries[0].GetProperty("said").GetString().Should().Be("the real string");
+        slice.Should().NotContain("7351");
+    }
+
     public void Dispose()
     {
         try

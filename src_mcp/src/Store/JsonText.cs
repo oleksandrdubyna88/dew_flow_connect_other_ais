@@ -7,8 +7,9 @@ namespace CoaiMcp.Store;
 /// </summary>
 /// <remarks>
 /// Used by <see cref="CallerTranscriptLocator"/> (the registry's <c>sessionId</c>), <see cref="WriteTools"/> (a write's
-/// <c>file_path</c>) and <see cref="TranscriptLine"/> (every field the reader takes from a line), so the rule "a non-string, a missing
-/// property and a non-object are all empty" is stated once. It never enumerates the object. Split into small steps to keep each at
+/// <c>file_path</c>), <see cref="TranscriptLine"/> (every field the reader takes from a line) and <see cref="AgentLog"/> (an entry's
+/// <c>type</c>, <c>cwd</c> and its blocks' text), so the rule "a non-string, a missing property and a non-object are all empty" is
+/// stated once. It never enumerates the object. Split into small steps to keep each at
 /// cyclomatic complexity 4 or less.
 /// </remarks>
 internal static class JsonText

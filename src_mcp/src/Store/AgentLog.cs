@@ -152,16 +152,11 @@ public static class AgentLog
 
             return new Entry(
                 utc,
-                Text(root, "type"),
-                Text(root, "cwd"),
+                JsonText.StringProperty(root, "type"),
+                JsonText.StringProperty(root, "cwd"),
                 Said(root));
         }
     }
-
-    private static string Text(JsonElement element, string name) =>
-        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
-            ? value.GetString() ?? string.Empty
-            : string.Empty;
 
     /// <summary>
     /// What the entry actually said, whatever shape it said it in.
@@ -200,12 +195,12 @@ public static class AgentLog
 
     private static void Append(StringBuilder said, JsonElement block)
     {
-        var kind = Text(block, "type");
+        var kind = JsonText.StringProperty(block, "type");
         var piece = kind switch
         {
-            "text" => Text(block, "text"),
-            "thinking" => Text(block, "thinking"),
-            "tool_use" => "[" + Text(block, "name") + "]",
+            "text" => JsonText.StringProperty(block, "text"),
+            "thinking" => JsonText.StringProperty(block, "thinking"),
+            "tool_use" => "[" + JsonText.StringProperty(block, "name") + "]",
             _ => string.Empty,
         };
         if (piece.Length > 0)
