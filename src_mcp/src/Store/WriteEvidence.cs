@@ -88,6 +88,7 @@ public sealed class CheckoutRoots
 
     private readonly Dictionary<string, WriteTarget> _byDirectory = [];
     private readonly CheckoutProbes _probes;
+    private readonly PathRules _rules;
 
     public CheckoutRoots()
         : this(CheckoutProbes.Real)
@@ -95,7 +96,17 @@ public sealed class CheckoutRoots
     }
 
     /// <summary>The seam a test uses to see every filesystem touch: <see cref="CheckoutProbes"/> is the ONLY way this class asks the disk.</summary>
-    internal CheckoutRoots(CheckoutProbes probes) => _probes = probes;
+    internal CheckoutRoots(CheckoutProbes probes)
+        : this(probes, PathRules.Real)
+    {
+    }
+
+    /// <summary>The same, with the path rules stated too, so a test on one platform can check the ORDER the other platform's rules run in.</summary>
+    internal CheckoutRoots(CheckoutProbes probes, PathRules rules)
+    {
+        _probes = probes;
+        _rules = rules;
+    }
 
     /// <summary>
     /// The cache key of a FULL directory: the directory itself, folded to one case only where the file system folds it. Not
@@ -109,7 +120,7 @@ public sealed class CheckoutRoots
     {
         // A UNC, device or network-drive path is refused on its TEXT, before any file-system call: asking Windows about
         // \\host\share contacts that host and offers the user's credentials, and a transcript path can be steered (LocalPaths).
-        var directory = IsAskable(path) ? DirectoryOf(path) : string.Empty;
+        var directory = AskableDirectory(path);
         if (directory.Length == 0)
         {
             return new WriteTarget(WriteTargetKind.Unresolved, string.Empty);
@@ -130,7 +141,7 @@ public sealed class CheckoutRoots
     /// text of <c>repo/../other/a.cs</c> climbs through <c>repo</c> and answers for a file that is in <c>other</c>. A fully-qualified
     /// path never reads the cwd. Empty for a relative path, a root, or a path the platform refuses.
     /// </summary>
-    private static string DirectoryOf(string path)
+    internal static string DirectoryOf(string path)
     {
         try
         {
@@ -142,9 +153,15 @@ public sealed class CheckoutRoots
         }
     }
 
-    /// <summary>A local, rooted path on a drive that is not a network drive — the only kind this class hands to the file system.</summary>
-    private bool IsAskable(string path) =>
-        LocalPaths.IsLocalRooted(path, OperatingSystem.IsWindows()) && !_probes.IsNetworkDrive(path);
+    /// <summary>
+    /// The directory this class may hand to the file system, or empty. The rule runs TWICE, in this order: on the raw text first, so a
+    /// UNC or device path never even reaches the normaliser; then on the NORMALISED directory, so <c>/./net/host</c> or
+    /// <c>/tmp/../net/host</c> cannot pass as <c>.</c> or <c>tmp</c> and be probed as <c>/net/host</c> (a parser differential).
+    /// </summary>
+    private string AskableDirectory(string path) =>
+        _rules.IsLocalRooted(path) && !_probes.IsNetworkDrive(path) ? LocalAfterNormalising(_rules.DirectoryOf(path)) : string.Empty;
+
+    private string LocalAfterNormalising(string directory) => _rules.IsLocalRooted(directory) ? directory : string.Empty;
 
     private WriteTarget ResolveDirectory(string directory) =>
         _probes.DirectoryExists(directory)
@@ -163,6 +180,15 @@ public sealed class CheckoutRoots
 
         return new WriteTarget(WriteTargetKind.OutsideAnyCheckout, string.Empty);
     }
+}
+
+/// <summary>
+/// The text rules <see cref="CheckoutRoots"/> applies to a path before the disk is asked: which paths are local (<see cref="LocalPaths"/>)
+/// and the normalising <see cref="CheckoutRoots.DirectoryOf"/>. A seam so the order of the two can be tested on any host.
+/// </summary>
+internal sealed record PathRules(Func<string, bool> IsLocalRooted, Func<string, string> DirectoryOf)
+{
+    public static PathRules Real { get; } = new(path => LocalPaths.IsLocalRooted(path, OperatingSystem.IsWindows()), CheckoutRoots.DirectoryOf);
 }
 
 /// <summary>

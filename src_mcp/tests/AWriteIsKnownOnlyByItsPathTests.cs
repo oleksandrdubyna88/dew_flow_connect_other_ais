@@ -402,4 +402,70 @@ public sealed class AWriteIsKnownOnlyByItsPathTests
     [InlineData(DriveType.Ram, false)]
     public void A_drive_the_table_cannot_name_as_local_is_refused_fail_closed(DriveType type, bool refused) =>
         LocalPaths.IsNotLocal(type).Should().Be(refused, $"{type}: only a drive the table names as local may be asked about (code gate round 2, finding 5)");
+
+    // ---- the automount test runs on the NORMALISED directory, not only on the raw text (third security finding) ------
+
+    /// <summary>Paths whose raw first segment is not an automount root but whose normalised directory is <c>/net/host</c>.</summary>
+    private static readonly string[] DotSegmentsIntoNet = ["/./net/host/a.cs", "/tmp/../net/host/a.cs", "/net/../net/host/a.cs"];
+
+    /// <summary>
+    /// POSIX rules on any host: the local-path rule of the POSIX arm, and a normaliser that answers what POSIX <c>GetFullPath</c> +
+    /// <c>GetDirectoryName</c> answer for these exact inputs (a lookup, so it cannot be more permissive than the real one).
+    /// </summary>
+    private static PathRules PosixRules(IReadOnlyDictionary<string, string> directoryOf) =>
+        new(path => LocalPaths.IsLocalRooted(path, windows: false, foldCase: false), path => directoryOf[path]);
+
+    [Fact]
+    public void An_automount_root_reached_through_dot_segments_is_refused_after_normalising()
+    {
+        var directoryOf = DotSegmentsIntoNet.ToDictionary(path => path, _ => "/net/host");
+        foreach (var path in DotSegmentsIntoNet)
+        {
+            var probes = new Probes();
+
+            var target = new CheckoutRoots(probes.Seam, PosixRules(directoryOf)).Resolve(path);
+
+            target.Should().Be(new WriteTarget(WriteTargetKind.Unresolved, string.Empty), path);
+            probes.Touched.Should().BeEmpty($"{path} normalises to /net/host, and the automount test must see the NORMALISED directory before any probe");
+        }
+    }
+
+    [Fact]
+    public void A_dot_segment_path_that_normalises_to_a_local_directory_is_still_asked_about()
+    {
+        var probes = new Probes();
+        var rules = PosixRules(new Dictionary<string, string> { ["/tmp/./repo/../repo/a.cs"] = "/tmp/repo" });
+
+        new CheckoutRoots(probes.Seam, rules).Resolve("/tmp/./repo/../repo/a.cs");
+
+        probes.Touched.Should().Equal(["/tmp/repo"], "the normalised directory, and only it, reaches the probe");
+    }
+
+    [Fact]
+    public void On_posix_the_real_normaliser_refuses_dot_segments_into_net()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "POSIX paths; the seam test above checks the same order on every host");
+        foreach (var path in DotSegmentsIntoNet)
+        {
+            var probes = new Probes();
+
+            new CheckoutRoots(probes.Seam).Resolve(path).Should().Be(new WriteTarget(WriteTargetKind.Unresolved, string.Empty), path);
+            probes.Touched.Should().BeEmpty(path);
+        }
+    }
+
+    [Fact]
+    public void On_windows_a_drive_path_with_dot_segments_never_becomes_unc()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "drive letters are a Windows spelling");
+        string[] paths = [@"D:\repo\..\..\..\a.cs", @"D:\..\..\host\share\a.cs", "D:/./../x/../repo/a.cs", @"D:\repo\.\..\\\\host\share\a.cs"];
+        foreach (var path in paths)
+        {
+            var probes = new Probes();
+
+            new CheckoutRoots(probes.Seam).Resolve(path);
+
+            probes.Touched.Should().NotBeEmpty(path).And.OnlyContain(touched => LocalPaths.IsLocalRooted(touched, true), $"{path} normalises on its own drive, never to a share");
+        }
+    }
 }
