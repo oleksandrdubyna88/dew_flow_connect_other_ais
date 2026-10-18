@@ -15,10 +15,29 @@ namespace CoaiMcp.Runners.Kimi;
 /// <param name="Shim">This binary, however it was started (<c>coai-mcp --ask-acp</c> is the process the executor launches).</param>
 public sealed record KimiSeams(Func<string, KimiPlaces> PlacesFor, Func<(string Executable, IReadOnlyList<string> Prefix)> Shim)
 {
-    /// <summary>This machine: the real profile and environment, and this binary.</summary>
-    public static KimiSeams Real(HostKind host) => new(
+    /// <summary>This machine: the real profile and environment, and this binary — or the seams a scenario's flow gave it (<see cref="Using"/>).</summary>
+    public static KimiSeams Real(HostKind host) => Overridden.Value ?? new(
         root => KimiPlaces.Resolve(root, host, Environment.GetEnvironmentVariable, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ExecutableResolver.IsInstalledFile),
         LocalRuntime.SelfInvocation);
+
+    private static readonly AsyncLocal<KimiSeams?> Overridden = new();
+
+    /// <summary>
+    /// A scenario's seam, per logical flow (the shape of <see cref="KimiHost.Using"/>): the real service builds its <see cref="KimiRuntime"/> itself (<c>new KimiRuntime(vendorId)</c>), which reads the machine through
+    /// <see cref="Real"/>, so a flow that must find a FAKE person's <c>~/.kimi-code</c> and start THIS repository's <c>coai-mcp</c> as the shim gives it here. Dispose restores the process's.
+    /// </summary>
+    internal static IDisposable Using(KimiSeams seams)
+    {
+        var before = Overridden.Value;
+        Overridden.Value = seams;
+
+        return new Restore(() => Overridden.Value = before);
+    }
+
+    private sealed class Restore(Action undo) : IDisposable
+    {
+        public void Dispose() => undo();
+    }
 }
 
 /// <summary>
