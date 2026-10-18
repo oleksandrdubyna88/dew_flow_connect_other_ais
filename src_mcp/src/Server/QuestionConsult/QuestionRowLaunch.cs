@@ -33,11 +33,23 @@ public sealed record RowLaunchInput(
     /// todo/PLAN_vibe_and_kimi_runtimes.md) actually reads — the copies' paths, known only once the launch has made them.
     /// Every other row's prompt is <see cref="Prompt"/> as composed, and this is never asked.
     /// </summary>
-    public Func<IReadOnlyList<string>, string> PromptNaming { get; init; } = NamesNoCopies;
+    public Func<CopiedRoots, string> PromptNaming { get; init; } = NamesNoCopies;
 
     /// <summary>The default: a row that stands in copies and was given no way to name them is a contract violation, never a prompt naming the originals.</summary>
-    public static string NamesNoCopies(IReadOnlyList<string> copies) =>
+    public static string NamesNoCopies(CopiedRoots copies) =>
         throw new ArgumentException("a question row standing in a copy of its roots needs a prompt that names the copies (RowLaunchInput.PromptNaming)", nameof(copies));
+}
+
+/// <summary>The copies a row stands in, as the prompt that names them needs them: where they are, and what they do not hold.</summary>
+/// <param name="Paths">The absolute root of each copy, in the order of the granted roots they were made from.</param>
+/// <param name="Limitations">What the copies left out (D9 of <c>todo/PLAN_vibe_reads_a_folder_of_repositories.md</c>: the linked worktrees whose main checkouts are copied) — sentences the model reads too.</param>
+public sealed record CopiedRoots(IReadOnlyList<string> Paths, IReadOnlyList<string> Limitations)
+{
+    /// <summary>Nothing copied yet — what a prompt composed before the launch has made its copies names.</summary>
+    public static CopiedRoots None { get; } = new([], []);
+
+    /// <summary>Roots a row reads as they are: no copy, so nothing left out.</summary>
+    public static CopiedRoots Of(IReadOnlyList<string> paths) => new(paths, []);
 }
 
 /// <summary>One turn of a row: the launches it made — one, or a launch and its follow-up — and what stopped a follow-up.</summary>
@@ -109,6 +121,7 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
 
         // Made INSIDE the try: when making it throws, the one-shot reservation above is still given back in `finally`.
         var scratch = string.Empty;
+        var skipped = string.Empty;
         IDisposable scratchLock = Stream.Null;
         using var row = CancellationTokenSource.CreateLinkedTokenSource(ct);
         row.CancelAfter(ConsultationDeadline.For(input.Budget));
@@ -117,22 +130,25 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
             scratch = NeedsAFolder(input.Row) ? MakeScratch() : string.Empty;
             scratchLock = HoldTheLockOf(scratch);
             using var place = await PlaceAsync(input.Row, scratch, input.Budget, row.Token);
+
+            // Held in a variable declared before the try, so the timed-out and the failed arm below carry it too: a row that ends any way at all says what its place skipped.
+            skipped = PlaceNotes(place);
             if (place.Refusal.Length > 0)
             {
-                return Ended(start, RowOutcomes.Refused, place.Refusal, started.Elapsed, Usage.None, PlaceNotes(place));
+                return Ended(start, RowOutcomes.Refused, place.Refusal, started.Elapsed, Usage.None, skipped);
             }
 
-            return await TurnsAsync(input, await TierProbedAsync(input.Row.Runtime, Launch(input, scratch, HomeFolderOf(homes, scratch), place), row.Token), start, started, PlaceNotes(place), row.Token);
+            return await TurnsAsync(input, await TierProbedAsync(input.Row.Runtime, Launch(input, scratch, HomeFolderOf(homes, scratch), place), row.Token), start, started, skipped, row.Token);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
             // OUR deadline, not the caller's — a wait the launcher did not bound (reliability.md).
-            return Ended(start, RowOutcomes.TimedOut, $"the row ran past its {input.Budget.TotalMinutes:0.#}-minute budget and its grace", started.Elapsed, Usage.Unknown);
+            return Ended(start, RowOutcomes.TimedOut, $"the row ran past its {input.Budget.TotalMinutes:0.#}-minute budget and its grace", started.Elapsed, Usage.Unknown, skipped);
         }
         catch (ArgumentException e)
         {
             // The adapter refused the plan by name — a contract violation this row's configuration caused.
-            return Ended(start, RowOutcomes.Failed, e.Message, started.Elapsed, Usage.None);
+            return Ended(start, RowOutcomes.Failed, e.Message, started.Elapsed, Usage.None, skipped);
         }
         finally
         {
@@ -196,7 +212,7 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
     /// and an EMPTY folder beside it to stand in, so a none row's cwd never holds its own home.
     /// </summary>
     private static ConsultantLaunch Launch(RowLaunchInput input, string scratch, string homeFolder, ConsultantPlace place) =>
-        new(input.Repo, input.Row.Plan.Cwd == CwdKind.Snapshot ? input.PromptNaming(place.Roots) : input.Prompt, string.Empty, input.AnswersDir, Owning(input, homeFolder), input.SchemaFile)
+        new(input.Repo, input.Row.Plan.Cwd == CwdKind.Snapshot ? input.PromptNaming(new CopiedRoots(place.Roots, place.Limitations)) : input.Prompt, string.Empty, input.AnswersDir, Owning(input, homeFolder), input.SchemaFile)
         {
             Confinement = new LaunchConfinement.Planned(input.Row.Plan),
             ScratchDir = StandingFolderIn(scratch),
@@ -263,13 +279,19 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
                 case AnsweringTurn.Next next:
                     // A runtime that continues its own conversation hands a ready invocation (an agy lookup); an api row's
                     // next turn is its launch built again with the longer prompt.
-                    (launch, memory, note, ready) = (next.Launch, next.Memory, next.Note, next.Invocation);
+                    (launch, memory, note, ready) = (next.Launch, next.Memory, NoteAfter(seed, next), next.Invocation);
                     continue;
                 case AnsweringTurn.Done done:
                     return Answered(start, done.Advice, started.Elapsed, usage, Joined(note, done.Note));
             }
         }
     }
+
+    /// <summary>
+    /// The row's note after a follow-up turn: what its place skipped (the <paramref name="seed"/>) stays, and the turn's own line follows it —
+    /// a turn's note never replaces the seed.
+    /// </summary>
+    internal static string NoteAfter(string seed, AnsweringTurn.Next next) => Joined(seed, next.Note);
 
     /// <summary>The conversation to continue: the one this turn named, or — when a continuation's stream named none — the one it continued.</summary>
     /// <remarks>Code round 2 (gemini): an empty handle from turn 2 ended a row that asked a second time, "agy named no

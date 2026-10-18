@@ -145,17 +145,18 @@ public sealed class AVibeDiskRowExpandsAParentFolderTests : IDisposable
 
         var places = PlacesWith(SnapshotOptions.Default with
         {
-            // The slow repository's file takes longer to copy than what is left of the budget.
+            // The slow repository's copy outlasts the whole budget. The budget is wide enough for the three git confirmations
+            // of a busy runner to finish inside it (a 4 s budget was tight there), and the sleep is wider still.
             BeforeCopyOf = (_, path) =>
             {
                 if (path.Contains("b-slow", StringComparison.OrdinalIgnoreCase))
                 {
-                    Thread.Sleep(TimeSpan.FromSeconds(6));
+                    Thread.Sleep(TimeSpan.FromSeconds(12));
                 }
             },
         });
 
-        using var place = await places.OneShotAsync(Row, [parent], TimeSpan.FromSeconds(4), TestContext.Current.CancellationToken);
+        using var place = await places.OneShotAsync(Row, [parent], TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
 
         place.Refusal.Should().Contain("1 of 3", "three repositories were confirmed, one was copied").And.Contain("budget");
         Snapshots().Should().BeEmpty("the copy that was made is disposed");
@@ -418,5 +419,270 @@ public sealed class AVibeDiskRowExpandsAParentFolderTests : IDisposable
         place.Roots.Should().HaveCount(2, "shared once (as the direct grant), other once");
         Path.GetDirectoryName(place.Roots[0]).Should().Be(Tree, "the first in source order wins: the direct grant, at the tree's top");
         Below(place.Roots[1]).Should().StartWith("1/other/snapshot-");
+    }
+
+    // ---------- D9: a linked worktree whose main checkout is copied is skipped (S16-S19) ----------
+
+    private const string OneSkippedSentence =
+        "skipped 1 linked worktree whose main checkout is copied — its branch and uncommitted files were not read; grant a worktree directly to include it";
+
+    private async Task<string> WorktreeAsync(string main, string at, string branch)
+    {
+        await GitAsync(main, ["worktree", "add", "-b", branch, at]);
+
+        return at;
+    }
+
+    [Fact]
+    public async Task AMainCheckoutAndThreeLinkedWorktreesUnderTheGrant_GiveOneCopy_AndOneSummaryNote()
+    {
+        var parent = Parent();
+        var main = await RepositoryAsync(Path.Combine(parent, "app"), true, ("app.txt", "main"));
+        foreach (var n in (int[])[1, 2, 3])
+        {
+            await WorktreeAsync(main, Path.Combine(parent, $"app-wt{n}"), $"wt{n}");
+        }
+
+        List<string> said = [];
+
+        using var place = await PlaceAsync(Places(said.Add), parent);
+
+        place.Refusal.Should().BeEmpty();
+        Below(place.Roots.Should().ContainSingle("the three worktrees are the main checkout's own branches").Subject).Should().StartWith("0/app/snapshot-");
+        place.Notes.Should().ContainSingle().Which.Should().Be(
+            "skipped 3 linked worktrees whose main checkouts are copied — their branches and uncommitted files were not read; grant a worktree directly to include it");
+        said.Should().Equal(place.Notes, "the log's sink gets the summary too");
+    }
+
+    [Fact]
+    public async Task ASingleLinkedWorktree_IsSaidInTheSingular()
+    {
+        var parent = Parent();
+        var main = await RepositoryAsync(Path.Combine(parent, "app"), true, ("app.txt", "main"));
+        await WorktreeAsync(main, Path.Combine(parent, "app-wt"), "wt");
+
+        using var place = await PlaceAsync(Places(), parent);
+
+        place.Notes.Should().ContainSingle().Which.Should().Be(OneSkippedSentence);
+    }
+
+    [Fact]
+    public async Task ALinkedWorktreeWhoseMainCheckoutIsOutsideTheGrant_IsCopied()
+    {
+        var main = await RepositoryAsync(_dir.At("elsewhere", "app"), true, ("app.txt", "main"));
+        var parent = Parent();
+        await WorktreeAsync(main, Path.Combine(parent, "app-wt"), "wt");
+
+        using var place = await PlaceAsync(Places(), parent);
+
+        place.Refusal.Should().BeEmpty();
+        Below(place.Roots.Should().ContainSingle().Subject).Should().StartWith("0/app-wt/snapshot-");
+        File.Exists(Path.Combine(place.Roots[0], "app.txt")).Should().BeTrue();
+        place.Notes.Should().BeEmpty("nothing was skipped: no main checkout of it is copied");
+    }
+
+    [Fact]
+    public async Task ALinkedWorktreeWhoseMainCheckoutCouldNotBeConfirmed_IsKept_BecauseItsIdentityIsUncertain()
+    {
+        var parent = Parent();
+        var main = await RepositoryAsync(Path.Combine(parent, "app"), true, ("app.txt", "main"));
+        await WorktreeAsync(main, Path.Combine(parent, "app-wt"), "wt");
+        // The main's own HEAD is garbage: git refuses the main (not a repository), while the worktree keeps its own HEAD.
+        await File.WriteAllTextAsync(Path.Combine(main, ".git", "HEAD"), "garbage\n", TestContext.Current.CancellationToken);
+
+        using var place = await PlaceAsync(Places(), parent);
+
+        place.Refusal.Should().BeEmpty();
+        Below(place.Roots.Should().ContainSingle("only the worktree was confirmed, so it is the one copy").Subject).Should().StartWith("0/app-wt/snapshot-");
+        place.Notes.Should().ContainSingle().Which.Should().Contain("app").And.Contain("git does not confirm it as a work tree");
+    }
+
+    [Fact]
+    public async Task AWorktreeGrantedDirectly_IsAlwaysCopied_EvenWhenItsMainCheckoutIsCopiedToo()
+    {
+        var parent = Parent();
+        var main = await RepositoryAsync(Path.Combine(parent, "app"), true, ("app.txt", "main"));
+        var direct = await WorktreeAsync(main, _dir.At("direct-wt"), "wt");
+
+        using var place = await PlaceAsync(Places(), parent, direct);
+
+        place.Refusal.Should().BeEmpty();
+        place.Roots.Should().HaveCount(2, "the main checkout through the parent, the worktree because it was granted by name");
+        place.Roots.Select(Below).Should().Contain(root => root.StartsWith("0/app/snapshot-")).And.Contain(root => root.StartsWith("snapshot-"));
+        place.Notes.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task AWorktreeGrantedDirectlyAndFoundUnderTheParent_IsCopiedOnce_AndIsNotCountedAsSkipped()
+    {
+        var parent = Parent();
+        var main = await RepositoryAsync(Path.Combine(parent, "app"), true, ("app.txt", "main"));
+        var inside = await WorktreeAsync(main, Path.Combine(parent, "app-wt"), "wt");
+
+        using var place = await PlaceAsync(Places(), inside, parent);
+
+        place.Refusal.Should().BeEmpty();
+        place.Roots.Should().HaveCount(2, "the worktree once (granted first), the main checkout once");
+        place.Notes.Should().BeEmpty("the worktree was copied, so it is not one of the skipped");
+    }
+
+    [Fact]
+    public async Task ACheckoutWhoseGitIsAFile_ButIsNotLinked_IsNeverTakenForALinkedWorktree()
+    {
+        // A `.git` FILE says nothing about being linked: a submodule's top has one, so does `git init --separate-git-dir`.
+        // What decides is git's answer — the absolute git dir against the common dir — never the file's text.
+        var parent = Parent();
+        await RepositoryAsync(Path.Combine(parent, "app"), true, ("app.txt", "main"));
+        var lib = Directory.CreateDirectory(Path.Combine(parent, "lib")).FullName;
+        await File.WriteAllTextAsync(Path.Combine(lib, "lib.txt"), "lib", TestContext.Current.CancellationToken);
+        await GitAsync(lib, ["init", "-b", "main", "--separate-git-dir", _dir.At("lib-gitdir")]);
+
+        using var place = await PlaceAsync(Places(), parent);
+
+        File.Exists(Path.Combine(lib, ".git")).Should().BeTrue("the checkout's .git is a file");
+        place.Refusal.Should().BeEmpty();
+        place.Roots.Should().HaveCount(2);
+        place.Notes.Should().BeEmpty();
+    }
+
+    // ---------- gap (a): a found candidate must be the TOP of a work tree ----------
+
+    [Fact]
+    public async Task AFolderWithAnEmptyGit_InsideAnotherRepository_IsNotATop_SkippedWithANote_NeverCopied()
+    {
+        var parent = Parent();
+        await RepositoryAsync(Path.Combine(parent, "good"), true, ("g.txt", "good"));
+        var other = await RepositoryAsync(_dir.At("other"), true, ("o.txt", "other"));
+        // X is not a candidate: its .git is a link (to ANOTHER repository's git dir), so the walk goes into it.
+        var x = Directory.CreateDirectory(Path.Combine(parent, "X")).FullName;
+        await DirectoryLink.MakeAsync(_launcher, Path.Combine(x, ".git"), Path.Combine(other, ".git"));
+        // X/sub holds an EMPTY .git folder: a candidate to the walk, but git, finding no repository there, climbs to X's.
+        var sub = Directory.CreateDirectory(Path.Combine(x, "sub")).FullName;
+        Directory.CreateDirectory(Path.Combine(sub, ".git"));
+        await File.WriteAllTextAsync(Path.Combine(sub, "s.txt"), "inside X", TestContext.Current.CancellationToken);
+
+        using var place = await PlaceAsync(Places(), parent);
+
+        place.Refusal.Should().BeEmpty();
+        Below(place.Roots.Should().ContainSingle("a folder inside another work tree is no repository top").Subject).Should().StartWith("0/good/snapshot-");
+        place.Notes.Should().ContainSingle().Which.Should().Contain(sub).And.Contain("git does not confirm it as a work tree");
+    }
+
+    // ---------- gap (b): a root that could not be listed says so, and keeps what the walk skipped ----------
+
+    [Fact]
+    public async Task ARootThatCouldNotBeListed_IsRefusedWithItsOwnSentence()
+    {
+        var parent = Parent();
+        var places = Places();
+        places.Listing = path => path == parent ? new FolderListing.Unreadable("Access is denied") : FolderListings.Read(path);
+
+        using var place = await PlaceAsync(places, parent);
+
+        place.Refusal.Should().Contain(parent).And.Contain("could not be listed (Access is denied)").And.Contain("grant a folder coai can read");
+        place.Refusal.Should().NotContain("holds no Git repository", "an unreadable folder is not an empty one");
+    }
+
+    [Fact]
+    public async Task ARootWhoseEveryChildCouldNotBeListed_IsRefusedAndKeepsOneNoteEach()
+    {
+        var parent = Parent();
+        var one = Directory.CreateDirectory(Path.Combine(parent, "one")).FullName;
+        var two = Directory.CreateDirectory(Path.Combine(parent, "two")).FullName;
+        var places = Places();
+        places.Listing = path => path == one || path == two ? new FolderListing.Unreadable("Access is denied") : FolderListings.Read(path);
+
+        using var place = await PlaceAsync(places, parent);
+
+        place.Refusal.Should().Contain("holds no Git repository");
+        place.Notes.Should().HaveCount(2).And.OnlyContain(note => note.Contains("could not be listed"));
+    }
+
+    [Fact]
+    public async Task ARootWithTooManyFolders_IsRefusedAndKeepsTheNotesTheWalkHadMade()
+    {
+        var parent = Parent();
+        var first = Path.Combine(parent, "f00000");
+        var places = Places();
+        places.Listing = path =>
+            path == parent ? new FolderListing.Listed([.. Enumerable.Range(0, RepositoryWalk.MaxFolders + 1).Select(i => new FolderEntry($"f{i:00000}", CoaiMcp.Server.EntryKind.Folder))])
+            : path == first ? new FolderListing.Unreadable("Access is denied")
+            : new FolderListing.Listed([]);
+
+        using var place = await PlaceAsync(places, parent);
+
+        place.Refusal.Should().Contain("more than 10000 folders");
+        place.Notes.Should().ContainSingle().Which.Should().Contain(first).And.Contain("could not be listed");
+    }
+
+    // ---------- the bound is the ROW's ----------
+
+    [Fact]
+    public async Task TheBoundSentenceNamesTheGrantedFolders_NotTheLastRoot()
+    {
+        var one = Parent("one");
+        var two = Parent("two");
+        await InitManyAsync(one, 26);
+        await InitManyAsync(two, 25);
+
+        using var place = await PlaceAsync(Places(), one, two);
+
+        place.Refusal.Should().Contain("the granted folders hold more than 50 Git repositories").And.Contain("grant the project folders themselves");
+        place.Refusal.Should().NotContain(two, "the second root alone holds 25; the ROW holds 51");
+        Snapshots().Should().BeEmpty("the bound is judged before any copy");
+    }
+
+    [Fact]
+    public async Task AGrantedWorkTree_CountsTowardTheSameBound_WhereverItStandsInTheList()
+    {
+        var parent = Parent();
+        await InitManyAsync(parent, 50);
+        var direct = await RepositoryAsync(_dir.At("direct"), false, ("d.txt", "the fifty-first"));
+        var copies = 0;
+        var places = PlacesWith(SnapshotOptions.Default with { BeforeCopyOf = (_, _) => Interlocked.Increment(ref copies) });
+
+        using var place = await places.OneShotAsync(Row, [parent, direct], TimeSpan.FromMinutes(10), TestContext.Current.CancellationToken);
+
+        place.Refusal.Should().Contain("the granted folders hold more than 50 Git repositories");
+        copies.Should().Be(0, "the directly granted work tree is counted before the first copy, so the row is refused before any");
+    }
+
+    // ---------- the walk's cost ----------
+
+    [Fact]
+    public async Task ADepthTwoFolder_IsNeverListed_OnlyItsGitIsLookedFor()
+    {
+        var parent = Parent();
+        await RepositoryAsync(Path.Combine(parent, "group", "repo"), true, ("r.txt", "root"));
+        Directory.CreateDirectory(Path.Combine(parent, "group", "plain"));
+        List<string> listed = [];
+        var places = Places();
+        places.Listing = path =>
+        {
+            listed.Add(path);
+
+            return FolderListings.Read(path);
+        };
+
+        using var place = await PlaceAsync(places, parent);
+
+        place.Refusal.Should().BeEmpty();
+        place.Roots.Should().ContainSingle();
+        listed.Should().BeEquivalentTo([parent, Path.Combine(parent, "group")], "the root and its children are listed; their children are only asked about .git");
+    }
+
+    [Fact]
+    public async Task AFolderLinkSkippedByTheWalk_IsNamedInANote_NotSkippedInSilence()
+    {
+        var parent = Parent();
+        await RepositoryAsync(Path.Combine(parent, "good"), true, ("g.txt", "good"));
+        var elsewhere = Directory.CreateDirectory(_dir.At("cloud")).FullName;
+        await DirectoryLink.MakeAsync(_launcher, Path.Combine(parent, "OneDrive"), elsewhere);
+
+        using var place = await PlaceAsync(Places(), parent);
+
+        place.Refusal.Should().BeEmpty();
+        place.Roots.Should().ContainSingle();
+        place.Notes.Should().ContainSingle().Which.Should().Contain("OneDrive").And.Contain("link");
     }
 }

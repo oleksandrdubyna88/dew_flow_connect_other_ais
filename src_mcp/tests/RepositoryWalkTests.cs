@@ -42,15 +42,31 @@ public sealed class RepositoryWalkTests
             return this;
         }
 
+        /// <summary>The paths the walk only looked for a <c>.git</c> in — the folders of the deepest level, never listed.</summary>
+        public List<string> Probed { get; } = [];
+
         public FolderListing List(string path)
         {
             Asked.Add(path);
 
-            return _listings.TryGetValue(path, out var listing) ? listing : new FolderListing.Listed([]);
+            return Listing(path);
         }
+
+        /// <summary>What <see cref="FolderListings.GitEntryOf"/> answers: the folder's <c>.git</c> entry, none, or why not.</summary>
+        public FolderListing Probe(string path)
+        {
+            Probed.Add(path);
+
+            return Listing(path) is FolderListing.Listed listed
+                ? new FolderListing.Listed([.. listed.Entries.Where(entry => entry.Name == ".git")])
+                : Listing(path);
+        }
+
+        private FolderListing Listing(string path) =>
+            _listings.TryGetValue(path, out var listing) ? listing : new FolderListing.Listed([]);
     }
 
-    private static WalkOutcome Walk(Disk disk, CancellationToken ct = default) => RepositoryWalk.Find(Root, disk.List, ct);
+    private static WalkOutcome Walk(Disk disk, CancellationToken ct = default) => RepositoryWalk.Find(Root, disk.List, disk.Probe, ct);
 
     private static WalkOutcome.Found Found(WalkOutcome outcome) =>
         outcome.Should().BeOfType<WalkOutcome.Found>("the walk found what it was asked for, not a refusal").Subject;
@@ -151,7 +167,7 @@ public sealed class RepositoryWalkTests
         var refused = Walk(disk).Should().BeOfType<WalkOutcome.Refused>().Subject;
 
         refused.Reason.Should().Contain("more than 10000 folders within two levels").And.Contain("grant the project folders themselves");
-        disk.Asked.Count.Should().BeLessThan(RepositoryWalk.MaxFolders + 2, "the walk stops at the bound instead of listing the rest");
+        (disk.Asked.Count + disk.Probed.Count).Should().BeLessThan(RepositoryWalk.MaxFolders + 2, "the walk stops at the bound instead of listing the rest");
     }
 
     [Fact]
@@ -229,8 +245,119 @@ public sealed class RepositoryWalkTests
         [
             new FolderEntry("a-folder", EntryKind.Folder),
             new FolderEntry("a-file.txt", EntryKind.File),
-            new FolderEntry("a-link", EntryKind.Link),
+            new FolderEntry("a-link", EntryKind.FolderLink),
         ]);
         FolderListings.Read(dir.At("missing")).Should().BeOfType<FolderListing.Unreadable>();
+    }
+
+    [Fact]
+    public void TheRealGitLookup_SeesAFolderAFileAndALink_ForOneNameOnly_AndNoneWhereThereIsNone()
+    {
+        using var dir = TempDir.For("testsToDelete-walk-");
+        Directory.CreateDirectory(dir.At("with-folder", ".git"));
+        Directory.CreateDirectory(dir.At("with-file"));
+        File.WriteAllText(dir.At("with-file", ".git"), "gitdir: /elsewhere");
+        Directory.CreateDirectory(dir.At("with-link"));
+        Directory.CreateDirectory(dir.At("target"));
+        SnapshotTestKit.LinkNow(dir.At("with-link", ".git"), dir.At("target"));
+        Directory.CreateDirectory(dir.At("none"));
+        File.WriteAllText(dir.At("none", "other.txt"), "x");
+
+        Entries(FolderListings.GitEntryOf(dir.At("with-folder"))).Should().Equal(new FolderEntry(".git", EntryKind.Folder));
+        Entries(FolderListings.GitEntryOf(dir.At("with-file"))).Should().Equal(new FolderEntry(".git", EntryKind.File));
+        Entries(FolderListings.GitEntryOf(dir.At("with-link"))).Should().Equal(new FolderEntry(".git", EntryKind.FolderLink));
+        Entries(FolderListings.GitEntryOf(dir.At("none"))).Should().BeEmpty("a folder without a .git answers none, and its other files are never read");
+        Entries(FolderListings.GitEntryOf(dir.At("vanished"))).Should().BeEmpty("a folder that is gone holds no .git");
+    }
+
+    private static IReadOnlyList<FolderEntry> Entries(FolderListing listing) =>
+        listing.Should().BeOfType<FolderListing.Listed>().Subject.Entries;
+
+    // ---------- the walk's second seam: the deepest level is only asked for its .git ----------
+
+    [Fact]
+    public void ADepthTwoFolder_IsOnlyProbedForItsGit_NeverListed()
+    {
+        var disk = new Disk()
+            .Has(Root, Dir("a"))
+            .Has(At("a"), Dir("x"), Dir("y"))
+            .Has(At("a", "x"), GitDir)
+            .Has(At("a", "y"), Dir("big"));
+
+        var found = Found(Walk(disk));
+
+        Relative(found).Should().Equal("a/x");
+        disk.Asked.Should().Equal([Root, At("a")], "the root and its children are listed");
+        disk.Probed.Should().Equal([At("a", "x"), At("a", "y")], "their children are only asked about a .git, in the walk's order");
+    }
+
+    [Fact]
+    public void ADepthTwoFolderThatCouldNotBeProbed_IsSkippedWithTheSameNote()
+    {
+        var disk = new Disk()
+            .Has(Root, Dir("a"))
+            .Has(At("a"), Dir("denied"), Dir("ok"))
+            .Denies(At("a", "denied"), "Access is denied")
+            .Has(At("a", "ok"), GitDir);
+
+        var found = Found(Walk(disk));
+
+        Relative(found).Should().Equal("a/ok");
+        found.Notes.Should().ContainSingle().Which.Should().Be($"{At("a", "denied")} was skipped: it could not be listed (Access is denied)");
+    }
+
+    // ---------- a root that cannot be listed is not an empty one ----------
+
+    [Fact]
+    public void ARootThatCannotBeListed_IsRefusedByName_NotReportedAsEmpty()
+    {
+        var disk = new Disk().Denies(Root, "Access is denied");
+
+        var refused = Walk(disk).Should().BeOfType<WalkOutcome.Refused>().Subject;
+
+        refused.Reason.Should().Be($"the folder {Root} could not be listed (Access is denied) — grant a folder coai can read");
+        refused.Notes.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ARefusalCarriesWhatTheWalkSkippedBeforeIt()
+    {
+        var disk = new Disk().Has(Root, Dir("denied"), Dir("plain")).Denies(At("denied"), "Access is denied");
+
+        var refused = Walk(disk).Should().BeOfType<WalkOutcome.Refused>().Subject;
+
+        refused.Reason.Should().Contain("holds no Git repository");
+        refused.Notes.Should().ContainSingle().Which.Should().Contain(At("denied")).And.Contain("could not be listed");
+    }
+
+    // ---------- a link to a folder is named, not skipped in silence ----------
+
+    [Fact]
+    public void LinksToFolders_AreNamedInOneNote_AndLinksToFilesAndHiddenOrNoiseLinksAreNot()
+    {
+        var disk = new Disk()
+            .Has(Root, Dir("repo"), new FolderEntry("OneDrive", EntryKind.FolderLink), new FolderEntry("Dropbox", EntryKind.FolderLink),
+                new FolderEntry("a-file-link", EntryKind.Link), new FolderEntry(".cache", EntryKind.FolderLink), new FolderEntry("node_modules", EntryKind.FolderLink))
+            .Has(At("repo"), GitDir);
+
+        var found = Found(Walk(disk));
+
+        found.Notes.Should().ContainSingle().Which.Should().Be(
+            $"{Root}: 2 linked folders were not entered, because a copy never follows a link (Dropbox, OneDrive)");
+    }
+
+    [Fact]
+    public void ALinkedFolderNote_NamesFiveAndCountsTheRest_AndIsSingular_ForOne()
+    {
+        var many = Enumerable.Range(1, 7).Select(i => new FolderEntry($"link{i}", EntryKind.FolderLink)).ToArray();
+        var disk = new Disk().Has(Root, [Dir("repo"), .. many]).Has(At("repo"), GitDir);
+
+        Found(Walk(disk)).Notes.Should().ContainSingle().Which.Should().Be(
+            $"{Root}: 7 linked folders were not entered, because a copy never follows a link (link1, link2, link3, link4, link5 and 2 more)");
+
+        var one = new Disk().Has(Root, Dir("repo"), new FolderEntry("cloud", EntryKind.FolderLink)).Has(At("repo"), GitDir);
+
+        Found(Walk(one)).Notes.Should().ContainSingle().Which.Should().Be(
+            $"{Root}: 1 linked folder was not entered, because a copy never follows a link (cloud)");
     }
 }

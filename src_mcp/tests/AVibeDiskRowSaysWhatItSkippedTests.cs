@@ -93,4 +93,55 @@ public sealed class AVibeDiskRowSaysWhatItSkippedTests : IDisposable
         note.Should().NotContain(new string('a', 36), "a note names folders on the person's disk and is written down: the token-shaped name is redacted");
         note.Should().Contain("[redacted]");
     }
+
+    private const string TwoSkipped =
+        "skipped 2 linked worktrees whose main checkouts are copied — their branches and uncommitted files were not read; grant a worktree directly to include it";
+
+    /// <summary>
+    /// D9: the row's note says how many linked worktrees were left out — and so does the PROMPT, where it names the copies, because
+    /// the model that reads the copies must know it did not read their branches or their uncommitted files.
+    /// </summary>
+    [Theory]
+    [InlineData(VibeFlowHost.Windows)]
+    [InlineData(VibeFlowHost.Wsl2)]
+    public async Task ALinkedWorktreeLeftOut_IsSaidInTheRowsNote_AndInThePromptThatNamesTheCopies(string mode)
+    {
+        using var flow = VibeFlowHost.Enter(mode, _dir.At("flow"));
+        using var noBudget = VibePathBudget.Using(VibePathBudget.None);
+        var parent = Directory.CreateDirectory(_dir.At("parent")).FullName;
+        var main = Path.Combine(parent, "app");
+        await _rows.RepositoryAsync(main, ("Mailer.cs", "void Send() { }\n"));
+        foreach (var n in (int[])[1, 2])
+        {
+            var worktree = await _launcher.RunAsync(new ProcessRequest("git", ["worktree", "add", "-b", $"wt{n}", Path.Combine(parent, $"app-wt{n}")], main), TestContext.Current.CancellationToken);
+            worktree.ExitCode.Should().Be(0, worktree.StdErr);
+        }
+
+        var vibe = new PlayedVibe(_launcher, Advice);
+
+        var reply = await AskAsync(vibe, parent);
+
+        var row = VibeQuestionRowFixture.TheRow(reply);
+        row.GetProperty("status").GetString().Should().Be(RowOutcomes.Answered, reply.ToString());
+        row.GetProperty("note").GetString().Should().Contain(TwoSkipped);
+        var turn = vibe.Turns.Should().ContainSingle().Subject;
+        turn.Files.Keys.Should().ContainSingle("only the main checkout is copied").Which.Should().EndWith("/Mailer.cs");
+        turn.Request.StdIn.Should().Contain(TwoSkipped, "the model is told what its copies do not hold");
+    }
+
+    [Theory]
+    [InlineData(VibeFlowHost.Windows)]
+    [InlineData(VibeFlowHost.Wsl2)]
+    public async Task ARowThatSkippedNoWorktree_PutsNoLimitationInItsPrompt(string mode)
+    {
+        using var flow = VibeFlowHost.Enter(mode, _dir.At("flow"));
+        using var noBudget = VibePathBudget.Using(VibePathBudget.None);
+        var parent = Directory.CreateDirectory(_dir.At("parent")).FullName;
+        await _rows.RepositoryAsync(Path.Combine(parent, "app"), ("Mailer.cs", "void Send() { }\n"));
+        var vibe = new PlayedVibe(_launcher, Advice);
+
+        await AskAsync(vibe, parent);
+
+        vibe.Turns.Should().ContainSingle().Which.Request.StdIn.Should().NotContain("linked worktree");
+    }
 }

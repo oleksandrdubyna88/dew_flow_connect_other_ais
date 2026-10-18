@@ -1,10 +1,12 @@
 # PLAN — Vibe reads a folder of repositories
 
-> Status: **plan only, nothing implemented yet, 2026-10-18.** Scope: `src_mcp/src/Server/Consultation/ConsultantPlaces.cs`
+> Status: **in progress, 2026-10-18: stories E1.1–E1.3 and decision D9 are built on branch `feat/vibe-folder-of-repos`; E1.4 (the
+> product-flow test, the sweep test, the docs, the help, the promotion) is open.** Scope: `src_mcp/src/Server/Consultation/ConsultantPlaces.cs`
 > (the copy loop of a Vibe consultant row), a new repository walk beside it, `QuestionRowLaunch.cs` (the skip notes on the
 > row), `PanelService.ScratchPrefixes` (the crash sweep), their tests, `research/module_runners.md`, `research/module_server.md`,
 > `research/module_tests.md`, the help sentence for a Vibe disk row in `helpContent.ts` and its four translations
-> (`helpDe/Es/Ru/Uk.ts`). Spec corrections C1–C9 of the story split were accepted 2026-10-18 and are folded into D1–D8 below.
+> (`helpDe/Es/Ru/Uk.ts`). Spec corrections C1–C9 of the story split were accepted 2026-10-18 and are folded into D1–D8 below. D9
+> (linked worktrees) and the review fixes R1–R9 (section "Review fixes", end of the file) were added the same day.
 >
 > Related docs: [PLAN_vibe_and_kimi_runtimes.md](PLAN_vibe_and_kimi_runtimes.md) (D6 — Vibe reads a copy coai makes through Git),
 > [module_runners.md](../research/module_runners.md).
@@ -49,15 +51,30 @@ is that, minus the configuration a checkout would carry.
     `.git` that is a LINK (symlink or junction) does not make a candidate — the D6 link rule.
   - The walk does **not** descend into a candidate (its nested repositories and submodules are the repository's own business; the
     snapshot lists what git lists).
-  - The walk skips hidden folders (`.`-prefixed), `node_modules`, `bin`, `obj`, and any link (never followed, never listed).
+  - The walk skips hidden folders (`.`-prefixed), `node_modules`, `bin`, `obj`, and any link (never followed, never listed). A link
+    to a FOLDER (a cloud provider's on-demand folder looks like one) is named in ONE note per root — its count and its first five
+    names; a link to a file stays silent (review fix R8).
   - A folder the walk cannot list (access denied, vanished, I/O error) is **skipped with a note** naming it; the walk goes on.
+  - At depth 2 the walk only asks whether `.git` exists (`FolderListings.GitEntryOf`, one lookup of one name) — it never lists a
+    depth-2 folder, so a folder of a million files costs one lookup (R8).
+  - A candidate git confirms must be the **top** of a work tree: `--is-inside-work-tree` is `true` AND `--show-cdup` is empty. A
+    folder with an empty or foreign `.git` inside another repository is "inside" that work tree and is skipped with a note (R1);
+    `--show-toplevel` strings are never compared (git changes slashes, case and resolves links). A work-tree root granted
+    DIRECTLY keeps the plain "inside a work tree" check — a sub-folder of a repository is still copied as before.
   - Depth 2 covers the measured layouts (`~/git/<repo>`, `d:\rsd\<repo>` and one grouping level).
 - **D3 — Bounds.**
   - The walk examines at most **10,000 folders** per root; past that the row is refused: "the folder <root> holds more than
     10000 folders within two levels — grant the project folders themselves". (50 repositories alone would not bound the walk:
     a parent can hold thousands of folders and no repository.)
-  - At most **50 CONFIRMED repositories** per row (git-validated, de-duplicated — a broken candidate never counts); beyond
-    that the row is refused with a sentence naming the bound and the same cure.
+  - At most **50 CONFIRMED repositories** per ROW (git-validated, de-duplicated — a broken candidate never counts, and a linked
+    worktree left out by D9 does not count); beyond that the row is refused with a sentence naming the bound and the same cure:
+    "the granted folders hold more than 50 Git repositories, more than a Vibe disk row copies — grant the project folders
+    themselves". It names the row, never the last root (R3). Work trees granted directly count toward the same bound, and are
+    counted before any parent is walked, whatever their place in the list.
+  - A root that cannot be listed at all (denied, vanished between the existence check and the listing) is refused by name:
+    "the folder X could not be listed (reason) — grant a folder coai can read" — never reported as a folder with no repository
+    (R2). Every refusal of the walk keeps the notes made before it (the too-many-folders refusal and a root whose children were
+    all unreadable included), and the place hands them to the row.
   - A root with NO repository beneath it is refused: "the folder <root> holds no Git repository within two levels — Vibe reads
     copies coai makes through Git".
   - The walk AND the copies run inside the row's existing budget token (`copying` in `OneShotAsync`, the #811 checkpoint rule);
@@ -106,6 +123,34 @@ is that, minus the configuration a checkout would carry.
   through `LinuxHeldFile`), and the sweep removes a `coai-question-*` folder only when it is older than six hours AND it
   can take that lock itself — the `VibeHomes.cs:189` pattern (`NewestWrite >= cutoff || lock not taken → keep`), reused,
   not copied. S10 pins both sides, red first.
+- **D9 — Linked worktrees (added 2026-10-18; the consultants agreed, the lead decided).** The owner's real root holds about 400
+  candidates, 392 of them agent worktrees under one folder, so without this the row is refused by D3's bound — and a worktree
+  is a full second copy of a project whose main checkout is already in the row.
+  - **One git call per candidate** (`RepositoryFacts`): `git rev-parse --is-inside-work-tree --show-cdup --absolute-git-dir
+    --path-format=absolute --git-common-dir`. It answers D2's "top of a work tree" question (R1) and this one.
+  - **A candidate is a LINKED worktree when its absolute git dir differs from its common dir.** Both are compared as identity
+    keys (`RepositoryIdentity.KeyOf`): the full path, the trailing separator trimmed, case-blind on Windows and exact elsewhere —
+    the comparison `ConversationSnapshots.cs:24-25` uses. `RepositoryIdentity.Normalised` was widened with a comparison argument
+    (its old form lowercases and swaps slashes, which is wrong on Linux); it was not copied. **The text of a `.git` file is never
+    the authority**: a submodule checkout holds the same kind of file, and a submodule inside a linked worktree writes a gitdir
+    that merely contains `/worktrees/` (`src_vs_code/src/projectIdentity.ts` documents the trap; S18 mirrors its scenarios).
+    An ordinary checkout and a submodule have the two dirs equal, so they are never linked.
+  - **Selection.** A linked worktree found beneath a granted parent is left out when a confirmed MAIN checkout — the top of a
+    work tree, not linked, identity known — with the same common-dir identity is copied in the SAME row, found under any parent
+    or granted directly. A linked worktree with no such main stays eligible, and so does one whose identity is uncertain (git
+    failed for the main, so the main is not confirmed). A worktree granted DIRECTLY is always copied, and one that is both
+    granted and found is copied once, as the direct grant.
+  - **Order is the contract.** Every candidate of every parent is validated first, then the linked worktrees are selected out,
+    then the bound counts what is left, then the copies are made — so the bound is the row's and a refusal comes before anything
+    is made. Validation stops early only when the bound is certainly passed by repositories no selection can remove.
+  - **One summary note** for the row: "skipped {n} linked worktrees whose main checkouts are copied — their branches and
+    uncommitted files were not read; grant a worktree directly to include it" (singular for one). The same sentence reaches the
+    PROMPT of a Vibe row, where the prompt names the copies (`ConsultantPlace.Limitations`, `QuestionPromptInput.Limitations`,
+    `CopiedRoots`), so the model knows what its copies do not hold.
+  - **Measured 2026-10-18 on the owner's real root, read-only:** 405 candidates, 405 confirmed by git, 392 linked worktrees left
+    out, 13 selected; the 405 git calls took about 34 s one after another (the walk itself 46 ms). Counts only — no path of the
+    owner's disk is written down here. The calls are sequential and the 34 s is spent before Vibe starts, inside the row's
+    budget; confirming a few candidates at a time is the first thing to do if a root grows.
 
 ## 4. Scenarios (each red is the message the test fails with before the fix)
 
@@ -137,6 +182,16 @@ is that, minus the configuration a checkout would carry.
   `src_mcp/tests/AVibeQuestionRowReadsACopyOfItsRootsTests.cs`) granted a parent of two repositories, one carrying
   `.vibe/hooks.toml` → the launch stands in the copy tree, sees both repositories' files and no `.vibe`, the prompt names no
   original path, and the copies are gone after the turn.
+- S16 *Given* a main checkout and three linked worktrees of it under one granted parent, *then* one copy (the main) and one
+  summary note ("skipped 3 linked worktrees…"); the prompt carries the same sentence (D9). Red: four copies, no note.
+- S17 *Given* a linked worktree whose main checkout is OUTSIDE the grant, *then* it is copied and nothing is noted. (Guard: green
+  from the start.) *Given* the main's own git is broken, so it is not confirmed, *then* the worktree is kept — an uncertain
+  identity keeps it.
+- S18 *Given* a checkout whose `.git` is a FILE but whose git dir is its common dir (`git init --separate-git-dir`; a submodule's
+  top; a submodule INSIDE a linked worktree), *then* it is never treated as a linked worktree — the facts say so, not the file's
+  text. (Guard: green from the start; `RepositoryFactsTests` runs real git for all three.)
+- S19 *Given* a linked worktree granted DIRECTLY beside its main checkout's parent, *then* it is copied; *given* the same
+  worktree granted directly AND found under the parent, *then* it is copied once and not counted as skipped. (Guards.)
 
 ## 5. Test plan
 
@@ -395,8 +450,10 @@ directly AND found under a parent grant is copied once — the first in source o
 
 **Done when:** all of the above green; `AConversationPlaceTests`, `AVibeQuestionRowReadsACopyOfItsRootsTests` (with the two
 assertions changed), `ConsultantCheckTests` green; `ConsultantPlaces.cs` stays under 800 lines (it is 403 now — if the
-expansion pushes it past ~550, move `ExpandedAsync` and its helpers into `ConsultantPlaces.Expansion.cs` as a partial);
-no `catch` around `CopyOfAsync` or `Maker.MakeAsync`.
+expansion pushes it past ~550, move the expansion out; **never a `partial` used to duck the limit** — the 2026-10-18 review
+made it `ParentExpansion.cs`, with `RepositoryCopier.cs` as the one copy method both a direct root and a found repository go
+through, `OneShotTally.cs` and `GrantedPaths.cs`; `ConsultantPlaces.cs` is 450 lines); no `catch` around `CopyOfAsync` or
+`Maker.MakeAsync`.
 
 ### E1.3 — The skip notes reach the row's `note`
 
@@ -446,7 +503,8 @@ promotion.
   `Directory.CreateTempSubdirectory("coai-question-")`.
 - `research/module_runners.md` — a new `##` section after `:3182` (the Vibe consultant) or at the end: "A Vibe disk row
   expands a parent folder into its repositories (2026-10-18, PLAN_vibe_reads_a_folder_of_repositories.md)" with the walk's
-  rules, the layout, the two D4 sides, a flowchart.
+  rules, the layout, the two D4 sides, a flowchart — and D9 (the one git call, the linked-worktree rule, the order: validate,
+  select, count, copy) and the review fixes R1–R9 with their measured counts.
 - `research/module_server.md:7362-7372` (the question row's one-shot copies bullet), `:7405` (the mermaid node
   `OneShotAsync(row folder, granted roots) — a copy per root; no Git work tree: refused` → "…a parent folder expanded into
   its repositories; none found: refused"), the table at `:7413-7420` (the walk's file, the new tests).
@@ -515,3 +573,33 @@ guards (S6, S8, S15 green from the start) and the reds (S10 if C1); `/promote-pl
   work-tree roots included, first in source order wins" (E1.2's `Tally.Copied`). D6 says only "a repository found under two
   overlapping grants"; the refinement covers a repository granted directly and found again under a parent grant. Say yes
   or no in the gate.
+
+## Review fixes (2026-10-18) — what the review of E1.1–E1.3 changed, and what it left
+
+Each was seen red first (the message is in `AVibeDiskRowExpandsAParentFolderTests`, `AQuestionRowKeepsWhatItsPlaceSkippedWhateverEndsItTests`
+and `AVibeDiskRowSaysWhatItSkippedTests`); R4 is a timing change with no behaviour to see red.
+
+- **R1 — A found candidate is a repository TOP.** `--is-inside-work-tree` true AND an empty `--show-cdup` (D2). Red: a folder with an
+  empty `.git` under a folder whose `.git` is a link to another repository was copied as `0/X/sub/snapshot-…`.
+- **R2 — A root that cannot be listed has its own refusal, and a refusal keeps its notes** (D3). `WalkOutcome` carries `Notes` on
+  both arms; `ParentExpansion` says them before it returns the reason. Red: "holds no Git repository" for an unreadable root, and no
+  notes on the place for an all-unreadable root and for the too-many-folders refusal.
+- **R3 — The bound names the row, and a direct grant counts** (D3). Red: the sentence named the second root of two that held 26
+  and 25; a 51st work tree granted directly after a parent of 50 was copied.
+- **R4 — S7a's timing.** The budget is 10 s and the slow copy sleeps 12 s (it was 4 s and 6 s, tight on a busy runner).
+- **R5 — The row's note on every arm.** The timed-out and the failed arm of `QuestionRowLaunch.RunAsync` carry what the place
+  skipped; `NoteAfter` joins the seed with a follow-up turn's note instead of replacing it. Red: an empty note on both arms.
+- **R6 — The root is normalised once** (`GrantedPaths.Keyed`) and that spelling is what `Directory.Exists`, the link check, git and
+  the walk all use.
+- **R7 — Links before git.** A found repository's links up to its root are checked before git runs in its folder (in discovery and
+  again in the copy). A link on the way refuses the row, as at the copy before.
+- **R8 — The walk's cost and its silence.** A depth-2 folder is probed for `.git`, never listed (red: the seam saw depth-2 listings);
+  a link to a folder is named in one note per root (red: a junction to a folder was skipped without a word).
+- **R9 — File size.** `ConsultantPlaces.cs` is 450 lines; the expansion is `ParentExpansion.cs`, the copy method `RepositoryCopier.cs`
+  (`CopyOfAsync` of this plan's text), the tally `OneShotTally.cs`, the link rule `GrantedPaths.cs`, the git answer `RepositoryFacts.cs`,
+  the worktree selection `LinkedWorktrees.cs` — each with one job; no `partial`.
+
+**Known limits, left on purpose.** De-duplication is by path TEXT: two spellings of one folder (8.3 short names, `\\?\` prefixes, a
+junction the walk did not follow) are two repositories, and a sub-folder of a repository granted beside the parent that holds it is
+copied a second time, as its own root — it costs budget and bytes, never correctness. The git confirmations run one after another
+(D9's measurement). A row cancelled by its own deadline INSIDE the walk loses the walk's notes (the place is never returned).

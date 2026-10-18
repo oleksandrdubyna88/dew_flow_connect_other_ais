@@ -202,10 +202,11 @@ public sealed class QuestionFanOut(
         var looking = WithLookup(row);
         var toolbox = looking.Runtime is AntigravityConsultant agy ? agy.LookupToolbox : string.Empty;
 
-        return CliLaunch(looking, roots => QuestionPrompt.Compose(new QuestionPromptInput(
-            instruction, row.Prompt.Capability, input.Question, clean.Context, string.Empty, roots, input.Nonce)
+        return CliLaunch(looking, copied => QuestionPrompt.Compose(new QuestionPromptInput(
+            instruction, row.Prompt.Capability, input.Question, clean.Context, string.Empty, copied.Paths, input.Nonce)
         {
             Toolbox = toolbox,
+            Limitations = copied.Limitations,
         }));
     }
 
@@ -213,10 +214,10 @@ public sealed class QuestionFanOut(
     /// A CLI row's launch, its prompt composed over the roots it is told: a disk row its roots — or, standing in a COPY of
     /// them (Vibe, D6), the copies' paths, which its launch makes; never the originals it cannot read (M-V11).
     /// </summary>
-    private static RowInput.Launch CliLaunch(RowAdmission.Admitted looking, Func<IReadOnlyList<string>, string> composed) =>
+    private static RowInput.Launch CliLaunch(RowAdmission.Admitted looking, Func<CopiedRoots, string> composed) =>
         looking.Plan.Cwd == CwdKind.Snapshot
-            ? new RowInput.Launch(looking, composed([])) { NamingCopies = composed }
-            : new RowInput.Launch(looking, composed(looking.Plan.Grant.Capability == Capability.Disk ? looking.Plan.Grant.Roots : []));
+            ? new RowInput.Launch(looking, composed(CopiedRoots.None)) { NamingCopies = composed }
+            : new RowInput.Launch(looking, composed(CopiedRoots.Of(looking.Plan.Grant.Capability == Capability.Disk ? looking.Plan.Grant.Roots : [])));
 
     /// <summary>
     /// An antigravity DISK row, able to ask coai to list and search its granted roots — it cannot do either itself in plan
@@ -495,7 +496,7 @@ public abstract record RowInput
     public sealed record Launch(RowAdmission.Admitted Row, string Prompt) : RowInput
     {
         /// <summary>For a row standing in a copy of its roots: the prompt naming the copies (<see cref="RowLaunchInput.PromptNaming"/>).</summary>
-        public Func<IReadOnlyList<string>, string> NamingCopies { get; init; } = RowLaunchInput.NamesNoCopies;
+        public Func<CopiedRoots, string> NamingCopies { get; init; } = RowLaunchInput.NamesNoCopies;
     }
 
     /// <summary>An api <c>none</c> row: composed with the outline when it arrives — the other rows do not wait for it.</summary>

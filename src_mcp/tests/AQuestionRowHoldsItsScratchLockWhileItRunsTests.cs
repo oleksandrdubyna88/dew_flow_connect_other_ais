@@ -51,7 +51,7 @@ public sealed class AQuestionRowHoldsItsScratchLockWhileItRunsTests : IAsyncLife
             Repo, Directory.CreateDirectory(_dir.At("answers")).FullName, string.Empty, TimeSpan.FromSeconds(30))
         {
             ChangesSoFar = _ => Task.FromResult<IReadOnlyList<Core.Consultation.TreeChange>>([]),
-            PromptNaming = copies => "Read " + string.Join(", ", copies),
+            PromptNaming = copies => "Read " + string.Join(", ", copies.Paths),
         };
         var launch = new QuestionRowLaunch(new ReviewerExecutor(vibe), new UsageLedger(_dir.At("data")), Logger.None, vibe);
 
