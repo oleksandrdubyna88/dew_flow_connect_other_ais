@@ -217,6 +217,16 @@ public sealed class CallerTranscriptFixture
         _ = holder?.Remove(path[^1]);
     }
 
+    /// <summary>Sets a top-level string key of line <paramref name="n"/>, or one level into <c>message</c> when the key reads <c>message.id</c>.</summary>
+    public void SetLineKey(TranscriptFile file, int n, string key, string value) => EditLine(file, n, line => SetKey(line, key, value));
+
+    private static void SetKey(JsonObject line, string key, string value)
+    {
+        var path = key.Split('.', 2);
+        var holder = path.Length == 1 ? line : line[path[0]] as JsonObject ?? throw new InvalidOperationException("The line has no '" + path[0] + "' object.");
+        holder[path[^1]] = value;
+    }
+
     public void PrependLine(TranscriptFile file, string json)
     {
         var path = PathOf(file);

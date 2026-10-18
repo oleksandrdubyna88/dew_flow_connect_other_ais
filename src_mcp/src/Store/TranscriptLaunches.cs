@@ -3,8 +3,12 @@ using System.Text.Json;
 
 namespace CoaiMcp.Store;
 
-/// <summary>What a parsed meta file said. Every string is an id or has passed its shape (S4-18, G11); <c>description</c> is never read.</summary>
-internal sealed record MetaFacts(string ToolUseId, string AgentType, string Alias, string ParentAgentId)
+/// <summary>
+/// What a parsed meta file said. Every string has passed its shape (S4-18, G11; the ids through <see cref="TranscriptShapes.Id"/>);
+/// <c>description</c> is never read. <see cref="ParentUnknown"/> is a <c>parentAgentId</c> that was written but refused by the shape:
+/// the parent is then unknown, never read as <c>main</c>.
+/// </summary>
+internal sealed record MetaFacts(string ToolUseId, string AgentType, string Alias, string ParentAgentId, bool ParentUnknown = false)
 {
     public static MetaFacts Empty { get; } = new(string.Empty, string.Empty, string.Empty, string.Empty);
 }
@@ -150,7 +154,9 @@ internal sealed class TranscriptLaunches
     private static bool Contradicts(MetaFacts meta, FileRead? holder) =>
         holder is not null && meta.ParentAgentId.Length > 0 && meta.ParentAgentId != holder.Key;
 
-    private static string NamedParent(MetaFacts meta) => meta.ParentAgentId.Length > 0 ? meta.ParentAgentId : "main";
+    /// <summary>The meta's own word: its <c>parentAgentId</c>; none written means main; one written off the id shape is unknown (<c>""</c>).</summary>
+    private static string NamedParent(MetaFacts meta) =>
+        meta.ParentUnknown ? string.Empty : meta.ParentAgentId.Length > 0 ? meta.ParentAgentId : "main";
 
     private static ObservedAgent Describe(Launched launch) => new(
         launch.Key, launch.ParentKey, launch.Meta.ToolUseId, launch.Meta.AgentType, launch.Meta.Alias, launch.FirstStamp, launch.CalledUtc, launch.Present);
@@ -228,10 +234,12 @@ internal sealed class TranscriptLaunches
         var model = JsonText.StringProperty(root, "model");
         var type = TranscriptShapes.Admit(JsonText.StringProperty(root, "agentType"), TranscriptShapes.IsAgentType);
         var alias = TranscriptShapes.Admit(model, TranscriptShapes.IsAlias);
-        tally.ValuesOffShape += type.OffShape + alias.OffShape;
+        var toolUseId = TranscriptShapes.Admit(JsonText.StringProperty(root, "toolUseId"), TranscriptShapes.IsId);
+        var parent = TranscriptShapes.Admit(JsonText.StringProperty(root, "parentAgentId"), TranscriptShapes.IsId);
+        tally.ValuesOffShape += type.OffShape + alias.OffShape + toolUseId.OffShape + parent.OffShape;
         tally.MetasWithoutModel += model.Length == 0 ? 1 : 0;
 
-        return new MetaFacts(JsonText.StringProperty(root, "toolUseId"), type.Value, alias.Value, JsonText.StringProperty(root, "parentAgentId"));
+        return new MetaFacts(toolUseId.Value, type.Value, alias.Value, parent.Value, parent.OffShape > 0);
     }
 
     /// <summary>A meta read once and bounded by what is READ: shared, at most 64 KiB, an object. A failure to read is as good as a torn file.</summary>

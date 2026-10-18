@@ -86,7 +86,7 @@ internal static class TranscriptLine
     private static LineFacts FactsOf(JsonElement root)
     {
         var header = new LineFacts(
-            KindOf(root), StampOf(root), JsonText.StringProperty(root, "agentId"), JsonText.Flag(root, "isSidechain"),
+            KindOf(root), StampOf(root), IdOf(root, "agentId"), JsonText.Flag(root, "isSidechain"),
             string.Empty, MessageValues.None, new TokenUsage(0, 0, 0, 0), false, []);
         var message = JsonText.Child(root, "message");
 
@@ -104,13 +104,17 @@ internal static class TranscriptLine
 
         return header with
         {
-            MessageId = JsonText.StringProperty(message, "id"),
+            MessageId = IdOf(message, "id"),
             Values = ValuesOf(root, message),
             Tokens = TokensOf(usage),
             UsageSeen = usage.ValueKind == JsonValueKind.Object,
             Blocks = Blocks(message, CallBlock),
         };
     }
+
+    /// <summary>An id the line carries, kept only on <see cref="TranscriptShapes.Id"/>; off the shape it reads as absent, so the line is
+    /// treated as one with no such id (an assistant line with no usable message id is <c>inconsistent transcript</c>, a block with none is skipped).</summary>
+    private static string IdOf(JsonElement element, string name) => TranscriptShapes.Admit(JsonText.StringProperty(element, name), TranscriptShapes.IsId).Value;
 
     private static LineKind KindOf(JsonElement root)
     {
@@ -158,7 +162,7 @@ internal static class TranscriptLine
     /// <summary>A <c>tool_use</c> of the <c>Agent</c>/<c>Task</c> tool or of a write tool with a path; every other block is skipped.</summary>
     private static IEnumerable<BlockFacts> CallBlock(JsonElement block)
     {
-        var id = JsonText.StringProperty(block, "id");
+        var id = IdOf(block, "id");
 
         return id.Length > 0 && IsType(block, "tool_use") ? CallOf(id, JsonText.StringProperty(block, "name"), JsonText.Child(block, "input")) : [];
     }
@@ -175,7 +179,7 @@ internal static class TranscriptLine
 
     private static IEnumerable<BlockFacts> ResultBlock(JsonElement block)
     {
-        var id = JsonText.StringProperty(block, "tool_use_id");
+        var id = IdOf(block, "tool_use_id");
 
         return IsType(block, "tool_result") && id.Length > 0 ? [new BlockFacts(BlockKind.Result, id, string.Empty, string.Empty, JsonText.Flag(block, "is_error"))] : [];
     }

@@ -558,4 +558,50 @@ public sealed class TheCallerTranscriptSaysWhatItDidNotSeeTests
         session.Messages.Should().NotContain(m => m.MessageId == lone.MessageId);
         Reasons(session).Should().Be("partial: inconsistent transcript");
     }
+
+    // ---- added after the E3 code gate (finding 15): an id is kept only on its shape ---------------------------------------
+
+    private const string Sentence = "a sentence an id never is";
+
+    /// <summary>Every member of a session that holds an id read from a transcript or a meta.</summary>
+    private static IEnumerable<string> Ids(ObservedSession session) =>
+    [
+        .. session.Agents.SelectMany(a => new[] { a.Key, a.ParentKey, a.ToolUseId }),
+        .. session.Messages.SelectMany(m => new[] { m.AgentKey, m.MessageId }),
+        .. session.Writes.Select(w => w.AgentKey),
+        .. session.UnobservedLaunches.SelectMany(u => new[] { u.ParentKey, u.ToolUseId }),
+    ];
+
+    [Fact]
+    public void A_line_id_off_its_shape_is_never_kept()
+    {
+        using var dir = TempDir.For(Prefix);
+        var sidechain = Read("message-as-several-lines", dir, f => f.SetSidechain(TranscriptFile.Main, 1, true, Sentence));
+        using var other = TempDir.For(Prefix);
+        var fixture = CallerTranscriptFixture.Materialise("message-as-several-lines", other);
+        var before = fixture.Read();
+        fixture.SetLineKey(TranscriptFile.Main, 1, "message.id", Sentence);
+        var message = fixture.Read();
+
+        Ids(sidechain).Concat(Ids(message)).Should().NotContain(id => id.Contains("sentence", StringComparison.Ordinal), "an agentId or a message.id that is a sentence is text, not an id");
+        Reasons(sidechain).Should().Be("partial: sidechain without agent id", "the sidechain line names no agent the reader can keep");
+        message.Messages.Should().HaveCount(before.Messages.Count - 1, "a line with no usable message id cannot be placed or de-duplicated");
+        Reasons(message).Should().Contain(ObservationReasons.InconsistentTranscript);
+    }
+
+    [Fact]
+    public void A_meta_id_off_its_shape_is_never_kept_and_its_parent_is_unknown_not_main()
+    {
+        using var dir = TempDir.For(Prefix);
+        var session = Read("nested-agents", dir, f =>
+        {
+            f.SetMetaKey(C07Depth1, "toolUseId", Sentence);
+            f.SetMetaKey(C07Depth2, "parentAgentId", Sentence);
+            f.DeleteAgentFile(C07Depth1); // the depth-2 launch is no longer joined, so the meta's own word is all there is
+        });
+
+        Ids(session).Should().NotContain(id => id.Contains("sentence", StringComparison.Ordinal), "a toolUseId or a parentAgentId that is a sentence is text, not an id");
+        AgentOf(session, C07Depth2).ParentKey.Should().BeEmpty("a parent the meta named off the shape is unknown; reading it as main would be a guess");
+        session.Diagnostics.ValuesOffShape.Should().BeGreaterThanOrEqualTo(2, "both refused values are counted");
+    }
 }

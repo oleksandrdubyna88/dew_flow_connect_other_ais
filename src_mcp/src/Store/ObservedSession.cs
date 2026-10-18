@@ -186,7 +186,17 @@ internal static partial class TranscriptShapes
     [GeneratedRegex(@"^[A-Z]?[a-z0-9][a-z0-9:._-]{0,62}\z", RegexOptions.CultureInvariant)]
     public static partial Regex AgentType();
 
+    /// <summary>
+    /// An id a transcript or a meta carries — <c>msg_…</c>, <c>toolu_…</c>, a hex agent id: one token of letters, digits, <c>_</c> and
+    /// <c>-</c>, at most 128 characters. It bounds what an id can carry to one such token, so a sentence, a path or a prompt read where an
+    /// id belongs is refused (plan §3.4; E3 code gate, finding 15).
+    /// </summary>
+    [GeneratedRegex(@"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}\z", RegexOptions.CultureInvariant)]
+    public static partial Regex Id();
+
     public static bool IsModelRef(string value) => ModelRef().IsMatch(value);
+
+    public static bool IsId(string value) => Id().IsMatch(value);
 
     public static bool IsAlias(string value) => Alias().IsMatch(value);
 

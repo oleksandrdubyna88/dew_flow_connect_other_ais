@@ -60,6 +60,7 @@ public sealed class NoTextLeavesTheCallerReaderTests
         [nameof(CallerTranscriptFixture.SetSidechain)] = new(C02, f => f.SetSidechain(TranscriptFile.Main, 1, true)),
         [nameof(CallerTranscriptFixture.SetStamp)] = new(C02, f => f.SetStamp(TranscriptFile.Agent(C02Agent), 13, f.StampOf(TranscriptFile.Agent(C02Agent), 14) - TimeSpan.FromHours(2.5))),
         [nameof(CallerTranscriptFixture.RemoveLineKey)] = new(C02, f => f.RemoveLineKey(TranscriptFile.Main, 1, "timestamp")),
+        [nameof(CallerTranscriptFixture.SetLineKey)] = new(C02, f => f.SetLineKey(TranscriptFile.Main, 1, "message.id", "a sentence an id never is")),
         [nameof(CallerTranscriptFixture.PrependLine)] = new(C02, f => f.PrependLine(TranscriptFile.Main, "{\"type\":\"ai-title\"}")),
         [nameof(CallerTranscriptFixture.PutMultibyte)] = new(C14, f => f.PutMultibyte(TranscriptFile.Agent(C14Agent), 1)),
         [nameof(CallerTranscriptFixture.PutLongLine)] = new(C14, f => f.PutLongLine(TranscriptFile.Agent(C14Agent), 88, 64 * 1024), MaxLineBytes: 32 * 1024),
