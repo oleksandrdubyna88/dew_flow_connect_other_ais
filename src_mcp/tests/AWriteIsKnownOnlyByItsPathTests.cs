@@ -377,4 +377,18 @@ public sealed class AWriteIsKnownOnlyByItsPathTests
     [InlineData("repo/a.cs", false, false)]
     public void Only_a_drive_rooted_or_single_slash_rooted_path_is_local(string path, bool windows, bool local) =>
         LocalPaths.IsLocalRooted(path, windows).Should().Be(local, path);
+
+    [Theory]
+    [InlineData("/net/host/repo/a.cs", false, false)]
+    [InlineData("/net", false, false)]
+    [InlineData("/Network/Servers/host/repo/a.cs", true, false)]
+    [InlineData("/network/servers/host/a.cs", true, false)]
+    [InlineData("/NET/host/a.cs", true, false)]
+    [InlineData("/NET/host/a.cs", false, true)]
+    [InlineData("/network/a.cs", false, true)]
+    [InlineData("/netbox/repo/a.cs", false, true)]
+    [InlineData("/Volumes/disk/repo/a.cs", true, true)]
+    [InlineData("/home/me/repo/a.cs", false, true)]
+    public void An_automount_root_is_not_local_and_a_mounted_volume_is(string path, bool foldCase, bool local) =>
+        LocalPaths.IsLocalRooted(path, windows: false, foldCase).Should().Be(local, $"{path} (case folded: {foldCase}) — /net and /Network mount a host the path names on first touch");
 }
