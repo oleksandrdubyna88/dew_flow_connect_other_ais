@@ -1,4 +1,5 @@
 using Xunit;
+using CoaiMcp.Runners.Platform;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Worktrees;
 using FluentAssertions;
@@ -378,7 +379,7 @@ public sealed class WorktreeManagerTests : IAsyncLifetime
         {
             treePath = lease.Path;
             var file = Path.Combine(treePath, relative.Replace('/', '\\'));
-            file.Length.Should().BeGreaterThan(259, "the fixture is only worth something past the limit");
+            file.Length.Should().BeGreaterThan(WindowsPathLimits.FileUnits, "the fixture is only worth something past the limit");
             File.Exists(file).Should().BeTrue("the tree must hold the file git was asked to check out");
             (await StatusOf(treePath)).Should().BeEmpty("a clean tree must not read as dirty (git status on a long path)");
         }

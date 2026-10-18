@@ -1,3 +1,5 @@
+using CoaiMcp.Runners.Platform;
+
 namespace CoaiMcp.Runners.Vibe;
 
 /// <summary>
@@ -23,8 +25,11 @@ namespace CoaiMcp.Runners.Vibe;
 /// <param name="DeepestChild">The characters Vibe writes below its home, wrapper included.</param>
 public sealed record VibePathBudget(int FileLimit, int DeepestChild)
 {
-    /// <summary>Windows with <c>LongPathsEnabled = 0</c>, Vibe 2.26.1: probed 259 and 156 (§27).</summary>
-    public static VibePathBudget Windows { get; } = new(259, 156);
+    /// <summary>
+    /// Windows with <c>LongPathsEnabled = 0</c>, Vibe 2.26.1: probed 259 (<see cref="WindowsPathLimits.FileUnits"/>, the one
+    /// constant) and 156 (§27).
+    /// </summary>
+    public static VibePathBudget Windows { get; } = new(WindowsPathLimits.FileUnits, 156);
 
     /// <summary>No budget: nothing is refused. A test that is about something else, and every platform but Windows.</summary>
     public static VibePathBudget None { get; } = new(0, 0);

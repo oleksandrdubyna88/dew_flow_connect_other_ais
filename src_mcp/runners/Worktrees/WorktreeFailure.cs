@@ -1,3 +1,5 @@
+using CoaiMcp.Runners.Platform;
+
 namespace CoaiMcp.Runners.Worktrees;
 
 /// <summary>
@@ -11,23 +13,10 @@ namespace CoaiMcp.Runners.Worktrees;
 /// corrupt repository (probes P2, P3, P11 of <c>research/PLAN_review_trees_survive_long_paths.md</c>).</para>
 /// <para>The reason is the text after the LAST <c>": "</c> on the line: git's reasons hold none, and a
 /// Windows file name cannot hold a colon. Lengths are <see cref="string.Length"/> — UTF-16 units, which is
-/// what Windows counts (P5), never bytes.</para>
+/// what Windows counts (P5), never bytes. The limits themselves are <see cref="WindowsPathLimits"/>'s.</para>
 /// </remarks>
 internal static class WorktreeFailure
 {
-    /// <summary>
-    /// The longest absolute FILE path Windows accepts without long-path support: 259 UTF-16 units were
-    /// created, 260 were refused (probe P1, P2).
-    /// </summary>
-    internal const int WindowsMaxPathUnits = 259;
-
-    /// <summary>
-    /// The longest absolute FOLDER path Windows accepts without long-path support — 12 units short of a
-    /// file's: git for Windows made a 247-unit folder and refused 248 (probed 2026-10-17, git 2.55), the
-    /// same 247 <c>research/PLAN_vibe_live_round_fixes.md</c> measured with Python.
-    /// </summary>
-    internal const int WindowsMaxFolderUnits = 247;
-
     private const string TooLong = "Filename too long";
 
     private static readonly (string Prefix, bool IsFolder)[] PathLines =
@@ -72,7 +61,7 @@ internal static class WorktreeFailure
     {
         public string Kind => IsFolder ? "folder" : "file";
 
-        public int WindowsLimit => IsFolder ? WindowsMaxFolderUnits : WindowsMaxPathUnits;
+        public int WindowsLimit => IsFolder ? WindowsPathLimits.FolderUnits : WindowsPathLimits.FileUnits;
 
         /// <summary>The record for a stderr line, or none when the line names no path.</summary>
         public static IEnumerable<Unwritable> From(string line) =>

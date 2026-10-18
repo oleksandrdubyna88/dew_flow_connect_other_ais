@@ -6,7 +6,7 @@ namespace CoaiMcp.Runners.Worktrees;
 /// </summary>
 /// <remarks>
 /// <para>On Windows git refuses to create, read or remove a file whose absolute path passes 259
-/// UTF-16 units unless <c>core.longpaths</c> is on, and it is on nowhere by default. A round tree's root
+/// UTF-16 units (<see cref="Platform.WindowsPathLimits.FileUnits"/>) unless <c>core.longpaths</c> is on, and it is on nowhere by default. A round tree's root
 /// is already 82 characters, so a tracked path of only 177 made <c>review_code</c> fail with "Could not
 /// reset index file", which names the index while the cause is the path. Nothing about it is
 /// confined to the checkout: <c>status</c> reads a clean tree as dirty, <c>worktree remove</c> drops the

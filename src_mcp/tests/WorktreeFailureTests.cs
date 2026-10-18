@@ -1,5 +1,6 @@
 using System.Text;
 using Xunit;
+using CoaiMcp.Runners.Platform;
 using CoaiMcp.Runners.Worktrees;
 using FluentAssertions;
 
@@ -62,7 +63,7 @@ public sealed class WorktreeFailureTests
 
         if (OperatingSystem.IsWindows())
         {
-            said.Should().Contain(WorktreeFailure.WindowsMaxPathUnits.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            said.Should().Contain(WindowsPathLimits.FileUnits.ToString(System.Globalization.CultureInfo.InvariantCulture));
             said.Should().Contain("core.longpaths=true", "the reader must know coai already asked for long paths");
         }
         else
@@ -92,18 +93,6 @@ public sealed class WorktreeFailureTests
         {
             said.Should().NotContain("247").And.NotContain("259");
         }
-    }
-
-    [Fact]
-    public void TheWindowsLimitIsOneNamedConstant_259()
-    {
-        WorktreeFailure.WindowsMaxPathUnits.Should().Be(259, "P1 accepted 259 units and P2 refused 260");
-    }
-
-    [Fact]
-    public void TheWindowsFolderLimitIsOneNamedConstant_247()
-    {
-        WorktreeFailure.WindowsMaxFolderUnits.Should().Be(247, "git made a 247-unit folder and refused 248");
     }
 
     /// <summary>A name longer than NTFS allows is not cured by a shorter root, so no advice about a root.</summary>
