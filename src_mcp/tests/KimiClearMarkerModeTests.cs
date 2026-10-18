@@ -224,6 +224,7 @@ public sealed class KimiClearMarkerModeTests : IDisposable
     [Fact]
     public async Task WhileALaunchHoldsTheSignInsGate_TheMarkerIsKept_AndTheModeExits74()
     {
+        using var standIn = WindowsStandIn.Begin();
         using var rooted = KimiCredentialsLock.RootFor(Root);
         var signIn = SignIn();
         KimiSurvivorMarker.Write(KimiCredentialsLock.MarkerPathFor(signIn), RunningFor(signIn, 424242, Member(424243)));
@@ -242,6 +243,7 @@ public sealed class KimiClearMarkerModeTests : IDisposable
     [Fact]
     public async Task WithTheGateFree_TheMarkerIsCleared_AndTheGateIsGivenBack()
     {
+        using var standIn = WindowsStandIn.Begin();
         using var rooted = KimiCredentialsLock.RootFor(Root);
         var signIn = SignIn();
         var marker = KimiCredentialsLock.MarkerPathFor(signIn);
