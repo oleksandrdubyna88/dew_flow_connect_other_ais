@@ -29,7 +29,16 @@ public sealed class KimiSurvivorMarkerReportTests : IDisposable
         _person.Dispose();
     }
 
-    private string MarkerPath => KimiCredentialsLock.MarkerPathFor(_person.Credentials);
+    /// <summary>This sign-in's marker file. macOS has no folder-identity rule (a Kimi launch is refused there, D18), so no marker is ever keyed and these tests skip, as the lock's own do.</summary>
+    private string MarkerPath
+    {
+        get
+        {
+            Assert.SkipWhen(OperatingSystem.IsMacOS(), "macOS has no folder identity, so no sign-in has a marker file to report");
+
+            return KimiCredentialsLock.MarkerPathFor(_person.Credentials);
+        }
+    }
 
     private KimiRuntime Runtime() => new("kimi", HostKind.Windows, new KimiSeams(_person.PlacesAt, () => ("coai-mcp", [])));
 
