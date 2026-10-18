@@ -48,18 +48,17 @@ export const KIMI_RUNTIME_SINCE = '0.57.0';
  * todo/PLAN_kimi_and_vibe_on_linux.md). `RUNTIME_SINCE` answers "does this server know the runtime"; this answers "does it
  * run it on THIS host", and they are different questions: a 0.57.0 server on WSL knows `vibe` and still refuses the row at
  * launch with the D18 sentence (DL14). The release that carries E2 and E3 is the next `src_mcp` minor after the newest
- * released one (0.57.0 when this was written, `.release-please-manifest.json`), so 0.58.0. <b>Whoever cuts the release keeps
+ * released one (0.58.0 when this was written, `.release-please-manifest.json`), so 0.59.0. <b>Whoever cuts the release keeps
  * it level with the tag</b>; `runtimeSinceIsAhead.test.ts` holds this table to the same guard as `RUNTIME_SINCE`.
  */
-export const VIBE_ON_LINUX_SINCE = '0.58.0';
+export const VIBE_ON_LINUX_SINCE = '0.59.0';
 
 /**
  * The first `coai-mcp` that RUNS a Kimi row on a Linux host — on WSL2 only, in that release (DL1 of
- * todo/PLAN_kimi_and_vibe_on_linux.md, E6). Kimi follows Vibe by one minor (DL14): Vibe is 0.58.0 (E1–E3), and the release that
- * carries E4–E6 is <b>0.60.0</b> at the earliest — set by E6 as that plan says, and kept level with the tag by whoever
- * cuts the release. The unreleased Kimi-consultant branch (`feat/kimi-consultant`) sets `KIMI_CONSULTANT_SINCE` to 0.58.0 too:
- * whichever of the two merges SECOND bumps its constant to the next minor (DL14). 0.58.0 was released from main without either, so
- * Vibe-on-Linux ships in 0.59.0 and Kimi-on-Linux in 0.60.0 at the earliest — one minor after Vibe's. `runtimeSinceIsAhead.test.ts` holds this table to the same guard as `RUNTIME_SINCE`.
+ * todo/PLAN_kimi_and_vibe_on_linux.md, E6). Kimi follows Vibe by one minor (DL14): 0.58.0 was released from main without either, so
+ * Vibe-on-Linux ships in 0.59.0 and Kimi-on-Linux in <b>0.60.0</b> at the earliest. Whoever cuts the release keeps it level with the
+ * tag, and whichever of the two merges SECOND bumps its constant to the next minor (DL14). `runtimeSinceIsAhead.test.ts` holds this
+ * table to the same guard as `RUNTIME_SINCE`.
  */
 export const KIMI_ON_LINUX_SINCE = '0.60.0';
 
@@ -114,8 +113,11 @@ function sinceMet(since: string | undefined, installedServerVersion: string): bo
  * runtime but is older than `ON_LINUX_SINCE` is told to update; a native Linux host and WSL1 are told they are refused, at
  * any server version, because an update would not change that ({@link hostNote}). A server that does not know the runtime
  * at all has already said so — never two notes for one row.</p>
+ *
+ * <p>The host is REQUIRED. It used to default to Windows, so a caller that forgot it gave a WSL2 or native-Linux card no host
+ * note at all — silently the Windows answer. A missing argument is a compile error now.</p>
  */
-export function runtimeSkewNote(installedServerVersion: string, vendors: readonly ApiRow[], host: HostKind = 'windows'): string {
+export function runtimeSkewNote(installedServerVersion: string, vendors: readonly ApiRow[], host: HostKind): string {
   const api = apiRuntimeSkewNote(installedServerVersion, vendors);
   const switchedOn = vendors.filter((vendor) => vendor.enabled && vendor.runtime !== 'api');
   const held = switchedOn.filter((vendor) => !runtimeOnServer(vendor.runtime, installedServerVersion));
@@ -134,7 +136,7 @@ export function runtimeSkewNote(installedServerVersion: string, vendors: readonl
  * kind, and the arm is what a person is told to DO, so it must be something that works:
  * <ul>
  *   <li><b>wsl2</b>: runs the row from `ON_LINUX_SINCE`, so a server older than that is told to update;</li>
- *   <li><b>linux</b>: refused at ANY server version — 0.58.0 still refuses a native host — so never "update coai-mcp";</li>
+ *   <li><b>linux</b>: refused at ANY server version — 0.59.0 still refuses a native host — so never "update coai-mcp";</li>
  *   <li><b>wsl1</b>: refused at any version too; what helps is moving the distro to WSL2;</li>
  *   <li><b>windows</b> and <b>darwin</b>: nothing here (Windows runs it from the runtime's own release; a Mac's refusal is
  *       the server's own sentence, and updating would not change it).</li>

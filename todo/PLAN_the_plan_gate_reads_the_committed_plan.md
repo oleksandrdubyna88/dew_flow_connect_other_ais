@@ -1,6 +1,6 @@
 # PLAN — The plan gate reads the committed plan itself
 
-> Status: **E1 coded and tested on the branch `feat/plan-gate-reads-committed-plan`, 2026-10-16, not merged; E2 not started — the plan gate `proceed`ed and the plan was split into two epics on 2026-10-15
+> Status: **E1 merged as #837 on `main`, 2026-10-16; E2 coded and tested on the branch `feat/plan-gate-e2`, 2026-10-16, not merged — the plan gate `proceed`ed and the plan was split into two epics on 2026-10-15
 > (§ Epics), after the question consultant was asked.** Scope: `review_plan` (`src_mcp/src/Tools.cs`,
 > `PanelService.ReviewPlanAsync`), one widening of `GitHistory`, a new committed-plan reader, the round record (session
 > file + one `rounds` column), the plan prompt's end line, and one display line in the extension's rounds log.
@@ -231,25 +231,30 @@ Cornerstones: 1 of 1 — E1.S2
 ### E2 — Expose plan provenance in history and the rounds log (§6 steps 4–5) · S · depends on E1 (the record it projects and shows)
 
 - **Stories.** [PLAN_the_plan_gate_reads_the_committed_plan_E2.md](PLAN_the_plan_gate_reads_the_committed_plan_E2.md) — three
-  stories, written by Opus 2026-10-15 together with E1's; no cornerstone.
+  stories, written by Opus 2026-10-15 together with E1's and revised 2026-10-16 against `main` once E1 had merged (#837);
+  no cornerstone.
 - **Goal.** §2 item 4's second half: `--log` and the extension's rounds log show what each plan round reviewed; a database
   from before the step and a session file from before E1 read as *not recorded*, never as empty.
 - **Scope.** The schema step (D11) — `ALTER TABLE rounds ADD COLUMN plan_source TEXT NOT NULL DEFAULT ''` appended after
-  `TheRoundsKey` (`Schema.cs:603-616`), **its number taken at merge** (step 22 if this lands before the size and authors
-  plans' steps, later otherwise; whichever PR merges second renumbers); the projection write in `RecordRoundRow`
-  (`RoundsDb.cs:841-867`) from `record.PlanSource`, `''` when null; `LoggedRound` gains a trailing `PlanSource? PlanSource
-  = null` (`RoundsQuery.cs:27`) read only under `HasColumn(db, "rounds", "plan_source")` (`RoundsQuery.cs:895`); `--log`
-  emits it; `rounds.ts` gains the optional `planSource` type and `roundsLog.ts` one detail line (D16), nothing when the
+  `TheRoundsSize` (`Schema.cs:37`) as **step 23** (array index 22): the round-size plan's step 22 merged first (#829), and the
+  authors plan's schema step moved to 24. The number is still checked against `main` at merge — if another step landed
+  first, this PR renumbers; the projection write in `RecordRoundRow` (`RoundsDb.cs:842-922`) from `record.PlanSource`,
+  `''` when null — the `round_key` precedent, rewritten from the record on every re-record; `LoggedRound` gains an **init
+  property** `PlanSource? PlanSource { get; init; }` (the `Size` precedent, `RoundsQuery.cs:113` — not a trailing positional
+  parameter, which amends D11), read by `RoundPlanSources.Attach` chained after `RoundChangesLog.Attach` and only under
+  `HasColumn(db, "rounds", "plan_source")` (`RoundsQuery.cs:909`), the ids bound through a helper shared with
+  `RoundChangesLog`; `--log` emits it; `rounds.ts` gains the optional `planSource` type and `roundsLog.ts` one detail line (D16), nothing when the
   field is absent; `research/module_extension.md` and `architecture.md` § the `--log` seam (one more field, same rule).
   **No backfill, decided:** a plan round completed between E1's merge and E2's carries `PlanSource` in its session file
   and in `status`, and reads `''` in the database — *not recorded*, by the absent ≠ empty rule D10 already states. Rounds
   have no startup re-projection today (consultations do, `PanelService.cs:159`); building the first one for the rounds
   of one dev window between two merges is machinery larger than the gap, and the session file keeps the fact.
-- **Stories list (T/B).** T13's `--log` row and "a DB without the column reads `null`" assertions; T17; two break-its of
-  its own, named here because none of B1–B9 touches E2 code: **B10** drop the `HasColumn` guard → T13's step-21 database
-  read goes red; **B11** render the line for an absent `planSource` → T17's "shows nothing" case goes red.
-- **Done when.** A step-21 database opens at the new step and a read-only `--log` on a step-21 file still answers; a round
+- **Stories list (T/B).** T13's `--log` row and "a DB without the column reads `null`" assertions; T17; three break-its of
+  its own, named here because none of B1–B9 touches E2 code: **B10** drop the `HasColumn` guard → T13's step-22 database
+  read goes red; **B11** render the line for an absent `planSource` → T17's "shows nothing" case goes red; **B16** bind
+  `''` always in the projection write → the round trip of a committed plan round goes red (story E2.S1).
+- **Done when.** A step-22 database opens at step 23 and a read-only `--log` on a step-22 file still answers; a round
   recorded before the step reads *not recorded* in `--log`; a round recorded after it shows commit, path, blob and bytes;
-  `bundledPage.test.ts` shows the line for a round with `planSource` and nothing without; B10 and B11 observed red then
+  `bundledPage.test.ts` shows the line for a round with `planSource` and nothing without; B10, B11 and B16 observed red then
   green; `CoaiMcp.Tests.exe` and `npm test` green; the step number checked against `main` at merge; both documents of this
   plan promoted together.

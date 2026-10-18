@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.78.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.77.0...extension-v0.78.0) (2026-10-16)
+
+
+### Features
+
+* **plan-gate:** the round history, --log and the Rounds page say what each plan round reviewed ([#841](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/841)) ([095ebd6](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/095ebd6d4ef843d3b1088b5eae275a8fcfd6539b))
+
 ## [0.77.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.76.0...extension-v0.77.0) (2026-10-16)
 
 

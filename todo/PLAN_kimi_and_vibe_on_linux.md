@@ -86,7 +86,7 @@ Numbered DL1–DL14 so they never collide with the parent plan's D-numbers. Ever
   and the Windows→WSL bridge is another plan's. macOS stays refused (nothing measured there). **Native Linux is refused for now —
   decided by the plan gate (F10), which closes Q1.** The code is the same, and WSL2 is a real Linux kernel, but every cell is WSL2's,
   and a desktop Linux differs where it matters (a keyring Vibe may use instead of `.env`, other filesystems, other distributions'
-  packaging). So 0.58.0 admits `HostKind.Wsl` ONLY; `HostKind.Linux` keeps a refusal whose sentence is new: *"Vibe runs on WSL2 only
+  packaging). So 0.59.0 admits `HostKind.Wsl` ONLY; `HostKind.Linux` keeps a refusal whose sentence is new: *"Vibe runs on WSL2 only
   for now — it is measured on WSL2 and not yet on a native Linux host (DL1 of todo/PLAN_kimi_and_vibe_on_linux.md)"*. It lifts when
   at least one native-Linux run of L-V9 is recorded (§5, L-V10). The `linux` limitation rows say exactly that; the `wsl` rows name the
   WSL2 cells. The host refusal becomes per runtime and per stage: Vibe admits WSL from E2, Kimi from E6 (WSL only, by the same rule — the same
@@ -230,7 +230,7 @@ Numbered DL1–DL14 so they never collide with the parent plan's D-numbers. Ever
   filesystem exception: `VibeHome` exists because hooks, MCP servers and agents in a home change what runs (`VibeHome.cs:12-24`), and
   the home is judged before every launch, the version probe included and again after it (`AgainstAsync`, `VibeLaunch.cs:201-211`;
   `AfterTheVersion`, `:214-224`).
-  A second dotenv the reviewed repository can supply would be that boundary with a hole in it — so 0.58.0 is not tagged until L-V8 is
+  A second dotenv the reviewed repository can supply would be that boundary with a hole in it — so 0.59.0 is not tagged until L-V8 is
   recorded (E3's done-when), whatever E2's tests say.
 
 - **DL3 — The Vibe home manifest is per platform.** The JSON already carries `"platform": "win32"`
@@ -250,9 +250,9 @@ Numbered DL1–DL14 so they never collide with the parent plan's D-numbers. Ever
   second 2.26.1 in `versions` turns a WINDOWS 2.26.1 launch into an unmeasured one — measured: 4 `*Vibe*` tests red, a tampered
   Windows plugin file admitted among them (RESULTS_vibe_confinement §30.6). E2 moves it with `node scripts/vibe-home-manifest.mjs
   --unstage linux` in the same change that makes `VibeHomeEntry` read `platform`. **If two fresh-home runs disagree on the hashes (L-V7)**, there is no `linux` entry and Linux is always
-  warn-and-run; the plan records it as the deviation. **Rollback:** going back to 0.57.x restores today's behaviour exactly — it
+  warn-and-run; the plan records it as the deviation. **Rollback:** going back to 0.58.x restores today's behaviour exactly — it
   reads only `version` and the pins, so on Windows the same entry is enforced, and on WSL D18 refuses before any home is judged. A
-  WSL home 0.58.0 left behind (with its `.env` link) is never launched on by 0.57.x, and its sweeps unlink a file link by its own
+  WSL home 0.59.0 left behind (with its `.env` link) is never launched on by 0.58.x, and its sweeps unlink a file link by its own
   name already (`GitScratch.Unlink`, `GitScratch.cs:116-133`, shipped in 0.54.0).
 
 - **DL4 — No Linux path budget.** `VibePathBudget.ForThisProcess` is already `None` off Windows (`src_mcp/runners/Vibe/VibePathBudget.cs:33`);
@@ -310,6 +310,18 @@ Numbered DL1–DL14 so they never collide with the parent plan's D-numbers. Ever
   line at `/data/win`, a `virtiofs` line, an octal-escaped mount point, a super-option NOT decoded, stacked mounts (the last line
   wins), a short line skipped, a table without `/`. The sentence
   still names `/mnt/<letter>/` as the example; the rule is the mount type. On a native Linux without drvfs the rule is inert (Q1).
+  **Network filesystems — decided 2026-10-17 as a stated assumption, pending the owner (Q7)** (E5's Fable security judgement,
+  finding 3; question consultant 3607576…, which split: one row "warn and admit", the other "refuse with a cure"). The DL6 argument
+  holds word for word for a sign-in folder on `nfs`/`nfs4`/`cifs`/`smb3`/`fuse.sshfs`/`ceph`/`glusterfs`: a `kimi` on ANOTHER
+  machine sharing that home refreshes the same rotating token, and no lock on this machine can see it. Windows already refuses
+  network and roaming locations for the same folder (D19). The repository's own precedent for the same choice is CredsForDevs'
+  `DataDirCheck` (refuse a network data folder by default, with an explicit override). So, in E6: `MountEntry.IsNetwork` (the
+  types above) refused with its own sentence — *"your Kimi sign-in folder is on network storage (<type>); a Kimi on another machine
+  that shares this home can refresh the same sign-in and sign you out, and coai cannot see it. Point `KIMI_CODE_HOME` at a folder on
+  this machine's own disk (not under the network home) and sign in there once with `kimi login`, or set
+  `coai.kimiAllowNetworkSignIn` if you never run Kimi on another machine"* — and an explicit, default-off override setting that
+  turns the refusal into a one-line warning on the card. The cure is a SEPARATE local sign-in, never a copy of the rotating token
+  (D19). The owner's own WSL2 home is ext4 and unaffected either way.
   It is judged on the real path (`Resolved`, `Junctions.cs:179`). coai never `chmod`s the target (Kimi keeps it `0700`, RESULTS_kimi
   §11). **Confirmed by L-K2 (RESULTS_kimi_confinement §29):** signed in 8 of 8 through the symlink; the one refresh wrote
   `<slot>.json.tmp.<pid>.<rand>` INSIDE the person's folder and renamed it over the slot (new inode, same name, size and mode `600`, no
@@ -543,6 +555,20 @@ Numbered DL1–DL14 so they never collide with the parent plan's D-numbers. Ever
   under ANOTHER file name, or hosted by an interpreter whose `exe` is not `kimi`, is not recognised — a shell wrapper that ends in
   the normal `kimi` binary is. `coai-mcp` in the parent chain is matched the same way, by the `exe` basename (`coai-mcp`); its `comm` was not
   measured and is not relied on. The parent-chain rule itself held: the agent's chain reached the driver.
+  **Re-decided 2026-10-17 — a hidden `exe` falls back to `argv[0]`, measured on the owner's WSL** (question consultant a2fa7b43; A2's
+  report). Linux reads `/proc/<pid>/exe` under PTRACE_MODE_READ_FSCREDS, so a SAME-uid process can still hide it: one with extra
+  capabilities, or one that is non-dumpable. The ubuntu CI runner has `systemd --user` hiding it (CapPrm 0x800000000), and so does
+  the owner's WSL2 (read-only check 2026-10-17): `systemd` (CapPrm 0x800000000) AND `(sd-pam)` (CapPrm 0 — non-dumpable, so a
+  capability exception alone would not admit it). Under the rule above every Kimi launch on that machine would be Busy — not a
+  usable product, and "refuse only what cannot be made safe" (owner) says the check must be precise, not blanket. Both processes'
+  `/proc/<pid>/cmdline` stay readable (same check). So the identity is read in this order, per same-uid process: (1) the `exe`
+  basename (with the ` (deleted)` strip); (2) when `exe` is denied, the basename of `argv[0]` from `cmdline` (and `comm` — `kimi`
+  in either is Kimi); (3) only when BOTH `exe` and `cmdline` are unreadable is the process *unreadable* → Busy, naming the pid and
+  what could not be read (the consultant's actionable diagnostic). A process gone between the listing and the read (ESRCH/ENOENT) is
+  skipped. Residual, stated in the code: a non-dumpable `kimi` started under another `argv[0]` is not recognised — the same boundary
+  as "a `kimi` started under another file name" above; `argv[0]` is the process's own claim, and the threat here is the person's own
+  `kimi`, not a process hiding from coai. Tests: the three `/proc` shapes measured (hidden `exe` + readable `cmdline` naming
+  `systemd` → skipped; the same naming `kimi` → Running; both unreadable → Unreadable with the pid), on the fake `IProcReads`.
 
 - **DL11 — Kimi's OS-home redirect on Linux is `HOME` alone.** D19 already says so (parent plan, "On Unix the redirect is `HOME`
   alone, when D18 lifts"). `KimiEnvironment.Built` sets `HOME` → `os/` on Unix and not the three Windows names; its refusal checks
@@ -599,14 +625,14 @@ Numbered DL1–DL14 so they never collide with the parent plan's D-numbers. Ever
   The second was measured harmless (L-V-home), but Vibe's configuration lives under `VIBE_HOME`, which D17 already owns; Windows has
   no such redirect and the two sides stay one shape.
 
-- **DL14 — Release order and versions.** Vibe ships first: E1–E3 in the next `src_mcp` minor, **0.58.0**, with an extension minor.
-  Kimi follows in the first minor after E4–E6 (0.59.0 at the earliest). The per-runtime gate `RUNTIME_SINCE`
+- **DL14 — Release order and versions.** Vibe ships first: E1–E3 in the next `src_mcp` minor, **0.59.0**, with an extension minor.
+  Kimi follows in the first minor after E4–E6 (0.60.0 at the earliest). The per-runtime gate `RUNTIME_SINCE`
   (`src_vs_code/src/runtimeSince.ts:46-50`) answers "does this server know the runtime", not "does it run it on THIS host", so a
-  second table joins it: `VIBE_ON_LINUX_SINCE = '0.58.0'`, `KIMI_ON_LINUX_SINCE` set by E6 — a Linux/WSL side whose server is older
+  second table joins it: `VIBE_ON_LINUX_SINCE = '0.59.0'`, `KIMI_ON_LINUX_SINCE` set by E6 — a Linux/WSL side whose server is older
   shows "update coai-mcp to run Vibe here" instead of a row that is refused at launch. **The unreleased Kimi-consultant branch
   (`feat/kimi-consultant`) sets `KIMI_CONSULTANT_SINCE` to 0.58.0. Whichever of the two merges SECOND bumps its constant to the next
   minor** (`runtimeSinceIsAhead.test.ts` guards the table, not unreleased commits — the reason `KIMI_RUNTIME_SINCE` once said 0.56.0,
-  `runtimeSince.ts:30-42`).
+  `runtimeSince.ts:30-42`). 2026-10-17: mcp 0.58.0 shipped first from main (the plan-gate round history, #844), so Vibe on WSL2 takes 0.59.0 and Kimi on Linux 0.60.0 at the earliest.
 
 ## 5. The measurement cells, and who waits for them
 
@@ -621,9 +647,9 @@ a built environment, nothing written into `~/.vibe` or `~/.kimi-code` by the pro
 |---|---|---|---|
 | L-V6 | Which variable NAMES the owner's `~/.vibe/.env` holds (names only, values never read out). **Not run in E1** (E1 never reads the owner's `.env`): E2 keeps `{MISTRAL_API_KEY}`, and a refusal by line number answers it on his first WSL launch. | free | E2 (DL2's admitted set) |
 | L-V7 | `scripts/vibe-home-manifest.mjs --write` in WSL: the `linux` entry; a second fresh home agrees on every hash. | 2 tiny turns | E2 (DL3) |
-| L-V8 | Does Vibe load a `.env` from its WORKING folder? (A bogus `MISTRAL_API_KEY` in the cwd, no home `.env`: still L-V1's "Missing" → it does not.) Code reading of Vibe's package first — done, and it predicts "no": every call site reads `VIBE_HOME/.env` only (DL2; A1 spec, 2026-10-16). | free | E2 (snapshot exclusion) **and E3's release** — 0.58.0 is not tagged before it is recorded |
+| L-V8 | Does Vibe load a `.env` from its WORKING folder? (A bogus `MISTRAL_API_KEY` in the cwd, no home `.env`: still L-V1's "Missing" → it does not.) Code reading of Vibe's package first — done, and it predicts "no": every call site reads `VIBE_HOME/.env` only (DL2; A1 spec, 2026-10-16). | free | E2 (snapshot exclusion) **and E3's release** — 0.59.0 is not tagged before it is recorded |
 | L-V6b | python-dotenv — the version in Vibe 2.26.1's own tool environment — over DL2's fixed set of lines AND whole files (the three multi-line shapes of DL2), written as `shared/dotenv-name-vectors.json`: per vector the names python-dotenv binds, and coai's expected verdict (admitted, or refused at line N with no file text). No `.env` of the owner's is read. | free | E2 (DL2's grammar) |
-| L-V9 | L-V1, L-V2/3, L-V4 re-run through the ported probe, 3 of 3. | ~10 turns | E3 (release) |
+| L-V9 | L-V1, L-V2/3, L-V4 re-run through the ported probe, 3 of 3. **Measured 2026-10-16: 3 of 3 on every cell** — signed out → "Missing MISTRAL_API_KEY", free; signed in through the `.env` link; read inside served, outside denied; write_file, bash and run_typescript all denied (9 runs, the model's retries included); `--resume` the same session; `~/.vibe` byte-identical (RESULTS_vibe_confinement §31). 21 paid turns: `VIBE_ACTIVE_MODEL=nope` is PAID on Linux (free on Windows). The run used `env -i` with the MinimalUnix names and a `→` in three prompts — the committed probe inherits its whole environment and its prompts are ASCII; both fixed in the probe after the run. | ~10 turns (21 spent) | E3 (release) |
 | L-V10 | L-V9 once on a NATIVE Linux host (not WSL). | ~10 turns | lifting DL1's native-Linux refusal — not this release |
 | L-N1 | .NET on Linux: `HeldFile.Take(…, inheritable: true)` excludes a second take (inheritable or not), and a child started after it holds the lock after the parent's SIGKILL. A test in the Linux CI job, in a child process (no test holds an inheritable handle in the host). Predicted (A2 spec, 2026-10-16): the exclusivity FAILS — the combined share mode takes a shared `flock` — so DL8's native take is expected; it ships only once this red run confirms it. | free | E5 (DL8) |
 | L-N2 | A subreaper shim and a FAKE agent that starts a same-group child and a `setsid` child, then exits first: after the teardown both are gone. Three more arms (DL9): a grandchild born AFTER the first listing is found by the re-listing confirmation; the shim `SIGTERM`ed while the agent lives ends its tree; the shim `SIGKILL`ed leaves its `running` marker naming the agent (written right after the start — DL9's phases; A3 spec, 2026-10-16), which the next launch reconciles. One more arm (the plan gate for epics 4–6, 2026-10-16, F11 + F15): a grandchild that exits by itself BEFORE the teardown is reaped by the shim's drain, is not recorded as a survivor, and no marker remains. A test in the Linux CI job. | free | E5 (DL9) |
@@ -649,7 +675,7 @@ scout's prepared run is the template.
    STAGED (DL3); see E1's outcome below.
 2. **E2** — Vibe on a Linux host (DL1 for Vibe, DL2, DL3, DL5's Vibe half, the diagnosis text). Red-first tests flip the D18 pins.
 3. **E3** — the extension's Vibe texts, `VIBE_ON_LINUX_SINCE`, the limitation rows, L-V9, the live WSL checks through the released
-   binary. **Release 0.58.0.**
+   binary. **Release 0.59.0.**
 4. **E4** — the Kimi WSL measurements (the cells above), the owner present. It depends on E1's ported Kimi probes only, so it may
    run beside E2–E3; what serialises it is the owner's presence and his own `kimi` closed.
 5. **E5** — the Kimi platform mechanisms (DL6–DL10), in two halves. The Kimi-INDEPENDENT half — DL7's identity key, L-N1, L-N2,
@@ -937,6 +963,9 @@ Prerequisites: Vibe paid turns for E1 and L-V9 (~12); Kimi paid turns for E4 (~1
   a mystery. Revisited only if the owner meets it in daily use.
 - **Q4 — `sudo apt-get` in the install terminal** (he types his password there). Default: yes.
 - **Q5 — Release order** if `feat/kimi-consultant` is ready first: it takes 0.58.0 and Vibe-on-Linux 0.59.0 (DL14).
+- **Q7 — A Kimi sign-in on a network filesystem (DL6).** Default taken 2026-10-17: refused, with the cure (a local
+  `KIMI_CODE_HOME`, signed in separately) and an explicit default-off override setting. The alternative — admit with a warning —
+  was one consultant's choice; the owner decides.
 - **Q6 — A survivor blocks the sign-in for coai** (DL9): while a marker names a process coai could not end — or names nothing it can
   match, because the shim died between its `spawning` write and the agent's start — every coai Kimi turn on that sign-in is Busy with
   the pid (or the reason), re-tried on every launch, until the process is gone or a person clears the marker. The person's own `kimi`
@@ -955,8 +984,8 @@ Prerequisites: Vibe paid turns for E1 and L-V9 (~12); Kimi paid turns for E4 (~1
 
 - [ ] E1–E6 done-when met; every cell of §5 that gates a shipped epic recorded in `research/RESULTS_vibe_confinement.md` /
       `RESULTS_kimi_confinement.md` (Linux sections), with predictions written before each run.
-- [ ] A Vibe row reviews, consults and answers a question row in WSL through the released 0.58.0; the real `~/.vibe` unchanged.
-- [ ] 0.58.0 admits `HostKind.Wsl` only; a native Linux host is refused with the WSL2-only sentence (S-V17) until L-V10 is recorded.
+- [ ] A Vibe row reviews, consults and answers a question row in WSL through the released 0.59.0; the real `~/.vibe` unchanged.
+- [ ] 0.59.0 admits `HostKind.Wsl` only; a native Linux host is refused with the WSL2-only sentence (S-V17) until L-V10 is recorded.
 - [ ] The scenario harness drives a plan round, a code round, a consult and a question row with a Vibe row on the Linux CI job
       (and the same with a Kimi row in E6); each flow and what it does not prove is in `research/module_tests.md` — E5's Linux
       teardown flows included (A3 spec, 2026-10-16).
@@ -969,7 +998,7 @@ Prerequisites: Vibe paid turns for E1 and L-V9 (~12); Kimi paid turns for E4 (~1
 - [ ] The `.env` link: exactly one admitted link (its raw target compared), the target judged through one descriptor, the names
       grammar with its four refusal kinds (`NoBinding`, `OtherName`, `NotText`, `ByteOrderMark` — each by line number only), no
       value or unread line ever in a sentence or log, deleters proven around it (green first, teeth by a mutant); L-V8 recorded
-      before 0.58.0 is tagged.
+      before 0.59.0 is tagged.
 - [ ] The lock key is identity-based on Linux (aliases and bind mounts one key, a file no key), the locality rule by mount type
       (`MountTable` with tests of its own), the tree hold proven exclusive and inherited (L-N1 — the native take only if its red run
       confirms the predicted shared lock), an unreadable process listing never read as clear, on Windows as on Linux (A2 spec,
@@ -1004,9 +1033,9 @@ because the two halves land in the same files (`KimiCredentialsLock`, `Junctions
 lines would be a merge exercise, not a boundary. *(2) E4 may run beside E2–E3.* Its only dependency is E1's ported Kimi probes;
 what serialises it is the owner's presence and his own `kimi` closed — so the Kimi measurements need not wait for the Vibe release.
 *(3) L-V8 is E3's release gate.* It gated E2's snapshot exclusion only; a second dotenv the reviewed repository can supply is a hole
-in the configuration boundary `VibeHome` exists for, and 0.58.0 is not tagged until the cell is recorded. *(4) E6 does not ship a
+in the configuration boundary `VibeHome` exists for, and 0.59.0 is not tagged until the cell is recorded. *(4) E6 does not ship a
 survivor that is only a report.* DL9's eligibility rule (the marker reconciled by the next launch and the home disposal) is E5's,
-and E6 depends on it. The release points stand: 0.58.0 after E3, the next minor after E6, DL14's second-merger rule unchanged.
+and E6 depends on it. The release points stand: 0.59.0 after E3, the next minor after E6, DL14's second-merger rule unchanged.
 Not changed, and weighed: splitting E5 into two epics (seven epics keep Q = 3 and would make the gate structural — rejected for the
 same-files reason above; the §6 wording and E5's done-when carry the gate instead), and moving the installer line (DL12) out of E6
 into its own epic (it is one button and its review is Fable's outside the quota either way).
@@ -1152,13 +1181,13 @@ a round of their own. Accepted, and where each landed:
   manager, or place the tools on PATH or in `~/.local/bin`), the same sentence in the `rg` refusal. §2 item 3 narrowed; DL12; S-K17.
 - **F3** — the `.env` link cannot be made: fall through to the "no `.env`" path, the cure naming the setup command and the reason.
   DL2's new bullet; S-V15.
-- **F6** — a manifest entry with no `platform` reads as `win32`; the rollback line (0.57.x restores today's behaviour). DL3; S-V16.
+- **F6** — a manifest entry with no `platform` reads as `win32`; the rollback line (0.58.x restores today's behaviour). DL3; S-V16.
 - **F8** — the names grammar follows python-dotenv's NAME part (whitespace, `export`, a quoted name), the value never parsed, and is
   checked against python-dotenv's own output as vectors. DL2's grammar bullet; §5 L-V6b; S-V13 rewritten with the `KEY = "v"` and
   `export KEY='v'` rows.
 - **F9** — DL5's precedence written out (the row's path, `$UV_TOOL_BIN_DIR`, `~/.local/bin`, `PATH`, the cure) with why the
   installer's folder precedes `PATH`. DL5; S-V11.
-- **F10** — 0.58.0 admits WSL only; native Linux refused with a WSL2-only sentence until L-V10; the signed-out cure names the keyring
+- **F10** — 0.59.0 admits WSL only; native Linux refused with a WSL2-only sentence until L-V10; the signed-out cure names the keyring
   case. §2 item 1; DL1 (Q1 closed); DL2's "no `.env`" bullet; §5 L-V10; S-V7 (now asserting the keyring sentence), S-V17; E2, E3,
   the DoD.
 - **F11** — the survivor marker's way out: a panel button over a one-shot mode that never clears over a living survivor, and a Busy
@@ -1246,8 +1275,24 @@ Rejected, with the reasons recorded:
 - **Cornerstone AREA A1 (confirmed by Fable, 2026-10-16).** Credential admission: the one admitted link — see *The cornerstone
   areas* above for its boundary, minimum scenarios and review focus. One story of this epic is marked when its stories document is
   written.
+- **Outcome (2026-10-17).** Built on `feat/wsl-vibe-host`, merged into PR #842; coai code gate epic 2 `proceed` (17 findings: 7
+  accepted and fixed, 10 rejected with reasons); a Fable security judgement found A1 MET after three fixes; the epic-2 risk consult
+  (aa853ecc) closed solved. Linux CI green on every job. **Deviations from the plan's letter, recorded:**
+  - **A1 spec §3.2 step 2 was wrong** (found independently by Fable and the risk consultant): the same home's second turn did not
+    re-judge the target. Now the target is judged through the one descriptor and its names scanned on EVERY turn; a target changed
+    between turns is refused before `--version`; a rotated key stays admitted.
+  - The read array is zeroed in a `finally` (the copy `buffer[..total]` had left the original uncleared); a relative or unexpanded
+    `VIBE_HOME` is ignored (only an absolute one is the person's Vibe home); a libc without `statx` is a refusal sentence, not an
+    exception; a failed open is named by what a person can do (no read permission / path too long / a symbolic link).
+  - `VibeLaunch.TakeAsync` takes a `VibeHost(Kind, Wsl, SignIn)`; the `(id, HostKind)` constructor is internal (test-only — it
+    carries no sign-in); the manifest platform is normalised where it is set (null or blank → `win32`).
+  - DL5 follows uv's own folder order (`UV_TOOL_BIN_DIR`, `XDG_BIN_HOME`, `XDG_DATA_HOME/../bin`, `~/.local/bin`), absolute
+    values only, a candidate counts only if it is an executable file.
+  - One WSL-banner rule for the server and the extension: `shared/wsl-banner-vectors.json`, read by both test suites.
+  - The WSL1 cure says to run `wsl --set-version <distro> 2` from Windows; the legacy `Classify(text, wsl: false)` names the
+    process's own host, never Windows.
 
-### E3 — Vibe on Linux in the extension, and the 0.58.0 release · S · ordinary — built on Opus · depends on E2, and on L-V8 recorded
+### E3 — Vibe on Linux in the extension, and the 0.59.0 release · S · ordinary — built on Opus · depends on E2, and on L-V8 recorded
 
 - **Goal.** The panel says what the WSL side does, and the release ships.
 - **Scope.** `vendors.ts:294`; `vendorTerminal.ts:478`, `:488-493`; the five help files; `runtimeSince.ts` (`VIBE_ON_LINUX_SINCE`);
@@ -1261,6 +1306,12 @@ Rejected, with the reasons recorded:
   Release clean-up owed by E2/E3: three texts still describe Vibe as Windows-only — `research/architecture.md:39` ("the Python
   CLI, Windows only"), `research/README.md` (its Vibe RESULTS rows, "Windows only"), and the `coai.vibeHomesDirectory` help text in
   `src_vs_code/package.json` (it speaks only of the Windows 259-character path budget).
+- **Outcome (2026-10-17).** The extension half on `feat/wsl-vibe-extension`, merged into PR #842; an Opus judge (8 findings, one
+  BLOCKING) and the coai code gate epic 3 `proceed` (12 findings: 5 accepted and fixed, 7 rejected with reasons). The card knows FIVE
+  host kinds (windows | wsl2 | wsl1 | linux | darwin), read once from the kernel banner and required in `PanelState`: the "update
+  coai-mcp" note shows on WSL2 only; native Linux and WSL1 get the server's refusal at any version; a host note never greys the stage
+  boxes; the card note is proven escaped. L-V9 is recorded 3 of 3 (RESULTS_vibe §31), so the WSL row is `confined` on that record,
+  not on n = 1. The release itself (tag, post-deploy, live WSL check) is the open tail of this epic.
 
 ### E4 — Kimi measured on WSL · M · ordinary (measurement) — built on Opus, **runs on the owner's live, rotating sign-in** · depends on E1 (its Kimi probes); may run beside E2–E3; gates E5's Kimi-dependent half
 

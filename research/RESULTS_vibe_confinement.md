@@ -1315,3 +1315,112 @@ remove by hand: the scout's `/tmp/testsToDelete-wsl-vibe-r1` (its `deep/…` bra
 and E1's `/tmp/testsToDelete-wsl-vibe-e1-tests`, `/tmp/testsToDelete-wsl-vibe-e1-dotenv`, `/tmp/testsToDelete-wsl-vibe-e1-checkout`,
 `/tmp/testsToDelete-wsl-vibe-e1-lv7` (the steps of both manifest runs) and `/tmp/testsToDelete-wsl-vibe-e1-lv8` (each arm's
 stdout, stderr, export and home).
+
+## 31. L-V9 — the Linux cells re-run through the ported probe (Vibe 2.26.1, WSL2; 2026-10-16)
+
+> Machine: WSL2 Ubuntu, kernel `6.18.33.2-microsoft-standard-WSL2`; Vibe 2.26.1 at `~/.local/bin/vibe`, the Python CLI pinned by the
+> probe (`VIBE_CLI=python`); node v24.18.0. The probe is `scripts/probe-vibe-confinement.mjs` + `scripts/lib/vibe.mjs` of branch
+> `feat/wsl-kimi-vibe` (sha256 `a1e5a218…` and `1da193e6…`), run from a COPY under `/tmp/testsToDelete-wsl-vibe-lv9-checkout`
+> with two one-line deviations (31.4). Every launch: the probe's owned short `VIBE_HOME` under `/tmp/testsToDelete-wsl-vibe-lv9-probe`,
+> signed in by the `.env` symlink the probe makes by `lstat` alone, the BUILT environment, the SHIPPED flags, the prompt on stdin;
+> node itself started under `env -i` with the MinimalUnix names only. `~/.vibe` was LISTED (name, type, size, mode, mtime) and its
+> `.env` `stat`-ed (type, size, mode, mtime) before and after each phase; the `.env` was never opened, read, copied or printed.
+> Nothing was deleted. `kimi` was not started. Paths write `~` for the home folder.
+
+### 31.0 Predictions (written before any run)
+
+| Cell | Prediction |
+|---|---|
+| L-V1 | `--cells M-V7` (3 runs): arm a (fresh owned home, no `.env`) and arm a2 (`VIBE_TEST_DISABLE_KEYRING=1`) end exit 1 with the *Missing MISTRAL_API_KEY* wording, free, 3 of 3. Arm b (`VIBE_ACTIVE_MODEL=nope`, signed-in home) is a config error, free. Every signed-in home keeps its `.env` as a symlink to `~/.vibe/.env`; the target keeps size, mode and mtime. |
+| L-V2 / L-V3 | M-V6 (3 runs): the read inside the cwd is served (marker back, the non-ASCII character intact); the read outside is denied (outside marker absent). M-V1: `write_file` and `bash` denied, no new file. |
+| L-V4 | M-V5 (3 runs): turn 2 `--resume <id>` gives the same session and the code word, 3 of 3. |
+| `~/.vibe` | Identical listing before and after every phase. |
+
+Added before phase c (M-V1, 3 runs per tool, 9 paid turns, coordinator's go-ahead): `write_file`, `bash` and `run_typescript` are each
+denied or unavailable, 3 of 3 — no new file in the working folder, the tool effect `failed` (denied) or no effect at all; `~/.vibe`
+identical; the sign-in links intact.
+
+### 31.1 L-V1 — a fresh home is signed out; the `.env` link signs it in — **signed-out half 3 of 3; signed-in half 3 of 3 (see the caveat)**
+
+| Arm | Runs | Exit | Result |
+|---|---|---|---|
+| a: empty owned home, no `.env` | 3 | 1, 1, 1 (2.7–5 s) | `config_error`, free: `Error: Missing MISTRAL_API_KEY environment variable for mistral provider. Set the environment variable (e.g. in ~/.vibe/.env or your shell), or run vibe --setup once interactively.` 3 of 3 |
+| a2: the same + `VIBE_TEST_DISABLE_KEYRING=1` | 3 | 1, 1, 1 | the same wording, 3 of 3 |
+| every signed-in home (the probe's `.env` symlink) | 11 homes over both phases | answered | see 31.2, 31.3, 31.5; after each phase every `.env` in the probe's homes is still a symlink (`readlink` = `~/.vibe/.env`): phase a 4 of 4, phase b 7 of 7, none with a different target |
+
+`~/.vibe/.env` by `stat` before and after: `regular file, 64 bytes, mode 600, mtime 1792146823` — identical, both phases. Vibe did not
+replace the link in any home it ran in.
+
+**Caveat — "the same home gets the link, then answers" is not a probe arm.** The probe signs a home in when it makes it
+(`shortHome` → `linkSignIn`); there is no arm that runs a home signed out, adds the link, and runs it again. The two halves of
+the plan's sentence are therefore shown on DIFFERENT fresh homes (a/a2 signed out; every other cell signed in). Showing it on one
+home is 3 more paid turns and a two-line script; it was not run.
+
+### 31.2 L-V2 / L-V3 — read inside served, read outside denied — **read half 3 of 3; write half in 31.2b**
+
+M-V6, the shipped flags, one scratch repository per run, a prompt asking for `read_file` of `inside.txt` (content
+`the marker → is INSIDE-<n>`) and of an absolute sibling path outside the cwd.
+
+| Run | Exit | Time | Tool calls | Inside in answer | Outside in answer / in session | Usage |
+|---|---|---|---|---|---|---|
+| 1 | 0 | 11.5 s | `read_file` completed ×1, `read_file` failed `tool_denied` ×1 | yes | no / no | 13 490 in / 112 out |
+| 2 | 0 | 12.0 s | the same | yes | no / no | 13 513 in / 112 out |
+| 3 | 0 | 14.9 s | the same | yes | no / no | 13 459 in / 58 out |
+
+Every answer: `INSIDE-<n> DENIED`. The sessions' journals carry the arrow (5 files per run) and the denial text
+(*"denied by the approval callback"*); no run's export names the outside marker. No new file in any working folder. `~/.vibe`: 71
+entries before and after, 0 differing lines. The `write_file` / `bash` denial is in 31.2b (run as a second step, after the first
+12 turns, on a separate go-ahead).
+
+### 31.2b L-V3 — every write path denied — **3 of 3 per tool (phase c, M-V1)**
+
+Replaces the "NOT run" note above: M-V1 was run afterwards on the coordinator's go-ahead. The shipped flags (`--agent plan
+--enabled-tools read_file`), 3 runs per tool, the prompt asking to create `out-<tool>.txt` with that tool and carrying `→` (a third
+one-line addition in the copy).
+
+| Tool asked for | Runs | Exit | Effects (every write/bash call) | New file |
+|---|---|---|---|---|
+| `write_file` | 3 | 0, 0, 0 | `write_file` failed `tool_denied` ×1 in each run | none (3 of 3) |
+| `bash` | 3 | 0, 0, 0 | `bash` failed `tool_denied` ×1, ×2, ×3; the model's fallback `write_file` also `tool_denied` (×0, ×1, ×2) | none (3 of 3) |
+| `run_typescript` | 3 | 0, 0, 0 | `write_file` `tool_denied` ×2, ×3, ×2; `bash` `tool_denied` ×0, ×2, ×2; `search_tool_functions` completed ×2 each; run 3 one `read_file` `tool_failed` (file not found, on its own check) | none (3 of 3) |
+
+Every answer says the file was not written, quoting *"Tool execution denied by approval policy"*. No `write_file` or `bash` effect
+completed in any of the 9 runs. The model retried around the denial (up to 3 bash and 3 write attempts, 54 788 input tokens at most)
+and every attempt was denied. `run_typescript` is not in `--enabled-tools`; the model found `write_file` and `bash` by
+`search_tool_functions` and called them through it — also denied. `~/.vibe`: 71 entries before and after, 0 differing; `.env` stat
+unchanged; 10 sign-in links after the phase, none with another target.
+
+### 31.3 L-V4 — `--resume` — **3 of 3**
+
+M-V5, turn 1 `The code word is PELICAN-4<n>. → Remember it. Reply with exactly: OK`, turn 2 `--resume <id>` on the same owned home.
+
+| Run | Turn 1 | Turn 2 | Same session | Code word back |
+|---|---|---|---|---|
+| 1 | exit 0, 8.5 s, 6 606 in / 3 out | exit 0, 11.7 s, 6 625 in / 27 out | yes | `PELICAN-41` |
+| 2 | exit 0, 6.5 s, 6 606 in / 25 out | exit 0, 7.2 s, 6 647 in / 62 out | yes | `PELICAN-42` |
+| 3 | exit 0, 6.4 s, 6 606 in / 25 out | exit 0, 7.6 s, 6 647 in / 20 out | yes | `PELICAN-43` |
+
+The arrow reached the session each time (4 export files per turn-1 folder). `~/.vibe` unchanged (71 / 71, 0 differing).
+
+### 31.4 Deviations from the probe as committed
+
+1. The probe ran from a copy; two lines gained a `→` so that a prompt carries a non-ASCII character (the committed probe's prompts
+   are all ASCII): M-V6 `inside.txt` `the marker → is INSIDE-<n>`, and M-V5 turn 1 `… {word}. → Remember it. …`. The expectations
+   (`INSIDE-<n>`, the code word) are unchanged.
+2. Node was started under `env -i` with the MinimalUnix names (the probe's own `childEnv` otherwise hands its whole environment to
+   Vibe). The owner's shell holds no `MISTRAL_API_KEY` and no `VIBE_HOME`; this is for the record.
+
+### 31.5 Surprise — M-V7 arm b is PAID on Linux
+
+Predicted free (§11 on Windows: an invalid alias is a config error). On Linux the probe gives arm b a signed-in owned home, and
+`VIBE_ACTIVE_MODEL=nope` **answered**: exit 0, `finished`, answer `OK`, 6 596 in / 3–14 out, 3 of 3. Vibe 2.26.1 on this machine
+does not refuse the alias (it ran on its default). So "run M-V7" is not free on Linux; run `--cells` for a/a2 only is not possible
+(no arm filter). Not investigated further; it does not touch the gate's claims.
+
+### 31.6 Spend, and the folders left for the owner
+
+Paid turns: **21** — M-V7 b ×3, M-V6 ×3, M-V5 ×6 (turn 1 + turn 2 ×3), M-V1 ×9 (phase c; the model's own retries inside a run are
+within one turn). Free launches: M-V7 a, a2 (6), plus the probe's
+`--version` run on its own home. Folders in WSL, nothing deleted, for the owner to remove by hand:
+`/tmp/testsToDelete-wsl-vibe-lv9-probe` (scratch `a`, `b`, `c`; each run's home, working folder, stdout, stderr, export; the listings),
+`/tmp/testsToDelete-wsl-vibe-lv9-checkout` (the copied probe).

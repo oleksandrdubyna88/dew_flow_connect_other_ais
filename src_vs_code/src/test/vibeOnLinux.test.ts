@@ -16,9 +16,9 @@ import { panelState, runPanel } from './panelPageHarness';
 
 /**
  * Vibe on a Linux host — E3 of todo/PLAN_kimi_and_vibe_on_linux.md: what the panel says on the WSL side, once coai-mcp
- * 0.58.0 runs a Vibe row there.
+ * 0.59.0 runs a Vibe row there.
  *
- * <p>The facts every text below must agree on (DL1, DL2, DL14): WSL2 runs Vibe from 0.58.0; the sign-in coai uses is
+ * <p>The facts every text below must agree on (DL1, DL2, DL14): WSL2 runs Vibe from 0.59.0; the sign-in coai uses is
  * `~/.vibe/.env`, made by `vibe --setup`, which coai links into its own homes and never copies; a sign-in kept in a
  * keyring is invisible to coai; a native Linux host is refused — "measured on WSL2 only for now"; Windows is as it was.
  * Kimi's texts are NOT in this file: Kimi on Linux is a later release.</p>
@@ -29,8 +29,8 @@ const VIBE: Vendor = {
   baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0,
 };
 
-/** The newest coai-mcp released without Vibe on Linux (`.release-please-manifest.json` says 0.57.0 when this was written). */
-const BEFORE_LINUX = '0.57.0';
+/** The newest coai-mcp released without Vibe on Linux (`.release-please-manifest.json` says 0.58.0 when this was written). */
+const BEFORE_LINUX = '0.58.0';
 /** What the server means about a native Linux host: refused for now, measured on WSL2 only (DL1) — said the same everywhere in English. */
 const NATIVE_REFUSED = 'On a native Linux host coai-mcp refuses Vibe for now — it is measured on WSL2 only';
 const KNOWN = (version: string) => ({ kind: 'known' as const, version, remembered: false, updateOffered: false });
@@ -39,20 +39,21 @@ const repo = (...parts: string[]): string => join(__dirname, '..', '..', '..', .
 // ---------------------------------------------------------------- DL14: the second table
 
 test('the Vibe-on-Linux release is its own table, beside the one that says which server knows the runtime', () => {
-  assert.equal(VIBE_ON_LINUX_SINCE, '0.58.0');
+  assert.match(VIBE_ON_LINUX_SINCE, /^\d+\.\d+\.\d+$/u, 'one released version, so the guard in runtimeSinceIsAhead.test.ts can hold it to the changelog');
+  assert.equal(ON_LINUX_SINCE['vibe'], VIBE_ON_LINUX_SINCE);
   assert.equal(ON_LINUX_SINCE['kimi'], KIMI_ON_LINUX_SINCE, 'Kimi on Linux is the release after Vibe (DL14): E6 added its entry');
   assert.deepEqual(Object.keys(ON_LINUX_SINCE).sort(), ['kimi', 'vibe']);
 });
 
-test('a Linux or WSL side whose server is older than 0.58.0 does not run Vibe; a newer or an unknown server does', () => {
+test(`a Linux or WSL side whose server is older than ${VIBE_ON_LINUX_SINCE} does not run Vibe; a newer or an unknown server does`, () => {
   assert.equal(runtimeOnLinuxSide('vibe', BEFORE_LINUX), false);
   assert.equal(runtimeOnLinuxSide('vibe', '0.53.0'), false, 'knowing the runtime is not running it on this host');
   assert.equal(runtimeOnLinuxSide('vibe', VIBE_ON_LINUX_SINCE), true);
-  assert.equal(runtimeOnLinuxSide('vibe', '0.58.1'), true);
+  assert.equal(runtimeOnLinuxSide('vibe', '0.59.1'), true);
   assert.equal(runtimeOnLinuxSide('vibe', '1.0.0'), true);
   assert.equal(runtimeOnLinuxSide('vibe', ''), true, 'an unknown server is not called old');
   assert.equal(runtimeOnLinuxSide('codex', '0.1.0'), true, 'a runtime with no entry runs on every host');
-  assert.equal(runtimeOnLinuxSide('kimi', '0.58.0'), false, `Kimi runs on Linux from ${KIMI_ON_LINUX_SINCE}: a 0.58.0 server refuses a Kimi row there`);
+  assert.equal(runtimeOnLinuxSide('kimi', VIBE_ON_LINUX_SINCE), false, `Kimi runs on Linux from ${KIMI_ON_LINUX_SINCE}: a server at Vibe's release still refuses a Kimi row there`);
 });
 
 // ---------------------------------------------------------------- the host kind (DL1): WSL2, WSL1, native Linux
@@ -90,7 +91,7 @@ test('the host kind of THIS host reads the banner only on Linux, and an unreadab
   assert.equal(await hostKind('linux', async () => WSL2_BANNER), 'wsl2');
   assert.equal(await hostKind('linux', async () => WSL1_BANNER), 'wsl1');
   assert.equal(await hostKind('linux', async () => NATIVE_BANNER), 'linux');
-  assert.equal(await hostKind('linux', async () => { throw new Error('no /proc/version'); }), 'linux');
+  assert.equal(await hostKind('linux', async () => { throw new Error('no /proc/version'); }, () => undefined), 'linux');
   assert.equal(await hostKind('win32', async () => WSL2_BANNER), 'windows');
   assert.equal(await hostKind('darwin', async () => WSL2_BANNER), 'darwin');
   assert.equal(await hostKind('freebsd', async () => WSL2_BANNER), 'wsl2', 'an unknown platform narrows to linux, as hostPlatform says');
@@ -98,17 +99,17 @@ test('the host kind of THIS host reads the banner only on Linux, and an unreadab
 
 // ---------------------------------------------------------------- the card's note, by host kind
 
-const ANY_SERVER = [BEFORE_LINUX, VIBE_ON_LINUX_SINCE, '0.58.1', '1.0.0', ''] as const;
+const ANY_SERVER = [BEFORE_LINUX, VIBE_ON_LINUX_SINCE, '0.59.1', '1.0.0', ''] as const;
 const UPDATE = /update coai-mcp to run Vibe here/iu;
 
-test('WSL2: a server older than 0.58.0 is told to update, a newer or unknown one is not', () => {
+test(`WSL2: a server older than ${VIBE_ON_LINUX_SINCE} is told to update, a newer or unknown one is not`, () => {
   const note = runtimeSkewNote(BEFORE_LINUX, [VIBE], 'wsl2');
 
   assert.match(note, UPDATE);
   assert.ok(note.includes(BEFORE_LINUX), 'it names the server the person has');
   assert.ok(note.includes(VIBE_ON_LINUX_SINCE), 'it names the release that runs Vibe here');
   assert.equal(runtimeSkewNote(VIBE_ON_LINUX_SINCE, [VIBE], 'wsl2'), '');
-  assert.equal(runtimeSkewNote('0.58.1', [VIBE], 'wsl2'), '');
+  assert.equal(runtimeSkewNote('0.59.1', [VIBE], 'wsl2'), '');
   assert.equal(runtimeSkewNote('', [VIBE], 'wsl2'), '', 'an unknown server is not called old');
 });
 
@@ -116,7 +117,7 @@ test('a native Linux host is told it is refused at EVERY server version — upda
   for (const version of ANY_SERVER) {
     const note = runtimeSkewNote(version, [VIBE], 'linux');
 
-    assert.doesNotMatch(note, UPDATE, `server "${version}": an update note on a host 0.58.0 still refuses`);
+    assert.doesNotMatch(note, UPDATE, `server "${version}": an update note on a host ${VIBE_ON_LINUX_SINCE} still refuses`);
     assert.match(note, /native Linux host/u, `server "${version}"`);
     assert.match(note, /measured on WSL2 only/u, `server "${version}"`);
   }
@@ -138,7 +139,6 @@ test('Windows, macOS and the old call shape get no note about the host; a server
       assert.equal(runtimeSkewNote(version, [VIBE], host), '', `${host} at "${version}"`);
     }
   }
-  assert.equal(runtimeSkewNote(BEFORE_LINUX, [VIBE]), '', 'the old call shape is the Windows one');
 
   for (const host of ['wsl2', 'wsl1', 'linux'] as const) {
     const note = runtimeSkewNote('0.52.0', [VIBE], host);
@@ -183,7 +183,7 @@ test('the Vibe card says what its HOST kind says: update on WSL2, a refusal on n
 
 // ---------------------------------------------------------------- the card hint
 
-test('the Vibe hint names Windows, WSL2 from 0.58.0, the .env sign-in, and that native Linux is measured on WSL2 only', () => {
+test(`the Vibe hint names Windows, WSL2 from ${VIBE_ON_LINUX_SINCE}, the .env sign-in, and that native Linux is measured on WSL2 only`, () => {
   const hint = VENDOR_PRESETS.find((one) => one.runtime === 'vibe')?.hint ?? '';
 
   assert.doesNotMatch(hint, /Windows only/u, 'the Windows-only sentence is what this release lifts');
@@ -199,7 +199,7 @@ test('the Vibe hint names Windows, WSL2 from 0.58.0, the .env sign-in, and that 
 
 // ---------------------------------------------------------------- the install note, per host
 
-test('⤓ for Vibe on WSL2 says Vibe runs there from 0.58.0 and where the sign-in is kept', () => {
+test(`⤓ for Vibe on WSL2 says Vibe runs there from ${VIBE_ON_LINUX_SINCE} and where the sign-in is kept`, () => {
   const note = vendorInstall(VIBE, 'linux', 'wsl2').note;
 
   assert.ok(note.includes(VIBE_ON_LINUX_SINCE) && note.includes('WSL2'), note);
@@ -299,14 +299,14 @@ const GONE: Record<string, readonly string[]> = {
 
 /** The question-consultant article's one sentence about the host a Vibe row runs on, per language. */
 const QUESTION_ROW: Record<string, readonly string[]> = {
-  en: ['on WSL2 from coai-mcp 0.58.0 (on a native Linux host or macOS coai-mcp refuses it for now)'],
-  de: ['unter WSL2 ab coai-mcp 0.58.0 (auf einem nativen Linux-Host und unter macOS lehnt coai-mcp es vorerst ab)'],
-  es: ['en WSL2, desde coai-mcp 0.58.0 (en un host Linux nativo y en macOS coai-mcp lo rechaza por ahora)'],
-  ru: ['в WSL2 — начиная с coai-mcp 0.58.0 (на нативном Linux-хосте и на macOS coai-mcp пока его отклоняет)'],
-  uk: ['в WSL2 — починаючи з coai-mcp 0.58.0 (на нативному Linux-хості та на macOS coai-mcp поки його відхиляє)'],
+  en: [`on WSL2 from coai-mcp ${VIBE_ON_LINUX_SINCE} (on a native Linux host or macOS coai-mcp refuses it for now)`],
+  de: [`unter WSL2 ab coai-mcp ${VIBE_ON_LINUX_SINCE} (auf einem nativen Linux-Host und unter macOS lehnt coai-mcp es vorerst ab)`],
+  es: [`en WSL2, desde coai-mcp ${VIBE_ON_LINUX_SINCE} (en un host Linux nativo y en macOS coai-mcp lo rechaza por ahora)`],
+  ru: [`в WSL2 — начиная с coai-mcp ${VIBE_ON_LINUX_SINCE} (на нативном Linux-хосте и на macOS coai-mcp пока его отклоняет)`],
+  uk: [`в WSL2 — починаючи з coai-mcp ${VIBE_ON_LINUX_SINCE} (на нативному Linux-хості та на macOS coai-mcp поки його відхиляє)`],
 };
 
-test('the five languages say the same about Vibe on Linux: WSL2 from 0.58.0, the .env sign-in, never copied, native Linux not yet', () => {
+test(`the five languages say the same about Vibe on Linux: WSL2 from ${VIBE_ON_LINUX_SINCE}, the .env sign-in, never copied, native Linux not yet`, () => {
   const article = HELP_ARTICLES.find((one) => one.id === 'choose-reviewers');
   assert.ok(article !== undefined, 'the reviewers article has been renamed, and this test is now asserting nothing');
   assert.deepEqual([...HELP_LANGUAGES].sort(), Object.keys(SAID).sort(), 'a language was added: say what it must say');
@@ -320,7 +320,7 @@ test('the five languages say the same about Vibe on Linux: WSL2 from 0.58.0, the
   }
 });
 
-test('the question-consultant help names Vibe on WSL2 from 0.58.0 in every language, and the Windows-only sentence is gone everywhere', () => {
+test(`the question-consultant help names Vibe on WSL2 from ${VIBE_ON_LINUX_SINCE} in every language, and the Windows-only sentence is gone everywhere`, () => {
   const article = HELP_ARTICLES.find((one) => one.id === 'the-question-consultant');
   assert.ok(article !== undefined, 'the question consultant article has been renamed, and this test is now asserting nothing');
 

@@ -30,6 +30,7 @@ const baseState = (): PanelState => ({
   codexModels: [], agyModels: [],
   localEngines: {},
   server: { kind: 'absent', version: '', remembered: false, updateOffered: false },
+  hostKind: 'windows',
   side: '',
   perSide: false,
   questions: [],

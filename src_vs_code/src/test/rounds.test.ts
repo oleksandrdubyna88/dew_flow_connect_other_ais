@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { calledBy, CallerDeclaration, costPhrase, decideSecondsOf, elapsed, instantOf, isRunning, parseSession, reviewerLines, reviewerRows, RoundRecord } from '../rounds';
+import { calledBy, CallerDeclaration, costPhrase, decideSecondsOf, elapsed, instantOf, isRunning, parseSession, PlanSourceRecord, reviewedFrom, reviewerLines, reviewerRows, RoundRecord } from '../rounds';
 
 /**
  * What `rounds.ts` still guarantees now that the markdown log is gone.
@@ -344,4 +344,90 @@ test('a reviewer that stood down carries the reason the cloud was quiet', () => 
   }));
 
   assert.match(row!.said, /^stood down \(the cloud reviewers found 1 remark/);
+});
+
+// ---------- what a plan round reviewed (E2.S3 of todo/PLAN_the_plan_gate_reads_the_committed_plan_E2.md, contract C3) ----------
+
+const COMMIT = 'a'.repeat(40);
+const BLOB = 'b'.repeat(40);
+const committed = (over: Partial<PlanSourceRecord> = {}): PlanSourceRecord => ({
+  origin: 'commit', commit: COMMIT, path: 'todo/PLAN_x.md', blob: BLOB, bytes: 98304, textId: '0123456789abcdef', ...over,
+});
+const pasted = (over: Partial<PlanSourceRecord> = {}): PlanSourceRecord => ({
+  origin: 'text', commit: 'c'.repeat(40), path: '', blob: '', bytes: 512, textId: 'fedcba9876543210', ...over,
+});
+
+test('a committed plan round says its file, the commit, the blob and the size', () => {
+  assert.equal(reviewedFrom(committed()), 'todo/PLAN_x.md @ aaaaaaa · blob bbbbbbb · 98 304 bytes');
+});
+
+test('a pasted plan round says so, with its text id so two pastes of one size stay apart', () => {
+  assert.equal(reviewedFrom(pasted()), 'pasted planText @ ccccccc · text fedcba9876543210 · 512 bytes');
+  assert.notEqual(reviewedFrom(pasted({ textId: '0000000000000000' })), reviewedFrom(pasted()));
+});
+
+test('a pasted plan whose commit is empty leaves the commit out rather than printing a bare @', () => {
+  assert.equal(reviewedFrom(pasted({ commit: '' })), 'pasted planText · text fedcba9876543210 · 512 bytes');
+});
+
+test('a hash is hex, trimmed, and shown as its first seven characters — uppercase kept', () => {
+  assert.equal(reviewedFrom(committed({ commit: ' ABCDEF1234 ', blob: '0123456' })), 'todo/PLAN_x.md @ ABCDEF1 · blob 0123456 · 98 304 bytes');
+});
+
+// The rule is the SERVER's too (`PlanSource.IsWellFormed`, which `--log` applies): the log and the page agree on what a source is.
+test('a committed source needs its blob and its text id; an empty one is no source, not a line with a hole', () => {
+  assert.equal(reviewedFrom(committed({ blob: '' })), '');
+  assert.equal(reviewedFrom(committed({ textId: '' })), '');
+  assert.equal(reviewedFrom({ ...committed(), textId: undefined }), '');
+});
+
+test('a pasted source has neither a path nor a blob — one that does is not a pasted source', () => {
+  assert.equal(reviewedFrom(pasted({ path: 'todo/PLAN_x.md' })), '');
+  assert.equal(reviewedFrom(pasted({ blob: 'b'.repeat(40) })), '');
+  assert.equal(reviewedFrom({ origin: 'text', commit: '', bytes: 3, textId: 'fedcba9876543210' }), 'pasted planText · text fedcba9876543210 · 3 bytes',
+    'a path and a blob that are absent are as empty as ones that are ""');
+});
+
+test('a committed path is repository-relative: not absolute, not a drive, not climbing out', () => {
+  for (const path of ['/etc/passwd', '\\\\server\\share\\PLAN.md', 'C:/x/PLAN.md', '../PLAN.md', 'a/../../PLAN.md', 'a\\..\\PLAN.md', 'a\0b.md']) {
+    assert.equal(reviewedFrom(committed({ path })), '', path);
+  }
+  assert.equal(reviewedFrom(committed({ path: 'docs/notes;v2.md' })), 'docs/notes;v2.md @ aaaaaaa · blob bbbbbbb · 98 304 bytes');
+});
+
+test('a hash that is not hex of a plausible length makes the whole line unusable', () => {
+  assert.equal(reviewedFrom(committed({ commit: 'abc' })), '', 'shorter than seven');
+  assert.equal(reviewedFrom(committed({ commit: 'a'.repeat(65) })), '', 'longer than a hash can be');
+  assert.equal(reviewedFrom(committed({ commit: 'zzzzzzzz' })), '', 'not hex');
+  assert.equal(reviewedFrom(committed({ commit: '<img src=x>' })), '', 'markup is not a hash');
+  assert.equal(reviewedFrom(committed({ blob: 'not-a-blob' })), '', 'a blob that is not hex');
+});
+
+test('a pasted plan with an empty text id is unusable, not a line with a hole in it', () => {
+  assert.equal(reviewedFrom(pasted({ textId: '' })), '');
+});
+
+test('the size is grouped by three with a plain space, and zero is a size', () => {
+  assert.equal(reviewedFrom(committed({ bytes: 0 })), 'todo/PLAN_x.md @ aaaaaaa · blob bbbbbbb · 0 bytes');
+  assert.equal(reviewedFrom(committed({ bytes: 999 })), 'todo/PLAN_x.md @ aaaaaaa · blob bbbbbbb · 999 bytes');
+  assert.equal(reviewedFrom(committed({ bytes: 1234567 })), 'todo/PLAN_x.md @ aaaaaaa · blob bbbbbbb · 1 234 567 bytes');
+});
+
+test('a source nobody recorded reads as no line at all', () => {
+  assert.equal(reviewedFrom(undefined), '');
+  assert.equal(reviewedFrom(null), '');
+  assert.equal(reviewedFrom('commit'), '', 'a bare string is not a source');
+});
+
+test('a source that cannot be trusted reads as no line, never a half-sentence', () => {
+  assert.equal(reviewedFrom({ commit: COMMIT, bytes: 1 }), '', 'no origin');
+  assert.equal(reviewedFrom(committed({ origin: 'ftp' })), '', 'an origin this build does not know');
+  assert.equal(reviewedFrom({ ...committed(), bytes: 'x' }), '', 'bytes that is not a number');
+  assert.equal(reviewedFrom(committed({ bytes: -1 })), '', 'a negative size');
+  assert.equal(reviewedFrom(committed({ bytes: 1.5 })), '', 'a fractional size');
+  assert.equal(reviewedFrom(committed({ bytes: 2 ** 60 })), '', 'a size past the safe integers');
+  assert.equal(reviewedFrom({ ...committed(), commit: 7 }), '', 'a commit that is not a string');
+  assert.equal(reviewedFrom({ ...committed(), blob: null }), '', 'a blob that is not a string');
+  assert.equal(reviewedFrom(committed({ path: '' })), '', 'a committed round without its path');
+  assert.equal(reviewedFrom({ ...pasted(), textId: 7 }), '', 'a text id that is not a string');
 });

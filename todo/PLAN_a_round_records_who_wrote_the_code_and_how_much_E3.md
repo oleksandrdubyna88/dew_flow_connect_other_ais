@@ -840,7 +840,7 @@ One branch and ONE commit for the epic. The coai gate runs once, over the whole 
    `partial: torn line` (§12, E3 done-when) may make most live rounds partial. E1 should measure how often a live read
    sees one; E3.S4's spec states its treatment.
 7. **The id source has no column.** §5 says "which id source was used is recorded", and §12 says "the record says
-   which", but step 23's columns (`authors_state`, `authors_session`, `authors_reader`) carry no source. E5 needs one.
+   which", but step 24's columns (step 23 was taken by the plan-gate E2, 2026-10-16) (`authors_state`, `authors_session`, `authors_reader`) carry no source. E5 needs one.
 8. **`CallerSessions.cs:44-53` is cited as the id source, but its ladder puts `COAI_CALLER_SESSION` first.** §12 wants
    that variable alone to be `unobserved: no session id`. The reader needs its own ladder (E3.S2), and E7 must not take
    a stated `rounds.caller` as a transcript key.

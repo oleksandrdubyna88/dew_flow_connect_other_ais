@@ -91,6 +91,8 @@ const VARYING = [
   'logs/vibe.log',
   'logs/session/active/.registry',
   'logs/session/unified/*/**',
+  // Vibe's session index, one file beside the session folders (L-V-manifest, 2.26.1 on WSL2: it appears on a resumed home) - session data on every platform.
+  'logs/session/unified/.session-index.json',
   // Vibe's plugin store stages an unpack here (vibe/plugins/_store.py:204): re-digested before it is renamed into packages/,
   // swept by Vibe itself, never loaded as a package - so it is admitted by name even though it lies under the pinned prefix.
   'logs/session/plugins/tmp/**',

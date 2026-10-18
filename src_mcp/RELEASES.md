@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.58.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.57.0...mcp-v0.58.0) (2026-10-16)
+
+
+### Features
+
+* **plan-gate:** review_plan reads the committed plan itself and proves the reviewers got it whole ([#837](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/837)) ([03ec1c1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/03ec1c1a56d3a6457f278140c46e3e1d04241b9e))
+* **plan-gate:** the round history, --log and the Rounds page say what each plan round reviewed ([#841](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/841)) ([095ebd6](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/095ebd6d4ef843d3b1088b5eae275a8fcfd6539b))
+
 ## [0.57.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.56.0...mcp-v0.57.0) (2026-10-16)
 
 

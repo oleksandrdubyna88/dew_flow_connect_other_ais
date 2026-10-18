@@ -21,7 +21,8 @@ namespace CoaiMcp.Runners.Files;
 /// ordinary machine, so <see cref="Refusal(HostKind, string, string)"/> admits it, asks the kernel where the target really is
 /// (<c>HandleRead.FinalDirectory</c>) and refuses only a resolution that leaves the local drives. The junction keeps the SPELLING
 /// as its target — one level.</para>
-/// <para><b>Windows only</b> (D18): on any other host <see cref="Refusal"/> answers the D18 sentence and nothing is made.</para>
+/// <para><b>Windows, Linux and WSL</b> (D18 lifted for them by E5 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): on a Linux or WSL host the link is a directory symbolic link (<c>JunctionsUnix</c>), and the filesystem that holds the real path
+/// is judged by its mount type (<see cref="MountLocality"/>), never by a <c>/mnt</c> prefix; on any other host <see cref="Refusal"/> answers the D18 sentence and nothing is made.</para>
 /// <para>Nothing Kimi-specific lives here: no config, no launch — only the shape of a link into somebody else's folder.</para>
 /// </remarks>
 public static partial class Junctions
@@ -41,7 +42,23 @@ public static partial class Junctions
     /// <c>JunctionsNative</c>, the kernel calls; a test's, per async flow, makes a symbolic link and names paths by their real spelling, so every
     /// decision below runs on any OS. TEST ONLY — null in the product.
     /// </summary>
-    internal static IJunctionShell Shell => _shell.Value ?? JunctionsNative.Instance;
+    internal static IJunctionShell Shell => _shell.Value ?? (OperatingSystem.IsWindows() ? JunctionsNative.Instance : JunctionsUnix.Instance);
+
+    private static readonly AsyncLocal<Func<string>?> _mountInfo = new();
+
+    private static readonly AsyncLocal<Func<string, MountIdentity>?> _mountIdentity = new();
+
+    /// <summary>The table of mounts the locality rule reads: <c>/proc/self/mountinfo</c> in the product, a test's, per async flow.</summary>
+    private static Func<string> MountInfo => _mountInfo.Value ?? ReadMountInfo;
+
+    private static string ReadMountInfo() => File.ReadAllText(MountLocality.MountInfoPath);
+
+    /// <summary>TEST ONLY: the table of mounts of this async flow, and — when a test names a mount point that does not exist — the identity the kernel would have given the path (default: the real <c>statx</c>). <see langword="null"/> puts <c>/proc/self/mountinfo</c> and the real question back.</summary>
+    internal static void StandInMountInfo(Func<string>? read, Func<string, MountIdentity>? identify = null)
+    {
+        _mountInfo.Value = read;
+        _mountIdentity.Value = identify;
+    }
 
     /// <summary>TEST ONLY: the shell of this async flow — <see langword="null"/> puts the product's back.</summary>
     internal static void StandIn(IJunctionShell? shell) => _shell.Value = shell;
@@ -54,19 +71,24 @@ public static partial class Junctions
         Refusal(host, link, target, driveType, Shell.FinalDirectory);
 
     /// <summary>The seam of the final path as well, so a test can make an ancestor link lead off the local drives.</summary>
-    internal static string Refusal(HostKind host, string link, string target, Func<string, DriveType> driveType, Func<string, string> final) =>
-        new Func<string>[]
+    internal static string Refusal(HostKind host, string link, string target, Func<string, DriveType> driveType, Func<string, string> final)
+    {
+        var real = new Lazy<string>(() => final(target));
+
+        return new Func<string>[]
         {
-            () => WindowsOnly(host),
+            () => HostAdmitted(host),
             () => LocalDrive(target, driveType),
             () => Length(target),
             () => Missing(target),
             () => Chained(target),
-            () => Resolved(target, driveType, final),
+            () => Resolved(target, driveType, real.Value),
+            () => Mounted(host, target, real.Value),
             () => Taken(link),
         }
         .Select(check => check())
         .FirstOrDefault(refusal => refusal.Length > 0) ?? string.Empty;
+    }
 
     /// <summary>
     /// Whether <paramref name="target"/> may be READ by a deleter that wants to know what a link's target holds: a local path,
@@ -138,9 +160,16 @@ public static partial class Junctions
         a.Length > 0 && b.Length > 0
         && string.Equals(Normalised(a), Normalised(b), OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
-    private static string WindowsOnly(HostKind host) => host == HostKind.Windows
+    private static string HostAdmitted(HostKind host) => HostKinds.HasKimiLockFamily(host)
         ? string.Empty
-        : $"a directory junction is made on Windows only; Kimi is refused on a {HostKinds.Word(host)} host until it is measured there (D18 of todo/PLAN_vibe_and_kimi_runtimes.md)";
+        : $"a sign-in link is made on windows, linux and wsl hosts only; Kimi is refused on a {HostKinds.Word(host)} host until it is measured there (D18 of todo/PLAN_vibe_and_kimi_runtimes.md)";
+
+    /// <summary>
+    /// DL6: on a Linux or WSL host, the FILESYSTEM that holds the real path — read from <c>/proc/self/mountinfo</c> — is judged by its type (<see cref="MountLocality"/>); a Windows filesystem is refused wherever it is mounted.
+    /// Asked of the HOST the launch is for, not of the operating system running the code, so a test that plays a Windows host on any OS never reads a Unix table.
+    /// </summary>
+    private static string Mounted(HostKind host, string target, string real) =>
+        host is HostKind.Linux or HostKind.Wsl && real.Length > 0 ? MountLocality.Refusal(target, real, MountInfo, _mountIdentity.Value ?? MountLocality.Identify) : string.Empty;
 
     private static string LocalDrive(string target, Func<string, DriveType> driveType) => IsLocal(target, driveType)
         ? string.Empty
@@ -176,16 +205,12 @@ public static partial class Junctions
     /// <see cref="LocalDrive"/>'s look at the spelling and would be listed on every sweep. Empty answer: the platform cannot name it,
     /// so coai cannot tell where the sign-in is (E4.2 decision 13).
     /// </summary>
-    private static string Resolved(string target, Func<string, DriveType> driveType, Func<string, string> final)
-    {
-        var resolved = final(target);
-
-        return resolved.Length == 0
+    private static string Resolved(string target, Func<string, DriveType> driveType, string resolved) =>
+        resolved.Length == 0
             ? $"{target} cannot be named by its handle on this host, so coai cannot tell where the Kimi sign-in really is — refused (D19)"
             : IsLocal(resolved, driveType)
                 ? string.Empty
                 : $"{target} resolves to {resolved}, which is not a local drive path — a link on the way to the Kimi sign-in points at a network or roaming location, and coai refuses to link the sign-in from there (D19)";
-    }
 
     private static string Taken(string link)
     {
@@ -199,7 +224,7 @@ public static partial class Junctions
         }
     }
 
-    /// <summary>The empty folder made and turned into the junction; the failure sentence otherwise, with the folder removed again — or the reason it could not be.</summary>
+    /// <summary>The link made at the fresh path (on Windows the empty folder, turned into the junction); the failure sentence otherwise, with the folder removed again — or the reason it could not be.</summary>
     private static string Built(string link, string target, Action<string> remove)
     {
         var failure = Reparsed(link, Path.TrimEndingDirectorySeparator(Path.GetFullPath(target)));
@@ -211,11 +236,9 @@ public static partial class Junctions
     {
         try
         {
-            Directory.CreateDirectory(link);
-
             return ReparseSize(target) > ReparseBufferBytes
                 ? $"the target path is {target.Length} characters, and a reparse point holds {ReparseBufferBytes / 1024} KiB"
-                : Shell.SetReparsePoint(link, target);
+                : Shell.MakeLink(link, target);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {

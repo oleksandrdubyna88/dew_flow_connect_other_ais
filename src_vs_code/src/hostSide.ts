@@ -169,22 +169,29 @@ export function hostKindOf(platform: Platform, procVersion: string): HostKind {
 
 /**
  * {@link hostKindOf} for THIS host, reading the banner itself — injected for the tests, and it never rejects: a banner that
- * cannot be read is an empty one, which is a native Linux host (a refusal, never a promise).
+ * cannot be read is an empty one, which is a native Linux host (a refusal, never a promise) — and it is SAID, once, through
+ * `warn` (default: the extension's `console.warn`, which lands in the extension-host log).
  */
 export async function hostKind(
   platform: string = process.platform,
   readBanner: () => Promise<string> = readProcVersion,
+  warn?: (line: string) => void,
 ): Promise<HostKind> {
   const here = hostPlatform(platform);
 
-  return here === 'linux' ? hostKindOf(here, await bannerOf(readBanner)) : hostKindOfPlatform(here);
+  return here === 'linux' ? hostKindOf(here, await bannerOf(readBanner, warn)) : hostKindOfPlatform(here);
 }
 
-/** The banner, with every way of not reading it collapsed into the empty one. */
-async function bannerOf(readBanner: () => Promise<string>): Promise<string> {
+/** The banner, with every way of not reading it collapsed into the empty one — and one line saying it happened. */
+async function bannerOf(readBanner: () => Promise<string>, warn?: (line: string) => void): Promise<string> {
   try {
     return await readBanner();
-  } catch {
+  } catch (reason) {
+    (warn ?? console.warn)(
+      `ConnectOtherAIs: /proc/version could not be read (${reason instanceof Error ? reason.message : String(reason)}); `
+      + 'this host is treated as a native Linux host, so a Vibe row is shown as refused here.',
+    );
+
     return '';
   }
 }

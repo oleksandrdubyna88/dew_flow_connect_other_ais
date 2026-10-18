@@ -849,12 +849,12 @@ public sealed class RoundsDb : IDisposable
                                 started_utc, completed_utc, tokens_in, tokens_out, cost_usd,
                                 plan_text, head_sha, base_ref, caller, agent_log,
                                 caller_vendor, caller_client, caller_client_version, caller_model,
-                                commands, plan_shape, plan_key, epic_number, cadence_note, note, round_key)
+                                commands, plan_shape, plan_key, epic_number, cadence_note, note, round_key, plan_source)
             VALUES ($session, $stage, $number, $subject, $status, $verdict, $gating,
                     $started, $completed, $tokensIn, $tokensOut, $cost,
                     $plan, $sha, $baseRef, $caller, $agentLog,
                     $vendor, $client, $clientVersion, $model,
-                    $commands, $planShape, $planKey, $epicNumber, $cadenceNote, $note, $roundKey)
+                    $commands, $planShape, $planKey, $epicNumber, $cadenceNote, $note, $roundKey, $planSource)
             ON CONFLICT(session_id, stage, number) DO UPDATE SET
                 subject = excluded.subject, status = excluded.status, verdict = excluded.verdict,
                 gating = excluded.gating, completed_utc = excluded.completed_utc,
@@ -865,7 +865,7 @@ public sealed class RoundsDb : IDisposable
                 caller_client_version = excluded.caller_client_version, caller_model = excluded.caller_model,
                 commands = excluded.commands, plan_shape = excluded.plan_shape,
                 plan_key = excluded.plan_key, epic_number = excluded.epic_number, cadence_note = excluded.cadence_note,
-                note = excluded.note, round_key = excluded.round_key
+                note = excluded.note, round_key = excluded.round_key, plan_source = excluded.plan_source
             RETURNING id
             """;
         BindRound(write, state.SessionId, round.Stage, round.Number);
@@ -917,6 +917,10 @@ public sealed class RoundsDb : IDisposable
         // The round's identity across the wire (schema step 21, story 4.1) — from the ROUND, which was minted it when
         // it started; empty for a skipped round, which launched nothing, and that is what empty means.
         Bind(write, "$roundKey", round.Key);
+        // What a PLAN round reviewed (schema step 23, E2.S1): from the round, rewritten on every re-record as the key is; '' = none.
+        Bind(write, "$planSource", round.PlanSource is { } source
+            ? JsonSerializer.Serialize(source, Server.ServerJsonContext.Default.PlanSource)
+            : string.Empty);
 
         return (long)(write.ExecuteScalar() ?? 0L);
     }

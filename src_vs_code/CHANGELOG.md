@@ -1,5 +1,60 @@
 # Changelog
 
+## Team server 0.13.0 — 2026-10-16
+
+**Added: the server reads the codex quota gauge after each codex job, inside the slot's lease.** It asks
+`codex app-server` for `account/rateLimits/read` and nothing else: no sign-in, no retry, no reset credit. The read can
+refresh the account's token set, so it is contained:
+- The slot's lock is taken first.
+- A fail-closed reader marker is written before the spawn.
+- Every process of the reader's tree is recorded as it appears, killed when the read ends, and confirmed gone by pid
+  and start time before the lease is released.
+- A crash that leaves a marker blocks the slot until the next acquisition or the startup sweep proves the tree is gone.
+  A marker with an incomplete identity blocks it until a person checks.
+- A token that expires within the reader's 20-second lifetime plus a 10-minute margin, or an expiry that cannot be
+  read, spawns nothing.
+- An authentication error or a refresh request suspends capture on that slot only. The slot is not marked as needing
+  sign-in.
+
+The reading — every window of every limit, with its used percent, window length and reset time — is stored on the
+slot and on the job's ledger line. It is served in the catalog (`gauges`, the newest reading per vendor, with no account
+name or email) and in `/api/usage` with rounds per 1 % per window. An older client ignores both.
+
+## Extension 0.78.0 — 2026-10-16
+
+**Added: the Rounds page says what a plan round reviewed.** When you open a plan round, a line under "asked by" now
+says "reviewed from":
+- a committed plan shows its path, the commit, the file's id and its size;
+- a pasted plan shows its size and its id.
+
+A record that is incomplete or malformed shows no line at all, and never a wrong one. It needs coai-mcp 0.58.0; with an
+older server the line is not there.
+
+## Server 0.58.0 — 2026-10-16
+
+**Added: the plan gate can read a committed plan itself.** `review_plan` takes `committedPlan`, a path in the
+repository, in place of `planText`. You can also pass `expectedCommit`. coai reads that file from git at the branch tip
+and checks that the text it sends is exactly the stored file, all of it. Then the reviewers get the whole plan. Before,
+a caller had to paste the plan, and a long plan could be cut on its way, so the reviewers judged part of a plan or none
+of it.
+
+Before any round starts, coai refuses a plan it cannot prove. That includes:
+- a file that is not committed, or is changed in your checkout;
+- a symlink, a submodule, an empty file or a file over 256 KiB;
+- a file that is not UTF-8;
+- a name that looks like a credential;
+- a repository that uses SHA-256 object ids.
+
+Each refusal says how to fix it. `planText` works as before.
+
+**Added: a reviewer that did not get the whole plan counts as failed.** Every plan round now marks the start and the end
+of the plan. A reviewer that says it cannot see both marks is counted as not answered, even if it also sent other
+findings. When no reviewer answered, the verdict is `call_human`.
+
+**Added: the round says what it reviewed.** A plan round records the commit, the path, the file's id and its size for a
+committed plan, or an id for a pasted one. `status` shows it, and `--log` carries it as `planSource`. The database gains
+one column (schema step 23). An older database is upgraded when the new server first opens it.
+
 ## Server 0.57.0 — 2026-10-16
 
 **Added: Kimi Code as a reviewer (Windows).** A `kimi` reviewer row runs Moonshot's Kimi Code CLI on your own sign-in.

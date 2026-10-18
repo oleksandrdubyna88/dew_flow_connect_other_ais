@@ -180,7 +180,7 @@ public sealed class AKimiShimScenarioTests : IDisposable
         var elsewhere = Path.Combine(_person.Folder, "another-home");
         Directory.CreateDirectory(elsewhere);
         using var agent = AgentFor();
-        var (holder, grandchild) = await KimiCredentialsLockTests.StartShimAsync("tree", Locks, _person.Credentials, elsewhere);
+        var (holder, grandchild) = await ShimChild.StartAsync("tree", Locks, _person.Credentials, elsewhere);
         try
         {
             var asked = Stopwatch.StartNew();
@@ -196,8 +196,8 @@ public sealed class AKimiShimScenarioTests : IDisposable
         }
         finally
         {
-            await KimiCredentialsLockTests.EndAsync(holder);
-            await KimiCredentialsLockTests.EndAsync(grandchild);
+            await ShimChild.EndAsync(holder);
+            await ShimChild.EndAsync(grandchild);
         }
     }
 

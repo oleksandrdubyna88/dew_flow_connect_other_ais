@@ -20,7 +20,9 @@
 
 Rule selection is deterministic now, and its priority is written down — but it is **generic**. A round
 is judged against the same eight tier rules whatever it changed, plus a tail rotated by branch. The
-measurement says what that costs: the corpus is 272 121 bytes against an 80 000-byte budget, so **24 of
+measurement (2026-09-15, at the 80 000-byte budget; the operator raised it to 90 000 on 2026-10-16, which now
+lets the tail take one to three rules a round — see `research/RESULTS_rules_selection_budget.md`, last section)
+says what that costs: the corpus is 272 121 bytes against an 80 000-byte budget, so **24 of
 32 rules reach no code round at all**, and *which* 24 depends on a branch name rather than on the change.
 
 A diff that edits a workflow file should get `git-workflow.md` BECAUSE it edits one. The shared
@@ -112,8 +114,8 @@ rules. E2 therefore ships first, and epic B does not start before it.
    its rules ARE what the mount contributes — the tier is not applied on top, because the resolver's
    own `load: always` rules already carry the unconditional core, and layering the tier over it would
    re-spend the budget the targeting just freed. Unchanged either way: the instruction files and this
-   repository's own rules still lead and are still outside any order, and the 80 000-byte whole-file
-   budget with its omission note still applies.
+   repository's own rules still lead and are still outside any order, and the whole-file
+   budget (90 000 bytes since 2026-10-16; 80 000 when this was written) with its omission note still applies.
 6. **Canonical order** within the manifest: reason strength (path match, then topic, then task, then
    always-loaded), ties by rule id — never enumeration order. Each rule carries its `reasons` into the
    prompt so a finding can say why its rule was shown.
