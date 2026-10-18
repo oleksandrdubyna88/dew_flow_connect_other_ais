@@ -2,8 +2,10 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization.Metadata;
 using CoaiMcp.Core.Rounds;
+using CoaiMcp.Runners.Processes;
 using CoaiMcp.Server;
 using FluentAssertions;
+using Serilog.Core;
 using Xunit;
 
 namespace CoaiMcp.Tests;
@@ -49,13 +51,19 @@ public sealed class ASessionFileKeepsWhatANewerServerWroteTests : IDisposable
         new Planting(["rounds[0]", "reviewerStates[0]"], "futureReviewer", "\"r\""),
     ];
 
-    public void Dispose() => _data.Dispose();
+    private readonly List<TempDir> _extra = [];
+
+    public void Dispose()
+    {
+        _data.Dispose();
+        _extra.ForEach(d => d.Dispose());
+    }
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    private static PersistedSession Baseline()
+    private static PersistedSession Baseline(string repo)
     {
-        var state = new SessionState("bag-1", Repo, Branch, new PanelConfig()) { Stage = Stage.CodeReview };
+        var state = new SessionState("bag-1", repo, Branch, new PanelConfig()) { Stage = Stage.CodeReview };
         var reviewer = new ReviewerState("codex", "correctness", ReviewerState.Done, 2);
         var round = new RoundRecord("CodeReview", 1, "proceed", 0, "codex", new DateTime(2026, 10, 18, 9, 0, 0, DateTimeKind.Utc))
         {
@@ -71,15 +79,15 @@ public sealed class ASessionFileKeepsWhatANewerServerWroteTests : IDisposable
     }
 
     /// <summary>A file as an OLDER server finds it: the baseline session with every <see cref="Planted"/> member added.</summary>
-    private string Plant(SessionStore store, IEnumerable<Planting> unknowns)
+    private string Plant(SessionStore store, IEnumerable<Planting> unknowns, string repo = Repo)
     {
-        var json = JsonNode.Parse(JsonSerializer.Serialize(Baseline(), ServerJsonContext.Default.PersistedSession))!.AsObject();
+        var json = JsonNode.Parse(JsonSerializer.Serialize(Baseline(repo), ServerJsonContext.Default.PersistedSession))!.AsObject();
         foreach (var unknown in unknowns)
         {
             Locate(json, unknown.Where)[unknown.Name] = JsonNode.Parse(unknown.Json);
         }
 
-        var file = store.FileFor(Repo, Branch);
+        var file = store.FileFor(repo, Branch);
         Directory.CreateDirectory(Path.GetDirectoryName(file)!);
         File.WriteAllText(file, json.ToJsonString());
         return file;
@@ -451,5 +459,55 @@ public sealed class ASessionFileKeepsWhatANewerServerWroteTests : IDisposable
         store.Save(store.Load(Repo, Branch)!);
 
         JsonNode.Parse(File.ReadAllText(file))!["state"]!["config"]!.AsObject().ContainsKey("catalog").Should().BeFalse();
+    }
+
+    private PanelService Service() =>
+        new(
+            new PanelSettings { Rounds = PanelConfig.Uniform(3, 2, StagePolicy.Human), DataDir = _data },
+            VaultKeys.None("no vault in tests"),
+            default,
+            new ProcessLauncher(),
+            Logger.None, Noticing.None);
+
+    /// <summary>A real repository with one commit on <c>main</c> — <c>open</c> resolves the branch and prunes the repository it is given.</summary>
+    private async Task<string> RepositoryWithOneCommit()
+    {
+        var repo = TempDir.For("testsToDelete-session-bag-repo-");
+        _extra.Add(repo);
+        var launcher = new ProcessLauncher();
+        await File.WriteAllTextAsync(repo.At("a.txt"), "x\n", Ct);
+        foreach (var args in new string[][] { ["init", "-b", "main"], ["add", "."], ["commit", "-m", "one"] })
+        {
+            var result = await launcher.RunAsync(
+                new ProcessRequest("git", ["-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", .. args], repo.Path), Ct);
+            result.ExitCode.Should().Be(0, $"git {string.Join(' ', args)}: {result.StdErr}");
+        }
+
+        return repo.Path;
+    }
+
+    [Fact]
+    public async Task OpenAndStatus_CarryNoUnknownMember()
+    {
+        // The unknown members belong to the FILE: a caller reads what this server knows, as before — and the file keeps them.
+        var repo = await RepositoryWithOneCommit();
+        var store = new SessionStore(_data);
+        var file = Plant(store, Planted, repo);
+        var service = Service();
+
+        var opened = await service.OpenAsync(repo, Branch);
+        var status = await service.StatusAsync(repo, Branch);
+
+        foreach (var answer in new[] { opened, status })
+        {
+            JsonNode.Parse(answer)!["rounds"]!.AsArray().Should().ContainSingle("the planted round is in the answer");
+            foreach (var name in new[] { "authors", "futureReviewer" })
+            {
+                answer.Should().NotContain($"\"{name}\"", $"the answer names no member this build does not know ({name})");
+            }
+        }
+
+        JsonNode.Parse(opened)!["rounds"]![0]!["verdict"]!.GetValue<string>().Should().Be("proceed", "the members it knows are still answered");
+        AssertEveryUnknownIsThere(file, Planted);
     }
 }
