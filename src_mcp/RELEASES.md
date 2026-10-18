@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.60.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.59.0...mcp-v0.60.0) (2026-10-18)
+
+
+### Features
+
+* **rounds:** a reviewer is not sent more than it can read ([#856](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/856)) ([2b302c6](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/2b302c65e833a1df3a382fb8991fe89149713951))
+
+
+### Bug Fixes
+
+* **review-trees:** round and review trees survive a tracked path longer than Windows' MAX_PATH ([#852](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/852)) ([820a742](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/820a7429b0c7a42ef3deb86ddbd7d127b3021aca))
+
 ## [0.59.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.58.0...mcp-v0.59.0) (2026-10-17)
 
 
