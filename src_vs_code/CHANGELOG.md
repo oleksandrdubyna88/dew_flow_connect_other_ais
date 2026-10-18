@@ -1,5 +1,26 @@
 # Changelog
 
+## Server 0.60.0 — 2026-10-18
+
+**Added: a reviewer row can say how much it can read.** A vendor row can now carry `maxPromptKib`: the largest first
+prompt its reviewer is sent, in whole KiB, from 1 to 4096. A reviewer whose prompt is larger than its cap is left out of
+the round before the round starts, so it is not launched and not paid for. The reply names the row, the prompt size, the
+cap in bytes and what to do: send the plan in parts, send a smaller change, or send the document in parts. When every
+reviewer is over its cap, `review_plan` and `review_code` refuse before a round starts, and a feature review records the
+stage as skipped. coai sets no cap by default; you set it per row. Any other value is no cap for that row only, and the
+other rows still load. `providers` shows each row's cap, and `--features` lists `maxPromptKib`.
+
+**Fixed: a plan reviewer that did not read the whole plan is one failure everywhere.** A reviewer that answers only
+`PLAN_INCOMPLETE` already counted as not answered in the verdict. But the ledger still said `ok`, and the local
+reviewer's stand-down counted it as a cloud reviewer that had nothing to say. Now the ledger, the live view, the audit
+line and the stand-down all record it as failed, with the tokens it spent.
+
+**Fixed: round and review trees on Windows survive a long tracked path.** `review_code` on a branch that tracks a long
+path failed on Windows with `Could not reset index file to revision 'HEAD'`. coai now gives each git command on a tree it
+makes `-c core.longpaths=true`, on Windows only. It writes no git config. If git still cannot write a path, the message
+names the path, its length, git's reason and the Windows limit, and says to set `COAI_ROUND_WORKTREES` to a shorter
+folder.
+
 ## Extension 0.79.0 — 2026-10-17
 
 **Added: the Vibe card says, for each host, what the server does.** The card now tells you what coai-mcp does with Vibe
