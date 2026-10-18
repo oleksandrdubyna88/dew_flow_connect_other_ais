@@ -52,6 +52,13 @@ internal static class VendorRowReader
         }
     }
 
+    /// <summary>The sentences for the `unrecognised` answer, the startup notice and the panel: one per refused row, each under its own key.</summary>
+    internal static IReadOnlyList<UnrecognisedSetting> SaidAbout(VendorRows rows) =>
+    [
+        .. WholeTextSentence(rows),
+        .. rows.Refused.Select(refusal => new UnrecognisedSetting($"{Key}[{refusal.Name}]", refusal.Sentence)),
+    ];
+
     /// <summary>
     /// The member a <see cref="JsonException.Path"/> names, as the person wrote it: <c>timeoutMinutes</c>, <c>price.in</c>,
     /// or the bracket form <c>['odd name']</c> the parser uses for a name it cannot write with a dot.
@@ -65,6 +72,13 @@ internal static class VendorRowReader
         _ when path.StartsWith('$') => path[1..],
         _ => path,
     };
+
+    private static string WhichMember(string? path) =>
+        MemberOf(path) switch
+        {
+            NoMember => NoMember,
+            var member => $"its member {member}",
+        };
 
     private static VendorRows RowsOf(JsonElement list)
     {
@@ -103,7 +117,7 @@ internal static class VendorRowReader
         catch (JsonException e)
         {
             return Refuse(
-                row, place, $"its member {MemberOf(e.Path)} has a value of the wrong JSON type.", "Write a number or true/false without quotes");
+                row, place, $"{WhichMember(e.Path)} has a value of the wrong JSON type.", "Write a number or true/false without quotes");
         }
     }
 
@@ -131,6 +145,13 @@ internal static class VendorRowReader
             .FirstOrDefault(id => id.Length > 0) ?? string.Empty;
 
     private static VendorRows NotAList(string complaint) => new([], [], complaint);
+
+    private static IReadOnlyList<UnrecognisedSetting> WholeTextSentence(VendorRows rows) => rows.IsList
+        ? []
+        : [new UnrecognisedSetting(
+            Key,
+            $"{Key} is not a JSON list this server can read — {rows.Complaint} It is running the reviewers it shipped with, "
+          + "and none you added is in this round. The form is an array of rows: [{\"id\":\"claude\",\"runtime\":\"claude\"}].")];
 
     private static string Describe(JsonValueKind kind) => kind switch
     {

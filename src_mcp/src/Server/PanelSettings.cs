@@ -1286,18 +1286,22 @@ public sealed record PanelSettings
     /// carry a runtime and a base URL, and a second encoding for those would be a format nobody
     /// could read in a config file. `COAI_PROVIDERS` still works for the simple case.
     /// </summary>
-    private PanelSettings WithProvidersFrom(Func<string, string?> env) => this with
+    private PanelSettings WithProvidersFrom(Func<string, string?> env)
     {
+        var list = VendorListFrom(env);
+
         // The env variable still answers for a vendor the list did not place. It predates the
         // panel, it is what a scripted or containerised run has, and dropping it the moment a
         // vendor list appeared is what made an executable path unsettable from either side.
-        Providers = VendorListFrom(env) is { Configured: true } list
-            ? [.. list.Vendors.Select(v => WithExecutable(v, env))]
-            : DefaultProviders(env),
-    };
+        return this with
+        {
+            Providers = list.Configured ? [.. list.Vendors.Select(v => WithExecutable(v, env))] : DefaultProviders(env),
+            UnrecognisedSettings = [.. UnrecognisedSettings, .. list.Said],
+        };
+    }
 
-    /// <summary>`COAI_VENDORS` as read: whether it configures the reviewers, and the rows it holds.</summary>
-    private sealed record VendorList(bool Configured, IReadOnlyList<ProviderSettings> Vendors);
+    /// <summary>`COAI_VENDORS` as read: whether it configures the reviewers, the rows it holds, and what was said about the rows it left out.</summary>
+    private sealed record VendorList(bool Configured, IReadOnlyList<ProviderSettings> Vendors, IReadOnlyList<UnrecognisedSetting> Said);
 
     /// <summary>
     /// An EMPTY list is empty: a catalog whose rows review nothing arrives as `[]`, and reading that as "not configured"
@@ -1306,14 +1310,16 @@ public sealed record PanelSettings
     /// </summary>
     private static VendorList VendorListFrom(Func<string, string?> env)
     {
-        var json = env("COAI_VENDORS") ?? string.Empty;
+        var json = env(VendorRowReader.Key) ?? string.Empty;
         if (json.Trim().Length == 0)
         {
-            return new VendorList(false, []);
+            return new VendorList(false, [], []);
         }
-        var vendors = ParseVendors(json);
+        var read = ReadVendors(json, SystemPlaces.Current with { Windows = OperatingSystem.IsWindows() }, ExecutablePaths.FilePresenceOf);
 
-        return new VendorList(vendors.Count > 0 || IsEmptyList(json), vendors);
+        // A row that was REFUSED is a row the person wrote: running codex and antigravity in its place is the failure #688
+        // fixed for `[]`. A row that merely names no vendor (`[{}]`) is not refused, and still means not configured.
+        return new VendorList(read.Rows.Count > 0 || read.Raw.Refused.Count > 0 || IsEmptyList(json), read.Rows, VendorRowReader.SaidAbout(read.Raw));
     }
 
     /// <summary>`COAI_PROVIDERS`, or the shipped pair, each with its model and CLI path from its own env variables.</summary>
@@ -1357,7 +1363,17 @@ public sealed record PanelSettings
     /// path: a hundred rows sharing one path probe the disk once (E1's code round).
     /// </summary>
     internal static List<ProviderSettings> ParseVendors(string json, SystemPlaces places, Func<string, RootPresence> presence) =>
-        [.. MapVendors(VendorRowReader.Read(json).Read, ExecutablePaths.Memoized(places, presence))];
+        ReadVendors(json, places, presence).Rows;
+
+    /// <summary>The reviewers `COAI_VENDORS` holds, and what the reader left out of it and why.</summary>
+    private sealed record VendorsRead(List<ProviderSettings> Rows, VendorRows Raw);
+
+    private static VendorsRead ReadVendors(string json, SystemPlaces places, Func<string, RootPresence> presence)
+    {
+        var raw = VendorRowReader.Read(json);
+
+        return new VendorsRead([.. MapVendors(raw.Read, ExecutablePaths.Memoized(places, presence))], raw);
+    }
 
     /// <summary>The ONE mapping from a row as written to a reviewer: every row that read, the ones with no usable id dropped.</summary>
     private static IEnumerable<ProviderSettings> MapVendors(IReadOnlyList<VendorDto> vendors, Func<string?, ThisSidePath> cliOf) =>
