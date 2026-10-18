@@ -236,7 +236,8 @@ units on any runner, with ≤ 40-unit components, and the test asserts that leng
 - [ ] Linux/macOS argv unchanged (T5 on their CI legs). — pending the PR's Linux and macOS CI legs at promotion.
 - [x] T1–T5 green; the step-1 RED messages and B1/B2 red→green recorded in the PR.
 - [x] A failing add names the path, its length in UTF-16 units, git's reason, and (for `Filename too
-      long`) the 259 limit and `COAI_ROUND_WORKTREES`; the limit is one named constant.
+      long`) the applicable file or folder limit (259 or 247) and `COAI_ROUND_WORKTREES`; each limit
+      is a named constant.
 - [x] No tree name, prefix or root changed (D3).
 - [x] `module_server.md` and `module_runners.md` document the escape hatch; `todo/README.md` row moved
       on promotion.
