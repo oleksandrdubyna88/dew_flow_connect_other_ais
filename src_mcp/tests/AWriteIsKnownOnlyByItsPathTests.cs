@@ -391,4 +391,15 @@ public sealed class AWriteIsKnownOnlyByItsPathTests
     [InlineData("/home/me/repo/a.cs", false, true)]
     public void An_automount_root_is_not_local_and_a_mounted_volume_is(string path, bool foldCase, bool local) =>
         LocalPaths.IsLocalRooted(path, windows: false, foldCase).Should().Be(local, $"{path} (case folded: {foldCase}) — /net and /Network mount a host the path names on first touch");
+
+    [Theory]
+    [InlineData(DriveType.Network, true)]
+    [InlineData(DriveType.Unknown, true)]
+    [InlineData(DriveType.NoRootDirectory, true)]
+    [InlineData(DriveType.Fixed, false)]
+    [InlineData(DriveType.Removable, false)]
+    [InlineData(DriveType.CDRom, false)]
+    [InlineData(DriveType.Ram, false)]
+    public void A_drive_the_table_cannot_name_as_local_is_refused_fail_closed(DriveType type, bool refused) =>
+        LocalPaths.IsNotLocal(type).Should().Be(refused, $"{type}: only a drive the table names as local may be asked about (code gate round 2, finding 5)");
 }

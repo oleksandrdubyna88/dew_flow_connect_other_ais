@@ -54,11 +54,15 @@ internal static class LocalPaths
 
     private static bool IsSeparator(char c) => c is '\\' or '/';
 
+    /// <summary>Whether a drive of this type must not be asked about.</summary>
+    /// <remarks>Fail closed: <c>Unknown</c> and <c>NoRootDirectory</c> (an unmapped or vanished drive) are refused with <c>Network</c>.</remarks>
+    internal static bool IsNotLocal(DriveType type) => type is DriveType.Network or DriveType.Unknown or DriveType.NoRootDirectory;
+
     private static bool IsNetworkRoot(string root)
     {
         try
         {
-            return new DriveInfo(root).DriveType == DriveType.Network;
+            return IsNotLocal(new DriveInfo(root).DriveType);
         }
         catch (ArgumentException)
         {
