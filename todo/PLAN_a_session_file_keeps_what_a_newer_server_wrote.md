@@ -1,6 +1,7 @@
 # PLAN — A session file keeps what a newer server wrote
 
-> Status: **plan only, nothing implemented yet, 2026-10-18.** Scope: `src_mcp` only — the session records in
+> Status: **plan only, nothing implemented yet, 2026-10-18; plan gate `good_enough` the same day (3 of 4 reviewers; 6 of 8
+> findings applied, 2 rejected with reasons).** Scope: `src_mcp` only — the session records in
 > `src_mcp/src/Server/SessionStore.cs` and `src_mcp/core/Rounds/SessionState.cs`, the save in `SessionStore`, the
 > `open`/`status` answer in `src_mcp/src/Server/PanelService.cs`, their tests, and `research/module_server.md`. No
 > schema step, no extension change, no wire change. All references are to `main` at `2b302c65`.
@@ -128,6 +129,18 @@ narrower one (D2).
   caller's snapshot stays as it was). A bag that ends empty becomes `null`. Why both, when deserialisation never puts
   a known name in a bag (M7, M8): (a) closes M9 for code that sets a bag, and (b) is the one place a release removes a
   member it retires — without it a retired member lives in the bag for ever (§8).
+
+  **The copy is rebuilt from the leaves up** (plan gate, 2026-10-18), because `with` is shallow and a scrubbed child is
+  useless unless its parent is re-made to hold it:
+  1. each `ReviewerState` of each round → `v with { Unknown = Scrub(v.Unknown, …) }`;
+  2. each `RoundRecord` → `r with { Unknown = …, ReviewerStates = [.. the scrubbed rows] }`;
+  3. each `RoleGate` in `State.Config.Roles` → a new dictionary of scrubbed gates, and `State.Config.SecurityLane`;
+  4. `State.Config` → `config with { Unknown = …, Roles = …, SecurityLane = … }`;
+  5. `State` → `state with { Unknown = …, Config = … }`;
+  6. the session → `session with { Unknown = …, State = …, Rounds = [.. the scrubbed rounds] }`.
+
+  A level whose bag is `null` and whose children are unchanged is passed through as the SAME object, so a session with
+  no bag anywhere costs one walk and no allocation of records. T6 plants a forged key at EVERY level, not only the root.
 - **D4 — No other behaviour changes.** The option set (`ServerJsonContext.cs:346-351`) stays. `UnmappedMemberHandling`
   stays *skip* (an extension-data property and *disallow* do not go together).
 - **D5 — The `open`/`status` answer carries no bag.** `SessionAnswerFor` (`PanelService.cs:1881-1894`) maps each round
@@ -160,8 +173,9 @@ narrower one (D2).
 | The authors snapshot, step 24, the card line | **E5** | none |
 
 Order: either can land first; they touch `RoundRecord` and `SessionAnswerFor` in different lines. Disjoint: nothing
-else. The same table is owed to E5 §7 item 18, which today says only that the guard is "the main session's to
-schedule" — that edit belongs to the session that owns the E5 branch (§10).
+else. **The same table is written into E5** — its §8 on `main`, added by this plan's branch (plan gate, 2026-10-18).
+E5's own branch (`feat/round-authors-e5`, `c1216b42`) rewrote that document and ends at §11; when it rebases, it keeps
+that section and points its §7 item 18 at it (§10).
 
 ## 6. Stories
 
@@ -170,11 +184,26 @@ schedule" — that edit belongs to the session that owns the E5 branch (§10).
 1. Add `src_mcp/tests/ASessionFileKeepsWhatANewerServerWroteTests.cs` with the RED tests of §7.1 (T1, T2). Run them on
    `main`: they must fail with the message in §1. Record the message in the commit body.
 2. Add the bag (D2) to the six types (D1). Run T1–T5: green.
+3. **The AOT gate, before S2 starts** (plan gate, 2026-10-18 — M12 built and linked the binary but did not run it). Publish
+   (`dotnet publish src_mcp/src/CoaiMcp.csproj -c Release -r win-x64` into a scratch folder) and run THAT binary once:
+   - `COAI_DATA_DIR` set to a new temp folder (`PanelSettings.cs:874-880`; the server uses a side folder under it,
+     `ResolveDataDir`, so run once on the empty folder and plant the file in the `sessions/` folder it creates);
+   - a session file planted at the name `SessionStore.FileFor` gives, with unknown members at every level of T1;
+   - `initialize` and one `tools/call open` over stdio, by a small script in the scratch folder (not committed), on a
+     throwaway repository (a temp `git init` with one commit — `open` prunes the repository it is given,
+     `PanelService.cs:491`);
+   - then read the file back. Prediction: every unknown member is still there, with the same value, and the `open`
+     answer holds none of them once S3 has landed (before S3 it holds them — M10).
+
+   The vault is not needed for this: a vault that cannot be read is a recorded note (`ProvidersAnswer.VaultRead`,
+   `ServerJsonContext.cs:103`), not a refused start. If the binary still cannot be run, S1 is NOT done and S2 does not
+   start: the suite runs the JIT build and cannot stand in for the published artefact. The installed `coai-mcp` and the
+   live data directory are never used. The observation goes in the commit body.
 
 ### S2 — The save scrub
 
 `SessionStore` gains a private static `Scrubbed(PersistedSession)` and a static `RetiredMembers` table (type → names,
-empty), used by `Write` before `:531` (D3). Tests T6–T8.
+empty), used by `Write` before `:531` (D3, rebuilt from the leaves up). Tests T6–T8 and T10.
 
 ### S3 — The answer strip
 
@@ -184,11 +213,9 @@ empty), used by `Write` before `:531` (D3). Tests T6–T8.
 
 - `research/module_server.md` § *Persistence* (`:2014-2020`): one paragraph — the bags, the scrub, the strip, D6, D7
   and D8, and that `init` fails at run time (M2).
-- One run of the PUBLISHED AOT binary (M12 left it unrun): `open` on a throwaway repository (a temp `git init` with one
-  commit — `open` prunes the repository it is given, `PanelService.cs:491`) with `COAI_DATA_DIR` set to a temp folder
-  that holds a planted file with unknown members; then read the file back. Prediction: every unknown member is still
-  there. The installed `coai-mcp` and the live data directory are not used. Record the observation in the commit body.
-  If the binary does not start without the vault, say so and rely on the suite.
+- The rule for a release that retires a member of a bagged type: add its name to `RetiredMembers` and update T10's
+  list in the same commit.
+- After S3, the S1 AOT run once more on the final build, to see the `open` answer without bags.
 
 ## 7. Test plan
 
@@ -212,12 +239,19 @@ All in `src_mcp/tests`, run by the MTP executable (`node .agents/conventions/too
   computed value (M7). Green on `main` too: a guard against a later change.
 - **T5 `ANewlyKnownMember_BindsAndIsWrittenOnce`** — a member in another case binds to the known property and is written
   once (M8). This is the case "a later version ADDS the member an older file holds as unknown".
-- **T6 `AKnownNameInABag_IsDroppedOnSave_AndTheTypedValueWins`** — a bag set by the test with `planText: "OLD"`; save,
-  reload: `PlanText` is the typed value, `planText` appears once, the other unknown members are still there (M9).
+- **T6 `AKnownNameInABag_IsDroppedOnSave_AndTheTypedValueWins`** — a forged known name in the bag of EVERY level (session
+  `planText`, state `stage`, config `onExhausted`, a gate `threshold`, a round `verdict`, a reviewer row `status`), each
+  holding a stale value; save, reload: every typed value wins and each name appears once; the other unknown members are
+  still there (M9). One forged level alone would not see a scrub that forgets to re-make a parent (D3).
 - **T7 `ARetiredMember_IsDroppedOnSave`** — the test registers one retired name through an `internal` seam; save drops
   it and keeps the rest.
 - **T8 `TheScrubLeavesTheSnapshotItWasGivenUnchanged`** — after `Save`, the caller's bag still holds the forged key
   (no in-place change).
+- **T10 `EveryBaggedTypesMembers_AreTheListedOnesOrRetired`** — a committed list of each bagged type's JSON member names;
+  the test compares it with `ServerJsonContext.Default.<Type>.Properties`. A member that disappears from a type fails the
+  test unless its name is in `RetiredMembers`; a new member fails it until the list gains it. This is the check that a
+  release which retires or RENAMES a member also tells the scrub (plan gate, 2026-10-18). A rename matters most: the old
+  name in old files becomes a bag entry and the new property starts empty.
 - **T9 `OpenAndStatus_CarryNoUnknownMember`** — through `OpenAsync` and `StatusAsync` on a repository built as
   `ACodeRoundRecordsItsSizeTests` builds one (`:159`), with a planted file: the answers contain none of the unknown
   member names, and the file still holds them after `open` saved it (M10).
@@ -232,6 +266,8 @@ All in `src_mcp/tests`, run by the MTP executable (`node .agents/conventions/too
 | Scrub the given dictionary in place | T8 |
 | Remove the answer strip | T9 |
 | Remove `[JsonInclude]` and keep `internal set` | T1 (the generator ignores the property; the bag stays empty) |
+| Scrub only the root bag (no rebuild of the children) | T6 (the round's `verdict` copy wins) |
+| Remove a member from `RoundRecord` and leave `RetiredMembers` as it is | T10 |
 
 The whole suite runs after S3; the count of passed tests is in the commit body.
 
@@ -239,7 +275,8 @@ The whole suite runs after S3; the count of passed tests is in the commit body.
 
 A bag holds only what a newer server wrote into that record, so a file is never larger than the newest server made it.
 One case grows nothing new but stops shrinking: a member that a later release RETIRES stays in old files' bags for ever,
-unless that release adds the name to `RetiredMembers` (D3). The rule for that release is in `module_server.md` (S4).
+unless that release adds the name to `RetiredMembers` (D3). T10 fails that release until it does; the rule is also in
+`module_server.md` (S4).
 Nothing here has an in-flight state, so no sweep is needed.
 
 ## 9. Other files with the same exposure (open tail — not fixed here)
@@ -264,8 +301,9 @@ there today, and each needs its own D7-style look at where its records are sent.
 
 ## 10. Questions left
 
-1. E5 §7 item 18 (branch `feat/round-authors-e5`) must link back to this plan with the §5 table (planning rule: a
-   boundary is named on both sides). That branch belongs to another session; this plan did not edit it.
+1. The boundary is now on both sides on `main`'s line (E5 §8, this branch). E5's branch (`feat/round-authors-e5`)
+   rewrote E5 and belongs to another session; this plan did not edit that branch. When it rebases it must keep E5 §8
+   and point its §7 item 18 at it — a text conflict at the end of the file is likely, and the resolution is to keep both.
 2. Whether `Finding` and the other shared value types (D7) need the projection plan is open. It needs a measured loss
    first — a member added to `Finding` that a user missed.
 
@@ -273,10 +311,12 @@ there today, and each needs its own D7-style look at where its records are sent.
 
 - [ ] T1 and T2 were RED on `main` with the §1 message, and the message is in the commit body.
 - [ ] The six types carry the bag of D2, `internal set` + `[JsonInclude]`, with the comment that names who sets it.
-- [ ] `SessionStore.Write` scrubs known and retired names on a copy (D3); `RetiredMembers` exists and is empty.
+- [ ] `SessionStore.Write` scrubs known and retired names on a copy, rebuilt from the leaves up (D3); `RetiredMembers`
+      exists and is empty; T10's member list is committed.
 - [ ] `open` and `status` carry no bag (D5); T9 proves it through the service.
-- [ ] T1–T9 green; every break-it in §7.3 went red and was restored; the whole suite green, with its count.
-- [ ] The published AOT binary ran once on a planted file (S4), or the reason it could not is recorded.
+- [ ] T1–T10 green; every break-it in §7.3 went red and was restored; the whole suite green, with its count.
+- [ ] The PUBLISHED AOT binary ran on a planted file before S2 started (S1 step 3) and again after S3; no suite run
+      stands in for it.
 - [ ] `research/module_server.md` § *Persistence* says what the bags keep, what they do not (D6, D7), and D8.
 - [ ] The release note says the guard helps only releases after it (D8).
 - [ ] `node .agents/conventions/tools/plan-lifecycle.mjs` is clean, and this plan is promoted when the work ships.
