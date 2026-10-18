@@ -83,7 +83,7 @@ Each was settled by opening the file; the line it rests on is given.
   (`RoundsDb.cs` is 1 293 lines and gains a seam, not a writer). A failure between the delete and the insert then leaves
   the round's earlier rows, never none.
 - **The whole scope's `From` is `rounds.base_ref`, never a merge-base computed today** (E2 §10 point 9). `base_ref` is the
-  base the live diff was resolved against — `CollectedDiff.ComparedAgainst` (`src_mcp/src/Server/PanelService.cs:891`) — and
+  base the live diff was resolved against — `CollectedDiff.ComparedAgainst` (`src_mcp/src/Server/PanelService.cs:892`) — and
   `RoundChangesLog` reads `Whole.From` from it (`src_mcp/src/Store/RoundChangesLog.cs:53`, `:113-114`). Recomputing `merge-base(main, sha)` after the
   branch merged gives `sha` itself and a zero whole. `CollectAsync` resolves its own comparison base from what it is handed
   (`ContextAssembler.cs:307-321`); handed `base_ref`, an ancestor of `sha`, it resolves to `base_ref` — so S2 hands it
@@ -91,16 +91,16 @@ Each was settled by opening the file; the line it rests on is given.
 - **The open time comes from the session file, never from the database.** `sessions.opened_utc` is the clock of the
   FIRST PROJECTION — bound to `DateTime.UtcNow` when the first round is recorded (`RoundsDb.cs:838`) and never updated
   (the upsert sets only `repo_path`/`branch`, `:833`) — so it is later than `open` by at least one whole round. `open`
-  stamps the real one on the session file (`src_mcp/src/Server/PanelService.cs:497-505`, `PersistedSession.OpenedUtc`,
+  stamps the real one on the session file (`src_mcp/src/Server/PanelService.cs:498-506`, `PersistedSession.OpenedUtc`,
   `SessionStore.cs:278`). A session file whose `OpenedUtc` is the default leaves the first window unbounded, which the live
-  path already treats as "no window" (`src_mcp/src/Server/Rounds/RoundEngine.cs:898-907`).
+  path already treats as "no window" (`src_mcp/src/Server/Rounds/RoundEngine.cs:899-908`).
 - **Which rounds — E5 §3's one sentence, one owner** (M6). Authors are decided for a `PlanReview` or `CodeReview` round that
   is SETTLED — status `done`, verdict not `skipped` (E4 §S2.3). A skipped, interrupted (`RoundRecord.Interrupted`, the
   sweep's word, `SessionStore.cs:626`), running, feature or document round is **not selected**: no snapshot, an empty
   `authors_state`, no reason — live and backfilled alike. `Assign` is never handed such a round (E4 G6).
 - **The caller's session id is `rounds.authors_session`, else `rounds.caller` when it is a UUID** (E5 §3's earlier-caller
   order). It is not on the session file — `RoundContext.Caller` (`src_mcp/src/Store/RoundContext.cs:40`) carries it straight
-  to the projection (`RoundEngine.cs:612-620`), and a `repo:<path>` value (`RoundCommands.cs:34-35`) is `NoSessionId`. So the
+  to the projection (`RoundEngine.cs:613-621`), and a `repo:<path>` value (`RoundCommands.cs:34-35`) is `NoSessionId`. So the
   population a backfill walks is the DATABASE's rounds; the session file adds `OpenedUtc`, the rounds' order and the place
   the snapshot lives. **The id source**: a recompute keeps the LIVE `authors_id_source` (`registry`/`environment`) — the
   live server's choice cannot be re-asked after the fact; `stored` is written only where the row had none; `healed` is the
@@ -111,12 +111,12 @@ Each was settled by opening the file; the line it rests on is given.
   `partial: peer running` as it is and never writes another session's rows. The backfill recomputes exactly those rows
   (S1 rule 3), under THAT session's claim (S3), and a second run then changes nothing.
 - **Session files are written under the session's claim, and two writers do not take it.** A round and `resolve` hold
-  `SessionClaim` (`src_mcp/src/Server/SessionClaim.cs:44-58`; taken at `RoundEngine.cs:222`, `PanelService.cs:1590`,
+  `SessionClaim` (`src_mcp/src/Server/SessionClaim.cs:44-58`; taken at `RoundEngine.cs:222`, `PanelService.cs:1591`,
   `AskHumanService.cs:349`); every read and write also takes `SessionTurn` (`SessionStore.cs:405-431`, `:495`, `:532`).
-  But `open` loads and saves WITHOUT the claim (`PanelService.cs:497-511`), and so does the startup orphan sweep
+  But `open` loads and saves WITHOUT the claim (`PanelService.cs:498-512`), and so does the startup orphan sweep
   (`SessionStore.cs:608-632`). A backfill takes the claim, and still verifies after writing and heals a lost snapshot
   on its next run (S1 rule 5, S3) — locking `open` is a different change and is not made here.
-- **An OLDER server strips the snapshot.** `PersistedSession` declares no `JsonExtensionData` (`ServerJsonContext.cs:339-345`
+- **An OLDER server strips the snapshot.** `PersistedSession` declares no `JsonExtensionData` (`ServerJsonContext.cs:346-352`
   is the whole option set), so a `coai-mcp` older than E5's release that loads and saves a session file — `open`, a round,
   the orphan sweep, in any VS Code window on that side — drops its `authors` member. The database rows survive (an older
   server knows no authors column and `RoundChangesTable`'s null rule writes nothing), but the session file, the rebuild
@@ -355,15 +355,15 @@ finds sends the work back through a new RED-test story before O4 (J1's rule).
   - **The peers — and with them `before-open` — come from ONE call, E5.S4's `AuthorPeers.Find(connection, load, deadline:
     null)`** (E5 §10 items 8 and 14): the same read-only lookup the live path runs, each peer built from its SESSION FILE
     through `AttributionMapping.Timeline`, so `running` rounds (which exist in files only — `RecordRound` is reached at
-    completion and skip alone, `RoundEngine.cs:612`, `RoundSkips.cs:80`) are visible with their `running` status. E4 derives
+    completion and skip alone, `RoundEngine.cs:613`, `RoundSkips.cs:80`) are visible with their `running` status. E4 derives
     `before-open` from these timelines itself (`PriorEnd`, the settled prefix, G2); **this document's earlier database join
     on `caller`/`repo_path` is dropped** — one implementation, so parity follows from construction. `Find`'s result also
     fills S1's `PeerStatus`: `PeersKnown` is E4's input flag (false when the lookup did not complete); `PeerIds` the gate
     ids found; `ANamedPeerRoundStillRuns` from the `running` rounds of the timelines whose ids are in the row's `PeerGates`
     and whose windows overlap this round's. The `universe` is `AttributionMapping.Universe(gate, peers, observation)`.
   - **Transcripts**: `ClaudeHome.Default.With(PanelSettings.AgentLogDir)` (E3.S2 brief 1; `AgentLogDir` is
-    `src_mcp/src/Server/PanelSettings.cs:421`, from `COAI_AGENT_LOG_DIR` at `:1009`) — the one resolution E5.S4 makes of
-    today's ternary (`RoundEngine.cs:902`, `AgentLog.DefaultProjectsDir`, `src_mcp/src/Store/AgentLog.cs:39`). The location
+    `src_mcp/src/Server/PanelSettings.cs:430`, from `COAI_AGENT_LOG_DIR` at `:1018`) — the one resolution E5.S4 makes of
+    today's ternary (`RoundEngine.cs:903`, `AgentLog.DefaultProjectsDir`, `src_mcp/src/Store/AgentLog.cs:39`). The location
     is `CallerTranscriptLocator.LocateStored(authors_session, else a UUID rounds.caller, home)` — run for every selected round
     BEFORE S1 decides (`TranscriptLocated`); the id source written is §3's (the live value kept on a recompute, `stored`
     only where the row had none). One read per caller session id per run, at the lowest `fromUtc` (`RoundAttribution.ReadFrom`)
@@ -538,8 +538,8 @@ finds sends the work back through a new RED-test story before O4 (J1's rule).
   after `--round-counts`'s (`:2457-2461`), and its entry in `Program.WriterModes` (`:310-314`, §3);
   `--backfill-authors` added to the one-shot list in `.agents/PROJECT.md:53-55` (enforced by
   `TheSanctionedModesAreTheOnesTheDocumentNames`, `src_mcp/tests/ARequestFaultIsNotAnOldBinaryTests.cs:50-69`);
-  `research/module_server.md` — a section beside `--round-counts` (`:3350`) with a Mermaid flow;
-  `research/module_tests.md` — its rows after the `--round-counts` section (`:3181`); tests
+  `research/module_server.md` — a section beside `--round-counts` (`:3363`) with a Mermaid flow;
+  `research/module_tests.md` — its rows after the `--round-counts` section (`:3191`); tests
   `src_mcp/tests/BackfillAuthorsCliScenarioTests.cs` through `OneShotProcess.StartInfo` (`src_mcp/tests/OneShotProcess.cs:40-55`)
   with `COAI_AGENT_LOG_DIR` pointing at a temp copy of E1's fixtures (re-pointed by their `fixtureRoots`, instants shifted by
   one offset — E1's contract) and a temporary git repository for the size.
@@ -942,7 +942,7 @@ revised on its own branch the same day. Every `path:line` was re-read on `main`.
 
 Rebased; no file this document cites in `src_mcp/src`, `core`, `storage` or `runners/Context/ContextAssembler.cs` changed
 since `2d98f2f8` (the eight commits are releases, Vibe-on-WSL, the rules budget and E1's #851 fixture re-cut). Anchors
-moved: `module_tests.md:3181` → `:3190` (its rows `:3205-3206`); corrected: `RoundChangesLog.cs` is in `src_mcp/src/Store/`,
+moved: `module_tests.md:3181` → `:3191` (its rows `:3206-3207`), `module_server.md:3350` → `:3363`; corrected: `RoundChangesLog.cs` is in `src_mcp/src/Store/`,
 `RoundChangesTable.Record` is `:28-39`, `SessionStore.Exists` is `:450`. E3 read at `16628077`, E4 `30362785`, E5 `c1216b42`,
 E6 `131074b4`; the cross-epic list owed to E7 (E4 §11 *Cross-epic*, E5 §10 items 11 and 14, E6 §3a) applied in full:
 
