@@ -92,6 +92,9 @@ public sealed class KimiRuntime(string id, KimiHost host, KimiSeams seams, Seril
 
     public string Provider => id;
 
+    /// <summary>Whether THIS adapter admits a sign-in folder on network storage (<c>coai.kimiAllowNetworkSignIn</c>): the answer its launches are judged by, so a test can read what a roster bound to a row.</summary>
+    internal bool AllowsNetworkSignIn => allowNetworkSignIn;
+
     /// <summary>
     /// The <c>kimi</c> CLI — what <c>providers</c> probes and what the card's version and install state are about — and NOT the shim this adapter
     /// launches: the same resolution a launch uses (<see cref="KimiPlaces.Resolve"/>), so the card and the launch cannot name two programs.

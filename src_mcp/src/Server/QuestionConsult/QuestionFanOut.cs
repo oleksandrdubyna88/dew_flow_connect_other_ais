@@ -315,7 +315,7 @@ public sealed class QuestionFanOut(
     }
 
     /// <summary>One row's launch settings — the roster's shape (<c>RosterBuilder.SettingsFor</c>), with the row's own budget.</summary>
-    private ReviewerSettings SettingsFor(RowAdmission.Admitted row)
+    internal ReviewerSettings SettingsFor(RowAdmission.Admitted row)
     {
         var provider = row.Provider;
         var settings = new ReviewerSettings(provider.Provider)

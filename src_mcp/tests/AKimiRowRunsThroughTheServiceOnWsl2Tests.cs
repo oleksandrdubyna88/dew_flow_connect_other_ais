@@ -32,7 +32,7 @@ public sealed class AKimiRowRunsThroughTheServiceOnWsl2Tests : IAsyncLifetime
     private static string SteeringFile => Path.Combine(Path.GetTempPath(), "fakecli-minimal.json");
 
     private readonly ProcessLauncher _launcher = new();
-    private readonly TempDir _dir = TempDir.For("coai-kimiflow-");
+    private readonly TempDir _dir = TempDir.For("testsToDelete-kimiflow-");
     private readonly KimiFixture _person = new();
     private FakeAcpAgent? _agent;
 
