@@ -1,5 +1,12 @@
 # Changelog
 
+## Extension 0.80.0 — 2026-10-18
+
+**Added: the model card sets a row's prompt cap.** The Models card has a new box, "Largest prompt it reads, KiB". It
+writes the row's `maxPromptKib`: a whole number from 1 to 4096. Empty is no cap, and there is no default; you choose the
+cap for each row. coai-mcp then leaves that reviewer out of a round whose prompt is larger than the cap, and says why in
+the reply. The box shows for every runtime. It needs coai-mcp 0.60.0: with an older server the cap is not written, and
+the card says that the server does not take it yet.
 ## Server 0.60.0 — 2026-10-18
 
 **Added: a reviewer row can say how much it can read.** A vendor row can now carry `maxPromptKib`: the largest first
