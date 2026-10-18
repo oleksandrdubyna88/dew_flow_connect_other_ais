@@ -37,9 +37,12 @@ internal static class VendorRowReader
 
     /// <summary>
     /// One cure for every member: the parser does not say whether text lost its quotes, a number gained them, or a number
-    /// does not fit (<c>30.5</c> or <c>99999999999</c> for whole minutes) — so the cure names all three.
+    /// does not fit (<c>30.5</c> or <c>99999999999</c> for whole minutes) — so the cure names all three, with the range a
+    /// minute member reads (the extension's <c>isMinutes</c>).
     /// </summary>
-    private const string WrongValueCure = "Write text in quotes, numbers and true/false without them, and minutes as whole numbers";
+    private static readonly string WrongValueCure =
+        "Write text in quotes, numbers and true/false without them, and minutes as whole numbers from 1 to "
+      + $"{Core.Catalog.CatalogLimits.MaxTimeoutMinutes}";
 
     /// <summary>Every row of <paramref name="json"/> that reads, and a refusal for each one that does not.</summary>
     internal static VendorRows Read(string json)

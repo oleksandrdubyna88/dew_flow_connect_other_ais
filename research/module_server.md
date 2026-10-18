@@ -7126,9 +7126,9 @@ rows. `VendorListFrom` read "no rows from a non-empty text" as "not configured" 
   as a `JsonElement?`, as `maxPromptKib` does) was rejected: `plan`/`code` default to TRUE, so `"plan":"false"` would
   become "reviews plans".
 - **The sentence.** One `UnrecognisedSetting` per refused row, no `Kind`, key `COAI_VENDORS[<id>]` or
-  `COAI_VENDORS[row 2 of 3]`: `COAI_VENDORS: the row "claude" (row 2 of 3) is left out of every round - its member
+  `COAI_VENDORS[row 2 of 3]`: `COAI_VENDORS: the row "claude" (row 2 of 3) is left out of every round — its member
   timeoutMinutes has a value of the wrong JSON type, or a number it cannot hold. The other rows still review. Write text in quotes,
-  numbers and true/false without them, and minutes as whole numbers, ...`. One cure for every member, because the parser does
+  numbers and true/false without them, and minutes as whole numbers from 1 to 1440, ...`. One cure for every member, because the parser does
   not say whether text lost its quotes, a number gained them, or a number does not fit (`30.5`, `99999999999`). It reaches `providers`
   (`unrecognised`), the startup and reload notice and the panel toast with no extension change. The key is per ROW because
   the notice ledger groups on (code, subject): one shared key would fold two bad rows into one notice.

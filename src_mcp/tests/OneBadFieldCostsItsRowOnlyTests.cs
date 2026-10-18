@@ -163,6 +163,7 @@ public sealed class OneBadFieldCostsItsRowOnlyTests : IDisposable
     [InlineData("\"id\":5", "Write text in quotes")]
     [InlineData("\"timeoutMinutes\":30.5", "or a number it cannot hold")]
     [InlineData("\"timeoutMinutes\":99999999999", "or a number it cannot hold")]
+    [InlineData("\"timeoutMinutes\":99999999999", "minutes as whole numbers from 1 to 1440")]
     public void AWrongTypeSentence_FitsTheValueThePersonWrote(string badMember, string expected)
     {
         var settings = From($$"""[{"runtime":"claude",{{badMember}}},{{Gemini}}]""");
