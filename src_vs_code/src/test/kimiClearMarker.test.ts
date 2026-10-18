@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { test } from 'node:test';
 
 import { catalogHtml } from '../catalogPage';
 import { KIMI_ON_LINUX_SINCE } from '../runtimeSince';
-import { clearMarkerSaid, markerLine, pressClearMarker, type MarkerPorts } from '../kimiMarker';
+import { clearMarkerSaid, markerLine, NOT_INSTALLED, pressClearMarker, type MarkerPorts } from '../kimiMarker';
 import { PANEL_COMMANDS, type PanelState } from '../panelView';
 import { parseProviders, type ProviderHealth, type ProvidersAnswer } from '../providers';
 import { DEFAULT_VENDORS, type Vendor } from '../vendors';
@@ -189,10 +191,79 @@ test('a press when the providers question was NOT answered says so — never "no
   assert.match((await pressClearMarker('kimi', ports(answer({}), { code: 0, output: '' }).ports)).title, /no marker to clear/u, 'while an ANSWERED question with no marker still says so');
 });
 
-test('a clear mode that never answered (code -1: a timeout or a spawn that failed) says nothing is known and the card shows what stands (N1)', () => {
-  const said = clearMarkerSaid(-1, '');
+test('a clear mode that never answered says WHICH way it did not: a timeout, a program that would not start, or an end nobody can read (N1; L of the review of 2026-10-18)', () => {
+  const timeout = clearMarkerSaid(-1, '', 'timeout');
+  const notStarted = clearMarkerSaid(-1, '', 'not-started');
+  const unknown = clearMarkerSaid(-1, '');
 
-  assert.equal(said.as, 'warning');
-  assert.match(said.title, /did not answer within 20 seconds/u);
-  assert.match(said.title, /the card shows what stands/u);
+  for (const said of [timeout, notStarted, unknown]) {
+    assert.equal(said.as, 'warning');
+    assert.match(said.title, /the card shows what stands/u);
+  }
+  assert.match(timeout.title, /did not answer within 20 seconds/u);
+  assert.match(notStarted.title, /could not be started/u, 'a program that never started was said to have taken 20 seconds');
+  assert.doesNotMatch(notStarted.title, /20 seconds/u);
+  assert.doesNotMatch(unknown.title, /20 seconds|could not be started/u, 'a cause nobody knows is not named');
+  assert.match(unknown.title, /without an answer/u);
+});
+
+test('every press ends as the notice of ITS outcome: cleared, absent, kept or refused — never one code for all of them (L)', async () => {
+  const cleared = JSON.stringify({ outcome: 'cleared', members: [] });
+  const absent = JSON.stringify({ outcome: 'absent', members: [] });
+  const code = (said: { notice: { code: string } }): string => said.notice.code;
+
+  assert.equal(code(clearMarkerSaid(0, cleared)), 'kimi-marker-cleared');
+  assert.equal(code(clearMarkerSaid(0, absent)), 'kimi-marker-absent', 'nothing was cleared: there was none');
+  for (const kept of [75, 74, -1]) {
+    assert.equal(code(clearMarkerSaid(kept, members('alive'))), 'kimi-marker-kept', `exit ${kept}: the marker stays`);
+  }
+  assert.equal(code(clearMarkerSaid(0, '')), 'kimi-marker-kept', 'a success nobody can read does not claim a clear');
+  for (const refused of [65, 64, 1]) {
+    assert.equal(code(clearMarkerSaid(refused, '')), 'kimi-marker-refused', `exit ${refused}: the request was not taken`);
+  }
+  const unanswered = await pressClearMarker('kimi', ports(answer({}, false), { code: 0, output: '' }).ports);
+  assert.equal(code(unanswered), 'kimi-marker-kept', 'a providers question nobody answered: nothing ran, whatever stands still stands');
+  assert.equal(code(await pressClearMarker('kimi', ports(answer({}), { code: 0, output: '' }).ports)), 'kimi-marker-absent', 'a stale button: no marker is reported now');
+  assert.equal(code(NOT_INSTALLED), 'kimi-marker-kept');
+  const noticeSources = new Set([cleared, absent].map((one) => clearMarkerSaid(0, one).notice.source));
+  assert.deepEqual([...noticeSources], ['kimiMarker']);
+});
+
+test('a press hands the reason a run ended without an exit code to the sentence (L)', async () => {
+  const run = (ended: 'timeout' | 'not-started'): Promise<{ title: string }> =>
+    pressClearMarker('kimi', {
+      providers: async () => answer({ kimi: row({ survivorMarker: { path: MARKER, pids: [1] } }) }),
+      clear: async () => ({ code: -1, output: '', ended }),
+    });
+
+  assert.match((await run('timeout')).title, /20 seconds/u);
+  assert.match((await run('not-started')).title, /could not be started/u);
+});
+
+test('the panel says the outcome through the notice of the press, and never writes one code of its own (L)', () => {
+  const source = readFileSync(join(__dirname, '..', '..', 'src', 'panelProvider.ts'), 'utf8');
+
+  assert.ok(source.includes('...said.notice'), 'the press is said as the notice its outcome names');
+  assert.ok(!source.includes("code: 'kimi-marker-cleared'"), 'a literal code in the host would say "cleared" for every outcome again');
+});
+
+test('the Clear button is disabled and says “Clearing…” while the run is in flight, and is itself again when the host answers (L)', () => {
+  const page = runPanel(stateWith({ kimi: row({ survivorMarker: { path: MARKER, pids: [4242] } }) }), { html: catalogHtml(stateWith({ kimi: row({ survivorMarker: { path: MARKER, pids: [4242] } }) }), 'test-nonce', 'models') });
+  const button = page.commands.find((one) => one.dataset['command'] === 'clearKimiMarker');
+  assert.ok(button !== undefined, 'the page has the Clear button');
+  const was = button.textContent;
+  assert.match(was, /Clear the stuck Kimi marker/u);
+  assert.equal(button.disabled, false);
+
+  button.fire('click');
+
+  assert.equal(button.disabled, true, 'a second press while the first runs would start a second run');
+  assert.equal(button.textContent, 'Clearing…');
+  const sent = page.posted.filter((one) => one['type'] === 'command').at(-1);
+  assert.ok(sent !== undefined && sent['command'] === 'clearKimiMarker', 'the press was posted');
+
+  page.deliver({ type: 'settled', seq: sent['seq'], doc: sent['doc'], ok: true });
+
+  assert.equal(button.disabled, false, 'the host answered: the button is pressable again');
+  assert.equal(button.textContent, was, 'and says what it said');
 });

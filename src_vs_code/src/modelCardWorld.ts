@@ -159,7 +159,7 @@ export function kimiMarkerNote(vendor: Vendor, reported: CardContext['reported']
   return marker === undefined
     ? ''
     : `<p class="skew warned"><b>A Kimi marker stands.</b> ${escapeHtml(markerLine(marker))} `
-      + `<button type="button" class="link" data-command="clearKimiMarker" data-id="${escapeHtml(vendor.id)}" `
+      + `<button type="button" class="link" data-command="clearKimiMarker" data-id="${escapeHtml(vendor.id)}" data-pending-label="Clearing…" `
       + 'title="Checks every process the marker names; clears it only when all of them are gone. Ends nothing.">Clear the stuck Kimi marker</button></p>';
 }
 

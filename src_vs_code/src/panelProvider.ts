@@ -114,7 +114,7 @@ import { askedOrRefused, asksAnEndpoint, type EndpointListing, listingOf } from 
 import { vaultKeyOf } from './vaultKey';
 import { isApiSettingKey, resetTarget, withApiSetting, withoutApiSetting } from './apiSettings';
 import { modelsForKey } from './apiModelsProbe';
-import { pressClearMarker } from './kimiMarker';
+import { NOT_INSTALLED, pressClearMarker } from './kimiMarker';
 import { Found, FoundRound, keysFileIn, readBugs, readFileAt, readPairs, readRealMethod, RoundKey, serverRun, uploadRun, writeDecisions } from './roundsDbRead';
 import { BinaryFeatures, FEATURES, FeaturesCache, hasFeature, settledFeatures } from './binaryFeatures';
 import { collectWithPick } from './bugzCollect';
@@ -3477,12 +3477,12 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   private async clearKimiMarker(rowId: string): Promise<void> {
     const executable = this.serverExecutable();
     const said = executable.length === 0
-      ? { as: 'warning' as const, title: 'coai-mcp is not installed on this side, so there is no marker to clear from here.' }
+      ? NOT_INSTALLED
       : await pressClearMarker(rowId, {
         providers: () => readProviders(executable),
         clear: (path) => serverRun(executable)(['--kimi-clear-marker', path], PanelProvider.CLEAR_MARKER_CAP_MS),
       });
-    await notify({ as: said.as, class: 'outcome', source: 'kimiMarker', code: 'kimi-marker-cleared', title: said.title });
+    await notify({ as: said.as, class: 'outcome', ...said.notice, title: said.title });
     if (executable.length > 0) {
       await this.refreshProviders(executable);
     }
