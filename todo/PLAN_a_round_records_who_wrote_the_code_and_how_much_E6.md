@@ -74,7 +74,7 @@ Each is a rule the stories implement and a test pins. A reviewer who disagrees a
 | D1 | **Cohort is decided over ALL reviewed rounds of the gate session's stage, before the window and before any exclusion.** A *reviewed* round has status `done` and a verdict that is not `skipped` — the predicate the shipped delta rule uses (`DeltaPredecessor.IsCandidate`, `src_mcp/src/Server/Rounds/DeltaPredecessor.cs:45-46`; a skip is written `done` WITH a sha and reviewed nothing, parent §16 D1), and, within the two review stages, exactly E4's *settled* (`Windows.IsSettled` = `IsRecorded` ∧ `done`, E4 §S2.3): one predicate for cohorts (here), contributors (D2) and the authors that exist (E5 §3). It needs `Verdict` and `Status` on every fact (S1 reads both). `first` = the lowest-`number` reviewed round; every later reviewed round is `corrective`. A skipped round has no cohort (excluded `skipped`, D12). An excluded first round does not promote round 2; a first round before `--since` leaves round 2 `corrective`. | otherwise a filter changes what "new code" means — and a skipped round 1 would make the first real review "corrective" |
 | D2 | **Contributing rounds of round R** = the SETTLED rounds (D1's predicate) of R's gate session, both review stages, whose `started_utc ≤ R.started_utc`; **contributors** = their `round_authors` rows, rows with `window = before-open` only under `--with-before-open`. A skipped, interrupted, running, feature or document round is never a contributing round: it opens no window (E4 §S2.3, case `c16`) and has no state (E5 §3), so counting it would make every round after a skip *not recorded*. Computed by E4.S4's one implementation (`Contributors.Of(upToN, withBeforeOpen)`, E4 doc as of `30362785`, §E4.S4) over the stored rows mapped to its input type by D18 — never a second union here (parent §6, §16 D2). | §6 *"the union of the windows up to and including round N"*; §6 does not say whether plan rounds' windows count — D2 says they do (the coding between plan `proceed` and code round 1 sits in a plan-tiled window) |
 | D3 | **Authors state of R for the report = the WORST state over its contributing rounds**: not recorded < unobserved < partial < observed. Not recorded or unobserved → excluded; partial → included and counted. **`partial: peer running` is partial** (E4 G3): ownership was decided while a same-caller peer round was still running; it is PROVISIONAL, E7's backfill finalises it once every overlapping peer round is final (`done` or `interrupted`, E4 §S2.3), and the cell counts such rounds beside (`provisional`). **The stated limit (E4 G9, E5 §10 item 13 (i)):** the state read is each round's ROLL-UP over its `before-open` and `round` windows — per-window states live in the session-file snapshot only and step 24 does not project them — so with `before-open` left out (the default) a round whose before-open window alone is partial or unobserved (e.g. `unobserved: no open time`) is still partial or excluded. The error goes one way: toward exclusion, never toward a claim. A later schema step can project `Windows` from the files with no backfill (§4 item 9); E6 reads no session file. | a union with a hole is not an observed union |
-| D4 | **Coders** = contributor rows with `who ≠ main` and association `wrote here` (§8 *"families of `wrote here` subagents"*). Family from the OBSERVED `model` (§5; E4.S3: a row's `Model` is the model that ANSWERED, `Requested` the one asked for) through `shared/model-display-vectors.json` (parent §16 D19, written by E5.S6, every vector `{ model, display, family }`) — the vectors the card reads too; empty or `unknown` → `unknown`; a model the vectors do not know → `other`. **`unknown` is not a family** (E4 G10): E4.S3's launch-only row and its two-repositories row both carry `Model = "unknown"` — write or launch evidence, no model claim. Coder mix over the KNOWN families (`other` included): one → it; several → `mixed`; then `+unknown` appended when any coder row is `unknown` (`sonnet+unknown`, `mixed+unknown`); only `unknown` coders → `unknown`; no coder and a `main` row `wrote here` → `main only`; none at all → `no write observed`. A REQUESTED alias (`sonnet`) maps to a family only when it equals a family word the vectors file names; any other non-empty value goes through the id rule (`other` when it does not parse); `''` → `unknown`. | §8 lists `sonnet, opus, fable, mixed, main only`; a Bash-only change has no `wrote here` row and needs a name; the suffix keeps `unknown` visible as D5 does, without calling a Sonnet round `mixed` |
+| D4 | **Coders** = contributor rows with `who ≠ main` and association `wrote here` (§8 *"families of `wrote here` subagents"*). Family from the OBSERVED `model` (§5; E4.S3: a row's `Model` is the model that ANSWERED, `Requested` the one asked for) through `shared/model-display-vectors.json` (parent §16 D19, written by E5.S6, every vector `{ model, display, family }`) — the vectors the card reads too; empty or `unknown` → `unknown`; a model the vectors do not know → `other`. **`unknown` is not a family** (E4 G10): E4.S3's launch-only row and its two-repositories row both carry `Model = "unknown"` — write or launch evidence, no model claim. Coder mix over the KNOWN families (`other` included): one → it; several → `mixed`; then `+unknown` appended when any coder row is `unknown` (`sonnet+unknown`, `mixed+unknown`); only `unknown` coders → `unknown`; no coder and a `main` row `wrote here` → `main only`; none at all → `no write observed`. A REQUESTED alias (`sonnet`) maps to a family only when it equals a family word the vectors file names; any other non-empty value goes through the id rule (`other` when it does not parse); `''` → `unknown`. **The family function is C# code; the binary reads no vectors file** — `shared/model-display-vectors.json` is TEST data that holds the C# function and the card's TypeScript to one answer, the `shared/path-family-vectors.json` precedent (`ExecutablePaths.cs:19`, read only by `src_mcp/tests/SharedPathVectors.cs`), so there is no runtime path, and no missing or malformed file to handle; S2's test reads every vector through that pattern. | §8 lists `sonnet, opus, fable, mixed, main only`; a Bash-only change has no `wrote here` row and needs a name; the suffix keeps `unknown` visible as D5 does, without calling a Sonnet round `mixed` |
 | D5 | **Coder effort** = distinct `effort` of the coder rows, `''` and E4's `unknown` word both → `unknown`, sorted, joined `+` (`high`, `high+unknown`); no coders → `—`. **Main model** = distinct observed `model` of `who = main` contributor rows, sorted, joined `+`; none → `unknown`. | `unknown` stays visible inside a mix instead of being out-voted |
 | D6 | **Reviewer set** = the DISTINCT `(provider, model, effort)` of reviewer rows with status `done`, sorted ordinally. Beside it, never in the key: failed rows, stood-down rows (`SessionStore.cs:53,56`), and `partial set` rounds (≥ 1 launched reviewer `failed`). No `done` reviewer → excluded `no reviewer answered`. | §8 *"for reviewers that answered — with failed and partial reviewers counted beside"* |
 | D7 | **Reviewer effort**: `not recorded` (step 22's column default for every row written before it, `Schema.cs:651`) renders `not recorded`, and so does a file older than step 22, which has no column (`EffortRecorded = false`); `''` renders `none` (the launch applied none — every runtime but claude, a Team server row and local, `RosterBuilder.EffortFor`, `RosterBuilder.cs:721-727`; codex's effort is kept and not sent). The two are never merged, and a reviewer set keyed on `none` is not the one keyed on `not recorded`. Shipped: `RecordReviewers` binds `ReviewerState.Effort` (`RoundsDb.cs:950-951`), never `not recorded`. | parent §16 D11: E2.S3 writes the explicit default |
@@ -139,13 +139,18 @@ Not a cornerstone.
      (a) the in-window rounds of the stage (`started_utc >= $since AND started_utc < $until`, D13) → their session ids;
      (b) EVERY round of those sessions, any stage, any time, `InWindow` set from (a) — S2 needs them for D1 and D2, and rounds
      of sessions with no in-window round are never read; (c) per round: reviewers, `rounds.gating` (`gate_count`), finding
-     counts in SQL (`COUNT(*)`, `SUM(is_gating)` (`severe`), `SUM(re_raised)`, `SUM(resolution = 'accept')`, `SUM(resolution = '')`), `rounds.accepted <> -1` as
-     `Resolved`; (d) the sizes through `RoundChangesLog.Read(db, ids)` (it carries its own step-22 guard), and the `round_authors`
+     counts in SQL, `GROUP BY round_id` (`COUNT(*)`, `SUM(is_gating)` (`severe`), `SUM(re_raised)`, `SUM(resolution = 'accept')`,
+     `SUM(resolution = '')`, each wrapped `COALESCE(…, 0)` — `SUM` over no row is NULL in SQLite); a round with no finding has
+     no grouped row and reads all zeros in memory, never a missing key; `rounds.accepted <> -1` as `Resolved`; (d) the sizes through `RoundChangesLog.Read(db, ids)` (it carries its own step-22 guard), and the `round_authors`
      rows plus the authors columns behind the step-24 guard (D19), with `authors_state` checked per row by
      `AuthorsSnapshot.IsWellFormed`. Every per-table query takes the round ids as ONE parameter through `PageIds.Bind` and
      `json_each` — the touched sessions' rounds can run to thousands, and a bound JSON array reaches no SQLite variable limit.
      Bounded by the touched sessions; at most one query per table, joined in memory by each row's own `round_id` — no
-     per-round query.
+     per-round query. **One snapshot:** every query of (a)–(d), `RoundChangesLog.Read` included (it takes the
+     `SqliteConnection`, `RoundChangesLog.cs:23`), runs on ONE read-only connection inside ONE deferred read transaction
+     (`BEGIN` … `COMMIT`), so a `RecordRound` landing between two queries (it writes a round's rows in one transaction,
+     `RoundsDb.cs:196-202`) is seen whole or not at all. A test seam — a `between` delegate, a no-op by default, called after
+     (b) — lets scenario 10 write in the middle.
   3. Never SELECT `plan_text`, `agent_log`, `subject`, `note`, `commands`, `plan_source` (step 23 — its JSON carries a relative
      path, `PlanSource`), nor `findings.title/why/fix/reason/file/category/security_evidence`, nor any text column E5 might add
      beside the authors. Parameters for every value; table/column names are literals.
@@ -161,7 +166,8 @@ Not a cornerstone.
   1. *A seeded round reads back as its facts*: one code round with two `done` codex reviewers + one `failed` gemini, five
      findings (2 blocking/major, 1 re-raised, 2 accepted, 1 rejected, 2 unresolved), `whole` rows for code/test/docs/binary,
      three author rows → the facts equal the expected record field for field (`Resolved = true`).
-  2. *A never-resolved round* → `Resolved = false`, `Unresolved = All`.
+  2. *A never-resolved round* → `Resolved = false`, `Unresolved = All`. *A round with no finding* → `FindingFacts` all zero,
+     and the read does not throw.
   3. *Out-of-window rounds of a touched session are read, untouched sessions are not*: session A rounds at −30 d and −1 d,
      session B only at −30 d, window = last 7 d → A's two rounds (`InWindow` false/true), none of B's.
   4. *Window edges* (D13): a round AT `since` is in, AT `until` is out.
@@ -184,12 +190,16 @@ Not a cornerstone.
   9. *No text crosses*: a sentinel (`SENTINEL-7f3a`) written into `plan_text`, `agent_log`, `subject`, `note`, and every
      finding's `title/why/fix/reason` → no `RoundFacts.ToString()` of the read contains it; companion (`testing.md`, *a
      structural test that matches nothing*): the same check finds the round's `branch` text, proving the probe sees strings.
+  10. *One snapshot*: the `between` seam records, through a second connection, a new round of a touched session with three
+     findings and its authors → the read returns the facts it would have returned without the write, never the round
+     without its findings or its authors.
 - **Break-its (each watched red, then reverted).** Select `v.effort` unconditionally → scenario 6 fails with the SQLite
   `no such column` instead of `EffortRecorded = false`; drop the step-24 guard → scenario 7's step-23 file fails with `no such
   column: authors_state`; drop the session filter of (b) → scenario 3 sees B's round; select `f.title` into a field →
   scenario 9; use `<=` for `until` → scenario 4; drop the per-row `IsWellFormed` check → scenario 7a reads `done` as a state; clamp
-  `uncovered_writes` with `Math.Max(0, …)` → scenario 7b reads `0`.
-- **Done when.** Scenarios 1–9 (with 7a–7c) green, the six break-its observed; the reader is read-only (scenarios 6–7) and
+  `uncovered_writes` with `Math.Max(0, …)` → scenario 7b reads `0`; drop the `COALESCE` and look the sums up for every
+  round id → scenario 2's no-finding round throws; drop the read transaction → scenario 10 sees the new round.
+- **Done when.** Scenarios 1–10 (with 7a–7c) green, the nine break-its observed; the reader is read-only (scenarios 6–7) and
   text-free (scenario 9); suite green.
 - **Depends on.** E2.S3 (step 22 — shipped, #829), E5.S1 (`AuthorsSnapshot.IsWellFormed`) and E5.S2 (step 24 and
   `RoundAuthorsTable.AgentKeyOf`), E4.S3 (the
@@ -204,7 +214,7 @@ Not a cornerstone.
   `4dc98df`, cited as a path, not linked).
 - **Scope.** New `RoundAuthorsPopulation.cs`; records added to `RoundAuthorsModels.cs`. Input: S1's facts and a
   `RoundAuthorsSelection(string Stage, string SinceUtc, string UntilUtc, string SplitUtc, string Cohort, IReadOnlyList<string>
-  Kinds, bool WithBeforeOpen, bool WithoutElided, bool WithUncovered)` (`WithUncovered` = the CLI's `--with-uncovered`, D12; it reaches `Population.Of`, which skips the `size not covered` exclusion when set) (`SplitUtc = ""` = no split). No I/O, no clock.
+  Kinds, bool WithBeforeOpen, bool WithoutElided, bool WithUncovered)` (`WithUncovered` = the CLI's `--with-uncovered`, D12; it reaches `Population.Of`, which skips the `size not covered` and `size coverage unknown` exclusions when set) (`SplitUtc = ""` = no split; `Stage` is the STORED name, `CodeReview`/`PlanReview`, mapped from the flag by S5; `Kinds` sorted and distinct; `UntilUtc = ""` when `--until` was not given — the resolved instant is the source's `ReadUtc`, S4). No I/O, no clock.
 - **Brief.**
   1. `Population Of(IReadOnlyList<RoundFacts> facts, RoundAuthorsSelection selection)` →
      `Population(IReadOnlyList<CountedRound> In, IReadOnlyList<ExcludedRound> Out)`. Only `InWindow` rounds of the selected
@@ -359,17 +369,30 @@ Not a cornerstone.
 - **Brief.**
   1. `RoundAuthorsAnswer(int Format, RoundAuthorsSelection Selection, IReadOnlyList<RoundAuthorsSource> Sources,
      IReadOnlyList<CellSums> Cells, IReadOnlyList<ExclusionCount> Exclusions, bool EffortMarkerKnown)`; `Format = 1`;
-     `RoundAuthorsSource(string SourceId, string Platform, string ReadUtc)` — `SourceId` is an OPAQUE id (lower-case hex of the first 16 bytes of SHA-256 over the normalised data-directory path), never the path: the JSON answer carries no absolute path, so it exposes no user name or workspace layout; the merge check compares ids, a test rejects any absolute path in the serialised answer; the platform from
-     `RuntimeInformation.OSDescription`'s family, the instant handed in (no clock inside the unit). **Only sums, counts, sets
-     and the selection** — no figure, no mark, no header: those are S3's render-time functions over the merged sums.
+     `RoundAuthorsSource(string SourceId, string Platform, string ReadUtc, bool EffortRecorded, IReadOnlyList<string>
+     Sessions)` — `SourceId` is an OPAQUE id (lower-case hex of the first 16 bytes of SHA-256 over the canonical
+     data-directory path: `Path.GetFullPath`, no trailing separator, upper-cased on Windows where the file system folds
+     case), never the path: the JSON answer carries no absolute path, so it exposes no user name or workspace layout; a
+     test rejects any absolute path in the serialised answer; the platform from `RuntimeInformation.OSDescription`'s family;
+     `ReadUtc` = the resolved `--until` the read used (handed in, no clock inside the unit); `EffortRecorded` = the store has
+     step 22's `reviewers.effort`; `Sessions` = EVERY gate-session id the read touched, sorted ordinally (opaque 8-hex ids,
+     `SessionStore`'s own — no path, no text). `EffortMarkerKnown` = every source's `EffortRecorded`, re-derived on a merge.
+     **Only sums, counts, sets and the selection** — no figure, no mark, no header: those are S3's render-time functions over
+     the merged sums.
   2. `Outcome Add(RoundAuthorsAnswer mine, RoundAuthorsAnswer theirs)` → the merged answer or a refusal sentence:
      `Format` differs → refuse naming both; any `Selection` field differs → refuse naming the FIELD and both values (two
-     selections are two populations); a `Source` present in both → refuse (a store added twice doubles every count);
-     `EffortMarkerKnown` differs → keep `false` (the weaker claim). Merge: cells by key — integers summed, session-id sets
-     UNIONED, branch maps summed per branch; exclusions summed by (cohort, period, reason); sources concatenated; cells
-     re-sorted as S3 sorts them.
+     selections are two populations — `Kinds` arrives sorted and an unset `--until` as `""`, so neither a reordered
+     `--kinds` nor two defaulted clocks differ); **a `SourceId` present in both, or two sources whose `Sessions`
+     intersect → refuse, naming the count of shared sessions** — a store added twice, or a COPY of a store read under
+     another path, would double every count, and a session id names one gate session in one store (a chance collision of
+     two random 8-hex ids between two real stores refuses rather than miscounts — the safe direction). `EffortMarkerKnown`
+     re-derived (one older store makes it `false`, and the header names that source — the CELLS are unaffected: each
+     reviewer set already carries its own rows' `not recorded`/`none` label, D7). Merge: cells by key — integers summed,
+     session-id sets UNIONED, branch maps and requested → answered maps summed per key; exclusions summed by (cohort,
+     period, reason); sources concatenated; cells re-sorted as S3 sorts them.
   3. `Parse(string text)` through the same JSON context; unknown properties, a missing required property, or a wrong type →
-     a refusal sentence (S5 turns every refusal of this unit into exit 65).
+     a refusal sentence (S5 turns every refusal of this unit into exit 65). S5 names the `--add` argument AS TYPED in every
+     refusal about that file — the user's own input, never read from the JSON, so the opacity holds.
 - **Scenarios (RED first).** Class `RoundAuthorsMergeTests`.
   1. *Two halves = the union*: seed store A with rounds X and store B with rounds Y (disjoint sessions) and store C with
      X ∪ Y (S1's seed, same records); `Add(Read(A), Read(B))` equals `Read(C)` in `Cells` and `Exclusions` exactly
@@ -380,11 +403,19 @@ Not a cornerstone.
   4. *Sets union*: two constructed answers that share a session id in one cell → sessions counted once.
   5. *Refusals*: selections differing in `--split` → the sentence names `split` and both instants; `Format = 2` → refused;
      one source added twice → refused; text that is not JSON, and JSON missing `cells` → refused.
+  5a. *A copy is not a second store*: store A read, then its `coai.db` copied to a second directory and read there → two
+     `SourceId`s, `Add` refused naming the shared sessions; the same directory under two spellings (case, a trailing
+     separator) → one `SourceId`, refused.
+  5b. *Same selection, different spelling*: `--kinds code,test` and `--kinds test,code`, and two answers both read with no
+     `--until` at different instants → merged, the two `ReadUtc`s kept on their sources.
+  5c. *Older store beside a current one*: a step-21 answer added to a step-24 answer → merged, `EffortMarkerKnown = false`,
+     and each cell's reviewer-set key is the one it had before the merge.
   6. *Round trip*: serialise → parse → equal; and no property anywhere in the document is named like a figure — asserted
      by walking the JSON and failing on any number that is not an integer (a ratio cannot hide as a sum).
 - **Break-its.** Session ids summed as counts → scenario 4 counts 2; marks stored in the JSON and added → scenario 3 shows
-  `small`; selection ignored → scenario 5 merges two splits silently.
-- **Done when.** Scenarios 1–6 green, the three break-its observed; the JSON contract is written into the mode's XML doc as
+  `small`; selection ignored → scenario 5 merges two splits silently; the session-overlap check removed → scenario 5a
+  merges the copy; `UntilUtc` stored resolved → scenario 5b refuses.
+- **Done when.** Scenarios 1–6 (with 5a–5c) green, the five break-its observed; the JSON contract is written into the mode's XML doc as
   `RoundCountsMode.cs:6-29` writes its own.
 - **Depends on.** S3. **Model:** brief Opus → code Sonnet → review Opus → fixes Sonnet.
 
@@ -408,12 +439,16 @@ Not a cornerstone.
 - **Brief.**
   1. Parse: every flag at most once except `--add` (repeatable); instants through `TryParseInstant`; `--since` default
      the epoch, `--until` default the clock; `--until ≤ --since` refused; `--split` outside `[since, until)` refused;
-     `--stage` ∈ {code, plan} (default code); `--cohort` ∈ {first, corrective, all} (default first); `--kinds` a
-     non-empty subset of {code, test, docs, config, unknown} (default `code,test`); `--stage plan` with `--kinds` or
-     `--without-elided` refused (no diff). Every refusal: the sentence on stderr naming the mode, the flag and the refused
+     `--stage` ∈ {code, plan} (default code), mapped HERE to the stored name — `code` → `nameof(Stage.CodeReview)`, `plan` →
+     `nameof(Stage.PlanReview)` (`RoundCounts.cs:172-175`) — so S1's query and the JSON carry the stored name; `--cohort` ∈
+     {first, corrective, all} (default first); `--kinds` a non-empty subset of {code, test, docs, config, unknown} (default
+     `code,test`), sorted and made distinct here; an unset `--until` enters the selection as `""` and its resolved clock
+     instant goes to S1 and to the source's `ReadUtc` (S4); `--stage plan` with `--kinds` or `--without-elided` refused (no
+     diff). Every refusal: the sentence on stderr naming the mode, the flag and the refused
      value; exit **65**; nothing on stdout. An unknown flag is a refusal, never ignored.
-  2. Answer: S1 → S2 → S3 → S4's answer for the local store; each `--add` file read and parsed (unreadable or refused →
-     **65** with S4's sentence); merged in argument order; then JSON (default, one document, S4's contract) or, with
+  2. Answer: S1 → S2 → S3 → S4's answer for the local store; each `--add` file read through `File.ReadAllText`, which
+     honours a byte-order mark (UTF-8, UTF-16 LE/BE, UTF-32 — a report redirected by Windows PowerShell 5.1 is UTF-16 LE with
+     a BOM), and parsed (unreadable or refused → **65** with S4's sentence and the argument as typed); merged in argument order; then JSON (default, one document, S4's contract) or, with
      `--table`, `RoundAuthorsText.Render(answer)`. A missing database is an empty local answer and exit **0** (and `--add`
      still applies). A store that will not read → **74** with `WhyUnreadable`. **Never 64.**
   3. `RoundAuthorsText.Render`: the header (S3) first; per cohort, per period, one table — coder mix · coder effort · main
@@ -447,12 +482,17 @@ Not a cornerstone.
      present in `--table` (the probe sees strings).
   9. *Two processes add up*: store B reported to a file; store A run with `--add` of it → stdout equals the report over
      store C = A ∪ B (`sources` aside).
+  9a. *The advertised workflow, with defaults*: store B run with NO `--until`, its stdout written to a file as UTF-16 LE with a
+     BOM; a few seconds later store A run with NO `--until` and `--add` of that file → exit 0, merged; the same file
+     `--add`ed twice → 65, stderr naming the argument as typed.
+  9b. *`--stage plan`* reaches the plan rounds: a seeded plan round is counted under `PlanReview`, never matched as `plan`.
   10. *Registered*: `Program.Classify(["--round-authors"])` is the new member, not `Startup.Usage`; the help text names it;
       `.agents/PROJECT.md`'s one-shot list names it; `AReaderModeNeverMakesTheDataDirectoryTests` runs it.
 - **Break-its.** A refusal answering 64 → scenario 4's `Expected code to be 65 … but found 64`; the missing-file check
   removed → scenario 3 finds 74; `subject` printed in the table → scenario 8; `--add` read failure as 74 → scenario 5;
-  the read opened read-write → scenario 7's SHA-256 differs.
-- **Done when.** Scenarios 1–10 green and the five break-its observed; the full `CoaiMcp.Tests.exe` green; `module_server.md`
+  the read opened read-write → scenario 7's SHA-256 differs; the flag word passed to S1 unmapped → scenario 9b counts
+  nothing; the `--add` file read as UTF-8 only → scenario 9a answers 65.
+- **Done when.** Scenarios 1–10 (with 9a–9b) green and the seven break-its observed; the full `CoaiMcp.Tests.exe` green; `module_server.md`
   and `module_tests.md` describe the mode; `--round-authors` is in `.agents/PROJECT.md`'s one-shot list IN THE SAME COMMIT
   that wires it into `Program.cs`, and `ARequestFaultIsNotAnOldBinaryTests` (`TheSanctionedModesAreTheOnesTheDocumentNames`)
   is green; a seeded round with `uncovered_writes > 0` is excluded as `size not covered` and taken in under
@@ -538,6 +578,18 @@ Every point was checked against those texts and the code before it was applied; 
 The design choices in D4 (suffix, alias rule) and D12 (own reason, same flag) and the D3 limit were put to the question
 consultants on 2026-10-18 (`c5adccb5…`); the one answering row agreed with each, and each was checked against E4 G10, E5 §10
 item 12 and E5.S6's vectors rule before it was written.
+
+**The plan gate of 2026-10-18** (session `d67ae71e`, round 1, `good_enough`, 16 findings, each checked in the code). Applied:
+NULL sums for a round with no finding (S1 `COALESCE`, scenario 2); one read transaction over every query (S1, scenario 10);
+`--add` refuses a copied store by intersecting `Sessions`, with the path canonicalised (S4 5a); `--stage` mapped to the stored
+name (S5, 9b); `EffortMarkerKnown` per source, cells unaffected (S4 5c); an unset `--until` stored as `""` so the default
+workflow merges (S4 5b, S5 9a); the `--add` argument named in refusals; BOM-aware reading (9a); `--kinds` sorted; the family
+function is code, the vectors file test data (D4). Rejected with reasons in the gate record: the "plan rounds out of
+window" reading of D2 (both stages share one gate session and (b) reads all of its rounds; the `started_utc` bound keeps later
+code rounds out), the "`author_window`" column (E5 names `window`; the shipped schema wins, §0; scenario 1 seeds a step-24
+store through the real writer), memory (bounded by touched sessions, integers and short ids only), SQLite error codes
+(`Program.Unreadable` maps every `SqliteException` and `IOException` to 74, `Program.cs:1652-1654`) and a timeout (the reused
+open string carries `Default Timeout=5`, `RoundCounts.cs:100`).
 
 ## 4. Open with E3–E5
 
