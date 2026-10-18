@@ -1,12 +1,16 @@
 # PLAN — one named constant for Windows' path limits, used by the Vibe budget and the worktree error text
 
-> Status: **plan only, nothing implemented yet, 2026-10-18.** Approved by the owner 2026-10-18 as a small refactor.
-> Scope: `src_mcp/runners/Platform/` (one new file), `src_mcp/runners/Vibe/VibePathBudget.cs`,
-> `src_mcp/runners/Worktrees/WorktreeFailure.cs`, their tests, and `research/module_runners.md`.
+> Status: **IMPLEMENTED, 2026-10-18** — on branch `refactor/one-windows-path-limit`, through the coai plan round
+> (`proceed`, session `fcf71b66`), the cadence consultation (closed `solved`) and the code round (`proceed`); the pull
+> request is opened from that branch and was NOT merged when this plan was promoted. Approved by the owner 2026-10-18
+> as a small refactor. What shipped differently is under *Deviations* below. Open tail: the extension help text
+> (section 8), recorded, not extracted — by decision. Scope: `src_mcp/runners/Platform/` (one new file),
+> `src_mcp/runners/Vibe/VibePathBudget.cs`, `src_mcp/runners/Worktrees/WorktreeFailure.cs`, their tests, and
+> `research/module_runners.md`.
 >
-> Related docs: [module_runners.md](../research/module_runners.md),
-> [PLAN_review_trees_survive_long_paths.md](../research/PLAN_review_trees_survive_long_paths.md),
-> [PLAN_vibe_live_round_fixes.md](../research/PLAN_vibe_live_round_fixes.md).
+> Related docs: [module_runners.md](module_runners.md),
+> [PLAN_review_trees_survive_long_paths.md](PLAN_review_trees_survive_long_paths.md),
+> [PLAN_vibe_live_round_fixes.md](PLAN_vibe_live_round_fixes.md).
 
 ## 1. Symptom
 
@@ -132,15 +136,15 @@ Run, per `.agents/PROJECT.md` (never `dotnet test`):
 
 ## 6. Definition of Done
 
-- [ ] `WindowsPathLimits.FileUnits = 259` and `.FolderUnits = 247` exist once, in `src_mcp/runners/Platform/WindowsPathLimits.cs`, with the probe history in their docs.
-- [ ] `VibePathBudget.Windows` and `WorktreeFailure` read them; `WorktreeFailure` has no constant of its own left.
-- [ ] No production C# code holds `259` or `247` outside that file (the census test).
-- [ ] The four new tests are green; the existing `WorktreeFailureTests`, `VibePathBudgetTests`, `WorktreeManagerTests` are green with no changed assertion except `:65` and `:381`.
-- [ ] The whole `CoaiMcp.Tests.exe` suite ran once with no filter; any red is named in the PR description with its cause.
-- [ ] The three break-its went red as expected and green after the revert; the outputs are in the PR description.
-- [ ] `dotnet format --verify-no-changes` is clean on the touched files.
-- [ ] `research/module_runners.md` names the new type; the plan is promoted to `research/` with `IMPLEMENTED`; `plan-lifecycle.mjs` is clean.
-- [ ] The coai code round reached `proceed`; the PR title is `refactor(...)` (not a releasing type).
+- [x] `WindowsPathLimits.FileUnits = 259` and `.FolderUnits = 247` exist once, in `src_mcp/runners/Platform/WindowsPathLimits.cs`, with the probe history in their docs.
+- [x] `VibePathBudget.Windows` and `WorktreeFailure` read them; `WorktreeFailure` has no constant of its own left.
+- [x] No production C# code holds `259` or `247` outside that file (the census test).
+- [x] The four new tests are green; the existing `WorktreeFailureTests`, `VibePathBudgetTests`, `WorktreeManagerTests` are green with no changed assertion except `:65` and `:381`.
+- [x] The whole `CoaiMcp.Tests.exe` suite ran once with no filter; any red is named in the PR description with its cause.
+- [x] The three break-its went red as expected and green after the revert; the outputs are in the PR description.
+- [x] `dotnet format --verify-no-changes` is clean on the touched files.
+- [x] `research/module_runners.md` names the new type; the plan is promoted to `research/` with `IMPLEMENTED`; `plan-lifecycle.mjs` is clean.
+- [x] The coai code round reached `proceed`; the PR title is `refactor(...)` (not a releasing type).
 
 ## 7. Constraints
 
@@ -152,4 +156,27 @@ Run, per `.agents/PROJECT.md` (never `dotnet test`):
 
 The extension's help text names 259 in seven places (section 2.2). It is the same limit, in another product. A check
 that the help text and `WindowsPathLimits.FileUnits` agree would be a cross-language census; it is not part of this
-refactor and is recorded here so that the next reader can see it was checked, not missed.
+refactor and is recorded here so that the next reader can see it was checked, not missed. The cadence consultation
+(gpt-6-astra, 2026-10-18) agreed it is a real gap against §1.4 with no numerical regression today. Checked: the seven
+places above (`help.ts`, `helpContent.ts`, `helpDe/Es/Ru/Uk.ts`, `package.json`); NOT checked: whether a generated
+help string or a shared JSON could carry the number — that is the work a follow-up plan would start with.
+
+## 9. Deviations — what shipped differently
+
+- **The census reads `src_mcp/` only.** The plan said "no production C# code". `ProductionSources` reads every `src_*`
+  project (`src_mcp/tests/ProductionSources.cs:198-203`), and a 247 in the Linux-only Team server is not this limit.
+  The cadence consultation found it; the test now filters to `src_mcp/` and its failure text says what to do with a
+  number that only happens to be 259 or 247 (commit `0358646f2`). Break-it 1 was run again after the change: still red.
+- **Break-it 2 turned fewer tests red than predicted.** With `FileUnits = 260`, `WindowsPathLimitsTests` (the pin and
+  the census) and 6 `VibePathBudgetTests` went red, and the tie test stayed green as planned — but `WorktreeFailureTests`
+  stayed green, against the plan's prediction. Its file-limit test reads the constant (`:65`), and its other asserts
+  only check that `259` is ABSENT. The folder/file split is still guarded: break-it 3 turned two of its tests red.
+- **The whole suite had 10 reds, none from this change.** 11106 tests, 11024 passed, 72 skipped, 10 failed after a
+  46-minute run under load — all slow or timeout tests in classes this change does not touch (Kimi lock, outline
+  timing, consultant modes, Vibe question rows, security lane, ask-human, round-counts CLI, partition timing, an
+  agy follow-up). All 10 passed when run alone on the same build.
+- **The code round named only the promotion** (four findings, all accepted): the plan in `todo/` with a "plan only"
+  status, the `todo/README.md` row, and the `module_runners.md` row that already cited `research/`. This promotion
+  is the fix.
+- **Rebased once** onto `045cd9191` (`chore(main): release mcp 0.60.0`), which touched only `RELEASES.md` and
+  `version.txt`.
