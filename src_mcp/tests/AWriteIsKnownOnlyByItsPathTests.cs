@@ -300,4 +300,81 @@ public sealed class AWriteIsKnownOnlyByItsPathTests
         GitMarker.HasGit(root.At("worktree")).Should().BeTrue("a linked worktree and a populated submodule carry a .git FILE");
         GitMarker.HasGit(root.At("empty-mount")).Should().BeFalse();
     }
+
+    // ---- a path the file system must never be asked about (security fix, 2026-10-18) -------------------------------
+
+    /// <summary>A fake file system that records every path it is asked about and says "no" to each.</summary>
+    private sealed class Probes
+    {
+        public List<string> Touched { get; } = [];
+
+        public bool Network { get; init; }
+
+        public CheckoutProbes Seam => new(Touch, Touch, _ => Network);
+
+        private bool Touch(string path)
+        {
+            Touched.Add(path);
+
+            return false;
+        }
+    }
+
+    /// <summary>UNC and device forms this platform reads as fully qualified; on Windows each one, handed to the file system, contacts a host.</summary>
+    private static IReadOnlyList<string> RemotePaths() => OperatingSystem.IsWindows()
+        ? [@"\\host\share\repo\a.cs", "//host/share/repo/a.cs", @"\\?\UNC\host\share\repo\a.cs", @"\\.\pipe\repo\a.cs", @"\\?\D:\repo\a.cs"]
+        : ["//host/share/repo/a.cs"];
+
+    [Fact]
+    public void A_unc_or_device_path_is_unresolved_and_never_reaches_the_file_system()
+    {
+        foreach (var path in RemotePaths())
+        {
+            var probes = new Probes();
+
+            var target = new CheckoutRoots(probes.Seam).Resolve(path);
+
+            target.Should().Be(new WriteTarget(WriteTargetKind.Unresolved, string.Empty), path);
+            probes.Touched.Should().BeEmpty($"{path} must never be handed to the file system: on Windows that contacts the host and offers the user's credentials");
+        }
+    }
+
+    [Fact]
+    public void A_path_on_a_network_drive_is_unresolved_and_never_walked()
+    {
+        var path = OperatingSystem.IsWindows() ? @"Z:\repo\a.cs" : "/mnt/share/repo/a.cs";
+        var probes = new Probes { Network = true };
+
+        var target = new CheckoutRoots(probes.Seam).Resolve(path);
+
+        target.Should().Be(new WriteTarget(WriteTargetKind.Unresolved, string.Empty));
+        probes.Touched.Should().BeEmpty("a mapped network drive is a share by another name");
+    }
+
+    [Fact]
+    public void A_local_path_is_still_asked_about_through_the_same_seam()
+    {
+        var path = OperatingSystem.IsWindows() ? @"D:\repo\a.cs" : "/repo/a.cs";
+        var probes = new Probes();
+
+        new CheckoutRoots(probes.Seam).Resolve(path).Kind.Should().Be(WriteTargetKind.Unresolved, "the fake says no directory exists");
+        probes.Touched.Should().NotBeEmpty("the seam sees the touches it exists to see, so an empty list above is evidence");
+    }
+
+    [Theory]
+    [InlineData(@"D:\repo\a.cs", true, true)]
+    [InlineData("d:/repo/a.cs", true, true)]
+    [InlineData(@"\\host\share\a.cs", true, false)]
+    [InlineData("//host/share/a.cs", true, false)]
+    [InlineData(@"\\?\UNC\host\share\a.cs", true, false)]
+    [InlineData(@"\\?\D:\repo\a.cs", true, false)]
+    [InlineData(@"\\.\pipe\a", true, false)]
+    [InlineData(@"\repo\a.cs", true, false)]
+    [InlineData("D:repo", true, false)]
+    [InlineData("/repo/a.cs", false, true)]
+    [InlineData("//host/share/a.cs", false, false)]
+    [InlineData(@"\\host\share\a.cs", false, false)]
+    [InlineData("repo/a.cs", false, false)]
+    public void Only_a_drive_rooted_or_single_slash_rooted_path_is_local(string path, bool windows, bool local) =>
+        LocalPaths.IsLocalRooted(path, windows).Should().Be(local, path);
 }

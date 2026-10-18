@@ -72,7 +72,9 @@ public sealed record WriteTarget(WriteTargetKind Kind, string Where);
 /// <para>The answer is per DIRECTORY and cached by the exact full directory (<see cref="CacheKey"/>: case-folded only where the
 /// file system folds it), so <c>D:\X</c> and <c>d:/x</c> share an entry on Windows and <c>/work/App</c> and <c>/work/app</c> do not
 /// on Linux, and a session that writes thousands of files asks the filesystem once per folder. Only <c>Directory.Exists</c> and
-/// <see cref="GitMarker.HasGit"/> are used: no git process, no file read.</para>
+/// <see cref="GitMarker.HasGit"/> are used, through <see cref="CheckoutProbes"/>: no git process, no file read.</para>
+/// <para><b>Never asks about a remote path</b> (security fix, 2026-10-18): a UNC or device path, or one on a mapped network drive,
+/// is <c>Unresolved</c> with an empty key and never reaches the file system — see <see cref="LocalPaths"/>.</para>
 /// <para><b>Nearest root wins.</b> A submodule or a nested checkout resolves to the INNER root, and a linked worktree to the
 /// worktree, not to the common dir — two worktrees are two checkouts. Whether an inner root under the gate's <c>repo_path</c> counts as
 /// "here" is E4's rule, not this class's.</para>
@@ -85,6 +87,15 @@ public sealed class CheckoutRoots
     private static readonly bool CaseSensitiveFileSystem = !(OperatingSystem.IsWindows() || OperatingSystem.IsMacOS());
 
     private readonly Dictionary<string, WriteTarget> _byDirectory = [];
+    private readonly CheckoutProbes _probes;
+
+    public CheckoutRoots()
+        : this(CheckoutProbes.Real)
+    {
+    }
+
+    /// <summary>The seam a test uses to see every filesystem touch: <see cref="CheckoutProbes"/> is the ONLY way this class asks the disk.</summary>
+    internal CheckoutRoots(CheckoutProbes probes) => _probes = probes;
 
     /// <summary>
     /// The cache key of a FULL directory: the directory itself, folded to one case only where the file system folds it. Not
@@ -96,7 +107,9 @@ public sealed class CheckoutRoots
 
     public WriteTarget Resolve(string path)
     {
-        var directory = DirectoryOf(path);
+        // A UNC, device or network-drive path is refused on its TEXT, before any file-system call: asking Windows about
+        // \\host\share contacts that host and offers the user's credentials, and a transcript path can be steered (LocalPaths).
+        var directory = IsAskable(path) ? DirectoryOf(path) : string.Empty;
         if (directory.Length == 0)
         {
             return new WriteTarget(WriteTargetKind.Unresolved, string.Empty);
@@ -129,16 +142,20 @@ public sealed class CheckoutRoots
         }
     }
 
-    private static WriteTarget ResolveDirectory(string directory) =>
-        Directory.Exists(directory)
+    /// <summary>A local, rooted path on a drive that is not a network drive — the only kind this class hands to the file system.</summary>
+    private bool IsAskable(string path) =>
+        LocalPaths.IsLocalRooted(path, OperatingSystem.IsWindows()) && !_probes.IsNetworkDrive(path);
+
+    private WriteTarget ResolveDirectory(string directory) =>
+        _probes.DirectoryExists(directory)
             ? NearestRoot(directory)
             : new WriteTarget(WriteTargetKind.Unresolved, RepositoryIdentity.Normalised(directory));
 
-    private static WriteTarget NearestRoot(string directory)
+    private WriteTarget NearestRoot(string directory)
     {
         for (var current = directory; current is not null; current = Path.GetDirectoryName(current))
         {
-            if (GitMarker.HasGit(current))
+            if (_probes.HasGit(current))
             {
                 return new WriteTarget(WriteTargetKind.Checkout, RepositoryIdentity.Normalised(current));
             }
@@ -146,4 +163,13 @@ public sealed class CheckoutRoots
 
         return new WriteTarget(WriteTargetKind.OutsideAnyCheckout, string.Empty);
     }
+}
+
+/// <summary>
+/// Every question <see cref="CheckoutRoots"/> asks the file system — the only door it has to the disk, so a test can see each
+/// touch. <see cref="IsNetworkDrive"/> is answered from the local drive table only.
+/// </summary>
+internal sealed record CheckoutProbes(Func<string, bool> DirectoryExists, Func<string, bool> HasGit, Func<string, bool> IsNetworkDrive)
+{
+    public static CheckoutProbes Real { get; } = new(Directory.Exists, GitMarker.HasGit, LocalPaths.IsOnNetworkDrive);
 }
