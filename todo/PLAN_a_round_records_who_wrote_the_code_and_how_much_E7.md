@@ -77,9 +77,11 @@ Each was settled by opening the file; the line it rests on is given.
 - **Both writers run inside ONE transaction the backfill opens** (E2 §10 point 10). `RoundChangesTable.Record` deletes the
   round's rows and inserts them again (`RoundChangesTable.cs:27-39`); only `RecordRound` wraps it in a transaction today
   (`RoundsDb.cs:196-201`), and `RoundsDb` exposes no transaction outward — its one seam is `Command()` (`:172-181`). So S3
-  adds ONE internal line beside it, `internal SqliteTransaction Transaction() => _db.BeginTransaction();`, with the same
-  remark (`RoundsDb.cs` is 1 293 lines and gains a seam, not a writer). A failure between the delete and the insert then
-  leaves the round's earlier rows, never none.
+  adds ONE internal line beside it, `internal SqliteTransaction Transaction() => _db.BeginTransaction(deferred: false);`
+  — `BEGIN IMMEDIATE`, the `SqliteMigrator.cs:80` shape, explicit so the write lock is taken at the re-read and a competing
+  writer surfaces as busy there, never as a stale overwrite later (risk consultation, §9a) — with the same remark
+  (`RoundsDb.cs` is 1 293 lines and gains a seam, not a writer). A failure between the delete and the insert then leaves
+  the round's earlier rows, never none.
 - **The whole scope's `From` is `rounds.base_ref`, never a merge-base computed today** (E2 §10 point 9). `base_ref` is the
   base the live diff was resolved against — `CollectedDiff.ComparedAgainst` (`src_mcp/src/Server/PanelService.cs:891`) — and
   `RoundChangesLog` reads `Whole.From` from it (`src_mcp/src/Store/RoundChangesLog.cs:53`, `:113-114`). Recomputing `merge-base(main, sha)` after the
@@ -136,8 +138,11 @@ Each was settled by opening the file; the line it rests on is given.
   1. **Backup before any write, verified, the write gated on it** (S4; tests `TheBackupHoldsTheStoreAsItWas`,
      `ABackupThatDoesNotVerify_WritesNothing`, `TheFirstWriteComesAfterTheVerifiedBackup`). The copy is SQLite's online backup
      plus every session file; it is verified by opening, `integrity_check`, `user_version`, per-table row counts equal to the
-     source's before AND after, `PRAGMA data_version` unchanged across the backup (a count is not proof — an UPDATE keeps it;
-     `data_version` changes on any other connection's commit), and the session files' hashes. **Both live stores** — Windows
+     source's before AND after, `PRAGMA data_version` unchanged across the backup — read twice on the mode's OWN read-only
+     connection, each as an autocommit statement with no reader left open between them: SQLite changes the value when ANY
+     OTHER connection commits, and never for the connection's own commits (sqlite.org/pragma.html#pragma_data_version; a
+     count is not proof — an UPDATE keeps it) — and the session files' hashes. This verifies a recovery point; it does not
+     stop a server writing afterwards, which is what S3's in-transaction re-read is for. **Both live stores** — Windows
      `%LOCALAPPDATA%\coai-mcp` and WSL `~/.local/share/coai-mcp` — are each backed up by the run that writes them, before it
      writes; no run writes a store it did not back up in that same run; no backup is ever deleted.
   2. **A dry run first** (`--dry-run`: read-only, no backup folder, the same counts; O1 — a writing run in O2/O3 is refused by
@@ -229,9 +234,11 @@ finds sends the work back through a new RED-test story before O4 (J1's rule).
        rounds*) → not selected, NO state.
     1. **Deferral.** `FileState = unreadable` → `deferred: the session file did not read`; the claim busy (S3) →
        `deferred: the session was busy`. Neither is recorded on the round; both are retried.
-    2. **Transcript GONE** (`TranscriptLocated` false). (a) The file holds a snapshot: the database empty or EITHER version
-       older → `re-project` (rows FROM the snapshot, the transcript not read — the completion of a run killed between its
-       two writes); else `keep: transcript gone`. (b) The file holds none and the database state is non-empty →
+    2. **Transcript GONE** (`TranscriptLocated` false). (a) The file holds a snapshot: the database empty, EITHER version
+       older, or the projection DISAGREEING (below) → `re-project` (rows FROM the snapshot, the transcript not read — the
+       completion of a run killed between its two writes) — **under the strength guard like every replacement**: a
+       snapshot weaker than the database's state → `keep: stronger existing` (the mismatch counted); else `keep: transcript
+       gone`. (b) The file holds none and the database state is non-empty →
        **`heal`** — the FILE gets a snapshot rebuilt from the database (S3: rows through `RoundAuthorsTable.AgentKeyOf`,
        never a second spelling of `"" → main`; state and reasons from `authors_state`, split on `": "` then `", "` — exact,
        E5 §10 item 4; `Session`, `Reader`, `Attribution`, the ambiguous totals and the two write counts from their
@@ -240,12 +247,15 @@ finds sends the work back through a new RED-test story before O4 (J1's rule).
        `keep: no file`. (c) The database empty too → `compute`, which ends `unobserved: <the locator's reason>` — every
        selected round gets a state. **A `peer running` row without its transcript stays provisional for ever** — the
        stated limit.
-    3. **Transcript PRESENT — `recompute: provisional`** when the state's reasons include `peer running` and
-       `ANamedPeerRoundStillRuns` is false; or when `PeersKnown`, `HasAuthors`, `IdSource ≠ healed` and `PeerIds ⊄
-       PeerGates` (the peer set grew — a failed projection, E4 G3 (iii); a healed or absent snapshot has an UNKNOWN peer
-       set, never an empty one, so it never triggers this — H1; a lookup that did not complete proves no growth). A named
-       peer round still `running` → `keep: peer still running` (the backfill never sweeps: `SweepOrphanedRounds`,
-       `SessionStore.cs:608`, run by a server at startup, `PanelService.cs:144`, is the one owner of `interrupted`).
+    3. **Transcript PRESENT — `recompute: provisional`**, BOTH disjuncts gated on `PeersKnown` (gate finding 5: a lookup
+       that did not complete — a peer file torn or busy mid-save, the race §3 names — hides a `running` peer round, and a
+       recompute without its timeline would hand the peer's writes to the main session as a stronger, wrong `observed`):
+       `PeersKnown` false and the reasons include `peer running` → `deferred: peers unknown`, retried next run. Otherwise:
+       the state's reasons include `peer running` and `ANamedPeerRoundStillRuns` is false; or `HasAuthors`, `IdSource ≠
+       healed` and `PeerIds ⊄ PeerGates` (the peer set grew — a failed projection, E4 G3 (iii); a healed or absent snapshot
+       has an UNKNOWN peer set, never an empty one, so it never triggers this — H1). A named peer round still `running` →
+       `keep: peer still running` (the backfill never sweeps: `SweepOrphanedRounds`, `SessionStore.cs:608`, run by a server
+       at startup, `PanelService.cs:144`, is the one owner of `interrupted`).
     4. **`recompute: snapshot lost`** — `FileState = present`, `FileHasRound`, `HasAuthors` false (an older server stripped
        it), whatever the database's versions say. "Equal rows" is NOT promised (M2): at equal versions the placed ids,
        owners, associations and rows come back equal, but a straddling message's tokens may be higher (E4 decision 7),
@@ -254,14 +264,24 @@ finds sends the work back through a new RED-test story before O4 (J1's rule).
     5. **`keep: equal or newer`** — (`HasAuthors`, or `FileState` gone/replaced: no file to hold one) ∧ the database state
        `observed` or `partial` (never `unobserved` — its versions are `0` where a component did not run, and a present
        transcript is worth a recompute even at current versions, H2) ∧ `authors_reader ≥ ReaderVersion` ∧
-       `authors_attribution ≥ RoundAttribution.Version`.
-    6. **`re-project`** — the file's snapshot at both versions ≥ current, the database empty or older → rows FROM the
-       snapshot, the transcript not read.
+       `authors_attribution ≥ RoundAttribution.Version` ∧ **the snapshot's PROJECTION equals the database's** — the
+       `authors_*` columns and the `round_authors` rows the snapshot would write (E5.S2's mapping), compared canonically
+       with what the database holds. Versions alone do not prove the two stores agree (cadence consultation, §9a): a run
+       killed after the file save and before the commit leaves a current-version `observed` snapshot over a
+       current-version `partial` row, and a keep by versions would freeze the disagreement. A disagreement at equal
+       versions → `re-project` (the file is the rebuild source and was written first), under the strength guard.
+    6. **`re-project`** — the file's snapshot at both versions ≥ current, the database empty, older or disagreeing → rows
+       FROM the snapshot, the transcript not read; a weaker snapshot → `keep: stronger existing`.
     7. **`compute`** — empty, older, or `unobserved`.
-    **After any `compute`/`recompute`:** written when its strength ≥ the database's; a WEAKER result → `keep: stronger
-    existing`, and when the file had no snapshot the file is healed from the database instead of being left empty (M2). A
-    result EQUAL to the stored snapshot, member for member, versions included → `kept: unchanged`, nothing written (S3) —
-    this is what makes an `unobserved` row at current versions, which rule 5 never keeps, idempotent in `written`.
+    **After any `compute`/`recompute`/`re-project`:** written when its strength ≥ the database's; a WEAKER result →
+    `keep: stronger existing`, and when the file had no snapshot the file is healed from the database instead of being
+    left empty (M2). **The one exception, for J1 (gate finding 4):** `BackfillDecision.CorrectedBelow` — two integers
+    beside the rules, default `0`/`0` — names reader/attribution versions whose results a RED-test fix story found WRONG;
+    a row whose stored version is below the named one is replaced whatever the strengths (a defective `observed` is not a
+    stronger observation, it is a false one), counted `written.corrected`. A fix that merely REFINES leaves the constant
+    at `0`, and the guard holds. A result whose PROJECTION equals the database's → `kept: unchanged`, nothing written (S3)
+    — this is the equality that works for a database-only row too (no snapshot to compare member for member), and it is
+    what makes an `unobserved` row at current versions, which rule 5 never keeps, idempotent in `written`.
     8. **Size**, decided apart: stage `code`, settled; `size_state` non-empty → keep (a live size is never replaced, and
        a backfill never re-measures its own); empty with both `BaseRef` and `HeadSha` → compute; else `size: no base
        recorded` / `size: no head recorded`.
@@ -289,15 +309,20 @@ finds sends the work back through a new RED-test story before O4 (J1's rule).
     `AFilledRowWithoutItsSnapshot_IsRecomputed_WhileTheTranscriptExists`;
     `APeerRunningRow_IsRecomputed_OnceEveryNamedPeerRoundIsFinal` (a `done` and an `interrupted` peer both release it);
     `APeerRunningRow_IsKept_WhileANamedPeerRoundStillRuns`; `AGrownPeerSet_IsRecomputed_AndAHealedSnapshotNeverIs`;
-    `AnIncompletePeerLookup_ProvesNoGrowth`; `AnUnobservedRowAtCurrentVersions_IsNotKept`; `AWeakerRecompute_HealsTheFileInstead`;
+    `AnIncompletePeerLookup_ProvesNoGrowth_AndDefersAPeerRunningRow`; `AnUnobservedRowAtCurrentVersions_IsNotKept`;
+    `AWeakerRecompute_HealsTheFileInstead`; `ASnapshotAndProjectionThatDisagreeAtEqualVersions_AreReprojected_NeverKept`
+    (the crash shape: a current `observed` snapshot over a current `partial` row); `AWeakerReprojection_IsKept`;
+    `ACorrectingVersionBump_ReplacesOlderRowsWhateverTheirStrength_ARefiningOneDoesNot`;
     `ARoundWithoutItsFile_IsComputedFromTheDatabase_AndKeptOnTheNextRun`; `ACodexCaller_GetsAStateNotASkip`;
     `APlanRound_GetsAuthorsAndNoSize`; `ASkippedOrInterruptedRound_IsNotSelected`; `ALiveSize_IsNeverReplaced`;
     `AnExistingButUnreadableSessionFile_IsDeferredNotGone`.
   - **Break-its.** Either version comparison made `>` instead of `≥` → `AnEqualOrNewerRow_…` red ("expected keep, found
     compute"); the strength guard removed → `AWeakerResult_…` red naming the downgraded state; the heal placed before the
     transcript check (the H1 order) → `AFilledRowWithoutItsSnapshot_IsRecomputed_WhileTheTranscriptExists` red; a healed
-    snapshot's `PeerGates = []` read as "no peers" → `AGrownPeerSet_…` red (the healed row re-triggers on every run).
-- **Done when.** Every cell of the table passes; the four break-its observed red and restored green; no reason sentence
+    snapshot's `PeerGates = []` read as "no peers" → `AGrownPeerSet_…` red (the healed row re-triggers on every run); the
+    projection comparison dropped from rule 5 → `ASnapshotAndProjectionThatDisagree…` red ("expected re-project, found
+    keep"); the `PeersKnown` gate dropped from rule 3's first disjunct → `AnIncompletePeerLookup_…` red.
+- **Done when.** Every cell of the table passes; the six break-its observed red and restored green; no reason sentence
   contains a path.
 - **Depends on.** E3.S4 (states, reader version), E3.S2 (`LocateStored`, its outcomes), E4.S2 (`PeerGates`, *final*,
   `RoundAttribution.Version`), E5.S1 (`IsWellFormed`, `Unknown`), E5.S2 (step 24's columns — array index 23, `user_version`
@@ -409,28 +434,32 @@ finds sends the work back through a new RED-test story before O4 (J1's rule).
   `INSERT` ([reuse-first.md](../.agents/conventions/common/reuse-first.md) step 1); tests
   `src_mcp/tests/ABackfillLeavesEverythingElseWhereItWasTests.cs`.
 - **Brief.**
-  - **The session file FIRST, under the claim** (plan gate finding 3): `SessionClaim.TryTake(dataDir, repo_path,
-    branch)` (`SessionClaim.cs:44-58`) → `SessionStore.Load` → replace ONLY the matching `(stage, number)` round's
-    `Authors` / `Size` / `Gitlinks`, and only where S1 allowed → `SessionStore.Save` (`SessionStore.cs:501-513`) → load
-    again and verify. When the claim is busy the round is `deferred` and NEITHER side is written. When the verify fails
-    the database is not touched for that round. **An equal result writes nothing**: a computed snapshot equal to the stored
-    one, member for member (versions, `PeerGates` and `IdSource` included) → `kept: unchanged`, no save, no transaction.
+  - **The order of one round's write** (plan gate finding 3; reshaped on the risk consultation, §9a — the conflict check
+    must come BEFORE the file save, or a conflict rolls back SQLite and leaves a stale snapshot for a later re-projection):
+    compute outside every lock → `SessionClaim.TryTake(dataDir, repo_path, branch)` (`SessionClaim.cs:44-58`; busy →
+    `deferred: busy`, nothing written) → `using var tx = db.Transaction()` (`BEGIN IMMEDIATE`, §3; a busy writer →
+    `deferred: busy`) → **validate inside the lock**: re-read the round's `authors_state`, `authors_reader`,
+    `authors_attribution`, `size_state` AND a canonical hash of its `round_authors` / `round_changes` rows, and compare
+    with what S1 decided on — any difference is a live server's write since the selection → rollback, `deferred: changed
+    under us` (four unchanged columns do not prove unchanged rows) → `SessionStore.Load` → replace ONLY the matching
+    `(stage, number)` round's `Authors` / `Size` / `Gitlinks`, and only where S1 allowed → `SessionStore.Save`
+    (`SessionStore.cs:501-513`) → load again and verify (a failed verify → rollback, the database untouched) → the two row
+    writers → `tx.Commit()`. The write lock spans one bounded file save. **An equal result writes nothing**: a computed
+    result whose PROJECTION equals the database's (S1) → `kept: unchanged`, no claim, no transaction, no save.
   - **A `heal` writes the FILE only.** The database row is the source and is not rewritten: its `authors_id_source` keeps the
     live value, the healed snapshot carries `IdSource = "healed"`, and the two legitimately differ (the file holds `Unknown`
     members the database never had). `healed` reaches the column only through a later re-projection of that snapshot, if
     the database rows are ever lost (consultants' Q2, §9a).
-  - **Then the projection, FROM the saved snapshot, in ONE transaction** (E2 §10 point 10): `using var tx =
-    db.Transaction();` → **re-read the round's `authors_state`, `authors_reader`, `authors_attribution` and `size_state` inside
-    the transaction and compare them with S1's inputs — any difference means a live server wrote this round since the
-    selection: rollback, `deferred: changed under us`, nothing written** (equal row counts are no proof of quiet, §3 *Safety*
-    1) → `RoundChangesTable.Record(db, id, round.Size, round.Gitlinks)` when S1 said compute-size (its `UPDATE rounds SET
+  - **The projection, FROM the saved snapshot, in that same transaction** (E2 §10 point 10): after the verified save →
+    `RoundChangesTable.Record(db, id, round.Size, round.Gitlinks)` when S1 said compute-size (its `UPDATE rounds SET
     size_state, delta_state, delta_from, size_origin, size_gitlinks` carries `size_origin = 'backfill'` from `Size.Origin`,
     parent §16 D12) → `RoundAuthorsTable.Record(db, id, round.Authors)` (E5.S2: the `authors_*` columns — `authors_reader`
     AND `authors_attribution` — `submodule_writes`, `uncovered_writes`, `ambiguous_*`, then delete-then-insert of the round's
     `round_authors`) → `tx.Commit()`. Every value comes from the snapshot just verified, never from the in-memory result; a
     null half writes nothing (both writers' rule). Nothing else is written: no `RecordRound`, no `RecordSession`. A run killed
-    after the save and before the commit leaves a snapshot without rows — or, with a fault between a delete and its insert,
-    the round's earlier rows, never none — which S1's rule 2(a)/6 re-projects on the next run without reading the transcript.
+    after the save and before the commit leaves a snapshot without rows, or over rows that disagree with it — or, with a
+    fault between a delete and its insert, the round's earlier rows, never none — which S1's rule 2(a)/5/6 re-projects on
+    the next run without reading the transcript (the projection comparison, not the versions, is what sees it).
   - **The one exception to "file first" — no file.** With `FileState` gone/replaced (S1 rule 5, S2) the computed result is
     written to the database alone, in the same transaction with the same re-read; it is counted `written.databaseOnly`.
   - **The race §3 names** (`open` and the orphan sweep save without the claim): a verify that finds the snapshot gone
@@ -460,9 +489,16 @@ finds sends the work back through a new RED-test story before O4 (J1's rule).
     the healed snapshot → red, `authors_id_source` reads `healed`.
   - `AnEqualResult_WritesNothing`: a store whose round already holds exactly the result → no save (mtime), no transaction
     (a counting seam), `kept.unchanged = 1`.
-  - `ARoundChangedUnderTheRun_IsDeferred`: a seam that rewrites the round's `authors_state` between the selection and the
-    transaction → rollback, nothing written, `deferred.changedUnderUs = 1`. **Break-it**: drop the in-transaction re-read →
-    red, the live server's row is overwritten.
+  - `ARoundChangedUnderTheRun_IsDeferred`: a seam that rewrites the round between the selection and the transaction — once
+    its `authors_state`, once ONLY its `round_authors` totals with every column kept — → rollback, nothing written on either
+    side (the file's mtime unchanged too), `deferred.changedUnderUs = 1`; and after a restart both stores hold the live
+    server's row. **Break-its**: drop the in-transaction re-read → red, the live row is overwritten; move the file save
+    before the transaction → red, the file holds the stale snapshot after the rollback.
+  - `TheTransactionIsImmediate`: a second connection holding a write lock → the round is `deferred: busy` at `BEGIN`, not
+    at the first `UPDATE`.
+  - `TheCrashShape_IsReprojectedNotKept` (cadence consultation): a current `partial: read budget` row, its snapshot lost,
+    recomputed `observed`, the fault after the save → run again, with and without the transcript → the database reads
+    `observed`, the two stores agree.
   - `ARoundWithoutItsFile_IsWrittenToTheDatabaseOnly_AndASecondRunKeepsIt`.
   - `TheSessionFileKeepsEveryOtherField`: the file before and after, parsed, with the touched round's `Authors` and
     `Size` removed from both, is equal; the other rounds' snapshots are untouched.
@@ -486,7 +522,7 @@ finds sends the work back through a new RED-test story before O4 (J1's rule).
     the transaction → red, the round has no size rows.
   - `ABackfilledSize_CarriesTheBackfillOrigin`: `rounds.size_origin = 'backfill'` and the session file's `Size.Origin` agree.
   - Sentinels absent from the database bytes and the session files.
-- **Done when.** All pass; the six break-its observed red with the named symptom and restored green.
+- **Done when.** All pass; the seven break-its observed red with the named symptom and restored green.
 - **Depends on.** S1, E2.S3 (`RoundChangesTable`, `RoundRecord.Size`/`Gitlinks` — shipped), E5.S1 (`RoundRecord.Authors`,
   `AuthorsSnapshot.Unknown`), E5.S2 (step 24, `RoundAuthorsTable.Record`, `AgentKeyOf`).
 - **Model.** scenarios + brief **opus** → code + tests **sonnet** → review **opus** → fixes **sonnet**.
@@ -536,9 +572,9 @@ finds sends the work back through a new RED-test story before O4 (J1's rule).
     successor's delta is measured, S2), the reader reading each caller session ONCE per run and caching the result.
   - **Summary JSON on stdout**, text-free: `readerVersion`, `attributionVersion`, `since`, `dryRun`, `backupDir`,
     `backupCheck: {opened, integrity, userVersion, tables, rowsMatch, dataVersionUnchanged, sessionFiles, filesMatch}`,
-    `selected`, `written: {computed, recomputedProvisional, recomputedSnapshotLost, reprojected, databaseOnly}`, `healed`,
-    `kept: {equalOrNewer, strongerExisting, transcriptGone, peerStillRunning, noFile, unchanged}`, `deferred: {busy,
-    unreadable, changedUnderUs}`, `unobserved: {<reason>: n}` (the states written, per reason), `size: {written, kept,
+    `selected`, `written: {computed, recomputedProvisional, recomputedSnapshotLost, reprojected, databaseOnly, corrected}`,
+    `healed`, `kept: {equalOrNewer, strongerExisting, transcriptGone, peerStillRunning, noFile, unchanged}`, `deferred:
+    {busy, unreadable, changedUnderUs, peersUnknown}`, `unobserved: {<reason>: n}` (the states written, per reason), `size: {written, kept,
     unrecoverable: {<reason>: n}, delta: {<ScopeState>: n}}`, `elapsedMs`. `backupDir` is the one path printed — the
     operator's own folder, and never committed (O4). `recomputedProvisional` is the count E6's `provisional` cells shrink by.
   - **Exit codes** (plan gate finding 5): **0** — done, including nothing to do and a missing store; **65** — a bad,
@@ -556,10 +592,17 @@ finds sends the work back through a new RED-test story before O4 (J1's rule).
     round's state names it. `TheProvisionalRowsAreTheOnesRecomputed`: a store with two `peer running` rows, one whose named
     peer rounds are final and one still running → `recomputedProvisional = 1`, `kept.peerStillRunning = 1`, and E6's
     `--round-authors` JSON shows `provisional` one lower after the run.
-  - `ADryRunWritesNothing`: SHA-256 and mtime of `coai.db`, `-wal` and every session file unchanged, no backup folder; its
-    counts equal the real run's. `ADryRunNeverOpensTheStoreForWriting`: over a store whose `user_version` is 24 but whose
-    `-wal` is absent, no `-wal`/`-shm` appears and a connection-string seam saw `Mode=ReadOnly` only. **Break-it**: open
-    through `OpenExisting` in the dry run → red, a `-wal` appears.
+  - **The dry run's own semantics** (cadence consultation): it keeps the run's results in an in-memory overlay of the
+    history — a predecessor's size "saved" in memory before its successor's delta is measured, database-only sessions
+    included — so its counts equal the writing run's, not a cascade of `base unknown`. It writes no store file; the
+    coordination files SQLite and `SessionTurn` may create in a writable directory are named and allowed — `-wal`/`-shm`
+    (a read-only connection may create them, sqlite.org/wal.html *read-only databases*) and the `.turn` lock
+    (`SessionStore.cs:415`, `HeldFile.Take`'s `OpenOrCreate`, `runners/Files/HeldFile.cs:51`) — and nothing else.
+  - `ADryRunWritesNothing`: the whole data-directory inventory before and after, started without lock files, differs only by
+    the named coordination files, each empty or unchanged in content; `coai.db`'s SHA-256, `user_version`, every table's
+    rows and every session file unchanged; no backup folder; its counts equal the real run's over the same store, two
+    unsized code rounds included. `ADryRunNeverOpensTheStoreForWriting`: a connection-string seam saw `Mode=ReadOnly` only.
+    **Break-it**: open through `OpenExisting` in the dry run → red, the seam saw `ReadWrite`.
   - `TheBackupHoldsTheStoreAsItWas`: the backup opens, `integrity_check` is `ok`, every table's row count and every session
     file's SHA-256 equal the pre-run source's — over a store in WAL mode with uncheckpointed rows (they must be in the copy).
   - `ABackupThatDoesNotVerify_WritesNothing`: a seam that changes one source row between the before and after counts (a
@@ -602,9 +645,30 @@ file and what it cites are committed.
   version is the first `mcp-v*` tag that contains E7's merge commit (`git merge-base --is-ancestor <merge> mcp-v<x>`);
   record it, and `coai-mcp --version` per side.
 - **Every running server on the side is on that release** before its first write — an older one strips `authors` from any
-  session file it saves (§3). Listed by executable path and version (`Get-Process` / `ps` with the path, read-only), never
-  stopped by image name; the operator reloads the VS Code windows (or the WSL remote) that still run an older one. Recorded per
-  side: the count of servers seen and that each runs `<x>`.
+  session file it saves (§3). **Checked by a committed read-only script, not by eye** (gate finding 2):
+  `scripts/backfill-preflight-servers.ps1` (Windows) / `.sh` (WSL, run from the script file) lists every `coai-mcp`
+  process by executable path and asks each path `--version`; it exits 1 and names the path when any is not `<x>`, 0 when
+  all are. Never stops a process; the operator reloads the VS Code windows (or the WSL remote) that still run an older one
+  and runs the script again. Recorded per side: the script's output. Enforcing this inside the mode is not done — a
+  cross-platform process walk is new scope, and `ProcessLiveness` (`src_mcp/src/Server/ProcessLiveness.cs:17`) answers by
+  pid only.
+- **The rehearsal — the released binary's backup and write path, exercised on a COPY before any live run** (gate finding 6;
+  the earlier text claimed O1 exercised the online backup and then scheduled it for O2). Per side, with no round running:
+  a quiescent copy of `coai.db`, `-wal`, `-shm` and `sessions/` into a NEW scratch folder, `COAI_DATA_DIR` pointed at it (the
+  WSL copy inside WSL by the script, into `~/coai-backfill/<utc>/rehearsal/`, never across drvfs); `coai-mcp
+  --backfill-authors --since …` (a WRITING run) and then its re-run against the copy; recorded: both summaries, the backup
+  folder opening read-only with its printed counts, the second run's `written` all 0. Until it passes per side, O2/O3 do not
+  start. It is a rehearsal of the binary, not the backup: O2/O3 make their own.
+- **The shaper-regime check, BEFORE any write** (gate finding 7 — it was in O4, after the rows and the hand-check): `git log
+  --since=2026-09-30 -L` over `DiffExclusions.Default` (`src_mcp/runners/Context/ContextAssembler.cs:7-30`) and
+  `DiffShaper.DefaultMaxBytes` (`src_mcp/core/Context/DiffShaper.cs:28`). A backfilled `whole` is numstat and does not depend
+  on either; only the `shown`/`elided`/`excluded` partition does. If either constant changed inside the window, the
+  decision is taken here and written into the predictions section: every round started before the change carries a
+  `regime` mark in RESULTS and is excluded from any per-100-line figure that reads `shown` or `elided` (the `whole` figures
+  keep it); no round is sized with historical constants (S1 rule 8 keeps a non-empty `size_state`, and no such sizer exists).
+  As of `e53e35ba` the one commit in the window touching those files is #829 (E2, 2026-10-15); O1 reads what it changed.
+- **The judge's dump script** (`scripts/round-authors-dump.mjs`, J1) is written, reviewed and its fixture test green before
+  the dry runs.
 - **Predictions first** ([measurement.md](../.agents/conventions/common/measurement.md) § 4), written into the
   draft `research/RESULTS_who_wrote_the_code_under_review.md` BEFORE any run: per side, the rounds `--since
   2026-09-30` the backfill will select; the share it will find `observed` or `partial` — E1 OBSERVED (not predicted) a
@@ -625,19 +689,25 @@ file and what it cites are committed.
   binary (`coai-mcp --version`) over THE SAME store exited 0 on the same day; the dry run is repeated after any reinstall.
 - **The `before` report**, both sides: `coai-mcp --round-authors --since 2026-09-30T00:00:00Z` (JSON) BEFORE the first
   writing run — its per-cell `provisional` and `size coverage unknown` counts are the numbers O4 compares the `after` with.
-- **Pass.** The release is recorded; every running server of each side is on it; both dry runs exit 0 and both `before`
-  reports are kept; every number is beside its prediction; any prediction missed by more than its own stated margin is
-  explained in writing before O2 — not by adjusting the prediction.
+- **Pass.** The release is recorded; the pre-flight script exits 0 on each side; the rehearsal passed on each side; the
+  shaper-regime decision is written; the dump script's test is green; both dry runs exit 0 and both `before` reports are
+  kept; every number is beside its prediction; any prediction missed by more than its own stated margin is explained in
+  writing before O2 — not by adjusting the prediction.
 - **Model.** main session (**opus**), attended.
 
 ### E7.O2 — Backfill Windows, twice
 
-- **Precondition**: O1's dry run of this binary over this store, same day, exit 0; O1's `before` report kept; no round
-  running on the side (the backup's before/after counts and `data_version` must agree, S4). Then run `coai-mcp
+- **Precondition**: O1's pre-flight script 0, O1's rehearsal passed, O1's dry run of this binary over this store, same day,
+  exit 0; O1's `before` report kept; no round running on the side (the backup's before/after counts and `data_version` must agree, S4). Then run `coai-mcp
   --backfill-authors --since 2026-09-30T00:00:00Z` against the LIVE store; record the summary, its `backupCheck` and the
   backup folder — a failed check has written nothing (exit 74) and is re-run, never bypassed. Run `--round-authors` (JSON)
   and keep it. Run the backfill again (its own backup first); record its summary; run `--round-authors` again and compare
-  the two JSON documents by SHA-256. Re-run while any `deferred` count is above 0, recording each.
+  the two JSON documents by SHA-256. Re-run while any `deferred` count is above 0, recording each — **bounded** (gate
+  finding 8): a claim is an OS lock held open with `FileShare.None` (`SessionClaim.cs:17-20`, *"an OS lock, not a lease"*),
+  released the moment its process ends, so there is no stale claim to clear; a session deferred on two consecutive re-runs
+  is one a LIVE server holds (a round running in a VS Code window). The operator waits for that round or asks for the window
+  to be closed — never kills a process — and if it still holds, records the session ids in the summary and in RESULTS,
+  proceeds, and J1's sample treats those sessions' rounds as an unfillable stratum.
 - **Pass.** Every writing run's `backupCheck` passed BEFORE it wrote; the second run reports every `written` count 0 and
   `healed = 0` (or only heals it can name); the two `after` report JSONs are byte-identical; the `after` report's
   `provisional` count is the `before` count minus the first run's `recomputedProvisional`, and `kept.peerStillRunning`
@@ -653,8 +723,10 @@ file and what it cites are committed.
   cleanup, no `mv` over an existing file. The outputs are read from Windows through `\\wsl.localhost\<distro>\…`,
   read-only. The WSL store is backed up by the mode itself, inside WSL, into its own `backfill-backups/` — never copied
   across the drvfs boundary, and nothing there is ever deleted by an agent. No value is passed through `wsl.exe`'s command
-  line (it re-parses after `--`): the script holds every argument. The WSL `--round-authors` JSON of the second run is the
-  file O4 passes to `--add`.
+  line (it re-parses after `--`): the script holds every argument. **The WSL `--round-authors` JSON of the SECOND run,
+  copied read-only to the Windows working folder with its SHA-256 recorded, is `wsl.json` — the file O4 passes to `--add`;
+  O4 generates no fresh one** (gate finding 10: a round run on the side after J1 would otherwise enter the published
+  tables unseen by any judge).
 - **Pass.** As O2.
 - **Model.** main session (**opus**), attended.
 
@@ -683,8 +755,16 @@ file and what it cites are committed.
 - **Agreement.** Every checked field EXACT — the reader's rule is the product's rule, so a disagreement is a bug
   report, not a harness note ([measurement.md](../.agents/conventions/common/measurement.md) § 2). On any
   disagreement: **stop, report no number**; the defect goes through a RED-test story (the round as a fixture, the
-  failure watched, the fix, E3's reader version bumped); O2/O3 are re-run, which replaces the older-reader rows only
-  where S1 allows; and ALL ten of that side are checked again.
+  failure watched, the fix, E3's `ReaderVersion` or E4's `RoundAttribution.Version` bumped); **the fix story states whether
+  the bump CORRECTS or REFINES** (gate finding 4): a correcting bump sets `BackfillDecision.CorrectedBelow` to the defective
+  version, so the re-run replaces every row of that version whatever its strength — a wrong `observed` is not a stronger
+  observation — counted `written.corrected`; a refining bump leaves the strength guard in force. O2/O3 are re-run (their
+  own backups first), and ALL ten of that side are checked again. The backups are the way back only if the re-run itself
+  is wrong; they are never restored over a live store by the session.
+- **The dump the judge reads** is a committed, read-only script — `scripts/round-authors-dump.mjs` (gate finding 9), one
+  round by `round_key` prefix → its `rounds.authors_*` columns, its `round_authors` rows and the session file's
+  `RoundRecord.Authors` member, as JSON — written and reviewed in O1, verified against S4's scenario store by a test in
+  `src_mcp/tests` (the dump of a fixture round equals the rows the test seeded), never a query composed during the run.
 - **Recorded** in the RESULTS file, first section: per round the `round_key` prefix (8 hex), its stratum, the fields
   checked and agree/disagree — no transcript text, no path, no branch of a repository outside this family.
 - **Pass.** 10 of 10 per side agree on every field.
@@ -692,13 +772,13 @@ file and what it cites are committed.
 
 ### E7.O4 — The answer
 
-- Inside WSL (script file): `coai-mcp --round-authors --since 2026-09-30T00:00:00Z --split 2026-10-13T00:00:00Z` →
-  `wsl.json`. On Windows: the same flags with `--add <wsl.json> --table`, for `--cohort first` and `--cohort
-  corrective` (never pooled), with and without `--with-before-open`.
-- **Before any number is copied**, the size caveat is measured, not assumed: `git log --since=2026-09-30 -L` over
-  `DiffExclusions.Default` (`src_mcp/runners/Context/ContextAssembler.cs:7-30`) and `DiffShaper.DefaultMaxBytes`
-  (`src_mcp/core/Context/DiffShaper.cs:28`). If either changed in the window, a backfilled `elided`/`excluded` split
-  may differ from what the reviewers were shown, and the file says for which rounds (§8 point 7).
+- **The inputs are O2's and O3's SECOND-run `--round-authors` JSONs, verbatim** (their SHA-256 recorded in RESULTS; the
+  window of every published claim is bounded by those two runs — nothing is regenerated here). On Windows: `coai-mcp
+  --round-authors --since 2026-09-30T00:00:00Z --split 2026-10-13T00:00:00Z --add <wsl.json> --table`, for `--cohort first`
+  and `--cohort corrective` (never pooled), with and without `--with-before-open` — the table rendering of the two frozen
+  JSONs, which E6 D-rules make a pure function of them.
+- **The size caveat was measured in O1** (the shaper-regime check) and is re-checked here as confirmation only; the RESULTS
+  file carries the per-round regime mark O1 decided on.
 - **`research/RESULTS_who_wrote_the_code_under_review.md`**, in this order:
   1. **Header** — *association only*: the cells say which coder mixes and reviewer sets co-occurred with which finding
      rates, not that one caused the other; where the coder mix and the reviewer set changed together, the table cannot
@@ -803,7 +883,10 @@ file and what it cites are committed.
 - [ ] The two exceptions to "equal or newer → keep" are the only recomputes of a current row: a provisional row once every
       named peer round is final (or a grown peer set), and a snapshot lost while the transcript exists; a heal writes the
       file only; a round changed by a live server between selection and write is deferred, never overwritten.
-- [ ] A dry run (read-only, nothing written, the same counts) ran on each side before its first writing run.
+- [ ] A dry run (read-only, nothing written, the same counts) ran on each side before its first writing run; so did the
+      pre-flight script (every running server on the release), the rehearsal on a copy (the released binary's backup and
+      write path) and the shaper-regime check; the judge's dump script was committed and tested before O2.
+- [ ] `--round-authors` JSONs: O2's and O3's second runs are the only inputs of O4, their SHA-256 in RESULTS.
 - [ ] Unrecoverable rounds counted per reason; ran on both sides, twice each, with the predictions written first.
 - [ ] Ten rounds per side hand-checked by a judge independent of the code, 10 of 10 agreeing, BEFORE any number.
 - [ ] `research/RESULTS_who_wrote_the_code_under_review.md`: association only in its header, the hand-check first, the
@@ -888,6 +971,30 @@ E6 `131074b4`; the cross-epic list owed to E7 (E4 §11 *Cross-epic*, E5 §10 ite
   corrections were taken: equal row counts do not prove no concurrent write (`data_version` added), and
   `RoundsDb.OpenExisting` migrates, so nothing before the verified backup may open it (`RoundCounts.cs:100` is the
   read-only shape).
+- **The plan gate (session `a308c4ce`, round 1 of 1, `good_enough`, 10 findings, 7 gating, 4 reviewers; `committedPlan`
+  at `0a202fce`).** Accepted, each checked in the code first: (2) the server pre-flight as a committed script (O1); (4) the
+  J1 correction path — `CorrectedBelow` (S1, J1); (5) `PeersKnown` gates both disjuncts of rule 3, §10 item 8 a
+  precondition; (6) the rehearsal on a copy (O1); (7) the shaper-regime check moved to O1 with its handling; (8) the
+  bounded deferral loop — `SessionClaim` is an OS lock (`SessionClaim.cs:17-20`), so there is no stale claim; (9) the
+  judge's dump as `scripts/round-authors-dump.mjs` with a test; (10) O4 reads O2's/O3's second-run JSONs verbatim.
+  **Rejected:** (1) *"`data_version` is per-connection, so another connection's UPDATE passes undetected"* — the opposite
+  of SQLite's documented behaviour: the value read twice on ONE connection differs exactly when ANOTHER connection
+  committed in between (sqlite.org/pragma.html#pragma_data_version; the risk consultant confirmed it) — the check as
+  written is the right one, and S4's wording now says "the mode's own connection, autocommit, no reader open"; (3)
+  *"automated deletion of older backup folders"* — the owner's rule: the mode never deletes, and in WSL nothing is deleted
+  by an agent (§3; `wsl-exe-rm-rf-home` 2026-10-07); §7 budgets the growth (≈ 150–360 MB per side for the whole operation)
+  and the operator retires the folders by hand after the RESULTS commit.
+- **The two ordered consultations (`gpt-6-astra`), both closed `solved`.** Risk (`ea2c1b05`): the strength guard applied to
+  `re-project` too (S1 rule 2(a)/6); S3's conflict check moved INSIDE the `BEGIN IMMEDIATE` transaction and BEFORE the file
+  save, comparing columns AND a hash of the round's rows; `Transaction()` is `BeginTransaction(deferred: false)` explicitly;
+  `data_version` on the same connection confirmed; an idle read-only connection pins no WAL (its readers are disposed);
+  the dry-run test's "no `-wal` appears" assertion withdrawn (a read-only connection may create `-wal`/`-shm`). Cadence
+  (`33ddbf4c`): versions do not prove the file and the projection agree — rule 5 compares the snapshot's projection with the
+  database's, and the equality for `unchanged` is the projection's (which also defines it for database-only rows); the
+  `stored` id source is not a reliable "the backfill wrote this" boundary, so the J1 correction is a named-version policy
+  (`CorrectedBelow`) instead; the dry run keeps an in-memory overlay so its counts equal the writing run's; the
+  "nothing written" test compares the directory inventory with the `.turn` lock named; the rehearsal on a copy is sound
+  and belongs before O2/O3.
 
 ## 10. Open with E3–E5
 
@@ -910,9 +1017,11 @@ ships. None blocks S1's table tests. Items 2, 3, 5 and 6 were closed by E5 on 20
    E5 §10 item 4); S1's heal split is exact.
 7. **E5 — the 60 s ceiling.** E5.S4 measures the C# read time before fixing the live 2 s (E5 §10 item 10); S2's 60 s per
    caller is this document's number, not a measurement. O1's prediction of `partial: read budget` counts is what tests it.
-8. **E4 — `PeersKnown` on the input.** S1 reads it as "the lookup completed" (an incomplete lookup proves no growth). E4.S5's
-   loader sets it `true` for fixtures; E4 to confirm that `AuthorPeers.Find` sets it `false` when a peer file did not load
-   or the deadline cut the walk — else S1 needs its own flag from S2.
+8. **E4/E5 — `PeersKnown` on the input — a PRECONDITION of S1, not a follow-up** (gate finding 5). S1 reads it as "the
+   lookup completed" (an incomplete lookup proves no growth and defers a `peer running` row). E4.S5's loader sets it `true`
+   for fixtures; E5.S4's `AuthorPeers.Find` must set it `false` when a peer's session file did not load or the deadline cut
+   the walk. Until E5 confirms, S2 computes its own `PeersKnown` from `Find`'s `load` outcomes (a null from the delegate
+   for any peer → false) and S1's table carries the cell.
 9. **E4 — overlap for `ANamedPeerRoundStillRuns`.** S1 takes "a round of a named peer that overlaps this round's windows"
    as E4 §S2.3's window overlap over the peer's timeline; if E4's `partial: peer running` is set from a different test, S2
    uses E4's predicate rather than its own.
