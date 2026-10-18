@@ -3739,6 +3739,8 @@ Those ten tests now skip where `ProcessTree.Supported` is false, and
 `WhereNoTreeCanBeConfirmed_TheCaptureSpawnsNothing_AndSaysWhy` runs ONLY there: the job is Done, nothing is launched,
 the note says `platform-unsupported`, no marker, no reading.
 
+Later, on Windows only (CI run 38853192407, 2026-10-16, about 1 run in 90), `AReaderIsEndedWithItsTreeTests.TheDescendantsOfALiveServer_AreListedWithTheirStartTimes` failed with `IOException: The process cannot access the file '…\pids' because it is being used by another process` — the fake CLI wrote its pid file with one `File.WriteAllLines`, so a poll that saw `File.Exists` while the writer still held the file open could not read it (on Linux it could read half of it). Every pid file the fake CLI writes (`serve`, `serve-shy`, `serve-quit`, the ACP agent's `grandchild.pid`) now goes through `Serving.WritePidFile`: a sibling `.tmp-<pid>` file, then `File.Move(overwrite: true)` (the ACP agent replays its steps on every prompt, so it writes the same file again; the move is retried on a Windows sharing violation) — whole or absent; the tests' readers are unchanged. The race has no deterministic RED, so the proof is a 100-run loop of that test before and after.
+
 ### Epic 6 — a reader that exits by itself (CodeRabbit, PR #790)
 
 CodeRabbit asked what happens when the reader's ROOT exits by itself: `RunToCompletionAsync` took `Ending.None`, the
