@@ -74,6 +74,9 @@ they derived from the constant, a wrong constant would make them agree with it a
   `VibePathBudget` is `public`, but only its value uses the constant, not its signature, so `internal` compiles.
 - **Docs move, they are not copied:** the probe history of each number (P1/P2, git 2.55 on 2026-10-17, §27) goes to
   the XML doc of its constant. `WorktreeFailure` loses its two constants.
+- **Scope of "one source of truth":** the C# code of `src_mcp`. The extension's help prose (TypeScript/JSON, another
+  product) names the same 259 and cannot read a C# constant; it stays the open tail of section 8 (plan round 1,
+  codex).
 - **No behaviour change:** every number, every sentence and every platform branch stays the same. The platform
   choice stays where it is today (`VibePathBudget.ForThisProcess`, `OperatingSystem.IsWindows()` in
   `WorktreeFailure.Advice`); this type only holds the Windows numbers. No new platform is mapped.
@@ -93,6 +96,8 @@ they derived from the constant, a wrong constant would make them agree with it a
 7. `research/module_runners.md`: the `WorktreeFailure` row (:48) and the `VibePathBudget` paragraph (:3495) name
    `WindowsPathLimits`; a new row beside `HostKind` (:87) for `Platform/WindowsPathLimits.cs`.
 8. Build, run the touched test classes, the break-it, `dotnet format --verify-no-changes`.
+9. Run the WHOLE suite once (`CoaiMcp.Tests.exe` with no filter), so a regression in an untouched class is seen
+   before the pull request (plan round 1, vibe).
 
 No growth surface: no table, folder, cache or process is added.
 
@@ -131,6 +136,7 @@ Run, per `.agents/PROJECT.md` (never `dotnet test`):
 - [ ] `VibePathBudget.Windows` and `WorktreeFailure` read them; `WorktreeFailure` has no constant of its own left.
 - [ ] No production C# code holds `259` or `247` outside that file (the census test).
 - [ ] The four new tests are green; the existing `WorktreeFailureTests`, `VibePathBudgetTests`, `WorktreeManagerTests` are green with no changed assertion except `:65` and `:381`.
+- [ ] The whole `CoaiMcp.Tests.exe` suite ran once with no filter; any red is named in the PR description with its cause.
 - [ ] The three break-its went red as expected and green after the revert; the outputs are in the PR description.
 - [ ] `dotnet format --verify-no-changes` is clean on the touched files.
 - [ ] `research/module_runners.md` names the new type; the plan is promoted to `research/` with `IMPLEMENTED`; `plan-lifecycle.mjs` is clean.
