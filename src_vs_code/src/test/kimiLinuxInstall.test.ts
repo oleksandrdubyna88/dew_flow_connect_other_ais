@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
 
+import { HELP_ARTICLES, HELP_LANGUAGES, bodyFor } from '../helpContent';
+import { KIMI_TOOLS_NOTE } from '../kimiLinuxLine';
 import { fromOfficialSources, vendorInstall, vendorUpdate } from '../vendorTerminal';
 import type { Vendor } from '../vendors';
 
@@ -62,14 +64,14 @@ after(() => {
   }
 });
 
-/** The folder of real tools on the PATH: Git's own `usr/bin` on Windows, a folder of links to `mkdir` and `ln` elsewhere. */
+/** The folder of real tools on the PATH: Git's own `usr/bin` on Windows, a folder of links to `mkdir`, `ln` and `readlink` elsewhere. */
 function coreFolder(): string {
   if (WINDOWS) {
     return join(BASH, '..', '..', 'usr', 'bin');
   }
   const folder = join(root, 'core tools');
   mkdirSync(folder, { recursive: true });
-  for (const tool of ['mkdir', 'ln']) {
+  for (const tool of ['mkdir', 'ln', 'readlink']) {
     const found = spawnSync('sh', ['-c', `command -v ${tool}`], { encoding: 'utf8' }).stdout.trim();
     assert.ok(found.length > 0, `this machine has no ${tool}, which the line needs`);
     symlinkSync(found, join(folder, tool));
@@ -119,9 +121,20 @@ interface World {
   readonly aliases?: readonly string[];
   /** `~/.local/bin/fd` is a symlink to a DIRECTORY somebody planted (S2): `ln -sf` would write inside it. */
   readonly fdDirLink?: boolean;
+  /** `~/.local/bin/fd` is a symlink: to a program of the person's own (it resolves), or to nothing (it dangles) — G of the review of 2026-10-18. */
+  readonly fdLink?: 'resolving' | 'dangling';
+  /** Debian's own `/usr/bin/fdfind` exists (the line's one literal path is pointed at a stand-in for it, so a real one on the test machine never matters). */
+  readonly usrBinFdfind?: boolean;
+  /** `fdfind` resolves ONLY through a RELATIVE entry of PATH, so `command -v fdfind` answers a relative path. */
+  readonly relativeFdfind?: boolean;
+  /** Programs already in `~/.local/bin`, as executable files. */
+  readonly localBinTools?: readonly string[];
 }
 
 interface Place {
+  readonly folder: string;
+  /** The stand-in for Debian's `/usr/bin/fdfind`: a file only in a world that has one. */
+  readonly usrBin: string;
   readonly home: string;
   readonly stub: string;
   readonly shelf: string;
@@ -163,8 +176,24 @@ function place(world: World): Place {
     mkdirSync(join(home, '.local', 'bin'), { recursive: true });
     writeFileSync(join(home, '.local', 'bin', 'fd'), world.fdFile);
   }
+  for (const name of world.localBinTools ?? []) {
+    mkdirSync(join(home, '.local', 'bin'), { recursive: true });
+    marker(join(home, '.local', 'bin', name));
+  }
+  const usrBin = join(folder, 'usr bin', 'fdfind');
+  if (world.usrBinFdfind === true) {
+    mkdirSync(join(folder, 'usr bin'), { recursive: true });
+    marker(usrBin);
+  }
+  if (world.relativeFdfind === true) {
+    mkdirSync(join(folder, 'rel'), { recursive: true });
+    marker(join(folder, 'rel', 'fdfind'));
+  }
+  if (world.fdLink === 'resolving') {
+    marker(join(home, 'own fd'));
+  }
 
-  return { home, stub, shelf, log: join(folder, 'log.txt'), installed: join(folder, 'installed.txt'), world };
+  return { folder, usrBin, home, stub, shelf, log: join(folder, 'log.txt'), installed: join(folder, 'installed.txt'), world };
 }
 
 interface Pressed {
@@ -182,6 +211,14 @@ interface Pressed {
   readonly localBin: string;
   /** The names that landed inside the planted directory (S2) — none when the link replaced the link. */
   readonly planted: string;
+  /** `~/.local/bin/fd` is the person's own program (`~/own fd`), reached by their link. */
+  readonly linkedToOwn: boolean;
+  /** `~/.local/bin/fd` is the stand-in for `/usr/bin/fdfind`. */
+  readonly linkedToUsrBin: boolean;
+  /** Where `~/.local/bin/fd` points, as written — read only in a world that asks. */
+  readonly target: string;
+  /** `~/.local` exists afterwards. */
+  readonly localMade: boolean;
 }
 
 const PATH_SEPARATOR = WINDOWS ? ';' : ':';
@@ -194,6 +231,8 @@ function envFor(where: Place, path: string): Record<string, string> {
     FAKE_INSTALLED: posix(where.installed),
     FAKE_SHELF: posix(where.shelf),
     FAKE_PM_EXIT: String(where.world.pmExit ?? 0),
+    FAKE_USRBIN: posix(where.usrBin),
+    FAKE_WANT_TARGET: where.world.fdLink === undefined && where.world.relativeFdfind !== true && where.world.usrBinFdfind !== true ? '' : 'yes',
     // Git Bash: a link is a .lnk shortcut, which needs no privilege and reads back as a link.
     ...(WINDOWS ? { MSYS: 'winsymlinks:lnk', MSYS2_ARG_CONV_EXCL: '*', SystemRoot: process.env['SystemRoot'] ?? 'C:\\Windows' } : {}),
   };
@@ -206,6 +245,10 @@ const PROBE = [
   'coai_fdfind=$(command -v fdfind)',
   '[ -L ~/.local/bin/fd ] && echo "COAI-ISLINK=yes"',
   '[ -n "$coai_fdfind" ] && [ ~/.local/bin/fd -ef "$coai_fdfind" ] && echo "COAI-LINKED=yes"',
+  '[ -L ~/.local/bin/fd ] && [ ~/.local/bin/fd -ef "$HOME/own fd" ] && echo "COAI-LINKEDOWN=yes"',
+  '[ -n "$FAKE_USRBIN" ] && [ -f "$FAKE_USRBIN" ] && [ ~/.local/bin/fd -ef "$FAKE_USRBIN" ] && echo "COAI-LINKEDUSR=yes"',
+  '[ -e ~/.local ] && echo "COAI-LOCALMADE=yes"',
+  '[ -n "$FAKE_WANT_TARGET" ] && [ -L ~/.local/bin/fd ] && echo "COAI-TARGET=$(readlink ~/.local/bin/fd)"',
   'coai_list=',
   'for coai_f in ~/.local/bin/*; do { [ -e "$coai_f" ] || [ -L "$coai_f" ]; } && coai_list="$coai_list ${coai_f##*/}"; done',
   'echo "COAI-BINLIST=$coai_list"',
@@ -218,8 +261,9 @@ const PROBE = [
 function prelude(world: World): string {
   const aliases = (world.aliases ?? []).length === 0 ? [] : ['shopt -s expand_aliases', ...(world.aliases ?? []).map((one) => `alias ${one.replace('=', "='")}'`)];
   const plant = world.fdDirLink === true ? ['mkdir -p "$HOME/.local/bin" "$HOME/planted dir" && ln -s "$HOME/planted dir" "$HOME/.local/bin/fd"'] : [];
+  const link = world.fdLink === undefined ? [] : [`mkdir -p "$HOME/.local/bin" && ln -s "$HOME/${world.fdLink === 'resolving' ? 'own fd' : 'gone fd'}" "$HOME/.local/bin/fd"`];
 
-  return [...aliases, ...plant].join('\n');
+  return [...aliases, ...plant, ...link].join('\n');
 }
 
 /** The shelf folders of what earlier presses installed — a real install outlives the shell that ran it. */
@@ -232,11 +276,13 @@ function installedBefore(where: Place): readonly string[] {
 /** One press of the line on a machine: `bash -c` of the stand-ins, the line and the probe, a deadline on it, the stand-in log read back. */
 function press(where: Place, line: string): Promise<Pressed> {
   writeFileSync(where.log, '');
-  const script = `${standIns(where.world.managers)}\n${prelude(where.world)}\n${line}\n${PROBE}`;
-  const env = envFor(where, [...installedBefore(where), posix(where.stub), CORE].join(PATH_SEPARATOR));
+  // The line's one literal `/usr/bin/fdfind` is pointed at this world's stand-in, so a real Debian file on the machine running the test changes nothing.
+  const script = `${standIns(where.world.managers)}\n${prelude(where.world)}\n${line.replaceAll(USR_BIN_FDFIND, `"${posix(where.usrBin)}"`)}\n${PROBE}`;
+  const path = [...(where.world.relativeFdfind === true ? ['rel'] : []), ...installedBefore(where), posix(where.stub), CORE].join(PATH_SEPARATOR);
+  const env = envFor(where, path);
 
   return new Promise((resolve, reject) => {
-    execFile(BASH, ['-c', script], { env, encoding: 'utf8', timeout: 300_000 }, (_error, stdout, stderr) => {
+    execFile(BASH, ['-c', script], { env, cwd: where.folder, encoding: 'utf8', timeout: 300_000 }, (_error, stdout, stderr) => {
       const has = (name: string): boolean => new RegExp(`^COAI-${name}=yes$`, 'mu').test(stdout);
       const status = /^COAI-STATUS=(\d+)$/mu.exec(stdout)?.[1];
       if (status === undefined) {
@@ -253,12 +299,18 @@ function press(where: Place, line: string): Promise<Pressed> {
         linkedToFdfind: has('LINKED'),
         localBin: /^COAI-BINLIST=(.*)$/mu.exec(stdout)?.[1]?.trim() ?? '',
         planted: /^COAI-PLANTED=(.*)$/mu.exec(stdout)?.[1]?.trim() ?? '',
+        linkedToOwn: has('LINKEDOWN'),
+        linkedToUsrBin: has('LINKEDUSR'),
+        target: /^COAI-TARGET=(.*)$/mu.exec(stdout)?.[1]?.trim() ?? '',
+        localMade: has('LOCALMADE'),
       });
     });
   });
 }
 
 const LINE = vendorInstall(KIMI, 'linux', 'wsl2').command;
+/** The one absolute path the line names for Debian's fd program. */
+const USR_BIN_FDFIND = '/usr/bin/fdfind';
 const sudoLines = (log: readonly string[]): readonly string[] => log.filter((one) => one.startsWith('sudo '));
 const installed = (log: readonly string[]): readonly string[] => log.filter((one) => /^(?:apt-get|dnf) /u.test(one));
 const MOONSHOT_RAN = ['curl -fsSL ' + MOONSHOT_URL, 'moonshot-ran'];
@@ -283,8 +335,14 @@ const realFile = started(() => press(realFilePlace!, LINE));
 const dirLink = started(() => press(place({ managers: ['apt-get'], onPath: ['rg', 'fdfind'], fdDirLink: true }), LINE));
 const aliasFd = started(() => press(place({ managers: ['apt-get'], onPath: ['rg', 'fdfind'], aliases: ['fd=fdfind'] }), LINE));
 const aliasRg = started(() => press(place({ managers: ['apt-get'], onPath: ['fdfind'], aliases: ['rg=grep'] }), LINE));
+// The review of 2026-10-18 (G, H): the link is judged by what is at the path, its target is absolute and prefers Debian's own file, and the check follows the server's order.
+const ownLink = started(() => press(place({ managers: ['apt-get'], onPath: ['rg', 'fdfind'], fdLink: 'resolving' }), LINE));
+const danglingLink = started(() => press(place({ managers: ['apt-get'], onPath: ['rg', 'fdfind'], fdLink: 'dangling' }), LINE));
+const relativePath = started(() => press(place({ managers: ['apt-get'], onPath: ['rg'], relativeFdfind: true }), LINE));
+const usrBinWins = started(() => press(place({ managers: ['apt-get'], onPath: ['rg', 'fdfind'], usrBinFdfind: true }), LINE));
+const pathBeforeLocalBin = started(() => press(place({ managers: [], onPath: ['rg', 'fd'], localBinTools: ['rg', 'fd'] }), LINE));
 // The pressed worlds, to be read: a rejected press is reported by the test that awaits it, never as an unhandled rejection.
-for (const pending of [debianFresh, debianSecond, debianInstalled, fedoraFdThere, noManager, noManagerToolsThere, ownersCase, managerFails, realFile, dirLink, aliasFd, aliasRg]) {
+for (const pending of [debianFresh, debianSecond, debianInstalled, fedoraFdThere, noManager, noManagerToolsThere, ownersCase, managerFails, realFile, dirLink, aliasFd, aliasRg, ownLink, danglingLink, relativePath, usrBinWins, pathBeforeLocalBin]) {
   pending.catch(() => undefined);
 }
 
@@ -352,7 +410,7 @@ test('Debian, a fresh account: ripgrep and fd-find are installed, ~/.local/bin i
   assert.equal(first.linkedToFdfind, true, '…to fdfind');
   assert.match(first.localBin, /\bfd\b/u);
   assert.match(first.out, /^rg: .*\/rg$/mu, 'the closing check names where rg resolved');
-  assert.match(first.out, /^fd: .*\/\.local\/bin\/fd$/mu, 'and where fd resolved — the link, which Kimi looks for before PATH');
+  assert.match(first.out, /^fd: .*\/\.local\/bin\/fd$/mu, 'and where fd resolved — the link (~/.local/bin is the last place the server looks, after PATH)');
   assert.ok(!first.out.includes(NO_MANAGER), 'the instruction is for a host with no package manager');
 });
 
@@ -448,6 +506,49 @@ test('a symlink at ~/.local/bin/fd that points to a DIRECTORY is replaced by the
   assert.equal(pressed.isLink && pressed.linkedToFdfind, true, '~/.local/bin/fd must be the link to fdfind, not the planted directory');
 });
 
+test('G: a link of the person’s own at ~/.local/bin/fd that resolves is left alone — it is replaced only when it dangles', { skip }, async () => {
+  const [own, dangling] = [await ownLink, await danglingLink];
+
+  assert.equal(own.status, 0, `${own.out}${own.err}`);
+  assert.equal(own.linkedToOwn, true, 'the person’s own link was replaced');
+  assert.equal(own.linkedToFdfind, false, 'the line linked fd to fdfind over a link that works');
+  assert.equal(dangling.status, 0, `${dangling.out}${dangling.err}`);
+  assert.equal(dangling.isLink && dangling.linkedToFdfind, true, 'a link that points at nothing is replaced by the link to fdfind');
+});
+
+test('G: when no link is needed nothing is made — ~/.local is not created for a host whose fd already resolves', { skip }, async () => {
+  const [fedora, bothThere] = [await fedoraFdThere, await noManagerToolsThere];
+
+  assert.equal(fedora.localMade, false, '~/.local was made although no link was');
+  assert.equal(bothThere.localMade, false, '~/.local was made although nothing needed it');
+  assert.equal((await debianFresh).localMade, true, 'and where the link IS made, the folder is made with it');
+});
+
+test('G: the link’s target is ABSOLUTE — a relative PATH entry is turned into a path from the current folder', { skip }, async () => {
+  const pressed = await relativePath;
+
+  assert.equal(pressed.status, 0, `${pressed.out}${pressed.err}`);
+  assert.equal(pressed.isLink && pressed.linkedToFdfind, true, 'the link was not made, or points elsewhere');
+  assert.match(pressed.target, /^\//u, `a relative link target stops working the moment the folder is not the current one: ${pressed.target}`);
+});
+
+test('G: Debian’s own /usr/bin/fdfind is preferred over whatever fdfind PATH resolves to first', { skip }, async () => {
+  const pressed = await usrBinWins;
+
+  assert.equal(pressed.status, 0, `${pressed.out}${pressed.err}`);
+  assert.equal(pressed.linkedToUsrBin, true, 'the link points at the fdfind PATH found first, not at the distribution’s own');
+  assert.equal(pressed.linkedToFdfind, false);
+  assert.equal(LINE.split(USR_BIN_FDFIND).length - 1, 1, 'the line must name the distribution’s path exactly once: the stand-in above is the ONE place it is pointed elsewhere');
+});
+
+test('H: the closing check looks where the SERVER looks — Kimi’s bin, then PATH, then ~/.local/bin', { skip }, async () => {
+  const pressed = await pathBeforeLocalBin;
+
+  assert.equal(pressed.status, 0, `${pressed.out}${pressed.err}`);
+  assert.match(pressed.out, /^rg: .*\/stand ins\/rg$/mu, 'a PATH hit comes before ~/.local/bin (KimiTools.Directories: bin, PATH, then ~/.local/bin)');
+  assert.match(pressed.out, /^fd: .*\/stand ins\/fd$/mu);
+});
+
 test('an alias-only fd is a missing fd: the link is still made, to the FILE fdfind resolves to (S3)', { skip }, async () => {
   const pressed = await aliasFd;
 
@@ -462,4 +563,24 @@ test('an alias-only rg is a missing rg: the package is installed, and the check 
   assert.equal(pressed.status, 0, `${pressed.out}${pressed.err}`);
   assert.deepEqual(sudoLines(pressed.log), ['sudo apt-get install -y ripgrep'], 'an alias named rg was read as the program: nothing was installed');
   assert.match(pressed.out, /^rg: .*\/rg$/mu);
+});
+
+// ---------------------------------------------------------------- the review of 2026-10-18 (I): what the person is told when apt has no list yet, and which PATH counts
+
+test('I: the Kimi card’s Linux note and the help in all five languages say what to do when apt cannot find the packages, and which PATH the tools must be on', () => {
+  assert.match(KIMI_TOOLS_NOTE, /`sudo apt-get update`/u, 'the card’s note never says what to do when apt cannot find ripgrep or fd-find');
+  assert.match(KIMI_TOOLS_NOTE, /VS Code server/u);
+  assert.match(KIMI_TOOLS_NOTE, /`\.bashrc`/u, 'the card’s note never says that a PATH only .bashrc adds is not the one the server sees');
+
+  const article = HELP_ARTICLES.find((one) => Object.values(bodyFor(one, 'en').body).join(' ').includes('`sudo apt-get`'));
+  assert.ok(article !== undefined, 'no help article describes the Linux install line any more: this test asserts nothing');
+  for (const language of HELP_LANGUAGES) {
+    const { body, fallback } = bodyFor(article, language);
+    const said = Object.values(body).join(' ');
+
+    assert.equal(fallback, false, `the ${language} article is missing, so a reader of it gets English`);
+    for (const word of ['`sudo apt-get update`', '`.bashrc`', '`~/.local/bin`']) {
+      assert.ok(said.includes(word), `the ${language} help never says ${word} beside the Linux install line`);
+    }
+  }
 });
