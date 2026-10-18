@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.80.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.79.0...extension-v0.80.0) (2026-10-18)
+
+
+### Features
+
+* **rounds:** a reviewer is not sent more than it can read ([#856](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/856)) ([2b302c6](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/2b302c65e833a1df3a382fb8991fe89149713951))
+
 ## [0.79.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.78.0...extension-v0.79.0) (2026-10-17)
 
 
