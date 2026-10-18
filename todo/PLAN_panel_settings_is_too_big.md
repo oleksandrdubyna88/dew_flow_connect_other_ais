@@ -94,3 +94,13 @@ One commit per step, each proved on its own: the build is green, the full suites
 | Item | Here | [PLAN_one_model_catalog.md](../research/PLAN_one_model_catalog.md) |
 |---|---|---|
 | `VendorDto` and its parsing in `PanelSettings.cs` | as written above | adds row fields in its E2 and no new section; whichever lands second rebases onto the other |
+
+## Boundary with the one-bad-field plan (2026-10-18)
+
+| Item | Here | [PLAN_one_bad_field_keeps_the_rows.md](PLAN_one_bad_field_keeps_the_rows.md) |
+|---|---|---|
+| The per-row read of `COAI_VENDORS` | does not touch it | builds it, in the new file `VendorRowReader.cs` |
+| `ParseVendors` and the DTO → row mapping | moves it to `VendorSettingsReader.cs` (step 3) | changes only its call to the reader |
+| `VendorListFrom`, `VendorList`, `WithProvidersFrom` | moves them with the vendor block | adds `Refusals` and the "configured" rule |
+
+Either plan can go first; whichever lands second rebases onto the other. Nothing else is shared.
