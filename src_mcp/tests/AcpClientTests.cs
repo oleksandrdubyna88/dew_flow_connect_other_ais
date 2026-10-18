@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using CoaiMcp.Runners.Acp;
 using CoaiMcp.Runners.Processes;
@@ -582,6 +583,77 @@ public sealed class AcpClientTests
         outcome.End.Should().Be(AcpEnd.Answered, outcome.Reason);
         Gone(outcome.AgentPid).Should().BeTrue();
         Gone(grandchild).Should().BeTrue("the tree must be killed while the agent is still alive to name its children");
+    }
+
+    /// <summary>
+    /// The fake agent replays its steps on EVERY prompt, so a <c>grandchild</c> step writes the same pid file again. The second write
+    /// replaces the first — it neither refuses (the agent dying with "file already exists") nor keeps the first grandchild's pid.
+    /// </summary>
+    [Fact]
+    public async Task AnAgentPromptedTwice_ReplacesItsGrandchildsPidFile_AndAnswersBothPrompts()
+    {
+        using var agent = new FakeAcpAgent(string.Empty, a => a.Grandchild(), _ => FakeAcpAgent.Chunk("x"));
+        var start = new ProcessStartInfo(FakeAcpAgent.FakeCliExe) { UseShellExecute = false, RedirectStandardInput = true, RedirectStandardOutput = true, WorkingDirectory = agent.Cwd };
+        start.ArgumentList.Add("acp-agent");
+        start.ArgumentList.Add(agent.Script);
+        using var process = Process.Start(start)!;
+        try
+        {
+            await PromptAndAwaitAnswerAsync(process, 1);
+            var first = agent.GrandchildPid();
+
+            await PromptAndAwaitAnswerAsync(process, 2);
+            var second = await ReadPidWhenItChangesAsync(agent.PidFile, first);
+
+            second.Should().NotBe(first, "the second prompt's grandchild replaced the first one's record");
+            ProcessTracking.StartedAt(second).Should().NotBeNull("the pid file names the grandchild the second prompt started");
+        }
+        finally
+        {
+            process.Kill(entireProcessTree: true);
+        }
+    }
+
+    private static async Task PromptAndAwaitAnswerAsync(Process agent, int id)
+    {
+        await agent.StandardInput.WriteLineAsync($$$"""{"jsonrpc":"2.0","id":{{{id}}},"method":"session/prompt","params":{"sessionId":"fake-session","prompt":[{"type":"text","text":"go"}]}}""");
+        await agent.StandardInput.FlushAsync();
+        using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var exited = agent.WaitForExitAsync(limit.Token);
+        while (true)
+        {
+            var reading = agent.StandardOutput.ReadLineAsync(limit.Token).AsTask();
+            if (await Task.WhenAny(reading, exited) == exited)
+            {
+                throw new Xunit.Sdk.XunitException($"the agent exited (code {agent.ExitCode}) before it answered prompt {id}");
+            }
+
+            if (await reading is not { } line)
+            {
+                throw new Xunit.Sdk.XunitException($"the agent ended its output before it answered prompt {id}");
+            }
+
+            if (line.Contains($"\"id\":{id},", StringComparison.Ordinal) && line.Contains("\"result\"", StringComparison.Ordinal))
+            {
+                return;
+            }
+        }
+    }
+
+    private static async Task<int> ReadPidWhenItChangesAsync(string pidFile, int previous)
+    {
+        var until = DateTime.UtcNow.AddSeconds(20);
+        while (DateTime.UtcNow < until)
+        {
+            if (int.TryParse(File.ReadAllText(pidFile), out var pid) && pid != previous)
+            {
+                return pid;
+            }
+
+            await Task.Delay(25);
+        }
+
+        return previous;
     }
 
     /// <summary>The graceful step is real: an agent still reading its stdin sees `session/cancel` before the kill.</summary>
