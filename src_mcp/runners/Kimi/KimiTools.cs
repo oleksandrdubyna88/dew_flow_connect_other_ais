@@ -83,7 +83,7 @@ public static class KimiTools
     /// <summary>Debian and Ubuntu name fd's program <c>fdfind</c> and Kimi looks for <c>fd</c>, so the link is part of the cure there; Fedora's package installs <c>fd</c> itself.</summary>
     private static string FdLink(List<string> missing, string manager) =>
         manager == "apt-get" && missing.Contains("fd")
-            ? " — and, because Debian and Ubuntu name fd's program fdfind, link it: `mkdir -p ~/.local/bin && ln -sf \"$(command -v fdfind)\" ~/.local/bin/fd`"
+            ? " — and, because Debian and Ubuntu name fd's program fdfind, link it unless ~/.local/bin/fd is already your own file: `mkdir -p ~/.local/bin && ln -sfn \"$(command -v fdfind)\" ~/.local/bin/fd`"
             : string.Empty;
 
     private static string PackageOf(string tool) => tool == "rg" ? "ripgrep" : "fd-find";

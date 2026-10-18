@@ -79,7 +79,9 @@ public sealed class KimiToolsOnLinuxTests
         var refusal = KimiTools.Refusal(false, Bin, "/usr/bin", null, Files(Bin + "/rg", "/usr/bin/apt-get"), Local);
 
         refusal.Should().Contain("fd was not found").And.Contain("sudo apt-get install -y fd-find")
-            .And.Contain("fdfind").And.Contain("ln -sf").And.Contain("~/.local/bin/fd");
+            .And.Contain("fdfind").And.Contain("ln -sfn \"$(command -v fdfind)\" ~/.local/bin/fd").And.Contain("~/.local/bin/fd");
+        refusal.Should().Contain("unless ~/.local/bin/fd is already your own file", "the cure must not tell a person to overwrite a file of their own")
+            .And.NotContain("ln -sf \"", "the unguarded ln -sf follows a planted directory link and writes inside it; the install line uses ln -sfn");
     }
 
     [Fact]
