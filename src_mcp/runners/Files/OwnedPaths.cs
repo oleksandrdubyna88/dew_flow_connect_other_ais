@@ -31,6 +31,22 @@ public static class OwnedPaths
         }
     }
 
+    /// <summary>
+    /// The target of the link at <paramref name="path"/> exactly as the link STORES it — never resolved, never normalised — or empty when it is
+    /// not a link, is not there, or cannot be read. A resolved target would admit a relative spelling of the same file.
+    /// </summary>
+    public static string RawLinkTarget(string path)
+    {
+        try
+        {
+            return new FileInfo(path).LinkTarget ?? string.Empty;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return string.Empty;
+        }
+    }
+
     /// <summary>The first of <paramref name="paths"/> that is a link (<see cref="IsLinkIfThere"/>), or empty.</summary>
     public static string FirstLink(params string[] paths) =>
         paths.FirstOrDefault(IsLinkIfThere) ?? string.Empty;

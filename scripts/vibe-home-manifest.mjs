@@ -28,13 +28,24 @@
 // decides whether VibeHome may admit it, and that decision is a code change, not a manifest edit.
 //
 // The person's ~/.vibe is never read or written, and nothing outside <scratch> is created or deleted.
-import { createHash } from 'node:crypto';
+//
+// PER PLATFORM (DL3 of todo/PLAN_kimi_and_vibe_on_linux.md): the entry carries `platform` (node's spelling) and replaces only the
+// entry of the same version AND platform — on Linux Vibe unpacks a different plugin package (L-V-manifest: 11 of 12 pinned
+// files hash differently), so a `linux` entry sits beside the `win32` one. On Linux the homes are signed in through the `.env`
+// LINK to the person's Vibe home's `.env` (L-V1: no keyring on WSL) — made by lstat alone, never opened, and never hashed: the
+// inventory names a link without reading through it, and the sign-in link is coai's, so it is not counted as something Vibe wrote.
+//
+//   --stage            write the entry into `staged`, not `versions`: coai-mcp up to 0.57.x reads `versions` by version alone
+//                      (VibeLaunch.Verdict matches exactly ONE entry), so a second 2.26.1 there would turn every Windows 2.26.1
+//                      launch into an "unmeasured" one. A staged entry is not enforced by anything until it is moved.
+//   --unstage <platform>  move that platform's staged entries into `versions` (no launch) — for the change that makes the C# read `platform` (E2).
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolved } from '../.github/scripts/lib/resolved.mjs';
-import { builtEnv as builtEnvFor, classOf as classOfIn, deepestChild, files, run, vibeArgs } from './lib/vibe.mjs';
+import { builtEnv as builtEnvFor, classOf as classOfIn, deepestChild, linkSignIn, personsVibeHome, run, vibeArgs } from './lib/vibe.mjs';
+import { inventoryOf, unstaged, withEntry, withoutSignInLink } from './lib/vibe-manifest.mjs';
 
 const argv = process.argv.slice(2);
 const flag = (name, fallback) => {
@@ -42,13 +53,23 @@ const flag = (name, fallback) => {
   return i >= 0 && i + 1 < argv.length ? argv[i + 1] : fallback;
 };
 const write = argv.includes('--write');
+const stage = argv.includes('--stage');
+const unstage = flag('--unstage', '');
 const from = flag('--from', '');
-const exe = from ? '' : flag('--vibe', '') || resolved('vibe');
-const scratch = from || flag('--scratch', '') || mkdtempSync(join(tmpdir(), 'vhm-'));
-mkdirSync(scratch, { recursive: true });
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const MANIFEST = join(ROOT, 'shared', 'vibe-home-manifest.json');
+
+if (unstage) {
+  const moved = unstaged(JSON.parse(readFileSync(MANIFEST, 'utf8')), unstage);
+  writeFileSync(MANIFEST, `${JSON.stringify(moved, null, 2)}\n`);
+  console.error(`moved the staged ${unstage} entries into versions: ${MANIFEST}`);
+  process.exit(0);
+}
+
+const exe = from ? '' : flag('--vibe', '') || resolved('vibe');
+const scratch = from || flag('--scratch', '') || mkdtempSync(join(tmpdir(), 'testsToDelete-vhm-'));
+mkdirSync(scratch, { recursive: true });
 
 /** The curated default model (D10): what a row with no model is launched on. */
 const MODEL = 'mistral-medium-3.5';
@@ -70,6 +91,8 @@ const VARYING = [
   'logs/vibe.log',
   'logs/session/active/.registry',
   'logs/session/unified/*/**',
+  // Vibe's session index, one file beside the session folders (L-V-manifest, 2.26.1 on WSL2: it appears on a resumed home) - session data on every platform.
+  'logs/session/unified/.session-index.json',
   // Vibe's plugin store stages an unpack here (vibe/plugins/_store.py:204): re-digested before it is renamed into packages/,
   // swept by Vibe itself, never loaded as a package - so it is admitted by name even though it lies under the pinned prefix.
   'logs/session/plugins/tmp/**',
@@ -91,10 +114,13 @@ const classIn = (inventoryOfAHome) => {
   return (path) => classOfIn(path, RULES, listing);
 };
 
-const sha256 = (path) => createHash('sha256').update(readFileSync(path)).digest('hex');
-const inventory = (home) => files(home, { folders: true }).map((path) => (path.endsWith('/')
-  ? { path, sha256: '', bytes: 0 }
-  : { path, sha256: sha256(join(home, path)), bytes: readFileSync(join(home, path)).length }));
+/** The home's files and folders (lib/vibe-manifest.mjs inventoryOf: a link named, never read through). */
+const inventory = (home) => inventoryOf(home);
+/**
+ * The `.env` sign-in link this script made is coai's, not Vibe's: it is left out of what Vibe wrote — only a link whose target is exactly
+ * the one linkSignIn makes (the person's Vibe home's `.env`). Any OTHER link, and a changed `.env` link, stays in, as unknown.
+ */
+const vibesOwn = (listing) => withoutSignInLink(listing, join(personsVibeHome(), '.env'));
 
 /** The built environment of D17, for `home` — lib/vibe.mjs's, the product's (VibeLaunch.Built). */
 const builtEnv = (home) => builtEnvFor(home, MODEL);
@@ -111,6 +137,9 @@ function measure() {
   const homeB = join(scratch, 'b');
   const work = join(scratch, 'w');
   for (const d of [homeA, homeB, work]) mkdirSync(d, { recursive: true });
+  // Linux: the sign-in is a LINK to the person's .env (L-V1); Windows needs none (the Credential Manager) and gets none.
+  const signIn = process.platform === 'win32' ? 'none (Windows)' : [homeA, homeB].map((home) => linkSignIn(home)).map((r) => (r.linked ? 'linked' : r.why)).join('; ');
+  console.error(`[manifest] sign-in: ${signIn}`);
 
   const steps = [];
   const v1 = launch('home A: vibe --version', ['--version'], homeA, work);
@@ -137,11 +166,12 @@ const v2 = launch('home A: vibe --version again', ['--version'], homeA, work);
 steps.push({ ...v2, after: inventory(homeA) });
 const v3 = launch('home B: vibe --version', ['--version'], homeB, work);
 steps.push({ ...v3, after: inventory(homeB) });
-writeFileSync(join(scratch, 'steps.json'), JSON.stringify({ exe, version, scratch, steps }, null, 2));
+writeFileSync(join(scratch, 'steps.json'), JSON.stringify({ exe, version, scratch, platform: process.platform, signIn, steps }, null, 2));
 return { version, steps };
 }
 
-const { version, steps } = from ? JSON.parse(readFileSync(join(from, 'steps.json'), 'utf8')) : measure();
+const { version, steps: measured } = from ? JSON.parse(readFileSync(join(from, 'steps.json'), 'utf8')) : measure();
+const steps = measured.map((step) => ({ ...step, after: vibesOwn(step.after) }));
 
 const afterTurn = steps[1].after;
 const classOf = classIn(afterTurn);
@@ -196,15 +226,20 @@ const WHY = [
   'file under it (a plugin per-session data folder), anything else - a hooks.toml, a config.toml, an',
   'agents/ or tools/ folder, a link - refuses the launch with the path named. A Vibe version with no entry here is RUN',
   "with a warning (the owner, 2026-10-13: warn, not refuse) - its plugin files admitted by name, its home's shape still checked;",
-  're-run this script after every Vibe update to measure it. `seen` is informational.',
+  're-run this script after every Vibe update to measure it. `seen` is informational. One entry per version PER PLATFORM',
+  '(`platform` as node spells it; an entry without it is win32). `staged`: entries measured for a platform the shipped coai-mcp',
+  'does not tell apart yet (it reads `versions` by version alone) - NOT enforced; `--unstage <platform>` moves them into',
+  '`versions` in the change that makes the C# read `platform` (DL3 of todo/PLAN_kimi_and_vibe_on_linux.md).',
 ];
 const prior = existsSync(MANIFEST) ? JSON.parse(readFileSync(MANIFEST, 'utf8')) : { versions: [] };
+const next = withEntry(prior, entry, { stage });
 const manifest = {
   why: WHY,
   pinnedPrefix: PINNED_PREFIX,
   varying: VARYING,
   varyingFolders: VARYING_FOLDERS,
-  versions: [...(prior.versions ?? []).filter((v) => v.version !== version), entry].sort((a, b) => a.version.localeCompare(b.version, 'en', { numeric: true })),
+  versions: next.versions,
+  ...(next.staged?.length ? { staged: next.staged } : {}),
 };
 writeFileSync(MANIFEST, `${JSON.stringify(manifest, null, 2)}\n`);
-console.error(`wrote ${MANIFEST} for vibe ${version}; scratch: ${scratch}`);
+console.error(`wrote ${MANIFEST} for vibe ${version} (${entry.platform})${stage ? ', STAGED' : ''}; scratch: ${scratch}`);

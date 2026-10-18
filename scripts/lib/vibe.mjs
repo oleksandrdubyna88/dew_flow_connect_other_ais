@@ -4,9 +4,13 @@
 // scripts/vibe-home-manifest.mjs (the owned home's hash manifest, D17 of todo/PLAN_vibe_and_kimi_runtimes.md). It was
 // private to the probe until the manifest step needed the same flag set, the same minimal environment and the same
 // tree kill: two copies of the flag set would be two measurements of two different launches the day one of them moved.
+//
+// Linux (E1 of todo/PLAN_kimi_and_vibe_on_linux.md, §5): every platform fact below takes the platform as an argument —
+// defaulting to this process's — so both arms are tested on both operating systems, and an arm is never chosen by guessing.
 import { spawnSync } from 'node:child_process';
-import { existsSync, readdirSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { existsSync, lstatSync, readdirSync, rmdirSync, symlinkSync, unlinkSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join, posix, relative, win32 } from 'node:path';
 
 /**
  * ProcessEnvironment.MinimalWindows (src_mcp/runners/Processes/ProcessEnvironment.cs) — the question row's child
@@ -19,15 +23,32 @@ export const MINIMAL_WINDOWS = ['PATH', 'PATHEXT', 'SystemRoot', 'windir', 'ComS
   'APPDATA', 'LOCALAPPDATA', 'TEMP', 'TMP', 'USERNAME', 'ProgramData', 'ProgramFiles', 'ProgramFiles(x86)', 'ProgramW6432',
   'PROCESSOR_ARCHITECTURE', 'PROCESSOR_IDENTIFIER', 'PROCESSOR_LEVEL', 'PROCESSOR_REVISION', 'OS', 'NUMBER_OF_PROCESSORS'];
 
-/** This process's values for MINIMAL_WINDOWS, matched case-insensitively as Windows does — absent names stay absent. */
-export function minimalWindowsEnv() {
-  const env = {};
-  for (const name of MINIMAL_WINDOWS) {
-    const key = Object.keys(process.env).find((k) => k.toLowerCase() === name.toLowerCase());
-    if (key !== undefined) env[name] = process.env[key];
+/**
+ * ProcessEnvironment.MinimalUnix — the same list for every other host. A copy of a C# list for the same reason as
+ * MINIMAL_WINDOWS; lib/vibe.test.mjs parses ProcessEnvironment.cs and fails unless the two are the same set.
+ */
+export const MINIMAL_UNIX = ['PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TERM', 'TMPDIR', 'TMP', 'TEMP', 'DOTNET_ROOT'];
+
+const isWindows = (platform) => platform === 'win32';
+/** The path flavour of a platform — a Linux path is built with `/` even by a test running on Windows. */
+const pathOf = (platform) => (isWindows(platform) ? win32 : posix);
+
+/**
+ * `env`'s values for the platform's minimal list — absent names stay absent. Windows matches names case-insensitively, as
+ * Windows does; every other platform takes the exact name only.
+ */
+export function minimalEnv(platform = process.platform, env = process.env) {
+  const out = {};
+  const names = isWindows(platform) ? MINIMAL_WINDOWS : MINIMAL_UNIX;
+  for (const name of names) {
+    const key = isWindows(platform) ? Object.keys(env).find((k) => k.toLowerCase() === name.toLowerCase()) : (name in env ? name : undefined);
+    if (key !== undefined) out[name] = env[key];
   }
-  return env;
+  return out;
 }
+
+/** This process's values for MINIMAL_WINDOWS, matched case-insensitively as Windows does — absent names stay absent. */
+export const minimalWindowsEnv = () => minimalEnv('win32');
 
 /**
  * The FIXED variables of D17's built environment — every name coai sets beside the home and the model, with its value:
@@ -37,29 +58,114 @@ export function minimalWindowsEnv() {
  */
 export const BUILT_FIXED = { VIBE_CLI: 'python', PYTHONUTF8: '1' };
 
-/** D17's BUILT environment for `home` and `model`: MinimalWindows, the home, the fixed variables and the model — nothing else. */
-export const builtEnv = (home, model) => ({ ...minimalWindowsEnv(), VIBE_HOME: home, ...BUILT_FIXED, VIBE_ACTIVE_MODEL: model });
+/** D17's BUILT environment for `home` and `model`: the platform's minimal list, the home, the fixed variables and the model — nothing else. */
+export const builtEnv = (home, model, platform = process.platform, env = process.env) =>
+  ({ ...minimalEnv(platform, env), VIBE_HOME: home, ...BUILT_FIXED, VIBE_ACTIVE_MODEL: model });
 
 export const fwd = (p) => p.replaceAll('\\', '/');
 
 /** A Windows system tool by its absolute path, never looked up through PATH (SonarCloud S4036, the code round 2026-10-12). */
 export const SYSTEM32 = (exe) => join(process.env.SystemRoot ?? String.raw`C:\Windows`, 'System32', exe);
 
+/** The bare name a canary hook or MCP server runs Python by: Ubuntu ships `python3` and no `python` unless python-is-python3 is installed. */
+export const pythonCommand = (platform = process.platform) => (isWindows(platform) ? 'python' : 'python3');
+
+/**
+ * Vibe's OWN interpreter, where uv puts a tool: `%APPDATA%\uv\tools\mistral-vibe\Scripts\python.exe` on Windows; on Linux
+ * `$UV_TOOL_DIR`, else `$XDG_DATA_HOME/uv/tools`, else `~/.local/share/uv/tools` (uv's storage docs), `mistral-vibe/bin/python`.
+ */
+export function vibePython(platform = process.platform, env = process.env, home = homedir()) {
+  const p = pathOf(platform);
+  if (isWindows(platform)) return p.join(env.APPDATA ?? '', 'uv', 'tools', 'mistral-vibe', 'Scripts', 'python.exe');
+  const tools = env.UV_TOOL_DIR || p.join(env.XDG_DATA_HOME || p.join(home, '.local', 'share'), 'uv', 'tools');
+  return p.join(tools, 'mistral-vibe', 'bin', 'python');
+}
+
+/** The person's Vibe home (DL2): `VIBE_HOME` of THIS process's environment when set, else `~/.vibe`. */
+export const personsVibeHome = (env = process.env, home = homedir(), platform = process.platform) => env.VIBE_HOME || pathOf(platform).join(home, '.vibe');
+
+const lstatOrNull = (p) => {
+  try {
+    return lstatSync(p);
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * DL2's sign-in on Linux: `<home>/.env` a SYMLINK to the person's `<Vibe home>/.env` — made by `lstat` alone, so the person's
+ * file is never opened, read or copied (a fresh owned home is signed out on WSL, L-V1). No link on Windows (the Credential
+ * Manager holds the key there), none when the person has no `.env`, and none when theirs is itself a link (never chained).
+ * Returns `{ linked, why }`; a refusal leaves nothing at `<home>/.env`. The product's own judgement of the target (owner,
+ * mode, one descriptor) is E2's; this is the probe's.
+ */
+export function linkSignIn(home, { personsHome = personsVibeHome(), platform = process.platform } = {}) {
+  if (isWindows(platform)) return { linked: false, why: 'on Windows Vibe reads the sign-in from the Credential Manager, so no .env link is made' };
+  const target = pathOf(platform).join(personsHome, '.env');
+  const stat = lstatOrNull(target);
+  if (stat === null) return { linked: false, why: `no .env in ${personsHome} — the person is not signed in on this side` };
+  if (stat.isSymbolicLink()) return { linked: false, why: `${target} is itself a link — a sign-in link is never chained` };
+  if (!stat.isFile()) return { linked: false, why: `${target} is not a regular file` };
+  try {
+    symlinkSync(target, pathOf(platform).join(home, '.env'), 'file');
+    return { linked: true, why: '' };
+  } catch (e) {
+    return { linked: false, why: `the .env link could not be made: ${e.code ?? e.message}` };
+  }
+}
+
+/** A FOLDER link `link` → `target`: a junction on Windows (mklink /J, a cmd builtin, by cmd.exe's absolute path), a symlink elsewhere; the error text, or ''. */
+export function dirLink(link, target, platform = process.platform) {
+  if (isWindows(platform)) {
+    const r = run(SYSTEM32('cmd.exe'), ['/d', '/c', 'mklink', '/J', link, target], { encoding: 'utf8', timeout: 30_000 });
+    return r.status === 0 ? '' : `mklink /J failed: ${(r.stdout + r.stderr).trim()}`;
+  }
+  try {
+    symlinkSync(target, link, 'dir');
+    return '';
+  } catch (e) {
+    return `symlink failed: ${e.code ?? e.message}`;
+  }
+}
+
+/** Removes a folder link by its OWN name, never what it points at: rmdir unlinks a junction on Windows; on POSIX rmdir refuses a symlink (ENOTDIR), unlink is the call. */
+export const removeDirLink = (link, platform = process.platform) => (isWindows(platform) ? rmdirSync(link) : unlinkSync(link));
+
+/** Ends a process tree by the pid this script started — never by image name: `taskkill /T` on Windows, its process GROUP elsewhere. */
+export function killTree(pid, platform = process.platform) {
+  if (isWindows(platform)) {
+    spawnSync(SYSTEM32('taskkill.exe'), ['/PID', String(pid), '/T', '/F'], { encoding: 'utf8', timeout: 15_000 });
+    return;
+  }
+  try {
+    process.kill(-pid, 'SIGKILL');
+  } catch {
+    try { process.kill(pid, 'SIGKILL'); } catch { /* already gone */ }
+  }
+}
+
+/**
+ * util-linux's setsid(1) by its absolute path (S4036). spawnSync cannot detach a child, so on POSIX the child is started
+ * THROUGH setsid: a child of node is no group leader, so setsid calls setsid(2) and execs in place — the same pid, now the
+ * leader of its own session and process group, which is what a group kill needs. '' where it is not installed.
+ */
+const SETSID = ['/usr/bin/setsid', '/bin/setsid'].find((p) => existsSync(p)) ?? '';
+
 /**
  * Every child these scripts start goes through here: exe + argv (never a shell string, except mklink, which is a cmd
  * builtin), always a timeout, and a timeout kills the child's WHOLE tree by its PID before this returns — a stuck vibe
- * leaves python children behind otherwise (the code round, codex, 2026-10-12). Never by image name.
+ * leaves python children behind otherwise (the code round, codex, 2026-10-12). Never by image name. On POSIX the child
+ * leads its own process group (through setsid), so the kill reaches every descendant that stayed in it (plan §5, measured
+ * red first: without the group a grandchild outlived the timeout); a descendant that opened its own session is out of reach
+ * of any group kill (L-K4 harness), which is DL9's subreaper question, not this script's.
  */
 export function run(file, args, options) {
-  const r = spawnSync(file, args, { ...options, timeout: options.timeout ?? 60_000 });
+  const grouped = process.platform !== 'win32' && SETSID !== '';
+  const r = grouped
+    ? spawnSync(SETSID, [file, ...args], { ...options, timeout: options.timeout ?? 60_000 })
+    : spawnSync(file, args, { ...options, timeout: options.timeout ?? 60_000 });
   const timedOut = r.error?.code === 'ETIMEDOUT' || Boolean(r.signal);
-  if (timedOut && r.pid) {
-    if (process.platform === 'win32') {
-      spawnSync(SYSTEM32('taskkill.exe'), ['/PID', String(r.pid), '/T', '/F'], { encoding: 'utf8', timeout: 15_000 });
-    } else {
-      try { process.kill(-r.pid, 'SIGKILL'); } catch { /* the group is already gone */ }
-    }
-  }
+  if (timedOut && r.pid) killTree(r.pid);
   return r;
 }
 
@@ -82,6 +188,17 @@ export function files(dir, { folders = false } = {}) {
   };
   walk(dir);
   return out.sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * A home's listing for a before/after comparison — names, sizes and modification times by `lstat`, so a link is named (and
+ * flagged) and never followed, and no file is opened. The probes compare the person's own `~/.vibe` with it (plan §5).
+ */
+export function homeListing(dir) {
+  return files(dir, { folders: true }).map((path) => {
+    const s = lstatSync(join(dir, path));
+    return { path, link: s.isSymbolicLink(), bytes: path.endsWith('/') ? 0 : s.size, mtimeMs: Math.round(s.mtimeMs) };
+  });
 }
 
 const segments = (path) => path.split('/').filter((seg) => seg.length > 0);
@@ -144,4 +261,3 @@ export function vibeArgs({ workdir, exportDir, trust = false, timeLimit = 120, r
   return ['-p', '--output', 'json', '--agent', 'plan', '--enabled-tools', 'read_file', '--workdir', workdir,
     '--time-limit', String(timeLimit), '--output-dir', exportDir, ...(trust ? ['--trust'] : []), ...(resume ? ['--resume', resume] : [])];
 }
-

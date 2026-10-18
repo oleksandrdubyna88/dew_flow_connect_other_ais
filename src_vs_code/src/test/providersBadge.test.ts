@@ -52,6 +52,7 @@ function page(over: Partial<PanelState> = {}): string {
     agyModels: [],
     localEngines: {},
     server: { kind: 'absent', version: '', remembered: false, updateOffered: false },
+    hostKind: 'windows',
     side: '',
     perSide: false,
     questions: [],
