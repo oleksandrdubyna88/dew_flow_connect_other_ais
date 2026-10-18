@@ -45,15 +45,22 @@ public sealed class WindowsPathLimitsTests
             .And.ContainKey("src_mcp/runners/Worktrees/WorktreeFailure.cs");
     }
 
+    /// <summary>
+    /// Only <c>src_mcp</c>, the product these limits belong to: the scanner reads every <c>src_*</c>, and a 247 in the Linux-only
+    /// Team server is not this limit (the cadence consultation on the plan, 2026-10-18).
+    /// </summary>
     [Fact]
     public void NoOtherProductionCode_SpellsTheLimit()
     {
-        var spelled = ProductionSources.FilesMatching(TheLimitAsALiteral);
+        var spelled = ProductionSources.FilesMatching(TheLimitAsALiteral)
+            .Where(hit => hit.Key.StartsWith("src_mcp/", StringComparison.Ordinal))
+            .ToDictionary(StringComparer.Ordinal);
 
         spelled.Should().ContainKey(TheOneType, "the scanner must see the one place, or an empty result proves nothing");
         spelled.Keys.Should().BeEquivalentTo(
             [TheOneType],
-            "a call site that keeps its own 259 or 247 is the copy that stays wrong when the constant is corrected");
+            "a call site that keeps its own 259 or 247 is the copy that stays wrong when the constant is corrected — read "
+            + "WindowsPathLimits instead; a number that only happens to be 259 or 247 is excluded here by its file, with the reason");
         spelled[TheOneType].Should().Be(2, "the file limit and the folder limit, once each");
     }
 }
