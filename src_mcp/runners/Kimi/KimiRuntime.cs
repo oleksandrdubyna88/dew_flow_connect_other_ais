@@ -206,6 +206,21 @@ public sealed class KimiRuntime(string id, KimiHost host, KimiSeams seams, Seril
     /// <summary>The card's warning for the version <c>providers</c> read — the launch control's own sentence (empty for a measured version).</summary>
     public string VersionWarning(string printedVersion) => KimiLaunch.VersionWarning(printedVersion);
 
+    /// <summary>
+    /// The card's one line when the sign-in folder is on network storage — what <c>coai.kimiAllowNetworkSignIn</c> (DL6) turns the refusal into. The CALLER asks only when the override is on: with it off, the launch's refusal says
+    /// the same fact with its cure. Empty on a local disk, on a host with no mount table, and when the folder cannot be named.
+    /// </summary>
+    public string NetworkSignInWarning() => Junctions.NetworkWarning(host.Kind, seams.PlacesFor(string.Empty).Credentials);
+
+    /// <summary>
+    /// The survivor marker standing for the person's sign-in — zero or one — for the providers answer's <c>survivorMarker</c> (DL9, F16): the marker file of THIS sign-in folder only, in the Kimi lock root the one-shot
+    /// <c>--kimi-clear-marker</c> accepts paths from. Nothing when the sign-in folder is not known or cannot be keyed.
+    /// </summary>
+    public IReadOnlyList<KimiMarkerReport> StandingMarker() =>
+        seams.PlacesFor(string.Empty).Credentials is { Length: > 0 } credentials
+            ? KimiSurvivorMarker.StandingReportFor(KimiCredentialsLock.MarkerPathFor(credentials), LivenessCheck.Of)
+            : [];
+
     /// <summary>The report's answer when the turn was answered; null — "no answer where this vendor puts one" — otherwise.</summary>
     public string? ReadAnswer(ReviewerInvocation invocation, ProcessResult result) =>
         KimiReport.Parse(result.StdOut) is { Answered: true } report ? report.Answer : null;

@@ -93,6 +93,26 @@ public static class KimiSurvivorMarker
     /// <summary>The report <c>--kimi-clear-marker</c> prints, as the one JSON object on stdout.</summary>
     public static string Json(ClearMarkerReport report) => JsonSerializer.Serialize(report, KimiSurvivorJsonContext.Default.ClearMarkerReport);
 
+    /// <summary>
+    /// What the providers answer reports for the marker at <paramref name="markerPath"/> (the file <c>KimiCredentialsLock.MarkerPathFor</c> names for THIS sign-in, so never another's): nothing when no file stands or the
+    /// path is empty; the path and the pids it names otherwise — empty pids for a marker that names nothing or cannot be read, which still blocks the sign-in. A marker whose own shim is still ALIVE is a turn in progress, not a
+    /// stuck one (the same question the launch gate asks first, <see cref="KimiSurvivorGate.OwnerLiveness"/>), and is not reported; a shim that cannot be checked leaves it standing.
+    /// </summary>
+    public static IReadOnlyList<KimiMarkerReport> StandingReportFor(string markerPath, Func<ProcessIdentity, Liveness> liveness) =>
+        markerPath.Length == 0
+            ? []
+            : Read(markerPath) switch
+            {
+                MarkerRead.Read read => Reported(markerPath, read.Marker, liveness),
+                MarkerRead.Unreadable => [new KimiMarkerReport(markerPath, [])],
+                _ => [],
+            };
+
+    private static IReadOnlyList<KimiMarkerReport> Reported(string path, KimiSurvivorMarkerDto marker, Func<ProcessIdentity, Liveness> liveness) =>
+        KimiSurvivorGate.OwnerLiveness(marker, liveness) is Liveness.Alive
+            ? []
+            : [new KimiMarkerReport(path, [.. marker.Marker.Tree.Select(member => member.Pid)])];
+
     /// <summary>Deletes the marker (a file already gone is fine).</summary>
     public static void Clear(string path) => File.Delete(path);
 
@@ -177,3 +197,6 @@ public sealed record ClearMarkerReport(string Path, string Outcome, int Exit, IR
 
 /// <summary>One member of a marker and what the check found: <c>alive</c>, <c>gone</c> or <c>unknown</c>, with the reason.</summary>
 public sealed record ClearMarkerMember(int Pid, DateTime StartedUtc, string Liveness, string Detail);
+
+/// <summary>What the providers answer reports for a Kimi row whose sign-in has a survivor marker standing: where the marker is (a path <c>--kimi-clear-marker</c> accepts) and the pids it names.</summary>
+public sealed record KimiMarkerReport(string Path, IReadOnlyList<int> Pids);

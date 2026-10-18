@@ -1,4 +1,5 @@
 using CoaiMcp.Core.Rounds;
+using CoaiMcp.Runners.Files;
 using CoaiMcp.Runners.Kimi;
 using CoaiMcp.Runners.Platform;
 using CoaiMcp.Runners.Reviewers;
@@ -43,6 +44,29 @@ public sealed class KimiNetworkSignInSettingTests : IDisposable
 
         PanelSettings.FromEnvironment(SettingsFile.Layer(dir.Path, _ => null, _ => { })).KimiAllowNetworkSignIn.Should().BeTrue("the extension's file turned it on");
         PanelSettings.FromEnvironment(SettingsFile.Layer(dir.Path, name => name == "COAI_KIMI_ALLOW_NETWORK_SIGNIN" ? "0" : null, _ => { })).KimiAllowNetworkSignIn.Should().BeFalse("a variable in the client's config is more specific than the file");
+    }
+
+    private KimiRuntime RuntimeOn(HostKind host) => new("kimi", new KimiHost(host, WslGeneration.Wsl2), new KimiSeams(_person.PlacesAt, () => ("coai-mcp", [])));
+
+    /// <summary>The card: with the override on, a network sign-in folder is a one-line warning on the row (never the refusal's wall of text), and a local one says nothing.</summary>
+    [Fact]
+    public void TheCardWarning_IsTheOneLine_OnNetworkStorage_AndNothingOnALocalDisk()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        try
+        {
+            Junctions.StandInMountInfo(() => "25 1 0:50 / / rw - nfs4 srv:/home rw\n", _ => new MountIdentity.NotAsked());
+            var warning = RuntimeOn(HostKind.Wsl).NetworkSignInWarning();
+            warning.Should().Contain("network storage (nfs4)").And.Contain("coai.kimiAllowNetworkSignIn").And.NotContain("\n");
+            RuntimeOn(HostKind.Windows).NetworkSignInWarning().Should().BeEmpty("a Windows host has no mount table");
+
+            Junctions.StandInMountInfo(() => "25 1 8:1 / / rw - ext4 /dev/sda1 rw\n", _ => new MountIdentity.NotAsked());
+            RuntimeOn(HostKind.Wsl).NetworkSignInWarning().Should().BeEmpty("an ext4 home is admitted silently");
+        }
+        finally
+        {
+            Junctions.StandInMountInfo(null);
+        }
     }
 
     private KimiRuntime Runtime() => new("kimi", HostKind.Windows, new KimiSeams(_person.PlacesAt, () => ("coai-mcp", [])));
