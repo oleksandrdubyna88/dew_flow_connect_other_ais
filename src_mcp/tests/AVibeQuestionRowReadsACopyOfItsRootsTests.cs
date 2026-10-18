@@ -27,6 +27,9 @@ public sealed class AVibeQuestionRowReadsACopyOfItsRootsTests : IAsyncLifetime
 
     private readonly ProcessLauncher _launcher = new();
     private readonly TempDir _dir = TempDir.For("coai-qvibe-");
+    private readonly VibeQuestionRowFixture _rows;
+
+    public AVibeQuestionRowReadsACopyOfItsRootsTests() => _rows = new VibeQuestionRowFixture(_dir, _launcher);
 
     private string Repo => _dir.At("repo");
 
@@ -46,22 +49,7 @@ public sealed class AVibeQuestionRowReadsACopyOfItsRootsTests : IAsyncLifetime
         return ValueTask.CompletedTask;
     }
 
-    private async Task RepositoryAsync(string at, params (string Path, string Text)[] files)
-    {
-        Directory.CreateDirectory(at);
-        foreach (var (path, text) in files)
-        {
-            var full = Path.Combine([at, .. path.Split('/')]);
-            Directory.CreateDirectory(Path.GetDirectoryName(full)!);
-            await File.WriteAllTextAsync(full, text, TestContext.Current.CancellationToken);
-        }
-
-        foreach (var args in (string[][])[["init", "-b", "main"], ["config", "user.email", "t@example.com"], ["config", "user.name", "t"], ["add", "."], ["commit", "-m", "base"]])
-        {
-            var result = await _launcher.RunAsync(new ProcessRequest("git", args, at), TestContext.Current.CancellationToken);
-            result.ExitCode.Should().Be(0, string.Join(' ', args) + ": " + result.StdErr);
-        }
-    }
+    private Task RepositoryAsync(string at, params (string Path, string Text)[] files) => _rows.RepositoryAsync(at, files);
 
     private PanelService Service(PlayedVibe vibe, params string[] roots) => ServiceOn(vibe, string.Empty, roots);
 
@@ -70,37 +58,12 @@ public sealed class AVibeQuestionRowReadsACopyOfItsRootsTests : IAsyncLifetime
     /// <summary>The service with a homes root: a home-keeping row reserves its one-shot folder there (D1).</summary>
     private PanelService ServiceOn(PlayedVibe vibe, string homesRoot, params string[] roots) => ServiceFor(vibe, homesRoot, "glm-5-3", roots);
 
-    private PanelService ServiceFor(PlayedVibe vibe, string homesRoot, string model, params string[] roots) => new(
-        new PanelSettings
-        {
-            ConsultantHomesRoot = homesRoot,
-            Providers = [],
-            Rounds = PanelConfig.Uniform(3, 2, StagePolicy.Human),
-            DataDir = _dir.At("data"),
-            ReviewerTimeout = TimeSpan.FromSeconds(30),
-            QuestionConsult = new QuestionConsultSettings
-            {
-                Rows = [new QuestionRow("vibe-disk", "mistral", "vibe", model, string.Empty, PlayedVibe.Exe, string.Empty, "question-disk", Enabled: true)],
-                Roots = roots,
-                RowBudget = TimeSpan.FromSeconds(30),
-            },
-        },
-        VaultKeys.None("no vault in tests"),
-        default,
-        vibe,
-        Logger.None,
-        Noticing.None);
+    private PanelService ServiceFor(PlayedVibe vibe, string homesRoot, string model, params string[] roots) => _rows.ServiceFor(vibe, homesRoot, model, roots);
 
-    private async Task<JsonElement> AskAsync(PanelService service, CancellationToken? ct = null) =>
-        JsonDocument.Parse(await service.AskConsultantsAsync(
-            Repo, "Which helper retries an outbound send?", "I tried a fixed wait.", ct: ct ?? TestContext.Current.CancellationToken)).RootElement;
+    private Task<JsonElement> AskAsync(PanelService service, CancellationToken? ct = null) =>
+        VibeQuestionRowFixture.AskAsync(service, Repo, ct ?? TestContext.Current.CancellationToken);
 
-    private static JsonElement TheRow(JsonElement reply)
-    {
-        reply.TryGetProperty("answers", out var answers).Should().BeTrue(reply.ToString());
-
-        return answers.EnumerateArray().Should().ContainSingle().Subject;
-    }
+    private static JsonElement TheRow(JsonElement reply) => VibeQuestionRowFixture.TheRow(reply);
 
     /// <summary>The row's own folder — the parent of the home its launch was given.</summary>
     private static string RowFolderOf(ProcessRequest request) =>

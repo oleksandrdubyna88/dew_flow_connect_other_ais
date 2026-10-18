@@ -67,16 +67,6 @@ public sealed class AVibeDiskRowExpandsAParentFolderTests : IDisposable
         return result.StdOut;
     }
 
-    /// <summary>A folder holding a <c>.git</c> FILE that points nowhere: a candidate git does not confirm.</summary>
-    private static string BrokenCheckout(string at)
-    {
-        Directory.CreateDirectory(at);
-        File.WriteAllText(Path.Combine(at, ".git"), "gitdir: /nowhere\n");
-        File.WriteAllText(Path.Combine(at, "lost.txt"), "unreachable");
-
-        return at;
-    }
-
     private string Parent(string name = "parent") => Directory.CreateDirectory(_dir.At(name)).FullName;
 
     private string[] Snapshots() =>
@@ -251,7 +241,7 @@ public sealed class AVibeDiskRowExpandsAParentFolderTests : IDisposable
     {
         var parent = Parent();
         await RepositoryAsync(Path.Combine(parent, "good"), true, ("g.txt", "good"));
-        BrokenCheckout(Path.Combine(parent, "broken"));
+        VibeQuestionRowFixture.BrokenCheckout(Path.Combine(parent, "broken"));
         var denied = Directory.CreateDirectory(Path.Combine(parent, "denied")).FullName;
         List<string> said = [];
         var places = Places(said.Add);
@@ -271,7 +261,7 @@ public sealed class AVibeDiskRowExpandsAParentFolderTests : IDisposable
     public async Task AParentWithOnlyABrokenRepository_IsRefusedWithTheNoneSentence_AndKeepsItsNote()
     {
         var parent = Parent();
-        BrokenCheckout(Path.Combine(parent, "broken"));
+        VibeQuestionRowFixture.BrokenCheckout(Path.Combine(parent, "broken"));
 
         using var place = await PlaceAsync(Places(), parent);
 
@@ -289,7 +279,7 @@ public sealed class AVibeDiskRowExpandsAParentFolderTests : IDisposable
     {
         var parent = Parent();
         await InitManyAsync(parent, 50);
-        BrokenCheckout(Path.Combine(parent, "zz-broken"));
+        VibeQuestionRowFixture.BrokenCheckout(Path.Combine(parent, "zz-broken"));
         var copies = 0;
         var places = PlacesWith(SnapshotOptions.Default with { BeforeCopyOf = (_, _) => Interlocked.Increment(ref copies) });
         var roomy = TimeSpan.FromMinutes(10);

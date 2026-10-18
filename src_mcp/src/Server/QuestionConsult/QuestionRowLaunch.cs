@@ -114,10 +114,10 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
             using var place = await PlaceAsync(input.Row, scratch, input.Budget, row.Token);
             if (place.Refusal.Length > 0)
             {
-                return Ended(start, RowOutcomes.Refused, place.Refusal, started.Elapsed, Usage.None);
+                return Ended(start, RowOutcomes.Refused, place.Refusal, started.Elapsed, Usage.None, PlaceNotes(place));
             }
 
-            return await TurnsAsync(input, await TierProbedAsync(input.Row.Runtime, Launch(input, scratch, HomeFolderOf(homes, scratch), place), row.Token), start, started, row.Token);
+            return await TurnsAsync(input, await TierProbedAsync(input.Row.Runtime, Launch(input, scratch, HomeFolderOf(homes, scratch), place), row.Token), start, started, PlaceNotes(place), row.Token);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
@@ -187,13 +187,21 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
     private async Task<ConsultantPlace> PlaceAsync(RowAdmission.Admitted row, string scratch, TimeSpan budget, CancellationToken ct) =>
         row.Plan.Cwd == CwdKind.Snapshot ? await _places.OneShotAsync(scratch, row.Plan.SnapshotSources, budget, ct) : ConsultantPlace.Checkout;
 
+    /// <summary>
+    /// What the place skipped (a candidate git did not confirm, a folder it could not list), for the row's <c>note</c>: redacted
+    /// like <see cref="Ended"/>'s reason, because a note names folders on the person's disk and is written down.
+    /// </summary>
+    private static string PlaceNotes(ConsultantPlace place) =>
+        place.Notes.Count == 0 ? string.Empty : Redaction.SafeText(string.Join("; ", place.Notes), Redaction.DetailLimit);
+
     /// <summary>The turns of one row: one for a CLI (a launch, or a launch and its follow-up), as many as the api row's follow-ups ask for.</summary>
-    private async Task<QuestionRowRecord> TurnsAsync(RowLaunchInput input, ConsultantLaunch launch, QuestionRowRecord start, Stopwatch started, CancellationToken ct)
+    /// <param name="seed">The row's note before its first turn — what the place skipped.</param>
+    private async Task<QuestionRowRecord> TurnsAsync(RowLaunchInput input, ConsultantLaunch launch, QuestionRowRecord start, Stopwatch started, string seed, CancellationToken ct)
     {
         var memory = AnsweringMemory.Start(launch.Prompt);
         var usage = Usage.None;
         var billed = new ConsultationBilled();
-        var note = string.Empty;
+        var note = seed;
         ReviewerInvocation? ready = null;
         while (true)
         {
