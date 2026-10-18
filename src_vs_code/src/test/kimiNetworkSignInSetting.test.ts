@@ -8,7 +8,10 @@ import { NEVER_TRANSFERRED } from '../configTransfer';
 import { type PanelState } from '../panelView';
 import type { ProviderHealth, ProvidersAnswer } from '../providers';
 import { serverSettingsJson } from '../serverSettingsFile';
+import { type Side } from '../coaiInstall';
+import { type Inspected, userLayerReader } from '../modelKeys';
 import { DEFAULTS, OVERLAID_SETTINGS, envBlock, settingMessageFrom, settingWrite, settingsFrom } from '../settingsShape';
+import { sideConfigReader } from '../sideSettings';
 import { DEFAULT_VENDORS, type Vendor } from '../vendors';
 import { pageTree } from './pageTree';
 import { lastWrite, panelState, runPanel } from './panelPageHarness';
@@ -29,7 +32,7 @@ const KIMI: Vendor = {
 const KEY = 'COAI_KIMI_ALLOW_NETWORK_SIGNIN';
 
 const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8')) as {
-  contributes: { configuration: { properties: Record<string, { type?: string; default?: unknown; markdownDescription?: string; description?: string }> } };
+  contributes: { configuration: { properties: Record<string, { type?: string; default?: unknown; scope?: string; markdownDescription?: string; description?: string }> } };
 };
 
 function stateOn(hostKind: PanelState['hostKind'], allow = false, reported: Record<string, ProviderHealth> = {}): PanelState {
@@ -129,4 +132,49 @@ test('with the override on, the server’s one-line warning about the network si
 
   assert.match(card.text(), /Runs with a warning:/u);
   assert.ok(card.text().includes('network storage (nfs4)'), 'the server’s own sentence, not a paraphrase');
+});
+
+// ---------------------------------------------------------------- who may switch it on (the review of 2026-10-18, A)
+
+/**
+ * This override admits a sign-in folder that another machine may refresh. A cloned repository's `.vscode/settings.json` — or a
+ * Settings Sync copy from another machine — must never switch the refusal off for the person. Two layers hold that line, and
+ * each has its own test: the manifest `scope` (VS Code does not apply a machine-scoped value from a workspace, and Settings Sync
+ * does not carry it; a WSL remote window reads its own machine's value), and the reader (the user layer only — the same door the
+ * model keys go through, so a value a workspace did write is not read).
+ */
+const WSL: Side = { remoteName: 'wsl', distro: 'Ubuntu', storagePath: '/home/x/.vscode-server/data/User/globalStorage/coai' };
+
+/** A window's configuration as VS Code answers it: `get` merges a workspace value over the user one, `inspect` names each layer. */
+function readerOver(layers: Inspected, perSide: boolean, overlay: Record<string, unknown> = {}) {
+  const merged = layers.workspaceFolderValue ?? layers.workspaceValue ?? layers.globalValue ?? layers.defaultValue;
+  const inspect = (key: string) => (key === 'kimiAllowNetworkSignIn' ? layers : undefined);
+  const store = { get: <T,>() => overlay as T, update: () => Promise.resolve() };
+
+  return sideConfigReader(userLayerReader((key) => (key === 'kimiAllowNetworkSignIn' ? merged : undefined), inspect), perSide, store, WSL);
+}
+
+const allowedBy = (reader: (key: string) => unknown) => settingsFrom(reader).kimiAllowNetworkSignIn;
+
+test('the manifest declares it machine-scoped: a workspace cannot set it and Settings Sync does not copy it', () => {
+  assert.equal(manifest.contributes.configuration.properties['coai.kimiAllowNetworkSignIn']?.scope, 'machine');
+});
+
+test('a workspace or folder value does not switch it on, whether this side keeps its own settings or not', () => {
+  for (const layer of ['workspaceValue', 'workspaceFolderValue'] as const) {
+    for (const globalValue of [undefined, false]) {
+      const layers: Inspected = { defaultValue: false, globalValue, [layer]: true };
+
+      assert.equal(allowedBy(readerOver(layers, false)), false, `${layer}, user ${String(globalValue)}, one shared layer`);
+      assert.equal(allowedBy(readerOver(layers, true)), false, `${layer}, user ${String(globalValue)}, per side with an EMPTY overlay`);
+      assert.equal(envBlock(settingsFrom(readerOver(layers, true)))[KEY], undefined, `${layer}: nothing crosses to the server`);
+    }
+  }
+});
+
+test('the person’s own tick still switches it on, shared or per side — and a workspace “false” cannot switch it back off', () => {
+  assert.equal(allowedBy(readerOver({ defaultValue: false, globalValue: true }, false)), true);
+  assert.equal(allowedBy(readerOver({ defaultValue: false, globalValue: true, workspaceValue: false }, false)), true);
+  assert.equal(allowedBy(readerOver({ defaultValue: false }, true, { kimiAllowNetworkSignIn: true })), true, 'this side’s own overlay');
+  assert.equal(envBlock(settingsFrom(readerOver({ defaultValue: false, globalValue: true }, false)))[KEY], 'true');
 });
