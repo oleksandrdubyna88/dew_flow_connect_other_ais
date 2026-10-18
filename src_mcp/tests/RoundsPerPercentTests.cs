@@ -256,7 +256,7 @@ public sealed class RoundsPerPercentTests
     }
 
     [Fact]
-    public void AReviewWithoutARoundInsideAPlateau_VoidsTheSpan()
+    public void AReviewWithoutARoundOnTheClosingReading_VoidsTheSpan()
     {
         // The closing reading of the span carries a launch with no round id: its rounds cannot be counted or left out.
         var ratio = Only(RoundsPerPercent.Derive([
@@ -294,6 +294,9 @@ public sealed class RoundsPerPercentTests
     [Theory]
     [InlineData(150)]
     [InlineData(-1)]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    [InlineData(double.NegativeInfinity)]
     public void AReadingOutsideZeroToOneHundred_IsAMissingReading_ForTheDerivation(double bad)
     {
         var ratio = Only(RoundsPerPercent.Derive([Job(0, "r0", 10), Job(10, "r1", bad), Job(20, "r2", 11)]));
@@ -334,6 +337,161 @@ public sealed class RoundsPerPercentTests
         var ratio = Only(RoundsPerPercent.Derive([Job(0, "r0", 10), Job(10, "r1", 12), Job(10, string.Empty, 12, review: false)]));
 
         ratio.RoundsPerPercent.Should().BeApproximately(0.5, 1e-9, "a consultation's spend is in the rise, and it is not a round");
+    }
+
+    // Review round 2026-10-18 of story 6.2b — the cases the first round did not name.
+
+    [Fact]
+    public void AFallWithoutAReset_VoidsTheSpan_TheLowerReadingIsTheNewBaseline()
+    {
+        var ratio = Only(RoundsPerPercent.Derive([
+            Job(0, "r0", 50), Job(10, "r1", 20), Job(20, "r2", 30), Job(30, "r3", 51),
+        ]));
+
+        // 50 → 20 is a fall inside one window instance, not a rise of 1 %: the span is void and 20 is the new baseline.
+        // Intervals 20 → 30 (1 round over 10 %) and 30 → 51 (1 round over 21 %): 2 rounds over 31 %.
+        ratio.RoundsPerPercent.Should().BeApproximately(2.0 / 31.0, 1e-9);
+        ratio.Intervals.Should().Be(2);
+    }
+
+    [Fact]
+    public void AFractionalFall_RebasesAtTheLowerReading()
+    {
+        var ratio = Only(RoundsPerPercent.Derive([Job(0, "r0", 12.0), Job(10, "r1", 11.8), Job(20, "r2", 12.05)]));
+
+        ratio.RoundsPerPercent.Should().BeApproximately(1.0 / 0.25, 1e-9, "one round over the 0.25 % from the new baseline 11.8");
+        ratio.Intervals.Should().Be(1);
+    }
+
+    [Fact]
+    public void TwoReadingsWithNoResetsAt_ReportMissingReading_NotTooFewReadings()
+    {
+        var ratio = Only(RoundsPerPercent.Derive([Job(0, "r0", 10, resets: string.Empty), Job(10, "r1", 11, resets: string.Empty)]));
+
+        ratio.Unavailable.Should().Be(GaugeReasons.MissingReading, "no reading names when the window resets");
+    }
+
+    [Fact]
+    public void ThreeStaleReadings_ReportStaleReading_NotTooFewReadings()
+    {
+        var ratio = Only(RoundsPerPercent.Derive([
+            Job(0, "r0", 10) with { AtUtc = T0.AddMinutes(40) },
+            Job(10, "r1", 11) with { AtUtc = T0.AddMinutes(50) },
+            Job(20, "r2", 12) with { AtUtc = T0.AddMinutes(60) },
+        ]));
+
+        ratio.Unavailable.Should().Be(GaugeReasons.StaleReading, "every reading is older than its line");
+    }
+
+    [Fact]
+    public void TwoReadingsOutsideZeroToOneHundred_ReportMissingReading_NotTooFewReadings()
+    {
+        var ratio = Only(RoundsPerPercent.Derive([Job(0, "r0", 150), Job(10, "r1", 160)]));
+
+        ratio.Unavailable.Should().Be(GaugeReasons.MissingReading, "150 % and 160 % are no readings");
+    }
+
+    [Fact]
+    public void AnInfiniteReadingThenAGoodOne_ReportsMissingReading_NotTooFewReadings()
+    {
+        var ratio = Only(RoundsPerPercent.Derive([Job(0, "r0", double.PositiveInfinity), Job(10, "r1", 11)]));
+
+        ratio.Unavailable.Should().Be(GaugeReasons.MissingReading, "the infinite reading is no reading, and the good one alone is no interval");
+    }
+
+    [Fact]
+    public void OneReadingThatCannotOpenASpan_IsStillTooFewReadings()
+    {
+        Only(RoundsPerPercent.Derive([Job(0, "r0", 10) with { AtUtc = T0.AddMinutes(40) }]))
+            .Unavailable.Should().Be(GaugeReasons.TooFewReadings);
+    }
+
+    [Fact]
+    public void TwoAccountsInterleavedInTime_ArePooledTogether_AndTheLastTenAreTakenAcrossBoth()
+    {
+        // Six intervals per account, ending alternately a1, b1, a2, b2 … The first two to end hold 5 rounds over 1 %;
+        // every other holds 1 round over 1 %. Twelve usable intervals: the last ten are all 1 over 1.
+        List<GaugeLine> lines = [Job(0, "a0", 10, account: "a"), Job(1, "b0", 10, account: "b")];
+        foreach (var i in Enumerable.Range(1, 6))
+        {
+            var rounds = i == 1 ? 5 : 1;
+            lines.AddRange(Enumerable.Range(0, rounds).Select(n => Job(2 * i, $"a{i}-{n}", 10 + i, account: "a")));
+            lines.AddRange(Enumerable.Range(0, rounds).Select(n => Job((2 * i) + 1, $"b{i}-{n}", 10 + i, account: "b")));
+        }
+
+        var ratio = Only(RoundsPerPercent.Derive(lines));
+
+        ratio.Intervals.Should().Be(RoundsPerPercent.LastIntervals);
+        ratio.RoundsPerPercent.Should().BeApproximately(1.0, 1e-9, "the two older, heavier intervals fell out of the last ten");
+    }
+
+    [Fact]
+    public void TwoAccountsEachWithAnInterval_ArePooled()
+    {
+        var ratio = Only(RoundsPerPercent.Derive([
+            Job(0, "a0", 10, account: "a"), Job(5, "b0", 20, account: "b"),
+            Job(10, "a1", 11, account: "a"), Job(15, "b1", 22, account: "b"),
+        ]));
+
+        ratio.RoundsPerPercent.Should().BeApproximately(2.0 / 3.0, 1e-9, "(1 + 1) rounds over (1 + 2) %");
+        ratio.Intervals.Should().Be(2);
+    }
+
+    [Fact]
+    public void ABareLaunchOnAnotherAccount_DoesNotVoidThisAccountsSpan()
+    {
+        var ratio = Only(RoundsPerPercent.Derive([
+            Job(0, "a0", 10, account: "a"), Bare(5, "rb", account: "b"), Job(10, "a1", 11, account: "a"),
+        ]));
+
+        ratio.RoundsPerPercent.Should().BeApproximately(1.0, 1e-9);
+        ratio.Intervals.Should().Be(1);
+    }
+
+    [Fact]
+    public void ABarrierRightAfterARise_KeepsTheRiseAndOpensTheNextSpanAtTheResetReading()
+    {
+        var ratio = Only(RoundsPerPercent.Derive([
+            Job(0, "r0", 10), Job(10, "r1", 11), Job(20, "r2", 1, resets: NextWeek), Job(30, "r3", 2, resets: NextWeek),
+        ]));
+
+        ratio.RoundsPerPercent.Should().BeApproximately(1.0, 1e-9, "r1 over 10 → 11 and r3 over 1 → 2");
+        ratio.Intervals.Should().Be(2);
+    }
+
+    [Fact]
+    public void ARoundOfThreeLaunchesInOneSpan_AddsUpToOneWholeRound_ThirdsIncluded()
+    {
+        var ratio = Only(RoundsPerPercent.Derive([
+            Job(0, "r0", 10), Job(10, "R", 10), Job(20, "R", 10), Job(30, "R", 11),
+        ]));
+
+        ratio.RoundsPerPercent.Should().BeApproximately(1.0, 1e-9, "three thirds are one round over 1 %");
+    }
+
+    [Fact]
+    public void EveryLimitOfACodexVendor_IsHidden_NotOnlyTheLimitCalledCodex()
+    {
+        var ratio = Only(RoundsPerPercent.Derive([
+            Job(0, "r0", 10, limit: "codex_other", vendor: "codex"),
+            Job(10, "r1", 11, limit: "codex_other", vendor: "codex"),
+        ]));
+
+        ratio.RoundsPerPercent.Should().BeNull("direct codex use spends every limit of the account, whatever its id");
+        ratio.Unavailable.Should().Be(GaugeReasons.ConsumerNotCounted);
+        ratio.MissingConsumer.Should().Be(GaugeConsumers.DirectCodexUse);
+        ratio.LimitId.Should().Be("codex_other");
+    }
+
+    [Fact]
+    public void AVendorRowNotCalledCodex_ThatReportsTheCodexLimit_IsStillHidden()
+    {
+        var ratio = Only(RoundsPerPercent.Derive([
+            Job(0, "r0", 10, limit: "codex", vendor: "codex-work"),
+            Job(10, "r1", 11, limit: "codex", vendor: "codex-work"),
+        ]));
+
+        ratio.MissingConsumer.Should().Be(GaugeConsumers.DirectCodexUse, "the codex limit id is codex's own, whatever the row is called");
     }
 
     [Fact]

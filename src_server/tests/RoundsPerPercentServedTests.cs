@@ -90,6 +90,20 @@ public sealed class RoundsPerPercentServedTests
     }
 
     [Fact]
+    public void ARoundRefusedOnOneAccountAndRunOnAnother_IsOneWholeRoundOnTheAccountThatRanIt()
+    {
+        // Round R was refused on account a (a requeue line: RateLimited, rotated, no reading) and then ran on account b,
+        // which read 10 % → 11 %. The refused launch ran nothing: R is ONE round over 1 %, not half of one.
+        var refused = Line(20, "R", 0) with { Slot = "a", Outcome = "RateLimited", Attempt = "rotated", Gauge = GaugeOnLine.None };
+
+        var answer = Answer("5h,24h,week", UsageScope.Company,
+            Line(30, "r0", 10) with { Slot = "b" }, refused, Line(10, "R", 11) with { Slot = "b", Attempt = "rotated" });
+
+        var acme = answer.Gauges.Should().ContainSingle().Subject;
+        acme.RoundsPerPercent.Should().BeApproximately(1.0, 1e-9, "the launch that was refused is not one of the round's launches that ran");
+    }
+
+    [Fact]
     public void CodexsFigure_IsHiddenForTheConsumerCoaiCannotCount()
     {
         var answer = Answer("5h,24h,week", UsageScope.Company,

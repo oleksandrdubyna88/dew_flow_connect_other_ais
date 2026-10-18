@@ -2828,6 +2828,16 @@ account (the Team server's slot), its round id, whether it is a review, and the 
    baseline's — the window reset (`window-reset`); it carries a review launch with no round id (`run-without-round`).
    The next GOOD reading — the barrier reading itself when it is good (a reset, a round-less launch, a reading after a
    reading-less launch), otherwise the first good one after it — opens the next span.
+   **A FALL** (the percentage BELOW the baseline within one window instance, no reset) voids the span with
+   `percent-did-not-rise` and the lower reading, a true state of the account, is the next baseline (50, 20, 30, 51 →
+   intervals 20→30 and 30→51). **A reading that cannot open a span** (missing, stale, no `resetsAt`, out of range), on an
+   account with more than one reading, is an unusable interval of its own with ITS reason (`WhyItCannotOpen`), so a
+   window nobody could baseline reports `missing-reading` / `stale-reading`, not `too-few-readings`; one reading on
+   the account is still too few.
+   **A launch the vendor refused ran no review** — server side (`UsageGauges`): a line whose outcome is `RateLimited`
+   (a requeue line, or a job that failed because every account was rate-limited) is handed to the derivation with
+   `IsReview = false`: still spend, still a bare launch on its account, but not one of the round's launches, so the launch
+   that ran carries the whole round (a round refused on account a and run on b is 1 round, not 0.5).
 4. **A round's share.** A round that ran several launches on the vendor counts in each interval by its share of those
    launches — a code round's four reviewers, each followed by its own reading, are one round over four intervals, not
    four rounds. A non-review launch (a consultation, a canary) spends — its rise is in the interval — and counts no round.
@@ -2836,10 +2846,12 @@ account (the Team server's slot), its round id, whether it is a review, and the 
    ratios (3 rounds over 1 % and 1 round over 2 % is 4 / 3, not 2.375); with no interval at all, `too-few-readings`; with
    none usable, the LATEST voided span's reason (`percent-did-not-rise` when a plateau is only waiting for a rise); with
    usable ones that held no round, `no-rounds`.
-6. **Then the consumer rule:** `GaugeConsumers.UncountedFor(limitId)` names the known consumers coai cannot count —
-   `direct-codex-use` for the `codex` limit (RESULTS_vendor_quota_gauges.md §2.4, §6.3) — and a limit with one has its
-   figure hidden: `null`, `consumer-not-counted`, the consumer named. The window is still named, so the gauge beside it
-   is still shown.
+6. **Then the consumer rule:** `GaugeConsumers.UncountedFor(vendor, limitIds)` names the known consumers coai cannot
+   count — `direct-codex-use` for a codex account (RESULTS_vendor_quota_gauges.md §2.4, §6.3): the vendor row called
+   `codex`, or any vendor reporting codex's own limit id `codex`. Every window of such a vendor has its figure hidden
+   (review round 2026-10-18 — it used to be only the limit called `codex`, while the protocol reads every entry of
+   `rateLimitsByLimitId`): `null`, `consumer-not-counted`, the consumer named. The window is still named, so the gauge
+   beside it is still shown.
 
 `NotReadHere` is what a machine that reads no gauge answers — `{ratios: [], unavailable: "local-capture-deferred"}` —
 and is what `coai-mcp --round-counts` carries as its trailing `gauge` (story 6.1b, local capture, is deferred).
@@ -2856,7 +2868,7 @@ after, the two answers byte-identical.
 by 0 or 1; pairing only ADJACENT readings voided the 0-rise pairs and took their rounds with them, so the figure leaned
 LOW. The baseline now carries through the plateau, so no round is dropped and none is counted twice.
 
-Tests: `RoundsPerPercentTests` (32, mcp), `RoundCountsTests` (+1, mcp) — listed in [module_tests.md](module_tests.md).
+Tests: `RoundsPerPercentTests` (49, mcp), `RoundCountsTests` (+1, mcp) — listed in [module_tests.md](module_tests.md).
 
 ## The sanitised snapshot — a CLI that reads only its working folder is given a copy without the branch's configuration (2026-10-12, S1 of `todo/PLAN_vibe_and_kimi_runtimes.md`)
 

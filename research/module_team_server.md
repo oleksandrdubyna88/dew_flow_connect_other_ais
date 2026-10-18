@@ -1813,7 +1813,7 @@ runners library (`RoundsPerPercent`, [module_runners.md](module_runners.md)); th
 | `roundsPerPercent` | pooled — Σ rounds ÷ Σ rise over the last 10 usable intervals (story 6.2b; a plateau keeps its rounds) — or `null`, never 0 or infinity |
 | `intervals` | how many usable intervals the figure was taken over (0 when null) |
 | `unavailable` | empty when shown; else a fixed code: `too-few-readings`, `percent-did-not-rise`, `window-reset`, `stale-reading`, `missing-reading`, `run-without-round`, `no-rounds`, `consumer-not-counted` |
-| `missingConsumer` | the known consumer coai cannot count that hides the figure — `direct-codex-use` for the `codex` limit today — else empty |
+| `missingConsumer` | the known consumer coai cannot count that hides the figure — `direct-codex-use` for a codex account today (every window of it) — else empty |
 
 - **Over every caller's lines, whatever the scope.** A gauge is the ACCOUNT's; every launch on it spent it, so counting
   one person's rounds against the account's whole rise would be a figure about nobody. The answer names a vendor, a
@@ -1823,7 +1823,7 @@ runners library (`RoundsPerPercent`, [module_runners.md](module_runners.md)); th
   reports; an older interval belongs to an instance that has already reset.
 - **Absent unless asked.** Nullable AND omitted when null, exactly as `windows` is: an answer to `?window=` alone — every
   client older than story 5.2 — is today's shape; a request that asked windows over a ledger with no readings gets `[]`.
-- **For codex the figure is hidden today.** Direct use of the account outside coai spends the same limit and writes no
+- **For codex the figure is hidden today — every window of the account.** Direct use of the account outside coai spends the same limit and writes no
   ledger line (RESULTS_vendor_quota_gauges.md §2.4, §6.3), so `roundsPerPercent` is null with `missingConsumer:
   direct-codex-use`. The observed gauge and its reset are still served — by the catalog (`slots.gauge`, story 6.1a) —
   and still shown. Showing the figure as an upper bound instead is the owner's call, not this story's.
@@ -1839,7 +1839,7 @@ flowchart LR
   C --> T
 ```
 
-Tests: `RoundsPerPercentServedTests` (4) and `RoundsPerPercentEndpointTests` (1), server; `RoundsPerPercentTests` (32),
+Tests: `RoundsPerPercentServedTests` (6) and `RoundsPerPercentEndpointTests` (1), server; `RoundsPerPercentTests` (49),
 mcp; `http/usage/usage.http` (+3 assertions); the seam's gauge leg (`scripts/seam-gauge.mjs`, the real server over a
 seeded slot and ledger, read and DRAWN by the extension's own code). The older-client check now also asks the released
 client's `fetchUsage(company)`: `extension-v0.69.0` asks no windows and gets no `gauges`; `extension-v0.70.0` asks them,

@@ -66,15 +66,22 @@ public static class GaugeReasons
     public const string LocalCaptureDeferred = "local-capture-deferred";
 }
 
-/// <summary>The consumers of an account that coai knows of and cannot count, per limit (RESULTS_vendor_quota_gauges.md §2.4, §6.3).</summary>
+/// <summary>The consumers of an account that coai knows of and cannot count, per vendor (RESULTS_vendor_quota_gauges.md §2.4, §6.3).</summary>
 public static class GaugeConsumers
 {
     /// <summary>The account's owner using codex directly, outside coai — it spends the same limit and writes no ledger line.</summary>
     public const string DirectCodexUse = "direct-codex-use";
 
-    /// <summary>The known, uncounted consumers of a limit — empty when every known consumer is counted.</summary>
-    public static IReadOnlyList<string> UncountedFor(string limitId) =>
-        limitId.Equals("codex", StringComparison.OrdinalIgnoreCase) ? [DirectCodexUse] : [];
+    /// <summary>
+    /// The known, uncounted consumers of a vendor's account — empty when every known consumer is counted. The account is
+    /// codex's when the vendor row is called <c>codex</c> or reports codex's own limit id (<c>codex</c>, what the protocol
+    /// names the primary limit whatever the row is called); then EVERY limit it reports is spent by the direct use, so
+    /// every window is hidden, not only the limit called <c>codex</c>.
+    /// </summary>
+    public static IReadOnlyList<string> UncountedFor(string vendor, IReadOnlyCollection<string> limitIds) =>
+        IsCodex(vendor) || limitIds.Any(IsCodex) ? [DirectCodexUse] : [];
+
+    private static bool IsCodex(string name) => name.Equals("codex", StringComparison.OrdinalIgnoreCase);
 }
 
 /// <summary>Rounds per 1 % of a vendor's window — computed ONCE, here, for both halves (story 6.2).</summary>
@@ -91,14 +98,16 @@ public static class GaugeConsumers
 /// up to and including the closing one) is missing — a launch before it has no reading of its own, it does not report the
 /// window, or its percentage is outside [0, 100] — stale (older than its line by more than <see cref="StaleAfter"/>), from
 /// another window instance (the window reset), or carries a review launch that sent no round id; the first such reading
-/// in time order names the reason, and the next good reading starts a new baseline. A round that ran several launches on
+/// in time order names the reason, and the next good reading starts a new baseline. A reading BELOW the baseline within one
+/// window instance (a fall, no reset) voids the span with <see cref="GaugeReasons.PercentDidNotRise"/> and is itself the
+/// next baseline. A reading that cannot open a span, on an account with more than one reading, reports its own reason. A round that ran several launches on
 /// the account counts in each reading by its share of those launches, so a code round's four reviewers are one round, not
 /// four.</para>
 /// <para><b>The figure</b> is POOLED: Σ rounds ÷ Σ rise over the last <see cref="LastIntervals"/> usable intervals across the
 /// vendor's accounts — what one percent actually bought, not a mean of per-interval ratios; with none, it is unavailable
 /// with the latest span's reason (<see cref="GaugeReasons.PercentDidNotRise"/> when a plateau is only waiting for a
 /// rise). <b>Then the consumer rule:</b> a
-/// limit with a known consumer coai cannot count (<see cref="GaugeConsumers"/>) has its figure hidden, with that consumer
+/// vendor account with a known consumer coai cannot count (<see cref="GaugeConsumers"/>) has every figure hidden, with that consumer
 /// named — the observed gauge and its reset are the catalog's and are shown regardless.</para>
 /// <para>Pure: lines in, figures out. The Team server hands it its ledger (<c>/api/usage</c>); <c>coai-mcp
 /// --round-counts</c> answers <see cref="NotReadHere"/>, because local capture is deferred.</para>
@@ -117,8 +126,8 @@ public static class RoundsPerPercent
     /// <summary>Every window's figure from the ledger's lines, with the known uncounted consumers hiding it.</summary>
     public static GaugeAnswer Derive(IEnumerable<GaugeLine> lines) => Derive(lines, GaugeConsumers.UncountedFor);
 
-    /// <summary>Every window's figure, with <paramref name="uncounted"/> naming each limit's uncounted consumers.</summary>
-    public static GaugeAnswer Derive(IEnumerable<GaugeLine> lines, Func<string, IReadOnlyList<string>> uncounted)
+    /// <summary>Every window's figure, with <paramref name="uncounted"/> naming a vendor's uncounted consumers from its name and the limit ids it reported.</summary>
+    public static GaugeAnswer Derive(IEnumerable<GaugeLine> lines, Func<string, IReadOnlyCollection<string>, IReadOnlyList<string>> uncounted)
     {
         var ratios = lines
             .GroupBy(line => line.Vendor, StringComparer.Ordinal)
@@ -163,18 +172,20 @@ public static class RoundsPerPercent
     /// </summary>
     private sealed record Account(IReadOnlyList<Reading> Readings, IReadOnlyList<bool> BareBefore);
 
-    private static IEnumerable<GaugeRatio> FiguresOf(string vendor, IReadOnlyList<GaugeLine> lines, Func<string, IReadOnlyList<string>> uncounted)
+    private static IEnumerable<GaugeRatio> FiguresOf(string vendor, IReadOnlyList<GaugeLine> lines, Func<string, IReadOnlyCollection<string>, IReadOnlyList<string>> uncounted)
     {
         var launches = LaunchesPerRound(lines);
         var accounts = AccountsOf(lines);
 
-        return lines
+        var windows = lines
             .SelectMany(line => Reported(line.Gauge).Select(one => one.Window))
             .Distinct()
             .OrderBy(window => window.LimitId, StringComparer.Ordinal)
             .ThenBy(window => window.Mins)
-            .Select(window => Hidden(Figure(vendor, window, IntervalsOf(window, accounts, launches)), uncounted(window.LimitId)))
             .ToList();
+        var consumers = uncounted(vendor, [.. windows.Select(window => window.LimitId).Distinct(StringComparer.Ordinal)]);
+
+        return [.. windows.Select(window => Hidden(Figure(vendor, window, IntervalsOf(window, accounts, launches)), consumers))];
     }
 
     /// <summary>Every account of the vendor, each read once.</summary>
@@ -258,7 +269,7 @@ public static class RoundsPerPercent
         var span = Waiting;
         for (var k = 0; k < account.Readings.Count; k++)
         {
-            var step = Advance(span, PointOf(window, account.Readings[k]), account.Readings[k], account.BareBefore[k], launches);
+            var step = Advance(span, PointOf(window, account.Readings[k]), account.Readings[k], (account.BareBefore[k], account.Readings.Count > 1), launches);
             span = step.Next;
             done.AddRange(step.Emitted);
         }
@@ -273,27 +284,54 @@ public static class RoundsPerPercent
         span.HasBaseline && span.After > 0 ? [new Interval(span.LastUtc, 0, 0, GaugeReasons.PercentDidNotRise)] : [];
 
     /// <summary>One reading walked: it opens an interval when there is none, otherwise it extends, closes or voids it.</summary>
-    private static Step Advance(Span span, Point point, Reading reading, bool bare, IReadOnlyDictionary<string, int> launches) =>
-        span.HasBaseline ? Extend(span, point, reading, bare, launches) : new Step(Begin(point), []);
+    private static Step Advance(Span span, Point point, Reading reading, (bool Bare, bool Several) account, IReadOnlyDictionary<string, int> launches) =>
+        span.HasBaseline ? Extend(span, point, reading, account.Bare, launches) : Open(point, account.Several);
+
+    /// <summary>
+    /// A reading with no span to extend: a good one opens a span. One that cannot, on an account that has more than one
+    /// reading, is an unusable interval of its own — so the figure says WHY there is none (missing, stale) instead of
+    /// "too few readings". A single reading on the account is still too few.
+    /// </summary>
+    private static Step Open(Point point, bool several)
+    {
+        var next = Begin(point);
+
+        return next.HasBaseline || !several
+            ? new Step(next, [])
+            : new Step(next, [new Interval(point.ObservedUtc, 0, 0, WhyItCannotOpen(point))]);
+    }
+
+    /// <summary>Why a reading cannot open a span, in <see cref="BarrierOf"/>'s order: missing first, then stale.</summary>
+    private static string WhyItCannotOpen(Point point) =>
+        point.Used is not null && point.Stale ? GaugeReasons.StaleReading : GaugeReasons.MissingReading;
 
     /// <summary>
     /// A reading after the baseline: a barrier voids the span (and, when the reading itself is good, opens the next one); a rise
-    /// closes it (the closing reading opens the next one); anything else is a plateau, which keeps its rounds.
+    /// closes it (the closing reading opens the next one); a FALL below the baseline within one window instance voids it with
+    /// <see cref="GaugeReasons.PercentDidNotRise"/> and the lower reading, a true state of the account, opens the next; an
+    /// unchanged reading is a plateau, which keeps its rounds.
     /// </summary>
     private static Step Extend(Span span, Point point, Reading reading, bool bare, IReadOnlyDictionary<string, int> launches)
     {
         var barrier = BarrierOf(span.Baseline, point, reading, bare);
         if (barrier.Length > 0)
         {
-            return new Step(Begin(point), [new Interval(point.ObservedUtc, 0, 0, barrier)]);
+            return Voided(point, barrier);
         }
 
         var rounds = span.Rounds + RoundsIn(reading, launches);
 
-        return point.Used > span.Baseline.Used
-            ? new Step(Begin(point), [new Interval(point.ObservedUtc, rounds, point.Used!.Value - span.Baseline.Used!.Value, string.Empty)])
-            : new Step(span with { Rounds = rounds, After = span.After + 1, LastUtc = point.ObservedUtc }, []);
+        return point.Used!.Value.CompareTo(span.Baseline.Used!.Value) switch
+        {
+            > 0 => new Step(Begin(point), [new Interval(point.ObservedUtc, rounds, point.Used.Value - span.Baseline.Used.Value, string.Empty)]),
+            < 0 => Voided(point, GaugeReasons.PercentDidNotRise),
+            _ => new Step(span with { Rounds = rounds, After = span.After + 1, LastUtc = point.ObservedUtc }, []),
+        };
     }
+
+    /// <summary>A voided span: its unusable interval, and the reading that voided it opens the next span when it is good.</summary>
+    private static Step Voided(Point point, string reason) =>
+        new(Begin(point), [new Interval(point.ObservedUtc, 0, 0, reason)]);
 
     /// <summary>A good reading opens an interval; one that cannot (missing, stale, no reset) leaves the walk looking for one.</summary>
     private static Span Begin(Point point) =>

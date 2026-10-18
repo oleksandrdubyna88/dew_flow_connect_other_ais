@@ -4402,3 +4402,22 @@ number there — they pin the barriers of the NEW accumulation.
 | Test (`RoundsPerPercentServedTests`, server) | Seen red as |
 |---|---|
 | `AnAnswerWithRoundWindows_CarriesEachGaugeWindowsFigure` — expectation changed from 5 / 3 (rounds-weighted) to 3 / 2 (pooled) | the old expectation against the new derivation: `Expected acme.RoundsPerPercent to approximate 1.6666666666666667 +/- 1E-09 … but 1.5 differed by 0.16666666666666674.` |
+
+#### Review round of 2026-10-18 (Opus review of 354a7dd65) — what was added, and its first red
+
+"Red" is the derivation as committed in 354a7dd65 (server: the lines handed over unchanged). Tests marked *guard* were already green and pin a case the review named.
+
+| Test | Seen red as |
+|---|---|
+| `AFallWithoutAReset_VoidsTheSpan_TheLowerReadingIsTheNewBaseline` (50, 20, 30, 51 → 2 / 31) | `Expected ratio.RoundsPerPercent to approximate 0.06451612903225806 +/- 1E-09, but 3.0 differed by 2.935483870967742.` |
+| `AFractionalFall_RebasesAtTheLowerReading` (12.0, 11.8, 12.05 → 4.0) | `Expected ratio.RoundsPerPercent to approximate 4.0 +/- 1E-09 because one round over the 0.25 % from the new baseline 11.8, but 39.99999999999943 differed by 35.99999999999943.` |
+| `TwoReadingsWithNoResetsAt_ReportMissingReading_NotTooFewReadings` | `Expected ratio.Unavailable to be the same string because no reading names when the window resets, but they differ at index 0: (actual) "too-few-readings" (expected) "missing-reading".` |
+| `ThreeStaleReadings_ReportStaleReading_NotTooFewReadings` | `… because every reading is older than its line, but they differ at index 0: (actual) "too-few-readings" (expected) "stale-reading".` |
+| `TwoReadingsOutsideZeroToOneHundred_ReportMissingReading_NotTooFewReadings` (150, 160) | `… because 150 % and 160 % are no readings, but they differ at index 0: (actual) "too-few-readings" (expected) "missing-reading".` |
+| `AnInfiniteReadingThenAGoodOne_ReportsMissingReading_NotTooFewReadings` | `… because the infinite reading is no reading, and the good one alone is no interval, but they differ at index 0: (actual) "too-few-readings" (expected) "missing-reading".` |
+| `EveryLimitOfACodexVendor_IsHidden_NotOnlyTheLimitCalledCodex` | `Did not expect a value because direct codex use spends every limit of the account, whatever its id, but found 1.0.` |
+| `RoundsPerPercentServedTests.ARoundRefusedOnOneAccountAndRunOnAnother_IsOneWholeRoundOnTheAccountThatRanIt` | `Expected acme.RoundsPerPercent to approximate 1.0 +/- 1E-09 because the launch that was refused is not one of the round's launches that ran, but 0.5 differed by 0.5.` |
+| *guard* `OneReadingThatCannotOpenASpan_IsStillTooFewReadings`, `TwoAccountsInterleavedInTime_ArePooledTogether_AndTheLastTenAreTakenAcrossBoth`, `TwoAccountsEachWithAnInterval_ArePooled`, `ABareLaunchOnAnotherAccount_DoesNotVoidThisAccountsSpan`, `ABarrierRightAfterARise_KeepsTheRiseAndOpensTheNextSpanAtTheResetReading`, `ARoundOfThreeLaunchesInOneSpan_AddsUpToOneWholeRound_ThirdsIncluded`, `AVendorRowNotCalledCodex_ThatReportsTheCodexLimit_IsStillHidden`, the out-of-range theory's NaN, +∞ and −∞ rows | green on the committed derivation |
+
+`AReviewWithoutARoundInsideAPlateau_VoidsTheSpan` was renamed `AReviewWithoutARoundOnTheClosingReading_VoidsTheSpan` — the round-less review is on the closing reading, as the test always had it; the inside-the-plateau case is `…_TheReadingAfterIt_OpensTheNextSpan`.
+
