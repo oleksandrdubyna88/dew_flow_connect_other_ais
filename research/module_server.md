@@ -7104,7 +7104,7 @@ paid for; the cap keeps the launch from being made.
   and restored: `>=` for `>` (the inclusive test), skipping the check for a capped row (the roster and round tests), reading the
   KiB as bytes (the byte and inclusive tests), and dropping the size from the carrier test (the dealt-lens test).
 
-## One bad field costs its row only (2026-10-18, `todo/PLAN_one_bad_field_keeps_the_rows.md`)
+## One bad field costs its row only (2026-10-18, `research/PLAN_one_bad_field_keeps_the_rows.md`)
 
 **Symptom it answers.** `COAI_VENDORS` was read with one `Deserialize` of the whole list, so ONE member of the wrong JSON
 type in ONE row (`"timeoutMinutes":"30"`, `"plan":"false"`, `"model":5`, `"price":{"in":"3"}`) threw, and the catch returned no

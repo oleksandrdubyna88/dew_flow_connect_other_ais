@@ -20,7 +20,7 @@ internal sealed record VendorRows(
 
 /// <summary>
 /// Reads `COAI_VENDORS` one row at a time, so one bad member costs that row and nothing else
-/// (todo/PLAN_one_bad_field_keeps_the_rows.md).
+/// (research/PLAN_one_bad_field_keeps_the_rows.md).
 /// </summary>
 /// <remarks>
 /// <para>The whole list read in one call made a single wrong-typed member (<c>"timeoutMinutes":"30"</c>) throw, and the

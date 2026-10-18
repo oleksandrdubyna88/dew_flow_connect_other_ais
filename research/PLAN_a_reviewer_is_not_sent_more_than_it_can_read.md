@@ -15,7 +15,7 @@
 > 3. **`VendorDto.MaxPromptKib` is a `JsonElement?`, not an `int?`**: `ParseVendors` returns `[]` on any `JsonException`,
 >    so a typed `int?` turned one hand-edited `"180"` into NO vendors at all. Read as a value, it is no cap for that row only.
 >    The same exposure stands for `timeoutMinutes` (`int?`) and the other typed row members; not changed here.
->    Fixed row by row in [PLAN_one_bad_field_keeps_the_rows.md](../todo/PLAN_one_bad_field_keeps_the_rows.md): one bad member now
+>    Fixed row by row in [PLAN_one_bad_field_keeps_the_rows.md](PLAN_one_bad_field_keeps_the_rows.md): one bad member now
 >    costs that row only, and the server says which row and which member. `maxPromptKib` itself is unchanged.
 > 4. **The check is in `PlaceOf`**, after `WhyNotCarried` and the api refusal and before the launch place — not after
 >    `ReviewerFor` builds the work. Nothing is built for an over-cap reviewer.

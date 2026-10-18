@@ -7,7 +7,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// One bad field in one reviewer row costs THAT row only (todo/PLAN_one_bad_field_keeps_the_rows.md).
+/// One bad field in one reviewer row costs THAT row only (research/PLAN_one_bad_field_keeps_the_rows.md).
 /// </summary>
 /// <remarks>
 /// Before this, a member of the wrong JSON type (<c>"timeoutMinutes":"30"</c>) made the whole `COAI_VENDORS` list

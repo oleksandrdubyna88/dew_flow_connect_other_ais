@@ -1,6 +1,6 @@
 # PLAN — One bad field in one reviewer row costs that row only, and the server says which row and which field
 
-> Status: **plan only, nothing implemented yet, 2026-10-18.** Scope: the `COAI_VENDORS` parse in coai-mcp
+> Status: **IMPLEMENTED, 2026-10-18 (S1–S3; branch `docs/plan-one-bad-field-keeps-the-rows`, not merged or released at promotion).** Scope: the `COAI_VENDORS` parse in coai-mcp
 > (`PanelSettings.ParseVendors` and `VendorListFrom`), one new small reader file beside it, the existing
 > "unrecognised setting" notice path, tests, and the docs. No extension code. Owner approval: 2026-10-18.
 > Plan gate: round 1 `good_enough` (session 3e591978, 3 of 4 reviewers; kimi timed out) — 6 findings applied
@@ -8,9 +8,29 @@
 > reasons checked in the code (`SecurityLaneSetting.Apply` appends; a consultant row is always one element; the
 > extension's `unrecognised` parse takes any non-empty string).
 >
-> Related: [PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md](../research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md)
-> (its deviation 3 found this; `maxPromptKib` stays as it shipped), [PLAN_panel_settings_is_too_big.md](PLAN_panel_settings_is_too_big.md)
-> (the boundary is in § 8, and named on its side too), [module_server.md](../research/module_server.md).
+> **What shipped differently** (code gate round 1 `proceed`, 3 gating findings under a threshold of 5, 8 of 16 reviewers
+> answered, session 3e591978; owner defaults taken: Q1 `maxPromptKib` unchanged, Q2 every row refused → no reviewer):
+> 1. **Names.** `VendorRows(Read, Refused, Complaint)` with a derived `IsList`, and `VendorList.Said` (the finished
+>    `UnrecognisedSetting` list from `VendorRowReader.SaidAbout`) — not `IsList` as a member and `VendorList.Refused`.
+> 2. **`PanelSettings.cs` grew by 7 lines, but about 150 moved**: the DTO → row mapping was extracted, unchanged inside,
+>    into `MapVendors`, so `ReadVendors` can hand it the rows that read. The split plan moves it as one block.
+> 3. **T3's assertions are split** into `ANullRow_IsLeftOut_AndTheSettingsStillRead` and `ANullRow_IsSaid_ByItsPlace`.
+> 4. **An extra commit** pins T10 (the consultant row) and T11 (out-of-range numbers) beside the reader.
+> 5. **The sentence.** D5's "wrong JSON type" also covers a number that does not fit (`30.5`, `99999999999` for an `int?`);
+>    the parser does not say which. D5's cure ("Write a number or true/false without quotes") was wrong for `"model":5` and
+>    `"id":5`, so the judge's review changed it to *"… has a value of the wrong JSON type, or a number it cannot hold. …
+>    Write text in quotes, numbers and true/false without them, and minutes as whole numbers from 1 to 1440"* (the range
+>    came from a code-gate finding). The not-a-list sentence (D4) names `COAI_PROVIDERS`, which is what runs when it is
+>    set, not only the shipped pair.
+> 6. **B2** (the `ValueKind` check) is not needed for correctness — the deserializer answers null for a null row — but it
+>    gives the exact sentence, and T3b pins it.
+>
+> **Open tail** (named, not built here): `PanelSettings.Detail` is shared by `ParseRoles` and the reader — the split plan
+> decides its home; `COAI_PROMPTS_PER_ROUND` still loses its whole map silently (§ 9); Q1 stays an owner question.
+>
+> Related: [PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md](PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md)
+> (its deviation 3 found this; `maxPromptKib` stays as it shipped), [PLAN_panel_settings_is_too_big.md](../todo/PLAN_panel_settings_is_too_big.md)
+> (the boundary is in § 8, and named on its side too), [module_server.md](module_server.md).
 
 ## 1. The symptom
 
@@ -223,12 +243,12 @@ One pull request, one commit per story, each green on its own. Build order: **S1
   one line that a wrong type now drops the row and says so. A row in the flow catalogue of `research/module_tests.md`
   (`:156`): "a hand-edited reviewer row with a wrong type" — covered by T1–T7; NOT covered: a real hand-edited file
   in a real editor. One line under deviation 3 of
-  [PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md](../research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md)
+  [PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md](PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md)
   that points here.
 
 ## 8. Boundary with PLAN_panel_settings_is_too_big.md (named on both sides)
 
-| Item | This plan | [PLAN_panel_settings_is_too_big.md](PLAN_panel_settings_is_too_big.md) |
+| Item | This plan | [PLAN_panel_settings_is_too_big.md](../todo/PLAN_panel_settings_is_too_big.md) |
 |---|---|---|
 | The per-row read of `COAI_VENDORS` | builds it, in the NEW file `VendorRowReader.cs` | does not touch it |
 | `ParseVendors` and the DTO → row mapping | changes only its call to the reader (a few lines) | moves it to `VendorSettingsReader.cs` (its step 3) |
@@ -318,6 +338,6 @@ The extension suite (`npm test` in `src_vs_code`) is not run for a change: no ex
 - [ ] The full `CoaiMcp.Tests` executable green; `dotnet format` clean on the touched files.
 - [ ] `VendorRowReader.cs` under 800 lines; `PanelSettings.cs` grows by no more than about 10 lines.
 - [ ] `research/module_server.md`, `research/module_tests.md` and the #856 plan's deviation 3 updated (S3).
-- [ ] The boundary table is in this plan AND in [PLAN_panel_settings_is_too_big.md](PLAN_panel_settings_is_too_big.md).
+- [ ] The boundary table is in this plan AND in [PLAN_panel_settings_is_too_big.md](../todo/PLAN_panel_settings_is_too_big.md).
 - [ ] Q1 and Q2 answered by the owner, or the defaults recorded as taken.
 - [ ] Plan gate `proceed`, code gate `proceed`; then this plan promoted to `research/` with its deviations.

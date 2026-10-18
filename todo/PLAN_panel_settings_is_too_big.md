@@ -97,7 +97,7 @@ One commit per step, each proved on its own: the build is green, the full suites
 
 ## Boundary with the one-bad-field plan (2026-10-18)
 
-| Item | Here | [PLAN_one_bad_field_keeps_the_rows.md](PLAN_one_bad_field_keeps_the_rows.md) |
+| Item | Here | [PLAN_one_bad_field_keeps_the_rows.md](../research/PLAN_one_bad_field_keeps_the_rows.md) |
 |---|---|---|
 | The per-row read of `COAI_VENDORS` | does not touch it | builds it, in the new file `VendorRowReader.cs` |
 | `ParseVendors` and the DTO → row mapping | moves it to `VendorSettingsReader.cs` (step 3) | changes only its call to the reader |
