@@ -3,6 +3,7 @@ import { MODEL_CHECK } from './consultantCheckRun';
 import { checkStateOnThisDisk, type CheckRecord, type HealthFile } from './consultantHealth';
 import type { ConsultantHealthState } from './consultantHealthState';
 import { escapeHtml } from './escapeHtml';
+import { markerLine } from './kimiMarker';
 import { remoteWarning } from './localEngines';
 import { CLI_RUNTIMES } from './models';
 import { type CardContext, endpointButton, headButtons } from './panelView';
@@ -143,6 +144,22 @@ export function versionWarningNote(id: string, reported: CardContext['reported']
   const warning = reported[id]?.warning ?? '';
 
   return warning.length === 0 ? '' : `<p class="skew warned"><b>Runs with a warning:</b> ${escapeHtml(warning)}</p>`;
+}
+
+/**
+ * A Kimi row's STANDING survivor marker, when the server reports one: the line that says what stands and the *Clear the stuck Kimi
+ * marker* button (E6 of todo/PLAN_kimi_and_vibe_on_linux.md, DL9). Nothing for any other row, when no marker stands, and from a
+ * server older than the field — the Busy sentence carries the way out by hand either way. The button's id is the ROW; the host asks
+ * the server again at the press and takes the path from that answer (`kimiMarker.ts`).
+ */
+export function kimiMarkerNote(vendor: Vendor, reported: CardContext['reported']): string {
+  const marker = vendor.runtime === 'kimi' ? reported[vendor.id]?.survivorMarker : undefined;
+
+  return marker === undefined
+    ? ''
+    : `<p class="skew warned"><b>A Kimi marker stands.</b> ${escapeHtml(markerLine(marker))} `
+      + `<button type="button" class="link" data-command="clearKimiMarker" data-id="${escapeHtml(vendor.id)}" `
+      + 'title="Checks every process the marker names; clears it only when all of them are gone. Ends nothing.">Clear the stuck Kimi marker</button></p>';
 }
 
 /** The contract the row's own Team server last said it speaks — undefined for any other row, or one not heard from. */

@@ -12976,8 +12976,7 @@ flowchart LR
 
 ## Vibe on Linux and WSL, on the panel's side (2026-10-16, E3 of `todo/PLAN_kimi_and_vibe_on_linux.md`)
 
-The extension's half of lifting D18 for WSL2 (DL1, DL2, DL14); the server's half is E2 (`module_runners.md`). Kimi's texts are
-untouched: Kimi on Linux is a later release.
+The extension's half of lifting D18 for WSL2 (DL1, DL2, DL14); the server's half is E2 (`module_runners.md`). Kimi's half is the next section.
 
 - **`VIBE_ON_LINUX_SINCE = '0.59.0'`** (`runtimeSince.ts`), in a second table `ON_LINUX_SINCE` beside `RUNTIME_SINCE`. The first
   answers "does this server know the runtime", the second "does it run it on THIS host" — a 0.57.0 server on WSL knows `vibe`
@@ -13013,3 +13012,62 @@ untouched: Kimi on Linux is a later release.
   (`runningUnderWsl` still answers "not WSL"); `hostKind` logs ONE line through `console.warn` (the extension has no output channel;
   its host-side diagnostics carry the `ConnectOtherAIs:` prefix into the extension-host log) naming the cause and that the host is treated as
   native Linux (`hostKindLogsAnUnreadableBanner.test.ts`).
+
+## Kimi on Linux and WSL, on the panel's side (2026-10-17, E6 of `todo/PLAN_kimi_and_vibe_on_linux.md`)
+
+The extension's half of lifting D18 for Kimi on WSL2 (DL1, DL12, DL14, Q3, S-K9, S-K10, S-K17, S-K18); the server's half is E5/E6
+(`module_runners.md`). It reuses the Vibe section's host-kind shape above — `HostKind` (`windows | wsl2 | wsl1 | linux | darwin`),
+`PanelState.hostKind`, `hostKindOfPlatform`, `runtimeSkewNote(version, vendors, host)` — and adds no second one.
+
+- **`KIMI_ON_LINUX_SINCE = '0.60.0'`** (`runtimeSince.ts`), one minor after Vibe's (0.58.0 was released from main without either; Vibe-on-Linux ships in 0.59.0 — DL14, whoever merges second bumps), joins `ON_LINUX_SINCE`; the
+  per-host-kind sentences of `runtimeSkewNote` therefore apply to a Kimi row with no new code (only the label *Kimi*): *Update coai-mcp
+  to run Kimi here* on WSL2 below 0.60.0, a refusal at any version on a native Linux host and on WSL1. The unreleased Kimi-consultant
+  branch sets `KIMI_CONSULTANT_SINCE` to 0.58.0: whichever of the two merges second bumps its constant (DL14).
+- **`kimiNoteFor(host)`** (`vendorTerminal.ts`) is Vibe's `vibeNoteFor` for Kimi: a `Record<HostKind, string>`, so a host kind added later
+  is a compile error. WSL2 *runs on this side from coai-mcp 0.60.0* and says that while the person's own `kimi` is open coai's turns
+  wait and then answer busy (Q3); native Linux and WSL1 carry Vibe's two refusal sentences with Kimi's name; macOS is not measured;
+  Windows is as it was. `vendorInstall(vendor, platform, host?)` takes the host kind; without one Linux is native (the safe answer).
+- **The Linux ⤓/⟳ line** (`kimiLinuxLine.ts`, DL12) provisions `rg` and `fd` and ends with Moonshot's script and a check. One line,
+  `&&`-joined, each step that holds a `||` wrapped in `{ …; }` (without the braces a failed step handed control to the next step's own
+  `||` and the line walked on — the stand-in run found it): `rg` (skipped when it resolves or `~/.kimi-code/bin/rg` exists, else
+  `sudo apt-get install -y ripgrep` or `sudo dnf install -y ripgrep`, chosen by `command -v`); `fd` likewise for `fd-find`, also skipped
+  when `fdfind` resolves or the line's own link is there (so a second press asks for no password); `mkdir -p ~/.local/bin` and the
+  link `ln -sfn … ~/.local/bin/fd` (`-n`: `-sf` alone follows a planted symlink to a DIRECTORY and writes inside it) only when a usable `fdfind` exists, no usable
+  `fd` does and the path is not already that same file — and never over a regular file (an addition to the plan's text). Every look-up goes
+  into a variable and must be an executable regular FILE (`unalias -a` inside the substitution only): an alias-only `fd` or `rg` is a
+  missing one, as `KimiTools` sees the disk; one generic sentence, once, when a tool was missing and neither
+  manager exists (printed with a capital *Install*, because the official-source check refuses a step carrying the lower-case word);
+  Moonshot's script; and the check, which prints where `rg` and `fd` resolve in the order `KimiTools` looks (Kimi's `bin`,
+  `~/.local/bin`, PATH) or `not found`. A failed package manager stops the line.
+- **`officialSources.ts`** gains `distroPackages: ['ripgrep', 'fd-find']`, the verbs `apt-get install` and `dnf install` (`-y` only,
+  those packages only) and the **`sudo` rule**: a step containing `sudo` — alone, by path, or opening a command substitution or backticks —
+  is admitted only when what follows is one of those two verbs, and only a step-opening shell word (`then`, `else`, `do`, `!`) may stand
+  before it. Red first against the old parser: 18 of the 38 table rows (every `sudo rm -rf`, `sudo chmod`, `sudo -u root …`, `/usr/bin/sudo`,
+  `$(sudo …)`, backtick, `sudo npm install …`, `sudo winget …`, `sudo bash -c "curl … | bash"` ADMITTED; every apt-get/dnf row refused).
+  After the security judge (2026-10-17) `su`, `doas`, `pkexec` and `run0` — by name or by path, anywhere in a step — refuse the step too, and only
+  `sudo` may carry the distro shape. The rule reads a word as PLAINLY spelled: a quote or escape inside the word, `$'sudo'` or a variable that
+  holds it are NOT read, and `officialSourcesLinux.test.ts` pins five such spellings as documented NOT-caught rows. The check runs only over
+  coai's own constants (header of `officialSources.ts`).
+- **The marker button** (`kimiMarker.ts`, `modelCardWorld.kimiMarkerNote`, `panelProvider.clearKimiMarker`): the server's providers
+  answer is read for `providers[].survivorMarker = { path, pids[] }` on a Kimi row (a field A3's spec does not name — proposed here); only
+  while it is reported the Kimi card shows the marker's path and pids and the button *Clear the stuck Kimi marker*. A press asks the
+  server again, takes the path from THAT answer (never from the page) and runs `coai-mcp --kimi-clear-marker <path>`; the exit code is
+  said in words — a providers question that got no answer runs nothing and says that a marker, if one stands, still stands; 0 cleared or none left (an unreadable report says neither); -1 (no answer in 20 s) says nothing is known; 75 a named process still runs (pid named, the marker stays), 74 a process could not be
+  checked (reason named, the marker stays), 65 refused (nothing deleted), anything else (an old coai-mcp's 64, a timeout) says the file the
+  Busy sentence names is still safe to delete by hand. The state is the server's marker file, re-read by the providers probe after the
+  press, so a reload shows what is true.
+- **The help** (`helpContent.ts`, `helpDe/Es/Ru/Uk.ts`, `choose-reviewers`): Kimi runs on Windows and on WSL2 from 0.60.0 when coai-mcp itself
+  runs there; native Linux is refused for now; WSL1 is refused; the person's own open `kimi` makes coai's turns wait; the Linux ⤓ line.
+- **`shared/consultant-limitations.json`**: Kimi `wsl` is `unconfined` — *measured* 2026-10-16 on kimi 2.2.0, §29 of
+  `RESULTS_kimi_confinement.md`, n = 1 per cell: writes 3 of 3 refused, `Read` served only inside the working folder, but `Grep` and `Glob`
+  read the disk directly (the Windows finding, held on Linux); `linux` is `unmeasured` — *measured on WSL2 only*. Kimi's `windows` and
+  `macos` rows belong to the consultant branch.
+- **Tests**: `officialSourcesLinux.test.ts` (5; the table of 38, the other escalators, the NOT-caught rows), `kimiLinuxInstall.test.ts` (18; a symlink to a directory, alias-only `fd` and `rg`; sealed PATH on Linux and macOS — bash by absolute path) — the line parsed by `bash -n` and RUN in
+  Git Bash / bash against `sudo`/`apt-get`/`dnf`/`curl` stand-ins in a `testsToDelete-` folder with spaces: Debian fresh, a second press,
+  Fedora with `fd` there, no manager (one sentence), the owner's case, a failing manager, a regular file at `~/.local/bin/fd`;
+  `kimiOnLinux.test.ts` (9) — the table, the per-host-kind notes, the hint, the five languages, the JSON rows; `kimiClearMarker.test.ts`
+  (15) — the providers field, the button only while a marker stands, the four exit codes, a press against a fake server.
+- **Not here / open**: the owner's live press in WSL (the install line against a machine without `rg`) and a recorded run of the
+  marker button against a real marker; whether the providers field is named as proposed (server half); `KimiTools.Refusal` must say the
+  same generic sentence (lower-case first letter); the three texts E3 listed as still Windows-only (`architecture.md:39`,
+  `research/README.md`, the `coai.vibeHomesDirectory` help) are untouched.
