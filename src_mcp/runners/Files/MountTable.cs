@@ -22,6 +22,12 @@ public sealed record MountEntry(string Root, string MountPoint, uint Major, uint
     /// <summary>A drvfs mount — WSL 2's <c>9p</c> with <c>aname=drvfs</c>, WSL 1's <c>drvfs</c>, or <c>virtiofs</c>: a Windows
     /// filesystem whose modes are what the mount reports and whose access Windows decides.</summary>
     public bool IsDrvfs => (Type == "9p" && Options.Contains("aname=drvfs", StringComparer.Ordinal)) || Type is "drvfs" or "virtiofs";
+
+    /// <summary>
+    /// A network filesystem (DL6, decided 2026-10-17 pending the owner): <c>nfs</c>, <c>nfs4</c>, <c>cifs</c>, <c>smb3</c>, <c>fuse.sshfs</c>, <c>ceph</c>, <c>glusterfs</c>. A sign-in folder there is shared with a Kimi on ANOTHER machine,
+    /// which refreshes the same rotating token — and no lock on this machine can see it.
+    /// </summary>
+    public bool IsNetwork => Type is "nfs" or "nfs4" or "cifs" or "smb3" or "fuse.sshfs" or "ceph" or "glusterfs";
 }
 
 /// <summary>What the kernel says, through <c>statx</c>, about the mount that really holds a path — a closed union, so "the kernel was not asked" and "the kernel could not say" are never one answer.</summary>

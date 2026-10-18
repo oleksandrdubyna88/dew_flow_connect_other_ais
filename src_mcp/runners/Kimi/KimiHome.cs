@@ -70,9 +70,9 @@ public static class KimiHome
     /// <c>credentials</c>, no <c>config.toml</c>) gets the junction and the config; one that has either is written to by nobody here,
     /// and the validation inside the turn judges it.
     /// </summary>
-    public static string Made(HostKind host, KimiPlaces places, byte[] expectedConfig)
+    public static string Made(HostKind host, KimiPlaces places, byte[] expectedConfig, bool allowNetworkSignIn = false)
     {
-        if (OwnedPaths.FirstLink(places.OwnedRoot, places.Home, places.Os) is { Length: > 0 } link)
+        if (OwnedPaths.FirstLink(places.OwnedRoot, places.Home, places.Os, places.Cache) is { Length: > 0 } link)
         {
             return $"{link} {LinkSentence}";
         }
@@ -81,12 +81,25 @@ public static class KimiHome
         {
             Directory.CreateDirectory(places.Home);
             Directory.CreateDirectory(places.Os);
+            MakeCache(places);
 
-            return Fresh(places) ? Fill(host, places, expectedConfig) : string.Empty;
+            return Fresh(places) ? Fill(host, places, expectedConfig, allowNetworkSignIn) : string.Empty;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             return $"the coai-owned Kimi home {places.OwnedRoot} could not be made ({e.Message})";
+        }
+    }
+
+    /// <summary>
+    /// DL11: on Linux and WSL the cache folder <c>XDG_CACHE_HOME</c> names (<see cref="KimiPlaces.Cache"/>), made <c>0700</c> beside <c>os/</c> — Kimi extracts about 2 MB of native files into it on every launch, and
+    /// <c>os/</c> must stay empty. Nothing on Windows, which has no such variable. Idempotent: a folder already there keeps its contents.
+    /// </summary>
+    public static void MakeCache(KimiPlaces places)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Directory.CreateDirectory(places.Cache, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         }
     }
 
@@ -164,9 +177,9 @@ public static class KimiHome
     private static bool Fresh(KimiPlaces places) =>
         !OwnedPaths.IsLinkIfThere(places.Link) && !Directory.Exists(places.Link) && !File.Exists(places.Config);
 
-    private static string Fill(HostKind host, KimiPlaces places, byte[] expectedConfig)
+    private static string Fill(HostKind host, KimiPlaces places, byte[] expectedConfig, bool allowNetworkSignIn)
     {
-        var linked = Junctions.Make(host, places.Link, places.Credentials);
+        var linked = Junctions.Make(host, places.Link, places.Credentials, allowNetworkSignIn);
         if (linked.Length > 0)
         {
             return $"the Kimi sign-in could not be linked: {linked}";
@@ -180,7 +193,7 @@ public static class KimiHome
     // ---------- the check ----------
 
     private static string Links(KimiPlaces places) =>
-        OwnedPaths.FirstLink(places.OwnedRoot, places.Home, places.Os) is { Length: > 0 } link ? Sentence(places, $"{link} {LinkSentence}") : string.Empty;
+        OwnedPaths.FirstLink(places.OwnedRoot, places.Home, places.Os, places.Cache) is { Length: > 0 } link ? Sentence(places, $"{link} {LinkSentence}") : string.Empty;
 
     private static string OsProblem(KimiPlaces places)
     {
@@ -238,11 +251,15 @@ public static class KimiHome
             ? string.Empty
             : Sentence(places, "config.toml is not what coai writes for this person and this model — tampered, or your Kimi sign-in changed since the home was made (a re-login)");
 
+    /// <summary>The cure for the HOST: the two <c>winget</c> lines on Windows; elsewhere the generic sentence (never <c>winget</c> — S-K9).</summary>
+    private static string InstallRgAndFd() =>
+        OperatingSystem.IsWindows() ? $"install rg and fd ({KimiTools.RipgrepInstall}, {KimiTools.FdInstall})" : KimiTools.UnixGenericCure;
+
     private static string Admitted(KimiPlaces places, string entry, string name)
     {
         if (name == "bin")
         {
-            return Sentence(places, $"holds bin/, which means Kimi downloaded ripgrep or fd into the home — coai refuses code in an owned home; install rg and fd ({KimiTools.RipgrepInstall}, {KimiTools.FdInstall})");
+            return Sentence(places, $"holds bin/, which means Kimi downloaded ripgrep or fd into the home — coai refuses code in an owned home; {InstallRgAndFd()}");
         }
 
         if (name == "workspace-trust")

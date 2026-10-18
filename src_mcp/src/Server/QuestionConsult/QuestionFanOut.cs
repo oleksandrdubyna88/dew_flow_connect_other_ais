@@ -334,6 +334,8 @@ public sealed class QuestionFanOut(
             McpServersToSwitchOff = NoMcpServers.CodexConfigured(env),
             // The row's fast mode, as for a reviewer (research/PLAN_fast_mode.md).
             Fast = provider.Fast,
+            // Only KimiRuntime reads it: whether a sign-in folder on network storage may be used (DL6, coai.kimiAllowNetworkSignIn).
+            KimiAllowNetworkSignIn = panel.KimiAllowNetworkSignIn,
         };
         // The row's CLI effort and the local ceiling by the reviewers' own road (research/PLAN_one_model_catalog.md, C2;
         // research/PLAN_local_effort_reaches_every_local_launch.md) — a local row's own effort, else the panel's; an api row's

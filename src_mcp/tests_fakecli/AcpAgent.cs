@@ -84,12 +84,30 @@ internal static class AcpAgent
         return 0;
     }
 
-    /// <summary>The script beside the work folder — <c>&lt;cwd&gt;/../agent.json</c>, the place <c>FakeAcpAgent</c> writes it — or empty when there is none.</summary>
+    /// <summary>
+    /// The script beside the work folder — <c>&lt;cwd&gt;/../agent.json</c>, the place <c>FakeAcpAgent</c> writes it — else the one the steering file in the temp directory names
+    /// (<c>FAKECLI_ACP_SCRIPT</c>, the same file a minimal-environment vendor launch reads: a round's snapshot is a folder no test can name beforehand, and a launch that builds the agent's
+    /// environment from scratch carries no variable) — or empty when there is none.
+    /// </summary>
     public static string ScriptBesideTheWorkFolder()
     {
         var beside = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "agent.json"));
 
-        return File.Exists(beside) ? beside : string.Empty;
+        return File.Exists(beside) ? beside : SteeredScript();
+    }
+
+    private static string SteeredScript()
+    {
+        var steering = Path.Combine(Path.GetTempPath(), "fakecli-minimal.json");
+        if (!File.Exists(steering))
+        {
+            return string.Empty;
+        }
+
+        using var document = JsonDocument.Parse(File.ReadAllText(steering));
+        var named = document.RootElement.ValueKind == JsonValueKind.Object && document.RootElement.TryGetProperty("FAKECLI_ACP_SCRIPT", out var script) ? script.GetString() ?? string.Empty : string.Empty;
+
+        return File.Exists(named) ? named : string.Empty;
     }
 
     /// <summary>
@@ -108,6 +126,8 @@ internal static class AcpAgent
             .Order(StringComparer.Ordinal)
             .Concat(Probed(script));
         File.WriteAllLines(path, lines);
+        // The folder the agent was started in, beside the environment record (not in it: that file is read as a set of variables).
+        File.WriteAllText(path + ".cwd", Directory.GetCurrentDirectory());
     }
 
     private static IEnumerable<string> Probed(JsonElement script) =>

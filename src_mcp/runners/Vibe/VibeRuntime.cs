@@ -76,11 +76,7 @@ public sealed class VibeRuntime(string id, VibeHost host, VibePathBudget? budget
     /// <c>~/.local/bin</c>. See <see cref="InstalledExecutableFor(HostKind, string, Func{string, string?}, Func{string, bool})"/> for the order.
     /// </summary>
     public string DefaultExecutable =>
-        InstalledExecutableFor(host.Kind, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), Environment.GetEnvironmentVariable, IsInstalledFile);
-
-    /// <summary>A file that exists and, off Windows, carries an execute bit: what a candidate must be to count (DL5 — a stray file named <c>vibe</c> is not an install).</summary>
-    private static bool IsInstalledFile(string path) =>
-        File.Exists(path) && (OperatingSystem.IsWindows() || (File.GetUnixFileMode(path) & (UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute)) != 0);
+        InstalledExecutableFor(host.Kind, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), Environment.GetEnvironmentVariable, ExecutableResolver.IsInstalledFile);
 
     /// <summary>D6: Vibe reads only its working folder (§10, §16), and loads its configuration from it — so a copy.</summary>
     public bool NeedsASanitisedSnapshot => true;

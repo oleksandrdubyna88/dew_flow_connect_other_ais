@@ -113,9 +113,9 @@ sequenceDiagram
   rule name)*. Two rounds of one fix therefore show identical rules, which is the defect the plan was
   opened for, while different branches order the rest of the corpus differently. **That second half
   reaches one to three rules in this repository since the operator raised the budget to 90 000 bytes
-  (2026-10-16; `RuleFiles.DefaultBudgetBytes`)** — the base and the tier spend **79 944** bytes, which
+  (2026-10-16; `RuleFiles.DefaultBudgetBytes`)** — the base and the tier spend **79 967** bytes (79 944 until 2026-10-18), which
   left **56** at the old 80 000 (the tail took nothing, so `common/test-leftovers.md` reached no
-  reviewer) and leave **10 056** now; the smallest rule outside the tier is 2 197. Over 3 000 branch
+  reviewer) and leave **10 033** now (10 056 until 2026-10-18); the smallest rule outside the tier is 2 197. Over 3 000 branch
   names the tail takes one rule on 30 %, two on 62 %, three on 8 % (mean 1.78), and
   `common/test-leftovers.md` is drawn on 9.8 % — drawn, not owed: a rule that must reach every reviewer
   belongs in the tier. Numbers: `research/RESULTS_rules_selection_budget.md` (last section).
@@ -133,8 +133,8 @@ sequenceDiagram
 
   The 1 145 / 77 562 / 78 855 figures in this paragraph are the 2026-09-18 measurements at 80 000 bytes
   and stay as the history of the CRLF defect. The rotation has room since 2026-10-16;
-  `StageRulesTests.AtNinetyKilobytes_TheBaseAndTheTier_SpendExactly79944Bytes` (the measuring test and drift
-  guard: 17 883 + 62 061),
+  `StageRulesTests.AtNinetyKilobytes_TheBaseAndTheTier_SpendExactly79967Bytes` (the measuring test and drift
+  guard: 17 906 + 62 061),
   `AtNinetyKilobytes_TheRotatedTail_FitsAtMostThreeRules` (the exact three tail rules on the canary branch,
   the measured maximum elsewhere),
   `AtNinetyKilobytes_EveryBranchReachesAtLeastOneTailRule` (at least one) and
@@ -3624,7 +3624,7 @@ flowchart LR
 (b) the hold outlives its opener's `SIGKILL` while a child started after the take lives. **Observed on Linux (CI run 38923199105, job `build · test · family checks`): arm (a, second inheritable take) RED** — `Expected string to be "busy" … because a second take of an inheritable hold succeeded — the lock is shared, not exclusive (S-K4), but "taken"` — so .NET's `None | Inheritable` IS a shared `flock` on Linux, as predicted from `SafeFileHandle.Unix.cs` (v10.0.11: `LOCK_EX` only when `share == FileShare.None` exactly). The other two arms were green. A2 §3.3 therefore ships the native take (`LinuxHeldFile`, below); the record is RESULTS_kimi_confinement.md §30.
 
 
-### A2 — one owner for the sign-in, for the tree's whole life (2026-10-16, built on the pieces above; `KimiLaunch.HostRefusal` still NOT lifted, that is E6)
+### A2 — one owner for the sign-in, for the tree's whole life (2026-10-16, built on the pieces above; `KimiLaunch.HostRefusal` was lifted for WSL2 by E6, 2026-10-17 — see *Kimi on WSL2* at the end of this file)
 
 A2 wires the pieces above into the Kimi lock, the shim's hold, the junction maker and the foreign-Kimi wait. On a Linux or WSL host every path below is reached only by tests until E6 opens the host door of the launch.
 
@@ -3781,3 +3781,55 @@ flowchart LR
 
 Tests: `KimiRuntimeTests`, `KimiIsClassifiedFromItsReportTests`, `OneKimiLaunchAtATimeTests`, `KimiIsDiagnosedInItsOwnWordsTests`, `AKimiReviewerRunsThroughTheShimTests`,
 `TheRoundsScratchDisposesItsKimiHomeJunctionFirstTests`, and the S2.45 canary re-run through the round's records in `KimiCanaryTests` — listed in [module_tests.md](module_tests.md).
+
+## Kimi on WSL2 — the host admission, the places, the cache, network storage and the marker report (2026-10-17, E6 server half of `todo/PLAN_kimi_and_vibe_on_linux.md`)
+
+E5 built Kimi's Linux mechanisms behind a closed door; E6 opens it, for WSL2 only. The extension's half (hints, install line, the *Clear the stuck Kimi marker* button, `KIMI_ON_LINUX_SINCE`) is `module_extension.md`'s.
+
+```mermaid
+flowchart TD
+  L["KimiLaunch.TakeAsync: host = KimiHost (kind + WSL generation)"] --> H{"HostAdmission.Refusal for Kimi"}
+  H -->|"Windows, a Windows kimi"| P
+  H -->|"WSL, generation WSL2"| P
+  H -->|"WSL1"| R1["refused: this is WSL1 - wsl --set-version distro 2, from Windows"]
+  H -->|"native Linux"| R2["refused: Kimi runs on WSL2 only for now"]
+  H -->|"wsl.exe bridge on Windows, macOS, other"| R3["refused: D18"]
+  P["places: ~/.kimi-code/bin/kimi; rg and fd in bin, then PATH, then ~/.local/bin"] --> E["built environment: HOME to os/, XDG_CACHE_HOME to cache/ beside it"]
+  E --> M{"MountLocality.Judge of the sign-in's real path"}
+  M -->|"drvfs, 9p aname=drvfs, virtiofs"| R4["refused: Windows filesystem"]
+  M -->|"nfs, nfs4, cifs, smb3, fuse.sshfs, ceph, glusterfs"| N{"coai.kimiAllowNetworkSignIn"}
+  N -->|"off (the default)"| R5["refused, with the cure: a local KIMI_CODE_HOME and a separate kimi login"]
+  N -->|"on"| W["admitted; one-line warning on the launch and the card"]
+  M -->|"ext4 and the rest"| OK["admitted silently"]
+```
+
+- **DL1 — one admission for two runtimes.** `HostAdmission.Refusal(runtime, host, executable, wsl)` (`runners/Platform/`) is the single home of the host sentences; `VibeLaunch.HostRefusal` and `KimiLaunch.HostRefusal`
+  are one-line calls with the runtime's name, so the two cannot word the same refusal two ways. Admitted: a Windows host starting a Windows CLI, and `HostKind.Wsl` whose kernel is WSL2 (`WslGenerations.NamesWsl2`, the
+  shared `shared/wsl-banner-vectors.json`). Refused: WSL1 (the WSL1 sentence and its cure, run from Windows), native Linux (*Kimi runs on WSL2 only for now — it is measured on WSL2 and not yet on a native Linux host*), a
+  Windows host that would start `wsl.exe` or a `\\wsl$` path, macOS and every other host. `KimiHost` (kind + generation, with the `AsyncLocal` flow seam `KimiHost.Using` that `VibeHost` has) reaches
+  `KimiLaunch.TakeAsync` and `KimiRuntime`; the bare-`HostKind` constructors are `internal` test doors. `KimiSeams.Using` is the same kind of seam for the person's places and the shim's binary.
+- **DL5 — the CLI and the tools are found where the installers put them.** `KimiAcpProfile.InstalledExecutableFor` and `KimiPlaces` find `<KIMI_INSTALL_DIR or ~/.kimi-code>/bin/kimi` on Linux and WSL
+  (spelled with `/` by the HOST, never `Path.Combine`); macOS still guesses nothing. `KimiTools` searches the person's bin, then `PATH`, then `~/.local/bin` (a third place — where DL12's `fd` link goes), and the
+  directory each of `rg` and `fd` was found in joins the built `PATH` through `ToolFolders`, so a `~/.local/bin/fd` is found though the editor's `PATH` lacks it. A candidate counts only when it is an executable file
+  (`ExecutableResolver.IsInstalledFile`, extracted from `VibeRuntime` rather than copied). **The refusal names the cure of the host (S-K9, S-K17):** on Windows the two `winget` lines as before; elsewhere the
+  `sudo apt-get install -y ripgrep` / `fd-find` line when `apt-get` resolves on `PATH` (with the `fdfind` link, because Debian and Ubuntu name fd's program `fdfind`), else the `dnf` line, else *install ripgrep and fd with
+  your distribution's package manager, or place them on PATH or in ~/.local/bin* — never `winget`; `KimiHome`'s `bin/` sentence says the same.
+- **DL11 and S-K8 — the environment.** `KimiEnvironment.Built(request, places, parentPath, windows)` is seven names on Windows and five on Linux and WSL: `KIMI_CODE_HOME`, `KIMI_CODE_NO_AUTO_UPDATE`, `HOME` → `os/`,
+  `XDG_CACHE_HOME` → `<owned root>/cache` and `PATH`; no `USERPROFILE`, `HOMEDRIVE` or `HOMEPATH`. The platform is a stated parameter (the short overloads ask the machine), so both shapes are unit tests on any
+  machine. `cache/` sits beside `os/` and NOT inside `home/` (whose shape `KimiHome` judges), is made `0700` by `KimiHome.Made` (and by the version probe's throwaway root), is refused if it is a link, and goes with the
+  owned root. Kimi's native-file extraction (about 2 MB per launch, L-K3) lands there; `os/` stays empty and `KimiHome.OsProblem` is unchanged. The refusal checks `HOME` and the cache on Unix.
+- **DL6 — network storage (a stated default, pending the owner, Q7).** `MountEntry.IsNetwork` (`nfs`, `nfs4`, `cifs`, `smb3`, `fuse.sshfs`, `ceph`, `glusterfs`); `MountLocality.Judge(...)` answers a `MountVerdict`
+  (`Refusal`, `Warning`): a sign-in folder there is refused with the plan's sentence — *your Kimi sign-in folder is on network storage (type); a Kimi on another machine that shares this home can refresh the same
+  sign-in and sign you out, and coai cannot see it. Point `KIMI_CODE_HOME` at a folder on this machine's own disk … and sign in there once with `kimi login`, or set `coai.kimiAllowNetworkSignIn` …* — unless the
+  default-off override is on, when it is admitted and the launch (and the providers row) carries one line. A Windows filesystem and an unreadable table are refused whatever the override says; a local disk is admitted
+  silently. **How the setting travels:** the extension writes `COAI_KIMI_ALLOW_NETWORK_SIGNIN` into the data directory's `settings.json` like every other `COAI_*` setting (an environment variable in the client's config wins);
+  `PanelSettings.KimiAllowNetworkSignIn` reads it through `Flag` (an unreadable value stays OFF); the roster and the question fan-out put it on `ReviewerSettings.KimiAllowNetworkSignIn`; `KimiRuntime.Build` binds
+  the invocation to an adapter that carries it (immutable, per launch — no global), and `KimiLaunch.TakeAsync(…, allowNetworkSignIn)` hands it to `KimiHome.Made` → `Junctions.Make`.
+- **DL9's report for the panel button.** The Kimi row of `coai-mcp --providers` carries `survivorMarker = { "path": <marker file>, "pids": [<int>…] }` when a marker of THIS sign-in stands
+  (`KimiRuntime.StandingMarker` → `KimiSurvivorMarker.StandingReportFor(KimiCredentialsLock.MarkerPathFor(credentials), …)`): ABSENT otherwise; `pids` empty for a `spawning` marker or one that cannot be read (it still
+  blocks the sign-in); never another sign-in's marker (the path is keyed by this folder); not reported while the shim that wrote it still runs (a turn in progress, the gate's own first question). The path is exactly what
+  `--kimi-clear-marker` accepts (sixteen hex digits and `.survivors.json`, directly under the lock root; a test runs the mode on the reported path).
+
+**Not built here, by the plan's own scope:** a Kimi consultant and a Kimi question row (`RuntimeCapabilities.Runtimes` and `ConsultantResolution` do not list Kimi; that is `feat/kimi-consultant`'s), so the harness
+has a plan round and a code round and no consult or question flow for Kimi. Tests: `KimiLaunchChecksTests` (S-K20), `KimiToolsOnLinuxTests`, `KimiPlacesOnLinuxTests`, `KimiEnvironmentOnLinuxTests`, `MountLocalityNetworkTests`,
+`KimiNetworkSignInSettingTests`, `KimiSurvivorMarkerReportTests`, `AKimiRowRunsThroughTheServiceOnWsl2Tests` — listed in [module_tests.md](module_tests.md).

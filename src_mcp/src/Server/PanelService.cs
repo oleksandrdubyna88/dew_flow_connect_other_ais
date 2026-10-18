@@ -293,12 +293,26 @@ public sealed class PanelService
         {
             Api = ApiReportOf(provider),
             Fast = FastReportOf(provider),
-            Warning = WarningOf(health),
+            Warning = CardWarningOf(health, RuntimeFor(provider)),
+            SurvivorMarker = SurvivorMarkerOf(RuntimeFor(provider)),
         };
     }
 
-    /// <summary>The health's warning on the wire — absent (null) for a row that has none, so its JSON reads as it did.</summary>
-    private static string? WarningOf(VendorHealth health) => health.Warning.Length > 0 ? health.Warning : null;
+    /// <summary>
+    /// The row's warning on the wire — the health's (an unmeasured CLI version) and, for a Kimi row with <c>coai.kimiAllowNetworkSignIn</c> on, the one line about its network sign-in folder — joined; null when there is none,
+    /// so the JSON reads as it did.
+    /// </summary>
+    private string? CardWarningOf(VendorHealth health, IReviewerRuntime? runtime) =>
+        string.Join("; ", new[] { health.Warning, NetworkWarningOf(runtime) }.Where(warning => warning.Length > 0)) is { Length: > 0 } joined ? joined : null;
+
+    private string NetworkWarningOf(IReviewerRuntime? runtime) =>
+        runtime is Runners.Kimi.KimiRuntime kimi && _settings.KimiAllowNetworkSignIn ? kimi.NetworkSignInWarning() : string.Empty;
+
+    /// <summary>
+    /// The standing survivor marker of a Kimi row's sign-in, for the card's <i>Clear the stuck Kimi marker</i> button — null for every other runtime and when none stands, so the JSON reads as it did.
+    /// </summary>
+    internal static SurvivorMarkerReport? SurvivorMarkerOf(IReviewerRuntime? runtime) =>
+        runtime is Runners.Kimi.KimiRuntime kimi && kimi.StandingMarker() is [var marker] ? new SurvivorMarkerReport(marker.Path, marker.Pids) : null;
 
     /// <summary>
     /// The health's sentence — and, for an Off codex row whose installed release refuses the standard tier, what its
