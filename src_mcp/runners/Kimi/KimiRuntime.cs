@@ -17,7 +17,7 @@ public sealed record KimiSeams(Func<string, KimiPlaces> PlacesFor, Func<(string 
 {
     /// <summary>This machine: the real profile and environment, and this binary.</summary>
     public static KimiSeams Real(HostKind host) => new(
-        root => KimiPlaces.Resolve(root, host, Environment.GetEnvironmentVariable, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), File.Exists),
+        root => KimiPlaces.Resolve(root, host, Environment.GetEnvironmentVariable, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ExecutableResolver.IsInstalledFile),
         LocalRuntime.SelfInvocation);
 }
 

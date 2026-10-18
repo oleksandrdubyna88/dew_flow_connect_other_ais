@@ -119,7 +119,7 @@ public sealed class KimiAcpProfile(ForeignKimiWatch watch) : IAcpProfile
             HostKinds.Current,
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             Environment.GetEnvironmentVariable("PATH"),
-            File.Exists);
+            ExecutableResolver.IsInstalledFile);
 
     /// <summary>
     /// <see cref="InstalledExecutable"/> for a given host, home and file test.
@@ -129,9 +129,11 @@ public sealed class KimiAcpProfile(ForeignKimiWatch watch) : IAcpProfile
     /// (RESULTS header) — when it is there, else bare <c>kimi</c>, which <see cref="ExecutableResolver"/> walks the
     /// PATH for at launch. The same rule <c>agy</c> follows on Windows: an MCP server is usually started by an editor
     /// whose PATH predates the install.</para>
-    /// <para>Every other host gets bare <c>kimi</c> and no guess: nothing here has run Kimi on Linux, WSL or a Mac,
-    /// and a path nobody observed is not one to start a process from (the <c>agy</c> precedent for macOS). The WSL
-    /// cells of S4 lift this when they run.</para>
+    /// <para>Linux and WSL (DL5 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>, measured on WSL2 by E4): <c>~/.kimi-code/bin/kimi</c> when it is there and
+    /// executable — the VS Code server's <c>PATH</c> often lacks it, and only a shell started after Moonshot's installer edited an rc file has it —
+    /// else bare <c>kimi</c> for the operating system's own <c>PATH</c> walk. (<c>KIMI_INSTALL_DIR</c> is <see cref="KimiPlaces"/>'s.)</para>
+    /// <para>Every other host (macOS, anything else) gets bare <c>kimi</c> and no guess: nothing here has run Kimi there,
+    /// and a path nobody observed is not one to start a process from (the <c>agy</c> precedent for macOS).</para>
     /// <para>Pure over <paramref name="host"/>, which means the Windows path is spelled with Windows separators
     /// whatever OS runs this: <c>Path.Combine</c> spelled it with the RUNNING OS's separator, so on Linux and macOS CI
     /// (2026-10-12) the path never equalled the one the file test was given and the answer was bare <c>kimi</c>.</para>
@@ -140,6 +142,7 @@ public sealed class KimiAcpProfile(ForeignKimiWatch watch) : IAcpProfile
         host switch
         {
             HostKind.Windows => IfThere($@"{home.TrimEnd('\\', '/')}\.kimi-code\bin\kimi.exe", exists),
+            HostKind.Linux or HostKind.Wsl => IfThere($"{home.TrimEnd('/')}/.kimi-code/bin/kimi", exists),
             _ => ProfileName,
         };
 

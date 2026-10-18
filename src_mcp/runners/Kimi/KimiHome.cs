@@ -238,11 +238,15 @@ public static class KimiHome
             ? string.Empty
             : Sentence(places, "config.toml is not what coai writes for this person and this model — tampered, or your Kimi sign-in changed since the home was made (a re-login)");
 
+    /// <summary>The cure for the HOST: the two <c>winget</c> lines on Windows; elsewhere the generic sentence (never <c>winget</c> — S-K9).</summary>
+    private static string InstallRgAndFd() =>
+        OperatingSystem.IsWindows() ? $"install rg and fd ({KimiTools.RipgrepInstall}, {KimiTools.FdInstall})" : KimiTools.UnixGenericCure;
+
     private static string Admitted(KimiPlaces places, string entry, string name)
     {
         if (name == "bin")
         {
-            return Sentence(places, $"holds bin/, which means Kimi downloaded ripgrep or fd into the home — coai refuses code in an owned home; install rg and fd ({KimiTools.RipgrepInstall}, {KimiTools.FdInstall})");
+            return Sentence(places, $"holds bin/, which means Kimi downloaded ripgrep or fd into the home — coai refuses code in an owned home; {InstallRgAndFd()}");
         }
 
         if (name == "workspace-trust")

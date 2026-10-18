@@ -206,7 +206,17 @@ public sealed class KimiHomeTests : IDisposable
         var places = Made();
         Write(Path.Combine(places.Home, "bin", "rg.exe"));
 
-        KimiHome.Refusal(places, Expected()).Should().Contain("bin/").And.Contain("downloaded ripgrep or fd").And.Contain("rg and fd").And.Contain("winget");
+        var refusal = KimiHome.Refusal(places, Expected());
+
+        refusal.Should().Contain("bin/").And.Contain("downloaded ripgrep or fd");
+        if (OperatingSystem.IsWindows())
+        {
+            refusal.Should().Contain("rg and fd").And.Contain("winget");
+        }
+        else
+        {
+            refusal.Should().Contain(KimiTools.UnixGenericCure).And.NotContain("winget", "the Linux refusal quotes winget");
+        }
     }
 
     // ---------- S2.19 ----------
