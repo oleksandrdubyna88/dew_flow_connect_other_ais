@@ -173,6 +173,7 @@ public sealed class KimiRuntime(string id, KimiHost host, KimiSeams seams, Seril
             var places = PlacesOf(root, executable);
             Directory.CreateDirectory(places.Home);
             Directory.CreateDirectory(places.Os);
+            KimiHome.MakeCache(places);
 
             return await launcher.RunAsync(KimiEnvironment.Built(new ProcessRequest(executable, ["--version"], places.Home) { Timeout = timeout }, places), ct);
         }

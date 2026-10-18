@@ -33,7 +33,7 @@ public sealed class KimiLaunchChecksTests
     private static ProcessRequest ShimRaw() =>
         Raw("--ask-acp", "--profile", "kimi", "--model", KimiModels.Default, "--home", Root, "--persons-bin", Bin);
 
-    private static ProcessRequest Built() => KimiEnvironment.Built(ShimRaw(), Places, Parent);
+    private static ProcessRequest Built() => KimiEnvironment.Built(ShimRaw(), Places, Parent, windows: true);
 
     private static ProcessRequest With(ProcessRequest request, string name, string? value) =>
         request with { Environment = new Dictionary<string, string?>(request.Environment) { [name] = value } };
@@ -87,7 +87,7 @@ public sealed class KimiLaunchChecksTests
         built.Environment["HOME"].Should().Be(Places.Os);
         (built.Environment["HOMEDRIVE"] + built.Environment["HOMEPATH"]).Should().Be(Places.Os);
         built.Environment["PATH"].Should().Be(string.Join(Path.PathSeparator, Bin, Tools, Windows));
-        KimiEnvironment.Built(built, Places, built.Environment["PATH"]!).Should().BeEquivalentTo(built, "building a built request changes nothing — idempotent");
+        KimiEnvironment.Built(built, Places, built.Environment["PATH"]!, windows: true).Should().BeEquivalentTo(built, "building a built request changes nothing — idempotent");
     }
 
     [Fact]
@@ -141,11 +141,11 @@ public sealed class KimiLaunchChecksTests
             _ => (WithFlag(built, "--persons-bin", Path.Combine(Tmp, "other-bin")), "other-bin"),
         };
 
-        var refusal = KimiEnvironment.Refusal(request, Places);
+        var refusal = KimiEnvironment.Refusal(request, Places, windows: true);
 
         refusal.Should().NotBeEmpty($"{row} is not what Built makes");
         refusal.Should().Contain(mentions);
-        KimiEnvironment.Refusal(built, Places).Should().BeEmpty("what Built makes is admitted");
+        KimiEnvironment.Refusal(built, Places, windows: true).Should().BeEmpty("what Built makes is admitted");
     }
 
     /// <summary>The request with the value after <paramref name="flag"/> replaced.</summary>
@@ -163,9 +163,9 @@ public sealed class KimiLaunchChecksTests
     [Fact]
     public void ABuiltVersionRequest_CarriesNoFlags_AndIsAdmitted()
     {
-        var version = KimiEnvironment.Built(Raw("--version"), Places, Parent);
+        var version = KimiEnvironment.Built(Raw("--version"), Places, Parent, windows: true);
 
-        KimiEnvironment.Refusal(version, Places).Should().BeEmpty("--version carries neither --home nor --persons-bin");
+        KimiEnvironment.Refusal(version, Places, windows: true).Should().BeEmpty("--version carries neither --home nor --persons-bin");
     }
 
     [Fact]

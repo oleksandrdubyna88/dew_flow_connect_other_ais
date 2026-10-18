@@ -34,6 +34,12 @@ public sealed record KimiPlaces(string OwnedRoot, string PersonsHome, string Per
     /// <summary>The empty OS home the redirected <c>USERPROFILE</c>/<c>HOME</c> point at.</summary>
     public string Os => Path.Combine(OwnedRoot, "os");
 
+    /// <summary>
+    /// The cache folder <c>XDG_CACHE_HOME</c> points at on Linux and WSL (DL11 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): beside <c>os/</c> and NOT inside <c>home/</c> (whose shape <see cref="KimiHome"/> judges), so Kimi's
+    /// native-file extraction (about 2 MB per launch, measured by L-K3) lands here and <c>os/</c> stays empty. Made <c>0700</c> with the home, deleted with the owned root.
+    /// </summary>
+    public string Cache => Path.Combine(OwnedRoot, "cache");
+
     /// <summary>The junction to the person's <c>credentials</c>, inside the owned home.</summary>
     public string Link => Path.Combine(Home, "credentials");
 
