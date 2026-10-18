@@ -465,6 +465,8 @@ internal sealed class RosterBuilder(
             McpServersToSwitchOff = NoMcpServers.CodexConfigured(Environment.GetEnvironmentVariable),
             // Only VibeRuntime reads it: the round's own folder, for one coai-owned home per reviewer (D17).
             OwnedScratch = runtime.KeepsAHome ? scratch.MadeHomeFolder() : scratch.Directory,
+            // Only KimiRuntime reads it: whether a sign-in folder on network storage may be used (DL6, coai.kimiAllowNetworkSignIn).
+            KimiAllowNetworkSignIn = _settings.KimiAllowNetworkSignIn,
         };
         var told = WithLocalEngine(settings, provider, _settings);
 

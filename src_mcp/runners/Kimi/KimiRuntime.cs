@@ -37,7 +37,7 @@ public sealed record KimiSeams(Func<string, KimiPlaces> PlacesFor, Func<(string 
 /// <para><b>Classified from the report, never from text</b> (<see cref="KimiReport"/>): a spent balance is exit 75 with the report's
 /// <c>failure: balance_spent</c> and nothing else; every other exit is an ordinary failure whatever words its trace holds.</para>
 /// </remarks>
-public sealed class KimiRuntime(string id, KimiHost host, KimiSeams seams, Serilog.ILogger log) : IReviewerRuntime
+public sealed class KimiRuntime(string id, KimiHost host, KimiSeams seams, Serilog.ILogger log, bool allowNetworkSignIn = false) : IReviewerRuntime
 {
     private const string DeadlineFlag = "--deadline-seconds";
 
@@ -98,8 +98,15 @@ public sealed class KimiRuntime(string id, KimiHost host, KimiSeams seams, Seril
         };
 
         // No effort and no tier: neither is measured taking effect on Kimi (shared/feature-availability.json), so none is sent.
-        return new ReviewerInvocation(Provider, role, KimiEnvironment.Built(request, places), string.Empty, this, Model: model);
+        return new ReviewerInvocation(Provider, role, KimiEnvironment.Built(request, places), string.Empty, Bound(settings), Model: model);
     }
+
+    /// <summary>
+    /// The adapter THIS launch is judged by: <c>this</c>, or — when the row's settings carry a different answer to "may a sign-in folder on network storage be used" (DL6, <c>coai.kimiAllowNetworkSignIn</c>, which the server
+    /// reads from the panel's settings file) — a copy that carries it. Immutable: the setting travels with the launch, never in a field somebody has to reason about across threads.
+    /// </summary>
+    private KimiRuntime Bound(ReviewerSettings settings) =>
+        settings.KimiAllowNetworkSignIn == allowNetworkSignIn ? this : new KimiRuntime(id, host, seams, log, settings.KimiAllowNetworkSignIn);
 
     /// <summary>
     /// The shim's argv (D15, D19): the profile, the model the session must offer, the folder it works in, the three places and the absolute
@@ -157,7 +164,7 @@ public sealed class KimiRuntime(string id, KimiHost host, KimiSeams seams, Seril
             return Task.FromResult(LaunchTurn.Refused($"this Kimi launch names no owned home ({AcpWords.HomeFlag}) and is refused (D19)", RefusalCause.LaunchControl));
         }
 
-        return KimiLaunch.TakeAsync(host, request, PlacesOf(root, KimiEnvironment.FlagOf(request, AcpWords.ExecutableFlag)), launcher, ct);
+        return KimiLaunch.TakeAsync(host, request, PlacesOf(root, KimiEnvironment.FlagOf(request, AcpWords.ExecutableFlag)), launcher, ct, allowNetworkSignIn);
     }
 
     /// <summary>

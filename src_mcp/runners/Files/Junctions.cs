@@ -71,7 +71,7 @@ public static partial class Junctions
         Refusal(host, link, target, driveType, Shell.FinalDirectory);
 
     /// <summary>The seam of the final path as well, so a test can make an ancestor link lead off the local drives.</summary>
-    internal static string Refusal(HostKind host, string link, string target, Func<string, DriveType> driveType, Func<string, string> final)
+    internal static string Refusal(HostKind host, string link, string target, Func<string, DriveType> driveType, Func<string, string> final, bool allowNetwork = false)
     {
         var real = new Lazy<string>(() => final(target));
 
@@ -83,7 +83,7 @@ public static partial class Junctions
             () => Missing(target),
             () => Chained(target),
             () => Resolved(target, driveType, real.Value),
-            () => Mounted(host, target, real.Value),
+            () => Mounted(host, target, real.Value, allowNetwork),
             () => Taken(link),
         }
         .Select(check => check())
@@ -124,6 +124,10 @@ public static partial class Junctions
 
     /// <summary>The junction made, read back and verified — empty on success, otherwise the sentence, with nothing left at <paramref name="link"/>.</summary>
     public static string Make(HostKind host, string link, string target) => Make(host, link, target, Target);
+
+    /// <summary><see cref="Make(HostKind, string, string)"/> with network storage admitted when <paramref name="allowNetwork"/> (DL6's default-off override).</summary>
+    public static string Make(HostKind host, string link, string target, bool allowNetwork) => Make(host, link, target, Target, RemoveFolder, Shell.FinalDirectory, allowNetwork);
+
     /// <summary>The seam of the read-back, so a test can make it name another folder.</summary>
     internal static string Make(HostKind host, string link, string target, Func<string, string> readBack) =>
         Make(host, link, target, readBack, RemoveFolder);
@@ -133,9 +137,9 @@ public static partial class Junctions
         Make(host, link, target, readBack, remove, Shell.FinalDirectory);
 
     /// <summary>The seam of the final path as well, so a test can make the target look like it resolves off the local drives.</summary>
-    internal static string Make(HostKind host, string link, string target, Func<string, string> readBack, Action<string> remove, Func<string, string> final)
+    internal static string Make(HostKind host, string link, string target, Func<string, string> readBack, Action<string> remove, Func<string, string> final, bool allowNetwork = false)
     {
-        var refusal = Refusal(host, link, target, Shell.DriveOf, final);
+        var refusal = Refusal(host, link, target, Shell.DriveOf, final, allowNetwork);
 
         return refusal.Length > 0 ? refusal : Verified(link, target, readBack, remove, Built(link, target, remove));
     }
@@ -165,11 +169,20 @@ public static partial class Junctions
         : $"a sign-in link is made on windows, linux and wsl hosts only; Kimi is refused on a {HostKinds.Word(host)} host until it is measured there (D18 of todo/PLAN_vibe_and_kimi_runtimes.md)";
 
     /// <summary>
-    /// DL6: on a Linux or WSL host, the FILESYSTEM that holds the real path — read from <c>/proc/self/mountinfo</c> — is judged by its type (<see cref="MountLocality"/>); a Windows filesystem is refused wherever it is mounted.
+    /// DL6: on a Linux or WSL host, the FILESYSTEM that holds the real path — read from <c>/proc/self/mountinfo</c> — is judged by its type (<see cref="MountLocality"/>); a Windows filesystem is refused wherever it is mounted,
+    /// and network storage is refused unless <paramref name="allowNetwork"/> (the default-off <c>coai.kimiAllowNetworkSignIn</c>).
     /// Asked of the HOST the launch is for, not of the operating system running the code, so a test that plays a Windows host on any OS never reads a Unix table.
     /// </summary>
-    private static string Mounted(HostKind host, string target, string real) =>
-        host is HostKind.Linux or HostKind.Wsl && real.Length > 0 ? MountLocality.Refusal(target, real, MountInfo, _mountIdentity.Value ?? MountLocality.Identify) : string.Empty;
+    private static string Mounted(HostKind host, string target, string real, bool allowNetwork) =>
+        host is HostKind.Linux or HostKind.Wsl && real.Length > 0 ? MountLocality.Judge(target, real, MountInfo, _mountIdentity.Value ?? MountLocality.Identify, allowNetwork).Refusal : string.Empty;
+
+    /// <summary>
+    /// The one-line warning for a sign-in folder the override ADMITTED on network storage — empty on a local disk, on a host with no mount table, and when nothing can be named (the refusal has said so). The card shows it; the launch carries it.
+    /// </summary>
+    public static string NetworkWarning(HostKind host, string target) =>
+        host is HostKind.Linux or HostKind.Wsl && Directory.Exists(target) && Shell.FinalDirectory(target) is { Length: > 0 } real
+            ? MountLocality.Judge(target, real, MountInfo, _mountIdentity.Value ?? MountLocality.Identify, allowNetwork: true).Warning
+            : string.Empty;
 
     private static string LocalDrive(string target, Func<string, DriveType> driveType) => IsLocal(target, driveType)
         ? string.Empty

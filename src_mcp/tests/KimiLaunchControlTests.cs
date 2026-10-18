@@ -134,6 +134,65 @@ public sealed class KimiLaunchControlTests : IDisposable
         HeldFile.IsHeld(KimiCredentialsLock.PathFor(places.Credentials)).Should().BeFalse("no gate was left held");
     }
 
+    // ---------- DL6: network storage (E6) ----------
+
+    private const string RootExt4 = "25 1 8:1 / / rw - ext4 /dev/sda1 rw\n";
+
+    private const string RootNfs = "25 1 0:50 / / rw - nfs4 srv:/home rw\n";
+
+    /// <summary>One launch on a WSL2 host whose mount table is <paramref name="table"/> — the table is what a person's home would read from <c>/proc/self/mountinfo</c>.</summary>
+    private async Task<(LaunchTurn Turn, FakeKimi Fake, KimiPlaces Places)> OnWsl2WithMountsAsync(string table, bool allowNetworkSignIn)
+    {
+        using var standIn = WindowsStandIn.Begin();
+        using var rooted = Rooted();
+        var places = _person.Places();
+        var fake = new FakeKimi();
+        Junctions.StandInMountInfo(() => table, _ => new MountIdentity.NotAsked());
+        try
+        {
+            var turn = await KimiLaunch.TakeAsync(
+                new KimiHost(HostKind.Wsl, WslGeneration.Wsl2), Request(places), places, fake, TestContext.Current.CancellationToken, allowNetworkSignIn);
+            turn.Dispose();
+
+            return (turn, fake, places);
+        }
+        finally
+        {
+            Junctions.StandInMountInfo(null);
+        }
+    }
+
+    [Fact]
+    public async Task ASignInFolderOnNetworkStorage_IsRefusedByDefault_AndStartsNothing()
+    {
+        var (turn, fake, _) = await OnWsl2WithMountsAsync(RootNfs, allowNetworkSignIn: false);
+
+        turn.Refusal.Should().Contain("your Kimi sign-in folder is on network storage (nfs4);", "a sign-in folder on an nfs mount was admitted").And.Contain("coai.kimiAllowNetworkSignIn");
+        fake.Started.Should().BeEmpty("a refusal starts nothing");
+    }
+
+    [Fact]
+    public async Task WithTheOverride_ASignInFolderOnNetworkStorage_Starts_AndTheLaunchCarriesTheWarning()
+    {
+        var (turn, fake, _) = await OnWsl2WithMountsAsync(RootNfs, allowNetworkSignIn: true);
+
+        turn.Refusal.Should().BeEmpty("the override admits it");
+        turn.Warning.Should().Contain("network storage (nfs4)").And.Contain("coai.kimiAllowNetworkSignIn").And.NotContain("\n");
+        fake.Started.Should().NotBeEmpty("the version was asked: the launch went on");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ALocalSignInFolder_Starts_WithNoWarning_WithOrWithoutTheOverride(bool allow)
+    {
+        var (turn, fake, _) = await OnWsl2WithMountsAsync(RootExt4, allow);
+
+        turn.Refusal.Should().BeEmpty();
+        turn.Warning.Should().BeEmpty("an ext4 home is admitted silently");
+        fake.Started.Should().NotBeEmpty();
+    }
+
     [Fact]
     public async Task AFolderTheKernelCannotName_IsRefusedWithTheKeySentence_AndStartsNothing()
     {

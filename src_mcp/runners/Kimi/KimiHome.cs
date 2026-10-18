@@ -70,7 +70,7 @@ public static class KimiHome
     /// <c>credentials</c>, no <c>config.toml</c>) gets the junction and the config; one that has either is written to by nobody here,
     /// and the validation inside the turn judges it.
     /// </summary>
-    public static string Made(HostKind host, KimiPlaces places, byte[] expectedConfig)
+    public static string Made(HostKind host, KimiPlaces places, byte[] expectedConfig, bool allowNetworkSignIn = false)
     {
         if (OwnedPaths.FirstLink(places.OwnedRoot, places.Home, places.Os, places.Cache) is { Length: > 0 } link)
         {
@@ -83,7 +83,7 @@ public static class KimiHome
             Directory.CreateDirectory(places.Os);
             MakeCache(places);
 
-            return Fresh(places) ? Fill(host, places, expectedConfig) : string.Empty;
+            return Fresh(places) ? Fill(host, places, expectedConfig, allowNetworkSignIn) : string.Empty;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -177,9 +177,9 @@ public static class KimiHome
     private static bool Fresh(KimiPlaces places) =>
         !OwnedPaths.IsLinkIfThere(places.Link) && !Directory.Exists(places.Link) && !File.Exists(places.Config);
 
-    private static string Fill(HostKind host, KimiPlaces places, byte[] expectedConfig)
+    private static string Fill(HostKind host, KimiPlaces places, byte[] expectedConfig, bool allowNetworkSignIn)
     {
-        var linked = Junctions.Make(host, places.Link, places.Credentials);
+        var linked = Junctions.Make(host, places.Link, places.Credentials, allowNetworkSignIn);
         if (linked.Length > 0)
         {
             return $"the Kimi sign-in could not be linked: {linked}";
