@@ -1,5 +1,51 @@
 # Changelog
 
+## Extension 0.80.0 — 2026-10-18
+
+**Added: the model card sets a row's prompt cap.** The Models card has a new box, "Largest prompt it reads, KiB". It
+writes the row's `maxPromptKib`: a whole number from 1 to 4096. Empty is no cap, and there is no default; you choose the
+cap for each row. coai-mcp then leaves that reviewer out of a round whose prompt is larger than the cap, and says why in
+the reply. The box shows for every runtime. It needs coai-mcp 0.60.0: with an older server the cap is not written, and
+the card says that the server does not take it yet.
+## Server 0.60.0 — 2026-10-18
+
+**Added: a reviewer row can say how much it can read.** A vendor row can now carry `maxPromptKib`: the largest first
+prompt its reviewer is sent, in whole KiB, from 1 to 4096. A reviewer whose prompt is larger than its cap is left out of
+the round before the round starts, so it is not launched and not paid for. The reply names the row, the prompt size, the
+cap in bytes and what to do: send the plan in parts, send a smaller change, or send the document in parts. When every
+reviewer is over its cap, `review_plan` and `review_code` refuse before a round starts, and a feature review records the
+stage as skipped. coai sets no cap by default; you set it per row. Any other value is no cap for that row only, and the
+other rows still load. `providers` shows each row's cap, and `--features` lists `maxPromptKib`.
+
+**Fixed: a plan reviewer that did not read the whole plan is one failure everywhere.** A reviewer that answers only
+`PLAN_INCOMPLETE` already counted as not answered in the verdict. But the ledger still said `ok`, and the local
+reviewer's stand-down counted it as a cloud reviewer that had nothing to say. Now the ledger, the live view, the audit
+line and the stand-down all record it as failed, with the tokens it spent.
+
+**Fixed: round and review trees on Windows survive a long tracked path.** `review_code` on a branch that tracks a long
+path failed on Windows with `Could not reset index file to revision 'HEAD'`. coai now gives each git command on a tree it
+makes `-c core.longpaths=true`, on Windows only. It writes no git config. If git still cannot write a path, the message
+names the path, its length, git's reason and the Windows limit, and says to set `COAI_ROUND_WORKTREES` to a shorter
+folder.
+
+## Extension 0.79.0 — 2026-10-17
+
+**Added: the Vibe card says, for each host, what the server does.** The card now tells you what coai-mcp does with Vibe
+on the host it runs on. On a WSL2 host it runs Vibe. On native Linux and on WSL1 it says that Vibe is refused there.
+Before, the card did not say this per host.
+
+## Server 0.59.0 — 2026-10-17
+
+**Added: Mistral Vibe works on a WSL2 host.** On a WSL2 host, coai-mcp now runs Vibe as a reviewer, as a consultant and
+as a question row. Before, this was not possible on WSL2.
+
+**Added: the Vibe sign-in on WSL2 is your own `~/.vibe/.env` file.** coai links this file into the private Vibe home of
+the run. It never copies the file, so your key stays in one place. coai checks the sign-in again at every turn, so a
+file that was removed or changed is seen at the next turn.
+
+**Added: native Linux and WSL1 are refused with a sentence.** On these hosts coai does not run Vibe. The refusal says
+why, in one sentence, and does not start Vibe.
+
 ## Team server 0.13.0 — 2026-10-16
 
 **Added: the server reads the codex quota gauge after each codex job, inside the slot's lease.** It asks

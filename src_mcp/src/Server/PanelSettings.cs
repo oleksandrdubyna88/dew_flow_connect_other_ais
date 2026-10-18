@@ -23,6 +23,15 @@ public sealed record ProviderSettings(string Provider)
     public int TimeoutMinutes { get; init; }
 
     /// <summary>
+    /// The most this row's reviewer is sent in its first prompt (<c>maxPromptKib</c>, whole KiB, 1 to 4096); <see cref="Core.Catalog.PromptCap.None"/>
+    /// is no cap, as it has always been (PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md D1). An OPERATOR's number, written
+    /// after the row was seen to lose the end of a long prompt — never a model capability the product guesses (D2: bytes, not
+    /// tokens). The range, the KiB-to-bytes unit and the inclusive boundary live in the type.
+    /// </summary>
+    /// <remarks>Not <c>maxPromptBytes</c>: <c>CatalogLimits.MaxPromptBytes</c> already means this row's SYSTEM prompt.</remarks>
+    public Core.Catalog.PromptCap PromptCap { get; init; }
+
+    /// <summary>
     /// A CLI row's reasoning effort, lower-cased (PLAN_one_model_catalog.md E2.2) — what it means is the runtime's, per
     /// <c>shared/feature-availability.json</c>: claude's levels are passed as <c>--effort</c>, a codex effort is kept and not
     /// sent while codex is unmeasured, a local row's is sent per call. Empty is none. An api row's effort is <c>Api</c>'s.
@@ -1400,6 +1409,8 @@ public sealed record PanelSettings
                         SystemPrompt = v.SystemPrompt?.Trim() ?? string.Empty,
                         // The extension's rule (`isMinutes`): 1 to a day; anything else is unset, the round's timeout.
                         TimeoutMinutes = v.TimeoutMinutes is { } minutes && minutes is > 0 and <= Core.Catalog.CatalogLimits.MaxTimeoutMinutes ? minutes : 0,
+                        // The same shape: a whole KiB from 1 to 4096; anything else is unset, no cap.
+                        PromptCap = PromptCapOf(v.MaxPromptKib),
                         // The same `effort` member an api row's settings read; what it means is the runtime's.
                         CliEffort = v.Effort?.Trim().ToLowerInvariant() ?? string.Empty,
                     })
@@ -1480,6 +1491,16 @@ public sealed record PanelSettings
         false => DocumentReviews.No,
         null => DocumentReviews.Unspecified,
     };
+
+    /// <summary>
+    /// A row's <c>maxPromptKib</c>, read as a value: a JSON NUMBER that is a whole KiB, handed to <see cref="Core.Catalog.PromptCap.OfKib"/>
+    /// for its range — anything else is no cap. A string, a fraction, a negative or an absent member is no cap, and never costs the
+    /// row's neighbours (see <see cref="VendorDto.MaxPromptKib"/>).
+    /// </summary>
+    private static Core.Catalog.PromptCap PromptCapOf(System.Text.Json.JsonElement? said) =>
+        said is { ValueKind: System.Text.Json.JsonValueKind.Number } number && number.TryGetInt64(out var kib)
+            ? Core.Catalog.PromptCap.OfKib(kib)
+            : Core.Catalog.PromptCap.None;
 
     /// <summary>
     /// Which runtime a configured vendor drives — every one this build knows, not two of them.

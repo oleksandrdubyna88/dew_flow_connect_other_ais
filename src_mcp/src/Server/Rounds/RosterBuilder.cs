@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Catalog;
 using CoaiMcp.Core.Findings;
 using CoaiMcp.Core.Rounds;
 using CoaiMcp.Runners.Reviewers;
@@ -247,7 +248,8 @@ internal sealed class RosterBuilder(
         var ids = CatalogIds(roles);
         var collector = new RosterCollector();
         Assemble(runnable, Items(ids, round, planPrompts), deal, seed,
-            (provider, role, promptId) => AddReviewer(frame, collector, provider, role, promptId), CanCarry);
+            (provider, role, promptId) => AddReviewer(frame, collector, provider, role, promptId),
+            (provider, item) => CanCarry(provider, item.Role) && FitsTheCap(frame, provider, item));
 
         var ordinary = collector.Work(ordinaryDue: ids.Count > 0, frame.Scratch);
         return securityFiles is null ? ordinary : Security(frame.Tiers, frame.Scratch).Append(ordinary, securityFiles, stage, round, securitySources);
@@ -318,7 +320,7 @@ internal sealed class RosterBuilder(
         }
 
         var api = ApiViewOf(provider, runtime);
-        var place = PlaceOf(frame, provider, role, runtime, api);
+        var place = PlaceOf(frame, provider, role, runtime, api, choice);
         if (place is LaunchPlace.At at)
         {
             collector.Add(ReviewerFor(frame, new ReviewerSeat(provider, role, choice, runtime, api, at)));
@@ -351,14 +353,92 @@ internal sealed class RosterBuilder(
     /// snapshot, its citations mapped back through the snapshot's manifest (D6); left out, with the reason, when the round
     /// has none to give it (<see cref="PlaceFor"/>).</para>
     /// </remarks>
-    private LaunchPlace PlaceOf(RosterFrame frame, ProviderSettings provider, string role, IReviewerRuntime runtime, ApiRowView api) =>
+    private LaunchPlace PlaceOf(
+        RosterFrame frame, ProviderSettings provider, string role, IReviewerRuntime runtime, ApiRowView api, PromptChoice choice) =>
         WhyNotCarried(provider, role) is { } why ? new LaunchPlace.Refused(why)
         : api.Refusal.Length > 0 ? new LaunchPlace.Refused(api.Refusal)
+        : WhyOverTheCap(frame, provider, runtime, choice) is { Length: > 0 } over ? new LaunchPlace.Refused(over)
         : PlaceFor(runtime, frame.LaunchDir, frame.HasCheckout, frame.Scratch);
 
     /// <summary>One reviewer the deal reached: its row, its role, its prompt, its runtime, its module view and where it starts.</summary>
     private sealed record ReviewerSeat(
         ProviderSettings Provider, string Role, PromptChoice Choice, IReviewerRuntime Runtime, ApiRowView Api, LaunchPlace.At At);
+
+    /// <summary>A reviewer's first prompt as it is composed, and the row's own instruction that went into it.</summary>
+    private sealed record FirstPromptText(string Prompt, string Instruction);
+
+    /// <summary>
+    /// The text a reviewer's FIRST launch is handed, composed once for everybody who needs it: <see cref="ReviewerFor"/> sends it
+    /// and the prompt cap (<see cref="WhyOverTheCap"/>) counts it — two sizes that must agree are one value (D3 of
+    /// <c>research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md</c>).
+    /// </summary>
+    /// <remarks>
+    /// The row's instruction is read ONCE here, for the body AND for the redaction list: two calls that must agree are one value.
+    /// </remarks>
+    private FirstPromptText FirstPrompt(RosterFrame frame, ProviderSettings provider, IReviewerRuntime runtime, PromptChoice choice)
+    {
+        var material = ReviewerMaterial.For(frame.HasCheckout, runtime, frame.Row.Reads);
+        var instruction = InstructionFor(provider, runtime);
+
+        return new FirstPromptText(
+            _reviewerPrompt.ComposePrompt(choice, frame.Context, material, frame.Row.Answers, frame.FollowUps, instruction), instruction);
+    }
+
+    /// <summary>
+    /// Whether the row's reader can take this item's first prompt — the carrier test the deal asks before it hands the item out. True
+    /// for a row with no cap, and then nothing is composed.
+    /// </summary>
+    /// <remarks>
+    /// The same question <see cref="PlaceOf"/> asks in the leaf (<see cref="WhyOverTheCap"/>), the way <see cref="CanCarry"/> is "one
+    /// rule, asked in two places": dealing first and excluding in the leaf is what cost a custom role its whole round. A row this
+    /// round cannot run at all (no runtime) fits — the leaf already says why it is not used. So does an item whose prompt has
+    /// no text: there is nothing to measure, composing it throws, and the leaf says the role was not asked and why (the
+    /// question <see cref="AddReviewer"/> asks BEFORE the place, kept in that order here).
+    /// </remarks>
+    private bool FitsTheCap(RosterFrame frame, ProviderSettings provider, (string Role, string PromptId) item)
+    {
+        if (!provider.PromptCap.IsSet || _runtimeFor(provider) is not { } runtime)
+        {
+            return true;
+        }
+
+        var choice = ChoiceOf(item.Role, item.PromptId);
+
+        return !_prompts.Has(choice) || WhyOverTheCap(frame, provider, runtime, choice).Length == 0;
+    }
+
+    /// <summary>
+    /// Why this row cannot be sent this prompt — its size, the row's cap and the cure — or empty when it can (D1-D5): the first
+    /// prompt's UTF-8 bytes against <c>maxPromptKib × 1024</c>, the cap inclusive.
+    /// </summary>
+    private string WhyOverTheCap(RosterFrame frame, ProviderSettings provider, IReviewerRuntime runtime, PromptChoice choice)
+    {
+        if (!provider.PromptCap.IsSet)
+        {
+            return string.Empty;
+        }
+
+        var bytes = System.Text.Encoding.UTF8.GetByteCount(FirstPrompt(frame, provider, runtime, choice).Prompt);
+
+        return provider.PromptCap.Admits(bytes) ? string.Empty : OverTheCap(frame.Stage, bytes, provider.PromptCap);
+    }
+
+    /// <summary>The sentence for a reviewer left out because its prompt is over its row's cap: the size, the cap, and what cures it.</summary>
+    private static string OverTheCap(Stage stage, int bytes, PromptCap cap)
+    {
+        var culture = System.Globalization.CultureInfo.InvariantCulture;
+        var cure = stage switch
+        {
+            Stage.PlanReview => "send the plan in parts (one epic per round)",
+            Stage.CodeReview => "send a smaller change",
+            // The document stage's own cure (`DocumentRules` sends a too-large document to "reviewed in parts").
+            Stage.DocumentReview => "send the document in parts",
+            _ => "send less in one round",
+        };
+
+        return $"its prompt is {bytes.ToString("N0", culture)} bytes and this row reads at most {cap.Bytes.ToString("N0", culture)} bytes "
+            + $"(maxPromptKib {cap.Kib}) — {cure}, or raise the row's cap";
+    }
 
     /// <summary>
     /// The reviewer's work: its first turn — the review launch and its repair — with the feature stage's conversation and
@@ -380,10 +460,9 @@ internal sealed class RosterBuilder(
     /// </remarks>
     private ReviewerWork ReviewerFor(RosterFrame frame, ReviewerSeat seat)
     {
-        var material = ReviewerMaterial.For(frame.HasCheckout, seat.Runtime, frame.Row.Reads);
-        // Once, for the body AND the redaction list below: two calls that must agree are one value.
-        var instruction = InstructionFor(seat.Provider, seat.Runtime);
-        var prompt = _reviewerPrompt.ComposePrompt(seat.Choice, frame.Context, material, frame.Row.Answers, frame.FollowUps, instruction);
+        // The body AND the instruction for the redaction list below, from the ONE place that composes them — which is also
+        // what a row's prompt cap measures, so the size it checks is the size that is sent.
+        var (prompt, instruction) = FirstPrompt(frame, seat.Provider, seat.Runtime, seat.Choice);
         var repairBase = _reviewerPrompt.ComposePrompt(seat.Choice, frame.Context, frame.Row.Reads, frame.Row.Answers, frame.FollowUps);
         var launch = SettingsFor(seat.Provider, seat.Runtime, seat.Api, frame.Tiers, frame.Scratch)
             with
@@ -531,7 +610,7 @@ internal sealed class RosterBuilder(
         bool deal,
         int seed,
         Action<ProviderSettings, string, string> add,
-        Func<ProviderSettings, string, bool> canCarry)
+        Func<ProviderSettings, (string Role, string PromptId), bool> canCarry)
     {
         if (!deal)
         {
@@ -545,7 +624,7 @@ internal sealed class RosterBuilder(
         // Dealing before asking cost a custom role its whole round: the hand fell to the Team
         // server, the leaf that builds a launch excluded it there, and the local vendor sitting
         // beside it was never offered the work. (gemini, story B2's second code round.)
-        foreach (var group in items.GroupBy(i => Carriers(runnable, i.Role, canCarry), StringComparer.Ordinal))
+        foreach (var group in items.GroupBy(i => Carriers(runnable, i, canCarry), StringComparer.Ordinal))
         {
             Hand(runnable, [.. group], group.Key.Split('\0', StringSplitOptions.RemoveEmptyEntries), seed, add);
         }
@@ -634,16 +713,20 @@ internal sealed class RosterBuilder(
         return _remote.RolesOn(provider.BaseUrl).WhyNot(role, known?.Name ?? role, known?.BuiltIn == true);
     }
 
-    /// <summary>The vendors that can carry this role, as one key so items group by capability.</summary>
+    /// <summary>The vendors that can carry this item (a role and the prompt dealt for it), as one key so items group by capability.</summary>
     /// <remarks>
+    /// <para>By ITEM, not by role, since a row's prompt cap (<see cref="FitsTheCap"/>) depends on the prompt the item composes —
+    /// two lenses of one role can fit different rows.</para>
     /// Joined on NUL because a provider name is a person's own word and may hold any punctuation a
     /// separator could have been — a space, a comma, a pipe, even a line break. Written as the
     /// ESCAPE: an edit on this branch put the BYTE itself into the source, where it is invisible,
     /// makes `grep` report the file as binary, and cannot be reviewed by reading it.
     /// </remarks>
     private static string Carriers(
-        IReadOnlyList<ProviderSettings> runnable, string role, Func<ProviderSettings, string, bool> canCarry) =>
-        string.Join('\0', runnable.Where(p => canCarry(p, role)).Select(p => p.Provider));
+        IReadOnlyList<ProviderSettings> runnable,
+        (string Role, string PromptId) item,
+        Func<ProviderSettings, (string Role, string PromptId), bool> canCarry) =>
+        string.Join('\0', runnable.Where(p => canCarry(p, item)).Select(p => p.Provider));
 
     /// <summary>
     /// The roles a code round runs, once the repository has been asked whether it wrote any rules.

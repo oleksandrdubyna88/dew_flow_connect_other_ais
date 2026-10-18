@@ -48,6 +48,13 @@ public sealed record ProviderStatus(
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public SurvivorMarkerReport? SurvivorMarker { get; init; }
+
+    /// <summary>
+    /// The row's prompt cap in whole KiB, when it has one (PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md D7) — how a caller
+    /// learns it BEFORE it sends a round. Absent when unset, so every row without a cap reads exactly as it did.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? MaxPromptKib { get; init; }
 }
 
 /// <summary>A standing Kimi survivor marker, as the providers answer reports it for the card's button: its full path and the pids it names (empty when it names none).</summary>

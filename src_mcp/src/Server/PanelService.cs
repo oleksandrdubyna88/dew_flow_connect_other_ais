@@ -295,6 +295,7 @@ public sealed class PanelService
             Fast = FastReportOf(provider),
             Warning = CardWarningOf(health, RuntimeFor(provider)),
             SurvivorMarker = SurvivorMarkerOf(RuntimeFor(provider)),
+            MaxPromptKib = provider.PromptCap.IsSet ? provider.PromptCap.Kib : null,
         };
     }
 

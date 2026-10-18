@@ -1358,6 +1358,34 @@ flowchart LR
     srv -->|a reader| empty[answers as for an empty store, makes nothing]
 ```
 
+### A row's prompt cap crosses by capability, and the cap is decided on the server (2026-10-17, `research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md`)
+
+One optional field, `maxPromptKib` (whole KiB, 1 to 4096; anything else is no cap), joins a `coai.vendors` row. It
+crosses the container boundary the way `timeoutMinutes` does: the model card's number input writes it into the row,
+and `vendorsWire.rowOnTheWire` puts it into `COAI_VENDORS` only for a binary whose `--features` lists `maxPromptKib`
+(an older binary would skip the member and launch the over-cap reviewer while the card said the row was capped; the
+card names that skew instead). coai-mcp reads it into `ProviderSettings.PromptCap` (`Core.Catalog.PromptCap`, which owns
+the range, the KiB-to-bytes unit and the inclusive boundary) and reports it back on `providers`, so a caller learns a cap
+before it sends a round. The decision itself is the server's alone — the extension never sees a prompt: `RosterBuilder`
+measures each reviewer's composed first prompt and leaves an over-cap reviewer out of the round, with the size, the cap
+and the cure in the reply. Nothing else crosses: no new tool, mode or table. The same plan moved the plan-stage
+`PLAN_INCOMPLETE` fold into the scheduler (`BoundedScheduler.RunAllAsync`'s `settle`), which is inside coai-mcp only.
+
+```mermaid
+sequenceDiagram
+    participant Card as Model card (extension)
+    participant Ext as Extension (vendorsWire)
+    participant File as settings.json (COAI_VENDORS)
+    participant Mcp as coai-mcp
+    Ext->>Mcp: --features
+    Mcp-->>Ext: [..., maxPromptKib]
+    Card->>Ext: maxPromptKib typed on the row
+    Ext->>File: row + maxPromptKib (only when listed)
+    Mcp->>File: read on start and on change (PromptCapOf)
+    Mcp->>Mcp: RosterBuilder: first prompt bytes vs cap; over the cap = left out, said in the reply
+    Mcp-->>Ext: providers: maxPromptKib on a capped row
+```
+
 ## How the Team server is deployed (2026-09-06)
 
 `coai.remsoft.dev` runs as a **systemd unit on the host**, not as a container, and the reason is the

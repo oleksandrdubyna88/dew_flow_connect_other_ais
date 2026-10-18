@@ -11626,6 +11626,21 @@ sequenceDiagram
 `vendorsEnv` writes a CLI row's `timeoutMinutes` when the binary lists `timeoutMinutes` (`FEATURES.timeoutMinutes`); an
 api row carries none — it keeps `reviewMinutes` (`timeoutOnTheWire.test.ts`).
 
+## A row's prompt cap on its Models card (2026-10-17, `research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md` S4)
+
+One number input beside the time limit — *Largest prompt it reads, KiB*, empty is no cap — writes `maxPromptKib` through the
+panel's one vendor write (a number box posts a number; an emptied box posts 0, which reads back as no cap). It is a setting, not
+an action: no new button. `promptCap.ts` holds `MAX_PROMPT_KIB` (4096, the number `CatalogLimits.MaxPromptKib` pins in
+coai-mcp) and `isKib`; it is a module of its own because `catalogRules.ts` imports `vendors.ts`, which imports
+`catalogFields.ts` — a limit in `catalogRules.ts` would make a cycle. `catalogFields` keeps the field on EVERY runtime (the server
+leaves an over-cap reviewer out whatever the row runs on). `vendorsEnv` writes it only to a binary that lists
+`maxPromptKib` (`FEATURES.maxPromptKib`; an older one skips the member and would launch the reviewer anyway), and a card whose
+binary lacks it says so through `skew` (`IGNORED`). Tests: `aRowsPromptCapIsSetOnTheModelCard.test.ts` — the card page RUN and read
+as a tree, the typed value through `settingMessageFrom` -> `vendorFieldWrite` -> `vendorsFrom` and drawn again, out-of-range values
+read back as unset, the wire with and without the feature (api row included), the skew sentence. Break-its, each observed red
+and restored: the field written to every binary, and the input dropped from the card. No real-editor (`test:host`) scenario: no
+command or contribution was added; the page is run by `runPanel`.
+
 ## A CLI row's effort crosses only to a binary that takes it (2026-10-05, PLAN_one_model_catalog.md E2.2)
 
 `vendorsEnv` writes a CLI row's `effort` when the binary lists `cliEffort` (`FEATURES.cliEffort`); what it means is
