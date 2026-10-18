@@ -193,6 +193,52 @@ public sealed class KimiLaunchControlTests : IDisposable
         fake.Started.Should().NotBeEmpty();
     }
 
+    // ---------- the review of 2026-10-18 (B, C): the override is judged on EVERY launch, not only when the home is made ----------
+
+    [Fact]
+    public async Task AHomeMadeUnderTheOverride_IsRefusedByTheNextLaunchWithoutIt_BeforeAnythingStarts()
+    {
+        var (first, fakeOn, _) = await OnWsl2WithMountsAsync(RootNfs, allowNetworkSignIn: true);
+        first.Refusal.Should().BeEmpty("the override admitted the network home: the first launch made the home");
+        fakeOn.Started.Should().NotBeEmpty();
+
+        var (second, fakeOff, places) = await OnWsl2WithMountsAsync(RootNfs, allowNetworkSignIn: false);
+
+        second.Refusal.Should().Contain("your Kimi sign-in folder is on network storage (nfs4);", "turning the override OFF must re-judge a home that already exists").And.Contain("coai.kimiAllowNetworkSignIn");
+        fakeOff.Started.Should().BeEmpty("not even --version is asked on a refused home");
+        VibeHomeTurns.Held(places.OwnedRoot).Should().BeFalse("nothing was taken before the refusal");
+    }
+
+    [Fact]
+    public async Task ASignInFolderThatMovedFromALocalMountToANetworkOne_IsRefusedByTheNextLaunch_BeforeAnythingStarts()
+    {
+        var (first, _, _) = await OnWsl2WithMountsAsync(RootExt4, allowNetworkSignIn: false);
+        first.Refusal.Should().BeEmpty("a local home starts");
+
+        var (second, fake, _) = await OnWsl2WithMountsAsync(RootNfs, allowNetworkSignIn: false);
+
+        second.Refusal.Should().Contain("your Kimi sign-in folder is on network storage (nfs4);", "the mount under an existing home changed between two launches");
+        fake.Started.Should().BeEmpty("nothing starts on a home that is now on a network mount");
+    }
+
+    [Theory]
+    [InlineData("/net/srv/home/.kimi-code")]
+    [InlineData("/misc/srv/home/.kimi-code")]
+    public async Task AnAutomountSpelledHome_IsRefusedByDefault_AndPastTheSpellingCheckWithTheOverride(string home)
+    {
+        using var standIn = WindowsStandIn.Begin();
+        using var rooted = Rooted();
+        var places = _person.Places() with { PersonsHome = home };
+        var host = new KimiHost(HostKind.Wsl, WslGeneration.Wsl2);
+        var request = Request(places);
+
+        var off = await KimiLaunch.TakeAsync(host, request, places, new FakeKimi(), TestContext.Current.CancellationToken, allowNetworkSignIn: false);
+        var on = await KimiLaunch.TakeAsync(host, request, places, new FakeKimi(), TestContext.Current.CancellationToken, allowNetworkSignIn: true);
+
+        off.Refusal.Should().Contain("is not on a local drive", "D19 refuses the automount spelling by default");
+        on.Refusal.Should().NotContain("is not on a local drive", "the override admits network storage, and /net/ and /misc/ are how a Unix host spells it; the mount table judges the rest");
+    }
+
     [Fact]
     public async Task AFolderTheKernelCannotName_IsRefusedWithTheKeySentence_AndStartsNothing()
     {

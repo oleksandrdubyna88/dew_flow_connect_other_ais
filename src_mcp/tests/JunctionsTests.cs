@@ -634,4 +634,16 @@ public sealed class JunctionsTests : IDisposable
 
         Junctions.IsLocal(path, _ => DriveType.Fixed).Should().Be(local);
     }
+
+    /// <summary>C of the review of 2026-10-18: the D19 SPELLING check and the network override say one thing. With <c>coai.kimiAllowNetworkSignIn</c> on, a Linux or WSL host also admits the automount spellings a network home has; a Windows host never does (UNC stays refused), and a bare '//' share never is one.</summary>
+    [Theory]
+    [InlineData(HostKind.Wsl, "/net/server/share/k", true, true)]
+    [InlineData(HostKind.Linux, "/misc/x", true, true)]
+    [InlineData(HostKind.Wsl, "/Network/x", true, true)]
+    [InlineData(HostKind.Wsl, "/net/server/share/k", false, false)]
+    [InlineData(HostKind.Windows, "/net/server/share/k", true, false)]
+    [InlineData(HostKind.Wsl, "//server/share/k", true, false)]
+    [InlineData(HostKind.Wsl, "relative/x", true, false)]
+    public void TheSpellingCheck_FollowsTheOverride_OnALinuxOrWslHostOnly(HostKind host, string path, bool allow, bool local) =>
+        Junctions.IsLocalSpelling(host, path, _ => DriveType.Fixed, allow).Should().Be(local);
 }

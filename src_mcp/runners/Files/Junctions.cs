@@ -78,13 +78,35 @@ public static partial class Junctions
         return new Func<string>[]
         {
             () => HostAdmitted(host),
-            () => LocalDrive(target, driveType),
+            () => LocalDrive(host, target, driveType, allowNetwork),
             () => Length(target),
             () => Missing(target),
             () => Chained(target),
-            () => Resolved(target, driveType, real.Value),
+            () => Resolved(host, target, driveType, real.Value, allowNetwork),
             () => Mounted(host, target, real.Value, allowNetwork),
             () => Taken(link),
+        }
+        .Select(check => check())
+        .FirstOrDefault(refusal => refusal.Length > 0) ?? string.Empty;
+    }
+
+    /// <summary>
+    /// B of the review of 2026-10-18: where the sign-in folder IS, judged alone — its spelling, where its ancestors really lead, and the filesystem that holds it — and nothing about making a link. The launch control asks it on
+    /// EVERY launch, before any process starts: the home is made once, but the override may be switched off, or a mount may change under the same folder, and a home that exists is not a home that was judged today. The very
+    /// checks <see cref="Refusal(HostKind, string, string)"/> runs, in the same order, so the two cannot say different things.
+    /// </summary>
+    public static string Locality(HostKind host, string target, bool allowNetwork) => Locality(host, target, Shell.DriveOf, Shell.FinalDirectory, allowNetwork);
+
+    /// <summary>The seams of the drive type and the final path, so a test can make a folder look like it resolves off the local drives.</summary>
+    internal static string Locality(HostKind host, string target, Func<string, DriveType> driveType, Func<string, string> final, bool allowNetwork)
+    {
+        var real = new Lazy<string>(() => final(target));
+
+        return new Func<string>[]
+        {
+            () => LocalDrive(host, target, driveType, allowNetwork),
+            () => Resolved(host, target, driveType, real.Value, allowNetwork),
+            () => Mounted(host, target, real.Value, allowNetwork),
         }
         .Select(check => check())
         .FirstOrDefault(refusal => refusal.Length > 0) ?? string.Empty;
@@ -113,6 +135,17 @@ public static partial class Junctions
         !target.StartsWith(@"\\", StringComparison.Ordinal)
         && DriveRooted().IsMatch(target)
         && IsLocalDrive(driveType(target[..3]));
+
+    /// <summary>
+    /// The SPELLING rule with the network override folded in (C of the review of 2026-10-18): <see cref="IsLocal(string, Func{string, DriveType})"/>, and — on a Linux or WSL host with <c>coai.kimiAllowNetworkSignIn</c> on — also the
+    /// automount spellings (<c>/net/</c>, <c>/misc/</c>, <c>/Network/</c>) a network home has, so the override is not undone by a spelling check that runs first. A Windows host never gets the extra: a UNC home stays refused whatever the setting says.
+    /// The mount table (<see cref="MountLocality"/>) still judges the filesystem itself.
+    /// </summary>
+    internal static bool IsLocalSpelling(HostKind host, string target, Func<string, DriveType> driveType, bool allowNetwork) =>
+        IsLocal(target, driveType) || (allowNetwork && host is HostKind.Linux or HostKind.Wsl && NetworkFolders.Any(folder => target.StartsWith(folder, StringComparison.Ordinal)));
+
+    /// <summary><see cref="IsLocalSpelling(HostKind, string, Func{string, DriveType}, bool)"/> as the launch control asks it, before anything is read.</summary>
+    internal static bool IsLocalSpelling(HostKind host, string target, bool allowNetwork) => IsLocalSpelling(host, target, Shell.DriveOf, allowNetwork);
 
     private static bool IsLocalDrive(DriveType type) => type is not (DriveType.Network or DriveType.Unknown or DriveType.NoRootDirectory);
 
@@ -184,7 +217,7 @@ public static partial class Junctions
             ? MountLocality.Judge(target, real, MountInfo, _mountIdentity.Value ?? MountLocality.Identify, allowNetwork: true).Warning
             : string.Empty;
 
-    private static string LocalDrive(string target, Func<string, DriveType> driveType) => IsLocal(target, driveType)
+    private static string LocalDrive(HostKind host, string target, Func<string, DriveType> driveType, bool allowNetwork) => IsLocalSpelling(host, target, driveType, allowNetwork)
         ? string.Empty
         : $"{target} is not a local drive path, and a junction cannot point at a network or roaming location — coai refuses to link the Kimi sign-in from there (D19)";
 
@@ -218,10 +251,10 @@ public static partial class Junctions
     /// <see cref="LocalDrive"/>'s look at the spelling and would be listed on every sweep. Empty answer: the platform cannot name it,
     /// so coai cannot tell where the sign-in is (E4.2 decision 13).
     /// </summary>
-    private static string Resolved(string target, Func<string, DriveType> driveType, string resolved) =>
+    private static string Resolved(HostKind host, string target, Func<string, DriveType> driveType, string resolved, bool allowNetwork) =>
         resolved.Length == 0
             ? $"{target} cannot be named by its handle on this host, so coai cannot tell where the Kimi sign-in really is — refused (D19)"
-            : IsLocal(resolved, driveType)
+            : IsLocalSpelling(host, resolved, driveType, allowNetwork)
                 ? string.Empty
                 : $"{target} resolves to {resolved}, which is not a local drive path — a link on the way to the Kimi sign-in points at a network or roaming location, and coai refuses to link the sign-in from there (D19)";
 

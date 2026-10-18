@@ -190,10 +190,11 @@ public static class KimiLaunch
 
     /// <summary>
     /// The person's home must be on a local drive, judged by its SPELLING before anything is read or opened: a UNC or mapped-drive home would
-    /// be connected to (NTLM, or the SMB timeout) by the very first read of its config, before `Junctions` refused it.
+    /// be connected to (NTLM, or the SMB timeout) by the very first read of its config, before `Junctions` refused it. With the network override on, a Linux or WSL host also admits the automount spellings
+    /// (<see cref="Junctions.IsLocalSpelling(HostKind, string, bool)"/>) — the same decision the link's own checks make, so the two cannot disagree.
     /// </summary>
-    private static string LocalHome(KimiPlaces places) =>
-        Junctions.IsLocal(places.Credentials)
+    private static string LocalHome(KimiHost host, KimiPlaces places, bool allowNetworkSignIn) =>
+        Junctions.IsLocalSpelling(host.Kind, places.Credentials, allowNetworkSignIn)
             ? string.Empty
             : $"the Kimi sign-in folder '{places.Credentials}' is not on a local drive — coai reads and links the sign-in from a local drive only, and never connects out to a network or roaming location (D19)";
 
@@ -204,7 +205,7 @@ public static class KimiLaunch
             () => HostRefusal(host.Kind, places.Executable, host.Wsl),
             PidfdLayer.Refusal,
             () => places.ToolsRefusal,
-            () => LocalHome(places),
+            () => LocalHome(host, places, allowNetworkSignIn),
             () => ModelRefusal(ModelOf(request)),
             () => KimiEnvironment.Refusal(request, places));
         if (first.Length > 0)
@@ -223,6 +224,13 @@ public static class KimiLaunch
         if (!Directory.Exists(places.Credentials))
         {
             return Prepared.Refuse($"not signed in to Kimi Code — {places.PersonsHome} has no credentials folder; run `kimi login` in a terminal and try again");
+        }
+
+        // B of the review of 2026-10-18: where the folder IS is judged on EVERY launch, not only when the home is made — the override may have been switched off, or a mount may have changed under the same folder.
+        var locality = Junctions.Locality(host.Kind, places.Credentials, allowNetworkSignIn);
+        if (locality.Length > 0)
+        {
+            return Prepared.Refuse(locality);
         }
 
         var expected = ExpectedConfig(model, places, slot);
