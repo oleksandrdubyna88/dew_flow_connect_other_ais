@@ -85,7 +85,8 @@ public sealed class RoundsPerPercentServedTests
 
         var acme = answer.Gauges.Should().ContainSingle().Subject;
         (acme.Vendor, acme.LimitId, acme.WindowMins, acme.Intervals, acme.Unavailable).Should().Be(("acme", "acme", 10080L, 2, string.Empty));
-        acme.RoundsPerPercent.Should().BeApproximately(5.0 / 3, 1e-9, "two rounds over 1 %, then one over 1 % — weighted by rounds, (2 × 2 + 1 × 1) / 3");
+        // Story 6.2b (owner 2026-10-16): pooled, (2 + 1) rounds over (1 + 1) %. This used to expect the rounds-weighted mean, 5 / 3.
+        acme.RoundsPerPercent.Should().BeApproximately(3.0 / 2, 1e-9, "two rounds over 1 %, then one over 1 % — pooled, (2 + 1) / (1 + 1)");
     }
 
     [Fact]

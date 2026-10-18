@@ -11,7 +11,7 @@
 > 2026-10-11 on `feat/round-counter-e5-server-counts` — 5.1 (`/api/usage` counts rounds over several windows from one
 > scan), 5.2 (the Team server tab shows them; an older server reads *count unavailable*), the plan round's seam leg,
 > 5.3b (the stated reset read locally by the one moved parser, shown, and said by the catalog and a queued job's
-> status) and 5.3c (a stated reset is never waited out locally) are implemented and through epic 5's code round; 5.4
+> status) and 5.3c (a stated reset beyond the reviewer's remaining budget is never waited out locally) are implemented and through epic 5's code round; 5.4
 > (release and the live count) waits for the deploy the owner approved for about 2026-10-14 08:00 UTC; E6 in progress
 > 2026-10-12 on `feat/round-counter-e6-vendor-gauge` — 6.1a (the Team server captures the codex gauge inside the
 > slot's lease, with the containment the epic-6 risk consultation fixed) is implemented, 6.1b deferred, 6.2 (the gauge
@@ -85,9 +85,13 @@ is the one question the data cannot settle — the counter has to make it settle
 5. A withdrawn launch is recorded as withdrawn (and an abandoned or backstopped one as such), with its usage *not
    captured* rather than 0; cached and reasoning tokens reach the server ledger.
 6. The server does not start a launch its caller can no longer wait for, and says so in a form the client reads
-   without matching a sentence.
-7. A stated reset (`Resets in 110h25m`) parks the slot until then on the SERVER; locally it is never waited out, and
-   shown (narrowed by E5's plan round, 2026-10-11 — see *What E5's plan round decided*).
+   without matching a sentence. **Accepted exception (story 4.3):** the server anchors the budget at receipt and
+   subtracts a fixed margin (`Coai:DeadlineSafetyMarginSeconds`; a job is ended at claim only when less than
+   `Coai:MinStartSeconds` is left), so a request that spent longer in transit than the margin can still be claimed
+   after its caller gave up. The caller's DELETE ends it when the caller can send one.
+7. A stated reset (`Resets in 110h25m`) parks the slot until then on the SERVER. Locally, a stated reset BEYOND the
+   reviewer's remaining budget is never waited out (one launch, the refusal shown); a short stated reset inside the
+   budget is still waited out (narrowed by E5's plan round, 2026-10-11 — see *What E5's plan round decided*).
 
 ## Out of scope — said so it is not read as forgotten
 
@@ -373,7 +377,7 @@ Answers the operator's question for this machine's work from the whole history, 
   Live: one round through the Team server → that vendor's `rounds` +1 exactly, its launches as made.
   `module_team_server.md`, `module_server.md`, `module_extension.md`, `module_runners.md`.
 - **What E5's plan round decided (2026-10-11, codex, `proceed`)** — binding on the build:
-  - **5.3c is built, narrowed: a stated reset is never waited out locally.** The ladder
+  - **5.3c is built, narrowed: a stated reset beyond the reviewer's remaining budget is never waited out locally.** The ladder
     (`BoundedScheduler.LadderAsync`) asks the moved `CooldownParser` for a STATED reset in the refusal; one that lies
     beyond what is left of the reviewer's own budget makes the refusal hopeless (no retry), as a spent daily allowance
     is today. Measured basis: agy's verbatim *"Individual quota reached … Resets in 88h49m9s"* matches none of
@@ -381,7 +385,8 @@ Answers the operator's question for this machine's work from the whole history, 
     reset inside the budget is still waited out. **Not built: a local park persisted across rounds** — a local CLI's
     account can change under it (a re-login), a parked row would then refuse a working account, and what a park saves
     is one refusal launch per round (seconds, no tokens). What-must-be-true item 7 therefore reads: *parked on the
-    SERVER; locally never waited out, and shown.*
+    SERVER; locally a stated reset beyond the reviewer's remaining budget is never waited out (one launch, the refusal
+    shown), a short one inside the budget still is, and it is shown.*
   - **A pre-release live contract check of the new `/api/usage` fields** (the round's one finding): a new leg of
     `npm run test:seam` starts the REAL server built from the tree over a seeded ledger, asks
     `/api/usage?windows=5h,24h,week` (and `scope=company`), and reads the answer through the extension's OWN parser
@@ -516,8 +521,9 @@ E1 → E2 → E3 → E4 → E5 → E6, each from the previous epic's commit.
 
 | Surface | Projected size | Who retires it | Interrupted |
 |---|---|---|---|
-| Server `usage.jsonl`, wider lines | ~4 100 lines/month today; ~+200 bytes per line → ≈ +0.8 MB/month on ≈ 1.1 MB/month | kept forever, as decided in story 2.4 of PLAN_team_server; the deferred reader plan reopens at ≈ 50 000 lines (≈ 12 months at today's rate) | append-only, one line per terminal job (budget refusals included); nothing in flight |
-| Local `usage.jsonl`, wider lines and one line per launch | ~9 000 lines/month on Windows, + a few % for repair / follow-up lines; ≈ +2 MB/month; the counter reads only the last 7 days of it | the existing per-provider "forget" mark; otherwise kept | same |
+| Server `usage.jsonl`, wider lines | ~4 100 lines/month today; ~+200 bytes per line → ≈ +0.8 MB/month on ≈ 1.1 MB/month | kept forever, as decided in story 2.4 of PLAN_team_server; the deferred reader plan reopens at ≈ 50 000 lines (≈ 12 months at today's rate) | append-only, one line per terminal job (budget refusals included); nothing in flight. A malformed or torn line is skipped and COUNTED, the rest still read (`UsageReader.Parse` returns null on `JsonException`; the admin's page shows `unreadableLines`) — tested: `ATornLastLineIsCountedRatherThanThrown`, `ATornLineIsReportedToAnAdminAndToNobodyElse` |
+| Local `usage.jsonl`, wider lines and one line per launch | ~9 000 lines/month on Windows, + a few % for repair / follow-up lines; ≈ +2 MB/month; the counter reads only the last 7 days of it | the existing per-provider "forget" mark; otherwise kept | same. Every reader skips a malformed line and goes on: the extension's `parseUsageLine` (`usage.ts:140`, behind `parseUsage` and the tail read `readTailSince`; tested — `usage.test.ts`, `ledgerTail.test.ts` torn at a chunk edge and at the end) and, for `chat-usage.jsonl`, `parseChatUsageLine` (`chatUsage.test.ts`). No C# code reads this file: `--round-counts` never opens it |
+| Extension `probe-usage.jsonl` (story 3.3, `probeUsageFile.ts`, written through `jsonlLedger.appendLine`) | one line (~0.3 KB, estimated) per billed Claude probe request: up to 4 candidates (`CLAUDE_CANDIDATES`) per probe, a probe at most weekly (`PROBE_GOOD_FOR_MS`) or when the CLI version changes — tens of lines a month, a few KB; more only if probes fail and retry | kept, like `chat-usage.jsonl` (nothing retires it; that ledger's ruling of 2026-09-10 is "keep it for ever"); the person may delete the file | `appendLine` never throws: a failed write is logged with `console.error` and the line is lost, no retry; a host killed mid-append leaves a torn tail that the next append fuses onto (the extension does not repair it). A request that did not finish is written as *usage not captured*, never 0/0. Read by the same skip-and-go-on `parseUsageLine`; no test feeds the probe file itself a malformed line — the shared parser's tests cover it |
 | `rounds.round_key` column, `reviewers(round_id)` index | 16 bytes per round (~1 500 rounds/month) and an index the size of `reviewers` (~8 000 rows today) | the rounds they belong to | written in the round's own insert |
 | Slot `state.json` gauge snapshot | one object per slot, overwritten | bounded by slot count | last write wins; the existing atomic write |
 | 6.1's app-server read, if 1.1 picks it | one short process per job per slot, inside the lease — lengthens the lease by its run time (measured in 1.1) | ends with the job | killed with the lease; a reading that did not arrive is *no reading*, never 0 % |
@@ -620,7 +626,7 @@ needs. Story 2.1 shipped 2026-10-10 on `feat/round-counter-e2-local-counter` —
 | 3.3 (the extension's probe) | — (the row above left it open) | **(b), on the consultation of 2026-10-11** (`866dbd5f`): `probeUsageFile.ts` — `recordingRun` wraps the probe's `run` at the LAUNCH boundary, so every request is a line before the probe's own merge logic sees it, failures included; `probe-usage.jsonl`, `UsageEntry`-shaped, kind `probe`, provider `claude`, the candidate as the model, Claude's own usage (through `claudeAdapter.classify`, cache reads and writes in the input as for a chat turn) and its billed `total_cost_usd`; a run that did not finish (`capture`'s -1) is *usage not captured*, never 0/0. The Spending tab (`PanelProvider.readUsage`) and the Rounds block (`roundsLoader`'s new `besidePaths`) read it beside `usage.jsonl`; `DATA_TO_MOVE` and `shared/data-inventory.json` carry it. `USAGE_NOT_CAPTURED` is exported from `roundsLog.ts` rather than spelled twice. | An older build never reads the new file, so it UNDER-counts probes (as today) and never misreads one as a chat — the consultation's one caveat, accepted: isolation prevents misclassification, not the undercount of a build that predates it. |
 | 3.3 | vendor reasons kept whole in the ledger and the log | `ReviewerSummaryFactory.DescribeWhole` — the vendor's line uncut to `VendorReason.SafetyCap` (4 000) — for the review ledger line, `RoundAudit`'s FAILED warning, and also the question row's and the consultation's ledger outcome (the same `Describe` road); `ReviewerExecutor.TailOf` keeps one stderr line longer than its 400 budget whole to the cap. **And redacted** (`Redaction.SafeText` at the cap): the question fan-out's own fixture showed a CLI's `Authorization: Bearer …` line reaching `usage.jsonl` unredacted through the old 160-character cut, though the record had lost it — found by this story's RED tests, closed with them. Display (`Describe`, notices, cells) unchanged. Not changed: `ReviewerExecutor.Complaint`'s 240-character cap inside an empty answer's `Unparseable.Reason` (one string shared by the summary and the ledger). | Keeping a vendor's stderr whole must not widen what a secret on it can reach; the redactor is the one every record already passes. |
 | 3.3 | (not in the plan) | **A repair that exits non-zero after billing is counted once.** `AfterTheRepair` added the repair's launch usage to `EarlierLaunches` while the `NonZeroExit` carried the same usage as its own — counted twice in the turn, the line and the round total (`ARepairThatExitsNonZero_IsBilledOnce`, RED at 1400 for 1200). | Found because the split lines could not add up to the double-counted sum; it changes a round total only in that edge, downward to the truth. |
-| 3.3 | closes 1.1's census | Closed: rows 1 (repair, follow-up, ladder), 7, 10 (follow-up, requeue). **Still open:** row 8 (above), rows 2/4 (a consultation's / question row's continued turn is still one line per turn), row 5 by hand (`--ask-api` from a terminal writes nothing), row 9 (a chat turn whose row was deleted mid-turn), row 10's host stop and infrastructure throw (story 3.2's). | Outside the brief's rows. |
+| 3.3 | closes 1.1's census | Closed: rows 1 (repair, follow-up, ladder), 7, 10 (follow-up, requeue). **Closed since:** row 8 (the extension's Claude probe — the *3.3 (the extension's probe)* row above, `probe-usage.jsonl`) and row 10's host stop (story 3.2: the thrown cancellation writes its one line). **Still open:** rows 2/4 (a consultation's / question row's continued turn is still one line per turn), row 5 by hand (`--ask-api` from a terminal writes nothing), row 9 (a chat turn whose row was deleted mid-turn), row 10's infrastructure throw (the broad `catch (Exception)` in `JobRunner.RunAsync` ends the job `NotStarted` and writes no line; read again 2026-10-16). | Outside the brief's rows. |
 | 3.3 (tests) | five named tests | `EveryPaidLaunchIsWrittenTests` (12), `EveryServerLaunchIsWrittenTests` (4), `ProbeApiModeTests` (+2), `SecurityAnswerLimitCharacterizationTests` (+1), `QuestionFanOutTests` (+1), `ConsultScenarioTests` (+1), `usagePricing.test.ts` / `roundsBlock.test.ts` / `helpCoverage.test.ts` (+1 each); five existing tests that pinned the folded line were updated to one line per launch with the same sums — listed in [module_tests.md](../research/module_tests.md). | — |
 | 3.4 | trailing, defaulted `UsageEntry` fields `cli`, `cliVersion`, `effort`/`effortFrom`, `tier`/`tierFrom`; server lines `job` and `slot` | The ten words as **eight** fields (`cli`, `cliVersion`, `effort`, `effortFrom`, `tier`, `tierFrom`, `job`, `slot`) at the END of `UsageEntry`, after 3.3's `turn`/`attempt` (the record grew since `:61`), mirrored in `UsageEntryDto`, `UsageLine` (`RanWith`, `Job`, `Slot`) and the extension's parser (`ranWithFields`); an old line reads `LaunchOptions.None` / absent (`AnOldLedgerLine_StillReads_WhatItRanWith`, `TheParser_KeepsWhatTheLaunchRanWith`). One record for the six launch fields both halves write — `LaunchOptions` in `src_mcp/runners/Reviewers/LaunchOptions.cs` — and one place it becomes columns (`UsageEntry.RanWith`). `cli` is the RUNTIME in the catalog's words (`codex`, `claude`, `antigravity`, `local`, `api`, `remote`), not the executable's name. | The runtime name is what every other surface calls the CLI; an executable name (`agy`, an npm shim path) differs per machine. |
 | 3.4 | the source vocabulary: the brief's `row`, `ignored`, `dropped`, `cli-config`, `` | **Six answers**: those five and **`server`** — a value that was sent and that the Team server chose: an effort lowered to `Coai:MaxEffort`, and the tier every server launch sets. `effort`/`tier` hold what the launch RAN WITH: the sent value (`row`/`server`); EMPTY for `ignored` and `dropped` (what the row asked for did not run, and nothing is claimed about what did — an ignored codex effort is not relabelled as the configuration's); the configuration's value for `cli-config` (nothing asked, nothing sent). `OptionChoice.Labelled` decides it in that order. | A clamped effort labelled `row` would say the person's level ran; `server` says whose choice it was. Empty on `ignored`/`dropped` keeps the line's question — did the setting run — answered by one field. |
@@ -706,6 +712,21 @@ needs. Story 2.1 shipped 2026-10-10 on `feat/round-counter-e2-local-counter` —
 | E6 (Linux CI) | 6.1a: reconcile kills the marker's members and confirms THEM gone | Linux CI found two holes the Windows runs could not. **A killed but unreaped process (a zombie) read as alive**: it keeps its `/proc` entry and start time until its parent reaps it — under a parent that never reaps, for ever, so the slot would have stayed unavailable over a process that had exited. `ProcessTree.IsAlive` now reads the state field of `/proc/<pid>/stat` and treats `Z`/`X` as gone. **The confirmation covered only the recorded members**: a member's children started after its record were killed with the tree but never waited for. The reconcile now lists the live descendants of every member that is still the recorded process (`ProcessTree.DescendantsOf`) BEFORE the kill, and confirms the union. Our own review of that fix added two guards: a zombie leader counts as exited only when no other thread of its group runs (`/proc/<pid>/task`), and a descendant must have started no earlier than its parent — a table records a parent NUMBER, and without it a reused number's orphans would be killed as the reader's. Accepted limit: a child spawned between the listing and the kill is ended with the tree but not confirmed. | The production host is Linux; both would have surfaced there, the first as a slot blocked for ever. |
 | E6 (CodeRabbit) | 6.1a: a reader that exits by itself leaves its tree | CodeRabbit proposed that, for a tracked `EndsWhen` request, an `Exited` wait return an `Ending` carrying an error so the caller stays fail-closed. **Rejected as is**: it kills nothing (the grandchild keeps running) and it turns every benign early exit of any codex version into a blocked slot that needs a human. **Shipped instead**: the descendants are listed while the reader runs (`TreeWatch`, a 200 ms `PeriodicTimer` leg, recorded as they appear), a self-exit kills and confirms what was seen, and the partial (`ProcessTreeNotRecordedException` with inner `ProcessTreeUnlistedException`, so the slot is marked partial for a human) is raised only on evidence: the stream was still open at the drain grace, so something never listed holds the pipes. Closed streams and nothing seen stay an ordinary no-answer. Residual limit: a descendant spawned within the last listing step before the self-exit that holds none of the inherited stdio is neither seen nor detected. | Fail-closed on evidence keeps the guarantee where the evidence is, and keeps the slot available where it is not. |
 
+### Open tail (2026-10-16)
+
+What the plan did not close, so the promotion carries it. The paid-path census (`RESULTS_vendor_quota_gauges.md` §5.1)
+rows that still write nothing, or fold launches into one line:
+
+- **Rows 2 and 4** — a consultation's or a question row's continued turn is still ONE line per turn (the line carries
+  the turn's correct sum; the code round of epic 3 rejected splitting it).
+- **Row 5, by hand** — `coai-mcp --ask-api` run from a terminal writes nothing; the launcher that normally runs it
+  writes the line.
+- **Row 9** — a chat turn whose vendor row was deleted mid-turn writes nothing (`chatTurn.ts`).
+- **Row 10, the infrastructure throw** — the broad `catch (Exception)` in `JobRunner.RunAsync` ends the job `NotStarted`
+  and writes no ledger line.
+
+Closed by the stories above: rows 1, 7, 8, 10's follow-up, requeue and host stop (rows 3, 6 and 11 were never gaps).
+
 ## Definition of Done
 
 - [ ] `RESULTS_vendor_quota_gauges.md` records what each vendor exposes and who shares each account, measured; E6's
@@ -719,11 +740,16 @@ needs. Story 2.1 shipped 2026-10-10 on `feat/round-counter-e2-local-counter` —
 - [ ] The Team-server block shows server rounds per vendor, `runsWithoutRound` apart; `people[].vendors[]` carries the
       same fields.
 - [ ] Server lines carry cached and reasoning tokens; a withdrawn, abandoned or backstopped launch is named as such
-      with usage not captured and its end cause, on both halves; every paid path in 1.1's census writes a line; vendor reasons are not clipped.
+      with usage not captured and its end cause, on both halves; every paid path the census CLOSED writes a line (rows
+      1, 7, 8, and 10 but for its infrastructure throw), and the open rows (2/4, 5 by hand, 9, 10's infrastructure
+      throw) are named in the *Open tail* under the deviations; vendor reasons are not clipped.
 - [ ] Every new ledger line carries round, attempt, effort/tier as sent with their source; server lines job and slot;
       the canary is `canary` and in no round count.
-- [ ] The server ends a job with too little budget left without starting the vendor, by name, and moves on.
-- [ ] A stated `Resets in …` parks the slot until then on both halves.
+- [ ] The server ends a job with too little budget left without starting the vendor, by name, and moves on. Accepted
+      exception: a request delayed in transit by more than the margin (`Coai:DeadlineSafetyMarginSeconds`) can still
+      be claimed after its caller gave up; the caller's DELETE ends it.
+- [ ] A stated `Resets in …` parks the slot until then on the server; locally a stated reset beyond the reviewer's
+      remaining budget is never waited out (one launch, the refusal shown) and a short one inside the budget still is.
 - [ ] Where a gauge exists, percent used, reset time and rounds per 1 % (all consumers, or hidden with the reason);
       where none does, the reset time from the last refusal.
 - [ ] Every RED test went red with the real symptom first; all suites green.

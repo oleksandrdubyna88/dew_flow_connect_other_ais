@@ -6,10 +6,10 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// Rounds per 1 % of a vendor's window (story 6.2 of todo/PLAN_every_round_is_counted.md) — the formula E6's plan round
-/// fixed: per window (limit identity + duration), between two consecutive readings of the SAME window instance (same
-/// <c>resetsAt</c>), the rounds counted between them over the rise; an interval is unusable — never 0 or infinity — when
-/// the percentage did not rise, the window reset, or a reading is stale or missing; the figure is the rounds-weighted mean
-/// of the last usable intervals, and a known consumer that is not counted hides it.
+/// fixed: per window (limit identity + duration), between a baseline reading and the first later reading of the SAME window instance (same
+/// <c>resetsAt</c>) whose percentage rose, the rounds counted between them over the rise; an interval is unusable — never 0 or infinity — when
+/// the window reset, or a reading is stale or missing; a plateau (no rise) keeps its rounds until the percentage rises (story
+/// 6.2b); the figure is pooled (sum of rounds over sum of rise) over the last usable intervals, and a known consumer that is not counted hides it.
 /// </summary>
 public sealed class RoundsPerPercentTests
 {
@@ -146,7 +146,7 @@ public sealed class RoundsPerPercentTests
     }
 
     [Fact]
-    public void TheFigure_IsTheRoundsWeightedMeanOfTheUsableIntervals()
+    public void TheFigure_IsPooled_RoundsOverRise_NotAMeanOfRatios()
     {
         var ratio = Only(RoundsPerPercent.Derive([
             Job(0, "r0", 10),
@@ -156,9 +156,150 @@ public sealed class RoundsPerPercentTests
             Job(20, "r4", 13),
         ]));
 
-        // Weighted by rounds: (3 × 3 + 1 × 0.5) / 4. A pooled 4 / 3 would be a different formula.
-        ratio.RoundsPerPercent.Should().BeApproximately(2.375, 1e-9);
+        // Owner decision 2026-10-16 (story 6.2b): pooled, Σ rounds ÷ Σ rise = 4 / 3. This test used to expect the
+        // rounds-weighted mean of per-interval ratios, (3 × 3 + 1 × 0.5) / 4 = 2.375 — that expectation is now wrong.
+        ratio.RoundsPerPercent.Should().BeApproximately(4.0 / 3.0, 1e-9);
         ratio.Intervals.Should().Be(2);
+    }
+
+    [Fact]
+    public void APlateau_KeepsItsRounds_TheIntervalClosesWhenThePercentageRises()
+    {
+        var ratio = Only(RoundsPerPercent.Derive([
+            Job(0, "r0", 10), Job(10, "r1", 10), Job(20, "r2", 10), Job(30, "r3", 11),
+        ]));
+
+        ratio.RoundsPerPercent.Should().BeApproximately(3.0, 1e-9, "three rounds were spent between the 10 % and the 11 %, whatever the readings in between said");
+        ratio.Intervals.Should().Be(1);
+    }
+
+    [Fact]
+    public void TwoPlateausInARow_AreTwoIntervals_AndNoRoundIsCountedTwice()
+    {
+        // 10,10,11 then 11,11,12: the 11 closing the first interval opens the second.
+        var ratio = Only(RoundsPerPercent.Derive([
+            Job(0, "r0", 10), Job(10, "r1", 10), Job(20, "r2", 11), Job(30, "r3", 11), Job(40, "r4", 11), Job(50, "r5", 12),
+        ]));
+
+        ratio.Intervals.Should().Be(2, "intervals of 2 rounds and 3 rounds");
+        ratio.RoundsPerPercent.Should().BeApproximately(2.5, 1e-9, "(2 + 3) rounds over (1 + 1) %");
+    }
+
+    [Fact]
+    public void AStaleReadingInsideAPlateau_VoidsTheSpan_TheNextGoodReadingIsTheNewBaseline()
+    {
+        var stale = Job(10, "r1", 10) with { AtUtc = T0.AddMinutes(40) };
+
+        var ratio = Only(RoundsPerPercent.Derive([
+            Job(0, "r0", 10), stale, Job(20, "r2", 10), Job(30, "r3", 11),
+        ]));
+
+        // The span 10 → 11 would be 3 rounds; the stale reading voids it, and the new baseline is the reading at minute 20.
+        ratio.RoundsPerPercent.Should().BeApproximately(1.0, 1e-9, "only the interval after the new baseline counts: one round over 1 %");
+        ratio.Intervals.Should().Be(1);
+    }
+
+    [Fact]
+    public void AStaleReadingInsideAPlateau_WithNothingGoodAfterIt_IsUnavailableAsStale()
+    {
+        var stale = Job(10, "r1", 10) with { AtUtc = T0.AddMinutes(40) };
+
+        var ratio = Only(RoundsPerPercent.Derive([Job(0, "r0", 10), stale, Job(20, "r2", 11)]));
+
+        ratio.RoundsPerPercent.Should().BeNull();
+        ratio.Unavailable.Should().Be(GaugeReasons.StaleReading);
+    }
+
+    [Fact]
+    public void AMissingReadingInsideAPlateau_VoidsTheSpan_TheNextGoodReadingIsTheNewBaseline()
+    {
+        var ratio = Only(RoundsPerPercent.Derive([
+            Job(0, "r0", 10), Job(10, "r1", null), Job(20, "r2", 10), Job(30, "r3", 11),
+        ]));
+
+        ratio.RoundsPerPercent.Should().BeApproximately(1.0, 1e-9, "the reading that did not report the window voids the span before it");
+        ratio.Intervals.Should().Be(1);
+    }
+
+    [Fact]
+    public void ALaunchWithNoReadingInsideAPlateau_VoidsTheSpan()
+    {
+        var ratio = Only(RoundsPerPercent.Derive([
+            Job(0, "r0", 10), Bare(5, "r1"), Job(10, "r2", 10), Job(20, "r3", 10), Job(30, "r4", 11),
+        ]));
+
+        // The reading at minute 10 follows a reading-less launch, so the span 0 → 10 is void; the new baseline is that
+        // reading, and the interval 10 → 30 holds two rounds over 1 %.
+        ratio.RoundsPerPercent.Should().BeApproximately(2.0, 1e-9);
+        ratio.Intervals.Should().Be(1);
+    }
+
+    [Fact]
+    public void AResetInsideAPlateau_VoidsTheSpan_TheResettingReadingOpensTheNextOne()
+    {
+        var ratio = Only(RoundsPerPercent.Derive([
+            Job(0, "r0", 90), Job(10, "r1", 90), Job(20, "r2", 2, resets: NextWeek), Job(30, "r3", 2, resets: NextWeek), Job(40, "r4", 3, resets: NextWeek),
+        ]));
+
+        // The old week's span is void. The new week starts at the reading of minute 20: two rounds over 1 %.
+        ratio.RoundsPerPercent.Should().BeApproximately(2.0, 1e-9);
+        ratio.Intervals.Should().Be(1);
+    }
+
+    [Fact]
+    public void AResetInsideAPlateau_WithNoRiseAfterIt_IsUnavailableAsAReset()
+    {
+        var ratio = Only(RoundsPerPercent.Derive([Job(0, "r0", 90), Job(10, "r1", 90), Job(20, "r2", 2, resets: NextWeek)]));
+
+        ratio.RoundsPerPercent.Should().BeNull();
+        ratio.Unavailable.Should().Be(GaugeReasons.WindowReset);
+    }
+
+    [Fact]
+    public void AReviewWithoutARoundInsideAPlateau_VoidsTheSpan()
+    {
+        // The closing reading of the span carries a launch with no round id: its rounds cannot be counted or left out.
+        var ratio = Only(RoundsPerPercent.Derive([
+            Job(0, "r0", 10), Job(10, "r1", 10), Job(20, string.Empty, 11),
+        ]));
+
+        ratio.RoundsPerPercent.Should().BeNull("a launch with no round id inside the span means the span's rounds cannot be counted");
+        ratio.Unavailable.Should().Be(GaugeReasons.RunWithoutRound);
+    }
+
+    [Fact]
+    public void AReviewWithoutARoundInsideAPlateau_TheReadingAfterIt_OpensTheNextSpan()
+    {
+        var ratio = Only(RoundsPerPercent.Derive([
+            Job(0, "r0", 10), Job(10, string.Empty, 10), Job(20, "r2", 10), Job(30, "r3", 11),
+        ]));
+
+        // The round-less launch's reading is itself a true state of the account, so it opens the next span:
+        // the rounds r2 and r3 over the rise to 11 %. The void span's round is not in it.
+        ratio.RoundsPerPercent.Should().BeApproximately(2.0, 1e-9);
+        ratio.Intervals.Should().Be(1);
+    }
+
+    [Fact]
+    public void ARoundSplitAcrossLaunchesInsideASpan_AddsUpToTheWholeRound()
+    {
+        var ratio = Only(RoundsPerPercent.Derive([
+            // Round R ran two launches, one on the plateau reading and one on the closing reading: half a round each.
+            Job(0, "r0", 10), Job(10, "R", 10), Job(20, "R", 11),
+        ]));
+
+        ratio.RoundsPerPercent.Should().BeApproximately(1.0, 1e-9, "the two halves are one round over 1 %");
+    }
+
+    [Theory]
+    [InlineData(150)]
+    [InlineData(-1)]
+    public void AReadingOutsideZeroToOneHundred_IsAMissingReading_ForTheDerivation(double bad)
+    {
+        var ratio = Only(RoundsPerPercent.Derive([Job(0, "r0", 10), Job(10, "r1", bad), Job(20, "r2", 11)]));
+
+        ratio.RoundsPerPercent.Should().BeNull($"{bad} % is not a percentage; it cannot close an interval");
+        ratio.Unavailable.Should().Be(GaugeReasons.MissingReading);
     }
 
     [Fact]
