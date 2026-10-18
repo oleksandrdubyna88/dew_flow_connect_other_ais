@@ -942,6 +942,7 @@ revised on its own branch the same day. Every `path:line` was re-read on `main`.
 
 Rebased; no file this document cites in `src_mcp/src`, `core`, `storage` or `runners/Context/ContextAssembler.cs` changed
 since `2d98f2f8` (the eight commits are releases, Vibe-on-WSL, the rules budget and E1's #851 fixture re-cut). Anchors
+The second rebase of the day, on `2b302c65` (#852, #856), touched `PanelService.cs` (one line before `:498`), `PanelSettings.cs`(`:421,1009` → `:430,1018`), `RoundEngine.cs` (one line before `:592`), `ServerJsonContext.cs` (`:339-345` → `:346-352`) and themodule docs — every citation re-read and moved; no cited statement changed.
 moved: `module_tests.md:3181` → `:3191` (its rows `:3206-3207`), `module_server.md:3350` → `:3363`; corrected: `RoundChangesLog.cs` is in `src_mcp/src/Store/`,
 `RoundChangesTable.Record` is `:28-39`, `SessionStore.Exists` is `:450`. E3 read at `16628077`, E4 `30362785`, E5 `c1216b42`,
 E6 `131074b4`; the cross-epic list owed to E7 (E4 §11 *Cross-epic*, E5 §10 items 11 and 14, E6 §3a) applied in full:
