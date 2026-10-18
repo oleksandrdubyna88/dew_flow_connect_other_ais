@@ -1198,9 +1198,9 @@ started after that edit. The paragraph became one clause (+247 bytes) and the ca
 the headroom itself is worth knowing about.
 
 *Update 2026-10-16:* the operator raised the budget to 90 000 bytes. The canary is now
-`StageRulesTests.AtNinetyKilobytes_TheRotatedTail_FitsAtMostThreeRules` (10 056 left; on the canary branch exactly
+`StageRulesTests.AtNinetyKilobytes_TheRotatedTail_FitsAtMostThreeRules` (10 033 left; on the canary branch exactly
 `gpu-lease`, `nuget-packages`, `durable-status`; no branch of the first hundred reaches more than three), backed by
-`AtNinetyKilobytes_TheBaseAndTheTier_SpendExactly79944Bytes` (base 17 883 + tier 62 061, the drift guard), joined by `AtNinetyKilobytes_EveryBranchReachesAtLeastOneTailRule` (at least one — the 80 000
+`AtNinetyKilobytes_TheBaseAndTheTier_SpendExactly79967Bytes` (base 17 906 + tier 62 061, the drift guard), joined by `AtNinetyKilobytes_EveryBranchReachesAtLeastOneTailRule` (at least one — the 80 000
 state was 56 bytes and zero) and `AtNinetyKilobytes_TheTestLeftoversRule_IsShownOnTheBranchesThatDrawIt` (a four-row theory:
 `fix/x` and `feat/e5` draw `common/test-leftovers.md`, `main` and `feat/a` do not), and by
 `RuleFilesTests.TheDefaultBudget_IsTheOperatorsNinetyKilobytes`, which pins the number. The figures in the
