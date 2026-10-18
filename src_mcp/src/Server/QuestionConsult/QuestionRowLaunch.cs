@@ -85,7 +85,7 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
     /// <summary>Makes a row's scratch folder; a test's seam for a folder that cannot be made.</summary>
     internal Func<string> MakeScratch { get; init; } = static () => Directory.CreateTempSubdirectory(ScratchPrefix).FullName;
 
-    /// <summary>The empty folder a home-keeping runtime's none row stands in, beside its home inside the row's folder.</summary>
+    /// <summary>The empty folder every scratch-cwd row stands in, beside its home when it keeps one, inside the row's folder.</summary>
     private const string EmptyName = "cwd";
 
     /// <summary>A question row's copies are one-shot: no conversation folder, so no homes root.</summary>
@@ -199,9 +199,17 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
         new(input.Repo, input.Row.Plan.Cwd == CwdKind.Snapshot ? input.PromptNaming(place.Roots) : input.Prompt, string.Empty, input.AnswersDir, Owning(input, homeFolder), input.SchemaFile)
         {
             Confinement = new LaunchConfinement.Planned(input.Row.Plan),
-            ScratchDir = KeepsAHome(input.Row) ? Directory.CreateDirectory(Path.Combine(scratch, EmptyName)).FullName : scratch,
+            ScratchDir = StandingFolderIn(scratch),
             Workdir = place.Workdir,
         };
+
+    /// <summary>
+    /// The empty folder a scratch-cwd row's CLI stands in: one level BELOW the row's folder, never the folder itself, which holds the
+    /// row's exclusively held <see cref="LockName"/> — a CLI that reads or indexes its working folder would meet a sharing violation on
+    /// Windows, and the file is noise to the model. Nothing when the row has no folder (its plan stands in a root).
+    /// </summary>
+    private static string StandingFolderIn(string scratch) =>
+        scratch.Length == 0 ? scratch : Directory.CreateDirectory(Path.Combine(scratch, EmptyName)).FullName;
 
     private static ReviewerSettings Owning(RowLaunchInput input, string homeFolder) =>
         KeepsAHome(input.Row) ? input.Settings with { OwnedScratch = homeFolder } : input.Settings;

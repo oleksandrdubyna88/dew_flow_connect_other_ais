@@ -94,4 +94,54 @@ public sealed class AQuestionRowHoldsItsScratchLockWhileItRunsTests : IAsyncLife
         Path.GetFileName(seen.Scratch).Should().StartWith(QuestionRowLaunch.ScratchPrefix);
         Directory.Exists(seen.Scratch).Should().BeFalse("the row let go of its lock and then removed its scratch — a held lock file would have kept the folder on Windows");
     }
+
+    /// <summary>The one launch of a row that keeps no home, as the launcher saw it: where it stood, what that folder held, and the lock one level up.</summary>
+    private sealed class SeenByTheLauncher : IProcessLauncher
+    {
+        public const string Exe = "claude-played";
+
+        public string WorkingDirectory { get; private set; } = string.Empty;
+
+        public IReadOnlyList<string> WorkingFolderHolds { get; private set; } = [];
+
+        public LockProbe LockOneLevelUp { get; private set; } = LockProbe.Unknown;
+
+        public Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
+        {
+            WorkingDirectory = request.WorkingDirectory;
+            WorkingFolderHolds = [.. Directory.EnumerateFileSystemEntries(request.WorkingDirectory).Select(Path.GetFileName).OfType<string>()];
+            LockOneLevelUp = HeldFile.Probe(Path.Combine(Path.GetDirectoryName(request.WorkingDirectory)!, QuestionRowLaunch.LockName));
+
+            return Task.FromResult(new ProcessResult(1, string.Empty, "played: no answer", TimedOut: false));
+        }
+    }
+
+    /// <summary>
+    /// A row that keeps no home and stands in a scratch folder (a Claude opinion row): its CLI's working folder must not hold the
+    /// exclusively held lock — a CLI that reads or indexes its cwd would meet a sharing violation on Windows, and the file is noise to
+    /// the model. It stands one level down, in the same <c>cwd</c> folder a home-keeping row uses, and the lock stays above it.
+    /// </summary>
+    [Fact]
+    public async Task ARowThatKeepsNoHome_StandsOneLevelBelowTheLock_SoItsWorkingFolderHoldsNoLockFile()
+    {
+        var launcher = new SeenByTheLauncher();
+        var admitted = (RowAdmission.Admitted)QuestionAdmission.Admit(
+            new QuestionRow("claude-opinion", "anthropic", "claude", "sonnet", string.Empty, SeenByTheLauncher.Exe, string.Empty, "question-opinion", Enabled: true),
+            new QuestionConsultSettings(), [], Core.Api.ApiOverrides.None);
+        var input = new RowLaunchInput(
+            admitted, "Which helper retries?", new ReviewerSettings("claude") { ExecutablePath = SeenByTheLauncher.Exe, Model = "sonnet", Timeout = TimeSpan.FromSeconds(30) },
+            Repo, Directory.CreateDirectory(_dir.At("answers")).FullName, string.Empty, TimeSpan.FromSeconds(30))
+        {
+            ChangesSoFar = _ => Task.FromResult<IReadOnlyList<Core.Consultation.TreeChange>>([]),
+        };
+        var row = new QuestionRowLaunch(new ReviewerExecutor(launcher), new UsageLedger(_dir.At("data")), Logger.None, launcher);
+
+        await row.RunAsync(
+            input, new QuestionRowRecord("claude-opinion", "anthropic", "sonnet", "claude", "question-opinion", "An opinion", "none", "default-deny"), TestContext.Current.CancellationToken);
+
+        launcher.WorkingDirectory.Should().NotBeEmpty("the row's CLI was launched");
+        launcher.WorkingFolderHolds.Should().BeEmpty("the working folder is an empty folder of its own, with no lock file and nothing else in it");
+        launcher.LockOneLevelUp.Should().Be(LockProbe.Held, "the lock sits one level above the working folder, held while the row runs");
+        Directory.Exists(Path.GetDirectoryName(launcher.WorkingDirectory)).Should().BeFalse("the scratch is gone once the row ended");
+    }
 }

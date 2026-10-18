@@ -7381,7 +7381,10 @@ handed a PLACE — a coai-owned folder for its home and a sanitised copy to stan
   creates the lock file, which moves the folder's time), then `FolderLock.RemoveIfFree`: a scratch whose lock cannot be taken is kept,
   and one older than six hours whose lock is free — a killed server's — is emptied around the lock, the lock let go, the folder
   removed. A lock that cannot be created when the row starts is logged and does not refuse the row; its scratch is then only as safe
-  as the six-hour window. The take-the-lock-or-keep step is `runners/Files/FolderLock.cs`, EXTRACTED from `VibeHomes.SweepOneShot`
+  as the six-hour window. **No CLI stands next to the lock:** every row whose plan stands in `Scratch` — not only a home-keeping one —
+  gets `ScratchDir = <scratch>/cwd` (`QuestionRowLaunch.StandingFolderIn`, the folder a home-keeping none row already used), because a
+  CLI that reads or indexes its working folder would meet a sharing violation on the held lock on Windows, and the file is noise to the
+  model. `ScratchDir` is read in one place, `ConsultantLaunches.Cwd`, as the child's working directory, so nothing else expected the top. The take-the-lock-or-keep step is `runners/Files/FolderLock.cs`, EXTRACTED from `VibeHomes.SweepOneShot`
   (reuse-first, step 2.2): the one-shot Vibe homes and the row scratch now use the same code. The test sweep still never touches a
   `coai-question-*` folder (`neverSwept`). The age is the folder's own last write (the product sweep's rule), so a row that runs
   past six hours depends on its lock alone.

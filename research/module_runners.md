@@ -1572,7 +1572,9 @@ built two one-shot modes in the server, `--consultants` and `--check-consultant`
   lock, lets go, removes the folder. The caller asks its own age first, because taking the lock creates the file and moves the
   folder's time. Used by the one-shot Vibe homes (`VibeHomes`, the age being the newest write below the folder) and by
   `PanelService.DeleteIfDue` for `coai-question-*` (the age being the folder's last write). `GitScratch.DeleteEntry` is public for it:
-  it takes a FILE as well as a folder, which `DeleteEvenIfReadOnly` (a directory's deleter) refuses.
+  it takes a FILE as well as a folder, which `DeleteEvenIfReadOnly` (a directory's deleter) refuses. **Known limit:** `HomeIo.Real.Delete`
+  (the deleter `VibeHomes.SweepOneShot` hands to `FolderLock`) is still `DeleteEvenIfReadOnly`, so a FILE at the top level of a one-shot
+  Vibe home would make that sweep fail on it; today a one-shot home holds only folders, and nothing observable depends on it.
 - **`GitScratch.DeleteEvenIfReadOnly`** (`runners/Files/GitScratch.cs`) — moved out of `PanelService` (git marks
   object files read-only, and `Directory.Delete` refuses them); the check deletes and sweeps its scratch repositories
   with it.
