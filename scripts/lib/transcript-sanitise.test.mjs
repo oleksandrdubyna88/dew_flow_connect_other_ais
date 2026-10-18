@@ -485,6 +485,63 @@ test('clipAgentsKeepsOnlyTheWindowsLinesOfEveryAgentFileAndTheDefaultKeepsThemWh
   assert.ok(clipped.every((ls) => ls.length === 2), 'the minute-55 line is outside the window');
 });
 
+// ---- a kept write call keeps its answer -------------------------------------------------------------------------------------
+const answerSession = () => {
+  const dir = join(scratch('ans'), 'projects', 'D--rsd--wt-MARKER_SLUG');
+  mkdirSync(join(dir, SESSION, 'subagents'), { recursive: true });
+  const call = (id, name, input) => ({ type: 'tool_use', id, name, input });
+  const assistant = (at, id, content) => ({ type: 'assistant', timestamp: T(at), sessionId: SESSION, cwd: 'D:/rsd/_wt/x', isSidechain: false, uuid: uid(at * 10),
+    message: { id: 'msg_01Answer' + id, model: 'claude-opus-4-1', role: 'assistant', content, usage: { input_tokens: 1, output_tokens: 1, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 } } });
+  const answer = (at, ids) => ({ type: 'user', timestamp: T(at), sessionId: SESSION, cwd: 'D:/rsd/_wt/x', isSidechain: false, uuid: uid(at * 10 + 1),
+    message: { role: 'user', content: ids.map((id) => ({ type: 'tool_result', tool_use_id: id, content: 'MARKER_RESULT' })) } });
+  const main = [
+    assistant(1, 'a', [call('toolu_01WriteCallAAAAAAAAAA', 'Write', { file_path: 'D:/rsd/_wt/x/a.md', content: 'MARKER_PROMPT' }), call('toolu_01BashCallBBBBBBBBBBB', 'Bash', { command: 'MARKER_CMD' }),
+      call('toolu_01EditCallCCCCCCCCCCC', 'Edit', { file_path: 'D:/rsd/_wt/x/c.md', old_string: 'MARKER_CMD' })]),
+    answer(5, ['toolu_01WriteCallAAAAAAAAAA', 'toolu_01BashCallBBBBBBBBBBB']),
+    assistant(6, 'b', [{ type: 'text', text: 'MARKER_PROMPT later' }]),
+    answer(7, ['toolu_01EditCallCCCCCCCCCCC'])];
+  writeFileSync(join(dir, SESSION + '.jsonl'), jl(main));
+  return join(dir, SESSION + '.jsonl');
+};
+const toolResultIds = (text) => jsonLines(text).flatMap((l) => (Array.isArray(l.message?.content) ? l.message.content : [])).filter((c) => c.type === 'tool_result').map((c) => c.tool_use_id);
+
+test('aKeptWriteCallKeepsTheLineThatAnswersItEvenWhenTheWindowEndsFirst', () => {
+  const src = answerSession();
+  const { outDir } = cut(src, { from: T(0), to: T(2) }); // the window holds only the calls
+  const lines = jsonLines(readAll(outDir).find((f) => /^projects\/[^/]+\/[^/]+\.jsonl$/.test(f.file)).text);
+  assert.equal(lines.length, 3, 'the call line plus the two lines that answer its Write and its Edit; the later text line is not kept');
+  const ids = toolResultIds(readAll(outDir).find((f) => /^projects\/[^/]+\/[^/]+\.jsonl$/.test(f.file)).text);
+  assert.equal(ids.length, 3, 'the Write, the Bash (it shares the answering line) and the Edit are all answered in the cut');
+  assert.ok(lines.every((l) => l.type !== 'assistant' || l.message.content.every((c) => c.type !== 'text')), 'the assistant text line outside the window is dropped');
+});
+
+test('aWriteCallOutsideTheWindowIsNotKeptSoItsAnswerIsNotPulledIn', () => {
+  const src = answerSession();
+  const { outDir } = cut(src, { from: T(5), to: T(8) });
+  const text = readAll(outDir).find((f) => /^projects\/[^/]+\/[^/]+\.jsonl$/.test(f.file)).text;
+  assert.equal(jsonLines(text).length, 3, 'only the lines inside the window; the call line at minute 1 stays out, and with it nothing is pinned');
+});
+
+test('anAnswerThatIsAlreadyInsideTheWindowIsKeptOnceAndNothingElseMoves', () => {
+  const src = answerSession();
+  const { outDir } = cut(src, { from: T(0), to: T(9) });
+  assert.equal(jsonLines(readAll(outDir).find((f) => /^projects\/[^/]+\/[^/]+\.jsonl$/.test(f.file)).text).length, 4);
+});
+
+test('aClippedAgentFileKeepsTheAnswerToItsWriteToo', () => {
+  const src = writeSession(scratch('in'));
+  const agent = join(dirname(src), SESSION, 'subagents', 'agent-' + AGENT_A + '.jsonl');
+  const lines = readFileSync(agent, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
+  const write = { ...lines[1], timestamp: T(5, 10), uuid: uid(9001), message: { ...lines[1].message, id: 'msg_01AgentWriteLine', content: [{ type: 'tool_use', id: 'toolu_01AgentWriteAAAAAAAAA', name: 'Write', input: { file_path: 'D:/rsd/_wt/x/w.md', content: 'MARKER_PROMPT' } }] } };
+  const result = { ...lines[0], timestamp: T(8), uuid: uid(9002), message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_01AgentWriteAAAAAAAAA', content: 'MARKER_RESULT' }] } };
+  writeFileSync(agent, jl([...lines, write, result]));
+  const { outDir } = cut(src, { from: T(0), to: T(7), clipAgents: true });
+  const out = readAll(outDir).filter((f) => f.file.includes('subagents') && f.file.endsWith('.jsonl')).map((f) => jsonLines(f.text));
+  const withWrite = out.find((ls) => ls.some((l) => (Array.isArray(l.message?.content) ? l.message.content : []).some((c) => c.type === 'tool_use' && c.name === 'Write')));
+  assert.ok(withWrite, 'the agent file with the write is cut');
+  assert.ok(withWrite.some((l) => (Array.isArray(l.message?.content) ? l.message.content : []).some((c) => c.type === 'tool_result')), 'its answer at minute 8, outside the window, is kept');
+});
+
 test('aClippedCutKeepsTheLaunchLineOfAnAgentWhoseCallIsOutsideTheWindow', () => {
   const src = writeSession(scratch('in'));
   const plain = cut(src, { from: T(5), to: T(7) });

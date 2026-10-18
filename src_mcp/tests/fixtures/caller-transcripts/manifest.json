@@ -14,6 +14,10 @@
     "D:/fixture/other",
     "D:/fixture/repo-a"
    ],
+   "checkouts": [
+    "D:/fixture/other",
+    "D:/fixture/repo-a"
+   ],
    "counts": {
     "assistantLines": 12,
     "distinctMessageIds": 5,
@@ -33,6 +37,10 @@
    "version": "2.1.296",
    "breaksJoin": false,
    "fixtureRoots": [
+    "D:/fixture/other",
+    "D:/fixture/repo-a"
+   ],
+   "checkouts": [
     "D:/fixture/other",
     "D:/fixture/repo-a"
    ],
@@ -58,6 +66,10 @@
     "D:/fixture/other",
     "D:/fixture/repo-a"
    ],
+   "checkouts": [
+    "D:/fixture/other",
+    "D:/fixture/repo-a"
+   ],
    "counts": {
     "assistantLines": 7,
     "distinctMessageIds": 4,
@@ -80,6 +92,10 @@
     "D:/fixture/other",
     "D:/fixture/repo-a"
    ],
+   "checkouts": [
+    "D:/fixture/other",
+    "D:/fixture/repo-a"
+   ],
    "counts": {
     "assistantLines": 10,
     "distinctMessageIds": 4,
@@ -99,6 +115,10 @@
    "version": "2.1.288",
    "breaksJoin": true,
    "fixtureRoots": [
+    "D:/fixture/other",
+    "D:/fixture/repo-a"
+   ],
+   "checkouts": [
     "D:/fixture/other",
     "D:/fixture/repo-a"
    ],
@@ -125,6 +145,10 @@
     "D:/fixture/repo-a",
     "D:/fixture/scratch"
    ],
+   "checkouts": [
+    "D:/fixture/other",
+    "D:/fixture/repo-a"
+   ],
    "counts": {
     "assistantLines": 7,
     "distinctMessageIds": 2,
@@ -147,6 +171,10 @@
     "D:/fixture/other",
     "D:/fixture/repo-a"
    ],
+   "checkouts": [
+    "D:/fixture/other",
+    "D:/fixture/repo-a"
+   ],
    "counts": {
     "assistantLines": 19,
     "distinctMessageIds": 7,
@@ -166,6 +194,10 @@
    "version": "2.1.284",
    "breaksJoin": false,
    "fixtureRoots": [
+    "D:/fixture/other",
+    "D:/fixture/repo-a"
+   ],
+   "checkouts": [
     "D:/fixture/other",
     "D:/fixture/repo-a"
    ],
@@ -192,6 +224,11 @@
     "D:/fixture/repo-a",
     "D:/fixture/repo-b"
    ],
+   "checkouts": [
+    "D:/fixture/other",
+    "D:/fixture/repo-a",
+    "D:/fixture/repo-b"
+   ],
    "counts": {
     "assistantLines": 4,
     "distinctMessageIds": 1,
@@ -213,6 +250,9 @@
    "fixtureRoots": [
     "D:/fixture/repo-a"
    ],
+   "checkouts": [
+    "D:/fixture/repo-a"
+   ],
    "counts": {
     "assistantLines": 0,
     "distinctMessageIds": 0,
@@ -232,6 +272,10 @@
    "version": "2.1.296",
    "breaksJoin": false,
    "fixtureRoots": [
+    "D:/fixture/other",
+    "D:/fixture/repo-a"
+   ],
+   "checkouts": [
     "D:/fixture/other",
     "D:/fixture/repo-a"
    ],
@@ -258,6 +302,10 @@
     "D:/fixture/repo-a",
     "D:/fixture/scratch"
    ],
+   "checkouts": [
+    "D:/fixture/other",
+    "D:/fixture/repo-a"
+   ],
    "counts": {
     "assistantLines": 2,
     "distinctMessageIds": 2,
@@ -281,6 +329,10 @@
     "D:/fixture/repo-a",
     "D:/fixture/scratch"
    ],
+   "checkouts": [
+    "D:/fixture/other",
+    "D:/fixture/repo-a"
+   ],
    "counts": {
     "assistantLines": 4,
     "distinctMessageIds": 1,
@@ -300,6 +352,10 @@
    "version": "2.1.296",
    "breaksJoin": false,
    "fixtureRoots": [
+    "D:/fixture/other",
+    "D:/fixture/repo-a"
+   ],
+   "checkouts": [
     "D:/fixture/other",
     "D:/fixture/repo-a"
    ],
@@ -326,6 +382,10 @@
     "D:/fixture/repo-a",
     "D:/fixture/scratch"
    ],
+   "checkouts": [
+    "D:/fixture/other",
+    "D:/fixture/repo-a"
+   ],
    "counts": {
     "assistantLines": 4,
     "distinctMessageIds": 1,
@@ -349,6 +409,10 @@
     "D:/fixture/repo-a",
     "D:/fixture/scratch"
    ],
+   "checkouts": [
+    "D:/fixture/other",
+    "D:/fixture/repo-a"
+   ],
    "counts": {
     "assistantLines": 4,
     "distinctMessageIds": 1,
@@ -368,6 +432,11 @@
    "version": "2.1.295",
    "breaksJoin": false,
    "fixtureRoots": [
+    "D:/fixture/other",
+    "D:/fixture/repo-a",
+    "D:/fixture/repo-b"
+   ],
+   "checkouts": [
     "D:/fixture/other",
     "D:/fixture/repo-a",
     "D:/fixture/repo-b"
@@ -394,6 +463,10 @@
     "D:/fixture/other",
     "D:/fixture/repo-a"
    ],
+   "checkouts": [
+    "D:/fixture/other",
+    "D:/fixture/repo-a"
+   ],
    "counts": {
     "assistantLines": 1,
     "distinctMessageIds": 1,
@@ -417,6 +490,11 @@
     "D:/fixture/repo-a",
     "D:/fixture/scratch"
    ],
+   "checkouts": [
+    "D:/fixture/other",
+    "D:/fixture/repo-a",
+    "D:/fixture/repo-a/p1000"
+   ],
    "counts": {
     "assistantLines": 2,
     "distinctMessageIds": 1,
@@ -439,6 +517,10 @@
     "D:/fixture/other",
     "D:/fixture/repo-a",
     "D:/fixture/scratch"
+   ],
+   "checkouts": [
+    "D:/fixture/other",
+    "D:/fixture/repo-a"
    ],
    "counts": {
     "assistantLines": 2,

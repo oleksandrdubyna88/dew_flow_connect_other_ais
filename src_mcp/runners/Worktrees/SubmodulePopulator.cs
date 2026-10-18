@@ -65,14 +65,14 @@ internal sealed class SubmodulePopulator(IProcessLauncher launcher)
 
         await launcher.RunAsync(new ProcessRequest(
             "git",
-            [
+            TreeGit.Argv([
                 // The mitigation this lifts (CVE-2022-39253) is about a submodule URL the REPOSITORY
                 // supplies; the URL below is one we computed and contained. It is set for this one
                 // invocation, never for a repository.
                 "-c", "protocol.file.allow=always",
                 "-c", $"submodule.{mount.Name}.url={source}",
                 "submodule", "update", "--init", "--", mount.Path,
-            ],
+            ]),
             worktreePath)
         {
             Timeout = Budget,

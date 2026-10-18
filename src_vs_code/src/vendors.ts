@@ -156,6 +156,12 @@ export interface Vendor {
   readonly systemPrompt?: string | undefined;
   /** A CLI row's own time limit; an api row keeps `reviewMinutes`. Absent = Limits › Reviewer timeout. */
   readonly timeoutMinutes?: number | undefined;
+  /**
+   * The most this row's reviewer is sent in its first prompt, in whole KiB (1 to 4096). Written by the operator after the row was
+   * seen to lose the end of a long prompt; a reviewer whose prompt is larger is left out of the round, and the reply says so.
+   * Absent = no cap, as it has always been.
+   */
+  readonly maxPromptKib?: number | undefined;
   /** What the chat composer opens with for this instance, ≤ 8 KiB. */
   readonly chatStartingPrompt?: string | undefined;
   /** An api row asks for its answer as a stream (research/PLAN_api_streaming.md). Absent = off, today's call. */
