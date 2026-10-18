@@ -504,8 +504,8 @@ finds sends the work back through a new RED-test story before O4 (J1's rule).
     `Size` removed from both, is equal; the other rounds' snapshots are untouched.
   - `ABusySession_IsDeferred_AndNeitherSideIsWritten`: the test holds the claim → database and file unchanged,
     `deferred = 1`.
-  - `TheSnapshotIsSavedBeforeTheProjection`: a writer seam that throws after the session-file save and before the
-    database transaction (a test-only fault point, the run "killed" between the two writes) → the file holds the
+  - `TheSnapshotIsSavedBeforeTheProjection`: a writer seam that throws after the verified session-file save and before the
+    first row writer, inside the transaction, which then rolls back (a test-only fault point, the run "killed" between the two writes) → the file holds the
     snapshot, the database holds no authors for the round; the next run re-projects it (S1 rule 2(a)/6) WITHOUT opening
     the transcript (the fixture's transcript deleted between the runs proves it) and its `round_authors` rows and
     authors columns equal those of an uninterrupted run, byte for byte. **Break-it**: write the database first → after
