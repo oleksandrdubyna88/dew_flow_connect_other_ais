@@ -1,5 +1,6 @@
 import { CATALOG_USES, type CatalogUse } from './catalogFields';
 import { MAX_PROMPT_BYTES } from './catalogRules';
+import { MAX_PROMPT_KIB } from './promptCap';
 import { escapeHtml } from './escapeHtml';
 import { help } from './panelControls';
 import { CHAT, CONSULTING, EFFORT, type EffortRow, THINKING } from './featureAvailability.generated';
@@ -140,6 +141,17 @@ export function fastField(vendor: Vendor, id: string, mark = ''): string {
 export function streamField(vendor: Vendor, id: string, mark = ''): string {
   return `<div class="check-row"><label class="check"><input type="checkbox" data-setting="stream" data-vendor="${id}"${vendor.stream === true ? ' checked' : ''}>`
     + ` stream the answer${mark}</label>${help('apiStream')}</div>`;
+}
+
+/**
+ * The most the row's reviewer is sent in one prompt — empty is no cap (research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md D1).
+ * A setting, not an action: the server leaves an over-cap reviewer out of the round and says so in the reply.
+ */
+export function maxPromptField(vendor: Vendor, id: string): string {
+  return `<div class="field"><label for="maxprompt-${id}">Largest prompt it reads, KiB</label>`
+    + `<input type="number" id="maxprompt-${id}" min="1" max="${MAX_PROMPT_KIB}" step="1" data-setting="maxPromptKib" data-vendor="${id}"`
+    + ` value="${vendor.maxPromptKib ?? ''}" placeholder="no cap">`
+    + `<div class="hint">A reviewer whose prompt is larger is left out of the round, and the reply says so.</div></div>`;
 }
 
 /** The row's own time limit for one answer — empty follows Limits › Reviewer timeout (D1; never a stand-in number). */

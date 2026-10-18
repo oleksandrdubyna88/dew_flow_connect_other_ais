@@ -44,6 +44,9 @@ internal static class FeaturesMode
         // `--providers` carries `settingProblems` — which setting and which stored value a refusal is about, by kind
         // (research/PLAN_paths_per_side.md E5.2); the Settings page prefers it to its own probe from a server that lists it.
         "settingProblems",
+        // A row's `maxPromptKib`: the most its reviewer is sent in a first prompt; an over-cap reviewer is left out of the round, said
+        // in the reply (research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md). `providers` carries it back when set.
+        "maxPromptKib",
     ];
 
     internal static async Task<int> RunAsync()
