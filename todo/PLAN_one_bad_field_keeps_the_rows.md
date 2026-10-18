@@ -3,6 +3,10 @@
 > Status: **plan only, nothing implemented yet, 2026-10-18.** Scope: the `COAI_VENDORS` parse in coai-mcp
 > (`PanelSettings.ParseVendors` and `VendorListFrom`), one new small reader file beside it, the existing
 > "unrecognised setting" notice path, tests, and the docs. No extension code. Owner approval: 2026-10-18.
+> Plan gate: round 1 `good_enough` (session 3e591978, 3 of 4 reviewers; kimi timed out) — 6 findings applied
+> (D1 name from the raw element, D3 any refused row configures, D5 `MemberOf`, D7 per-row key), 3 rejected with
+> reasons checked in the code (`SecurityLaneSetting.Apply` appends; a consultant row is always one element; the
+> extension's `unrecognised` parse takes any non-empty string).
 >
 > Related: [PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md](../research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md)
 > (its deviation 3 found this; `maxPromptKib` stays as it shipped), [PLAN_panel_settings_is_too_big.md](PLAN_panel_settings_is_too_big.md)
@@ -140,7 +144,8 @@ it "said" is a question for the owner (§ 10, Q1), not part of this change.
 
 **The notice: reuse `UnrecognisedSettings`.** It already reaches all three places: the `providers` answer
 (`unrecognised`), the startup and reload notice with the log line, and the panel toast. `COAI_ROLES` already puts
-one sentence per dropped row under one key (`PanelSettings.cs:967`); this plan does the same under `COAI_VENDORS`.
+one sentence per dropped row into it (`PanelSettings.cs:967`); this plan does the same for `COAI_VENDORS`, with one
+key per row (D7).
 
 ## 6. Decisions
 
@@ -152,7 +157,13 @@ Each is checked against the code. Two consultants answered the open questions on
   `SettingsJsonContext.Default.VendorDto` (the source generator already makes this type info, because
   `List<VendorDto>` is registered at `SettingsJsonContext.cs:143`) inside its own `try`/`catch (JsonException)`. A
   `null` or non-object element is refused by a `ValueKind` check, not by an exception. It answers a record:
-  `VendorRows(IReadOnlyList<VendorDto> Read, IReadOnlyList<string> Refusals, bool NamesAVendor, bool IsList)`.
+  `VendorRows(IReadOnlyList<VendorDto> Read, IReadOnlyList<VendorRefusal> Refused, bool IsList)`, where
+  `VendorRefusal(string Name, string Sentence)`.
+  **The name of a refused row comes from the raw `JsonElement`, never from the DTO** (plan gate, gemini and vibe): when
+  deserialization throws there is no DTO. The reader walks the element's properties (`EnumerateObject`, name compared
+  `OrdinalIgnoreCase`, because the context reads case-insensitively, `SettingsJsonContext.cs:140`) and takes `id` only
+  when it is a non-blank string. It never calls `GetProperty`, which throws on a missing member. With no usable `id`,
+  the row is named by position: `row 2 of 3`.
   It does NOT map to `ProviderSettings`: the one mapping stays in `ParseVendors` (`PanelSettings.cs:1365-1414`), so
   there is no second copy. A new file, because `PanelSettings.cs` is 1712 lines against a ceiling of 800 (§ 8).
 - **D2 — `ParseVendors` keeps its signature.** It has about 40 callers, all in tests, and two in the consultant code.
@@ -160,30 +171,41 @@ Each is checked against the code. Two consultants answered the open questions on
   `[.. ReadVendors(…).Rows]`. The outer `catch (JsonException)` stays only for a text that is not JSON at all.
 - **D3 — "Configured" when every row is left out.** Today, empty result + non-empty text = not configured = the
   shipped pair. New rule in `VendorListFrom` (`PanelSettings.cs:1316`): the list is configured when a row was read,
-  OR the text is `[]` (as today), OR **a refused row named a vendor** (its `id` read as a non-blank string). Then the
-  provider list is empty, and the round refuses with its own sentence, as for `[]`
-  (`AnEmptyReviewerListIsEmptyTests.cs:25-29`). A refused row with no readable `id` (a `null`, a `5`, an `{"id":3}`)
-  names no vendor, like `[{}]` — the shipped pair runs, as `AnEmptyReviewerListIsEmptyTests.cs:31-36` pins today.
-  Reason: running codex and antigravity when the person named other reviewers is the failure #688 already fixed for
-  `[]`.
+  OR the text is `[]` (as today), OR **any row was refused** — whether or not its `id` could be read (`[null]`,
+  `[5]`, `[{"id":5}]` included). Then the provider list is empty, and the round refuses with its own sentence, as for
+  `[]` (`AnEmptyReviewerListIsEmptyTests.cs:25-29`). Reason: a refused row is a row the person WROTE; running codex and
+  antigravity in its place is the failure #688 already fixed for `[]` (goal 3; plan gate, codex).
+  Unchanged: rows that READ but carry no usable `id` (`[{}]`, `[{"id":"  "}]`) are not refused — they are skipped as
+  today, say nothing, and still run the shipped pair, as `AnEmptyReviewerListIsEmptyTests.cs:31-36` pins (#688,
+  CodeRabbit: "rows with no usable id are not a choice of nobody").
 - **D4 — A text that is not JSON at all keeps its fallback, and is now SAID.** `VendorSettingsTests.cs:50-56` pins
   that `[{oops` runs the shipped pair ("a review run against a vendor list somebody half-wrote is worse than the
   default one"). That stays. New: one sentence with the parser's position, through `Detail(e)` (`PanelSettings.cs:1567`),
   the helper `ParseRoles` already uses. A root that is JSON but not an array (`{}`, `"x"`) is treated the same way.
-- **D5 — The sentence.** One per refused row, key `COAI_VENDORS`, no `Kind` (so it goes into `unrecognised`, not
-  `settingProblems`):
+- **D5 — The sentence.** One per refused row, no `Kind` (so it goes into `unrecognised`, not `settingProblems`):
   `COAI_VENDORS: the row "claude" (row 2 of 3) is left out of every round — its member timeoutMinutes has a value of the wrong JSON type. The other rows still review. Write a number or true/false without quotes, or save the reviewers in the panel again, which rewrites the list.`
   For a null or non-object row: `… row 2 of 3 is left out — it is null, not a row …` (or `… it is a number, not a row …`).
-  The member is `JsonException.Path` without its `$.`. The parser's own message is NOT copied: it names a CLR type
+  The member comes from ONE helper, `MemberOf(string? path)`: `JsonException.Path` is nullable, so a null or blank
+  path, or a bare `$`, gives `one of its members`; otherwise the leading `$.` (or `$`) is removed and the rest is kept
+  as written (`timeoutMinutes`, `price.in`, or the bracket form `['odd name']` that System.Text.Json uses for a name it
+  cannot write with a dot). No `Substring` on an unchecked value (plan gate, gemini and vibe).
+  The parser's own message is NOT copied: it names a CLR type
   (``System.Nullable`1[System.Int32]``), which helps nobody. The row id is lower-cased and trimmed, as the parser
   makes it (`PanelSettings.cs:1369`).
 - **D6 — The consultant row and `--check-model` keep their refusal.** Both call `ParseVendors("[<row>]")` and refuse
   when they do not get exactly one row (`ConsultantResolver.cs:187`, `ConsultantCheckMode.cs:180-182`). Under (b) a bad
   member still gives zero rows, so both still refuse by name. Their sentences do not change in this plan (§ 9).
-- **D7 — Where the sentences go.** `VendorList` (`PanelSettings.cs:1300`) gains `Refusals`. `WithProvidersFrom`
-  appends them: `UnrecognisedSettings = [.. UnrecognisedSettings, .. list.Refusals.Select(s => new UnrecognisedSetting("COAI_VENDORS", s))]`
-  — the shape `SecurityLaneSetting.Apply` already uses (`SecurityLaneSetting.cs:42`). `FromEnvironment` then runs
-  `SecurityLaneSetting.Apply`, which appends and does not replace, so the sentences survive.
+- **D7 — Where the sentences go.** `VendorList` (`PanelSettings.cs:1300`) gains `Refused`. `WithProvidersFrom`
+  appends them: `UnrecognisedSettings = [.. UnrecognisedSettings, .. list.Refused.Select(r => new UnrecognisedSetting($"COAI_VENDORS[{r.Name}]", r.Sentence))]`
+  — the shape `SecurityLaneSetting.Apply` already uses (`SecurityLaneSetting.cs:42-43`). `FromEnvironment` then runs
+  `SecurityLaneSetting.Apply`, which appends its own lane complaints and does not replace the list
+  (checked, `SecurityLaneSetting.cs:35-44`), so the sentences survive, once each.
+  **The key is per ROW** (`COAI_VENDORS[claude]`, `COAI_VENDORS[row 2 of 3]`), not the bare variable name. The notice
+  ledger groups repeats on (code, subject), and the subject is the key (`StartupNotices.cs:74-75`; the reason is in
+  `PanelSettings.cs:612-616`). Under one shared key, two bad rows would fold into ONE notice row on the notices page
+  (plan gate, vibe). The panel toast is not the problem: it already shows every sentence, joined, in one toast
+  (`panelProvider.ts:937-963`). `UnrecognisedSetting.Key` is read only for that grouping and for `SettingProblems`,
+  which takes only entries with a `Kind` (`PanelSettings.cs:634-635`); these have none.
 - **D8 — No extension change.** The toast, the `unrecognised` parse (`providers.ts:129-136`) and the startup notice
   exist. The toast's cure ("Fix them in ConnectOtherAIs Settings and reload the window") is right for a panel user;
   the sentence itself names the hand-edit cure.
@@ -194,7 +216,7 @@ One pull request, one commit per story, each green on its own. Build order: **S1
 
 - **S1 — The row reader (D1, D2, D5).** `VendorRowReader.cs`; `ReadVendors` and the `ParseVendors` overloads
   delegate to it; the `null`-row crash goes away. Red first: T1, T3.
-- **S2 — The notice and the configured rule (D3, D4, D7).** `VendorList.Refusals`; the `VendorListFrom` rule;
+- **S2 — The notice and the configured rule (D3, D4, D7).** `VendorList.Refused`; the `VendorListFrom` rule;
   `WithProvidersFrom` appends the sentences; the not-JSON sentence. Red first: T2, T4, T5, T6.
 - **S3 — Docs.** `research/module_server.md`: a new section after § *A row's prompt cap* (`:7066`), "One bad field
   costs its row only", with the rule, the sentence and the configured rule; § *A CLI row's own timeout* (`:7059`) gets
@@ -210,7 +232,7 @@ One pull request, one commit per story, each green on its own. Build order: **S1
 |---|---|---|
 | The per-row read of `COAI_VENDORS` | builds it, in the NEW file `VendorRowReader.cs` | does not touch it |
 | `ParseVendors` and the DTO → row mapping | changes only its call to the reader (a few lines) | moves it to `VendorSettingsReader.cs` (its step 3) |
-| `VendorListFrom`, `VendorList`, `WithProvidersFrom` | adds `Refusals` and the configured rule | moves them with the vendor block |
+| `VendorListFrom`, `VendorList`, `WithProvidersFrom` | adds `Refused` and the configured rule | moves them with the vendor block |
 | `PanelSettings.cs` size | grows by about 10 lines | brings it under 800 |
 
 Order: either can go first. This plan is a behaviour fix and is small; whichever lands second rebases onto the
@@ -232,8 +254,9 @@ other. Disjoint otherwise: this plan touches no other block of `PanelSettings.cs
 
 - **Q1.** Should a bad `maxPromptKib` also be SAID (the row kept, the cap unset, one sentence)? Today it is silent,
   by #856's decision. Default if unanswered: no change.
-- **Q2.** D3 changes one outcome: a list whose every NAMED row is refused now runs no reviewer (the round refuses)
-  instead of the shipped pair. Both consultants preferred this. Default if unanswered: D3 as written.
+- **Q2.** D3 changes one outcome: a list in which any row is refused, and no row reads, now runs no reviewer (the
+  round refuses, and the sentences say why) instead of the shipped pair. Both consultants and the plan gate (codex)
+  preferred this. Default if unanswered: D3 as written.
 
 ## 11. Growth
 
@@ -256,9 +279,11 @@ is reported:
 | T1 | `AWrongTypeInOneRow_CostsOnlyThatRow` — `ParseVendors("""[{"id":"claude","runtime":"claude","timeoutMinutes":"30"},{"id":"gemini","runtime":"gemini"}]""")`; a theory over `"30"`, `30.5`, `30.0`, `"plan":"false"`, `"model":5`, `"price":{"in":"3"}`, `"stream":1`, `"document":"no"` | **zero vendors** (`Expected … to be equal to {"gemini"}, but found empty`) | exactly `gemini` |
 | T2 | `AWrongTypeInOneRow_IsSaid_ByRowAndMember` — `COAI_VENDORS` as in T1, through `FromEnvironment` | `Providers` is `codex, antigravity`; `Unrecognised` is empty | `Providers` is `gemini`; `UnrecognisedSettings` has one entry, key `COAI_VENDORS`, its sentence names `"claude"` and `timeoutMinutes` |
 | T3 | `ANullRow_IsLeftOutAndSaid_AndTheSettingsStillRead` — `[null,{"id":"gemini","runtime":"gemini"}]` | `NullReferenceException` out of `FromEnvironment` | `gemini`; a sentence naming row 1 of 2 |
-| T3b | `ANullRowAlone_NamesNoVendor_AndTheShippedPairRuns` — `[null]` | `NullReferenceException` | `codex, antigravity` (D3: names no vendor), and the sentence |
-| T4 | `EveryNamedRowLeftOut_RunsNoReviewerThePersonDidNotChoose` — `[{"id":"claude","runtime":"claude","timeoutMinutes":"30"}]` | `codex, antigravity` | `Providers` empty, the sentence present |
+| T3b | `ARefusedRowWithNoId_StillRunsNoReviewerThePersonDidNotChoose` — `[null]`, `[5]`, `[{"id":5}]`, `[{"runtime":"claude","timeoutMinutes":"30"}]` | `NullReferenceException` for `[null]`; `codex, antigravity` for the rest | `Providers` empty (D3), one sentence naming `row 1 of 1` |
+| T4 | `EveryRowLeftOut_RunsNoReviewerThePersonDidNotChoose` — `[{"id":"claude","runtime":"claude","timeoutMinutes":"30"}]` | `codex, antigravity` | `Providers` empty, the sentence present |
 | T5 | `AListThatIsNotJson_StillFallsBack_AndIsNowSaid` — `[{oops` and `{}` | the fallback is right, but `Unrecognised` is empty | the shipped pair (as `VendorSettingsTests.cs:50` pins) AND one sentence with the parser's position |
+| T12 | `TwoBadRows_AreTwoNotices` — two rows with a wrong type; `StartupNotices.Unrecognised` with a recording `Noticing` | (no sentence today) | two notes, subjects `COAI_VENDORS[claude]` and `COAI_VENDORS[row 2 of 3]`, each with its own sentence |
+| T13 | `AMemberPathIsSaidPlainly` — `MemberOf` over `null`, `""`, `"$"`, `"$.timeoutMinutes"`, `"$.price.in"`, `"$['odd name']"` | (new helper) | `one of its members`, three times; then `timeoutMinutes`, `price.in`, `['odd name']` |
 | T6 | `ProvidersCarriesTheRowAndTheMember` — `PanelService.ProvidersAsync` with the T2 settings (the `ARowCarriesAPromptCapTests.cs:91` shape) | `unrecognised` is empty | `unrecognised` holds the T2 sentence |
 
 **Guards that must stay green, unchanged** (regression):
@@ -277,16 +302,18 @@ B1 — let a per-row `JsonException` escape to the outer catch → T1, T2.
 B2 — remove the `ValueKind` check for a `null` row → T3, T3b.
 B3 — put back `vendors.Count > 0 || IsEmptyList(json)` as the configured rule → T4.
 B4 — do not append the refusals to `UnrecognisedSettings` → T2, T6.
-B5 — count a refused row with no readable `id` as naming a vendor → T3b.
+B5 — make the configured rule need a readable `id` on a refused row → T3b.
+B7 — key every refusal as the bare `COAI_VENDORS` → T12.
+B8 — read the refused row's name with `GetProperty("id")` → T3b (`KeyNotFoundException`).
 B6 — drop the not-JSON sentence → T5.
 
 The extension suite (`npm test` in `src_vs_code`) is not run for a change: no extension file changes (D8).
 
 ## Definition of Done
 
-- [ ] T1, T3, T3b, T4 each watched RED on today's code with the symptom in the message (zero vendors, the shipped
+- [ ] T1, T3, T3b, T4, T12 each watched RED on today's code with the symptom in the message (zero vendors, the shipped
       pair, the `NullReferenceException`), then GREEN; T2, T5, T6 the same.
-- [ ] B1–B6 run, each red with the named test, restored, green.
+- [ ] B1–B8 run, each red with the named test, restored, green.
 - [ ] T7–T11 green without change to their assertions.
 - [ ] The full `CoaiMcp.Tests` executable green; `dotnet format` clean on the touched files.
 - [ ] `VendorRowReader.cs` under 800 lines; `PanelSettings.cs` grows by no more than about 10 lines.
