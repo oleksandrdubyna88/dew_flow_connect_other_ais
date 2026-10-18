@@ -1,5 +1,11 @@
 # Changelog
 
+## Extension 0.80.1 — 2026-10-18
+
+**Changed: the help says how rounds per 1 % is counted now,** in all five languages: from one rise of the
+window's percentage to the next, pooled over the last ten such rises. When a figure is unavailable because the
+percentage has not moved yet, the reason now reads *the percentage has not risen yet*.
+
 ## Server 0.60.1 — 2026-10-18
 
 **Fixed: rounds per 1 % of quota is counted from one rise to the next, and pooled.** The `gauge` block of
