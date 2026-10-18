@@ -79,10 +79,13 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
 {
     public const string ScratchPrefix = "coai-question-";
 
+    /// <summary>The lock file a row holds in its scratch folder for its whole life — what tells the scratch sweep the row is alive (D8 of <c>todo/PLAN_vibe_reads_a_folder_of_repositories.md</c>).</summary>
+    public const string LockName = ".coai-question.lock";
+
     /// <summary>Makes a row's scratch folder; a test's seam for a folder that cannot be made.</summary>
     internal Func<string> MakeScratch { get; init; } = static () => Directory.CreateTempSubdirectory(ScratchPrefix).FullName;
 
-    /// <summary>The empty folder a home-keeping runtime's none row stands in, beside its home inside the row's folder.</summary>
+    /// <summary>The empty folder every scratch-cwd row stands in, beside its home when it keeps one, inside the row's folder.</summary>
     private const string EmptyName = "cwd";
 
     /// <summary>A question row's copies are one-shot: no conversation folder, so no homes root.</summary>
@@ -106,11 +109,13 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
 
         // Made INSIDE the try: when making it throws, the one-shot reservation above is still given back in `finally`.
         var scratch = string.Empty;
+        IDisposable scratchLock = Stream.Null;
         using var row = CancellationTokenSource.CreateLinkedTokenSource(ct);
         row.CancelAfter(ConsultationDeadline.For(input.Budget));
         try
         {
             scratch = NeedsAFolder(input.Row) ? MakeScratch() : string.Empty;
+            scratchLock = HoldTheLockOf(scratch);
             using var place = await PlaceAsync(input.Row, scratch, input.Budget, row.Token);
             if (place.Refusal.Length > 0)
             {
@@ -131,9 +136,34 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
         }
         finally
         {
+            // The lock goes BEFORE the folder it sits in: a held file would keep the delete from finishing on Windows.
+            scratchLock.Dispose();
             Remove(scratch);
             Release(homes);
         }
+    }
+
+    /// <summary>
+    /// The row's lock in its scratch folder, held until the row ends (D8 of <c>todo/PLAN_vibe_reads_a_folder_of_repositories.md</c>): the
+    /// scratch sweep keeps a <c>coai-question-*</c> folder whose lock it cannot take, because the row's budget has no upper bound and age
+    /// alone would delete the copies a live row is reading. A lock that cannot be taken is said, never a reason to refuse the row.
+    /// </summary>
+    private IDisposable HoldTheLockOf(string scratch)
+    {
+        if (scratch.Length == 0)
+        {
+            return Stream.Null;
+        }
+
+        var hold = Runners.Files.HeldFile.Take(Path.Combine(scratch, LockName));
+        if (hold is Runners.Files.Hold.Taken taken)
+        {
+            return taken.Stream;
+        }
+
+        log.Warning("a question row's scratch lock could not be taken in {Path}: {Hold}", scratch, hold);
+
+        return Stream.Null;
     }
 
     /// <summary>The row's one-shot folder when one was reserved, else its own scratch folder — where the home and the export live.</summary>
@@ -169,9 +199,17 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
         new(input.Repo, input.Row.Plan.Cwd == CwdKind.Snapshot ? input.PromptNaming(place.Roots) : input.Prompt, string.Empty, input.AnswersDir, Owning(input, homeFolder), input.SchemaFile)
         {
             Confinement = new LaunchConfinement.Planned(input.Row.Plan),
-            ScratchDir = KeepsAHome(input.Row) ? Directory.CreateDirectory(Path.Combine(scratch, EmptyName)).FullName : scratch,
+            ScratchDir = StandingFolderIn(scratch),
             Workdir = place.Workdir,
         };
+
+    /// <summary>
+    /// The empty folder a scratch-cwd row's CLI stands in: one level BELOW the row's folder, never the folder itself, which holds the
+    /// row's exclusively held <see cref="LockName"/> — a CLI that reads or indexes its working folder would meet a sharing violation on
+    /// Windows, and the file is noise to the model. Nothing when the row has no folder (its plan stands in a root).
+    /// </summary>
+    private static string StandingFolderIn(string scratch) =>
+        scratch.Length == 0 ? scratch : Directory.CreateDirectory(Path.Combine(scratch, EmptyName)).FullName;
 
     private static ReviewerSettings Owning(RowLaunchInput input, string homeFolder) =>
         KeepsAHome(input.Row) ? input.Settings with { OwnedScratch = homeFolder } : input.Settings;
