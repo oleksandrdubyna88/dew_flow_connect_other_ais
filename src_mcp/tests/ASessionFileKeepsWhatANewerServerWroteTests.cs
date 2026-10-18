@@ -194,7 +194,7 @@ public sealed class ASessionFileKeepsWhatANewerServerWroteTests : IDisposable
     /// <summary>The names an object was written with must be exactly those of its type's JSON contract that held a value.</summary>
     private static void AssertWrittenAsTheContract<T>(JsonNode? written, T value, JsonTypeInfo<T> info, string level)
     {
-        var expected = info.Properties.Where(p => p.Get?.Invoke(value!) is not null).Select(p => p.Name);
+        var expected = info.Properties.Where(p => !p.IsExtensionData && p.Get?.Invoke(value!) is not null).Select(p => p.Name);
         written!.AsObject().Select(p => p.Key).Should().BeEquivalentTo(expected, level);
     }
 
@@ -273,5 +273,183 @@ public sealed class ASessionFileKeepsWhatANewerServerWroteTests : IDisposable
 
         Spelled(file, [], "planText").Should().Be(1);
         JsonNode.Parse(File.ReadAllText(file))!["planText"]!.GetValue<string>().Should().Be("UPPER");
+    }
+
+    private static JsonElement Value(string json) => JsonDocument.Parse(json).RootElement.Clone();
+
+    /// <summary>A bag with what it held and one more entry — a copy, never the dictionary it was given.</summary>
+    private static Dictionary<string, JsonElement> WithEntry(Dictionary<string, JsonElement>? bag, string name, string json) =>
+        new(bag ?? []) { [name] = Value(json) };
+
+    /// <summary>
+    /// The session as CODE can make it and deserialisation never does: a stale copy of a KNOWN member put into the bag of every
+    /// level — session <c>planText</c>, state <c>stage</c>, config <c>onExhausted</c>, a gate's <c>threshold</c>, a round's
+    /// <c>verdict</c> and a reviewer row's <c>status</c>.
+    /// </summary>
+    private static PersistedSession WithForgedKnownNames(PersistedSession loaded)
+    {
+        var (role, gate) = loaded.State.Config.Roles.First();
+        var roles = loaded.State.Config.Roles.ToDictionary(p => p.Key, p => p.Value);
+        roles[role] = gate with { Unknown = WithEntry(gate.Unknown, "threshold", "99") };
+        var config = loaded.State.Config with
+        {
+            Roles = roles,
+            Unknown = WithEntry(loaded.State.Config.Unknown, "onExhausted", "\"Continue\""),
+        };
+        var round = loaded.Rounds[0] with
+        {
+            Unknown = WithEntry(loaded.Rounds[0].Unknown, "verdict", "\"OLD\""),
+            ReviewerStates =
+            [
+                loaded.Rounds[0].ReviewerStates[0] with
+                {
+                    Unknown = WithEntry(loaded.Rounds[0].ReviewerStates[0].Unknown, "status", "\"OLD\""),
+                },
+            ],
+        };
+
+        return loaded with
+        {
+            Unknown = WithEntry(loaded.Unknown, "planText", "\"OLD\""),
+            State = loaded.State with { Unknown = WithEntry(loaded.State.Unknown, "stage", "\"PlanReview\""), Config = config },
+            Rounds = [round],
+        };
+    }
+
+    /// <summary>Each forged name with where it sits, and the TYPED value that must win.</summary>
+    private static readonly (string[] Where, string Name, string Typed)[] Forged =
+    [
+        ([], "planText", "THE SCOPE"),
+        (["state"], "stage", "CodeReview"),
+        (["state", "config"], "onExhausted", "Human"),
+        (["rounds[0]"], "verdict", "proceed"),
+        (["rounds[0]", "reviewerStates[0]"], "status", "done"),
+    ];
+
+    [Fact]
+    public void AKnownNameInABag_IsDroppedOnSave_AndTheTypedValueWins()
+    {
+        var store = new SessionStore(_data);
+        var file = Plant(store, Planted);
+
+        store.Save(WithForgedKnownNames(store.Load(Repo, Branch)!));
+
+        foreach (var (where, name, typed) in Forged)
+        {
+            Spelled(file, where, name).Should().Be(1, $"{string.Join('.', where)} {name} must be written once, by the typed member");
+            Locate(JsonNode.Parse(File.ReadAllText(file))!.AsObject(), where)[name]!.GetValue<string>()
+                .Should().Be(typed, $"the typed {name} must win over the bag's stale copy");
+        }
+
+        var roles = JsonNode.Parse(File.ReadAllText(file))!["state"]!["config"]!["roles"]!.AsObject();
+        Spelled(file, ["state", "config", "roles", roles.First().Key], "threshold").Should().Be(1, "a gate's threshold is written once");
+        roles.First().Value!["threshold"]!.GetValue<int>().Should().NotBe(99, "the typed threshold must win");
+        AssertEveryUnknownIsThere(file, Planted);
+
+        var reloaded = store.Load(Repo, Branch)!;
+        reloaded.PlanText.Should().Be("THE SCOPE");
+        reloaded.Rounds[0].Verdict.Should().Be("proceed");
+        reloaded.Rounds[0].ReviewerStates[0].Status.Should().Be(ReviewerState.Done);
+    }
+
+    [Fact]
+    public void ARetiredMember_IsDroppedOnSave()
+    {
+        var retired = new RetiredMembers([(typeof(RoundRecord), "authors"), (typeof(PersistedSession), "FUTUREROOT")]);
+        var store = new SessionStore(_data) { Retired = retired };
+        var file = Plant(store, Planted);
+
+        store.Save(store.Load(Repo, Branch)!);
+
+        var json = JsonNode.Parse(File.ReadAllText(file))!.AsObject();
+        json.ContainsKey("futureRoot").Should().BeFalse("a retired name is dropped, whatever its case");
+        json["rounds"]![0]!.AsObject().ContainsKey("authors").Should().BeFalse("authors was registered as retired");
+        AssertEveryUnknownIsThere(file, Planted.Where(p => p.Name is not ("authors" or "futureRoot")));
+    }
+
+    [Fact]
+    public void TheScrubLeavesTheSnapshotItWasGivenUnchanged()
+    {
+        var store = new SessionStore(_data);
+        Plant(store, Planted);
+        var forged = WithForgedKnownNames(store.Load(Repo, Branch)!);
+        var before = JsonSerializer.Serialize(forged, ServerJsonContext.Default.PersistedSession);
+
+        store.Save(forged);
+
+        forged.Unknown.Should().ContainKey("planText", "the caller's bag is shared by every with-copy: it is not scrubbed in place");
+        forged.State.Unknown.Should().ContainKey("stage");
+        forged.State.Config.Unknown.Should().ContainKey("onExhausted");
+        forged.State.Config.Roles.First().Value.Unknown.Should().ContainKey("threshold");
+        forged.Rounds[0].Unknown.Should().ContainKey("verdict");
+        forged.Rounds[0].ReviewerStates[0].Unknown.Should().ContainKey("status");
+        JsonSerializer.Serialize(forged, ServerJsonContext.Default.PersistedSession).Should().Be(before);
+    }
+
+    /// <summary>
+    /// The JSON member names of each type whose file members are kept — COMMITTED here, so that a release which removes or renames
+    /// one is stopped until it tells the scrub (<see cref="RetiredMembers"/>).
+    /// </summary>
+    private static readonly (JsonTypeInfo Info, string[] Members)[] Committed =
+    [
+        (ServerJsonContext.Default.PersistedSession,
+            ["state", "rounds", "openedUtc", "pending", "planText", "plan", "epic", "cadenceRepoId", "featureBase", "carried", "caller", "usedPrompts"]),
+        (ServerJsonContext.Default.SessionState,
+            ["sessionId", "repoPath", "branch", "config", "stage", "roundsRunThisStage", "escalationsUsed", "awaitingResolve", "planProceeded", "advanceOnResolve", "humanGate", "holdQuestions", "requestQuestions", "rejections", "secondRound", "document", "isDocumentSession", "feature", "isFeatureSession"]),
+        (ServerJsonContext.Default.PanelConfig,
+            ["onExhausted", "catalog", "securityLane", "roles"]),
+        (ServerJsonContext.Default.RoleGate,
+            ["maxRounds", "threshold", "enabled"]),
+        (ServerJsonContext.Default.RoundRecord,
+            ["stage", "number", "verdict", "gatingCount", "reviewers", "completedUtc", "status", "startedUtc", "runnerPid", "sha", "planKey", "epicNumber", "cadenceNote", "note", "key", "admittedBy", "repeats", "loggedNote", "reviewerStates", "caller", "size", "gitlinks", "planSource", "subject", "tokensIn", "tokensOut", "costUsd", "costNote", "usageNote"]),
+        (ServerJsonContext.Default.ReviewerState,
+            ["provider", "role", "status", "findings", "note", "seconds", "model", "effort", "warning"]),
+    ];
+
+    [Fact]
+    public void EveryBaggedTypesMembers_AreTheListedOnesOrRetired()
+    {
+        // A rename matters most: the old name in old files becomes a bag entry, and the new property starts empty.
+        var problems = Committed.SelectMany(c => MemberProblems(c.Info, c.Members)).ToList();
+
+        string.Join("; ", problems).Should().BeEmpty("a member that went away is named in RetiredMembers, a member that came is added to the list");
+    }
+
+    [Fact]
+    public void TheMemberListCheckStillSeesTheTypes()
+    {
+        // The check compares two lists, and a list that is empty on both sides would pass for ever.
+        Committed.Should().OnlyContain(c => c.Members.Length > 0 && c.Info.Properties.Count > 0);
+        Committed.Select(c => c.Info.Type).Should().BeEquivalentTo(
+            [typeof(PersistedSession), typeof(SessionState), typeof(PanelConfig), typeof(RoleGate), typeof(RoundRecord), typeof(ReviewerState)]);
+        Committed.Select(c => c.Info.Properties.Count(p => p.IsExtensionData)).Should().OnlyContain(
+            n => n == 1, "each type lists its bag among its properties, which is why the list check filters it out");
+    }
+
+    private static IEnumerable<string> MemberProblems(JsonTypeInfo info, string[] committed)
+    {
+        var actual = info.Properties.Where(p => !p.IsExtensionData).Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var retired = RetiredMembers.Shipped.Of(info.Type);
+        var listed = committed.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return
+        [
+            .. listed.Except(actual).Except(retired).Select(n => $"{info.Type.Name}.{n} is gone and is not in RetiredMembers"),
+            .. actual.Except(listed).Select(n => $"{info.Type.Name}.{n} is new and is not in the committed list"),
+            .. retired.Intersect(actual).Select(n => $"{info.Type.Name}.{n} is retired but still a member"),
+        ];
+    }
+
+    [Fact]
+    public void ACatalogAnOlderBuildWroteIntoTheConfig_IsNotCarriedForEver()
+    {
+        // PanelConfig.Catalog is [JsonIgnore]d since the catalog stopped being persisted, and earlier files still hold one.
+        // It is a member of the contract that is never written, so it is not "something a newer server wrote".
+        var store = new SessionStore(_data);
+        var file = Plant(store, [new Planting(["state", "config"], "catalog", """{"roles":["old"]}""")]);
+
+        store.Save(store.Load(Repo, Branch)!);
+
+        JsonNode.Parse(File.ReadAllText(file))!["state"]!["config"]!.AsObject().ContainsKey("catalog").Should().BeFalse();
     }
 }

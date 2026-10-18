@@ -472,6 +472,9 @@ internal sealed class SessionTurn : IDisposable
 
 public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
 {
+    /// <summary>The names a release retired from the types whose file members are kept; the save drops them. A test registers its own.</summary>
+    internal RetiredMembers Retired { get; init; } = RetiredMembers.Shipped;
+
     private string SessionsDir => Path.Combine(dataDir, "sessions");
 
     /// <summary>
@@ -564,7 +567,8 @@ public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
         // tried to move it, and the loser died with `UnauthorizedAccessException: Access to the path
         // is denied` out of `LiveRound.Persist`. Twice in one morning's log before it was understood.
         var temp = $"{file}.{Environment.ProcessId}-{Guid.NewGuid().ToString("N")[..8]}.tmp";
-        var json = JsonSerializer.Serialize(session, ServerJsonContext.Default.PersistedSession);
+        // The bags are cleaned on a copy, once, here — the only place a session is serialised (SessionScrub says what it drops).
+        var json = JsonSerializer.Serialize(SessionScrub.Scrubbed(session, Retired), ServerJsonContext.Default.PersistedSession);
         using (var turn = SessionTurn.Take(file))
         {
             if (turn.Held)
