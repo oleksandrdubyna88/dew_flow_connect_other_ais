@@ -1,7 +1,7 @@
 import { apiSettingsFields } from './apiSettingsView';
 import { type BinarySays, confirmButton, describedBy, type FirstSeen, newTag, skew } from './catalogShell';
 import { escapeHtml } from './escapeHtml';
-import { effortField, fastField, streamField, systemPromptField, thinkingLine, timeoutField, usesBoxes } from './modelCardFields';
+import { effortField, fastField, maxPromptField, streamField, systemPromptField, thinkingLine, timeoutField, usesBoxes } from './modelCardFields';
 import { rowHasFastTier } from './fastTier';
 import {
   type CheckFacts, checkButton, cliBadge, contractNote, healthBadge, offMachineNote, verdictBadge, versionWarningNote, worldButtons,
@@ -153,6 +153,7 @@ function actions(vendor: Vendor, id: string, facts: ModelCardFacts, locked: stri
 const IGNORED: readonly { readonly feature: string; readonly what: string; readonly set: (vendor: Vendor) => boolean }[] = [
   { feature: 'systemPrompt', what: 'its system prompt', set: (vendor) => (vendor.systemPrompt ?? '').length > 0 },
   { feature: 'timeoutMinutes', what: 'its own time limit', set: (vendor) => vendor.runtime !== 'api' && vendor.timeoutMinutes !== undefined },
+  { feature: 'maxPromptKib', what: 'its prompt cap', set: (vendor) => vendor.maxPromptKib !== undefined },
   { feature: 'cliEffort', what: 'its effort', set: (vendor) => vendor.runtime !== 'api' && (vendor.effort ?? '').length > 0 },
   { feature: 'apiStream', what: 'streaming the answer', set: (vendor) => vendor.runtime === 'api' && vendor.stream === true },
   // A consultation reads the row's settings only from a binary that takes the whole row (C2; the epics 4–5 consultation).
@@ -203,7 +204,8 @@ function top(vendor: Vendor, id: string, facts: ModelCardFacts): string {
 }
 
 function useFor(vendor: Vendor, id: string, facts: ModelCardFacts): string {
-  const on = vendor.enabled && facts.context.runtimeNote.length === 0;
+  // The held RUNTIME switches the boxes off — not any note: a host note (refused on native Linux) leaves the ticks alone.
+  const on = vendor.enabled && !facts.context.runtimeHeld;
   const stage = (kind: 'plan' | 'code', text: string): string => stageBox(kind, id, vendor[kind], on && !facts.lastFor.includes(kind), text, '',
     facts.lastFor.includes(kind) ? lockLineId(vendor) : '');
 
@@ -238,9 +240,9 @@ function tuning(vendor: Vendor, id: string, facts: ModelCardFacts): string {
   const context = facts.context;
 
   return vendor.runtime === 'api'
-    ? apiSettingsFields(vendor, id, context.reported[vendor.id], context.serverVersion) + streamField(vendor, id, newTag('model.stream', facts.firstSeen, facts.now))
+    ? apiSettingsFields(vendor, id, context.reported[vendor.id], context.serverVersion) + streamField(vendor, id, newTag('model.stream', facts.firstSeen, facts.now)) + maxPromptField(vendor, id)
     : effortField(vendor, id, probedOf(context, vendor.id), newTag('model.effort', facts.firstSeen, facts.now)) + thinkingLine(vendor) + timeoutField(vendor, id)
-      + fastOf(vendor, id, facts);
+      + maxPromptField(vendor, id) + fastOf(vendor, id, facts);
 }
 
 /** The fast-mode select, for a row that has a tier (research/PLAN_fast_mode.md). */

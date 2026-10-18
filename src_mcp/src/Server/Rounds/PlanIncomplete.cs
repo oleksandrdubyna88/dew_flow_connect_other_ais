@@ -7,10 +7,12 @@ namespace CoaiMcp.Server;
 /// A reviewer that said the plan did not reach it whole did not review the plan — it failed, and is never an answer.
 /// </summary>
 /// <remarks>
-/// <para>Parent D12. Applied to <c>results</c> right after the fan-out returns, because everything after it reads
-/// them: the summary, the merge (which keeps only <see cref="ReviewerOutcome.Ok"/>), the decision, the notice, the
-/// live view's finish and the spent lenses. The progress callback has already shown the reviewer as finished — an
-/// accepted mismatch the parent records.</para>
+/// <para>Parent D12, settled ONCE: the scheduler applies <see cref="Settle"/> to each reviewer's outcome where it finishes
+/// (<c>BoundedScheduler.RunAllAsync</c>'s <c>settle</c>), so the spending ledger, the live view, the audit line, the local
+/// stand-down count and the round's <c>results</c> — the summary, the merge (which keeps only <see cref="ReviewerOutcome.Ok"/>),
+/// the decision, the notice and the spent lenses — all read the same outcome. It used to run on <c>results</c> after the
+/// fan-out, which left the first four saying <c>ok</c>: the "accepted mismatch" D12 recorded, superseded by
+/// <c>research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md</c> (D8). The tokens the reviewer spent are kept (D9).</para>
 /// <para><b>Any</b> finding titled with THIS round's token folds the reviewer, whatever else it answered. The token is a
 /// statement that the plan did not arrive whole; a reviewer that makes it did not review the plan, and "exactly one
 /// finding" let two identical tokens — or the token beside others — stay an answer and carry a round past the plan
@@ -23,20 +25,26 @@ internal static class PlanIncomplete
 {
     internal const string Reason = "the plan did not reach this reviewer whole (PLAN_INCOMPLETE)";
 
-    internal static IReadOnlyList<(ReviewerInvocation Invocation, ReviewerOutcome Outcome)> Fold(
-        Stage stage,
-        string planText,
-        IReadOnlyList<(ReviewerInvocation Invocation, ReviewerOutcome Outcome)> results)
+    /// <summary>The title THIS round's token carries — computed once per round, from the plan the round was handed.</summary>
+    internal static string TitleOf(string planText) => PlanSection.IncompleteTitle(DocumentRules.ArtifactIdOf(planText));
+
+    /// <summary>
+    /// The rule a round hands the scheduler: <see cref="Settle"/> with this round's title worked out ONCE — and not at all for a
+    /// stage that has no plan to be cut, whose <c>planText</c> can be a whole diff.
+    /// </summary>
+    internal static Func<ReviewerOutcome, ReviewerOutcome> Settler(Stage stage, string planText)
     {
-        if (stage != Stage.PlanReview)
-        {
-            return results;
-        }
+        var title = stage == Stage.PlanReview ? TitleOf(planText) : string.Empty;
 
-        var title = PlanSection.IncompleteTitle(DocumentRules.ArtifactIdOf(planText));
-
-        return [.. results.Select(r => (r.Invocation, Outcome: Folded(r.Outcome, title)))];
+        return outcome => Settle(stage, title, outcome);
     }
+
+    /// <summary>
+    /// ONE reviewer's outcome, settled: a plan-stage answer carrying this round's token is the failure it is, everything else is
+    /// returned as it came.
+    /// </summary>
+    internal static ReviewerOutcome Settle(Stage stage, string title, ReviewerOutcome outcome) =>
+        stage == Stage.PlanReview ? Folded(outcome, title) : outcome;
 
     private static ReviewerOutcome Folded(ReviewerOutcome outcome, string title)
     {

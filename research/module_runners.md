@@ -42,8 +42,10 @@ sequenceDiagram
 | `IProcessLauncher` / `ProcessLauncher` | `Processes/ProcessLauncher.cs` | the ONE process seam; one deadline over the write, the read and the wait, and it kills the entire tree; `StdIn` carries every long or multi-line input, BOM-less UTF-8, and a child that exits before reading is not an exception; each stream is kept up to `MaxOutputChars` and says so when it is cut; a request with `InheritsEnvironment = false` starts the child from `ProcessEnvironment.Passthrough` instead of this process's whole environment, the request's own names on top either way |
 | `ProcessEnvironment` | `Processes/ProcessEnvironment.cs` | the allowlist a confined launch starts from — an allowlist because what is being kept out is not a known name; compared the platform's way (`Path` is `PATH` on Windows and is not on Linux); `HOME` is on it for a measured reason, below |
 | `ExecutableResolver` | `Processes/ExecutableResolver.cs` | npm Windows shims: the PATHEXT resolution `Process.Start` does not do |
-| `WorktreeManager`, `WorktreeLease` | `Worktrees/WorktreeManager.cs` | one detached tree per round, `coai-wt-` prefix under OUR storage; prune-on-open; disposal = finally; never touches a human's worktree |
+| `WorktreeManager`, `WorktreeLease` | `Worktrees/WorktreeManager.cs` | one detached tree per round, `coai-wt-` prefix under OUR storage (`%LOCALAPPDATA%\coai-mcp\round-worktrees`, or `COAI_ROUND_WORKTREES` — a LOCAL path; a shorter root is also the way to more path ceiling on a git that ignores `core.longpaths`; review trees move with `COAI_REVIEW_ROOT` instead, never with this one); prune-on-open; disposal = finally; never touches a human's worktree |
 | `SubmodulePopulator` | `Worktrees/SubmodulePopulator.cs` | fills the round tree's submodules from the PARENT checkout, not the remote — git populates none in a linked worktree, and in this family the project's rules ARE one; offline, pinned, never fatal, and refused when the source is reached through a reparse point |
+| `TreeGit` | `Worktrees/TreeGit.cs` | how git is started in a tree coai MADE: on Windows every launch point that works in a round tree or a review tree (`WorktreeManager.Git`, `ReviewTreeRoot.GitAsync`, `SubmodulePopulator.OneAsync`) leads its argv with `-c core.longpaths=true`, so a tracked path past Windows' 259 UTF-16 units checks out, reads clean, populates in a submodule and is removed; per command, never a config write; on Linux and macOS the argv is unchanged |
+| `WorktreeFailure` | `Worktrees/WorktreeFailure.cs` | what a failed round-tree `worktree add` says: reads git's own `error: unable to create file <rel>: <reason>` / `fatal: cannot create directory at '<rel>': <reason>` line and names the path, its length in UTF-16 units and git's reason, instead of only the closing `fatal: Could not reset index file` (which names the index); for `Filename too long` it adds the Windows limit of the KIND of path git could not make (`WindowsMaxPathUnits` = 259 for a file, `WindowsMaxFolderUnits` = 247 for a folder, one constant each, Windows only) and `COAI_ROUND_WORKTREES`; a failure with no such line reads exactly as `FatalLine` always did. Round trees only — a review tree keeps its wire word `git_failed` |
 | `GitModules`, `SubmoduleMount` | `Git/GitModules.cs` | `.gitmodules` as (name, path); a file inside the repository under review, so absolute/traversing paths and names that could spell another config key drop the mount |
 | `DiffExclusions`, `ContextAssembler`, `CollectedDiff`, `DiffBase` | `Context/ContextAssembler.cs` | numstat → per-file diffs with `:(exclude,glob)` pathspecs; binary sizes via `cat-file -s`; every one of the three taken against the MERGE BASE, which the result names. `DiffExclusions.Excludes(path)` / `WhichExcludes` answer the same glob table for ONE path — the source resolver's question, since it has no git call to hand the pathspecs to. Each glob's matcher carries a 1000 ms match ceiling (SonarCloud S6444), and a match that hits it FAILS CLOSED — the path counts as excluded and is never served, the refusal naming that glob (`WhenMatchTimesOut`, reached by a test through the `FirstExcluding` seam) |
 | `SourceResolver` | `Feature/SourceResolver.cs` | source on demand for a feature reviewer (plan §4.9, S3.1): git objects at the round's pinned head and nothing else, one read per file per round, every name check before any process, every byte through `Redaction.SafeSource`, every cap from `SourceBudget` — the section below |
@@ -112,9 +114,13 @@ sequenceDiagram
   given `ForBranch(branch)` — the tier FIXED, the rest of the mount ordered by a SHA-256 of *(branch,
   rule name)*. Two rounds of one fix therefore show identical rules, which is the defect the plan was
   opened for, while different branches order the rest of the corpus differently. **That second half
-  currently reaches almost nothing in this repository** — the base and the tier spend **77 562** of
-  the 80 000-byte budget, and the smallest rule outside the tier is 2 213, so the tail takes ONE rule
-  and the rest are skipped as oversized.
+  reaches one to three rules in this repository since the operator raised the budget to 90 000 bytes
+  (2026-10-16; `RuleFiles.DefaultBudgetBytes`)** — the base and the tier spend **79 944** bytes, which
+  left **56** at the old 80 000 (the tail took nothing, so `common/test-leftovers.md` reached no
+  reviewer) and leave **10 056** now; the smallest rule outside the tier is 2 197. Over 3 000 branch
+  names the tail takes one rule on 30 %, two on 62 %, three on 8 % (mean 1.78), and
+  `common/test-leftovers.md` is drawn on 9.8 % — drawn, not owed: a rule that must reach every reviewer
+  belongs in the tier. Numbers: `research/RESULTS_rules_selection_budget.md` (last section).
 
   **That number is the same on every platform only since 2026-09-18.** Until then `RuleFiles.Read`
   handed the collector whatever the disk held, so a CRLF checkout measured **78 855** — one character
@@ -127,9 +133,15 @@ sequenceDiagram
   somebody pays for. `ACrlfCheckout_ReachesTheSameRulesAsAnLfOne` is the guard, and it runs everywhere
   because it writes both corpora itself rather than depending on the checkout it finds.
 
-  The rotation is correct and all but inert; rule
-  modularization or the resolver is what would give it room, and
-  `StageRulesTests.TheRotatedTail_CurrentlyFitsAtMostOneRule` fails the day that changes.
+  The 1 145 / 77 562 / 78 855 figures in this paragraph are the 2026-09-18 measurements at 80 000 bytes
+  and stay as the history of the CRLF defect. The rotation has room since 2026-10-16;
+  `StageRulesTests.AtNinetyKilobytes_TheBaseAndTheTier_SpendExactly79944Bytes` (the measuring test and drift
+  guard: 17 883 + 62 061),
+  `AtNinetyKilobytes_TheRotatedTail_FitsAtMostThreeRules` (the exact three tail rules on the canary branch,
+  the measured maximum elsewhere),
+  `AtNinetyKilobytes_EveryBranchReachesAtLeastOneTailRule` (at least one) and
+  `AtNinetyKilobytes_TheTestLeftoversRule_IsShownOnTheBranchesThatDrawIt` pin the facts and fail the day they change;
+  `RuleFilesTests.TheDefaultBudget_IsTheOperatorsNinetyKilobytes` pins the number itself.
   `string.GetHashCode` is unusable here: .NET randomises it per process,
   so it would differ between two rounds on one machine. Measured basis:
   [RESULTS_rules_selection_budget.md](RESULTS_rules_selection_budget.md).
@@ -2271,7 +2283,7 @@ two protections (S3.1) are applied there as well — the pack goes to the same t
   withholds every hunk line rather than serving any.
   (`APrivateKeyBlockIsNeverServedTests.AHunkInsideAKeyBody_WithNoMarkerInView_IsWithheldFromThePack`.)
 - **`StageRules.Feature`** (`runners/Context/StageRules.cs`) — the feature stage's rules tier, collected
-  at the full `RuleFiles.DefaultBudgetBytes` (D18): the code review's order (the language doctrines,
+  at the full `RuleFiles.DefaultBudgetBytes` (D18; 90 000 bytes since 2026-10-16): the code review's order (the language doctrines,
   security, testing, reuse, style, the knowledge base) and then the rules a feature breaks ACROSS
   epics — reliability, scenario tests, planning docs, HTTP contracts, platform limits.
   `StageRulesTests.EveryTierEntry_ResolvesInThePinnedConventionsMount` covers the new tier.
@@ -2986,8 +2998,9 @@ the consultant's launch and the question row are S3's.
 
 Mistral Vibe (`vibe`, the Python CLI, on the person's own Mistral subscription — its sign-in is in the OS keyring,
 research/RESULTS_vibe_confinement.md §12) reviews plans and code as a CLI row, runtime `vibe`. Every flag and every check
-cites the RESULTS cell it rests on — all Windows, 3 of 3, Vibe 2.26.1 — and nothing here claims anything for WSL or
-macOS: a launch on any host but Windows is refused (D18). Machine-only (D12: `MachineOnlyRuntimes`, so the Team server
+cites the RESULTS cell it rests on — Windows 3 of 3, Vibe 2.26.1 — and, since E2 of `todo/PLAN_kimi_and_vibe_on_linux.md`
+(2026-10-16), WSL2 (the scout's cells, n = 1, RESULTS §30): a launch on a Windows host or a **WSL2** host starts; a native Linux
+host, a WSL1 host, macOS and a Windows row naming `wsl.exe` are refused (D18, DL1). Machine-only (D12: `MachineOnlyRuntimes`, so the Team server
 refuses a `vibe` row by name); not in any default vendor list (D11).
 
 ```mermaid
@@ -3001,8 +3014,9 @@ sequenceDiagram
   R->>V: Build(role, prompt, snapshot root, …, OwnedScratch) — argv, built env, home vh-HASH in the round's scratch
   E->>V: ForLaunch: --time-limit from THIS launch's timeout, a fresh export folder vx-HASH
   E->>V: TakeTurnAsync (before EVERY launch)
-  V->>V: host is Windows (D18) · env is the built one (D17) · model on the curated list (D10) · home made, not a link
-  V->>V: take the home's turn (serialised) · the home's SHAPE (no hooks.toml, config.toml, agents/, tools/, link, trust entry)
+  V->>V: host is Windows or WSL2 (D18, DL1) · env is the built one (D17) · model on the curated list (D10) · home made, not a link
+  V->>V: take the home's turn (serialised) · the home's SHAPE (no hooks.toml, config.toml, agents/, tools/, no link but the one admitted .env, trust entry)
+  V->>V: a host that links the sign-in (WSL2): VibeSignInLink makes HOME/.env -> the person's ~/.vibe/.env (DL2)
   V->>P: vibe --version (same built env, same home)
   V->>V: a measured version: its plugin files by SHA-256, a mismatch refused · an unmeasured version: run, with a warning
   V-->>E: Refused(sentence) → NotStarted, nothing started  |  Holding(turn + export folder, warning)
@@ -3038,8 +3052,9 @@ sequenceDiagram
   scratch folder (`RoundScratch`), so one home per reviewer of the round, and a repair or a retry of that reviewer starts
   on the home its first launch left. Without an owned scratch (a caller that set none) the home falls back to the
   launch's own `coai-answers-*` folder, which the six-hour sweep removes.
-- **The launch control** (`VibeLaunch.TakeAsync`, through `IReviewerRuntime.TakeTurnAsync`), in this order: the host
-  (D18 — a non-Windows host, or a WSL bridge named as the executable, `wsl.exe` or `\\wsl$\…`); the environment is the
+- **The launch control** (`VibeLaunch.TakeAsync(VibeHost, …)`, through `IReviewerRuntime.TakeTurnAsync`), in this order: the host
+  (`HostRefusal(host, executable, wsl)`: Windows and WSL2 admitted; WSL1 refused with the WSL1 sentence, a native Linux host with the
+  WSL2-only sentence (DL1), macOS and `Other` with D18's; a Windows row naming a WSL bridge, `wsl.exe` or `\\wsl$\…`, still D18's); the environment is the
   built one; the model is on `VibeModels.Curated` (`mistral-medium-3.5`, `glm-5-3` — the two seen as `active_model`,
   §11/§17/§24 — because Vibe exits 0 on an alias it does not know, §11); the home is made when absent and is not a link;
   the home's TURN is taken (`VibeHomeTurns`, in-process, keyed by the full path, dropped when its last holder leaves);
@@ -3049,7 +3064,56 @@ sequenceDiagram
   must not reach the review (the risk consultation 6b4726a6 of 2026-10-13 found the unmeasured branch launched without
   this re-check); for a version WITH an entry in `shared/vibe-home-manifest.json` the home is then checked with the
   plugin files' hashes — a mismatch is tampered bytes of a measured version, and refused. Every refusal is `NotStarted` with the path and its cure (delete the
-  home; the next launch starts from an empty one).
+  home; the next launch starts from an empty one). **The manifest is per platform** (DL3): `VibeHomeEntry.Platform` (`win32` | `linux`,
+  as node spells it; an entry with no `platform` reads as `win32`), `VibeHomeManifest.For(version, platform)`, and the verdict still needs
+  exactly ONE entry — for the HOST's platform (`VibeHost.Platform`: Windows `win32`, WSL and Linux `linux`; in the product the process's own).
+  The Linux entry of 2.26.1 (L-V7, written by the script in WSL2: two fresh homes agreed on all 12 hashes, 11 differ from `win32`) waited
+  under `staged` until this change and was moved with `node scripts/vibe-home-manifest.mjs --unstage linux` in the same commit that made
+  the C# read the field (moved earlier, four `*Vibe*` tests went red, a tampered Windows plugin file among them). A version measured on
+  ANOTHER platform only is an unmeasured version here: run with the shared warning, which names every measured version with its platform
+  (`Known`: `2.26.1 (win32), 2.26.1 (linux)`). `logs/session/unified/.session-index.json` joined `varying` on every platform (session data).
+- **The sign-in is LINKED, never copied** (DL2; A1 spec; the cornerstone area): on a host that links one (`VibeSignIn.Links` — WSL2; never
+  Windows, where the sign-in is the keyring) the launch control makes `HOME/.env` → the person's `<VIBE_HOME or ~/.vibe>/.env` between the
+  first shape check and `--version` (`VibeSignInLink.Make`). In order: something at the name that is not the right link is refused and
+  never deleted; then the target is judged on EVERY turn, the same home's second included (this corrects the A1 spec §3.2 step 2, which
+  answered `Linked` for the right link without looking: the person's file can change between turns — a `VIBE_*` appended, `chmod 666`, a FIFO —
+  and the turn would run un-judged; an admitted file on a second turn is `Linked` without remaking the link, and a rotated key stays
+  admitted): the target is read through ONE descriptor (`RegularFiles.ReadOwned`,
+  ported from wsl_care's Linux leg: `open(O_NOFOLLOW|O_NONBLOCK|O_CLOEXEC)`, then `statx` of THAT descriptor for type, owner = `geteuid`,
+  no group/other write bit, then at most 64 KiB, one byte more refused; a link, FIFO, socket or device is refused, never waited on) — missing →
+  `NoSignIn` (no link, Vibe runs signed out); then its variable NAMES are scanned (`DotenvNames.Judge`: python-dotenv's name grammar over BYTES,
+  a line break is CRLF, LF or a bare CR; four refusal kinds `NotText`/`NoBinding`/`OtherName`/`ByteOrderMark`, each refused by LINE NUMBER only —
+  never a name or a byte of any value; the buffer is zeroed after the scan); only `MISTRAL_API_KEY` is admitted, and a value python-dotenv
+  cannot parse is admitted (it binds nothing). The link is made at a path that does not exist and read back RAW (`FileInfo.LinkTarget`, never
+  resolved); a failed step removes what it made by its own name and the launch goes on signed out (`NotMade`) — never a copy; a leftover coai
+  cannot remove refuses the launch. `VibeHome.Judge` admits exactly that link (`AdmittedLink`: name `.env` at the top level, its raw target
+  string-equal to the expected absolute path); every other link, a `.env` file, a link below the top level, a link to a folder, and any link on
+  Windows is refused as before. The reason a link was not made rides as the launch's WARNING (`LaunchTurn.Warning`; the cure is keyed on Vibe's
+  own text and cannot see the launch control — a recorded deviation from the plan gate's F3). The `providers` probe makes no link (`--version`
+  needs no key). **The residual**, stated on `ReadOwned`: coai's judgement and Vibe's read are two opens; the mode rule leaves only the person's
+  own account (or root) able to swap the file between them. L-V8 (recorded, RESULTS §30.8): Vibe does not load a `.env` from its working
+  folder, so none joins the snapshot exclusions. **Deleters** (S-V10): the existing ones already unlink a file link by its own name; a Linux
+  test pins that the person's file keeps bytes, mode and mtime on every route.
+- **Three hardenings of the same link** (the E2 security review): `VIBE_HOME` is the person's Vibe home only when it is ABSOLUTE (a relative
+  or unexpanded value would resolve against coai-mcp's cwd — often the reviewed repository — and link ITS `.vibe/.env`); `RegularFiles.Capped`
+  zeroes the array it reads into after a success, an oversized file and a read that throws (the copy handed out is the caller's to zero); and a
+  libc without `statx` (glibc before 2.28: `EntryPointNotFoundException`, `DllNotFoundException`) is a refusal with a reason, not an exception.
+  Stated residual: `VibeSignInLink.LeftOver` removes by name what is at the link path after a failed step, so something the person's own
+  account puts there between the check and the link is removed with it.
+- **Where the host comes from.** `VibeHost(Kind, Wsl, SignIn)`: the product's adapter takes `VibeHost.Current` (this process: `HostKinds.Current`,
+  `WslGenerations.Current` — `NamesWsl2`: the banner holds `WSL2` or `microsoft-standard`; WSL1 is `NamesWsl` but not that — and
+  `VibeSignIn.ForThisProcess`). The constructor that takes a bare `HostKind` is INTERNAL (a test's: it carries NO sign-in and, unset, this
+  machine's WSL generation — a product caller on it would run Vibe signed out on WSL2 without a word); the public ways in are the id alone
+  and a `VibeHost`. **One banner rule for both halves:** `shared/wsl-banner-vectors.json` (banner → none | wsl1 | wsl2, a WSL2 kernel with no
+  marker reads as none — stated in the file) is read by the server's `WslGenerations` tests and, in E3's branch, by the extension's. A manifest
+  entry's `Platform` is normalised in its setter (null or blank → `win32`). The legacy `Classify(text, bool? wsl)` flag means WSL-or-not:
+  `false` is this process's own host kind (a WSL process asked as not-WSL is plain Linux), never Windows (`VendorDiagnosis.HostFor`). A failed
+  `open` is named by what a person can do — no read permission (`EACCES`/`EPERM`), path too long (`ENAMETOOLONG`), the link text (`ELOOP`),
+  each with its errno. A per-flow `AsyncLocal` seam (`VibeHost.Using`, the shape of `VibePathBudget.Using`) lets a scenario give the host
+  the real service's own `new VibeRuntime(id)` takes.
+- **The CLI is found where uv puts it** (DL5): the row's own path first; then, on WSL, the folders `uv tool install` uses, in uv's own order —
+  `$UV_TOOL_BIN_DIR`, `$XDG_BIN_HOME`, `$XDG_DATA_HOME/../bin`, `~/.local/bin` (read from `uv tool dir --bin`, uv 0.13.0), each only when
+  `vibe` is there and executable; then bare `vibe` (the `PATH` walk); a failed start carries the install cure.
 - **A version nobody measured is RUN, with a warning** (the owner's decision of 2026-10-13: "Vibe must WARN, not refuse —
   set it up once and it must work if it can"; it replaced the refusal S2 first shipped). Its home's shape is still
   checked before its `--version` starts, so a forbidden name, a link, a trust entry, a `config.toml`, `hooks.toml`,
@@ -3102,14 +3166,17 @@ sequenceDiagram
   fresh `coai-answers-*` folder as its home, deleted after the probe (a crash leaves it to the six-hour sweep). A
   capability of the adapter, never an `if` on a vendor name in the probe.
 - **Diagnosis** (`VendorDiagnosis`): Vibe's not-signed-in sentence (`Missing MISTRAL_API_KEY environment variable`, §11
-  arm a2) → `vibe --setup`, kind `Refused`; the Rust CLI's `unexpected argument '--time-limit'` (§3) → named as the
+  arm a2) → `vibe --setup`, kind `Refused` — and its cure is per HOST (`Classify(text, HostKind)`; the `bool?` spelling routes through it): the
+  keyring on Windows; off Windows `~/.vibe/.env` (which coai links and never copies) and the case that a sign-in kept in a desktop keyring is
+  invisible to coai's launches (no D-Bus session in the built environment); the Rust CLI's `unexpected argument '--time-limit'` (§3) → named as the
   unmeasured CLI, kind `UnknownOption`. The install cure is Mistral's own README's (D16): `uv tool install
   mistral-vibe` (with uv's own installer when uv is missing) where `linux` is false, Mistral's script
   `curl -LsSf https://mistral.ai/vibe/install.sh | bash` on Linux.
 
 Tests: `VibeRuntimeTests`, `VibeLaunchRulesTests`, `VibeHomeTests`, `VibeHomeManifestTests`, `VibeLaunchControlTests`,
 `AVibeRowReviewsInTheRoundsSnapshotTests`, `AVibeReviewerRunsThroughAFakeVibeTests`, `VibeIsDiagnosedInItsOwnWordsTests`,
-`TheVibeProbeLeavesThePersonsHomeAloneTests`
+`TheVibeProbeLeavesThePersonsHomeAloneTests`, `DotenvNamesTests`, `RegularFilesTests`, `VibeSignInLinkTests`,
+`AVibeLaunchOnWslLinksTheSignInTests`, `ADeleterLeavesTheVibeSignInUntouchedTests`
 — listed in [module_tests.md](module_tests.md).
 
 ## The Vibe consultant — `VibeConsultant` (2026-10-13, S3 of `todo/PLAN_vibe_and_kimi_runtimes.md`)

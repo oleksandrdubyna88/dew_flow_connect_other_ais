@@ -10,14 +10,23 @@
 // token and, if it does, puts the live pair back where the person's Kimi expects it (RESULTS §12).
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, rmdirSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { basename, dirname, join, relative, resolve, sep } from 'node:path';
-import { SYSTEM32, files, fwd, run } from './vibe.mjs';
+import { basename, dirname, join, posix, relative, resolve, sep, win32 } from 'node:path';
+import { dirLink, files, fwd, killTree, pythonCommand, removeDirLink, run } from './vibe.mjs';
 
 export const REAL_HOME = join(homedir(), '.kimi-code');
-/** Where Moonshot's installer puts it on Windows — KimiAcpProfile.InstalledExecutableFor, the shim's own default. */
-export const KIMI_EXE = join(REAL_HOME, 'bin', 'kimi.exe');
+
+/**
+ * Where Moonshot's installer puts `kimi`: on Windows `~/.kimi-code/bin/kimi.exe` (KimiAcpProfile.InstalledExecutableFor, the shim's
+ * own default); elsewhere `<KIMI_INSTALL_DIR or ~/.kimi-code>/bin/kimi` (DL5 of todo/PLAN_kimi_and_vibe_on_linux.md).
+ */
+export function kimiExecutable(platform = process.platform, env = process.env, home = homedir()) {
+  if (platform === 'win32') return win32.join(home, '.kimi-code', 'bin', 'kimi.exe');
+  return posix.join(env.KIMI_INSTALL_DIR || posix.join(home, '.kimi-code'), 'bin', 'kimi');
+}
+
+export const KIMI_EXE = kimiExecutable();
 export const DEFAULT_MODEL = 'kimi-code/k3-256k';
 /** The shim's exit codes (AskAcpMode): the contract the probe reads, never the stdout text. */
 export const EXIT = { ok: 0, badRequest: 65, unavailable: 69, failed: 70, spent: 75, protocol: 76, refused: 77 };
@@ -96,7 +105,9 @@ export function trustInHome(home, workdir) {
 
 /** What a copied home takes from the real one: the sign-in and the config, the device identity, and the bundled rg/fd (never kimi.exe). */
 const HOME_FILES = ['config.toml', 'tui.toml', 'device_id', 'region', 'migrations-effort.json'];
-const HOME_BIN = ['rg.exe', 'fd.exe'];
+/** The tools a person's `~/.kimi-code/bin` may hold beside `kimi`, by the platform's names (L-K1: on WSL `fd` is there and `rg` is not). */
+export const homeBin = (platform = process.platform) => (platform === 'win32' ? ['rg.exe', 'fd.exe'] : ['rg', 'fd']);
+const HOME_BIN = homeBin();
 
 /**
  * A fresh home at `home` copied from `real`. Every copy is verified by hash; the list of what was copied is returned.
@@ -181,8 +192,9 @@ const isInside = (child, parent) => fold(child).startsWith(fold(withoutTrailingS
 
 /**
  * The sensitive files a copied home must not keep once the run is over: the sign-in and the config (it carries an API key).
- * A `credentials` that is a LINK (the shared-sign-in arm, M-K8b) is unlinked with `rmdirSync`, which removes the junction and
- * never what it points at — checked on a throwaway junction before the arm existed; a recursive remove would have followed it.
+ * A `credentials` that is a LINK (the shared-sign-in arm, M-K8b) is removed by its OWN name (lib/vibe.mjs removeDirLink: `rmdir`
+ * of a junction on Windows, `unlink` of a symlink elsewhere — `rmdir` refuses a symlink with ENOTDIR, measured red on WSL first)
+ * and never what it points at; a recursive remove would have followed it.
  */
 export function scrubHome(home) {
   const gone = [];
@@ -190,7 +202,7 @@ export function scrubHome(home) {
     const p = join(home, rel);
     const link = isLink(p);
     if (!existsSync(p) && !link) continue;
-    if (link) rmdirSync(p); else rmSync(p, { recursive: true, force: true });
+    if (link) removeDirLink(p); else rmSync(p, { recursive: true, force: true });
     if (existsSync(p) || isLink(p)) throw new Error(`${p} still exists after the scrub`);
     gone.push(link ? `${rel} (link)` : rel);
   }
@@ -199,11 +211,11 @@ export function scrubHome(home) {
 
 const isLink = (p) => { try { return lstatSync(p).isSymbolicLink(); } catch { return false; } };
 
-/** A directory junction `link` → `target` (a cmd builtin, so cmd.exe by its absolute path); the error text when it could not be made. */
-export function junction(link, target) {
-  const r = run(SYSTEM32('cmd.exe'), ['/d', '/c', 'mklink', '/J', link, target], { encoding: 'utf8', timeout: 30_000 });
-  return r.status === 0 ? '' : `mklink /J failed: ${(r.stdout + r.stderr).trim()}`;
-}
+/**
+ * A folder link `link` → `target`: a directory junction on Windows (mklink /J through cmd.exe by its absolute path), a symlink on
+ * Linux (DL6 of todo/PLAN_kimi_and_vibe_on_linux.md) — lib/vibe.mjs's dirLink, one maker for both probes. The error text, or ''.
+ */
+export const junction = (link, target) => dirLink(link, target);
 
 // ------------------------------------------------------------------------------------------------- the credential guard
 
@@ -299,7 +311,7 @@ export class CredentialGuard {
 /** A fixed Python snippet: the path arrives as argv[1], so nothing about the path is ever Python source (the Vibe probe's rule). */
 export const CANARY_SNIPPET = "import sys; open(sys.argv[1], 'w').write('x')";
 const toml = (s) => JSON.stringify(s); // a JSON string is a valid TOML basic string
-export const canaryCommand = (path) => `python -c "${CANARY_SNIPPET}" "${fwd(path)}"`;
+export const canaryCommand = (path, platform = process.platform) => `${pythonCommand(platform)} -c "${CANARY_SNIPPET}" "${fwd(path)}"`;
 
 /** `[[hooks]]` as Kimi's own docs spell it (customization/hooks): event, command, timeout; nothing else, or the file fails to load. */
 export function hooksToml(canary, event = 'SessionStart') {
@@ -308,7 +320,7 @@ export function hooksToml(canary, event = 'SessionStart') {
 
 /** `mcp.json` as Kimi's own docs spell it (customization/mcp): a stdio server whose command writes the canary and exits. */
 export function mcpJson(canary) {
-  return `${JSON.stringify({ mcpServers: { 'probe-canary': { command: 'python', args: ['-c', CANARY_SNIPPET, fwd(canary)] } } }, null, 2)}\n`;
+  return `${JSON.stringify({ mcpServers: { 'probe-canary': { command: pythonCommand(), args: ['-c', CANARY_SNIPPET, fwd(canary)] } } }, null, 2)}\n`;
 }
 
 // --------------------------------------------------------------------------------------------------------- prompt mode
@@ -386,11 +398,15 @@ function choose(options) {
   return hit && offered.filter((o) => o.optionId === hit.optionId).length === 1 ? { optionId: hit.optionId, kind: hit.kind } : null;
 }
 
-/** FolderReadBoundary's rule, lexically: an absolute path inside `root` whose components hold no excluded name. */
+/**
+ * FolderReadBoundary's rule, lexically: an absolute path inside `root` whose components hold no excluded name. The root prefix
+ * is case-folded on Windows only — on Linux `/w/Repo` and `/w/repo` are two folders; the excluded names stay case-insensitive
+ * everywhere (the stricter reading).
+ */
 function boundaryAnswer(root, requested) {
-  const rootFull = resolve(root).toLowerCase() + sep;
+  const rootFull = fold(resolve(root)) + sep;
   const full = resolve(String(requested ?? ''));
-  if (!full.toLowerCase().startsWith(rootFull)) return { served: false, reason: 'outside the working folder' };
+  if (!fold(full).startsWith(rootFull)) return { served: false, reason: 'outside the working folder' };
   const parts = full.slice(rootFull.length).split(/[\\/]/u).filter(Boolean).map((p) => p.toLowerCase());
   for (const ex of EXCLUSIONS) {
     const exParts = ex.toLowerCase().split('/');
@@ -402,10 +418,6 @@ function boundaryAnswer(root, requested) {
   return { served: true, text: readFileSync(full, 'utf8') };
 }
 
-function killTree(pid) {
-  if (pid) run(SYSTEM32('taskkill.exe'), ['/PID', String(pid), '/T', '/F'], { encoding: 'utf8', timeout: 15_000 });
-}
-
 /**
  * One ACP conversation against `kimi acp`, NOT through the shim — used only where the shim has no path yet: `session/load`
  * (M-K5; S5 adds it to the shim) and a `session/new` whose `configOptions` name the models (M-K7, no prompt, no spend).
@@ -414,7 +426,8 @@ function killTree(pid) {
  */
 export function acpTurn({ exe, cwd, env, deadlineMs, model = '', prompt = '', load = '', followUp = '' }) {
   return new Promise((done) => {
-    const child = spawn(exe, ['acp'], { cwd, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+    // On POSIX the agent leads its own process group, so the end below reaches every descendant that stayed in it (plan §5).
+    const child = spawn(exe, ['acp'], { cwd, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, detached: process.platform !== 'win32' });
     const state = { pid: child.pid, lines: [], answer: '', answer2: '', sessionId: load, refusals: [], reads: [], toolCalls: {}, usage: null,
       sessionResult: null, stopReason: '', error: '', exit: null, stderrTail: '', prompting: false, second: false };
     const pending = new Map();
@@ -428,7 +441,7 @@ export function acpTurn({ exe, cwd, env, deadlineMs, model = '', prompt = '', lo
       state.error ||= why;
       clearTimeout(timer);
       try { child.stdin.end(); } catch { /* already closed */ }
-      setTimeout(() => { killTree(child.pid); state.stderrTail = stderr.slice(-1500); setTimeout(() => done(state), 300); }, 1500);
+      setTimeout(() => { if (child.pid) killTree(child.pid); state.stderrTail = stderr.slice(-1500); setTimeout(() => done(state), 300); }, 1500);
     };
     const timer = setTimeout(() => finish(`deadline ${deadlineMs} ms`), deadlineMs);
     const send = (obj) => { const line = JSON.stringify(obj); state.lines.push(`> ${line}`); child.stdin.write(`${line}\n`); };

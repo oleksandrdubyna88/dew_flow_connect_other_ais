@@ -406,6 +406,8 @@ internal sealed class RoundEngine(
             // legitimately run for a long time while every reviewer inside it behaved, and the
             // operator asked for a bound after one passed ten minutes.
             //
+            // What a plan reviewer's answer is READ AS is settled once, where the reviewer finishes — before the ledger, the
+            // live view, the audit and the stand-down below are told (D8 of research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md).
             var results = await _scheduler.RunAllAsync(work, _executor, roundClock.Token, progress =>
             {
                 live.Report(progress);
@@ -424,9 +426,8 @@ internal sealed class RoundEngine(
                 }
             },
             // Issue #485: with the switch on, the local reviewer stands down once the cloud was quiet.
-            _settings.StopLocalWhenQuiet ? StandDown.For(work) : null);
-            // A plan that did not reach a reviewer whole is a failed reviewer, and everything below reads `results`.
-            results = PlanIncomplete.Fold(stage.Stage, planText, results);
+            _settings.StopLocalWhenQuiet ? StandDown.For(work) : null,
+            PlanIncomplete.Settler(stage.Stage, planText));
             // What ran, and — since 2026-09-07 — who was enabled for this stage and could not.
             //
             // The deadline is reported only when IT is what ended the round: `roundClock` fired and

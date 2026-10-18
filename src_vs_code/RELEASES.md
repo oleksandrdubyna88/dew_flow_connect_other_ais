@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.80.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.79.0...extension-v0.80.0) (2026-10-18)
+
+
+### Features
+
+* **rounds:** a reviewer is not sent more than it can read ([#856](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/856)) ([2b302c6](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/2b302c65e833a1df3a382fb8991fe89149713951))
+
+## [0.79.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.78.0...extension-v0.79.0) (2026-10-17)
+
+
+### Features
+
+* **vibe:** Vibe on WSL2 — the sign-in link, host admission, extension texts ([#842](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/842)) ([30bdc7c](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/30bdc7cc54ab34d7787d0de3d0aea229af480be8))
+
 ## [0.78.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.77.0...extension-v0.78.0) (2026-10-16)
 
 

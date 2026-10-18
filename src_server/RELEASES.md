@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.13.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/server-v0.12.0...server-v0.13.0) (2026-10-16)
+
+
+### Features
+
+* Mistral Vibe as a coai reviewer — the owned home, the round's snapshot, one-press install per OS; Kimi measured and re-planned ([#803](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/803)) ([0312d06](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/0312d0637991ff65a42096c97f9c490fe11b1c7d))
+* the Team server reads each vendor's quota gauge under the slot's lease, and the extension shows it and when the quota comes back (round counter E6) ([#790](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/790)) ([e68dd2e](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/e68dd2e370213d64f5bca62e95263bdfd484ee63))
+
 ## [0.12.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/server-v0.11.0...server-v0.12.0) (2026-10-12)
 
 

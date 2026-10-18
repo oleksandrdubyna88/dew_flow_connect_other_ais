@@ -8,7 +8,7 @@ namespace CoaiMcp.Tests;
 /// Which rules survive a budget that cannot hold them all.
 /// </summary>
 /// <remarks>
-/// <para>The family corpus is far larger than the 80 KB a round can carry, and selection is
+/// <para>The family corpus is far larger than the 90 KB a round can carry, and selection is
 /// whole-file — so the ORDER decides what a reviewer is judged against, and what it is never shown.
 /// Measured 2026-09-06: in plain enumeration order the two longest files took a quarter of the
 /// budget, and <c>testing.md</c>, <c>security.md</c>, <c>reuse-first.md</c> and all three language
@@ -127,10 +127,10 @@ public sealed class RuleOrderTests : IDisposable
     /// without the draw's instability, because a branch is what a round is about and it does not change
     /// between the rounds of one fix.</para>
     /// <para><b>What this does NOT say.</b> The fixture below writes twenty 10 KB rules under a
-    /// 41 000-byte budget, so its tail has room. The real corpus does not: measured 2026-09-16, the
-    /// base and the tier leave 1 145 bytes (2 438 under LF) against a smallest non-tier rule of 2 247
-    /// (2 213), so the rotation reaches one rule on Linux and none on Windows. This test asserts the
-    /// mechanism; <c>StageRulesTests.TheRotatedTail_CurrentlyFitsAtMostOneRule</c> asserts
+    /// 41 000-byte budget, so its tail has room. The real corpus has less: measured 2026-10-16 at the
+    /// 90 000-byte budget, the base and the tier leave 10 056 bytes against a smallest non-tier rule of
+    /// 2 197, so the rotation reaches one to three rules (it reached none at 80 000, with 56 bytes
+    /// left). This test asserts the mechanism; <c>StageRulesTests.AtNinetyKilobytes_TheRotatedTail_FitsAtMostThreeRules</c> asserts
     /// the fact.</para>
     /// </remarks>
     [Fact]

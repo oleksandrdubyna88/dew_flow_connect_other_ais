@@ -157,6 +157,9 @@ public sealed class ThePromptSaysWhatTheReviewerHasTests
         // Since the 2026-10-13 split of RosterBuilder.BuildWork (complexity 4): the round's frame — where it launches and
         // whether that is a checkout — is RosterFrame.Directories in RosterAssembly.cs, and one reviewer's prompt is
         // ReviewerFor's. The same properties are held; the two lines that carry the mode across the split are new asserts.
+        // Since the prompt cap (research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md D3) the composing lines live in
+        // RosterBuilder.FirstPrompt — one helper for what is SENT and what the cap COUNTS — and ReviewerFor calls it; the lines
+        // below moved with them, unchanged but for the names of their parameters.
         var source = File.ReadAllText(Path.Combine(RepoPaths.Root(), "src_mcp", "src", "Server", "PanelService.cs"))
             + File.ReadAllText(Path.Combine(RepoPaths.Root(), "src_mcp", "src", "Server", "Rounds", "RosterBuilder.cs"))
             + File.ReadAllText(Path.Combine(RepoPaths.Root(), "src_mcp", "src", "Server", "Rounds", "RosterAssembly.cs"))
@@ -164,12 +167,14 @@ public sealed class ThePromptSaysWhatTheReviewerHasTests
 
         source.Should().Contain("{WhatYouHave(material, followUps)}",
             "every composed prompt carries it, including one a person overrode in the catalog");
-        source.Should().Contain("ComposePrompt(seat.Choice, frame.Context, material, frame.Row.Answers, frame.FollowUps, instruction)",
+        source.Should().Contain("ComposePrompt(choice, frame.Context, material, frame.Row.Answers, frame.FollowUps, instruction)",
             "the real mode reaches the prompt — a literal here would pass every other test in this file");
-        source.Should().Contain("var instruction = InstructionFor(seat.Provider, seat.Runtime);",
+        source.Should().Contain("var instruction = InstructionFor(provider, runtime);",
             "and the row's instruction is the runtime's decision, computed once for the body and the redaction list");
-        source.Should().Contain("var material = ReviewerMaterial.For(frame.HasCheckout, seat.Runtime, frame.Row.Reads)",
+        source.Should().Contain("var material = ReviewerMaterial.For(frame.HasCheckout, runtime, frame.Row.Reads)",
             "and what a reviewer without a checkout — or that cannot read one — holds is the STAGE's answer, per reviewer");
+        source.Should().Contain("var (prompt, instruction) = FirstPrompt(frame, seat.Provider, seat.Runtime, seat.Choice);",
+            "and what a reviewer is SENT is composed by that one helper, the one the prompt cap counts");
         source.Should().Contain("var hasCheckout = readsCheckout && !fastCode",
             "the mode is TOLD, and a round that reads no checkout has none however it is configured");
         source.Should().Contain("var (launchDir, hasCheckout) = RosterFrame.Directories(_settings.CodeWorkspace, worktreePath, readsCheckout);",

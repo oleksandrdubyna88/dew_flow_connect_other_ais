@@ -30,6 +30,7 @@ function css(): string {
     codexModels: [], agyModels: [],
     localEngines: {},
     server: { kind: 'absent', version: '', remembered: false, updateOffered: false },
+    hostKind: 'windows',
     side: '',
     perSide: false,
     latestServerVersion: '',
