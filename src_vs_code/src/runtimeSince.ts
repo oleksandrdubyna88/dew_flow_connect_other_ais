@@ -55,12 +55,12 @@ export const VIBE_ON_LINUX_SINCE = '0.59.0';
 
 /**
  * The first `coai-mcp` that RUNS a Kimi row on a Linux host — on WSL2 only, in that release (DL1 of
- * todo/PLAN_kimi_and_vibe_on_linux.md, E6). Kimi follows Vibe by one minor (DL14): 0.58.0 was released from main without either, so
- * Vibe-on-Linux ships in 0.59.0 and Kimi-on-Linux in <b>0.60.0</b> at the earliest. Whoever cuts the release keeps it level with the
+ * todo/PLAN_kimi_and_vibe_on_linux.md, E6). Kimi follows Vibe (DL14): 0.58.0 was released from main without either, Vibe-on-Linux shipped
+ * in 0.59.0, and main then released 0.60.0 without Kimi, so Kimi-on-Linux ships in <b>0.61.0</b> at the earliest. Whoever cuts the release keeps it level with the
  * tag, and whichever of the two merges SECOND bumps its constant to the next minor (DL14). `runtimeSinceIsAhead.test.ts` holds this
  * table to the same guard as `RUNTIME_SINCE`.
  */
-export const KIMI_ON_LINUX_SINCE = '0.60.0';
+export const KIMI_ON_LINUX_SINCE = '0.61.0';
 
 /**
  * Which `coai-mcp` first runs each runtime on a Linux or WSL host. A runtime with no entry runs on every host its server

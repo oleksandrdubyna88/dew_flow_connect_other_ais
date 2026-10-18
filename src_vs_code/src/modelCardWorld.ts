@@ -6,6 +6,7 @@ import { escapeHtml } from './escapeHtml';
 import { markerLine } from './kimiMarker';
 import { remoteWarning } from './localEngines';
 import { CLI_RUNTIMES } from './models';
+import { help } from './panelControls';
 import { type CardContext, endpointButton, headButtons } from './panelView';
 import { availabilityOf } from './providers';
 import type { TeamServerState } from './teamServerView';
@@ -160,6 +161,22 @@ export function kimiMarkerNote(vendor: Vendor, reported: CardContext['reported']
     : `<p class="skew warned"><b>A Kimi marker stands.</b> ${escapeHtml(markerLine(marker))} `
       + `<button type="button" class="link" data-command="clearKimiMarker" data-id="${escapeHtml(vendor.id)}" `
       + 'title="Checks every process the marker names; clears it only when all of them are gone. Ends nothing.">Clear the stuck Kimi marker</button></p>';
+}
+
+/**
+ * A Kimi row's tick-box for `coai.kimiAllowNetworkSignIn` (DL6, Q7): admit a sign-in folder on network storage. Drawn only on a Kimi card
+ * on a WSL2 or Linux window (`CardContext.kimiAllowNetworkSignIn` is undefined elsewhere) and written as a PLAIN setting — never a row's
+ * field, so no `data-vendor`. It says the risk beside the box, because the refusal it lifts exists to keep the person signed in.
+ */
+export function kimiNetworkSignInField(vendor: Vendor, context: CardContext): string {
+  const on = context.kimiAllowNetworkSignIn;
+
+  return vendor.runtime !== 'kimi' || on === undefined
+    ? ''
+    : `<div class="field"><div class="check-row"><label class="check"><input type="checkbox" data-setting="kimiAllowNetworkSignIn"${on ? ' checked' : ''}> `
+      + `Allow a Kimi sign-in on network storage</label>${help('kimiAllowNetworkSignIn')}</div>`
+      + '<div class="hint">Off: coai refuses to start Kimi when its sign-in folder is on network storage (NFS, CIFS, sshfs). A Kimi on another machine that shares '
+      + 'this home can refresh the sign-in first and leave you signed out. Tick only if you never run Kimi elsewhere with this home.</div></div>';
 }
 
 /** The contract the row's own Team server last said it speaks — undefined for any other row, or one not heard from. */

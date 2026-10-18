@@ -29,8 +29,8 @@ const repo = (...parts: string[]): string => join(__dirname, '..', '..', '..', .
 
 // ---------------------------------------------------------------- DL14: the table
 
-test('KIMI_ON_LINUX_SINCE is 0.60.0 — 0.58.0 was released without Vibe-on-Linux, which ships in 0.59.0 — and is in the table beside it', () => {
-  assert.equal(KIMI_ON_LINUX_SINCE, '0.60.0');
+test('KIMI_ON_LINUX_SINCE is 0.61.0 — Vibe-on-Linux shipped in 0.59.0 and main released 0.60.0 without Kimi (DL14) — and is in the table beside it', () => {
+  assert.equal(KIMI_ON_LINUX_SINCE, '0.61.0');
   assert.equal(ON_LINUX_SINCE['kimi'], KIMI_ON_LINUX_SINCE);
   assert.ok(compareVersions('0.58.0', KIMI_ON_LINUX_SINCE) < 0, 'one minor after Vibe’s release');
 });

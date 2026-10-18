@@ -4,12 +4,12 @@ import { escapeHtml } from './escapeHtml';
 import { effortField, fastField, maxPromptField, streamField, systemPromptField, thinkingLine, timeoutField, usesBoxes } from './modelCardFields';
 import { rowHasFastTier } from './fastTier';
 import {
-  type CheckFacts, checkButton, cliBadge, contractNote, healthBadge, kimiMarkerNote, offMachineNote, verdictBadge, versionWarningNote, worldButtons,
+  type CheckFacts, checkButton, cliBadge, contractNote, healthBadge, kimiMarkerNote, kimiNetworkSignInField, offMachineNote, verdictBadge, versionWarningNote, worldButtons,
 } from './modelCardWorld';
 import type { TeamServerState } from './teamServerView';
 import { modelsFor, modelsProvenance } from './models';
 import {
-  type CardContext, type CliFieldFacts, cannotRun, dialectField, endpointField, featureBox, modelOptions, modelWords, priceFields, runtimeFields, stageBox,
+  type CardContext, cannotRun, dialectField, endpointField, featureBox, modelOptions, modelWords, priceFields, runtimeFields, stageBox,
 } from './panelView';
 import { vaultKeyOf } from './vaultKey';
 import { executableFor } from './vendorTerminal';
@@ -256,12 +256,12 @@ function answers(vendor: Vendor, id: string, facts: ModelCardFacts): string {
 }
 
 /** How the row is reached: its endpoint, an api row's dialect, the CLI's path where there is a CLI here. */
-function connectionOf(vendor: Vendor, id: string, cli: CliFieldFacts): string {
+function connectionOf(vendor: Vendor, id: string, cli: CardContext): string {
   const remote = vendor.runtime === 'remote';
   const api = vendor.runtime === 'api';
 
   return endpointField(vendor, id, vendor.runtime === 'local', remote, false) + (api ? dialectField(vendor, id, false) : '')
-    + runtimeFields(vendor, remote || api, cli);
+    + runtimeFields(vendor, remote || api, cli) + kimiNetworkSignInField(vendor, cli);
 }
 
 function usedLine(references: readonly string[]): string {
