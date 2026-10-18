@@ -5,7 +5,11 @@ namespace CoaiMcp.Runners.Reviewers;
 /// <param name="Vendor">The vendor row the launch belonged to.</param>
 /// <param name="Account">The account (the Team server's slot) the launch ran on — readings of two accounts are never paired.</param>
 /// <param name="Round">The client's round id, or empty when the request sent none.</param>
-/// <param name="IsReview">Whether the line is a review launch — the only kind a round is counted from.</param>
+/// <param name="IsReview">
+/// True for a review launch that RAN and counts toward its round's launches — the only kind a round is counted from. False
+/// for any other job (a consultation, a canary) and for a review launch the server requeued after a rate-limit refusal
+/// (<c>UsageGauges.IsReviewThatRan</c>): that one is still spend and still a launch on its account, but it ran no review.
+/// </param>
 /// <param name="Gauge">The reading taken on the account right after the launch, or <see cref="GaugeOnLine.None"/>.</param>
 public sealed record GaugeLine(DateTimeOffset AtUtc, string Vendor, string Account, string Round, bool IsReview, GaugeOnLine Gauge);
 
@@ -168,9 +172,11 @@ public static class RoundsPerPercent
     /// <summary>
     /// One account's readings, oldest first, and — for each reading after the first — whether a launch with no reading of
     /// its own lies between it and the one before. Built ONCE per account and shared by every window (epic 6's code
-    /// round: the missing-reading check used to rescan every line for every interval of every window).
+    /// round: the missing-reading check used to rescan every line for every interval of every window). `BareAfter` is
+    /// whether a launch with no reading of its own came AFTER the account's last reading — the one a later reading never
+    /// flags, so a span still open at the end says so instead of waiting for a rise.
     /// </summary>
-    private sealed record Account(IReadOnlyList<Reading> Readings, IReadOnlyList<bool> BareBefore);
+    private sealed record Account(IReadOnlyList<Reading> Readings, IReadOnlyList<bool> BareBefore, bool BareAfter);
 
     private static IEnumerable<GaugeRatio> FiguresOf(string vendor, IReadOnlyList<GaugeLine> lines, Func<string, IReadOnlyCollection<string>, IReadOnlyList<string>> uncounted)
     {
@@ -210,8 +216,12 @@ public static class RoundsPerPercent
             flags[k] = next < bare.Count && bare[next] <= readings[k].ObservedUtc;
         }
 
-        return new Account(readings, flags);
+        return new Account(readings, flags, BareAfterLast(readings, bare));
     }
+
+    /// <summary>Whether a reading-less launch (its instants, oldest first) came after the account's last reading.</summary>
+    private static bool BareAfterLast(IReadOnlyList<Reading> readings, IReadOnlyList<DateTimeOffset> bare) =>
+        readings.Count > 0 && bare.Count > 0 && bare[^1] > readings[^1].ObservedUtc;
 
     /// <summary>The first index from <paramref name="from"/> whose instant is after <paramref name="instant"/>.</summary>
     private static int FirstAfter(IReadOnlyList<DateTimeOffset> instants, int from, DateTimeOffset instant)
@@ -274,14 +284,19 @@ public static class RoundsPerPercent
             done.AddRange(step.Emitted);
         }
 
-        done.AddRange(Trailing(span));
+        done.AddRange(Trailing(span, account.BareAfter));
 
         return done;
     }
 
-    /// <summary>A plateau that ended the walk without a rise is not an interval — but "the percentage did not rise" is why.</summary>
-    private static IReadOnlyList<Interval> Trailing(Span span) =>
-        span.HasBaseline && span.After > 0 ? [new Interval(span.LastUtc, 0, 0, GaugeReasons.PercentDidNotRise)] : [];
+    /// <summary>
+    /// A plateau that ended the walk without a rise is not an interval — but "the percentage did not rise" is why, unless a
+    /// launch with no reading came after the last one: then it is <see cref="GaugeReasons.MissingReading"/>.
+    /// </summary>
+    private static IReadOnlyList<Interval> Trailing(Span span, bool bareAfter) =>
+        span.HasBaseline && span.After > 0
+            ? [new Interval(span.LastUtc, 0, 0, bareAfter ? GaugeReasons.MissingReading : GaugeReasons.PercentDidNotRise)]
+            : [];
 
     /// <summary>One reading walked: it opens an interval when there is none, otherwise it extends, closes or voids it.</summary>
     private static Step Advance(Span span, Point point, Reading reading, (bool Bare, bool Several) account, IReadOnlyDictionary<string, int> launches) =>

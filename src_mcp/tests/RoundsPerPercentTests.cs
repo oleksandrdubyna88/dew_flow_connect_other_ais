@@ -438,6 +438,24 @@ public sealed class RoundsPerPercentTests
     }
 
     [Fact]
+    public void ABareLaunchAfterTheLastReading_IsAMissingReading_NotAPlateauWaitingForARise()
+    {
+        var ratio = Only(RoundsPerPercent.Derive([Job(0, "r0", 10), Job(10, "r1", 10), Bare(20, "r2")]));
+
+        ratio.RoundsPerPercent.Should().BeNull();
+        ratio.Unavailable.Should().Be(GaugeReasons.MissingReading, "a launch after the last reading spent something nobody read");
+    }
+
+    [Fact]
+    public void ABareLaunchAfterTheLastReading_DoesNotChangeAFigureThatHasUsableIntervals()
+    {
+        var ratio = Only(RoundsPerPercent.Derive([Job(0, "r0", 10), Job(10, "r1", 11), Job(20, "r2", 11), Bare(30, "r3")]));
+
+        ratio.RoundsPerPercent.Should().BeApproximately(1.0, 1e-9, "the usable interval 10 → 11 stands; the trailing launch only ends an unfinished span");
+        ratio.Intervals.Should().Be(1);
+    }
+
+    [Fact]
     public void ABareLaunchOnAnotherAccount_DoesNotVoidThisAccountsSpan()
     {
         var ratio = Only(RoundsPerPercent.Derive([

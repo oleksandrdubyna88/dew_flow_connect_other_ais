@@ -2833,7 +2833,9 @@ account (the Team server's slot), its round id, whether it is a review, and the 
    intervals 20→30 and 30→51). **A reading that cannot open a span** (missing, stale, no `resetsAt`, out of range), on an
    account with more than one reading, is an unusable interval of its own with ITS reason (`WhyItCannotOpen`), so a
    window nobody could baseline reports `missing-reading` / `stale-reading`, not `too-few-readings`; one reading on
-   the account is still too few.
+   the account is still too few. A plateau still open at the end reports `percent-did-not-rise` — or `missing-reading` when
+   a launch with no reading of its own came AFTER the account's last reading (`Account.BareAfter`); a figure that has usable
+   intervals is unchanged.
    **A launch the vendor refused ran no review** — server side (`UsageGauges`): a line whose outcome is `RateLimited`
    (a requeue line, or a job that failed because every account was rate-limited) is handed to the derivation with
    `IsReview = false`: still spend, still a bare launch on its account, but not one of the round's launches, so the launch
