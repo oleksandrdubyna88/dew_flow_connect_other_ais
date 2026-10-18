@@ -3219,8 +3219,9 @@ empty temp folder.
 
 **Four states, all distinguishable:** `observed` (also with zero subagents: `IsObservedZero`), `partial: <reason>[ ×N], …` (read on past a
 gap) and `unobserved: <reason>`. A reason is recorded when something was LOST or a counted value is uncertain — an `Agent` call or a meta with
-no transcript, an agent file with no meta, a torn middle line, a torn meta, a line over the cap, a failed read, the read budget, and five
-layout breaks under `inconsistent transcript`. A count in `Diagnostics` is enough when the reader could choose between readings and lost
+no transcript, an agent file with no meta, a torn middle line, a torn meta, a line over the cap, a failed read, the read budget, and the
+layout breaks under `inconsistent transcript` (five triggers, the fourth also catching an assistant line with no usable `message.id`).
+A main file with no stamped line is `unobserved: transcript empty` even when the budget stopped the read. A count in `Diagnostics` is enough when the reader could choose between readings and lost
 nothing: a torn LAST line (the CLI's append racing the read), a synthetic line, a refused or unanswered write, a meta that never named a model,
 a value off its shape. Every reason is a const of `ObservationReasons`; nothing read from a transcript can become one.
 
@@ -3235,7 +3236,9 @@ A result that answers no parsed call is ignored, and a repeated block id is one 
 **What is read, and what never is.** From a line: `type`, `timestamp`, `agentId`, `isSidechain`, `message.id`, `message.model`, the four usage
 numbers, `requestedModel`, `effort`, a block's `type`, a `tool_use`'s `name` and `id` (and a write tool's one path), a `tool_result`'s
 `tool_use_id` and `is_error`; from a meta `agentType`, `toolUseId`, `parentAgentId` and `model`; from the registry `sessionId`. Never `cwd`, a
-prompt, a description, a message's text, a `toolUseResult`, an object's keys or `tool-results/`. A line is parsed over its raw bytes
+prompt, a description, a message's text, a `toolUseResult`, an object's keys or `tool-results/`. What is KEPT is narrower: every id
+(`message.id`, `agentId`, a block's `id`/`tool_use_id`, a meta's `toolUseId`/`parentAgentId`) only on `TranscriptShapes.Id`, one token of
+letters, digits, `_` and `-` — off it the id reads as absent, and a refused `parentAgentId` leaves the parent unknown. A line is parsed over its raw bytes
 (`TranscriptLine`) and its document disposed before the next line is asked for, so no full-line string exists;
 `NoTextLeavesTheCallerReaderTests` walks every string of every fixture's session for E1's sentinel.
 
@@ -3246,7 +3249,8 @@ the whole read. A stop is `partial: read budget`: it drops the stopped file's id
 and skips the Agent-count check. `ObservedSession.ReaderVersion` is bumped by any change to a counting rule, and
 `TheReaderVersionIsPinnedToTheFixturesTests` ties it to the fixtures' totals.
 
-`agent_log` is unchanged and still reads through `TranscriptLines.ReadShared`. The reader has no call site yet: E4 attributes what it reads
+`agent_log` is unchanged and still reads through `TranscriptLines.ReadShared`; its property reads go through the same
+`JsonText.StringProperty` (2026-10-18), so a non-string field reads empty there too. The reader has no call site yet: E4 attributes what it reads
 and E5 stores it.
 
 **Shape decisions.**

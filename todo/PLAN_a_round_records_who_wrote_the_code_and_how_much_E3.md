@@ -1,6 +1,6 @@
 # PLAN — E3: the caller's own transcript, read text-free (`CallerTranscript` → `ObservedSession`)
 
-> Status: **E3.S1–S3 coded on `feat/round-authors-e3` (b24c81ae, 64ee32a6, f9da2839; judge fixes 32ad19be), 2026-10-17; E3.S4 (the cornerstone) and E3.S5 are open — S4 is coded after PR #851 merges.** Epic E3 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
+> Status: **E3.S1–S5 implemented on `feat/round-authors-e3`, 2026-10-18, rebased onto main `045cd9191` (after #851, #852, #856): S1–S3 at 5d1ff6f79/6698fb40a/6002f001f, the S1–S3 judge fixes c03556bee, S4 50c887f72, S5 97df6cb34; the owner-approved switch of the old copies to the shared helpers 37a9117e2; the S4/S5 judge fixes 308f6e34b; the code-gate fix afc9b0599. Code gate `proceed` (12 of 16 reviewers; 16 findings rejected with reasons, 1 accepted and fixed) — §5. Not merged; stays in `todo/` until the parent promotes with all its stories documents (planning-docs, *A plan split into epics and stories*).** Epic E3 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
 > Scope: `src_mcp/src/Store` — a new reader keyed by the caller's session id, the text-free read helpers lifted out of
 > `AgentLog.cs` (its behaviour kept), and one helper in `src_mcp/runners` widened. No schema step, no call site in
 > `RoundEngine.cs`/`PanelService.cs`, nothing persisted: E5 stores, E4 attributes. Five stories; ONE cornerstone,
@@ -308,7 +308,9 @@ agent files ordinal (S4-21); (3) the `toolUseId` join and a meta's `parentAgentI
 (4) an `assistant` line with no parseable `timestamp` (step 4) — *widened 2026-10-17 (S4-22)*: or a `user` line with
 none whose `tool_result` answers a parsed write call (the result is then dropped and the call reads unanswered); (5) two
 PRESENT values of `message.model`, `requestedModel` or `effort` differing across one id's lines (S4-14; an absent value
-never differs, G14).
+never differs, G14). *(As coded, 2026-10-18 — §5.1.)* Trigger (4) also covers an `assistant` line with no usable
+`message.id` (absent, or refused by the id shape of §3.4): it can be neither placed nor de-duplicated, so it is dropped
+and counted here. An answer on a `user` line with no stamp is dropped before its `is_error` is read (S4-22).
 
 ### 3.3 Identities stay apart (parent §4)
 
@@ -342,6 +344,12 @@ caller. The guarantee §3.4 makes, and that E3.S5 tests, is about what LEAVES th
 bytes (`JsonDocument.Parse(ReadOnlyMemory<byte>)`), so `ReadSharedFrom` yields bytes and decodes nothing — **is the
 decided form (Fable, G4)**: `ReadSharedFrom` yields `ReadOnlyMemory<byte>`, E3.S4 parses the bytes, and no full-line
 `string` exists in the new reader at all. `AgentLog` keeps its `string` path through `ReadShared`.
+
+*(Added 2026-10-18, code-gate finding 15 — §5.1.)* What may be READ is not what may be KEPT for ids either:
+`message.id`, a line's `agentId`, a `tool_use` `id`, a `tool_result` `tool_use_id`, and a meta's `toolUseId` and
+`parentAgentId` are kept only on `TranscriptShapes.Id` (one token of letters, digits, `_` and `-`, at most 128). Off the
+shape an id reads as absent; a refused `parentAgentId` leaves the parent unknown (`""`), never `main`. So every member
+holds an id-shaped token, a closed-shape value, a write-tool name, a path key or a file-name agent key — never a sentence.
 
 ## 4. The stories
 
@@ -1368,6 +1376,47 @@ S1–S3 landed as three commits on the branch — b24c81ae, 64ee32a6, f9da2839 �
 | the registry beats the variable, recorded | E3.S2, and E3.S4 tests 57–58 over E1's real registry bytes (`c12`, `c10`) |
 | no sentinel in any rendering | E3.S5 (E5 adds the `.db` bytes and `--log`) |
 | helpers lifted, `AgentLog` behaviour kept | E3.S1 |
+
+### 5.1 What shipped, and the judge's review of S4–S5 (2026-10-18)
+
+- **Rebase.** The branch sat on #851's head `38bbde962` (an ancestor of the old HEAD); #851 was squash-merged as
+  `e53e35ba4` with the same 23 files and line counts. `git rebase --onto origin/main 38bbde962` replayed the 14 E3
+  commits onto `045cd9191` with no conflict. The S1–S3 SHAs in older notes (b24c81ae, 64ee32a6, f9da2839, 32ad19be) are
+  the pre-rebase ones; the status line names the current ones.
+- **Owner-approved switch (37a9117e2).** `AgentLog.Text` → `JsonText.StringProperty`, `ConsultantPlaces.HoldsGit` →
+  `GitMarker.HasGit`. One stated difference, on malformed input only: a non-object block in a content array used to throw
+  `InvalidOperationException` out of `AgentLog.Slice`; it now adds nothing. New pin
+  `AgentLogTests.ANonStringFieldReadsEmpty_AndTheRestOfTheLineIsKept`, green before and after.
+- **Judge fixes (308f6e34b), each RED first.** (1) A main file with no stamped line read `partial: read budget` after a
+  budget stop; it is `unobserved: transcript empty` (S4-10). (2) An unstamped answer that was also an error counted as
+  refused; it is dropped first (S4-22). (3) Pins for §3.2 trigger 4 and the no-`message.id` line, which had no test.
+  (4) `TranscriptLaunches.Resolve` was cyclomatic complexity 6 (a one-build CA1502 probe over `src_mcp/src/Store`); now
+  within 4, and the probe shows no E3 method over 4. `AgentLog.ReadFile` (6) and `AgentLog.Said` (7) predate E3 (main,
+  2026-09-05); they are named here and not rewritten.
+- **Code gate.** One round over `045cd9191..308f6e34b` with the epic as scope: verdict `proceed`, gating count 12, 12 of
+  16 reviewers (kimi's four: one cancelled, three never started before the 30-minute limit). 17 findings: 16 rejected
+  with reasons checked in the code (a `const` read only inside one assembly; the four-tool table by D18; an off-shape model
+  is a diagnostic, not partial; the registry cap refuses `read > Max`; `MakeRoom` copies only the pending line; the
+  measured bounds of 273 files per session and 552 project folders; S4-16's per-file block key), 1 accepted — ids copied
+  without a shape (§3.4) — and fixed RED-first in afc9b0599, which is after the round and was not gate-reviewed.
+- **Privacy, verified.** Every string member is an id-shaped token, a closed-shape value, a write-tool name, a path key
+  or a file-name agent key. Each document is disposed before the next `MoveNext` (`TranscriptLine.TryRead`,
+  `TranscriptLaunches.ReadMeta`), and no `JsonElement` is stored.
+- **The invariant.** `TranscriptPresent ⇒ LaunchedUtc != null` holds for every SUBAGENT (test 56, over every fixture).
+  `main` is `TranscriptPresent = true` with `LaunchedUtc = null` by contract — its instant is `FirstLineUtc` — so E4/E5's
+  mapping must treat main apart.
+- **The S4/S5 coder's 15 deviations, judged — all accepted.** `BytesInSlice` excludes the line that tripped the budget
+  (G3's intent: the slice is what was handed on); a file the read never opened has its head read off the budget (keeps
+  `LaunchedUtc` and `TranscriptPresent` complete after a stop; it stops at the first stamped line); the setups of tests 19,
+  32, 52, 53 and 54 (53 also reads `agent call without transcript`, the reasoning of test 23); break-its B06/B08/B12
+  replanted, B31 reaches test 48 only, B40 stays green on NTFS (ordinal listing); `TornTailCountsAsPartial` is
+  `static readonly` (a `const` condition is unreachable code under warnings-as-errors); the extra small files
+  (`TranscriptRead`, `FileRead`, `LineIntake`, `TranscriptLine`, `ReadMeter`, `ReadTally`, and test helpers) are named
+  units, not a split to duck a limit; `inconsistent transcript` is counted per id or per file as each trigger states, plus
+  the no-`message.id` line (§3.2); meta reads are capped at 64 KiB; no `module_tests.md` row, because E3 adds no flow (no
+  tool, CLI mode or call site — the reader has no caller until E5).
+- **Tests, observed.** The E3 classes + `AgentLogTests`: 200 total, 198 passed, 2 skipped (a Linux-only test and a
+  case-sensitive file-system test), 0 failed.
 
 ## 6. Defects found in the parent plan (recorded, not fixed here)
 

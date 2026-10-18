@@ -1,7 +1,9 @@
 # PLAN — a round records who wrote the code under review, and how big the change was
 
-> Status: **plan only for epics E3–E7; epic E1 (the measurements and fixtures, #828) and epic E2 (the size, its schema
-> step and `--log`, #829) are implemented and merged, 2026-10-15.** Revised 2026-10-14 after the question
+> Status: **plan only for epics E4–E7; epic E1 (the measurements and fixtures, #828) and epic E2 (the size, its schema
+> step and `--log`, #829) are implemented and merged, 2026-10-15; epic E3 (the text-free caller-transcript reader) is
+> implemented on `feat/round-authors-e3`, 2026-10-18 (code gate `proceed`; its pull request is a draft, not merged — the
+> E3 stories document's §5.1).** Revised 2026-10-14 after the question
 > consultant's advice (§10) and after the seven stories documents (§16); revised again 2026-10-16 against E1's
 > measurements as the E3 stories document's §8.2 records (§5, D3, D7, D8, the E1 and E3 epic entries). Scope: `src_mcp` — the code round's
 > numstat (`runners/Context`), a new text-free caller-transcript reader beside `Store/AgentLog.cs`, attribution in
