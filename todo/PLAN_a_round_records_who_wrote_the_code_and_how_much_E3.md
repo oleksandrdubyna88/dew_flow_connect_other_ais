@@ -1,6 +1,6 @@
 # PLAN — E3: the caller's own transcript, read text-free (`CallerTranscript` → `ObservedSession`)
 
-> Status: **E3.S1–S5 implemented on `feat/round-authors-e3`, 2026-10-18, rebased onto main `045cd9191` (after #851, #852, #856): S1–S3 at 5d1ff6f79/6698fb40a/6002f001f, the S1–S3 judge fixes c03556bee, S4 50c887f72, S5 97df6cb34; the owner-approved switch of the old copies to the shared helpers 37a9117e2; the S4/S5 judge fixes 308f6e34b; the code-gate fix afc9b0599. Code gate `proceed` (12 of 16 reviewers; 16 findings rejected with reasons, 1 accepted and fixed) — §5. Not merged; stays in `todo/` until the parent promotes with all its stories documents (planning-docs, *A plan split into epics and stories*).** Epic E3 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
+> Status: **E3.S1–S5 implemented on `feat/round-authors-e3`, 2026-10-18, rebased onto main `045cd9191` (after #851, #852, #856): S1–S3 at 5d1ff6f79/6698fb40a/6002f001f, the S1–S3 judge fixes c03556bee, S4 50c887f72, S5 97df6cb34; the owner-approved switch of the old copies to the shared helpers 37a9117e2; the S4/S5 judge fixes 308f6e34b; the code-gate fix afc9b0599; three security fixes on write paths 0cef98490, 72a8d7397, 14781fb64 and the gate's fail-closed drive fix 1d3938863. Code gate: round 1 `proceed` (12 of 16 reviewers; 16 rejected with reasons, 1 accepted and fixed), round 2 `proceed` (12 of 16; 8 rejected, 1 accepted and fixed) — §5.1. Not merged; stays in `todo/` until the parent promotes with all its stories documents (planning-docs, *A plan split into epics and stories*).** Epic E3 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
 > Scope: `src_mcp/src/Store` — a new reader keyed by the caller's session id, the text-free read helpers lifted out of
 > `AgentLog.cs` (its behaviour kept), and one helper in `src_mcp/runners` widened. No schema step, no call site in
 > `RoundEngine.cs`/`PanelService.cs`, nothing persisted: E5 stores, E4 attributes. Five stories; ONE cornerstone,
@@ -1415,8 +1415,34 @@ S1–S3 landed as three commits on the branch — b24c81ae, 64ee32a6, f9da2839 �
   units, not a split to duck a limit; `inconsistent transcript` is counted per id or per file as each trigger states, plus
   the no-`message.id` line (§3.2); meta reads are capped at 64 KiB; no `module_tests.md` row, because E3 adds no flow (no
   tool, CLI mode or call site — the reader has no caller until E5).
-- **Tests, observed.** The E3 classes + `AgentLogTests`: 200 total, 198 passed, 2 skipped (a Linux-only test and a
-  case-sensitive file-system test), 0 failed.
+- **Security fixes on write paths (from an automated security review of the push, 2026-10-18), each RED first with a
+  break-it.** A write path comes from a transcript, which a prompt can steer, and `CheckoutRoots` asks the disk about it.
+  (1) 0cef98490: a UNC, device or extended-length path (`\\host\share`, `//host/share`, `\\?\UNC\…`, `\\.\…`) or a path on
+  a mapped network drive is refused on its TEXT, before any `GetFullPath`/`Directory.Exists`/`.git` probe — on Windows
+  such a call contacts the host over SMB and offers the user's NTLM credentials. Only a drive-rooted path (Windows) or a
+  single-`/`-rooted path (POSIX) is asked about (`LocalPaths`); `CheckoutProbes` is the one door to the disk, so tests see
+  every touch. (2) 72a8d7397: a POSIX path whose first segment is `net` or `Network` (case-folded on macOS) is refused —
+  `/net` and `/Network/Servers` are host automounts, so a probe would mount a host the path names; `/Volumes` stays
+  allowed (its volumes are already mounted). (3) 14781fb64: that test also runs on the NORMALISED directory, after the
+  raw-text test and before any probe, so `/./net/host` and `/tmp/../net/host` cannot pass as `.` or `tmp` (a parser
+  differential); a `PathRules` seam checks the order on any host. Plus the gate's round-2 finding 5 (1d3938863): a drive
+  of type `Unknown` or `NoRootDirectory` fails closed like `Network`. **Residual limits, stated in the code:** a custom
+  autofs map on another root is not detected (the full fix reads the mount table — `/proc/self/mountinfo`,
+  `getmntinfo` — and is out of scope); a network file system mounted into a POSIX tree is not detected; an existing
+  junction or link under a local drive is followed (the host is then one the link's owner chose, not the transcript).
+- **Code gate, round 2** (`again`, over `045cd9191..0cef98490`): verdict `proceed`, gating count 5, 12 of 16 reviewers
+  (kimi's four timed out, were cancelled or never started). 9 findings: 8 rejected with reasons (a reader registry for
+  vendors E1 never measured; performance points re-raised against the measured 273-file bound; `AgentLog.Parse` throwing
+  on a non-string `timestamp` is NOT a change of this diff — main's catch was `JsonException` only — and is reported to
+  the owner as an older defect; `CallRecord` is a per-read accumulator, not a contract; a pre-existing junction gives the
+  transcript no new capability), 1 accepted and fixed (1d3938863). 72a8d7397 and 14781fb64 landed after round 2 and were
+  not gate-reviewed.
+- **Full suite, observed once** (`CoaiMcp.Tests.exe` at afc9b0599, lowered, on a machine loaded by other sessions):
+  11 321 total, 11 246 passed, 74 skipped, 1 failed — `AskHumanScenarioTests.RequireRefusesTheThirdBatch_AskConsultantsAnswers_AndItsConsultIdOpensAskHuman`,
+  which passed alone twice; in the suite the fake CLI received another test's `exec …` call (`fake-cli: unknown verb`), a
+  shared-state defect outside E3 (consultants), reported and not fixed here.
+- **Tests, observed (final).** The E3 classes + `AgentLogTests`: 237 total, 234 passed, 3 skipped (platform-specific
+  tests), 0 failed.
 
 ## 6. Defects found in the parent plan (recorded, not fixed here)
 

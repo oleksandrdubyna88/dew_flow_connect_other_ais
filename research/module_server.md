@@ -3231,7 +3231,11 @@ is not always the largest) and its instant its earliest line; `Model`, `Requeste
 is one agent file or meta (a resumed agent is one); its parent is the file holding the launching `Agent` call, else the meta's
 `parentAgentId`, else main. A write is an `Edit`/`Write`/`MultiEdit`/`NotebookEdit` call whose `tool_result` is present, not an error and
 stamped (`AnsweredUtc`), at its message's instant, in the checkout its path resolved to (`CheckoutRoots`); a shell command is never a write.
-A result that answers no parsed call is ignored, and a repeated block id is one call.
+A result that answers no parsed call is ignored, and a repeated block id is one call. A write path is handed to the file
+system only when it is LOCAL (`Store/LocalPaths.cs`, 2026-10-18 security fixes): a drive-rooted path on Windows or a
+single-`/`-rooted one elsewhere, judged on the raw text AND on the normalised directory, never on a network drive (an
+unknown drive type fails closed), never under the host automounts `/net` or `/Network`; anything else is `Unresolved` with
+an empty key, because asking the disk about `\\host\share` makes Windows offer the user's credentials to that host.
 
 **What is read, and what never is.** From a line: `type`, `timestamp`, `agentId`, `isSidechain`, `message.id`, `message.model`, the four usage
 numbers, `requestedModel`, `effort`, a block's `type`, a `tool_use`'s `name` and `id` (and a write tool's one path), a `tool_result`'s
