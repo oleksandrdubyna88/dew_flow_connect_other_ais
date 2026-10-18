@@ -125,7 +125,7 @@ public sealed class WorktreeManager(IProcessLauncher launcher, string storageRoo
         if (result.ExitCode != 0)
         {
             await EraseAsync(repoPath, path);
-            throw new WorktreeException("worktree add", FatalLine(result.StdErr));
+            throw new WorktreeException("worktree add", WorktreeFailure.Sentence(result.StdErr, path));
         }
 
         // A linked worktree gets no submodules from git, and in this family the project's own
@@ -479,7 +479,7 @@ public sealed class WorktreeManager(IProcessLauncher launcher, string storageRoo
         ?? stderr.Trim();
 
     private Task<ProcessResult> Git(string repoPath, TimeSpan budget, params string[] args) =>
-        launcher.RunAsync(new ProcessRequest("git", args, repoPath)
+        launcher.RunAsync(new ProcessRequest("git", TreeGit.Argv(args), repoPath)
         {
             Timeout = budget,
         });
