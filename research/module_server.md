@@ -7369,6 +7369,22 @@ handed a PLACE — a coai-owned folder for its home and a sanitised copy to stan
   naming the originals). A runtime with a `HomesFolder` keeps its home in the row's folder too (`OwnedScratch`), and its
   none row stands in an EMPTY `cwd` folder beside it, so a cwd never holds its own home. Everything goes in `finally`
   (`GitScratch.DeleteEvenIfReadOnly`) — on an answer, a refusal and a cancellation alike.
+- **`ask_consultants` — a killed server's row scratch is swept, and a live row's is locked (D8, 2026-10-18,
+  `todo/PLAN_vibe_reads_a_folder_of_repositories.md`).** `finally` never runs when the server is killed, and the product sweep
+  (`PanelService.ScratchPrefixes`) listed only `coai-answers-*`, `coai-repair-*` and `coai-noworkspace-*`, so a row's
+  `coai-question-*` folder — and the repository copies in it — stayed for ever (`shared/temp-sweep.json` keeps it `neverSwept` for the
+  TEST sweep, which says the product sweeps it "on its own clock": it did not). Now `ScratchPrefixes` has `coai-question-*`, and the
+  sweep keeps a folder by its LOCK, not by age alone, because the row budget (`COAI_QCONSULT_ROW_MINUTES`) has no upper bound and a
+  deep write does not move the folder's own time. `QuestionRowLaunch.RunAsync` takes `HeldFile.Take(<scratch>/.coai-question.lock)`
+  (`QuestionRowLaunch.LockName`) right after it makes the scratch and lets go of it in the same `finally`, BEFORE the folder is
+  deleted (a held file keeps the delete from finishing on Windows). `PanelService.DeleteIfDue` asks the age first (taking the lock
+  creates the lock file, which moves the folder's time), then `FolderLock.RemoveIfFree`: a scratch whose lock cannot be taken is kept,
+  and one older than six hours whose lock is free — a killed server's — is emptied around the lock, the lock let go, the folder
+  removed. A lock that cannot be created when the row starts is logged and does not refuse the row; its scratch is then only as safe
+  as the six-hour window. The take-the-lock-or-keep step is `runners/Files/FolderLock.cs`, EXTRACTED from `VibeHomes.SweepOneShot`
+  (reuse-first, step 2.2): the one-shot Vibe homes and the row scratch now use the same code. The test sweep still never touches a
+  `coai-question-*` folder (`neverSwept`). The age is the folder's own last write (the product sweep's rule), so a row that runs
+  past six hours depends on its lock alone.
 - **`--check-consultant` — the check's one-shot copy.** `ConsultantCheckTurn` gives a runtime that asks the same: a copy of
   the scratch repository in the check's own scratch (`own/tree/…`), the home beside it, the prompt naming the copy; gone
   with the check's scratch.
@@ -7404,6 +7420,10 @@ flowchart TD
   makeat --> launch
   row["question row, plan Cwd = Snapshot"] --> copies["OneShotAsync(row folder, granted roots) — a copy per root; no Git work tree: refused"]
   copies --> rowlaunch["launch in tree · prompt names the copies · finally: the row folder deleted"]
+  rowlaunch -. "holds .coai-question.lock for the row's life" .-> qlock["row scratch lock"]
+  beat --> qsweep["PruneOldAnswerDirs — coai-question-* older than six hours"]
+  qsweep -->|"lock cannot be taken: a live row"| qkept["kept this beat"]
+  qsweep -->|"lock free: a killed server's row"| qgone["emptied around the lock · lock let go · folder removed"]
   beat["ConsultationService.Sweep — at start and every beat"] --> records["records swept first (idle: closed)"]
   records --> sweep["ConsultantHomeSweep over coai-vibe/ and coai-kimi/"]
   sweep -->|"over, or unknown/idle past ConsultIdle, and no turn held"| gone["snapshot released · folder deleted, links unlinked, never entered"]
@@ -7418,6 +7438,7 @@ flowchart TD
 | The homes root | `PanelSettings.ConsultantHomesRoot` (`COAI_CONSULTANT_HOMES`, else local application data; empty in hand-built settings, so a test never touches the machine's own) |
 | Wiring | `ConsultationService.RunTurnAsync` / `Sweep` / `CloseAsync`; `QuestionRowLaunch.RunAsync`; `QuestionFanOut.CheckedInput`; `ConsultantCheckTurn.TurnAsync` |
 | Tests | `AVibeConsultationKeepsOneSnapshotTests`, `AVibeQuestionRowReadsACopyOfItsRootsTests`, `ConsultantHomeSweepTests`, `ConsultantCheckTests.AVibeCheck_…` — [module_tests.md](module_tests.md) |
+| A question row's scratch lock and its sweep (D8) | `QuestionRowLaunch.LockName` / `RunAsync`; `PanelService.ScratchPrefixes`, `DeleteIfDue`; `Runners/Files/FolderLock.cs`; tests `AScratchSweepRunsOnTheConsultationBeatTests`, `AQuestionRowHoldsItsScratchLockWhileItRunsTests` — [module_tests.md](module_tests.md) |
 
 Not done here: one live `consult` and one live question row through the product with a real Vibe (paid turns) — the
 step after the release, recorded then in research/RESULTS_vibe_confinement.md and [module_tests.md](module_tests.md).

@@ -1566,6 +1566,13 @@ built two one-shot modes in the server, `--consultants` and `--check-consultant`
   their own copy of that open and its two catches; they now call this, and the consultant check's lock is built on it
   rather than as a fourth copy. Its header states the residual: on Unix .NET implements `FileShare.None` as an advisory
   `flock` — honoured between .NET processes, not across the WSL/Windows 9P boundary.
+- **`FolderLock`** (`runners/Files/FolderLock.cs`) — the sweep's keep-test for a folder whose owner holds a lock file in it, EXTRACTED
+  from `VibeHomes.SweepOneShot` when a question row's scratch needed the same (D8 of `todo/PLAN_vibe_reads_a_folder_of_repositories.md`):
+  `RemoveIfFree(folder, lockName, delete, ready?)` takes the lock or answers false with nothing touched, empties the folder around the
+  lock, lets go, removes the folder. The caller asks its own age first, because taking the lock creates the file and moves the
+  folder's time. Used by the one-shot Vibe homes (`VibeHomes`, the age being the newest write below the folder) and by
+  `PanelService.DeleteIfDue` for `coai-question-*` (the age being the folder's last write). `GitScratch.DeleteEntry` is public for it:
+  it takes a FILE as well as a folder, which `DeleteEvenIfReadOnly` (a directory's deleter) refuses.
 - **`GitScratch.DeleteEvenIfReadOnly`** (`runners/Files/GitScratch.cs`) — moved out of `PanelService` (git marks
   object files read-only, and `Directory.Delete` refuses them); the check deletes and sweeps its scratch repositories
   with it.
