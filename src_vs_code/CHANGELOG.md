@@ -1,5 +1,13 @@
 # Changelog
 
+## Team server 0.13.1 — 2026-10-18
+
+**Fixed: rounds per 1 % of quota is counted from one rise to the next, and pooled** (the server's half of the same
+fix as coai-mcp). `/api/usage`'s per-window figure keeps the rounds of readings whose percentage did not change,
+starts a new baseline after a fall, and pools all rounds over the total rise of the last ten intervals. A launch the
+server requeued after a rate-limit refusal is no longer counted as one of its round's launches, so the launch that
+ran carries the whole round. codex stays hidden on every limit of the account.
+
 ## Extension 0.80.1 — 2026-10-18
 
 **Changed: the help says how rounds per 1 % is counted now,** in all five languages: from one rise of the
