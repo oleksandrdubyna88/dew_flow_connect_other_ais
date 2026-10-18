@@ -35,6 +35,12 @@ internal static class VendorRowReader
 
     private const string NoMember = "one of its members";
 
+    /// <summary>
+    /// One cure for every member: the parser does not say whether text lost its quotes, a number gained them, or a number
+    /// does not fit (<c>30.5</c> or <c>99999999999</c> for whole minutes) — so the cure names all three.
+    /// </summary>
+    private const string WrongValueCure = "Write text in quotes, numbers and true/false without them, and minutes as whole numbers";
+
     /// <summary>Every row of <paramref name="json"/> that reads, and a refusal for each one that does not.</summary>
     internal static VendorRows Read(string json)
     {
@@ -117,7 +123,7 @@ internal static class VendorRowReader
         catch (JsonException e)
         {
             return Refuse(
-                row, place, $"{WhichMember(e.Path)} has a value of the wrong JSON type.", "Write a number or true/false without quotes");
+                row, place, $"{WhichMember(e.Path)} has a value of the wrong JSON type, or a number it cannot hold.", WrongValueCure);
         }
     }
 
@@ -150,8 +156,8 @@ internal static class VendorRowReader
         ? []
         : [new UnrecognisedSetting(
             Key,
-            $"{Key} is not a JSON list this server can read — {rows.Complaint} It is running the reviewers it shipped with, "
-          + "and none you added is in this round. The form is an array of rows: [{\"id\":\"claude\",\"runtime\":\"claude\"}].")];
+            $"{Key} is not a JSON list this server can read — {rows.Complaint} It is running the reviewers COAI_PROVIDERS "
+          + "names, or the ones it shipped with when that is not set, and none you added is in this round. The form is an array of rows: [{\"id\":\"claude\",\"runtime\":\"claude\"}].")];
 
     private static string Describe(JsonValueKind kind) => kind switch
     {

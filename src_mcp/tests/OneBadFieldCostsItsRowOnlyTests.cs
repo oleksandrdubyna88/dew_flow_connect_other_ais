@@ -144,6 +144,34 @@ public sealed class OneBadFieldCostsItsRowOnlyTests : IDisposable
         From("[{oops").UnrecognisedSettings.Single().Sentence.Should().Contain("line 1, character");
 
     [Fact]
+    public void ABrokenListSentence_NamesCoaiProviders_WhichIsWhatRunsWhenItIsSet()
+    {
+        var settings = PanelSettings.FromEnvironment(name => name switch
+        {
+            "COAI_VENDORS" => "[{oops",
+            "COAI_PROVIDERS" => "gemini",
+            _ => null,
+        });
+
+        settings.Providers.Select(p => p.Provider).Should().Equal("gemini");
+        settings.UnrecognisedSettings.Single().Sentence.Should()
+            .Contain("COAI_PROVIDERS", "the fallback is COAI_PROVIDERS when it is set, not only the shipped pair");
+    }
+
+    [Theory]
+    [InlineData("\"model\":5", "Write text in quotes")]
+    [InlineData("\"id\":5", "Write text in quotes")]
+    [InlineData("\"timeoutMinutes\":30.5", "or a number it cannot hold")]
+    [InlineData("\"timeoutMinutes\":99999999999", "or a number it cannot hold")]
+    public void AWrongTypeSentence_FitsTheValueThePersonWrote(string badMember, string expected)
+    {
+        var settings = From($$"""[{"runtime":"claude",{{badMember}}},{{Gemini}}]""");
+
+        settings.UnrecognisedSettings.Should().ContainSingle()
+            .Which.Sentence.Should().Contain(expected, "the cure must fit the value: text needs quotes, and a number may not fit");
+    }
+
+    [Fact]
     public void TwoBadRows_AreTwoNotices()
     {
         var written = new List<ServerNotice>();

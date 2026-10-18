@@ -7127,14 +7127,16 @@ rows. `VendorListFrom` read "no rows from a non-empty text" as "not configured" 
   become "reviews plans".
 - **The sentence.** One `UnrecognisedSetting` per refused row, no `Kind`, key `COAI_VENDORS[<id>]` or
   `COAI_VENDORS[row 2 of 3]`: `COAI_VENDORS: the row "claude" (row 2 of 3) is left out of every round - its member
-  timeoutMinutes has a value of the wrong JSON type. The other rows still review. ...`. It reaches `providers`
+  timeoutMinutes has a value of the wrong JSON type, or a number it cannot hold. The other rows still review. Write text in quotes,
+  numbers and true/false without them, and minutes as whole numbers, ...`. One cure for every member, because the parser does
+  not say whether text lost its quotes, a number gained them, or a number does not fit (`30.5`, `99999999999`). It reaches `providers`
   (`unrecognised`), the startup and reload notice and the panel toast with no extension change. The key is per ROW because
   the notice ledger groups on (code, subject): one shared key would fold two bad rows into one notice.
 - **"Configured" when every row is left out** (`VendorListFrom`): a row was read, OR the text is `[]`, OR any row was
   REFUSED (whether or not its `id` could be read). Then the provider list is empty and the round refuses with its own
   sentence, as for `[]`. Rows that READ but carry no usable id (`[{}]`, `[{"id":"  "}]`) are not refused, say nothing and
   still run the shipped pair (#688).
-- **A text that is not a JSON list** (`[{oops`, `{}`) keeps its fallback (the shipped pair) and is now SAID, once, under the
+- **A text that is not a JSON list** (`[{oops`, `{}`) keeps its fallback (`COAI_PROVIDERS`, or the shipped pair) and is now SAID, once, under the
   bare key `COAI_VENDORS`, with the parser's position (`PanelSettings.Detail`).
 - **Unchanged on purpose.** `maxPromptKib` stays "no cap, not said" for a bad value; a number of the right type but out of
   range (`timeoutMinutes` 0 or 1441) stays unset and not said; a blank-id row is dropped without a sentence.

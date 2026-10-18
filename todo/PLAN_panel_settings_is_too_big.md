@@ -101,6 +101,6 @@ One commit per step, each proved on its own: the build is green, the full suites
 |---|---|---|
 | The per-row read of `COAI_VENDORS` | does not touch it | builds it, in the new file `VendorRowReader.cs` |
 | `ParseVendors` and the DTO → row mapping | moves it to `VendorSettingsReader.cs` (step 3) | changes only its call to the reader |
-| `VendorListFrom`, `VendorList`, `WithProvidersFrom` | moves them with the vendor block | adds `Refusals` and the "configured" rule |
+| `VendorListFrom`, `VendorList`, `WithProvidersFrom` | moves them with the vendor block | adds `Said` and the "configured" rule |
 
 Either plan can go first; whichever lands second rebases onto the other. Nothing else is shared.
