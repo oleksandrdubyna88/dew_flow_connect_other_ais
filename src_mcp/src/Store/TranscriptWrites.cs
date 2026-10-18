@@ -43,14 +43,20 @@ internal static class TranscriptWrites
             return [];
         }
 
-        if (result.IsError)
+        // An answer with no stamp is DROPPED before its error flag is read (S4-22): the call reads unanswered, never refused.
+        if (result.Answered is not { } answeredUtc)
         {
-            tally.WriteCallsRefused++;
-
-            return [];
+            return Unstamped(tally);
         }
 
-        return result.Answered is { } answeredUtc ? [Place(candidate, spot, answeredUtc, roots)] : Unstamped(tally);
+        return result.IsError ? Refused(tally) : [Place(candidate, spot, answeredUtc, roots)];
+    }
+
+    private static IEnumerable<Positioned> Refused(ReadTally tally)
+    {
+        tally.WriteCallsRefused++;
+
+        return [];
     }
 
     /// <summary>A result on a line with no parseable stamp (S4-22): it is dropped, the call reads unanswered, and the transcript is inconsistent.</summary>

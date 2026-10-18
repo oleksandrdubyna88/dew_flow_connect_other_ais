@@ -80,13 +80,19 @@ internal sealed class TranscriptLaunches
         var launches = AllKeys().Select(key => Launch(key, files, holders, messages, tally)).ToList();
         var missing = launches.Where(launch => launch.HasMeta && !launch.Present).Select(launch => MetaWithoutTranscript(launch, tally));
         List<UnobservedLaunch> calls = afterBudgetStop ? [] : UnansweredCalls(files, messages, tally);
-        var agents = launches.Select(Describe).OrderBy(agent => agent.LaunchedUtc ?? agent.CalledUtc ?? DateTime.MaxValue).ThenBy(agent => agent.Key, StringComparer.Ordinal);
+        var agents = launches.Select(Describe).OrderBy(LaunchOrder).ThenBy(agent => agent.Key, StringComparer.Ordinal);
 
         return new ResolvedLaunches(
             [MainAgent(), .. agents],
-            [.. missing.Concat(calls).OrderBy(launch => launch.Utc ?? DateTime.MaxValue).ThenBy(launch => launch.ToolUseId, StringComparer.Ordinal)],
+            [.. missing.Concat(calls).OrderBy(UnobservedOrder).ThenBy(launch => launch.ToolUseId, StringComparer.Ordinal)],
             _metas.ToDictionary(pair => pair.Key, pair => pair.Value.Alias, StringComparer.Ordinal));
     }
+
+    /// <summary>Agents by launch: the first stamped line, else the launching call, else last.</summary>
+    private static DateTime LaunchOrder(ObservedAgent agent) => agent.LaunchedUtc ?? agent.CalledUtc ?? DateTime.MaxValue;
+
+    /// <summary>Unobserved launches by instant; one without an instant goes last.</summary>
+    private static DateTime UnobservedOrder(UnobservedLaunch launch) => launch.Utc ?? DateTime.MaxValue;
 
     private static ObservedAgent MainAgent() => new("main", string.Empty, string.Empty, string.Empty, string.Empty, null, null, true);
 

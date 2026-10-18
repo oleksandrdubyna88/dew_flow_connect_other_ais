@@ -466,4 +466,96 @@ public sealed class TheCallerTranscriptSaysWhatItDidNotSeeTests
             session.Diagnostics.AgentFilesEmpty.Should().Be(0, fixtureCase.Name);
         }
     }
+
+    // ---- added after the S4 review: a budget stop on an empty main, and a line with no stamp ------------------------------
+
+    [Fact]
+    public void A_main_transcript_with_no_parseable_line_is_transcript_empty_even_after_a_budget_stop()
+    {
+        using var dir = TempDir.For(Prefix);
+        var fixture = CallerTranscriptFixture.Materialise("message-as-several-lines", dir);
+        Enumerable.Range(1, fixture.Lines(TranscriptFile.Main).Count).ToList().ForEach(n => fixture.TruncateLine(TranscriptFile.Main, n));
+
+        var session = fixture.Read(new ReadBudget(1, TimeSpan.MaxValue, TimeProvider.System));
+
+        Reasons(session).Should().Be("unobserved: transcript empty", "a main file with no stamped line has nothing to be partial about, stopped or not (S4-10, step 10)");
+        session.Agents.Should().BeEmpty();
+        session.Messages.Should().BeEmpty();
+        session.FirstLineUtc.Should().BeNull();
+    }
+
+    private static int AnswerLineOf(CallerTranscriptFixture fixture, string callId)
+    {
+        var line = fixture.Lines(TranscriptFile.Main).ToList().FindIndex(text => text.Contains("\"tool_result\"", StringComparison.Ordinal) && text.Contains(callId, StringComparison.Ordinal)) + 1;
+        line.Should().BeGreaterThan(0, "the fixture holds an answer for the call");
+
+        return line;
+    }
+
+    private static string SingleWriteOf(CallerTranscriptFixture fixture) => fixture.CallIds(TranscriptFile.Main, "Write").Single();
+
+    [Fact]
+    public void An_answer_on_a_line_with_no_stamp_is_dropped_and_the_transcript_is_inconsistent()
+    {
+        using var dir = TempDir.For(Prefix);
+        var fixture = CallerTranscriptFixture.Materialise("model-switch-in-window", dir);
+        fixture.RemoveLineKey(TranscriptFile.Main, AnswerLineOf(fixture, SingleWriteOf(fixture)), "timestamp");
+
+        var session = fixture.Read();
+
+        session.Writes.Should().BeEmpty();
+        (session.Diagnostics.WriteCallsUnanswered, session.Diagnostics.WriteCallsRefused).Should().Be((1, 0));
+        Reasons(session).Should().Be("partial: inconsistent transcript");
+    }
+
+    [Fact]
+    public void A_refused_answer_on_a_line_with_no_stamp_is_dropped_not_refused()
+    {
+        using var dir = TempDir.For(Prefix);
+        var fixture = CallerTranscriptFixture.Materialise("model-switch-in-window", dir);
+        var call = SingleWriteOf(fixture);
+        fixture.SetResultError(TranscriptFile.Main, call);
+        fixture.RemoveLineKey(TranscriptFile.Main, AnswerLineOf(fixture, call), "timestamp");
+
+        var session = fixture.Read();
+
+        session.Writes.Should().BeEmpty();
+        (session.Diagnostics.WriteCallsUnanswered, session.Diagnostics.WriteCallsRefused).Should().Be((1, 0), "an unstamped result is dropped before anyone reads its error flag (S4-22)");
+        Reasons(session).Should().Be("partial: inconsistent transcript");
+    }
+
+    private static RawAssistant LoneAssistantOf(CallerTranscriptFixture fixture) =>
+        TranscriptTruth.Assistants(fixture).Where(l => l.FileKey == "main").GroupBy(l => l.MessageId).Where(g => g.Count() == 1).Select(g => g.Single()).Last();
+
+    [Fact]
+    public void An_assistant_line_with_no_stamp_is_inconsistent_and_its_message_is_not_counted_from_it()
+    {
+        using var dir = TempDir.For(Prefix);
+        var fixture = CallerTranscriptFixture.Materialise("two-repositories-one-session", dir);
+        var before = fixture.Read();
+        var lone = LoneAssistantOf(fixture);
+        fixture.RemoveLineKey(TranscriptFile.Main, lone.Line, "timestamp");
+
+        var session = fixture.Read();
+
+        before.Messages.Should().Contain(m => m.MessageId == lone.MessageId, "the message was counted before the stamp was removed");
+        session.Messages.Should().NotContain(m => m.MessageId == lone.MessageId);
+        Reasons(session).Should().Be("partial: inconsistent transcript");
+    }
+
+    [Fact]
+    public void An_assistant_line_with_no_message_id_is_inconsistent()
+    {
+        using var dir = TempDir.For(Prefix);
+        var fixture = CallerTranscriptFixture.Materialise("two-repositories-one-session", dir);
+        var before = fixture.Read();
+        var lone = LoneAssistantOf(fixture);
+        fixture.RemoveLineKey(TranscriptFile.Main, lone.Line, "message.id");
+
+        var session = fixture.Read();
+
+        session.Messages.Should().HaveCount(before.Messages.Count - 1);
+        session.Messages.Should().NotContain(m => m.MessageId == lone.MessageId);
+        Reasons(session).Should().Be("partial: inconsistent transcript");
+    }
 }

@@ -207,6 +207,16 @@ public sealed class CallerTranscriptFixture
 
     public void SetStamp(TranscriptFile file, int n, DateTime instant) => EditLine(file, n, line => line["timestamp"] = StampText(instant));
 
+    /// <summary>Removes a top-level key of line <paramref name="n"/> (<c>timestamp</c>), or one level into <c>message</c> when the key reads <c>message.id</c>.</summary>
+    public void RemoveLineKey(TranscriptFile file, int n, string key) => EditLine(file, n, line => RemoveKey(line, key));
+
+    private static void RemoveKey(JsonObject line, string key)
+    {
+        var path = key.Split('.', 2);
+        var holder = path.Length == 1 ? line : line[path[0]] as JsonObject;
+        _ = holder?.Remove(path[^1]);
+    }
+
     public void PrependLine(TranscriptFile file, string json)
     {
         var path = PathOf(file);

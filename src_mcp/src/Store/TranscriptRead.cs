@@ -156,7 +156,9 @@ internal sealed class TranscriptRead
     private ObservedSession Assemble()
     {
         var main = _files[0];
-        if (main.FirstStamp is null && !_meter.Stopped)
+        // After a stop, Finish has already read main's head off the budget, so a null here means main holds no stamped
+        // line at all: empty, whether or not the budget stopped the read (S4-10).
+        if (main.FirstStamp is null)
         {
             return Of(ObservationState.Unobserved(ObservationReasons.TranscriptEmpty), null, [], [], [], []);
         }
