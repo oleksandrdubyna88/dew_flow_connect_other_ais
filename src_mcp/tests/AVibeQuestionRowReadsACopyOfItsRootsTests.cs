@@ -13,7 +13,7 @@ namespace CoaiMcp.Tests;
 /// <summary>
 /// A Vibe question-consultant row (S3 of <c>todo/PLAN_vibe_and_kimi_runtimes.md</c>): a <c>disk</c> row reads its operator's
 /// GRANTED ROOTS — each copied, limited to that root, into a sub-folder of the row's own snapshot — and is told the
-/// COPIES' paths, never the originals (Vibe reads only its working folder, M-V11); a root outside any Git work tree is
+/// COPIES' paths, never the originals (Vibe reads only its working folder, M-V11); a root that is no work tree and holds no repository is
 /// refused; and the row's home and copies are gone once the row ends — on an answer, a refusal and a cancellation alike.
 /// </summary>
 /// <remarks>
@@ -157,7 +157,7 @@ public sealed class AVibeQuestionRowReadsACopyOfItsRootsTests : IAsyncLifetime
 
         var row = TheRow(reply);
         row.GetProperty("status").GetString().Should().Be(RowOutcomes.Refused, reply.ToString());
-        row.GetProperty("reason").GetString().Should().Contain("not inside a Git work tree");
+        row.GetProperty("reason").GetString().Should().Contain("holds no Git repository within two levels");
         vibe.Versions.Should().BeEmpty("nothing of Vibe's starts for a row whose copy was refused");
         vibe.Turns.Should().BeEmpty();
     }
@@ -184,7 +184,7 @@ public sealed class AVibeQuestionRowReadsACopyOfItsRootsTests : IAsyncLifetime
 
         var reply = await AskAsync(ServiceOn(vibe, Homes, plain));
 
-        TheRowWasRefusedFor(reply, "not inside a Git work tree");
+        TheRowWasRefusedFor(reply, "holds no Git repository within two levels");
         TheHomesFolderIsEmpty();
     }
     [Fact]
