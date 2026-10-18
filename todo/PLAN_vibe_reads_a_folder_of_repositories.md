@@ -36,7 +36,8 @@ is that, minus the configuration a checkout would carry.
 
 - **D1 — Expand, do not widen.** In `OneShotAsync`'s source list (`ConsultantPlaces.cs:293`), a granted root that is NOT inside a
   work tree is expanded into the Git work trees beneath it before copying; a root that IS a work tree is copied as today. Each
-  found repository goes through the unchanged `CopyOfAsync` (git validation, link refusal, snapshot). Nothing else reads the
+  found repository goes through `CopyOfAsync` (git validation, link refusal, snapshot) — the same method, widened only by an
+  optional link root (D5). Nothing else reads the
   parent folder, and Vibe never sees a path of it. `OutsideAGitTreeAsync` (`:387-401`) folds two answers into one today;
   it is split, because only "not inside a work tree" expands — a folder that does not exist stays a refusal (C3). The two
   existing assertions that expect the work-tree sentence for a plain folder (`AVibeQuestionRowReadsACopyOfItsRootsTests.cs:160`,
@@ -55,7 +56,8 @@ is that, minus the configuration a checkout would carry.
   - The walk examines at most **10,000 folders** per root; past that the row is refused: "the folder <root> holds more than
     10000 folders within two levels — grant the project folders themselves". (50 repositories alone would not bound the walk:
     a parent can hold thousands of folders and no repository.)
-  - At most **50 repositories** per root; beyond that the row is refused with a sentence naming the count and the same cure.
+  - At most **50 CONFIRMED repositories** per row (git-validated, de-duplicated — a broken candidate never counts); beyond
+    that the row is refused with a sentence naming the bound and the same cure.
   - A root with NO repository beneath it is refused: "the folder <root> holds no Git repository within two levels — Vibe reads
     copies coai makes through Git".
   - The walk AND the copies run inside the row's existing budget token (`copying` in `OneShotAsync`, the #811 checkpoint rule);
@@ -97,7 +99,13 @@ is that, minus the configuration a checkout would carry.
   `PanelService.ScratchPrefixes` (`:1364-1365`) sweeps only `coai-answers-*`, `coai-repair-*`, `coai-noworkspace-*`, although
   `shared/temp-sweep.json` says the product sweeps its never-swept prefixes "itself, on its own clock". This plan adds
   `"coai-question-*"` to `ScratchPrefixes`: `PruneOldAnswerDirs` (`PanelService.cs:1404`) then removes it after six hours on
-  the consultation beat. A live row is bounded by its row budget (minutes), far under six hours. S10 pins it, red first.
+  the consultation beat. **Age alone is not enough** (cadence consult 5f02ed0f, verified): `RowBudget` is
+  `IntVar(COAI_QCONSULT_ROW_MINUTES)` with no upper bound (`QuestionConsultSettings.cs:149`), so a row set to 480 minutes
+  outlives six hours, and a deep write does not refresh the scratch folder's own timestamp. So the row HOLDS a lock file
+  in its scratch for its whole life (`HeldFile.Take(Path.Combine(scratch, ".coai-question.lock"))`, exclusive on Linux
+  through `LinuxHeldFile`), and the sweep removes a `coai-question-*` folder only when it is older than six hours AND it
+  can take that lock itself — the `VibeHomes.cs:189` pattern (`NewestWrite >= cutoff || lock not taken → keep`), reused,
+  not copied. S10 pins both sides, red first.
 
 ## 4. Scenarios (each red is the message the test fails with before the fix)
 
@@ -115,7 +123,8 @@ is that, minus the configuration a checkout would carry.
 - S9 *Given* a folder whose `.git` is a FILE pointing at a live worktree, *then* it is copied; *given* a `.git` that is a
   SYMLINK, *then* it is not a candidate.
 - S10 *Given* a stranded `coai-question-*` folder holding copies, older than six hours, *then* the consultation beat's sweep
-  removes it (reuse `AScratchSweepRunsOnTheConsultationBeatTests`'s pattern; red first — D8).
+  removes it (reuse `AScratchSweepRunsOnTheConsultationBeatTests`'s pattern; red first — D8). *Given* the same folder aged
+  seven hours but with its lock HELD (a live row), *then* it survives the sweep, and is removed once the lock is released.
 - S11 *Given* a candidate whose `.git` file points nowhere, and an unreadable folder, *then* both skipped with a note each, and
   the other repositories copied.
 - S12 *Given* two repositories where the SECOND copy is refused (a committed mode-120000 link INSIDE it that git lists, the
@@ -179,8 +188,8 @@ One epic, E1 — the expansion (ordinary; the confinement is D6's, unchanged, an
 
 ### E1.1 — The repository walk (pure, over a listing seam)
 
-**Owns:** D2 (all bullets), D3's first three bullets (the counts and the three sentences), D7 (the order). Scenarios S2, S3
-(the walk's arm), S4 (the walk's arm), S5 (all three refusals), S9, S11's walk arm.
+**Owns:** D2 (all bullets), D3's folder bound and its "no candidate" sentence (the 50-repository bound is E1.2's, over
+confirmed repositories), D7 (the order). Scenarios S2, S3 (the walk's arm), S4 (the walk's arm), S5a–c, S9, S11's walk arm.
 
 **Files (new):**
 - `src_mcp/src/Server/Consultation/FolderListing.cs` — the seam.
@@ -232,9 +241,11 @@ internal static class RepositoryWalk
 - `Unreadable` → note `"{path} was skipped: it could not be listed ({reason})"`; the walk goes on (S11).
 - Every folder listed counts (the root included). When the count would pass `MaxFolders`, the walk stops and the outcome
   is `Refused("the folder {root} holds more than 10000 folders within two levels — grant the project folders themselves")`.
-- After the walk: more than `MaxRepositories` →
-  `Refused("the folder {root} holds {n} Git repositories within two levels, more than the 50 a Vibe disk row copies — grant the project folders themselves")`;
-  none → `Refused("the folder {root} holds no Git repository within two levels — Vibe reads copies coai makes through Git")`.
+- After the walk: no CANDIDATE at all →
+  `Refused("the folder {root} holds no Git repository within two levels — Vibe reads copies coai makes through Git")`.
+- The walk does NOT apply the 50-repository bound (cadence consult 5f02ed0f, verified): a candidate is not yet a
+  repository, so "50 good ones plus one broken `.git` file" must not refuse the row. The bound counts CONFIRMED
+  repositories and lives in E1.2. `RepositoryWalk` keeps `MaxRepositories` only as the shared constant.
 - The walk does not ask git. Whether a candidate IS a work tree is E1.2's question (D4's discovery side).
 
 **Red-first tests** (`RepositoryWalkTests`, over a `Dictionary<string, FolderListing>` seam — no disk — and one small test
@@ -247,7 +258,8 @@ implements:
   `Expected found.Repositories to contain 1 item(s), but found 0` (the one plain repository beside them). Then the
   listed-paths assertion guards the skip once the walk exists.
 - S4 `ACandidateIsNotDescended_SoItsNestedRepositoryAndSubmoduleAreNotFound` — red: `…to contain 1 item(s), but found 0`.
-- S5a `FiftyOneRepositories_AreRefusedNamingTheCount` — red: `Expected outcome to be of type WalkOutcome+Refused, but found WalkOutcome+Found`.
+- S5a `FiftyOneCandidates_AreAllFound_TheBoundIsNotTheWalks` — the walk returns all 51 (the bound is E1.2's, over confirmed
+  repositories); red: `Expected found.Repositories to contain 51 item(s), but found 0`.
 - S5b `NoRepository_IsRefusedWithTheGitSentence` — same red shape; the assertion also checks `holds no Git repository within two levels`.
 - S5c `TenThousandAndOneFolders_AreRefused_AndTheWalkStops` (101 folders at depth 1 × 100 children, from the seam) — same red
   shape; a second assertion: the seam was asked fewer than 10 002 times.
@@ -306,7 +318,7 @@ private sealed class Tally                       // replaces the bare List<Revie
 {
     public List<ReviewSnapshot> Made { get; } = [];
     public List<string> Notes { get; } = [];
-    public int Found { get; set; }               // copy targets known so far: +1 when a work-tree root is reached, +n when a root is expanded
+    public int Found { get; set; }               // copy targets known so far: +1 when a work-tree root is reached, +n (CONFIRMED, not yet copied) when a root's candidates are validated
     public HashSet<string> Copied { get; } = new(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);  // the comparer ConversationSnapshots.cs:24-25 uses
 }
 private async Task<string> ExpandedAsync(int index, string root, string tree, Tally tally, CancellationToken copying);
@@ -318,15 +330,25 @@ private static string LinkUpTo(string repository, string root);   // the first l
    follows a link, so a root that IS one must be refused here, not walked (D5 reaches the grant).
 2. `RepositoryWalk.Find(Path.GetFullPath(root), Listing, copying)` → `Refused` → return its sentence (D3). `Found` → add
    its notes to `tally.Notes` and say each through `note(...)` (the log keeps them).
-3. For each `FoundRepository` in order: `tally.Found++`; `IsAWorkTreeAsync(repo.Path)` false → note
-   `"{repo.Path} was skipped: it holds a .git, but git does not confirm it as a work tree"` (D4 discovery side; S11) and
-   continue; already in `tally.Copied` → continue (D6 de-duplication, S14); `BeforeCopyOf(repo.Path)`;
-   `LinkUpTo(repo.Path, root)` non-empty → return the link sentence (D5, S13 — the row is refused);
-   destination = `Path.Combine([tree, index.ToString(CultureInfo.InvariantCulture), .. repo.Segments])`;
-   `Maker.MakeAsync(new SnapshotSource.Live(repo.Path), destination, copying)` → `Made` → `tally.Made.Add`, `tally.Copied.Add`;
-   `copying.ThrowIfCancellationRequested()`; `Refused` → return its reason (D4 copy side, S12 — no catch-and-skip).
-   `ReviewSnapshots.MakeAsync` creates the destination folder itself (`ReviewSnapshots.cs:175`); no extra `CreateDirectory`.
-4. Return empty.
+3. **Validate first, then copy** (cadence consult 5f02ed0f, verified — so the "of" in the budget sentence is the real total
+   and the bound counts confirmed repositories). For each `FoundRepository` in order: `IsAWorkTreeAsync(repo.Path)` false →
+   note `"{repo.Path} was skipped: it holds a .git, but git does not confirm it as a work tree"` (D4 discovery side; S11) and
+   continue; already in `tally.Copied` or already confirmed in this row → continue (D6 de-duplication, S14); else add it to
+   the row's confirmed list. Each confirmation adds 1 to `tally.Found` at once, so a budget that runs out DURING validation
+   says "0 of k" with k = confirmed so far.
+4. More than `RepositoryWalk.MaxRepositories` confirmed (count the row's whole confirmed list, stop validating at the 51st)
+   → return `"the folder {root} holds more than 50 Git repositories within two levels, more than a Vibe disk row copies —
+   grant the project folders themselves"`. NONE confirmed → return D3's "holds no Git repository within two levels"
+   sentence; the skip notes stay on the place (the refused arm carries them, E1.3).
+5. For each confirmed repository in order: `BeforeCopyOf(repo.Path)`; `CopyOfAsync(repo.Path, destination, copying, root)`
+   — the SAME method a work-tree root goes through, so D1's promise holds. `CopyOfAsync` gains an optional `linkRoot`
+   argument: empty (a work-tree root) keeps today's `LinkUpToTheWorkTree`; non-empty uses `LinkUpTo(repo.Path, linkRoot)`
+   (D5, S13 — the row is refused). Its git check is repeated there (cheap, and it closes the walk→copy window).
+   destination = `Path.Combine([tree, index.ToString(CultureInfo.InvariantCulture), .. repo.Segments])`. `Made` →
+   `tally.Made.Add`, `tally.Copied.Add`; `copying.ThrowIfCancellationRequested()`; `Refused` → return its reason (D4 copy
+   side, S12 — no catch-and-skip). `ReviewSnapshots.MakeAsync` creates the destination folder itself
+   (`ReviewSnapshots.cs:175`); no extra `CreateDirectory`.
+6. Return empty.
 
 A directly granted work-tree root also goes into `tally.Copied` and counts `tally.Found++`, so a repository granted
 directly AND found under a parent grant is copied once — the first in source order wins.
@@ -339,9 +361,9 @@ directly AND found under a parent grant is copied once — the first in source o
   `.vibe`, `AGENTS.md`.
 - S6 `AWorkTreeRoot_IsCopiedAsToday_AtTreeSnapshot` — a guard, green from the start: one root `…/tree/snapshot-<id>`, no
   `<n>` folder. Said so in the summary.
-- S7a `TheBudgetRunsOutAfterOneOfTwoFoundRepositories_RefusesNamingOneOfTwo_AndLeavesNoSnapshot` (the slow-copy `Maker`
-  of `AConversationPlaceTests.cs:121-131` over a parent of `fast` and `slow`) — red: `Expected place.Refusal to contain "1 of 2"`
-  (today the sentence is the work-tree refusal). Green also asserts no `snapshot-*` folder anywhere under `tree`
+- S7a `TheBudgetRunsOutInTheSecondOfThreeCopies_RefusesNamingOneOfThree_AndLeavesNoSnapshot` (the slow-copy `Maker`
+  of `AConversationPlaceTests.cs:121-131` over a parent of `a-fast`, `b-slow`, `c-fast`) — red: `Expected place.Refusal to contain "1 of 3"`
+  (today the sentence is the work-tree refusal; a per-candidate counter would say "1 of 2" — this test is what catches it). Green also asserts no `snapshot-*` folder anywhere under `tree`
   (`Directory.EnumerateDirectories(tree, "snapshot-*", SearchOption.AllDirectories)` empty) and `budget.Held == 0`.
 - S7b `TheBudgetRunsOutDuringTheWalk_RefusesWithNothingMade` — `Listing` sleeps 2 s on its first call, budget 1 s — red:
   `Expected place.Refusal to contain "budget"`; green: "0 of 0" in the sentence, no `snapshot-*` folder.
@@ -358,6 +380,12 @@ directly AND found under a parent grant is copied once — the first in source o
 - S13 `AGroupingFolderReplacedByALinkBetweenTheWalkAndTheCopy_RefusesTheRow` — `BeforeCopyOf` moves `group` aside and makes
   a link at its name with `DirectoryLink.MakeAsync` — red: `Expected place.Refusal to contain "link", but found ""` (without
   `LinkUpTo`, git works through the junction and the copy succeeds). Windows and Linux both: `DirectoryLink` has both arms.
+- S13b `AGrantedRootThatIsALink_IsRefusedBeforeTheWalk` — the root is a `DirectoryLink` to a parent of one repository — red:
+  `Expected place.Refusal to contain "link"` (without step 1 the walk lists through it and the copy succeeds).
+- S11b `AParentWithOnlyABrokenRepository_IsRefusedWithTheNoneSentence_AndKeepsItsNote` — red: `Expected place.Refusal to
+  contain "holds no Git repository"`, but found "" (a skip-everything loop would return Owned with zero copies).
+- S5d `FiftyGoodRepositoriesAndOneBrokenGitFile_AreOwnedWithFiftyCopies` — slow (50 inits); the cadence consult's case;
+  red: the work-tree sentence. Merge it with the D3/D7 sentence test below if the suite's time matters (51 good → refused).
 - S14a `TwoGrantsEachHoldingGroupRepo_GiveTwoCopies_UnderDifferentGrantIndexes` — red: the work-tree sentence; green:
   roots under `tree/0/group/repo/…` and `tree/1/group/repo/…`.
 - S14b `TwoOverlappingGrants_CopyTheSharedRepositoryOnce` — grants `parent` and `parent/group` — red: the work-tree
@@ -401,13 +429,17 @@ api-row scenario tests green; no other caller of `TurnsAsync` exists (it is priv
 
 ### E1.4 — The product flow, the sweep, the docs and the help
 
-**Owns:** D8 (with correction C1 below — pending the owner's yes), S10, S15, the docs and the help sentence, the plan's
+**Owns:** D8 (C1 accepted, plus the lock of the cadence consult), S10 (both sides), S15, the docs and the help sentence, the plan's
 promotion.
 
 **Files:**
 - `src_mcp/tests/AVibeQuestionRowReadsACopyOfItsRootsTests.cs` (or the fixture E1.3 lifted): S15 as a
   `[Theory]` over `VibeFlowHost.Windows` / `VibeFlowHost.Wsl2` (`:110-112`).
-- `src_mcp/src/Server/PanelService.cs:1364-1365` — **only if C1 is accepted:** `ScratchPrefixes` gains `"coai-question-*"`.
+- `src_mcp/src/Server/PanelService.cs:1364-1365` — C1 ACCEPTED: `ScratchPrefixes` gains `"coai-question-*"`, and
+  `PruneOldAnswerDirs` (`:1404`) skips a `coai-question-*` folder whose `.coai-question.lock` it cannot take (D8; extract
+  the `VibeHomes.cs:189` keep-test into one shared helper if it is private there — reuse-first step 2.2).
+- `src_mcp/src/Server/QuestionConsult/QuestionRowLaunch.cs` — the row takes `HeldFile.Take` on `.coai-question.lock` right
+  after `MakeScratch` (`:83`) and releases it in the same `finally` that removes the scratch, BEFORE the delete.
   `shared/temp-sweep.json` is unchanged (`coai-question-` stays `neverSwept` for the TEST sweep; the product sweeps it on
   its own six-hour clock, as it does `coai-answers-`).
 - `src_mcp/tests/AScratchSweepRunsOnTheConsultationBeatTests.cs` — S10 as a second test beside `:43-66`, over
