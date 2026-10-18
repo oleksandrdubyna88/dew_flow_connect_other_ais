@@ -3797,7 +3797,7 @@ flowchart TD
   H -->|"native Linux"| R2["refused: Kimi runs on WSL2 only for now"]
   H -->|"wsl.exe bridge on Windows, macOS, other"| R3["refused: D18"]
   P["places: ~/.kimi-code/bin/kimi; rg and fd in bin, then PATH, then ~/.local/bin"] --> E["built environment: HOME to os/, XDG_CACHE_HOME to cache/ beside it"]
-  E --> M{"MountLocality.Judge of the sign-in's real path"}
+  E --> M{"MountLocality.Judge of the sign-in's real path, on EVERY launch before any process starts"}
   M -->|"drvfs, 9p aname=drvfs, virtiofs"| R4["refused: Windows filesystem"]
   M -->|"nfs, nfs4, cifs, smb3, fuse.sshfs, ceph, glusterfs"| N{"coai.kimiAllowNetworkSignIn"}
   N -->|"off (the default)"| R5["refused, with the cure: a local KIMI_CODE_HOME and a separate kimi login"]
@@ -3827,6 +3827,20 @@ flowchart TD
   silently. **How the setting travels:** the extension writes `COAI_KIMI_ALLOW_NETWORK_SIGNIN` into the data directory's `settings.json` like every other `COAI_*` setting (an environment variable in the client's config wins);
   `PanelSettings.KimiAllowNetworkSignIn` reads it through `Flag` (an unreadable value stays OFF); the roster and the question fan-out put it on `ReviewerSettings.KimiAllowNetworkSignIn`; `KimiRuntime.Build` binds
   the invocation to an adapter that carries it (immutable, per launch — no global), and `KimiLaunch.TakeAsync(…, allowNetworkSignIn)` hands it to `KimiHome.Made` → `Junctions.Make`.
+- **The review of 2026-10-18 — the override is judged on every launch, and the spelling check follows it (B, C).** `KimiHome.Made` ran the only mount check (`Junctions.Make` → `Refusal`) when the home was FRESH, so a
+  home made under `coai.kimiAllowNetworkSignIn` stayed usable after the person switched it off, and a folder that moved from a local mount to a network one between two launches was never looked at again.
+  `Junctions.Locality(host, target, allowNetwork)` is now asked by `KimiLaunch.Rendered` on EVERY launch, after the credentials folder is known to exist and before the home, the lock or `--version`: the three checks of
+  `Refusal` that are about WHERE the folder is — `LocalDrive` (the spelling), `Resolved` (where its ancestors really lead) and `Mounted` (the filesystem) — as one call, so the two cannot say different things (the
+  link's own checks keep their order). `KimiLaunch.LocalHome` and `Junctions.LocalDrive`/`Resolved` ask one spelling rule, `Junctions.IsLocalSpelling(host, path, driveType, allowNetwork)`: `IsLocal`, and — on a Linux or
+  WSL host with the override on — also the automount spellings `/net/`, `/misc/` and `/Network/` that a network home has (a Windows host never gets the extra, so a UNC home stays refused whatever the setting says;
+  `//server/share` is never admitted). With the override on, the mount table still judges the filesystem and says the warning; with it off the D19 sentence stands as before.
+- **`--kimi-clear-marker` reads, checks and deletes under the sign-in's gate (D).** The mode took the marker, asked the liveness seam and deleted, with nothing between a turn that started in that window and the delete.
+  It now takes `KimiCredentialsLock.TakeAsync(marker.SignInFolder)` (waited `GateWait`, 20 s) around the whole of read → check → delete, re-reads the marker UNDER the gate, and deletes only when
+  `KimiSurvivorMarker.Holds(path, judged)` — the file still serialises to the marker that was judged. A gate that cannot be taken in time (a launch holds it while it asks `--version`), or cannot be opened, keeps the marker
+  and exits 74 (*cannot verify*), as does a marker that changed while it was judged; a sign-in folder with no key (it is gone) has no gate to take — nothing can be launching on it — and is judged without one.
+- **The Linux cure for `fd` and the closing check follow the server (F, H).** `KimiTools`' cure sentence says `ln -sfn` and *unless ~/.local/bin/fd is already your own file* (never `ln -sf`, which follows a planted link
+  to a folder and writes inside it — the install line has always used `-sfn`). The install line's closing check looks Kimi's `bin`, then `PATH`, then `~/.local/bin` — the order of `KimiTools.Directories` — and DL12 of the
+  plan says so now (DL5 always did).
 - **DL9's report for the panel button.** The Kimi row of `coai-mcp --providers` carries `survivorMarker = { "path": <marker file>, "pids": [<int>…] }` when a marker of THIS sign-in stands
   (`KimiRuntime.StandingMarker` → `KimiSurvivorMarker.StandingReportFor(KimiCredentialsLock.MarkerPathFor(credentials), …)`): ABSENT otherwise; `pids` empty for a `spawning` marker or one that cannot be read (it still
   blocks the sign-in); never another sign-in's marker (the path is keyed by this folder); not reported while the shim that wrote it still runs (a turn in progress, the gate's own first question). The path is exactly what
