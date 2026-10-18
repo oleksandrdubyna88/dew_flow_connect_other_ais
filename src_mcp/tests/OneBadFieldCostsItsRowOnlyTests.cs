@@ -193,4 +193,23 @@ public sealed class OneBadFieldCostsItsRowOnlyTests : IDisposable
         settings.Providers.Select(p => p.Provider).Should().Equal("codex", "antigravity");
         settings.UnrecognisedSettings.Should().BeEmpty();
     }
+
+    [Fact]
+    public void AConsultantRowWithAWrongType_IsStillRefusedByName()
+    {
+        var bad = new ConsultantChoice("claude", Runtime: "claude", Row: """{"id":"claude","runtime":"claude","timeoutMinutes":"30"}""");
+        var good = new ConsultantChoice("claude", Runtime: "claude", Row: """{"id":"claude","runtime":"claude","timeoutMinutes":30}""");
+
+        ConsultantResolver.OptionsOf(bad).Should().BeNull("a row that does not read is refused by name, never a quiet fall back");
+        ConsultantResolver.OptionsOf(good)!.TimeoutMinutes.Should().Be(30);
+    }
+
+    [Fact]
+    public void ARowOutOfRangeOfTheRightType_IsStillUnsetAndNotSaid()
+    {
+        var settings = From("""[{"id":"claude","runtime":"claude","timeoutMinutes":0},{"id":"codex","runtime":"codex","timeoutMinutes":1441}]""");
+
+        settings.Providers.Select(p => p.TimeoutMinutes).Should().Equal(0, 0);
+        settings.UnrecognisedSettings.Should().BeEmpty();
+    }
 }
