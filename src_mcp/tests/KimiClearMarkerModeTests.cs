@@ -1,5 +1,6 @@
 using System.Text.Json;
 using CoaiMcp.Acp;
+using CoaiMcp.Runners.Files;
 using CoaiMcp.Runners.Kimi;
 using CoaiMcp.Runners.Processes;
 using FluentAssertions;
@@ -192,6 +193,65 @@ public sealed class KimiClearMarkerModeTests : IDisposable
         exits.Should().AllBeEquivalentTo(65, "exit was 64 — a known mode never answers 64");
         new[] { decoy, elsewhere, notAMarkerName, inASubfolder }.Should().OnlyContain(path => File.Exists(path), "the clear mode deleted a file outside the Kimi lock root");
         Notes.Should().Contain("needs <path>").And.Contain("is not a Kimi survivor marker under");
+    }
+
+    // ---------- the review of 2026-10-18 (D): read, check and delete happen under the sign-in's gate, and only over the marker that was judged ----------
+
+    private static KimiSurvivorMarkerDto RunningFor(string signIn, int owner, params ProcessIdentity[] tree) =>
+        new(new ReaderMarkerDto(ReaderPhases.Running, owner, Started, DateTimeOffset.UtcNow, tree), "/owned/kimi-root", signIn);
+
+    [Fact]
+    public async Task AMarkerRewrittenBetweenTheLivenessCheckAndTheDelete_IsKept_NotDeleted()
+    {
+        KimiSurvivorMarker.Write(MarkerPath, Running(Member(424243)));
+
+        // A turn that starts in the window writes a FRESH marker: the check ran over the old one and said "every member is gone".
+        var exit = await ClearAsync(member =>
+        {
+            KimiSurvivorMarker.Write(MarkerPath, Running(Member(515151), Member(515152)));
+
+            return new Liveness.Gone("no such process");
+        });
+
+        exit.Should().Be(74, "the marker that was judged is not the marker that was there at the delete — and exit 74 says cannot-verify");
+        File.Exists(MarkerPath).Should().BeTrue("the fresh marker of a turn that started in the window was deleted");
+        Notes.Should().Contain("changed while it was judged");
+        Report().GetProperty("outcome").GetString().Should().Be("kept");
+    }
+
+    private string SignIn() => Directory.CreateDirectory(_dir.At("people", "sign-in")).FullName;
+
+    [Fact]
+    public async Task WhileALaunchHoldsTheSignInsGate_TheMarkerIsKept_AndTheModeExits74()
+    {
+        using var rooted = KimiCredentialsLock.RootFor(Root);
+        var signIn = SignIn();
+        KimiSurvivorMarker.Write(KimiCredentialsLock.MarkerPathFor(signIn), RunningFor(signIn, 424242, Member(424243)));
+        var marker = KimiCredentialsLock.MarkerPathFor(signIn);
+        marker.Should().NotBeEmpty("a real folder has a key");
+        using var gate = ((Hold.Taken)await KimiCredentialsLock.TakeAsync(signIn, TestContext.Current.CancellationToken)).Stream;
+
+        var exit = await KimiClearMarkerMode.RunAsync(["--kimi-clear-marker", marker], _notes.Add, _stdout, Root, _ => new Liveness.Gone("no such process"), () => new KimiPresence.NoKimi(), TimeSpan.FromMilliseconds(300));
+
+        exit.Should().Be(74, "a launch holds the gate: the mode must not read, check and delete beside it");
+        File.Exists(marker).Should().BeTrue("the marker was deleted while a launch held the sign-in's gate");
+        Notes.Should().Contain("gate");
+        Report().GetProperty("outcome").GetString().Should().Be("kept");
+    }
+
+    [Fact]
+    public async Task WithTheGateFree_TheMarkerIsCleared_AndTheGateIsGivenBack()
+    {
+        using var rooted = KimiCredentialsLock.RootFor(Root);
+        var signIn = SignIn();
+        var marker = KimiCredentialsLock.MarkerPathFor(signIn);
+        KimiSurvivorMarker.Write(marker, RunningFor(signIn, 424242, Member(424243)));
+
+        var exit = await KimiClearMarkerMode.RunAsync(["--kimi-clear-marker", marker], _notes.Add, _stdout, Root, _ => new Liveness.Gone("no such process"), () => new KimiPresence.NoKimi(), TimeSpan.FromSeconds(5));
+
+        exit.Should().Be(0, Notes);
+        File.Exists(marker).Should().BeFalse();
+        HeldFile.IsHeld(KimiCredentialsLock.PathFor(signIn)).Should().BeFalse("the mode gave the gate back");
     }
 
     // ---------- a marker that names nothing ----------

@@ -73,7 +73,7 @@ public static class KimiSurvivorMarker
             Directory.CreateDirectory(folder);
         }
 
-        AtomicFile.Write(path, JsonSerializer.Serialize(marker, KimiSurvivorJsonContext.Default.KimiSurvivorMarkerDto));
+        AtomicFile.Write(path, Serialized(marker));
     }
 
     /// <summary>
@@ -115,6 +115,15 @@ public static class KimiSurvivorMarker
 
     /// <summary>Deletes the marker (a file already gone is fine).</summary>
     public static void Clear(string path) => File.Delete(path);
+
+    /// <summary>
+    /// Whether the file at <paramref name="path"/> STILL holds exactly <paramref name="judged"/> — the marker a caller read, checked and is about to delete. A turn that starts in that window writes a fresh marker, and
+    /// deleting it would lose the one record that keeps the sign-in blocked; a file that vanished, cannot be read or reads differently is not the judged one. Compared by the JSON this class writes, so two reads of one file are equal.
+    /// </summary>
+    public static bool Holds(string path, KimiSurvivorMarkerDto judged) =>
+        Read(path) is MarkerRead.Read now && Serialized(now.Marker) == Serialized(judged);
+
+    private static string Serialized(KimiSurvivorMarkerDto marker) => JsonSerializer.Serialize(marker, KimiSurvivorJsonContext.Default.KimiSurvivorMarkerDto);
 
     /// <summary>
     /// The markers under <paramref name="lockRoot"/> that name <paramref name="ownedRoot"/> — at most a handful of files, and never the sign-in folder. <b>Fail-closed</b> (the coai code gate, E5): when a candidate marker
