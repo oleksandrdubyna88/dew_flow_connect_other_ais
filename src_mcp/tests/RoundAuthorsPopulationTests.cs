@@ -4,6 +4,7 @@ using CoaiMcp.Core.Context;
 using CoaiMcp.Store;
 using FluentAssertions;
 using Xunit;
+using static CoaiMcp.Tests.RoundAuthorsFacts;
 using static CoaiMcp.Tests.RoundAuthorsSeed;
 
 namespace CoaiMcp.Tests;
@@ -14,50 +15,6 @@ namespace CoaiMcp.Tests;
 /// </summary>
 public sealed class RoundAuthorsPopulationTests
 {
-    private const string Caller = "c1";
-
-    private static readonly string[] CodeAndTest = ["code", "test"];
-
-    private static StoredAuthorRow MainRow(string association = Association.SameSession, string model = "claude-opus-5-5", string window = "round") =>
-        new(0, "main", string.Empty, "opus", model, "high", string.Empty, association, window, 0, 2, 1);
-
-    private static StoredAuthorRow Coder(string agent, string model, string requested = "sonnet", string effort = "high", string association = Association.WroteHere, string window = "round", int launches = 1, int writes = 1) =>
-        new(1, "subagent", agent, requested, model, effort, "general-purpose", association, window, launches, 2, writes);
-
-    private static AuthorsFacts Observed(params StoredAuthorRow[] rows) =>
-        new(AuthorsStateKind.Observed, [], Caller, rows, new AmbiguousFacts(true, 0, 0, 0, 0, 0, 0, 0), 0);
-
-    private static AuthorsFacts Stated(AuthorsStateKind kind, string reason, int uncovered = 0, params StoredAuthorRow[] rows) =>
-        new(kind, reason.Length == 0 ? [] : [reason], Caller, rows, new AmbiguousFacts(true, 0, 0, 0, 0, 0, 0, 0), uncovered);
-
-    private static readonly AuthorsFacts Typical = Observed(MainRow(), Coder("a1", "claude-sonnet-5-5"));
-
-    private static SizeFacts Sized(RoundSize size) => new(true, size);
-
-    private static SizeFacts Code(int lines) => Sized(Whole(Cell("shown", "code", lines)));
-
-    private static readonly ReviewerFact Codex = new("codex", "gpt-6-luna", "high", true, "done");
-
-    private static RoundFacts Round(
-        int number,
-        double hours = double.NaN,
-        string stage = "CodeReview",
-        string session = "s",
-        bool inWindow = true,
-        string status = "done",
-        string verdict = "proceed",
-        AuthorsFacts? authors = null,
-        SizeFacts? size = null,
-        ReviewerFact[]? reviewers = null,
-        string branch = "main") =>
-        new(
-            (session == "s" ? 0 : 1000) + number + (stage == "PlanReview" ? 100 : 0), session, "D:/repo", branch, stage, number, status, verdict,
-            Stamp(T0.AddHours(double.IsNaN(hours) ? number : hours)), inWindow, authors ?? Typical, size ?? Code(100), reviewers ?? [Codex],
-            new FindingFacts(1, 1, 0, 0, 0, 1, false));
-
-    private static RoundAuthorsSelection Sel(string stage = "CodeReview", string cohort = "all", string[]? kinds = null, string split = "", bool beforeOpen = false, bool withoutElided = false, bool withUncovered = false) =>
-        new(stage, string.Empty, string.Empty, split, cohort, kinds ?? CodeAndTest, beforeOpen, withoutElided, withUncovered);
-
     private static CountedRound CountedAt(Population population, int number) =>
         population.In.Should().ContainSingle(round => round.Facts.Number == number, $"round {number} is counted").Subject;
 
