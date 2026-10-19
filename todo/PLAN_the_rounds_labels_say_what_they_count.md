@@ -121,10 +121,10 @@ One epic, branch `fix/rounds-labels-say-what-they-count`.
   | | fewer than two readings | a launch sent no round id | no round ran between the readings | no round id (replaces "older extension") |
   |---|---|---|---|---|
   | en | `fewer than two readings` | `a launch sent no round id` | `no round ran between the readings` | `sent no round id` |
-  | de | `weniger als zwei Lesungen` | `ein Start ohne Runden-ID` | `zwischen den Lesungen lief keine Runde` | `keine Runden-ID` |
-  | es | `menos de dos lecturas` | `un lanzamiento sin id de ronda` | `ninguna ronda entre las lecturas` | `sin id de ronda` |
-  | ru | `меньше двух чтений` | `запуск без id раунда` | `между чтениями не было раунда` | `без id раунда` |
-  | uk | `менше двох читань` | `запуск без id раунду` | `між читаннями не було раунду` | `без id раунду` |
+  | de | `weniger als zwei Lesungen` | `ein Start schickte keine Runden-ID` | `zwischen den Lesungen lief keine Runde` | `keine Runden-ID` |
+  | es | `menos de dos lecturas` | `un lanzamiento no envió id de ronda` | `no corrió ninguna ronda entre las lecturas` | `cuyo cliente no envió id de ronda` |
+  | ru | `меньше двух чтений` | `запуск не прислал id раунда` | `между чтениями не было раунда` | `чей клиент — coai-mcp до 0.49.0` |
+  | uk | `менше двох читань` | `запуск не надіслав id раунду` | `між читаннями не було раунду` | `без id раунду` |
 
   The translations follow each file's existing terms for *reading*, *round* and *launch* (checked by reading the
   article's surrounding text first), and a second agent reads each back into English before commit.
