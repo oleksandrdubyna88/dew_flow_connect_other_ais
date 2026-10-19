@@ -1,6 +1,6 @@
 # PLAN — E4 stories: attribution — windows, the association ladder, ambiguous totals, contributors
 
-> Status: **plan only, nothing implemented yet, 2026-10-14.** Epic E4 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
+> Status: **S1–S5 implemented on `feat/round-authors-e4`, 2026-10-19 (draft pull request #862, not merged; code gate not yet run); §12 is the implementation record — its deviations and the two E7 confirmations. Plan 2026-10-14, revised 2026-10-16 and 2026-10-17.** Epic E4 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
 >
 > **Revised 2026-10-16 against main** (`59463d73`: E1 #828, E2 #829 and the plan-gate fix #837/#841 shipped since the
 > first text; E3 is not built). Every `path:line` re-verified — the drift is §8.1, and the S2 text keeps the numbers Fable
@@ -9,7 +9,7 @@
 > reference moves. S5 is rewritten against the twenty shipped fixtures `c01`–`c20`: it names which test uses which case,
 > and what no fixture can show. §8.3 lists the edits other documents need. §9 lists what contradicted Fable's S2 spec;
 > **Fable amended S2 the same day** (§S2.2a decides F1–F5 and E5's §8 items) and §9 stays as the record of the questions.
-> §10 is the risk-consultation brief owed before E4's code round. Nothing is implemented, so the status stays.
+> §10 is the risk-consultation brief owed before E4's code round. (Implemented since: §12.)
 >
 > **Plan gate 2026-10-16** (round 1 `proceed`, on `c17fbc0c`): the risk (4/4.2) and cadence (4–6) consultations were
 > taken and closed; findings for S1/S3 are applied in place, and what touches S2 is §11, for Fable.
@@ -1616,3 +1616,49 @@ parent's §6 and §16, and `research/RESULTS_caller_transcripts_on_both_sides.md
   ownership is `partial: peer running`, repaired by E7; §9's "never overwrites an `observed`/`partial` row produced by a
   newer or equal reader version" gains the `peer running` exception; §6's `before-open` definition says "the end of the
   last SETTLED window … of the same caller" (G2).
+
+## 12. Implementation record (2026-10-19)
+
+Built on `feat/round-authors-e4` after merging `feat/round-authors-e3` (merge, not rebase). One commit per story. Every test was watched RED on its
+assertion against a shell that returned empty values, and every break-it of S1, S2, S3, S4 and S5 (and of `AttributionMapping`) was planted, watched red by
+the test named for it, restored, rebuilt and watched green. S5's acceptance tests run over finished code, so their red is their break-its.
+
+**E3 facts verified in the code** (the E4 anchors that moved): `ObservedSession` `src_mcp/src/Store/ObservedSession.cs:11`, `ReaderVersion = 1` `:22`, `ObservedAgent` `:33`,
+`ObservedMessage` `:49`, `ObservedWrite(AgentKey, Utc, AnsweredUtc, Tool, Target)` `:63`, `UnobservedLaunch` `:66`, `ReadDiagnostics` `:69` (with `AgentFilesEmpty`),
+`ObservationReason` `:98`, `ObservationReasons` `:134`; main is listed with `LaunchedUtc = null` and `TranscriptPresent = true` (`TranscriptLaunches.cs:101`) — the mapping leaves it out of
+`Agents`; there is one `UnobservedLaunch` per meta without a file (`TranscriptLaunches.cs:167-171`) and one per `Agent` call without a meta (`:194`); `WriteTarget.Where` is a normalised KEY
+(`RepositoryIdentity.Normalised`), compared to the gate's `repo_path` by `Repositories` (separators folded, case ignored) and never resolved. E4's own anchors on this tree:
+`AgentLog.InRepo` is now one line, `AgentLog.cs:228`, calling `Repositories.Contains`; `WhatTheCallerWasDoing` is `RoundEngine.cs:899`; the save appends the record at `SessionStore.cs:595`.
+
+**Deviations from the text above, each the smallest change that keeps the intent.** None changes a type E5 consumes: `RoundAuthors`, `WindowAuthors`, `PeerGates`,
+`RoundAttribution.Version`, `StateReason` and the settled and final rules are as specified.
+
+1. **The prior end counts only peer rounds that complete BEFORE this gate's own first round** (§S2.3 *Prior end*, case 8c). As written, the walk takes a settled prefix whatever its
+   completion. With case 8c's "A C1 `done @150`" (A ranks after G's +140) the bound would be +60, G's before-open window would be `[+60, +100)`, and G would lose +30 to A — so the bound would
+   be an OWNERSHIP rule, against case 7's equality and against case 8c's own sentence "G keeps +30, A labels it claimed by peer (G)". The rule now also requires that the peer round's window
+   precedes this gate's before-open window by rank; the sentence is a test (`WhenThatPeerRoundSettlesAfterG_GKeepsTheMessageAndAClaimsNothing`). Every other claim of cases 7, 8c and 8d holds as written.
+2. **The fact "a blind before-open, a counted round window" cannot arise** (S3 `ABlindBeforeOpenLeavesTheRoundWindowCounted`, G9). Both windows of the first round depend on the same two instants (open and
+   start), so they are blind together. The fact became `ABlindFirstRound_IsUnknownInEveryWindowAndInTheRollUp`. The per-window design is unchanged.
+3. **Case 6 (a): the late-answered write reads `ambiguous · no evidence`, not `same-session`.** On case 1's A C2 the window also holds cy's write into y, so its destinations are {y}. With
+   cx's +75 write dropped by the horizon, cx has no evidence of its own. What the text means — the write is not evidence, live or backfilled, and no write placement exists — is what the test asserts.
+4. **`ANewPeerGateChangesNothing` compares everything but `PeerGates`**, which gains the new peer by design (§S2.2b G3 iii): the field exists so a backfill sees the peer set grow.
+5. **A record holding an `ImmutableArray` compares and prints the array by reference**, so "equal by value and by `ToString()`" is judged on the serialised JSON (and on `BeEquivalentTo`). The sentinel
+   test serialises too. No type changed.
+6. **S5's cells for `c17` and `c19` differ from the 2026-10-16 hand-read**, because E1 re-cut both fixtures (results kept) and they reached this branch through E3. `c17` now SHOWS
+   `ambiguous · two repositories` (A owns the three messages, B labels them `claimed by peer`, each gate keeps a `wrote here` row with one write call). `c19` shows the submodule write as
+   `wrote here`, listed in `WritesOutsideTheGateCheckout`, and the scratchpad write as outside. Both were re-read from the fixture lines on 2026-10-19.
+7. **`FixtureTruncation`** (test-side, static) cuts a materialised fixture's files at an instant for the live-record-against-backfill facts. It is not a method of `CallerTranscriptFixture`, so E3.S5's
+   mutation-helper census is untouched. **Break-it S5 (d)** (materialise without folding separators on a non-Windows host) cannot be planted on Windows; the precondition (`CheckoutWrites` per case) is the guard.
+8. **Additions the spec did not list.** `Validate()` also refuses an agent declared twice. `PeersKnown = false` makes `Assign` read NO peer (so `PeerGates` is empty and every window says
+   `prior windows unknown`, whatever `Peers` holds). An unobserved caller places nothing, and its windows are `unobserved`. `RoundAttribution.PeerStillRuns(input)` exists (E7 item 9, below).
+   The round-level `Agents` count of a total is the SUM of the windows' counts (§S3 "totals summed"), so an agent in two windows counts in both. `NotSeen.Why` reads `<state>: <reasons joined by ", ">`.
+   A contributor's `Models`, `Requested` and `Efforts` include `unknown` when a launch-only or two-repositories row carries it. A `claimed by peer` placement keeps this gate's own ladder rung.
+
+**The two confirmations E7 asked for (E7 §10 items 8 and 9):**
+
+- **Item 9 — "a named peer round still runs" is §S2.3's window overlap.** It is the same test that sets `partial: peer running`: a window of THIS caller, not blind, not settled (a `running` round;
+  an interrupted one opens no window), sharing an instant with one of this round's non-blind windows. `RoundAttribution.PeerStillRuns(AttributionInput)` exposes it, so E7 uses E4's predicate and not its
+  own. `APeerStillRunningIsTheWindowOverlapTests` pins it (overlapping: true; the non-overlapping A C3: false; another caller: false; interrupted: false) and shows that predicate and state agree on every worked example.
+- **Item 8 — `PeersKnown` on `AttributionInput` means "the lookup of the caller's other gate sessions completed".** True: `Peers` is the complete set (E4.S5's fixture loader sets it true). False: `Peers`
+  is not read — `Assign` names no peer in `PeerGates`, claims nothing, marks every window `partial: prior windows unknown`, and `PeerStillRuns` is false — so an incomplete lookup proves no growth and E7 defers a
+  `peer running` row. E5's `AuthorPeers.Find` sets it false when a peer's session file did not load or the deadline cut the walk.

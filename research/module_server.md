@@ -3254,7 +3254,7 @@ and skips the Agent-count check. `ObservedSession.ReaderVersion` is bumped by an
 `TheReaderVersionIsPinnedToTheFixturesTests` ties it to the fixtures' totals.
 
 `agent_log` is unchanged and still reads through `TranscriptLines.ReadShared`; its property reads go through the same
-`JsonText.StringProperty` (2026-10-18), so a non-string field reads empty there too. The reader has no call site yet: E4 attributes what it reads
+`JsonText.StringProperty` (2026-10-18), so a non-string field reads empty there too. The reader has no call site yet: E4 attributes what it reads (the pure core `src_mcp/core/Authors/`, see `module_core.md`, through the one mapping `src/Store/AttributionMapping.cs`)
 and E5 stores it.
 
 **Shape decisions.**
