@@ -61,15 +61,13 @@ public static class RoundAuthorsCells
     private static int Flag(bool value) => value ? 1 : 0;
 
     /// <summary>One numerator of one round: counted only where its value is KNOWN, and in the delta twins only where the round's delta is recorded too.</summary>
-    private static NumeratorSums Sums(Numerator numerator, RoundSums round)
-    {
-        var known = numerator.Covered;
-        var delta = known && round.DeltaCovered;
+    private static NumeratorSums Sums(Numerator numerator, RoundSums round) =>
+        numerator.Covered ? Covered(numerator.Value, round) : new NumeratorSums(0, 0, 0, 0, 0, 0);
 
-        return new NumeratorSums(
-            known ? numerator.Value : 0, Flag(known), known ? round.SelectedLines : 0,
-            Flag(delta), delta ? round.DeltaLines : 0, delta ? numerator.Value : 0);
-    }
+    private static NumeratorSums Covered(long value, RoundSums round) =>
+        round.DeltaCovered
+            ? new NumeratorSums(value, 1, round.SelectedLines, 1, round.DeltaLines, value)
+            : new NumeratorSums(value, 1, round.SelectedLines, 0, 0, 0);
 
     /// <summary>A round's ambiguous totals: a known total joins the sums, an unknown one is only COUNTED — never a minus one in a sum (D17).</summary>
     private static AmbiguousSums AmbiguousOf(AmbiguousFacts ambiguous) =>
@@ -146,12 +144,6 @@ public static class RoundAuthorsCells
     /// <summary>An ambiguous total: a floor (<c>≥ n</c>) when any round of the cell contributed no total, exact otherwise (D17).</summary>
     public static RoundFigure Ambiguous(long total, AmbiguousSums sums) =>
         sums.UnknownRounds > 0 ? RoundFigure.AtLeast(total) : RoundFigure.Of(total);
-
-    /// <summary>The percentage of the cell's rounds on its largest branch, to one place — a figure of the marks' own sums.</summary>
-    public static RoundFigure TopBranchPercent(CellSums cell) =>
-        cell.Rounds == 0 || cell.Branches.Count == 0
-            ? RoundFigure.Unknown
-            : RoundFigure.Of(Math.Round(100.0 * cell.Branches.Max(branch => branch.Count) / cell.Rounds, 0, MidpointRounding.ToEven));
 
     private static bool IsPlan(string stage) => stage == nameof(Core.Rounds.Stage.PlanReview);
 

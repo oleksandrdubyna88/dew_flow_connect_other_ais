@@ -91,12 +91,18 @@ public static class RoundAuthorsPopulation
 
     private static IEnumerable<Verdict> NeedingADiff(View view) =>
         When(!view.Fact.Size.Recorded, ExclusionReason.SizeNotRecorded)
-            .Concat(When(view.Fact.Size.Recorded && view.Fact.Size.Size.Whole.State != ScopeState.Recorded, ExclusionReason.SizeUnavailable, ScopeWord.Of(view.Fact.Size.Size.Whole.State)))
+            .Concat(When(Unavailable(view), ExclusionReason.SizeUnavailable, ScopeWord.Of(view.Fact.Size.Size.Whole.State)))
             .Concat(When(view.Lines.BinaryOnly, ExclusionReason.BinaryOnly))
-            .Concat(When(!view.Selection.WithUncovered && view.Fact.Authors.UncoveredWrites > 0, ExclusionReason.SizeNotCovered))
-            .Concat(When(!view.Selection.WithUncovered && view.Fact.Authors.UncoveredWrites < 0, ExclusionReason.SizeCoverageUnknown))
+            .Concat(When(CoverageRequired(view) && view.Fact.Authors.UncoveredWrites > 0, ExclusionReason.SizeNotCovered))
+            .Concat(When(CoverageRequired(view) && view.Fact.Authors.UncoveredWrites < 0, ExclusionReason.SizeCoverageUnknown))
             .Concat(When(view.Lines.Selected == 0, ExclusionReason.NoSelectedLines))
             .Concat(When(view.Selection.WithoutElided && view.Lines.AnyElided, ExclusionReason.Elided));
+
+    private static bool Unavailable(View view) =>
+        view.Fact.Size.Recorded && view.Fact.Size.Size.Whole.State != ScopeState.Recorded;
+
+    /// <summary>Whether the write counts are to be believed: <c>--with-uncovered</c> relaxes the coverage requirement as a whole (D12).</summary>
+    private static bool CoverageRequired(View view) => !view.Selection.WithUncovered;
 
     private static IEnumerable<Verdict> When(bool failed, ExclusionReason reason, string detail = "") =>
         failed ? [new Verdict(reason, detail)] : [];

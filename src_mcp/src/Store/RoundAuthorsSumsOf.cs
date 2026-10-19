@@ -24,7 +24,7 @@ internal static class RoundAuthorsSumsOf
         RoundAuthorsSelection selection)
     {
         var delta = DeltaOf(round, cohort, selection);
-        var unmeasured = selection.WithUncovered && selection.Stage != nameof(Core.Rounds.Stage.PlanReview);
+        var relaxed = selection.WithUncovered && selection.Stage != nameof(Core.Rounds.Stage.PlanReview);
 
         return new RoundSums(
             lines.Selected, lines.Elided, lines.Excluded, lines.BinaryFiles, lines.NotCounted,
@@ -33,8 +33,8 @@ internal static class RoundAuthorsSumsOf
             Count(round, Failed), Count(round, ReviewerState.StoodDown), Count(round, Failed) > 0,
             worst == AuthorsStateKind.Partial,
             contributing.Any(other => other.Authors.Reasons.Contains(AttributionReasons.PeerRunning)),
-            unmeasured && round.Authors.UncoveredWrites > 0,
-            unmeasured && round.Authors.UncoveredWrites < 0,
+            relaxed && round.Authors.UncoveredWrites > 0,
+            relaxed && round.Authors.UncoveredWrites < 0,
             round.Authors.Ambiguous,
             coders.Launches,
             coders.Pairs);
@@ -44,19 +44,14 @@ internal static class RoundAuthorsSumsOf
     /// The delta of a CORRECTIVE round of the code stage (D10): covered when recorded (an observed zero included), else counted per scope word.
     /// A first round has no delta, and a plan round has no diff — neither is "unavailable".
     /// </summary>
-    private static Delta DeltaOf(RoundFacts round, string cohort, RoundAuthorsSelection selection)
-    {
-        if (cohort != Cohort.Corrective || selection.Stage == nameof(Core.Rounds.Stage.PlanReview))
-        {
-            return new Delta(false, 0, string.Empty);
-        }
+    private static Delta DeltaOf(RoundFacts round, string cohort, RoundAuthorsSelection selection) =>
+        cohort != Cohort.Corrective || selection.Stage == nameof(Core.Rounds.Stage.PlanReview)
+            ? new Delta(false, 0, string.Empty)
+            : IsRecorded(round) ? new Delta(true, RoundLines.DeltaOf(round.Size.Size.Delta.Cells, selection.Kinds), string.Empty) : new Delta(false, 0, WhyNot(round));
 
-        var scope = round.Size.Size.Delta;
+    private static bool IsRecorded(RoundFacts round) => round.Size.Recorded && round.Size.Size.Delta.State == ScopeState.Recorded;
 
-        return scope.State == ScopeState.Recorded && round.Size.Recorded
-            ? new Delta(true, RoundLines.DeltaOf(scope.Cells, selection.Kinds), string.Empty)
-            : new Delta(false, 0, ScopeWord.Of(round.Size.Recorded ? scope.State : string.Empty));
-    }
+    private static string WhyNot(RoundFacts round) => ScopeWord.Of(round.Size.Recorded ? round.Size.Size.Delta.State : string.Empty);
 
     private static int Count(RoundFacts round, string status) => round.Reviewers.Count(reviewer => reviewer.Status == status);
 

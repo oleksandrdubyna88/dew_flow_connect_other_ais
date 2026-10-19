@@ -75,21 +75,25 @@ public static class RoundAuthorsHeader
     /// <summary>For one cohort: the dimensions whose SET of values differs between the periods, and the cannot-separate sentence when coder mix and reviewer set both do.</summary>
     private static IEnumerable<string> Changed(RoundAuthorsSums sums, string cohort)
     {
-        var before = sums.Cells.Where(cell => cell.Key.Cohort == cohort && cell.Key.Period == Period.Before).ToList();
-        var after = sums.Cells.Where(cell => cell.Key.Cohort == cohort && cell.Key.Period == Period.After).ToList();
-        if (before.Count == 0 || after.Count == 0)
-        {
-            return [$"Cohort {cohort}: only one period has counted rounds, so nothing is compared."];
-        }
+        var before = InPeriod(sums, cohort, Period.Before);
+        var after = InPeriod(sums, cohort, Period.After);
 
-        var changed = Dimensions.Where(name => ValuesOf(before, name).SetEquals(ValuesOf(after, name)) is false).ToList();
-
-        return
-        [
-            changed.Count == 0 ? $"Cohort {cohort}: no dimension changed between the periods." : $"Cohort {cohort}: changed between the periods: {string.Join(", ", changed)}.",
-            .. changed.Contains("coder mix") && changed.Contains("reviewer set") ? new[] { CannotSeparate } : [],
-        ];
+        return before.Count == 0 || after.Count == 0
+            ? [$"Cohort {cohort}: only one period has counted rounds, so nothing is compared."]
+            : Compared(cohort, Dimensions.Where(name => !ValuesOf(before, name).SetEquals(ValuesOf(after, name))).ToList());
     }
+
+    private static List<CellSums> InPeriod(RoundAuthorsSums sums, string cohort, string period) =>
+        [.. sums.Cells.Where(cell => cell.Key.Cohort == cohort && cell.Key.Period == period)];
+
+    private static IEnumerable<string> Compared(string cohort, List<string> changed) =>
+    [
+        changed.Count == 0 ? $"Cohort {cohort}: no dimension changed between the periods." : $"Cohort {cohort}: changed between the periods: {string.Join(", ", changed)}.",
+        .. CannotSeparateWhen(changed),
+    ];
+
+    private static string[] CannotSeparateWhen(List<string> changed) =>
+        changed.Contains("coder mix") && changed.Contains("reviewer set") ? [CannotSeparate] : [];
 
     private static HashSet<string> ValuesOf(List<CellSums> cells, string dimension) =>
         [.. cells.Select(cell => dimension switch

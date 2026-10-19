@@ -157,5 +157,27 @@ internal static class RoundAuthorsSeed
         new(window, stage, number, agent == AgentKey.MainId ? "main" : "subagent", new AgentKey(agent), agent == AgentKey.MainId ? string.Empty : "general-purpose",
             requested, model, effort, association, launches, 2, new TokenTerms(1, 1, 1, 1), writeCalls);
 
+    /// <summary>
+    /// Two code rounds per gate session, through the real writers: a first with a Sonnet coder, a corrective one with a recorded delta. When
+    /// <paramref name="resolved"/> the caller accepted a finding in each; otherwise <c>resolve</c> never ran.
+    /// </summary>
+    public static void Sessions(string dataDir, bool resolved, params string[] sessions)
+    {
+        using var db = Open(dataDir);
+        foreach (var session in sessions)
+        {
+            Round(
+                db, session, "D:/repo", "feat/x", "CodeReview", 1, T0, reviewers: [Done("codex", "gpt-6-luna", "high")], findings: [Found("a"), Found("b")],
+                size: Whole(Cell("shown", "code", 100)),
+                authors: Snapshot("CodeReview", 1, rows: [Author(AgentKey.MainId, "claude-opus-5-5", Association.SameSession), Author("a1", "claude-sonnet-5-5")]),
+                accept: resolved ? [0] : [], gating: 1);
+            Round(
+                db, session, "D:/repo", "feat/x", "CodeReview", 2, T0.AddHours(1), reviewers: [Done("codex", "gpt-6-luna", "high")], findings: [Found("c")],
+                size: WithDelta([Cell("shown", "code", 120)], Cell("shown", "code", 20)),
+                authors: Snapshot("CodeReview", 2, rows: [Author(AgentKey.MainId, "claude-opus-5-5", Association.SameSession), Author("a1", "claude-sonnet-5-5", number: 2)]),
+                accept: resolved ? [0] : []);
+        }
+    }
+
     public static ImmutableArray<string> NoReasons => [];
 }

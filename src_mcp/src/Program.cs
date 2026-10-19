@@ -295,6 +295,13 @@ internal static class Program
         /// of nought where it should say the server is too old. See <see cref="Server.RoundCountsMode"/>.
         /// </remarks>
         RoundCounts,
+
+        /// <summary>
+        /// Who wrote the code a round reviewed, and what the reviewers found, as additive sums over the rounds database
+        /// (E6 of <c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E6.md</c>) — read-only, one document of JSON or a table.
+        /// </summary>
+        /// <remarks>Its own <c>args[0]</c> for the reason <c>--round-counts</c> is. See <see cref="Server.RoundAuthorsMode"/>.</remarks>
+        RoundAuthors,
     }
 
     /// <summary>
@@ -337,6 +344,7 @@ internal static class Program
                 "--probe-api" => Startup.ProbeApi,
                 "--log" => Startup.Log,
                 "--round-counts" => Startup.RoundCounts,
+                "--round-authors" => Startup.RoundAuthors,
                 "--findings" => Startup.Findings,
                 "--findings-many" => Startup.FindingsMany,
                 "--bugs-json" => Startup.Bugs,
@@ -442,6 +450,11 @@ internal static class Program
                 // The clock is the system's here and a `--now` in a test; the data directory is
                 // resolved exactly as `--log` resolves it, and the read is read-only.
                 return Server.RoundCountsMode.Run(args, Environment.GetEnvironmentVariable, Console.Out, Note, TimeProvider.System);
+
+            case Startup.RoundAuthors:
+                // Read-only, like the counter: the data directory is resolved as `--round-counts` resolves it, and an `--add` file is read with
+                // File.ReadAllText, which honours a byte-order mark (a report redirected by Windows PowerShell 5.1 is UTF-16).
+                return Server.RoundAuthorsMode.Run(args, Environment.GetEnvironmentVariable, Console.Out, Note, TimeProvider.System, File.ReadAllText);
 
             case Startup.Findings:
                 return FindingsJson(args);
@@ -2459,6 +2472,13 @@ internal static class Program
         rounds launched, and the rounds per reviewer model where the round recorded one — from the rounds
         database alone, read-only, as JSON; `--now` fixes the clock. A missing database is an empty
         answer and exit 0; a bad argument is 65; a database that will not read is 74 — never 64.
+        `--round-authors [--since <utc>] [--until <utc>] [--split <utc>] [--stage code|plan] [--cohort first|corrective|all]
+        [--with-before-open] [--kinds <k,…>] [--without-elided] [--with-uncovered] [--add <file.json>]… [--table]` reports who wrote the code
+        the reviewed rounds held — coder mix, effort, main model — against what the reviewers found, per cell and per 100 lines the
+        reviewers read, from the rounds database alone, read-only. By default it prints ONE JSON document of sums (format 1, no figure, no
+        absolute path); `--table` prints the report, header first; `--add` adds the document an earlier run printed (two reports are one
+        population only with the same selection and no shared gate session). An association, never a cause. A missing database is an empty
+        answer and exit 0; a bad argument or an `--add` that cannot be read or added is 65; a database that will not read is 74 — never 64.
         `--findings --session <id> --stage <stage> --number <n>` prints one round's findings; it
         exits 69 when the database has never heard of that round, which is not the same as finding
         nothing.

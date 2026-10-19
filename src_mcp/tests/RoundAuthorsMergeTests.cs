@@ -27,20 +27,7 @@ public sealed class RoundAuthorsMergeTests : IDisposable
 
     private string NewStore(string name) => Directory.CreateDirectory(_root.At(name)).FullName;
 
-    /// <summary>Two code rounds per gate session: a first with a Sonnet coder, a corrective one with a recorded delta.</summary>
-    private static void SeedSessions(string dir, params string[] sessions)
-    {
-        using var db = Open(dir);
-        foreach (var session in sessions)
-        {
-            Round(
-                db, session, "D:/repo", "feat/x", "CodeReview", 1, T0, reviewers: [Done("codex", "gpt-6-luna", "high")], findings: [Found("a"), Found("b")],
-                size: Whole(Cell("shown", "code", 100)), authors: Snapshot("CodeReview", 1, rows: [Author(AgentKey.MainId, "claude-opus-5-5", Association.SameSession), Author("a1", "claude-sonnet-5-5")]), accept: [0], gating: 1);
-            Round(
-                db, session, "D:/repo", "feat/x", "CodeReview", 2, T0.AddHours(1), reviewers: [Done("codex", "gpt-6-luna", "high")], findings: [Found("c")],
-                size: WithDelta([Cell("shown", "code", 120)], Cell("shown", "code", 20)), authors: Snapshot("CodeReview", 2, rows: [Author(AgentKey.MainId, "claude-opus-5-5", Association.SameSession), Author("a1", "claude-sonnet-5-5", number: 2)]), accept: [0]);
-        }
-    }
+    private static void SeedSessions(string dir, params string[] sessions) => Sessions(dir, true, sessions);
 
     private static RoundAuthorsSelection Selection() => Sel() with { SinceUtc = Stamp(T0.AddDays(-1)) };
 
