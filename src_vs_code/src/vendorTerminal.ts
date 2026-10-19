@@ -483,7 +483,7 @@ const UV_INSTALLED_IN = '$(if ($env:UV_INSTALL_DIR) { $env:UV_INSTALL_DIR } else
 const VIBE_KEYRING = 'The sign-in is kept in the operating system’s keyring, which every coai launch of Vibe reads.';
 
 /**
- * Where the sign-in is kept on a Linux host (DL2 of todo/PLAN_kimi_and_vibe_on_linux.md): a FILE, because WSL has no keyring
+ * Where the sign-in is kept on a Linux host (DL2 of research/PLAN_kimi_and_vibe_on_linux.md): a FILE, because WSL has no keyring
  * and coai's launches carry no desktop session to reach one. coai links the file into its own homes and never copies it.
  */
 const VIBE_ENV_FILE =
@@ -531,7 +531,7 @@ const VIBE_NOTES: Readonly<Record<HostKind, string>> = {
 };
 
 /**
- * Which note ⤓ and ⟳ show for Vibe on this host (DL1 of todo/PLAN_kimi_and_vibe_on_linux.md) — pure, and the host is a
+ * Which note ⤓ and ⟳ show for Vibe on this host (DL1 of research/PLAN_kimi_and_vibe_on_linux.md) — pure, and the host is a
  * REQUIRED argument: WSL2 runs Vibe, WSL1 and a native Linux host are refused, macOS is not measured, Windows is as it was.
  */
 export function vibeNoteFor(host: HostKind): string {
@@ -563,7 +563,7 @@ export function vibeNoteFor(host: HostKind): string {
  * Both are portable zips from the project's own GitHub releases — nobody is repackaging. A later version's manifest is
  * checked the same way before this id list is trusted again.</p>
  *
- * <p><b>Linux provisions them too</b> (DL12 of todo/PLAN_kimi_and_vibe_on_linux.md, E6 — the day the paragraph that used to
+ * <p><b>Linux provisions them too</b> (DL12 of research/PLAN_kimi_and_vibe_on_linux.md, E6 — the day the paragraph that used to
  * stand here said would come): the projects' READMEs give `sudo apt-get install -y ripgrep fd-find` on Debian and Ubuntu
  * (where fd's program is `fdfind` and Kimi looks for `fd`, so `~/.local/bin/fd` must link to it) and `sudo dnf install
  * ripgrep fd-find` on Fedora, and {@link KIMI_LINUX_LINE} (`kimiLinuxLine.ts`) runs exactly those, each step skipped when the
@@ -641,7 +641,7 @@ const KIMI_NOTES: Readonly<Record<HostKind, string>> = {
 };
 
 /**
- * Which note ⤓ and ⟳ show for Kimi on this host (DL1 of todo/PLAN_kimi_and_vibe_on_linux.md) — the same host-kind union Vibe's note
+ * Which note ⤓ and ⟳ show for Kimi on this host (DL1 of research/PLAN_kimi_and_vibe_on_linux.md) — the same host-kind union Vibe's note
  * is chosen by (`hostSide.ts`): WSL2 runs the row, WSL1 and a native Linux host are refused, macOS is not measured, Windows is as it was.
  */
 export function kimiNoteFor(host: HostKind): string {

@@ -21,7 +21,7 @@ public abstract record SubreaperResult
 }
 
 /// <summary>
-/// <c>prctl(PR_SET_CHILD_SUBREAPER, 1)</c> (DL9 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): a process that becomes a child subreaper is the parent of every descendant whose own parent
+/// <c>prctl(PR_SET_CHILD_SUBREAPER, 1)</c> (DL9 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>): a process that becomes a child subreaper is the parent of every descendant whose own parent
 /// exits, however far down the tree it was started and whatever session it opened — which is what lets a teardown LIST an orphan that a process-group kill would never reach (L-K4: <c>rg</c>
 /// in its own session survives a pid and a group kill).
 /// </summary>
@@ -36,7 +36,7 @@ public static partial class LinuxSubreaper
 
     /// <summary>The refusal when <c>prctl</c> failed — the plan's wording, with the errno.</summary>
     public static string Sentence(int errno) =>
-        $"coai could not make this process the reaper of its own tree (prctl(PR_SET_CHILD_SUBREAPER) answered errno {errno}), so it cannot verify Kimi's teardown and does not launch it (DL9 of todo/PLAN_kimi_and_vibe_on_linux.md)";
+        $"coai could not make this process the reaper of its own tree (prctl(PR_SET_CHILD_SUBREAPER) answered errno {errno}), so it cannot verify Kimi's teardown and does not launch it (DL9 of research/PLAN_kimi_and_vibe_on_linux.md)";
 
     /// <summary>Idempotent. Off Linux: <see cref="SubreaperResult.NotLinux"/> and nothing is called.</summary>
     public static SubreaperResult Become() => OperatingSystem.IsLinux() ? BecomeOnLinux() : new SubreaperResult.NotLinux();

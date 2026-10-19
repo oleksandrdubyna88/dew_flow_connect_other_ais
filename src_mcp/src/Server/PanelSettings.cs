@@ -664,7 +664,7 @@ public sealed record PanelSettings
     public bool ConsultEnabled { get; init; } = true;
 
     /// <summary>
-    /// Whether a Kimi sign-in folder on network storage (nfs, cifs, sshfs …) may be used — default OFF (DL6 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>, Q7). The extension's <c>coai.kimiAllowNetworkSignIn</c> writes
+    /// Whether a Kimi sign-in folder on network storage (nfs, cifs, sshfs …) may be used — default OFF (DL6 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>, Q7). The extension's <c>coai.kimiAllowNetworkSignIn</c> writes
     /// <c>COAI_KIMI_ALLOW_NETWORK_SIGNIN</c> into the data directory's settings file, which this reads like every other <c>COAI_*</c> setting; a variable in the client's config wins over the file. Read through <see cref="Flag"/>:
     /// an unreadable value stays OFF, which is the safe side of a rotating sign-in.
     /// </summary>

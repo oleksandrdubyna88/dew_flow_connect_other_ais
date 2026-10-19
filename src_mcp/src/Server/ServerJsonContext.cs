@@ -42,7 +42,7 @@ public sealed record ProviderStatus(
     public string? Warning { get; init; }
 
     /// <summary>
-    /// For a Kimi row whose sign-in has a survivor marker standing (DL9 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): where it is and which pids it names — what the card's <i>Clear the stuck Kimi marker</i> button
+    /// For a Kimi row whose sign-in has a survivor marker standing (DL9 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>): where it is and which pids it names — what the card's <i>Clear the stuck Kimi marker</i> button
     /// runs <c>coai-mcp --kimi-clear-marker &lt;path&gt;</c> with. ABSENT when no marker stands, or when the standing one belongs to a turn that is still running; <c>pids</c> is empty for a marker that names nothing
     /// (a <c>spawning</c> one) or cannot be read. Never a marker of another sign-in. Additive: an older extension ignores the field.
     /// </summary>

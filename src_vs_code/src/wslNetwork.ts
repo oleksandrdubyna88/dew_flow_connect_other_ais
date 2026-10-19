@@ -55,7 +55,7 @@ export function isWsl(procVersion: string): boolean {
 
 /**
  * Whether the banner is a WSL2 kernel — the narrower question Vibe's host rule asks (DL1 of
- * todo/PLAN_kimi_and_vibe_on_linux.md). {@link isWsl} is right for the networking cure, which holds for both generations;
+ * research/PLAN_kimi_and_vibe_on_linux.md). {@link isWsl} is right for the networking cure, which holds for both generations;
  * it is wrong for "measured on WSL2", because a WSL1 kernel (`4.4.0-…-Microsoft`) is a syscall translation layer with no
  * real process tree. The same rule as the server's `NamesWsl2`: the banner holds `WSL2` or `microsoft-standard`, any case.
  */

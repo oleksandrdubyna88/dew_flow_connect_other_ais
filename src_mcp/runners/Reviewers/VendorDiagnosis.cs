@@ -178,7 +178,7 @@ public static class VendorDiagnosis
     internal static HostKind HostFor(bool? wsl, HostKind process) => wsl switch { true => HostKind.Wsl, false => process == HostKind.Wsl ? HostKind.Linux : process, null => process };
 
     /// <summary>
-    /// <see cref="Classify(string, bool?)"/> for a stated HOST (DL2 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): a cure that differs
+    /// <see cref="Classify(string, bool?)"/> for a stated HOST (DL2 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>): a cure that differs
     /// by platform — Vibe's sign-in is in the keyring on Windows and in <c>~/.vibe/.env</c> elsewhere — needs more than WSL-or-not.
     /// The old signature routes through this one (<c>true</c> is WSL, <c>false</c> Windows, <c>null</c> this machine's own host).
     /// </summary>

@@ -1,4 +1,4 @@
-// node --test scripts/lib/*.test.mjs — the manifest script's per-platform write (DL3 of todo/PLAN_kimi_and_vibe_on_linux.md) and its
+// node --test scripts/lib/*.test.mjs — the manifest script's per-platform write (DL3 of research/PLAN_kimi_and_vibe_on_linux.md) and its
 // inventory of a home that holds the .env sign-in link (DL2). Runs nothing of Vibe's; makes folders only under this user's own temp
 // folder, and removes them.
 import assert from 'node:assert/strict';

@@ -70,7 +70,7 @@ public static class VibeLaunch
     public static readonly TimeSpan VersionTimeout = TimeSpan.FromSeconds(60);
 
     /// <summary>
-    /// D18, lifted for WSL2 by DL1 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>: Vibe only where it was measured — a Windows host starting a
+    /// D18, lifted for WSL2 by DL1 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>: Vibe only where it was measured — a Windows host starting a
     /// Windows <c>vibe</c>, or a WSL2 host. Every number is Windows' or WSL2's. <b>WSL1 is not WSL2</b> (a syscall translation layer),
     /// and a native Linux host is not measured at all (a desktop keyring Vibe may use instead of <c>.env</c>, other filesystems, other
     /// packaging) — each is refused with its own sentence. A WSL bridge named as the executable of a WINDOWS host is the Linux side by

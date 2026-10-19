@@ -5,7 +5,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// DL10's re-decision of 2026-10-17 (<c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): Linux reads <c>/proc/&lt;pid&gt;/exe</c> under <c>PTRACE_MODE_READ_FSCREDS</c>, so a SAME-account process can still hide it — one with extra
+/// DL10's re-decision of 2026-10-17 (<c>research/PLAN_kimi_and_vibe_on_linux.md</c>): Linux reads <c>/proc/&lt;pid&gt;/exe</c> under <c>PTRACE_MODE_READ_FSCREDS</c>, so a SAME-account process can still hide it — one with extra
 /// capabilities, or a non-dumpable one. The ubuntu runner has <c>systemd --user</c> hiding it, and so does the owner's WSL2 (<c>systemd</c> and <c>(sd-pam)</c>). Every Kimi launch there would be Busy, which is "refuse
 /// everything", not "refuse only what cannot be made safe". So the identity is read from <c>exe</c>, then — when it is denied — from <c>argv[0]</c> and <c>comm</c>; only a process whose <c>exe</c> AND <c>cmdline</c> are
 /// both unreadable makes the listing unreadable. The three shapes measured, on the fake <c>/proc</c>.

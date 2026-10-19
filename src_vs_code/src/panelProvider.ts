@@ -1949,7 +1949,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // runs on this side, so a WSL window wants the linux instructions. `hostSide.ts` is where that
     // doctrine and its narrowing now live, in one place — this used to be one of three copies.
     // WSL is a Linux host to the extension, and Vibe's note differs between WSL2, WSL1 and a native Linux box (DL1 of
-    // todo/PLAN_kimi_and_vibe_on_linux.md): the host kind is asked of this window once (`hostKindHere`) and `commandFor`
+    // research/PLAN_kimi_and_vibe_on_linux.md): the host kind is asked of this window once (`hostKindHere`) and `commandFor`
     // REQUIRES it, so a dropped argument is a compile error rather than the native-Linux note shown on WSL.
     const install = commandFor(vendor, hostPlatform(), await this.hostKindHere);
     if (install.command.length === 0) {

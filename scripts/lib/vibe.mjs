@@ -5,7 +5,7 @@
 // private to the probe until the manifest step needed the same flag set, the same minimal environment and the same
 // tree kill: two copies of the flag set would be two measurements of two different launches the day one of them moved.
 //
-// Linux (E1 of todo/PLAN_kimi_and_vibe_on_linux.md, §5): every platform fact below takes the platform as an argument —
+// Linux (E1 of research/PLAN_kimi_and_vibe_on_linux.md, §5): every platform fact below takes the platform as an argument —
 // defaulting to this process's — so both arms are tested on both operating systems, and an arm is never chosen by guessing.
 import { spawnSync } from 'node:child_process';
 import { existsSync, lstatSync, readdirSync, rmdirSync, symlinkSync, unlinkSync } from 'node:fs';

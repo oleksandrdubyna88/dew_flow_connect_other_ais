@@ -4,7 +4,7 @@ using CoaiMcp.Runners.Files;
 namespace CoaiMcp.FakeCli;
 
 /// <summary>
-/// L-N1 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c> as a CHILD process: the product's own inheritable take, <c>HeldFile.Take(path, inheritable: true)</c>, on one file.
+/// L-N1 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c> as a CHILD process: the product's own inheritable take, <c>HeldFile.Take(path, inheritable: true)</c>, on one file.
 /// <c>hold</c> keeps it, starts a sleeping grandchild AFTER the take (so the grandchild is the process that may inherit the descriptor), prints <c>held &lt;grandchild pid&gt;</c> and sleeps;
 /// <c>try</c> takes it once and prints <c>taken</c>, <c>busy</c> or <c>unusable</c>, then exits. A real second process, because what is measured is what the kernel's lock does between processes.
 /// </summary>

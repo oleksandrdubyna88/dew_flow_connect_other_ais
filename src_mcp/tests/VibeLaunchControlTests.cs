@@ -189,7 +189,7 @@ public sealed class VibeLaunchControlTests : IDisposable
         failure.Cure.Contains(installCure, StringComparison.Ordinal).Should().Be(kind == "cli-not-found", "only a CLI that is not there is told to install it");
     }
 
-    /// <summary>S-V17 (DL1 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): D18 lifts for WSL2 only — a native Linux host stays refused, with a sentence that says so.</summary>
+    /// <summary>S-V17 (DL1 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>): D18 lifts for WSL2 only — a native Linux host stays refused, with a sentence that says so.</summary>
     [Fact]
     public async Task ANativeLinuxHost_IsRefused_BeforeAnythingStarts_WithTheWsl2OnlySentence()
     {

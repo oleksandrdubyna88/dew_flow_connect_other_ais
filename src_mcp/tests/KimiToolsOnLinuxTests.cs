@@ -5,7 +5,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// DL5 and DL12 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c> (E6; S-K9, S-K17's refusal arm): <c>rg</c> and <c>fd</c> are found on a Linux or WSL host in the person's Kimi <c>bin</c>, then on <c>PATH</c>,
+/// DL5 and DL12 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c> (E6; S-K9, S-K17's refusal arm): <c>rg</c> and <c>fd</c> are found on a Linux or WSL host in the person's Kimi <c>bin</c>, then on <c>PATH</c>,
 /// then in <c>~/.local/bin</c> (where DL12's <c>fd</c> link goes) — and the refusal names the cure of THIS host: the <c>apt-get</c> or <c>dnf</c> line when that manager resolves, else one generic sentence.
 /// Never <c>winget</c>. Pure over an injected file test, with <c>/</c> paths on whatever machine runs it.
 /// </summary>

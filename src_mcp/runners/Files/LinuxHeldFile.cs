@@ -6,7 +6,7 @@ namespace CoaiMcp.Runners.Files;
 
 /// <summary>
 /// The INHERITABLE take of a lock file on Linux, native: <c>open</c> without <c>O_CLOEXEC</c>, then <c>flock(LOCK_EX | LOCK_NB)</c> — behind the unchanged <see cref="Hold"/> union (DL8 of
-/// <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>, A2 §3.4).
+/// <c>research/PLAN_kimi_and_vibe_on_linux.md</c>, A2 §3.4).
 /// </summary>
 /// <remarks>
 /// <para><b>Why not .NET's.</b> On Unix .NET turns a share mode into an advisory <c>flock</c> and chooses <c>LOCK_EX</c> only when the share mode is exactly <see cref="FileShare.None"/>;

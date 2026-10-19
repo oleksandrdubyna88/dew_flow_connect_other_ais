@@ -29,7 +29,7 @@
 //
 // The person's ~/.vibe is never read or written, and nothing outside <scratch> is created or deleted.
 //
-// PER PLATFORM (DL3 of todo/PLAN_kimi_and_vibe_on_linux.md): the entry carries `platform` (node's spelling) and replaces only the
+// PER PLATFORM (DL3 of research/PLAN_kimi_and_vibe_on_linux.md): the entry carries `platform` (node's spelling) and replaces only the
 // entry of the same version AND platform — on Linux Vibe unpacks a different plugin package (L-V-manifest: 11 of 12 pinned
 // files hash differently), so a `linux` entry sits beside the `win32` one. On Linux the homes are signed in through the `.env`
 // LINK to the person's Vibe home's `.env` (L-V1: no keyring on WSL) — made by lstat alone, never opened, and never hashed: the
@@ -229,7 +229,7 @@ const WHY = [
   're-run this script after every Vibe update to measure it. `seen` is informational. One entry per version PER PLATFORM',
   '(`platform` as node spells it; an entry without it is win32). `staged`: entries measured for a platform the shipped coai-mcp',
   'does not tell apart yet (it reads `versions` by version alone) - NOT enforced; `--unstage <platform>` moves them into',
-  '`versions` in the change that makes the C# read `platform` (DL3 of todo/PLAN_kimi_and_vibe_on_linux.md).',
+  '`versions` in the change that makes the C# read `platform` (DL3 of research/PLAN_kimi_and_vibe_on_linux.md).',
 ];
 const prior = existsSync(MANIFEST) ? JSON.parse(readFileSync(MANIFEST, 'utf8')) : { versions: [] };
 const next = withEntry(prior, entry, { stage });
