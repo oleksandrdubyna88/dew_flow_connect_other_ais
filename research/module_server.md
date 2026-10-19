@@ -3606,6 +3606,36 @@ query, is logged exactly as before and stays at twenty-three; `--round-counts` r
 word:** an empty column and a value `AuthorsSnapshot.IsWellFormed` refuses read as an absent member, judged per ROW and never around the query
 (a catch around the query would swallow *no such column* and hide what the `HasColumn` guard prevents).
 
+**The authors step — who wrote what a round reviewed, on the answer path** (story E5.S4 of
+`todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`). `RoundAuthorsStep.For(session, record)` (`src/Server/Rounds/`) runs in
+`RoundEngine` as ONE statement after the record's `with` block — `record = record with { Authors = _authors.For(session, record) }` — before the
+save and before the projection opens the database. It answers null (not recorded) for any round that E4 does not call *settled* (a plan or
+code round, `done`, not `skipped`): a skipped, interrupted or running round and every feature or document round; `Assign` is never
+called for one. The order: **locate** (`CallerTranscriptLocator.Locate`, the vendor from the round's own `Caller`, the identity from the
+step's INJECTED environment — `PanelService` gains one optional `environment` parameter and never reads the process's variables here); a
+refusal ends the step as `AuthorsSnapshot.Unknown(…, "unobserved", [reason])` with no peer query → **the peers and the gate's own timeline**
+(`AuthorPeers.Find`, one read-only connection that waits a second) → `RoundAttribution.ReadFrom` → the reader, bounded by the time left and
+the byte budget → `AttributionMapping` (the one mapping: `Observation`, `Timeline`, `Universe`) → `Assign` → `RoundAuthorsBuilder.Build` →
+`AuthorsSnapshot.From`. `ArgumentException` from `Assign` is `unobserved: invalid input`; any other exception is `unobserved: reader failed`
+(logged with its TYPE only) — the round still answers and is saved. **`Unknown(...)` carries `Reader = 0` / `Attribution = 0` for the component that
+did not run**, and `-1` in every count; an `unobserved` result from E4 itself gets `-1` write counts too.
+
+**`AuthorPeers.Find(connection, lookup, load, deadline, clock)`** is the ONE peer build, called by the live path and by E7's backfill (deadline null =
+unbounded). It asks which OTHER gate sessions hold a plan or code round whose `authors_session` — else, when empty, a UUID `rounds.caller` — is this
+caller, builds each peer's `GateTimeline` from its SESSION FILE (`OpenedUtc` from the file, never `sessions.opened_utc`; a round's completion only when it
+is `done`, so a running row's progress stamp ranks nothing) through `AttributionMapping.Timeline`, and reads the caller of this gate's earlier rounds in
+the same query. A round's caller is its own snapshot's session when the file has one, else `authors_session`, else a UUID `caller`, else empty. **It
+sets `PeersKnown = false`** — peers empty, E4 then says `partial: prior windows unknown` — when the store is absent or locked or has no
+`authors_session` column (older than step 24), when a peer's session file does not load or names another session, or when the deadline passes before a peer
+file is loaded (checked before EACH file). Two stated limits: a peer whose only same-caller round is still `running` is not found (`RecordRound` never runs
+for a running round; E7's grown-peer-set rule repairs it), and a RUNNING round of a found peer has no caller on disk, so E4's `peer running` cannot name it
+until it is projected. **The budget** (`AuthorsBudget.Default` = 2 s and 64 MiB of the `fromUtc` SLICE, a parameter of the step): one deadline for the whole
+step, checked between phases; the reader's own limits give `partial: read budget` with the rows read so far; a deadline passed before attribution ran gives
+`Unknown(partial, [read budget])`. `Writes into another checkout` are counts only: `UncoveredWrites` every call, `SubmoduleWrites` those whose root is a
+declared submodule of the checkout's `.gitmodules`, parsed by `GitModules.In` — no process is launched on the answer path. The reader's diagnostics are
+logged at Debug as numbers (`AgentFilesEmpty` included); none becomes a reason, a column or a member. `PanelSettings.TranscriptHome` is the one place the
+default transcripts folder is written (`ClaudeHome.Default.With(AgentLogDir)`); the window over the caller's own work (`RoundEngine.WhatTheCallerWasDoing`) reads it too.
+
 ### The gate's history of a piece of work (`GateHistoryQuery`, 2026-09-26, feature review S2.3)
 
 The feature review ([PLAN_feature_review.md](../todo/PLAN_feature_review.md) §4.8) sends its reviewer

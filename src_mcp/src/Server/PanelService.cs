@@ -53,7 +53,8 @@ public sealed class PanelService
         DateTime vaultReadUtc,
         IProcessLauncher launcher,
         Serilog.ILogger log,
-        Noticing noticing)
+        Noticing noticing,
+        Func<string, string?>? environment = null)
     {
         _settings = settings;
         _keys = keys;
@@ -133,7 +134,7 @@ public sealed class PanelService
         _commands = new RoundCommands(settings, prompts, log);
         _engine = new RoundEngine(
             settings, log, noticing, _store, _worktrees, scheduler, executor, _commands, _escalations, ledger,
-            _projection, callers, _remote, ExcludedFrom, NoReviewerRefusal);
+            _projection, callers, _remote, new RoundAuthorsStep(settings, log, _store, environment), ExcludedFrom, NoReviewerRefusal);
         // The fourth gate, in a file of its own (S2.2b): its inputs, its refs and its pack, over the same
         // engine. The outliner is the in-process tree-sitter one the pack is measured with.
         _feature = new FeatureStage(settings, launcher, _engine, _roster, new Normalizer.TreeSitterOutliner(), log, noticing);

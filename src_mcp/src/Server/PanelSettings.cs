@@ -430,6 +430,13 @@ public sealed record PanelSettings
     public string AgentLogDir { get; init; } = string.Empty;
 
     /// <summary>
+    /// The Claude home the caller's transcripts are read from: <see cref="Store.ClaudeHome.Default"/> with its transcripts folder moved to
+    /// <see cref="AgentLogDir"/> when that is set. THE one place the default is written — the rounds' window over the caller's own work
+    /// (<c>RoundEngine</c>) and the authors step read it from here, so the two cannot name different folders.
+    /// </summary>
+    public Store.ClaudeHome TranscriptHome => Store.ClaudeHome.Default.With(AgentLogDir);
+
+    /// <summary>
     /// What a LOCAL reviewer is told about thinking: <c>none</c> by default, a level to ask for it,
     /// or <c>engine</c> to say nothing and take the engine's own default.
     /// </summary>
