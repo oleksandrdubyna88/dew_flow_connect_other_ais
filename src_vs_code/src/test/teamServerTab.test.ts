@@ -206,8 +206,10 @@ test('the Settings sheet is byte-identical after its tokens, chips and badges mo
   // 456ad98a…fff8 (`.reset-line`) and bddeea71…4791 (paths per side E4) over becbdd07…877c; this sheet carries both.
   // Re-pinned 2026-10-13 for the card's `.skew.warned` rule (a row coai-mcp runs with a warning — an unmeasured Vibe):
   // the sheet with that comment and rule taken out still hashes to the previous pin, 4536314c…92a1.
+  // Re-pinned 2026-10-19 when that plan moved from todo/ to research/: the `.rounds-line` comment names the plan's path,
+  // and the sheet with only that path put back hashes to the previous pin, 1d7f4705…d514.
   assert.equal(createHash('sha256').update(CATALOG_CSS).digest('hex'),
-    '1d7f4705db0a6186499c0ba791ca503868e8250086da4c75bcef77606effd514');
+    '862e9808b1d116fa30806fd2cc1c944a9a351413adbc9ebf391fbc57ceb9d82e');
   for (const piece of [CATALOG_TOKENS, CATALOG_CHIPS, CATALOG_BADGES]) {
     assert.ok(CATALOG_CSS.includes(piece) && TEAM_TAB_CSS.includes(piece), 'both sheets wear the one shared piece');
   }
