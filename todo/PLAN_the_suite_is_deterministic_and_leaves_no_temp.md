@@ -185,19 +185,23 @@ its message. Neither assertion prints the reason, which is why they read as two 
 
 **Fix.** Read the start time through one helper that catches BOTH things `Process.StartTime` throws for a child that is
 gone — `Win32Exception` (macOS, the text above) and `InvalidOperationException` (.NET's own "process has exited" /
-"no process is associated", the Linux and Windows spelling). When the read throws AND `process.HasExited`, there is
+"no process is associated", the Linux and Windows spelling). When the read throws AND the child has ended (`HasEnded`: `WaitForExit` for up to 100 ms, because one `HasExited` read at the moment of exit can still say false — code gate, 2026-10-19), there is
 nothing for the orphan sweep to find, so **nothing is recorded**: `IProcessTracker.Record(pid, startedUtc, label)`
 (`src_mcp/runners/Processes/ProcessTracking.cs:10`) is not called, and the launch goes on to its normal result. **What
 the reader marker then holds** (the Team server's tracker writes `ReaderMarkerDto`, `ReaderMarker.cs:65-70`): it stays
 `spawning` (`ReaderPhases.Spawning`, `:33`) — exactly the state it is in today between `Process.Start` and `Record` — and
-is cleared by the launch's normal end, the same path a recorded child's marker takes; a `spawning` marker with no live
-child reconciles as "nothing to kill" (`Unidentified`, `:76-77`), never as a blocked slot, because the owner's own launch
-is the one clearing it. The brief pins both halves with a tracker stand-in: no `Record`, and the end-of-launch call made.
+is cleared by the launch's normal end, the same path a recorded child's marker takes. **That window fails closed, and the
+first draft of this paragraph claimed the opposite (corrected at the code gate, 2026-10-19):** a `spawning` marker with no
+live child does NOT reconcile as "nothing to kill" — `ReaderMarkerDto.Unidentified` is true for every phase but Running
+(`ReaderMarker.cs:76-77`) and `ReaderReconcile.RunAsync` returns `Blocked(ReaderIdentityMissing)`, a slot that needs a
+person. A server that crashes inside the window blocks the slot until someone acts; it is the SAME window that exists today
+between `MarkReaderExpected` and `Record`, and the launch's own end (`GaugeCapture.ReadAsync`'s `ClearReader`) is what
+closes it in every case where the server survives. The brief pins both halves with a tracker stand-in: no `Record`, and the end-of-launch call made.
 When the read throws while the child is ALIVE, today's rule stays: kill, wait, rethrow (the remarks at `:300-306` say
 why); `ITreeSupervisor.StartedUnidentified(int pid)` (`ITreeSupervisor.cs:21`) is already the verb for a pid with no
 start. No assertion changes.
 
-**RED first.** A seam on the launcher for the start-time read (`Func<Process, DateTime>`, default `p => p.StartTime`).
+**RED first.** A seam on the launcher for the start-time read (`Func<Process, DateTime>`, default `p => p.StartTime`), shipped as an `internal` constructor overload — the public constructor keeps its one `IProcessTracker?` parameter (code gate, 2026-10-19).
 Test 1 (S8), **two arms**: the seam waits for the child to exit, then throws (a) the macOS `Win32Exception` and (b) an
 `InvalidOperationException`; `FakeCli emit hello` with a `TrackAs` must end with exit 0 and `hello`, nothing recorded,
 on both arms. Today both throw — red on every OS, every run. Test 2 (S9), the guard: the seam throws while the child

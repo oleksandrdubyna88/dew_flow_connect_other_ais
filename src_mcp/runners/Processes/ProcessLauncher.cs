@@ -188,17 +188,7 @@ public interface IProcessLauncher
 /// The real launcher. On timeout the WHOLE process tree is killed — a reviewer CLI spawns its own
 /// children, and an orphaned child that keeps running is a reviewer that never really failed.
 /// </summary>
-/// <param name="tracker">
-/// Where a long-running child is written down while it runs, so a later server can collect it if
-/// this one dies. Defaults to recording nothing, which is what every test and every git command
-/// wants.
-/// </param>
-/// <param name="startTimeOf">
-/// How a started child's start time is read for the tracker. Defaults to <see cref="Process.StartTime"/>; it is a seam so
-/// that a test can make the read fail AFTER the child has exited, which is what macOS does to a child that answers
-/// fast — a race no test can win on purpose with a real clock.
-/// </param>
-public sealed class ProcessLauncher(IProcessTracker? tracker = null, Func<Process, DateTime>? startTimeOf = null) : IProcessLauncher
+public sealed class ProcessLauncher : IProcessLauncher
 {
     /// <summary>
     /// How much of a stream is taken per read.
@@ -211,9 +201,37 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null, Func<Proces
     /// </remarks>
     private const int DrainBufferChars = 8192;
 
-    private readonly IProcessTracker _tracker = tracker ?? NoProcessTracking.Instance;
+    /// <summary>
+    /// How long a child whose start time could not be read is given to end before it is called "alive". The reaping of a
+    /// child that has JUST exited is the runtime's own later step, so one <see cref="Process.HasExited"/> read at that
+    /// moment can still say false (code gate of epic 1, 2026-10-19).
+    /// </summary>
+    private static readonly TimeSpan EndedProbe = TimeSpan.FromMilliseconds(100);
 
-    private readonly Func<Process, DateTime> _startTimeOf = startTimeOf ?? (static process => process.StartTime);
+    private readonly IProcessTracker _tracker;
+
+    private readonly Func<Process, DateTime> _startTimeOf;
+
+    /// <param name="tracker">
+    /// Where a long-running child is written down while it runs, so a later server can collect it if this one dies.
+    /// Defaults to recording nothing, which is what every test and every git command wants.
+    /// </param>
+    public ProcessLauncher(IProcessTracker? tracker = null)
+        : this(tracker ?? NoProcessTracking.Instance, static process => process.StartTime)
+    {
+    }
+
+    /// <summary>
+    /// The seam: how a started child's start time is read for the tracker. The public constructor reads
+    /// <see cref="Process.StartTime"/>; a test makes the read fail AFTER the child has exited, which is what macOS does to
+    /// a child that answers fast — a race no test can win on purpose with a real clock. Internal, so production code
+    /// cannot swap it and no nullable parameter rides the public signature.
+    /// </summary>
+    internal ProcessLauncher(IProcessTracker tracker, Func<Process, DateTime> startTimeOf)
+    {
+        _tracker = tracker;
+        _startTimeOf = startTimeOf;
+    }
 
     public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
     {
@@ -315,10 +333,13 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null, Func<Proces
     /// There is nothing left for an orphan sweep to find, so <see cref="IProcessTracker.Record"/> is NOT called and the
     /// launch goes on to collect what the child said. What the tracker's owner then holds is exactly what it held between
     /// <see cref="Started"/> and <c>Record</c> in every launch: the Team server's reader marker stays "spawning" and is
-    /// cleared by the capture's own end (<c>GaugeCapture.ReadAsync</c>, <c>ClearReader</c>); a "spawning" marker with no
-    /// live child reconciles as "nothing to kill". The <c>finally</c> of <see cref="RunAsync"/> still tells the tracker to
-    /// forget the pid. A child that is still ALIVE when the read fails is the case above: ended, waited for, and the
-    /// exception rethrown.</para>
+    /// cleared by the capture's own end (<c>GaugeCapture.ReadAsync</c>, <c>ClearReader</c>). That window FAILS CLOSED: a
+    /// "spawning" marker with no live child does NOT reconcile as "nothing to kill" — <c>ReaderMarkerDto.Unidentified</c> is
+    /// true for every phase but Running and <c>ReaderReconcile</c> answers Blocked(ReaderIdentityMissing), a slot that needs a
+    /// person. It is the same window that exists today between <c>MarkReaderExpected</c> and <c>Record</c> in every launch,
+    /// not a new one: a server that crashes inside it leaves the slot blocked until a person acts. The <c>finally</c> of
+    /// <see cref="RunAsync"/> still tells the tracker to forget the pid. A child that is still ALIVE when the read fails is
+    /// the case above: ended, waited for, and the exception rethrown.</para>
     /// </remarks>
     private async Task RecordedAsync(Process process, ProcessRequest request)
     {
@@ -341,6 +362,7 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null, Func<Proces
     /// that is not a failure. Both spellings are covered: macOS throws <see cref="System.ComponentModel.Win32Exception"/>
     /// ("Unable to retrieve the specified information about the process or thread"), and .NET's own "process has exited"
     /// is an <see cref="InvalidOperationException"/>. The same exception for a child that is still alive is not caught.
+    /// "Has exited" is decided by <see cref="HasEnded"/>, which gives a child that is ending a moment to finish.
     /// </summary>
     private bool TryStartedAt(Process process, out DateTime startedUtc)
     {
@@ -350,11 +372,29 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null, Func<Proces
 
             return true;
         }
-        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException && process.HasExited)
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException && HasEnded(process))
         {
             startedUtc = default;
 
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Whether the child has ended: true when it exits within <see cref="EndedProbe"/>, or when there is no process left to
+    /// ask (<see cref="InvalidOperationException"/> — "No process is associated with this object" — from either
+    /// <see cref="Process.HasExited"/> or <see cref="Process.WaitForExit(TimeSpan)"/>). A live child costs the probe's
+    /// wait on the failure path and nothing on any other.
+    /// </summary>
+    internal static bool HasEnded(Process process)
+    {
+        try
+        {
+            return process.WaitForExit(EndedProbe);
+        }
+        catch (InvalidOperationException)
+        {
+            return true;
         }
     }
 

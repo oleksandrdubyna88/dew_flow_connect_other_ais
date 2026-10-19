@@ -4666,14 +4666,16 @@ Product defect, found by three macOS-only flaky tests: `BoundedSchedulerTests.Fo
 `EndToEndTests.ARoundThatFoundNothing_…` (2). All read "Expected …Ok, but found …NotStarted": a reviewer that exits at once can be
 gone before `ProcessLauncher` reads its start time, and on macOS `Process.StartTime` then throws `Win32Exception`.
 
-The race cannot be won on purpose, so the launcher's start-time read is a seam — the second constructor argument of
-`ProcessLauncher`, `Func<Process, DateTime>? startTimeOf` (default `process.StartTime`). `AChildThatExitedBeforeItsStartTimeWasReadTests`
+The race cannot be won on purpose, so the launcher's start-time read is a seam — an `internal` constructor overload
+`ProcessLauncher(IProcessTracker, Func<Process, DateTime>)` (the public constructor is unchanged and reads `process.StartTime`). `AChildThatExitedBeforeItsStartTimeWasReadTests`
 (`[Collection("fakecli-env")]`) makes it fail the way macOS does, after the real `FakeCli` child exited, on any operating system.
 
 | Test | Seen red as |
 |---|---|
 | `AChildThatExitedBeforeItsStartTimeWasRead_IsNotReportedAsNotStarted` (S8, arms `Win32Exception`, `InvalidOperationException`) | `Win32Exception : Unable to retrieve the specified information about the process or thread…` / `InvalidOperationException : Cannot process request because the process has exited.` thrown out of `RunAsync`; green: exit 0, `hello`, no `Record`, one `Forget` |
 | `AReviewerThatExitedBeforeItsStartTimeWasRead_IsAnAnswer_NotNotStarted` (the same two arms through a real `ReviewerExecutor`) | `Expected type to be ReviewerOutcome+Ok because a reviewer that answered fast on a Mac was reported as 'could not be started'…: NotStarted {…}` (arm 1); the `InvalidOperationException` arm escapes the executor altogether |
+| `AChildThatIsStillEndingWhenTheReadFails_IsGivenAMomentToEnd_AndIsNotReportedAsNotStarted` (code gate, 2026-10-19; both arms) — the seam proves the child ALIVE (`HasExited` false) when the read fails and kills it 10 ms later | `Did not expect any exception because a child that ended within the wait is a child that is gone…, but found System.InvalidOperationException: Cannot process request because the process has exited.` out of `RunAsync` (the single `HasExited` read said "alive"); green with `HasEnded` (`WaitForExit` 100 ms); watched red again by putting `process.HasExited` back into `HasEnded` |
+| `AProcessThatWasNeverStarted_HasEnded_…` | pins that "no process is associated" (`InvalidOperationException`) reads as ended; green from the start (a guard) |
 | *guard* `AChildStillAliveWhoseStartTimeCannotBeRead_IsKilled_AndTheErrorReachesTheCaller` (S9, both arms) | green before and after; **watched red once** by removing `&& process.HasExited` from the helper's `when`: `Expected a <System.Exception> to be thrown, but no exception was thrown.` after 20 s (the live child ran to its end) |
 
 `EndToEndTests.ARoundThatFoundNothing_SaysWhatItSent_AndKeepsWhatItWasTold` now asserts `all 2 reviewers answered` (plan round) and

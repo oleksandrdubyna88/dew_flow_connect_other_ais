@@ -82,6 +82,45 @@ public sealed class AChildThatExitedBeforeItsStartTimeWasReadTests
         IsGone(seen[0]).Should().BeTrue("a child that is alive and unrecorded must not be left running");
     }
 
+    [Theory]
+    [MemberData(nameof(BothSpellings))]
+    public async Task AChildThatIsStillEndingWhenTheReadFails_IsGivenAMomentToEnd_AndIsNotReportedAsNotStarted(string spelling)
+    {
+        // The window the first fix left open (code gate, 2026-10-19): ONE `HasExited` read decided "the child has gone", and
+        // at the moment of exit that read can still say false — on Unix the reaping is the runtime's own later step. Here
+        // the child is provably alive when the read fails (checked inside the seam) and ends a few milliseconds after.
+        var tracker = new RecordingTracker();
+        var aliveWhenTheReadFailed = false;
+        var launcher = new ProcessLauncher(tracker, process =>
+        {
+            aliveWhenTheReadFailed = !process.HasExited;
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(10));
+                KillIfStillThere(process);
+            });
+
+            throw Failure(spelling);
+        });
+        var request = new ProcessRequest(FakeCliInvocations.Exe, ["sleep", "20000"], AppContext.BaseDirectory) { TrackAs = Reviewer };
+
+        var act = () => launcher.RunAsync(request, TestContext.Current.CancellationToken);
+
+        await act.Should().NotThrowAsync("a child that ended within the wait is a child that is gone, not one that could not be recorded");
+        aliveWhenTheReadFailed.Should().BeTrue("the test is only a test of the race if the child had NOT yet exited when the read failed");
+        tracker.Recorded.Should().BeEmpty("an ended child has nothing left for an orphan sweep to find");
+    }
+
+    [Fact]
+    public void AProcessThatWasNeverStarted_HasEnded_BecauseThereIsNothingAssociatedToWaitFor()
+    {
+        // `HasExited` and `WaitForExit` both throw InvalidOperationException ("No process is associated with this object")
+        // for a handle with nothing behind it; the launcher reads that as "ended" — the same fact in its third spelling.
+        using var never = new Process();
+
+        ProcessLauncher.HasEnded(never).Should().BeTrue();
+    }
+
     /// <summary>Waits for the child to exit — so it is gone when the read happens — and then fails the way the platform does.</summary>
     private static Func<Process, DateTime> ThrowsAfterTheChildExited(string spelling) => process =>
     {
@@ -89,6 +128,18 @@ public sealed class AChildThatExitedBeforeItsStartTimeWasReadTests
 
         throw Failure(spelling);
     };
+
+    private static void KillIfStillThere(Process process)
+    {
+        try
+        {
+            process.Kill();
+        }
+        catch (InvalidOperationException)
+        {
+            // Already ended or disposed: exactly the state this kill was meant to produce.
+        }
+    }
 
     private static Exception Failure(string spelling) => spelling switch
     {
