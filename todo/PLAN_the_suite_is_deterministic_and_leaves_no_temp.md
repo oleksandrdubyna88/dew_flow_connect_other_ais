@@ -4,7 +4,8 @@
 > (`src_mcp/tests_fakecli`), the fixed-name temp paths of the C# and extension tests, the flaky cases found in CI and
 > locally between 2026-09-26 and 2026-10-19 (product code where the cause is in the product), and the `coai-*` folders
 > the suites leave in `%TEMP%`. The owner put this "tail" at the very end of the queue; it is written now so the causes
-> are on paper while the evidence is fresh.
+> are on paper while the evidence is fresh. **Plan gate (session `f6808c2f`, verdict proceed) and the Opus judge folded
+> 2026-10-19** — what was taken, what was refuted and why: § *Review record*.
 >
 > Related docs: [module_tests.md](../research/module_tests.md),
 > [PLAN_the_tests_take_their_temp_directories_with_them.md](../research/PLAN_the_tests_take_their_temp_directories_with_them.md)
@@ -64,16 +65,17 @@ are work in progress and are not in this table unless §4 says otherwise.
 | `BoundedSchedulerTests.FourOfSixAnswer_TheSummaryNamesWhoFailedAndWhy` | **17** (macOS) | 13 (8) | 09-28 – 10-16 | C2 | product | this plan |
 | `TheRoundsNumstatsAreCountedTests.AnUnknownCommit_IsGitFailed_NeverAThrow` | 9 (macOS, Linux) | 7 (6) | 10-15 – 10-16 | C20 | fixed by #840 | — |
 | `CadenceStoreTests.ManyClosesAtOnce_AllLand` | 3 (Linux 2, Windows 1) | 3 (3), `main` 10-19 | 09-28 – 10-19 | C19 | product | its own plan |
-| `APromptFileDoesNotOutliveItsLaunchTests.AFileAlreadyGone_IsNotAFailure` | 3 (macOS) | 3 (2) | 10-16 – 10-19 | C2 | product | this plan |
-| `AUsageTheVendorNeverReportedIsUnknownTests.An_api_call_whose_deadline_struck_…` | 3 (Linux) | 2 (2), `main` | 10-03 – 10-10 | C16 | shared state in the stub | this plan |
+| `APromptFileDoesNotOutliveItsLaunchTests.AFileAlreadyGone_IsNotAFailure` | **4** (macOS) | 4 (3), `main` 10-19 (run 39229540975) | 10-16 – 10-19 | C2 | product | this plan |
+| `AUsageTheVendorNeverReportedIsUnknownTests.An_api_call_whose_deadline_struck_…` | **4** (Linux) | 3 (3), `main` | 10-03 – **10-19** (run 39278975228, still active) | C16 | shared state in the stub | this plan |
 | `KimiCredentialsLockTests.AShimThatMeetsADisposalsProbe_…` | 2 (Windows) + 3 work-in-progress | `main` 10-18 | 10-16 – 10-18 | C3 | timing | this plan |
 | `EndToEndTests.ARoundThatFoundNothing_SaysWhatItSent_…` | 2 (macOS) | 2 (2), `main` | 09-26 | C2 | product | this plan |
 | `AcpClientUsageTests.AUsagePromptThatOutlivesTheTurnsDeadline_…` | 1 (Windows, run 39269879269) | dependabot | 10-19 | C5 | timing | this plan |
 | `AConversationPlaceTests.CopiesThatOutrunTheRowsBudget_…` | 1 (Windows) | dependabot | 10-15 | C17 | timing | this plan |
-| `QuestionFanOutTests.TheHeartbeatIsRewritten_…` | 1 (Windows) | dependabot | 10-16 | C18 | timing | this plan |
+| `QuestionFanOutTests.TheHeartbeatIsRewritten_…` | **2** (Windows) | 2 dependabot (2) | 10-16 – 10-19 (run 39253800395, 2.9 s) | C18 | timing | this plan |
 | `ConsultAntigravityDenialScenarioTests.AHungFollowUp_…` | 1 (Windows) | a branch that does not touch it | 10-16 | C15 | timing | this plan |
 | `AReaderIsEndedWithItsTreeTests.TheDescendantsOfALiveServer_…` | 1 (Windows) | `fix/flaky-size-deadline-test` | 10-16 | C4 | shared file, fixed by #849 | — |
 | `PidfdLayerTests.AZombie_IsGone_NotSignalled` | 1 (Linux, run 39276863927, PR #868) | a store PR | 10-19 | C21 | timing inside the test | this plan |
+| the job `extension · a real editor` — the editor exited before the host ran a scenario (run 39282963558 attempt 1, PR #888) | 1 (Linux; the job is `continue-on-error`, so the run stayed green) | a docs branch (1) | 10-19 | C22 | timing in the editor's own start | this plan |
 
 **Seen only in local whole-suite runs** (no CI failure in the 174 logs): the steering-file collision (C1), the three
 `AReviewerThatAsksForSourceIsAskedAgainTests` budgets (C13), `AFeatureIsReviewedEndToEndTests.TheRoundsDeadline_…` (C6),
@@ -92,7 +94,8 @@ every run of one commit; and the three `release-please` changelog tests, which c
 ## 4. Each case, with its cause
 
 Every `file:line` below was read on `origin/main` `ea9ccd1c8` (2026-10-19) and re-checked on `38ecd4e11` (#887, the same day) for
-the files that commit touched. **Class** is SHARED STATE (two runs or two
+the files that commit touched — `ConsultantPlaces.cs` among them (C17's lines moved; re-read in full). The review folds of
+2026-10-19 re-read every line they cite on `38ecd4e11`. **Class** is SHARED STATE (two runs or two
 tests use one thing), TIMING (a deadline shorter than the measured cost of the work it waits for), or PRODUCT (the
 product is wrong and the test is the first to see it). **Confidence** says what the evidence proves and what would raise
 it.
@@ -146,6 +149,11 @@ in the run's own folder anyway.
 `TEMP`, `TMP` and `TMPDIR` pointed at that folder, a vendor argv (`exec …`) and no `FAKECLI_MODE`. Today it answers
 `decoy` and exits 7 on every run, on every OS; after the fix it does not read the folder at all. The test never writes
 into the real user temp. Its companion — a file beside the binary DOES steer — keeps the six scenario classes honest.
+**A third, structural (gate finding D1):** inside one run the file is safe only while EVERY writer is in the serial
+`fakecli-env` collection, and nothing checks that today. S2b is a source scan over `src_mcp/tests`: every class that calls
+the steering helper (`FakeCliSteering.Write`/`MinimalFile`) must carry `[Collection("fakecli-env")]` — judged on the
+concrete class, like S4, so a base class's call counts through each derived class. It is green on the six classes today
+and goes red when one of them (or a seventh) leaves the collection; it is watched red once by moving one class out.
 
 ### C2 — a reviewer that exits before its start time is read is reported "could not be started" (PRODUCT, high)
 
@@ -175,16 +183,28 @@ kept nothing. On the same day run 36240525010 failed another `EndToEndTests` rou
 its message. Neither assertion prints the reason, which is why they read as two more mysteries; the
 `ARoundThatFoundNothing` story also asserts "all reviewers answered" first, so a failure names its cause.
 
-**Fix.** Read the start time through one helper: when the read throws AND `process.HasExited`, there is nothing for the
-orphan sweep to find, so nothing is recorded and the launch goes on to its normal result. When the read throws while the
-child is ALIVE, today's rule stays: kill, wait, rethrow (the remarks at `:300-306` say why). No assertion changes.
+**Fix.** Read the start time through one helper that catches BOTH things `Process.StartTime` throws for a child that is
+gone — `Win32Exception` (macOS, the text above) and `InvalidOperationException` (.NET's own "process has exited" /
+"no process is associated", the Linux and Windows spelling). When the read throws AND `process.HasExited`, there is
+nothing for the orphan sweep to find, so **nothing is recorded**: `IProcessTracker.Record(pid, startedUtc, label)`
+(`src_mcp/runners/Processes/ProcessTracking.cs:10`) is not called, and the launch goes on to its normal result. **What
+the reader marker then holds** (the Team server's tracker writes `ReaderMarkerDto`, `ReaderMarker.cs:65-70`): it stays
+`spawning` (`ReaderPhases.Spawning`, `:33`) — exactly the state it is in today between `Process.Start` and `Record` — and
+is cleared by the launch's normal end, the same path a recorded child's marker takes; a `spawning` marker with no live
+child reconciles as "nothing to kill" (`Unidentified`, `:76-77`), never as a blocked slot, because the owner's own launch
+is the one clearing it. The brief pins both halves with a tracker stand-in: no `Record`, and the end-of-launch call made.
+When the read throws while the child is ALIVE, today's rule stays: kill, wait, rethrow (the remarks at `:300-306` say
+why); `ITreeSupervisor.StartedUnidentified(int pid)` (`ITreeSupervisor.cs:21`) is already the verb for a pid with no
+start. No assertion changes.
 
 **RED first.** A seam on the launcher for the start-time read (`Func<Process, DateTime>`, default `p => p.StartTime`).
-Test 1: the seam waits for the child to exit, then throws the macOS `Win32Exception`; `FakeCli emit hello` with a
-`TrackAs` must end with exit 0 and `hello`, nothing recorded. Today it throws — red on every OS, every run. Test 2, the
-guard: the seam throws while the child (`sleep 20000`) is alive — the exception still reaches the caller and the child
-is gone. **Confidence: high** on the class (one message, always an instant child, only macOS); certain once the stack is
-seen, which Test 1's message will show.
+Test 1 (S8), **two arms**: the seam waits for the child to exit, then throws (a) the macOS `Win32Exception` and (b) an
+`InvalidOperationException`; `FakeCli emit hello` with a `TrackAs` must end with exit 0 and `hello`, nothing recorded,
+on both arms. Today both throw — red on every OS, every run. Test 2 (S9), the guard: the seam throws while the child
+(`sleep 20000`) is alive — the exception still reaches the caller and the child is gone. **Confidence: high** on the
+class (one message, always an instant child, only macOS; a 4th failure landed on `main` on 2026-10-19, run 39229540975,
+`Expected type to be ReviewerOutcome+Ok, but found ReviewerOutcome+NotStarted`); certain once the stack is seen, which
+Test 1's message will show.
 
 ### C3 — a Kimi shim that meets a disposal's probe: a 250 ms stand-in for an instant, inside a 500 ms wait (TIMING, medium)
 
@@ -208,9 +228,16 @@ thing it stands for, and its release depends on a timer.
 seam, `KimiCredentialsLock.BeforeTheHomeHold = MeetADisposalsProbe` (`src_mcp/tests_fakecli/TreeHoldVerb.cs:38`), and the
 shim must keep its product take (`HoldTree` → the INHERITABLE `HeldFile.TakeVerified`, `KimiCredentialsLock.cs:172-175`) —
 the test's subject. A second seam of the same kind, called when the home file's take first answers busy, lets the verb
-release its probe at that moment. The test then proves exactly its title — the shim met a
-busy file and waited it out — with no clock in the outcome. A second test pins the other side with no timer either: a
-probe that is never released ends in exit 69 after `HomeWait`.
+release its probe at that moment. **Where that seam goes (judge, J13):** on the Kimi lock's call site, never inside
+`HeldFile.TakeWithin`/`TakeVerified` — a shared primitive used by every lock in the product. Today the home file is
+taken in one call, `take(Path.Combine(root, HomeHoldName), HomeWait)` (`KimiCredentialsLock.cs:209`, `take` being
+`Inheritable` → `HeldFile.TakeVerified(path, within, inheritable: true)`, `:175`), and the busy answers live inside
+`TakeWithin`'s loop (`HeldFile.cs:173`). The call site splits it: one `HeldFile.TakeVerified` with no wait first; when
+that answers `Hold.Busy`, the test-only `WhenTheHomeFileIsBusy?.Invoke(path)` (null in the product, beside
+`BeforeTheHomeHold`, `:114`) fires once, then the waiting take runs as today. The product's behaviour is unchanged
+(one more open attempt before the same 500 ms wait); `HeldFile` is not touched. The test then proves exactly its
+title — the shim met a busy file and waited it out — with no clock in the outcome. A second test pins the other side
+with no timer either: a probe that is never released ends in exit 69 after `HomeWait`.
 
 **RED first.** None deterministic for the race itself; the event-driven version is deterministic by construction. The
 before/after proof is a loop: the test 100 times in a whole-suite load on Windows before (expect a failure in roughly
@@ -228,14 +255,19 @@ cause is the timer's late release and not an antivirus scan of the new lock file
   grandchild, `Serving.cs:153`) and write both pids before that deadline kills the tree; nothing waits for the pids
   first. A cold start under load is measured up to ten seconds on this machine (`research/module_tests.md:3536`). It is
   one of the four deadline tests that failed in the full local run of 2026-10-18 and passed alone
-  (`research/module_tests.md:4475`); the failure text was not kept. **Fix:** the test's subject is "a server that never
+  (`research/module_tests.md:4493`); the failure text was not kept. **Fix:** the test's subject is "a server that never
   answers is ended at the deadline, with its tree"; the tree must EXIST before the deadline for that to be tested. The
   test waits for the pid file to name both processes (the fake already writes it whole, `Serving.cs:114-131`) before it
   lets the deadline matter: the launcher's deadline (`deadline.CancelAfter(request.Timeout)`,
-  `src_mcp/runners/Processes/ProcessLauncher.cs:401`) is armed through an injectable `TimeProvider` (D3), and the test
-  advances a manual clock past the deadline only after the pid file is complete. **RED first:** a `startDelayMs` on the `serve` verb larger than the deadline makes
-  today's test fail on every run with the pid file missing. **Confidence: low** until a failure log is kept (D5 asks
-  every failure in the suite to be kept with its full message).
+  `src_mcp/runners/Processes/ProcessLauncher.cs:401`) would be armed through an injectable `TimeProvider` (D3), and the
+  test would advance a manual clock past the deadline only after the pid file is complete. **Gated (judge, J8):**
+  `ProcessLauncher` is the one class D3 does NOT touch until this case has a KEPT failure — its deadline, drain grace and
+  caller-cancellation separation (`:287`, `:401`, `:437`) is the riskiest seam in the plan, and the evidence for this
+  case is a failure whose text nobody kept. So the order is D5 first (the next full-suite failure of this test is kept
+  with its message), then the seam WITH its RED in one story; until then the test is not changed. **RED first (when the
+  story opens):** a `startDelayMs` on the `serve` verb larger than the deadline makes today's test fail on every run
+  with the pid file missing. **Confidence: low** until a failure log is kept (D5 asks every failure in the suite to be
+  kept with its full message).
 
 ### C5 — an ACP turn's 2 s deadline also pays the agent's cold start (TIMING, high)
 
@@ -243,7 +275,7 @@ cause is the timer's late release and not an antivirus scan of the new lock file
 (`src_mcp/tests/AcpClientUsageTests.cs:47-58`) failed in run 39269879269 (Windows leg, 2026-10-19, a dependabot npm
 bump that touches no C#), the only failure of 11,735 tests, in 2 s 025 ms: `Expected outcome.End to be AcpEnd.Answered …
 but found AcpEnd.Deadline … the agent did not answer within the 2s this turn was given`. It also failed in the full local
-run of 2026-10-18 (`research/module_tests.md:4475`).
+run of 2026-10-18 (`research/module_tests.md:4493`).
 
 **Cause.** The turn's clock starts right after the child process starts: `deadline.CancelAfter(ask.Deadline)`
 (`src_mcp/runners/Acp/AcpClient.cs:119`). The test gives 2 s (`AcpClientUsageTests.cs:53`) and means "the deadline
@@ -252,8 +284,10 @@ config call and the FIRST prompt. Under the suite's load that took longer than 2
 answer and the end was `Deadline` — the product did the right thing for what happened. The test's subject (the usage
 bound is clipped to what is left of the turn, `AcpClient.cs:180`, `:189-203`, the bound at `:195`) never got to run.
 
-**Fix.** The turn's deadline and the usage bound read an injectable `TimeProvider` (D3; default `TimeProvider.System`,
-so the product is unchanged). The test uses a manual clock: it waits until the agent has RECEIVED the second
+**Fix.** The turn's deadline and the usage bound read an injectable `TimeProvider` (D3): an optional
+`TimeProvider? clock = null` constructor parameter on `AcpClient` itself — the class that owns both timers — defaulting
+to `TimeProvider.System`, so the product is unchanged; the shape is `BoundedScheduler.cs:96-102`'s. It lands in the
+SAME story as this RED (D3: no all-at-once seam). The test uses a manual clock: it waits until the agent has RECEIVED the second
 `session/prompt` (the `/usage` one), then advances the clock past the deadline. The assertions at `:55-57` stay as they
 are. **RED first:** a `startDelayMs` in the fake agent's script, longer than the deadline, makes today's test fail on
 every run with the CI message. **Confidence: high** (the end was `Deadline` at 2.025 s on a change that touches no C#;
@@ -273,18 +307,32 @@ limit" BEFORE the reviewer launched — the round's deadline struck during the r
 inside it. The conversation's cap is the same 8 s on a `Stopwatch` (`src_mcp/runners/Reviewers/TurnLoop.cs:41-45`), and
 each turn is a real `FakeCli` launch that sleeps 700 ms (`FAKECLI_SLEEP_MS`, test `:451`) under its own 2 s timeout
 (`TurnLoop.cs:134-138`). The test's own remark says the round takes 3–4 s idle: a 2× margin against eight parallel
-test threads and several agent sessions on one machine. Nothing is shared; the margin is wall-clock.
+test threads and several agent sessions on one machine. The margin is wall-clock — **and one thing IS shared**, which
+the judge found (J4): `PanelService._sweptUtc` (`src_mcp/src/Server/PanelService.cs:1407`) is a STATIC throttle — the
+product walks the temp folder at most once per ten minutes per process (`:1424`). `PanelService.ForgetTheLastSweep()`
+(`:1440-1444`) resets it, and seven call sites do so from classes that are in NO collection:
+`AScratchSweepRunsOnTheConsultationBeatTests.cs:57`, `:112`, `:141`, `:150`, `:167`, `VibeHomesTests.cs:154` and
+`TempDirsAreSwept.cs:286`. Each reset means the NEXT `BuildWork` anywhere in the process walks the real `%TEMP%` —
+≈0.7–1 s at today's 95,285 entries (§5), ≈3 s at the 2026-09-13 size — and this round's `BuildWork` runs INSIDE its 8 s
+deadline (`RoundEngine.cs:285-286` arms it before the round is assembled). That is the most likely reason the recorded
+failure saw the deadline strike during setup, and it is why this case fails locally (a big temp) and not in CI (a fresh
+runner's temp is nearly empty).
 
 **Fix.** The test's subject is arithmetic plus "the conversation is not cut": (1) a pure test pins
 `RoundDeadline.For(… ReviewerTimeout = 2 s, followUps: 3)` = 8 s and `followUps: 0` = 2 s — none exists today (the
-callers in `SecurityCoverageTests.cs:72` and `SecurityPresetTests.cs:203` pass zero follow-ups); (2) the round clock
-(`RoundEngine.cs:286`), the conversation cap (`TurnLoop.cs:45`) and the per-turn timeout read the D3 `TimeProvider`,
-and the end-to-end test advances a manual clock 700 ms per turn instead of sleeping. A one-turn budget then cuts the
-conversation at turn 3 on every run, and the right budget never does. **RED first:** the same test with
-`FAKECLI_SLEEP_MS=1900` fails on every run today — it shows that fixed sleeps against a fixed deadline decide the
-outcome. **Confidence: medium-high** — the recorded message shows the round clock striking before the first launch, which is
-exactly the setup-inside-the-deadline path above; keeping the next failure's `answer` JSON (D5)
-confirms it. This case moves here from `PLAN_question_consultant_tails.md` §6 (§7).
+callers in `SecurityCoverageTests.cs:72` and `SecurityPresetTests.cs:203` pass zero follow-ups); (2) the conversation
+cap and the per-turn timeout read `TurnLoop`'s own injected clock (C13's seam — the `Stopwatch` at `TurnLoop.cs:41-45`
+goes), and the end-to-end test advances a manual clock 700 ms per turn instead of sleeping; the round clock at
+`RoundEngine.cs:286` is NOT given a seam (D3: the clock is never threaded through `PanelService`/`RoundEngine`) — the
+sweep-walk inside it is removed instead: (3) the seven `ForgetTheLastSweep` callers move into a serial collection (S4's
+scan grows a second rule: any caller of `ForgetTheLastSweep` must be in a `DisableParallelization` collection), and
+under D2 the walk is of the run's own folder. A one-turn budget then cuts the conversation at turn 3 on every run, and
+the right budget never does. **RED first:** the same test with `FAKECLI_SLEEP_MS=1900` fails on every run today — it
+shows that fixed sleeps against a fixed deadline decide the outcome; and for the shared half, S4's grown scan names the
+three classes today. **Confidence: medium** (down from medium-high, on the judge's point) — the recorded message shows
+the round clock striking before the first launch, which both the setup-inside-the-deadline path and the sweep reset
+explain; keeping the next failure's `answer` JSON (D5) and the sweep's warning line decides between them. This case
+moves here from `PLAN_question_consultant_tails.md` §6 (§7).
 
 ### C7 — `SqliteMigratorTests` "database is locked" (cause NOT yet determined, low)
 
@@ -322,7 +370,14 @@ per-file `CancelAfter`), `:206`/`:210` (`Reading.Not(TimedOutReason)`). Its titl
 That plan builds it; this plan only orders it (§9) and adds one correction to its step 3: injecting "200 ms / 300 ms"
 must keep the per-file deadline LONGER than the collection budget in the characterization test, or "git timed out"
 becomes the correct answer and the test would pin the wrong sentence. The deterministic RED it needs is the D3 manual
-clock: fire the per-file timer BEFORE the collection timer, both past 30 s — red on every OS today.
+clock: fire the per-file timer BEFORE the collection timer, both past 30 s — red on every OS today. **Who adds which
+clock (judge, J14 — written on both sides, the sibling's §Boundary says the same):** the per-file timer is
+`SourceResolver`'s (`SourceResolver.cs:200`) and gets its `TimeProvider? clock = null` here, in C13's story (E4), because
+C13's resolver test needs it first; the collection timer at `SecuritySources.cs:32` (`CollectionBudget`, `:14`) is added
+by **the sibling plan**, with its own RED (S21), on the same manual clock — the sibling's step 1 is the first test that
+needs it, and D3's rule is that a seam lands with the RED that needs it. Start: the sibling may start as soon as E1 is
+merged (J7); its step 1 is deterministic on the system clock (a per-file read that is made to time out before the
+collection budget) and needs no seam, so only its step 3 waits for C13's resolver clock.
 
 ### C9 — the extension's "a child that writes many lines nobody reads still finishes promptly" (TIMING, medium)
 
@@ -338,7 +393,10 @@ the scheduler's, not the launcher's: what the test means — "the fan does not r
 cost. **Fix:** a direct test of `replayingFan` (exported for tests — today it is a module-private function, `src_vs_code/src/processLauncher.ts:194`) that emits 40,000 values with no subscriber and
 asserts the CPU time spent (`process.cpuUsage()` delta) is under a bound the quadratic version cannot meet (it costs
 about 6 s of CPU at 40,000 values, per the file's own 64 s at 130,000; the append costs milliseconds); the real-child
-test stays as a smoke test of the pipes — exit 0 and every character arrived — without a wall-clock assertion. The
+test stays as a smoke test of the pipes — exit 0 and every character arrived — without a wall-clock assertion, **and
+without the `ended` helper's 10 s timer** (judge, J5): that timer (`:22-24`, `nothing arrived within 10000 ms`) is what
+actually failed locally, so the smoke test waits on `onExit`/`onError` alone and leaves the hang budget to the runner's
+own per-file timeout (`run-tests.mjs`), which names the file. A test that measures nothing by the clock has no clock. The
 guard moves, it does not weaken: the CPU bound catches the quadratic fan at 40,000 values on any machine, where the 4 s
 wall bound sat below the regression's own ≈6 s by a margin a busy machine could erase in either direction. **RED
 first:** put `held = [...held, value]` back for one run; the CPU test goes red, the smoke test does not. **Confidence:
@@ -407,7 +465,9 @@ All three in `src_mcp/tests/AReviewerThatAsksForSourceIsAskedAgainTests.cs`; non
 
 **Fix.** D3: `TurnLoop`'s cap and per-turn bound (`src_mcp/runners/Reviewers/TurnLoop.cs:41-45`, `:134-138`; it uses a
 `Stopwatch` today) and `SourceResolver`'s per-file deadline (`src_mcp/runners/Feature/SourceResolver.cs:197-221`) read
-the `TimeProvider`. The turn tests run through an in-process launcher stand-in that advances the manual clock by a turn's
+a `TimeProvider` — an optional `TimeProvider? clock = null` constructor parameter on EACH of the two classes (the
+class that owns the timer, `BoundedScheduler.cs:96-102`'s shape), landed in this case's own story together with S14;
+nothing is threaded through `RoundEngine` or `PanelService`, which construct them with the default. The turn tests run through an in-process launcher stand-in that advances the manual clock by a turn's
 simulated duration and answers `TimedOut` when the request's timeout is shorter — the file already has an in-process
 launcher precedent (`TwoDecidedThenReal`, `:443`). The resolver test's slow read waits on the clock, which is advanced
 only after the fast read was served. **RED first:** with the manual clock, removing the cap at `TurnLoop.cs:44` turns the
@@ -429,16 +489,31 @@ throws leaves the old stamp in place, so the next call tries again" (`:76-78`). 
 file — into an EMPTY settings set, so the rebuild does NOT throw, and the host publishes DEFAULT settings under the new
 stamp until the file changes again. In production that is a server that silently runs on defaults after a reload that
 met a busy file. The same `catch` takes `JsonException` (`SettingsFile.cs:90-93`), which is what a HALF-written file
-reads as. **Fix:** `SettingsFile.Read` tells "missing" (empty, as today) from "busy, torn or malformed" (throws), so the
-host's own retry rule works. Two behaviours this decides, said out loud because they change production: at START
-(`Build(first: true)`, `PanelServiceHost.cs:60`) a busy or malformed file still yields defaults with a warning — a server
-that refuses to start is worse; on a RELOAD it keeps the last good settings and the old stamp, warns once per stamp, and
-tries again on the next call — so a file left malformed keeps the previous settings until it is fixed, instead of
-silently dropping to defaults. Also: the test's `Host()` (`:116-118`) passes no consultant-homes folder, so every beat
+reads as. **Fix (the lead's decision on gate C14 and judge J3):** a **tri-state read on the RELOAD path only.**
+`SettingsFile.Read` keeps today's signature and behaviour for its callers — `SettingsFile.Layer`'s eight call sites
+(`ProbeApiMode.cs:97`, `Program.cs:633`, `:712`, `:2097`, `CadenceReadMode.cs:32`, `ConsultantCheckMode.cs:47`,
+`ConsultantsReadMode.cs:221`, `PanelServiceHost.cs:101`) see no change. A new `SettingsFile.TryRead` answers one of
+three: `Read(values)`, `Missing`, or **`Busy`** — and `Busy` is ONLY a sharing violation / `IOException` while another
+process holds the file for writing; a malformed file and an empty file are `Read` with no values, exactly what they
+are today. `PanelServiceHost.Current` (`:64-85`) uses it on the rebuild: on `Busy` it keeps `_current` AND the old
+stamp, warns once per stamp, and tries again on the next call; on everything else it behaves as today. **Why malformed
+and empty are not kept-last-good:** a person who writes a broken file did an explicit thing, and today's answer to it
+(defaults, a warning) is the answer they can see and fix; a torn write — the writer mid-file — already heals by itself,
+because the stamp is `(LastWriteTimeUtc, Length)` (`PanelServiceHost.cs:152-157`) and the finished file has another
+length, so the next call rebuilds. Only the busy case has no cure today, and only the busy case is cured. **`Current`
+never throws to its callers (gate C14):** `Build(first: false)` is inside a `try` whose catch logs the reason and
+returns `_current` under the OLD stamp — the comment at `:76-78` already promises the retry, and this makes the promise
+true for a throwing rebuild too. **Blast radius:** `PanelServiceHost.Current` (the 20 `.Current` readers in `src_mcp/src`
+go through it) on the reload path only; START (`Build(first: true)`, `:60`) is untouched — a busy file at start still
+yields defaults with a warning, as today, a server that refuses to start being worse. Nothing in `SettingsFile.Layer`,
+`--providers`, the cadence or consultant read modes changes. Also: the test's `Host()` (`:116-118`) passes no consultant-homes folder, so every beat
 sweeps the machine's real per-user folders and walks the real temp folder — `ConsultScenarioBase` documents `homes` for
 exactly this; the test passes its own. **RED first (Windows, no timing):** hold `settings.json` open for write with
-`FileShare.Read` and new content flushed; read `host.Current`; release; read again — today the second read shows the
-defaults. **Confidence: low-medium** — the mechanism is real in the code; that it is THIS failure is not proven.
+`FileShare.None` and new content flushed; read `host.Current`; release; read again — today the first read (busy)
+shows the defaults under the new stamp; after the fix it shows the last good settings and the second read shows the
+new file. Two companions that are GREEN today and stay green, pinning the decision: a malformed file on reload gives
+defaults, and an empty file on reload gives defaults (as today). **Confidence: low-medium** — the mechanism is real in
+the code; that it is THIS failure is not proven.
 
 ### C15 — `ConsultAntigravityDenialScenarioTests`: a whole-turn stopwatch for a launch-level claim (TIMING, medium-high)
 
@@ -462,7 +537,8 @@ the overhead did not fit the 3 s).
 
 `AUsageTheVendorNeverReportedIsUnknownTests.An_api_call_whose_deadline_struck_before_the_answer_is_recorded_as_unknown`
 (`src_mcp/tests/AUsageTheVendorNeverReportedIsUnknownTests.cs:107`) failed on the Linux leg in runs 37134428327
-(2026-10-03, `main`), 37138270645 (10-03) and 38063638766 (10-10) with a `NullReferenceException` thrown by the TEST's
+(2026-10-03, `main`), 37138270645 (10-03), 38063638766 (10-10) and **39278975228 (2026-10-19, a docs branch, 1 s 135 ms
+— still active)** with a `NullReferenceException` thrown by the TEST's
 `Dispose`, not by its body: `NameValueCollection.GetKey ← HttpListenerResponse.FormatHeaders ← … ← HttpListener.Stop ←
 ApiEndpointStub.Dispose`. **Cause:** `Dispose` sets the hold and stops the stub in the same breath (`:40-42`); the set
 wakes the stub's serving thread, which starts writing the status, the content type and the headers of the held answer
@@ -478,20 +554,30 @@ paths).
 
 `AConversationPlaceTests.CopiesThatOutrunTheRowsBudget_RefuseThePlace_SayingHowManyWereCopied_AndKeepNone`
 (`src_mcp/tests/AConversationPlaceTests.cs:114-142`) failed once on Windows (run 38817686874, 2026-10-15): the refusal
-said `0 of 2 copied`, the test expects `1 of 2` (`:136`). **Cause:** the budget is 1 s (`:132`), armed by
-`copying.CancelAfter(budget)` (`src_mcp/src/Server/Consultation/ConsultantPlaces.cs:298`), and the FAST root's copy runs
-git (a work-tree check, `ls-files`, the link checks) before it copies a byte; on a loaded Windows runner that passed 1 s,
-and `copying.ThrowIfCancellationRequested()` (`:329`) reported 0. The slow root's 3 s sleep (`:121-127`) is not the
-problem. **Fix:** D3 — the copy's budget is armed through the `TimeProvider`; the slow root's hook ADVANCES the clock past
-the budget instead of sleeping, so the fast copy runs with no clock pressure and the slow one is cut every time.
-**Confidence: medium-high** ("0 of 2" proves the fast copy outlived 1 s; its real cost was not logged).
+said `0 of 2 copied`, the test expects `1 of 2` (`:136`). **Cause** (lines re-read on `38ecd4e11`, after #887 rewrote
+`ConsultantPlaces.cs` by 204 lines): the budget is 1 s (`:134`), armed by `copying.CancelAfter(budget)` in
+`OneShotAsync(folder, sources, budget, ct)` (`src_mcp/src/Server/Consultation/ConsultantPlaces.cs:329`, `:334`), and
+since #887 the flow asks git of EVERY root ONCE, before anything is copied (`:390` — "each source asked of git ONCE,
+before anything is copied"): a work-tree check and the link checks per root, then the copies in grant order. On a
+loaded Windows runner that git phase passed 1 s, and `copying.ThrowIfCancellationRequested()` (`:416`) reported 0 — the
+product's own sentence now says which phase it was (`OutOfBudget`, `:449-457`: "the budget ran out while confirming N
+candidates with git, before anything was copied"). The slow root's 3 s sleep (`:123-131`) is not the problem. **Fix:**
+D3 — the copy's budget is armed through a `TimeProvider? clock = null` constructor parameter on `ConsultantPlaces`
+(the class that owns the timer; landed with this RED, S16); the slow root's hook ADVANCES the clock past the budget
+instead of sleeping, so the fast copy runs with no clock pressure and the slow one is cut every time.
+**Confidence: medium-high** ("0 of 2" proves the fast copy outlived 1 s; its real cost was not logged — and the
+refusal's phase sentence now records it for the next time).
 
 ### C18 — the question row's heartbeat counted by polling the file every 40 ms (TIMING, medium)
 
 `QuestionFanOutTests.TheHeartbeatIsRewritten_WhileARowRuns_OnTheConfiguredInterval`
-(`src_mcp/tests/QuestionFanOutTests.cs:686-710`) failed once on Windows (run 38906020752, 2026-10-16): `Expected
-beats.Count >= 3 … found 1`, in **13 s** for a test that takes 1.5 s — the process was starved, so the row's 1.5 s delay
-and the 200 ms beat fired late and together. The row still settled `Answered` (`:707` passed): not a product defect.
+(`src_mcp/tests/QuestionFanOutTests.cs:686-710`) failed twice on Windows: run 38906020752 (2026-10-16): `Expected
+beats.Count >= 3 … found 1`, in **13 s** for a test that takes 1.5 s; and run 39253800395 (2026-10-19, a dependabot
+npm bump), the same assertion in **2 s 899 ms**. The second run weakens the first reading — "the process was starved"
+fits 13 s, not 2.9 s: at 2.9 s the row's 1.5 s delay and the 200 ms beat still fired late enough, or close enough
+together, that fewer than three DISTINCT `HeartbeatUtc` values were seen — a 200 ms timer losing two beats under
+ordinary load, not a starved process. Both runs agree on the shape: the count depends on how many timer ticks the
+scheduler granted inside a fixed delay. The row still settled `Answered` (`:707` passed): not a product defect.
 **Fix:** the store's `projected` callback (`QuestionConsultStore`, called on every write) collects distinct
 `HeartbeatUtc` values; the scripted row waits on a gate instead of `Wait = 1.5 s` and is released when three distinct
 beats were seen, under a 30 s guard that fails with its own sentence. The test then depends only on "the heartbeat is
@@ -541,6 +627,51 @@ become `sleep` — it waits (bounded, with its own sentence) until `/proc/<paren
 killed child while it waits for the foreground `sleep 2`, so today's test fails on every run with the CI sentence; with
 the wait for `comm == sleep` it is green. **Confidence: medium** — the window is certain from the script; that the CI
 shell closed it by reaping is inferred from the 10 s and from the absence of any other actor.
+
+### C22 — the real-editor job: the editor exited before the extension host ran a scenario (TIMING in the editor's own start, medium)
+
+**Evidence.** The job `extension · a real editor` (`.github/workflows/ci.yml:390-425`, `continue-on-error: true`, so it
+never turns a run red) failed on PR #888 (run 39282963558, attempt 1, 2026-10-19 16:07 UTC, `docs/promote-kimi-vibe-linux`,
+a docs-only branch) at its step `Run the scenarios in a real editor` (`xvfb-run -a npm run test:host` → `scripts/run-host.mjs`)
+and passed on the rerun (attempt 2). **The first reading of the log was wrong, and the log says why.** `run-host.mjs`
+launches the editor TWICE (`:100`, `:106-107`): the ordinary scenarios, then a second launch with a missing data root
+that runs ONE scenario. The lines `1/1 scenarios passed`, `Extension host test runner exit code: 0` and
+`Error: Unexpected SIGPIPE` all belong to the SECOND launch (pid 2759, 16:08:17–16:08:32), which passed; the SIGPIPE
+is VS Code's own, printed by a launch that then exited 0, and is not a failure condition anywhere in the harness. The
+FIRST launch (pid 2557) printed NOTHING from the extension host — no `ok`, no `FAIL`, no `N/N scenarios passed`
+(`src/test/host/scenarios.ts:984-990` prints one of those for every run that reaches `run()`) — and VS Code's main
+process logged `CodeWindow: detected unresponsive` at 16:08:17.073, sixteen seconds after it created the window
+(16:08:00.794), then `Exit code: 1`. `@vscode/test-electron`'s `runTests` rejects on a non-zero editor exit, so the
+harness recorded `the extension host: Test run failed with code 1` and exited 1 (`run-host.mjs:95-96`, `:109-110`,
+`:119-122`) — the step's failure condition, working as designed: "a failure to launch is non-zero" (`:22-26`).
+
+**Cause.** The editor's renderer window did not answer VS Code's responsiveness check in time — Electron's hung-renderer
+timer, not any budget of ours — and VS Code, running extension tests from the command line, ends the process with
+code 1 when a window is unresponsive (there is nobody to answer its "window is not responding" dialog). Why the renderer
+was slow is inferred, not shown: the first launch is the FIRST start of a freshly downloaded, freshly unpacked VS Code
+1.142.0 (330 MB, `node-compile-cache … inactive`, in-memory shared storage) on a cold runner under `xvfb`; the second
+launch, seventeen seconds later on the same warm install, started and ran its scenario in fifteen seconds. Nothing of
+ours ran before the window hung — the extension's activation and the scenarios never printed — so no shared state and
+no test of ours is involved; the harness' two budgets (`LAUNCH_MS`, the scenario budget) did not fire.
+
+**Fix (E5; harness only, no product code).** (1) **The failure says what happened.** When the editor exits non-zero and
+the extension host printed no scenario line, `run-host.mjs`'s sentence is "the editor exited (code N) before the
+extension host ran a scenario — VS Code's last main line: `CodeWindow: detected unresponsive`", not `Test run failed with
+code 1` — the harness keeps the editor's stdout/stderr tail (it already has it) and quotes the last `[main …]` line. A
+scenario failure keeps today's sentence. That is D5 for this job: the next failure is readable without `gh api`.
+(2) **The launch budget measures the launch.** `runTests` downloads and unpacks inside the `bounded(LAUNCH_MS)` race
+(`:84-94`); the download moves out — `downloadAndUnzipVSCode` first, its path passed as `vscodeExecutablePath` — so
+`LAUNCH_MS` bounds only the editor's start and the sentence for a slow download is a different one. (3) **One retry of
+the LAUNCH, never of a scenario**, when and only when the editor exited before the host printed a line: the first
+launch is re-run once on the now-warm install and the log says so ("the editor did not start the first time; started
+on the second"). This is not a longer timeout — the budgets stay — and not a hidden rerun of a failed test: a scenario
+that failed is reported the first time. The streak step (`host-job-streak.mjs`) counts the retry as a note, so the
+promotion number stays honest. **RED first:** S23 — `run-host.mjs` pointed at a stub `vscodeExecutablePath` that exits
+1 at once and prints a `[main …]` line: today's sentence is `Test run failed with code 1`; after (1) it names the exit
+before the host and quotes the line, and after (3) the stub is launched twice before the sentence. **Confidence:
+medium** on the cause (the unresponsive line and the empty host output are certain; "cold first start" is the only
+actor on the timeline, but no CPU or disk figure was kept); high that (1) makes the next failure legible, and
+measured — not assumed — that (3) removes it: the streak step's count over the next 20 runs of `main`.
 
 ## 5. The temp folder — what is in it, who made it, why it stays
 
@@ -602,47 +733,110 @@ other `fakecli-minimal.json` literal in the test tree. A per-launch steering fil
 its script path through each child's own environment) and rejected for the same reason as the variable: the children
 here are started on an environment the test does not write.
 
-**D2 — Each suite runs inside ONE temp folder of its own.** Before any test, the C# assembly fixture makes
-`testsToDelete-coai-run-<6 chars>` in the real temp folder, remembers the real one (the existing start-of-run sweep
-still sweeps the REAL folder), and points `TEMP`, `TMP` and `TMPDIR` of the test process at the new one; at the end it
-restores them and removes the folder. `src_vs_code/scripts/run-tests.mjs` does the same for the `node --test` children
-it starts. `Path.GetTempPath()` and `os.tmpdir()` read those variables on every call, and every child inherits them —
-the suite already relies on this in `AVibeHomesNeverLiveUnderTempTests.cs:15-60`. Everything a run makes in "temp" —
-its own folders, the product's `coai-answers-`/`-repair-`/`-noworkspace-`, the loose `api-*.prompt` files, a stray
-steering file — is then inside one folder that the run removes, that no other run's sweep can see (C12), and that a
-glob over "temp" cannot leave (C10). A run that is killed leaves ONE folder, named by the family's leftovers rule
-(`.agents/conventions/common/test-leftovers.md`), for leftovers-E5's sweep or the janitor. *Loses:* a temp-root parameter through
-the product (`RosterBuilder`, `RosterAssembly`, `SecurityRoster`, every runtime's output folder) — a product change for a
-test concern, the follow-up leftovers-E5's D5 proposed; the operating system already offers this seam. *Risk, measured in its
-story:* the folder adds about 25 characters to every temp path, and some tests sit near a path budget (Kimi's 260,
-Vibe's 102 — Vibe homes no longer live under temp, `AVibeHomesNeverLiveUnderTempTests`); the story runs those classes
-first and keeps the name short. *Two things the story proves rather than assumes:* that xUnit v3 constructs the assembly
-fixture before every class fixture and static initializer that reads the temp path, and disposes it after the last
-(a test that records `Path.GetTempPath()` from a class fixture says so); and that the extension runner removes its
-folder BEFORE it calls `process.exit` (`run-tests.mjs` ends the process itself — the same trap leftovers-E5 recorded for
-`run-host.mjs`, where a `.finally` never ran). Children reach the folder because `TEMP`, `TMP` and `TMPDIR` are on every
-launch's allowlist (`ProcessEnvironment.cs:48-52`).
+**The trade-off the judge asked for (J12), decided:** once D2 lands every run has its own `TEMP`, so a steering file
+under `Path.GetTempPath()` — today's location — becomes per-run for free, and D1 would not be needed for the two-runs
+case. Two placements, two limits: *TEMP-keyed after E2* fails for two runs of the same bin folder only if they also
+share a TEMP (they do not, under D2), but is correct only while every launch path keeps `TEMP`/`TMP`/`TMPDIR` on its
+allowlist AND E2 has landed — before E2 it is exactly today's defect; *beside the binary* works before E2 and does not
+depend on how any launch builds its environment, and fails only for two runs of the SAME output folder at once (one
+checkout, one configuration, started twice — not a way this suite is run, and a rebuild between them is refused while
+the first holds its binaries). **Decision: beside the binary**, because E1 must land first and alone (§9) and C1 is the
+case that already changed a result; D2 then makes the remaining limit smaller still (a stray copy a killed run leaves
+is deleted at the next run's start either way). Weighed: deferring C1 until E2 and keeping the file TEMP-keyed — that
+leaves the live collision open for the whole of E2 and ties the fake's correctness to an allowlist.
 
-**D3 — A deadline a test must race is armed through an injectable `TimeProvider`.** `ProcessLauncher` (`:401`),
-`AcpClient` (`:119`, `:195`), `RoundEngine`'s round clock (`:286`), `TurnLoop`'s cap and per-turn bound, the consultant place's copy budget
-(`ConsultantPlaces.cs:298`), and `SecuritySources`/`SourceResolver` (C8) take an optional `TimeProvider`, default `TimeProvider.System` — the product
-behaves exactly as today. A test that means "the deadline strikes while X" drives a manual clock and advances it when X
-has happened. **The seam's contract is the cornerstone, not the parameter:** every elapsed-budget calculation, delay
-and cancellation on a path reads the SAME clock (a `Stopwatch` left beside an injected timer is the race again); the
-launcher keeps its separation of the execution deadline from the output-drain grace and of caller cancellation from
-timeout (`ProcessLauncher.cs:287`, `:401`, `:437`); and the tests get ONE manual clock with timers, monotonic timestamps
-and disposal — the suite's `FixedClock` (`src_mcp/tests/FixedClock.cs:16`) and `MovableClock`
+**D2 — Each suite runs inside ONE temp folder of its own.** **Set ONCE, before any test, never toggled during the run
+(gate finding D2 / judge J11).** The C# side is a `[ModuleInitializer]` in the test assembly (`RunTemp`, one static
+class, the first code of the assembly to run — before any type is touched, including `MemberData` discovery, class
+fixtures and static initializers), not the assembly fixture: it records the REAL temp folder in `RunTemp.Real`, makes
+`testsToDelete-coai-run-<6 chars>` inside it, and points `TEMP`, `TMP` and `TMPDIR` of the test process at the new one.
+The existing `[assembly: AssemblyFixture]` (`TempDirsAreSwept.cs:5`) then only sweeps the REAL folder (through
+`RunTemp.Real`, as today), and at the end restores the three variables and removes the run folder — the fixture
+removes and restores, it never sets. `src_vs_code/scripts/run-tests.mjs` does the same for the `node --test` children
+it starts (the variables are set in the parent before the first child, once). `Path.GetTempPath()` and `os.tmpdir()`
+read those variables on every call, and every child inherits them — the suite already relies on this in
+`AVibeHomesNeverLiveUnderTempTests.cs:15-60`, the ONE class that moves `TEMP` during a run; it is in `fakecli-env`
+and restores what it found (`:25`, `:27-32`), which under D2 is the run folder, so it stays as it is. Everything a run
+makes in "temp" — its own folders, the product's `coai-answers-`/`-repair-`/`-noworkspace-`, the loose `api-*.prompt`
+files, a stray steering file — is then inside one folder that the run removes, that no other run's sweep can see
+(C12), and that a glob over "temp" cannot leave (C10).
+
+*The guards that mean the REAL temp (judge J2).* Two assertions say "never under TEMP" and must keep saying it about
+the machine's folder, not the run's: `AntigravityReadOnlyTests.cs:118` (`DefaultBase.Should().NotStartWith(Path.GetTempPath())`)
+and `KimiCredentialsLockTests.cs:237` (`Root.Should().NotStartWith(Path.GetTempPath()…)`). Under D2 both would compare
+a `LocalApplicationData` path against the run folder — still green, but no longer able to catch a root that moved into
+the real temp. Both read `RunTemp.Real` instead. The E2 spec includes the scan of every other `Path.GetTempPath()`
+assertion in the test trees and says, per site, which temp it means; read on `38ecd4e11` today: `AVibeHomesNeverLiveUnderTempTests.cs:48`
+(asserts its OWN move — unchanged), `AVibeRowReviewsInTheRoundsSnapshotTests.cs:192` and `KimiRuntimeTests.cs:229`
+(compare an in-process product path with the same call — the run folder on both sides, unchanged), `AcpClientTests.cs:175`,
+`:189` (a fixed name that must NOT be created — lands in the run folder if it ever is, unchanged), `SnapshotBudgetTests.cs:114`
+(free bytes of the volume — unchanged). A guard test fails when a test source uses `GetTempPath()` in a `NotStartWith`
+/`NotContain` assertion without `RunTemp.Real`.
+
+*A killed run leaves ONE folder — claimed (judge J1, the lead's decision).* The run folder carries the family's owner
+claim in E5's exact format so E5's sweep can judge it by liveness instead of age: a sibling
+`testsToDelete-coai-run-<6>.owner` holding `<host>@<os>:<pid>[:<startUnixSeconds>]` — the `OWNER_TEXT` of the
+conventions' reference helper (`dew_flow_conventions · tools/lib/owned.mjs`, on branch `e1/r3-owned` on 2026-10-19,
+NOT yet on its `main`): the start only where the OS gives it without spawning a process (`/proc` on Linux; the
+two-field form on Windows and macOS), written AFTER the folder exists and the restore is registered. Reuse rule: if
+E5's C# helper (`owned` for .NET, E5 S3) is on `main` when E2 starts, `RunTemp` calls it; otherwise `RunTemp` holds the
+one claim writer (one static method, the format above, a test that pins the regex) and E5 S3 adopts it — never two
+writers. Until E5's sweep lands, the folder is collected by the family janitor (`.agents/conventions/common/test-leftovers.md`)
+after an hour. *Loses:* a temp-root parameter through the product (`RosterBuilder`, `RosterAssembly`, `SecurityRoster`,
+every runtime's output folder) — a product change for a test concern, the follow-up leftovers-E5's D5 proposed; the
+operating system already offers this seam. *Risk, measured in its story:* the folder adds about 25 characters to every
+temp path, and some tests sit near a path budget (Kimi's 260, Vibe's 102 — Vibe homes no longer live under temp,
+`AVibeHomesNeverLiveUnderTempTests`); the story runs those classes first and keeps the name short. *Two things the story
+proves rather than assumes:* that the module initializer ran before every class fixture, static initializer and
+`MemberData` that reads the temp path (a test that records `Path.GetTempPath()` from a class fixture AND from a
+`MemberData` says so), and that the extension runner removes its folder BEFORE it calls `process.exit` (`run-tests.mjs`
+ends the process itself — the same trap leftovers-E5 recorded for `run-host.mjs`, where a `.finally` never ran).
+Children reach the folder because `TEMP`, `TMP` and `TMPDIR` are on every launch's allowlist
+(`ProcessEnvironment.cs:48-52`).
+
+**D3 — A deadline a test must race is armed through an injectable `TimeProvider`, one class at a time, each landed
+WITH its RED (judge J8).** No all-at-once seam story. The seam is an optional `TimeProvider? clock = null` constructor
+parameter on the class that OWNS each timer — `BoundedScheduler.cs:96-102`'s existing precedent (`_clock = clock ??
+TimeProvider.System`) — and it lands in the same story as the first RED that needs it: `AcpClient` (`:119`, `:195`) with
+C5/S12; `ConsultantPlaces` (`:334`) with C17/S16; `TurnLoop` (`:41-45`, `:134-138`) and `SourceResolver` (`:200`) with
+C13/S14, which C6/S13 then reuses. **Never threaded through `PanelService` or `RoundEngine`** — they construct these
+classes with the default, and the round clock at `RoundEngine.cs:286` gets no seam (C6 removes the walk inside it
+instead). `SecuritySources.cs:32` is the sibling plan's (C8, J14). **`ProcessLauncher` (`:401`) is left out** until C4
+has a kept failure — its three separations (execution deadline from drain grace, caller cancellation from timeout:
+`:287`, `:401`, `:437`) are the riskiest seam here and the only evidence is a failure nobody kept. A test that means
+"the deadline strikes while X" drives a manual clock and advances it when X has happened. **The seam's contract is
+the cornerstone, not the parameter:** on each class every elapsed-budget calculation, delay and cancellation reads the
+SAME clock (a `Stopwatch` left beside an injected timer is the race again); `CreateLinkedTokenSource` + `CancelAfter`
+has no `TimeProvider` overload, so the timer becomes `new CancellationTokenSource(delay, clock)` linked in, and
+`WaitAsync(timeout, clock)` replaces `WaitAsync(timeout)`; and the tests get ONE manual clock with timers, monotonic
+timestamps and disposal — the suite's `FixedClock` (`src_mcp/tests/FixedClock.cs:16`) and `MovableClock`
 (`TheRunsThemselvesTests.cs:209`) override only the wall time. The shape to copy, by path:
-`wsl_care · src_daemon/tests/WslCare.TestSupport/ManualTimeProvider.cs` (timers `:36`, timestamps `:58-60`). *Loses:* longer timeouts (they move the race, they do not remove it, and every second is paid on every
-run); fixed sleeps in the fakes as the thing that decides the outcome.
+`wsl_care · src_daemon/tests/WslCare.TestSupport/ManualTimeProvider.cs` (timers `:36`, timestamps `:58-60`); the
+manual clock is the first story of E4 and is the one piece landed without a product change. *Loses:* a single seam
+story across six classes (a refactor with no RED of its own, which is what made the first cut a cornerstone for the
+wrong reason); longer timeouts (they move the race, they do not remove it, and every second is paid on every run);
+fixed sleeps in the fakes as the thing that decides the outcome.
 
-**D4 — A round removes its own always-empty folders.** `coai-repair-` and `coai-noworkspace-` are removed when the round
-ends — the story names the actual end: `RoundEngine` has no `finally` for it today, and the folders travel in
-`RosterFrame` (`RosterAssembly.cs:19`, used at `RosterBuilder.cs:479`) — after every child that used them is gone — reviewers and repairs,
-on success, failure and cancellation alike — and by the PATH the round recorded when it made them, never by a name
-glob; `coai-answers-` keeps the six-hour sweep. A `BuildWork` called with no round around it (`SubmissionOrderTests.cs:116-118`, a hundred
-times) has no end to remove them at; under D2 that is the test's folder, and D4 does not claim more than rounds. *Loses:* leaving it to D2 (D2 helps only the tests; a person's machine makes two of these per round for
-ever).
+**D4 — A round removes its own always-empty folders (PRODUCT — built in E3, judge J9).** `coai-repair-` and
+`coai-noworkspace-` are removed when the round ends, by the PATH the round recorded when it made them, never by a name
+glob; `coai-answers-` keeps the six-hour sweep. **The plumbing, named:** the frame paths never leave `RosterBuilder` —
+`RosterFrame` (`RosterAssembly.cs:13-24`) is built in `RosterBuilder.FrameFor` (`:274-285`: `repairDir` at `:282`, the
+`coai-noworkspace-` launch folder through `RosterFrame.Directories` at `:283` → `RosterAssembly.cs:42`) and used only
+inside the builder — but the frame already carries the round's **`RoundScratch`** (`RosterFrame.Scratch`, `:24`),
+reserved once per `BuildWork` (`RosterBuilder.cs:107`), handed out in `RoundWork.Scratch`, and DISPOSED by the round at
+its real end: `using var scratchOfTheRound = roundWork.Scratch;` (`RoundEngine.cs:358`) — after every reviewer and
+repair of the round, on success, failure and cancellation alike, because it is a `using`. `RoundScratch.Dispose`
+(`RoundScratch.cs:94-124`) already deletes its own folder with `GitScratch.DeleteEvenIfReadOnly`. So D4 is: the two
+folders are REGISTERED with the scratch when they are made (`FrameFor` for both of the ordinary round's;
+`SecurityRoster.Append(RoundWork ordinary, …)` (`SecurityRoster.cs:30`) registers its own `:154` folder with
+`ordinary.Scratch`), and `Dispose` removes them with its own folder — recursively, never following a link
+(`Directory.Delete(recursive)` does not follow reparse points / symlinks into their targets, and the story's test
+pins that with a planted link), best effort: a folder that cannot be removed is warned about and left to the six-hour
+sweep, and **a failed removal never fails the round.** A `BuildWork` called with no round around it
+(`SubmissionOrderTests.cs:116-118`, a hundred times) never disposes its scratch; under D2 that is the test's folder,
+and D4 does not claim more than rounds. *Loses:* leaving it to D2 (D2 helps only the tests; a person's machine makes
+two of these per round for ever); a `finally` in `RoundEngine` (there is none today, and the scratch's `using` IS the
+round's end — a second end would be the reuse rule's defect).
 
 **D5 — A failure in the suite is written down before it is fixed.** Four of the cases here (C4b, C6, C7, C9) were seen
 locally and their messages were not kept, which is why their confidence is low. Each story that touches a case starts
@@ -659,15 +853,19 @@ folder to `testsToDelete-coai-…` stays leftovers-E5's (§7).
 |---|---|---|
 | C1/D1 — the minimal-environment steering file beside the fake's binary | **this plan** (E1) | leftovers-E5, the test-leftovers rollout's epic (`todo/PLAN_test_leftovers_E5.md`, draft PR #850, not merged) S4 lists "`tests_fakecli` fixed file names → an environment variable the test sets"; that cannot reach a minimal-environment child, so its row is superseded by D1 and its author drops it when E5 is next amended |
 | D2 — one per-run temp folder per suite, named `testsToDelete-coai-run-…` | **this plan** (E2) | leftovers-E5's sweep (S2) collects a killed run's folder by owner liveness; leftovers-E5's D5 follow-up ("the product scratch root is a seam") is not needed — D2 takes that slice without a product seam |
+| **The owner claim on the run folder — ONE format, ONE writer** (judge J1, the lead's decision) | **shared contract**: the sibling `<folder>.owner` holds `<host>@<os>:<pid>[:<startUnixSeconds>]` — `OWNER_TEXT` of `dew_flow_conventions · tools/lib/owned.mjs` (branch `e1/r3-owned`, 2026-10-19; not on its `main` yet) | **Landing order:** whichever lands FIRST on `main` owns the C# claim writer. If leftovers-E5 S3 (the C# helper) is merged when E2 starts, `RunTemp` calls it. If E2 lands first, `RunTemp` holds the writer (one static method + the regex test) and E5 S3 adopts it instead of writing a second one. **Open item for E5's owner** (the E5 plan lives on `docs/test-leftovers-e5-stories`, draft PR #850, not on this branch's base, so it is amended there, not here): add to its S3 the sentence "the run folder's claim is written by the same helper; if `RunTemp` exists on `main`, S3 moves its writer into the helper and `RunTemp` calls it", and to its S2 that `testsToDelete-coai-run-*` is a name its sweep judges by liveness like any other |
 | Renaming every test folder to `testsToDelete-coai-…`, the claim marker, the guard | leftovers-E5 | this plan renames nothing; D6 only makes seven sites remove what they made |
 | C12 — the ten-minute age sweep can reach a live run | leftovers-E5 (owner liveness replaces age) | D2 removes the exposure until leftovers-E5 lands |
-| C8 — the security lane's two equal deadlines | [PLAN_two_equal_deadlines_race_on_macos.md](PLAN_two_equal_deadlines_race_on_macos.md) | this plan orders it (§9), adds the Windows evidence and the step-3 correction (C8), and shares D3's clock |
+| C8 — the security lane's two equal deadlines | [PLAN_two_equal_deadlines_race_on_macos.md](PLAN_two_equal_deadlines_race_on_macos.md) | this plan orders it (§9), adds the Windows evidence and the step-3 correction (C8), and shares E4's manual clock. **Clock seams (J14, both sides):** `SourceResolver.cs:200` gets its clock HERE (C13); `SecuritySources.cs:32` gets its clock THERE, with S21. The sibling's step 1 needs no seam and may start as soon as E1 is merged |
 | `CadenceStoreTests.ManyClosesAtOnce_AllLand` — `SessionTurn.Take` counts tries | [PLAN_a_turn_waits_by_the_clock.md](PLAN_a_turn_waits_by_the_clock.md) | this plan orders it (§9) and adds the CI evidence (§3) |
 | C6, C13, C14 — the three deadline tests of `PLAN_question_consultant_tails.md` §6 | **this plan** — moved here on 2026-10-19 | tails §6 now points here; its DoD line goes with it |
+| D4 — a round removes its two empty folders | **this plan** (E3, product) | not E2: E2 is test infrastructure only (J9) |
 
 Disjoint: nothing else in this plan is built by another plan, and nothing in those plans' other sections is built here.
-Order: E1 (C1) first — it is the case that already changed a result across runs; the two owned plans may run beside
-this plan's E3–E4 at any time.
+Order (J7): E1 (C1) first and alone — it is the case that already changed a result across runs; **C2 (E3 S1) and the
+sibling's C8 step 1 start at once, beside E1** — neither needs a clock seam (C2's seam is a `Func<Process, DateTime>`
+on the launcher; C8's step 1 is deterministic on the system clock) and both are the largest sources of macOS red;
+`PLAN_a_turn_waits_by_the_clock.md` (C19) may run at any time.
 
 ## 8. Scenarios — each with the RED it must show first
 
@@ -678,42 +876,51 @@ deterministic red exists), then watched passing; both observations go in the PR 
 |---|---|---|---|
 | S1 | `ASteeringFileAnotherRunLeftInTheUsersTemp_NeverSteersThisRunsFake` — a decoy in a PRIVATE temp, the fake started with `TEMP`/`TMP`/`TMPDIR` pointed at it | C1 | the fake answers `decoy` and exits 7 |
 | S2 | `ASteeringFileBesideTheBinary_SteersTheFake` | C1 | does not compile / the fake ignores the file (today it reads only temp) |
+| S2b | `EveryWriterOfTheSteeringFile_IsInTheSerialCollection` (a source scan over the helper's callers, judged on the concrete class) | C1 (gate D1) | green today on the six classes; watched red by moving one class out of `fakecli-env` |
 | S3 | `ARepairTest_SeesOnlyItsOwnRoundsRepairFolder` — a non-empty `coai-repair-decoy` in the temp folder the test sees | C10 | `Expected … to be empty` on the decoy's folder |
-| S4 | `EveryClassThatSetsTheProcessEnvironment_IsInTheSerialCollection` (a source scan) | C11 | names `ARequestFaultIsNotAnOldBinaryTests.cs` and `VibeRuntimeTests.cs` |
-| S5 | `ATestRun_KeepsItsTempInsideItsOwnFolder` — the fixture's folder exists, `Path.GetTempPath()` is inside it, a product round's `coai-answers-` lands in it | D2 | `Path.GetTempPath()` is the machine's temp folder |
+| S4 | `EveryClassThatSetsTheProcessEnvironment_IsInTheSerialCollection` (a source scan; its second rule: every caller of `PanelService.ForgetTheLastSweep` is in a serial collection) | C11, C6 | names `ARequestFaultIsNotAnOldBinaryTests.cs` and `VibeRuntimeTests.cs`; the second rule names `AScratchSweepRunsOnTheConsultationBeatTests.cs`, `VibeHomesTests.cs`, `TempDirsAreSwept.cs` |
+| S5 | `ATestRun_KeepsItsTempInsideItsOwnFolder` — the run folder exists, `Path.GetTempPath()` is inside it from a class fixture AND from a `MemberData`, `RunTemp.Real` is the machine's folder, the folder's `.owner` matches E5's regex, a product round's `coai-answers-` lands in it | D2 | `Path.GetTempPath()` is the machine's temp folder |
+| S5b | `TheNeverUnderTempGuards_CompareAgainstTheRealTemp` — a source scan: a `NotStartWith`/`NotContain` on `GetTempPath()` without `RunTemp.Real` | D2 (J2) | names `AntigravityReadOnlyTests.cs:118` and `KimiCredentialsLockTests.cs:237` |
 | S6 | `AFullRunLeavesNothingOutsideItsFolder` (a measurement, §10) | D2, D6 | today: ≈3,700 new `coai-*` folders and the loose prompt files after one `src_mcp` run |
-| S7 | `ARoundRemovesItsEmptyRepairAndWorkspaceFolders` | D4 | both folders still exist after the round |
-| S8 | `AChildThatExitedBeforeItsStartTimeWasRead_IsNotReportedAsNotStarted` (the start-time seam throws the macOS `Win32Exception` after the child exited) | C2 | the launch throws `Win32Exception` "Unable to retrieve the specified information about the process or thread" |
+| S7 | `ARoundRemovesItsEmptyRepairAndWorkspaceFolders` — and `AFolderThatCannotBeRemoved_IsLeftToTheSweep_AndTheRoundStillEnds`, and a planted link is not followed | D4 (E3) | both folders still exist after the round |
+| S8 | `AChildThatExitedBeforeItsStartTimeWasRead_IsNotReportedAsNotStarted` — two arms: the seam throws the macOS `Win32Exception`, then an `InvalidOperationException`, after the child exited; the tracker stand-in saw no `Record` and saw the end-of-launch call | C2 | the launch throws `Win32Exception` "Unable to retrieve the specified information about the process or thread" (arm a) / `InvalidOperationException` (arm b) |
 | S9 | `AChildStillAliveWhoseStartTimeCannotBeRead_IsKilled_AndTheErrorReachesTheCaller` | C2 | green today — the guard that the fix keeps story 6.1a's rule; watched red by breaking it once |
-| S10 | `ASettingsFileHeldOpenByItsWriter_IsNotReadAsDefaults` (Windows) | C14 | the second `host.Current` shows the defaults, published under the new stamp |
+| S10 | `ASettingsFileHeldOpenByItsWriter_KeepsTheLastGoodSettings` (Windows), with two green companions: a malformed file on reload gives defaults, an empty file on reload gives defaults; and `CurrentNeverThrows_WhenTheRebuildThrows` | C14 | the busy read shows the defaults, published under the new stamp; the rebuild's exception reaches the caller |
 | S11 | `AStubDisposedWhileItsHandlerWrites_WaitsForTheHandler_AndDoesNotThrow` | C16 | `Dispose` returns before the handler ends |
 | S12 | the AcpClient usage test on a manual clock + a fake agent with `startDelayMs` longer than the deadline | C5 | `found AcpEnd.Deadline` (the CI message) |
 | S13 | `RoundDeadline.For` pinned (8 s with three follow-ups, 2 s with none) + the end-to-end test on a manual clock, 700 ms per turn | C6 | with a one-turn budget put back: the conversation is cut at turn 3, every run |
 | S14 | the three turn tests and the resolver test on a manual clock | C13 | with the cap at `TurnLoop.cs:44` removed: no terminal `TimedOut` |
-| S15 | `AServerThatNeverAnswers_…` on the launcher's manual clock + `startDelayMs` past the deadline | C4 | the pid file is missing (today's test) |
-| S16 | the copy budget on a manual clock; the slow root advances it | C17 | `0 of 2 copied` when the fast copy is slowed past the budget in today's test |
-| S17 | the probe released by the shim's first busy answer; and a probe never released ends in exit 69 | C3 | no deterministic red for the race; the loop of §10 before (failures) and after (none) |
+| S15 | `AServerThatNeverAnswers_…` on the launcher's manual clock + `startDelayMs` past the deadline — **gated on a kept failure (D5); the launcher gets no seam before that** | C4 | the pid file is missing (today's test) |
+| S16 | the copy budget on `ConsultantPlaces`' own manual clock; the slow root advances it | C17 | `0 of 2 copied` when the fast copy is slowed past the budget in today's test |
+| S17 | the probe released by the shim's first busy answer (the seam on the Kimi call site, `KimiCredentialsLock.cs:209`); and a probe never released ends in exit 69 | C3 | no deterministic red for the race; the loop of §10 before (failures) and after (none) |
 | S18 | the heartbeat seen through the store's `projected` callback, the row released after three beats | C18 | with the heartbeat loop removed: fails at the 30 s guard with its sentence |
 | S19 | the follow-up launch's timeout asserted directly | C15 | with `RetryLadder.Lesser(left, next)` replaced by the whole budget: launch 2's timeout is 8 s |
-| S20 | `replayingFan` CPU bound at 40,000 values | C9 | with `held = [...held, value]` put back: CPU time in seconds |
-| S21 | the security lane's per-file timer fired BEFORE the collection timer on a manual clock | C8 | `not served: src/B.cs — timed out: git did not answer within 30 s` — built by its own plan |
+| S20 | `replayingFan` CPU bound at 40,000 values; the real-child smoke test waits on `onExit`/`onError` only — no `ended` 10 s timer | C9 | with `held = [...held, value]` put back: CPU time in seconds (the smoke test stays green) |
+| S21 | the security lane's per-file timer fired BEFORE the collection timer on a manual clock (`SecuritySources`' clock is the sibling's, `SourceResolver`'s is C13's) | C8 | `not served: src/B.cs — timed out: git did not answer within 30 s` — built by its own plan |
 | S22 | `AZombie_IsGone_NotSignalled` with the kill after the parent reads `comm == sleep`; the red arm through `bash … sleep 2; exec sleep 600` | C21 | `the outer sleep never reaps, so the killed child should have stayed a zombie` (the CI sentence), every run |
+| S23 | `run-host.mjs` against a stub `vscodeExecutablePath` that exits 1 at once after a `[main …]` line: the sentence names "the editor exited before the extension host ran a scenario" and quotes the line; the stub is launched twice before the sentence | C22 | `the extension host: Test run failed with code 1`, one launch |
 
 ## 9. Build order — the shared-state fixes first
 
-1. **E1 — C1, then C10 and C11.** C1 is the case that already changed a result across two runs; C10 and C11 are the same
-   class and small. Nothing else in this plan should be measured while two runs can still see each other.
-2. **E2 — D2, D6, then D4.** The per-run folder makes every later measurement clean (a run's leftovers are countable as
-   one folder) and ends C12's exposure. D6's seven sites are one-line fixes; D4 is the one product change of the epic.
-3. **E3 — C2, then C14.** C2 removes the largest single source of macOS red after C8 (17 runs plus C2's two siblings);
-   C14 is a product defect with a deterministic red.
-4. **E4 — the D3 clock seam, then C5, C6, C13, C4, C17 on it.** One story lands the seam in every place D3 names with no
-   behaviour change (proved by the existing suite), the next ones move each test onto it.
-   [PLAN_two_equal_deadlines_race_on_macos.md](PLAN_two_equal_deadlines_race_on_macos.md) (C8) builds on the same seam
-   and goes right after E4's first story; [PLAN_a_turn_waits_by_the_clock.md](PLAN_a_turn_waits_by_the_clock.md) (C19)
-   needs no seam and may go at any time.
-5. **E5 — the tests that wait for an event: C16, C3, C18, C15, C9, C21, then C7's measurement.** Independent of each other
-   and of the clock seam, so E5 starts right after E1 and runs beside E2–E4 (§ Epics); C7 waits for a kept failure (D5) or ends with a recorded measurement of its slow step.
+1. **E1 — C1, then C10 and C11 — and, AT ONCE beside it (J7): C2 (E3 S1) and the sibling's C8 step 1.** C1 is the case
+   that already changed a result across two runs; C10 and C11 are the same class and small. C2's seam is a
+   `Func<Process, DateTime>` on the launcher and C8's step 1 is deterministic on the system clock — neither waits for a
+   clock seam, and together they are the two largest sources of macOS red (17 + 43 runs), so neither waits for E1 either.
+   Nothing else in this plan is MEASURED (the loops, the two-runs proof, the census) while two runs can still see each other.
+2. **E2 — D2, then D6 (test infrastructure only, J9).** The per-run folder makes every later measurement clean (a
+   run's leftovers are countable as one folder) and ends C12's exposure. D6's seven sites are one-line fixes. No
+   product code in this epic.
+3. **E3 — C2 (already started), C14, then D4.** C2 removes the largest single source of macOS red after C8 (17 runs
+   plus C2's three siblings); C14 is a product defect with a deterministic red; D4 is the product change that moved here
+   from E2 — it waits for E1's C10 rewrite (the repair test must assert on the launch, or D4 turns it red).
+4. **E4 — the manual clock, then C5, C17, C13 (each landing its own class's clock seam WITH its RED), C6 on C13's
+   seam; C4 gated.** No all-at-once seam story (D3). The first story is the manual clock alone (no product change);
+   each next one adds `TimeProvider? clock = null` to ONE class and moves that class's test. C4's story opens only when
+   a failure of `AServerThatNeverAnswers_…` has been kept (D5). [PLAN_two_equal_deadlines_race_on_macos.md](PLAN_two_equal_deadlines_race_on_macos.md)
+   (C8) started beside E1; its step 3 waits for C13's `SourceResolver` clock and adds `SecuritySources`' own;
+   [PLAN_a_turn_waits_by_the_clock.md](PLAN_a_turn_waits_by_the_clock.md) (C19) needs no seam and may go at any time.
+5. **E5 — the tests that wait for an event: C16, C3, C18, C15, C9, C21, C22, then C7's measurement.** Independent of each
+   other and of the clock seam, so E5 starts right after E1 and runs beside E2–E4 (§ Epics); C7 waits for a kept failure (D5) or ends with a recorded measurement of its slow step.
 
 ## 10. Test plan
 
@@ -733,8 +940,11 @@ cd src_vs_code && npm test
 - **The temp measurement, before and after E2** (read-only counts, by prefix, with the same script as §5): one whole
   `src_mcp` run and one `npm test` on a machine where nothing else runs; after E2 the count of `coai-*` entries and of
   loose `api-*`/`local-*` files in the real temp folder is unchanged by the run, and the run's own folder is gone.
-- **CI:** after each epic merges, the census script of §3 re-run over the next 20 runs of each leg; a case is closed when
-  its test is absent from them.
+- **CI:** after each epic merges, the census script of §3 re-run over the next 20 runs of each leg — **as a watch, not
+  as the proof** (judge J15): a case that fails in ~1 % of runs is absent from 20 runs 82 % of the time with NO fix, so
+  absence proves nothing. **The proof that a case is closed is its deterministic RED turned green** (§8), plus the
+  recorded loop for the cases that have no deterministic red (C3). The 20-run watch only says whether something ELSE
+  is still wrong; a failure inside it reopens the case with its kept log (D5).
 - Every suite green on Windows, Linux and the macOS CI leg with the same test count before and after each epic.
 
 ## 11. Growth
@@ -751,23 +961,31 @@ cd src_vs_code && npm test
 ## Definition of Done
 
 - [ ] No test reads or writes a fixed name in the machine's shared temp folder; the steering files live beside the
-      fake's binary; S1–S4 RED then GREEN.
+      fake's binary; S1–S4 RED then GREEN; S2b green and watched red once.
 - [ ] Two whole `src_mcp` runs from two worktrees at once are both green.
-- [ ] Each suite runs inside its own temp folder and removes it; the measurement of §10 shows the real temp folder
-      unchanged by a whole run (`src_mcp` and extension); S5–S7 RED then GREEN.
-- [ ] A round removes its empty `coai-repair-` and `coai-noworkspace-` folders (D4).
-- [ ] C2, C14, C16 fixed with their deterministic REDs (S8, S10, S11) and S9 kept green.
-- [ ] Every deadline a test must race is armed through `TimeProvider`; the product's default behaviour is unchanged (the
-      whole suite green before the test moves); S12–S16 RED then GREEN.
-- [ ] C3, C9, C15, C18, C21 wait for an event or measure CPU instead of wall time; their loops recorded before and after.
+- [ ] Each suite runs inside its own temp folder, set once by a `[ModuleInitializer]` and never toggled, with E5's
+      owner claim beside it, and removes it; the two "never under TEMP" guards compare against `RunTemp.Real`; the
+      measurement of §10 shows the real temp folder unchanged by a whole run (`src_mcp` and extension); S5, S5b, S6 RED
+      then GREEN.
+- [ ] A round removes its empty `coai-repair-` and `coai-noworkspace-` folders through its `RoundScratch` (D4, E3);
+      a failed removal never fails the round; S7 RED then GREEN.
+- [ ] C2 (both exception arms), C14 (busy only; malformed and empty as today; `Current` never throws), C16 fixed with
+      their deterministic REDs (S8, S10, S11) and S9 kept green.
+- [ ] Each deadline a test must race is armed through that class's own optional `TimeProvider`, landed with its RED;
+      nothing threaded through `PanelService`/`RoundEngine`; `ProcessLauncher` untouched until C4 has a kept failure;
+      the product's default behaviour is unchanged; S12–S14, S16 RED then GREEN (S15 when its gate opens).
+- [ ] C3, C9, C15, C18, C21, C22 wait for an event or measure CPU instead of wall time; their loops recorded before
+      and after; C22's harness names an editor that exited before the host ran (S23).
 - [ ] C7 either fixed from a kept failure or closed with the recorded measurement of its slow step.
-- [ ] C8 and C19 built by their own plans in the order of §9; C6, C13, C14 closed here and removed from
+- [ ] C8 and C19 built by their own plans in the order of §9 (C8 step 1 beside E1; `SecuritySources`' clock is the
+      sibling's, `SourceResolver`'s is C13's); C6, C13, C14 closed here and removed from
       `PLAN_question_consultant_tails.md` §6.
-- [ ] Every case of §3 absent from the next 20 CI runs of its leg.
+- [ ] Every case of §3 closed by its RED turned green (or its recorded loop), then watched over the next 20 CI runs
+      of its leg — the watch reopens, it never closes.
 - [ ] No assertion weakened, no test skipped, no timeout lengthened without the measured cost that justifies it — said
       per case in its PR.
 - [ ] `research/module_tests.md` records D1, D2, D3 and the per-run folder; the "OPEN shared-state investigation" note
-      (`research/module_tests.md:4475`) is closed with a link here; `shared/temp-sweep.json`'s `why` names D2.
+      (`research/module_tests.md:4493`) is closed with a link here; `shared/temp-sweep.json`'s `why` names D2.
 - [ ] Promotion per `.agents/conventions/common/planning-docs.md`, then `node .agents/conventions/tools/plan-lifecycle.mjs`.
 
 ## Epics
@@ -785,12 +1003,14 @@ Cornerstones: 0 of 2 — the per-run temp folder (E2), the clock contract (E4)
 one path constant, one helper, two readers and a deterministic RED on every OS — a wrong D1 fails S1 at once. D2 (E2) is
 a lifecycle: if the assembly fixture runs after a class fixture or a static initializer has read `Path.GetTempPath()`,
 half the run lands outside the folder and every later measurement (S6, the two-runs proof, the CI census) reports clean
-when it is not. D3 (E4) touches every launch path in the product; a `Stopwatch` left beside the injected timer, or a
-`CancelAfter` on a linked token source that still uses the system timer, is the same race again while the tests on the
-manual clock go green. *Weighed and not changed:* E2 before E1 (one consultant's view — D2 isolates runs only while every
-launch keeps the `TEMP` allowlist, and C1 already changed a result, so D1 goes first); E4 before E3 (C14 needs no retry
-loop and C2's seam is small — landing it first is cheaper than rebasing it onto the refactor); "E1 and E2 are grab-bags"
-(each has one goal — two runs cannot meet; one folder per run — and every case in it serves that goal).
+when it is not. D3 (E4) touches four classes on the product's launch paths, one per story; a `Stopwatch` left beside the
+injected timer, or a `CancelAfter` on a linked token source that still uses the system timer, is the same race again
+while the tests on the manual clock go green — and that mistake is per class, which is why the contract is written once
+and checked in every story. *Weighed and not changed:* E2 before E1 (one consultant's view — D2 isolates runs only while
+every launch keeps the `TEMP` allowlist, and C1 already changed a result, so D1 goes first); "E1 and E2 are grab-bags"
+(each has one goal — two runs cannot meet; one folder per run — and every case in it serves that goal). *Changed by the
+reviews (2026-10-19):* E2 is test infrastructure only and D4 is E3's (J9); E4 has no all-at-once seam story and leaves
+`ProcessLauncher` alone until C4 has a kept failure (J8); C2 and the sibling's C8 start beside E1 (J7).
 
 ### E1 — No run sees another
 
@@ -813,59 +1033,75 @@ classes then green; the two-runs proof of §10 green on both runs; no test reads
 `Path.GetTempPath()`.
 
 **Size.** Four stories for Sonnet coders. S1 the helper, the two readers, S1/S2 and the assembly-start delete (first).
-S2 the six scenario classes onto the helper (after S1; all six are in `fakecli-env`, so one coder). S3 C10's sites and S3
-(parallel with S1). S4 C11 and the S4 guard (parallel with S1). No cornerstone.
+S2 the six scenario classes onto the helper and the S2b structural scan (after S1; all six are in `fakecli-env`, so one
+coder). S3 C10's sites and S3 (parallel with S1). S4 C11, the S4 guard and its second rule (the seven
+`ForgetTheLastSweep` callers into a serial collection, C6) (parallel with S1). No cornerstone.
 
-### E2 — One temp folder per run — cornerstone area: the per-run temp folder
+### E2 — One temp folder per run — cornerstone area: the per-run temp folder (test infrastructure only)
 
 **Goal.** A whole `src_mcp` run and a whole extension run leave the machine's temp folder as they found it; everything a
 run makes sits in ONE folder the run removes, so no other run's sweep (C12) and no glob over "temp" (C10) can see it.
+**No product code in this epic** (J9) — D4 moved to E3.
 
-**Scope.** D2: the C# assembly fixture makes `testsToDelete-coai-run-<6>` and points `TEMP`/`TMP`/`TMPDIR` of the test
-process at it, restores and removes it at the end; `src_vs_code/scripts/run-tests.mjs` does the same for its `node
---test` children and removes the folder BEFORE `process.exit`. D6: the seven leaking sites remove what they made. D4: a
-round removes its own `coai-repair-` (`RosterBuilder.cs:282`) and `coai-noworkspace-` (`RosterAssembly.cs:42`,
-`SecurityRoster.cs:154`) when it ends — after every child that used them is gone, on success, failure and cancellation,
-by the recorded path. The S6 measurement before and after. Closes C12's exposure until leftovers-E5 lands.
+**Scope.** D2: a `[ModuleInitializer]` in the C# test assembly (`RunTemp`) records the real temp folder in
+`RunTemp.Real`, makes `testsToDelete-coai-run-<6>` and points `TEMP`/`TMP`/`TMPDIR` of the test process at it, ONCE,
+before any type is touched; the existing assembly fixture (`TempDirsAreSwept.cs:5`) only sweeps the real folder,
+restores the three variables and removes the run folder at the end — it never sets; the folder carries E5's owner claim
+(`<folder>.owner`, `<host>@<os>:<pid>[:<start>]`, §7's one-writer rule). `src_vs_code/scripts/run-tests.mjs` does the
+same for its `node --test` children and removes the folder BEFORE `process.exit`. The two "never under TEMP" guards
+(`AntigravityReadOnlyTests.cs:118`, `KimiCredentialsLockTests.cs:237`) compare against `RunTemp.Real`; the S5b scan
+keeps it so; the spec lists every other `GetTempPath()` assertion with its verdict (D2). D6: the seven leaking sites
+remove what they made. The S6 measurement before and after. Closes C12's exposure until leftovers-E5 lands.
 
-**The cornerstone area** is D2's fixture and runner: the order proof (the assembly fixture is constructed before every
-class fixture and static initializer that reads the temp path, and disposed after the last — a `Path.GetTempPath()`
-recorded from a class fixture says so), the inheritance proof (a product round's `coai-answers-` lands inside the folder
-through the allowlist, `ProcessEnvironment.cs:48-52`), the restore on every exit path, the path budget (Kimi 260, Vibe
-102 — those classes run first), and the one folder a killed run leaves. Fable writes this spec; Sonnet codes; Opus
-reviews.
+**The cornerstone area** is D2's initializer, fixture and runner: the order proof (the module initializer ran before
+every class fixture, static initializer and `MemberData` that reads the temp path — a `Path.GetTempPath()` recorded
+from a class fixture AND from a `MemberData` says so), the never-toggled proof (no test source sets `TEMP`/`TMP`/`TMPDIR`
+except `AVibeHomesNeverLiveUnderTempTests`, which is in `fakecli-env` and restores), the inheritance proof (a product
+round's `coai-answers-` lands inside the folder through the allowlist, `ProcessEnvironment.cs:48-52`), the real-temp
+guards (J2), the claim's format and its order (folder → restore registered → claim), the restore on every exit path, the
+path budget (Kimi 260, Vibe 102 — those classes run first), and the one claimed folder a killed run leaves. Fable
+writes this spec; Sonnet codes; Opus reviews.
 
-**Depends on.** E1 (the same fixture; and D4 only after E1's C10 rewrite asserts on the launch, or D4 turns it red).
+**Depends on.** E1 (the same fixture). Not on E3/D4.
 
-**Done when.** S5 red (`Path.GetTempPath()` is the machine's folder) then green; S6 shows the real temp folder's `coai-*`
-and loose `api-*`/`local-*` counts unchanged by a whole `src_mcp` run and a whole `npm test`, and the run's folder gone;
-S7 red (both folders still exist) then green; every suite green on Windows, Linux and macOS with the same test count;
-`shared/temp-sweep.json`'s `why` names D2.
+**Done when.** S5 red (`Path.GetTempPath()` is the machine's folder) then green; S5b red (names the two guards) then
+green; S6 shows the real temp folder's `coai-*` and loose `api-*`/`local-*` counts unchanged by a whole `src_mcp` run
+and a whole `npm test`, and the run's folder gone; every suite green on Windows, Linux and macOS with the same test
+count; `shared/temp-sweep.json`'s `why` names D2.
 
-**Size.** Five stories. S1 the C# assembly fixture, S5, the two proofs and the path-budget check (the cornerstone, Fable
-spec; first). S2 the extension runner and its exit-path proof (parallel with S1; the same spec covers it). S3 D6's seven
-sites (parallel). S4 D4 and S7 (product change; after S1; the brief names where a round ends). S5 the S6 measurement
-before and after, recorded in `research/module_tests.md` (a scout gathers, the caller records).
+**Size.** Four stories. S1 the module initializer, the fixture's restore/remove, the claim writer (or the call to E5's
+helper, §7), S5, S5b and the proofs (the cornerstone, Fable spec; first). S2 the extension runner and its exit-path
+proof (parallel with S1; the same spec covers it). S3 D6's seven sites (parallel). S4 the S6 measurement before and
+after, recorded in `research/module_tests.md` (a scout gathers, the caller records).
 
 ### E3 — Product defects the tests found
 
-**Goal.** Two product defects that show up today as "flaky" tests are fixed with deterministic REDs; no assertion changes.
+**Goal.** Two product defects that show up today as "flaky" tests are fixed with deterministic REDs, and a round stops
+leaving two empty folders per round (D4); no assertion changes.
 
-**Scope.** C2: one helper reads `process.StartTime` (`ProcessLauncher.cs:311`); when the read throws AND the child has
-exited, nothing is recorded and the launch goes on; when it throws while the child is alive, today's rule stays (kill,
-wait, rethrow); the `ARoundThatFoundNothing` test asserts "all reviewers answered" first. C14: `SettingsFile.Read` tells
-"missing" from "busy, torn or malformed", with the start and reload behaviours C14 states; the sweeper test passes its
-own homes. Scenarios S8, S9, S10.
+**Scope.** C2: one helper reads `process.StartTime` (`ProcessLauncher.cs:311`) and catches `Win32Exception` AND
+`InvalidOperationException`; when the read throws AND the child has exited, nothing is recorded (`Record` not called;
+the reader marker stays `spawning` and is cleared by the launch's normal end) and the launch goes on; when it throws
+while the child is alive, today's rule stays (kill, wait, rethrow); the `ARoundThatFoundNothing` test asserts "all
+reviewers answered" first. C14: a tri-state `SettingsFile.TryRead` used by `PanelServiceHost.Current` on the RELOAD path
+only — `Busy` keeps the last good settings and the old stamp; malformed and empty behave as today; `Layer`'s eight
+callers unchanged; `Current` never throws; the sweeper test passes its own homes. D4: the two empty folders register with
+the round's `RoundScratch` (`RosterBuilder.cs:107`, `SecurityRoster.cs:30`/`:154`) and are removed by its `Dispose` at
+`RoundEngine.cs:358` — recursive, never following a link, best effort, never failing the round. Scenarios S7, S8, S9, S10.
 
-**Depends on.** E1 (the measurement rule). C2 lands BEFORE E4 touches `ProcessLauncher`, so E4 rebases on it.
+**Depends on.** C2 (S1) on nothing — it starts beside E1 (J7); C14 on E1 (the measurement rule); D4 on E1's C10 rewrite
+(the repair test asserts on the launch, or D4 turns it red).
 
-**Done when.** S8 red (`Win32Exception` "Unable to retrieve…") then green on every OS; S9 green, watched red once by
-breaking the guard; S10 red (defaults under the new stamp) then green on Windows; the three C2 tests absent from the next
-20 macOS runs.
+**Done when.** S8 red on both arms then green on every OS; S9 green, watched red once by breaking the guard; S10 red
+(defaults under the new stamp on the busy read) then green on Windows, its two companions green throughout; S7 red
+(both folders still exist) then green, with the link and the cannot-remove cases; the four C2 tests not seen in the
+next 20 macOS runs (a watch, §10).
 
-**Size.** Two stories, parallel: S1 C2 (the launcher seam, S8, S9, the EndToEnd assertion; the brief pins that an exited
-child's later `Forget` logs nothing and the Team server's reader marker path is unaffected); S2 C14 (`SettingsFile.Read`,
-S10, the homes fix). Product code: Opus brief, Sonnet code, Opus review. No cornerstone.
+**Size.** Three stories: S1 C2 (the launcher helper, S8 both arms, S9, the EndToEnd assertion; the brief pins the
+tracker stand-in's two observations and that the Team server's reader marker is cleared by the launch's normal end) —
+first, beside E1; S2 C14 (`TryRead`, the host's catch, S10 and its companions, the homes fix) — parallel; S3 D4 and S7
+(after E1 S3; the brief names `RoundScratch` as the end). Product code: Opus brief, Sonnet code, Opus review. No
+cornerstone.
 
 ### E4 — Deadlines on an injectable clock — cornerstone area: the clock contract
 
@@ -873,59 +1109,111 @@ S10, the homes fix). Product code: Opus brief, Sonnet code, Opus review. No corn
 the tests that race a deadline advance a manual clock when the thing they mean has happened, and no fixed sleep decides
 an outcome.
 
-**Scope.** D3's seam in `ProcessLauncher` (`:401`, keeping the deadline apart from the drain grace `:437` and caller
-cancellation apart from timeout), `AcpClient` (`:119`, `:195`), `RoundEngine` (`:286`), `TurnLoop` (`:41-45` — the
-`Stopwatch` goes — and `:134-138`), `SourceResolver` (`:200`), `ConsultantPlaces` (`:298`); one manual clock with timers,
-monotonic timestamps and disposal, shaped on `wsl_care · src_daemon/tests/WslCare.TestSupport/ManualTimeProvider.cs`
-(the suite's `FixedClock`/`MovableClock` stay for wall-time-only tests). Then C5, C6 (with the pure `RoundDeadline.For`
-test), C13 (an in-process launcher stand-in, on the pattern of `TwoDecidedThenReal`), C4 (`AServerThatNeverAnswers…`),
-C17. Scenarios S12–S16. `PLAN_two_equal_deadlines_race_on_macos.md` (C8, S21) builds on the seam right after the first
-story.
+**Scope.** D3, one class at a time, each WITH its RED (J8): `AcpClient` (`:119`, `:195`) with C5; `ConsultantPlaces`
+(`:334`) with C17; `TurnLoop` (`:41-45` — the `Stopwatch` goes — and `:134-138`) and `SourceResolver` (`:200`) with
+C13; then C6 on `TurnLoop`'s seam (with the pure `RoundDeadline.For` test and the sweep-reset half, S4's second rule).
+Each seam is an optional `TimeProvider? clock = null` constructor parameter on the class that owns the timer
+(`BoundedScheduler.cs:96-102`); nothing is threaded through `PanelService` or `RoundEngine`; `RoundEngine.cs:286` gets
+no seam. **`ProcessLauncher` is left out** until C4 has a kept failure (D5) — then C4's story lands the launcher's seam
+with S15. One manual clock with timers, monotonic timestamps and disposal, shaped on
+`wsl_care · src_daemon/tests/WslCare.TestSupport/ManualTimeProvider.cs` (the suite's `FixedClock`/`MovableClock` stay
+for wall-time-only tests). Scenarios S12, S13, S14, S16 (S15 gated). `PLAN_two_equal_deadlines_race_on_macos.md`
+(C8, S21) reuses the manual clock and C13's `SourceResolver` seam and adds `SecuritySources`' own.
 
-**The cornerstone area** is the seam's CONTRACT: (1) every elapsed calculation, delay and cancellation on one path reads
-the same clock — the spec lists every `Stopwatch`, `DateTime.UtcNow`, `Task.Delay`, `CancelAfter` and `WaitAsync` on the
-six paths and which clock each reads after; (2) `CreateLinkedTokenSource` + `CancelAfter` has no `TimeProvider`
-overload, so the timer becomes `new CancellationTokenSource(delay, timeProvider)` linked in, and
-`WaitAsync(timeout, timeProvider)` replaces `WaitAsync(timeout)`; (3) the launcher keeps its three separations; (4) the
-manual clock fires timers in order and never runs a callback under its own lock; (5) the whole suite is green on the
-seam alone before any test moves. Fable writes this spec; Sonnet codes; Opus reviews.
+**The cornerstone area** is the seam's CONTRACT, applied per class: (1) every elapsed calculation, delay and
+cancellation in that class reads the same clock — the spec lists every `Stopwatch`, `DateTime.UtcNow`, `Task.Delay`,
+`CancelAfter` and `WaitAsync` on the four classes and which clock each reads after; (2) `CreateLinkedTokenSource` +
+`CancelAfter` has no `TimeProvider` overload, so the timer becomes `new CancellationTokenSource(delay, clock)` linked in,
+and `WaitAsync(timeout, clock)` replaces `WaitAsync(timeout)`; (3) the default is `TimeProvider.System` and the whole
+suite is green with the seam in and the test not yet moved — proved inside each story, before its test moves; (4) the
+manual clock fires timers in order and never runs a callback under its own lock; (5) what the launcher's three
+separations must keep, written down now for the gated C4 story. Fable writes this spec; Sonnet codes; Opus reviews.
 
-**Depends on.** E1 (the measurement rule) and E3's S1 (same file, lands first). Not on E2.
+**Depends on.** E1 (the measurement rule). Not on E2, and not on E3's S1 any more (the launcher is not touched here).
 
-**Done when.** The seam story: the whole suite green with the same test count and no test moved. Then S12 red
-(`found AcpEnd.Deadline`), S13 red (cut at turn 3 with a one-turn budget), S14 red (no terminal `TimedOut` with the cap
-removed), S15 red (pid file missing), S16 red (`0 of 2 copied`) — each then green; the loops of §10 recorded per case; C4,
-C5, C6, C13, C17 absent from the next 20 CI runs of their legs; no timeout lengthened.
+**Done when.** S12 red (`found AcpEnd.Deadline`), S16 red (`0 of 2 copied`), S14 red (no terminal `TimedOut` with the
+cap removed), S13 red (cut at turn 3 with a one-turn budget) — each then green, each with the suite green on its seam
+alone first; the loops of §10 recorded per case; C5, C6, C13, C17 not seen in the next 20 CI runs of their legs (a
+watch, §10); no timeout lengthened; `ProcessLauncher` unchanged unless C4's gate opened.
 
-**Size.** Six stories. S1 the manual clock and the seam in all six places, no behaviour change (the cornerstone, Fable
-spec; ONE coder — the contract is one thing). Then S2 C5, S3 C6, S4 C13, S5 C4, S6 C17 — parallel after S1, different
-test files. C8's own plan starts after S1 merges.
+**Size.** Five stories. S1 the manual clock alone (the cornerstone's shared piece, Fable spec; first, small). Then S2 C5
+(`AcpClient`'s clock + S12), S3 C17 (`ConsultantPlaces`' clock + S16), S4 C13 (`TurnLoop` + `SourceResolver` clocks + S14)
+— parallel after S1, different classes and test files; S5 C6 (after S4, on `TurnLoop`'s seam, + S13). C4 is a sixth
+story only when its gate opens. C8's own plan's step 3 starts after S4 merges.
 
 ### E5 — Tests that wait for an event
 
-**Goal.** Seven tests stop measuring the scheduler: each waits for the event it means, or measures the cost it means
-(CPU), and the clock leaves the outcome.
+**Goal.** Eight tests and one CI job stop measuring the scheduler: each waits for the event it means, or measures the
+cost it means (CPU), and the clock leaves the outcome.
 
 **Scope.** C16 (`ApiEndpointStub.Dispose` waits for in-flight handlers, bounded, with a sentence), C3 (the probe released
-at the shim's first busy answer through a seam beside `BeforeTheHomeHold`, the shim's take staying INHERITABLE), C18
-(beats seen through the store's `projected` callback, the row released after three), C15 (launch 2's recorded timeout
-asserted directly), C9 (`replayingFan`'s CPU bound; the real-child test keeps exit 0 and every character), C21 (the kill
-only after the parent's `comm` reads `sleep`), C7 (a kept failure per D5, else the slow step sized from a measurement).
-Scenarios S11, S17, S18, S19, S20, S22.
+at the shim's first busy answer through `WhenTheHomeFileIsBusy` on the Kimi call site, `KimiCredentialsLock.cs:209` —
+never inside `HeldFile`; the shim's take staying INHERITABLE), C18 (beats seen through the store's `projected` callback,
+the row released after three), C15 (launch 2's recorded timeout asserted directly), C9 (`replayingFan`'s CPU bound; the
+real-child smoke test keeps exit 0 and every character and waits on `onExit`/`onError` with no 10 s timer), C21 (the kill
+only after the parent's `comm` reads `sleep`), C22 (`run-host.mjs`: the sentence names an editor that exited before the
+host ran a scenario and quotes VS Code's last main line; the download out of the launch budget; one retry of the LAUNCH
+only, said in the log and counted by the streak step), C7 (a kept failure per D5, else the slow step sized from a
+measurement). Scenarios S11, S17, S18, S19, S20, S22, S23.
 
 **Depends on.** E1 only. Nothing here needs the clock seam, so E5 may run BESIDE E2–E4; its number is 5 because its
 stories are the smallest value each.
 
-**Done when.** S11, S18, S19, S20, S22 red with their §8 sentence then green; S17's 100-run loop before and after recorded;
-C7 fixed from a kept stack or closed with the recorded measurement; C3, C9, C15, C16, C18, C21 absent from the next 20 CI
-runs of their legs; C9's and C15's PRs each say why the new assertion is at least as strong as the old.
+**Done when.** S11, S18, S19, S20, S22, S23 red with their §8 sentence then green; S17's 100-run loop before and after
+recorded; C7 fixed from a kept stack or closed with the recorded measurement; C3, C9, C15, C16, C18, C21 not seen in
+the next 20 CI runs of their legs and C22 not seen in the streak step's next 20 runs of `main` (a watch, §10); C9's,
+C15's and C22's PRs each say why the new assertion is at least as strong as the old.
 
-**Size.** Seven stories, all parallel, one coder each, different files. C7 starts as a scout (collect the failure or
+**Size.** Eight stories, all parallel, one coder each, different files. C7 starts as a scout (collect the failure or
 measure the step) and becomes a coder story only if a cause is shown. No cornerstone.
 
 ### Order, and what runs beside what
 
-E1 → E2 → E3 → E4 in series for their first stories; E5 starts after E1 and runs beside the rest.
-`PLAN_two_equal_deadlines_race_on_macos.md` (C8) goes right after E4's S1; `PLAN_a_turn_waits_by_the_clock.md` (C19)
-needs no seam and may go at any time, calling `HeldFile.TakeWithin` rather than writing a second wait. Nothing is
-reported closed until its test is absent from 20 CI runs of its leg after the merge (§10).
+E1 first; **E3's S1 (C2) and the sibling's C8 step 1 start at once beside it** (J7); E2 → E3's rest → E4 in series for
+their first stories; E5 starts after E1 and runs beside the rest. `PLAN_two_equal_deadlines_race_on_macos.md` (C8)
+step 3 goes after E4's S4 (C13's `SourceResolver` clock); `PLAN_a_turn_waits_by_the_clock.md` (C19) needs no seam and
+may go at any time, calling `HeldFile.TakeWithin` rather than writing a second wait. A case is reported closed when its
+RED is green (or its loop recorded), and WATCHED for 20 CI runs of its leg after the merge — the watch reopens, it does
+not close (§10, J15).
+
+## Review record (2026-10-19)
+
+The plan gate (coai session `f6808c2f`, verdict **proceed**) raised three findings; the lead accepted all three. An
+independent Opus judge raised fifteen. Every claim below was re-read against `origin/main` `38ecd4e11` before it was
+folded; where the code said otherwise, it is written here instead of in the plan.
+
+### The gate — 3 findings, 3 accepted and folded
+
+| # | Finding | Folded as |
+|---|---|---|
+| G1 | D1: inside one run every writer of the steering file must stay in the serial `fakecli-env` collection — a structural test that fails when one is outside | C1 RED (third test), S2b, E1 S2 |
+| G2 | D2: TEMP/TMP/TMPDIR set ONCE before any test, never toggled — a `[ModuleInitializer]`, the assembly fixture only removes and restores | D2 rewritten; S5's `MemberData` arm; E2's never-toggled proof. Checked: `AVibeHomesNeverLiveUnderTempTests` is the one class that moves TEMP (`:15-60`), in `fakecli-env`, restoring what it found — it stays |
+| G3 | C14: `PanelServiceHost.Current` must never throw to its callers | C14 fix: `Build(first: false)` under a `try` that keeps `_current` and the old stamp; S10's `CurrentNeverThrows` companion |
+
+### The judge — 15 findings
+
+| # | Finding | Decision | What the code said |
+|---|---|---|---|
+| J1 | BLOCKING — D2's run folder vs leftovers-E5's owner claim and sweep | **Folded.** The run folder writes E5's claim in E5's exact format; one writer, landing order in §7 of this plan; the E5 amendment recorded as an open item for E5's owner (its plan is on `docs/test-leftovers-e5-stories`, PR #850, not on this branch's base — not edited here) | The format is `<host>@<os>:<pid>[:<start>]` — `OWNER_TEXT` in `dew_flow_conventions · tools/lib/owned.mjs`, which on 2026-10-19 exists only on branches `e1/r3-*`, not on that repository's `main`; the pinned submodule's `test-leftovers.md` has no owner section yet. The E5 plan itself says it is "blocked on the E1 release of the conventions". So "reuse E5's helper if it exists on main" cannot be true when E2 starts unless E5 S3 lands first — hence the two-way landing rule |
+| J2 | BLOCKING — the two "never under TEMP" guards must compare against the REAL temp | **Folded.** `RunTemp.Real`; both guards read it; S5b; the E2 scan of every other `GetTempPath()` assertion, with its verdicts in D2 | Confirmed: `AntigravityReadOnly.DefaultBase` (`AntigravityReadOnly.cs:48`) and `KimiCredentialsLock.Root` (`KimiCredentialsLock.cs:87-91`) are `LocalApplicationData` paths; under D2 both guards would compare against the run folder — green, but blind to a root that moved into the real temp. Six other `GetTempPath()` assertion sites found and judged (D2) |
+| J3 | C14 — tri-state on the RELOAD path only; `Layer`'s callers keep today's behaviour; only busy keeps last-good; malformed and empty as today | **Folded** as the lead decided, with the blast radius | `SettingsFile.Layer` has exactly 8 call sites (listed in C14); the catch at `SettingsFile.cs:90-93`; the length-stamp that heals torn reads is `PanelServiceHost.Stamp`, `PanelServiceHost.cs:152-157` (the judge's `:152-157` is that file, not `SettingsFile.cs`). The first draft's "malformed keeps the previous settings" is withdrawn |
+| J4 | Add the shared-state case: `ForgetTheLastSweep()` outside any collection resets the static `_sweptUtc`, so the next `BuildWork` walks the real %TEMP% inside a round deadline; C6 to medium | **Folded.** C6 cause, confidence medium, fix (3), S4's second rule | Confirmed: `_sweptUtc` `PanelService.cs:1407`, throttle `:1424`, reset `:1440-1444`; seven callers (`AScratchSweepRunsOnTheConsultationBeatTests.cs:57`, `:112`, `:141`, `:150`, `:167`, `VibeHomesTests.cs:154`, `TempDirsAreSwept.cs:286`), none in a collection |
+| J5 | C9 — the smoke test also needs an event-only wait; the 10 s `ended()` timer is what failed | **Folded.** S20 | Confirmed: `ended` `processLauncher.test.ts:22-34`, `nothing arrived within ${ms} ms` |
+| J6 | C2 — the helper covers `Win32Exception` AND `InvalidOperationException`; say what the tracker/reader marker records; S8 tests both | **Folded.** C2 fix and RED (two arms), S8 | `IProcessTracker.Record(pid, startedUtc, label)` (`ProcessTracking.cs:10`) — nothing is recorded for an exited child; the reader marker (`ReaderMarkerDto`, `ReaderMarker.cs:65-70`) stays `spawning` until the launch's normal end clears it; `ITreeSupervisor.StartedUnidentified(int pid)` (`:21`) is the existing verb for a live pid with no start |
+| J7 | Build order — C8 (step 1, no clock seam) and C2 (E3 S1) start at once beside E1 | **Folded.** §7 order, §9 item 1, E3 and Order | — |
+| J8 | E4 — no all-at-once seam; `TimeProvider? clock = null` per owning class, landed WITH its RED; never through `PanelService`/`RoundEngine`; `ProcessLauncher` left out until C4 has a kept failure; `BoundedScheduler.cs:96-102` precedent | **Folded.** D3, C4 gated, C5/C13/C17 fixes, E4 rewritten (five stories, the manual clock first) | Confirmed: `BoundedScheduler.cs:96` `TimeProvider? clock = null`, `:102` `_clock = clock ?? TimeProvider.System` |
+| J9 | D4 moves to E3 (product): recursive, never follows a link, best effort, never fails the round; name the plumbing | **Folded.** D4 rewritten, E2 test-infra only, E3 S3, §7 row | The plumbing exists: `RosterFrame.Scratch` (`RosterAssembly.cs:24`) is a `RoundScratch` reserved per `BuildWork` (`RosterBuilder.cs:107`), carried in `RoundWork.Scratch`, and disposed by the round at `RoundEngine.cs:358` (`using var scratchOfTheRound = roundWork.Scratch`); `RoundScratch.Dispose` (`:94-124`) already deletes with `GitScratch.DeleteEvenIfReadOnly`; `SecurityRoster.Append(RoundWork ordinary, …)` (`:30`) reaches the same scratch for its `:154` folder. The frame paths do not leave `RosterBuilder`; the scratch does |
+| J10 | Refresh stale evidence: #887 changed `ConsultantPlaces.cs`; add runs 39229540975 (C2 on `main`), 39253800395 (C18 2.9 s — weaken "starved"), 39278975228 (C16 active) | **Folded.** C17 lines (`:329`, `:334`, `:390`, `:416`, `:449-457`), §3 rows, C2/C16/C18 evidence | All three runs read: 39229540975 `main` macOS 09:22 UTC `Expected … Ok, but found … NotStarted` (the `APromptFile…` sibling — C2's 4th); 39253800395 Windows 12:51 UTC `beats.Count … >= 3` in 2 s 899 ms; 39278975228 Linux 15:36 UTC `NullReferenceException … FormatHeaders` in 1 s 135 ms. #887's stat: `ConsultantPlaces.cs` 204 lines; the test file `AConversationPlaceTests.cs` was not touched, but its budget line is `:134`, not `:132` |
+| J11 | = G2 | Folded with G2 | — |
+| J12 | D1 trade-off — decide "beside the binary" vs "TEMP-keyed after E2"; state the two-runs-of-one-bin limit | **Folded.** D1's new paragraph: beside the binary, with both limits stated | — |
+| J13 | C3 — where the busy-answer seam goes: not inside `HeldFile.TakeWithin`/`TakeVerified`; prefer the Kimi lock's call site | **Folded.** C3 fix: the call site at `KimiCredentialsLock.cs:209` splits the take; `HeldFile` untouched | Confirmed: `take(…, HomeWait)` `:209`; `Inheritable` → `HeldFile.TakeVerified(path, within, inheritable: true)` `:175`; the busy loop is `HeldFile.cs:173` |
+| J14 | Who adds the clock to `SecuritySources.cs:32` — the sibling plan or this plan's E4; consistent on both sides | **Folded, both sides.** `SourceResolver.cs:200` here (C13); `SecuritySources.cs:32` in the sibling, with S21; the sibling's §Boundary rows 1–2 and its "Disjoint" line say the same | Confirmed: `CollectionBudget` `SecuritySources.cs:14`, `CancelAfter` `:32` |
+| J15 | Accuracy — "absent from 20 CI runs" proves nothing for ~1 % failures; fix moved lines `module_tests.md:4493` and D6's siblings `:502/:532/:557` | **Half folded, half refuted.** §10 and the DoD now say the REDs are the proof and the 20 runs a watch (0.99²⁰ ≈ 0.82); `module_tests.md:4475` → `:4493` in three places — correct. **Refuted:** the D6 sibling lines. On `38ecd4e11`, `PanelServiceTests.cs` has `coai-plan-said-` at `:352`, `coai-plan-rules-` at `:480`, `coai-plan-partial-` at `:518`, `coai-plan-none-` at `:542` — the plan's `:480/:518/:542` are right; `:502/:532/:557` match nothing in the file | `grep -n "coai-plan-" src_mcp/tests/PanelServiceTests.cs` on `38ecd4e11` |
+
+### One finding of our own, from reading the C22 log
+
+The report that reached this plan said the real-editor job "failed although the scenario passed" (`1/1 scenarios
+passed`, exit 0, `Unexpected SIGPIPE`). The job log says otherwise: those three lines are the SECOND launch's (the
+missing-root launch, one scenario, passed); the FIRST launch printed no scenario line at all, VS Code logged
+`CodeWindow: detected unresponsive` and exited 1, and the harness reported exactly that (`Test run failed with code 1`).
+The job's pass/fail rule worked; what was missing is a sentence that tells the two apart — C22.
