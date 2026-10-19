@@ -89,3 +89,19 @@ test('a read with nothing watching it behaves exactly as it always has', async (
   assert.equal(code, 0);
   assert.equal(output, 'plain');
 });
+
+test('a read that did not finish says WHY: its cap ran out, the program never started, or it was given up on — and a real exit says nothing (L of the review of 2026-10-18)', async () => {
+  const timedOut = await capture(NODE, SLEEPS, false, 300);
+  const missing = await capture(join(tmpdir(), 'coai-no-such-program-for-capture'), [], false, 30_000);
+  let cancelled = false;
+  setTimeout(() => {
+    cancelled = true;
+  }, 150);
+  const stopped = await capture(NODE, SLEEPS, false, 60_000, () => cancelled);
+  const exited = await capture(NODE, ['-e', 'process.stdout.write("done")'], false, 30_000);
+
+  assert.deepEqual([timedOut.code, timedOut.ended], [-1, 'timeout'], 'a child that outlived its cap');
+  assert.deepEqual([missing.code, missing.ended], [-1, 'not-started'], 'a program the machine could not start was said to have timed out');
+  assert.deepEqual([stopped.code, stopped.ended], [-1, 'stopped'], 'a read nobody waited for');
+  assert.deepEqual([exited.code, exited.ended], [0, undefined], 'a real exit carries no reason');
+});

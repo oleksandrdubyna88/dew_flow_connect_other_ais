@@ -14,17 +14,10 @@ internal static class WindowStates
     public static WindowState Of(Window window, AttributionInput input, bool hasRunningPeer, GateTimeline gate)
     {
         var reasons = Gather(window, input, hasRunningPeer, gate).ToList();
-        var worst = reasons.Select(reason => reason.Kind).DefaultIfEmpty(ObservationKinds.Observed).MaxBy(Badness) ?? ObservationKinds.Observed;
+        var worst = reasons.Select(reason => reason.Kind).DefaultIfEmpty(ObservationKinds.Observed).MaxBy(ObservationKinds.Badness) ?? ObservationKinds.Observed;
 
         return new WindowState(window, worst, [.. reasons.Where(reason => reason.Kind == worst).Select(reason => reason.Why).Distinct(StringComparer.Ordinal)]);
     }
-
-    private static int Badness(string kind) => kind switch
-    {
-        ObservationKinds.Unobserved => 2,
-        ObservationKinds.Partial => 1,
-        _ => 0,
-    };
 
     private static IEnumerable<Reason> Gather(Window window, AttributionInput input, bool hasRunningPeer, GateTimeline gate) =>
     [
@@ -63,17 +56,20 @@ internal static class WindowStates
     /// <summary>An item with no instant is about the whole session, so it is in every window.</summary>
     private static bool IsIn(DateTimeOffset? at, Window window) => at is not { } instant || window.Contains(instant);
 
-    private static IEnumerable<Reason> CallerChanged(Window window, GateTimeline gate)
+    private static IEnumerable<Reason> CallerChanged(Window window, GateTimeline gate) =>
+        CallerBefore(window, gate).Where(before => before != window.CallerSessionId).Select(ChangeOf);
+
+    private static Reason ChangeOf(string before) =>
+        new(ObservationKinds.Partial, before.Length == 0 ? AttributionReasons.PriorCallerUnknown : AttributionReasons.CallerChanged);
+
+    /// <summary>The caller of the recorded round before this window's own, for a sighted round window that has one; nothing otherwise.</summary>
+    private static IEnumerable<string> CallerBefore(Window window, GateTimeline gate) =>
+        window.Kind == WindowKind.Round && !window.Blind ? CallerOfRoundBefore(window, gate.Rounds.Where(Windows.IsRecorded).ToList()) : [];
+
+    private static IEnumerable<string> CallerOfRoundBefore(Window window, List<GateRound> recorded)
     {
-        var recorded = gate.Rounds.Where(Windows.IsRecorded).ToList();
-        var index = recorded.FindIndex(round => round.Stage == window.Stage && round.Number == window.Number);
-        if (window.Kind != WindowKind.Round || window.Blind || index < 1)
-        {
-            return [];
-        }
+        var index = recorded.FindIndex(round => Windows.IsRoundOf(round, window));
 
-        var before = recorded[index - 1].CallerSessionId;
-
-        return before == window.CallerSessionId ? [] : [new Reason(ObservationKinds.Partial, before.Length == 0 ? AttributionReasons.PriorCallerUnknown : AttributionReasons.CallerChanged)];
+        return index >= 1 ? [recorded[index - 1].CallerSessionId] : [];
     }
 }

@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using Stage = CoaiMcp.Core.Rounds.Stage;
 
 namespace CoaiMcp.Core.Authors;
 
@@ -18,7 +19,7 @@ public static class Windows
     /// round of the journal opens no window — its stretch lands in the next recorded round.
     /// </summary>
     public static bool IsRecorded(GateRound round) =>
-        round.Stage is "PlanReview" or "CodeReview" && round.Verdict != Skipped && round.Status != Interrupted;
+        round.Stage is nameof(Stage.PlanReview) or nameof(Stage.CodeReview) && round.Verdict != Skipped && round.Status != Interrupted;
 
     /// <summary>
     /// Recorded and <c>done</c>: the CLAIM condition. A recorded round that is not settled is <c>running</c>; it tiles its own gate but
@@ -55,18 +56,21 @@ public static class Windows
 
         var own = Of(gate, null).First(window => window.Kind == WindowKind.BeforeOpen);
 
-        return others.Where(other => SameRepository(other.RepoPath, gate.RepoPath)).Select(other => SettledPrefixEnd(other, open, caller, own)).Max();
+        return others.Where(other => Repositories.SameRoot(other.RepoPath, gate.RepoPath)).Select(other => SettledPrefixEnd(other, open, caller, own)).Max();
     }
 
     /// <summary>The ordinal order of rank: completion (not settled = last), then gate session id, then <c>before-open</c> before <c>round</c>.</summary>
     public static int Compare(Window left, Window right)
     {
-        var byCompletion = (left.CompletedUtc ?? DateTimeOffset.MaxValue).CompareTo(right.CompletedUtc ?? DateTimeOffset.MaxValue);
-        if (byCompletion != 0)
-        {
-            return byCompletion;
-        }
+        var byCompletion = CompletionOf(left).CompareTo(CompletionOf(right));
 
+        return byCompletion != 0 ? byCompletion : ByGateThenKind(left, right);
+    }
+
+    private static DateTimeOffset CompletionOf(Window window) => window.CompletedUtc ?? DateTimeOffset.MaxValue;
+
+    private static int ByGateThenKind(Window left, Window right)
+    {
         var byGate = string.CompareOrdinal(left.Gate, right.Gate);
 
         return byGate != 0 ? byGate : KindOrder(left).CompareTo(KindOrder(right));
@@ -88,24 +92,30 @@ public static class Windows
     }
 
     /// <summary>The reason a blind window is blind: the first round's missing open time, else a missing round start.</summary>
-    internal static string BlindReason(GateTimeline gate, Window window)
+    internal static string BlindReason(GateTimeline gate, Window window) =>
+        OpenTimeIsTheGap(gate, window) ? AttributionReasons.NoOpenTime : AttributionReasons.NoRoundStart;
+
+    private static bool OpenTimeIsTheGap(GateTimeline gate, Window window)
     {
         var first = gate.Rounds.FirstOrDefault(IsRecorded);
-        var isFirst = first is not null && first.Stage == window.Stage && first.Number == window.Number;
 
-        return isFirst && first!.StartedUtc is not null && gate.OpenedUtc is null ? AttributionReasons.NoOpenTime : AttributionReasons.NoRoundStart;
+        return first is not null && IsRoundOf(first, window) && first.StartedUtc is not null && gate.OpenedUtc is null;
     }
+
+    /// <summary>Whether <paramref name="window"/> is one of the windows of <paramref name="round"/>.</summary>
+    internal static bool IsRoundOf(GateRound round, Window window) => round.Stage == window.Stage && round.Number == window.Number;
 
     private static int KindOrder(Window window) => window.Kind == WindowKind.BeforeOpen ? 0 : 1;
 
     private static DateTimeOffset? Later(DateTimeOffset? left, DateTimeOffset? right) =>
-        left is null ? right : right is null ? left : left > right ? left : right;
+        left is { } a && right is { } b ? Larger(a, b) : left ?? right;
 
     private static DateTimeOffset? Earlier(DateTimeOffset? left, DateTimeOffset? right) =>
-        left is null ? right : right is null ? left : left < right ? left : right;
+        left is { } a && right is { } b ? Smaller(a, b) : left ?? right;
 
-    private static bool SameRepository(string left, string right) =>
-        Repositories.Normalise(left).Equals(Repositories.Normalise(right), StringComparison.OrdinalIgnoreCase);
+    private static DateTimeOffset Larger(DateTimeOffset left, DateTimeOffset right) => left > right ? left : right;
+
+    private static DateTimeOffset Smaller(DateTimeOffset left, DateTimeOffset right) => left < right ? left : right;
 
     private static DateTimeOffset? SettledPrefixEnd(GateTimeline peer, DateTimeOffset open, string caller, Window own)
     {
@@ -124,17 +134,19 @@ public static class Windows
     }
 
     private static bool ClaimsBefore(Window window, DateTimeOffset open, string caller, Window own) =>
-        !window.Blind && window.CompletedUtc is not null && window.CallerSessionId == caller && window.To <= open && Precedes(window, own);
+        IsSettledFor(window, caller) && window.To <= open && Precedes(window, own);
+
+    private static bool IsSettledFor(Window window, string caller) => !window.Blind && window.CompletedUtc is not null && window.CallerSessionId == caller;
 
     private static IEnumerable<Window> First(GateTimeline gate, GateRound round, DateTimeOffset? priorEnd)
     {
         var blind = round.StartedUtc is null || gate.OpenedUtc is null;
-        var edge = blind ? null : Earlier(gate.OpenedUtc, round.StartedUtc);
+        var edge = UnlessBlind(blind, Earlier(gate.OpenedUtc, round.StartedUtc));
 
         return
         [
-            Make(gate, WindowKind.BeforeOpen, round, blind ? null : priorEnd, edge, blind),
-            Make(gate, WindowKind.Round, round, edge, blind ? null : round.StartedUtc, blind),
+            Make(gate, WindowKind.BeforeOpen, round, UnlessBlind(blind, priorEnd), edge, blind),
+            Make(gate, WindowKind.Round, round, edge, UnlessBlind(blind, round.StartedUtc), blind),
         ];
     }
 
@@ -142,8 +154,11 @@ public static class Windows
     {
         var blind = round.StartedUtc is null || previous.StartedUtc is null;
 
-        return Make(gate, WindowKind.Round, round, blind ? null : previous.StartedUtc, blind ? null : round.StartedUtc, blind);
+        return Make(gate, WindowKind.Round, round, UnlessBlind(blind, previous.StartedUtc), UnlessBlind(blind, round.StartedUtc), blind);
     }
+
+    /// <summary>A blind window has no edge: whatever instant was about to bound it is dropped.</summary>
+    private static DateTimeOffset? UnlessBlind(bool blind, DateTimeOffset? edge) => blind ? null : edge;
 
     private static Window Make(GateTimeline gate, string kind, GateRound round, DateTimeOffset? from, DateTimeOffset? to, bool blind) =>
         new(gate.GateSessionId, kind, round.Stage, round.Number, from, to, round.CallerSessionId, round.Status == Done ? round.CompletedUtc : null, blind);

@@ -45,7 +45,7 @@ sequenceDiagram
 | `WorktreeManager`, `WorktreeLease` | `Worktrees/WorktreeManager.cs` | one detached tree per round, `coai-wt-` prefix under OUR storage (`%LOCALAPPDATA%\coai-mcp\round-worktrees`, or `COAI_ROUND_WORKTREES` — a LOCAL path; a shorter root is also the way to more path ceiling on a git that ignores `core.longpaths`; review trees move with `COAI_REVIEW_ROOT` instead, never with this one); prune-on-open; disposal = finally; never touches a human's worktree |
 | `SubmodulePopulator` | `Worktrees/SubmodulePopulator.cs` | fills the round tree's submodules from the PARENT checkout, not the remote — git populates none in a linked worktree, and in this family the project's rules ARE one; offline, pinned, never fatal, and refused when the source is reached through a reparse point |
 | `TreeGit` | `Worktrees/TreeGit.cs` | how git is started in a tree coai MADE: on Windows every launch point that works in a round tree or a review tree (`WorktreeManager.Git`, `ReviewTreeRoot.GitAsync`, `SubmodulePopulator.OneAsync`) leads its argv with `-c core.longpaths=true`, so a tracked path past Windows' 259 UTF-16 units checks out, reads clean, populates in a submodule and is removed; per command, never a config write; on Linux and macOS the argv is unchanged |
-| `WorktreeFailure` | `Worktrees/WorktreeFailure.cs` | what a failed round-tree `worktree add` says: reads git's own `error: unable to create file <rel>: <reason>` / `fatal: cannot create directory at '<rel>': <reason>` line and names the path, its length in UTF-16 units and git's reason, instead of only the closing `fatal: Could not reset index file` (which names the index); for `Filename too long` it adds the Windows limit of the KIND of path git could not make (`WindowsMaxPathUnits` = 259 for a file, `WindowsMaxFolderUnits` = 247 for a folder, one constant each, Windows only) and `COAI_ROUND_WORKTREES`; a failure with no such line reads exactly as `FatalLine` always did. Round trees only — a review tree keeps its wire word `git_failed` |
+| `WorktreeFailure` | `Worktrees/WorktreeFailure.cs` | what a failed round-tree `worktree add` says: reads git's own `error: unable to create file <rel>: <reason>` / `fatal: cannot create directory at '<rel>': <reason>` line and names the path, its length in UTF-16 units and git's reason, instead of only the closing `fatal: Could not reset index file` (which names the index); for `Filename too long` it adds the Windows limit of the KIND of path git could not make (`WindowsPathLimits.FileUnits` = 259 for a file, `WindowsPathLimits.FolderUnits` = 247 for a folder, read from the one shared type, Windows only) and `COAI_ROUND_WORKTREES`; a failure with no such line reads exactly as `FatalLine` always did. Round trees only — a review tree keeps its wire word `git_failed` |
 | `GitModules`, `SubmoduleMount` | `Git/GitModules.cs` | `.gitmodules` as (name, path); a file inside the repository under review, so absolute/traversing paths and names that could spell another config key drop the mount |
 | `DiffExclusions`, `ContextAssembler`, `CollectedDiff`, `DiffBase` | `Context/ContextAssembler.cs` | numstat → per-file diffs with `:(exclude,glob)` pathspecs; binary sizes via `cat-file -s`; every one of the three taken against the MERGE BASE, which the result names. `DiffExclusions.Excludes(path)` / `WhichExcludes` answer the same glob table for ONE path — the source resolver's question, since it has no git call to hand the pathspecs to. Each glob's matcher carries a 1000 ms match ceiling (SonarCloud S6444), and a match that hits it FAILS CLOSED — the path counts as excluded and is never served, the refusal naming that glob (`WhenMatchTimesOut`, reached by a test through the `FirstExcluding` seam) |
 | `SourceResolver` | `Feature/SourceResolver.cs` | source on demand for a feature reviewer (plan §4.9, S3.1): git objects at the round's pinned head and nothing else, one read per file per round, every name check before any process, every byte through `Redaction.SafeSource`, every cap from `SourceBudget` — the section below |
@@ -80,11 +80,12 @@ sequenceDiagram
 | `ProcessEnvironment.Minimal`, `ProcessRequest.Passthrough` | `Processes/ProcessEnvironment.cs`, `ProcessLauncher.cs` | the measured minimal list a question child starts from (S2c), chosen per request: the launcher's filter took its allowlist from the request rather than growing a second flag |
 | `FeatureOutlineBuilder.BuildAtHeadAsync` | `Feature/FeatureOutlineBuilder.cs` | the outline of what EXISTS at a commit — against the repository's empty tree, no member hunks — what an api question row is shown of the code |
 | `RetryLadder` | `Reviewers/RetryLadder.cs` | the waits and when to stop: four steps, jittered, bounded by the reviewer's own deadline; pure, so the jitter is a table rather than a stopwatch. `ResetOutlasts(reason, left, now)` (story 5.3c of todo/PLAN_every_round_is_counted.md): a STATED reset beyond what is left of the budget — the ladder then takes no step |
-| `RoundsPerPercent`, `GaugeLine`, `GaugeRatio`, `GaugeAnswer`, `GaugeReasons`, `GaugeConsumers` | `Reviewers/RoundsPerPercent.cs` | rounds per 1 % of a vendor's gauge window, computed ONCE for both halves (story 6.2 of todo/PLAN_every_round_is_counted.md): pure, ledger lines in, one figure per vendor × window out — or `null` with a fixed reason; a known uncounted consumer (`direct-codex-use` for the `codex` limit) hides it. The Team server answers it in `/api/usage`'s `gauges`; `coai-mcp --round-counts` answers `NotReadHere` (`local-capture-deferred`) — the section *Rounds per 1 % of a gauge window* |
+| `RoundsPerPercent`, `GaugeLine`, `GaugeRatio`, `GaugeAnswer`, `GaugeReasons`, `GaugeConsumers` | `Reviewers/RoundsPerPercent.cs` | rounds per 1 % of a vendor's gauge window, computed ONCE for both halves (story 6.2, corrected by 6.2b — a plateau keeps its rounds, a barrier voids the whole span, a percentage outside [0, 100] is a missing reading, the figure is pooled Σ rounds ÷ Σ rise, of todo/PLAN_every_round_is_counted.md): pure, ledger lines in, one figure per vendor × window out — or `null` with a fixed reason; a known uncounted consumer (`direct-codex-use` for the `codex` limit) hides it. The Team server answers it in `/api/usage`'s `gauges`; `coai-mcp --round-counts` answers `NotReadHere` (`local-capture-deferred`) — the section *Rounds per 1 % of a gauge window* |
 | `CooldownParser` | `Reviewers/CooldownParser.cs` | the vendor's own rate-limit sentence → an instant — ONE parser for both halves since story 5.3b (moved from `src_server/src/Slots`): `Until` (always an answer; the Team server parks a slot on it, falling back to a doubling guess) and `StatedReset` (only what the vendor NAMED — a duration up to 14 days, a date, a clock time — else null; the local ledger and the ladder read this one) |
 | `ClaudeCapability`, `RestrictedSupport` | `Reviewers/ClaudeCapability.cs` | what the INSTALLED claude's own `--help` says about `--restricted` — `Declared`, `NotDeclared`, `Unknown` (the help did not come back), or `Unprobed` — read through the launcher (10 s per ask, tree-killed, one retry on `Unknown`) on every launch, never cached. Carried into a pure `Build` on `ReviewerSettings.ClaudeCli` (default `Unprobed`, which the consultant's `Build` refuses); the reviewer is planned to read it too (the section *The claude consultant is confined by an allowlist*) |
 | `ConsultantPreparation` (`Ready` / `Refused`) | `Consultation/IConsultantRuntime.cs` | what `IConsultantRuntime.PrepareAsync` concluded before `Build`: a launch with the confinement it will be SENT and a log note, or a classified refusal the service applies like any failure |
 | `HostKind`, `HostKinds` | `Platform/HostKind.cs` | `Windows / Linux / Wsl / MacOs / Other` from `OperatingSystem` + `VendorDiagnosis.OnWsl`; the one answer to "which platform" for the limitations and the health files' `side` |
+| `WindowsPathLimits` | `Platform/WindowsPathLimits.cs` | Windows' path limits without long-path support, in UTF-16 units: `FileUnits` = 259, `FolderUnits` = 247, each with its probe in its doc. The ONE place these numbers live (platform-limits §1.4, `research/PLAN_one_windows_path_limit.md`): `VibePathBudget.Windows` and `WorktreeFailure` read it, and `WindowsPathLimitsTests` pins both numbers and refuses a `259`/`247` in any other production C# code. Windows' numbers only — the caller decides the platform |
 | `ConsultantLimitations`, `ConsultantLimitation`, `LimitationEvidence` | `Consultation/ConsultantLimitations.cs` | `shared/consultant-limitations.json`, embedded and read through a source-generated context; fails closed on a row without exactly one kind of evidence; `Lookup(host, runtime, capability = "")` takes a qualifier WORD (a claude overload passes `ClaudeCapability.Qualifier`) and never answers with another platform's row |
 | `ReviewSnapshots`, `ReviewSnapshot`, `SnapshotSource` (`Pinned` / `Live`), `SnapshotOutcome`, `SnapshotRefresh`, `SnapshotPath`, `SnapshotRead` | `Snapshots/ReviewSnapshots.cs`, `ReviewSnapshot.cs`, `SnapshotSource.cs` | the sanitised snapshot (D6 of `todo/PLAN_vibe_and_kimi_runtimes.md`, S1, 2026-10-12): a fresh coai-owned copy of a pinned worktree or of the live tree with every project-configuration path left out, made whole-or-not inside the caller's `coai-answers-*` scratch directory; `MapBack` / `Resolve` / `Read` answer only from the manifest; `RefreshAsync` re-fills the SAME root from the live tree (a resumed Vibe session is bound to its folder); disposal deletes it and gives its bytes back — the section *The sanitised snapshot* below |
 | `SnapshotOptions`, `SnapshotExclusions`, `SnapshotManifest`, `SnapshotUnavailable` | `Snapshots/SnapshotOptions.cs`, `SnapshotManifest.cs` | the ceilings (512 MB, 50 000 files, 60 s — ten-plus times this repository's 38.8 MB, 2 737 files, 5.7 s), the names left out at every depth (`.git`, `.vibe`, `.agents/skills`, `.kimi-code`, `AGENTS.md`, `agents.md` — one default set for both vendors, a parameter for more), and what a snapshot holds: copied paths, excluded paths, unavailable paths (an unpopulated submodule, an LFS pointer) and the destination's measured case rule |
@@ -115,9 +116,9 @@ sequenceDiagram
   rule name)*. Two rounds of one fix therefore show identical rules, which is the defect the plan was
   opened for, while different branches order the rest of the corpus differently. **That second half
   reaches one to three rules in this repository since the operator raised the budget to 90 000 bytes
-  (2026-10-16; `RuleFiles.DefaultBudgetBytes`)** — the base and the tier spend **79 944** bytes, which
+  (2026-10-16; `RuleFiles.DefaultBudgetBytes`)** — the base and the tier spend **79 967** bytes (79 944 until 2026-10-18), which
   left **56** at the old 80 000 (the tail took nothing, so `common/test-leftovers.md` reached no
-  reviewer) and leave **10 056** (10 037 since 2026-10-19: PROJECT.md grew by the 19 characters of `--round-authors`); the smallest rule outside the tier is 2 197. Over 3 000 branch
+  reviewer) and leave **10 033** now (10 056 until 2026-10-18); the smallest rule outside the tier is 2 197. Over 3 000 branch
   names the tail takes one rule on 30 %, two on 62 %, three on 8 % (mean 1.78), and
   `common/test-leftovers.md` is drawn on 9.8 % — drawn, not owed: a rule that must reach every reviewer
   belongs in the tier. Numbers: `research/RESULTS_rules_selection_budget.md` (last section).
@@ -135,8 +136,8 @@ sequenceDiagram
 
   The 1 145 / 77 562 / 78 855 figures in this paragraph are the 2026-09-18 measurements at 80 000 bytes
   and stay as the history of the CRLF defect. The rotation has room since 2026-10-16;
-  `StageRulesTests.AtNinetyKilobytes_TheBaseAndTheTier_SpendExactlyTheirPinnedBytes` (the measuring test and drift
-  guard: 17 902 + 62 061 = 79 963 since 2026-10-19, when `.agents/PROJECT.md` named `--round-authors`; 17 883 + 62 061 before),
+  `StageRulesTests.AtNinetyKilobytes_TheBaseAndTheTier_SpendExactly79967Bytes` (the measuring test and drift
+  guard: 17 906 + 62 061),
   `AtNinetyKilobytes_TheRotatedTail_FitsAtMostThreeRules` (the exact three tail rules on the canary branch,
   the measured maximum elsewhere),
   `AtNinetyKilobytes_EveryBranchReachesAtLeastOneTailRule` (at least one) and
@@ -1673,8 +1674,17 @@ flowchart LR
   `EndCause`: `Round` (the client's 32-hex round id) and `ClientAttempt` (the client's word for the request — `first`,
   `retry`, `repair`, `followUp`), written by the Team server through `RecordJob`'s two new trailing parameters, the
   client's word BESIDE the server's own `attempt` (`first` / `rotated` / `followUp` inside the job), never over it. A
-  local line leaves both empty here — its own `attempt` already is the client's word; whether a local line carries the
-  round is story 4.1's ([module_team_server.md](module_team_server.md), *The round on the wire*).
+  local line leaves `ClientAttempt` empty — its own `attempt` already is the client's word.
+- **The round, on a LOCAL review line (2026-10-19).** The plan's Definition of Done says every new ledger line carries
+  its round; the local ones did not — `ReviewerInvocation.Round` (the key `RoundEngine` mints once per round and
+  `RoundWork.InRound` stamps, carried to later turns by `TurnLoop`) reached only the remote argv, the plan's deviation
+  row having deferred the local line "until the column exists". `UsageLedger.Entry` now writes `Round:
+  invocation.Round`, under the field name the server's lines use, so a local line joins `rounds.round_key`. Every line of
+  one `Record` call shares it (the first launch, a repair, a follow-up, each earlier turn — one invocation feeds them
+  all). A launch outside a round has an empty key and the line says none; `RecordJob` (consultation, question row,
+  probe, chat) still writes no round. The extension's `parseUsageLine` was already source-agnostic (an empty round is
+  absent, a non-empty one kept), and nothing there groups by round, so no figure moves: the Spending tab still shows
+  *reviewers per round* from `coai.db` and claims no per-launch figure.
 - **The guard.** `LaunchLines.Of` writes the parts only when their usage adds up to the turn's exactly; otherwise the
   turn is the one line it always was. A ledger whose lines summed to something the round total did not would be a
   second answer to "what did this cost".
@@ -2810,23 +2820,50 @@ account (the Team server's slot), its round id, whether it is a review, and the 
    `(limitId, mins)`, never by where the vendor filed it; a window with no stated length cannot be identified, and a
    reading that does not report a window is a missing reading for it.
 2. **A reading belongs to the launch whose line carries it.** The server reads the gauge after a job and writes it on
-   that job's lines, so the rounds "between" two readings are the rounds of the lines carrying the later one. Readings
-   are per account and never paired across accounts; every line carrying one instant is one reading.
-3. **An interval is unusable — its figure unavailable, never 0 or infinity —** checked in this order: a launch between
-   the readings has no reading of its own, or either reading does not report the window (`missing-reading`); either
-   reading is older than its line by more than `StaleAfter` (5 min — `stale-reading`); either `resetsAt` is unstated
-   (`missing-reading`) or they differ — the window reset (`window-reset`); the percentage did not rise
-   (`percent-did-not-rise`); a review between them sent no round id (`run-without-round`).
+   that job's lines, so the rounds of a reading are the rounds of the lines carrying it. Readings are per account and
+   never paired across accounts; every line carrying one instant is one reading.
+3. **An interval opens at a BASELINE and closes at the first reading whose percentage RISES (story 6.2b, owner
+   2026-10-16).** A plateau — readings whose percentage did not rise — keeps the baseline and keeps its rounds: each
+   reading after the baseline adds its own rounds (`RoundsIn`), and the interval closes at the first reading above the
+   baseline's percentage — rounds = the accumulated rounds, rise = closing − baseline. The closing reading is the next
+   baseline, so intervals never overlap and a round is counted in exactly one. `AccountIntervals` walks the readings
+   (`Advance` → `Begin` / `Extend`); a plateau still waiting for a rise at the end is no interval and reports
+   `percent-did-not-rise`.
+   **A reading's percentage outside [0, 100] is a MISSING reading for the derivation** (`InRange`; the display of the
+   vendor's own number is unchanged).
+   **A barrier voids the WHOLE span** (`BarrierOf`, checked per reading after the baseline up to and including the
+   closing one, in time order — the first one names the reason): a launch before the reading has no reading of its own,
+   or the reading does not report the window (`missing-reading`); the reading is older than its line by more than
+   `StaleAfter` (5 min — `stale-reading`); its `resetsAt` is unstated (`missing-reading`) or differs from the
+   baseline's — the window reset (`window-reset`); it carries a review launch with no round id (`run-without-round`).
+   The next GOOD reading — the barrier reading itself when it is good (a reset, a round-less launch, a reading after a
+   reading-less launch), otherwise the first good one after it — opens the next span.
+   **A FALL** (the percentage BELOW the baseline within one window instance, no reset) voids the span with
+   `percent-did-not-rise` and the lower reading, a true state of the account, is the next baseline (50, 20, 30, 51 →
+   intervals 20→30 and 30→51). **A reading that cannot open a span** (missing, stale, no `resetsAt`, out of range), on an
+   account with more than one reading, is an unusable interval of its own with ITS reason (`WhyItCannotOpen`), so a
+   window nobody could baseline reports `missing-reading` / `stale-reading`, not `too-few-readings`; one reading on
+   the account is still too few. A plateau still open at the end reports `percent-did-not-rise` — or `missing-reading` when
+   a launch with no reading of its own came AFTER the account's last reading (`Account.BareAfter`); a figure that has usable
+   intervals is unchanged.
+   **A launch the vendor refused ran no review** — server side (`UsageGauges`): a line whose outcome is `RateLimited`
+   (a requeue line, or a job that failed because every account was rate-limited) is handed to the derivation with
+   `IsReview = false`: still spend, still a bare launch on its account, but not one of the round's launches, so the launch
+   that ran carries the whole round (a round refused on account a and run on b is 1 round, not 0.5).
 4. **A round's share.** A round that ran several launches on the vendor counts in each interval by its share of those
    launches — a code round's four reviewers, each followed by its own reading, are one round over four intervals, not
    four rounds. A non-review launch (a consultation, a canary) spends — its rise is in the interval — and counts no round.
-5. **The figure** is the rounds-weighted mean `Σ Rᵢ·(Rᵢ/Δᵢ) / Σ Rᵢ` over the last `LastIntervals` (10) usable intervals
-   of the vendor's accounts, oldest end first; with no interval at all, `too-few-readings`; with none usable, the LATEST
-   interval's reason; with usable ones that held no round, `no-rounds`.
-6. **Then the consumer rule:** `GaugeConsumers.UncountedFor(limitId)` names the known consumers coai cannot count —
-   `direct-codex-use` for the `codex` limit (RESULTS_vendor_quota_gauges.md §2.4, §6.3) — and a limit with one has its
-   figure hidden: `null`, `consumer-not-counted`, the consumer named. The window is still named, so the gauge beside it
-   is still shown.
+5. **The figure is POOLED** (story 6.2b): `Σ rounds ÷ Σ rise` over the last `LastIntervals` (10) usable intervals of the
+   vendor's accounts, oldest end first — what one percent actually bought, not the rounds-weighted mean of per-interval
+   ratios (3 rounds over 1 % and 1 round over 2 % is 4 / 3, not 2.375); with no interval at all, `too-few-readings`; with
+   none usable, the LATEST voided span's reason (`percent-did-not-rise` when a plateau is only waiting for a rise); with
+   usable ones that held no round, `no-rounds`.
+6. **Then the consumer rule:** `GaugeConsumers.UncountedFor(vendor, limitIds)` names the known consumers coai cannot
+   count — `direct-codex-use` for a codex account (RESULTS_vendor_quota_gauges.md §2.4, §6.3): the vendor row called
+   `codex`, or any vendor reporting codex's own limit id `codex`. Every window of such a vendor has its figure hidden
+   (review round 2026-10-18 — it used to be only the limit called `codex`, while the protocol reads every entry of
+   `rateLimitsByLimitId`): `null`, `consumer-not-counted`, the consumer named. The window is still named, so the gauge
+   beside it is still shown.
 
 `NotReadHere` is what a machine that reads no gauge answers — `{ratios: [], unavailable: "local-capture-deferred"}` —
 and is what `coai-mcp --round-counts` carries as its trailing `gauge` (story 6.1b, local capture, is deferred).
@@ -2839,12 +2876,11 @@ the result is shared by every window — linear in the lines after the sort. The
 every interval of every window; epic 6's code round measured 4 000 lines on one account at 11.4 s before and 0.26 s
 after, the two answers byte-identical.
 
-**A recorded limit, not a defect fixed here:** with whole-number percentages, consecutive readings after one job each
-often rise by 0 (unusable) or 1 (one job's rounds over 1 %), so the usable intervals over-represent the jobs that tipped
-the percentage. The plan round's formula is implemented as fixed; pairing a reading with the last reading whose
-percentage DIFFERED would remove the bias, and is an open question for the owner (recorded in the plan's deviations).
+**The bias this once recorded is fixed (story 6.2b).** With whole-number percentages, consecutive one-job readings rise
+by 0 or 1; pairing only ADJACENT readings voided the 0-rise pairs and took their rounds with them, so the figure leaned
+LOW. The baseline now carries through the plateau, so no round is dropped and none is counted twice.
 
-Tests: `RoundsPerPercentTests` (19, mcp), `RoundCountsTests` (+1, mcp) — listed in [module_tests.md](module_tests.md).
+Tests: `RoundsPerPercentTests` (49, mcp), `RoundCountsTests` (+1, mcp) — listed in [module_tests.md](module_tests.md).
 
 ## The sanitised snapshot — a CLI that reads only its working folder is given a copy without the branch's configuration (2026-10-12, S1 of `todo/PLAN_vibe_and_kimi_runtimes.md`)
 
@@ -3492,7 +3528,7 @@ flowchart TD
   end
 ```
 
-- **`VibePathBudget`** (`Vibe/VibePathBudget.cs`) is the one adapter for the path numbers: Windows `FileLimit 259`, `DeepestChild 156`
+- **`VibePathBudget`** (`Vibe/VibePathBudget.cs`) is the one adapter for the path numbers: Windows `FileLimit 259` (read from `WindowsPathLimits.FileUnits`), `DeepestChild 156`
   (Vibe writes `logs\session\unified\<36>\chunks\.<64 hex>.json.<16 hex>.tmp` below its home: 134 persisted plus 22 for the atomic
   write), counted in UTF-16 units. There is no budget off Windows (D18 refuses Vibe there first) and no long-paths exemption (the
   registry flag is not proof that Vibe's interpreter is long-path aware; M-V18 measures it). It is resolved once in `VibeRuntime`'s
@@ -3593,6 +3629,127 @@ flowchart LR
   folder's entry NAMES, and never opens a credentials file. `KimiCanaryTests` pins that no string coai composes contains a canary from the
   sign-in or from the `moonshot-ai` row's `api_key`; the agent's own stderr and error text are vendor text, outside the pin.
 
+## Linux building blocks for Kimi — the Kimi-independent half of E5 (2026-10-16, `todo/PLAN_kimi_and_vibe_on_linux.md` DL6–DL10; A2 and A3 specs)
+
+Mechanical pieces, built before the Kimi launch is opened on Linux (`KimiLaunch.HostRefusal` is NOT lifted — that is E6), **the pieces were built first and wired into nothing; A2 (below) wires the lock, the listing and the junction shell, A3 (below) built the teardown and the survivor marker, and the integration step joins them to A2’s seam**: before A2 no `KimiCredentialsLock`, `KimiLaunch`, `AcpTransport`,
+`AskAcpMode`, `ForeignKimi` or `HostProcessList` code calls them. Each file that comes from wsl_care (MIT, the same owner) says so in a header; what was not ported is named there too.
+
+| Piece | File (`src_mcp/runners/…`) | What it is | Tests |
+|---|---|---|---|
+| Mount table | `Files/MountTable.cs` | Ported: `Parse`, `Holding`, `MountEntry.IsDrvfs` over `/proc/self/mountinfo` (octal escapes decoded, super-options raw). `IsWholeDrive` is not ported. Judge fix (2026-10-16): `MountEntry.Id` (field 0, the mount id) and `Find(mounts, path, MountIdentity)` → closed `MountHolder` (`Found` / `NoMount` / `Unproven`). The TEXT rule (longest mount point) is wrong under an over-mount (a drvfs mounted later over `/data` hides an ext4 at `/data/linux`), so the kernel's answer wins: `Mounted(id, major, minor)` finds the mount BY ID; `Device(major, minor)` (no mount id, kernel before 5.8) keeps the text rule but refuses on a device mismatch; `Unreadable` refuses. `Holding` stays as a thin wrapper (text rule). | `MountTableTests` (written fresh — wsl_care has none) |
+| Mount locality | `Files/MountLocality.cs` | DL6's rule: `Refusal(target, realPath, mountInfo)` — a drvfs mount (`9p` + `aname=drvfs`, `drvfs`, `virtiofs`) is refused wherever it is mounted; an unreadable table, one no mount of which holds the path, or a mount that cannot be PROVEN is refused too. The 3-argument overload asks the kernel (`Identify` = `statx` with `STATX_MNT_ID`, retried without it for the device alone); the 4-argument overload takes the answer as a seam (tests hand a `MountIdentity`). | `MountLocalityTests` (S-K12, everywhere; the real-kernel arm on Linux) |
+| File status | `Files/FileStatus.cs`, `Files/LinuxStatx.cs` | `FileStatus` + `SameFileAs` verbatim (plus the init-only `MountId`, `stx_mnt_id` u64 at 144, asked with `STATX_MNT_ID` 0x1000); `LinuxStatx` is the one `statx` import (`"libc"`): `OfPath`, `OfHandle`, the offsets decoder, a closed `StatxRead`. An answer without ANY trusted field it was asked for (type, owner, inode, mount id) is `Failed(0)` — a zero is never a value. `FolderIdentity`/`KeyFor` are the spec-driven half. | `FileStatusTests` |
+| `/proc` stat | `Processes/ProcStat.cs`, `Processes/ProcReads.cs` | The one `stat` reader: `ProcStat.Parse/ReadFor` → `Read` / `Gone` (ENOENT) / `Unreadable`, over the `IProcReads` seam (`ProcReads.Real`). `ProcStatLine` carries `StartTicks` (field 22) from the same line; `Parse` refuses a line whose leading pid is not the one asked for. `ProcessTree`'s parent walk and exited-entry rule read through it. | `ProcStatTests`, `TheTreeIsReadByIdentityTests` (unchanged) |
+| Liveness | `Processes/Liveness.cs` | `Alive` / `Gone(why)` / `Unknown(reason)`; only a PROVEN `Gone` is evidence that a process left: ENOENT on `/proc/<pid>` (same pid namespace, no `hidepid=invisible`), another start time, or an exited entry. An unreadable start time re-reads the `stat` and is `Unknown("start time unreadable")` unless that proves it gone; off Linux it is `Unknown` unless absence is provable. The start time is read ONCE. `Of(identity, startTicks)` compares EXACT ticks from one read of the line. `CoaiMcp.Server.ProcessLiveness` (two-state, for the sweeps) is untouched. | `LivenessCheckTests` |
+| pidfd layer | `Processes/LinuxPidfd.cs` | `IPidfdCalls`; `LibcPidfdCalls` (ported); `RawSyscallPidfdCalls` (`syscall(434)` / `syscall(424)`, new); `PidfdLayer.Current` → `Wrapper` / `Raw` / `Missing`, resolved once, with a per-flow `Using(...)` test seam (S-K21). The probe must PROVE the road: a descriptor for coai's own pid AND `signal 0` through it answering 0; ENOSYS keeps the plan's sentence, any other errno (a seccomp EPERM on either call) is `Missing` with `RefusalFor(call, errno)` naming it. **This widens DL9** (it refused only ENOSYS, so a filtered `EPERM` kept the road open and every kill then failed after Kimi was launched). | `PidfdLayerTests` |
+| By-identity signal | `Processes/TreeSignals.cs` | `Kill(members, calls)`: pin (`pidfd_open`) → check liveness on the pin → `SIGKILL` through the descriptor → close; `Sent` / `Gone` / `Unknown` / `Failed`. Never a signal by number. `Kill(IReadOnlyList<PinnedMember>, calls)` checks EXACT start ticks (`PinnedMember(identity, startTicks)`, `PinnedMember.Of(identity, reads)`) from the same `stat` line as the state — no 1 s slack; the `ProcessIdentity` overload keeps the slack (its start is a clock estimate). | `PidfdLayerTests` |
+
+```mermaid
+flowchart LR
+  subgraph built["built, wired into nothing"]
+    MT[MountTable] --> ML[MountLocality]
+    LS[LinuxStatx] --> FS[FileStatus]
+    PR[ProcReads / IProcReads] --> PS[ProcStat]
+    PS --> LC[LivenessCheck]
+    PL[PidfdLayer] --> TS[TreeSignals]
+    LC --> TS
+  end
+  PS --> PT[ProcessTree - uses it]
+  LS --> PR
+```
+
+**L-N1 (`HeldFileInheritableOnLinuxTests`, `FakeCli hold-file`).** Four Linux-only tests (the fourth, `L_N1a_ProcLocks_NamesTheKindOfFlockTheInheritableHoldTook`, reads the kernel's own `/proc/locks`: it listed `READ` for .NET's take and must list `WRITE` for the native one), one per premise of DL8: (a) a non-inheritable take beside an inheritable hold is Busy; (a) a second inheritable take is Busy;
+(b) the hold outlives its opener's `SIGKILL` while a child started after the take lives. **Observed on Linux (CI run 38923199105, job `build · test · family checks`): arm (a, second inheritable take) RED** — `Expected string to be "busy" … because a second take of an inheritable hold succeeded — the lock is shared, not exclusive (S-K4), but "taken"` — so .NET's `None | Inheritable` IS a shared `flock` on Linux, as predicted from `SafeFileHandle.Unix.cs` (v10.0.11: `LOCK_EX` only when `share == FileShare.None` exactly). The other two arms were green. A2 §3.3 therefore ships the native take (`LinuxHeldFile`, below); the record is RESULTS_kimi_confinement.md §30.
+
+
+### A2 — one owner for the sign-in, for the tree's whole life (2026-10-16, built on the pieces above; `KimiLaunch.HostRefusal` was lifted for WSL2 by E6, 2026-10-17 — see *Kimi on WSL2* at the end of this file)
+
+A2 wires the pieces above into the Kimi lock, the shim's hold, the junction maker and the foreign-Kimi wait. On a Linux or WSL host every path below is reached only by tests until E6 opens the host door of the launch.
+
+```mermaid
+flowchart TD
+  T[KimiLaunch.TakeAsync] -->|gate: TakeVerified| G[KimiCredentialsLock.TakeAsync<br/>writes KimiLockRecord once]
+  G -->|gate held| S1[IKimiSurvivors.BlockedAsync<br/>seam 1 - ReconcilingSurvivors]
+  SH[KimiShimHold.Taken] --> W[ForeignKimiWatch.Wait<br/>Clear / Running / Unreadable]
+  W -->|Clear| H[HoldTree: sign-in file + home file<br/>inheritable, TakeVerified]
+  H -->|both held| S2[IKimiSurvivors.BlockedAsync<br/>seam 2]
+  D[KimiHome.Alive] --> S3[IKimiSurvivors.KeepsHome<br/>seam 3]
+  K[FolderIdentity.Of -> KeyFor] --> G
+  K --> H
+  SW[KimiLockRetirement.Sweep<br/>start + every beat, Linux only] -->|takes both files, reads the record| R[unlink the key's files]
+  SW --> S4[IKimiSurvivors.BlockedAsync<br/>a standing marker keeps all three files]
+  J[Junctions.Refusal] --> HA[HostAdmitted: windows, linux, wsl]
+  J --> M[MountLocality over /proc/self/mountinfo<br/>for a Linux or WSL host]
+  J --> MK[IJunctionShell.MakeLink<br/>JunctionsNative or JunctionsUnix]
+```
+
+| Piece | File (`src_mcp/runners/…`) | What it is |
+|---|---|---|
+| Identity | `Files/FolderIdentity.cs`, `Kimi/KimiCredentialsLock.cs` | `KeyFor` hashes `FolderIdentity.Of`: Windows the upper-cased final path of the opened handle; Linux `dev_major:dev_minor:ino` from `statx(STATX_TYPE\|STATX_INO)` and only for a DIRECTORY (a symlink in the path is followed). A file, a missing path or a failed call is empty, and an empty identity has no key, so the lock is `Unusable`, never keyed by the spelling. `MarkerPathFor` names A3's `<key>.survivors.json` with the same key. |
+| Two-holders guard | `Files/HeldFile.cs` | `TakeVerified`: on Linux the file taken is checked to still BE the file at the path (`fstat` of the descriptor against `statx` of the path); a mismatch means a sweep unlinked it under the taker, so it releases and takes again, at most `MostRetakes` (3), then `Unusable`. Every Kimi lock take (gate, sign-in tree file, home file) goes through it. |
+| Native inheritable take | `Files/LinuxHeldFile.cs` | **L-N1 decided it** (RESULTS §30): .NET's `FileShare.None \| Inheritable` is a SHARED `flock` on Linux, so `HeldFile.Take(path, inheritable: true)` on Linux is `open` without `O_CLOEXEC` + `flock(LOCK_EX\|LOCK_NB)` through `LibraryImport("libc")`, behind the unchanged `Hold` union (EWOULDBLOCK is `Busy`). Every other take is .NET's. |
+| Gate record | `Kimi/KimiLockJson.cs`, `KimiCredentialsLock.TakeAsync` | On the first take (file empty) the gate writes `{identity, folder, writtenUtc}` through the held stream. A failed write never refuses a launch. |
+| Retirement | `Kimi/KimiLockRetirement.cs`, `PanelService.SweepKimiLocks`, `ConsultationSweeper` | Linux only. For each `<16 hex>.lock`: take the gate and the tree file without waiting, read the record, and unlink the key's files (and its marker) while both are held when the recorded folder is gone or has another identity now. A key that is held, has no readable record, or has a standing marker is left and said. Never throws. Runs at server start and on every beat. |
+| Survivor seam | `Kimi/KimiSurvivors.cs`, `Kimi/KimiSurvivorSeam.cs` | `IKimiSurvivors` (`BlockedAsync(markerPath)` and `KeepsHome(ownedRoot)`, both a sentence or empty) is the A2-A3 seam; `KimiSurvivors.Gate` is `ReconcilingSurvivors.Real` (the fail-closed `MarkerPresence` stand-in is gone). `BlockedAsync` is A3's reconcile: a marker whose every member is confirmed gone is CLEARED (file deleted, empty answer, the launch goes on); otherwise `KimiSurvivorGate.Sentence`. `KeepsHome` is `KimiSurvivorMarker.StandingFor(lock root, home)`: only a marker that NAMES the home keeps it, and asking never reconciles. Asked in `KimiLaunch.TakeAsync` (after the gate), `KimiShimHold.Taken` (after both tree files, hold given back on a block) and `KimiHome.Alive`, and by the retirement sweep. |
+| Listing | `Kimi/ProcessListing.cs`, `LinuxProcessListing.cs`, `HostProcessList.cs` | `ProcessListing { Listed \| Unreadable }`; `ProcessEntry` gains `Comm`. Linux: this account's processes only, exited entries and processes that left skipped, name = `exe` basename with ONE trailing ` (deleted)` stripped; an unreadable `stat`, an unreadable same-uid `exe`, an unlistable `/proc` or a listing without the shim's own pid makes the whole listing `Unreadable`. Windows: a failed snapshot or a walk that ended on a real error is `Unreadable`; macOS and 32-bit say "no process listing on this host". **A hidden `exe` (DL10 re-decided 2026-10-17):** a same-account process can hide `/proc/<pid>/exe` (`systemd --user`, `(sd-pam)`), so the name is the `exe` basename, else the `argv[0]` basename from `cmdline` (`IProcReads.Cmdline`; ` (deleted)` is stripped from `exe` only); `comm` is read beside it; only a process whose `exe` AND `cmdline` are both unreadable makes the listing `Unreadable`, naming the pid. A process that left mid-read is skipped. |
+| Foreign Kimi | `Kimi/ForeignKimi.cs`, `KimiShimHold.cs` | `Wait` returns `ForeignKimiAnswer { Clear \| Running \| Unreadable }`; `Unreadable` ends the wait at once and the shim's hold is `Busy` with `UnreadableSentence`. A Kimi is `kimi` by its exe name, or by `comm` `kimi` (the TUI). |
+| Junction shell | `Files/JunctionShell.cs`, `JunctionsNative.cs`, `JunctionsUnix.cs`, `Junctions.cs` | `SetReparsePoint` became `MakeLink(link, target)` at a path that does not exist (Windows: the shell makes the empty folder itself; Unix: `Directory.CreateSymbolicLink`, atomic). `HostAdmitted` admits Windows, Linux and WSL; macOS and Other keep the D18 sentence. After `Resolved`, a Linux or WSL host asks `MountLocality` about the real path's filesystem. The mount rule is asked of the HOST the launch is for (not the OS running the code), so a test that plays a Windows host never reads a Unix table. |
+
+Retirement, `TakeVerified` and the native take are Linux behaviours; the same code is inert (or .NET's own) on Windows, where the key is path-stable and an open `FileShare.None` file cannot be unlinked.
+
+## The verified teardown, and what a survivor does to the next launch — A3 of E5 (2026-10-16, `todo/PLAN_kimi_and_vibe_on_linux.md` DL9, S-K6, S-K14–S-K16, S-K18, S-K21, S-K22)
+
+The Linux end of a Kimi tree, and the marker that makes a survivor change the next launch's ELIGIBILITY. **Built and tested; the three call sites that consult the marker (`KimiLaunch.TakeAsync`,
+`KimiShimHold.Taken`, `KimiHome.Alive`) are wired in the integration step with A2's work — until then a Kimi tree is still ended by today's `UnsupervisedTree`, and `KimiLaunch.HostRefusal` still refuses Linux (E6).**
+
+| Piece | File (`src_mcp/…`) | What it is |
+|---|---|---|
+| Subreaper | `runners/Processes/LinuxSubreaper.cs` | `prctl(PR_SET_CHILD_SUBREAPER, 1)`, `"libc"` source-generated: `Became` / `Failed(errno)` / `NotLinux`. The FIRST statement of `AskAcpMode.RunAsync` (the overload the product calls, `Program` passes `LinuxSubreaper.Become`); `Failed` → exit 65 with the written sentence, nothing started. An in-process test calls the overload without a reaper — a test host must never become a subreaper. |
+| Supervisor seam | `runners/Processes/ITreeSupervisor.cs` | `ITreeSupervisor { Started(identity); EndAsync(process) → TreeEnd(Survivors) }`; `UnsupervisedTree` = today's `ProcessLauncher.EndTreeFirstAsync`, byte for byte (Windows; a profile without a home). Threaded `AcpHolding.Held(Hold, Supervisor)` → `AcpClient` → `AcpTransport`; `AcpOutcome.Survivors` → the shim report's `"survivors"`. `Held` keeps a one-argument constructor, so A2's `KimiShimHold` compiles unchanged and is unsupervised until it passes the Kimi one. |
+| The teardown | `runners/Processes/SupervisedTeardown.cs` | Order is the contract: list `Descendants(shim)` while the agent lives, exited entries dropped → `onListed` (the marker is written BEFORE any signal) → `SIGKILL` through a pidfd per member (`TreeSignals`, by identity) → every 100 ms re-list, reap, re-signal, up to `ProcessTree.ConfirmationBound` → stdin closed, the agent's exit awaited with no token → `TreeEnd(aliveAtTheBound)`. The kill set is EVERY live descendant, the agent and the children `Process.Start` made (`startedByUs`) included — `startedByUs` only decides whose STATUS the drain may not take (a zombie among them is left for .NET to reap), so a managed child that exited by itself keeps its own exit code and one alive at the first listing ends with 137 (pinned both ways by `SupervisedTeardownLinuxTests`, 2026-10-19). |
+| Reaping | `runners/Processes/ProcessReaping.cs`, `ReapSelection` | `waitid(P_PID, pid, …, WEXITED \| WNOHANG)` per pid — never `waitpid(-1)`; only LISTED descendants in state `Z` that this process did not start (`startedByUs`: .NET reaps those itself, a status taken from under it can end in the runtime's FailFast). A zombie is never a survivor (`ProcessTree.IsAlive` drops it — the one rule). |
+| Signals into the token | `runners/Processes/StopSignals.cs` | `StopSignals.Into(cts)`: `SIGTERM` + `SIGINT` → cancel (S-K16). In the runners rather than `src/Server/` so the fake CLI's shim uses the very registration; the two older copies (`RefusingServeAsync`, `ConsultantCheckMode`) are NOT replaced — plan Q7, asked. |
+| Marker | `runners/Kimi/KimiSurvivorMarker.cs` | `<lock root>/<key>.survivors.json`, `AtomicFile`, `KimiSurvivorMarkerDto(ReaderMarkerDto Marker, OwnedRoot, SignInFolder)` — the moved `ReaderMarkerDto` reused. `Read` → `Absent` / `Read` / `Unreadable`; `StandingFor(root, ownedRoot)` for the home disposal; source-generated JSON, camelCase. |
+| Kimi supervisor | `runners/Kimi/KimiTreeSupervisor.cs` | The phases: `Begin` writes `spawning` (a failed write → `Refused`, the shim answers 65 and starts nothing); `Started` → `running [agent]` (what a SIGKILLed shim leaves); `onListed` → `running [members]`; no survivors → delete; survivors → kept, now naming the late-born ones too, and the Busy sentence on stderr. A failed write during the teardown never skips the kill. |
+| Gate | `runners/Kimi/KimiSurvivorGate.cs`, `KimiPresence.cs` | `ReconcileAsync(markerPath, IProcessList)` → `None` / `Cleared` / `Blocked(marker, path, code, detail)`: `ReaderReconcile` over the marker with this host's seams (a pidfd, by identity, on Linux), the tri-state on every member afterwards. A `spawning` marker is cleared only over a READABLE listing with no `kimi` in it (a recorded deviation: the vendor-slot precedent blocks a nameless marker for ever). `Sentence(blocked)`: the three Busy sentences, the marker's full path, the pids and "safe to delete once …" FIRST, the card's button as an addition. `KimiPresence.Of(IProcessList)` is the ONE place that reads the listing's shape — an EMPTY list is "cannot tell", never "nobody". |
+| `ReaderReconcile` | `runners/Processes/ReaderMarker.cs` (MOVED from `src_server/src/Slots/`) | `BlockedReasons`, `ReaderPhases`, `ReaderMarkerDto`, `Reconciled`, `ReaderReconcile` — namespace `CoaiMcp.Runners.Processes`. A fifth parameter `Func<ProcessIdentity, Liveness>`; after an empty confirmation every member is asked `Alive` / `Gone` / `Unknown`, and one `Unknown` keeps the marker (`reader-member-unverifiable`, the errno in `Blocked.Detail`, which the server ignores). `ProcessTracking.StartedAt` keeps its two-state answer. |
+| The button's mode | `src/Acp/KimiClearMarkerMode.cs` | `--kimi-clear-marker <path>`: deletes ONE `^[0-9a-f]{16}\.survivors\.json$` file directly under the Kimi lock root, only when every member is `Gone`; never signals. **0** cleared or absent · **65** no path / not a marker under the root · **75** a member alive (beats unknown) · **74** a member or the file cannot be checked. One JSON object on stdout. Listed in `.agents/PROJECT.md`. |
+| Kernel refusal | `runners/Acp/KimiAcpProfile.cs` | `AgentRefusal` also asks `PidfdLayer.Refusal()` (S-K21): a kernel with no pidfd refuses before anything is held or started. `PidfdLayer.Calls` answers `ENOSYS` to everything on such a kernel — never a kill by number. |
+
+```mermaid
+sequenceDiagram
+  participant Shim as shim (subreaper)
+  participant TD as SupervisedTeardown
+  participant M as survivor marker
+  participant K as kernel (pidfd)
+  Shim->>M: spawning (before the agent starts)
+  Shim->>M: running [agent] (right after Process.Start)
+  Note over Shim: turn ends — answer, deadline, SIGTERM, premature EOF
+  Shim->>TD: EndAsync
+  TD->>TD: list Descendants(shim) while the agent lives
+  TD->>M: running [members] (BEFORE any signal)
+  TD->>K: pidfd_open, check identity, SIGKILL through the fd
+  loop every 100 ms up to ConfirmationBound
+    TD->>TD: re-list, reap Z (not startedByUs), re-signal what is alive
+  end
+  alt nobody alive
+    TD->>M: delete
+  else survivors
+    TD->>M: keep, naming them; Busy sentence on stderr
+  end
+  Note over Shim,M: next launch: KimiSurvivorGate.ReconcileAsync (gate, shim hold, home disposal)
+```
+
+**The calls the integration step makes (the callee is built here):** `KimiLaunch.TakeAsync` — after the gate file is held — `await KimiSurvivorGate.ReconcileAsync(KimiCredentialsLock.MarkerPathFor(target), HostProcessList.Current)`;
+`Blocked` → `Given(attempt, KimiSurvivorGate.Sentence(blocked))`. `KimiShimHold.Taken` — after BOTH tree files are held → the same reconcile (`GetAwaiter().GetResult()`, nothing may yield); `Blocked` → dispose the hold →
+`AcpHolding.Busy(Sentence(blocked))`; else `KimiTreeSupervisor.Begin(markerPath, places.OwnedRoot, target)` → `Ready(s)` → `new AcpHolding.Held(hold, s)` on Linux (`UnsupervisedTree.Instance` elsewhere), `Refused(sentence)` → dispose the hold →
+`AcpHolding.Unusable(sentence)`. `KimiHome.Alive(root)` — `KimiSurvivorMarker.StandingFor(KimiCredentialsLock.Root, root)` non-empty → the home is kept. `KimiLaunch.Prepare`'s `FirstOf` — `PidfdLayer.Refusal()` after `HostRefusal`.
+
+**The integration, built (E5, 2026-10-17).** A2's seam and A3's teardown are joined at one class, `ReconcilingSurvivors` (`Kimi/KimiSurvivorSeam.cs`), and one shim method, `KimiShimHold.WithNoSurvivors`. The order once both tree files are held is fixed and never yields: reconcile the previous turn's marker (`GetAwaiter().GetResult()`) → on Linux `KimiTreeSupervisor.Begin` writes this turn's own `spawning` marker → `Held(hold, supervisor)`; a standing marker gives the hold back as `Busy` (exit 69), a marker that cannot be written gives it back as `Unusable` (exit 65). Off Linux the hold is `Held(hold)` with `UnsupervisedTree`, byte for byte as before (`Taken(…, supervised)` is the seam the tests use; the product passes `OperatingSystem.IsLinux()`). `KimiPresence.Of` reads `ProcessListing` (`Listed` with entries, else cannot-tell: `Unreadable` and an EMPTY `Listed` are both fail-closed) and uses `ForeignKimiWatch.IsKimi`, the one rule shared with the foreign-Kimi wait. `KimiLaunch.Prepare` refuses a kernel without a proven pidfd road (`PidfdLayer.Refusal`) right after `HostRefusal`. The teardown signals each member through `TreeSignals.Kill(PinnedMember…)` with the exact start ticks of its own `/proc` line (`SupervisedTeardown.Ended`); a marker's members carry no ticks, so a RECONCILE still pins by the identity's start time within the slack. **The marker's owner is asked first (E5 security judge, 2026-10-17):** `KimiSurvivorGate.ReconcileAsync` (named and nameless markers) and `--kimi-clear-marker` ask the shim that WROTE the marker (`OwnerPid` + start time) before anything it names is touched. Alive → Blocked with `reader-owner-alive` and a wait sentence ("a Kimi turn is still running under coai shim pid N — it ends when its agent does; the turn is given up"; exit 75 in the button) — nothing is signalled; not checkable → `reader-member-unverifiable` (74); gone → the orphan fail-safe (today's reconcile). So the reconcile that `KimiLaunch.TakeAsync` runs under the gate alone can no longer end another live turn's agent. **Also:** the exact-ticks pin (`LivenessCheck.Linux(identity, ticks, reads, startedAt)`) requires the listing's start time to agree as well, so a pid reused between the listing and the pin is not signalled; a marker path that is empty (the folder could not be keyed after the gate was taken) is refused with the key sentence in the launch and the shim and read as unreadable by `KimiSurvivorMarker.Read`, never thrown at; `HeldFile.Take(inheritable: true)` on a host that is neither Windows nor Linux is `Hold.Unusable(PlatformNotSupportedException)`, never .NET's shared flock; `LinuxHeldFile` closes its descriptor when the stream over it cannot be made. **Three fail-open gaps closed (the epic-5 risk consultant, 2026-10-17):** (1) the Linux listing judges a process by the uids of its own `/proc/<pid>/status` (`ProcStatus.RunsAs`: real OR effective uid ours), never by the owner of its `/proc/<pid>` directory — a non-dumpable same-account process has a root-owned directory, so the old test skipped exactly the processes whose `exe` is hidden; another account's process is skipped, a `status` that cannot be read (or has no `Uid:` line) is an `Unreadable` listing, a process that left is skipped. (2) A start time is never invented: `KimiTreeSupervisor.Begin` REFUSES the turn when the shim's own start time cannot be read (an invented `UtcNow` disagrees with every later read, so a live owner would read as Gone and the next launch would end an active turn's agent); an agent whose start time cannot be read is told to the supervisor as a bare pid (`ITreeSupervisor.StartedUnidentified`: the drain never reaps it, the marker stays `spawning`, which blocks while a kimi runs) and is not a listed member (its exit is awaited, unbounded). (3) The confirmation is `TeardownRounds`, three-state: only `Gone` drops a member, a member that was listed and cannot be read this round (the listing omits what it cannot identify) is kept — `Unknown` at the bound is a survivor, so the marker stays and blocks. **The code gate's findings (E5, 2026-10-17):** ONE predicate for the host family (`HostKinds.HasKimiLockFamily`: Windows, Linux, WSL — `Junctions.HostAdmitted` and `HeldFile.InheritableSupported` both ask it) and ONE supervision decision (`KimiTreeSupervisor.IsSupervisedHost`, `[SupportedOSPlatformGuard("linux")]`, asked by the shim's hold and by the teardown); `IJunctionShell.MakeLink` creates the link's parent (the interface says so; both shells are tested); `LinuxHeldFile` names its constants after libc (`O_RDWR`, `O_CREAT`, `O_NOCTTY`, `S_IRUSR | S_IWUSR`, `LOCK_EX | LOCK_NB`, `EWOULDBLOCK`…). A marker and a gate record are read through `BoundedFile`: a link is never followed (`lstat` before the open and, on Linux, the opened descriptor compared with the un-followed path after it — .NET has no `O_NOFOLLOW` and its value differs by architecture), more than 64 KiB is refused rather than truncated, and a failure is said by its type and code, never by a message that carries a resolved path â and, since E6 gate fix 12 (2026-10-19), by the path the CALLER gave: `BoundedRead.Refused(Failure, Path)`, whose `Why` reads `{path}: {type} (code 0xâ¦)`; a caller that already names the file in its own sentence (the survivor gate, `--kimi-clear-marker`) uses `Failure`, so no sentence names the path twice. **`StandingFor` is fail-closed:** it answers `StandingMarkers { Found | Unverifiable }`, and an unreadable candidate marker (or an unlistable lock root) makes `KimiHome.Alive` KEEP the home — this replaces an earlier remark that skipping it was the safe direction, which the gate's refusal of the sign-in does not make true for a home cleanup; a marker that does name the home keeps it whatever else is unreadable. The foreign-Kimi wait says ONE line on the shim's stderr when it is about to wait (the pid and the bound), and the Linux listing stops at the first process it cannot judge. **Left for the owner / a follow-up:** a sign-in or lock folder on a network filesystem (finding 3) and `DOTNET_SYSTEM_IO_DISABLEFILELOCKING` (finding 9).
+
+**What this does not prove.** A fake agent starts the processes a test names; the real `kimi`'s sub-agents, its background shell and its MCP servers (`research/RESULTS_kimi_confinement.md` §29.8) are other processes in other places of the tree, and a `Grep`'s `rg` in its own
+session is only the one shape measured (L-K4). Nothing here ends a process by name, and `SIGKILL` is the only signal: a survivor means a process the kernel would not let this uid kill (an `EPERM`, a different uid), which is why it blocks the sign-in.
+
 ## The Kimi reviewer — `KimiRuntime` (2026-10-15, E4.4 of `todo/PLAN_vibe_and_kimi_runtimes_E4.md`)
 
 Kimi Code (`kimi`, on the person's own Kimi Code plan, signed in as itself) as a machine-only reviewer runtime, `kimi`. The adapter BUILDS the shim's request,
@@ -3662,3 +3819,69 @@ flowchart LR
 
 Tests: `KimiRuntimeTests`, `KimiIsClassifiedFromItsReportTests`, `OneKimiLaunchAtATimeTests`, `KimiIsDiagnosedInItsOwnWordsTests`, `AKimiReviewerRunsThroughTheShimTests`,
 `TheRoundsScratchDisposesItsKimiHomeJunctionFirstTests`, and the S2.45 canary re-run through the round's records in `KimiCanaryTests` — listed in [module_tests.md](module_tests.md).
+
+## Kimi on WSL2 — the host admission, the places, the cache, network storage and the marker report (2026-10-17, E6 server half of `todo/PLAN_kimi_and_vibe_on_linux.md`)
+
+E5 built Kimi's Linux mechanisms behind a closed door; E6 opens it, for WSL2 only. The extension's half (hints, install line, the *Clear the stuck Kimi marker* button, `KIMI_ON_LINUX_SINCE`) is `module_extension.md`'s.
+
+```mermaid
+flowchart TD
+  L["KimiLaunch.TakeAsync: host = KimiHost (kind + WSL generation)"] --> H{"HostAdmission.Refusal for Kimi"}
+  H -->|"Windows, a Windows kimi"| P
+  H -->|"WSL, generation WSL2"| P
+  H -->|"WSL1"| R1["refused: this is WSL1 - wsl --set-version distro 2, from Windows"]
+  H -->|"native Linux"| R2["refused: Kimi runs on WSL2 only for now"]
+  H -->|"wsl.exe bridge on Windows, macOS, other"| R3["refused: D18"]
+  P["places: ~/.kimi-code/bin/kimi; rg and fd in bin, then PATH, then ~/.local/bin"] --> E["built environment: HOME to os/, XDG_CACHE_HOME to cache/ beside it"]
+  E --> M{"MountLocality.Judge of the sign-in's real path, on EVERY launch before any process starts"}
+  M -->|"drvfs, 9p aname=drvfs, virtiofs"| R4["refused: Windows filesystem"]
+  M -->|"nfs, nfs4, cifs, smb3, fuse.sshfs, ceph, glusterfs"| N{"coai.kimiAllowNetworkSignIn"}
+  N -->|"off (the default)"| R5["refused, with the cure: a local KIMI_CODE_HOME and a separate kimi login"]
+  N -->|"on"| W["admitted; one-line warning on the launch and the card"]
+  M -->|"ext4 and the rest"| OK["admitted silently"]
+```
+
+- **DL1 — one admission for two runtimes.** `HostAdmission.Refusal(runtime, host, executable, wsl)` (`runners/Platform/`) is the single home of the host sentences; `VibeLaunch.HostRefusal` and `KimiLaunch.HostRefusal`
+  are one-line calls with the runtime's name, so the two cannot word the same refusal two ways. Admitted: a Windows host starting a Windows CLI, and `HostKind.Wsl` whose kernel is WSL2 (`WslGenerations.NamesWsl2`, the
+  shared `shared/wsl-banner-vectors.json`). Refused: WSL1 (the WSL1 sentence and its cure, run from Windows), native Linux (*Kimi runs on WSL2 only for now — it is measured on WSL2 and not yet on a native Linux host*), a
+  Windows host that would start `wsl.exe` or a `\\wsl$` path, macOS and every other host. `KimiHost` (kind + generation, with the `AsyncLocal` flow seam `KimiHost.Using` that `VibeHost` has) reaches
+  `KimiLaunch.TakeAsync` and `KimiRuntime`; the bare-`HostKind` constructors are `internal` test doors. `KimiSeams.Using` is the same kind of seam for the person's places and the shim's binary.
+- **DL5 — the CLI and the tools are found where the installers put them.** `KimiAcpProfile.InstalledExecutableFor` and `KimiPlaces` find `<KIMI_INSTALL_DIR or ~/.kimi-code>/bin/kimi` on Linux and WSL
+  (spelled with `/` by the HOST, never `Path.Combine`); macOS still guesses nothing. `KimiTools` searches the person's bin, then `PATH`, then `~/.local/bin` (a third place — where DL12's `fd` link goes), and the
+  directory each of `rg` and `fd` was found in joins the built `PATH` through `ToolFolders`, so a `~/.local/bin/fd` is found though the editor's `PATH` lacks it. A candidate counts only when it is an executable file
+  (`ExecutableResolver.IsInstalledFile`, extracted from `VibeRuntime` rather than copied). **The refusal names the cure of the host (S-K9, S-K17):** on Windows the two `winget` lines as before; elsewhere the
+  `sudo apt-get install -y ripgrep` / `fd-find` line when `apt-get` resolves on `PATH` (with the `fdfind` link, because Debian and Ubuntu name fd's program `fdfind`), else the `dnf` line, else *install ripgrep and fd with
+  your distribution's package manager, or place them on PATH or in ~/.local/bin* — never `winget`; `KimiHome`'s `bin/` sentence says the same.
+- **DL11 and S-K8 — the environment.** `KimiEnvironment.Built(request, places, parentPath, windows)` is seven names on Windows and five on Linux and WSL: `KIMI_CODE_HOME`, `KIMI_CODE_NO_AUTO_UPDATE`, `HOME` → `os/`,
+  `XDG_CACHE_HOME` → `<owned root>/cache` and `PATH`; no `USERPROFILE`, `HOMEDRIVE` or `HOMEPATH`. The platform is a stated parameter (the short overloads ask the machine), so both shapes are unit tests on any
+  machine. `cache/` sits beside `os/` and NOT inside `home/` (whose shape `KimiHome` judges), is made `0700` by `KimiHome.Made` (and by the version probe's throwaway root), is refused if it is a link, and goes with the
+  owned root. Kimi's native-file extraction (about 2 MB per launch, L-K3) lands there; `os/` stays empty and `KimiHome.OsProblem` is unchanged. The refusal checks `HOME` and the cache on Unix.
+- **DL6 — network storage (decided by the owner 2026-10-19, Q7 option A: refused by default, admitted with a warning by `coai.kimiAllowNetworkSignIn`).** `MountEntry.IsNetwork` (`nfs`, `nfs4`, `cifs`, `smb3`, `fuse.sshfs`, `ceph`, `glusterfs`); `MountLocality.Judge(...)` answers a `MountVerdict`
+  (`Refusal`, `Warning`): a sign-in folder there is refused with the plan's sentence — *your Kimi sign-in folder is on network storage (type); a Kimi on another machine that shares this home can refresh the same
+  sign-in and sign you out, and coai cannot see it. Point `KIMI_CODE_HOME` at a folder on this machine's own disk … and sign in there once with `kimi login`, or set `coai.kimiAllowNetworkSignIn` …* — unless the
+  default-off override is on, when it is admitted and the launch (and the providers row) carries one line. A Windows filesystem and an unreadable table are refused whatever the override says; a local disk is admitted
+  silently. **How the setting travels:** the extension writes `COAI_KIMI_ALLOW_NETWORK_SIGNIN` into the data directory's `settings.json` like every other `COAI_*` setting (an environment variable in the client's config wins);
+  `PanelSettings.KimiAllowNetworkSignIn` reads it through `Flag` (an unreadable value stays OFF); the roster and the question fan-out put it on `ReviewerSettings.KimiAllowNetworkSignIn`; `KimiRuntime.Build` binds
+  the invocation to an adapter that carries it (immutable, per launch — no global), and `KimiLaunch.TakeAsync(…, allowNetworkSignIn)` hands it to `KimiHome.Made` → `Junctions.Make`.
+- **The review of 2026-10-18 — the override is judged on every launch, and the spelling check follows it (B, C).** `KimiHome.Made` ran the only mount check (`Junctions.Make` → `Refusal`) when the home was FRESH, so a
+  home made under `coai.kimiAllowNetworkSignIn` stayed usable after the person switched it off, and a folder that moved from a local mount to a network one between two launches was never looked at again.
+  `Junctions.Locality(host, target, allowNetwork)` is now asked by `KimiLaunch.Rendered` on EVERY launch, after the credentials folder is known to exist and before the home, the lock or `--version`: the three checks of
+  `Refusal` that are about WHERE the folder is — `LocalDrive` (the spelling), `Resolved` (where its ancestors really lead) and `Mounted` (the filesystem) — as one call, so the two cannot say different things (the
+  link's own checks keep their order). `KimiLaunch.LocalHome` and `Junctions.LocalDrive`/`Resolved` ask one spelling rule, `Junctions.IsLocalSpelling(host, path, driveType, allowNetwork)`: `IsLocal`, and — on a Linux or
+  WSL host with the override on — also the automount spellings `/net/`, `/misc/` and `/Network/` that a network home has (a Windows host never gets the extra, so a UNC home stays refused whatever the setting says;
+  `//server/share` is never admitted). With the override on, the mount table still judges the filesystem and says the warning; with it off the D19 sentence stands as before. **E6 code-gate fix 11 (2026-10-19):** that D19 sentence â and the `Resolved` one â now ends with the cure the mount refusal carries when a Linux or WSL host is refused for an automount spelling (`Junctions.Cure`): point `KIMI_CODE_HOME` at a folder on this machine's own disk and sign in there once with `kimi login`, or set `coai.kimiAllowNetworkSignIn` if Kimi never runs on another machine. Before, a home under `/net/` was refused by its spelling first and never reached the mount refusal, so the person never saw the cure. A Windows host keeps its own sentence (it has no override to offer); a spelling that is no automount folder has no network cure to give. The D18 refusal for a host that does not admit Kimi no longer keeps its own list of hosts: it says "a host that admits Kimi" and names the refused host, and `HostKinds.HasKimiLockFamily` is the only place the hosts are listed.
+- **`--kimi-clear-marker` reads, checks and deletes under the sign-in's gate (D).** The mode took the marker, asked the liveness seam and deleted, with nothing between a turn that started in that window and the delete.
+  It now takes `KimiCredentialsLock.TakeAsync(marker.SignInFolder)` (waited `GateWait`, 20 s) around the whole of read → check → delete, re-reads the marker UNDER the gate, and deletes only when
+  `KimiSurvivorMarker.Holds(path, judged)` — the file still serialises to the marker that was judged. A gate that cannot be taken in time (a launch holds it while it asks `--version`), or cannot be opened, keeps the marker
+  and exits 74 (*cannot verify*), as does a marker that changed while it was judged; a sign-in folder with no key (it is gone) has no gate to take — nothing can be launching on it — and is judged without one.
+- **The Linux cure for `fd` and the closing check follow the server (F, H).** `KimiTools`' cure sentence says `ln -sfn` and *unless ~/.local/bin/fd is already your own file* (never `ln -sf`, which follows a planted link
+  to a folder and writes inside it — the install line has always used `-sfn`). The install line's closing check looks Kimi's `bin`, then `PATH`, then `~/.local/bin` — the order of `KimiTools.Directories` — and DL12 of the
+  plan says so now (DL5 always did).
+- **DL9's report for the panel button.** The Kimi row of `coai-mcp --providers` carries `survivorMarker = { "path": <marker file>, "pids": [<int>…] }` when a marker of THIS sign-in stands
+  (`KimiRuntime.StandingMarker` → `KimiSurvivorMarker.StandingReportFor(KimiCredentialsLock.MarkerPathFor(credentials), …)`): ABSENT otherwise; `pids` empty for a `spawning` marker or one that cannot be read (it still
+  blocks the sign-in); never another sign-in's marker (the path is keyed by this folder); not reported while the shim that wrote it still runs (a turn in progress, the gate's own first question). The path is exactly what
+  `--kimi-clear-marker` accepts (sixteen hex digits and `.survivors.json`, directly under the lock root; a test runs the mode on the reported path).
+
+**Not built here, by the plan's own scope:** a Kimi consultant and a Kimi question row (`RuntimeCapabilities.Runtimes` and `ConsultantResolution` do not list Kimi; that is `feat/kimi-consultant`'s), so the harness
+has a plan round and a code round and no consult or question flow for Kimi. Tests: `KimiLaunchChecksTests` (S-K20), `KimiToolsOnLinuxTests`, `KimiPlacesOnLinuxTests`, `KimiEnvironmentOnLinuxTests`, `MountLocalityNetworkTests`,
+`KimiNetworkSignInSettingTests`, `KimiSurvivorMarkerReportTests`, `AKimiRowRunsThroughTheServiceOnWsl2Tests` — listed in [module_tests.md](module_tests.md).

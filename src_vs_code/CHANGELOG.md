@@ -1,5 +1,59 @@
 # Changelog
 
+## Extension 0.80.2 — 2026-10-19
+
+**No change in what the extension does.** This release ships with coai-mcp 0.60.2, whose local review lines in
+`usage.jsonl` now carry their round. The Usage page already read a line's `round` from either source, so a local line
+keeps the round key the engine stamped, a line with an empty round reads as a line with no round, and the round changes
+no count or total: two launches of one round are still two runs, with their tokens summed once. New tests hold these
+three facts, and the doc comments on the usage entry now describe the local line as it is.
+
+## Server 0.60.2 — 2026-10-19
+
+**Fixed: one bad field in a reviewer row costs that row only.** A hand-edited member of the wrong JSON type in
+`COAI_VENDORS` (for example `"timeoutMinutes":"30"`) used to make the whole list read as empty, so the server quietly
+ran the shipped default reviewers in place of every row the person wrote. A `null` row crashed the server at startup.
+Now the rows are read one by one. A row that does not read is left out on its own, the others still review, and the
+server names the row and the member in `providers`, in the startup and reload notice, and in the panel's toast. If
+every row is refused, no reviewer runs, the same as for an empty list.
+
+**Fixed: a local review line in `usage.jsonl` carries its round.** Every launch of one review turn — the first, a
+repair, a follow-up and every earlier turn of a conversation — now writes the round key the engine stamped, under the
+same `round` field the Team server's lines use, so a local line can be joined to its round. A launch outside a round,
+and consultation, question-row and probe lines, write none.
+
+## Team server 0.13.1 — 2026-10-18
+
+**Fixed: rounds per 1 % of quota is counted from one rise to the next, and pooled** (the server's half of the same
+fix as coai-mcp). `/api/usage`'s per-window figure keeps the rounds of readings whose percentage did not change,
+starts a new baseline after a fall, and pools all rounds over the total rise of the last ten intervals. A launch the
+server requeued after a rate-limit refusal is no longer counted as one of its round's launches, so the launch that
+ran carries the whole round. codex stays hidden on every limit of the account.
+
+## Extension 0.80.1 — 2026-10-18
+
+**Changed: the help says how rounds per 1 % is counted now,** in all five languages: from one rise of the
+window's percentage to the next, pooled over the last ten such rises. When a figure is unavailable because the
+percentage has not moved yet, the reason now reads *the percentage has not risen yet*.
+
+## Server 0.60.1 — 2026-10-18
+
+**Fixed: rounds per 1 % of quota is counted from one rise to the next, and pooled.** The `gauge` block of
+`--round-counts` and the Team server's `/api/usage` read one shared derivation, and it had two faults:
+- It dropped any pair of readings whose whole-number percentage did not rise, together with the rounds between them.
+  So 10, 10, 10, 11 % with a round between each counted 1 round per 1 % instead of 3, and the figure leaned low.
+- It averaged the intervals' ratios weighted by rounds, which gave 2.375 where the true figure is 4/3.
+
+Now:
+- An interval keeps its starting reading through readings that did not change, adds up their rounds, and closes when
+  the percentage rises.
+- A reading that falls without a reset starts a new baseline.
+- A reset, a stale or missing reading, a launch with no reading, or a review without a round voids the span.
+- A percentage outside 0–100 counts as a missing reading.
+- The figure is pooled: all the rounds over the total rise of the last ten intervals.
+- When there is no figure, the reason is the real one, not "too few readings".
+- codex stays hidden, now on every limit of the account.
+
 ## Extension 0.80.0 — 2026-10-18
 
 **Added: the model card sets a row's prompt cap.** The Models card has a new box, "Largest prompt it reads, KiB". It

@@ -13,6 +13,10 @@ public static class Repositories
     /// <summary>Backslashes folded to <c>/</c>, trailing separators dropped.</summary>
     public static string Normalise(string path) => path.Replace('\\', '/').TrimEnd('/');
 
+    /// <summary>Whether two paths name the same root: equal under <see cref="Normalise"/> and <c>OrdinalIgnoreCase</c>.</summary>
+    public static bool SameRoot(string left, string right) =>
+        Normalise(left).Equals(Normalise(right), StringComparison.OrdinalIgnoreCase);
+
     /// <summary>
     /// Whether <paramref name="path"/> is <paramref name="root"/> or under it. The separator is part of the test, so <c>/repo-two</c>
     /// is not inside <c>/repo</c>; case is ignored, ordinally. Either side empty is false.
@@ -43,8 +47,13 @@ public static class Repositories
     /// <summary>Absolute, and free of dot segments: the only paths membership is decided for.</summary>
     private static bool IsPlace(string path) => IsAbsolute(Normalise(path)) && !HasDotSegment(Normalise(path));
 
-    private static bool IsAbsolute(string normalised) =>
-        normalised.StartsWith('/') || (normalised.Length >= 2 && char.IsAsciiLetter(normalised[0]) && normalised[1] == ':' && (normalised.Length == 2 || normalised[2] == '/'));
+    private static bool IsAbsolute(string normalised) => normalised.StartsWith('/') || IsDrivePath(normalised);
+
+    private static bool IsDrivePath(string normalised) =>
+        normalised.Length >= 2 && char.IsAsciiLetter(normalised[0]) && normalised[1] == ':' && IsDriveRoot(normalised);
+
+    /// <summary>A drive letter and colon end the path or are followed by a separator: <c>C:</c> and <c>C:/x</c>, never <c>C:x</c>.</summary>
+    private static bool IsDriveRoot(string normalised) => normalised.Length == 2 || normalised[2] == '/';
 
     private static bool HasDotSegment(string normalised) => normalised.Split('/').Any(segment => segment is "." or "..");
 }

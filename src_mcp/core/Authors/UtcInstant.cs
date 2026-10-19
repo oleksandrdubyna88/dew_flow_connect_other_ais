@@ -10,8 +10,14 @@ public static class UtcInstant
     /// <c>default</c> means <i>not recorded</i> and is null, never an instant. An unspecified kind is the UTC value it was written as
     /// (<c>SpecifyKind</c>); only a local kind, whose offset is known, is converted.
     /// </summary>
-    public static DateTimeOffset? From(DateTime value) =>
-        value.Ticks == 0 ? null : new DateTimeOffset(value.Kind == DateTimeKind.Local ? value.ToUniversalTime() : DateTime.SpecifyKind(value, DateTimeKind.Utc));
+    public static DateTimeOffset? From(DateTime value) => value.Ticks == 0 ? null : Of(value);
 
     public static DateTimeOffset? From(DateTime? value) => value is { } instant ? From(instant) : null;
+
+    /// <summary>
+    /// The rule itself, for a value that is always recorded: a local kind is converted by its known offset, anything else is the UTC
+    /// value it was written as. A caller with a non-null instant uses this and never spells <c>SpecifyKind</c> again.
+    /// </summary>
+    public static DateTimeOffset Of(DateTime value) =>
+        new(value.Kind == DateTimeKind.Local ? value.ToUniversalTime() : DateTime.SpecifyKind(value, DateTimeKind.Utc));
 }

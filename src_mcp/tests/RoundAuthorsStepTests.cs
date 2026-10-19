@@ -591,6 +591,21 @@ public sealed class RoundAuthorsStepTests : IDisposable
         sink.Lines.Should().NotContain(line => line.Contains(FixtureManifest.Sentinel, StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void APeerLookupThatDidNotComplete_SaysWhyInTheLog_AndTheSnapshotOnlySaysPriorWindowsUnknown()
+    {
+        using var h = AuthorsStepHarness.Of("resumed-agent");
+        var sink = new ListSink();
+        var log = new Serilog.LoggerConfiguration().MinimumLevel.Verbose().WriteTo.Sink(sink).CreateLogger();
+        var round = h.Round(1);
+
+        var snapshot = h.Step(peers: (_, _) => AuthorPeerSet.Unknown("no rounds database"), log: log).For(h.SessionBefore(round), round)!;
+
+        sink.Lines.Should().Contain(line => line.Contains("no rounds database", StringComparison.Ordinal),
+            "AuthorPeerSet.Why exists for a Debug line: a lookup that did not complete must say why somewhere");
+        snapshot.Reasons.Should().NotContain(reason => reason.Contains("database", StringComparison.Ordinal), "the why is a diagnostic, never a reason");
+    }
+
     // ---------- writes into other checkouts ----------
 
     [Fact]

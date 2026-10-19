@@ -1,6 +1,6 @@
 # PLAN — E4 stories: attribution — windows, the association ladder, ambiguous totals, contributors
 
-> Status: **S1–S5 implemented on `feat/round-authors-e4`, 2026-10-19 (draft pull request #862, not merged; code gate not yet run); §12 is the implementation record — its deviations and the two E7 confirmations. Plan 2026-10-14, revised 2026-10-16 and 2026-10-17.** Epic E4 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
+> Status: **code built, code gate `good_enough`, 2026-10-19 — S1–S5 implemented on `feat/round-authors-e4` (pull request #862, not merged; the coai code gate ran one round, 13 of 16 reviewers, 4 findings accepted and fixed or recorded, §12); Fable reviewed the code on 2026-10-19 and ACCEPTED every deviation of §12, and its wording changes are applied in place below; §12 is the implementation record — its deviations and the two E7 confirmations. Plan 2026-10-14, revised 2026-10-16 and 2026-10-17.** Epic E4 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
 >
 > **Revised 2026-10-16 against main** (`59463d73`: E1 #828, E2 #829 and the plan-gate fix #837/#841 shipped since the
 > first text; E3 is not built). Every `path:line` re-verified — the drift is §8.1, and the S2 text keeps the numbers Fable
@@ -204,7 +204,9 @@ agent is inert, §S2.2b G4: its launch is the `UnobservedLaunch` E3 emits for it
 `tool_result` line's instant — a member E3 owes, §S2.2b G3); `GateRound.CompletedUtc` is `UtcInstant.From(RoundRecord.CompletedUtc)`
 when `Status == done` and null otherwise (the core applies the same rule again, §S2.3 *Tiling*); every E3 `ObservationReason`
 except `agent call without transcript` and `meta without transcript` becomes a `StateReason(Code, At: null)` (§S2.2b G5);
-`Effort` `"unknown"` as is; `TokenTerms` from `TokenUsage` term by term. Nothing in the mapping decides anything.
+`Effort` `"unknown"` as is; `TokenTerms` from `TokenUsage` term by term; **`main` is never listed in `Agents`** (E3 lists it
+with no launch; every rule reads `main` as implicit — `AttributionMapping.Observation`, Fable 2026-10-19). Nothing in the mapping
+decides anything.
 
 `Peers` are the OTHER gate sessions this caller session served (E5 finds them in the store by
 `rounds.authors_session`, else `rounds.caller` when it is a UUID — §S2.8 is the rule; *aligned 2026-10-16, E5 §8.5*);
@@ -248,7 +250,7 @@ defaults to `at`, and a test moves it past a completion to plant a late result �
 `.Peer(timeline)`. Every instant is ONE fixed base `2026-10-14T12:00:00Z` plus minutes, never `now`
 (testing.md, *A test that reads the clock expires*). Message ids are generated deterministically (`m-0001`, …).
 S1 adds `AttributionInput.Validate()` returning the list of contract violations (a message whose agent is not
-declared, a write by an undeclared agent, rounds out of journal order, a `(Stage, Number)` not in
+declared, a write by an undeclared agent, an agent declared twice (added in the code and accepted by Fable, 2026-10-19), rounds out of journal order, a `(Stage, Number)` not in
 `Gate.Rounds`, the caller's `CallerSessionId` differing from the attributed round's, a `MessageId` twice — and, added
 2026-10-16, a `(Stage, Number)` listed twice in one journal (E1's `replay-same-round-twice` fixture, `c13`, has exactly
 that; tiled, the copy would open an empty window and the round would be looked up twice), and a parent chain that does not
@@ -437,14 +439,14 @@ One row per item: the decision, its reason, the evidence, and where the rule now
 | # | Decision | Reason | Evidence | Where |
 |---|---|---|---|---|
 | G1 | **A completion ranks only on a `done` round.** `Windows.Of` sets `Window.CompletedUtc = r.Status == done ? r.CompletedUtc : null`; E5's mapping applies the same rule (belt and braces); a running peer that carries a stamp ranks last and claims nothing | the stamp is positional and every row has one: the running row goes through `Record()`, whose sixth argument is `DateTime.UtcNow`; `Finish` and the sweep overwrite it. A rule that read the stamp would rank a running peer by the time of its last progress tick | `LiveRound.cs:256`, `:269-276`; `:235-237`; `SessionStore.cs:84`, `:626`; E5 `:65` says a running peer "is in the file with no completion" — false, listed for E5 | §S2.3 *Tiling*, *Rank*; fact `ARunningPeerWithAStamp_RanksLast` |
-| G2 | **`PriorEnd` is the end of the SETTLED PREFIX, and only settled windows claim.** Walk the peer's recorded rounds in journal order while each is settled (`done`), non-blind, of this caller and started at or before the gate's open; `PriorEnd` = the last such round's start, null when the walk stops at once. `ClaimantsOf` admits settled windows only | the equality "owned set with `PriorEnd` = owned set without it" needs every message before `PriorEnd` to lie in a window that WILL claim it; a running round's window may vanish (interrupted), a blind one places nothing, another caller's claims nothing — so the walk stops at the first of them instead of skipping it (an orphaned `running` row can sit before a `done` one in a journal: the sweep runs at startup, `IsOrphaned` `SessionStore.cs:718-719`) | risk consultation turn 1 item 2 (A starts `+60` running, B opens `+100`, message `+30`); case 7 | §S2.3 *Prior end*, *Claimants*; case 8c; fact `APriorEndStopsAtTheFirstUnsettledPeerRound` |
+| G2 | **`PriorEnd` is the end of the SETTLED PREFIX, and only settled windows claim.** Walk the peer's recorded rounds in journal order while each is settled (`done`), non-blind, of this caller, started at or before the gate's open, and whose window ranks BEFORE this gate's before-open window (it completed before this gate's first recorded round completed — *the fifth condition, Fable 2026-10-19: a peer round that completes after this round never bounds it; if it did, the bound would become an ownership rule*); `PriorEnd` = the last such round's start, null when the walk stops at once. `ClaimantsOf` admits settled windows only | the equality "owned set with `PriorEnd` = owned set without it" needs every message before `PriorEnd` to lie in a window that WILL claim it; a running round's window may vanish (interrupted), a blind one places nothing, another caller's claims nothing — so the walk stops at the first of them instead of skipping it (an orphaned `running` row can sit before a `done` one in a journal: the sweep runs at startup, `IsOrphaned` `SessionStore.cs:718-719`) | risk consultation turn 1 item 2 (A starts `+60` running, B opens `+100`, message `+30`); case 7 | §S2.3 *Prior end*, *Claimants*; case 8c; fact `APriorEndStopsAtTheFirstUnsettledPeerRound` |
 | G3 | **The owner of stored uniqueness is E7's backfill; E4 makes the two hazards decidable.** (i) *Late-answered write:* a write is evidence for a round only when `AnsweredAt < that round's CompletedUtc` — THIS round's completion for the own ladder, the CLAIMANT round's for a claimant's ladder — applied live and backfilled alike, so the live view is reproducible exactly and the hazard is gone (`ObservedWrite.AnsweredAt`, a member E3 owes). (ii) *Concurrent completion:* a window overlapped by a not-settled same-caller peer window is `partial: peer running` — ownership was decided from an unsettled store and is PROVISIONAL; E5 stores it as it is and never repairs another gate's rows live (it holds no claim on that session); E7 recomputes exactly the rows whose reasons include `peer running` once no overlapping round of a named peer is still `running` (done or interrupted — *final*, M7) — one of the TWO exceptions to "equal reader → keep" (the other is E5's lost-snapshot recompute, E5 §10 item 11; L10) — and writes the result under that session's claim. (iii) The assignment names the peer gates it saw (`PeerGates`, ids only) so a backfill can tell a round whose peer set grew (a peer whose projection failed, `Projection.Write` is best-effort) and recompute it too | uniqueness of STORED rows is a property across gate sessions, which only a process that sees them all after they settled can hold; a live cross-gate repair would write another session's file mid-round without its claim. Without a marker the backfill cannot tell a provisional row from a final one, and the no-overwrite rule would freeze the duplicate | `SessionClaim.cs:32-38` (the key is repo + branch + document + feature, never the caller); `LiveRound.cs:237` (stamp) → `RoundEngine.cs:485-496` (the record; E5's step is the statement after it) → `:591` (save) → `:612` (projection); `Projection.cs:24-38`; parent §9 ("never overwrites an `observed`/`partial` row produced by a newer or equal reader version"); E7 `:165-174` rule (2) | §S2.3 *States*, *Claimants*; §S2.4 *WriteRung*; §S2.5 `PeerGates`, `RoundAttribution.Version`; §11 cross-epic list (E3, E5, E7, parent) |
 | G4 | **One missing transcript is one item and one reason.** Only `UnobservedLaunch`es make unobserved-launch items and `partial: <why>`; an `ObservedAgent` with `TranscriptPresent = false` is inert (declared, no launch, no item, no reason; `FirstLineAt` nullable and read by no rule). `c05` → 2 | E3 emits BOTH records for one meta without a file: the key goes into `Agents` with `TranscriptPresent = false`, and step 8a emits `UnobservedLaunch(ParentKey, ToolUseId, CalledUtc, MetaWithoutTranscript)`; the reason text lives on the launch, not on the agent | E3 `:206-210`, `:880-881`, `:916-917`; E3 test 20 (`:1049`): `UnobservedLaunches.Count == 2` on `c05`; test 22 (`:1051`) | decision 9; §S2.3 *What is placed*, *States*; S1's record comment; fact `AMetaWithoutATranscript_IsOneUnobservedLaunchNotTwo` |
 | G5 | **Every E3 reason arrives with `At = null` and marks every window of the round.** The mapping turns each `ObservationReason` into `StateReason(Code, null)` — except `agent call without transcript` and `meta without transcript`, which are not mapped as reasons at all: their instants ride on the `UnobservedLaunch`es (G4), so a missing child marks only ITS window and decision 9's "other windows stay observed" holds. S3's state table is corrected: the "read budget hit before the window's end" row is gone — a read budget marks every window | `ObservationReason(Code, Count)` has no instant; placing a reason by guessing an instant would be inference. A whole-session reason (torn middle line, read budget, inconsistent transcript) IS about every window — nothing is lost by saying so | E3 `:231`; E3 step 10 (`:924-926`): reasons are counts ordered by code | §0 table; §S2.3 *States*; S3 *State*; fact `AnE3ReasonWithoutAnInstant_MarksEveryWindow` |
 | G6 | **`AssignEvery` runs over the SETTLED rounds of the observation's caller only**, in every timeline; a round of another caller or a running round is skipped (both would fail `Validate()`); the `PeersKnown = false` scenario of case 7 is outside identity 2 by design (it duplicates and says so). `Validate()` refuses attributing a round that is not recorded and settled | identity 2 is a statement about what THIS caller's transcript lets the settled rounds own; another caller's rounds read another transcript | §S2.5 identity 2; S1 `Validate()`; case 8b (B C1 by `c9`), *Caller changed* | §S2.5; §S2.9 item 2 |
 | G7 | **The token identity, restated over message ids**: over `AssignEvery`, every message id placed in some window of some settled round of this caller is either owned exactly once (its tokens counted once) or owned by nobody and labelled `wrote elsewhere` in EVERY assignment that places it; so Σ owned tokens = Σ tokens of the ids owned somewhere. `cx +10` (owned by A, `wrote elsewhere` in B) is counted once | a message `wrote elsewhere` from one gate is normally `wrote here` from another — subtracting it was wrong whenever it was owned | §S2.10 `NoMessageIsOwnedTwiceTests` | §S2.5 identity 2 |
 | G8 | **§S2.1 now says what decision 1 says**: a recorded round with no `StartedUtc` is blind, it and the next recorded round are `unobserved: no round start`, nothing is re-tiled into a neighbour | one rule, two texts | §S2.1 vs decision 1 | §S2.1 |
-| G9 | **Per-window state AND totals are kept.** `RoundAuthors` gains `Windows: ImmutableArray<WindowAuthors>` — one per window of the round, empty windows included, each with its `State`, `Reasons`, `Ambiguous`, `Elsewhere`, `ClaimedByPeer`, `UnobservedLaunches`; the round-level members stay as the roll-up (the WORST state, reasons distinct in window order, totals summed — `Unknown` when any window is `unobserved`). `AuthorRow` and `ActivityTotals` are unchanged (final); `RoundAuthors` was never declared final, and the addition is announced to E5 (snapshot ≈ +300 B a round) | E6 leaves `before-open` out by default and then cannot know the state or the ambiguous share of the windows it keeps: "before-open partial, round observed" and the reverse store the same round state, and a before-open that is `unobserved: no open time` makes the whole round `Unknown` although the round window was read | cadence consultation item 2; E6 D2/D3 (`feat/round-authors-e6` `:74-75`) | S3 *The records*, *State*; §S2.5 last paragraph |
+| G9 | **Per-window state AND totals are kept.** `RoundAuthors` gains `Windows: ImmutableArray<WindowAuthors>` — one per window of the round, empty windows included, each with its `State`, `Reasons`, `Ambiguous`, `Elsewhere`, `ClaimedByPeer`, `UnobservedLaunches`; the round-level members stay as the roll-up (the WORST state, reasons distinct in window order, totals summed — `Unknown` when any window is `unobserved`). `AuthorRow` and `ActivityTotals` are unchanged (final); `RoundAuthors` was never declared final, and the addition is announced to E5 (snapshot ≈ +300 B a round) | E6 leaves `before-open` out by default and then cannot know the state or the ambiguous share of the windows it keeps: "before-open partial, round observed" and the reverse store the same round state. Both windows of a first round are blind together (open and start are their shared edges); a blind round has no counted window (*corrected 2026-10-19, Fable: the text said a blind before-open left the round window counted, which cannot arise — §12 deviation 2*) | cadence consultation item 2; E6 D2/D3 (`feat/round-authors-e6` `:74-75`) | S3 *The records*, *State*; §S2.5 last paragraph |
 | G10 | **The agent counts are per total, not a partition; turns, launches and tokens are.** `Ambiguous.Agents` = distinct agents of owned `ambiguous` items ∪ agents with `AgentAssociation(ambiguous, two repositories)` in the window (decision 4: a two-repositories agent is ambiguous in every gate that saw two repositories, whatever owns its messages); `Elsewhere.Agents` / `ClaimedByPeer.Agents` = distinct agents of those items. The two-repositories row has `Model = Requested = Effort = "unknown"`: it carries authorship evidence (write calls), not a model claim; its models are in the ambiguous totals, which carry none (§8.3 item 7). S3's sentence becomes "the two `unknown` rows are the launch-only row and the two-repositories row". `BothGatesCountOneAmbiguousAgent` moves to S3 | S2 makes no totals; a count rule belongs where the counting is | §S2.6 *Two repositories, one agent*; S3 *Grain* | S3 *Grain*, *Agent counts*; `ATwoRepositoryAgentKeepsItsWritesAndAddsNoTokenTests` |
 | G11 | **Completion rank stays; the caller-level shared total is rejected.** With rank, the first-completed settled window owns contested activity; `claimed by peer` names the allocation on the other side; E6 states the convention in one sentence and never reads the allocation as evidence of a repository or a model. *Rejected:* a shared total that no gate owns. Reasons: (1) it needs an entity no store has — rounds are per gate session, `sessions` per repo + branch; a caller-level aggregate is a new table, a new writer under no claim and a new backfill target, carried by E5, E6 and E7; (2) it is not decidable live — a shared total is known only when every gate of the caller has settled, so the card could never show it and the report would wait for the backfill (parent §8: it does not); (3) ambiguous activity is already kept out of repository and model conclusions (parent §6 "never guessed"), so the allocation decides a number in a column no conclusion reads — what matters is once (identity 2) and labelled (`claimed by peer`, and E6 can read "seen by two gates" per round as `ClaimedByPeer`); (4) rank is the one rule that keeps live = backfill for ownership (D24), which a shared total would have to solve again for its own writes. Cost accepted and stated: the first-completed gate's `Ambiguous` totals carry activity that may equally belong to the other gate | the consultant called rank "defensible as an accounting convention but no repository evidence" — both halves are right, and the second is already how E6 treats `ambiguous` | risk consultation turn 1; parent §16 D24; E6 `:74-75`, `:496` | decision 3; §11 cross-epic list (E6) |
 | G12 | **Small text points.** (a) one ordering word: states are ordered `observed < partial < unobserved` by badness and the WORST wins, in §S2.3 and §S2.5 (E6 D3 uses the same word); (b) claimant containment is `P.Contains(t)` (a null `From` is unbounded); (c) the `SessionRung` destination set is built over EVERY gate in the input — `input.Gate` and every `input.Peers[*]` — whichever gate the ladder runs for, so a peer's ladder sees this gate's `repo_path` as a destination; (d) `NoInputMemberIsACwd` and `ABashCallIsNotAWrite` are positives: a shell cannot fail them, and their break-its (§S2.11 rows 4 and the `ABashCallIsNotAWrite` plant) are what prove them; (e) the four anchors are corrected in place (`SessionStore.cs:278`, `:608-631`/`:626`, `RoundEngine.cs:900` twice) and §11's E3 anchors with them (`:880-881`, `:912-917`, `:231` on the E3 document named above) | — | own review; §8.1 | §S2.3, §S2.4, §S2.5, §S2.10, §S2.11, the scope paragraph |
@@ -479,10 +481,14 @@ recorded starts decrease; equal starts give an empty window, which is legal.
 
 **Prior end** (`Windows.PriorEnd(gate, peers, caller)`, *rewritten 2026-10-16, G2*): for each peer whose `RepoPath` is
 `Normalise`-equal to the gate's, walk its recorded rounds in journal order while the round is settled, non-blind, has
-`CallerSessionId == caller` and `StartedUtc ≤ open`, and take the LAST such round's start — the end of the peer's **settled
-prefix**; the walk stops (does not skip) at the first round that fails any of the four, because a running round's window
-may vanish when it is interrupted, a blind window places nothing and another caller's window claims nothing, and a
-message in any of them would be owned by nobody with the bound and by this gate without it. `PriorEnd` is the maximum
+`CallerSessionId == caller`, `StartedUtc ≤ open`, **and its window ranks BEFORE this gate's before-open window** (it completed
+before this gate's first recorded round completed — `Windows.Precedes`; *the fifth condition, added by Fable 2026-10-19,
+§12 deviation 1*), and take the LAST such round's start — the end of the peer's **settled prefix**; the walk stops (does not
+skip) at the first round that fails any of the five, because a running round's window may vanish when it is interrupted, a
+blind window places nothing, another caller's window claims nothing, and a window that ranks after this gate's claims
+nothing from it either — a message in any of them would be owned by nobody with the bound and by this gate without it. A
+peer round that completes after this round never bounds it: if it did, the bound would become an ownership rule
+(`Windows.cs` `PriorEnd`, `SettledPrefixEnd`, `ClaimsBefore`). `PriorEnd` is the maximum
 over the peers; null when every walk stops at once, or when `PeersKnown` is false. It is a READ bound, not an ownership
 rule: §S2.6 case 7 proves the owned set is the same with and without it, and case 8c proves the walk must stop.
 
@@ -501,7 +507,8 @@ with `P.CallerSessionId == caller`, not blind, **settled** (`P.CompletedUtc` not
 1. `own = ladder(g, W, gate)`. If `own == wrote elsewhere` → the item is **`wrote elsewhere`** (not owned; the root is
    kept on the placement). Claimants are not consulted: elsewhere is this gate's own evidence.
 2. Otherwise, for each claimant `P` in rank order with `P.Contains(t)` (*G12b: a null `From` is unbounded*): if
-   `ladder(g, P, P's gate)` is owning → the item is **`claimed by peer`** (`OwnerGate = P.Gate`). Stop at the first.
+   `ladder(g, P, P's gate)` is owning → the item is **`claimed by peer`** (`OwnerGate = P.Gate`). Stop at the first. The
+   placement keeps this gate's OWN rung; `OwnerGate` names the peer (*Fable 2026-10-19; `Ownership.Of`*).
 3. Otherwise the item is owned here with association `own`, rung as the ladder says.
 
 **Owning** associations: `wrote here`, `child of`, `same-session`, `ambiguous`. Non-owning: `wrote elsewhere`,
@@ -514,7 +521,8 @@ whose `At` lies in one **and whose `AnsweredAt` is before THIS round's `Complete
 completion was not in the live read and is not evidence in the backfill either), as a `WritePlacement`
 with its root and `here | elsewhere | outside`; every `UnobservedLaunch` whose `At` lies in one. Nothing outside the
 round's windows is placed, which is the evidence cutoff: a line stamped at or after this round's start is in no window
-of this round.
+of this round. **When the observation is `unobserved`, nothing is placed and every window is `unobserved`** (*Fable
+2026-10-19; `AssignRun.Build`, `WindowStates`*).
 
 **States** (`WindowState(Window, Kind, Reasons)`): the kinds are ordered `observed < partial < unobserved` by badness and
 the **worst wins** (*G12a: one word, here, in §S2.5 and in S3 — E6 D3's word*), reasons accumulated and
@@ -700,7 +708,9 @@ test adds one — peer B's `C1` moved to `@125→128` — and asserts that THEN 
 into `y`, answered at `+122`) changes B's ladder for cx to `two repositories` and the owner of cx `+75` from A to B's
 ambiguous totals: the peer's evidence is honoured as the peer saw it (decision 7), and `AssignEvery` still owns `+75`
 once. **The horizon** (*2026-10-16, G3*), on the same scenario: (a) cx's write into `x` at `+75` with `answeredAt +131`
-(after A C2's completion `+130`) is not evidence — cx `+75` reads `same-session` in A C2, not `wrote here`, and
+(after A C2's completion `+130`) is not evidence — cx `+75` reads `ambiguous · no evidence` in A C2 (the window's only
+destination is `y`, cy's write), not `wrote here` (*corrected 2026-10-19, Fable; §12 deviation 3 — the text said
+`same-session`*), and
 `Writes` has no placement for it, identically when the input is the "live" one (lines after `+130` absent) and the
 "backfill" one (present); (b) in the two-step fact, the `+122` write answered at `+129` (after B C1's completion `+128`)
 leaves B's ladder for cx at `wrote elsewhere` — B's live read could not have seen the result, and the backfill must not
@@ -740,7 +750,8 @@ peer running` (A C1's `[+0, +60)` overlaps it). With `.WithoutPriorEnd()` the ow
 7 claims holds BECAUSE the walk stopped. Under the old rule (`PriorEnd` = max start over recorded rounds = `+60`) G's
 before-open would have been `[+60, +100)`, `+30` owned by nobody with the bound and by G without it. Then A C1
 `interrupted` → nothing changes for G but the state (`observed`); A C1 `done @150` → A ranks after G (`+150 > +140`),
-G keeps `+30`, and A C1's own assignment labels `+30` `claimed by peer (G)`.
+so by *Prior end*'s fifth condition it does not bound G's before-open (`PriorEnd` stays null), G keeps `+30`, and A C1's own
+assignment labels `+30` `claimed by peer (G)` (fact `WhenThatPeerRoundSettlesAfterG_GKeepsTheMessageAndAClaimsNothing`).
 
 **Case 8d — a settled peer round after an unsettled one.** Case 8c with A `C1 @60→70` done and A `C2 @80` running,
 G open `+100`: the walk takes C1 (start `+60`) and stops at C2, so `PriorEnd = +60`; a message at `+70` is in A C2's
@@ -859,7 +870,7 @@ FluentAssertions `BeEquivalentTo`/`ContainSingle`, never on `Should().NotBeNull(
 | `BeforeOpenWorkBelongsToTheFirstRoundOnlyTests` | case 7: `WorkBeforeOpen_IsTheBeforeOpenWindowOfRoundOne`; `RoundTwo_HasNoBeforeOpenWindow`; `ASecondGateOnTheSameRepo_StartsAtThePriorEnd`; `ThePriorEndIsAReadBoundNotAnOwnershipRule` (owned set equal with `.WithoutPriorEnd()`); added by §S2.2b: `APriorEndStopsAtTheFirstUnsettledPeerRound` (case 8c: `PriorEnd` null, `+30` owned by G either way, `partial: peer running`) and `ASettledPrefixEndsBeforeTheRunningRound` (case 8d: `PriorEnd = +60`, owned sets equal); `PeersUnknown_IsPartialPriorWindowsUnknown` | before-open absent / owned sets differ silently |
 | `TheCallerOfTheRoundIsTheCallerReadTests` | `ACallerChange_IsPartialCallerChanged`; `AnEmptyPriorCaller_IsPartialPriorCallerUnknown`; `AnObservationOfAnotherCaller_IsAContractViolation` | state `observed` / no exception |
 | `TwoRepositoriesOneAgentTests` | decision 4's scenario: `ItsMessagesAreAmbiguousInTheFirstCompletedWindow`; `TheOtherGateSeesThemClaimedByPeer`; `BothGatesEmitItsAgentAssociationAsAmbiguousTwoRepositories` (the agent COUNT is S3's — G10 moved `BothGatesCountOneAmbiguousAgent` there); `BothGatesKeepItsWriteCallsOnAnAgentAssociation` | tokens in both |
-| `AssignIsStableUnderReplayTests` | case 6: `TwiceIsEqualByValueAndText`; `AnExtendedJournalChangesNothing`; `ALaterPeerRoundChangesNothing`; `ANewPeerGateChangesNothing`; `LinesAtOrAfterCompletionChangeNothing`; `LinesBetweenStartAndCompletionMatterOnlyThroughAPeerThatEndsThere` (the two-step fact of case 6); added by §S2.2b (G3): `AWriteAnsweredAfterTheCompletion_IsNotEvidence_LiveOrBackfilled` (case 6 (a): cx `+75` `same-session`, no `WritePlacement`, live input ≡ backfill input); `APeersLadderSeesOnlyWritesAnsweredBeforeThePeerCompleted` (case 6 (b)/(c)); `APermutedInputGivesTheSameOutput` | inequality / ordering differs |
+| `AssignIsStableUnderReplayTests` | case 6: `TwiceIsEqualByValueAndText`; `AnExtendedJournalChangesNothing`; `ALaterPeerRoundChangesNothing`; `ANewPeerGateChangesNothing`; `LinesAtOrAfterCompletionChangeNothing`; `LinesBetweenStartAndCompletionMatterOnlyThroughAPeerThatEndsThere` (the two-step fact of case 6); added by §S2.2b (G3): `AWriteAnsweredAfterTheCompletion_IsNotEvidence_LiveOrBackfilled` (case 6 (a): cx `+75` reads `ambiguous · no evidence` in A C2 — the window's only destination is `y`, cy's write — not `wrote here`; no `WritePlacement`; live input ≡ backfill input); `APeersLadderSeesOnlyWritesAnsweredBeforeThePeerCompleted` (case 6 (b)/(c)); `APermutedInputGivesTheSameOutput` | inequality / ordering differs |
 | `ReadFromIsTheEarliestLineAssignNeedsTests` | `ANonFirstRound_ReadsFromThePreviousRecordedStart`; `AClaimantStartingEarlier_LowersIt`; `AFirstRoundWithNoPriorEnd_ReadsFromTheFirstLine` (null); `DroppingEveryLineBeforeReadFrom_ChangesNothing` | wrong bound |
 | `EvidenceNotInferenceTests` | `AnAgentTypeNamedCoder_AssociatesNothing`; `ALaunchInsideTheWindow_AssociatesNothing`; `AnAgentWhoseOnlyWritesAreOutside_HasNoEvidence`; `NoInputMemberIsACwd` (reflection over the S1 records: no property named `Cwd`) | association `wrote here`. `NoInputMemberIsACwd` and `ABashCallIsNotAWrite` (above) are POSITIVES: a shell passes them, and their break-its — §S2.11's `Cwd` plant and the `ABashCallIsNotAWrite` plant — are what prove them (*G12d*) |
 
@@ -870,7 +881,7 @@ FluentAssertions `BeEquivalentTo`/`ContainSingle`, never on `Should().NotBeNull(
 | In `Windows.Of`, `From = r_{k-1}.CompletedUtc` (`RoundEngine.cs:900`'s rule; *was cited `:895`, G12e*) | `TheReviewTimeWorkIsInRoundNsWindow_NotInNone`: bg `+65`, `+70` in no window — local completeness also red |
 | In `Windows.Of`, `Completed = r_k.CompletedUtc` regardless of `Status` (*G1*) | `ARunningPeerWithAStamp_RanksLast`: B C1's `+105` ranks before A C2's `+130` and claims s2 `+80` |
 | `PriorEnd` = max start over every recorded round (the old rule; *G2*) | `APriorEndStopsAtTheFirstUnsettledPeerRound`: `ReadFrom = +60` where null is expected and `+30` is owned by nobody while `.WithoutPriorEnd()` owns it |
-| Drop `AnsweredAt < horizon(w)` from the `WriteRung` (*G3*) | `AWriteAnsweredAfterTheCompletion_IsNotEvidence_LiveOrBackfilled`: cx `+75` reads `wrote here` on the backfill input and `same-session` on the live one — live ≠ backfill |
+| Drop `AnsweredAt < horizon(w)` from the `WriteRung` (*G3*) | `AWriteAnsweredAfterTheCompletion_IsNotEvidence_LiveOrBackfilled`: cx `+75` reads `wrote here` on the backfill input and `ambiguous · no evidence` on the live one (*was `same-session`, corrected with case 6 (a), 2026-10-19*) — live ≠ backfill |
 | Drop the `peer running` branch from *States* (*G3*) | `AWindowOverlappedByARunningPeer_IsPartialPeerRunning`: `observed` |
 | Make a `TranscriptPresent = false` agent an unobserved item too (*G4*, the text before §S2.2b) | `AMetaWithoutATranscript_IsOneUnobservedLaunchNotTwo`: three items and a repeated reason on case 5 |
 | Admit a shell write (`Bash` with a path-shaped argument) as an `ObservedWrite` in the builder | `ABashCallIsNotAWrite`: the input's write set is not empty (*G12d: the plant that proves the positive*) |
@@ -943,7 +954,7 @@ public sealed record RoundAuthors(
     string Stage, int Number,   // added by the 2026-10-16 plan gate: S4's NotSeen and FixersOf need them for a round with no rows; announced to E5
     string CallerSessionId, string State, ImmutableArray<string> Reasons,   // the roll-up: the WORST window state; reasons distinct, in window order
     ImmutableArray<AuthorRow> Rows,
-    ActivityTotals Ambiguous, ActivityTotals Elsewhere, ActivityTotals ClaimedByPeer, int UnobservedLaunches,   // the roll-up: sums; Unknown (and UnobservedLaunches = -1, M1) when any window is unobserved
+    ActivityTotals Ambiguous, ActivityTotals Elsewhere, ActivityTotals ClaimedByPeer, int UnobservedLaunches,   // the roll-up: sums — except UnobservedLaunches, which counts each launch ONCE (one with no instant marks every window but is one item; §12 item 10); Unknown (and UnobservedLaunches = -1, M1) when any window is unobserved
     ImmutableArray<WindowAuthors> Windows,                            // G9: the per-window state and totals E6 needs when it leaves before-open out
     ImmutableArray<string> PeerGates,                                 // G3 (iii): carried from WindowAssignment; ids only
     ImmutableArray<CheckoutWrites> WritesOutsideTheGateCheckout);   // gate finding 0, below
@@ -993,7 +1004,8 @@ be in two counts. `Ambiguous.Agents` = distinct agents of owned `ambiguous` plac
 `AgentAssociation` in the window is `ambiguous · two repositories` (decision 4: such an agent is ambiguous in every gate
 that saw two repositories, whatever owns its messages — so gate B of §S2.6 *Two repositories, one agent* counts 1 agent
 with 0 tokens); `Elsewhere.Agents` = distinct agents of `wrote elsewhere` items; `ClaimedByPeer.Agents` = distinct agents
-of `claimed by peer` items.
+of `claimed by peer` items. **`Agents` is counted per WINDOW; the round total is the sum over the windows** (an agent active
+in two windows counts in both). Distinct agents across windows are S4's job (*Fable 2026-10-19; `RoundAuthorsBuilder.Total`*).
 
 **`Model` and `Requested` on a row** (added 2026-10-16, §2 and RESULTS Q2). A row's `Model` is the placements'
 `ObservedMessage.Model`, the model that answered. Its `Requested` is the placements' `Requested`, which for a meta with
@@ -1014,7 +1026,7 @@ partial < unobserved`, *G12a*), reasons distinct in window order, totals summed 
 | an unobserved launch with an instant inside the window (a missing child — `agent call without transcript`, `meta without transcript`; *G4/G5*: these are the only reasons that carry an instant) | `partial` | each, in order | as counted — a floor |
 | every E3 reason (a torn MIDDLE line, a read budget, an inconsistent transcript, …; a torn LAST line is not a reason at all, parent §16 D22) — none carries an instant (*G5*) | `partial` | for every window | as counted |
 | a not-settled same-caller peer round whose window overlaps this one (*G3*) | `partial` | `peer running` | as counted — provisional until E7 recomputes |
-| S2's window-level unobserved (no round start) | `unobserved` | `no round start` | `Unknown` and `UnobservedLaunches = -1` for that window; the other windows as they are; the round roll-up is `Unknown`/`-1` (M1) |
+| S2's window-level unobserved (no round start) | `unobserved` | `no round start` | `Unknown` and `UnobservedLaunches = -1` for that window; both windows of a first round are blind together (open and start are their shared edges), and a blind round has no counted window; the round roll-up is `Unknown`/`-1` (M1) (*corrected 2026-10-19, Fable*) |
 | none of the above, with or without subagents | `observed` | `[]` | as counted — an observed session with no subagents is an observed ZERO |
 
 If E3 or E5 already carries an unknown-count value type (a `Captured`/`Figure` analogue), use it instead of
@@ -1041,7 +1053,7 @@ the `-1` sentinel and record the choice (reuse-first).
 | `ATwoRepositoryAgentKeepsItsWritesAndAddsNoTokenTests` | the agent of E4.S2 decision 4 has one `wrote here` row with its write calls into this repository and zero turns, launches and tokens, `Model = Requested = Effort = "unknown"`; its messages are counted once, in `Ambiguous` or `ClaimedByPeer`; `BothGatesCountOneAmbiguousAgent` (moved from S2 by G10: A and B each count 1 in `Ambiguous.Agents`, B also 1 in `ClaimedByPeer.Agents`) |
 | `EveryWindowAccountsForEveryMessageTests` | local completeness over ROWS: Σ row turns + ambiguous turns + elsewhere turns + claimed-by-peer turns = the window's distinct message ids, and the same per token term — over every S2 acceptance scenario, through one `[Theory]` fed by the builder; `TheAgentCountsAreNotAPartition` (G10: a two-repositories agent claimed by a peer is in two agent counts while its turns are in one) |
 | `TheAuthorsStateSaysWhatWasNotSeenTests` | each row of the state table, including `AnObservedSessionWithNoSubagents_IsObservedZero`, `AnUnobservedRound_NeverReadsAsZero`, `AReadBudgetMarksEveryWindow` (G5) and `APeerRunningWindow_IsPartialPeerRunning` (G3) |
-| `EveryWindowKeepsItsOwnStateAndTotalsTests` (G9) | `Windows` has one entry per window of the round, the empty before-open of a first round included; `BeforeOpenPartialRoundObserved_AndTheReverse_AreDifferent` (the round roll-up is `partial` in both, the per-window states differ); `ABlindBeforeOpenLeavesTheRoundWindowCounted` (round roll-up `unobserved`/`Unknown`, the round window's own totals counted); Σ per-window totals = the round totals when no window is unobserved |
+| `EveryWindowKeepsItsOwnStateAndTotalsTests` (G9) | `Windows` has one entry per window of the round, the empty before-open of a first round included; `BeforeOpenPartialRoundObserved_AndTheReverse_AreDifferent` (the round roll-up is `partial` in both, the per-window states differ); `ABlindFirstRound_IsUnknownInEveryWindowAndInTheRollUp` (both windows of a first round are blind together, so every window and the round roll-up are `unobserved`/`Unknown`; *was `ABlindBeforeOpenLeavesTheRoundWindowCounted`, a case that cannot arise — Fable 2026-10-19, §12 deviation 2*); Σ per-window totals = the round totals when no window is unobserved |
 | `NoEffortIsUnknownNotHighTests` | absent effort → `unknown` on the row |
 | `TheModelOnARowIsTheOneThatAnsweredTests` (added 2026-10-16) | `ASessionAnsweredByAFallbackModel_CountsTheAnsweringModel` (main requests `claude-opus-5-5[1m]`, its messages carry `claude-opus-4-8` → the row's `Model` is `claude-opus-4-8`, `Requested` is `claude-opus-5-5[1m]`); `AMetaWithNoAlias_NeverBlanksTheModel` (an agent whose `ObservedAgent.Requested` is `""` → `Model` from its messages, `Requested` from theirs); `ASwitchMidWindowAfterAFallback_IsTwoRows` |
 | `TheSameRoundBuiltTwiceIsIdenticalTests` | `Build` twice → equal by value AND equal `ToString()`; the input's message order permuted → identical output |
@@ -1115,7 +1127,10 @@ Rules:
 - `FixersOf(…, N)` = contributors with an `ActiveIn` entry for round N's own window, when round N is not the
   gate session's first CODE round — the set E2's `delta_*` sizes.
 - An `unobserved` round in `upToN` contributes nothing and is listed in `NotSeen` with its reason; a `partial`
-  round contributes and is listed too (its contributors are a floor).
+  round contributes and is listed too (its contributors are a floor). `NotSeen.Why` reads `<state>: <reasons>`, the reasons
+  joined by `", "` (*Fable 2026-10-19; `Contributors.cs` `Why`*).
+- A contributor's `Models`, `Requested` and `Efforts` may contain `unknown`: the launch-only row and the two-repositories
+  row carry it (*Fable 2026-10-19*).
 - Output ordered by (caller session, `main` first, then agent id), ordinal; inner arrays ordinal and distinct.
 
 **The coder's brief (Sonnet).** Tests first (below), watched red; then `Contributors.cs` as two pure statics
@@ -1236,14 +1251,15 @@ below means `ambiguous · no evidence` unless the row says otherwise.
 | `c14` | resumed-agent | H, I, R | Round 1: the agent `wrote here` (1 write call into `repo-a`, 11 turns before the start, 1 launch), and main `same-session` (destinations {`repo-a`}). Lines after the start are not placed. With the extension, round 2 holds the agent's later messages with 0 launches, ambiguous (no write in that window): one launch over both windows | the same agent `wrote here` → `same-session` across windows. Builder: S2 case 4 |
 | `c15` | second-gate-session-same-caller | H, I | Gate 2's `before-open` starts at `PriorEnd` = gate 1's round start and holds nothing. Main's one message is in gate 2's round window, ambiguous (its write goes into `scratch`). Gate 1 owns nothing. The owned set is equal with `.WithoutPriorEnd()` | — |
 | `c16` | skipped-round-between-recorded | H, I | The journal is 1, 3 (round 2 is ABSENT): round 3's window = [round 1's start, round 3's start) and holds main's message | a SKIP record (`Verdict = skipped`): `rounds.json` has no verdict (§8.3 item 5). Builder: S2 `ASkippedRound_OpensNoWindow` |
-| `c17` | two-repositories-one-session | H, I | The `repo-b` `Edit` has no `tool_result` (it is the file's last line) → not a write (D23). Main wrote only into `repo-a`: gate A owns its 3 messages `wrote here` (write calls 1), and gate B labels all 3 `wrote elsewhere`. Each is owned once | `ambiguous · two repositories`: it needs the `repo-b` result (§8.3 item 4). Builder: S2 `TwoRepositoriesOneAgentTests` |
+| `c17` | two-repositories-one-session | H, I | *Re-read 2026-10-19 after E1's re-cut (#851, results kept), `RecordedCells.cs` `c17`.* Both writes are answered, so main wrote into `repo-a` AND `repo-b` in one window: `ambiguous · two repositories` in both gates. Gate A completes first and owns the 3 messages in its ambiguous totals (1 agent, 0 launches, 3 turns); gate B labels all 3 `claimed by peer` (claimed turns 3) and counts 1 ambiguous agent with 0 turns. Each gate keeps one `wrote here` row for main with 1 write call, 0 turns, 0 launches and `Model = Effort = unknown`. Each message is owned once | — |
 | `c18` | work-before-open | H, I | The `before-open` window: main `wrote here` (1 write call, 1 turn). The round window is empty. Contributors are none with `withBeforeOpen: false` and main with `true` | — |
-| `c19` | write-into-submodule-and-scratchpad | H, I | Both writes are unanswered → no write (D23). Main is ambiguous | the submodule write and the scratchpad write, until §8.3 item 4. After that fix: the submodule write is `wrote here` and is listed in `WritesOutsideTheGateCheckout`, and the scratchpad write is outside |
+| `c19` | write-into-submodule-and-scratchpad | H, I | *Re-read 2026-10-19 after E1's re-cut (#851, results kept), `RecordedCells.cs` `c19`.* Both writes are answered. The submodule write resolves to a checkout under `repo-a`: main `wrote here` (1 turn, 1 write call), and the write is listed once in `WritesOutsideTheGateCheckout`. The scratchpad write is outside (D3) and is no evidence. Ambiguous totals are zero | — |
 | `c20` | writes-only-elsewhere | H, I | The only write goes into `scratch` → outside (D3), NOT elsewhere. Main is ambiguous, and the `Elsewhere` totals are zero | The name says "elsewhere", but under D3 a scratchpad is outside. `wrote elsewhere` on data is `c17`'s gate B |
 
-**No fixture shows these** (builder only, through S2's and S3's tests): `child of`; `ambiguous · two repositories`; a
-submodule or nested-worktree write; a skip record; an interrupted round; a caller change; a blind round; `effort =
-unknown`; a model switch on a row; `claimed by peer` where the peer's ladder is `wrote here`.
+**No fixture shows these** (builder only, through S2's and S3's tests): `child of`; a skip record; an interrupted round;
+a caller change; a blind round; `effort = unknown`; a model switch on a row; `claimed by peer` where the peer's ladder is
+`wrote here`. (*2026-10-19: `ambiguous · two repositories` and a submodule write left this list — `c17` and `c19` show them
+since E1's re-cut.*)
 
 **The coder's brief (Sonnet).**
 
@@ -1285,7 +1301,8 @@ hand-read.
 
 **Dependencies.** E4.S3 and E4.S4; E3.S2 + E3.S4 (the reader, its `ObservedSession` in `src/Store`, and its materialiser,
 with §8.3 item 6) — the mapping to `AttributionInput` is THIS story's `AttributionMapping` (B1), so E4 reaches Done with
-no E5 story built; E1.S5's fixtures (shipped, #828) — `c17` and `c19` give their full cells only after §8.3 item 4.
+no E5 story built; E1.S5's fixtures (shipped, #828) — `c17` and `c19` give their full cells since E1's re-cut (#851, results
+kept), which reached this branch through E3; §8.3 item 4 is closed.
 **Model:** brief by opus (this document) · code: sonnet · review: opus.
 
 ---
@@ -1401,6 +1418,9 @@ is E3's document, not code. Schema step 23 is the plan gate's (`Schema.cs:655`),
 > non-Windows host, and takes the submodule marker from a manifest `checkouts` list E1 owes). Item 4 is **owed by E1** as E3
 > §8 item 1 (re-cut c12/c17/c19 with results kept; manifest `checkouts`). Items 1, 5 and 7 stand.
 >
+> *2026-10-19:* item 4 is **closed** — E1 re-cut `c12`, `c17` and `c19` with the results kept and the manifest `checkouts`
+> lists (#851), and the re-cut reached this branch through E3; S5's `c17` and `c19` rows carry the full cells.
+>
 > *2026-10-16, Fable, §S2.2b:* the edits G1–G12 require of E3, E5, E6, E7 and the parent are listed ONCE, in §11's
 > *Cross-epic consequences*, and are not repeated here.
 
@@ -1417,7 +1437,8 @@ is E3's document, not code. Schema step 23 is the plan gate's (`Schema.cs:655`),
 3. **E3 S4-9**: `StraddleGuard = 1 h` rests on "one message never spans an hour". Q4 measured 3 ids per side over 1 h,
    the longest 2.01 h. A message that starts before midnight and runs past a bound set early on the next day is then
    counted from a later line, at a wrong instant.
-4. **E1's fixtures `c17` and `c19`**: their write calls have no `tool_result`. In `c17` the `Edit` into `repo-b` is the
+4. *(Closed 2026-10-19 — E1's re-cut, #851; the text below is the record of the request.)* **E1's fixtures `c17` and
+   `c19`**: their write calls have no `tool_result`. In `c17` the `Edit` into `repo-b` is the
    file's last line, and `c19` has no result line at all. Under D23 (E3 S4-7) these are not writes, so `c17` does not show
    `ambiguous · two repositories`, and `c19` shows neither the submodule nor the scratchpad. E3's worked-example row for
    `write-into-submodule-and-scratchpad` expects writes that S4-7 drops. The fix: re-cut with the window past the results,
@@ -1628,10 +1649,18 @@ the test named for it, restored, rebuilt and watched green. S5's acceptance test
 `ObservationReason` `:98`, `ObservationReasons` `:134`; main is listed with `LaunchedUtc = null` and `TranscriptPresent = true` (`TranscriptLaunches.cs:101`) — the mapping leaves it out of
 `Agents`; there is one `UnobservedLaunch` per meta without a file (`TranscriptLaunches.cs:167-171`) and one per `Agent` call without a meta (`:194`); `WriteTarget.Where` is a normalised KEY
 (`RepositoryIdentity.Normalised`), compared to the gate's `repo_path` by `Repositories` (separators folded, case ignored) and never resolved. E4's own anchors on this tree:
-`AgentLog.InRepo` is now one line, `AgentLog.cs:228`, calling `Repositories.Contains`; `WhatTheCallerWasDoing` is `RoundEngine.cs:899`; the save appends the record at `SessionStore.cs:595`.
+`AgentLog.InRepo` is now one line, `AgentLog.cs:228`, calling `Repositories.Contains`; `WhatTheCallerWasDoing` is `RoundEngine.cs:899`; the save appends the record at `RoundEngine.cs:595` (*was cited `SessionStore.cs:595`; corrected 2026-10-19, re-verified after the merges of E3 `24cced19a` and main `bb279e3db`*).
 
 **Deviations from the text above, each the smallest change that keeps the intent.** None changes a type E5 consumes: `RoundAuthors`, `WindowAuthors`, `PeerGates`,
 `RoundAttribution.Version`, `StateReason` and the settled and final rules are as specified.
+
+**Fable's code review, 2026-10-19** (over `595d1e991`, against §S2): every deviation below and every addition of item 8 is
+ACCEPTED, and no code change was required. What E5 and E7 rely on is unchanged and verified (`RoundAuthors`, `WindowAuthors`
+final, `PeerGates`, `Version = 1`, `StateReason`, settled and final, `PeerStillRuns`, `PeersKnown = false`; `main` is never
+listed in `Agents`). Fable's wording changes are applied in place above — §S2.2b G2 and G9, §S2.3 *Prior end*, *Ownership*
+and *What is placed*, §S2.6 cases 6 (a) and 8c, §S2.10, §S2.11, S1's `Validate()` list and *Mapping*, S3's *Agent counts*,
+state table and test row, S4's rules, S5's `c17`/`c19` rows and the list of what no fixture shows, and §8.3 item 4 (closed).
+Items 4 and 5 below need no §S2 change.
 
 1. **The prior end counts only peer rounds that complete BEFORE this gate's own first round** (§S2.3 *Prior end*, case 8c). As written, the walk takes a settled prefix whatever its
    completion. With case 8c's "A C1 `done @150`" (A ranks after G's +140) the bound would be +60, G's before-open window would be `[+60, +100)`, and G would lose +30 to A — so the bound would
@@ -1653,6 +1682,48 @@ the test named for it, restored, rebuilt and watched green. S5's acceptance test
    `prior windows unknown`, whatever `Peers` holds). An unobserved caller places nothing, and its windows are `unobserved`. `RoundAttribution.PeerStillRuns(input)` exists (E7 item 9, below).
    The round-level `Agents` count of a total is the SUM of the windows' counts (§S3 "totals summed"), so an agent in two windows counts in both. `NotSeen.Why` reads `<state>: <reasons joined by ", ">`.
    A contributor's `Models`, `Requested` and `Efforts` include `unknown` when a launch-only or two-repositories row carries it. A `claimed by peer` placement keeps this gate's own ladder rung.
+
+**The judge's review, 2026-10-19** (Opus, after Fable's; four findings, each fixed by a Sonnet coder in its own commit, RED then GREEN):
+
+9. **Cyclomatic complexity ≤ 4 is a build error now, not a habit.** Measured with Roslyn's CA1502 (threshold file `src_mcp/CodeMetricsConfig.txt`, `CA1502: 4`; a
+   lambda counts toward the method that holds it), ten methods were over the bound: the `AssignRun` constructor and `Build`, `AssociationLadder.ChildRung`,
+   `AttributionContract.Climbs`, `Repositories.IsAbsolute`, `WindowStates.CallerChanged`, `Windows.ClaimsBefore`, `First`, `Compare` and `BlindReason`. `.editorconfig`
+   now sets CA1502 to `error` for `src_mcp/core/Authors/*.cs` and `src_mcp/src/Store/AttributionMapping.cs`, beside the security lane. RED was the build failing on
+   those methods; GREEN is a refactor with no behaviour change (`ae65d3abb`).
+10. **The round counts an unobserved launch with no instant ONCE** (S3's "the roll-up: sums" is narrowed for this one member). Such a launch marks every window,
+   and each window's `UnobservedLaunches` still counts it; but summing the windows counted it twice in a first round (before-open + round), so one missing
+   transcript read as two, against decision 9 (G4). The round's `UnobservedLaunches` is now the placed launches plus the launches with no instant
+   (`RoundAuthorsBuilder.UnobservedLaunchesOf`). RED `AnUnobservedLaunchWithNoInstant_IsCountedOnceInTheRound`: expected 1, found 2 (`6fe57e5d7`). The other
+   totals are still the sum of the windows.
+11. **One place per rule** (reuse-first). `Repositories.SameRoot` replaces three copies of the same-root test (`Windows`, `AssociationLadder`, `WindowSlice`);
+   `ObservationKinds.Badness` replaces two copies; the stage words are `nameof(Stage.PlanReview)` and `nameof(Stage.CodeReview)`; and `AttributionMapping` reads
+   every message and write instant through `UtcInstant.Of` (the rule `UtcInstant.From` now calls) instead of its own `SpecifyKind`. RED: a Local-kind instant
+   on this +02:00 machine (`2684ab8d1`). E3 parses stamps as UTC, so no stored value changes.
+12. **The purity scan also forbids a working-directory lookup** (`Path.GetFullPath`, `CurrentDirectory`), which is S1's rule "never resolved against a working
+   directory". A planted `GetFullPath` turned it red (`c210f9318`).
+
+**The coai code gate, 2026-10-19** (session `a9d8b6b8`, code round 1 over `71e15e392`, `baseRef` a parentless commit whose tree is E3
+`24cced19a` merged with main `bb279e3db`, so the reviewers saw E4 alone): verdict **`good_enough`** (gating 17 against a threshold of 5,
+the stage's one round spent), **13 of 16 reviewers** answered — the three Kimi reviewers of Architecture, SecurityReliability and
+UxDxPerformance returned empty answers. 23 findings: **4 accepted, 19 rejected**, each rejection checked in the code and its reason
+recorded with `resolve`. The rejections in short: the ladder never makes a two-repositories row for a gate the agent did not write
+into (`WriteRung`); `Climbs` already reports every cycle; the dot-segment refusal is in `RepositoryOf`, which is the only road E4 uses;
+E3 never emits a default instant; equal sort keys are equal records; the performance findings assumed every window of every round
+(an assignment holds one or two) or many gate sessions (a handful). Accepted:
+
+13. **Each write's home row is found once per window** (finding 3; `dcf327428`): `WindowSlice.WriteCallsByRow` builds the row → write
+   calls map once, instead of a scan of every write and every message per row. Same rule, no behaviour change; the E4 classes and the
+   full suite are green.
+14. **The worked examples are listed once** (finding 12; `18733ae50`): `AttributionCases` holds one `(name, factory)` table that both
+   `Names` and `Named` read, so a case cannot be added to one and missed by every identity theory (105 theory rows before and after).
+15. **`Assign` throws `ArgumentException` on a contract violation** (finding 10, recorded, not changed): csharp doctrine §5 says expected
+   failures are values. A violation here is not an expected answer — it is E5's or E7's programming error against the S1 contract, and
+   §S2.7 requires the throw; E5 maps it to `unobserved: invalid input`. `Validate()` is the value-returning form for a caller that wants
+   to ask first.
+16. **The closed vocabularies stay `string` constants** (findings 11 and 0, recorded, not changed): `Association`, `Rung`, `WindowKind`,
+   `WriteWhere`, `ObservationKinds` and `GateRound.Stage/Status/Verdict` are the exact words E5 stores and the session file holds
+   (doctrine §3's serialisation exception); every comparison is against the one constant class, and an unknown stage legitimately
+   opens no window. `WriteKind` is an enum because it is E3's enum copied one for one and is never stored.
 
 **The two confirmations E7 asked for (E7 §10 items 8 and 9):**
 

@@ -39,7 +39,13 @@ internal static class WindowsStandIn
         public Standing()
         {
             Junctions.StandIn(new SymbolicLinks());
-            KimiCredentialsLock.Final = RealFolder;
+
+            // Linux names a folder by its device and inode now (FolderIdentity), so nothing stands in for the key there. macOS has no identity rule in the product
+            // (a Kimi launch is refused there, D18), and the suites that run on it still need a key.
+            if (OperatingSystem.IsMacOS())
+            {
+                KimiCredentialsLock.Final = RealFolder;
+            }
         }
 
         public void Dispose()
@@ -55,9 +61,9 @@ internal static class WindowsStandIn
 
         public DriveType DriveOf(string root) => DriveType.Fixed;
 
-        public string SetReparsePoint(string link, string target)
+        public string MakeLink(string link, string target)
         {
-            Directory.Delete(link);
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(link)) ?? string.Empty);
             Directory.CreateSymbolicLink(link, target);
 
             return string.Empty;

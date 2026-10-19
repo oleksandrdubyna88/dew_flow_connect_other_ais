@@ -135,6 +135,13 @@ export interface CoaiSettings {
    */
   readonly vibeHomesDirectory: string;
 
+  /**
+   * Whether a Kimi sign-in folder on network storage (nfs, cifs, sshfs …) may be used — `COAI_KIMI_ALLOW_NETWORK_SIGNIN` on the wire (DL6 and Q7 of
+   * `todo/PLAN_kimi_and_vibe_on_linux.md`). OFF by default: a Kimi on another machine that shares the folder can refresh the same rotating sign-in
+   * and sign this one out, and coai cannot see it. Only a stored boolean `true` turns it on. Written only when ON, like every switch here.
+   */
+  readonly kimiAllowNetworkSignIn: boolean;
+
   readonly onExhausted: OnExhausted;
   readonly maxConcurrency: number;
   readonly maxPerProvider: number;
@@ -265,6 +272,7 @@ export const DEFAULTS: CoaiSettings = {
   bugzModel: '',
   bugzServer: '',
   vibeHomesDirectory: '',
+  kimiAllowNetworkSignIn: false,
   onExhausted: 'human',
   maxConcurrency: 3,
   maxPerProvider: 2,
@@ -323,6 +331,8 @@ export const OVERLAID_SETTINGS: readonly string[] = [
   'bugzModel', 'bugzServer',
   // The Vibe homes folder is a path on THIS side (a Windows folder is not a WSL one), like the question consultant's roots.
   'vibeHomesDirectory',
+  // Whether THIS side's home may hold a Kimi sign-in on network storage — the home is this side's (a WSL home is not a Windows one).
+  'kimiAllowNetworkSignIn',
   // Which chat presets this side's catalog moved (E4.6a) — beside its `vendors`, which hold the rows they became.
   'chatPresetsMoved',
   // Which chat model this side opens on, and its model name (D8: chat models are per side) — they name this side's rows.
@@ -419,6 +429,7 @@ export function settingsFrom(read: ConfigReader): CoaiSettings {
     bugzModel: asString(read('bugzModel')),
     bugzServer: asString(read('bugzServer')),
     vibeHomesDirectory: asString(read('vibeHomesDirectory')).trim(),
+    kimiAllowNetworkSignIn: read('kimiAllowNetworkSignIn') === true,
 
     escalationMinutes: asPositive(read('escalationMinutes'), DEFAULTS.escalationMinutes),
     promptsPerRound: asPromptRounds(read('promptsPerRound')),
@@ -590,6 +601,11 @@ export function envBlock(
   // (a full local path that exists, made private by coai) — the environment still wins over this key.
   if (settings.vibeHomesDirectory) {
     env['COAI_CONSULTANT_HOMES'] = settings.vibeHomesDirectory;
+  }
+  // Only when ON: off is the server's own default, and a file carries only what differs. The server reads it like every COAI_* switch
+  // (`PanelSettings.KimiAllowNetworkSignIn`); a variable in the client's config wins over this file.
+  if (settings.kimiAllowNetworkSignIn) {
+    env['COAI_KIMI_ALLOW_NETWORK_SIGNIN'] = 'true';
   }
   return env;
 }

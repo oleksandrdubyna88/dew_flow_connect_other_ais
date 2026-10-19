@@ -49,13 +49,17 @@ internal sealed class RoundAuthorsStep
     {
         _settings = settings;
         _log = log;
-        _clock = clock ?? TimeProvider.System;
-        _env = environment ?? Environment.GetEnvironmentVariable;
-        _budget = budget ?? AuthorsBudget.Default;
-        _peers = peers ?? RealPeers(settings, load ?? ((repo, branch) => store.Load(repo, branch)), _clock);
-        _read = read ?? CallerTranscript.Read;
-        _assign = assign ?? RoundAttribution.Assign;
+        _clock = Or(clock, TimeProvider.System);
+        _env = Or(environment, Environment.GetEnvironmentVariable);
+        _budget = Or(budget, AuthorsBudget.Default);
+        _peers = Or(peers, RealPeers(settings, Or(load, (repo, branch) => store.Load(repo, branch)), _clock));
+        _read = Or(read, CallerTranscript.Read);
+        _assign = Or(assign, RoundAttribution.Assign);
     }
+
+    /// <summary>A seam's value, or the real thing: one place for the defaults, so the constructor stays within complexity 4.</summary>
+    private static T Or<T>(T? seam, T real)
+        where T : class => seam ?? real;
 
     /// <summary>The peer lookup over the real store: a short read-only connection per call, opened and closed here.</summary>
     private static AuthorPeerSource RealPeers(PanelSettings settings, Func<string, string, PersistedSession?> load, TimeProvider clock) =>
@@ -130,13 +134,29 @@ internal sealed class RoundAuthorsStep
         }
 
         var gate = GateOf(subject, set);
-        var peers = set.PeersKnown ? set.Peers : [];
+        var peers = KnownPeers(set);
         var bound = RoundAttribution.ReadFrom(InputOf(subject, EmptyObservation(subject.Caller), gate, peers, set.PeersKnown));
         var observed = _read(subject.Found, new ReadBudget(_budget.MaxBytes, Left(subject.Deadline), _clock), bound?.UtcDateTime);
         reached.Reader = ObservedSession.ReaderVersion;
         LogDiagnostics(observed);
 
         return Past(subject.Deadline) ? OutOfTime(subject, ObservedSession.ReaderVersion) : Assigned(subject, observed, gate, peers, set.PeersKnown);
+    }
+
+    /// <summary>
+    /// The peers E4 may read: none unless the lookup completed (E4 reads no peer when <c>PeersKnown</c> is false). A lookup that did not
+    /// complete says WHY at Debug — the store's own words, never a transcript's — because the snapshot only says <c>prior windows unknown</c>.
+    /// </summary>
+    private ImmutableArray<GateTimeline> KnownPeers(AuthorPeerSet set)
+    {
+        if (set.PeersKnown)
+        {
+            return set.Peers;
+        }
+
+        _log.Debug("the authors' peer lookup did not complete: {Why}", set.Why);
+
+        return [];
     }
 
     private AuthorsSnapshot Assigned(Subject subject, ObservedSession observed, GateTimeline gate, ImmutableArray<GateTimeline> peers, bool peersKnown)

@@ -1,6 +1,6 @@
 # PLAN — Round authors, epic E5: store and show
 
-> Status: **S1–S6 implemented on `feat/round-authors-e5`, 2026-10-19 (draft pull request #863, not merged; code gate not yet run); §12 is the implementation record — its deviations, the two items owed from E7 and PR #868, and what is open. Plan 2026-10-14; revised 2026-10-16 against `main` at `59463d73` (§9), and again
+> Status: **S1–S6 implemented on `feat/round-authors-e5`, 2026-10-19 (pull request #863, not merged — stacked on #867 E3 and #862 E4; E4 final and main merged in, judge-reviewed, code gate `good_enough` the same day, §12.1); §12 is the implementation record — its deviations, the two items owed from E7 and PR #868, and what is open. Plan 2026-10-14; revised 2026-10-16 against `main` at `59463d73` (§9), and again
 > 2026-10-16 for the E4/E5 reconciliation Fable decided (§8, E4 at `244d953c`) and the points E6 (`3c50a78c`) and E7
 > (`740d1a4f`) raised for E5 (§10); and again 2026-10-17 for the independent review of `2af746b3` (eight points) and the
 > E5 consequences of E4's §S2.2b (G1–G12, E4 at `7c3bf469`) — §11 records both, against `origin/main` `ce9cd298`, whose
@@ -1098,5 +1098,39 @@ on `partial: read budget 2`). S2: the table reading a `RoundContext` (the rebuil
 the identity read from `Environment.GetEnvironmentVariable` (this run was INSIDE a Claude Code session — `CLAUDE_CODE_SESSION_ID` and `CLAUDE_PID` set — and twenty-five of 34 tests went red), `CompletedUtc` mapped without the status check
 (`ARunningPeersStamp_…`). S5: the reader keeping a meta's sentinel field as `AgentType` (`NoSentinelLeavesTheReader_…`, naming the session file). S6: the `writtenWithHtml` term deleted from `detail` (two page tests red, every unit test green).
 
-**What is open.** The code gate has not been run (this task ran none) and nothing was pushed or opened. `research/module_tests.md` was not given a catalog row for the new classes beyond this record. Two things E6/E7 should
+**What is open.** (Superseded by §12.1: the code gate ran, and `research/module_tests.md` carries the E5 row.) Two things E6/E7 should
 read before they build: deviation 3 (the tie order) and deviation 8 (`peer running` is unreachable for a still-running peer in production).
+
+### 12.1 The judge's review, E4 final and the code gate (2026-10-19)
+
+**Merges, not rebases** (E6 and E7 merged this branch's earlier ref): the final E4 (`origin/feat/round-authors-e4` at `f0d89dad8` — the CA1502 refactors, the
+unobserved-launch double count fixed, `SameRoot`/`Badness`/`UtcInstant.Of`) in `b570416fc`, then `origin/main` at `b1a3266dd` in `7d0992a09`. Conflicts only in
+`research/module_tests.md` (both rows kept) and `todo/README.md` (E4's final row, this E5 row). Deviation 1's `[JsonIgnore]` on `ActivityTotals.IsUnknown` survived
+E4's refactor unchanged. PR #868 is still open, so main brought no second §8; the note in §12 stands. After the merges the E3, E4 and E5 classes ran green (797 tests).
+
+**The judge's review** checked schema step 24 (appended, `ON CONFLICT … DO UPDATE` keeps row ids, `round_authors` keyed by `(round_id, ordinal)`), the one transaction
+(`RoundAuthorsTable.Record` opens none), the strip in `SessionAnswerFor` (both `open` and `status`), the snapshot against E4's final `RoundAuthors`, `-1` for unknown,
+every `PeersKnown = false` case, the timeline `session.Rounds + record` (the save appends exactly that), the 2 s deadline (a negative time left stops the reader at
+once — `ReadMeter` compares elapsed `>` the limit), S6's defensive reads and escaping, and privacy (ids, closed words, counts; no text, no root). **Every deviation 1–12 is
+accepted**; 8 and 9 stay findings for E6/E7. Two defects were fixed red-green in `6ef9cccd1`:
+
+- **Complexity 4 was not enforced on E5's own files.** `.editorconfig` now makes CA1502 an error for `RoundAuthorsStep`, `AuthorPeers`, `AuthorsBudget`,
+  `RoundAuthorsTable` and `RoundAuthorsLog`, as E4 did for its core. Red: the build failed on the step's constructor (8), `Observe` (5) and `AuthorPeers.Walk` (5).
+  Green: the seams' defaults through one `Or<T>`, `KnownPeers`, `Expired`.
+- **`AuthorPeerSet.Why` reached no line.** It was documented "for a Debug line" and nothing logged it, so a lookup that did not complete left only `prior windows unknown`.
+  `KnownPeers` now logs it at Debug. Red: `APeerLookupThatDidNotComplete_SaysWhyInTheLog_…` found no `no rounds database` line; green after.
+
+**The code gate** — `good_enough` (threshold 5, one round; 12 of 16 reviewers answered, kimi's four returned empty answers), over a PARENTLESS base commit
+(`abac3ff60`) whose tree is E4 final merged with main, so the reviewers saw E5 only. 23 findings: **2 accepted, 21 rejected with a reason checked in the code.**
+
+- Accepted, findings 5 and 20 (`37f963141`): `Why` carried the store's exception MESSAGE, which may hold a path. It is now the type and the SQLite error code
+  (`SqliteException (SQLite error 1)`). Red: `AStoreThatCannotAnswer_SaysWhyByTypeAndCode_…` failed on the message text; green after.
+- Rejected, the main reasons: the count columns' `DEFAULT 0` is the plan's own contract (§S2: a reader checks the state first); a session file's name is a HASH of
+  repo and branch (`SessionStore.FileFor`), so no traversal reaches it; `GitModules` already drops a rooted or `..` mount; a negative time left is graceful; `Reached`
+  must survive an exception, so it cannot be an immutable return value; a nullable "not recorded" is `RoundRecord`'s established pattern (`Caller`, `Size`,
+  `PlanSource`); per-row inserts, sequential peer loads and the type-only failure log follow the neighbours and the privacy contract, with no measured cost.
+
+**Suites after the last code change.** `CoaiMcp.Tests.exe`: 12 651 tests, 12 530 passed, 1 failed, 120 skipped (26 m 28 s on a shared machine). The one failure,
+`ARoundRecordsWhoWroteItEndToEndTests.ADeletedDatabase_…`, was a plan round that answered `call_human` after 40 s under the suite's load (the FakeCli reviewer has
+the repository's usual 30 s timeout); its class passed alone three times out of three (4 of 4 each, about 30 s). `npm test`: 6 554 tests, 6 551 passed, 0 failed,
+3 skipped, exit 0. `dotnet format --verify-no-changes` on the changed files: clean. `plan-lifecycle`: clean; `pin-check`: OK.

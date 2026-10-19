@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using CoaiMcp.Runners.Acp;
 using CoaiMcp.Runners.Processes;
@@ -298,13 +299,14 @@ public sealed class AcpClientTests
     /// Finding G of the risk consultations (2026-10-12): the transport used to close stdin BEFORE the tree kill, and an
     /// agent that exits on EOF could leave the kill an empty tree. On Windows this test passed under the old order too —
     /// the <c>Process</c> object keeps the exited parent's handle, and .NET's tree kill still finds the children by their
-    /// stale parent pid — so no red could be shown here; the order was fixed by the finding's own reasoning, and the
-    /// case this test pins is the one that would lose on Linux, where an orphan is reparented to init the moment its
-    /// parent goes. That case, a parent gone BEFORE the kill, is a known limit on Linux and macOS — CI showed it on
-    /// 2026-10-12 (*Expected Gone(grandchild) to be True … but found False*, both platforms). So the grandchild is asserted
-    /// gone on Windows only; elsewhere it is ended here by its recorded pid, and the test reports itself SKIPPED with the
-    /// limit named, never green: owning the tree (a process group on Unix) is a condition in
-    /// <c>todo/PLAN_vibe_and_kimi_runtimes.md</c> §4 before Kimi is launched on any host but Windows.
+    /// stale parent pid — so no red could be shown here; the order was fixed by the finding's own reasoning.
+    /// <para>On Linux and macOS an orphan is reparented the moment its parent goes, and a client that is not a SUBREAPER finds
+    /// none (CI showed it on 2026-10-12: <i>Expected Gone(grandchild) to be True … but found False</i>). The mechanism that
+    /// closes it is DL9 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>: the SHIM becomes a child subreaper and ends its tree by
+    /// identity (<c>SupervisedTeardown</c>) — which an in-process test cannot show, because the test host must never become a
+    /// subreaper. The Linux assertion is <c>SupervisedTeardownLinuxTests.AnAgentThatExitsFirst_LeavesNoSameGroupAndNoSetsidChild</c>
+    /// and its twin through the shim, run in a real subreaper child. Here the grandchild is asserted gone on Windows only;
+    /// elsewhere it is ended by its recorded pid and the test reports itself SKIPPED, never green.</para>
     /// </remarks>
     [Fact]
     public async Task APrematureEofIsAProtocolEnd_AndTheGrandchildIsGoneToo()
@@ -327,9 +329,7 @@ public sealed class AcpClientTests
         if (!OperatingSystem.IsWindows())
         {
             EndLeftover(grandchild);
-            Assert.Skip("known limit on Linux and macOS: an agent that exits before the teardown loses its children to "
-                + "reparenting, and the tree kill finds none — owning the tree is a condition in "
-                + "todo/PLAN_vibe_and_kimi_runtimes.md §4 before Kimi is launched on any host but Windows");
+            Assert.Skip("not a subreaper: an in-process client loses an exited agent's children to reparenting; the Linux proof is SupervisedTeardownLinuxTests, in a real subreaper (DL9)");
         }
 
         Gone(grandchild).Should().BeTrue("a grandchild orphaned by the agent's own exit is still the client's to end");
@@ -582,6 +582,77 @@ public sealed class AcpClientTests
         outcome.End.Should().Be(AcpEnd.Answered, outcome.Reason);
         Gone(outcome.AgentPid).Should().BeTrue();
         Gone(grandchild).Should().BeTrue("the tree must be killed while the agent is still alive to name its children");
+    }
+
+    /// <summary>
+    /// The fake agent replays its steps on EVERY prompt, so a <c>grandchild</c> step writes the same pid file again. The second write
+    /// replaces the first — it neither refuses (the agent dying with "file already exists") nor keeps the first grandchild's pid.
+    /// </summary>
+    [Fact]
+    public async Task AnAgentPromptedTwice_ReplacesItsGrandchildsPidFile_AndAnswersBothPrompts()
+    {
+        using var agent = new FakeAcpAgent(string.Empty, a => a.Grandchild(), _ => FakeAcpAgent.Chunk("x"));
+        var start = new ProcessStartInfo(FakeAcpAgent.FakeCliExe) { UseShellExecute = false, RedirectStandardInput = true, RedirectStandardOutput = true, WorkingDirectory = agent.Cwd };
+        start.ArgumentList.Add("acp-agent");
+        start.ArgumentList.Add(agent.Script);
+        using var process = Process.Start(start)!;
+        try
+        {
+            await PromptAndAwaitAnswerAsync(process, 1);
+            var first = agent.GrandchildPid();
+
+            await PromptAndAwaitAnswerAsync(process, 2);
+            var second = await ReadPidWhenItChangesAsync(agent.PidFile, first);
+
+            second.Should().NotBe(first, "the second prompt's grandchild replaced the first one's record");
+            ProcessTracking.StartedAt(second).Should().NotBeNull("the pid file names the grandchild the second prompt started");
+        }
+        finally
+        {
+            process.Kill(entireProcessTree: true);
+        }
+    }
+
+    private static async Task PromptAndAwaitAnswerAsync(Process agent, int id)
+    {
+        await agent.StandardInput.WriteLineAsync($$$"""{"jsonrpc":"2.0","id":{{{id}}},"method":"session/prompt","params":{"sessionId":"fake-session","prompt":[{"type":"text","text":"go"}]}}""");
+        await agent.StandardInput.FlushAsync();
+        using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var exited = agent.WaitForExitAsync(limit.Token);
+        while (true)
+        {
+            var reading = agent.StandardOutput.ReadLineAsync(limit.Token).AsTask();
+            if (await Task.WhenAny(reading, exited) == exited)
+            {
+                throw new Xunit.Sdk.XunitException($"the agent exited (code {agent.ExitCode}) before it answered prompt {id}");
+            }
+
+            if (await reading is not { } line)
+            {
+                throw new Xunit.Sdk.XunitException($"the agent ended its output before it answered prompt {id}");
+            }
+
+            if (line.Contains($"\"id\":{id},", StringComparison.Ordinal) && line.Contains("\"result\"", StringComparison.Ordinal))
+            {
+                return;
+            }
+        }
+    }
+
+    private static async Task<int> ReadPidWhenItChangesAsync(string pidFile, int previous)
+    {
+        var until = DateTime.UtcNow.AddSeconds(20);
+        while (DateTime.UtcNow < until)
+        {
+            if (int.TryParse(File.ReadAllText(pidFile), out var pid) && pid != previous)
+            {
+                return pid;
+            }
+
+            await Task.Delay(25);
+        }
+
+        return previous;
     }
 
     /// <summary>The graceful step is real: an agent still reading its stdin sees `session/cancel` before the kill.</summary>

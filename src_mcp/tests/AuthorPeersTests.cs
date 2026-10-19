@@ -129,6 +129,24 @@ public sealed class AuthorPeersTests : IDisposable
     }
 
     [Fact]
+    public void AStoreThatCannotAnswer_SaysWhyByTypeAndCode_NeverByTheStoresOwnMessage()
+    {
+        using (var db = new SqliteConnection($"Data Source={_dir.At(RoundsDb.FileName)};Pooling=False"))
+        {
+            db.Open();
+            using var make = db.CreateCommand();
+            make.CommandText = string.Join(";\n", Schema.Steps[..23]) + "; PRAGMA user_version=23;";
+            make.ExecuteNonQuery();
+        }
+
+        SqliteConnection.ClearAllPools();
+
+        var found = Find();
+
+        found.Why.Should().Be("SqliteException (SQLite error 1)", "the why reaches a Debug line: a type and a code, never a message, which may carry a path (code gate finding 5)");
+    }
+
+    [Fact]
     public void APeerFileThatDoesNotLoad_MeansPeersUnknown_AndNoPartialList()
     {
         World.Add("peerA", T0, [Round(1)]);
