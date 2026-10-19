@@ -844,7 +844,13 @@ folders are REGISTERED with the scratch when they are made (`FrameFor` for both 
 child (`ProcessLauncher.cs:586-590`), so an ordinary reviewer's grandchild can outlive the round inside that folder, and
 on Unix removing a live process's working folder succeeds silently. A folder that is not empty, or cannot be removed,
 is warned about and left to the six-hour sweep (which needs the folder old, so a live grandchild is not raced), and
-**a failed removal never fails the round.** The always-empty case is the measured one (8,844 of 8,844). A `BuildWork` called with no round around it
+**a failed removal never fails the round.** The always-empty case is the measured one (8,844 of 8,844). **Policy,
+stated (cadence consult 589e4647, turn 2):** an EMPTY folder can still be a surviving descendant's working folder. A
+round that has ENDED may remove it anyway: a descendant still running after its round is a leak the round's end should
+have stopped, and anything it writes later is not wanted. On Linux the removal succeeds and that descendant's next
+relative write fails; on Windows the removal fails while the folder is in use, and the folder is left to the sweep. S7's
+grandchild arm pins exactly this: the grandchild enters the empty folder, closes its pipes, signals ready and waits; the
+round ends and disposes; the round's outcome is unchanged on both platforms, and the folder is gone (Linux) or left (Windows). A `BuildWork` called with no round around it
 (`SubmissionOrderTests.cs:116-118`, a hundred times) never disposes its scratch; under D2 that is the test's folder,
 and D4 does not claim more than rounds. *Loses:* leaving it to D2 (D2 helps only the tests; a person's machine makes
 two of these per round for ever); a `finally` in `RoundEngine` (there is none today, and the scratch's `using` IS the
