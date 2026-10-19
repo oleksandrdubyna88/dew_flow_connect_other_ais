@@ -114,6 +114,20 @@ test('ALocalReviewLine_KeepsItsRound_AndTheRoundDoesNotMoveATotal — two local 
   assert.equal(row?.tokensIn, 150, 'the tokens are summed once per line, never once per round');
 });
 
+test('ALocalLine_ReadsItsRound_AndAnEmptyRoundIsNoRound — a key is kept as written; "" is absent, never a phantom round to group by', () => {
+  // The local shape `UsageLedger.Record` writes (empty email/job/slot, the client's `attempt`) with a round, and the same shape
+  // outside a round, which the ledger writes as `"round":""`. A reader that kept "" would make every round-less line one round.
+  const roundKey = '0123456789abcdef0123456789abcdef';
+  const shape = (round: string): string => '{"utc":"2026-10-19T10:00:00Z","provider":"codex","model":"gpt-6-luna","role":"Architecture",'
+    + '"stage":"PlanReview","seconds":4,"tokensIn":100,"tokensOut":10,"costUsd":null,"outcome":"ok","email":"","kind":"",'
+    + '"turn":"abcdef012345","attempt":"first","job":"","slot":"","round":"' + round + '","clientAttempt":""}';
+  const [inside, outside] = parseUsage([shape(roundKey), shape('')].join('\n'));
+
+  assert.equal(inside?.round, roundKey, 'a local line\'s round must parse to exactly the key written');
+  assert.equal(outside?.round, undefined, 'an empty round must be absent — an empty-string key would group as one phantom round');
+  assert.equal('round' in (outside ?? {}), false, 'the property itself is absent, not present and undefined');
+});
+
 test('TheParser_KeepsWhatTheLaunchRanWith —a line keeps its CLI, version, effort and tier with their sources, job and slot; an old line has none', () => {
   // Story 3.4 of todo/PLAN_every_round_is_counted.md — AnOldLedgerLine_StillReads, the extension's half: read, not dropped.
   const [server, local, old] = parseUsage([
