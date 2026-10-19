@@ -8,6 +8,7 @@ namespace CoaiMcp.Server;
 /// <param name="Gate">The gate session; its journal is the overlay the run keeps current.</param>
 /// <param name="Index">The round's place in the gate's journal, or -1 when the journal does not list it.</param>
 /// <param name="CallerId">The caller's session id: <c>rounds.authors_session</c>, else a UUID <c>rounds.caller</c>, else empty (E5 §3's order).</param>
+/// <param name="Fingerprint">The round's <see cref="RoundFingerprint"/> when it was selected: what the write validates against, inside its lock.</param>
 /// <param name="Peers">THE one peer lookup of the round — shared by the decision and the compute, so a round asks its store once.</param>
 internal sealed record RoundFacts(
     StoredRound Round,
@@ -18,7 +19,8 @@ internal sealed record RoundFacts(
     AuthorPeerSet Peers,
     SnapshotPresence Presence,
     PeerStatus PeerStatus,
-    bool ProjectionAgrees)
+    bool ProjectionAgrees,
+    string Fingerprint)
 {
     /// <summary>The transcript was found (<c>TranscriptLocated</c> — apart from E3's per-agent <c>TranscriptPresent</c>).</summary>
     public bool TranscriptLocated => Location is CallerTranscriptLocation.Found;
@@ -56,7 +58,7 @@ internal sealed class StoredFacts(SqliteConnection db, PanelSettings settings, B
             ? PeersOf(gate, round, index, record, caller, presence)
             : (AuthorPeerSet.Unknown("no transcript, no peer lookup"), PeerStatus.Nobody);
 
-        return new RoundFacts(round, gate, index, caller, location, peers, presence, status, Agrees(presence, record, db, round));
+        return new RoundFacts(round, gate, index, caller, location, peers, presence, status, Agrees(presence, record, db, round), RoundFingerprint.Read(db.CreateCommand, round.RoundId));
     }
 
     private (AuthorPeerSet Peers, PeerStatus Status) PeersOf(StoredGate gate, StoredRound round, int index, RoundRecord record, string caller, SnapshotPresence presence)

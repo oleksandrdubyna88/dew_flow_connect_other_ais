@@ -321,6 +321,16 @@ public sealed class ABackfillDecidesEachRoundOnceTests
     }
 
     [Fact]
+    public void ARowFromANewerReader_IsNeverReplacedByAnOlderOnesOutput()
+    {
+        var newer = new SettleInput("observed", Reader + 1, Attribution, "observed", false, false, Reader, Attribution);
+
+        BackfillDecision.Settle(newer).Should().Be(Settlement.KeepStronger, "equal strength, but the database row was written by a newer reader");
+        BackfillDecision.Settle(newer with { ResultReader = Reader + 1 }).Should().Be(Settlement.Write, "a result at least as new replaces an equal row");
+        BackfillDecision.Settle(newer with { DatabaseReader = Reader, DatabaseAttribution = Attribution + 1, ResultAttribution = Attribution }).Should().Be(Settlement.KeepStronger, "the same for the attribution version");
+    }
+
+    [Fact]
     public void AWeakerReprojection_IsKept()
     {
         BackfillDecision.Settle(new SettleInput("observed", Reader, Attribution, "partial: read budget", false, false)).Should().Be(Settlement.KeepStronger);

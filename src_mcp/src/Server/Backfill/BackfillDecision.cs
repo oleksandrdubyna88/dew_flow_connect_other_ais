@@ -198,8 +198,15 @@ internal static class BackfillDecision
     private static bool IsCorrected(SettleInput input, (int Reader, int Attribution) below) =>
         input.DatabaseReader < below.Reader || input.DatabaseAttribution < below.Attribution;
 
+    /// <summary>
+    /// Weaker: a state no store could have written, a lesser strength — or a result a OLDER reader or attribution produced than the one that wrote the row.
+    /// A newer reader's row is never overwritten by an older one's output, whatever the two states say.
+    /// </summary>
     private static bool Weaker(SettleInput input) =>
-        Strength(input.ResultState) is var result && (result == 0 || result < Strength(input.DatabaseState));
+        Strength(input.ResultState) is var result && (result == 0 || result < Strength(input.DatabaseState) || ProducedByAnOlderVersion(input));
+
+    private static bool ProducedByAnOlderVersion(SettleInput input) =>
+        input.ResultReader < input.DatabaseReader || input.ResultAttribution < input.DatabaseAttribution;
 
     private static Settlement KeepStronger(SettleInput input) =>
         input.FileLacksSnapshot ? Settlement.KeepStrongerAndHeal : Settlement.KeepStronger;

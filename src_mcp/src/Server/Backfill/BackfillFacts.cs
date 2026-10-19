@@ -124,6 +124,12 @@ internal enum BackfillWhy
     Computed,
     RecomputedProvisional,
     RecomputedSnapshotLost,
+
+    // what a settled result or a write adds: the counts a summary keeps, never a state on the round
+    StrongerExisting,
+    Unchanged,
+    Busy,
+    ChangedUnderUs,
 }
 
 /// <summary>A verb with its reason.</summary>
@@ -137,13 +143,17 @@ internal readonly record struct BackfillAction(BackfillVerb Verb, BackfillWhy Wh
 /// <param name="ResultState">The state the result would write.</param>
 /// <param name="ProjectionEqualsDatabase">The result's projection is what the database already holds.</param>
 /// <param name="FileLacksSnapshot">The file could hold a snapshot and has none (<see cref="SnapshotPresence.Lost"/>).</param>
+/// <param name="ResultReader">The reader version of the result; absent means "not older than anything" — a result no version speaks against.</param>
+/// <param name="ResultAttribution">The attribution version of the result; absent as <paramref name="ResultReader"/>.</param>
 internal readonly record struct SettleInput(
     string DatabaseState,
     int DatabaseReader,
     int DatabaseAttribution,
     string ResultState,
     bool ProjectionEqualsDatabase,
-    bool FileLacksSnapshot);
+    bool FileLacksSnapshot,
+    int ResultReader = int.MaxValue,
+    int ResultAttribution = int.MaxValue);
 
 /// <summary>What happens to a computed or re-projected result.</summary>
 internal enum Settlement
