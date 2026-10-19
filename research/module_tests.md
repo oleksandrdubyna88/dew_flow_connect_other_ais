@@ -4598,3 +4598,21 @@ checks that.
 **Break-it (done, then restored):** the two readers (`Program.cs` `MinimalSteering.Load`, `AcpAgent.SteeredScript`) put back on
 `Path.GetTempPath()` → S1 and S2 red as above, and all of `AKimiRowRunsThroughTheServiceOnWsl2Tests` red
 (`answered no version (exit 64): fake-cli: unknown verb [--version]` — the fake could no longer find the file its test wrote beside the binary).
+
+### S2b — every writer of the steering file is in the serial collection
+
+`EveryWriterOfTheSteeringFileTests` (6) plus the shared parser `TestSourceIndex` (the classes of `src_mcp/tests` read from SOURCE with the
+lexer every census here uses — comments and string contents removed — judged on the CONCRETE class: a base class's calls count through each
+class derived from it; a collection counts only when the concrete class carries it itself; a nested class's code is not its outer's).
+
+| Test | Guarantee |
+|---|---|
+| `EveryClassThatWritesTheSteeringFile_IsInTheSerialFakeCliEnvCollection` | any concrete class whose lineage calls `FakeCliSteering.Write` / `ReadBack` / `MinimalFile` has `[Collection("…")]` naming a collection defined with `DisableParallelization = true` |
+| `TheScan_StillSeesTheSixKnownWriters_AndTheCollectionTheyAreIn` (companion) | the scan finds the six classes that used to write their own copy, finds the `fakecli-env` definition as serial, and finds the collection on each |
+| `NoTestSourceSpellsTheSteeringFilesName_ButTheHelperAndTheTestsThatPinIt` | no other test source spells `fakecli-minimal.json` or `MinimalSteeringFile` (one writer, one path); the allowed files are found, so the scan reads something |
+| `AClassThatWritesOutsideTheSerialCollection_IsAnOffender`, `ABaseClassesWriteCounts_ThroughEachConcreteDerivedClass`, `ANestedClassesWriteBelongsToTheNestedClass_NotToItsOuter` | the parser on synthetic source: outside / parallel-collection writers are named, a call in a string or a comment is not a call, the abstract base is not judged but each concrete derived class is, primary-constructor and nested classes parse |
+
+**Green today on the six classes; watched RED twice on the real tree, then restored:** `[Collection("fakecli-env")]` taken off
+`QuestionRowOnAgyScenarioTests` → `Expected Offenders(TestSourceIndex.Classes) to be empty … but found at least one item
+{"QuestionRowOnAgyScenarioTests.cs: QuestionRowOnAgyScenarioTests"}`; a scratch file spelling the steering file's name → `Expected spelling to be
+empty … but found at least one item {"ZzBreak.cs"}`.
