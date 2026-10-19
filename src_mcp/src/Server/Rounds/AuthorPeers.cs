@@ -112,9 +112,13 @@ internal static class AuthorPeers
         }
         catch (Exception e) when (e is SqliteException or InvalidOperationException)
         {
-            return AuthorPeerSet.Unknown(e.GetType().Name + ": " + e.Message);
+            return AuthorPeerSet.Unknown(WhyOf(e));
         }
     }
+
+    /// <summary>A failure as its type and, for SQLite, its error code — never its message, which may carry a path (code gate finding 5).</summary>
+    private static string WhyOf(Exception e) =>
+        e is SqliteException sqlite ? $"{nameof(SqliteException)} (SQLite error {sqlite.SqliteErrorCode})" : e.GetType().Name;
 
     private static AuthorPeerSet Walk(SqliteConnection connection, PeerLookup lookup, Func<string, string, PersistedSession?> load, DateTimeOffset? deadline, TimeProvider clock)
     {
