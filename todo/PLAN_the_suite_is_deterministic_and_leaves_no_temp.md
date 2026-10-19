@@ -493,9 +493,15 @@ reads as. **Fix (the lead's decision on gate C14 and judge J3):** a **tri-state 
 `SettingsFile.Read` keeps today's signature and behaviour for its callers — `SettingsFile.Layer`'s eight call sites
 (`ProbeApiMode.cs:97`, `Program.cs:633`, `:712`, `:2097`, `CadenceReadMode.cs:32`, `ConsultantCheckMode.cs:47`,
 `ConsultantsReadMode.cs:221`, `PanelServiceHost.cs:101`) see no change. A new `SettingsFile.TryRead` answers one of
-three: `Read(values)`, `Missing`, or **`Busy`** — and `Busy` is ONLY a sharing violation / `IOException` while another
-process holds the file for writing; a malformed file and an empty file are `Read` with no values, exactly what they
-are today. `PanelServiceHost.Current` (`:64-85`) uses it on the rebuild: on `Busy` it keeps `_current` AND the old
+three: `Read(values)`, `Missing`, or **`Busy`** — and `Busy` is ONLY a sharing violation (Windows HResult
+`0x80070020` / ERROR_SHARING_VIOLATION, or an `IOException` the open could not take because another process holds the file
+for writing); a **permission denial is never `Busy`** — `UnauthorizedAccessException` (Windows deny-read, Linux `chmod 000`)
+keeps today's answer, empty settings with a warning (`SettingsFile.cs:90`), so a file locked down by mistake can never pin
+stale settings for ever (cadence consult 589e4647, verified); a malformed file and an empty file are `Read` with no
+values, exactly what they are today. S10 gains a denial arm that must NOT keep the last good settings. **One existing
+test changes by design:** `PanelServiceHostTests.AReloadThatFails_IsTriedAgainOnTheNextCall_RatherThanHiddenBehindTheNewStamp`
+(`:113`) asserts `Current` THROWS; under "Current never throws" it asserts the old settings come back and the next call
+still retries — the retry it pins is kept, only the throw goes. `PanelServiceHost.Current` (`:64-85`) uses it on the rebuild: on `Busy` it keeps `_current` AND the old
 stamp, warns once per stamp, and tries again on the next call; on everything else it behaves as today. **Why malformed
 and empty are not kept-last-good:** a person who writes a broken file did an explicit thing, and today's answer to it
 (defaults, a warning) is the answer they can see and fix; a torn write — the writer mid-file — already heals by itself,
@@ -745,7 +751,11 @@ case that already changed a result; D2 then makes the remaining limit smaller st
 is deleted at the next run's start either way). Weighed: deferring C1 until E2 and keeping the file TEMP-keyed — that
 leaves the live collision open for the whole of E2 and ties the fake's correctness to an allowlist.
 
-**D2 — Each suite runs inside ONE temp folder of its own.** **Set ONCE, before any test, never toggled during the run
+**D2 — Each suite runs inside ONE temp folder of its own.** *(Cadence consult 589e4647, verified: `TempDirsAreSwept` is
+BOTH the assembly fixture (`TempDirsAreSwept.cs:5`) and a test class with eight Facts/Theories (`:62-227`), so a disposal
+added to it would run after test instances too. The run folder's restore-and-remove lives in a DEDICATED fixture type
+with no test methods, `RunTempFixture`; `TempDirsAreSwept` keeps its sweep and its tests. Coordinated with E1's S4
+collection scan.)* **Set ONCE, before any test, never toggled during the run
 (gate finding D2 / judge J11).** The C# side is a `[ModuleInitializer]` in the test assembly (`RunTemp`, one static
 class, the first code of the assembly to run — before any type is touched, including `MemberData` discovery, class
 fixtures and static initializers), not the assembly fixture: it records the REAL temp folder in `RunTemp.Real`, makes
@@ -829,10 +839,12 @@ repair of the round, on success, failure and cancellation alike, because it is a
 (`RoundScratch.cs:94-124`) already deletes its own folder with `GitScratch.DeleteEvenIfReadOnly`. So D4 is: the two
 folders are REGISTERED with the scratch when they are made (`FrameFor` for both of the ordinary round's;
 `SecurityRoster.Append(RoundWork ordinary, …)` (`SecurityRoster.cs:30`) registers its own `:154` folder with
-`ordinary.Scratch`), and `Dispose` removes them with its own folder — recursively, never following a link
-(`Directory.Delete(recursive)` does not follow reparse points / symlinks into their targets, and the story's test
-pins that with a planted link), best effort: a folder that cannot be removed is warned about and left to the six-hour
-sweep, and **a failed removal never fails the round.** A `BuildWork` called with no round around it
+`ordinary.Scratch`), and `Dispose` removes them **only when they are EMPTY** — a non-recursive `Directory.Delete`
+(cadence consult 589e4647, verified): the launcher lists and confirms descendants only for a request that ends its own
+child (`ProcessLauncher.cs:586-590`), so an ordinary reviewer's grandchild can outlive the round inside that folder, and
+on Unix removing a live process's working folder succeeds silently. A folder that is not empty, or cannot be removed,
+is warned about and left to the six-hour sweep (which needs the folder old, so a live grandchild is not raced), and
+**a failed removal never fails the round.** The always-empty case is the measured one (8,844 of 8,844). A `BuildWork` called with no round around it
 (`SubmissionOrderTests.cs:116-118`, a hundred times) never disposes its scratch; under D2 that is the test's folder,
 and D4 does not claim more than rounds. *Loses:* leaving it to D2 (D2 helps only the tests; a person's machine makes
 two of these per round for ever); a `finally` in `RoundEngine` (there is none today, and the scratch's `using` IS the
@@ -1209,6 +1221,17 @@ folded; where the code said otherwise, it is written here instead of in the plan
 | J13 | C3 — where the busy-answer seam goes: not inside `HeldFile.TakeWithin`/`TakeVerified`; prefer the Kimi lock's call site | **Folded.** C3 fix: the call site at `KimiCredentialsLock.cs:209` splits the take; `HeldFile` untouched | Confirmed: `take(…, HomeWait)` `:209`; `Inheritable` → `HeldFile.TakeVerified(path, within, inheritable: true)` `:175`; the busy loop is `HeldFile.cs:173` |
 | J14 | Who adds the clock to `SecuritySources.cs:32` — the sibling plan or this plan's E4; consistent on both sides | **Folded, both sides.** `SourceResolver.cs:200` here (C13); `SecuritySources.cs:32` in the sibling, with S21; the sibling's §Boundary rows 1–2 and its "Disjoint" line say the same | Confirmed: `CollectionBudget` `SecuritySources.cs:14`, `CancelAfter` `:32` |
 | J15 | Accuracy — "absent from 20 CI runs" proves nothing for ~1 % failures; fix moved lines `module_tests.md:4493` and D6's siblings `:502/:532/:557` | **Half folded, half refuted.** §10 and the DoD now say the REDs are the proof and the 20 runs a watch (0.99²⁰ ≈ 0.82); `module_tests.md:4475` → `:4493` in three places — correct. **Refuted:** the D6 sibling lines. On `38ecd4e11`, `PanelServiceTests.cs` has `coai-plan-said-` at `:352`, `coai-plan-rules-` at `:480`, `coai-plan-partial-` at `:518`, `coai-plan-none-` at `:542` — the plan's `:480/:518/:542` are right; `:502/:532/:557` match nothing in the file | `grep -n "coai-plan-" src_mcp/tests/PanelServiceTests.cs` on `38ecd4e11` |
+
+### The cadence consult for epics 1-3 (589e4647) — 3 findings, all verified and folded
+- **E2's cleanup on a class that is also a test class** — true (`TempDirsAreSwept.cs:5` is the assembly fixture AND holds
+  eight Facts/Theories). Folded into D2: a dedicated `RunTempFixture` with no test methods.
+- **C14 leaves a permission denial unmapped, and contradicts a test** — true (`SettingsFile.cs:90` maps
+  `UnauthorizedAccessException` to empty settings; `PanelServiceHostTests.cs:113` asserts `Current` throws). Folded into
+  C14: a denial is never `Busy`, it keeps today's answer; the `:113` assertion changes by design, its retry kept; S10 gains
+  a denial arm.
+- **D4 can remove a live grandchild's working folder** — true (`ProcessLauncher.cs:586-590`: descendants are listed and
+  confirmed only for a request that ends its own child). Folded into D4: remove only an EMPTY folder, non-recursive; a
+  non-empty one is left to the six-hour sweep; S7 gains a grandchild arm.
 
 ### One finding of our own, from reading the C22 log
 
