@@ -223,6 +223,11 @@ budget (4 706 bytes of the 10 056 left).
 
 The old canary was named `TheRotatedTail_CurrentlyFitsAtMostOneRule`.
 
+**Re-measured 2026-10-19 (E7, `--backfill-authors`).** `.agents/PROJECT.md` names the new one-shot mode, which
+`ARequestFaultIsNotAnOldBinaryTests` requires, so the base is **17 905** (+22) and base + tier **79 966**, leaving
+10 034 of 90 000. The tail is unchanged — the three smallest tail rules (2 197, 3 065, 3 421) still fit and the fourth (3 460) still does
+not — and `StageRulesTests` pins the new numbers. The figures above stay as the 2026-10-16 measurement.
+
 **What this supersedes.** The "80 000", "1 328 spare", "77 562 / 2 438" and "1 of 24" figures above are the
 dated measurements of 2026-09-15 and 2026-09-16 and stay as history. The "D18" of the feature plan named
 the FULL budget (not its size) and still does: the feature stage now collects at 90 000.

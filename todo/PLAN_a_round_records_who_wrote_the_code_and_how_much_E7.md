@@ -1,6 +1,6 @@
 # PLAN — E7 stories: backfill the authors, hand-check twenty rounds, then answer
 
-> Status: **plan only, nothing implemented yet, 2026-10-14; revised 2026-10-16 against `main` at `2d98f2f8` (§9) and 2026-10-18 against `main` at `e53e35ba` (§9a — the corrected `BackfillDecision`, the safety rules, the consultants' answers).** Epic E7 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
+> Status: **S1–S4 implemented on `feat/round-authors-e7`, 2026-10-19 (not merged, code gate not run; O1–O5 and J1 not performed — they need the released binary and the owner; §11 is the implementation record). Plan written 2026-10-14; revised 2026-10-16 against `main` at `2d98f2f8` (§9) and 2026-10-18 against `main` at `e53e35ba` (§9a — the corrected `BackfillDecision`, the safety rules, the consultants' answers).** Epic E7 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
 >
 > Scope: the parent's §9 (backfill) and §11 steps 6–7 — one new one-shot mode `coai-mcp --backfill-authors` in
 > `src_mcp`, run once per side over that side's own store and transcripts; the hand-check of ten rounds per side; the
@@ -1030,3 +1030,46 @@ ships. None blocks S1's table tests. Items 2, 3, 5 and 6 were closed by E5 on 20
    uses E4's predicate rather than its own.
 10. **The parent — §9's no-overwrite sentence.** Gains the two exceptions and "last SETTLED window" for `before-open`
     (E4 §11 *Cross-epic*); edited by the main session, not here.
+
+## 11. Implementation record (2026-10-19)
+
+Built on `feat/round-authors-e7` after merging the local `feat/round-authors-e5` (E3 + E4 + E5) into it — a merge, not a rebase (`8396eab84`). One commit per story: **S1 `1bca5e122`,
+S2 `bbcf6a822`, S3 `2d60bd6e2`, S4 `8e2303f34`**; this record is the commit after them. Every test was watched RED for its real symptom before the code that answers it
+(a stub that computed everything, a writer shaped like `RecordRound`, a mode that printed `{}`), and every break-it was planted, seen red, restored byte for byte (SHA-256
+checked), rebuilt and seen green. No live store was opened: every store is a `testsToDelete-` temp folder and the one-shot process is always handed an explicit
+`COAI_DATA_DIR` and `COAI_AGENT_LOG_DIR`. **O1–O5 and J1 were not performed** — they need the released binary and the owner's approval (the preflight script
+`scripts/backfill-preflight-servers.*`, the judge's dump `scripts/round-authors-dump.mjs`, the rehearsal, the dry runs on both sides, the runs, the hand-check and the RESULTS
+file are all still to build or run).
+
+**Deviations, each the smallest change that keeps the intent.**
+
+1. **`CallerTranscriptLocator.LocateStored(vendor, id, home)`** — an overload. The shipped `LocateStored(id, home)` has no vendor, so S1's `no reader for <vendor>` could not come
+   through it. A stored caller that is not a GUID is `no session id` (E3's code has no `stated id` for a stored value).
+2. **S2 computes through THE live `RoundAuthorsStep`** (injected environment carrying the stored id, the one peer set, `AuthorsBudget(64 MiB, 60 s)`, the `CallerReads` reader) instead of
+   a second assembly of `Assign`'s input; `RoundAuthorsStep.GateOf/InputOf/EmptyObservation` and `RoundAuthorsTable.AgentColumn` became `internal` for the decision's peer predicate and the projection.
+   The live step reads the id as `environment`; the snapshot's `IdSource` is then replaced by the row's own, else `stored`.
+3. **Rule 4 (`snapshot lost`) requires a non-empty database state.** An empty row over a file without a snapshot is `computed`, so the counts mean something.
+4. **Rule 3 reading:** a named peer round still running holds back BOTH disjuncts (`keep: peer still running`); the plan's sentence attaches the keep to the first.
+5. **`Settle` knows two things the plan did not name:** `WriteFileOnly` (an equal result whose file lacks its snapshot writes the file, never the database — otherwise a snapshot lost to a
+   concurrent `open` would never come back), and **a result produced by an OLDER reader or attribution than the one that wrote the row never replaces it** (found when a stale file
+   snapshot at the current reader sat over a newer reader's row and equal strength would have overwritten it).
+6. **E6's `--round-authors` is not on this branch**, so the "totals oracle" is a canonical dump of the authors and size tables, the session files and every other table
+   (`StoreDump`); the report's JSON identity is for O2–O4.
+7. **`SizeOutcome.GitFailed`** (`git failed`) joins the closed reasons for a `ContextException` after both commits are known to exist; a base or head that is not a hex object name is `commit not found`
+   and never reaches a command line.
+8. **The writer sets its own busy wait** (5 s by default; the tests use 300 ms) through `PRAGMA busy_timeout` and the connection's `DefaultTimeout`, so `RoundsDb` gains only the planned
+   `Transaction()` line. The backup copy is switched to `journal_mode = DELETE` so a backup is ONE file and a read-only open of it makes no `-wal`/`-shm`.
+9. **Exit 75 for ANY deferral** (`busy`, `unreadable`, `changedUnderUs`, `peersUnknown`), not only a busy session; a verify that finds the snapshot not kept counts as `changedUnderUs`;
+   `SessionStoreException` and a `coai.db` that is a directory are 74.
+10. **`.editorconfig` switches CA1502 (complexity 4) on for `src_mcp/src/Server/Backfill/*.cs`** — the analyzer, not review, holds the bound.
+11. **The rules-budget drift guard was re-baselined** (`StageRulesTests…SpendExactly79944Bytes`): naming `--backfill-authors` in `.agents/PROJECT.md`, which `ARequestFaultIsNotAnOldBinaryTests` requires,
+    moved the base from 17 883 to **17 905** (+22) and the total to **79 966**. The tail canaries are unaffected; the method name keeps its first number. E6 re-baselined the same pin on its own branch
+    (to 79 963); the merge resolves the conflict.
+12. **Two live limits the tests show and the plan states:** a fresh data directory's first live round is `partial: prior windows unknown` (E5 §3), so the parity tests create the store before the first
+    round; and a still-RUNNING peer round has no caller on disk (E5 §12 deviation 8), so `ANamedPeerRoundStillRuns` holds only for a round projected into the database — in production the
+    grown-peer-set rule carries the repair. The replay fixture (a number listed twice) is `invalid input` live and `observed` backfilled: stronger, never weaker, rows not comparable.
+13. A real defect the first run found in the new code and fixed: a `DateTimeStyles` combination the framework refuses (`RoundtripKind` with `AdjustToUniversal`).
+
+**Suites.** `CoaiMcp.Tests.exe` over the whole suite: 12 176 tests, 59 skipped (platform-only); the run that included this record had 6 red, none new to this work and none of E7's 140 tests — five
+(`ASourceRequestIsServedOrRefusedTests`, `AskAcpModelAndUsageTests` ×2, `TheServerAnswersInitializeAtOnceTests`, `CollectorTests`) timed out under load while another session's suite ran and passed when
+re-run alone, and `StageRulesTests…` was item 11, re-baselined and green. `dotnet format --verify-no-changes` clean; `plan-lifecycle` and `pin-check` clean.

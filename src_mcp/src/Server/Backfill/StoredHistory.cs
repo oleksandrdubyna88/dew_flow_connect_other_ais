@@ -124,8 +124,8 @@ internal sealed class StoredHistory(SqliteConnection db, SessionStore store)
             Columns.Text(rows, "authors_session"), started, Columns.Text(rows, "authors_state"), Columns.Text(rows, "authors_id_source"),
             Columns.Number(rows, "authors_reader"), Columns.Number(rows, "authors_attribution"), Columns.Text(rows, "size_state"),
             Columns.Text(rows, "base_ref"), Columns.Text(rows, "head_sha"));
-        var record = Rebuild(stored, Columns.Text(rows, "round_key"), Columns.Number(rows, "gating"), Columns.Text(rows, "completed_utc"))
-            with { Size = RebuiltSize(stored, Columns.Text(rows, "delta_state"), Columns.Text(rows, "delta_from")) };
+        var size = RebuiltSize(stored, Columns.Text(rows, "delta_state"), Columns.Text(rows, "delta_from"));
+        var record = Rebuild(stored, Columns.Text(rows, "round_key"), Columns.Number(rows, "gating"), Columns.Text(rows, "completed_utc")) with { Size = size };
 
         return new Row(stored, record, Columns.Text(rows, "repo_path"), Columns.Text(rows, "branch"));
     }

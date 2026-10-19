@@ -153,6 +153,10 @@ public sealed class StageRulesTests : IDisposable
     /// instruction files or rules change by one character. That is the point, not a nuisance: the tail
     /// canaries below are measured against this number, so a change here means they have to be
     /// re-measured in the same change (<c>research/RESULTS_rules_selection_budget.md</c>, last section).</para>
+    /// <para><b>Re-baselined 2026-10-19 (E7).</b> The base is 17 905, not 17 883: `.agents/PROJECT.md` must name every one-shot mode
+    /// (`ARequestFaultIsNotAnOldBinaryTests`) and now names `--backfill-authors` — 22 characters. The total is 79 966, leaving 10 034 of 90 000; the
+    /// tail canaries below are unaffected (the three smallest tail rules are 8 683, the fourth adds 3 460). The method name keeps the number of its first
+    /// measurement.</para>
     /// <para>The unit is the one the collector spends: characters of the line-ending-normalised text
     /// (<c>RuleFile.Text.Length</c>), which is what <c>RuleFiles.DefaultBudgetBytes</c> calls bytes. They
     /// differ for the non-ASCII characters in these files, and are equal on every platform.</para>
@@ -170,13 +174,13 @@ public sealed class StageRulesTests : IDisposable
             .Where(file => !file.Path.Equals(file.WithinMount, StringComparison.Ordinal) && RuleOrder.IsTier(file.WithinMount))
             .Sum(file => file.Text.Length);
 
-        var message = $"base {baseBytes} + tier {tierBytes} = {baseBytes + tierBytes} (pinned: 17 883 + 62 061 = 79 944 of 90 000). "
+        var message = $"base {baseBytes} + tier {tierBytes} = {baseBytes + tierBytes} (pinned: 17 905 + 62 061 = 79 966 of 90 000; re-baselined 2026-10-19, E7: `.agents/PROJECT.md` names `--backfill-authors`, +22). "
             + "WHEN THIS FAILS the headroom the tail canaries are measured against has moved: re-measure "
             + "research/RESULTS_rules_selection_budget.md, then re-baseline the canaries below in the same change.";
 
         tierBytes.Should().Be(62_061, message);
-        baseBytes.Should().Be(17_883, message);
-        (baseBytes + tierBytes).Should().Be(79_944, message);
+        baseBytes.Should().Be(17_905, message);
+        (baseBytes + tierBytes).Should().Be(79_966, message);
     }
 
     /// <summary>
