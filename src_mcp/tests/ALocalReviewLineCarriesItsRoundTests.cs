@@ -44,8 +44,17 @@ public sealed class ALocalReviewLineCarriesItsRoundTests : IDisposable
 
     private static ProcessResult Exited(int code, string stdOut) => new(code, stdOut, string.Empty, TimedOut: false);
 
-    private IReadOnlyList<JsonElement> Written(UsageLedger ledger) =>
-        [.. File.ReadAllLines(ledger.Path).Select(l => JsonDocument.Parse(l).RootElement.Clone())];
+    private static List<JsonElement> Written(UsageLedger ledger)
+    {
+        var lines = new List<JsonElement>();
+        foreach (var line in File.ReadAllLines(ledger.Path))
+        {
+            using var doc = JsonDocument.Parse(line);
+            lines.Add(doc.RootElement.Clone());
+        }
+
+        return lines;
+    }
 
     private static string RoundOf(JsonElement line) =>
         line.TryGetProperty("round", out var value) ? value.GetString() ?? string.Empty : string.Empty;
