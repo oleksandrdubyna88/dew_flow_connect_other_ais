@@ -1,5 +1,28 @@
 # Changelog
 
+## Extension 0.81.0 · Server 0.61.0 — 2026-10-19
+
+**Added: Kimi Code runs as a reviewer on a WSL2 host.** Vibe already ran on WSL2 (server 0.59.0). Kimi now uses the same
+host check. WSL2 is admitted. Native Linux, WSL1, macOS and a `wsl.exe` bridge are refused, and the refusal says why.
+
+**Server (coai-mcp 0.61.0):**
+- The Linux mechanisms are in: an exclusive sign-in lock, a file identity key, a mount-locality check, a `/proc` process
+  listing and a teardown that leaves no child behind.
+- `rg` and `fd` are found in the Kimi bin folder, then on PATH, then in `~/.local/bin`. A missing tool is refused with a
+  cure for `apt-get`, `dnf` or a generic host.
+- On Linux, Kimi gets only the environment it needs: HOME, a private cache folder, `KIMI_CODE_HOME`, the no-update flag
+  and PATH.
+- A sign-in folder on NFS, CIFS or sshfs is refused by default, because a Kimi on another computer could refresh the
+  rotating token and sign the person out. The check runs on every launch.
+- A stuck Kimi leaves a survivor marker. The providers answer now reports it, and `--kimi-clear-marker` clears it under
+  the sign-in lock.
+
+**Extension (0.81.0):**
+- The Kimi card has a *Clear the stuck Kimi marker* button.
+- The setting `coai.kimiAllowNetworkSignIn` lets a person allow a network sign-in folder. It is read from the user layer
+  only: a workspace cannot set it, Settings Sync does not copy it, and a config export never carries it.
+- On Linux the Install button runs only the vendor installer and the `apt-get` or `dnf` install of `ripgrep` and
+  `fd-find`.
 ## Extension 0.80.2 — 2026-10-19
 
 **No change in what the extension does.** This release ships with coai-mcp 0.60.2, whose local review lines in
