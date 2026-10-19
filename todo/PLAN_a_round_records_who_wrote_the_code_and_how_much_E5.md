@@ -1,6 +1,6 @@
 # PLAN — Round authors, epic E5: store and show
 
-> Status: **plan only, nothing implemented yet, 2026-10-14; revised 2026-10-16 against `main` at `59463d73` (§9), and again
+> Status: **S1–S6 implemented on `feat/round-authors-e5`, 2026-10-19 (draft pull request #863, not merged; code gate not yet run); §12 is the implementation record — its deviations, the two items owed from E7 and PR #868, and what is open. Plan 2026-10-14; revised 2026-10-16 against `main` at `59463d73` (§9), and again
 > 2026-10-16 for the E4/E5 reconciliation Fable decided (§8, E4 at `244d953c`) and the points E6 (`3c50a78c`) and E7
 > (`740d1a4f`) raised for E5 (§10); and again 2026-10-17 for the independent review of `2af746b3` (eight points) and the
 > E5 consequences of E4's §S2.2b (G1–G12, E4 at `7c3bf469`) — §11 records both, against `origin/main` `ce9cd298`, whose
@@ -792,6 +792,11 @@ S6 may run beside S2–S5 once S1 has merged (E2 has). The epic ships as ONE com
     guard (`[JsonExtensionData]` on both, stripped from the `open`/`status` answer, with a round-trip test) would protect
     every field added AFTER the release that carries it; it cannot protect E5's own field from the binaries already out.
     It is a change to the two types every stage saves — the main session's to schedule, not this epic's.
+    *Update 2026-10-19:* `research/PLAN_a_session_file_keeps_what_a_newer_server_wrote.md` (a file of PR #868's branch, so not linked: the link would not resolve on this branch) is that change, open as
+    PR #868 and NOT on `main` yet. It adds a §8 to THIS document — a boundary table between the guard and E5 — which is not carried here:
+    when `main` brings #868 in, keep its §8 (this document's own §8 is the E4 reconciliation, so one of the two takes a new number), and point this item at it.
+    Until then the boundary is: E5 adds `Authors` as a KNOWN member and depends on no bag; the guard protects only servers released after it; whichever of the
+    two lands second puts its strip of the `open`/`status` answer in the same method (`SessionAnswerFor`, where S1's strip of `Authors` already is).
 19. **`authors_reader` versions E3's reader only** (E7 §10 item 3). E3's `ReaderVersion` is bumped by a COUNTING rule; an
     E4 attribution-rule change with no E3 change leaves it equal, and E7's "equal reader → keep" would keep a row an older
     rule attributed. E5 stores what parent §9 names (E3's constant); if E4 adds an attribution version, it needs its own
@@ -859,7 +864,7 @@ E6 `3c50a78c` §4 and E7 `740d1a4f` §10 (*Open with E3–E5*). Each answer is i
    E7's heal from the database needs the inverse too, so the one inverse is S2's `RoundAuthorsTable.AgentKeyOf`, beside
    the mapping; **E6 D18 calls it** instead of spelling `"" → main` itself (a note owed to E6, item 13).
 8. **Peers on every round, the same for the backfill** (E7 §10 item 5). S4's peer build is one unit,
-   `AuthorPeers.Find(connection, load, deadline)` (deadline null for E7), which E7.S2 calls; and the ONE
+   `AuthorPeers.Find(connection, load, deadline)` (deadline null for E7), which E7.S2 calls — **and which sets `PeersKnown = false`** when a peer's session file does not load, names another session or the deadline cuts the walk (E7 §10 item 8, a precondition of E7's rule 3; built and tested in S4, §12 deviation 4 for its exact signature); and the ONE
    `ObservedSession → AttributionInput` mapping is **E4.S5's `AttributionMapping`** (`Observation`, `Timeline`, `Universe`;
    B1, 2026-10-17), which S4 and E7.S2 call — E7.S2 stops reading `before-open` from a database join of its own (E7
    `:223-225`) and hands E4 what `Find` + `Timeline` give. Parity follows from there being one implementation of each.
@@ -877,7 +882,8 @@ here edits E6 or E7.*
 
     **Inputs beyond `740d1a4f`'s `:161-164`.** `StoredRound` gains `AuthorsAttribution`; `SnapshotPresence` gains
     `AuthorsAttribution`, `PeerGates` and `IdSource` (a `healed` snapshot has an UNKNOWN peer set — never read as "no
-    peers"); **`TranscriptPresent`** — `CallerTranscriptLocator.LocateStored(authors_session, else a UUID rounds.caller)`
+    peers"); **`TranscriptPresent`** (E7 calls this input **`TranscriptLocated`**, to keep it apart from E3's per-agent `ObservedAgent.TranscriptPresent`; a name
+    difference only — the same fact, the same use, and E5 builds nothing under either name) — `CallerTranscriptLocator.LocateStored(authors_session, else a UUID rounds.caller)`
     run BEFORE the decision (or a two-phase decision); **peer status** — for every gate in `PeerGates`, whether a round of
     it that overlaps this round's windows is still `running` (a round is FINAL when `done` or `interrupted`, E4 §S2.3 —
     an interrupted peer never becomes `done`, so waiting for "settled" would leave the row provisional for ever, M7), and
@@ -1011,3 +1017,86 @@ B1 is written into E4 by Fable (`AttributionMapping`, E4.S5).
 | L10 | "the ONE exception" | item 11 (b) | the two exceptions named (item 11 list 8); E4's G3 row says "one of two" |
 | L1, L2, L4, L9 | E4-only points | — | resolved in E4 by Fable (its §11 *Resolutions II*) |
 | size | ≈ 15 KB of restatement | §7 items 1–14, §8, §9, §11.2–11.3, the S1/§10 older-server duplicates | condensed as the judge proposed; the decisions stand in §3 and the stories; the one older-server specification is §3's |
+
+## 12. Implementation record (2026-10-19)
+
+Built on `feat/round-authors-e5` after merging `feat/round-authors-e4` (which holds E3) into it — a merge, not a rebase (`442b7bb5f`; origin's copy of the E4 branch carried
+no code yet, so the local ref of the E4 worktree was merged). One commit per story, then this record. **Every test was watched RED for its real symptom before the code
+that answers it** — a shell that returned empty values, an absent column, a step that answered null — and every break-it of the stories was planted, watched red by the
+test named for it, restored byte for byte, rebuilt and watched green. The committed files carry no stub and no scratch test.
+
+**Facts of E3 and E4 verified in the code before use.** `AttributionMapping` (`src_mcp/src/Store/AttributionMapping.cs`) is the one mapping and E5 calls it
+(`Observation`, `Timeline`, `Universe`); it writes none of its own. `RoundAuthors` has 13 members (`WritesOutsideTheGateCheckout` the one that never reaches a file),
+`WindowAuthors`, `PeerGates`, `RoundAttribution.Version = 1`, `StateReason`, *settled* = recorded and `done` (`Windows.IsSettled`), *final* = not running;
+`RoundAttribution.PeerStillRuns(AttributionInput)` exists and `PeersKnown = false` makes `Assign` read no peer; `main` is never listed in `CallerObservation.Agents`;
+E3's `ObservedSession.ReaderVersion = 1` and `ReadDiagnostics.AgentFilesEmpty` exist (the step logs it with the other counts).
+
+**What was built.** S1 `8e55fbf17`, S2 `ac67b97bb`, S3 `c2ca41ddb`, S4 `04d71c572`, S5 `20ee9d803`, S6 `067594862`; this record is the commit after them.
+
+**Deviations from the text above, each the smallest change that keeps the intent.** None changes a column, a member of `AuthorsSnapshot`, an unknown value, an `authors_id_source`
+value or a version — what E6 and E7 read.
+
+1. **`ActivityTotals.IsUnknown` gets `[JsonIgnore]`** (E4's record, an attribute only — no member changed). S1's own shape test found the stray `isUnknown` key in the session
+   file (red: `authors.ambiguous.isUnknown`): the computed-property class §8 item 3 names, which E4's `[JsonIgnore]` on `AgentKey.IsMain` closed for one record only.
+2. **`writtenWith` lives in `src_vs_code/src/authorsLine.ts`, not `rounds.ts`**: `rounds.ts` would pass ESLint's 800-line ceiling with its helpers. `rounds.ts` exports `member()`
+   for it and gains the two fields; the tests are `authorsLine.test.ts`, not `rounds.test.ts`. `LogRow.writtenWith`, `writtenWithHtml`, the CSS and the five fixtures are as specified.
+3. **The spec contradicts itself on a tie of coder groups** — the rule says *larger group first, ties by family name*, the example for the noun says *1 Sonnet + 1 Opus coders*. The rule
+   is implemented (*1 Opus + 1 Sonnet coders*, the two sorted by name) and tested; E6's report should print the same order or say it does not.
+4. **`AuthorPeers.Find(connection, lookup, load, deadline, clock)`**: the plan's three-argument shape plus the two inputs it implied — `PeerLookup(callerSessionId, gateSessionId)`
+   (who the peers are peers of) and the clock the deadline is read from — returning `AuthorPeerSet(PeersKnown, Peers, EarlierCallers, Why)`. `AuthorPeers.OpenReadOnly(dataDir)` is the
+   one read-only, one-second connection, null when the store is absent. E7.S2 calls `Find(connection, lookup, load, deadline: null, TimeProvider.System)`. The earlier-caller read of §3 is the
+   same query's second half (`EarlierCallers`), so the live path and the backfill share one build.
+5. **The step's seams are optional constructor parameters** — environment, clock, budget, peer source, reader, `assign`, and `load` (the session loader the default peer source uses) —
+   and `PanelSettings.TranscriptHome` (`ClaudeHome.Default.With(AgentLogDir)`) is the ONE place the default transcripts folder is written: `RoundEngine.WhatTheCallerWasDoing` reads it too.
+6. **The byte-budget test uses 2 KiB, not 1 KiB.** E3's byte gate always yields the HEAD of a file (the first line holding a timestamp); in the fixture that line alone is 1.6 KiB, so a 1 KiB
+   budget stops even a bounded read. 2 KiB shows both sides of the slice's limit (`partial: read budget` unbounded, `observed` with the window starting hours after the last line).
+7. **"A reader that throws, through `PanelService`"** cannot use a seam: the step is an internal type and `PanelService` is public with one optional parameter (`environment`). The
+   engine-level test poisons the transcripts folder name (a NUL), which the locator's directory listing answers with `ArgumentException` — not an IO error, so a real failure inside the
+   step. The throwing-reader fact itself is a unit test through the `read` seam.
+8. **A RUNNING peer round has no caller on disk** — no row (`RecordRound` never runs for it), no snapshot — so it is built with an empty caller, and E4's `partial: peer running` cannot name it
+   in production until it is projected. **This is a finding for E4, E6 and E7, not a defect fixed here:** the spec's §3 order (snapshot, `authors_session`, UUID `caller`, empty) gives nothing else
+   to read. The tests project the running round (a state production never writes) to show the reason is stored as E4 returns it; E7's repair therefore leans on the grown-peer-set rule
+   (`a settled caller gate session not in PeerGates`), which works, more than on `peer running`.
+9. **A fresh data directory's first round is `partial: prior windows unknown`**: the store does not exist yet, so the lookup cannot answer (§3 says exactly this); E7's recompute repairs it.
+10. **S2's "doubles the rows" break-it** reads as a UNIQUE-constraint error: the primary key `(round_id, ordinal)` refuses the doubling the plan predicted.
+11. **S5 uses the one fixture `resumed-agent`**, placed between the plan round's completion and the code round's start (every stamp moved by one offset and compressed 200×, derived from the
+    clock at run time), the checkout `repo-a` of the fixture made a real git repository. The plan round runs first against stamps an hour in the future, so it records nothing of the fixture.
+12. **The suite's wall time cannot show 5 %.** The baseline (before S1, this worktree, 27 m 16 s, 11 883 tests, 4 failed) and the final run were taken on a machine other sessions were also loading; see the measurements.
+
+**Owed into E5, applied.** From E7: `AuthorPeers.Find` sets `PeersKnown = false` when a peer's session file does not load (null, or naming another session) or the deadline cuts the walk, and
+when the store cannot answer — built (`AuthorPeersTests`: `APeerFileThatDoesNotLoad_…`, `APeerFileThatNamesAnotherSession_…`, `ADeadlineThatPassesBeforeAFileLoads_…`, `ANoDatabase_…`,
+`AStoreWithoutTheColumn_…`) and written into §10 item 8; E7 calls E5's `TranscriptPresent` input **`TranscriptLocated`** — a name difference only, noted in §10 item 11. From PR #868: not on `main`
+(open, branch `docs/plan-session-keeps-unknown-fields`), so §7 item 18 carries the note; its §8 (a boundary table) will collide with this document's §8 and one of the two takes a new number when it lands.
+Both PRs strip the bags from the `open`/`status` answer in `SessionAnswerFor`; whichever lands second puts its strip in the same expression (a merge conflict there is the signal).
+
+**The older-server run, measured once (S1, the plan's §3).** The released `coai-mcp-0.58.0-win-x64` (`gh release download mcp-v0.58.0`, SHA-256 matched the release's `.sha256`), run over stdio from a
+scratch folder: `open` on a THROWAWAY repository (a temp `git init` with one commit) over a fresh data directory whose session file — first created by that same binary's own `open` — was then given two rounds
+each carrying an `authors` snapshot in the shape S1 writes (hand-shaped to the contract, which S1's own shape test pins); a second `open` ran. **Observed: `authors` was gone from every round of the file after
+ONE `open`** (the file shrank from 13 221 to 3 246 bytes; the round keys left are the old binary's own), and **`open` never opened `coai.db`** (none existed in the data directory afterwards; the startup
+re-projections had nothing to project). The prediction held; the database half is S2's suite test (`AnOlderServersReSave_LeavesTheProjectedAuthorsInPlace`: the 23-step migrator, both preview forks and an
+unwidened upsert leave `user_version` 24 and the projected authors byte-equal). The throwaway folders carried the `testsToDelete-` prefix and were removed by this run; the installed `coai-mcp`, the live databases
+and `%LOCALAPPDATA%\coai-mcp` were never touched.
+
+**Measurements (S4; Debug build, a machine shared with other sessions).** *Prediction, written before the runs:* the largest of E1's fixtures reads and attributes in under 50 ms; a synthetic slice of 64 MiB
+reads in under 2 s at 40 MiB/s or better; so 2 s / 64 MiB stands. *Observed:* the largest fixture (`resumed-agent`, 103 101 bytes in two files) takes **6.7 ms** per `For` (20-run mean, warm; the slowest of the
+twenty cases); a synthetic main file of 8 / 32 / 64 / 96 MiB (one real transcript line repeated, stamps rising a second per line) reads whole in 215 / 785 / 569 / 692 ms (37–139 MiB/s, the first runs cold), and with
+`fromUtc` near the end in 167 / 404 / 165 / 173 ms — the bytes before the bound are still SCANNED, which is why the time limit runs over the whole read and the byte limit over the slice (E3 F1). E1's Node figure
+for a 650 MB session (19.9 s) is the figure the budget was set against; at C# speeds a 64 MiB slice fits the 2 s with about three times to spare, and the 650 MB case is bounded by the `fromUtc` slice and the deadline, never by the file.
+
+**Suites.** `CoaiMcp.Tests.exe`: 12 012 tests, 11 953 passed, 0 failed, 59 skipped (platform-only cases), exit 0, 17 m 14 s — the whole run, once, after the last code change; nothing needed a rerun alone. The baseline before S1 had failed 4 (`QuestionRowOnAgyScenarioTests` three times, `SessionStoreConcurrencyTests.EightWritersOnOneSession_DoNotDenyEachOther` once — all load-sensitive) and took 27 m 16 s on a more heavily shared machine; 129 tests were added. `npm test`: 6 475 tests, 6 472 passed, 0 failed, 3 skipped, exit 0 (132 s; typecheck and lint clean). `dotnet format --verify-no-changes`: clean (exit 0) over the whole solution. `plan-lifecycle`: clean, and `pin-check`: OK (the conventions pin is at the tip of `release`).
+
+**Tests added** (all under `testsToDelete-` temp folders): `RoundAuthorsSnapshotTests` (17), `TheRoundsAuthorsAreStepTwentyFourTests`, `RoundAuthorsTableTests` (S2), `TheLogNamesEachRoundsAuthorsTests` (S3),
+`RoundAuthorsStepTests`, `AuthorPeersTests`, `ThePanelAnswersWhateverTheAuthorsStepDoesTests` (S4), `ARoundRecordsWhoWroteItEndToEndTests` (S5), `authorsLine.test.ts` and additions to `roundsLog.test.ts`,
+`bundledPage.test.ts` and `anOlderExtensionReadsALogPageCarryingASize.test.ts` (S6); shared files `shared/authors-state-vectors.json` (read by C# and TypeScript) and `shared/model-display-vectors.json`;
+test helpers `AuthorsSnapshotFixtures`, `AuthorsStepHarness`, `PeerWorld`, `FakeCliGateBase`.
+
+**Break-its planted, seen red, restored, rebuilt, seen green** — S1: materialising getter (`ASessionFileWithoutAuthors_…` and the `status` test red, the invented key in the file), strip removed
+(`TheStatusAnswer_HasNoAuthors_…`), `InvalidInput = "invalid, input"` (`E5sReasonsContainNoJoiner`), `PeerGates` made internal (the reflection fact, four red), a digit admitted by the C# rule (`EveryVectorOfTheSharedFile_…`
+on `partial: read budget 2`). S2: the table reading a `RoundContext` (the rebuild test red with zero rows), the `DELETE` dropped, the `DROP INDEX` left out of `ThePairsThemselvesTests`, `Record` with its own `BEGIN`/`COMMIT`
+(sixteen red, `cannot start a transaction within a transaction`), an early `COMMIT` (`AFaultAfterTheWriter_…`: `Expected … rounds … but {1}`), `agent.Id` written unmapped (main's row reads `main`). S3: the `HasColumn` guard dropped
+(`AStepTwentyThreeFile_…`: exit 74). S4: the statement moved after `Save` (the file side null), the `catch` removed, the byte check removed (`ReadBudget(long.MaxValue, …)`), a refused location falling through to the peer query,
+the identity read from `Environment.GetEnvironmentVariable` (this run was INSIDE a Claude Code session — `CLAUDE_CODE_SESSION_ID` and `CLAUDE_PID` set — and twenty-five of 34 tests went red), `CompletedUtc` mapped without the status check
+(`ARunningPeersStamp_…`). S5: the reader keeping a meta's sentinel field as `AgentType` (`NoSentinelLeavesTheReader_…`, naming the session file). S6: the `writtenWithHtml` term deleted from `detail` (two page tests red, every unit test green).
+
+**What is open.** The code gate has not been run (this task ran none) and nothing was pushed or opened. `research/module_tests.md` was not given a catalog row for the new classes beyond this record. Two things E6/E7 should
+read before they build: deviation 3 (the tie order) and deviation 8 (`peer running` is unreachable for a still-running peer in production).
