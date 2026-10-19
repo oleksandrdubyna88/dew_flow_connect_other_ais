@@ -259,7 +259,9 @@ Answers the operator's question for this machine's work from the whole history, 
   reports usage only cumulatively across the two launches, as agy does, the second line carries the difference and
   says so); vendor reasons are kept whole in the ledger and the log
   (clipped at ~100 characters today, which is how this plan lost the verbatim weekly line).
-- **3.4 Each line says what it ran with** (Opus) — trailing, defaulted `UsageEntry` fields (`UsageLedger.cs:61`):
+- **3.4 Each line says what it ran with** (Opus) — *narrowed at the promotion (2026-10-19, plan-round finding on the
+  record): the launch fields are recorded on REVIEW lines; consultation, question, probe and chat lines carry empty
+  effort/tier and usually no `cliVersion` (deviation rows 642 and 645), listed in the Open tail* — trailing, defaulted `UsageEntry` fields (`UsageLedger.cs:61`):
   `cli` and `cliVersion` (which CLI ran the launch and its version — a cross-vendor measurement must say it, and today's
   ledger cannot), `effort`/`effortFrom` and `tier`/`tierFrom` as actually SENT, after the server's `Dropped` (a codex row's own effort
   setting shows as *ignored*; `src_server/src/Jobs/ClientOptions.cs` drops a remote codex effort), with `cli-config`
@@ -816,7 +818,8 @@ was checked in the code or the plan text it names:
       1, 7, 8, and 10 but for its infrastructure throw), and the open rows (2/4, 5 by hand, 9, 10's infrastructure
       throw) are named in the *Open tail* under the deviations; vendor reasons are not clipped.
 - [ ] Every new ledger line carries round, attempt, effort/tier as sent with their source; server lines job and slot;
-      the canary is `canary` and in no round count.
+      the canary is `canary` and in no round count. *(Effort/tier with their source: on REVIEW lines — consultation,
+      question, probe and chat lines carry them empty; see 3.4 and the Open tail.)*
       **Open, narrowed at the promotion (2026-10-19):** the Team server's lines carry round, attempt, effort and tier with
       their source, job and slot, and the canary is `canary`; the LOCAL ledger line carries no `round` — see *Open tail*,
       "The local ledger line carries no round". **Fix in flight, ships with the next coai-mcp release** (branch `fix/local-ledger-line-carries-round`); the box stays unticked until it lands.
