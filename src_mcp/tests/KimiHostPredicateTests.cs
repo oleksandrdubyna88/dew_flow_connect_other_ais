@@ -34,7 +34,7 @@ public sealed class KimiHostPredicateTests : IDisposable
     public void TheSignInLinkAndTheInheritableHold_AdmitExactlyTheSameHosts(HostKind host)
     {
         var link = _dir.At("never", "made");
-        var linkAdmitsIt = !(Junctions.Refusal(host, link, _dir.Path).Contains("sign-in link is made on windows, linux and wsl hosts only", StringComparison.Ordinal));
+        var linkAdmitsIt = !(Junctions.Refusal(host, link, _dir.Path).Contains("a sign-in link is made only on a host that admits Kimi", StringComparison.Ordinal));
 
         linkAdmitsIt.Should().Be(HeldFile.InheritableSupported(host), "two predicates for one family drift: a host admitted by one and refused by the other");
         linkAdmitsIt.Should().Be(HostKinds.HasKimiLockFamily(host));

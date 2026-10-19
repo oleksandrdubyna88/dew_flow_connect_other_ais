@@ -298,7 +298,7 @@ public sealed class JunctionsTests : IDisposable
         var refusal = Junctions.Refusal(host, Link, Target);
         var made = Junctions.Make(host, Link, Target);
 
-        refusal.Should().Contain("D18").And.Contain(HostKinds.Word(host)).And.Contain("windows, linux and wsl hosts only");
+        refusal.Should().Contain("D18").And.Contain(HostKinds.Word(host)).And.Contain("a sign-in link is made only on a host that admits Kimi").And.NotContain("hosts only");
         made.Should().Be(refusal);
         NothingIsAt(Link).Should().BeTrue("nothing is made on a host Kimi is refused on");
     }
@@ -646,4 +646,26 @@ public sealed class JunctionsTests : IDisposable
     [InlineData(HostKind.Wsl, "relative/x", true, false)]
     public void TheSpellingCheck_FollowsTheOverride_OnALinuxOrWslHostOnly(HostKind host, string path, bool allow, bool local) =>
         Junctions.IsLocalSpelling(host, path, _ => DriveType.Fixed, allow).Should().Be(local);
+
+    /// <summary>
+    /// E6 gate finding 11: a home under an automount spelling (<c>/net/</c>, <c>/misc/</c>) is refused by its SPELLING before the mount table is read, and that sentence carries the same cure as the mount refusal (DL6) — a person whose
+    /// <c>KIMI_CODE_HOME</c> is under <c>/net/</c> never reaches the mount refusal, so the cure has to be here.
+    /// </summary>
+    [Theory]
+    [InlineData(HostKind.Linux, "/net/server/share/k")]
+    [InlineData(HostKind.Wsl, "/misc/x")]
+    public void AnAutomountSpelling_IsRefusedWithTheCure_OnALinuxOrWslHost(HostKind host, string target)
+    {
+        var refusal = Junctions.Refusal(host, Link, target, _ => DriveType.Fixed);
+
+        refusal.Should().Contain("not a local drive path").And.Contain("KIMI_CODE_HOME").And.Contain("kimi login").And.Contain("coai.kimiAllowNetworkSignIn");
+    }
+
+    [Fact]
+    public void AUncHome_OnAWindowsHost_KeepsItsOwnSentence_WithNoOverrideToOffer()
+    {
+        var refusal = Junctions.Refusal(HostKind.Windows, Link, @"\server\share\k", _ => DriveType.Fixed);
+
+        refusal.Should().Contain("not a local drive path").And.NotContain("coai.kimiAllowNetworkSignIn", "an override a Windows host never has is not offered");
+    }
 }

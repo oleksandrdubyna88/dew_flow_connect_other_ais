@@ -86,7 +86,7 @@ public static class KimiSurvivorMarker
         {
             BoundedRead.Absent => new MarkerRead.Absent(),
             BoundedRead.Text text => Parsed(text.Value),
-            BoundedRead.Refused refused => new MarkerRead.Unreadable(refused.Why),
+            BoundedRead.Refused refused => new MarkerRead.Unreadable(refused.Failure),
             _ => new MarkerRead.Unreadable("a read this marker reader has no word for"),
         };
 

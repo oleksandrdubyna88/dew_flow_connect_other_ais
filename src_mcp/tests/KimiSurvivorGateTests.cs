@@ -172,6 +172,18 @@ public sealed class KimiSurvivorGateTests : IDisposable
         read.Should().BeOfType<MarkerRead.Unreadable>().Which.Reason.Should().NotContain(_dir.Path, "an exception's own message carries the path it was given").And.Contain("code 0x");
     }
 
+    /// <summary>E6 gate finding 12: a refused read says WHICH file — the path the caller gave, once, with the type and code of the failure.</summary>
+    [Fact]
+    public void ARefusedRead_NamesThePathItWasGiven_Once()
+    {
+        Directory.CreateDirectory(MarkerPath);
+
+        var refused = BoundedFile.ReadRegular(MarkerPath).Should().BeOfType<BoundedRead.Refused>().Subject;
+
+        refused.Why.Should().StartWith(MarkerPath + ": ").And.Contain("code 0x");
+        refused.Why.Split(MarkerPath).Should().HaveCount(2, "the path is named once, not once by the failure and again by a caller");
+    }
+
     [Fact]
     public void AMarkerOfExactlyTheCeiling_IsStillRead()
     {

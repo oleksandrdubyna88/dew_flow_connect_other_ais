@@ -21,7 +21,7 @@ namespace CoaiMcp.Runners.Files;
 /// ordinary machine, so <see cref="Refusal(HostKind, string, string)"/> admits it, asks the kernel where the target really is
 /// (<c>HandleRead.FinalDirectory</c>) and refuses only a resolution that leaves the local drives. The junction keeps the SPELLING
 /// as its target — one level.</para>
-/// <para><b>Windows, Linux and WSL</b> (D18 lifted for them by E5 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): on a Linux or WSL host the link is a directory symbolic link (<c>JunctionsUnix</c>), and the filesystem that holds the real path
+/// <para><b>The hosts that admit Kimi</b> (<see cref="HostKinds.HasKimiLockFamily(HostKind)"/> says which; D18 lifted for them by E5 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): on a Linux or WSL host the link is a directory symbolic link (<c>JunctionsUnix</c>), and the filesystem that holds the real path
 /// is judged by its mount type (<see cref="MountLocality"/>), never by a <c>/mnt</c> prefix; on any other host <see cref="Refusal"/> answers the D18 sentence and nothing is made.</para>
 /// <para>Nothing Kimi-specific lives here: no config, no launch — only the shape of a link into somebody else's folder.</para>
 /// </remarks>
@@ -199,7 +199,7 @@ public static partial class Junctions
 
     private static string HostAdmitted(HostKind host) => HostKinds.HasKimiLockFamily(host)
         ? string.Empty
-        : $"a sign-in link is made on windows, linux and wsl hosts only; Kimi is refused on a {HostKinds.Word(host)} host until it is measured there (D18 of todo/PLAN_vibe_and_kimi_runtimes.md)";
+        : $"a sign-in link is made only on a host that admits Kimi; Kimi is refused on a {HostKinds.Word(host)} host until it is measured there (D18 of todo/PLAN_vibe_and_kimi_runtimes.md)";
 
     /// <summary>
     /// DL6: on a Linux or WSL host, the FILESYSTEM that holds the real path — read from <c>/proc/self/mountinfo</c> — is judged by its type (<see cref="MountLocality"/>); a Windows filesystem is refused wherever it is mounted,
@@ -219,7 +219,16 @@ public static partial class Junctions
 
     private static string LocalDrive(HostKind host, string target, Func<string, DriveType> driveType, bool allowNetwork) => IsLocalSpelling(host, target, driveType, allowNetwork)
         ? string.Empty
-        : $"{target} is not a local drive path, and a junction cannot point at a network or roaming location — coai refuses to link the Kimi sign-in from there (D19)";
+        : $"{target} is not a local drive path, and a junction cannot point at a network or roaming location — coai refuses to link the Kimi sign-in from there (D19){Cure(host, target)}";
+
+    /// <summary>
+    /// E6 gate finding 11: an automount spelling (<c>/net/</c>, <c>/misc/</c>, <c>/Network/</c>) on a Linux or WSL host is refused by its SPELLING, before the mount table is read — so the refusal carries the cure the mount refusal
+    /// carries (<see cref="MountLocality"/>, DL6): a folder on this machine's own disk with its own <c>kimi login</c>, or the override. A Windows host has no override, so it is offered none; any other spelling has no network cure to give.
+    /// </summary>
+    private static string Cure(HostKind host, string spelling) =>
+        host is HostKind.Linux or HostKind.Wsl && NetworkFolders.Any(folder => spelling.StartsWith(folder, StringComparison.Ordinal))
+            ? ". Point `KIMI_CODE_HOME` at a folder on this machine's own disk (not under the network home) and sign in there once with `kimi login`, or set `coai.kimiAllowNetworkSignIn` if you never run Kimi on another machine"
+            : string.Empty;
 
     /// <summary><c>C:\</c> or <c>C:/</c> — a letter, a colon and a separator; the only roots a junction may name.</summary>
     [GeneratedRegex(@"^[A-Za-z]:[\\/]")]
@@ -256,7 +265,7 @@ public static partial class Junctions
             ? $"{target} cannot be named by its handle on this host, so coai cannot tell where the Kimi sign-in really is — refused (D19)"
             : IsLocalSpelling(host, resolved, driveType, allowNetwork)
                 ? string.Empty
-                : $"{target} resolves to {resolved}, which is not a local drive path — a link on the way to the Kimi sign-in points at a network or roaming location, and coai refuses to link the sign-in from there (D19)";
+                : $"{target} resolves to {resolved}, which is not a local drive path — a link on the way to the Kimi sign-in points at a network or roaming location, and coai refuses to link the sign-in from there (D19){Cure(host, resolved)}";
 
     private static string Taken(string link)
     {

@@ -16,8 +16,15 @@ internal abstract record BoundedRead
     /// <summary>The whole file, as UTF-8 text, no larger than the ceiling.</summary>
     public sealed record Text(string Value) : BoundedRead;
 
-    /// <summary>The file is not read: it is a link, was swapped for another file, is larger than the ceiling, or could not be opened. <paramref name="Why"/> names what failed — never a resolved path.</summary>
-    public sealed record Refused(string Why) : BoundedRead;
+    /// <summary>
+    /// The file is not read: it is a link, was swapped for another file, is larger than the ceiling, or could not be opened. <paramref name="Failure"/> names what failed, never a resolved path; <paramref name="Path"/> is the path the
+    /// CALLER gave. <see cref="Why"/> is both, for a reader that does not name the file itself — a caller that already names it in its own sentence uses <see cref="Failure"/>, so no sentence names the path twice.
+    /// </summary>
+    public sealed record Refused(string Failure, string Path) : BoundedRead
+    {
+        /// <summary>The path the caller gave, then the failure.</summary>
+        public string Why => $"{Path}: {Failure}";
+    }
 }
 
 /// <summary>
@@ -38,12 +45,12 @@ internal static class BoundedFile
         {
             if (new FileInfo(path).LinkTarget is not null)
             {
-                return new BoundedRead.Refused("it is a link, and a link is never followed");
+                return new BoundedRead.Refused("it is a link, and a link is never followed", path);
             }
 
             using var handle = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
 
-            return IsTheNamedFile(handle, path) ? Read(handle, maxBytes) : new BoundedRead.Refused("it was replaced by another file while it was being opened");
+            return IsTheNamedFile(handle, path) ? Read(handle, path, maxBytes) : new BoundedRead.Refused("it was replaced by another file while it was being opened", path);
         }
         catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException)
         {
@@ -51,7 +58,7 @@ internal static class BoundedFile
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return new BoundedRead.Refused(Said(e));
+            return new BoundedRead.Refused(Said(e), path);
         }
     }
 
@@ -62,17 +69,17 @@ internal static class BoundedFile
         {
             stream.Position = 0;
 
-            return Read(stream.SafeFileHandle, maxBytes);
+            return Read(stream.SafeFileHandle, stream.Name, maxBytes);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return new BoundedRead.Refused(Said(e));
+            return new BoundedRead.Refused(Said(e), stream.Name);
         }
     }
 
     private static bool IsTheNamedFile(SafeFileHandle handle, string path) => !OperatingSystem.IsLinux() || HeldFile.StillTheFile(handle, path);
 
-    private static BoundedRead Read(SafeFileHandle handle, int maxBytes)
+    private static BoundedRead Read(SafeFileHandle handle, string path, int maxBytes)
     {
         var buffer = new byte[maxBytes + 1];
         var total = 0;
@@ -81,9 +88,9 @@ internal static class BoundedFile
             total += read;
         }
 
-        return total > maxBytes ? new BoundedRead.Refused($"it is larger than {maxBytes} bytes") : new BoundedRead.Text(Encoding.UTF8.GetString(buffer, 0, total));
+        return total > maxBytes ? new BoundedRead.Refused($"it is larger than {maxBytes} bytes", path) : new BoundedRead.Text(Encoding.UTF8.GetString(buffer, 0, total));
     }
 
-    /// <summary>What failed, by type and code — the message of a .NET I/O exception names the path, and the path may be one a link led to.</summary>
+    /// <summary>What failed, by type and code — never <c>Exception.Message</c>, which names the path, and the path may be one a link led to; the path the CALLER gave rides in <see cref="BoundedRead.Refused.Path"/>.</summary>
     private static string Said(Exception e) => $"{e.GetType().Name} (code 0x{e.HResult:X8})";
 }
