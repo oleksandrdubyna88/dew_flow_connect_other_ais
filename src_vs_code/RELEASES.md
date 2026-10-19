@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.80.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.80.0...extension-v0.80.1) (2026-10-18)
+
+
+### Bug Fixes
+
+* **round-counter:** rounds per 1 % keeps a plateau's rounds and is pooled (story 6.2b) ([#860](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/860)) ([ca9b7c1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/ca9b7c1ec5ae706ab10e7d81cb01b4ef25e51d70))
+
+## [0.80.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.79.0...extension-v0.80.0) (2026-10-18)
+
+
+### Features
+
+* **rounds:** a reviewer is not sent more than it can read ([#856](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/856)) ([2b302c6](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/2b302c65e833a1df3a382fb8991fe89149713951))
+
 ## [0.79.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.78.0...extension-v0.79.0) (2026-10-17)
 
 

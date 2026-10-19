@@ -1765,7 +1765,7 @@ notification and `remoteControl/status/changed`, which names the machine (RESULT
 | the job's ledger lines (`usage.jsonl`, every line of the job) | `gaugeObservedUtc`, `gaugePlan`, `gaugeWindows[]` — EVERY window of EVERY limit the reading reported, each `{limitId, kind, mins, usedPercent, resetsUtc}` (`GaugeOnLine` / `GaugeWindowOnLine`, `UsageEntry.WithGauge`, `GaugeReadingDto.OnLine`) | three trailing fields; the list is left off the line when empty (`JsonIgnore WhenWritingNull`), so an absent window is absent and an old line reads none; mirrored in `UsageEntryDto` (`GaugeWindowEntryDto`), `UsageLine.Gauge` and the extension's `usage.ts` (`gaugeWindowsOf`, which reads only a WHOLE window and never coerces a missing number to 0). Epic 6's code round replaced the first shape — one limit's two windows in nine flat fields — because a codex answer with several limits in `rateLimitsByLimitId` lost all but one on the line, and `RoundsPerPercent` could not derive the rest; nothing had shipped, so the shape changed in place |
 | `GET /api/catalog` → `vendors[].slots.gauge` | the LATEST reading among the vendor's accounts by `observedUtc` — the reading only, never which account | nullable AND omitted when null, as `UsageDto.Daily`: an older server and a server that never read are the same absence, which story 6.2 renders as unavailable |
 
-Story 6.2 derives rounds per 1 % from consecutive readings of one window instance and renders all of this; 6.1a
+Story 6.2 derives rounds per 1 % from a baseline reading and the first later reading of one window instance whose percentage rose (6.2b: a plateau keeps its rounds) and renders all of this; 6.1a
 stores and serves it. Growth: one object per slot, overwritten; ~+150 bytes per server ledger line that carries a reading.
 
 ```mermaid
@@ -1810,10 +1810,10 @@ runners library (`RoundsPerPercent`, [module_runners.md](module_runners.md)); th
 | Field | Meaning |
 |---|---|
 | `vendor`, `limitId`, `windowMins` | the window — identified by the vendor's limit identity AND its length, never by where the vendor filed it |
-| `roundsPerPercent` | the rounds-weighted mean of the last 10 usable intervals — or `null`, never 0 or infinity |
+| `roundsPerPercent` | pooled — Σ rounds ÷ Σ rise over the last 10 usable intervals (story 6.2b; a plateau keeps its rounds) — or `null`, never 0 or infinity |
 | `intervals` | how many usable intervals the figure was taken over (0 when null) |
 | `unavailable` | empty when shown; else a fixed code: `too-few-readings`, `percent-did-not-rise`, `window-reset`, `stale-reading`, `missing-reading`, `run-without-round`, `no-rounds`, `consumer-not-counted` |
-| `missingConsumer` | the known consumer coai cannot count that hides the figure — `direct-codex-use` for the `codex` limit today — else empty |
+| `missingConsumer` | the known consumer coai cannot count that hides the figure — `direct-codex-use` for a codex account today (every window of it) — else empty |
 
 - **Over every caller's lines, whatever the scope.** A gauge is the ACCOUNT's; every launch on it spent it, so counting
   one person's rounds against the account's whole rise would be a figure about nobody. The answer names a vendor, a
@@ -1823,7 +1823,7 @@ runners library (`RoundsPerPercent`, [module_runners.md](module_runners.md)); th
   reports; an older interval belongs to an instance that has already reset.
 - **Absent unless asked.** Nullable AND omitted when null, exactly as `windows` is: an answer to `?window=` alone — every
   client older than story 5.2 — is today's shape; a request that asked windows over a ledger with no readings gets `[]`.
-- **For codex the figure is hidden today.** Direct use of the account outside coai spends the same limit and writes no
+- **For codex the figure is hidden today — every window of the account.** Direct use of the account outside coai spends the same limit and writes no
   ledger line (RESULTS_vendor_quota_gauges.md §2.4, §6.3), so `roundsPerPercent` is null with `missingConsumer:
   direct-codex-use`. The observed gauge and its reset are still served — by the catalog (`slots.gauge`, story 6.1a) —
   and still shown. Showing the figure as an upper bound instead is the owner's call, not this story's.
@@ -1839,7 +1839,7 @@ flowchart LR
   C --> T
 ```
 
-Tests: `RoundsPerPercentServedTests` (4) and `RoundsPerPercentEndpointTests` (1), server; `RoundsPerPercentTests` (19),
+Tests: `RoundsPerPercentServedTests` (6) and `RoundsPerPercentEndpointTests` (1), server; `RoundsPerPercentTests` (49),
 mcp; `http/usage/usage.http` (+3 assertions); the seam's gauge leg (`scripts/seam-gauge.mjs`, the real server over a
 seeded slot and ledger, read and DRAWN by the extension's own code). The older-client check now also asks the released
 client's `fetchUsage(company)`: `extension-v0.69.0` asks no windows and gets no `gauges`; `extension-v0.70.0` asks them,

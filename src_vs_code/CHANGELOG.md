@@ -1,5 +1,44 @@
 # Changelog
 
+## Team server 0.13.1 — 2026-10-18
+
+**Fixed: rounds per 1 % of quota is counted from one rise to the next, and pooled** (the server's half of the same
+fix as coai-mcp). `/api/usage`'s per-window figure keeps the rounds of readings whose percentage did not change,
+starts a new baseline after a fall, and pools all rounds over the total rise of the last ten intervals. A launch the
+server requeued after a rate-limit refusal is no longer counted as one of its round's launches, so the launch that
+ran carries the whole round. codex stays hidden on every limit of the account.
+
+## Extension 0.80.1 — 2026-10-18
+
+**Changed: the help says how rounds per 1 % is counted now,** in all five languages: from one rise of the
+window's percentage to the next, pooled over the last ten such rises. When a figure is unavailable because the
+percentage has not moved yet, the reason now reads *the percentage has not risen yet*.
+
+## Server 0.60.1 — 2026-10-18
+
+**Fixed: rounds per 1 % of quota is counted from one rise to the next, and pooled.** The `gauge` block of
+`--round-counts` and the Team server's `/api/usage` read one shared derivation, and it had two faults:
+- It dropped any pair of readings whose whole-number percentage did not rise, together with the rounds between them.
+  So 10, 10, 10, 11 % with a round between each counted 1 round per 1 % instead of 3, and the figure leaned low.
+- It averaged the intervals' ratios weighted by rounds, which gave 2.375 where the true figure is 4/3.
+
+Now:
+- An interval keeps its starting reading through readings that did not change, adds up their rounds, and closes when
+  the percentage rises.
+- A reading that falls without a reset starts a new baseline.
+- A reset, a stale or missing reading, a launch with no reading, or a review without a round voids the span.
+- A percentage outside 0–100 counts as a missing reading.
+- The figure is pooled: all the rounds over the total rise of the last ten intervals.
+- When there is no figure, the reason is the real one, not "too few readings".
+- codex stays hidden, now on every limit of the account.
+
+## Extension 0.80.0 — 2026-10-18
+
+**Added: the model card sets a row's prompt cap.** The Models card has a new box, "Largest prompt it reads, KiB". It
+writes the row's `maxPromptKib`: a whole number from 1 to 4096. Empty is no cap, and there is no default; you choose the
+cap for each row. coai-mcp then leaves that reviewer out of a round whose prompt is larger than the cap, and says why in
+the reply. The box shows for every runtime. It needs coai-mcp 0.60.0: with an older server the cap is not written, and
+the card says that the server does not take it yet.
 ## Server 0.60.0 — 2026-10-18
 
 **Added: a reviewer row can say how much it can read.** A vendor row can now carry `maxPromptKib`: the largest first
