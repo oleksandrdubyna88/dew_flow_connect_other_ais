@@ -95,6 +95,48 @@ public sealed class WorktreeFailureTests
         }
     }
 
+    /// <summary>
+    /// The two tests above assert the Windows wording only when the host IS Windows, and SonarCloud's coverage job runs on
+    /// Linux — so the platform is an input here and the Windows sentence is exercised on every OS.
+    /// </summary>
+    [Fact]
+    public void OnWindows_AFileTooLong_IsHeldAgainstTheFileLimit_OnAnyHost()
+    {
+        var said = WorktreeFailure.Sentence("error: unable to create file a/b.txt: Filename too long", Tree, windows: true);
+
+        said.Should().Contain($"a file path of {WindowsPathLimits.FileUnits} characters");
+        said.Should().Contain("core.longpaths=true", "the reader must know coai already asked for long paths");
+        said.Should().Contain("COAI_ROUND_WORKTREES");
+    }
+
+    [Fact]
+    public void OnWindows_ADirectoryTooLong_IsHeldAgainstTheFolderLimit_OnAnyHost()
+    {
+        var said = WorktreeFailure.Sentence("fatal: cannot create directory at 'a/b': Filename too long", Tree, windows: true);
+
+        said.Should().Contain($"a folder path of {WindowsPathLimits.FolderUnits} characters");
+        said.Should().NotContain(WindowsPathLimits.FileUnits.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            "the file limit is not the one this folder crossed");
+        said.Should().Contain("COAI_ROUND_WORKTREES");
+    }
+
+    [Fact]
+    public void OnWindows_TheRelativePathIsWrittenWithBackslashes_OnAnyHost()
+    {
+        var said = WorktreeFailure.Sentence("error: unable to create file a/b.txt: Filename too long", "root", windows: true);
+
+        said.Should().Contain($"could not write '{Path.Combine("root", @"a\b.txt")}'");
+    }
+
+    [Fact]
+    public void OffWindows_NoLimitIsNamed_BecauseNobodyMeasuredItElsewhere_OnAnyHost()
+    {
+        var said = WorktreeFailure.Sentence("error: unable to create file a/b.txt: Filename too long", Tree, windows: false);
+
+        said.Should().Contain("COAI_ROUND_WORKTREES").And.Contain("a/b.txt");
+        said.Should().NotContain("259").And.NotContain("247").And.NotContain("core.longpaths");
+    }
+
     /// <summary>A name longer than NTFS allows is not cured by a shorter root, so no advice about a root.</summary>
     [Fact]
     public void AnotherReason_NamesThePathAndTheReason_WithoutTheLimitOrTheRootAdvice()

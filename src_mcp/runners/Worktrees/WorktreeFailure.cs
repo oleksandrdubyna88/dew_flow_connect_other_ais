@@ -30,7 +30,14 @@ internal static class WorktreeFailure
     /// the path git could not write, its length and git's reason — or, when git named no path, exactly what
     /// <see cref="WorktreeManager.FatalLine"/> has always said.
     /// </summary>
-    internal static string Sentence(string stderr, string treePath)
+    internal static string Sentence(string stderr, string treePath) =>
+        Sentence(stderr, treePath, OperatingSystem.IsWindows());
+
+    /// <summary>
+    /// <see cref="Sentence(string, string)"/> with the platform as an INPUT, so the Windows wording — the one that
+    /// names <see cref="WindowsPathLimits"/>' numbers — is testable on every OS rather than only on a Windows host.
+    /// </summary>
+    internal static string Sentence(string stderr, string treePath, bool windows)
     {
         var verdict = WorktreeManager.FatalLine(stderr);
         var unwritable = stderr.Split('\n', StringSplitOptions.TrimEntries)
@@ -40,17 +47,17 @@ internal static class WorktreeFailure
 
         return unwritable.Count == 0
             ? verdict
-            : $"{unwritable[0].Describe(treePath)}{Advice(unwritable[0])} git: {verdict}";
+            : $"{unwritable[0].Describe(treePath, windows)}{Advice(unwritable[0], windows)} git: {verdict}";
     }
 
     /// <summary>
     /// What an operator can DO about it — only for the reason a shorter root actually cures, and held against
     /// the limit of the KIND of path git could not make: a folder stops sooner than a file.
     /// </summary>
-    private static string Advice(Unwritable what) =>
+    private static string Advice(Unwritable what, bool windows) =>
         what.Reason != TooLong
             ? string.Empty
-            : OperatingSystem.IsWindows()
+            : windows
                 ? $" Windows allows a {what.Kind} path of {what.WindowsLimit} characters without long-path support; "
                   + "coai already passed core.longpaths=true, so this git did not honour it — set "
                   + "COAI_ROUND_WORKTREES to a shorter local folder, or shorten the path."
@@ -70,9 +77,9 @@ internal static class WorktreeFailure
                 .Take(1)
                 .SelectMany(known => Split(line[known.Prefix.Length..], known.IsFolder));
 
-        public string Describe(string treePath)
+        public string Describe(string treePath, bool windows)
         {
-            var path = Path.Combine(treePath, OperatingSystem.IsWindows() ? Relative.Replace('/', '\\') : Relative);
+            var path = Path.Combine(treePath, windows ? Relative.Replace('/', '\\') : Relative);
 
             return $"could not write '{path}' ({path.Length} characters): {Reason}.";
         }
