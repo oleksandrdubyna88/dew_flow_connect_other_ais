@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.80.2](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.80.1...extension-v0.80.2) (2026-10-19)
+
+
+### Bug Fixes
+
+* **ledger:** a local review line carries its round ([#877](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/877)) ([bb279e3](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/bb279e3dbd7bdeaa49a2aa9d8ba6038415867f0b))
+
 ## [0.80.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.80.0...extension-v0.80.1) (2026-10-18)
 
 
