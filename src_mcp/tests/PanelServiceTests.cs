@@ -112,7 +112,9 @@ public sealed class PanelServiceTests : IAsyncLifetime
         int threshold = 2,
         StagePolicy onExhausted = StagePolicy.Human,
         int maxRounds = 3,
-        bool deal = false) =>
+        bool deal = false,
+        IProcessLauncher? through = null,
+        string workspace = "none") =>
         new(
             new PanelSettings
             {
@@ -127,10 +129,11 @@ public sealed class PanelServiceTests : IAsyncLifetime
                 RateLimitBackoff = TimeSpan.FromMilliseconds(5),
                 DealPlanLenses = deal,
                 DealCodeLenses = deal,
+                CodeWorkspace = workspace,
             },
             VaultKeys.None("no vault in tests"),
             default,
-            _launcher,
+            through ?? _launcher,
             Logger.None, Noticing.None);
 
     private static JsonElement Parse(string json) => JsonDocument.Parse(json).RootElement;
@@ -242,37 +245,106 @@ public sealed class PanelServiceTests : IAsyncLifetime
         // the checkout again invites the same exploration that produced the empty answer — the
         // plan stage learned this at ten minutes a round, and antigravity failed intermittently on
         // the code stage until the repair stopped carrying a workspace.
-        var record = Directory.CreateTempSubdirectory("coai-record-").FullName;
-        Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
+        var repairs = await RepairLaunchesOfACodeRoundAsync();
+
+        repairs.Should().NotBeEmpty("the first answers were not the schema's JSON, so every reviewer was repaired — a test that saw no repair saw nothing");
+        repairs.Should().OnlyContain(repair => Path.GetFileName(repair.WorkingDirectory).StartsWith("coai-repair-", StringComparison.Ordinal),
+            "the repair launch runs in a directory of its own, never in the checkout it was refused");
+        repairs.Should().OnlyContain(repair => repair.EntriesAtLaunch.Count == 0,
+            "an empty directory is what makes an agentic CLI answer instead of explore");
+    }
+
+    /// <summary>
+    /// The repair test reads what the repair launch was GIVEN, never a folder found by name in the machine's temp folder (C10 of
+    /// <c>todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md</c>): another run's repair folders, or a live round's, used to count.
+    /// </summary>
+    [Fact]
+    public async Task ARepairTest_SeesOnlyItsOwnRoundsRepairFolder()
+    {
+        // What another run, or a person's live round, leaves in the temp folder under the product's own prefix: not empty.
+        var decoy = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "coai-repair-decoy-" + Guid.NewGuid().ToString("N")[..8])).FullName;
         try
         {
-            var service = Service();
-            await service.OpenAsync(_repo, "feature");
-            await service.ReviewPlanAsync(_repo, "feature", "the plan");
-            await service.ResolveAsync(_repo, "feature", "[]");
-            foreach (var file in Directory.GetFiles(record))
-            {
-                File.Delete(file);
-            }
+            await File.WriteAllTextAsync(Path.Combine(decoy, "someone-elses.txt"), "x", TestContext.Current.CancellationToken);
 
-            await service.ReviewCodeAsync(_repo, "feature", "main", Scope);
+            var repairs = await RepairLaunchesOfACodeRoundAsync();
 
-            // Every recorded launch is the FIRST attempt here (the fake answers correctly), so the
-            // assertion is on how the repair was BUILT: its working directory is not the worktree.
-            var session = new SessionStore(_data).Load(_repo, "feature");
-            session.Should().NotBeNull();
-            Directory.EnumerateDirectories(Path.GetTempPath(), "coai-repair-*")
-                .Should().NotBeEmpty("the repair launch runs in a directory of its own");
-            foreach (var dir in Directory.EnumerateDirectories(Path.GetTempPath(), "coai-repair-*"))
-            {
-                Directory.EnumerateFileSystemEntries(dir).Should().BeEmpty(
-                    "an empty directory is what makes an agentic CLI answer instead of explore");
-            }
+            repairs.Should().NotBeEmpty();
+            repairs.Should().OnlyContain(repair => repair.EntriesAtLaunch.Count == 0 && repair.WorkingDirectory != decoy,
+                "the folders this round's repairs were given are what is judged, and the decoy is not one of them");
         }
         finally
         {
-            Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", null);
-            Directory.Delete(record, recursive: true);
+            Directory.Delete(decoy, recursive: true);
+        }
+    }
+
+    /// <summary>One launch the repair prompt rode in: where it ran, and what that folder held at the moment it started.</summary>
+    private sealed record RepairLaunch(string WorkingDirectory, IReadOnlyList<string> EntriesAtLaunch);
+
+    /// <summary>
+    /// A code round whose first answers are not the schema's JSON, so each reviewer is launched a second time with the repair prompt;
+    /// the answers to the repair are clean. Returns the repair launches, each with its folder's entries read BEFORE it started.
+    /// </summary>
+    private async Task<IReadOnlyList<RepairLaunch>> RepairLaunchesOfACodeRoundAsync()
+    {
+        const string Marker = "YOUR PREVIOUS ATTEMPT";
+        var seen = new SeenRepairs(_launcher, Marker);
+        try
+        {
+            // The review launch runs IN the checkout, so a repair that carried the workspace would be seen as not empty.
+            var service = Service(through: seen, workspace: "worktree");
+            await service.OpenAsync(_repo, "feature");
+            await service.ReviewPlanAsync(_repo, "feature", "the plan");
+            await service.ResolveAsync(_repo, "feature", "[]");
+
+            SetAnswer("this is prose, not the schema's JSON");
+            Environment.SetEnvironmentVariable("FAKECLI_REPAIR_MARKER", Marker);
+            Environment.SetEnvironmentVariable("FAKECLI_TURN1_REPAIR_STDOUT", CleanReview);
+            Environment.SetEnvironmentVariable("FAKECLI_TURN1_REPAIR_OUTFILE_TEXT", CleanReview);
+
+            await service.ReviewCodeAsync(_repo, "feature", "main", Scope);
+
+            seen.Reviews.Should().Contain(review => review.EntriesAtLaunch.Count > 0, "in worktree mode the review launched in the checkout, so the repair folder being empty is a choice and not an accident");
+
+            return [.. seen.Repairs];
+        }
+        finally
+        {
+            foreach (var name in (string[])["FAKECLI_REPAIR_MARKER", "FAKECLI_TURN1_REPAIR_STDOUT", "FAKECLI_TURN1_REPAIR_OUTFILE_TEXT"])
+            {
+                Environment.SetEnvironmentVariable(name, null);
+            }
+        }
+    }
+
+    /// <summary>The real launcher, noting each launch that carries the repair prompt — and what its folder held before it started.</summary>
+    private sealed class SeenRepairs(IProcessLauncher real, string marker) : IProcessLauncher
+    {
+        private readonly System.Collections.Concurrent.ConcurrentQueue<RepairLaunch> _repairs = new();
+
+        private readonly System.Collections.Concurrent.ConcurrentQueue<RepairLaunch> _reviews = new();
+
+        public IReadOnlyCollection<RepairLaunch> Repairs => _repairs;
+
+        /// <summary>The other launches of the fake CLI — the reviews — with the same two facts.</summary>
+        public IReadOnlyCollection<RepairLaunch> Reviews => _reviews;
+
+        public Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
+        {
+            var carriesTheRepair = request.StdIn.Contains(marker, StringComparison.Ordinal)
+                || request.Arguments.Any(argument => argument.Contains(marker, StringComparison.Ordinal));
+            var launch = new RepairLaunch(request.WorkingDirectory, [.. Directory.EnumerateFileSystemEntries(request.WorkingDirectory)]);
+            if (carriesTheRepair)
+            {
+                _repairs.Enqueue(launch);
+            }
+            else if (Path.GetFileNameWithoutExtension(request.Executable) == "FakeCli")
+            {
+                _reviews.Enqueue(launch);
+            }
+
+            return real.RunAsync(request, ct);
         }
     }
 
