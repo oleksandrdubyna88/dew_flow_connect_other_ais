@@ -1185,6 +1185,7 @@ export function cardContextFor(state: PanelState): (vendor: Vendor) => CardConte
     featureNote: featureNote(v, serverVersion),
     // An api card's per-model settings name the installed server when it is too old for them (S3.8).
     serverVersion,
+    kimiAllowNetworkSignIn: host === 'wsl2' || host === 'linux' ? state.settings.kimiAllowNetworkSignIn : undefined,
     otherSideCli: otherSides.includes(v.id) ? family : undefined,
     family,
     // The mark by THIS side's STORED value — what the box draws and the watch keys its finding on (paths per side,
@@ -1294,6 +1295,11 @@ export interface CardContext {
   readonly featureNote: string;
   /** The installed `coai-mcp`'s version, or empty when absent or unknown — which is not old. */
   readonly serverVersion: string;
+  /**
+   * The saved `coai.kimiAllowNetworkSignIn` for a Kimi card's *Connection* fold (DL6 of todo/PLAN_kimi_and_vibe_on_linux.md), or UNDEFINED where
+   * there is nothing to admit — a Windows, WSL1 or macOS window has no network mount of a Linux home to judge. Absent draws no box.
+   */
+  readonly kimiAllowNetworkSignIn?: boolean | undefined;
   /** The family of THIS side when the row's CLI path is the other side's (the host decided it) — else undefined, no note. */
   readonly otherSideCli: PathFamily | undefined;
   /**
@@ -3428,6 +3434,9 @@ export const PANEL_COMMANDS = [
   'toggleUse',
   'duplicateModel',
   'removeModel',
+  // A Kimi card's *Clear the stuck Kimi marker* (E6 of todo/PLAN_kimi_and_vibe_on_linux.md): drawn only while the server reports a
+  // standing marker for the row. Its id is the ROW; the host asks the server again and runs the one-shot mode on the path it names.
+  'clearKimiMarker',
   // ✓ Check on a Models card: one paid turn of that row, asked first by the host (D10), kept as `model-<id>`.
   'checkModel',
   // Try it on the Settings page's Security lane tab: the id is the sample, put to `coai-mcp --check-security` on stdin (E4.2).

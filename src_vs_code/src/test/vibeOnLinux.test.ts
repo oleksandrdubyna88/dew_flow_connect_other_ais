@@ -7,7 +7,7 @@ import { catalogHtml } from '../catalogPage';
 import { HELP_ARTICLES, HELP_LANGUAGES, bodyFor } from '../helpContent';
 import { type HostKind, hostKind, hostKindOf, hostKindOfPlatform } from '../hostSide';
 import { cardContextFor, type PanelState } from '../panelView';
-import { ON_LINUX_SINCE, VIBE_ON_LINUX_SINCE, VIBE_RUNTIME_SINCE, runtimeOnLinuxSide, runtimeSkewNote } from '../runtimeSince';
+import { KIMI_ON_LINUX_SINCE, ON_LINUX_SINCE, VIBE_ON_LINUX_SINCE, VIBE_RUNTIME_SINCE, runtimeOnLinuxSide, runtimeSkewNote } from '../runtimeSince';
 import { vendorInstall, vendorUpdate, vibeNoteFor } from '../vendorTerminal';
 import { namesWsl2 } from '../wslNetwork';
 import { DEFAULT_VENDORS, VENDOR_PRESETS, type Vendor } from '../vendors';
@@ -40,7 +40,9 @@ const repo = (...parts: string[]): string => join(__dirname, '..', '..', '..', .
 
 test('the Vibe-on-Linux release is its own table, beside the one that says which server knows the runtime', () => {
   assert.match(VIBE_ON_LINUX_SINCE, /^\d+\.\d+\.\d+$/u, 'one released version, so the guard in runtimeSinceIsAhead.test.ts can hold it to the changelog');
-  assert.deepEqual(ON_LINUX_SINCE, { vibe: VIBE_ON_LINUX_SINCE }, 'Kimi on Linux is a later release: its entry belongs to that release');
+  assert.equal(ON_LINUX_SINCE['vibe'], VIBE_ON_LINUX_SINCE);
+  assert.equal(ON_LINUX_SINCE['kimi'], KIMI_ON_LINUX_SINCE, 'Kimi on Linux is the release after Vibe (DL14): E6 added its entry');
+  assert.deepEqual(Object.keys(ON_LINUX_SINCE).sort(), ['kimi', 'vibe']);
 });
 
 test(`a Linux or WSL side whose server is older than ${VIBE_ON_LINUX_SINCE} does not run Vibe; a newer or an unknown server does`, () => {
@@ -51,7 +53,7 @@ test(`a Linux or WSL side whose server is older than ${VIBE_ON_LINUX_SINCE} does
   assert.equal(runtimeOnLinuxSide('vibe', '1.0.0'), true);
   assert.equal(runtimeOnLinuxSide('vibe', ''), true, 'an unknown server is not called old');
   assert.equal(runtimeOnLinuxSide('codex', '0.1.0'), true, 'a runtime with no entry runs on every host');
-  assert.equal(runtimeOnLinuxSide('kimi', '0.57.0'), true, 'Kimi has no Linux entry yet — this release says nothing about it');
+  assert.equal(runtimeOnLinuxSide('kimi', VIBE_ON_LINUX_SINCE), false, `Kimi runs on Linux from ${KIMI_ON_LINUX_SINCE}: a server at Vibe's release still refuses a Kimi row there`);
 });
 
 // ---------------------------------------------------------------- the host kind (DL1): WSL2, WSL1, native Linux
@@ -391,5 +393,5 @@ test('the Vibe windows and macos rows are as they were', () => {
   assert.equal(vibeRow('windows').measured?.date, '2026-10-12');
   assert.equal(vibeRow('macos').standing, 'unmeasured');
   assert.match(vibeRow('macos').text, /refuses it on macOS/u);
-  assert.ok(!ROWS.some((one) => one.runtime === 'kimi'), 'Kimi rows are another branch’s');
+  // Kimi's wsl and linux rows are E6's (kimiOnLinux.test.ts); its windows and macos rows are the consultant branch's.
 });

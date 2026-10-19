@@ -44,6 +44,9 @@ namespace CoaiMcp.FakeCli;
 ///     {"kind":"hang"}                                  never returns: the kill path
 ///     {"kind":"exit","code":3}                         leaves mid-turn: the premature EOF
 ///     {"kind":"grandchild","pidFile":"…"}              spawns a sleeping FakeCli and writes its pid there
+///     {"kind":"grandchildSetsid","pidFile":"…"}        the same, but the sleeper calls setsid() first — it leaves the agent's session and group (what `rg` does, L-K4)
+///     {"kind":"grandchildLateSetsid","pidFile":"…","trigger":"…"}   a child that polls for the file `trigger` and only THEN starts the setsid sleeper and writes its pid
+///     {"kind":"grandchildExits","pidFile":"…"}         a child that writes its pid and exits 0 at once
 ///   ]
 /// }
 /// </code>
@@ -81,12 +84,30 @@ internal static class AcpAgent
         return 0;
     }
 
-    /// <summary>The script beside the work folder — <c>&lt;cwd&gt;/../agent.json</c>, the place <c>FakeAcpAgent</c> writes it — or empty when there is none.</summary>
+    /// <summary>
+    /// The script beside the work folder — <c>&lt;cwd&gt;/../agent.json</c>, the place <c>FakeAcpAgent</c> writes it — else the one the steering file in the temp directory names
+    /// (<c>FAKECLI_ACP_SCRIPT</c>, the same file a minimal-environment vendor launch reads: a round's snapshot is a folder no test can name beforehand, and a launch that builds the agent's
+    /// environment from scratch carries no variable) — or empty when there is none.
+    /// </summary>
     public static string ScriptBesideTheWorkFolder()
     {
         var beside = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "agent.json"));
 
-        return File.Exists(beside) ? beside : string.Empty;
+        return File.Exists(beside) ? beside : SteeredScript();
+    }
+
+    private static string SteeredScript()
+    {
+        var steering = Path.Combine(Path.GetTempPath(), "fakecli-minimal.json");
+        if (!File.Exists(steering))
+        {
+            return string.Empty;
+        }
+
+        using var document = JsonDocument.Parse(File.ReadAllText(steering));
+        var named = document.RootElement.ValueKind == JsonValueKind.Object && document.RootElement.TryGetProperty("FAKECLI_ACP_SCRIPT", out var script) ? script.GetString() ?? string.Empty : string.Empty;
+
+        return File.Exists(named) ? named : string.Empty;
     }
 
     /// <summary>
@@ -105,6 +126,8 @@ internal static class AcpAgent
             .Order(StringComparer.Ordinal)
             .Concat(Probed(script));
         File.WriteAllLines(path, lines);
+        // The folder the agent was started in, beside the environment record (not in it: that file is read as a set of variables).
+        File.WriteAllText(path + ".cwd", Directory.GetCurrentDirectory());
     }
 
     private static IEnumerable<string> Probed(JsonElement script) =>
@@ -318,6 +341,16 @@ internal static class AcpAgent
             case "grandchild":
                 Grandchild(Text(step, "pidFile"));
                 break;
+            case "grandchildSetsid":
+                SpawnedInto(Text(step, "pidFile"), "sleep", "--own-session", "600000");
+                break;
+            case "grandchildLateSetsid":
+                // Not the pid file of the sleeper's own: the late child writes THAT file when it spawns.
+                Spawned("late-spawn", Text(step, "trigger"), Text(step, "pidFile"));
+                break;
+            case "grandchildExits":
+                SpawnedInto(Text(step, "pidFile"), "exit-after", "0", "0");
+                break;
         }
     }
 
@@ -355,6 +388,12 @@ internal static class AcpAgent
         var child = Process.Start(info)!;
         Serving.WritePidFile(pidFile, [child.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)]);
     }
+
+    /// <summary>A FakeCli child with every stream of its own, its pid written to the file.</summary>
+    private static void SpawnedInto(string pidFile, params string[] arguments) =>
+        File.WriteAllText(pidFile, Spawned(arguments).Id.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+    private static Process Spawned(params string[] arguments) => SupervisionVerbs.StartChild(arguments);
 
     /// <summary>Reads stdin, logging every line, until a <c>session/cancel</c> arrives — the prompt then ends <c>cancelled</c>.</summary>
     private static void AwaitCancel()

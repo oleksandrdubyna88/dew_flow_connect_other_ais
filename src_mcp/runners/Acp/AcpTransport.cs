@@ -47,6 +47,7 @@ internal sealed class AcpTransport : IDisposable
     private const int ChunkChars = 8192;
 
     private readonly Process _process;
+    private readonly ITreeSupervisor _supervisor;
     private readonly SemaphoreSlim _writing = new(1, 1);
     private readonly BoundedText _stderr = new(StdErrChars);
     private readonly CancellationTokenSource _draining = new();
@@ -55,9 +56,10 @@ internal sealed class AcpTransport : IDisposable
     private int _length;
     private int _scanned;
 
-    private AcpTransport(Process process)
+    private AcpTransport(Process process, ITreeSupervisor supervisor)
     {
         _process = process;
+        _supervisor = supervisor;
         _stderrDrain = DrainStdErrAsync();
         Exited = process.WaitForExitAsync(CancellationToken.None);
     }
@@ -84,7 +86,13 @@ internal sealed class AcpTransport : IDisposable
     /// <remarks>Started by <see cref="ProcessLauncher.Started"/>, the one place a child is built — its resolver, its
     /// UTF-8 streams without a byte-order mark (three stray bytes before the first JSON line would be a parse error on
     /// the agent's side) and its environment rule are the launcher's, not a copy.</remarks>
-    public static AcpTransport Start(ProcessRequest request) => new(ProcessLauncher.Started(request));
+    public static AcpTransport Start(ProcessRequest request) => Start(request, UnsupervisedTree.Instance);
+
+    /// <summary><see cref="Start(ProcessRequest)"/> with the supervisor that ends the agent's tree (DL9): Linux Kimi's, by identity under a subreaper; else today's.</summary>
+    public static AcpTransport Start(ProcessRequest request, ITreeSupervisor supervisor) => new(ProcessLauncher.Started(request), supervisor);
+
+    /// <summary>The members of the tree still alive when <see cref="EndAsync"/> finished — empty until then, and for an unsupervised tree.</summary>
+    public IReadOnlyList<ProcessIdentity> Survivors { get; private set; } = [];
 
     /// <summary>
     /// The next line the agent wrote — or null at the end of its output, which is the one fact a reader must see.
@@ -217,11 +225,11 @@ internal sealed class AcpTransport : IDisposable
     {
         await SettledAsync(graceful());
 
-        // The tree FIRST, by this process's own handle — never by a name — then stdin, then the wait. Not the
-        // launcher's own order (stdin first): closing stdin is the EOF a well-behaved agent exits on, and an agent that
-        // has exited can no longer name its children — on Linux they are reparented to init the moment it goes, and the
-        // kill that follows finds an empty tree (finding G of the risk consultations, 2026-10-12).
-        await ProcessLauncher.EndTreeFirstAsync(_process);
+        // The tree FIRST, while the agent still lives, then stdin, then the wait — the supervisor's order, whatever it is: closing stdin is the EOF a well-behaved agent exits on, and an
+        // agent that has exited can no longer name its children (finding G of the risk consultations, 2026-10-12). Windows and a profile without a home: the tree killed by this process's
+        // own handle, as before. Linux Kimi (DL9): the shim is a subreaper, so an orphan of the tree — even one that opened its own session — is the shim's to list again and end by identity
+        // through a pidfd, and what is still alive at the bound is reported (Survivors), never waited on.
+        Survivors = (await _supervisor.EndAsync(_process)).Survivors;
 
         _draining.CancelAfter(DrainGrace);
         await SettledAsync(_stderrDrain);

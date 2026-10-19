@@ -299,13 +299,14 @@ public sealed class AcpClientTests
     /// Finding G of the risk consultations (2026-10-12): the transport used to close stdin BEFORE the tree kill, and an
     /// agent that exits on EOF could leave the kill an empty tree. On Windows this test passed under the old order too —
     /// the <c>Process</c> object keeps the exited parent's handle, and .NET's tree kill still finds the children by their
-    /// stale parent pid — so no red could be shown here; the order was fixed by the finding's own reasoning, and the
-    /// case this test pins is the one that would lose on Linux, where an orphan is reparented to init the moment its
-    /// parent goes. That case, a parent gone BEFORE the kill, is a known limit on Linux and macOS — CI showed it on
-    /// 2026-10-12 (*Expected Gone(grandchild) to be True … but found False*, both platforms). So the grandchild is asserted
-    /// gone on Windows only; elsewhere it is ended here by its recorded pid, and the test reports itself SKIPPED with the
-    /// limit named, never green: owning the tree (a process group on Unix) is a condition in
-    /// <c>todo/PLAN_vibe_and_kimi_runtimes.md</c> §4 before Kimi is launched on any host but Windows.
+    /// stale parent pid — so no red could be shown here; the order was fixed by the finding's own reasoning.
+    /// <para>On Linux and macOS an orphan is reparented the moment its parent goes, and a client that is not a SUBREAPER finds
+    /// none (CI showed it on 2026-10-12: <i>Expected Gone(grandchild) to be True … but found False</i>). The mechanism that
+    /// closes it is DL9 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>: the SHIM becomes a child subreaper and ends its tree by
+    /// identity (<c>SupervisedTeardown</c>) — which an in-process test cannot show, because the test host must never become a
+    /// subreaper. The Linux assertion is <c>SupervisedTeardownLinuxTests.AnAgentThatExitsFirst_LeavesNoSameGroupAndNoSetsidChild</c>
+    /// and its twin through the shim, run in a real subreaper child. Here the grandchild is asserted gone on Windows only;
+    /// elsewhere it is ended by its recorded pid and the test reports itself SKIPPED, never green.</para>
     /// </remarks>
     [Fact]
     public async Task APrematureEofIsAProtocolEnd_AndTheGrandchildIsGoneToo()
@@ -328,9 +329,7 @@ public sealed class AcpClientTests
         if (!OperatingSystem.IsWindows())
         {
             EndLeftover(grandchild);
-            Assert.Skip("known limit on Linux and macOS: an agent that exits before the teardown loses its children to "
-                + "reparenting, and the tree kill finds none — owning the tree is a condition in "
-                + "todo/PLAN_vibe_and_kimi_runtimes.md §4 before Kimi is launched on any host but Windows");
+            Assert.Skip("not a subreaper: an in-process client loses an exited agent's children to reparenting; the Linux proof is SupervisedTeardownLinuxTests, in a real subreaper (DL9)");
         }
 
         Gone(grandchild).Should().BeTrue("a grandchild orphaned by the agent's own exit is still the client's to end");

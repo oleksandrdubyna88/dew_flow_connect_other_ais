@@ -1,5 +1,6 @@
 import { CliStatus, updateAvailable } from './cliVersions';
 import { type HostKind, Platform, hostExecutableSide, hostKindOfPlatform } from './hostSide';
+import { KIMI_LINUX_LINE, KIMI_NATIVE_LINUX, KIMI_ON_WSL1, KIMI_OWN_OPEN, KIMI_RUNS_ON_WSL, KIMI_TOOLS_NOTE } from './kimiLinuxLine';
 import { executableOf, type ExecutableSide } from './pathFamily';
 import { VIBE_ON_LINUX_SINCE } from './runtimeSince';
 import { Vendor } from './vendors';
@@ -560,20 +561,24 @@ export function vibeNoteFor(host: HostKind): string {
  * github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-pc-windows-msvc.zip); `sharkdp.fd` (10.5.0,
  * David Peter, github.com/sharkdp/fd, installer github.com/sharkdp/fd/releases/download/v10.5.0/fd-v10.5.0-x86_64-pc-windows-msvc.zip).
  * Both are portable zips from the project's own GitHub releases — nobody is repackaging. A later version's manifest is
- * checked the same way before this id list is trusted again. Linux and macOS get Moonshot's script alone: D18 refuses a Kimi
- * REVIEW there, so the tools are not needed yet. For the day it lifts, the projects' READMEs give `brew install ripgrep fd`
- * on macOS, `sudo apt-get install -y ripgrep fd-find` on Debian and Ubuntu (where the binary is `fdfind` and Kimi looks for
- * `fd`, so `~/.local/bin/fd` must link to it) and `sudo dnf install ripgrep fd-find` on Fedora; `OFFICIAL_SOURCES` would then
- * need those verbs — a change of that day.</p>
+ * checked the same way before this id list is trusted again.</p>
+ *
+ * <p><b>Linux provisions them too</b> (DL12 of todo/PLAN_kimi_and_vibe_on_linux.md, E6 — the day the paragraph that used to
+ * stand here said would come): the projects' READMEs give `sudo apt-get install -y ripgrep fd-find` on Debian and Ubuntu
+ * (where fd's program is `fdfind` and Kimi looks for `fd`, so `~/.local/bin/fd` must link to it) and `sudo dnf install
+ * ripgrep fd-find` on Fedora, and {@link KIMI_LINUX_LINE} (`kimiLinuxLine.ts`) runs exactly those, each step skipped when the
+ * tool is already there. `OFFICIAL_SOURCES` admits those two verbs for those two packages, and `sudo` only in front of them
+ * (`officialSources.ts`). macOS still gets Moonshot's script alone: nothing runs Kimi there.</p>
  *
  * <p>These are the commands `VendorDiagnosis.InstallCure` names when a round finds no Kimi, held level by
  * `kimiWindowsInstall.test.ts`, which also holds the Windows line to PowerShell's own parser; `kimiWindowsInstallRuns.test.ts`
  * runs it against stand-ins.</p>
  */
-function kimiInstall(platform: Platform): VendorInstall {
-  return platform === 'win32'
-    ? { command: KIMI_WINDOWS_LINE, prerequisite: '', docs: DOCS['kimi']!, note: KIMI_NOTE_WINDOWS }
-    : { command: KIMI_SCRIPT, prerequisite: '', docs: DOCS['kimi']!, note: KIMI_NOTE_POSIX };
+function kimiInstall(platform: Platform, host?: HostKind): VendorInstall {
+  const kind = host ?? hostKindOfPlatform(platform);
+  const command = platform === 'win32' ? KIMI_WINDOWS_LINE : (kind === 'darwin' ? KIMI_SCRIPT : KIMI_LINUX_LINE);
+
+  return { command, prerequisite: '', docs: DOCS['kimi']!, note: kimiNoteFor(kind) };
 }
 
 /**
@@ -610,11 +615,38 @@ const KIMI_NOTE_WINDOWS =
   + 'as a .bak. It updates the default install: a row with a CLI path of its own (a Kimi kept in another folder) is NOT what ⟳ '
   + 'reaches — the line puts no path in the command — so update that copy yourself, or clear the CLI path.';
 
-const KIMI_NOTE_POSIX =
+/** WSL2, WSL1 and a native Linux box share the line, the tools and the sign-in; what differs is whether coai-mcp runs the row (DL1). */
+const KIMI_LINUX_SHARED = `${KIMI_TOOLS_NOTE} ${KIMI_SIGN_IN} ⟳ runs this same line.`;
+
+const KIMI_NOTE_WSL = `${KIMI_LINUX_SHARED} ${KIMI_RUNS_ON_WSL} ${KIMI_OWN_OPEN}`;
+
+const KIMI_NOTE_LINUX = `${KIMI_LINUX_SHARED} ${KIMI_NATIVE_LINUX}`;
+
+/** WSL1 is not WSL2 (DL1, F0; S-K20): the install line is the same, the row is refused. */
+const KIMI_NOTE_WSL1 = `${KIMI_LINUX_SHARED} ${KIMI_ON_WSL1}`;
+
+const KIMI_NOTE_MACOS =
   'Moonshot’s own installer, from code.kimi.com. It is a piped script — read it first if that matters to you. It puts Kimi in '
   + '~/.kimi-code/bin and edits one shell rc file so that folder is on your PATH (open a new shell, or restart VS Code). '
-  + KIMI_SIGN_IN + ' coai-mcp does not run Kimi on Linux, WSL or macOS yet — none of them is measured — so a reviewer on '
-  + 'this side waits for that; this line installs Kimi only, not the ripgrep and fd it will need.';
+  + KIMI_SIGN_IN + ' coai-mcp does not run Kimi on macOS — nothing is measured there — so a reviewer on this side waits for '
+  + 'that; this line installs Kimi only, not the ripgrep and fd it would need.';
+
+/** The note per host — a record over the whole union, as Vibe's is (`VIBE_NOTES`): a host kind added later is a compile error here. */
+const KIMI_NOTES: Readonly<Record<HostKind, string>> = {
+  windows: KIMI_NOTE_WINDOWS,
+  wsl2: KIMI_NOTE_WSL,
+  wsl1: KIMI_NOTE_WSL1,
+  linux: KIMI_NOTE_LINUX,
+  darwin: KIMI_NOTE_MACOS,
+};
+
+/**
+ * Which note ⤓ and ⟳ show for Kimi on this host (DL1 of todo/PLAN_kimi_and_vibe_on_linux.md) — the same host-kind union Vibe's note
+ * is chosen by (`hostSide.ts`): WSL2 runs the row, WSL1 and a native Linux host are refused, macOS is not measured, Windows is as it was.
+ */
+export function kimiNoteFor(host: HostKind): string {
+  return KIMI_NOTES[host];
+}
 
 /** The CLIs a person installs from their vendor's own installer rather than from npm. */
 const OWN_INSTALLER: Record<string, (platform: Platform, host?: HostKind) => VendorInstall> = {
