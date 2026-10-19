@@ -321,4 +321,26 @@ public sealed class TheRoundKnowsWhoCalledItTests
         CallerDeclaration.From(default, "claude-code", "", "claude-opus-5").Phrase
             .Should().Be("claude-code · claude-opus-5");
     }
+
+    [Fact]
+    public void TheVendorList_CannotBeRewrittenThroughWhatItExposes()
+    {
+        // E3 code gate round 3, finding 3: a `static readonly string[]` freezes the reference, not the contents, so any code in
+        // the assembly could write an element and change what VendorOf recognises for the rest of the process.
+        var exposed = (IList<string>)CallerDeclaration.KnownVendors;
+        var first = exposed[0];
+        try
+        {
+            var write = () => exposed[0] = "rewritten";
+
+            write.Should().Throw<NotSupportedException>("the closed vendor list must not be writable through the list it exposes");
+        }
+        finally
+        {
+            if (exposed[0] != first)
+            {
+                exposed[0] = first;
+            }
+        }
+    }
 }
