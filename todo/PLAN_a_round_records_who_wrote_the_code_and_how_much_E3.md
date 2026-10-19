@@ -1399,8 +1399,8 @@ S1–S3 landed as three commits on the branch — b24c81ae, 64ee32a6, f9da2839 �
   is a diagnostic, not partial; the registry cap refuses `read > Max`; `MakeRoom` copies only the pending line; the
   measured bounds of 273 files per session and 552 project folders; S4-16's per-file block key), 1 accepted — ids copied
   without a shape (§3.4) — and fixed RED-first in afc9b0599, which is after the round and was not gate-reviewed.
-- **Privacy, verified.** Every string member is an id-shaped token, a closed-shape value, a write-tool name, a path key
-  or a file-name agent key. Each document is disposed before the next `MoveNext` (`TranscriptLine.TryRead`,
+- **Privacy, verified.** Every string member is an id-shaped token, a closed-shape value, a write-tool name or a path key
+  (an agent key taken from a file name passes the same id gate since the CodeRabbit round, below). Each document is disposed before the next `MoveNext` (`TranscriptLine.TryRead`,
   `TranscriptLaunches.ReadMeta`), and no `JsonElement` is stored.
 - **The invariant.** `TranscriptPresent ⇒ LaunchedUtc != null` holds for every SUBAGENT (test 56, over every fixture).
   `main` is `TranscriptPresent = true` with `LaunchedUtc = null` by contract — its instant is `FirstLineUtc` — so E4/E5's
@@ -1467,6 +1467,26 @@ S1–S3 landed as three commits on the branch — b24c81ae, 64ee32a6, f9da2839 �
   load-bound tests outside E3 (stream and ACP usage bounds, review-tree and snapshot disposal, shutdown, the security
   context characterisations, a rows budget, a conversation cap). **Each of the 14 passed when run alone** (13 filters,
   one a 16-case theory: 16 of 16). None of them is in a file E3 changes.
+- **CodeRabbit threads on PR #867 (2026-10-19), six; each behaviour fix RED first, with a break-it.**
+  (1) `AgentLog.Parse` read `timestamp` with `GetString()` and `Said` read `message` with `TryGetProperty`, so a valid-JSON
+  line of the wrong shape (a numeric `timestamp`, an array root, a string `message`) threw `InvalidOperationException` out of
+  `Slice` — the older defect round 2 reported. Both now read through `JsonText.StringProperty` and `JsonText.Child`. RED:
+  `AgentLogTests.ALineThatIsValidJsonWithTheWrongShapeIsSkippedOrEmpty_AndTheValidLinesAreKept` ("Did not expect any
+  exception, but found InvalidOperationException … type 'String', but the target element has type 'Number'"); GREEN after;
+  break-it on `Said` alone ("requires an element of type 'Object', but the target element has type 'String'").
+  (2) The `module_server.md` sentence about `agent_log` is now true and names the fields. (3) `TranscriptLaunches.KeysOf`
+  took the agent key from a file name with no shape gate, so `agent-some words here.jsonl` entered `ObservedAgent.Key`; it
+  now filters on `TranscriptShapes.IsId` and counts each refused file name in `ValuesOffShape`. RED:
+  `An_agent_file_name_off_the_id_shape_is_never_kept_and_is_counted` ("Expected after.Agents.Select(a => a.Key) to be equal
+  to {"main", "303b2866f0b3022b2"} … but {…, "some words here"} contains 1 item(s) too many"); GREEN after; the break-it
+  (filter removed, count kept) reproduces the RED. The fixture helper `CopyAgentUnderName` has its `Samples` row.
+  (4–6) Test-helper complexity, behaviour unchanged: `CallerTranscriptFixture.RewriteKey` (5 → 3, `TryTextOf`),
+  `TheCallerTranscriptReadsFromTheBoundTests.SliceBytes` (→ `SliceBytesOf` + `Kept`) and `TranscriptTruth.Parse`
+  (→ `IsAssistant`, `IsCounted`, `ModelOf`); no new test, the existing ones cover them and stay green. The macOS job failed in
+  `SecuritySourcesCharacterizationTests.The_collection_deadline_ends_the_file_it_interrupts_and_every_later_one`, a 30 s
+  deadline test; the PR does not touch that file or the collecting code under it, so it is a load-bound failure outside E3.
+  Tests, observed: the E3 classes + `AgentLogTests` + `TheRoundKnowsWhoCalledItTests` + `ACallerTranscriptFixtureCarriesNoTextTests`:
+  303 total, 300 passed, 3 skipped (platform-specific), 0 failed.
 - **Tests, observed (final, at cb10d7eea).** The E3 classes + `AgentLogTests` + `TheRoundKnowsWhoCalledItTests`: 273
   total, 270 passed, 3 skipped (platform-specific tests), 0 failed.
 

@@ -165,6 +165,14 @@ public sealed class CallerTranscriptFixture
 
     public void DeleteAgentFile(string id) => File.Delete(PathOf(TranscriptFile.Agent(id)));
 
+    /// <summary>Copies <c>agent-&lt;id&gt;.jsonl</c> and its meta to files named for <paramref name="otherName"/>, which need not be an id.</summary>
+    public void CopyAgentUnderName(string id, string otherName)
+    {
+        var folder = Path.Combine(SessionFolder, "subagents");
+        File.Copy(PathOf(TranscriptFile.Agent(id)), Path.Combine(folder, "agent-" + otherName + ".jsonl"));
+        File.Copy(MetaPathOf(id), Path.Combine(folder, "agent-" + otherName + ".meta.json"));
+    }
+
     /// <summary>Overwrites the meta with half of its bytes (G1).</summary>
     public void CorruptMeta(string id)
     {
@@ -544,7 +552,7 @@ public sealed class CallerTranscriptFixture
 
     private bool RewriteKey(JsonObject owner, string key, bool makeFolder)
     {
-        if (owner[key] is not JsonValue value || !value.TryGetValue<string>(out var path) || !IsUnderARoot(path))
+        if (!TryTextOf(owner, key, out var path) || !IsUnderARoot(path))
         {
             return false;
         }
@@ -554,6 +562,14 @@ public sealed class CallerTranscriptFixture
         _ = !makeFolder || Directory.CreateDirectory(Path.GetDirectoryName(mapped)!).Exists;
 
         return true;
+    }
+
+    /// <summary>The string a key holds, or false for a missing key, a non-string and an empty string.</summary>
+    private static bool TryTextOf(JsonObject owner, string key, out string text)
+    {
+        text = owner[key] is JsonValue value && value.TryGetValue<string>(out var held) ? held : string.Empty;
+
+        return text.Length > 0;
     }
 
     private bool IsUnderARoot(string path)

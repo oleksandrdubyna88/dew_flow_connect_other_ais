@@ -59,10 +59,10 @@ internal sealed class TranscriptLaunches
     public static TranscriptLaunches List(string sessionFolder, ReadTally tally)
     {
         var folder = Path.Combine(sessionFolder, Folder);
-        var fileKeys = KeysOf(folder, "agent-*.jsonl", ".jsonl");
+        var fileKeys = KeysOf(folder, "agent-*.jsonl", ".jsonl", tally);
         var metas = new Dictionary<string, MetaFacts>(StringComparer.Ordinal);
         var torn = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var key in KeysOf(folder, "agent-*.meta.json", ".meta.json"))
+        foreach (var key in KeysOf(folder, "agent-*.meta.json", ".meta.json", tally))
         {
             ReadMeta(folder, key, metas, torn, tally);
         }
@@ -199,14 +199,21 @@ internal sealed class TranscriptLaunches
 
     private static bool IsRefused(FileRead file, string toolUseId) => file.Results.TryGetValue(toolUseId, out var result) && result.IsError;
 
-    private static List<string> KeysOf(string folder, string pattern, string suffix)
+    /// <summary>
+    /// The agent keys named by the files of one kind. A key is taken from a FILE NAME, so it passes the same gate as every other id
+    /// (<see cref="TranscriptShapes.IsId"/>): a name that is free text is no agent and is counted as a value off its shape.
+    /// </summary>
+    private static List<string> KeysOf(string folder, string pattern, string suffix, ReadTally tally)
     {
         try
         {
-            return Directory.Exists(folder)
-                ? [.. Directory.EnumerateFiles(folder, pattern).Select(Path.GetFileName).OfType<string>().Where(name => name.EndsWith(suffix, StringComparison.Ordinal))
-                    .Select(name => name["agent-".Length..^suffix.Length]).Where(key => key.Length > 0).Order(StringComparer.Ordinal)]
+            var named = Directory.Exists(folder)
+                ? Directory.EnumerateFiles(folder, pattern).Select(Path.GetFileName).OfType<string>().Where(name => name.EndsWith(suffix, StringComparison.Ordinal))
+                    .Select(name => name["agent-".Length..^suffix.Length]).Where(key => key.Length > 0).ToList()
                 : [];
+            tally.ValuesOffShape += named.Count(key => !TranscriptShapes.IsId(key));
+
+            return [.. named.Where(TranscriptShapes.IsId).Order(StringComparer.Ordinal)];
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {

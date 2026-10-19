@@ -3256,8 +3256,11 @@ the whole read. A stop is `partial: read budget`: it drops the stopped file's id
 and skips the Agent-count check. `ObservedSession.ReaderVersion` is bumped by any change to a counting rule, and
 `TheReaderVersionIsPinnedToTheFixturesTests` ties it to the fixtures' totals.
 
-`agent_log` is unchanged and still reads through `TranscriptLines.ReadShared`; its property reads go through the same
-`JsonText.StringProperty` (2026-10-18), so a non-string field reads empty there too. The reader has no call site yet: E4 attributes what it reads
+`agent_log` is unchanged and still reads through `TranscriptLines.ReadShared`; every property read of a line (`timestamp`, `type`,
+`cwd`, `message`, `content` and its blocks) goes through `JsonText` (2026-10-18; `timestamp` and `message` on 2026-10-19), so a line
+that is valid JSON in the wrong shape never throws out of `AgentLog.Slice`: a non-string field reads empty, and a line whose
+`timestamp` is not a parseable string is skipped. An agent key read from a FILE NAME (`agent-<key>.jsonl`, `.meta.json`) passes the same
+`TranscriptShapes.IsId` gate as every other id; a name that fails it is no agent and is counted in `ValuesOffShape`. The reader has no call site yet: E4 attributes what it reads
 and E5 stores it.
 
 **Shape decisions.**

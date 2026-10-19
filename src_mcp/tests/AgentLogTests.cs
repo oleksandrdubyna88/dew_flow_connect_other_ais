@@ -243,6 +243,36 @@ public sealed class AgentLogTests : IDisposable
         slice.Should().NotContain("7351");
     }
 
+    [Fact]
+    public void ALineThatIsValidJsonWithTheWrongShapeIsSkippedOrEmpty_AndTheValidLinesAreKept()
+    {
+        // Every line below parses as JSON, so TranscriptLines.TryParse lets it through; each has the wrong shape in a
+        // different place. The day text is in each one, so the line reaches Parse. None may take the slice down.
+        var numericStamp = "{\"timestamp\":20260905,\"type\":\"assistant\",\"cwd\":\"D:/repo\",\"note\":\"2026-09-05\"}";
+        var objectStamp = "{\"timestamp\":{\"at\":\"2026-09-05T13:20:00Z\"},\"type\":\"assistant\",\"cwd\":\"D:/repo\"}";
+        var arrayRoot = "[\"2026-09-05T13:20:00Z\",\"assistant\"]";
+        var stringRoot = "\"2026-09-05T13:20:00Z\"";
+        var stringMessage = "{\"timestamp\":\"2026-09-05T13:25:00Z\",\"type\":\"assistant\",\"cwd\":\"D:/repo\",\"message\":\"2026-09-05 free text\"}";
+        Transcript("d--rsd-repo",
+            Line("2026-09-05T13:20:00Z", "assistant", "D:/repo", "the first valid line"),
+            numericStamp,
+            objectStamp,
+            arrayRoot,
+            stringRoot,
+            stringMessage,
+            Line("2026-09-05T13:30:00Z", "assistant", "D:/repo", "the last valid line"));
+
+        var slice = "";
+        var read = () => slice = AgentLog.Slice(_dir, Opened, PlanRound, "D:/repo");
+
+        read.Should().NotThrow();
+        slice.Should().Contain("the first valid line").And.Contain("the last valid line");
+        var entries = JsonDocument.Parse(slice).RootElement;
+        // The string-message line has a real stamp and no readable message: it stays, with nothing said.
+        entries.GetArrayLength().Should().Be(3);
+        slice.Should().NotContain("free text");
+    }
+
     public void Dispose()
     {
         try
