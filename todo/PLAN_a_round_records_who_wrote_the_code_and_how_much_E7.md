@@ -1,6 +1,6 @@
 # PLAN — E7 stories: backfill the authors, hand-check twenty rounds, then answer
 
-> Status: **S1–S4 implemented on `feat/round-authors-e7`, 2026-10-19 (not merged, code gate not run; O1–O5 and J1 not performed — they need the released binary and the owner; §11 is the implementation record). Plan written 2026-10-14; revised 2026-10-16 against `main` at `2d98f2f8` (§9) and 2026-10-18 against `main` at `e53e35ba` (§9a — the corrected `BackfillDecision`, the safety rules, the consultants' answers).** Epic E7 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
+> Status: **S1–S4 implemented on `feat/round-authors-e7`, 2026-10-19; E5 final (`8172eb193`) and `main` merged in, judge-reviewed by Fable and through the code gate (`good_enough`, 9 of 26 findings taken, each RED first) the same day — pull request #865, not merged (§11 is the implementation record, §11.1–§11.3 the review, the gate and the open tail). O1–O5 and J1 are NOT performed: they need the released binary and the owner's separate approval; no live store was opened. Plan written 2026-10-14; revised 2026-10-16 against `main` at `2d98f2f8` (§9) and 2026-10-18 against `main` at `e53e35ba` (§9a — the corrected `BackfillDecision`, the safety rules, the consultants' answers).** Epic E7 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
 >
 > Scope: the parent's §9 (backfill) and §11 steps 6–7 — one new one-shot mode `coai-mcp --backfill-authors` in
 > `src_mcp`, run once per side over that side's own store and transcripts; the hand-check of ten rounds per side; the
@@ -1062,9 +1062,10 @@ file are all still to build or run).
 9. **Exit 75 for ANY deferral** (`busy`, `unreadable`, `changedUnderUs`, `peersUnknown`), not only a busy session; a verify that finds the snapshot not kept counts as `changedUnderUs`;
    `SessionStoreException` and a `coai.db` that is a directory are 74.
 10. **`.editorconfig` switches CA1502 (complexity 4) on for `src_mcp/src/Server/Backfill/*.cs`** — the analyzer, not review, holds the bound.
-11. **The rules-budget drift guard was re-baselined** (`StageRulesTests…SpendExactly79944Bytes`): naming `--backfill-authors` in `.agents/PROJECT.md`, which `ARequestFaultIsNotAnOldBinaryTests` requires,
-    moved the base from 17 883 to **17 905** (+22) and the total to **79 966**. The tail canaries are unaffected; the method name keeps its first number. E6 re-baselined the same pin on its own branch
-    (to 79 963); the merge resolves the conflict.
+11. **The rules-budget drift guard was re-baselined** (`StageRulesTests…SpendExactly79967Bytes`): naming `--backfill-authors` in `.agents/PROJECT.md`, which `ARequestFaultIsNotAnOldBinaryTests` requires,
+    moved the base by **+22** — 17 905 / 79 966 on E7's own branch; **17 928 / 79 989 on the tree that merges E5 final and `main`** (E5's `--kimi-clear-marker` entry is +23), re-baselined
+    ONCE on the merged tree (`67755070d`; `research/RESULTS_rules_selection_budget.md` records it). The tail canaries are unaffected (8 683 fits, 12 143 does not); the method name keeps its
+    first number. E6 re-baselined the same pin on its own branch (to 79 963); the branch that merges last re-measures once more.
 12. **Two live limits the tests show and the plan states:** a fresh data directory's first live round is `partial: prior windows unknown` (E5 §3), so the parity tests create the store before the first
     round; and a still-RUNNING peer round has no caller on disk (E5 §12 deviation 8), so `ANamedPeerRoundStillRuns` holds only for a round projected into the database — in production the
     grown-peer-set rule carries the repair. The replay fixture (a number listed twice) is `invalid input` live and `observed` backfilled: stronger, never weaker, rows not comparable.
@@ -1073,3 +1074,100 @@ file are all still to build or run).
 **Suites.** `CoaiMcp.Tests.exe` over the whole suite: 12 176 tests, 59 skipped (platform-only); the run that included this record had 6 red, none new to this work and none of E7's 140 tests — five
 (`ASourceRequestIsServedOrRefusedTests`, `AskAcpModelAndUsageTests` ×2, `TheServerAnswersInitializeAtOnceTests`, `CollectorTests`) timed out under load while another session's suite ran and passed when
 re-run alone, and `StageRulesTests…` was item 11, re-baselined and green. `dotnet format --verify-no-changes` clean; `plan-lifecycle` and `pin-check` clean.
+
+### 11.1 Merges and the judge's review (2026-10-19, Fable — the security judge and the author of §3's rule order)
+
+**Merges, not rebases.** `origin/feat/round-authors-e5` at its final `8172eb193` (E5 with its judge fixes) was merged (`4a7911221`), then `origin/main`
+(`89280146c`, mcp 0.61.0 / extension 0.81.0). Three conflicts, each resolved on the merged tree: `.editorconfig` (E5's CA1502 sections for the attribution
+core and the authors step AND E7's for `Server/Backfill/*.cs` — all kept), `RoundAuthorsStep.Observe` (E7's `GateOf(session, record, caller, set)` /
+`InputOf(record, …)` seams with E5's `KnownPeers(set)`, which logs WHY a lookup did not complete), and the rules-budget pin (item 11: re-baselined once, to
+79 989). A fourth difference was found by the code gate, not by the merge: `.github/changelog-baseline.json` had lost `0.61.0` — restored (`0bded57c3`).
+
+**The security and correctness review, item by item — each checked in the code, not in the record:**
+
+| Item | Verdict | Where |
+|---|---|---|
+| The `BackfillDecision` order against §S1 | **holds** — selection → unreadable deferral → transcript gone (re-project / keep / heal / compute) → transcript present: provisional (both disjuncts under `PeersKnown`) → snapshot lost → keep (observed/partial, both versions ≥ current, projection agrees) → re-project → compute; the strength guard on re-project is `Settle`'s, which every `Reproject` and `Compute` passes through (`RoundBackfill.Settled`) | `BackfillDecision.cs:73-177`, `RoundBackfill.cs:79-113` |
+| The strength guard on every write path | **holds** — `Settle` is the only road to `Write`/`WriteCorrected`; `Weaker` = strength 0, a lesser strength, or an OLDER reader/attribution than the row's; `CorrectedBelow` bypasses it only for a named defective version | `BackfillDecision.cs:186-212` |
+| The two exceptions only | **holds** — a current row is recomputed only as `RecomputedProvisional` (rule 3) or `RecomputedSnapshotLost` (rule 4); everything else a filled row gets is keep, re-project or heal | `BackfillDecision.cs:110-121` |
+| The heal writes the FILE only; `healed` never retriggers | **holds** — `Heal` → `Locked` → `AuthorsHeal.From` inside the lock → `SaveOnly` → `FileOnly`, no row writer; `PeerSetGrew` excludes `IdSource == healed`; a healed snapshot carries the row's own versions and projects equal, so the next run keeps or reads `unchanged` | `BackfillWriter.cs:85-89`, `BackfillDecision.cs:152-153`, `AuthorsHeal.cs` |
+| The write order | **holds** — `SessionClaim.TryTake` (null → `DeferredBusy`) → `db.Transaction()` = `BeginTransaction(deferred: false)` (SQLite 5/6 → `DeferredBusy`) → `RoundFingerprint` re-read ≠ expected → `DeferredChanged` → `Load` → `Replaced` (only `Authors`/`Size`/`Gitlinks` of the one `(stage, number)`) → `Save` → `Load` again, `Same` by the serialised form → `RoundChangesTable.Record` → `RoundAuthorsTable.Record` → `Commit`; a non-`Written` result or a throw disposes the transaction = rollback | `BackfillWriter.cs:93-181`, `RoundsDb.cs:187` |
+| The backup | **holds** — `Take(versionFirst: true)` reads `data_version` FIRST, then the counts; `BackupDatabase` (the online API); every session file copied with the store's own sharing; `Take(versionFirst: false)` reads the counts then `data_version` LAST; `Verify`: the copy opens read-only, `integrity_check == ok`, `user_version` equal, every `sqlite_master` table's count equal to BOTH source counts, `data_version` unchanged, every file's SHA-256 equal and the counts agree | `BackfillBackup.cs:61-72, 97-104, 189-226` |
+| No write before `backup:verified` | **holds** — `Execute`: a backup whose `Check.Verified` is false prints the summary and returns 74 before `Run`; `Run` traces `open:ReadWrite` and calls `OpenExisting` only on the writing path, after that gate | `BackfillAuthorsMode.cs:175-230` |
+| The dry run is ReadOnly and never calls `OpenExisting` | **holds** — `Run`'s dry branch returns before `OpenExisting`; the only read connection is `Mode=ReadOnly;Pooling=False`; `SessionStore` creates no directory until `Write`, which `DryWrites` never reaches | `BackfillAuthorsMode.cs:213-241` |
+| Idempotence | **holds** — a written round projects equal → `keep: equal or newer` (observed/partial) or `unchanged` (unobserved, recomputed each run by design — the plan's stated cost); a healed or re-projected row the same; `BackfillTwice_TheSecondRunChangesNoTotals` and `ASecondRun_KeepsEverySizeItGave` prove it end to end | `BackfillDecision.cs:156-191` |
+| Nothing is ever deleted | **holds** — no `Delete`/`Move` in `Server/Backfill/`; the only deletes are the two shipped writers' delete-then-insert of a round's OWN rows, inside the one transaction | `rg` over the folder |
+| Path handling, E3's guards | **holds** — the transcript is located through `CallerTranscriptLocator.LocateStored(vendor, id, home)` → the shipped `LocateStored(id, home)` (a GUID in `D` form or `no session id`; `ClaudeHome` is `COAI_AGENT_LOG_DIR` or the profile), and read through the live `RoundAuthorsStep` → E3's reader with its `LocalPaths`/`WriteEvidence` path rules; the checkout is `sessions.repo_path` through the same `ContextAssembler`/`GitModules` the live round used; a base or head that is not a hex object name never reaches a command line | `StoredFacts.cs:55`, `CallerTranscriptLocator.cs:110-122`, `StoredSizer.cs:90-94` |
+| SQL injection | **holds** — every value is a `$` parameter; table names come from `sqlite_master` and are `"`-quoted with `""` escaping; the one interpolated number is an `int` (`PRAGMA busy_timeout`) | `RoundFingerprint.cs`, `AuthorsHeal.cs`, `AuthorsProjection.cs`, `BackfillBackup.cs:120`, `BackfillWriter.cs:142` |
+| Exit codes | **holds** — 65 a bad/repeated/unknown argument; 74 unreadable, a directory named `coai.db`, below step 24, a backup that did not verify, `SessionStoreException`, the `WriterModes` refusal; 75 any deferral; 0 otherwise; `Classify` maps `--backfill-authors`, so 64 is unreachable (`NoPathThroughTheModeAnswers64`) | `BackfillAuthorsMode.cs`, `Program.cs:354` |
+| Concurrency with a live server | **holds** — a held claim → `DeferredBusy` before any file is touched; a busy `BEGIN IMMEDIATE` (after the 5 s busy wait) → `DeferredBusy`, the file untouched (`TheTransactionIsImmediate…`); a write since the selection → `DeferredChanged`; a snapshot stripped AFTER a verified write by a claim-less `open`/sweep is the race §3 names, recomputed or healed next run | `BackfillWriter.cs:93-130`, `ABackfillLeavesEverythingElseWhereItWasTests` |
+| Deviation 2's seam — can the live step read THIS machine's registry? | **no** — the injected environment answers only `CLAUDE_CODE_SESSION_ID`; `CLAUDE_PID` is null, `IsPid("")` is false, `FromRegistry` answers `None`, so the stored id is the only source | `BackfillAttribution.cs:83-84`, `CallerTranscriptLocator.cs:137-154` |
+
+One limit stated, not fixed: a refusal's sentence on stderr may carry an OS message (`Program.WhyUnreadable`: `the rounds database could not be read: <e.Message>`,
+a `SessionStoreException` names the branch) — the convention every one-shot mode here follows; it is never transcript text, and the sentinel tests hold stderr to that.
+
+**Deviations 1–13, judged:** all thirteen **accepted**. 1 (the vendor overload mirrors `Locate`'s refusal exactly); 2 (THE live step with seams is the strongest
+form of "the live snapshot by construction" — verified above that no machine state leaks in); 3 (an empty row over a lost snapshot IS a compute; the count means
+something); 4 (a still-running named peer holds back both disjuncts — the safer reading of the plan's sentence); 5 (`WriteFileOnly` is what brings a snapshot lost
+to a concurrent `open` back when the result is equal; "an older reader's output never replaces a newer row" closes a hole the plan's strength-only guard left —
+both are tighter than the plan, never looser); 6 (E6 is not on the branch; the dump is the oracle until O2); 7 (`git failed` is a closed word, text-free);
+8 (the busy wait is the writer's own, `RoundsDb` gains only the seam; `journal_mode = DELETE` on the COPY makes a backup one file); 9 (every deferral is "run
+again"); 10 (the analyzer holds the bound, not review); 11 (re-done on the merged tree); 12 (two live limits the tests show); 13 (a real defect fixed by a real red run).
+
+**Deviations 14–20 — the code gate's accepted findings, each RED first (`0bded57c3`):**
+
+14. **A deferral stops the whole round** (gate 7). `RoundBackfill.ProcessAsync` returns after counting a `Defer`: nothing is measured, nothing is written on
+    either side. Before, the authors waited and the SIZE was written to the database alone while the session file did not read — the two stores would have
+    disagreed on it for ever (`ADeferredRound_HasNoSizeWrittenEither…`: `SizeWritten to be 0 … found 2`). A real defect the plan's S1 rule 1 names and the
+    review missed; the gate found it.
+15. **The fingerprint hashes whole rows** (gate 0, 6, 18): `RoundFingerprint` is `SELECT *` over the round's row and both row tables, so a re-recorded
+    `head_sha` under a size measured from the old commits — or a column a later schema step adds — defers the round instead of passing the guard
+    (`ARoundChangedUnderTheRun_InAColumnTheBackfillDoesNotWrite_IsDeferredToo`: `found 0`). A tripwire pins that `AuthorsProjection` and `AuthorsHeal` read every
+    column of `round_authors` the writer fills (the table's own list, less its two keys), so the next schema step turns a test red rather than erasing a column.
+16. **The backup folder carries its verdict** (gate 22): `check.json` = `BackupVerdict(Verified, Check)`, written after the check whatever it said — the folder is
+    the mode's, not the store's, so it is no write before the gate; a folder without it is a run killed mid-copy (`TheBackupFolderSaysWhetherItVerified`:
+    `Could not find file '…\check.json'`).
+17. **`AuthorsSnapshot.Split`** (gate 20) is the one inverse of `Render`, in core beside it; `IsWellFormed`, the heal and the decision call it
+    (`Split_IsTheInverseOfRender`, three cases).
+18. **The deferral mapping is exhaustive** (gate 19): `BackfillSummary.DeferredOf` refuses a reason its four fields cannot name
+    (`ADeferralTheSummaryCannotName…`: `no exception was thrown`), and exit 75 is read from `counts.Deferred.Total`, not from the mapped fields.
+19. **`StoredGate.Before` invents no stage** (gate 21): the reconstruction says which members are real and leaves the rest at the type's default. No behaviour
+    changes (the attribution reads no stage), so no test — stated here.
+20. **`.github/changelog-baseline.json`** gets `0.61.0` back (gate 25) — a merge artifact, not an E7 decision.
+
+### 11.2 The code gate (2026-10-19)
+
+Session `a308c4ce` (the plan round's), **code round 1 of 1, `good_enough`**, 16 gating of 26 findings, 14 of 16 reviewers answered (kimi/Conventions did
+not answer within 195 s; kimi/UxDxPerformance returned an empty answer twice); 1 208 492 tokens in, 116 929 out. `baseRef` was a PARENTLESS commit
+(`238ffdf72`) whose tree is E5 final merged with `main`, so the reviewers saw E7 alone (E4's gate-scope recipe); the scope text is the §S1–§S4 contract
+written out in full (the goal, ten "what must be true" items, the constraints, what is out of scope, the DoD). **Taken: 9** — 0, 6, 7, 18, 19, 20, 21, 22, 25
+(items 14–20 above). **Rejected: 17**, each with a reason checked in the code: 1 (the planning pass hands the step `CallerReads.Probe`, which reads no byte —
+what runs twice is `Assign` over an empty observation, never the transcript read), 2 (the fingerprint at selection IS the guard's baseline; computed inside the
+write it would compare the row with itself), 3 and 10 (stdout carries the summary and stderr only a refusal, by the mode's contract; O2/O3 redirect both to
+files), 4 (the usage names the shape and an example), 5 (the journal is the plan's own overlay, documented mutable), 8 and 9 (10 000 rounds per gate and
+gigabytes of observations against E1's measured ~400 code rounds per side; `ObservedSession` holds ids and counts, never bytes), 11 (there is no `Task.WhenAll`:
+the loop is `foreach … await`), 12 (the pragma runs on the same open connection on a file nobody else names; WAL on the copy is what made `-wal`/`-shm` appear),
+13 (`CorrectedBelow` is set by the fix story that proves a version wrong; a flag would let anyone bypass safety rule 5), 14 (`Take` runs BEFORE the copy, line 64
+before 66 — the order described is not the code's), 15 (`Verify` hands the size to `Project` on the database-only path; the methods named do not exist),
+16 (every store opener in the repository interpolates its connection string — `RoundsDb.cs:132` first — so a `;` in the data dir fails before E7; a test was
+written and withdrawn; see §11.3), 17 (`ProcessRequest.Timeout` is 10 min and the token is passed), 23 (the proposed check compares the reload with the
+pre-save file and so cannot see a save between them; a round is only added under the claim the writer holds), 24 (two writing runs in one second are two
+operators, which O2/O3 forbid; the name is the plan's). **Commands applied:** work autonomously (every fix RED first, the docs in the same commit, the whole
+suite before the push); ask the consultants before the person (no human question arose). **Not asked of a human:** nothing blocked.
+
+**Suites after the gate.** E7's classes: 146 tests (140 + the six the gate added), all green, plus `Split_IsTheInverseOfRender` ×3. The whole
+`CoaiMcp.Tests.exe` at low priority on the merged tree with the fixes: **12 823 tests, 0 failed, 12 703 passed, 120 skipped (platform-only), 24 min 17 s** — no
+re-run needed. `dotnet format --verify-no-changes` clean on `CoaiMcp`, `CoaiMcp.Core` and `CoaiMcp.Tests`; `plan-lifecycle` and `pin-check` clean.
+
+### 11.3 Open tail — not in this pull request
+
+- **`scripts/backfill-preflight-servers.ps1` / `.sh`** (O1: every running `coai-mcp` on the release, read-only, exit 1 naming an older path) and
+  **`scripts/round-authors-dump.mjs`** (J1: one round's `authors_*` columns, `round_authors` rows and the file's `Authors` member as JSON, read-only) are
+  O1/J1's own code by §4's story map and §6's text ("written and reviewed in O1"), not S1–S4's — so they are built, with their `node --test` tests
+  (`scripts/**/*.test.mjs`, the CI step) and the dump's fixture test against S4's scenario store in `src_mcp/tests`, BEFORE the dry runs, as O1 says.
+- **A question for the owner (gate finding 16):** every store opener here builds its connection string by interpolating the path (`RoundsDb.cs:132`,
+  `RoundCounts.cs:100`, `AuthorPeers.cs:78`, `RoundsQuery.cs`, `GateHistoryQuery.cs`, `BugsQuery.cs`); a `;` in a data directory would break them all. Switch
+  the repository to `SqliteConnectionStringBuilder` in one change? Not an E7 defect; nothing in E7 alone would fix it.
+- **The rules-budget pin** meets E6's own re-baseline (79 963) at merge time; whichever branch merges last re-measures once more.
+- **O1–O5 and J1** need the released binary and the owner's separate approval. No run from a session touches the live stores: every run in this epic so far was a
+  `testsToDelete-` temp folder with an explicit `COAI_DATA_DIR`.

@@ -3658,7 +3658,7 @@ flowchart TD
     ro -->|user_version below step 24| e74a["this side has not run the release · exit 74"]
     ro --> dry{"--dry-run"}
     dry -->|yes| run
-    dry -->|no| backup["BackfillBackup: online backup of coai.db<br/>+ every session file, a NEW folder<br/>integrity · counts before and after · data_version · SHA-256"]
+    dry -->|no| backup["BackfillBackup: online backup of coai.db<br/>+ every session file, a NEW folder<br/>integrity · counts before and after · data_version · SHA-256<br/>the folder's own verdict: check.json"]
     backup -->|a check fails| e74b["nothing written · summary names the check · exit 74"]
     backup -->|verified| rw[("RoundsDb.OpenExisting<br/>the first read-write open")]
     rw --> run["BackfillRun: gates in round order<br/>facts → plan reads → RoundBackfill per round"]
@@ -3676,8 +3676,11 @@ overlaps and still runs, held back as `keep: peer still running` while one does,
 row with its snapshot is kept — never an `unobserved` one; a current snapshot over an empty, older or disagreeing database is re-projected; the rest is
 computed. `Settle` then guards the result: **a weaker state never replaces a stronger one, and neither does one an OLDER reader or attribution produced**;
 an equal projection writes nothing (only the FILE, when it lacks its snapshot); `BackfillDecision.CorrectedBelow` (default `0`/`0`) is the one exception J1's
-correcting fix would set. The state's strength, `observed` 3 > `partial` 2 > `unobserved` 1 > empty 0, is read through `AuthorsSnapshot.IsWellFormed`: a
-stored state the rule refuses counts as empty. `src_mcp/src/Server/Backfill/*.cs` is held to cyclomatic complexity 4 by `CA1502` (`.editorconfig`).
+correcting fix would set. The state's strength, `observed` 3 > `partial` 2 > `unobserved` 1 > empty 0, is read through `AuthorsSnapshot.IsWellFormed` and
+`AuthorsSnapshot.Split` — the one inverse of `Render`, in core beside it, which the heal reads the column back through too (code gate finding 20): a stored
+state the rule refuses counts as empty. **A deferral is the whole round's** (code gate finding 7): a round decided `deferred` is not measured and not written
+on either side — the size waits with the authors — so the two stores never disagree on a size the file could not take. `src_mcp/src/Server/Backfill/*.cs`
+is held to cyclomatic complexity 4 by `CA1502` (`.editorconfig`).
 
 **S2 — a stored round's history.** `StoredHistory` reads every plan/code round and each gate's session file (`Exists` before `Load`, which answers null for a
 torn file too: *gone*, *replaced* by another session, or *unreadable* — deferred, never recorded); the open time is the FILE's `OpenedUtc`, never
@@ -3692,8 +3695,9 @@ the recorded base is `size: base not an ancestor`, and `repository not found`, `
 
 **S3 — the narrow write.** `BackfillWriter` never calls `RecordRound`: it writes through `RoundAuthorsTable.Record` and `RoundChangesTable.Record` inside ONE
 `BEGIN IMMEDIATE` transaction (`RoundsDb.Transaction()`), under the session's `SessionClaim`. The order: claim (busy → deferred) → begin (busy → deferred) →
-**re-read the round's `RoundFingerprint` inside the lock** — the authors and size columns AND every `round_authors` / `round_changes` row — and compare with
-what the round was selected with (a difference is a live server's write: deferred, nothing written) → load the file, replace ONLY the matching round's
+**re-read the round's `RoundFingerprint` inside the lock** — EVERY column of the round's row and every `round_authors` / `round_changes` row, whole
+(`SELECT *`, so a re-recorded `head_sha` under a size measured from the old commits, or a column a later schema step adds, is covered by construction — code
+gate findings 0, 6, 18) — and compare with what the round was selected with (a difference is a live server's write: deferred, nothing written) → load the file, replace ONLY the matching round's
 `Authors`/`Size`/`Gitlinks`, save, load again and verify → the two row writers FROM the verified copy → commit. The file is written first, so a run killed between the
 halves leaves a snapshot the next run re-projects without reading the transcript. A **heal** writes the file only (the snapshot built from the database inside the
 lock, `IdSource = "healed"`, everything the database never held `Unknown`); a gone or replaced file is a **database-only** write; an equal result writes nothing.
@@ -3705,12 +3709,15 @@ predecessor from it — which is also how a dry run keeps its counts equal to th
 copy must open read-only, answer `ok` to `integrity_check`, carry the source's `user_version`, hold the source's row count in EVERY table counted before AND
 after, and the source's `PRAGMA data_version` — read twice on the mode's own read-only connection, each an autocommit statement — must be unchanged: SQLite
 changes it when ANY OTHER connection commits, which a count (an `UPDATE` keeps it) cannot show; every session file's SHA-256 equals its source's. Any failure →
-nothing is written, the summary names the check, exit **74**, the folder stays. `RoundsDb.OpenExisting` — which migrates — is the first read-write open and happens
+nothing is written, the summary names the check, exit **74**, the folder stays. **Every folder carries its own verdict**, `check.json` (`BackupVerdict`: the checks
+and whether every one held — code gate finding 22), so a refused backup, a run killed mid-copy (no file) and a verified one are told apart on disk a year later;
+a restore treats a folder without `verified: true` as unverified. `RoundsDb.OpenExisting` — which migrates — is the first read-write open and happens
 only after the backup verified. `--dry-run` reads through `Mode=ReadOnly` only, makes no backup, writes no store file (SQLite's `-wal`/`-shm` and the session store's
 `.turn` lock are the named coordination files it may create) and keeps the run's results in the in-memory journal so its counts are the writing run's. **Nothing is ever
 deleted**, on either side. Exit codes: **0** done (a missing store included, nothing created), **65** a bad, repeated or unknown argument, **74** a store or session file
 that will not read or write (or a side below step 24, or a backup that did not verify), **75** the run completed but something was deferred (`deferred.busy`,
-`unreadable`, `changedUnderUs`, `peersUnknown` — the summary says to run again); **never 64**. The summary is JSON on stdout — `readerVersion`,
+`unreadable`, `changedUnderUs`, `peersUnknown` — the summary says to run again; the exit code is read from the counts' total, and a deferral reason the four
+fields cannot name is refused loudly rather than printed as zeros — code gate finding 19); **never 64**. The summary is JSON on stdout — `readerVersion`,
 `attributionVersion`, `since`, `dryRun`, `backupDir`, `backupCheck`, `selected`, `written` (`computed`, `recomputedProvisional`, `recomputedSnapshotLost`,
 `reprojected`, `databaseOnly`, `corrected`), `healed`, `kept`, `deferred`, `unobserved` (per reason), `size` (`written`, `kept`, `unrecoverable`, `delta`),
 `elapsedMs`, `next` — counts and closed words, no text; `backupDir` is the one path printed.
