@@ -253,6 +253,28 @@ public sealed class RoundAuthorsPopulationTests
         CountedAt(RoundAuthorsPopulation.Of([Round(1, authors: uncovered)], Sel(withUncovered: true)), 1).Sums.SizeNotCovered.Should().BeTrue();
     }
 
+    /// <summary>
+    /// The coverage of a round's union is the coverage of its CONTRIBUTING rounds (the D3 rule, applied to D12): round 2's whole change carries
+    /// what round 1's window wrote, so a write round 1 made into a submodule is a write round 2's size does not cover either.
+    /// </summary>
+    [Fact]
+    public void AContributingRoundsUncoveredWrites_LeaveTheLaterRoundNotCoveredToo()
+    {
+        var uncovered = Stated(AuthorsStateKind.Partial, "read budget", 2, MainRow(), Coder("a", "claude-sonnet-5-5"));
+        var unknown = Stated(AuthorsStateKind.Partial, "read budget", -1, MainRow(), Coder("a", "claude-sonnet-5-5"));
+
+        OutAt(RoundAuthorsPopulation.Of([Round(1, authors: uncovered), Round(2)], Sel()), 2).Reason.Should().Be(ExclusionReason.SizeNotCovered,
+            "round 2's contributors include round 1, which wrote twice outside the checkout the size covers");
+        OutAt(RoundAuthorsPopulation.Of([Round(1, authors: unknown), Round(2)], Sel()), 2).Reason.Should().Be(ExclusionReason.SizeCoverageUnknown,
+            "round 1's coverage was never measured, so round 2's union is not known to be covered");
+        OutAt(RoundAuthorsPopulation.Of([Round(1, authors: uncovered), Round(2, authors: unknown)], Sel()), 2).Reason.Should().Be(ExclusionReason.SizeNotCovered,
+            "a known write elsewhere outranks an unknown count, as it does for one round");
+        CountedAt(RoundAuthorsPopulation.Of([Round(1, authors: uncovered), Round(2)], Sel(withUncovered: true)), 2).Sums.SizeNotCovered.Should().BeTrue(
+            "under --with-uncovered the round is counted, and the cell still says its size is not covered");
+        CountedAt(RoundAuthorsPopulation.Of([Round(1), Round(2, authors: uncovered)], Sel()), 1).Sums.SizeNotCovered.Should().BeFalse(
+            "a round that started later is no contributor of round 1");
+    }
+
     [Fact]
     public void ARoundThatFailsEveryCheck_IsExcludedOnce_UnderTheFirst()
     {

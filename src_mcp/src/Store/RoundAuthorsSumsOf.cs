@@ -25,6 +25,7 @@ internal static class RoundAuthorsSumsOf
     {
         var delta = DeltaOf(round, cohort, selection);
         var relaxed = selection.WithUncovered && selection.Stage != nameof(Core.Rounds.Stage.PlanReview);
+        var uncovered = RoundAuthorsPopulation.UncoveredOf(contributing);
 
         return new RoundSums(
             lines.Selected, lines.Elided, lines.Excluded, lines.BinaryFiles, lines.NotCounted,
@@ -33,8 +34,8 @@ internal static class RoundAuthorsSumsOf
             Count(round, Failed), Count(round, ReviewerState.StoodDown), Count(round, Failed) > 0,
             worst == AuthorsStateKind.Partial,
             contributing.Any(other => other.Authors.Reasons.Contains(AttributionReasons.PeerRunning)),
-            relaxed && round.Authors.UncoveredWrites > 0,
-            relaxed && round.Authors.UncoveredWrites < 0,
+            relaxed && uncovered > 0,
+            relaxed && uncovered < 0,
             round.Authors.Ambiguous,
             coders.Launches,
             coders.Pairs);

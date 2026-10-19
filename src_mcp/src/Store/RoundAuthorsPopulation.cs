@@ -24,7 +24,7 @@ public static class RoundAuthorsPopulation
 {
     private sealed record Verdict(ExclusionReason Reason, string Detail);
 
-    private sealed record View(RoundFacts Fact, RoundAuthorsSelection Selection, AuthorsStateKind Worst, RoundLines.Counted Lines);
+    private sealed record View(RoundFacts Fact, RoundAuthorsSelection Selection, AuthorsStateKind Worst, int Uncovered, RoundLines.Counted Lines);
 
     private sealed record Judged(string Cohort, IReadOnlyList<CountedRound> Counted, IReadOnlyList<ExcludedRound> Excluded);
 
@@ -58,7 +58,7 @@ public static class RoundAuthorsPopulation
     private static Judged Judge(RoundFacts round, List<RoundFacts> session, string cohort, RoundAuthorsSelection selection)
     {
         var contributing = Contributing(round, session);
-        var view = new View(round, selection, WorstState(contributing), RoundLines.Of(round.Size.Size.Whole.Cells, selection.Kinds));
+        var view = new View(round, selection, WorstState(contributing), UncoveredOf(contributing), RoundLines.Of(round.Size.Size.Whole.Cells, selection.Kinds));
         var period = PeriodOf(round.StartedUtc, selection.SplitUtc);
         var failure = Failures(view).Take(1).ToList();
 
@@ -74,6 +74,17 @@ public static class RoundAuthorsPopulation
     /// <summary>D3: the worst state over the contributing rounds — not recorded &lt; unobserved &lt; partial &lt; observed.</summary>
     private static AuthorsStateKind WorstState(List<RoundFacts> contributing) =>
         contributing.Select(round => round.Authors.State).DefaultIfEmpty(AuthorsStateKind.NotRecorded).Min();
+
+    /// <summary>
+    /// D12 over the union, as D3 is: the round's whole change carries what every contributing round's windows wrote, so their writes outside the
+    /// covered checkout are the round's too. A known write elsewhere (the sum, &gt; 0) outranks an unknown count (<c>-1</c>); otherwise 0 is covered.
+    /// </summary>
+    internal static int UncoveredOf(IReadOnlyList<RoundFacts> contributing)
+    {
+        var elsewhere = contributing.Where(round => round.Authors.UncoveredWrites > 0).Sum(round => round.Authors.UncoveredWrites);
+
+        return elsewhere > 0 ? elsewhere : contributing.Any(round => round.Authors.UncoveredWrites < 0) ? -1 : 0;
+    }
 
     /// <summary>D13: no split is one period <c>all</c>; else a round AT the split is <c>after</c>. Compared textually over the column's own UTC stamps.</summary>
     internal static string PeriodOf(string startedUtc, string splitUtc) =>
@@ -93,8 +104,8 @@ public static class RoundAuthorsPopulation
         When(!view.Fact.Size.Recorded, ExclusionReason.SizeNotRecorded)
             .Concat(When(Unavailable(view), ExclusionReason.SizeUnavailable, ScopeWord.Of(view.Fact.Size.Size.Whole.State)))
             .Concat(When(view.Lines.BinaryOnly, ExclusionReason.BinaryOnly))
-            .Concat(When(CoverageRequired(view) && view.Fact.Authors.UncoveredWrites > 0, ExclusionReason.SizeNotCovered))
-            .Concat(When(CoverageRequired(view) && view.Fact.Authors.UncoveredWrites < 0, ExclusionReason.SizeCoverageUnknown))
+            .Concat(When(CoverageRequired(view) && view.Uncovered > 0, ExclusionReason.SizeNotCovered))
+            .Concat(When(CoverageRequired(view) && view.Uncovered < 0, ExclusionReason.SizeCoverageUnknown))
             .Concat(When(view.Lines.Selected == 0, ExclusionReason.NoSelectedLines))
             .Concat(When(view.Selection.WithoutElided && view.Lines.AnyElided, ExclusionReason.Elided));
 
