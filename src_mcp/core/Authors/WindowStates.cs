@@ -14,17 +14,10 @@ internal static class WindowStates
     public static WindowState Of(Window window, AttributionInput input, bool hasRunningPeer, GateTimeline gate)
     {
         var reasons = Gather(window, input, hasRunningPeer, gate).ToList();
-        var worst = reasons.Select(reason => reason.Kind).DefaultIfEmpty(ObservationKinds.Observed).MaxBy(Badness) ?? ObservationKinds.Observed;
+        var worst = reasons.Select(reason => reason.Kind).DefaultIfEmpty(ObservationKinds.Observed).MaxBy(ObservationKinds.Badness) ?? ObservationKinds.Observed;
 
         return new WindowState(window, worst, [.. reasons.Where(reason => reason.Kind == worst).Select(reason => reason.Why).Distinct(StringComparer.Ordinal)]);
     }
-
-    private static int Badness(string kind) => kind switch
-    {
-        ObservationKinds.Unobserved => 2,
-        ObservationKinds.Partial => 1,
-        _ => 0,
-    };
 
     private static IEnumerable<Reason> Gather(Window window, AttributionInput input, bool hasRunningPeer, GateTimeline gate) =>
     [

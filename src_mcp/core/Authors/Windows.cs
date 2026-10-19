@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using Stage = CoaiMcp.Core.Rounds.Stage;
 
 namespace CoaiMcp.Core.Authors;
 
@@ -18,7 +19,7 @@ public static class Windows
     /// round of the journal opens no window — its stretch lands in the next recorded round.
     /// </summary>
     public static bool IsRecorded(GateRound round) =>
-        round.Stage is "PlanReview" or "CodeReview" && round.Verdict != Skipped && round.Status != Interrupted;
+        round.Stage is nameof(Stage.PlanReview) or nameof(Stage.CodeReview) && round.Verdict != Skipped && round.Status != Interrupted;
 
     /// <summary>
     /// Recorded and <c>done</c>: the CLAIM condition. A recorded round that is not settled is <c>running</c>; it tiles its own gate but
@@ -55,7 +56,7 @@ public static class Windows
 
         var own = Of(gate, null).First(window => window.Kind == WindowKind.BeforeOpen);
 
-        return others.Where(other => SameRepository(other.RepoPath, gate.RepoPath)).Select(other => SettledPrefixEnd(other, open, caller, own)).Max();
+        return others.Where(other => Repositories.SameRoot(other.RepoPath, gate.RepoPath)).Select(other => SettledPrefixEnd(other, open, caller, own)).Max();
     }
 
     /// <summary>The ordinal order of rank: completion (not settled = last), then gate session id, then <c>before-open</c> before <c>round</c>.</summary>
@@ -111,9 +112,6 @@ public static class Windows
 
     private static DateTimeOffset? Earlier(DateTimeOffset? left, DateTimeOffset? right) =>
         left is null ? right : right is null ? left : left < right ? left : right;
-
-    private static bool SameRepository(string left, string right) =>
-        Repositories.Normalise(left).Equals(Repositories.Normalise(right), StringComparison.OrdinalIgnoreCase);
 
     private static DateTimeOffset? SettledPrefixEnd(GateTimeline peer, DateTimeOffset open, string caller, Window own)
     {

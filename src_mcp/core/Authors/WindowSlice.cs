@@ -47,7 +47,7 @@ internal sealed class WindowSlice
     public IEnumerable<string> NestedCheckoutWrites(string gateRepository) =>
         IsUnobserved
             ? []
-            : _writes.Where(write => write.Where == WriteWhere.Here && !Repositories.Normalise(write.Root).Equals(Repositories.Normalise(gateRepository), StringComparison.OrdinalIgnoreCase)).Select(write => write.Root);
+            : _writes.Where(write => write.Where == WriteWhere.Here && !Repositories.SameRoot(write.Root, gateRepository)).Select(write => write.Root);
 
     public IEnumerable<AuthorRow> Rows() => IsUnobserved ? [] : [.. MessageRows(), .. LaunchOnlyRows(), .. TwoRepositoryRows()];
 

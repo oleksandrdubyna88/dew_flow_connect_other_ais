@@ -13,6 +13,10 @@ public static class Repositories
     /// <summary>Backslashes folded to <c>/</c>, trailing separators dropped.</summary>
     public static string Normalise(string path) => path.Replace('\\', '/').TrimEnd('/');
 
+    /// <summary>Whether two paths name the same root: equal under <see cref="Normalise"/> and <c>OrdinalIgnoreCase</c>.</summary>
+    public static bool SameRoot(string left, string right) =>
+        Normalise(left).Equals(Normalise(right), StringComparison.OrdinalIgnoreCase);
+
     /// <summary>
     /// Whether <paramref name="path"/> is <paramref name="root"/> or under it. The separator is part of the test, so <c>/repo-two</c>
     /// is not inside <c>/repo</c>; case is ignored, ordinally. Either side empty is false.

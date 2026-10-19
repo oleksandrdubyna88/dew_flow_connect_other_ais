@@ -64,7 +64,7 @@ internal static class AttributionMapping
     private static Authors.ObservedMessage Message(ObservedMessage message) => new(
         new Authors.AgentKey(message.AgentKey),
         message.MessageId,
-        new DateTimeOffset(DateTime.SpecifyKind(message.Utc, DateTimeKind.Utc)),
+        UtcInstant.Of(message.Utc),
         message.Model,
         message.Requested,
         message.Effort,
@@ -80,8 +80,8 @@ internal static class AttributionMapping
 
     private static Authors.ObservedWrite Write(ObservedWrite write) => new(
         new Authors.AgentKey(write.AgentKey),
-        new DateTimeOffset(DateTime.SpecifyKind(write.Utc, DateTimeKind.Utc)),
-        new DateTimeOffset(DateTime.SpecifyKind(write.AnsweredUtc, DateTimeKind.Utc)),
+        UtcInstant.Of(write.Utc),
+        UtcInstant.Of(write.AnsweredUtc),
         write.Target.Kind switch
         {
             WriteTargetKind.Checkout => WriteKind.Checkout,

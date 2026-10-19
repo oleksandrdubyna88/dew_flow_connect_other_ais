@@ -12,7 +12,7 @@ public static class RoundAuthorsBuilder
     {
         var slices = assignment.Windows.Select(window => new WindowSlice(window, input, assignment)).ToList();
         var windows = slices.Select(slice => slice.Authors()).ToImmutableArray();
-        var worst = windows.Select(window => window.State).DefaultIfEmpty(ObservationKinds.Observed).MaxBy(Badness) ?? ObservationKinds.Observed;
+        var worst = windows.Select(window => window.State).DefaultIfEmpty(ObservationKinds.Observed).MaxBy(ObservationKinds.Badness) ?? ObservationKinds.Observed;
         var unknown = windows.Any(window => window.State == ObservationKinds.Unobserved);
 
         return new RoundAuthors(
@@ -30,13 +30,6 @@ public static class RoundAuthorsBuilder
             assignment.PeerGates,
             OutsideTheGateCheckout(slices, input));
     }
-
-    private static int Badness(string kind) => kind switch
-    {
-        ObservationKinds.Unobserved => 2,
-        ObservationKinds.Partial => 1,
-        _ => 0,
-    };
 
     /// <summary>
     /// Each unobserved launch ONCE: the ones placed at an instant (in exactly one window) plus the ones with no instant, which mark every

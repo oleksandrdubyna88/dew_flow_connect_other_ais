@@ -112,7 +112,7 @@ internal sealed class AssociationLadder
     {
         var destinations = EvidenceIn(window).Where(write => write.Root.Length > 0).Select(write => DestinationOf(write.Root))
             .DistinctBy(Repositories.Normalise, StringComparer.OrdinalIgnoreCase).ToList();
-        var theOne = destinations.Count == 1 && SamePlace(destinations[0], RepositoryOfGate(window.Gate));
+        var theOne = destinations.Count == 1 && Repositories.SameRoot(destinations[0], RepositoryOfGate(window.Gate));
 
         return theOne ? new LadderVerdict(Association.SameSession, Rung.Session, []) : new LadderVerdict(Association.Ambiguous, Rung.NoEvidence, []);
     }
@@ -121,7 +121,4 @@ internal sealed class AssociationLadder
     private string DestinationOf(string root) =>
         _repositoryOf.Values.Where(path => Repositories.Contains(path, root)).OrderByDescending(path => Repositories.Normalise(path).Length)
             .ThenBy(path => path, StringComparer.Ordinal).FirstOrDefault() ?? root;
-
-    private static bool SamePlace(string left, string right) =>
-        Repositories.Normalise(left).Equals(Repositories.Normalise(right), StringComparison.OrdinalIgnoreCase);
 }
