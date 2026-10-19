@@ -23,17 +23,27 @@ public sealed class SupervisedTeardownLinuxTests : IDisposable
 
     private readonly TempDir _dir = TempDir.For("testsToDelete-teardown-");
     private readonly List<Process> _started = [];
-    private readonly List<int> _pids = [];
+    private readonly List<PinnedMember> _members = [];
 
     [DllImport("libc", EntryPoint = "kill")]
     private static extern int Kill(int pid, int signal);
 
+    /// <summary>Writes down WHO a process is — its pid with the start time and exact start ticks it has right now — so the end of the test can end it by identity (a pidfd, checked on the pin), never by a bare number. A process that is already gone is nobody to end.</summary>
+    private void Remember(int pid)
+    {
+        if (ProcessTracking.StartedAt(pid) is { } started)
+        {
+            _members.Add(PinnedMember.Of(new ProcessIdentity(pid, started), ProcReads.Real));
+        }
+    }
+
     public void Dispose()
     {
-        // Every process this test made, ended by its recorded pid — never by image name — so a red run leaks nothing into the suite.
-        foreach (var pid in _pids.Concat(_started.Select(process => process.Id)).Distinct())
+        // Every process this test made, ended BY IDENTITY (the product TreeSignals: pin, check the start, signal through the pidfd) — never by a bare number or an image name — so a red run
+        // leaks nothing into the suite and a pid that somebody else has reused is left alone.
+        if (OperatingSystem.IsLinux() && _members.Count > 0)
         {
-            _ = Kill(pid, 9);
+            _ = TreeSignals.Kill([.. _members.DistinctBy(member => member.Identity.Pid)], PidfdLayer.Calls);
         }
 
         _started.ForEach(process => process.Dispose());
@@ -52,6 +62,7 @@ public sealed class SupervisedTeardownLinuxTests : IDisposable
 
         var process = Process.Start(info)!;
         _started.Add(process);
+        Remember(process.Id);
 
         return process;
     }
@@ -88,7 +99,7 @@ public sealed class SupervisedTeardownLinuxTests : IDisposable
         }
 
         var pid = int.Parse(File.ReadAllText(file));
-        _pids.Add(pid);
+        Remember(pid);
 
         return pid;
     }
@@ -155,7 +166,22 @@ public sealed class SupervisedTeardownLinuxTests : IDisposable
 
         var report = await SupervisedAsync("managed");
 
-        report.GetProperty("managedExit").GetInt32().Should().Be(17, "the drain reaped a child .NET started: its managed exit code was lost (expected 17)");
+        report.GetProperty("managedExitedBefore").GetBoolean().Should().BeTrue("the precondition: the managed child had already exited before the teardown, so the teardown has nothing to kill in it");
+        // 137 would mean the child was killed while still alive (the precondition above missed); a status taken from under .NET would end the supervise-tree process itself (exit 134, FailFast on ECHILD) and fail the earlier exit-0 assertion.
+        report.GetProperty("managedExit").GetInt32().Should().Be(17, "the managed child's own exit code was lost: 137 means it was killed while still alive, anything else means the drain took its status (expected 17)");
+        report.GetProperty("survivors").GetArrayLength().Should().Be(0);
+        StateOf(report, "c2.pid").Should().Be("gone");
+    }
+
+    [Fact]
+    public async Task AManagedChildThatIsStillAliveAtTheTeardown_IsKilledLikeEveryDescendant()
+    {
+        OnLinux();
+
+        var report = await SupervisedAsync("managed-live");
+
+        report.GetProperty("managedAliveBefore").GetBoolean().Should().BeTrue("the precondition: the managed child was still alive when the teardown started");
+        report.GetProperty("managedExit").GetInt32().Should().Be(137, "DL9: every live descendant is SIGKILLed, a child .NET started too — only its STATUS is never taken by the drain");
         report.GetProperty("survivors").GetArrayLength().Should().Be(0);
         StateOf(report, "c2.pid").Should().Be("gone");
     }
@@ -229,7 +255,7 @@ public sealed class SupervisedTeardownLinuxTests : IDisposable
         var report = JsonDocument.Parse(output.Trim()).RootElement;
         report.GetProperty("end").GetString().Should().Be("Cancelled", "the report is printed as every end is");
         var agentPid = report.GetProperty("agentPid").GetInt32();
-        _pids.Add(agentPid);
+        Remember(agentPid);
         (await GoneSoonAsync(agentPid)).Should().BeTrue($"after SIGTERM the agent (pid {agentPid}) is still alive");
         (await GoneSoonAsync(grandchild)).Should().BeTrue("after SIGTERM the setsid grandchild is still alive");
         File.Exists(MarkerPath).Should().BeFalse();
@@ -249,7 +275,7 @@ public sealed class SupervisedTeardownLinuxTests : IDisposable
         var marker = KimiSurvivorMarker.Read(MarkerPath).Should().BeOfType<MarkerRead.Read>().Subject.Marker;
         marker.Marker.Phase.Should().Be(ReaderPhases.Running);
         var agentPid = marker.Marker.Tree.Single().Pid;
-        _pids.Add(agentPid);
+        Remember(agentPid);
         marker.Marker.Unidentified.Should().BeFalse("the marker written before the start does not name the agent");
         (await GoneSoonAsync(agentPid)).Should().BeTrue("the agent leaves on its stdin's EOF once the shim is dead");
 

@@ -92,7 +92,7 @@ internal static class SupervisionVerbs
     /// <summary>
     /// <c>supervise-tree &lt;mode&gt; &lt;dir&gt;</c> — modes <c>orphans</c> (the agent exits first, leaving a same-group and a <c>setsid</c> child), <c>late</c> (a grandchild is born AFTER the first
     /// listing — the member list is handed to <c>onListed</c>, which waits for the late spawn), <c>zombie</c> (a child that exits by itself while the shim is its parent, a zombie before the teardown),
-    /// <c>managed</c> (a second child this process started that exits with 17 on its own). Prints one JSON object on stdout.
+    /// <c>managed</c> (a second child this process started that exits with 17 on its own — and has exited BEFORE the teardown), <c>managed-live</c> (the same child, still alive at the teardown: it is killed like every descendant, exit 137). Prints one JSON object on stdout.
     /// </summary>
     internal static async Task<int> SuperviseTree(string mode, string dir)
     {
@@ -106,8 +106,10 @@ internal static class SupervisionVerbs
         var started = new HashSet<int>();
         var agent = StartChild(AgentArguments(mode, dir));
         _ = started.Add(agent.Id);
-        var managed = mode == "managed" ? StartManaged(started) : null;
-        var zombieBefore = Prepared(mode, dir, agent);
+        var managed = StartManaged(mode, started);
+        var zombieBefore = Prepared(mode, dir, agent, managed);
+        var managedExitedBefore = managed is not null && ManagedEnded(managed);
+        var managedAliveBefore = managed is not null && !managedExitedBefore;
         var end = await SupervisedTeardown.EndAsync(agent, Environment.ProcessId, started, PidfdLayer.Calls, members => Listed(mode, dir, members));
         managed?.WaitForExit();
         Console.Out.WriteLine(JsonSerializer.Serialize(new
@@ -116,6 +118,8 @@ internal static class SupervisionVerbs
             agentExit = agent.ExitCode,
             managedExit = managed?.ExitCode ?? -1,
             zombieBefore,
+            managedExitedBefore,
+            managedAliveBefore,
             states = StatesOf(dir),
         }));
 
@@ -132,25 +136,51 @@ internal static class SupervisionVerbs
     {
         "late" => ["late-spawn", Path.Combine(dir, "trigger"), Path.Combine(dir, "late.pid")],
         "zombie" => ["spawn-then-exit", Path.Combine(dir, "g.pid"), "300"],
-        "orphans" or "managed" => ["orphan-maker", dir],
+        "orphans" or "managed" or "managed-live" => ["orphan-maker", dir],
         _ => ["sleep", "600000"],
     };
 
-    private static Process StartManaged(HashSet<int> started)
+    /// <summary>How long the managed child lives before it exits with 17 by itself: 60 ms (<c>managed</c>, over long before the teardown) or 20 s (<c>managed-live</c>, alive at the teardown); empty — no managed child.</summary>
+    private static string ManagedMs(string mode) => mode switch
     {
-        var child = StartChild("exit-after", "60", "17");
+        "managed" => "60",
+        "managed-live" => "20000",
+        _ => string.Empty,
+    };
+
+    private static Process? StartManaged(string mode, HashSet<int> started)
+    {
+        var ms = ManagedMs(mode);
+        if (ms.Length == 0)
+        {
+            return null;
+        }
+
+        var child = StartChild("exit-after", ms, "17");
         _ = started.Add(child.Id);
 
         return child;
     }
 
-    /// <summary>What must be true before the teardown starts, per mode — and whether a zombie is really there (<c>zombie</c>).</summary>
-    private static bool Prepared(string mode, string dir, Process agent)
+    /// <summary>The managed child has exited: its <c>/proc</c> entry is gone, or it is a zombie (<c>Z</c>) that nobody took the status of yet. Read from <c>/proc</c>, never from <see cref="Process.HasExited"/>, which would take the status itself.</summary>
+    private static bool ManagedEnded(Process managed) =>
+        ProcStat.ReadFor(managed.Id, ProcReads.Real) switch
+        {
+            ProcStatRead.Gone => true,
+            ProcStatRead.Read { Line.State: "Z" } => true,
+            _ => false,
+        };
+
+    /// <summary>What must be true before the teardown starts, per mode — and whether a zombie is really there (<c>zombie</c>). In <c>managed</c> mode the managed child has ALREADY exited (bounded by <see cref="Patience"/>): the teardown kills every live descendant (DL9), so a managed child still alive at the first listing is killed (137), not left to exit with its own code.</summary>
+    private static bool Prepared(string mode, string dir, Process agent, Process? managed)
     {
         switch (mode)
         {
-            case "orphans":
             case "managed":
+                _ = Waited(() => File.Exists(Path.Combine(dir, "c1.pid")) && File.Exists(Path.Combine(dir, "c2.pid")) && agent.HasExited && ManagedEnded(managed!));
+                return false;
+            case "orphans":
+            case "managed-live":
                 _ = Waited(() => File.Exists(Path.Combine(dir, "c1.pid")) && File.Exists(Path.Combine(dir, "c2.pid")) && agent.HasExited);
                 return false;
             case "zombie":

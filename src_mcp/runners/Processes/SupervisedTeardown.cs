@@ -23,7 +23,7 @@ public static class SupervisedTeardown
 {
     /// <param name="agent">The agent the shim started.</param>
     /// <param name="shimPid">This process — the subreaper, whose descendants the agent's whole tree now is.</param>
-    /// <param name="startedByUs">Every pid this process started through <c>Process.Start</c> (today only the agent): the drain never takes their status.</param>
+    /// <param name="startedByUs">Every pid this process started through <c>Process.Start</c> (today only the agent). They are still KILLED like every other descendant, while alive — only their STATUS is never taken by the drain (a zombie among them is left for .NET to reap), so a child that exited by itself keeps its own exit code and one that was alive at the first listing ends with 137.</param>
     /// <param name="calls">The pidfd road of this host (<see cref="PidfdLayer"/>).</param>
     /// <param name="onListed">Told the members the first listing found, before the first signal. It must not throw: the kill is never skipped.</param>
     public static async Task<TreeEnd> EndAsync(
