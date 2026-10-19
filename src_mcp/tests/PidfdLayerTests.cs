@@ -8,7 +8,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// The pidfd layer and the by-identity signalling built on it (DL9 and S-K21 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>; A3 §4.4–§4.5): the layer picks libc's wrapper or the raw
+/// The pidfd layer and the by-identity signalling built on it (DL9 and S-K21 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>; A3 §4.4–§4.5): the layer picks libc's wrapper or the raw
 /// <c>syscall</c> and refuses a kernel with no pidfd, and <c>TreeSignals</c> pins → checks → signals through the descriptor, never by number. The logic runs on every platform over a fake
 /// of <see cref="IPidfdCalls"/>; the REAL kernel is the Linux arms at the end (the ubuntu CI job; they skip elsewhere).
 /// </summary>

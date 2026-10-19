@@ -6,7 +6,7 @@
 > (`scripts/probe-vibe-confinement.mjs`), run the same day: every cell M-V1…M-V14 and M-V3b, 3 runs per arm and one run per
 > positive control, **Windows only**, with the **Python** CLI pinned (`VIBE_CLI=python`, see §3). **WSL: not measured** in
 > §1–§29 — `vibe` was not installed there then, so no claim in those sections holds for WSL; **§30 holds the WSL2 cells**
-> (2026-10-16, `todo/PLAN_kimi_and_vibe_on_linux.md`). Every arm ran from a scratch folder under the OS temp dir
+> (2026-10-16, `research/PLAN_kimi_and_vibe_on_linux.md`). Every arm ran from a scratch folder under the OS temp dir
 > (except the first M-V2 attempt of §3, in `%LOCALAPPDATA%\Tempvcp1`), never a repository checkout. Every arm that needed a user-level file ran on a short copied `VIBE_HOME` inside that scratch
 > folder. The script never wrote the person's `~/.vibe`, and nothing outside the scratch folders was written or deleted.
 
@@ -1106,7 +1106,7 @@ scratch repository, `work\` = the client and the three `out-<step>\result.json` 
 the watchers' lists) and the homes root `C:\testsToDelete-vh056\` (empty: `coai-vh`, `coai-vibe`). The owner's coai
 installation, its data folder and its running servers were not used.
 
-## 30. Vibe 2.26.1 on Linux (WSL2) — the cells of `todo/PLAN_kimi_and_vibe_on_linux.md` §5 (2026-10-16)
+## 30. Vibe 2.26.1 on Linux (WSL2) — the cells of `research/PLAN_kimi_and_vibe_on_linux.md` §5 (2026-10-16)
 
 > Two runs, one machine. **(a) The scout run** (cells L-V1 … L-V5, L-V-home, L-V-manifest), by hand from script files, before the
 > probes were ported; its draft lived in session scratch and is carried here, never linked. **(b) Epic E1** (cells L-V6b, L-V7,

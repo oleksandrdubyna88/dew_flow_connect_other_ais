@@ -137,7 +137,7 @@ export interface CoaiSettings {
 
   /**
    * Whether a Kimi sign-in folder on network storage (nfs, cifs, sshfs …) may be used — `COAI_KIMI_ALLOW_NETWORK_SIGNIN` on the wire (DL6 and Q7 of
-   * `todo/PLAN_kimi_and_vibe_on_linux.md`). OFF by default: a Kimi on another machine that shares the folder can refresh the same rotating sign-in
+   * `research/PLAN_kimi_and_vibe_on_linux.md`). OFF by default: a Kimi on another machine that shares the folder can refresh the same rotating sign-in
    * and sign this one out, and coai cannot see it. Only a stored boolean `true` turns it on. Written only when ON, like every switch here.
    */
   readonly kimiAllowNetworkSignIn: boolean;

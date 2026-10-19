@@ -36,7 +36,7 @@ export interface ProviderHealth {
   readonly warning?: string | undefined;
   /**
    * A Kimi row's STANDING survivor marker — the file coai-mcp keeps when a Kimi it started may still be running, which makes every
-   * Kimi turn on that sign-in Busy (DL9 of todo/PLAN_kimi_and_vibe_on_linux.md). Absent for every other row, when no marker
+   * Kimi turn on that sign-in Busy (DL9 of research/PLAN_kimi_and_vibe_on_linux.md). Absent for every other row, when no marker
    * stands, and from a server older than the field, so the card draws no button for them (E6).
    */
   readonly survivorMarker?: SurvivorMarker | undefined;

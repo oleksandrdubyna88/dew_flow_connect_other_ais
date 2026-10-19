@@ -1,7 +1,7 @@
 // Ported from wsl_care (MIT, same copyright holder): src_daemon/src/WslCare.Core/Files/RegularFiles.cs @ 0a5c72d3 — the Linux leg
 // only (`ReadOwned` → `ReadLinuxOwned` → `ReadOpened` → `Judged` → `Capped`, `OwnershipProblem`, `OwnedErrno`, `Describe`, the
 // native block), measured there and re-homed here with its tests (src_mcp/tests/RegularFilesTests.cs). DL2 of
-// todo/PLAN_kimi_and_vibe_on_linux.md; research/module_runners.md says what was left.
+// research/PLAN_kimi_and_vibe_on_linux.md; research/module_runners.md says what was left.
 //
 // NOT ported: Read, ReadNoFollow, ReadOther*, ReadHead/Head, StatNoFollow, MayExecute, LinkErrno, MakeReadable, HomeFileOwner and
 // BeneathFiles. Nothing here walks a folder chain: the chain above ~/.vibe/.env is the person's own home, which coai admits for

@@ -183,7 +183,7 @@ public sealed class AVibeReviewerRunsThroughAFakeVibeTests : IAsyncLifetime
             VaultKeys.None("no vault in tests"), default, _launcher, Logger.None, Noticing.None);
     }
 
-    /// <summary>The code-round flow, as a Windows host and as a WSL2 host (E2 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>, §8): the real service, a fake Vibe as a real child process, the .env link made against a fake person's file.</summary>
+    /// <summary>The code-round flow, as a Windows host and as a WSL2 host (E2 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>, §8): the real service, a fake Vibe as a real child process, the .env link made against a fake person's file.</summary>
     [Theory]
     [InlineData(VibeFlowHost.Windows)]
     [InlineData(VibeFlowHost.Wsl2)]
@@ -225,7 +225,7 @@ public sealed class AVibeReviewerRunsThroughAFakeVibeTests : IAsyncLifetime
     /// The owner's decision of 2026-10-13: a Vibe version nobody measured is RUN, and the round's record of the reviewer says
     /// so — <c>reviewerStates[].warning</c>, what the rounds view reads — beside an answer counted as any other.
     /// </summary>
-    /// <summary>The plan-round flow, as a Windows host and as a WSL2 host (E2 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>, §8).</summary>
+    /// <summary>The plan-round flow, as a Windows host and as a WSL2 host (E2 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>, §8).</summary>
     [Theory]
     [InlineData(VibeFlowHost.Windows)]
     [InlineData(VibeFlowHost.Wsl2)]

@@ -3,7 +3,7 @@ using CoaiMcp.Runners.Processes;
 namespace CoaiMcp.Runners.Kimi;
 
 /// <summary>
-/// The product's side of the A2-A3 seam (<see cref="IKimiSurvivors"/>; §0 of both cornerstone specs of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): A3's reconcile answers "may this launch go on", and A3's
+/// The product's side of the A2-A3 seam (<see cref="IKimiSurvivors"/>; §0 of both cornerstone specs of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>): A3's reconcile answers "may this launch go on", and A3's
 /// marker scan answers "does a marker keep this home". One class, so the three callers (<c>KimiLaunch.TakeAsync</c>, <c>KimiShimHold.Taken</c>, <c>KimiHome.Alive</c>) and the retirement sweep read the SAME rule.
 /// </summary>
 /// <remarks>

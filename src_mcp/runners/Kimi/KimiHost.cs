@@ -3,7 +3,7 @@ using CoaiMcp.Runners.Platform;
 namespace CoaiMcp.Runners.Kimi;
 
 /// <summary>
-/// The two facts about the machine a Kimi launch is judged against (D18 of <c>todo/PLAN_vibe_and_kimi_runtimes.md</c>, DL1 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): which kind of host this is, and
+/// The two facts about the machine a Kimi launch is judged against (D18 of <c>todo/PLAN_vibe_and_kimi_runtimes.md</c>, DL1 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>): which kind of host this is, and
 /// which WSL it is when it is one. The shape of <see cref="Vibe.VibeHost"/> without its sign-in, which Kimi finds another way (<see cref="KimiPlaces"/>). Resolved once, where the adapter is made.
 /// </summary>
 /// <param name="Kind">The host (<see cref="HostKinds.Current"/> for this process).</param>

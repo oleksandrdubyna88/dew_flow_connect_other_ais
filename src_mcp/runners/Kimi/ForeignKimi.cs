@@ -116,7 +116,7 @@ public sealed class ForeignKimiWatch(IProcessList processes, int ownPid, TimeSpa
 
     /// <summary>The sentence when the machine's process list cannot be read: the turn is given up, never started on a sign-in coai cannot see.</summary>
     public static string UnreadableSentence(string reason) =>
-        $"coai could not read this machine's process list ({reason}), so it cannot tell whether your own Kimi Code is running; it does not start a second Kimi on a sign-in it cannot see — the turn is given up (DL10 of todo/PLAN_kimi_and_vibe_on_linux.md)";
+        $"coai could not read this machine's process list ({reason}), so it cannot tell whether your own Kimi Code is running; it does not start a second Kimi on a sign-in it cannot see — the turn is given up (DL10 of research/PLAN_kimi_and_vibe_on_linux.md)";
 
     /// <summary>Walks the parents (bounded, so a listing with a cycle ends): coai's when the chain reaches this shim or a <c>coai-mcp</c>.</summary>
     private static bool IsCoais(ProcessEntry entry, Dictionary<int, ProcessEntry> byPid, int ownPid)

@@ -4,7 +4,7 @@ using System.Runtime.Versioning;
 namespace CoaiMcp.Runners.Processes;
 
 /// <summary>
-/// The Linux end of a tree the shim owns as a CHILD SUBREAPER (DL9 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): list while the agent lives, write down what was listed BEFORE any
+/// The Linux end of a tree the shim owns as a CHILD SUBREAPER (DL9 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>): list while the agent lives, write down what was listed BEFORE any
 /// signal, end every member by identity through a pidfd, re-list until nothing is left or the bound passes, reap the zombies it listed — and answer with what survived.
 /// </summary>
 /// <remarks>

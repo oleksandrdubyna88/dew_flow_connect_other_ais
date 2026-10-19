@@ -1,7 +1,11 @@
 # PLAN — a round records who wrote the code under review, and how big the change was
 
-> Status: **plan only for the epics not yet built; epic E2 (the size, its schema step and `--log`) is implemented on feat/round-size-e2r, 2026-10-15.** Revised the same day after the question
-> consultant's advice (§10), and again after the seven stories documents (§16). Scope: `src_mcp` — the code round's
+> Status: **plan only for epics E4–E7; epic E1 (the measurements and fixtures, #828) and epic E2 (the size, its schema
+> step and `--log`, #829) are implemented and merged, 2026-10-15; epic E3 (the text-free caller-transcript reader) is
+> implemented on `feat/round-authors-e3`, 2026-10-18 (code gate `proceed`; its pull request is a draft, not merged — the
+> E3 stories document's §5.1).** Revised 2026-10-14 after the question
+> consultant's advice (§10) and after the seven stories documents (§16); revised again 2026-10-16 against E1's
+> measurements as the E3 stories document's §8.2 records (§5, D3, D7, D8, the E1 and E3 epic entries). Scope: `src_mcp` — the code round's
 > numstat (`runners/Context`), a new text-free caller-transcript reader beside `Store/AgentLog.cs`, attribution in
 > `core/Authors/`, appended schema steps, the round's
 > record (nullable `Size` and `Authors` snapshots in the session file, text-free) and its projection write, `--log`,
@@ -138,14 +142,22 @@ A new reader (`Store/CallerTranscript.cs` → an `ObservedSession` value), keyed
 the transcript is `<projects>/*/<sessionId>.jsonl` (one directory listing per project folder; no slug is computed —
 the slug rule is lossy, `claudeSessions.ts`). Which id source was used is recorded (`authors_id_source`: `registry`,
 `environment`, or `stored` for a backfill). The reader takes a lower bound `fromUtc` — the earliest window start
-attribution needs — and reads only that slice of every file; the day-substring gate makes the bound cheap (§16 D7).
+attribution needs — and reads only that slice of every file. The bound is cheap because a line is skipped BEFORE it is
+decoded — the last-write time per file, then the exact stamp tested on raw bytes (E3.S1); the byte budget applies to the
+slice, the time limit to the whole read (§16 D7). *(2026-10-16, E1 RESULTS Q6: the day-substring gate still decodes
+every line and keeps 19.9 s of a 30.5 s read at 650 MB, so it is not the saving; `agent_log` keeps it.)*
 
-- **Tokens** are counted once per `message.id`: each of the four terms is the MAXIMUM over that id's lines (outputs
-  only grow across the lines of one message; inputs are identical), placed at the id's earliest instant (§16 D8).
+- **Tokens** are counted once per `message.id`: each of the four terms is the MAXIMUM over that id's lines, placed at
+  the id's earliest instant (§16 D8). Only `output_tokens` differs across one message's lines (≈ 10 % of ids), and the
+  last line is NOT always the maximum (16 WSL ids, E1 RESULTS Q3) — the per-term maximum is the rule, never the last
+  line.
 - **Launches** are counted once per `agentId` — the first line of `agent-<id>.jsonl`. A resumed agent (more lines in
   the same file, later) is the same launch with later activity, never a second launch.
-- **Requested vs observed model** are two fields: `requested` (the meta's alias, else `requestedModel`) and `model`
-  (`message.model`). The report groups on observed and shows where they differ.
+- **Requested vs observed model** are two fields: `requested` (the meta's alias when the launch gave one, else the
+  line's `requestedModel`, else empty) and `model` (`message.model`). The report groups on observed and shows where they
+  differ. An empty alias is the normal case on most versions (32–98 % of metas carry `model`, E1 RESULTS Q2): a meta
+  without `model` is `observed` plus a diagnostics count (`Diagnostics.MetasWithoutModel`), never `partial` — nothing is
+  lost, the observed model comes from the agent file's own lines (E3.S4's S4-17).
 - **Effort** is the line's own `effort`. Absent is `unknown` — never today's default, never the session's.
 - **Parent/child**: `toolUseId` joins a meta to the main `Agent` call; `parentAgentId` joins a nested agent to its
   parent.
@@ -156,10 +168,13 @@ attribution needs — and reads only that slice of every file; the day-substring
   file, the assistant's memory folder) is `outside` (§16 D3). `Bash`, `PowerShell` and every other tool are `Unknown`
   and never a write — no guessing from command text. A write call whose `tool_result` is an error, or that has no
   `tool_result` at all, is NOT a write — nothing changed, or nothing is known to have; both are only counted as
-  diagnostics (§16 D23, E3.S4's S4-7). An `Agent` (older: `Task`) call refused with an error result and no meta is a
+  diagnostics (§16 D23, E3.S4's S4-7). A `tool_result` that answers no parsed `tool_use` (its call is before the bound or
+  outside the cut) is ignored — no write, no launch, no count; a repeated `tool_use` block id is ONE call, at its
+  earliest instant (E3.S4's S4-15, S4-16). An `Agent` (older: `Task`) call refused with an error result and no meta is a
   refused launch, not a missing child.
 - **States, all four distinguishable**: `observed` (complete — and an observed session with no subagents is an
-  observed ZERO), `partial: <why>` (an `Agent` call with no transcript, a meta without one, the read budget hit),
+  observed ZERO), `partial: <why>` (an `Agent` call with no transcript, a meta without one, the read budget hit — a
+  meta without `model` is not a cause, see *Requested vs observed* above),
   `unobserved: <why>` (no session id, a stated id, no reader for the vendor, transcript not found — persistence off is
   one cause), and empty = not recorded (a round from before the step). Reasons are a closed vocabulary (`ObservationReasons`).
   A torn LAST line of a file is a race with the CLI's append, not a loss: it is counted (`Diagnostics.TornTails`) and is
@@ -439,7 +454,9 @@ gone for good. The report does not wait for it.
 | A subagent writing only into another repository; one with no evidence while the session wrote into two repositories | credited elsewhere; ambiguous totals, no row |
 | Background work during round N−1's review | lands in round N's window, not in none |
 | Work before `open` | `before-open`, excluded from the report unless asked |
-| A meta without a transcript; an `Agent` call with neither; a torn MIDDLE line; a meta with no `model` | `partial` naming each; read on; observed model from the lines |
+| A meta without a transcript; an `Agent` call with neither; a torn MIDDLE line | `partial` naming each; read on |
+| A meta with no `model` | `observed`, `Diagnostics.MetasWithoutModel` counts it; `requested` empty; observed model from the lines (S4-17) |
+| A `tool_result` answering no parsed call; one `tool_use` block id on two lines | ignored, no count; ONE call (S4-15, S4-16) |
 | A torn LAST line | NOT partial: `Diagnostics.TornTails` counts it, the state is unchanged (§16 D22) |
 | A write call whose result is an error, or that has no result | not a write; counted as a diagnostic (§16 D23) |
 | Two gate sessions of one caller whose windows overlap | an item is owned once: by the earlier-COMPLETED window, `claimed by peer` in the other; a two-repository agent has a `wrote here` row with its write calls and zero tokens |
@@ -507,12 +524,12 @@ document's own defects section (E6 has none; its §0 decisions D1–D16 played t
 |---|---|---|---|
 | D1 | Skipped and interrupted rounds never open a window and are never a delta predecessor; activity before them lands in the next RECORDED round of the same gate session | a skip is written `done` with a sha (`RoundSkips.cs:95-111`) and reviewed nothing; an interrupted round is swept past the call site (`SessionStore.cs:578-597`) | E2/1, E4/7, E5/8 |
 | D2 | Windows tile ALL stages of one gate session in time order; contributors of code round N = the union of every window up to N, each tagged with its stage; the report groups by the tag; rounds are always `(stage, number)` | the coding between plan `proceed` and code round 1 sits in a plan-tiled window; hiding it would lose the main authorship stretch | E4/9, E6 D2 |
-| D3 | A write is `here` when the nearest checkout root of its path is at or under `repo_path` (submodules and worktrees under it count); a path under no checkout is `outside` — never a second repository, never evidence; a write into another checkout is `elsewhere`. **Gate finding 0:** `here` is for association only — the size covers `repo_path`'s own checkout, so writes into a submodule or nested checkout are counted (`submodule_writes`, `uncovered_writes`) and mark the round `size not covered`; changed gitlinks are counted as `size_gitlinks`, never sized as code | scratchpad, memory and temp writes are constant; counted as repositories, `same-session` would almost never apply | E3/4, E3/5, E4/2 |
+| D3 | A write is `here` when the nearest checkout root of its path is at or under `repo_path` (submodules and worktrees under it count); a path under no checkout is `outside` — never a second repository, never evidence; a write into another checkout is `elsewhere`. **Gate finding 0:** `here` is for association only — the size covers `repo_path`'s own checkout, so writes into a submodule or nested checkout are counted (`submodule_writes`, `uncovered_writes`) and mark the round `size not covered`; changed gitlinks are counted as `size_gitlinks`, never sized as code. **2026-10-16 (E3.S4 S4-15, S4-16):** a `tool_result` that answers no parsed call is ignored; a repeated `tool_use` block id is one call | scratchpad, memory and temp writes are constant; counted as repositories, `same-session` would almost never apply. An orphan result answers a call the reader did not see (c05, c17); a re-logged line (c07) would otherwise be two calls | E3/4, E3/5, E4/2 |
 | D4 | Writes are kept per call — (agent, instant, checkout root, tool) — never as a boolean; `write_calls` counts them | association is per window; a session-wide boolean associates an agent with a window where it wrote nothing | E3/3, E4/1, E5/4 |
 | D5 | Never duplicated: an agent writing into two repositories, or activity two gate sessions could claim, goes to the ambiguous totals of each candidate as a COUNT of ambiguous items; its tokens are never added twice. **Made exact by E4.S2 (decision 4):** the two-repository agent is `ambiguous` with a `wrote here` ROW holding its write calls into this repository and ZERO turns and tokens; its messages are owned once — here or by the first-ranked peer (`claimed by peer`, E4.S3's `ClaimedByPeer` total) | double counting is the one error with no symptom; the row keeps authorship without adding a token | E4/3, E4/5 |
 | D6 | Evidence cutoff: only lines stamped before round N's start are evidence for N, live and backfill alike; compared in UTC, clock source recorded, skew a stated limitation. **Refined by E4.S2 (decision 7):** a PEER's claim is judged on the peer's own window and evidence, which may end after N's start but always before the peer completed | otherwise a live record and a backfill of one round differ, and "a second backfill changes nothing" cannot see it; truncating a peer's evidence at N's start would let one message land in two rows | E4/10, E4/13 |
-| D7 | The reader takes a lower bound `fromUtc` and reads only that slice; the 64 MiB / 2 s budget applies to the slice; E1 measures whole-session sizes | one real session is 14.8 MB main + 63 MB subagents; a whole read ends `partial: read budget` on exactly the orchestrator sessions the question is about | E3/1, E3/10 |
-| D8 | Tokens per `message.id`: the per-term MAXIMUM across that id's lines | outputs only grow across a message's lines; inputs are identical (162 of ≈ 2 400 ids differ) | E3/2 |
+| D7 | The reader takes a lower bound `fromUtc` and reads only that slice; the 64 MiB / 2 s budget: the byte budget applies to the slice, the time limit to the whole read; E1 measures whole-session sizes | one real session is 14.8 MB main + 63 MB subagents; a whole read ends `partial: read budget` on exactly the orchestrator sessions the question is about. **Revised 2026-10-16 (E1 RESULTS Q6):** the largest session is 650 MB, and the day-substring gate keeps 19.9 s of a 30.5 s read — so the reader skips BEFORE it decodes (last-write time per file, then the exact stamp on raw bytes, E3.S1); the round pays for scan time, so time is charged on everything | E3/1, E3/10, E3/12 |
+| D8 | Tokens per `message.id`: the per-term MAXIMUM across that id's lines | inputs are identical; only `output_tokens` differs (162 of ≈ 2 400 ids here; ≈ 10 % of ids on both sides, E1 RESULTS Q3). **Revised 2026-10-16:** the last line is NOT always the maximum (16 WSL ids; fixture c03) — never take the last line | E3/2 |
 | D9 | The reader's own id ladder: `~/.claude/sessions/<CLAUDE_PID>.json` (read by pid; the folder is never listed, `.key` files never touched) → `CLAUDE_CODE_SESSION_ID`; `COAI_CALLER_SESSION` alone is `unobserved: stated id`; `repo:<path>` is no session id; new column `authors_id_source` | `CallerIdentity.From` puts the stated id first; a stated id names no transcript | E1/6, E1/7, E3/7, E3/8, E5/3, E5/11 |
 | D10 | Numerators named apart: `gate_count` = `rounds.gating` (after the standing-rejection discount, `GateRule.cs:32-37`) and `severe` = findings with `is_gating` (blocking/major, before it, `Finding.cs:84`); never one word for both | E6's "gating" column was pre-discount while the gate's own count is post-discount | E6 D8 |
 | D11 | `reviewers.effort` gets an explicit `not recorded` default for rows before step 22, distinct from `''` = no effort applied | codex, the only reviewer since 2026-10-11, applies none (`RosterBuilder.cs:705-712`); without a marker the two read alike | E2/4, E6 D7 |
@@ -606,12 +623,23 @@ Cornerstones: 3 of 3 — E2.S1, E3.S4, E4.S2
 - **Stories.** [PLAN_a_round_records_who_wrote_the_code_and_how_much_E1.md](PLAN_a_round_records_who_wrote_the_code_and_how_much_E1.md)
 - **Goal.** The facts the reader is built on, measured before any product code: §2's layout, `meta.json` and `effort` presence
   per Claude Code version, `message.id` repetition, `/clear` and `--resume` against the registry and the inherited variable,
-  each store's transcript coverage, the read time over 14 MB — prediction first (`measurement.md` rule 4: ≥ 95 %, ≤ 300 ms p50).
+  each store's transcript coverage, and the read time over whole sessions — prediction first (`measurement.md` rule 4: ≥ 95 %,
+  ≤ 300 ms p50 over 14 MB). **Measured (RESULTS Q5, Q6):** coverage held (100 % of Claude-called rounds on both sides); the
+  read-time prediction was REFUTED by two orders of magnitude — the largest session is 650 MB (273 files), a full parse
+  30.5 s p50, a day-gated one 19.9 s. E5 measures the C# reader's slice read again.
 - **Scope.** A `research/RESULTS_` file; sanitised fixtures under `src_mcp/tests/fixtures/caller-transcripts/` (LF by
   `.gitattributes`), the union of §6's and §12's cases, each with a `rounds.json`, every string off a shape-checked allowlist the
   sentinel; whole-session sizes (§16 D7); the `/clear` and `--resume` probes attended; the WSL side from inside WSL (`roundCountsRead.ts:18-21`). No product code, no schema step. Its fixtures gate the AUTHORS schema (step 24, E5) only; E2's step 22 derives from git numstat and does not wait for them (gate finding 4).
 - **Done when.** The RESULTS file carries prediction then observation for both sides; one fixture per case; a test asserts
   every string off the allowlist is the sentinel and every allowlisted one has its shape; the measured read time is in the file, for E5's budget.
+- **Follow-up owed (2026-10-16, E3 stories §8).** Shipped in #828; one E1 follow-up is owed BEFORE E3.S4's c17/c19 rows are
+  coded as intended. (1) *Blocking for those rows:* re-cut `c12`, `c17`, `c19` with every kept write call's `tool_result`
+  line pinned (the cutter rule beside `launchLines`, `scripts/lib/transcript-sanitise.mjs`, same salt); `manifest.json`
+  gains per case `checkouts` (for c19 including the submodule root `repo-a/p1000`, never `scratch`); two guard tests in
+  `ACallerTranscriptFixtureCarriesNoTextTests` — `EveryKeptWriteCallHasItsResult` and
+  `EveryCheckoutIsAFixtureRootOrUnderOne`. (2) *Not blocking:* widen `allowlist.json`'s `model-ref` with the seven
+  `[1m]` model ids, re-cut the eight cases that carry them, update `ApprovedAllowlistSha256`. Until (1) lands E3.S4 uses
+  its interim (`AnswerCall`, a test-placed marker, test 13a).
 
 ### E2 — Diff size, shipped alone (step 1) · M · depends on nothing, may run beside E1 or before it
 
@@ -642,7 +670,8 @@ Cornerstones: 3 of 3 — E2.S1, E3.S4, E4.S2
   requested vs observed model; `effort` or `unknown`; parent links; writes per call — agent, instant, checkout root,
   tool — from the write tools' one path property (§16 D3, D4, D18); the four states; the `Agent`-count check.
 - **Done when.** Over E1's fixtures: a three-line message counts once; a resumed agent is one launch; a meta without a transcript,
-  an `Agent` call with neither, a torn MIDDLE line, a meta with no `model` → `partial: <why>`, reading on; a torn LAST line →
+  an `Agent` call with neither, a torn MIDDLE line → `partial: <why>`, reading on; a meta with no `model` → `observed`, counted in
+  `Diagnostics.MetasWithoutModel` (an empty alias is normal, S4-17), never `partial`; a torn LAST line →
   not partial, counted in `Diagnostics.TornTails` (§16 D22); a refused or unanswered write → not a write; no `effort` → `unknown`;
   persistence off → `unobserved: transcript not found`; the registry beats the variable, recorded; no sentinel in any rendering.
 - **Cornerstone AREA.** The counting rules — tokens once per `message.id`, launches once per `agentId`, resume ≠ launch. Every

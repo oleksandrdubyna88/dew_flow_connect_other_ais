@@ -3,7 +3,7 @@ using CoaiMcp.Runners.Platform;
 namespace CoaiMcp.Runners.Vibe;
 
 /// <summary>
-/// Where the person's Vibe sign-in file is (DL2 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): the file the launch control LINKS into a
+/// Where the person's Vibe sign-in file is (DL2 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>): the file the launch control LINKS into a
 /// coai-owned Vibe home, so Vibe finds its own sign-in without coai ever reading, holding or copying the key.
 /// </summary>
 /// <remarks>

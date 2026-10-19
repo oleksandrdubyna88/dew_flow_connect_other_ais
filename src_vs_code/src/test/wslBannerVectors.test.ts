@@ -8,7 +8,7 @@ import { isWsl, namesWsl2 } from '../wslNetwork';
 
 /**
  * ONE rule for which WSL a Linux kernel is, shared with the server (`shared/wsl-banner-vectors.json`, E3 of
- * todo/PLAN_kimi_and_vibe_on_linux.md, code gate "one WSL-banner rule for the extension and the server").
+ * research/PLAN_kimi_and_vibe_on_linux.md, code gate "one WSL-banner rule for the extension and the server").
  *
  * <p>The rule: the first line of `/proc/version` holding `WSL2` or `microsoft-standard` (any case) is WSL2; else holding
  * `microsoft` or `WSL` is WSL1; else it is no WSL at all. The server asserts its own predicate (`WslGenerations.Of`) against

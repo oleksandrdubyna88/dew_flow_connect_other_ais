@@ -350,3 +350,20 @@ S6 may run beside S2–S5 once S1 and E2 have merged. The epic ships as ONE comm
 13. **E1's fixtures** must have re-pointable write paths and shiftable timestamps for an end-to-end round; E1's scope does not say.
 14. **One model-family rule is needed on both sides** (card in TypeScript, report in C#); the plan names neither — S6 adds the
     shared vectors file both read.
+
+## 8. Boundary with the session-file guard (added 2026-10-18)
+
+A field added to `RoundRecord` is dropped by any OLDER `coai-mcp` that re-saves the session file; E5's `Authors` is one
+such field. The general guard — a `[JsonExtensionData]` bag on the session's own records, so a re-save keeps what a newer
+server wrote — is [PLAN_a_session_file_keeps_what_a_newer_server_wrote.md](../research/PLAN_a_session_file_keeps_what_a_newer_server_wrote.md) (implemented 2026-10-19),
+not E5. It helps only servers released after it; the binaries already out still strip `Authors`, so E5's database copy
+stays E5's answer for them.
+
+| Item | Who builds it | The other one's part |
+|---|---|---|
+| The bag on `RoundRecord` and five other session types, and the save scrub | **the guard plan** | E5 adds `Authors` as a KNOWN member; nothing in E5 depends on the bag |
+| The bags stripped from the `open`/`status` answer | **the guard plan** | E5 S1 strips `Authors` from the same answer; whichever lands second puts its strip in the same method |
+| `Authors` stripped by servers released BEFORE the guard | nobody can | E5's database copy (and E7's repair) |
+| The snapshot, the schema step, the card line | **E5** | none |
+
+Either can land first. Nothing else is shared.

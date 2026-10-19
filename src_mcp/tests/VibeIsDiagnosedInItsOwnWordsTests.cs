@@ -30,7 +30,7 @@ public sealed class VibeIsDiagnosedInItsOwnWordsTests
         + "(e.g. in ~/.vibe/.env or your shell), or run `vibe --setup` once interactively.";
 
     /// <summary>
-    /// S-V7 (DL2 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>; L-V1): off Windows the sign-in is the file <c>~/.vibe/.env</c> — which coai LINKS into
+    /// S-V7 (DL2 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>; L-V1): off Windows the sign-in is the file <c>~/.vibe/.env</c> — which coai LINKS into
     /// its own homes, never copies — and a sign-in kept in a desktop keyring is invisible to coai's launches (no D-Bus session in their
     /// built environment). The word <c>keyring</c> MUST be in the sentence: it is the case a person with a desktop Linux would be in.
     /// </summary>

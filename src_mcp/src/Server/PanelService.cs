@@ -1856,7 +1856,7 @@ public sealed class PanelService
     public void SweepScratch() => PruneOldAnswerDirs(_settings.ConsultantHomesRoot, _log);
 
     /// <summary>
-    /// The Kimi lock files of a sign-in folder that is gone or is another folder now, retired (DL7 / F15 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): at server start and on every beat. Linux only — elsewhere
+    /// The Kimi lock files of a sign-in folder that is gone or is another folder now, retired (DL7 / F15 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>): at server start and on every beat. Linux only — elsewhere
     /// <see cref="Runners.Kimi.KimiLockRetirement.Sweep"/> answers 0 at once — and it never throws: a key it cannot decide about is left and logged.
     /// </summary>
     public int SweepKimiLocks() => Runners.Kimi.KimiLockRetirement.Sweep(Runners.Kimi.KimiCredentialsLock.Root, note => _log.Debug("{Note}", note));
@@ -1923,13 +1923,26 @@ public sealed class PanelService
         session.State.PlanProceeded,
         _settings.Rounds.For(session.State.Stage).Threshold,
         _settings.Rounds.For(session.State.Stage).MaxRounds,
-        session.Rounds)
+        WithoutUnknownMembers(session.Rounds))
     {
         HumanDecision = CurrentAnswer.WordFor(Escalations.DecisionOf(gatesAnswer)),
         HumanAnswer = gatesAnswer?.Answer ?? string.Empty,
         Consultations = _consultations.OpenIn(session.State.RepoPath),
         Pending = session.State.AwaitingResolve ? session.Pending : [],
     };
+
+    /// <summary>
+    /// The rounds as THIS server knows them: the members a newer server wrote (<c>RoundRecord.Unknown</c>, and each reviewer row's)
+    /// belong to the session file, which keeps them, and not to the answer — the extension reads only the members it was built for.
+    /// </summary>
+    private static IReadOnlyList<RoundRecord> WithoutUnknownMembers(IEnumerable<RoundRecord> rounds) =>
+    [
+        .. rounds.Select(r => r with
+        {
+            Unknown = null,
+            ReviewerStates = [.. r.ReviewerStates.Select(v => v with { Unknown = null })],
+        }),
+    ];
 
     private static string Json<T>(T value, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> type) =>
         JsonSerializer.Serialize(value, type);

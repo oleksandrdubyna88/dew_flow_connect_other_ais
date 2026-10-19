@@ -11,7 +11,7 @@ import { fromOfficialSources, vendorInstall, vendorUpdate } from '../vendorTermi
 import type { Vendor } from '../vendors';
 
 /**
- * ⤓ and ⟳ for Kimi on a Linux host — DL12 of todo/PLAN_kimi_and_vibe_on_linux.md (E6), scenarios S-K9/S-K10/S-K17.
+ * ⤓ and ⟳ for Kimi on a Linux host — DL12 of research/PLAN_kimi_and_vibe_on_linux.md (E6), scenarios S-K9/S-K10/S-K17.
  *
  * <p><b>The line is RUN here, against harmless substitutes, never against a real package manager or Moonshot's installer</b>
  * (common/generated-code-tests.md; an assertion over the text says the line was written, not that it works). The boundary: a
