@@ -3653,7 +3653,10 @@ no split, `code`, `first`, `code,test`. Stdout is ONE JSON document (`format` 1:
 `effortMarkerKnown` — integers, sets and counts; no figure, no mark, no header, **no absolute path**) or, with `--table`, the report.
 Exit **0** an answer (an empty one when no database exists; nothing is created), **65** a bad request — an unknown or repeated flag, an
 unparseable instant, `--until` not after `--since`, `--split` outside the window, `--stage plan` with `--kinds` or `--without-elided`, an
-`--add` that cannot be read, parsed or added (its sentence names the argument as typed) — **74** a database that will not read, **never 64**.
+`--add` that cannot be read, parsed or added — an empty or malformed path, a missing file, a report whose source id is not 32 lower-case hex or whose
+branch / requested-to-answered names are not two words joined by one newline (its sentence names the argument as typed) — **74** a database that
+will not read, **never 64**. Every refusal travels as the report's one outcome shape, `Store/Outcome.cs` (`Outcome<T>`: ok, value, why — the C#
+doctrine §5), never a per-call-site tuple.
 
 ```mermaid
 flowchart LR
@@ -3671,27 +3674,29 @@ flowchart LR
 
 | Unit (`src_mcp/src/…`) | Job |
 |---|---|
-| `Store/RoundAuthorsQuery.cs` | The read: the rounds of every session the window touches, in ONE deferred read transaction on a read-only connection (a writer waits for it, so a round is seen whole or not at all). `HasColumn` per schema step (24 → authors, 22 → size and reviewer effort, 20 → reviewer model); a malformed stored state is *not recorded* per ROW; no text column is selected. The size is `RoundChangesLog.Read`'s |
+| `Store/RoundAuthorsQuery.cs` | The read: the rounds of every session the window touches, in ONE deferred read transaction on the counter's read-only open (`RoundCounts.OpenReadOnly`, the one spelling of that connection string for both readers; a writer waits for it, so a round is seen whole or not at all). `HasColumn` per schema step (24 → authors, 22 → size and reviewer effort, 20 → reviewer model); a malformed stored state is *not recorded* per ROW; no text column is selected. The size is `RoundChangesLog.Read`'s |
 | `Store/StoredAuthors.cs` | D18 — the stored columns and rows as E4.S3's `RoundAuthors`, through `RoundAuthorsTable.AgentKeyOf`; `Contributors.Of` is the one union |
-| `Store/RoundAuthorsPopulation.cs`, `RoundAuthorsCoders.cs`, `RoundLines.cs`, `RoundAuthorsSumsOf.cs`, `ModelFamily.cs` | WHO is in: cohorts over E4's *settled* rounds (D1), contributors (D2), the worst state of the union (D3), coder mix with `unknown` a suffix and never a family (D4), effort and main model (D5), the reviewer set (D6, D7), lines (D10), one exclusion per round in D12's order |
+| `Store/RoundAuthorsPopulation.cs`, `RoundAuthorsCoders.cs`, `RoundLines.cs`, `RoundAuthorsSumsOf.cs`, `ModelFamily.cs` | WHO is in: cohorts over E4's *settled* rounds (D1), contributors (D2), the worst state of the union (D3) and the coverage of the union (D12: a contributing round's `uncovered_writes > 0` leaves the round `size not covered`, its `-1` leaves it `size coverage unknown`), coder mix with `unknown` a suffix and never a family (D4), effort and main model (D5), the reviewer set (D6, D7), lines (D10), one exclusion per round in D12's order |
 | `Store/RoundAuthorsCells.cs`, `RoundAuthorsExclusions.cs`, `RoundAuthorsHeader.cs` | HOW they are counted: one-round cells folded by `Add` — the same function `--add` uses — figures as ratios of sums (D16), marks (D14), every exclusion reason listed with its count, the header (D15) |
 | `Store/RoundAuthorsMerge.cs` | The JSON of sums, its own strict context, `Report`, `Parse`, `Add` |
-| `Store/RoundAuthorsText.cs`, `Server/RoundAuthorsMode.cs` | The table; the flags and the exit codes |
+| `Store/RoundAuthorsText.cs`, `Server/RoundAuthorsMode.cs` | The table (every control character of a displayed value — a store row or an `--add` file — printed as `?`, so no terminal escape reaches the screen); the flags and the exit codes |
 
 **What the report will not say, and says.** The state it reads for a round is the roll-up over its two windows — per-window states live in the
 session file only and step 24 does not project them — so with `before-open` left out a round whose before-open window alone is partial or
 unobserved is still read partial or excluded; the error goes toward exclusion, never toward a claim (D3; `RoundAuthorsHeader.RollUpLimit`). A
 `peer running` round is counted as partial and provisional until E7's backfill finalises it. `uncovered_writes = -1` is *unknown*, excluded as
-`size coverage unknown`, never read as covered (`--with-uncovered` takes both reasons in). A corrective round whose delta is unavailable stays in
+`size coverage unknown`, never read as covered (`--with-uncovered` takes both reasons in) — and both reasons are decided over the round's
+CONTRIBUTING rounds, as its state is: the whole change of round N carries what every earlier window wrote, so a write round 1 made into a submodule
+is one round N's size does not cover either (judge review 2026-10-19). A corrective round whose delta is unavailable stays in
 the whole figures, leaves the delta figures and is counted per reason — its whole lines are never a delta denominator. The label `sonnet+unknown` is
 what a coder row with no model claim adds to a mix; the rank allocation of ambiguous activity is an accounting convention, stated in the header.
 
 **Two halves add only as one population.** The same `format`, the same selection field by field (`kinds` arrives sorted; an unset `--until` is `""`
 and each source keeps its own `readUtc`), and **no shared gate session** — a store added twice, or a copy of one read under another path, would count
-every session twice. That refusal is ONE method (`RoundAuthorsMerge.Overlap`), so the owner's open question (may two `--add` stores share a session?)
-changes one place. A source is an opaque id (32 hex of the SHA-256 of the canonical data-directory path), never the path.
+every session twice. That refusal is ONE method (`RoundAuthorsMerge.Overlap`); **the owner confirmed it on 2026-10-19: two `--add` stores that share a gate session are
+REFUSED** (a store added twice is named as that). A source is an opaque id (32 hex of the SHA-256 of the canonical data-directory path), never the path.
 
-**Deviations from the stories, each the smallest change that keeps the intent** (the record is in the stories document, §6): the JSON has its own
+**Deviations from the stories, each the smallest change that keeps the intent** (the record is in the stories document, §5): the JSON has its own
 `JsonSerializerContext` (`RoundAuthorsJson`) because strict reading — unknown member, missing member, null — is a per-context switch and the server's
 shared context must stay lenient for old session files; the branch map is keyed by an opaque repository id beside the branch name, because the answer
 carries no absolute path; `NumeratorSums` carries `DeltaTotal` (the per-100-delta figure needs the findings of the rounds whose delta is recorded);
