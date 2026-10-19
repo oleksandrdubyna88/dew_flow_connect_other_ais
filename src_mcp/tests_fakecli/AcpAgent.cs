@@ -386,7 +386,7 @@ internal static class AcpAgent
         info.ArgumentList.Add("sleep");
         info.ArgumentList.Add("600000");
         var child = Process.Start(info)!;
-        File.WriteAllText(pidFile, child.Id.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Serving.WritePidFile(pidFile, [child.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)]);
     }
 
     /// <summary>A FakeCli child with every stream of its own, its pid written to the file.</summary>
