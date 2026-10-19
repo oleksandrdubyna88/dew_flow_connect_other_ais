@@ -33,7 +33,7 @@ This release was proposed as 0.13.2 and became 0.14.0 when the Kimi-on-WSL2 work
 `gauge claude/a: skipped (slot-not-readable)` for a healthy slot of every vendor whose runtime is not codex. Only the
 codex runtime has a gauge the server reads, so the note now says `skipped (no-gauge-for-runtime)` for the others.
 `slot-not-readable` stays for a codex slot that really cannot be read: signed out, blocked, or with capture suspended.
-Nothing is written to the slot for the new code; only a suspended capture is stored, as before.
+Nothing is written to the slot for a vendor that has no gauge; a codex reading is still stored, and a suspended capture is still stored as suspended, as before.
 
 **Changed: a gauge reader's marker is cleared only when every process it names is proven gone.** The reader marker
 moved into the shared process code that coai-mcp also uses for Kimi. After the kill and its confirmation, each process
