@@ -50,3 +50,13 @@ under load lose one. A user's gate call on a loaded machine can meet the same se
 
 - [ ] No retry loop in the turn counts attempts instead of time.
 - [ ] Three consecutive whole-suite runs clean.
+
+## Boundary with [PLAN_the_suite_is_deterministic_and_leaves_no_temp.md](PLAN_the_suite_is_deterministic_and_leaves_no_temp.md) (2026-10-19)
+
+| Item | Built by | The other plan's part |
+|---|---|---|
+| `SessionTurn.Take` waits to a deadline (this plan, all of it) | **this plan** | that plan orders it (§9: any time, no clock seam needed) and keeps its CI evidence (§3, C19) |
+| The evidence since 2026-10-03 | — | `CadenceStoreTests.ManyClosesAtOnce_AllLand` failed in CI on 2026-09-28 (Linux), 2026-10-13 (Linux) and **2026-10-19 on `main`** (Windows) |
+| Two corrections | **this plan** | the caller list is stale — `ConsultationStore` no longer calls `Take` directly; `RecordFiles.cs:51`, `QuestionConsultStore.cs:104` and `QuestionPhaseStore.cs:87`, `:108` now do; and the clock-based wait already exists — `HeldFile.TakeWithin` (`src_mcp/runners/Files/HeldFile.cs:167-180`), so the fix calls it rather than writing a second one |
+
+Disjoint: that plan builds nothing in `SessionStore`.

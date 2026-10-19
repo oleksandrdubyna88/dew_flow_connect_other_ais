@@ -64,6 +64,9 @@ in the table, or cap it by count, using the store's existing pruning seam if one
 
 ## 6. The flaky round-deadline test
 
+> **Moved 2026-10-19** to [PLAN_the_suite_is_deterministic_and_leaves_no_temp.md](PLAN_the_suite_is_deterministic_and_leaves_no_temp.md), which builds all three tests of this section (its C6, C13 and C14,
+> each with its cause); the text below is kept as the record of what was seen. Boundary table: that plan, §7.
+
 `AFeatureIsReviewedEndToEndTests.TheRoundsDeadline_IsScaledByTheFollowUps_SoAConversationIsNotCutByAOneTurnBudget`
 (`src_mcp/tests/AFeatureIsReviewedEndToEndTests.cs:424`) fails about 1 run in 3 on a clean `origin/main` as well. It runs
 for 12–20 s and reports "not started … the round reached its limit" before the reviewer launches. It is
@@ -106,7 +109,7 @@ capability row.
 - [ ] api `web` is either measured for one vendor and allowed, or still blocked, with the reason.
 - [ ] The operator's choice on uncommitted work is recorded and built.
 - [ ] `question_consults` has a retention, tested.
-- [ ] The round-deadline test passes 20 runs in a row.
+- The round-deadline test passes 20 runs in a row — moved to [PLAN_the_suite_is_deterministic_and_leaves_no_temp.md](PLAN_the_suite_is_deterministic_and_leaves_no_temp.md) (C6), 2026-10-19.
 - [ ] An api row reports its cost when the vendor states it.
 - [ ] module docs updated; this plan promoted when done.
 

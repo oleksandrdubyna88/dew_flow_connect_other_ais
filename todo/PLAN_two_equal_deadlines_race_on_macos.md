@@ -61,3 +61,13 @@ reviewer is told "git timed out on B, ask again next turn" when the truth is "th
 - [ ] The rule (which deadline names an interrupted file) is stated in `SecuritySources.cs` and `module_server.md`.
 - [ ] The characterization test no longer depends on two equal timers; the suite is ~30 s faster.
 - [ ] The macOS leg green on the PR.
+
+## Boundary with [PLAN_the_suite_is_deterministic_and_leaves_no_temp.md](PLAN_the_suite_is_deterministic_and_leaves_no_temp.md) (2026-10-19)
+
+| Item | Built by | The other plan's part |
+|---|---|---|
+| The collection deadline vs the per-file read deadline (this plan, all of it) | **this plan** | that plan orders it after its E4 story 1 (the injectable `TimeProvider`, D3), which gives step 1 its deterministic RED: fire the per-file timer BEFORE the collection timer on a manual clock |
+| The evidence since 2026-10-04 | — | recorded there (§3, C8): **43** failed CI runs to 2026-10-19, 37 macOS and **6 Windows**, one a `main` push — this is not a macOS-only race any more; the cited lines moved by one (`ef2a39199`): `SecuritySources.cs:32`, `:85`, `:88`, `SourceResolver.cs:200`, `:206`, `:210` |
+| A correction to step 3 | **this plan** | when the budgets are injected small, the per-file deadline stays LONGER than the collection budget in the characterization test, or "git timed out" becomes the right answer and the test pins the wrong sentence |
+
+Disjoint: that plan builds nothing in `SecuritySources`/`SourceResolver` beyond the shared clock seam.
