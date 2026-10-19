@@ -44,19 +44,32 @@ is incomplete.
 
 ## What must be true when this is done
 
-1. A model line's median is labelled **per launch** when its row runs on this machine AND every line of its group
-   carries `attempt` (captured or not — one rule for the median and the division). Otherwise it is **per recorded
-   turn**: a line from before coai-mcp 0.48.0 may sum a repair or a follow-up, and a `remote` row's local line is the
-   Team-server job's total — one line with `attempt: first` that can hold a first launch and its follow-up
-   (`UsageLedger.cs:397–406` writes the remote outcome, which has no launch parts, as one line; `ReviewLauncher.cs:279–281`
-   sums the two launches on the server). The column header says per launch, and a cell that is not says *per recorded
-   turn* beside its number, with a tooltip.
-2. The model line's fallback division (rounds unknown) follows the same rule: **per launch** when every line carries
-   `attempt`, else **per recorded turn**. Consultation, question, chat and probe lines keep **per recorded turn** — they
+1. A model line's median is labelled **per launch** when EVERY line of its group (captured or not — one rule for the
+   median and the division) is a launch line: it carries a non-empty `attempt`, that attempt is not `followUp`, and it
+   carries a non-empty `cli` that is not `remote`. Otherwise it is **per recorded turn**, because the line can hold more
+   than one launch:
+   - a line from before coai-mcp 0.48.0 has no `attempt` and may sum a repair or a follow-up;
+   - a `remote` row's local line is the Team-server job's total — one line with `attempt: first` that can hold a first
+     launch and its follow-up (`UsageLedger.cs:397–406` writes the remote outcome, which has no launch parts, as one
+     line; `ReviewLauncher.cs:279–281` sums the two launches on the server). The line itself says so: its `cli` is
+     `remote` (`RuntimeResolution.NameOf`, `RuntimeResolution.cs:94–100`, stamped by `RowLaunchOptions.cs:31` and written
+     by `UsageEntry.RanWith`, `UsageLedger.cs:290–300`), so a deleted row or a row that changed runtime inside the week
+     is judged by what the line recorded, not by today's settings;
+   - an antigravity `followUp` continues the same conversation (`AntigravityRuntime.FollowUp`, `AntigravityRuntime.cs:99`;
+     every other runtime has none, `ReviewerRuntime.cs:462`), and antigravity reports usage cumulatively in a
+     conversation — measured for consultations, unmeasured for a reviewer follow-up
+     ([PLAN_the_reviewer_follow_up_is_billed_once.md](PLAN_the_reviewer_follow_up_is_billed_once.md)). Until that plan
+     measures it, a `followUp` line is not claimed as one launch;
+   - a line with no `cli` is not claimed either (nothing says where it ran).
+
+   The column header says per launch, and a cell that is not says *per recorded turn* beside its number, with a
+   tooltip.
+2. The model line's fallback division (rounds unknown) follows the same rule: **per launch** when every line is a
+   launch line, else **per recorded turn**; its tooltip says *launches* (plural), never "launchs". Consultation, question, chat and probe lines keep **per recorded turn** — they
    are still one line per turn (census rows 2 and 4 of the round-counter plan).
 3. The footnote says what is true, without claiming "always": from coai-mcp 0.48.0 a review run on this machine writes
-   one line per launch; a line from before 0.48.0, and a Team-server row's line, can hold a repair or a follow-up, and a
-   figure that includes such a line says *per recorded turn*.
+   one line per launch; a line from before 0.48.0, a Team-server row's line and a follow-up in the same conversation can
+   hold more than one launch, and a figure that includes such a line says *per recorded turn*.
 4. `ROUNDS_UNAVAILABLE` names **0.12.0** as the first Team server that counts rounds, without claiming the answering
    server is older (it says what it saw and what would answer).
 5. The help article, in all five languages, lists every reason code `REASON_WORDS` names for a figure that is not a
@@ -76,24 +89,31 @@ One epic, branch `fix/rounds-labels-say-what-they-count`.
 
 ### E1 — the labels say what they count
 
-- **1.1 (model) — a group knows whether its lines are launches.** `LedgerLine` (`roundMoney.ts:34`) gains `attempt`;
-  `Rollup` (`roundMoney.ts:61`, which `MoneyGroup` extends at `:69`) gains `linesAreLaunches: boolean` — the LINE fact
-  only; whether the row runs here is the block's fact and is added in 1.2. Exactly:
-  group: `lines.length > 0 && lines.every((one) => (one.attempt ?? '').length > 0)`;
+- **1.1 (model) — a group knows whether its lines are launches.** `LedgerLine` (`roundMoney.ts:34`) gains `attempt` and
+  `cli` (both already parsed by `usage.ts`). A pure `isLaunchLine(line)` =
+  `(line.attempt ?? '') !== '' && line.attempt !== 'followUp' && (line.cli ?? '') !== '' && line.cli !== 'remote'`.
+  `Rollup` (`roundMoney.ts:61`, which `MoneyGroup` extends at `:69`) gains `linesAreLaunches: boolean`. Exactly:
+  group: `lines.length > 0 && lines.every(isLaunchLine)`;
   roll-up: `groups.length > 0 && groups.every((one) => one.linesAreLaunches)`. A group is never empty in practice (it is
   built from its members), and an empty roll-up is the "nothing in this window" case, so both answer false — the label
   then falls back to the safe *per recorded turn*. A chat turn read into the `LedgerLine` shape carries no `attempt` and
   so stays per recorded turn.
 - **1.2 (labels) — the median and the fallback division.** New `PER_LAUNCH = 'launch'`. `MEDIAN_OUTPUT_LABEL` becomes
-  `median output per launch`. The block computes `perLaunch = ranOn(provider) === '' && group.linesAreLaunches` for a
-  model line. `medianCell` adds ` <span class="hint">per recorded turn</span>` and a `title` when it is false.
-  `unitDivisor('review', undefined, turns, perLaunch)` answers `per: PER_LAUNCH` when it holds, else
-  `PER_RECORDED_TURN`; `modelPerRoundCell` shows the hint for either unit (it already shows it for
-  `PER_RECORDED_TURN`). `kindLine` and the vendor row's per-round cell are unchanged.
+  `median output per launch`. `medianCell` adds ` <span class="hint">per recorded turn</span>` and a `title` when the
+  group's `linesAreLaunches` is false. `unitDivisor('review', undefined, turns, linesAreLaunches)` answers
+  `per: PER_LAUNCH` when it holds, else `PER_RECORDED_TURN`; `modelPerRoundCell` shows the hint for either unit (it
+  already shows it for `PER_RECORDED_TURN`). `perUnit`'s plural (`roundMoney.ts:225`, `${divisor.per}s`) takes a plural
+  table so `launch` reads `launches`. `kindLine` and the vendor row's per-round cell are unchanged. No row lookup is
+  used: the decision is the lines' own.
 - **1.3 (footnote) — `FOOTNOTE` rewritten** per *What must be true* 3.
 - **1.4 (message) — `ROUNDS_UNAVAILABLE`** becomes: *"this Team server answered without the 5 h / 24 h / 7 d windows —
   Team servers count rounds from 0.12.0"*.
-- **1.5 (help) — the `the-rounds-log` article in five languages**: the reason list gains *fewer than two readings*,
+- **1.5 (help) — two articles in five languages.** (a) `what-each-ai-has-used` (`helpContent.ts:465`; `helpDe.ts`,
+  `helpEs.ts`, `helpRu.ts` at `:208`, `helpUk.ts:200`, each the `usage` of its `"what-each-ai-has-used"` entry) says *"the median
+  output per recorded turn"* and *"Every paid launch is its own ledger line"* — the first becomes *per launch, or per
+  recorded turn where a line can hold more*, the second gains *for a row run on this machine; a Team-server row's line
+  here is its job's total, and a follow-up in the same conversation is not yet split*. (b) `the-rounds-log`: the reason
+  list gains *fewer than two readings*,
   *a launch sent no round id*, *no round ran between the readings*; "launches from an older extension" becomes "launches
   whose client sent no round id (a coai-mcp older than 0.49.0, or another caller of the server's API)". The phrases, which
   the help test pins per language:
@@ -117,14 +137,13 @@ One epic, branch `fix/rounds-labels-say-what-they-count`.
 
 - **A per-launch claim on a mixed window.** A seven-day window that still holds pre-0.48.0 lines must not be labelled
   per launch. 1.1's rule (EVERY line of the group carries `attempt`) is what prevents it; the test pins a mixed group.
-- **A line that carries `attempt` and still sums launches.** Two cases, both found by the Opus plan review of
-  2026-10-19 and checked in the code. (a) A `remote` row: the block reads only this side's `usage.jsonl`
+- **A line that carries `attempt` and still sums launches.** Found by the Opus plan review and the epic's risk
+  consultation (1a46fd0c), each checked in the code. (a) A `remote` row: the block reads only this side's `usage.jsonl`
   (`roundCountsCache.ts:31`), and coai-mcp writes a remote turn as ONE line with `attempt: first` holding the job's
-  total, which can include a follow-up — handled by the row condition in 1.2, pinned by a test. (b) A local turn whose
-  launch parts do not add up to its usage is written folded, as one `first` line (`LaunchParts.cs:87–91`); `attempt`
-  cannot see it. Rare, guarded by a test in `src_mcp`; **accepted as a residual** and the footnote does not claim
-  "always". (c) The row condition reads the row's runtime TODAY (`ranOnOf`, `roundsBlock.ts:55`); a row that moved
-  between local and remote inside the week is judged by its current runtime — accepted, said in the footnote's tooltip.
+  total — excluded by the line's own `cli: remote`, pinned by a test with no configured row. (b) An antigravity
+  `followUp` may be cumulative — excluded by its attempt until it is measured. (c) A local turn whose launch parts do not
+  add up to its usage is written folded, as one `first` line (`LaunchParts.cs:87–91`); nothing on the line shows it.
+  Rare, guarded by a test in `src_mcp`; **accepted as a residual**, and the footnote does not claim "always".
 - **Translation drift.** Four hand-written translations of one paragraph; a wrong word misleads silently. Mitigation:
   read each back in English through a second agent before commit.
 
@@ -138,7 +157,10 @@ All in `src_vs_code/src/test/`, node test runner (`npm test` in `src_vs_code`):
 | 1.2 | `roundMoney.test.ts` — the existing `ARepairedTurn_IsOneRecordedTurn_NotOneLaunch` keeps its old-line fixture and asserts it is not per launch (its `doesNotMatch(/launch/)` on `MEDIAN_OUTPUT_LABEL`, `roundMoney.test.ts:85–86`, moves to the cell); `unitDivisor` answers `launch` only when told the lines are launches | the division is per recorded turn for every line |
 | 1.2 | `roundsBlock.test.ts` — `TheMedianHeader_SaysPerLaunch_AndAnOlderLineSaysPerRecordedTurnBesideItsNumber` | header says per recorded turn; no hint exists |
 | 1.2 | `roundsBlock.test.ts` — `AModelWithUnknownRounds_AndAMixedWeek_IsDividedPerRecordedTurn` (codex gate finding: one pre-0.48.0 line and one launch line in one group, rounds unavailable → the fallback cell says *per recorded turn*), and `…_AndOnlyLaunchLines_IsDividedPerLaunch` | no per-launch division exists |
-| 1.2 | `roundsBlock.test.ts` — `ATeamServerRow_StaysPerRecordedTurn_EvenWhenItsLinesCarryAnAttempt` (a `remote` row, every line `attempt: first` → median and fallback say *per recorded turn*) | — (guards the row condition; observed RED by removing it) |
+| 1.1 | `roundMoney.test.ts` — `ALineIsALaunch_OnlyWhenItSaysSo` (`isLaunchLine`: `attempt: first, cli: codex` → true; `cli: remote` → false; `attempt: followUp` → false; no `cli` → false; no `attempt` → false) | `isLaunchLine` does not exist |
+| 1.2 | `roundsBlock.test.ts` — `ATeamServerLine_StaysPerRecordedTurn_EvenWithItsRowDeleted` (lines `attempt: first, cli: remote`, `ranOn: ranOnOf([])` → median and fallback say *per recorded turn*), and `ALocalRow_StaysPerLaunch_AfterItsRowIsDeleted` (`cli: codex` lines, no configured row → per launch) | the row is not consulted at all today; RED on the label |
+| 1.2 | `roundMoney.test.ts` — `TwoLaunches_ReadAsLaunches_NotLaunchs` (`perUnit` over `{ per: 'launch', count: 2 }` with unpriced money → the note says `2 launches`) | `perUnit` appends `s` |
+| 1.5 | `helpCoverage.test.ts` — `EveryLanguagesUsageArticle_SaysTheMedianIsPerLaunch` (each `what-each-ai-has-used` article no longer says only *per recorded turn* for the median: en `per launch`, de `pro Start`, es `por lanzamiento`, ru `на запуск`, uk `на запуск`) | the article says per recorded turn |
 | 1.3 | `roundsBlock.test.ts` — `TheFootnote_SaysAReviewLineIsOneLaunch` (and no longer contains "a per-launch figure is not claimed") | old footnote |
 | 1.4 | `teamRounds.test.ts` — `ACountlessServer_IsToldTheVersionThatCounts` (`ROUNDS_UNAVAILABLE` contains `0.12.0`); the existing assertion at `teamRounds.test.ts:85` (`/does not count rounds/`) is updated to the new text | no version in the text |
 | 1.5 | `helpCoverage.test.ts` — `EveryLanguagesRoundsArticle_NamesEveryReasonTheGaugeWordsKnow` (each of the five `the-rounds-log` articles contains each phrase of its row in 1.5's table; the English one no longer says "launches from an older extension") | the reasons are missing |
