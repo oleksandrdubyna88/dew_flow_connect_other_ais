@@ -4658,3 +4658,25 @@ into one string. All six classes moved into `fakecli-env` (the serial collection
 (`EveryWriterOfTheSteeringFileTests`) + 5 (`EveryClassThatSetsTheProcessEnvironmentTests`) + 1 (`ARepairTest_SeesOnlyItsOwnRoundsRepairFolder`). **Two whole runs from two worktrees of
 the same commit, started three seconds apart on one Windows user** — the situation that produced C1 — both finished 11,883 / 0 failed (17 min 26 s and 17 min 23 s). No test failed in
 the suite and passed alone, so nothing is listed as shared-state beyond the three cases above.
+
+## A reviewer that answered before its start time was read (2026-10-19, C2 / E3 S1 of `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md`)
+
+Product defect, found by three macOS-only flaky tests: `BoundedSchedulerTests.FourOfSixAnswer_TheSummaryNamesWhoFailedAndWhy`
+(17 CI runs), `APromptFileDoesNotOutliveItsLaunchTests.AFileAlreadyGone_IsNotAFailure` (4, one on `main`, run 39229540975) and
+`EndToEndTests.ARoundThatFoundNothing_…` (2). All read "Expected …Ok, but found …NotStarted": a reviewer that exits at once can be
+gone before `ProcessLauncher` reads its start time, and on macOS `Process.StartTime` then throws `Win32Exception`.
+
+The race cannot be won on purpose, so the launcher's start-time read is a seam — the second constructor argument of
+`ProcessLauncher`, `Func<Process, DateTime>? startTimeOf` (default `process.StartTime`). `AChildThatExitedBeforeItsStartTimeWasReadTests`
+(`[Collection("fakecli-env")]`) makes it fail the way macOS does, after the real `FakeCli` child exited, on any operating system.
+
+| Test | Seen red as |
+|---|---|
+| `AChildThatExitedBeforeItsStartTimeWasRead_IsNotReportedAsNotStarted` (S8, arms `Win32Exception`, `InvalidOperationException`) | `Win32Exception : Unable to retrieve the specified information about the process or thread…` / `InvalidOperationException : Cannot process request because the process has exited.` thrown out of `RunAsync`; green: exit 0, `hello`, no `Record`, one `Forget` |
+| `AReviewerThatExitedBeforeItsStartTimeWasRead_IsAnAnswer_NotNotStarted` (the same two arms through a real `ReviewerExecutor`) | `Expected type to be ReviewerOutcome+Ok because a reviewer that answered fast on a Mac was reported as 'could not be started'…: NotStarted {…}` (arm 1); the `InvalidOperationException` arm escapes the executor altogether |
+| *guard* `AChildStillAliveWhoseStartTimeCannotBeRead_IsKilled_AndTheErrorReachesTheCaller` (S9, both arms) | green before and after; **watched red once** by removing `&& process.HasExited` from the helper's `when`: `Expected a <System.Exception> to be thrown, but no exception was thrown.` after 20 s (the live child ran to its end) |
+
+`EndToEndTests.ARoundThatFoundNothing_SaysWhatItSent_AndKeepsWhatItWasTold` now asserts `all 2 reviewers answered` (plan round) and
+`all 6 reviewers answered` (code round) before it counts what was kept, so a reviewer that was not started names its cause instead of
+reading as a missing file. No other assertion changed. NOT covered: the macOS race itself — the seam stands in for it; the watch is
+the next 20 macOS CI runs (§10 of the plan).

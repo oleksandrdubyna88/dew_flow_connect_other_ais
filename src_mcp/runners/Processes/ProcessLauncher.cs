@@ -193,7 +193,12 @@ public interface IProcessLauncher
 /// this one dies. Defaults to recording nothing, which is what every test and every git command
 /// wants.
 /// </param>
-public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessLauncher
+/// <param name="startTimeOf">
+/// How a started child's start time is read for the tracker. Defaults to <see cref="Process.StartTime"/>; it is a seam so
+/// that a test can make the read fail AFTER the child has exited, which is what macOS does to a child that answers
+/// fast — a race no test can win on purpose with a real clock.
+/// </param>
+public sealed class ProcessLauncher(IProcessTracker? tracker = null, Func<Process, DateTime>? startTimeOf = null) : IProcessLauncher
 {
     /// <summary>
     /// How much of a stream is taken per read.
@@ -207,6 +212,8 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
     private const int DrainBufferChars = 8192;
 
     private readonly IProcessTracker _tracker = tracker ?? NoProcessTracking.Instance;
+
+    private readonly Func<Process, DateTime> _startTimeOf = startTimeOf ?? (static process => process.StartTime);
 
     public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
     {
@@ -303,17 +310,51 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
     /// of todo/PLAN_every_round_is_counted.md has no answer to — a marker still saying "spawning" would then be read as
     /// "nothing was spawned" — so the launcher closes that door itself: a record that fails is a child that is killed,
     /// its tree with it, and waited for, before the exception reaches the caller.
+    /// <para><b>A child that is already gone is not a child that could not be recorded.</b> A reviewer that answers at once
+    /// can exit — and on macOS be reaped — before its start time is read, and there <see cref="Process.StartTime"/> throws.
+    /// There is nothing left for an orphan sweep to find, so <see cref="IProcessTracker.Record"/> is NOT called and the
+    /// launch goes on to collect what the child said. What the tracker's owner then holds is exactly what it held between
+    /// <see cref="Started"/> and <c>Record</c> in every launch: the Team server's reader marker stays "spawning" and is
+    /// cleared by the capture's own end (<c>GaugeCapture.ReadAsync</c>, <c>ClearReader</c>); a "spawning" marker with no
+    /// live child reconciles as "nothing to kill". The <c>finally</c> of <see cref="RunAsync"/> still tells the tracker to
+    /// forget the pid. A child that is still ALIVE when the read fails is the case above: ended, waited for, and the
+    /// exception rethrown.</para>
     /// </remarks>
     private async Task RecordedAsync(Process process, ProcessRequest request)
     {
         try
         {
-            _tracker.Record(process.Id, process.StartTime.ToUniversalTime(), request.TrackAs);
+            if (TryStartedAt(process, out var startedUtc))
+            {
+                _tracker.Record(process.Id, startedUtc, request.TrackAs);
+            }
         }
         catch (Exception)
         {
             await EndAndConfirmAsync(process, request with { EndsWhen = ProcessRequest.Never }, new TreeWatch(_tracker, request.TrackAs, tracked: false));
             throw;
+        }
+    }
+
+    /// <summary>
+    /// The child's start time, or <c>false</c> when the read failed BECAUSE the child has already exited — the one failure
+    /// that is not a failure. Both spellings are covered: macOS throws <see cref="System.ComponentModel.Win32Exception"/>
+    /// ("Unable to retrieve the specified information about the process or thread"), and .NET's own "process has exited"
+    /// is an <see cref="InvalidOperationException"/>. The same exception for a child that is still alive is not caught.
+    /// </summary>
+    private bool TryStartedAt(Process process, out DateTime startedUtc)
+    {
+        try
+        {
+            startedUtc = _startTimeOf(process).ToUniversalTime();
+
+            return true;
+        }
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException && process.HasExited)
+        {
+            startedUtc = default;
+
+            return false;
         }
     }
 
