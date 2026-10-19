@@ -3543,6 +3543,29 @@ Reached through both preview-fork shapes as step 22 is, and a read-only `--log` 
 twenty-two (`ThePlanSourceIsStepTwentyThreeTests`). `ThePairsThemselvesTests`' step-12 re-run drops the column with the
 rest.
 
+**Schema step 24 — who wrote the code a round reviewed** (`Schema.TheRoundsAuthors`, appended after step 23; story E5.S2 of
+`todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`). `round_authors` holds one row per row of the round's
+`AuthorsSnapshot` — `who` (`main` | `subagent`), `agent` (the opaque id, **empty for main**), `requested`, `model`, `effort`,
+`agent_type`, `association`, `window` (`before-open` | `round`), `launches`, `turns`, the four token terms and `write_calls`, keyed
+`(round_id, ordinal)`; the round's own stage and number are its `round_id`'s. Fourteen columns join `rounds`: `authors_state` (the
+card text, `State` or `State: reasons`), `authors_session`, `authors_id_source` (`registry` | `environment` | `stored` | `healed`),
+`authors_reader` and `authors_attribution` (E3's reader version and E4's `RoundAttribution.Version`; `0` = that component did not run),
+`submodule_writes`, `uncovered_writes` and the seven `ambiguous_*` totals; `rounds_by_authors_session` serves the peer lookup
+that runs on EVERY round. **`RoundAuthorsTable.Record(db, roundId, snapshot)`** (its own file, the `RoundChangesTable` shape)
+is called from `RecordRound` inside its transaction and is the second caller E7's backfill joins: it opens **no transaction of its
+own**, and `TheWriterJoinsTheCallersTransaction` / `AFaultAfterTheWriter_LeavesNoAuthors` prove a rollback or a later fault leaves
+nothing behind. It projects FROM `round.Authors`, never a `RoundContext`, so a deleted database re-projected from the session files
+comes back identical; a null snapshot writes NOTHING (a backfilled row survives a live re-record) and the upsert is NOT widened.
+**An unknown is `-1`, never `0`** — the ambiguous totals of an unobserved round, and both write counts of any snapshot no attribution
+produced; `authors_state = ''` means *not recorded* and a reader checks it first. `main` ↔ `''` is `RoundAuthorsTable`'s one
+mapping (`AgentColumn`) and its one inverse (`AgentKeyOf`), which E6's read and E7's heal call. The older-server limit, stated: a
+`coai-mcp` released before step 24 re-saves a session file WITHOUT the snapshot (no session type carries `JsonExtensionData`; measured on
+the released 0.58.0, `open` on a throwaway repository over a data directory whose file carried a snapshot on two rounds: `authors`
+was gone from every round after one `open`, and `open` never opened `coai.db`); the database keeps the projected columns, because its
+upsert names none of them, it runs no step on a file past its own and never touches `round_authors` (`AnOlderServersReSave_LeavesTheProjectedAuthorsInPlace`). What is lost is the card line, the rebuild path and the members the database never held; E7's recompute
+repairs them while the transcript exists. Reached through both preview-fork shapes as step 23 is; `ThePairsThemselvesTests`' step-12
+re-run drops the index first (SQLite refuses `DROP COLUMN` on an indexed column), then the fourteen columns.
+
 **`--log` names each round's size** (story E2.S5, contract C3). `LoggedRound` gains an init property `Size`
 (`RoundSize?`, JSON `size`): `{ whole: { state, from, cells[] }, delta: { … }, origin }`, one cell per (coverage, kind) with
 `files`, `added`, `removed`. `RoundsQuery.Rounds` hands the page's rounds to `RoundChangesLog.Attach` (which finds each round's id in its own cursor) (its own file, the
