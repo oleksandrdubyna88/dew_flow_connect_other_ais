@@ -98,3 +98,7 @@ dotnet_diagnostic.CA1502.severity = error
 
 [src_mcp/src/Store/SecurityPreviewFork.cs]
 dotnet_diagnostic.CA1502.severity = error
+
+# The authors backfill (E7) is held to the doctrine bound as well: every method of its own files stays within complexity 4.
+[src_mcp/src/Server/Backfill/*.cs]
+dotnet_diagnostic.CA1502.severity = error
