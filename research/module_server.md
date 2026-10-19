@@ -3236,6 +3236,9 @@ system only when it is LOCAL (`Store/LocalPaths.cs`, 2026-10-18 security fixes):
 single-`/`-rooted one elsewhere, judged on the raw text AND on the normalised directory, never on a network drive (an
 unknown drive type fails closed), never under the host automounts `/net` or `/Network`; anything else is `Unresolved` with
 an empty key, because asking the disk about `\\host\share` makes Windows offer the user's credentials to that host.
+Not detected, and stated in the code: a custom autofs map on another root, a network file system mounted into a POSIX tree,
+and an existing junction or link under a local path, which the probe follows (its target is the link owner's choice, not
+the transcript's).
 
 **What is read, and what never is.** From a line: `type`, `timestamp`, `agentId`, `isSidechain`, `message.id`, `message.model`, the four usage
 numbers, `requestedModel`, `effort`, a block's `type`, a `tool_use`'s `name` and `id` (and a write tool's one path), a `tool_result`'s
