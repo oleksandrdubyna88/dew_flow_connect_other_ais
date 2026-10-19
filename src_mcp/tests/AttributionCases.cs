@@ -13,40 +13,29 @@ public static class AttributionCases
     public const string X = "D:/x";
     public const string Y = "D:/y";
 
-    public static TheoryData<string> Names =>
+    /// <summary>The worked examples, in order — the ONE list: <see cref="Names"/> and <see cref="Named"/> both read it.</summary>
+    private static readonly (string Name, Func<AttributionScenario> Build)[] Examples =
     [
-        "case1-two-repositories-in-one-session",
-        "case2-background-work-across-rounds",
-        "case3-a-model-switch-inside-one-window",
-        "case4-a-resumed-agent",
-        "case5-missing-child-transcripts",
-        "case7-before-open-and-a-second-gate",
-        "case8b-a-peer-of-another-caller",
-        "case8b-a-peer-still-running",
-        "case8c-the-prior-end-stops",
-        "case8d-a-settled-peer-after-an-unsettled-one",
-        "caller-changed",
-        "blind-rounds",
-        "two-repositories-one-agent",
+        ("case1-two-repositories-in-one-session", () => Case1()),
+        ("case2-background-work-across-rounds", () => Case2()),
+        ("case3-a-model-switch-inside-one-window", () => Case3()),
+        ("case4-a-resumed-agent", () => Case4()),
+        ("case5-missing-child-transcripts", () => Case5()),
+        ("case7-before-open-and-a-second-gate", () => Case7()),
+        ("case8b-a-peer-of-another-caller", () => Case1(peerCaller: "c9")),
+        ("case8b-a-peer-still-running", () => Case1(peerStatus: "running", peerStamp: 105)),
+        ("case8c-the-prior-end-stops", () => Case8c()),
+        ("case8d-a-settled-peer-after-an-unsettled-one", () => Case8d()),
+        ("caller-changed", () => CallerChanged()),
+        ("blind-rounds", () => BlindRounds()),
+        ("two-repositories-one-agent", () => TwoRepositoriesOneAgent()),
     ];
 
-    internal static AttributionScenario Named(string name) => name switch
-    {
-        "case1-two-repositories-in-one-session" => Case1(),
-        "case2-background-work-across-rounds" => Case2(),
-        "case3-a-model-switch-inside-one-window" => Case3(),
-        "case4-a-resumed-agent" => Case4(),
-        "case5-missing-child-transcripts" => Case5(),
-        "case7-before-open-and-a-second-gate" => Case7(),
-        "case8b-a-peer-of-another-caller" => Case1(peerCaller: "c9"),
-        "case8b-a-peer-still-running" => Case1(peerStatus: "running", peerStamp: 105),
-        "case8c-the-prior-end-stops" => Case8c(),
-        "case8d-a-settled-peer-after-an-unsettled-one" => Case8d(),
-        "caller-changed" => CallerChanged(),
-        "blind-rounds" => BlindRounds(),
-        "two-repositories-one-agent" => TwoRepositoriesOneAgent(),
-        _ => throw new ArgumentOutOfRangeException(nameof(name), name, "Not a worked example."),
-    };
+    public static TheoryData<string> Names => [.. Examples.Select(example => example.Name)];
+
+    internal static AttributionScenario Named(string name) =>
+        Examples.Where(example => example.Name == name).Select(example => example.Build()).FirstOrDefault()
+        ?? throw new ArgumentOutOfRangeException(nameof(name), name, "Not a worked example.");
 
     /// <summary>
     /// Case 1 — two repositories in one caller session. Gate A on x (open +0; C1 60→70, C2 120→130, C3 180→190), peer B on y (open
