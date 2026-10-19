@@ -65,13 +65,25 @@ function run(target: string, args: readonly string[], shell: boolean): Promise<s
 /** How often a cancellable read asks whether it has been given up on. */
 const STOP_POLL_MS = 200;
 
+/** Why a capture answered `code: -1` — absent when it did not (a real exit) or when the cause is not known. */
+export type CaptureEnd = 'timeout' | 'not-started' | 'stopped';
+
+/** What a capture answers: the exit code and what the child printed, and — for a `-1` — why there is no exit code. */
+export interface Captured {
+  readonly code: number;
+  readonly output: string;
+  readonly ended?: CaptureEnd;
+}
+
 /**
  * Everything a binary printed, or nothing at all.
  *
  * <p>Expressed over the one launcher rather than owning a spawn of its own. The contract its three
  * callers rely on is unchanged and is stated here rather than left to be re-derived: a synchronous
  * throw, a spawn error, a timeout and an unreadable exit all answer `code: -1` with empty output,
- * and only a real close carries what the child printed.</p>
+ * and only a real close carries what the child printed. A caller that must say WHICH of them it was
+ * reads `ended` (`CaptureEnd`): `timeout`, `not-started` (the spawn failed) or `stopped` (given up on);
+ * it is absent for a real exit and for an end nobody could name.</p>
  *
  * <p><b>The output is taken on `close`, not `exit`</b> — the launcher's own rule, and the reason is
  * this function: `exit` can arrive with output still buffered, and a truncated banner parses to no
@@ -105,20 +117,20 @@ export function capture(
   env?: Readonly<Record<string, string>>,
   /** What the child reads on stdin — a model check's row (`--check-model`, PLAN_one_model_catalog.md E3.3); empty for every probe. */
   input = '',
-): Promise<{ code: number; output: string }> {
+): Promise<Captured> {
   return new Promise((resolve) => {
     const child = launch(target, args, env === undefined ? { shell } : { shell, env });
 
     let output = '';
     let answered = false;
-    const answer = (code: number, text: string): void => {
+    const answer = (code: number, text: string, ended?: CaptureEnd): void => {
       if (answered) {
         return;
       }
       answered = true;
       clearTimeout(timer);
       clearInterval(watch);
-      resolve({ code, output: text });
+      resolve(ended === undefined ? { code, output: text } : { code, output: text, ended });
     };
 
     // `undefined` rather than an interval that asks a question nobody wants answered: a probe with
@@ -127,7 +139,7 @@ export function capture(
       if (stop()) {
         // The same teardown the cap performs, for the same reason: the tree has to go.
         child.kill();
-        answer(-1, '');
+        answer(-1, '', 'stopped');
       }
     }, STOP_POLL_MS);
 
@@ -137,7 +149,7 @@ export function capture(
       // panel repaints. Both codex's and the local reviewer's rounds named this; the tree is what
       // has to go, and the launcher is what knows how.
       child.kill();
-      answer(-1, '');
+      answer(-1, '', 'timeout');
     }, capMs);
 
     // NOTHING IS COMING. This function has no way to send input, so an open pipe is a promise it
@@ -150,7 +162,7 @@ export function capture(
     child.onStdout((chunk) => {
       output += chunk;
     });
-    child.onError(() => answer(-1, ''));
+    child.onError(() => answer(-1, '', 'not-started'));
     child.onExit((code) => answer(code, output));
   });
 }

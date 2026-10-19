@@ -1,3 +1,5 @@
+using CoaiMcp.Runners.Processes;
+
 namespace CoaiMcp.Runners.Acp;
 
 /// <summary>One turn to ask of an ACP agent: where to start it, what to start it in, which model, the prompt, and how long it has.</summary>
@@ -97,6 +99,9 @@ public sealed record AcpOutcome(
 {
     /// <summary>The session's input/output token totals from <c>/usage</c>, asked after an answered turn only — unknown otherwise.</summary>
     public AcpTokens Tokens { get; init; } = AcpTokens.Unknown;
+
+    /// <summary>The members of the agent's tree still alive when its teardown's confirmation ended (DL9) — empty for a clean end and for every profile that does not supervise its tree.</summary>
+    public IReadOnlyList<ProcessIdentity> Survivors { get; init; } = [];
 
     /// <summary>A turn that never started an agent: only the reason, and nothing from a session that did not exist.</summary>
     public static AcpOutcome NotStarted(string why) =>

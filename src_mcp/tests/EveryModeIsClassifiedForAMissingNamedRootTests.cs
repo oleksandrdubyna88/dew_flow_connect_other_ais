@@ -27,6 +27,7 @@ public sealed class EveryModeIsClassifiedForAMissingNamedRootTests
         // When the Kimi session ownership record of PLAN_vibe_and_kimi_runtimes.md §7 lands, this shim WRITES under the data
         // directory (kimi-sessions.jsonl) and moves to Program.WriterModes.
         [Program.Startup.AskAcp] = "the Kimi ACP shim: prompt on stdin, its child runs in --cwd, the report on stdout (AskAcpMode.cs)",
+        [Program.Startup.KimiClearMarker] = "deletes ONE survivor marker under the Kimi lock root and nothing else; it never opens the data directory (KimiClearMarkerMode.cs)",
         [Program.Startup.AgyHook] = "the Antigravity tool-use hook: stdin to a decision on stdout (AntigravityReadOnly)",
         [Program.Startup.Normalize] = "reads --in, writes --out (NormalizeMode.cs)",
         [Program.Startup.Outline] = "reads one source file, prints its outline (OutlineMode.cs)",

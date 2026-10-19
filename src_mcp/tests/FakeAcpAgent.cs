@@ -159,6 +159,15 @@ internal sealed class FakeAcpAgent : IDisposable
 
     public static string Exit(int code) => $$"""{"kind":"exit","code":{{code}}}""";
 
+    /// <summary>A grandchild that calls <c>setsid()</c> first — in its own session and group, as <c>rg</c> is in a Grep turn (L-K4) — its pid in <paramref name="pidFile"/>.</summary>
+    public static string GrandchildSetsid(string pidFile) => $$"""{"kind":"grandchildSetsid","pidFile":{{Quote(pidFile)}}}""";
+
+    /// <summary>A grandchild that waits for the file <paramref name="trigger"/> and only THEN starts a <c>setsid</c> sleeper, writing ITS pid to <paramref name="pidFile"/>.</summary>
+    public static string GrandchildLateSetsid(string trigger, string pidFile) => $$"""{"kind":"grandchildLateSetsid","trigger":{{Quote(trigger)}},"pidFile":{{Quote(pidFile)}}}""";
+
+    /// <summary>A grandchild that writes its pid and exits 0 at once: a zombie until its parent reaps it.</summary>
+    public static string GrandchildExits(string pidFile) => $$"""{"kind":"grandchildExits","pidFile":{{Quote(pidFile)}}}""";
+
     public string Grandchild() => $$"""{"kind":"grandchild","pidFile":{{Quote(PidFile)}}}""";
 
     public void Dispose() => _dir.Dispose();

@@ -1,6 +1,6 @@
 # PLAN — Kimi Code and Mistral Vibe on Linux and WSL
 
-> Status: **plan only, 2026-10-16; E1 done 2026-10-16 (the probes run on Linux; L-V6b, L-V7, L-V8 recorded); E4 measured 2026-10-16.** Scope: lifting D18 of
+> Status: **E1–E3 released in 0.59.0, E4–E5 built, E6 built and in review for 0.61.0 — 2026-10-18.** (Earlier: E1 done 2026-10-16 — the probes run on Linux; L-V6b, L-V7, L-V8 recorded; E4 measured 2026-10-16.) Scope: lifting D18 of
 > [PLAN_vibe_and_kimi_runtimes.md](PLAN_vibe_and_kimi_runtimes.md) for a coai-mcp that runs ON a Linux host (Remote-WSL first) —
 > Vibe first, because it is measured; Kimi after its WSL cells. Touches `src_mcp/runners/{Vibe,Kimi,Files,Processes,Platform}`,
 > `src_mcp/src/Acp`, `src_mcp/src/Program.cs` (the `--kimi-clear-marker` one-shot mode), `src_server/src/Slots`
@@ -310,6 +310,18 @@ Numbered DL1–DL14 so they never collide with the parent plan's D-numbers. Ever
   line at `/data/win`, a `virtiofs` line, an octal-escaped mount point, a super-option NOT decoded, stacked mounts (the last line
   wins), a short line skipped, a table without `/`. The sentence
   still names `/mnt/<letter>/` as the example; the rule is the mount type. On a native Linux without drvfs the rule is inert (Q1).
+  **Network filesystems — decided by the owner 2026-10-19 (Q7, option A; first taken as a stated assumption 2026-10-17)** (E5's Fable security judgement,
+  finding 3; question consultant 3607576…, which split: one row "warn and admit", the other "refuse with a cure"). The DL6 argument
+  holds word for word for a sign-in folder on `nfs`/`nfs4`/`cifs`/`smb3`/`fuse.sshfs`/`ceph`/`glusterfs`: a `kimi` on ANOTHER
+  machine sharing that home refreshes the same rotating token, and no lock on this machine can see it. Windows already refuses
+  network and roaming locations for the same folder (D19). The repository's own precedent for the same choice is CredsForDevs'
+  `DataDirCheck` (refuse a network data folder by default, with an explicit override). So, in E6: `MountEntry.IsNetwork` (the
+  types above) refused with its own sentence — *"your Kimi sign-in folder is on network storage (<type>); a Kimi on another machine
+  that shares this home can refresh the same sign-in and sign you out, and coai cannot see it. Point `KIMI_CODE_HOME` at a folder on
+  this machine's own disk (not under the network home) and sign in there once with `kimi login`, or set
+  `coai.kimiAllowNetworkSignIn` if you never run Kimi on another machine"* — and an explicit, default-off override setting that
+  turns the refusal into a one-line warning on the card. The cure is a SEPARATE local sign-in, never a copy of the rotating token
+  (D19). The owner's own WSL2 home is ext4 and unaffected either way.
   It is judged on the real path (`Resolved`, `Junctions.cs:179`). coai never `chmod`s the target (Kimi keeps it `0700`, RESULTS_kimi
   §11). **Confirmed by L-K2 (RESULTS_kimi_confinement §29):** signed in 8 of 8 through the symlink; the one refresh wrote
   `<slot>.json.tmp.<pid>.<rand>` INSIDE the person's folder and renamed it over the slot (new inode, same name, size and mode `600`, no
@@ -584,9 +596,14 @@ Numbered DL1–DL14 so they never collide with the parent plan's D-numbers. Ever
     `mkdir -p ~/.local/bin` first (a fresh account has no such folder, and `ln` into a missing folder fails); then the link ONLY when
     `command -v fdfind` resolves AND `command -v fd` does not; the step is idempotent — it is skipped when `~/.local/bin/fd` is
     already a link to that `fdfind`, and otherwise made with `ln -sf "$(command -v fdfind)" ~/.local/bin/fd`, on that exact path
-    only, so a second press neither fails on an existing link nor touches anything else;
-  - the line ENDS by checking its own work (the plan gate for epics 4–6, 2026-10-16, F10): it resolves `rg` and `fd` the way `KimiTools` will look — the person's Kimi
-    `bin`, `~/.local/bin`, then `PATH` (DL5) — and prints which path each one resolved to, or that it did not, so a press that
+    only, so a second press neither fails on an existing link nor touches anything else. *As built (the review of 2026-10-18, G):* the
+    link is judged by what is at the path — a REAL file, or a link of the person's own that still resolves to a file, is left alone; only
+    an absent path, a dangling link or a link to a folder gets the link — `mkdir -p ~/.local/bin` moved INSIDE that branch (a host that needs
+    no link gets no empty `~/.local`), it is `ln -sfn`, and the target is absolute: `/usr/bin/fdfind` when it exists, else `command -v`'s
+    answer made absolute;
+  - the line ENDS by checking its own work (the plan gate for epics 4–6, 2026-10-16, F10): it resolves `rg` and `fd` the way the SERVER will look
+    (`KimiTools.Directories` — the person's Kimi `bin`, then `PATH`, then `~/.local/bin`; DL5 says the same, and the line follows it since the review of
+    2026-10-18, H — it had listed `~/.local/bin` before `PATH`) — and prints which path each one resolved to, or that it did not, so a press that
     installed nothing usable says so in the terminal rather than at the next launch;
   - any other distribution — neither `apt-get` nor `dnf` resolves — (the plan gate, F2 + F13): the line installs nothing for the
     tools and prints ONE generic instruction, *"install ripgrep and fd with your distribution's package manager, or place them on
@@ -614,13 +631,13 @@ Numbered DL1–DL14 so they never collide with the parent plan's D-numbers. Ever
   no such redirect and the two sides stay one shape.
 
 - **DL14 — Release order and versions.** Vibe ships first: E1–E3 in the next `src_mcp` minor, **0.59.0**, with an extension minor.
-  Kimi follows in the first minor after E4–E6 (0.60.0 at the earliest). The per-runtime gate `RUNTIME_SINCE`
+  Kimi follows in the first minor after E4–E6 (0.60.0 at the earliest — and see the 2026-10-18 note at the end of this decision: main released 0.60.0 without it, so it is **0.61.0**). The per-runtime gate `RUNTIME_SINCE`
   (`src_vs_code/src/runtimeSince.ts:46-50`) answers "does this server know the runtime", not "does it run it on THIS host", so a
   second table joins it: `VIBE_ON_LINUX_SINCE = '0.59.0'`, `KIMI_ON_LINUX_SINCE` set by E6 — a Linux/WSL side whose server is older
   shows "update coai-mcp to run Vibe here" instead of a row that is refused at launch. **The unreleased Kimi-consultant branch
   (`feat/kimi-consultant`) sets `KIMI_CONSULTANT_SINCE` to 0.58.0. Whichever of the two merges SECOND bumps its constant to the next
   minor** (`runtimeSinceIsAhead.test.ts` guards the table, not unreleased commits — the reason `KIMI_RUNTIME_SINCE` once said 0.56.0,
-  `runtimeSince.ts:30-42`). 2026-10-17: mcp 0.58.0 shipped first from main (the plan-gate round history, #844), so Vibe on WSL2 takes 0.59.0 and Kimi on Linux 0.60.0 at the earliest.
+  `runtimeSince.ts:30-42`). 2026-10-17: mcp 0.58.0 shipped first from main (the plan-gate round history, #844), so Vibe on WSL2 takes 0.59.0 and Kimi on Linux 0.60.0 at the earliest. **2026-10-18:** main released mcp 0.60.0 (#857, the prompt-cap work) without Kimi on Linux, so by the second-merger rule Kimi on Linux ships in **0.61.0**: `KIMI_ON_LINUX_SINCE` is `'0.61.0'`, the help says 0.61.0 in five languages, and the release PR — not this branch — moves the manifests and the changelog.
 
 ## 5. The measurement cells, and who waits for them
 
@@ -951,6 +968,10 @@ Prerequisites: Vibe paid turns for E1 and L-V9 (~12); Kimi paid turns for E4 (~1
   a mystery. Revisited only if the owner meets it in daily use.
 - **Q4 — `sudo apt-get` in the install terminal** (he types his password there). Default: yes.
 - **Q5 — Release order** if `feat/kimi-consultant` is ready first: it takes 0.58.0 and Vibe-on-Linux 0.59.0 (DL14).
+- **Q7 — A Kimi sign-in on a network filesystem (DL6).** **ANSWERED by the owner 2026-10-19: option A.** A Kimi sign-in folder on
+  network storage is refused by default, with the cure (a local `KIMI_CODE_HOME`, signed in separately), and the machine-scoped
+  override `coai.kimiAllowNetworkSignIn` admits it with a warning. (Taken as the default 2026-10-17; the alternative — admit with a
+  warning and no refusal — was one consultant's choice and is not taken.)
 - **Q6 — A survivor blocks the sign-in for coai** (DL9): while a marker names a process coai could not end — or names nothing it can
   match, because the shim died between its `spawning` write and the agent's start — every coai Kimi turn on that sign-in is Busy with
   the pid (or the reason), re-tried on every launch, until the process is gone or a person clears the marker. The person's own `kimi`
@@ -1349,3 +1370,19 @@ Rejected, with the reasons recorded:
   arms, and S-K20; the providers answer reports a standing marker for its row and the card's button appears only then and runs
   the mode; the install button run in WSL on a machine (or a `testsToDelete-` prefix) without `rg`; the live Kimi checks of §8
   through the release; this plan promoted.
+
+- **Outcome of the integration (2026-10-18).** The server half (`feat/wsl-kimi-e6-server`), the extension half (`feat/wsl-kimi-extension`) and main (mcp 0.60.0) are merged on `feat/wsl-kimi-linux`; the only conflict was main's `MaxPromptKib` field beside E6's `SurvivorMarker` field on the providers row (both kept). Three things the two halves left open are closed here. (1) **The setting `coai.kimiAllowNetworkSignIn`** (DL6, Q7) had a server reader (`COAI_KIMI_ALLOW_NETWORK_SIGNIN`) and no writer: it is now a boolean, default off, in `package.json`, written to the data directory's `settings.json` only when on, per side, never carried by a config export, with a tick-box on the Kimi card (*Connection*) in a WSL2 or Linux window and a help sentence in five languages. (2) **The card's two server fields were already covered** by the extension half: the survivor marker (`kimiMarkerNote`, the *Clear the stuck Kimi marker* button) and the row `warning` (`versionWarningNote`, which draws the network-storage line); a Kimi-row test for the warning was added. (3) **The version**: `KIMI_ON_LINUX_SINCE` 0.60.0 → 0.61.0 (DL14).
+
+- **Outcome of the review (2026-10-18).** The lead's review of the integrated branch found twelve defects, all verified against the code; each was fixed red-first on `feat/wsl-kimi-linux` (the reds are in `research/module_tests.md`, *Kimi on Linux — the review of 2026-10-18*).
+  **Security.** (A) `coai.kimiAllowNetworkSignIn` could be switched on by a workspace's `.vscode/settings.json` and copied by Settings Sync: it is now `"scope": "machine"` AND read through the user-layer door
+  (`modelKeys.ts` `SAFETY_KEYS`, beside `MODEL_KEYS`, no second copy of the reading). (B) Turning the override OFF did not re-judge an existing home — the only mount check ran when the home was fresh: `Junctions.Locality` is asked on EVERY
+  launch, before any process starts. (C) The D19 spelling check (`/net/`, `/misc/`) refused a home the override had admitted: `Junctions.IsLocalSpelling` follows the override on a Linux or WSL host. (D) `--kimi-clear-marker`
+  read, checked and deleted without the sign-in's gate: it takes the gate (exit 74 when it cannot, in 20 s) and deletes only a marker that is still the one judged. (E) The supply-chain guard's observed bypasses (an escalator behind
+  `$(`, a backtick, `&`, `<(`; a fetch with no readable admitted URL): the splitter breaks at `& ( )` and the backtick, an escalator is a TOKEN of the raw step text, the one admitted `sudo apt-get|dnf install` is a whole
+  construct, a fetcher step must carry an admitted URL, and the line itself mutated at every `$(` is refused. **Correctness.** (F) the `KimiTools` cure said `ln -sf`: it says `ln -sfn … unless ~/.local/bin/fd is already your own file`.
+  (G) The `fd` link: a real file or a resolving link of the person's own is left alone, `mkdir -p` moved inside the link branch, the target is absolute and prefers `/usr/bin/fdfind`. *Deviation from the brief:* a link that resolves to a
+  FOLDER is still replaced (only one that resolves to a FILE is left alone) — the S2 guard against a planted directory link keeps its meaning. (H) The closing check follows the server's order (Kimi's bin, PATH, `~/.local/bin`);
+  DL12's text above now says so. (I) The Kimi card's Linux note and the help in five languages say `sudo apt-get update` once if apt cannot find the packages, and that the tools must be on the PATH the VS Code server sees. (J) The
+  override chain is tested link by link (roster, providers row, question fan-out) and was broken once on purpose and restored. (K) `AKimiRowRunsThroughTheServiceOnWsl2Tests` uses a `testsToDelete-` folder. (L) The Clear button says
+  each way a run can end without an exit code, every outcome has its own notice code, and the button is disabled and reads *Clearing…* while the run is in flight. *Not done here, on purpose:* the `AsyncLocal` + `Restore` seam copies
+  (`KimiHost.cs`, `KimiRuntime.cs` and five older ones) and the twin `{Path, Pids}` records are a separate refactor; 76 older `TempDir.For("coai-…")` prefixes in `src_mcp/tests` still lack `testsToDelete-`.

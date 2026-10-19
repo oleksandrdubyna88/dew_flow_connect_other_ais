@@ -114,6 +114,7 @@ import { askedOrRefused, asksAnEndpoint, type EndpointListing, listingOf } from 
 import { vaultKeyOf } from './vaultKey';
 import { isApiSettingKey, resetTarget, withApiSetting, withoutApiSetting } from './apiSettings';
 import { modelsForKey } from './apiModelsProbe';
+import { NOT_INSTALLED, pressClearMarker } from './kimiMarker';
 import { Found, FoundRound, keysFileIn, readBugs, readFileAt, readPairs, readRealMethod, RoundKey, serverRun, uploadRun, writeDecisions } from './roundsDbRead';
 import { BinaryFeatures, FEATURES, FeaturesCache, hasFeature, settledFeatures } from './binaryFeatures';
 import { collectWithPick } from './bugzCollect';
@@ -2766,6 +2767,9 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       case 'trySecurity':
         await this.trySecurity(id ?? '');
         break;
+      case 'clearKimiMarker':
+        await this.clearKimiMarker(id ?? '');
+        break;
       case 'closeConsultation':
         await this.closeConsultation(id ?? '');
         break;
@@ -3460,6 +3464,28 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       ? securityTryFailed(sample, refusal)
       : await this.askCheckSecurity(server.fsPath, sample, features);
     await this.render();
+  }
+
+  /** How long the clear mode may take: it reads a few `/proc` entries and deletes one file. */
+  private static readonly CLEAR_MARKER_CAP_MS = 20_000;
+
+  /**
+   * The Kimi card's *Clear the stuck Kimi marker* (E6): the server is asked again, the path comes from ITS answer for this row, the
+   * one-shot `--kimi-clear-marker` runs on it, and its exit code is said in words (`kimiMarker.ts`). The state lives in the server's
+   * marker file and is re-read by the providers probe, so a reload shows what is true; the probe is refreshed after the press.
+   */
+  private async clearKimiMarker(rowId: string): Promise<void> {
+    const executable = this.serverExecutable();
+    const said = executable.length === 0
+      ? NOT_INSTALLED
+      : await pressClearMarker(rowId, {
+        providers: () => readProviders(executable),
+        clear: (path) => serverRun(executable)(['--kimi-clear-marker', path], PanelProvider.CLEAR_MARKER_CAP_MS),
+      });
+    await notify({ as: said.as, class: 'outcome', ...said.notice, title: said.title });
+    if (executable.length > 0) {
+      await this.refreshProviders(executable);
+    }
   }
 
   private async askCheckSecurity(executable: string, sample: string, features: readonly string[]): Promise<SecurityTryResult> {

@@ -184,6 +184,12 @@ public sealed record ReviewerSettings(string Provider)
     /// like <see cref="DataDir"/> — a directory, never anything in it.
     /// </remarks>
     public string OwnedScratch { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Only <c>KimiRuntime</c> reads it: whether a sign-in folder on network storage may be used (DL6 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>, the panel setting <c>coai.kimiAllowNetworkSignIn</c>). Default off — the refusal
+    /// is the rule, the override a person turns on when they never run Kimi on another machine.
+    /// </summary>
+    public bool KimiAllowNetworkSignIn { get; init; }
 }
 
 /// <summary>One reviewer launch, fully described: the process, and where its answer lands.</summary>

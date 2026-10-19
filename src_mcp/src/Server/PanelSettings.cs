@@ -671,6 +671,13 @@ public sealed record PanelSettings
     public bool ConsultEnabled { get; init; } = true;
 
     /// <summary>
+    /// Whether a Kimi sign-in folder on network storage (nfs, cifs, sshfs …) may be used — default OFF (DL6 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>, Q7). The extension's <c>coai.kimiAllowNetworkSignIn</c> writes
+    /// <c>COAI_KIMI_ALLOW_NETWORK_SIGNIN</c> into the data directory's settings file, which this reads like every other <c>COAI_*</c> setting; a variable in the client's config wins over the file. Read through <see cref="Flag"/>:
+    /// an unreadable value stays OFF, which is the safe side of a rotating sign-in.
+    /// </summary>
+    public bool KimiAllowNetworkSignIn { get; init; }
+
+    /// <summary>
     /// Whether <c>COAI_CONSULTANTS</c> could not be read at all — in which case consulting refuses.
     /// </summary>
     /// <remarks>
@@ -994,6 +1001,7 @@ public sealed record PanelSettings
             ConsultantHomesRoot = HomesRootOf(env),
             Pace = ServerPace.From(env),
             ConsultEnabled = NotSwitchedOff(env, "COAI_CONSULT_ENABLED"),
+            KimiAllowNetworkSignIn = Flag(env, "COAI_KIMI_ALLOW_NETWORK_SIGNIN"),
             ConsultantsUnreadable = consultants.Unreadable,
             GlobalConcurrency = IntVar(env, "COAI_MAX_CONCURRENCY", 3),
             PerProviderConcurrency = IntVar(env, "COAI_MAX_PER_PROVIDER", 2),
