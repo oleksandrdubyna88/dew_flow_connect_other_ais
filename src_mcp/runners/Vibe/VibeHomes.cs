@@ -184,27 +184,10 @@ public static class VibeHomes
     }
 
     /// <summary>Old, and its owner gone (the lock is free): every entry but the held lock file removed, then the lock, then the folder.</summary>
-    private static bool RemovedUnderItsLock(string folder, DateTime cutoffUtc, HomeIo io)
-    {
-        if (NewestWrite(folder) >= cutoffUtc || HeldFile.Take(Path.Combine(folder, LockName)) is not Hold.Taken locked)
-        {
-            return false;
-        }
+    private static bool RemovedUnderItsLock(string folder, DateTime cutoffUtc, HomeIo io) =>
+        NewestWrite(folder) < cutoffUtc && FolderLock.RemoveIfFree(folder, LockName, io.Delete);
 
-        using (locked.Stream)
-        {
-            foreach (var entry in Directory.EnumerateFileSystemEntries(folder).Where(entry => !IsTheLock(entry)))
-            {
-                io.Delete(entry);
-            }
-        }
-
-        io.Delete(folder);
-
-        return true;
-    }
-
-    private static bool IsTheLock(string entry) => Path.GetFileName(entry).Equals(LockName, StringComparison.OrdinalIgnoreCase);
+    private static bool IsTheLock(string entry) => FolderLock.IsTheLock(entry, LockName);
 
     /// <summary>
     /// The newest write of the folder's entries and their entries — a home a launch just wrote into is young — or of the folder

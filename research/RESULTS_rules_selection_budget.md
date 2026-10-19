@@ -208,8 +208,8 @@ budget (4 706 bytes of the 10 056 left).
 `src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-class "*.StageRulesTests"` (and
 `--filter-class "*.RuleFilesTests"` for the number itself).
 - `RuleFilesTests.TheDefaultBudget_IsTheOperatorsNinetyKilobytes` — the constant is 90 000.
-- `StageRulesTests.AtNinetyKilobytes_TheBaseAndTheTier_SpendExactly79944Bytes` — **the measuring test and the
-  drift guard**: base 17 883 + tier 62 061 = 79 944. Its failure message prints the three numbers it found,
+- `StageRulesTests.AtNinetyKilobytes_TheBaseAndTheTier_SpendExactly79967Bytes` (named ...79944Bytes until 2026-10-18) — **the measuring test and the
+  drift guard**: base 17 906 + tier 62 061 = 79 967 (17 883 + 62 061 = 79 944 until 2026-10-18, see the last measurement). Its failure message prints the three numbers it found,
   so a conventions bump or an edit to this repository's own instruction files that moves them turns it red and
   the figures in this file are re-measured from that message. The unit is the collector's own: characters of
   the line-ending-normalised text.
@@ -229,6 +229,31 @@ the FULL budget (not its size) and still does: the feature stage now collects at
 
 **Not measured.** The prompt grows by up to 10 000 bytes a rule-carrying round; no vendor's context or cost
 effect of that was measured here.
+
+## RE-MEASURED AGAIN, 2026-10-18 — 23 characters of this repository's own base (E5's one-shot-mode entry)
+
+> **Subject:** the E6 server branch (`feat/wsl-kimi-e6-server`, from E5's merge `056d1ce1`), conventions pin `e29883f8`. **Cause:** E5 added the `--kimi-clear-marker` mode to the one-shot list in
+> `.agents/PROJECT.md` (the base rules, which `AGENTS.md`'s rule-selection procedure and the collector both read) — a deliberate growth that met the 90 KB pin (#848) and turned
+> `StageRulesTests.AtNinetyKilobytes_TheBaseAndTheTier_SpendExactly79944Bytes` red on every platform: base 17 906 where 17 883 was pinned. **Harness:** the production collector over the real mounted corpus,
+> through a throw-away loop inside `StageRulesTests` (written, run and deleted; not kept — the same method as the 2026-10-16 section above): the measuring test's own two sums with no budget in the way, then
+> the canary branch at 90 000, then for `i` in 0..2999 a collect with `RuleOrder.ForBranch(name)`, name = `feat/branch-<i>` for even `i` and `fix/issue-<i>-thing` for odd, counting mount rules that are not in
+> `RuleOrder.TierRules`. Windows checkout; the collector normalises line endings, so the numbers are the same on Linux and macOS (the CI jobs printed the same 17 906 and 79 967).
+
+| | 2026-10-16 | 2026-10-18 |
+|---|---|---|
+| base (instruction files + this repository's own rules) | 17 883 | **17 906** (+23, `.agents/PROJECT.md`) |
+| the eight tier rules | 62 061 | 62 061 |
+| base + tier | 79 944 | **79 967** |
+| **left for the rotated tail**, of 90 000 | 10 056 | **10 033** |
+| smallest rules outside the tier | 2 197, 3 065, 3 421, 3 460, 4 706 | the same |
+| files shown on the canary branch (`canary/the-tail`) | 16, 88 666 bytes | **16, 88 689 bytes** — the same three tail rules in the same order |
+| tail rules shown, 3 000 branches | 1 on 908, 2 on 1 847, 3 on 245; mean 1.78, max 3 | **the same: 908 / 1 847 / 245, mean 1.78, max 3** |
+| reach per rule, 3 000 branches | `durable-status` 877, `nuget-packages` 729, `gpu-lease` 397, `coai-caller-model` 364, `test-leftovers` 294, `utc-timestamps` 246, `automated-checks` 229, `dotnet-build` 216 … | **identical, rule by rule** |
+
+**Reading it.** 23 characters moved nothing that matters: the leftover is still more than the three smallest rules together (8 683) and less than the fourth smallest added to them (12 143), so the tail is still
+one to three rules, the distribution and every rule's reach are unchanged, and `common/test-leftovers.md` is still drawn on 294 of 3 000 (9.8 %). What changed is the two numbers the pin states and the byte count of the
+canary branch. Re-pinned: `StageRulesTests.AtNinetyKilobytes_TheBaseAndTheTier_SpendExactly79967Bytes` (base 17 906 + tier 62 061 = 79 967); the at-most-three test, the at-least-one test and the
+test-leftovers test are unchanged because the measurement leaves them true. The 2026-10-16 table above stays as history, with its 79 944 / 10 056.
 
 ## What this does not settle
 

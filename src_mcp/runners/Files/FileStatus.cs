@@ -8,6 +8,9 @@ namespace CoaiMcp.Runners.Files;
 /// <summary>What <c>statx</c> says about one file: its type and permission bits (from <c>stx_mode</c>), its owner, its inode and the device it lives on.</summary>
 public sealed record FileStatus(int Type, int Permissions, uint OwnerUid, ulong Inode, uint DeviceMajor, uint DeviceMinor)
 {
+    /// <summary>The mount this file lives on (statx <c>stx_mnt_id</c>, kernel 5.8+); 0 when it was not asked for or not filled (E5's mount-identity rule, DL6).</summary>
+    public ulong MountId { get; init; }
+
     public bool IsRegular => Type == 0x8000;
 
     public bool IsDirectory => Type == 0x4000;

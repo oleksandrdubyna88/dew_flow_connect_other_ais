@@ -1,5 +1,88 @@
 # Changelog
 
+## Extension 0.82.0 · Server 0.62.0 — 2026-10-19
+
+**Added: a Vibe "Projects on this disk" row can read a folder of repositories.** Before, such a row was refused on a
+folder like `d:\rsd` or `~/git`, because it holds many repositories and Vibe has no trustworthy read-only mode, so it may
+read only a clean Git copy of one work tree. Now coai-mcp opens a granted parent folder and finds the Git repositories
+under it. It copies each one into a folder that coai owns, and it removes the copies after the turn.
+
+**Server (coai-mcp 0.62.0):**
+- The walk goes two levels down. It skips hidden folders, `node_modules`, `bin`, `obj`, Windows hidden and system folders,
+  and every link. It never goes into a repository. One Git call confirms each candidate as the top of a work tree.
+- A broken candidate or an unreadable folder is skipped, and a note says so on the row. Any refusal from a copy refuses the
+  whole row and removes every copy.
+- Links are checked from the granted folder down to each repository, right before its copy.
+- A linked worktree whose main checkout is copied in the same row is left out, and the row and the model's prompt both say so.
+- Limits: 10,000 folders per walk, 100,000 entries per listing and 50 repositories per row. Over 50, the row is refused and
+  the refusal names the cure. The walk and the copies share the row's time budget, and a refusal says which one ran out.
+- After a crash, `coai-question-*` scratch folders are swept after six hours, and only when the sweep can take the row's lock.
+
+**Extension (0.82.0):** the help texts for the disk row now describe the folder of repositories, in all five languages.
+## Extension 0.81.0 · Server 0.61.0 — 2026-10-19
+
+**Added: Kimi Code runs as a reviewer on a WSL2 host.** Vibe already ran on WSL2 (server 0.59.0). Kimi now uses the same
+host check. WSL2 is admitted. Native Linux, WSL1, macOS and a `wsl.exe` bridge are refused, and the refusal says why.
+
+**Server (coai-mcp 0.61.0):**
+- The Linux mechanisms are in: an exclusive sign-in lock, a file identity key, a mount-locality check, a `/proc` process
+  listing and a teardown that leaves no child behind.
+- `rg` and `fd` are found in the Kimi bin folder, then on PATH, then in `~/.local/bin`. A missing tool is refused with a
+  cure for `apt-get`, `dnf` or a generic host.
+- On Linux, Kimi gets only the environment it needs: HOME, a private cache folder, `KIMI_CODE_HOME`, the no-update flag
+  and PATH.
+- A sign-in folder on NFS, CIFS or sshfs is refused by default, because a Kimi on another computer could refresh the
+  rotating token and sign the person out. The check runs on every launch.
+- A stuck Kimi leaves a survivor marker. The providers answer now reports it, and `--kimi-clear-marker` clears it under
+  the sign-in lock.
+
+**Extension (0.81.0):**
+- The Kimi card has a *Clear the stuck Kimi marker* button.
+- The setting `coai.kimiAllowNetworkSignIn` lets a person allow a network sign-in folder. It is read from the user layer
+  only: a workspace cannot set it, Settings Sync does not copy it, and a config export never carries it.
+- On Linux the Install button runs only the vendor installer and the `apt-get` or `dnf` install of `ripgrep` and
+  `fd-find`.
+
+## Team server 0.14.0 — 2026-10-19
+
+This release was proposed as 0.13.2 and became 0.14.0 when the Kimi-on-WSL2 work (#879) landed first. Its
+`feat` commit moved the server's line to a minor version, so the release carries both changes below.
+
+**Fixed: a vendor with no quota gauge is logged as such.** After a deploy canary, the log said
+`gauge claude/a: skipped (slot-not-readable)` for a healthy slot of every vendor whose runtime is not codex. Only the
+codex runtime has a gauge the server reads, so the note now says `skipped (no-gauge-for-runtime)` for the others.
+`slot-not-readable` stays for a codex slot that really cannot be read: signed out, blocked, or with capture suspended.
+Nothing is written to the slot for a vendor that has no gauge; a codex reading is still stored, and a suspended capture is still stored as suspended, as before.
+
+**Changed: a gauge reader's marker is cleared only when every process it names is proven gone.** The reader marker
+moved into the shared process code that coai-mcp also uses for Kimi. After the kill and its confirmation, each process
+the marker names is now checked once more. If one is still running, the slot stays blocked with
+`reader-termination-failed`, as before. If one cannot be checked (for example, its status cannot be read), the slot
+now stays blocked with the new code `reader-member-unverifiable`. Before, that process counted as gone and the marker
+was cleared.
+
+## Extension 0.80.2 — 2026-10-19
+
+**No change in what the extension does.** This release ships with coai-mcp 0.60.2, whose local review lines in
+`usage.jsonl` now carry their round. The Usage page already read a line's `round` from either source, so a local line
+keeps the round key the engine stamped, a line with an empty round reads as a line with no round, and the round changes
+no count or total: two launches of one round are still two runs, with their tokens summed once. New tests hold these
+three facts, and the doc comments on the usage entry now describe the local line as it is.
+
+## Server 0.60.2 — 2026-10-19
+
+**Fixed: one bad field in a reviewer row costs that row only.** A hand-edited member of the wrong JSON type in
+`COAI_VENDORS` (for example `"timeoutMinutes":"30"`) used to make the whole list read as empty, so the server quietly
+ran the shipped default reviewers in place of every row the person wrote. A `null` row crashed the server at startup.
+Now the rows are read one by one. A row that does not read is left out on its own, the others still review, and the
+server names the row and the member in `providers`, in the startup and reload notice, and in the panel's toast. If
+every row is refused, no reviewer runs, the same as for an empty list.
+
+**Fixed: a local review line in `usage.jsonl` carries its round.** Every launch of one review turn — the first, a
+repair, a follow-up and every earlier turn of a conversation — now writes the round key the engine stamped, under the
+same `round` field the Team server's lines use, so a local line can be joined to its round. A launch outside a round,
+and consultation, question-row and probe lines, write none.
+
 ## Team server 0.13.1 — 2026-10-18
 
 **Fixed: rounds per 1 % of quota is counted from one rise to the next, and pooled** (the server's half of the same

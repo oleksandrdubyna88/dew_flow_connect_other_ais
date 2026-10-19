@@ -21,7 +21,8 @@ namespace CoaiMcp.Runners.Files;
 /// ordinary machine, so <see cref="Refusal(HostKind, string, string)"/> admits it, asks the kernel where the target really is
 /// (<c>HandleRead.FinalDirectory</c>) and refuses only a resolution that leaves the local drives. The junction keeps the SPELLING
 /// as its target — one level.</para>
-/// <para><b>Windows only</b> (D18): on any other host <see cref="Refusal"/> answers the D18 sentence and nothing is made.</para>
+/// <para><b>The hosts that admit Kimi</b> (<see cref="HostKinds.HasKimiLockFamily(HostKind)"/> says which; D18 lifted for them by E5 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): on a Linux or WSL host the link is a directory symbolic link (<c>JunctionsUnix</c>), and the filesystem that holds the real path
+/// is judged by its mount type (<see cref="MountLocality"/>), never by a <c>/mnt</c> prefix; on any other host <see cref="Refusal"/> answers the D18 sentence and nothing is made.</para>
 /// <para>Nothing Kimi-specific lives here: no config, no launch — only the shape of a link into somebody else's folder.</para>
 /// </remarks>
 public static partial class Junctions
@@ -41,7 +42,23 @@ public static partial class Junctions
     /// <c>JunctionsNative</c>, the kernel calls; a test's, per async flow, makes a symbolic link and names paths by their real spelling, so every
     /// decision below runs on any OS. TEST ONLY — null in the product.
     /// </summary>
-    internal static IJunctionShell Shell => _shell.Value ?? JunctionsNative.Instance;
+    internal static IJunctionShell Shell => _shell.Value ?? (OperatingSystem.IsWindows() ? JunctionsNative.Instance : JunctionsUnix.Instance);
+
+    private static readonly AsyncLocal<Func<string>?> _mountInfo = new();
+
+    private static readonly AsyncLocal<Func<string, MountIdentity>?> _mountIdentity = new();
+
+    /// <summary>The table of mounts the locality rule reads: <c>/proc/self/mountinfo</c> in the product, a test's, per async flow.</summary>
+    private static Func<string> MountInfo => _mountInfo.Value ?? ReadMountInfo;
+
+    private static string ReadMountInfo() => File.ReadAllText(MountLocality.MountInfoPath);
+
+    /// <summary>TEST ONLY: the table of mounts of this async flow, and — when a test names a mount point that does not exist — the identity the kernel would have given the path (default: the real <c>statx</c>). <see langword="null"/> puts <c>/proc/self/mountinfo</c> and the real question back.</summary>
+    internal static void StandInMountInfo(Func<string>? read, Func<string, MountIdentity>? identify = null)
+    {
+        _mountInfo.Value = read;
+        _mountIdentity.Value = identify;
+    }
 
     /// <summary>TEST ONLY: the shell of this async flow — <see langword="null"/> puts the product's back.</summary>
     internal static void StandIn(IJunctionShell? shell) => _shell.Value = shell;
@@ -54,19 +71,46 @@ public static partial class Junctions
         Refusal(host, link, target, driveType, Shell.FinalDirectory);
 
     /// <summary>The seam of the final path as well, so a test can make an ancestor link lead off the local drives.</summary>
-    internal static string Refusal(HostKind host, string link, string target, Func<string, DriveType> driveType, Func<string, string> final) =>
-        new Func<string>[]
+    internal static string Refusal(HostKind host, string link, string target, Func<string, DriveType> driveType, Func<string, string> final, bool allowNetwork = false)
+    {
+        var real = new Lazy<string>(() => final(target));
+
+        return new Func<string>[]
         {
-            () => WindowsOnly(host),
-            () => LocalDrive(target, driveType),
+            () => HostAdmitted(host),
+            () => LocalDrive(host, target, driveType, allowNetwork),
             () => Length(target),
             () => Missing(target),
             () => Chained(target),
-            () => Resolved(target, driveType, final),
+            () => Resolved(host, target, driveType, real.Value, allowNetwork),
+            () => Mounted(host, target, real.Value, allowNetwork),
             () => Taken(link),
         }
         .Select(check => check())
         .FirstOrDefault(refusal => refusal.Length > 0) ?? string.Empty;
+    }
+
+    /// <summary>
+    /// B of the review of 2026-10-18: where the sign-in folder IS, judged alone — its spelling, where its ancestors really lead, and the filesystem that holds it — and nothing about making a link. The launch control asks it on
+    /// EVERY launch, before any process starts: the home is made once, but the override may be switched off, or a mount may change under the same folder, and a home that exists is not a home that was judged today. The very
+    /// checks <see cref="Refusal(HostKind, string, string)"/> runs, in the same order, so the two cannot say different things.
+    /// </summary>
+    public static string Locality(HostKind host, string target, bool allowNetwork) => Locality(host, target, Shell.DriveOf, Shell.FinalDirectory, allowNetwork);
+
+    /// <summary>The seams of the drive type and the final path, so a test can make a folder look like it resolves off the local drives.</summary>
+    internal static string Locality(HostKind host, string target, Func<string, DriveType> driveType, Func<string, string> final, bool allowNetwork)
+    {
+        var real = new Lazy<string>(() => final(target));
+
+        return new Func<string>[]
+        {
+            () => LocalDrive(host, target, driveType, allowNetwork),
+            () => Resolved(host, target, driveType, real.Value, allowNetwork),
+            () => Mounted(host, target, real.Value, allowNetwork),
+        }
+        .Select(check => check())
+        .FirstOrDefault(refusal => refusal.Length > 0) ?? string.Empty;
+    }
 
     /// <summary>
     /// Whether <paramref name="target"/> may be READ by a deleter that wants to know what a link's target holds: a local path,
@@ -92,6 +136,17 @@ public static partial class Junctions
         && DriveRooted().IsMatch(target)
         && IsLocalDrive(driveType(target[..3]));
 
+    /// <summary>
+    /// The SPELLING rule with the network override folded in (C of the review of 2026-10-18): <see cref="IsLocal(string, Func{string, DriveType})"/>, and — on a Linux or WSL host with <c>coai.kimiAllowNetworkSignIn</c> on — also the
+    /// automount spellings (<c>/net/</c>, <c>/misc/</c>, <c>/Network/</c>) a network home has, so the override is not undone by a spelling check that runs first. A Windows host never gets the extra: a UNC home stays refused whatever the setting says.
+    /// The mount table (<see cref="MountLocality"/>) still judges the filesystem itself.
+    /// </summary>
+    internal static bool IsLocalSpelling(HostKind host, string target, Func<string, DriveType> driveType, bool allowNetwork) =>
+        IsLocal(target, driveType) || (allowNetwork && host is HostKind.Linux or HostKind.Wsl && NetworkFolders.Any(folder => target.StartsWith(folder, StringComparison.Ordinal)));
+
+    /// <summary><see cref="IsLocalSpelling(HostKind, string, Func{string, DriveType}, bool)"/> as the launch control asks it, before anything is read.</summary>
+    internal static bool IsLocalSpelling(HostKind host, string target, bool allowNetwork) => IsLocalSpelling(host, target, Shell.DriveOf, allowNetwork);
+
     private static bool IsLocalDrive(DriveType type) => type is not (DriveType.Network or DriveType.Unknown or DriveType.NoRootDirectory);
 
     private static bool IsLocalUnixPath(string target) =>
@@ -102,6 +157,10 @@ public static partial class Junctions
 
     /// <summary>The junction made, read back and verified — empty on success, otherwise the sentence, with nothing left at <paramref name="link"/>.</summary>
     public static string Make(HostKind host, string link, string target) => Make(host, link, target, Target);
+
+    /// <summary><see cref="Make(HostKind, string, string)"/> with network storage admitted when <paramref name="allowNetwork"/> (DL6's default-off override).</summary>
+    public static string Make(HostKind host, string link, string target, bool allowNetwork) => Make(host, link, target, Target, RemoveFolder, Shell.FinalDirectory, allowNetwork);
+
     /// <summary>The seam of the read-back, so a test can make it name another folder.</summary>
     internal static string Make(HostKind host, string link, string target, Func<string, string> readBack) =>
         Make(host, link, target, readBack, RemoveFolder);
@@ -111,9 +170,9 @@ public static partial class Junctions
         Make(host, link, target, readBack, remove, Shell.FinalDirectory);
 
     /// <summary>The seam of the final path as well, so a test can make the target look like it resolves off the local drives.</summary>
-    internal static string Make(HostKind host, string link, string target, Func<string, string> readBack, Action<string> remove, Func<string, string> final)
+    internal static string Make(HostKind host, string link, string target, Func<string, string> readBack, Action<string> remove, Func<string, string> final, bool allowNetwork = false)
     {
-        var refusal = Refusal(host, link, target, Shell.DriveOf, final);
+        var refusal = Refusal(host, link, target, Shell.DriveOf, final, allowNetwork);
 
         return refusal.Length > 0 ? refusal : Verified(link, target, readBack, remove, Built(link, target, remove));
     }
@@ -138,13 +197,38 @@ public static partial class Junctions
         a.Length > 0 && b.Length > 0
         && string.Equals(Normalised(a), Normalised(b), OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
-    private static string WindowsOnly(HostKind host) => host == HostKind.Windows
+    private static string HostAdmitted(HostKind host) => HostKinds.HasKimiLockFamily(host)
         ? string.Empty
-        : $"a directory junction is made on Windows only; Kimi is refused on a {HostKinds.Word(host)} host until it is measured there (D18 of todo/PLAN_vibe_and_kimi_runtimes.md)";
+        : $"a sign-in link is made only on a host that admits Kimi; Kimi is refused on a {HostKinds.Word(host)} host until it is measured there (D18 of todo/PLAN_vibe_and_kimi_runtimes.md)";
 
-    private static string LocalDrive(string target, Func<string, DriveType> driveType) => IsLocal(target, driveType)
+    /// <summary>
+    /// DL6: on a Linux or WSL host, the FILESYSTEM that holds the real path — read from <c>/proc/self/mountinfo</c> — is judged by its type (<see cref="MountLocality"/>); a Windows filesystem is refused wherever it is mounted,
+    /// and network storage is refused unless <paramref name="allowNetwork"/> (the default-off <c>coai.kimiAllowNetworkSignIn</c>).
+    /// Asked of the HOST the launch is for, not of the operating system running the code, so a test that plays a Windows host on any OS never reads a Unix table.
+    /// </summary>
+    private static string Mounted(HostKind host, string target, string real, bool allowNetwork) =>
+        host is HostKind.Linux or HostKind.Wsl && real.Length > 0 ? MountLocality.Judge(target, real, MountInfo, _mountIdentity.Value ?? MountLocality.Identify, allowNetwork).Refusal : string.Empty;
+
+    /// <summary>
+    /// The one-line warning for a sign-in folder the override ADMITTED on network storage — empty on a local disk, on a host with no mount table, and when nothing can be named (the refusal has said so). The card shows it; the launch carries it.
+    /// </summary>
+    public static string NetworkWarning(HostKind host, string target) =>
+        host is HostKind.Linux or HostKind.Wsl && Directory.Exists(target) && Shell.FinalDirectory(target) is { Length: > 0 } real
+            ? MountLocality.Judge(target, real, MountInfo, _mountIdentity.Value ?? MountLocality.Identify, allowNetwork: true).Warning
+            : string.Empty;
+
+    private static string LocalDrive(HostKind host, string target, Func<string, DriveType> driveType, bool allowNetwork) => IsLocalSpelling(host, target, driveType, allowNetwork)
         ? string.Empty
-        : $"{target} is not a local drive path, and a junction cannot point at a network or roaming location — coai refuses to link the Kimi sign-in from there (D19)";
+        : $"{target} is not a local drive path, and a junction cannot point at a network or roaming location — coai refuses to link the Kimi sign-in from there (D19){Cure(host, target)}";
+
+    /// <summary>
+    /// E6 gate finding 11: an automount spelling (<c>/net/</c>, <c>/misc/</c>, <c>/Network/</c>) on a Linux or WSL host is refused by its SPELLING, before the mount table is read — so the refusal carries the cure the mount refusal
+    /// carries (<see cref="MountLocality"/>, DL6): a folder on this machine's own disk with its own <c>kimi login</c>, or the override. A Windows host has no override, so it is offered none; any other spelling has no network cure to give.
+    /// </summary>
+    private static string Cure(HostKind host, string spelling) =>
+        host is HostKind.Linux or HostKind.Wsl && NetworkFolders.Any(folder => spelling.StartsWith(folder, StringComparison.Ordinal))
+            ? ". Point `KIMI_CODE_HOME` at a folder on this machine's own disk (not under the network home) and sign in there once with `kimi login`, or set `coai.kimiAllowNetworkSignIn` if you never run Kimi on another machine"
+            : string.Empty;
 
     /// <summary><c>C:\</c> or <c>C:/</c> — a letter, a colon and a separator; the only roots a junction may name.</summary>
     [GeneratedRegex(@"^[A-Za-z]:[\\/]")]
@@ -176,16 +260,12 @@ public static partial class Junctions
     /// <see cref="LocalDrive"/>'s look at the spelling and would be listed on every sweep. Empty answer: the platform cannot name it,
     /// so coai cannot tell where the sign-in is (E4.2 decision 13).
     /// </summary>
-    private static string Resolved(string target, Func<string, DriveType> driveType, Func<string, string> final)
-    {
-        var resolved = final(target);
-
-        return resolved.Length == 0
+    private static string Resolved(HostKind host, string target, Func<string, DriveType> driveType, string resolved, bool allowNetwork) =>
+        resolved.Length == 0
             ? $"{target} cannot be named by its handle on this host, so coai cannot tell where the Kimi sign-in really is — refused (D19)"
-            : IsLocal(resolved, driveType)
+            : IsLocalSpelling(host, resolved, driveType, allowNetwork)
                 ? string.Empty
-                : $"{target} resolves to {resolved}, which is not a local drive path — a link on the way to the Kimi sign-in points at a network or roaming location, and coai refuses to link the sign-in from there (D19)";
-    }
+                : $"{target} resolves to {resolved}, which is not a local drive path — a link on the way to the Kimi sign-in points at a network or roaming location, and coai refuses to link the sign-in from there (D19){Cure(host, resolved)}";
 
     private static string Taken(string link)
     {
@@ -199,7 +279,7 @@ public static partial class Junctions
         }
     }
 
-    /// <summary>The empty folder made and turned into the junction; the failure sentence otherwise, with the folder removed again — or the reason it could not be.</summary>
+    /// <summary>The link made at the fresh path (on Windows the empty folder, turned into the junction); the failure sentence otherwise, with the folder removed again — or the reason it could not be.</summary>
     private static string Built(string link, string target, Action<string> remove)
     {
         var failure = Reparsed(link, Path.TrimEndingDirectorySeparator(Path.GetFullPath(target)));
@@ -211,11 +291,9 @@ public static partial class Junctions
     {
         try
         {
-            Directory.CreateDirectory(link);
-
             return ReparseSize(target) > ReparseBufferBytes
                 ? $"the target path is {target.Length} characters, and a reparse point holds {ReparseBufferBytes / 1024} KiB"
-                : Shell.SetReparsePoint(link, target);
+                : Shell.MakeLink(link, target);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
