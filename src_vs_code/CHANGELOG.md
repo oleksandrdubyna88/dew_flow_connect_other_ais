@@ -23,6 +23,25 @@ host check. WSL2 is admitted. Native Linux, WSL1, macOS and a `wsl.exe` bridge a
   only: a workspace cannot set it, Settings Sync does not copy it, and a config export never carries it.
 - On Linux the Install button runs only the vendor installer and the `apt-get` or `dnf` install of `ripgrep` and
   `fd-find`.
+
+## Team server 0.14.0 — 2026-10-19
+
+This release was proposed as 0.13.2 and became 0.14.0 when the Kimi-on-WSL2 work (#879) landed first. Its
+`feat` commit moved the server's line to a minor version, so the release carries both changes below.
+
+**Fixed: a vendor with no quota gauge is logged as such.** After a deploy canary, the log said
+`gauge claude/a: skipped (slot-not-readable)` for a healthy slot of every vendor whose runtime is not codex. Only the
+codex runtime has a gauge the server reads, so the note now says `skipped (no-gauge-for-runtime)` for the others.
+`slot-not-readable` stays for a codex slot that really cannot be read: signed out, blocked, or with capture suspended.
+Nothing is written to the slot for the new code; only a suspended capture is stored, as before.
+
+**Changed: a gauge reader's marker is cleared only when every process it names is proven gone.** The reader marker
+moved into the shared process code that coai-mcp also uses for Kimi. After the kill and its confirmation, each process
+the marker names is now checked once more. If one is still running, the slot stays blocked with
+`reader-termination-failed`, as before. If one cannot be checked (for example, its status cannot be read), the slot
+now stays blocked with the new code `reader-member-unverifiable`. Before, that process counted as gone and the marker
+was cleared.
+
 ## Extension 0.80.2 — 2026-10-19
 
 **No change in what the extension does.** This release ships with coai-mcp 0.60.2, whose local review lines in
