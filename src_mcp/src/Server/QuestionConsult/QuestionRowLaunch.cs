@@ -33,11 +33,23 @@ public sealed record RowLaunchInput(
     /// todo/PLAN_vibe_and_kimi_runtimes.md) actually reads — the copies' paths, known only once the launch has made them.
     /// Every other row's prompt is <see cref="Prompt"/> as composed, and this is never asked.
     /// </summary>
-    public Func<IReadOnlyList<string>, string> PromptNaming { get; init; } = NamesNoCopies;
+    public Func<CopiedRoots, string> PromptNaming { get; init; } = NamesNoCopies;
 
     /// <summary>The default: a row that stands in copies and was given no way to name them is a contract violation, never a prompt naming the originals.</summary>
-    public static string NamesNoCopies(IReadOnlyList<string> copies) =>
+    public static string NamesNoCopies(CopiedRoots copies) =>
         throw new ArgumentException("a question row standing in a copy of its roots needs a prompt that names the copies (RowLaunchInput.PromptNaming)", nameof(copies));
+}
+
+/// <summary>The copies a row stands in, as the prompt that names them needs them: where they are, and what they do not hold.</summary>
+/// <param name="Paths">The absolute root of each copy, in the order of the granted roots they were made from.</param>
+/// <param name="Limitations">What the copies left out (D9 of <c>todo/PLAN_vibe_reads_a_folder_of_repositories.md</c>: the linked worktrees whose main checkouts are copied) — sentences the model reads too.</param>
+public sealed record CopiedRoots(IReadOnlyList<string> Paths, IReadOnlyList<string> Limitations)
+{
+    /// <summary>Nothing copied yet — what a prompt composed before the launch has made its copies names.</summary>
+    public static CopiedRoots None { get; } = new([], []);
+
+    /// <summary>Roots a row reads as they are: no copy, so nothing left out.</summary>
+    public static CopiedRoots Of(IReadOnlyList<string> paths) => new(paths, []);
 }
 
 /// <summary>One turn of a row: the launches it made — one, or a launch and its follow-up — and what stopped a follow-up.</summary>
@@ -79,10 +91,13 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
 {
     public const string ScratchPrefix = "coai-question-";
 
+    /// <summary>The lock file a row holds in its scratch folder for its whole life — what tells the scratch sweep the row is alive (D8 of <c>todo/PLAN_vibe_reads_a_folder_of_repositories.md</c>).</summary>
+    public const string LockName = ".coai-question.lock";
+
     /// <summary>Makes a row's scratch folder; a test's seam for a folder that cannot be made.</summary>
     internal Func<string> MakeScratch { get; init; } = static () => Directory.CreateTempSubdirectory(ScratchPrefix).FullName;
 
-    /// <summary>The empty folder a home-keeping runtime's none row stands in, beside its home inside the row's folder.</summary>
+    /// <summary>The empty folder every scratch-cwd row stands in, beside its home when it keeps one, inside the row's folder.</summary>
     private const string EmptyName = "cwd";
 
     /// <summary>A question row's copies are one-shot: no conversation folder, so no homes root.</summary>
@@ -106,34 +121,65 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
 
         // Made INSIDE the try: when making it throws, the one-shot reservation above is still given back in `finally`.
         var scratch = string.Empty;
+        var skipped = string.Empty;
+        IDisposable scratchLock = Stream.Null;
         using var row = CancellationTokenSource.CreateLinkedTokenSource(ct);
         row.CancelAfter(ConsultationDeadline.For(input.Budget));
         try
         {
             scratch = NeedsAFolder(input.Row) ? MakeScratch() : string.Empty;
+            scratchLock = HoldTheLockOf(scratch);
             using var place = await PlaceAsync(input.Row, scratch, input.Budget, row.Token);
+
+            // Held in a variable declared before the try, so the timed-out and the failed arm below carry it too: a row that ends any way at all says what its place skipped.
+            skipped = PlaceNotes(place);
             if (place.Refusal.Length > 0)
             {
-                return Ended(start, RowOutcomes.Refused, place.Refusal, started.Elapsed, Usage.None);
+                return Ended(start, RowOutcomes.Refused, place.Refusal, started.Elapsed, Usage.None, skipped);
             }
 
-            return await TurnsAsync(input, await TierProbedAsync(input.Row.Runtime, Launch(input, scratch, HomeFolderOf(homes, scratch), place), row.Token), start, started, row.Token);
+            return await TurnsAsync(input, await TierProbedAsync(input.Row.Runtime, Launch(input, scratch, HomeFolderOf(homes, scratch), place), row.Token), start, started, skipped, row.Token);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
             // OUR deadline, not the caller's — a wait the launcher did not bound (reliability.md).
-            return Ended(start, RowOutcomes.TimedOut, $"the row ran past its {input.Budget.TotalMinutes:0.#}-minute budget and its grace", started.Elapsed, Usage.Unknown);
+            return Ended(start, RowOutcomes.TimedOut, $"the row ran past its {input.Budget.TotalMinutes:0.#}-minute budget and its grace", started.Elapsed, Usage.Unknown, skipped);
         }
         catch (ArgumentException e)
         {
             // The adapter refused the plan by name — a contract violation this row's configuration caused.
-            return Ended(start, RowOutcomes.Failed, e.Message, started.Elapsed, Usage.None);
+            return Ended(start, RowOutcomes.Failed, e.Message, started.Elapsed, Usage.None, skipped);
         }
         finally
         {
+            // The lock goes BEFORE the folder it sits in: a held file would keep the delete from finishing on Windows.
+            scratchLock.Dispose();
             Remove(scratch);
             Release(homes);
         }
+    }
+
+    /// <summary>
+    /// The row's lock in its scratch folder, held until the row ends (D8 of <c>todo/PLAN_vibe_reads_a_folder_of_repositories.md</c>): the
+    /// scratch sweep keeps a <c>coai-question-*</c> folder whose lock it cannot take, because the row's budget has no upper bound and age
+    /// alone would delete the copies a live row is reading. A lock that cannot be taken is said, never a reason to refuse the row.
+    /// </summary>
+    private IDisposable HoldTheLockOf(string scratch)
+    {
+        if (scratch.Length == 0)
+        {
+            return Stream.Null;
+        }
+
+        var hold = Runners.Files.HeldFile.Take(Path.Combine(scratch, LockName));
+        if (hold is Runners.Files.Hold.Taken taken)
+        {
+            return taken.Stream;
+        }
+
+        log.Warning("a question row's scratch lock could not be taken in {Path}: {Hold}", scratch, hold);
+
+        return Stream.Null;
     }
 
     /// <summary>The row's one-shot folder when one was reserved, else its own scratch folder — where the home and the export live.</summary>
@@ -166,12 +212,20 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
     /// and an EMPTY folder beside it to stand in, so a none row's cwd never holds its own home.
     /// </summary>
     private static ConsultantLaunch Launch(RowLaunchInput input, string scratch, string homeFolder, ConsultantPlace place) =>
-        new(input.Repo, input.Row.Plan.Cwd == CwdKind.Snapshot ? input.PromptNaming(place.Roots) : input.Prompt, string.Empty, input.AnswersDir, Owning(input, homeFolder), input.SchemaFile)
+        new(input.Repo, input.Row.Plan.Cwd == CwdKind.Snapshot ? input.PromptNaming(new CopiedRoots(place.Roots, place.Limitations)) : input.Prompt, string.Empty, input.AnswersDir, Owning(input, homeFolder), input.SchemaFile)
         {
             Confinement = new LaunchConfinement.Planned(input.Row.Plan),
-            ScratchDir = KeepsAHome(input.Row) ? Directory.CreateDirectory(Path.Combine(scratch, EmptyName)).FullName : scratch,
+            ScratchDir = StandingFolderIn(scratch),
             Workdir = place.Workdir,
         };
+
+    /// <summary>
+    /// The empty folder a scratch-cwd row's CLI stands in: one level BELOW the row's folder, never the folder itself, which holds the
+    /// row's exclusively held <see cref="LockName"/> — a CLI that reads or indexes its working folder would meet a sharing violation on
+    /// Windows, and the file is noise to the model. Nothing when the row has no folder (its plan stands in a root).
+    /// </summary>
+    private static string StandingFolderIn(string scratch) =>
+        scratch.Length == 0 ? scratch : Directory.CreateDirectory(Path.Combine(scratch, EmptyName)).FullName;
 
     private static ReviewerSettings Owning(RowLaunchInput input, string homeFolder) =>
         KeepsAHome(input.Row) ? input.Settings with { OwnedScratch = homeFolder } : input.Settings;
@@ -187,13 +241,23 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
     private async Task<ConsultantPlace> PlaceAsync(RowAdmission.Admitted row, string scratch, TimeSpan budget, CancellationToken ct) =>
         row.Plan.Cwd == CwdKind.Snapshot ? await _places.OneShotAsync(scratch, row.Plan.SnapshotSources, budget, ct) : ConsultantPlace.Checkout;
 
+    /// <summary>
+    /// What the place skipped (a candidate git did not confirm, a folder it could not list), for the row's <c>note</c>. Each note was
+    /// redacted once where it was made (<see cref="OneShotTally.Say"/>, for the log and the list alike); what is left to do here is the
+    /// CUT of the joined text to one detail's limit — <see cref="Redaction.SafeText"/> is the one method that cuts with the suffix, and
+    /// redacting text that is already redacted changes nothing.
+    /// </summary>
+    private static string PlaceNotes(ConsultantPlace place) =>
+        place.Notes.Count == 0 ? string.Empty : Redaction.SafeText(string.Join("; ", place.Notes), Redaction.DetailLimit);
+
     /// <summary>The turns of one row: one for a CLI (a launch, or a launch and its follow-up), as many as the api row's follow-ups ask for.</summary>
-    private async Task<QuestionRowRecord> TurnsAsync(RowLaunchInput input, ConsultantLaunch launch, QuestionRowRecord start, Stopwatch started, CancellationToken ct)
+    /// <param name="seed">The row's note before its first turn — what the place skipped.</param>
+    private async Task<QuestionRowRecord> TurnsAsync(RowLaunchInput input, ConsultantLaunch launch, QuestionRowRecord start, Stopwatch started, string seed, CancellationToken ct)
     {
         var memory = AnsweringMemory.Start(launch.Prompt);
         var usage = Usage.None;
         var billed = new ConsultationBilled();
-        var note = string.Empty;
+        var note = seed;
         ReviewerInvocation? ready = null;
         while (true)
         {
@@ -217,13 +281,19 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
                 case AnsweringTurn.Next next:
                     // A runtime that continues its own conversation hands a ready invocation (an agy lookup); an api row's
                     // next turn is its launch built again with the longer prompt.
-                    (launch, memory, note, ready) = (next.Launch, next.Memory, next.Note, next.Invocation);
+                    (launch, memory, note, ready) = (next.Launch, next.Memory, NoteAfter(seed, next), next.Invocation);
                     continue;
                 case AnsweringTurn.Done done:
                     return Answered(start, done.Advice, started.Elapsed, usage, Joined(note, done.Note));
             }
         }
     }
+
+    /// <summary>
+    /// The row's note after a follow-up turn: what its place skipped (the <paramref name="seed"/>) stays, and the turn's own line follows it —
+    /// a turn's note never replaces the seed.
+    /// </summary>
+    internal static string NoteAfter(string seed, AnsweringTurn.Next next) => Joined(seed, next.Note);
 
     /// <summary>The conversation to continue: the one this turn named, or — when a continuation's stream named none — the one it continued.</summary>
     /// <remarks>Code round 2 (gemini): an empty handle from turn 2 ended a row that asked a second time, "agy named no
