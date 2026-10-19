@@ -13,7 +13,8 @@ namespace CoaiMcp.Store;
 /// reads <c>Unresolved</c> with an empty key. Claude Code writes plain absolute paths (E1, Q8), so nothing measured is refused.</para>
 /// <para><b>A mapped network drive</b> (<c>Z:</c> → a share) is refused too, from the local drive table (<see cref="DriveInfo"/>),
 /// which answers without contacting the share. Not covered: a network file system mounted into the POSIX tree (cifs, nfs) —
-/// its credentials are the mount's own, set up by whoever mounted it, not offered per access.</para>
+/// its credentials are the mount's own, set up by whoever mounted it, not offered per access. Nor is an existing junction or link
+/// under a local path: this test reads TEXT, and the probe that follows does follow links (see <see cref="CheckoutRoots"/>).</para>
 /// </remarks>
 internal static class LocalPaths
 {

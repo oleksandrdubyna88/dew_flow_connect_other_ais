@@ -353,7 +353,7 @@ internal static class AcpAgent
         info.ArgumentList.Add("sleep");
         info.ArgumentList.Add("600000");
         var child = Process.Start(info)!;
-        File.WriteAllText(pidFile, child.Id.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Serving.WritePidFile(pidFile, [child.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)]);
     }
 
     /// <summary>Reads stdin, logging every line, until a <c>session/cancel</c> arrives — the prompt then ends <c>cancelled</c>.</summary>
