@@ -295,6 +295,13 @@ internal static class Program
         /// of nought where it should say the server is too old. See <see cref="Server.RoundCountsMode"/>.
         /// </remarks>
         RoundCounts,
+
+        /// <summary>
+        /// Gives every settled plan or code round the authors and the size the live path would have written, from what is on disk — one run per side, over
+        /// that side's own store, behind a verified backup and a dry run (E7). See <see cref="Server.BackfillAuthorsMode"/>.
+        /// </summary>
+        /// <remarks>Its own <c>args[0]</c> and a WRITER mode: a named data folder that is missing is refused before it runs.</remarks>
+        BackfillAuthors,
     }
 
     /// <summary>
@@ -310,7 +317,7 @@ internal static class Program
     internal static readonly IReadOnlySet<Startup> WriterModes = new HashSet<Startup>
     {
         Startup.CheckConsultant, Startup.CheckModel, Startup.Collect, Startup.PairsKeep, Startup.PairsDecide,
-        Startup.UploadPairs, Startup.RequeueRefused, Startup.ProbeApi, Startup.Consultants,
+        Startup.UploadPairs, Startup.RequeueRefused, Startup.ProbeApi, Startup.Consultants, Startup.BackfillAuthors,
     };
 
     /// <summary>Why <paramref name="startup"/> may not run here — empty when it may (not a writer, or its root is there).</summary>
@@ -337,6 +344,7 @@ internal static class Program
                 "--probe-api" => Startup.ProbeApi,
                 "--log" => Startup.Log,
                 "--round-counts" => Startup.RoundCounts,
+                "--backfill-authors" => Startup.BackfillAuthors,
                 "--findings" => Startup.Findings,
                 "--findings-many" => Startup.FindingsMany,
                 "--bugs-json" => Startup.Bugs,
@@ -442,6 +450,11 @@ internal static class Program
                 // The clock is the system's here and a `--now` in a test; the data directory is
                 // resolved exactly as `--log` resolves it, and the read is read-only.
                 return Server.RoundCountsMode.Run(args, Environment.GetEnvironmentVariable, Console.Out, Note, TimeProvider.System);
+
+            case Startup.BackfillAuthors:
+                // A one-shot WRITER: the summary on stdout and nothing else, a refusal's sentence on stderr. It makes its own verified backup before it opens
+                // the store for writing, and deletes nothing.
+                return await Server.BackfillAuthorsMode.RunAsync(args, Environment.GetEnvironmentVariable, Console.Out, Note, TimeProvider.System);
 
             case Startup.Findings:
                 return FindingsJson(args);
@@ -2459,6 +2472,14 @@ internal static class Program
         rounds launched, and the rounds per reviewer model where the round recorded one — from the rounds
         database alone, read-only, as JSON; `--now` fixes the clock. A missing database is an empty
         answer and exit 0; a bad argument is 65; a database that will not read is 74 — never 64.
+        `--backfill-authors [--since <utc instant>] [--dry-run]` gives every settled plan or code round the authors
+        and the size the live path would have written, from this side's own store and transcripts. A writing run
+        first makes a VERIFIED backup (SQLite's online backup of coai.db and every session file) in a new folder
+        under <data dir>/backfill-backups/ and writes only after it verified; --dry-run reads through a read-only
+        connection, writes nothing and makes no backup. It deletes nothing. The summary is JSON on stdout. Exits 0
+        done (a missing store included), 65 a bad, repeated or unknown argument, 74 a store or session file that
+        will not read or write, a side that has not run the release, or a backup that did not verify, 75 the run
+        completed but something was deferred (run it again) — never 64.
         `--findings --session <id> --stage <stage> --number <n>` prints one round's findings; it
         exits 69 when the database has never heard of that round, which is not the same as finding
         nothing.
