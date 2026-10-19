@@ -548,3 +548,52 @@ test('every language says what a Vibe question row reads, that its web prompt is
     }
   }
 });
+
+const ROUNDS_ARTICLE_PHRASES: Record<string, readonly string[]> = {
+  // fewer than two readings · a launch sent no round id · no round ran between the readings · the replacement for "older extension"
+  en: ['fewer than two readings', 'a launch sent no round id', 'no round ran between the readings', 'sent no round id'],
+  de: ['weniger als zwei Lesungen', 'ein Start ohne Runden-ID', 'zwischen den Lesungen lief keine Runde', 'keine Runden-ID'],
+  es: ['menos de dos lecturas', 'un lanzamiento sin id de ronda', 'ninguna ronda entre las lecturas', 'sin id de ronda'],
+  ru: ['меньше двух чтений', 'запуск без id раунда', 'между чтениями не было раунда', 'без id раунда'],
+  uk: ['менше двох читань', 'запуск без id раунду', 'між читаннями не було раунду', 'без id раунду'],
+};
+
+test('EveryLanguagesRoundsArticle_NamesEveryReasonTheGaugeWordsKnow (the rounds labels plan, story 1.5)', () => {
+  const article = HELP_ARTICLES.find((one) => one.id === 'the-rounds-log');
+  assert.ok(article !== undefined, 'the rounds article has been renamed, and this test is now asserting nothing');
+  for (const language of HELP_LANGUAGES) {
+    const phrases = ROUNDS_ARTICLE_PHRASES[language];
+    assert.ok(phrases !== undefined, `the test has no phrases for ${language}, so it would assert nothing there`);
+    const { body, fallback } = bodyFor(article, language);
+    const said = Object.values(body).join(' ');
+    assert.equal(fallback, false, `the ${language} rounds article is missing`);
+    for (const phrase of phrases) {
+      assert.ok(said.includes(phrase), `the ${language} rounds article never says "${phrase}" — a reader cannot learn that reason`);
+    }
+  }
+  const english = Object.values(bodyFor(article, 'en').body).join(' ');
+  assert.ok(!english.includes('launches from an older extension'), 'the English article still blames an older extension for a run without a round');
+});
+
+const PER_LAUNCH_PHRASE: Record<string, string> = {
+  en: 'per launch',
+  de: 'pro Start',
+  es: 'por lanzamiento',
+  ru: 'на запуск',
+  uk: 'на запуск',
+};
+
+test('EveryLanguagesUsageArticle_SaysTheMedianIsPerLaunch (the rounds labels plan, story 1.5)', () => {
+  const article = HELP_ARTICLES.find((one) => one.id === 'what-each-ai-has-used');
+  assert.ok(article !== undefined, 'the usage article has been renamed, and this test is now asserting nothing');
+  for (const language of HELP_LANGUAGES) {
+    const phrase = PER_LAUNCH_PHRASE[language];
+    assert.ok(phrase !== undefined, `the test has no phrase for ${language}, so it would assert nothing there`);
+    const { body, fallback } = bodyFor(article, language);
+    assert.equal(fallback, false, `the ${language} usage article is missing`);
+    assert.ok(
+      Object.values(body).join(' ').includes(phrase),
+      `the ${language} usage article never says "${phrase}" — it still names the median's unit as the recorded turn only`,
+    );
+  }
+});
