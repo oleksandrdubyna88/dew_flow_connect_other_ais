@@ -17,7 +17,7 @@ namespace CoaiMcp.Tests;
 /// the SAME conversation with the result (research/PLAN_agy_searches_through_coai.md, S2).
 /// </summary>
 /// <remarks>
-/// The fake CLI runs as a real child on the question row's minimal environment, steered by the temp-directory file; it
+/// The fake CLI runs as a real child on the question row's minimal environment, steered by the file beside its binary (<c>FakeCliSteering</c>); it
 /// tells the turns apart by <see cref="AntigravityFollowUps.LookupTurnMarker"/> on stdin, which every continuation carries.
 /// </remarks>
 [Collection("fakecli-env")]
@@ -29,10 +29,9 @@ public sealed class QuestionRowLookupScenarioTests : IAsyncLifetime
     private string _repo = string.Empty;
     private string _data = string.Empty;
     private string _record = string.Empty;
+    private IDisposable _steering = FakeCliSteering.Unwritten;
 
     private static string FakeCliExe => Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "FakeCli.exe" : "FakeCli");
-
-    private static string SteeringFile => Path.Combine(Path.GetTempPath(), "fakecli-minimal.json");
 
     public async ValueTask InitializeAsync()
     {
@@ -49,11 +48,7 @@ public sealed class QuestionRowLookupScenarioTests : IAsyncLifetime
 
     public ValueTask DisposeAsync()
     {
-        try
-        {
-            File.Delete(SteeringFile);
-        }
-        catch (IOException) { }
+        _steering.Dispose();
 
         foreach (var dir in (string[])[_repo, _data, _record])
         {
@@ -106,7 +101,7 @@ public sealed class QuestionRowLookupScenarioTests : IAsyncLifetime
             pairs[$"FAKECLI_TURN{turn + 2}_STDOUT"] = later[turn];
         }
 
-        File.WriteAllText(SteeringFile, JsonSerializer.Serialize(pairs));
+        _steering = FakeCliSteering.Write(pairs);
     }
 
     private PanelService Service() => new(
@@ -231,9 +226,9 @@ public sealed class QuestionRowLookupScenarioTests : IAsyncLifetime
         // in plan mode CAN write (research/RESULTS_agy_searches_through_coai.md §3).
         Steer(Stream("Looking.\n" + Block("list ."), 100, 5), Stream("never reached", 200, 9));
         var written = Path.Combine(_repo, "written-by-the-row.txt");
-        var steering = JsonSerializer.Deserialize<Dictionary<string, string>>(await File.ReadAllTextAsync(SteeringFile, TestContext.Current.CancellationToken))!;
+        var steering = FakeCliSteering.ReadBack();
         steering["FAKECLI_SIDE_EFFECT"] = written;
-        await File.WriteAllTextAsync(SteeringFile, JsonSerializer.Serialize(steering), TestContext.Current.CancellationToken);
+        _steering = FakeCliSteering.Write(steering);
 
         var row = Row(await AskAsync());
 

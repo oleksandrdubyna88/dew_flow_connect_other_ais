@@ -55,9 +55,20 @@ public sealed class TempDirsAreSwept
     /// </remarks>
     internal static readonly SweepRule Rule = SweepRule.Shared();
 
-    public TempDirsAreSwept() =>
+    /// <summary>
+    /// The fake CLI's steering file a KILLED run left beside the binary is deleted at this run's start, once — never in the middle of it
+    /// (this class is also a test class, and its constructor runs again for every Fact). The file is read by the first vendor-shaped
+    /// launch of any later run of the same output folder, so a stale one would steer it (C1 of
+    /// <c>todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md</c>).
+    /// </summary>
+    private static readonly Lazy<bool> SteeringLeftoverDeleted = new(FakeCliSteering.DeleteALeftover, isThreadSafe: true);
+
+    public TempDirsAreSwept()
+    {
+        _ = SteeringLeftoverDeleted.Value;
         PanelService.PruneOldScratchDirs(
             Path.GetTempPath(), DateTime.UtcNow - Rule.Keeps, [$"{Rule.Prefix}*"], Rule.NeverSwept);
+    }
 
     [Fact]
     public void TheSharedRuleIsTheOperatorsTenMinutes()

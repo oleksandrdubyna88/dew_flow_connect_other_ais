@@ -305,24 +305,6 @@ public sealed class TheVaultsRequestsAreShapedForTheKeyTests
 }
 
 /// <summary>
-/// Clears every <c>FAKECLI_*</c> variable this process holds. The vault's probe made several more of them
-/// matter to the vault tests, so a class that sets only its own and inherits the rest from whichever test
-/// ran before can see a "--help exited 3" it never asked for (own review).
-/// </summary>
-internal static class FakeCliSteering
-{
-    public static void Reset()
-    {
-        foreach (var name in Environment.GetEnvironmentVariables().Keys.Cast<string>()
-                     .Where(name => name.StartsWith("FAKECLI_", StringComparison.Ordinal))
-                     .ToList())
-        {
-            Environment.SetEnvironmentVariable(name, null);
-        }
-    }
-}
-
-/// <summary>
 /// The LIVE half of the cross-repository contract (testing.md, "one live check compares the two sides for
 /// real"): a real creds CLI's <c>--help</c> names <see cref="KeyVault.StdinMarker"/>, and it refuses the argument
 /// form. Both pinned constants could agree while a real CLI disagreed; only running one can see that.
