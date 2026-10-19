@@ -1,4 +1,6 @@
 using System.Collections.Immutable;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using CoaiMcp.Core.Gate;
 
 namespace CoaiMcp.Core.Rounds;
@@ -45,7 +47,20 @@ public enum EscalationStep
 /// once: an older panel driving a newer server, a stored settings record written before the key
 /// existed, and a role nobody has ever touched.</para>
 /// </param>
-public sealed record RoleGate(int MaxRounds, int Threshold, bool Enabled = true);
+public sealed record RoleGate(int MaxRounds, int Threshold, bool Enabled = true)
+{
+    /// <summary>
+    /// Members of this role gate in the file that THIS build does not know, kept so that a save by an older build does not
+    /// strip what a newer build wrote. Null when the file had none.
+    /// </summary>
+    /// <remarks>
+    /// Set by the deserialiser, by the save scrub (<c>SessionScrub</c>) and by the answer strip — nothing changes the dictionary
+    /// itself, because <c>with</c> copies share it. <c>internal set</c> with <c>[JsonInclude]</c>, never <c>init</c> (the
+    /// generator binds it to a constructor parameter and the first load throws) and never <c>private set</c> (SYSLIB1038).
+    /// </remarks>
+    [JsonExtensionData, JsonInclude]
+    public Dictionary<string, JsonElement>? Unknown { get; internal set; }
+}
 
 /// <summary>Kept as the name a stage-wide budget goes by; a stage's gate is its widest role.</summary>
 public sealed record StageGate(int MaxRounds, int Threshold);
@@ -128,6 +143,18 @@ public sealed record PanelConfig(
     public RoleCatalog Catalog { get; init; } = RoleCatalog.Builtin;
 
     public RoleGate SecurityLane { get; init; } = new(2, 0, false);
+
+    /// <summary>
+    /// Members of this panel config in the file that THIS build does not know, kept so that a save by an older build does not
+    /// strip what a newer build wrote. Null when the file had none.
+    /// </summary>
+    /// <remarks>
+    /// Set by the deserialiser, by the save scrub (<c>SessionScrub</c>) and by the answer strip — nothing changes the dictionary
+    /// itself, because <c>with</c> copies share it. <c>internal set</c> with <c>[JsonInclude]</c>, never <c>init</c> (the
+    /// generator binds it to a constructor parameter and the first load throws) and never <c>private set</c> (SYSLIB1038).
+    /// </remarks>
+    [JsonExtensionData, JsonInclude]
+    public Dictionary<string, JsonElement>? Unknown { get; internal set; }
 
     public IReadOnlyDictionary<string, RoleGate> Roles { get; init; } = Roles ?? Defaults();
 
@@ -497,6 +524,18 @@ public sealed record SessionState(
 
     /// <summary>Whether this session reviews a whole feature rather than a branch or a document.</summary>
     public bool IsFeatureSession => Feature.Length > 0;
+
+    /// <summary>
+    /// Members of this session state in the file that THIS build does not know, kept so that a save by an older build does not
+    /// strip what a newer build wrote. Null when the file had none.
+    /// </summary>
+    /// <remarks>
+    /// Set by the deserialiser, by the save scrub (<c>SessionScrub</c>) and by the answer strip — nothing changes the dictionary
+    /// itself, because <c>with</c> copies share it. <c>internal set</c> with <c>[JsonInclude]</c>, never <c>init</c> (the
+    /// generator binds it to a constructor parameter and the first load throws) and never <c>private set</c> (SYSLIB1038).
+    /// </remarks>
+    [JsonExtensionData, JsonInclude]
+    public Dictionary<string, JsonElement>? Unknown { get; internal set; }
 }
 
 /// <summary>The canonical identity of a session: same checkout + branch → same session, always.</summary>
