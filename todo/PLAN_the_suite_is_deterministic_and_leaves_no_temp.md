@@ -1055,6 +1055,28 @@ S2 the six scenario classes onto the helper and the S2b structural scan (after S
 coder). S3 C10's sites and S3 (parallel with S1). S4 C11, the S4 guard and its second rule (the seven
 `ForgetTheLastSweep` callers into a serial collection, C6) (parallel with S1). No cornerstone.
 
+**Outcome (2026-10-19, branch `docs/flaky-tests-and-temp-leak`; the tests are in `research/module_tests.md`, section "The suite is deterministic — epic E1").**
+Built in four commits, each red first: (1) C1/D1 with S1 and S2, the six writers moved onto the helper and the assembly-start delete;
+(2) S2b; (3) C10; (4) C11 and S4 with its second rule. Reds seen: S1 `Did not expect result.StdOut "decoy" to contain "decoy"` and exit 7 where 64 was
+expected; S2 `Expected result.StdOut "" to contain "steered"`; C10 `Expected Directory.EnumerateFileSystemEntries(dir) to be empty … {"…\coai-repair-decoy-e1red\x.txt"}` and the
+two document tests failing with `IOException` / `UnauthorizedAccessException` when their fixed names were taken; S4 named the three classes of rule 2 and three of rule 1.
+Break-its done and restored: the two readers back on the temp folder (S1, S2 and the whole Kimi flow red), a class out of `fakecli-env` (S2b), a scratch file spelling the
+file's name (S2b), the repair launched in the review's folder (the C10 test), `[Collection]` off two classes (S4). A full `CoaiMcp.Tests.exe` run: 11,883 tests, 11,766 passed,
+117 skipped, 0 failed; **the two-runs proof of §10 done**: two whole runs from two worktrees of this branch started three seconds apart, both 11,883 / 0 failed
+(17 min 26 s and 17 min 23 s). Deviations from this plan, each decided on what the code showed:
+- **S4's first rule names THREE classes, not two.** `TheVaultsRequestsAreShapedForTheKeyTests` (`TheVaultKeyTravelsOnStdinTests.cs`) sets a uniquely named variable
+  (`COAI_TEST_INHERITED_7F3A`) in no collection — harmless by its name, the same shape by the rule. It joined `fakecli-env` with the two named here.
+- **S1 does not move the test process's `TEMP`.** The child is started with `TEMP`/`TMP`/`TMPDIR` pointed at a private folder through its request, so the suite's own variables are
+  never toggled (D2's "set once, never toggled" holds from E1 on), and nothing is written in the machine's temp folder.
+- **The repair test needed `CodeWorkspace = "worktree"`.** In the default `none` mode the review launch runs in an empty folder too, so "the repair folder was empty at launch"
+  could not tell a repair that carried the workspace from one that did not — the first break-it stayed green. The round is now a worktree round with a positive control (a review
+  launch saw a non-empty folder), and the break-it goes red. The test also needed a REPAIR to exist: the first answers are prose and the repair answers are clean.
+- **The shared constant lives in the fake's own assembly** (`CoaiMcp.FakeCli.MinimalSteeringFile`, public, read by `MinimalSteering.Load` and `AcpAgent.SteeredScript`) and the tests reach it
+  through `FakeCliSteering.MinimalFile`: one definition where the file is read. The scan for other `fakecli-minimal.json` spellings allows exactly the helper and the two test files that pin it.
+- **A nested class counts for its outer class** in the two scans (`TestSourceIndex`): the first parser judged private `Canary` helpers inside placed classes on their own and named them.
+- **C1's commit includes the six writers' move** (not a separate story): between the helper and the move the suite would have been red.
+**Not done in E1, and said:** the fixed names that are only PATHS and never created (`ConsultationStoreTests`, the `Kimi*` classes and the rest) were left alone, as C10 says; the CI watch of §10 starts when this merges.
+
 ### E2 — One temp folder per run — cornerstone area: the per-run temp folder (test infrastructure only)
 
 **Goal.** A whole `src_mcp` run and a whole extension run leave the machine's temp folder as they found it; everything a

@@ -4651,3 +4651,10 @@ into one string. All six classes moved into `fakecli-env` (the serial collection
 
 **Break-it (done, then restored):** `[Collection]` taken off `VibeRuntimeTests` and `VibeHomesTests` → rule 1 names `VibeRuntimeTests.cs: VibeRuntimeTests`, rule 2 names
 `VibeHomesTests.cs: VibeHomesTests`. **Limit, stated in the test:** a scan of each class's OWN code — a write made from a static helper is the helper's.
+
+### E1 — counts and the two-runs proof (2026-10-19, Windows, Debug)
+
+`CoaiMcp.Tests.exe`, the whole suite: 11,883 tests, 11,766 passed, 117 skipped (arms for another OS), 0 failed. New in E1: 4 (`AFakeCliSteeringFileIsBesideItsBinaryTests`) + 6
+(`EveryWriterOfTheSteeringFileTests`) + 5 (`EveryClassThatSetsTheProcessEnvironmentTests`) + 1 (`ARepairTest_SeesOnlyItsOwnRoundsRepairFolder`). **Two whole runs from two worktrees of
+the same commit, started three seconds apart on one Windows user** — the situation that produced C1 — both finished 11,883 / 0 failed (17 min 26 s and 17 min 23 s). No test failed in
+the suite and passed alone, so nothing is listed as shared-state beyond the three cases above.
