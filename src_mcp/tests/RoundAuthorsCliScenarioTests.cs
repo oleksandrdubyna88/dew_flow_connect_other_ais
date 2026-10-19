@@ -154,6 +154,32 @@ public sealed class RoundAuthorsCliScenarioTests : IDisposable
         Run(a, [.. Window(), "--add", other]).Err.Should().Contain("`split`", "the field that differs is named");
     }
 
+    /// <summary>
+    /// An <c>--add</c> argument that names no file, and a file that parses as a report but breaks a shape the table relies on, are bad REQUESTS:
+    /// 65 with the argument named — never the 70 of a crash with a stack trace on stderr.
+    /// </summary>
+    [Fact]
+    public void AnAddThatNamesNoFile_OrAReportOfTheWrongShape_Is65_NeverACrash()
+    {
+        var (a, b) = (Store("a"), Store("b"));
+        Sessions(a, true, "x1");
+        Sessions(b, true, "y1");
+        var report = Run(b, [.. Window()]).Out;
+        var shortId = _root.At("short-id.json");
+        File.WriteAllText(shortId, System.Text.RegularExpressions.Regex.Replace(report, "\"sourceId\": \"[0-9a-f]+\"", "\"sourceId\": \"x\""));
+        var noSeparator = _root.At("no-separator.json");
+        File.WriteAllText(noSeparator, report.Replace("\\n", string.Empty, StringComparison.Ordinal));
+
+        foreach (var path in new[] { string.Empty, _root.Path, shortId, noSeparator })
+        {
+            var run = Run(a, [.. Window(), "--add", path, "--table"]);
+
+            run.Code.Should().Be(65, $"--add '{path}' is a bad request; stderr was: {run.Err}");
+            run.Out.Should().BeEmpty();
+            run.Err.Should().Contain($"--add '{path}'", "the argument as typed").And.NotContain("   at ", "no stack trace");
+        }
+    }
+
     [Fact]
     public void AStoreThatWillNotRead_Is74()
     {

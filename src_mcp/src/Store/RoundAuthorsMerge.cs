@@ -103,13 +103,31 @@ public static class RoundAuthorsMerge
         {
             var parsed = JsonSerializer.Deserialize(text, RoundAuthorsJson.Default.RoundAuthorsAnswer);
 
-            return parsed is null ? Refused("it holds no report") : new MergeOutcome(true, parsed, string.Empty);
+            return Accepted(parsed);
         }
         catch (JsonException error)
         {
             return Refused("it is not a round-authors report: " + error.Message);
         }
     }
+
+    private static MergeOutcome Accepted(RoundAuthorsAnswer? parsed) =>
+        parsed is null ? Refused("it holds no report")
+        : Misshapen(parsed) is { Length: > 0 } why ? Refused("it is not a round-authors report: " + why)
+        : new MergeOutcome(true, parsed, string.Empty);
+
+    /// <summary>
+    /// The shapes this program writes and the table and a merge rely on, which the JSON types alone cannot say: an opaque source id of 32
+    /// lower-case hex digits, and every branch and requested-to-answered name two words joined by ONE newline. A file that breaks one is refused
+    /// (65), never rendered into a crash. Empty when the answer is well shaped.
+    /// </summary>
+    internal static string Misshapen(RoundAuthorsAnswer answer) =>
+        answer.Sources.Any(source => !IsSourceId(source.SourceId)) ? "a source id is not 32 lower-case hex digits"
+        : answer.Cells.SelectMany(cell => cell.Branches.Concat(cell.Requested)).Any(pair => pair.Name.Count(at => at == '\n') != 1)
+            ? "a branch or requested-to-answered name is not two words joined by one newline"
+        : string.Empty;
+
+    private static bool IsSourceId(string id) => id.Length == 32 && id.All(char.IsAsciiHexDigitLower);
 
     /// <summary>Two halves of one population added: the merged answer, or the sentence that says why they are not one population.</summary>
     public static MergeOutcome Add(RoundAuthorsAnswer mine, RoundAuthorsAnswer theirs)

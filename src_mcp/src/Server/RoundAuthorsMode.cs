@@ -121,11 +121,15 @@ internal static class RoundAuthorsMode
 
             return parsed.Ok ? RoundAuthorsMerge.Add(mine, parsed.Answer) : parsed;
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        catch (Exception e) when (IsNoReadableFile(e))
         {
             return new MergeOutcome(false, mine, "it could not be read: " + e.Message);
         }
     }
+
+    /// <summary>What reading an <c>--add</c> argument throws when it names no readable file — an empty or malformed path included, which is a bad request (65), never a crash.</summary>
+    private static bool IsNoReadableFile(Exception e) =>
+        e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException;
 
     /// <summary>The request, or the refusal sentence — pure over the arguments and the clock.</summary>
     internal static (bool Ok, Request Value, string Why) Parse(string[] args, TimeProvider clock)
