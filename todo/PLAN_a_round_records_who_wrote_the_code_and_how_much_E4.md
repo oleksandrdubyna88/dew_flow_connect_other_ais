@@ -1,6 +1,6 @@
 # PLAN — E4 stories: attribution — windows, the association ladder, ambiguous totals, contributors
 
-> Status: **code built, gate pending, 2026-10-19 — S1–S5 implemented on `feat/round-authors-e4` (pull request #862, not merged; the coai code gate has not yet run); Fable reviewed the code on 2026-10-19 and ACCEPTED every deviation of §12, and its wording changes are applied in place below; §12 is the implementation record — its deviations and the two E7 confirmations. Plan 2026-10-14, revised 2026-10-16 and 2026-10-17.** Epic E4 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
+> Status: **code built, code gate `good_enough`, 2026-10-19 — S1–S5 implemented on `feat/round-authors-e4` (pull request #862, not merged; the coai code gate ran one round, 13 of 16 reviewers, 4 findings accepted and fixed or recorded, §12); Fable reviewed the code on 2026-10-19 and ACCEPTED every deviation of §12, and its wording changes are applied in place below; §12 is the implementation record — its deviations and the two E7 confirmations. Plan 2026-10-14, revised 2026-10-16 and 2026-10-17.** Epic E4 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
 >
 > **Revised 2026-10-16 against main** (`59463d73`: E1 #828, E2 #829 and the plan-gate fix #837/#841 shipped since the
 > first text; E3 is not built). Every `path:line` re-verified — the drift is §8.1, and the S2 text keeps the numbers Fable
@@ -1701,6 +1701,29 @@ Items 4 and 5 below need no §S2 change.
    on this +02:00 machine (`2684ab8d1`). E3 parses stamps as UTC, so no stored value changes.
 12. **The purity scan also forbids a working-directory lookup** (`Path.GetFullPath`, `CurrentDirectory`), which is S1's rule "never resolved against a working
    directory". A planted `GetFullPath` turned it red (`c210f9318`).
+
+**The coai code gate, 2026-10-19** (session `a9d8b6b8`, code round 1 over `71e15e392`, `baseRef` a parentless commit whose tree is E3
+`24cced19a` merged with main `bb279e3db`, so the reviewers saw E4 alone): verdict **`good_enough`** (gating 17 against a threshold of 5,
+the stage's one round spent), **13 of 16 reviewers** answered — the three Kimi reviewers of Architecture, SecurityReliability and
+UxDxPerformance returned empty answers. 23 findings: **4 accepted, 19 rejected**, each rejection checked in the code and its reason
+recorded with `resolve`. The rejections in short: the ladder never makes a two-repositories row for a gate the agent did not write
+into (`WriteRung`); `Climbs` already reports every cycle; the dot-segment refusal is in `RepositoryOf`, which is the only road E4 uses;
+E3 never emits a default instant; equal sort keys are equal records; the performance findings assumed every window of every round
+(an assignment holds one or two) or many gate sessions (a handful). Accepted:
+
+13. **Each write's home row is found once per window** (finding 3; `dcf327428`): `WindowSlice.WriteCallsByRow` builds the row → write
+   calls map once, instead of a scan of every write and every message per row. Same rule, no behaviour change; the E4 classes and the
+   full suite are green.
+14. **The worked examples are listed once** (finding 12; `18733ae50`): `AttributionCases` holds one `(name, factory)` table that both
+   `Names` and `Named` read, so a case cannot be added to one and missed by every identity theory (105 theory rows before and after).
+15. **`Assign` throws `ArgumentException` on a contract violation** (finding 10, recorded, not changed): csharp doctrine §5 says expected
+   failures are values. A violation here is not an expected answer — it is E5's or E7's programming error against the S1 contract, and
+   §S2.7 requires the throw; E5 maps it to `unobserved: invalid input`. `Validate()` is the value-returning form for a caller that wants
+   to ask first.
+16. **The closed vocabularies stay `string` constants** (findings 11 and 0, recorded, not changed): `Association`, `Rung`, `WindowKind`,
+   `WriteWhere`, `ObservationKinds` and `GateRound.Stage/Status/Verdict` are the exact words E5 stores and the session file holds
+   (doctrine §3's serialisation exception); every comparison is against the one constant class, and an unknown stage legitimately
+   opens no window. `WriteKind` is an enum because it is E3's enum copied one for one and is never stored.
 
 **The two confirmations E7 asked for (E7 §10 items 8 and 9):**
 
