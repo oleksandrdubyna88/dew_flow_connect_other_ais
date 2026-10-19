@@ -7096,7 +7096,8 @@ Listed today: `bugzRuntime` (`--collect-bugs --runtime`, E2.1). In PROJECT.md's 
 `VendorDto.TimeoutMinutes` → `ProviderSettings.TimeoutMinutes`: whole minutes 1 to `CatalogLimits.MaxTimeoutMinutes`
 (1440, the extension's `isMinutes`), anything else unset. `RosterBuilder.TimeoutFor` makes it the launch timeout of a
 CLI row in place of `ReviewerTimeout`; an api row keeps the round's launch timeout, its own limit being the whole review
-(`reviewMinutes`). `--features` lists `timeoutMinutes` (`ARowsOwnTimeoutTests`, RED first).
+(`reviewMinutes`). `--features` lists `timeoutMinutes` (`ARowsOwnTimeoutTests`, RED first). A member of the WRONG JSON type (`"timeoutMinutes":"30"`, `30.5`, `30.0`) is not "unset": it
+drops the whole row, and the server says so (the section "One bad field costs its row only", below).
 
 ## A row's prompt cap (2026-10-17, `research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md` S1-S2)
 
@@ -7137,6 +7138,47 @@ paid for; the cap keeps the launch from being made.
   plan and code, a roomy cap changes nothing), `AFeatureIsReviewedEndToEndTests` (the feature skip). Break-its, each observed red
   and restored: `>=` for `>` (the inclusive test), skipping the check for a capped row (the roster and round tests), reading the
   KiB as bytes (the byte and inclusive tests), and dropping the size from the carrier test (the dealt-lens test).
+
+## One bad field costs its row only (2026-10-18, `research/PLAN_one_bad_field_keeps_the_rows.md`)
+
+**Symptom it answers.** `COAI_VENDORS` was read with one `Deserialize` of the whole list, so ONE member of the wrong JSON
+type in ONE row (`"timeoutMinutes":"30"`, `"plan":"false"`, `"model":5`, `"price":{"in":"3"}`) threw, and the catch returned no
+rows. `VendorListFrom` read "no rows from a non-empty text" as "not configured" and ran `COAI_PROVIDERS` or the shipped pair
+(codex and antigravity) in place of every row the person wrote, with nothing logged. A `null` row threw a
+`NullReferenceException` out of `FromEnvironment` instead.
+
+- **The reader.** `VendorRowReader.Read` (`src_mcp/src/Server/VendorRowReader.cs`) parses the text with `JsonDocument` and
+  deserializes each array element with the SAME generated `SettingsJsonContext.Default.VendorDto`, in its own `try`. It
+  answers `VendorRows(Read, Refused, Complaint)`. A `null` or non-object element is refused by a `ValueKind` check (its
+  sentence says what it is: `it is a number, not a row`). The row is named from the RAW element (`IdOf`, ignoring case,
+  only a non-blank string, never `GetProperty`), else by place: `row 2 of 3`. `MemberOf(JsonException.Path)` turns
+  `$.timeoutMinutes` into `timeoutMinutes`, `$.price.in` into `price.in`, and a null, blank or bare `$` path into
+  `one of its members`. It maps nothing: the one mapping to `ProviderSettings` stays in `PanelSettings.MapVendors`, and
+  `ParseVendors` keeps its signature (about 40 callers).
+- **The rule: a row that does not read fails CLOSED.** It does not review, and the other rows do. This is the rule the
+  consultant row already follows (`ConsultantResolver.OptionsOf` answers null, refused by name; `--check-model` the same):
+  both still call `ParseVendors("[<row>]")` and still get no row for a bad member. The alternative (read each typed member
+  as a `JsonElement?`, as `maxPromptKib` does) was rejected: `plan`/`code` default to TRUE, so `"plan":"false"` would
+  become "reviews plans".
+- **The sentence.** One `UnrecognisedSetting` per refused row, no `Kind`, key `COAI_VENDORS[<id>]` or
+  `COAI_VENDORS[row 2 of 3]`: `COAI_VENDORS: the row "claude" (row 2 of 3) is left out of every round — its member
+  timeoutMinutes has a value of the wrong JSON type, or a number it cannot hold. The other rows still review. Write text in quotes,
+  numbers and true/false without them, and minutes as whole numbers from 1 to 1440, ...`. One cure for every member, because the parser does
+  not say whether text lost its quotes, a number gained them, or a number does not fit (`30.5`, `99999999999`). It reaches `providers`
+  (`unrecognised`), the startup and reload notice and the panel toast with no extension change. The key is per ROW because
+  the notice ledger groups on (code, subject): one shared key would fold two bad rows into one notice.
+- **"Configured" when every row is left out** (`VendorListFrom`): a row was read, OR the text is `[]`, OR any row was
+  REFUSED (whether or not its `id` could be read). Then the provider list is empty and the round refuses with its own
+  sentence, as for `[]`. Rows that READ but carry no usable id (`[{}]`, `[{"id":"  "}]`) are not refused, say nothing and
+  still run the shipped pair (#688).
+- **A text that is not a JSON list** (`[{oops`, `{}`) keeps its fallback (`COAI_PROVIDERS`, or the shipped pair) and is now SAID, once, under the
+  bare key `COAI_VENDORS`, with the parser's position (`PanelSettings.Detail`).
+- **Unchanged on purpose.** `maxPromptKib` stays "no cap, not said" for a bad value; a number of the right type but out of
+  range (`timeoutMinutes` 0 or 1441) stays unset and not said; a blank-id row is dropped without a sentence.
+  `COAI_PROMPTS_PER_ROUND` still loses its whole map silently for one bad value (out of scope, named in the plan).
+- **Tests.** `OneBadFieldCostsItsRowOnlyTests`: wrong types in one row (a theory over nine members), the null row, refused rows
+  with no id, every row left out, a list that is not JSON, two bad rows as two notices, `MemberOf`, the `providers` answer, and
+  the guards (a clean list says nothing, `maxPromptKib`, out-of-range numbers, the consultant row still refused).
 
 ## A CLI row's effort (2026-10-05, PLAN_one_model_catalog.md E2.2)
 
