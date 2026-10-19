@@ -1,5 +1,13 @@
 # Changelog
 
+## Extension 0.80.2 — 2026-10-19
+
+**No change in what the extension does.** This release ships with coai-mcp 0.60.2, whose local review lines in
+`usage.jsonl` now carry their round. The Usage page already read a line's `round` from either source, so a local line
+keeps the round key the engine stamped, a line with an empty round reads as a line with no round, and the round changes
+no count or total: two launches of one round are still two runs, with their tokens summed once. New tests hold these
+three facts, and the doc comments on the usage entry now describe the local line as it is.
+
 ## Server 0.60.2 — 2026-10-19
 
 **Fixed: one bad field in a reviewer row costs that row only.** A hand-edited member of the wrong JSON type in
