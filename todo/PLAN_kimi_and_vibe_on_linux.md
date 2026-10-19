@@ -310,7 +310,7 @@ Numbered DL1–DL14 so they never collide with the parent plan's D-numbers. Ever
   line at `/data/win`, a `virtiofs` line, an octal-escaped mount point, a super-option NOT decoded, stacked mounts (the last line
   wins), a short line skipped, a table without `/`. The sentence
   still names `/mnt/<letter>/` as the example; the rule is the mount type. On a native Linux without drvfs the rule is inert (Q1).
-  **Network filesystems — decided 2026-10-17 as a stated assumption, pending the owner (Q7)** (E5's Fable security judgement,
+  **Network filesystems — decided by the owner 2026-10-19 (Q7, option A; first taken as a stated assumption 2026-10-17)** (E5's Fable security judgement,
   finding 3; question consultant 3607576…, which split: one row "warn and admit", the other "refuse with a cure"). The DL6 argument
   holds word for word for a sign-in folder on `nfs`/`nfs4`/`cifs`/`smb3`/`fuse.sshfs`/`ceph`/`glusterfs`: a `kimi` on ANOTHER
   machine sharing that home refreshes the same rotating token, and no lock on this machine can see it. Windows already refuses
@@ -968,9 +968,10 @@ Prerequisites: Vibe paid turns for E1 and L-V9 (~12); Kimi paid turns for E4 (~1
   a mystery. Revisited only if the owner meets it in daily use.
 - **Q4 — `sudo apt-get` in the install terminal** (he types his password there). Default: yes.
 - **Q5 — Release order** if `feat/kimi-consultant` is ready first: it takes 0.58.0 and Vibe-on-Linux 0.59.0 (DL14).
-- **Q7 — A Kimi sign-in on a network filesystem (DL6).** Default taken 2026-10-17: refused, with the cure (a local
-  `KIMI_CODE_HOME`, signed in separately) and an explicit default-off override setting. The alternative — admit with a warning —
-  was one consultant's choice; the owner decides.
+- **Q7 — A Kimi sign-in on a network filesystem (DL6).** **ANSWERED by the owner 2026-10-19: option A.** A Kimi sign-in folder on
+  network storage is refused by default, with the cure (a local `KIMI_CODE_HOME`, signed in separately), and the machine-scoped
+  override `coai.kimiAllowNetworkSignIn` admits it with a warning. (Taken as the default 2026-10-17; the alternative — admit with a
+  warning and no refusal — was one consultant's choice and is not taken.)
 - **Q6 — A survivor blocks the sign-in for coai** (DL9): while a marker names a process coai could not end — or names nothing it can
   match, because the shim died between its `spawning` write and the agent's start — every coai Kimi turn on that sign-in is Busy with
   the pid (or the reason), re-tried on every launch, until the process is gone or a person clears the marker. The person's own `kimi`
