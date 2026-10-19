@@ -11,12 +11,15 @@ import { RoundRecord, SessionFile } from '../rounds';
  * work reads a server that sends it — and the only thing owed is that the page is the page it was.
  *
  * <p>`roundsDb.ts` is byte-identical to the newest published extension's
- * (`git diff extension-v0.75.0 -- src_vs_code/src/roundsDb.ts` is empty), so this parser IS the released parser — the one
+ * (`git diff extension-v0.80.1 -- src_vs_code/src/roundsDb.ts` is empty), so this parser IS the released parser — the one
  * thing this file proves. `roundsLog.ts` and `rounds.ts` are NOT pinned: the plan gate's E2.S3 adds the plan-source line to
  * them, and the page-level case below only says that the page a log page produces does not change with a member it ignores.</p>
  *
  * <p>The same holds for `planSource` (E2.S2 of `todo/PLAN_the_plan_gate_reads_the_committed_plan_E2.md`, contract C2): `--log`
  * now carries it on a plan round, and `parseLog` reads field by field, so the member is ignored.</p>
+ *
+ * <p>And for `authorsState` (E5.S3 of `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`): `--log` now carries the state
+ * of each round's authors, and the released parser ignores it as it ignores the other two.</p>
  */
 
 /** What `--log --paged` prints for one code round that has a size, binary cell included: `added`/`removed` are ABSENT there. */
@@ -43,7 +46,7 @@ const PLAN_SOURCE = {
   textId: '0123456789abcdef',
 };
 
-function page(withSize: boolean, withPlanSource = false): string {
+function page(withSize: boolean, withPlanSource = false, withAuthorsState = false): string {
   return JSON.stringify({
     rounds: [{
       repoPath: 'D:\\repo', branch: 'main', stage: withPlanSource ? 'PlanReview' : 'CodeReview', number: 1,
@@ -51,6 +54,7 @@ function page(withSize: boolean, withPlanSource = false): string {
       findings: [], cursor: '2026-10-01T07:41:00.000Z|1', foundCount: 1, resolvedUtc: '', note: '',
       ...(withSize ? { size: SIZE } : {}),
       ...(withPlanSource ? { planSource: PLAN_SOURCE } : {}),
+      ...(withAuthorsState ? { authorsState: 'partial: peer running' } : {}),
     }],
     blindSpots: [],
     defended: [],
@@ -77,6 +81,15 @@ test('AnOlderExtensionReadsALogPageCarryingAPlanSource: the same round, and no e
   assert.equal(carrying.rounds.length, 1);
   assert.equal(carrying.rounds[0].stage, 'PlanReview');
   assert.deepEqual(carrying, plain, 'a member this parser does not know changes nothing it does');
+});
+
+test('AnOlderExtensionReadsALogPageCarryingAnAuthorsState: the same round, and no error', () => {
+  const carrying = parseLog(page(false, false, true), true);
+  const plain = parseLog(page(false), true);
+
+  assert.equal(carrying.read, true, 'the page was read, not refused as a shape from a future server');
+  assert.equal(carrying.rounds.length, 1);
+  assert.deepEqual(carrying, plain, 'a round carrying authorsState parses equal to the same page without it');
 });
 
 /** The session file the page joins the database round to — the round the log page above describes. */
