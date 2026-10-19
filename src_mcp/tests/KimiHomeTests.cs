@@ -69,11 +69,11 @@ public sealed class KimiHomeTests : IDisposable
     }
 
     [Fact]
-    public void ANonWindowsHost_MakesNothing()
+    public void AMacOsHost_MakesNothing()
     {
-        var places = _person.Places("kh-linux");
+        var places = _person.Places("kh-mac");
 
-        KimiHome.Made(HostKind.Linux, places, Expected()).Should().Contain("D18").And.Contain("sign-in could not be linked");
+        KimiHome.Made(HostKind.MacOs, places, Expected()).Should().Contain("D18").And.Contain("sign-in could not be linked");
         File.Exists(places.Config).Should().BeFalse("nothing is written when the junction was refused");
     }
 
@@ -206,7 +206,17 @@ public sealed class KimiHomeTests : IDisposable
         var places = Made();
         Write(Path.Combine(places.Home, "bin", "rg.exe"));
 
-        KimiHome.Refusal(places, Expected()).Should().Contain("bin/").And.Contain("downloaded ripgrep or fd").And.Contain("rg and fd").And.Contain("winget");
+        var refusal = KimiHome.Refusal(places, Expected());
+
+        refusal.Should().Contain("bin/").And.Contain("downloaded ripgrep or fd");
+        if (OperatingSystem.IsWindows())
+        {
+            refusal.Should().Contain("rg and fd").And.Contain("winget");
+        }
+        else
+        {
+            refusal.Should().Contain(KimiTools.UnixGenericCure).And.NotContain("winget", "the Linux refusal quotes winget");
+        }
     }
 
     // ---------- S2.19 ----------
@@ -555,6 +565,55 @@ public sealed class KimiHomeTests : IDisposable
         KimiHome.Dispose(places.OwnedRoot, _ => { }).Should().BeOfType<Disposal.Stopped>("a kept home costs a beat where a wrong unlink costs a sign-in");
         OwnedPaths.IsLinkIfThere(places.Link).Should().BeTrue();
     }
+    private sealed class Keeping(string sentence) : IKimiSurvivors
+    {
+        public Task<string> BlockedAsync(string markerPath, CancellationToken ct) => Task.FromResult(string.Empty);
+
+        public string KeepsHome(string ownedRoot) => sentence;
+    }
+
+    [Fact]
+    public void AHomeAStandingSurvivorMarkerNames_IsKept_EvenWithItsTreeFileFree()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        var places = Made();
+        using var seam = KimiSurvivors.Using(new Keeping("a Kimi started on this home may still be running (the survivor marker names pid 4242) — the home is kept until the marker is cleared"));
+
+        var disposal = KimiHome.Dispose(places.OwnedRoot, _ => { });
+
+        disposal.Should().BeOfType<Disposal.Stopped>("a survivor marker keeps the home exactly as a held coai-tree.lock does").Which.Reason.Should().Contain("survivor marker");
+        OwnedPaths.IsLinkIfThere(places.Link).Should().BeTrue("nothing was unlinked");
+    }
+
+    [Fact]
+    public void AHomeAStandingMarkerNames_IsKeptByTheProductsGate_NamingThePid_AndNothingIsUnlinked()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        var places = Made();
+        using var rooted = KimiCredentialsLock.RootFor(Path.Combine(_person.Folder, "locks"));
+        var marker = KimiCredentialsLock.MarkerPathFor(places.Credentials);
+        KimiSurvivorMarker.Write(marker, new KimiSurvivorMarkerDto(new ReaderMarkerDto(ReaderPhases.Running, 424242, DateTime.UtcNow, DateTimeOffset.UtcNow, [new ProcessIdentity(2_000_000_011, DateTime.UtcNow)]), places.OwnedRoot, "/people/sign-in"));
+
+        var disposal = KimiHome.Dispose(places.OwnedRoot, _ => { });
+
+        disposal.Should().BeOfType<Disposal.Stopped>("a marker that names this home keeps it exactly as a held coai-tree.lock does").Which.Reason.Should().Contain(marker).And.Contain("pid 2000000011");
+        OwnedPaths.IsLinkIfThere(places.Link).Should().BeTrue("nothing was unlinked");
+        File.Exists(marker).Should().BeTrue("a home disposal never clears a marker");
+    }
+
+    [Fact]
+    public void AMarkerThatNamesAnotherHome_DoesNotKeepThisOne()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        var places = Made();
+        using var rooted = KimiCredentialsLock.RootFor(Path.Combine(_person.Folder, "locks"));
+        var marker = KimiCredentialsLock.MarkerPathFor(places.Credentials);
+        KimiSurvivorMarker.Write(marker, new KimiSurvivorMarkerDto(new ReaderMarkerDto(ReaderPhases.Running, 424242, DateTime.UtcNow, DateTimeOffset.UtcNow, [new ProcessIdentity(2_000_000_011, DateTime.UtcNow)]), Path.Combine(_person.Folder, "owned", "another-home"), "/people/sign-in"));
+
+        KimiHome.Dispose(places.OwnedRoot, _ => { }).Should().Be(new Disposal.Clean(true), "a marker names the home it was written for, and no other");
+        File.Exists(marker).Should().BeTrue("a home disposal reconciles nothing: it only asks whether a marker names its home");
+    }
+
     // ---------- the refusals and stops no other row reaches ----------
 
     [Fact]

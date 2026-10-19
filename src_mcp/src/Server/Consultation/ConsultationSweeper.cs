@@ -102,6 +102,13 @@ public static class ConsultationSweeper
             // build path was the only caller of this throttled sweep, so a crashed consult's snapshot outlived every server
             // that ran no round. Throttled to once in ten minutes by the service itself; a quiet server pays one walk.
             service.SweepScratch();
+
+            // The Kimi lock files of a sign-in folder that is gone or is another folder now (DL7 / F15): Linux keys are inodes, so they pile up where Windows ones cannot. Never throws.
+            var locks = service.SweepKimiLocks();
+            if (locks > 0)
+            {
+                log.Information("retired {Count} Kimi lock key(s): their sign-in folder is gone or is another folder now", locks);
+            }
         }
         catch (Exception failure)
         {

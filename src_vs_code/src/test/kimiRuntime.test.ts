@@ -134,12 +134,12 @@ test('thePresetRoundTrips: Add a model offers Kimi Code on its first curated mod
   assert.equal(back!.code, true);
 });
 
-test('the preset’s hint names the release, the sign-in, Windows-only, and the reviewers that run one after another', () => {
+test('the preset’s hint names the release, the sign-in, Windows and WSL2, and the reviewers that run one after another', () => {
   const hint = VENDOR_PRESETS.find((one) => one.runtime === 'kimi')?.hint ?? '';
 
   assert.ok(KIMI_RUNTIME_SINCE.length > 0 && hint.includes(KIMI_RUNTIME_SINCE), `the hint does not name coai-mcp ${KIMI_RUNTIME_SINCE}: ${hint}`);
   assert.match(hint, /kimi login/u);
-  assert.match(hint, /Windows only/u);
+  assert.doesNotMatch(hint, /Windows only/u, 'the Windows-only sentence is what E6 lifts for WSL2');
   assert.match(hint, /one after another/u, 'D19: a Kimi row’s three reviewers are serialised');
 });
 

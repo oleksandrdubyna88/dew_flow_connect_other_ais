@@ -65,7 +65,7 @@ public sealed record RuleOrder
     /// budget (77 562 when this was first measured, 2026-09-16), leaving 56 bytes against a smallest
     /// non-tier rule of 2 197 — so the tail took NO rule on any branch, and the new
     /// <c>common/test-leftovers.md</c> (4 706 bytes) could not reach a reviewer at all. The operator
-    /// raised the budget to 90 000 that day: the same base and tier now leave 10 056 bytes, and the tail
+    /// raised the budget to 90 000 that day: the same base and tier now leave 10 033 bytes (10 056 until 2026-10-18, when `.agents/PROJECT.md` gained 23 characters), and the tail
     /// takes one rule on 30 % of branches, two on 62 % and three on 8 % (mean 1.78, over 3 000 branch
     /// names). <c>common/test-leftovers.md</c> is drawn on about 10 % of them — a real but partial
     /// reach, which is what a rotation over 29 candidates and about 10 KB can give. The number is the

@@ -46,6 +46,12 @@ public static class HostKinds
             || executable.TrimStart().StartsWith(@"\\wsl", StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// The ONE answer to "is this a host where Kimi's lock family exists?" — Windows, Linux and WSL (an exclusive inheritable hold, a sign-in link, the key's identity rule). Everywhere else (macOS, any other)
+    /// is refused until measured. <c>Junctions.HostAdmitted</c>, <c>HeldFile.InheritableSupported</c> and every other site ask THIS, so a host can never be admitted by one and refused by another.
+    /// </summary>
+    public static bool HasKimiLockFamily(HostKind host) => host is HostKind.Windows or HostKind.Linux or HostKind.Wsl;
+
     /// <summary>The host the four facts describe — pure, so every platform is a unit test on any one of them.</summary>
     public static HostKind Of(bool windows, bool linux, bool macOs, bool wsl) => (windows, linux, macOs) switch
     {

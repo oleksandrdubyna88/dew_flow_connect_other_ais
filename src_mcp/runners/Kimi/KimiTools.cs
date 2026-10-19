@@ -34,38 +34,70 @@ public static class KimiTools
     /// The directories — never <paramref name="bin"/> itself, each once, <c>rg</c>'s before <c>fd</c>'s — where the tools are found
     /// outside the person's <c>bin</c>: what the built <c>PATH</c> must name after <c>bin</c> so both resolve.
     /// </summary>
-    public static IReadOnlyList<string> FoldersFor(bool isWindows, string bin, string? path, string? pathext, Func<string, bool> exists)
+    public static IReadOnlyList<string> FoldersFor(bool isWindows, string bin, string? path, string? pathext, Func<string, bool> exists, string localBin = "")
     {
         var comparer = isWindows ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
         return
         [
             .. Names
-                .Select(name => FolderOf(isWindows, bin, name, path, pathext, exists))
+                .Select(name => FolderOf(isWindows, bin, name, path, pathext, exists, localBin))
                 .Where(folder => folder.Length > 0 && !comparer.Equals(folder, Trimmed(bin, isWindows)))
                 .Distinct(comparer),
         ];
     }
 
-    /// <summary>The refusal naming the missing tool(s) and the two cures, or empty when both are found.</summary>
-    public static string Refusal(bool isWindows, string bin, string? path, string? pathext, Func<string, bool> exists)
+    /// <summary>
+    /// The refusal naming the missing tool(s) and the cure of THIS host, or empty when both are found: on Windows the two <c>winget</c> lines; elsewhere (DL12 of
+    /// <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>) the <c>apt-get</c> or <c>dnf</c> line when that manager resolves on <paramref name="path"/>, else one generic sentence. Never <c>winget</c> off Windows.
+    /// </summary>
+    public static string Refusal(bool isWindows, string bin, string? path, string? pathext, Func<string, bool> exists, string localBin = "")
     {
-        var missing = Names.Where(name => FolderOf(isWindows, bin, name, path, pathext, exists).Length == 0).ToList();
+        var missing = Names.Where(name => FolderOf(isWindows, bin, name, path, pathext, exists, localBin).Length == 0).ToList();
 
-        return missing.Count == 0
-            ? string.Empty
-            : $"{string.Join(" and ", missing)} {(missing.Count == 1 ? "was" : "were")} not found in {bin} or on PATH — Kimi's Grep and Glob would download "
-              + $"{(missing.Count == 1 ? "it" : "them")} into the coai-owned home, which coai refuses (D19); install them — `{RipgrepInstall}` and `{FdInstall}`, "
-              + "the two steps the panel's Install button for Kimi runs — and restart the editor; or run kimi once in a terminal and use its search, "
-              + $"which downloads both into {bin}";
+        return missing.Count == 0 ? string.Empty : isWindows ? WindowsRefusal(missing, bin) : UnixRefusal(missing, bin, Manager(path, exists));
     }
 
-    /// <summary>The first directory — the person's <c>bin</c>, then each entry of <c>PATH</c> — where <paramref name="name"/> resolves, or empty.</summary>
-    private static string FolderOf(bool isWindows, string bin, string name, string? path, string? pathext, Func<string, bool> exists)
+    /// <summary>The one cure sentence for a host that is not Windows when the tools are not found anywhere — what <c>KimiHome</c> quotes for a <c>bin/</c> Kimi downloaded into the home.</summary>
+    public const string UnixGenericCure = "install ripgrep and fd with your distribution's package manager, or place them on PATH or in ~/.local/bin";
+
+    private static string WindowsRefusal(List<string> missing, string bin) =>
+        $"{string.Join(" and ", missing)} {(missing.Count == 1 ? "was" : "were")} not found in {bin} or on PATH — Kimi's Grep and Glob would download "
+        + $"{(missing.Count == 1 ? "it" : "them")} into the coai-owned home, which coai refuses (D19); install them — `{RipgrepInstall}` and `{FdInstall}`, "
+        + "the two steps the panel's Install button for Kimi runs — and restart the editor; or run kimi once in a terminal and use its search, "
+        + $"which downloads both into {bin}";
+
+    private static string UnixRefusal(List<string> missing, string bin, string manager) =>
+        $"{string.Join(" and ", missing)} {(missing.Count == 1 ? "was" : "were")} not found in {bin}, on PATH or in ~/.local/bin — Kimi's Grep and Glob would download "
+        + $"{(missing.Count == 1 ? "it" : "them")} into the coai-owned home, which coai refuses (D19); {UnixCure(missing, manager)}; "
+        + $"or run kimi once in a terminal and use its search, which downloads them into {bin}";
+
+    /// <summary>The cure for the manager that resolved — its install line per missing tool — or the generic sentence when neither did.</summary>
+    private static string UnixCure(List<string> missing, string manager) => manager switch
+    {
+        "" => UnixGenericCure,
+        _ => $"install {(missing.Count == 1 ? "it" : "them")} — {string.Join(" and ", missing.Select(name => $"`sudo {manager} install -y {PackageOf(name)}`"))} "
+             + $"(the panel's Install button for Kimi runs these){FdLink(missing, manager)}",
+    };
+
+    /// <summary>Debian and Ubuntu name fd's program <c>fdfind</c> and Kimi looks for <c>fd</c>, so the link is part of the cure there; Fedora's package installs <c>fd</c> itself.</summary>
+    private static string FdLink(List<string> missing, string manager) =>
+        manager == "apt-get" && missing.Contains("fd")
+            ? " — and, because Debian and Ubuntu name fd's program fdfind, link it unless ~/.local/bin/fd is already your own file: `mkdir -p ~/.local/bin && ln -sfn \"$(command -v fdfind)\" ~/.local/bin/fd`"
+            : string.Empty;
+
+    private static string PackageOf(string tool) => tool == "rg" ? "ripgrep" : "fd-find";
+
+    /// <summary>The package manager that resolves on <paramref name="path"/> — <c>apt-get</c> before <c>dnf</c> — or empty.</summary>
+    private static string Manager(string? path, Func<string, bool> exists) =>
+        new[] { "apt-get", "dnf" }.FirstOrDefault(manager => ExecutableResolver.OnPosixPath(manager, path, exists).Length > 0) ?? string.Empty;
+
+    /// <summary>The first directory — the person's <c>bin</c>, each entry of <c>PATH</c>, then <paramref name="localBin"/> — where <paramref name="name"/> resolves, or empty.</summary>
+    private static string FolderOf(bool isWindows, string bin, string name, string? path, string? pathext, Func<string, bool> exists, string localBin)
     {
         var candidates = Candidates(isWindows, name, pathext);
 
-        return Directories(isWindows, bin, path)
+        return Directories(isWindows, bin, path, localBin)
             .FirstOrDefault(directory => ExecutableResolver.In(directory, candidates, isWindows, exists).Length > 0)
             ?? string.Empty;
     }
@@ -80,10 +112,11 @@ public static class KimiTools
             : [name];
     }
 
-    /// <summary><paramref name="bin"/> first, then <c>PATH</c>'s entries, each without a trailing separator.</summary>
-    private static IEnumerable<string> Directories(bool isWindows, string bin, string? path) =>
+    /// <summary><paramref name="bin"/> first, then <c>PATH</c>'s entries, then <paramref name="localBin"/> when there is one — each without a trailing separator.</summary>
+    private static IEnumerable<string> Directories(bool isWindows, string bin, string? path, string localBin) =>
         new[] { bin }
             .Concat((path ?? string.Empty).Split(isWindows ? ';' : ':', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Concat(localBin.Length > 0 ? [localBin] : [])
             .Select(directory => Trimmed(directory, isWindows));
 
     /// <summary>Without a trailing separator — except a drive root, whose separator is the folder.</summary>

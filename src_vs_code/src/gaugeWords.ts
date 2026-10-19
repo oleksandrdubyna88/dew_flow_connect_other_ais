@@ -116,7 +116,7 @@ function reachedWords(reading: GaugeReading): string {
 /** Why a figure is not a number, in words — a code this build does not know is said as it came. */
 const REASON_WORDS: Readonly<Record<string, string>> = {
   'too-few-readings': 'fewer than two readings of this window on one account',
-  'percent-did-not-rise': 'the percentage did not rise between the last readings',
+  'percent-did-not-rise': 'the percentage has not risen yet',
   'window-reset': 'the window reset between the last readings',
   'stale-reading': 'a reading was older than the launch it followed',
   'missing-reading': 'a launch between the readings has no reading of its own',
