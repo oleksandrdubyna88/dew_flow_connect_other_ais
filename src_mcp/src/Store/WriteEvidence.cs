@@ -74,7 +74,10 @@ public sealed record WriteTarget(WriteTargetKind Kind, string Where);
 /// on Linux, and a session that writes thousands of files asks the filesystem once per folder. Only <c>Directory.Exists</c> and
 /// <see cref="GitMarker.HasGit"/> are used, through <see cref="CheckoutProbes"/>: no git process, no file read.</para>
 /// <para><b>Never asks about a remote path</b> (security fix, 2026-10-18): a UNC or device path, or one on a mapped network drive,
-/// is <c>Unresolved</c> with an empty key and never reaches the file system — see <see cref="LocalPaths"/>.</para>
+/// is <c>Unresolved</c> with an empty key and never reaches the file system — see <see cref="LocalPaths"/>. <b>Residual, accepted:</b>
+/// an EXISTING junction or symbolic link under a local path IS followed by <c>Directory.Exists</c> and the <c>.git</c> walk — unlike
+/// <c>SubmodulePopulator</c>'s walk, which refuses links. Such a link can point at a share, but the host is then one the link's
+/// owner chose on this disk, not one the transcript names; a probe here is not a promise that no link is crossed.</para>
 /// <para><b>Nearest root wins.</b> A submodule or a nested checkout resolves to the INNER root, and a linked worktree to the
 /// worktree, not to the common dir — two worktrees are two checkouts. Whether an inner root under the gate's <c>repo_path</c> counts as
 /// "here" is E4's rule, not this class's.</para>
