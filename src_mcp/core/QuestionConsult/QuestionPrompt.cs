@@ -25,6 +25,12 @@ public sealed record QuestionPromptInput(
     /// (research/PLAN_agy_searches_through_coai.md); empty for every other row, whose prompt is then unchanged.
     /// </summary>
     public string Toolbox { get; init; } = string.Empty;
+
+    /// <summary>
+    /// What the roots do NOT hold — a disk row that stands in COPIES of its roots (Vibe) is told, under the list of them, what the copies
+    /// left out (the linked worktrees whose main checkouts it reads), so it never reports a branch it could not see as one that is not there.
+    /// </summary>
+    public IReadOnlyList<string> Limitations { get; init; } = [];
 }
 
 /// <summary>
@@ -65,7 +71,7 @@ public static class QuestionPrompt
         }
 
         text.AppendLine();
-        AppendRoots(text, input.Roots);
+        AppendRoots(text, input.Roots, input.Limitations);
         AppendMaterial(text, OutlineHeading, "the outline", input.Nonce, input.Outline);
         AppendMaterial(text, ContextHeading, "the caller's context", input.Nonce, input.Context.Text);
         text.AppendLine(QuestionHeading);
@@ -107,7 +113,7 @@ public static class QuestionPrompt
     private const string Closing =
         "Answer in prose, to the AI that asked — it is blocked on your answer. Advice, never orders.";
 
-    private static void AppendRoots(StringBuilder text, IReadOnlyList<string> roots)
+    private static void AppendRoots(StringBuilder text, IReadOnlyList<string> roots, IReadOnlyList<string> limitations)
     {
         if (roots.Count == 0)
         {
@@ -118,6 +124,11 @@ public static class QuestionPrompt
         foreach (var root in roots)
         {
             text.Append("- ").AppendLine(root);
+        }
+
+        foreach (var limitation in limitations)
+        {
+            text.AppendLine().Append("Note: ").AppendLine(limitation);
         }
 
         text.AppendLine();
