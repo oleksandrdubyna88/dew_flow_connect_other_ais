@@ -17,7 +17,7 @@ internal sealed class AssignRun
     public AssignRun(AttributionInput input, bool usePriorEnd)
     {
         _input = input;
-        var gates = new[] { input.Gate }.Concat(input.Peers).DistinctBy(gate => gate.GateSessionId, StringComparer.Ordinal).ToList();
+        var gates = new[] { input.Gate }.Concat(input.PeersKnown ? input.Peers : []).DistinctBy(gate => gate.GateSessionId, StringComparer.Ordinal).ToList();
         foreach (var gate in gates)
         {
             var priorEnd = usePriorEnd ? Windows.PriorEnd(gate, gates.Where(other => other.GateSessionId != gate.GateSessionId), input.Caller.CallerSessionId) : null;
@@ -36,6 +36,9 @@ internal sealed class AssignRun
 
         return reached.Count == 0 || reached.Any(window => window.From is null) ? null : reached.Min(window => window.From);
     }
+
+    /// <summary>Whether an unsettled peer window of this caller overlaps one of this round's windows — the test that gives a window <c>partial: peer running</c>.</summary>
+    public bool HasRunningPeer() => _mine.Any(window => !window.Blind && Ownership.HasRunningPeer(window, _peerWindows, _input.Caller.CallerSessionId));
 
     public WindowAssignment Build()
     {

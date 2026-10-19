@@ -40,5 +40,13 @@ public static class RoundAttribution
     /// </summary>
     public static DateTimeOffset? ReadFrom(AttributionInput input) => ReadFrom(input, usePriorEnd: true);
 
+    /// <summary>
+    /// Whether a round of a named peer still runs and overlaps this round's windows: E4 §S2.3's window overlap over the peers'
+    /// timelines — a window of THIS caller, not blind, not settled, sharing an instant with one of this round's non-blind windows. It is
+    /// exactly the test that gives a window <c>partial: peer running</c>, so a backfill that asks "may this row be recomputed yet?" and the
+    /// state a recompute would write cannot disagree. False when the peers are not known.
+    /// </summary>
+    public static bool PeerStillRuns(AttributionInput input) => new AssignRun(input, usePriorEnd: true).HasRunningPeer();
+
     internal static DateTimeOffset? ReadFrom(AttributionInput input, bool usePriorEnd) => new AssignRun(input, usePriorEnd).ReadFrom();
 }
