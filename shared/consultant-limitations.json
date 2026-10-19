@@ -253,7 +253,7 @@
       "platform": "linux",
       "standing": "unmeasured",
       "text": "Not run here: Vibe is measured on WSL2 only for now, so coai refuses it on a native Linux host.",
-      "source": "Not measured on native Linux: every Linux Vibe cell is WSL2 (sections 30 and 31 of research/RESULTS_vibe_confinement.md), and a desktop Linux may keep Vibe's sign-in in a keyring instead of ~/.vibe/.env, which coai cannot see; the launch is refused until one native-Linux run (L-V10 of todo/PLAN_kimi_and_vibe_on_linux.md) is recorded."
+      "source": "Not measured on native Linux: every Linux Vibe cell is WSL2 (sections 30 and 31 of research/RESULTS_vibe_confinement.md), and a desktop Linux may keep Vibe's sign-in in a keyring instead of ~/.vibe/.env, which coai cannot see; the launch is refused until one native-Linux run (L-V10 of research/PLAN_kimi_and_vibe_on_linux.md) is recorded."
     },
     {
       "runtime": "vibe",
@@ -279,7 +279,7 @@
       "platform": "linux",
       "standing": "unmeasured",
       "text": "Not run here: Kimi is measured on WSL2 only for now, so coai refuses it on a native Linux host.",
-      "source": "Not measured on native Linux: every Linux Kimi cell is WSL2 (section 29 of research/RESULTS_kimi_confinement.md); the launch is refused until one native-Linux run is recorded (DL1 of todo/PLAN_kimi_and_vibe_on_linux.md)."
+      "source": "Not measured on native Linux: every Linux Kimi cell is WSL2 (section 29 of research/RESULTS_kimi_confinement.md); the launch is refused until one native-Linux run is recorded (DL1 of research/PLAN_kimi_and_vibe_on_linux.md)."
     },
     {
       "runtime": "kimi",

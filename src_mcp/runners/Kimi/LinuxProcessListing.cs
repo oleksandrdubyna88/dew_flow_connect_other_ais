@@ -3,7 +3,7 @@ using CoaiMcp.Runners.Processes;
 namespace CoaiMcp.Runners.Kimi;
 
 /// <summary>
-/// The Linux process listing for <see cref="ForeignKimiWatch"/>, read from <c>/proc</c> through <see cref="IProcReads"/> (DL10 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>, A2 §5.5): one <see cref="ProcessEntry"/> per process
+/// The Linux process listing for <see cref="ForeignKimiWatch"/>, read from <c>/proc</c> through <see cref="IProcReads"/> (DL10 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>, A2 §5.5): one <see cref="ProcessEntry"/> per process
 /// this account owns that has not exited, with its parent and <c>comm</c> from the one <c>stat</c> reader (<see cref="ProcStat"/>) and its <c>exe</c> basename as the name — or, when that <c>exe</c> is hidden, the basename of
 /// <c>argv[0]</c> (DL10, re-decided 2026-10-17).
 /// </summary>

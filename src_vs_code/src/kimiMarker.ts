@@ -2,7 +2,7 @@ import type { ProvidersAnswer, SurvivorMarker } from './providers';
 import type { CaptureEnd, Captured } from './versionProbe';
 
 /**
- * The Kimi card's *Clear the stuck Kimi marker* button — E6 of todo/PLAN_kimi_and_vibe_on_linux.md, DL9, S-K18.
+ * The Kimi card's *Clear the stuck Kimi marker* button — E6 of research/PLAN_kimi_and_vibe_on_linux.md, DL9, S-K18.
  *
  * <p>When a Kimi that coai started may still be running, coai-mcp keeps a marker file and answers every Kimi turn on that sign-in
  * Busy (two refreshers of one rotating token would sign the person out). The Busy sentence already carries the manual way out —

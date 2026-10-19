@@ -7,7 +7,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// L-N1 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c> (DL8; S-K4 and S-K5) on the PRODUCT's tree hold — <c>KimiCredentialsLock.HoldTree</c>, keyed by the sign-in folder's identity — in
+/// L-N1 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c> (DL8; S-K4 and S-K5) on the PRODUCT's tree hold — <c>KimiCredentialsLock.HoldTree</c>, keyed by the sign-in folder's identity — in
 /// a real second process (<c>FakeCli tree-hold</c>), on Linux CI with no stand-in. <see cref="HeldFileInheritableOnLinuxTests"/> asks the same two questions of the bare primitive;
 /// this asks them of what the shim actually takes: the sign-in's file and the home's.
 /// </summary>

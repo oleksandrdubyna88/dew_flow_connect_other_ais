@@ -69,7 +69,7 @@ public sealed class AVibeQuestionRowReadsACopyOfItsRootsTests : IAsyncLifetime
     private static string RowFolderOf(ProcessRequest request) =>
         Path.GetDirectoryName(request.Environment[VibeLaunch.HomeVariable])!;
 
-    /// <summary>The question-row flow, as a Windows host and as a WSL2 host (E2 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>).</summary>
+    /// <summary>The question-row flow, as a Windows host and as a WSL2 host (E2 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>).</summary>
     [Theory]
     [InlineData(VibeFlowHost.Windows)]
     [InlineData(VibeFlowHost.Wsl2)]

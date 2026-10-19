@@ -5,7 +5,7 @@ namespace CoaiMcp.Runners.Processes;
 /// <summary>The five facts of one <c>/proc/&lt;pid&gt;/stat</c> line that anything here reads: the process, its name (<c>comm</c>), its state letter and its parent.</summary>
 /// <remarks>
 /// <c>comm</c> is the KERNEL's name for the thread group — at most 15 characters, and not the program's file name: a running <c>kimi acp</c> reads
-/// <c>MainThread</c> (L-K6 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>), which is why a caller that must recognise a program matches the <c>exe</c> link
+/// <c>MainThread</c> (L-K6 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>), which is why a caller that must recognise a program matches the <c>exe</c> link
 /// instead. <see cref="State"/> is one letter; <c>Z</c> (a zombie) and <c>X</c> (being removed) mean the process has exited.
 /// </remarks>
 /// <param name="Pid">The process.</param>

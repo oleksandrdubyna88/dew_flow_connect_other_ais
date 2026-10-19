@@ -7,7 +7,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// The names grammar of the person's Vibe sign-in file (DL2 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>; A1 spec §1; S-V13): which
+/// The names grammar of the person's Vibe sign-in file (DL2 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>; A1 spec §1; S-V13): which
 /// variable names python-dotenv — the reader Vibe uses — would bind, judged without reading a value.
 /// </summary>
 /// <remarks>
