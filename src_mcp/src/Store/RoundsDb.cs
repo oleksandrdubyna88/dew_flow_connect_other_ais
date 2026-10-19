@@ -198,6 +198,7 @@ public sealed class RoundsDb : IDisposable
         var roundId = RecordRoundRow(state, round, context);
         RecordReviewers(roundId, round);
         RoundChangesTable.Record(this, roundId, round.Size, round.Gitlinks);
+        RoundAuthorsTable.Record(this, roundId, round.Authors);
         RecordFindings(roundId, findings, context);
         transaction.Commit();
     }

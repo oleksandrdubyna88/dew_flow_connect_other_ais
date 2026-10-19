@@ -3,6 +3,7 @@ using CoaiMcp.Runners.Files;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Snapshots;
 using CoaiMcp.Runners.Vibe;
+using CoaiMcp.Runners.Worktrees;
 
 namespace CoaiMcp.Server;
 
@@ -374,15 +375,12 @@ public sealed class ConsultantPlaces(string homesRoot, string store, IProcessLau
         for (var at = folder; at is not null; at = Path.GetDirectoryName(at))
         {
             yield return at;
-            if (HoldsGit(at))
+            if (GitMarker.HasGit(at))
             {
                 yield break;
             }
         }
     }
-
-    private static bool HoldsGit(string folder) =>
-        Directory.Exists(Path.Combine(folder, ".git")) || File.Exists(Path.Combine(folder, ".git"));
 
     private async Task<string> OutsideAGitTreeAsync(string source, CancellationToken ct)
     {

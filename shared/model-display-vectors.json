@@ -1,0 +1,40 @@
+{
+  "$comment": [
+    "Golden vectors for ONE question: how is the model id a transcript recorded SHOWN, and which FAMILY does it count under?",
+    "",
+    "The round card reads `written with Opus 5.5 (main) · 3 Sonnet coders · …`; the report E6 builds counts the same coders by the",
+    "same family. Two implementations of one rule drift, so both answer THIS file (`rounds.test.ts` for the extension; E6's C#",
+    "family function reads it too — never a retyped copy).",
+    "",
+    "The rule: `claude-<family>-<major>-<minor>[-<date>]` — <family> lower-case letters, <major> digits, <minor> one or two digits, an",
+    "optional eight-digit date — is shown as `<Family> <major>.<minor>` and its family is `<family>`. An empty model, and the word",
+    "`unknown` (E4.S3's launch-only row), are family `unknown`. ANY other id is shown verbatim and counts as family `other`: a new",
+    "naming scheme is never guessed into a family it may not belong to, and a `[1m]` suffix is part of the id the transcript wrote.",
+    "The page escapes what it shows; the vectors carry the text as it arrives, hostile ones included.",
+    "",
+    "Each row: { model, display, family }."
+  ],
+  "models": [
+    { "model": "claude-opus-5-5", "display": "Opus 5.5", "family": "opus" },
+    { "model": "claude-sonnet-5-5", "display": "Sonnet 5.5", "family": "sonnet" },
+    { "model": "claude-haiku-4-5-20251001", "display": "Haiku 4.5", "family": "haiku" },
+    { "model": "claude-sonnet-4-5-20250929", "display": "Sonnet 4.5", "family": "sonnet" },
+    { "model": "claude-opus-4-1", "display": "Opus 4.1", "family": "opus" },
+    { "model": "claude-opus-5-5-20261001", "display": "Opus 5.5", "family": "opus" },
+    { "model": "claude-fable-5-0", "display": "Fable 5.0", "family": "fable" },
+    { "model": "claude-opus-10-12", "display": "Opus 10.12", "family": "opus" },
+    { "model": "", "display": "unknown", "family": "unknown" },
+    { "model": "unknown", "display": "unknown", "family": "unknown" },
+    { "model": "opus", "display": "opus", "family": "other" },
+    { "model": "gpt-6-luna", "display": "gpt-6-luna", "family": "other" },
+    { "model": "claude-3-5-sonnet-20241022", "display": "claude-3-5-sonnet-20241022", "family": "other" },
+    { "model": "claude-opus-5", "display": "claude-opus-5", "family": "other" },
+    { "model": "claude-opus-5-20261001", "display": "claude-opus-5-20261001", "family": "other" },
+    { "model": "claude-opus-5-5-2026", "display": "claude-opus-5-5-2026", "family": "other" },
+    { "model": "claude-opus-5-5[1m]", "display": "claude-opus-5-5[1m]", "family": "other" },
+    { "model": "Claude-Opus-5-5", "display": "Claude-Opus-5-5", "family": "other" },
+    { "model": "claude-opus-5-5 ", "display": "claude-opus-5-5 ", "family": "other" },
+    { "model": "claude--5-5", "display": "claude--5-5", "family": "other" },
+    { "model": "<img src=x onerror=alert(1)>", "display": "<img src=x onerror=alert(1)>", "family": "other" }
+  ]
+}

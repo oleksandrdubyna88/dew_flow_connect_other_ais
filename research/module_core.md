@@ -246,6 +246,34 @@ guard's own rehearsal, then for real on 2026-09-26 when the member was added ahe
 feature session's key (the fourth argument ignored: the feature key equalled the branch key, and one
 plan's session equalled another's).
 
+## Round attribution — who wrote the code a round reviewed (2026-10-19, E4 of the round-authors plan)
+
+`src_mcp/core/Authors/`, namespace `CoaiMcp.Core.Authors`: PURE — no clock, no disk, no process, no environment (`TheAttributionCoreTouchesNoClockAndNoDiskTests` scans the folder).
+It turns ONE caller session's observation (`CallerObservation`, filled by the one mapping `src/Store/AttributionMapping.cs` from E3's `ObservedSession`) and the gate
+sessions' journals (`GateTimeline`) into, per round: `RoundAttribution.Assign(AttributionInput) → WindowAssignment` (placements, launches, writes, unobserved launches,
+agent associations, window states, `ReadFrom`, `PeerGates`), `RoundAuthorsBuilder.Build → RoundAuthors` (rows, ambiguous / elsewhere / claimed-by-peer totals, the state
+per window and rolled up) and `Contributors.Of / FixersOf`. Nothing is stored here; E5 stores, E6 reads, E7 backfills.
+
+- **Windows** (`Windows.Of`): a recorded round (plan or code, not skipped, not interrupted) owns `[previous recorded round's START, own start)`; the first also owns `before-open`,
+  from the end of the other gate sessions' SETTLED PREFIX (`PriorEnd`, a READ bound — the owned set is the same without it) to the open. A round with no start, and the next one, are
+  BLIND: `unobserved`, nothing placed. A completion ranks only on a `done` round.
+- **The ladder** (`AssociationLadder`): the agent's own writes in the window (`wrote here` / `wrote elsewhere` / `ambiguous · two repositories`), then a SUBAGENT parent that wrote here
+  or is a child of one in the same window (`child of`; main never propagates), then the window's destinations (`same-session` only for exactly this repository, else
+  `ambiguous · no evidence`). Only evidence: a name, a request, a launch time or a working directory is read by no rung. A write is evidence for a round only when its result
+  was written before that round completed, live and backfilled alike.
+- **Ownership** (`Ownership`): contested activity goes to the SETTLED window that completed first (ties by gate id); the other labels it `claimed by peer`. A window overlapped by a
+  not-settled same-caller peer is `partial: peer running` — provisional until E7's backfill recomputes it (`RoundAttribution.PeerStillRuns` is that same overlap test).
+- **States**: `observed < partial < unobserved`, the worst wins, reasons distinct in first-seen order; an unobserved window's totals are `ActivityTotals.Unknown` and its unobserved-launch
+  count is −1, never 0. `RoundAttribution.Version` is bumped by any change to a rule here.
+- **Contributors** come only from rows, are keyed (caller session, agent), and name the rounds they were not seen in (`NotSeen`).
+- **`AuthorsSnapshot`** (E5.S1, `AuthorsSnapshot.cs`) is what a round STORES of a `RoundAuthors`: every text-free member of it by name — never `WritesOutsideTheGateCheckout`, whose checkout roots must not reach
+  a file — plus E5's own five (`IdSource`, `Reader`, `Attribution`, `SubmoduleWrites`, `UncoveredWrites`). `From(authors, …)` is the one constructor from E4's result and `Unknown(…)` the one for a snapshot built
+  WITHOUT E4 (no row, `-1` in every unmeasured member, `Reader`/`Attribution` `0` for the component that did not run). `Render()` and `IsWellFormed(string)` are the state as text and the one rule for a stored state
+  (`shared/authors-state-vectors.json`, read by the extension too). `ActivityTotals.IsUnknown` is `[JsonIgnore]`, so a session file carries exactly the four members. The reflection fact fails when E4 adds a member the snapshot lacks.
+
+Design record: `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E4.md` (S2 is the cornerstone). Tests: `tests/Attribution*`, the `A…Tests` classes named in that plan, and the twenty recorded
+sessions of `tests/fixtures/caller-transcripts` through `AttributionHoldsOnTheRecordedSessionsTests`.
+
 ## Every stage answers by name — `Stages` (2026-09-25)
 
 `Rounds/Stages.cs` is one exhaustive table, a `StageDescriptor` row per `Stage`, and the only place

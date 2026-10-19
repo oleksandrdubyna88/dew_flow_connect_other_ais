@@ -53,7 +53,8 @@ public sealed class PanelService
         DateTime vaultReadUtc,
         IProcessLauncher launcher,
         Serilog.ILogger log,
-        Noticing noticing)
+        Noticing noticing,
+        Func<string, string?>? environment = null)
     {
         _settings = settings;
         _keys = keys;
@@ -133,7 +134,7 @@ public sealed class PanelService
         _commands = new RoundCommands(settings, prompts, log);
         _engine = new RoundEngine(
             settings, log, noticing, _store, _worktrees, scheduler, executor, _commands, _escalations, ledger,
-            _projection, callers, _remote, ExcludedFrom, NoReviewerRefusal);
+            _projection, callers, _remote, new RoundAuthorsStep(settings, log, _store, environment), ExcludedFrom, NoReviewerRefusal);
         // The fourth gate, in a file of its own (S2.2b): its inputs, its refs and its pack, over the same
         // engine. The outliner is the in-process tree-sitter one the pack is measured with.
         _feature = new FeatureStage(settings, launcher, _engine, _roster, new Normalizer.TreeSitterOutliner(), log, noticing);
@@ -1886,7 +1887,9 @@ public sealed class PanelService
         session.State.PlanProceeded,
         _settings.Rounds.For(session.State.Stage).Threshold,
         _settings.Rounds.For(session.State.Stage).MaxRounds,
-        session.Rounds)
+        // Without the authors snapshot: its rows would cost the calling AI up to several KB of context per round, on every reply.
+        // The session file and the rounds page keep it (E5.S1).
+        [.. session.Rounds.Select(round => round with { Authors = null })])
     {
         HumanDecision = CurrentAnswer.WordFor(Escalations.DecisionOf(gatesAnswer)),
         HumanAnswer = gatesAnswer?.Answer ?? string.Empty,

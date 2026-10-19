@@ -782,6 +782,13 @@ plan round, and a step-22 database all send NO member — never an empty one —
 malformed row cannot fail the page. An older extension ignores it (`parseLog` reads field by field); the extension's own
 rounds-log line reads the SESSION FILE's copy, not this member (`module_extension.md`).
 
+**And a third (2026-10-19): `LoggedRound.AuthorsState`.** The state of who wrote the code a round reviewed (`rounds.authors_state`,
+schema step 24, E5) rides `--log` as an optional member `authorsState` — `observed`, `partial: <reasons>` or `unobserved: <reasons>` — an init
+property read by a page-scoped reader (`RoundAuthorsLog`) after `RoundPlanSources`. A round with no recorded state, every round of a step-23
+database, and a stored value the shared rule refuses (`shared/authors-state-vectors.json`, read by the server and the extension alike) all send
+NO member: the words "not recorded" are never printed. An older extension ignores it (`anOlderExtensionReadsALogPageCarryingASize.test.ts`); the
+extension's own round card reads the SESSION FILE's snapshot, never this member.
+
 ### The second one: the review ROLES (2026-09-12)
 
 The same shape, arrived at the same way. `coai-mcp` held five roles and twenty-five prompts as a C#

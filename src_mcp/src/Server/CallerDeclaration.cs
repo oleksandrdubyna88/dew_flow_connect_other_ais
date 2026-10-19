@@ -95,6 +95,12 @@ public sealed record CallerDeclaration(
                 : CallerIdentity.Unknown;
 
     /// <summary>
+    /// The closed list of vendors a client name can be recognised as. Read by <see cref="VendorOf"/> and by the caller-transcript reader's
+    /// guard, which accepts a reason only when its vendor word is on this list (E3.S5).
+    /// </summary>
+    internal static readonly string[] KnownVendors = ["claude", "codex", "gemini", "antigravity"];
+
+    /// <summary>
     /// The vendors a client name can be recognised as, or null for one we do not know.
     /// </summary>
     /// <remarks>
@@ -104,8 +110,7 @@ public sealed record CallerDeclaration(
     /// verbatim as the client, and the vendor is <c>unknown</c> rather than borrowed.
     /// </remarks>
     private static string? VendorOf(string client) =>
-        new[] { "claude", "codex", "gemini", "antigravity" }
-            .FirstOrDefault(vendor => client.StartsWith(vendor, StringComparison.OrdinalIgnoreCase));
+        KnownVendors.FirstOrDefault(vendor => client.StartsWith(vendor, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// One field of somebody else's: trimmed, stripped of invisible characters, and bounded.
