@@ -4674,7 +4674,7 @@ The scans (`EveryWriterOfTheSteeringFileTests`, `EveryClassThatSetsTheProcessEnv
 
 ### E1 — counts and the two-runs proof (2026-10-19, Windows, Debug)
 
-`CoaiMcp.Tests.exe`, the whole suite: 11,883 tests, 11,766 passed, 117 skipped (arms for another OS), 0 failed. New in E1: 4 (`AFakeCliSteeringFileIsBesideItsBinaryTests`) + 6
+`CoaiMcp.Tests.exe`, the whole suite: 11,883 tests, 11,766 passed, 117 skipped (arms for another OS), 0 failed (after the code gate of 2026-10-19, which added 18 tests: 11,901 total, 11,784 passed, 117 skipped, 0 failed; `CoaiServer.Tests.exe` 614 total, 613 passed, 1 skipped). New in E1: 4 (`AFakeCliSteeringFileIsBesideItsBinaryTests`) + 6
 (`EveryWriterOfTheSteeringFileTests`) + 5 (`EveryClassThatSetsTheProcessEnvironmentTests`) + 1 (`ARepairTest_SeesOnlyItsOwnRoundsRepairFolder`). **Two whole runs from two worktrees of
 the same commit, started three seconds apart on one Windows user** — the situation that produced C1 — both finished 11,883 / 0 failed (17 min 26 s and 17 min 23 s). No test failed in
 the suite and passed alone, so nothing is listed as shared-state beyond the three cases above.

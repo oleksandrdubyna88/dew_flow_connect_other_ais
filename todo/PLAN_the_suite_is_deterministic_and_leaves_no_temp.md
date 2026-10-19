@@ -218,7 +218,8 @@ ACP transport's supervisor, and `RecordedAsync` already ends a live child itself
 (S8 at the launcher and through `ReviewerExecutor`, two arms each; S9 two arms) — 4 of 6 red on the unfixed helper (`Win32Exception`,
 `InvalidOperationException`, `NotStarted`), S9 green; S9 watched red once by dropping `&& process.HasExited`. `EndToEndTests.ARoundThatFoundNothing…`
 asserts `all 2` / `all 6 reviewers answered` first. Docs: `module_runners.md` (the launcher row), `module_tests.md` (a section). Open:
-the watch of 20 macOS runs (§10).
+the watch of 20 macOS runs (§10). The code gate's record for this story and E1 is under E1's Outcome ("Code gate (2026-10-19)"); it changed the seam to an `internal` constructor and the
+"has exited" decision to `HasEnded`.
 
 ### C3 — a Kimi shim that meets a disposal's probe: a 250 ms stand-in for an instant, inside a 500 ms wait (TIMING, medium)
 
@@ -1089,6 +1090,29 @@ file's name (S2b), the repair launched in the review's folder (the C10 test), `[
   through `FakeCliSteering.MinimalFile`: one definition where the file is read. The scan for other `fakecli-minimal.json` spellings allows exactly the helper and the two test files that pin it.
 - **A nested class counts for its outer class** in the two scans (`TestSourceIndex`): the first parser judged private `Canary` helpers inside placed classes on their own and named them.
 - **C1's commit includes the six writers' move** (not a separate story): between the helper and the move the suite would have been red.
+**Code gate (2026-10-19), epic 1 (E1 + C2). Verdict: proceed.** The fixes below were made in the same branch, each red first where it changes behaviour.
+Accepted (gate numbers #0, #1, #2, #3, #8, #9, #10, #11, #13; #14 in part): #0/#2 one `HasExited` read decided "the child has gone" — now `HasEnded` (`WaitForExit` 100 ms; "no process
+is associated" counts as ended), red by a seam that kills the child 10 ms after the read fails; #1 the start-time seam is an `internal` constructor overload, the public constructor
+is unchanged; #3 the test helper `IsGone` catches `ArgumentException`, `InvalidOperationException` and `Win32Exception` and compares the start time captured at launch (pid reuse);
+#8 every limit of the structural scans is listed in `module_tests.md`; #9 a steering file that cannot be deleted warns and never blocks the assembly (no `Lazy` caching an exception;
+a writer's lease deletes best-effort); #10 `TestSourceIndex` builds a name-to-class lookup once per list (no quadratic lineage); #11 `EveryWriterOfTheSteeringFileTests` reads each file once; #13 the dictionary
+`ReadBack` returns is read-only and its caller (`QuestionRowLookupScenarioTests`) builds a new one; #14 was replaced by the judge's concrete rule — a static class
+other than `FakeCliSteering` that writes the steering file or sets the environment fails, and `FakeCliSteering.Reset(` joins the environment rule's pattern (`using static` and aliases are a
+stated limit).
+Rejected, with the reason: #4 the `when` precedence is correct (`e is A or B && cond` is `(e is (A or B)) && cond`); #5 and #6 the catch in `RecordedAsync` rethrows after ending the child, so
+nothing is swallowed; #7 the scans defend against accidents, not a determined bypass (said in the limits); #12 a sentinel start time would be wrong data on the tracker's disk; #14 as worded
+(see above).
+The judge's eight: (1) the safety claim was WRONG and is corrected in the code remarks, `module_runners.md` and this plan — a `spawning` marker with no live child fails CLOSED
+(`ReaderMarkerDto.Unidentified` is true for every phase but Running, `ReaderReconcile.RunAsync` returns `Blocked(ReaderIdentityMissing)`), cleared by `GaugeCapture.ReadAsync`'s `ClearReader`
+at the launch's end, and a server crash inside that window blocks the slot until a person acts — the same window that exists today between `MarkReaderExpected` and `Record`;
+(2) `GaugeCaptureTests.ALaunchThatReturnedWithoutRecord_ClearsTheMarker_StoresTheGauge_AndBlocksNoSlot` pins the launch-returned-without-Record path — a guard, green from the start, watched
+red by commenting out `ClearReader`; the S8 assertion message now says the marker is cleared by `ReadAsync` because `SlotReaderTracker.Forget` does nothing; (3) the scans see static helpers (above);
+(4) the S3 decoy test is dropped — it wrote a non-empty folder into the machine's shared temp and its assertion was true by construction; (5) `FakeCliSteering`'s lease and `DeleteALeftover`
+are best-effort; (6) the C10 positive control read every launch since the service was built (the plan round, the `--version` probe) and stayed green in a mode where every real review ran
+in an empty folder — it records only from just before `ReviewCodeAsync`, counts only launches that carry a prompt, and a test asserts it goes red in `none` mode; `SeenRepairs` never throws for a
+missing folder; (7) the internal constructor (above); (8) a leftover that cannot be deleted must not block the assembly. After the gate: `CoaiMcp.Tests.exe` 11,901 tests, 11,784 passed, 117 skipped,
+0 failed; `CoaiServer.Tests.exe` 614, 613 passed, 1 skipped. (A first whole run showed one failure of `AKimiRowRunsThroughTheServiceOnWsl2Tests` — two whole runs of the SAME output folder had been
+started by mistake and shared the steering file, the limit stated above; the clean run is the number.)
 **Not done in E1, and said:** the fixed names that are only PATHS and never created (`ConsultationStoreTests`, the `Kimi*` classes and the rest) were left alone, as C10 says; the CI watch of §10 starts when this merges.
 
 ### E2 — One temp folder per run — cornerstone area: the per-run temp folder (test infrastructure only)
