@@ -34,6 +34,19 @@ export interface ProviderHealth {
    * row, and from a server older than the field, so the card draws nothing for them.
    */
   readonly warning?: string | undefined;
+  /**
+   * A Kimi row's STANDING survivor marker — the file coai-mcp keeps when a Kimi it started may still be running, which makes every
+   * Kimi turn on that sign-in Busy (DL9 of todo/PLAN_kimi_and_vibe_on_linux.md). Absent for every other row, when no marker
+   * stands, and from a server older than the field, so the card draws no button for them (E6).
+   */
+  readonly survivorMarker?: SurvivorMarker | undefined;
+}
+
+/** What the server reports about a standing marker: where the file is (the button hands this path back) and the pids it names. */
+export interface SurvivorMarker {
+  readonly path: string;
+  /** The processes the marker names — empty for a marker written before Kimi started, which names none. */
+  readonly pids: readonly number[];
 }
 
 /**
@@ -250,7 +263,7 @@ function oneProvider(row: unknown): ProviderHealth | undefined {
   if (typeof row !== 'object' || row === null) {
     return undefined;
   }
-  const { provider, auth, note, api, warning } = row as Record<string, unknown>;
+  const { provider, auth, note, api, warning, survivorMarker } = row as Record<string, unknown>;
 
   return typeof provider === 'string' && provider.length > 0
     ? {
@@ -259,6 +272,7 @@ function oneProvider(row: unknown): ProviderHealth | undefined {
       note: typeof note === 'string' ? note : '',
       ...apiOf(api),
       ...warningOf(warning),
+      ...markerOf(survivorMarker),
     }
     : undefined;
 }
@@ -268,6 +282,19 @@ function warningOf(raw: unknown): { warning?: string } {
   const warning = typeof raw === 'string' ? raw.trim() : '';
 
   return warning.length > 0 ? { warning } : {};
+}
+
+/**
+ * The standing marker a Kimi row reports, kept only whole: a non-empty `path` string. The pids are the positive integers among
+ * `pids`; anything else in it is dropped, never kept as a half. Nothing for any other shape.
+ */
+function markerOf(raw: unknown): { survivorMarker?: SurvivorMarker } {
+  const fields = recordOf(raw);
+  const path = textOf(fields['path']);
+  const listed = fields['pids'];
+  const pids = Array.isArray(listed) ? listed.filter((one): one is number => Number.isInteger(one) && (one as number) > 0) : [];
+
+  return path.length > 0 ? { survivorMarker: { path, pids } } : {};
 }
 
 /** An `api` row's report when the server sent one the panel can read — nothing otherwise, never a half. */

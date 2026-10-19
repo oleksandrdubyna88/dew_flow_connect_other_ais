@@ -61,7 +61,7 @@ public sealed class KimiLaunchControlTests : IDisposable
 
     public static TheoryData<string> Refusals => new()
     {
-        "a Linux host", "the tools missing", "a model outside the plan", "an inherited request", "a config with no slot",
+        "a native Linux host", "a WSL1 host", "the tools missing", "a model outside the plan", "an inherited request", "a config with no slot",
         "a credentials folder that is not there", "a credentials folder that is a link", "a block on moonshot-ai",
         "a UNC sign-in home",
     };
@@ -73,14 +73,18 @@ public sealed class KimiLaunchControlTests : IDisposable
         using var standIn = WindowsStandIn.Begin();
         using var rooted = Rooted();
         var places = _person.Places();
-        var host = HostKind.Windows;
+        var host = KimiHost.Of(HostKind.Windows);
         var request = Request(places);
         var expected = "";
         switch (row)
         {
-            case "a Linux host":
-                host = HostKind.Linux;
-                expected = "Kimi is refused on a linux host";
+            case "a native Linux host":
+                host = KimiHost.Of(HostKind.Linux);
+                expected = "Kimi runs on WSL2 only for now — it is measured on WSL2 and not yet on a native Linux host";
+                break;
+            case "a WSL1 host":
+                host = new KimiHost(HostKind.Wsl, WslGeneration.Wsl1);
+                expected = "this is WSL1";
                 break;
             case "the tools missing":
                 places = places with { ToolsRefusal = KimiTools.Refusal(true, places.PersonsBin, string.Empty, ".EXE", _ => false) };
@@ -130,6 +134,111 @@ public sealed class KimiLaunchControlTests : IDisposable
         HeldFile.IsHeld(KimiCredentialsLock.PathFor(places.Credentials)).Should().BeFalse("no gate was left held");
     }
 
+    // ---------- DL6: network storage (E6) ----------
+
+    private const string RootExt4 = "25 1 8:1 / / rw - ext4 /dev/sda1 rw\n";
+
+    private const string RootNfs = "25 1 0:50 / / rw - nfs4 srv:/home rw\n";
+
+    /// <summary>One launch on a WSL2 host whose mount table is <paramref name="table"/> — the table is what a person's home would read from <c>/proc/self/mountinfo</c>.</summary>
+    private async Task<(LaunchTurn Turn, FakeKimi Fake, KimiPlaces Places)> OnWsl2WithMountsAsync(string table, bool allowNetworkSignIn)
+    {
+        using var standIn = WindowsStandIn.Begin();
+        using var rooted = Rooted();
+        var places = _person.Places();
+        var fake = new FakeKimi();
+        Junctions.StandInMountInfo(() => table, _ => new MountIdentity.NotAsked());
+        try
+        {
+            var turn = await KimiLaunch.TakeAsync(
+                new KimiHost(HostKind.Wsl, WslGeneration.Wsl2), Request(places), places, fake, TestContext.Current.CancellationToken, allowNetworkSignIn);
+            turn.Dispose();
+
+            return (turn, fake, places);
+        }
+        finally
+        {
+            Junctions.StandInMountInfo(null);
+        }
+    }
+
+    [Fact]
+    public async Task ASignInFolderOnNetworkStorage_IsRefusedByDefault_AndStartsNothing()
+    {
+        var (turn, fake, _) = await OnWsl2WithMountsAsync(RootNfs, allowNetworkSignIn: false);
+
+        turn.Refusal.Should().Contain("your Kimi sign-in folder is on network storage (nfs4);", "a sign-in folder on an nfs mount was admitted").And.Contain("coai.kimiAllowNetworkSignIn");
+        fake.Started.Should().BeEmpty("a refusal starts nothing");
+    }
+
+    [Fact]
+    public async Task WithTheOverride_ASignInFolderOnNetworkStorage_Starts_AndTheLaunchCarriesTheWarning()
+    {
+        var (turn, fake, _) = await OnWsl2WithMountsAsync(RootNfs, allowNetworkSignIn: true);
+
+        turn.Refusal.Should().BeEmpty("the override admits it");
+        turn.Warning.Should().Contain("network storage (nfs4)").And.Contain("coai.kimiAllowNetworkSignIn").And.NotContain("\n");
+        fake.Started.Should().NotBeEmpty("the version was asked: the launch went on");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ALocalSignInFolder_Starts_WithNoWarning_WithOrWithoutTheOverride(bool allow)
+    {
+        var (turn, fake, _) = await OnWsl2WithMountsAsync(RootExt4, allow);
+
+        turn.Refusal.Should().BeEmpty();
+        turn.Warning.Should().BeEmpty("an ext4 home is admitted silently");
+        fake.Started.Should().NotBeEmpty();
+    }
+
+    // ---------- the review of 2026-10-18 (B, C): the override is judged on EVERY launch, not only when the home is made ----------
+
+    [Fact]
+    public async Task AHomeMadeUnderTheOverride_IsRefusedByTheNextLaunchWithoutIt_BeforeAnythingStarts()
+    {
+        var (first, fakeOn, _) = await OnWsl2WithMountsAsync(RootNfs, allowNetworkSignIn: true);
+        first.Refusal.Should().BeEmpty("the override admitted the network home: the first launch made the home");
+        fakeOn.Started.Should().NotBeEmpty();
+
+        var (second, fakeOff, places) = await OnWsl2WithMountsAsync(RootNfs, allowNetworkSignIn: false);
+
+        second.Refusal.Should().Contain("your Kimi sign-in folder is on network storage (nfs4);", "turning the override OFF must re-judge a home that already exists").And.Contain("coai.kimiAllowNetworkSignIn");
+        fakeOff.Started.Should().BeEmpty("not even --version is asked on a refused home");
+        VibeHomeTurns.Held(places.OwnedRoot).Should().BeFalse("nothing was taken before the refusal");
+    }
+
+    [Fact]
+    public async Task ASignInFolderThatMovedFromALocalMountToANetworkOne_IsRefusedByTheNextLaunch_BeforeAnythingStarts()
+    {
+        var (first, _, _) = await OnWsl2WithMountsAsync(RootExt4, allowNetworkSignIn: false);
+        first.Refusal.Should().BeEmpty("a local home starts");
+
+        var (second, fake, _) = await OnWsl2WithMountsAsync(RootNfs, allowNetworkSignIn: false);
+
+        second.Refusal.Should().Contain("your Kimi sign-in folder is on network storage (nfs4);", "the mount under an existing home changed between two launches");
+        fake.Started.Should().BeEmpty("nothing starts on a home that is now on a network mount");
+    }
+
+    [Theory]
+    [InlineData("/net/srv/home/.kimi-code")]
+    [InlineData("/misc/srv/home/.kimi-code")]
+    public async Task AnAutomountSpelledHome_IsRefusedByDefault_AndPastTheSpellingCheckWithTheOverride(string home)
+    {
+        using var standIn = WindowsStandIn.Begin();
+        using var rooted = Rooted();
+        var places = _person.Places() with { PersonsHome = home };
+        var host = new KimiHost(HostKind.Wsl, WslGeneration.Wsl2);
+        var request = Request(places);
+
+        var off = await KimiLaunch.TakeAsync(host, request, places, new FakeKimi(), TestContext.Current.CancellationToken, allowNetworkSignIn: false);
+        var on = await KimiLaunch.TakeAsync(host, request, places, new FakeKimi(), TestContext.Current.CancellationToken, allowNetworkSignIn: true);
+
+        off.Refusal.Should().Contain("is not on a local drive", "D19 refuses the automount spelling by default");
+        on.Refusal.Should().NotContain("is not on a local drive", "the override admits network storage, and /net/ and /misc/ are how a Unix host spells it; the mount table judges the rest");
+    }
+
     [Fact]
     public async Task AFolderTheKernelCannotName_IsRefusedWithTheKeySentence_AndStartsNothing()
     {
@@ -152,6 +261,119 @@ public sealed class KimiLaunchControlTests : IDisposable
         fake.Started.Should().BeEmpty();
         VibeHomeTurns.Held(places.OwnedRoot).Should().BeFalse("the turn taken first was given back");
         Directory.Exists(Locks).Should().BeFalse("no lock file was made on a spelling");
+    }
+
+    private sealed class Blocking(string sentence) : IKimiSurvivors
+    {
+        public Task<string> BlockedAsync(string markerPath, CancellationToken ct) => Task.FromResult(sentence);
+
+        public string KeepsHome(string ownedRoot) => string.Empty;
+    }
+
+    [Fact]
+    public async Task AStandingSurvivorMarker_RefusesTheLaunch_WithItsSentence_HoldingNothing()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        using var rooted = Rooted();
+        var places = _person.Places();
+        var fake = new FakeKimi();
+        using var seam = KimiSurvivors.Using(new Blocking("a survivor marker stands: pid 4242 of an earlier Kimi tree is still running"));
+
+        var turn = await KimiLaunch.TakeAsync(HostKind.Windows, Request(places), places, fake, TestContext.Current.CancellationToken);
+
+        turn.Refusal.Should().Be("a survivor marker stands: pid 4242 of an earlier Kimi tree is still running", "a free gate is not a free sign-in while a marker stands");
+        fake.Started.Should().BeEmpty("a refusal starts nothing");
+        VibeHomeTurns.Held(places.OwnedRoot).Should().BeFalse("no turn was left held");
+        HeldFile.IsHeld(KimiCredentialsLock.PathFor(places.Credentials)).Should().BeFalse("no gate was left held");
+    }
+
+    /// <summary>A marker as the shim of an earlier turn left it: naming one agent that is long gone (no process has this number).</summary>
+    private static KimiSurvivorMarkerDto AMarkerNamingAGoneMember(string ownedRoot) =>
+        new(new ReaderMarkerDto(ReaderPhases.Running, 424242, DateTime.UtcNow.AddHours(-1), DateTimeOffset.UtcNow, [new ProcessIdentity(2_000_000_011, DateTime.UtcNow.AddHours(-1))]), ownedRoot, "/people/sign-in");
+
+    [Fact]
+    public async Task AStandingMarkerWhoseMemberIsGone_IsClearedByTheLaunch_AndTheLaunchProceeds()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        using var rooted = Rooted();
+        var places = _person.Places();
+        var marker = KimiCredentialsLock.MarkerPathFor(places.Credentials);
+        KimiSurvivorMarker.Write(marker, AMarkerNamingAGoneMember(places.OwnedRoot));
+
+        var turn = await KimiLaunch.TakeAsync(HostKind.Windows, Request(places), places, new FakeKimi(), TestContext.Current.CancellationToken);
+
+        turn.Refusal.Should().BeEmpty("a marker whose every member is confirmed gone is cleared by the launch that finds it, and the launch goes on");
+        File.Exists(marker).Should().BeFalse("the reconcile deletes the marker it cleared");
+        turn.Dispose();
+    }
+
+    private sealed class Machine(params ProcessEntry[] entries) : IProcessList
+    {
+        public ProcessListing Snapshot() => new ProcessListing.Listed([new ProcessEntry(100, 1, "coai-mcp"), .. entries]);
+    }
+
+    [Fact]
+    public async Task AStandingMarkerThatCannotBeCleared_RefusesTheLaunch_NamingThePid_KeepsTheMarker_AndHoldsNothing()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        using var rooted = Rooted();
+        var places = _person.Places();
+        var marker = KimiCredentialsLock.MarkerPathFor(places.Credentials);
+        KimiSurvivorMarker.Write(marker, new KimiSurvivorMarkerDto(new ReaderMarkerDto(ReaderPhases.Spawning, 424242, DateTime.UtcNow.AddHours(-1), DateTimeOffset.UtcNow), places.OwnedRoot, "/people/sign-in"));
+        var fake = new FakeKimi();
+        using var seam = KimiSurvivors.Using(new ReconcilingSurvivors(new Machine(new ProcessEntry(77, 1, "kimi")), () => Locks));
+
+        var turn = await KimiLaunch.TakeAsync(HostKind.Windows, Request(places), places, fake, TestContext.Current.CancellationToken);
+
+        turn.Refusal.Should().Contain(marker).And.Contain("pid 77").And.Contain("safe to delete", "the way out is in the sentence, before any button");
+        File.Exists(marker).Should().BeTrue("a marker the reconcile could not clear stands");
+        fake.Started.Should().BeEmpty("a refusal starts nothing");
+        VibeHomeTurns.Held(places.OwnedRoot).Should().BeFalse("no turn was left held");
+        HeldFile.IsHeld(KimiCredentialsLock.PathFor(places.Credentials)).Should().BeFalse("no gate was left held");
+    }
+
+    [Fact]
+    public async Task AFolderThatVanishesAfterTheGateWasTaken_RefusesWithTheKeySentence_NeverThrows_AndHoldsNothing()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        using var rooted = Rooted();
+        var places = _person.Places();
+        var fake = new FakeKimi();
+        var asked = 0;
+        KimiCredentialsLock.Final = _ => asked++ == 0 ? "the-folders-identity-at-the-take" : string.Empty;
+        LaunchTurn turn;
+        try
+        {
+            turn = await KimiLaunch.TakeAsync(HostKind.Windows, Request(places), places, fake, TestContext.Current.CancellationToken);
+        }
+        finally
+        {
+            KimiCredentialsLock.Final = null;
+        }
+
+        turn.Refusal.Should().Contain("cannot be named by its handle").And.Contain(places.Credentials, "a folder that vanished after the take has no marker path: the launch is refused, not thrown at");
+        fake.Started.Should().BeEmpty();
+        VibeHomeTurns.Held(places.OwnedRoot).Should().BeFalse("the turn taken first was given back");
+        HeldFile.IsHeld(KimiCredentialsLock.PathFor(places.Credentials)).Should().BeFalse("the gate was given back");
+    }
+
+    [Fact]
+    public async Task AKernelWithNoPidfd_RefusesTheLaunch_BeforeAnythingIsTaken()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        using var rooted = Rooted();
+        var places = _person.Places();
+        var fake = new FakeKimi();
+        LaunchTurn turn;
+        using (PidfdLayer.Using(wrapperPresent: false, new AskAcpSubreaperTests.EnosysCalls()))
+        {
+            turn = await KimiLaunch.TakeAsync(HostKind.Windows, Request(places), places, fake, TestContext.Current.CancellationToken);
+        }
+
+        turn.Refusal.Should().Contain(PidfdLayer.NoPidfdSentence, "a launch on a kernel that cannot end the tree by identity was allowed");
+        fake.Started.Should().BeEmpty("a refusal starts nothing");
+        VibeHomeTurns.Held(places.OwnedRoot).Should().BeFalse("no turn was left held");
+        Directory.Exists(Locks).Should().BeFalse("no lock was taken for a launch that was refused first");
     }
 
     // ---------- S2.26 ----------

@@ -632,6 +632,12 @@
           "default": "",
           "markdownDescription": "Where coai keeps the **homes of Mistral Vibe** — one short, private folder per round, question or check under `coai-vh`, and one per conversation under `coai-vibe`. They hold Vibe's session **transcripts of the code under review and coai's copy of your repository** (`coai-vibe\\\\<id>\\\\tree`), so coai makes its folders there readable only by you (and SYSTEM and Administrators) and refuses one that another account can open. Empty is the default, `%LOCALAPPDATA%`. The folder must **exist** — coai never creates it — and be **short and local**: Vibe writes 156 characters below its home, and Windows stops a path at 259, so a long folder (or a long user name) makes coai refuse the launch before it is paid for. A network share is refused. After you change it, the old folder's `coai-vibe` and `coai-vh` are not swept any more: delete them once no consultation is open. Kept per side of this machine, like a folder path always is. Reaches the server as `COAI_CONSULTANT_HOMES`."
         },
+        "coai.kimiAllowNetworkSignIn": {
+          "type": "boolean",
+          "default": false,
+          "scope": "machine",
+          "markdownDescription": "Let coai use a **Kimi sign-in folder that lives on network storage** (NFS, CIFS/SMB, sshfs and the like) on WSL2 or Linux. Off by default, and coai then refuses to start Kimi and says how to fix it: Kimi's sign-in token is replaced every time it refreshes, so a Kimi running on **another machine** that shares the same home can refresh it first and leave you **signed out** — and coai cannot see that other machine. Turn it on only if you never run Kimi anywhere else with this home. When it is on, the Kimi card carries a one-line warning. A **machine** setting: a workspace's `.vscode/settings.json` cannot switch it on, Settings Sync does not copy it, and a WSL window keeps its own value. Needs `coai-mcp` **0.61.0** or later. Also on the Kimi card, under *Connection*."
+        },
         "coai.alsoWatchDataDirectories": {
           "type": "array",
           "items": {

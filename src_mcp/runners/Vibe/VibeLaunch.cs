@@ -76,26 +76,7 @@ public static class VibeLaunch
     /// packaging) — each is refused with its own sentence. A WSL bridge named as the executable of a WINDOWS host is the Linux side by
     /// another door, and stays refused (a Windows process cannot take a Linux lock or end a Linux process tree).
     /// </summary>
-    public static string HostRefusal(HostKind host, string executable, WslGeneration wsl) => host switch
-    {
-        HostKind.Windows => HostKinds.RunsInWsl(executable) ? WslBridgeRefusal(executable) : string.Empty,
-        HostKind.Wsl => WslRefusal(wsl),
-        HostKind.Linux => Wsl2Only("it is measured on WSL2 and not yet on a native Linux host", string.Empty),
-        _ => NothingMeasured(host),
-    };
-
-    /// <summary>WSL2 is admitted; a WSL1 kernel (which reads as a WSL host) is refused with its cure.</summary>
-    private static string WslRefusal(WslGeneration wsl) =>
-        wsl == WslGeneration.Wsl2 ? string.Empty : Wsl2Only("it is measured on WSL2, and this is WSL1", "; Run this from Windows (not inside WSL): `wsl --set-version <distro> 2`");
-
-    private static string NothingMeasured(HostKind host) =>
-        $"Vibe is refused on a {HostKinds.Word(host)} host until it is measured there (D18 of todo/PLAN_vibe_and_kimi_runtimes.md) — Vibe is measured on Windows and WSL2 only";
-
-    private static string Wsl2Only(string why, string cure) =>
-        $"Vibe runs on WSL2 only for now — {why} (DL1 of todo/PLAN_kimi_and_vibe_on_linux.md){cure}";
-
-    private static string WslBridgeRefusal(string executable) =>
-        $"'{executable}' would start Vibe on the Linux side, which is refused until it is measured there (D18 of todo/PLAN_vibe_and_kimi_runtimes.md) — point this row at a Windows vibe";
+    public static string HostRefusal(HostKind host, string executable, WslGeneration wsl) => HostAdmission.Refusal("Vibe", host, executable, wsl);
 
     /// <summary>
     /// D17: the launch is the built one — not inheriting this process's environment, keeping only the minimal names, and
