@@ -703,8 +703,29 @@ timing, documentation or pure refactor item has no behaviour to see red — said
 - Making the copies in parallel is deferred for the same reason, and because the shared byte budget makes the order matter.
 - Reporting progress while a row copies is a separate feature (it needs a record field and a panel change), not a fix to this epic.
 - The re-check of links and git right before each copy is deliberate: it closes the walk-to-copy window (D5, R7) and costs one cheap call.
-- The remaining sixteen declined findings (duplicates of the above, style preferences with no behaviour, and claims the code refutes)
-  are recorded one by one in the gate's resolve record for session `6c326eb7`; this plan carries the four whose reason is design.
+- (1) The tally mutating its lists: it is a private per-row accumulator, made and finished inside one `OneShotAsync` call; the place
+  it yields is immutable, and rebuilding it per candidate adds allocations for no safety.
+- (3) The bound refusing before every candidate is validated: D9 stops early only when confirmed non-linked repositories CERTAINLY
+  pass the bound, which no selection can undo — the answer cannot change (the sentence and notes may; written into D9 as G-L).
+- (7) Progress while confirming: the same separate feature as above; the row shows running for its whole life.
+- (8) A directly granted worktree not removing its siblings: as D9 decided — only a MAIN checkout makes linked worktrees redundant.
+- (9) Folding separators on every platform: a backslash is a legal filename character on Linux; folding belongs to the case-blind
+  (Windows) comparison only.
+- (10) The one `.git` lookup per candidate: next to a git process per candidate it costs nothing measurable.
+- (16) Moving the expansion to a shared project: there is no second caller; it already lives in its own classes.
+- (17) Splitting the tally in two: it is one cohesive record of one row's copy pass.
+- (18) A case-sensitive identity compare on Windows: refuted — both values are `RepositoryIdentity.KeyOf` keys
+  (`RepositoryFacts.cs:56`), already case-folded there.
+- (19) Turning an exception into a refusal: an exception is a defect and must stay visible; every copy is disposed before the
+  rethrow, and every note already reached the log.
+- (20) `GetFullPath` resolving links: refuted — it is string normalisation only and resolves nothing.
+- (21) Redacting refusal reasons: a refusal names the person's own granted folder to that person; notes are redacted because they
+  can carry names found UNDER the grant.
+- (25) An asynchronous walk: the walk is bounded and measured at 46 ms on the owner's root.
+- (26) Listing a stranded folder before taking its lock: the lock must be held while the folder is emptied, or a live row could start
+  in between — the race the lock exists to close.
+- (27) String allocations in the identity key: a few short strings per repository, at most a few hundred per row.
+- (28) Caching the link check from the walk: the re-check before the copy IS the D5 protection.
 
 **Tests added in this round:** `OneShotTallyTests` (2), `FolderLockTests` (4), and in the existing classes `RepositoryWalkTests` (+5),
 `RepositoryFactsTests` (+2), `AVibeDiskRowExpandsAParentFolderTests` (+5) — each in `research/module_tests.md`.
