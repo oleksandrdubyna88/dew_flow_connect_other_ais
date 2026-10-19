@@ -20,11 +20,13 @@ one of them arriving wrong.
 Target: the released **extension** version — `--target 0.33.1`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
 
 Last verified: 2026-10-19 · mcp **0.60.1** and extension **0.80.1** (released) · server **0.13.1** deployed (run
-39166313743) — the box serves 0.13.1 · automated items 1, 2, 6, 9 and 10 PASS as the checker printed them:
-`PASS 1 — all six RIDs present`, `PASS 2 — marketplace serves 0.80.1`, `PASS 6 — client-config 200
-{"microsoftScope":"api://3afb5834-0273-42f2-ad64-2237e383dde3/coai.access","providers":["m - catalog 401`,
+39166313743) — the box serves 0.13.1 · automated items 1, 2, 7, 9 and 10 (the checker prints the row labelled 7 as 6 —
+it numbers rows by position) PASS as the checker printed them:
+`PASS 1 — all six RIDs present`, `PASS 2 — marketplace serves 0.80.1`, `PASS 6` (the row labelled 7, "up but refuses everything") — client-config answered 200 (the body is clipped by the
+checker), and the catalog answered 401 without a session — the expected answer; the failure this item exists for would be
+`403 HTTPS required`,
 `PASS 9 — all six RIDs present`, `PASS 10 — 200 {"ok":true,"version":"0.13.1"}`; the checker printed `MANUAL` for items 3,
-4, 5, 7, 8, 11 and 12 and ended "every automated item passed". Run locally:
+4, 5, 7, 8, 11 and 12 (its own numbering, by position) and ended "every automated item passed". Run locally:
 `MCP_VERSION=0.60.1 SERVER_VERSION=0.13.1 node .agents/conventions/tools/post-deploy-check.mjs --target 0.80.1`. Manual
 items **8 and 11 observed** on the deploy's own canary — one real review per configured vendor: `codex: done`,
 `antigravity: done`, `claude: done`; manual items 3, 4, 5, 7 and 12 were not run. **The live gauge read (round counter,

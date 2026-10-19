@@ -848,6 +848,9 @@ was checked in the code or the plan text it names:
       languages) describe the counter, the fields, the refusal and the reset; README rows match; the neighbouring
       plans' boundary tables match this one.
 - [x] Released in the order above; the server deploy verified live (one round through it, counted once).
-      Server 0.12.0 deployed 2026-10-14 and checked live 2026-10-15 (one round through it, counted once); server 0.13.0
-      was never deployed (see the status); server 0.13.1 deployed 2026-10-19 and checked live. `POST_DEPLOY.md` has the stamp.
+      What was observed, exactly. Server 0.12.0 deployed 2026-10-14. On 2026-10-15 the ledger held 27 launches since that
+      deploy, every one with a client round id — 3 distinct rounds of nine launches each, `clientAttempt: first`. Server 0.13.0
+      was never deployed (see the status). Server 0.13.1 deployed 2026-10-19: the deploy canary's lines, and the codex gauge
+      read after the canary's codex job. **The one-round before-and-after of `/api/usage` (`rounds` +1 exactly) was NOT
+      recorded** — see *Open tail*, "Live checks never recorded". `POST_DEPLOY.md` has the stamps.
 - [x] This plan promoted with its deviations and its open tail.
