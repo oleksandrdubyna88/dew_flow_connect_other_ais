@@ -31,7 +31,9 @@ internal sealed class AttributionScenario
     private readonly List<StateReason> _reasons = [];
     private readonly List<string> _universe = [];
     private string _kind = ObservationKinds.Observed;
+    private GateSpec? _current;
     private bool _peersKnown = true;
+    private bool _withoutPriorEnd;
 
     private AttributionScenario(string caller) => _caller = caller;
 
@@ -44,9 +46,10 @@ internal sealed class AttributionScenario
 
     // ---- gates and rounds -----------------------------------------------------------------------------------------------
 
+    /// <summary>Starts a gate session, or moves back to one already started (its repository is then unchanged).</summary>
     public AttributionScenario Gate(string id, string repoPath)
     {
-        _gates.Add(new GateSpec(id, repoPath));
+        _current = _gates.Find(gate => gate.Id == id) ?? Add(new GateSpec(id, repoPath));
 
         return this;
     }
@@ -123,11 +126,21 @@ internal sealed class AttributionScenario
     public AttributionScenario Write(string agent, double at, string path, double? answeredAt = null) =>
         AddWrite(agent, at, answeredAt, WriteKind.Checkout, path);
 
+    /// <summary>A write answered at <paramref name="answeredAt"/>, or no write at all when it is null — what a live read that ended before the result saw.</summary>
+    public AttributionScenario WriteWhenAnswered(string agent, double at, string path, double? answeredAt) =>
+        answeredAt is { } answered ? Write(agent, at, path, answered) : this;
+
     public AttributionScenario WriteOutside(string agent, double at, double? answeredAt = null) =>
         AddWrite(agent, at, answeredAt, WriteKind.OutsideAnyCheckout, string.Empty);
 
     public AttributionScenario WriteUnresolved(string agent, double at, string path, double? answeredAt = null) =>
         AddWrite(agent, at, answeredAt, WriteKind.Unresolved, path);
+
+    /// <summary>
+    /// A shell command naming a path. It is NOT a write: the reader never counts one (parent §5, E3 <c>WriteTools</c>), so this records
+    /// nothing in the observation — the call exists so a test can say that, and so a plant can make it lie.
+    /// </summary>
+    public AttributionScenario ShellCall(string agent, double at, string path) => this;
 
     /// <summary>An <c>Agent</c> call, or a meta, with no transcript: one item, stamped <paramref name="at"/>.</summary>
     public AttributionScenario MissingChild(string parent, double? at, string why)
@@ -176,6 +189,14 @@ internal sealed class AttributionScenario
         return this;
     }
 
+    /// <summary>Hands <see cref="RoundAttribution"/> no prior end: the read bound alone, to show it is not an ownership rule.</summary>
+    public AttributionScenario WithoutPriorEnd()
+    {
+        _withoutPriorEnd = true;
+
+        return this;
+    }
+
     // ---- what it builds -------------------------------------------------------------------------------------------------
 
     public AttributionInput Build(string gate, string stage, int number)
@@ -199,6 +220,23 @@ internal sealed class AttributionScenario
         return new AttributionInput(Observation(), mine, peers, Universe(), stage, number, _peersKnown);
     }
 
+    public WindowAssignment Assign(string gate, string stage, int number)
+    {
+        var input = Build(gate, stage, number);
+
+        return _withoutPriorEnd ? RoundAttribution.Assign(input, usePriorEnd: false) : RoundAttribution.Assign(input);
+    }
+
+    /// <summary>
+    /// Test-side only (L9): the assignment of every settled, recorded round of this caller in every timeline, the others as peers
+    /// (G6). A round of another caller and a running round are skipped — <see cref="AttributionInput.Validate"/> refuses both.
+    /// </summary>
+    public IReadOnlyList<Assigned> AssignEvery() =>
+    [
+        .. _gates.SelectMany(gate => Timeline(gate).Rounds.Where(IsSettledOfThisCaller).Select(round => (gate.Id, round)))
+            .Select(pair => new Assigned(pair.Id, pair.round.Stage, pair.round.Number, Assign(pair.Id, pair.round.Stage, pair.round.Number))),
+    ];
+
     public GateTimeline Timeline(string gateId) => Timeline(_gates.Single(gate => gate.Id == gateId));
 
     public CallerObservation Observation() => new(
@@ -211,7 +249,17 @@ internal sealed class AttributionScenario
 
     // ---- private --------------------------------------------------------------------------------------------------------
 
-    private GateSpec Current => _gates.Count > 0 ? _gates[^1] : throw new InvalidOperationException("Start a gate with Gate(...) first.");
+    private GateSpec Current => _current ?? throw new InvalidOperationException("Start a gate with Gate(...) first.");
+
+    private GateSpec Add(GateSpec gate)
+    {
+        _gates.Add(gate);
+
+        return gate;
+    }
+
+    private bool IsSettledOfThisCaller(GateRound round) =>
+        round.Stage is "PlanReview" or "CodeReview" && round.Verdict != "skipped" && round.Status == "done" && round.CallerSessionId == _caller;
 
     private static GateTimeline Timeline(GateSpec gate) => new(gate.Id, gate.RepoPath, gate.Opened, [.. gate.Rounds]);
 
@@ -238,4 +286,7 @@ internal sealed class AttributionScenario
 
         public List<GateRound> Rounds { get; } = [];
     }
+
+    /// <summary>One gate's round and what attribution said about it.</summary>
+    public sealed record Assigned(string Gate, string Stage, int Number, WindowAssignment Assignment);
 }
