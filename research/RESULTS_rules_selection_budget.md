@@ -208,8 +208,8 @@ budget (4 706 bytes of the 10 056 left).
 `src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-class "*.StageRulesTests"` (and
 `--filter-class "*.RuleFilesTests"` for the number itself).
 - `RuleFilesTests.TheDefaultBudget_IsTheOperatorsNinetyKilobytes` — the constant is 90 000.
-- `StageRulesTests.AtNinetyKilobytes_TheBaseAndTheTier_SpendExactly79944Bytes` — **the measuring test and the
-  drift guard**: base 17 883 + tier 62 061 = 79 944. Its failure message prints the three numbers it found,
+- `StageRulesTests.AtNinetyKilobytes_TheBaseAndTheTier_SpendExactlyTheirPinnedBytes` — **the measuring test and the
+  drift guard**: base 17 902 + tier 62 061 = 79 963 (17 883 + 62 061 = 79 944 when this was measured; **re-baselined 2026-10-19**, below). Its failure message prints the three numbers it found,
   so a conventions bump or an edit to this repository's own instruction files that moves them turns it red and
   the figures in this file are re-measured from that message. The unit is the collector's own: characters of
   the line-ending-normalised text.
@@ -244,3 +244,11 @@ effect of that was measured here.
 The 2026-09-06 note recorded "all four language doctrines" as starved. There are **three** — `csharp`,
 `rust`, `typescript`. Corrected in the code comments and the plan; the measurement above counts what
 exists.
+
+### Re-baselined 2026-10-19 — the base grew by 19 characters
+
+The E6 report mode (`coai-mcp --round-authors`) had to be named in `.agents/PROJECT.md`'s one-shot list in the same commit that wires it (`ARequestFaultIsNotAnOldBinaryTests`), which is an instruction file of the base: 
+17 883 -> **17 902** characters, base + tier 79 944 -> **79 963**, left for the tail 10 056 -> **10 037**. `StageRulesTests` went red on exactly the guard this section describes and on nothing else; the three canaries (
+`AtNinetyKilobytes_TheRotatedTail_FitsAtMostThreeRules`, `…EveryBranchReachesAtLeastOneTailRule`, `…TheTestLeftoversRule_IsShownOnTheBranchesThatDrawIt`) were re-run and are green unchanged: the three smallest rules outside the tier still 
+come to 8 683 against 10 037, the fourth would add 3 421, so the tail is still the same three rules and at most three. The history table above is the 2026-10-16 measurement and is left as it was. 
+Any further edit to an instruction file moves these numbers again; that is the point of the guard.

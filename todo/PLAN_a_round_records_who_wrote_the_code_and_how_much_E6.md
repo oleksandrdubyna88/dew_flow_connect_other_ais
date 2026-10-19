@@ -1,6 +1,6 @@
 # PLAN — E6: the report, `coai-mcp --round-authors`, over live rounds (stories)
 
-> Status: **plan only, nothing implemented yet, 2026-10-14; revised 2026-10-16 against `main` at `2d98f2f8`, and 2026-10-18 against `main` at `9a0a5f2e` with the points E3/E4/E5 owe it (§3).** Epic E6 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
+> Status: **S1–S5 implemented on `feat/round-authors-e6`, 2026-10-19 (draft pull request #864, not merged; §5 records the deviations, the re-baselined rules-budget guard and what is open).** Plan 2026-10-14; revised 2026-10-16 against `main` at `2d98f2f8`, and 2026-10-18 against `main` at `9a0a5f2e` with the points E3/E4/E5 owe it (§3). Epic E6 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
 >
 > Scope: `src_mcp` only — a read-only one-shot mode beside `--round-counts`, its reader, a pure population unit, a pure
 > counting unit, the JSON of sums and `--add`, the table. Nothing is written to any store; nothing on the extension or the
@@ -625,3 +625,66 @@ when that epic ships; none blocks S2–S4, which are pure over S1's records. Ite
    until a schema step projects the round window's state and totals (E5 §10 item 13 (i): possible from the files with no
    backfill). When it ships, D3 reads the windows it keeps — the `round` window alone without `--with-before-open` — and the
    header's limit sentence goes. Not E6's to build; an owner decision whether it is wanted.
+
+## 5. Implementation record (2026-10-19)
+
+Built on `feat/round-authors-e6` after merging the local ref of `feat/round-authors-e5` (E3 + E4 + E5 code) — a merge, not a rebase (`e18a0b1e2`; the one conflict, the
+`todo/README.md` index, kept E5's three rows and this epic's own). One commit per story, then this record. **Every test was watched RED for its real symptom before
+the code that answers it** — a shell that answered empty values (`Expected … to contain a single item, but the collection is empty.`), never a missing type or a setup
+error — and every break-it of the stories was planted, watched red by the test named for it, restored byte for byte, rebuilt and watched green. No committed file
+carries a stub or a scratch test. Nothing was run against a live store: every database is a `testsToDelete-` temp folder seeded through the real writers.
+
+**Facts of E3–E5 verified in the code before use.** Schema step 24 is `Schema.TheRoundsAuthors` (`round_authors` and the `authors_*`, `submodule_writes`,
+`uncovered_writes`, `ambiguous_*` columns, `Schema.cs:691`); `AuthorsSnapshot.Unknown` writes `-1` for every ambiguous term and both write counts, and
+`IsWellFormed` is the one state rule; `RoundAuthorsTable.AgentKeyOf` (`internal`, reachable through `InternalsVisibleTo`) is the one inverse and `StoredAuthors`
+calls it; `authors_id_source` (`registry`, `environment`, `stored`, `healed`) is NOT read — a healed round counts like a live one; `Windows.IsSettled` and
+`Contributors.Of` are E4's and are the only predicate and the only union E6 uses; `uncovered_writes = -1` reads as *unknown coverage*. **The coder-group order of the
+card** (`authorsLine.ts`: the larger group first, a tie by family name — E5's deviation 3) is the order the table prints a cell's coder launches in (`Named`:
+count descending, then name); the card counts distinct coder agents and the table counts their launches, which is a different measure of the same families, said here.
+
+**What was built.** S1 `cd0e265c0`, S2 `dec87e0a8`, S3 `ce18aba88`, S4 `078c28a94`, S5 `57641eae8`; this record is the commit after them. 77 tests in five suites.
+
+**The owner's decisions, applied.** The label `sonnet+unknown` is the mix of a Sonnet coder and a coder row with no model claim (D4). `--with-uncovered` takes in rounds
+whose coverage is unknown as well as those with writes elsewhere (D12). No per-window schema step is built: the roll-up limit is stated in the header
+(`RoundAuthorsHeader.RollUpLimit`) and in `module_server.md`. Two `--add` stores that share a gate session are REFUSED — the plan's default — and the policy is ONE
+method, `RoundAuthorsMerge.Overlap`, so a decision to allow it changes one place and one test.
+
+**Deviations from the text above, each the smallest change that keeps the intent.** None changes E5's columns or snapshot.
+
+1. **The JSON has its own `JsonSerializerContext`, `RoundAuthorsJson`, not a line in `ServerJsonContext`** (S4 scope). Strict reading — an unknown member, a missing member and a null where a
+   value is required are refusals — is a per-context switch (`UnmappedMemberHandling`, `RespectRequiredConstructorParameters`, `RespectNullableAnnotations`), and the server's shared context must stay
+   lenient for session files an older build wrote.
+2. **The branch map is keyed by an opaque repository id (`RoundAuthorsCells.RepoId`, 8 hex of a SHA-256) beside the branch name, not by `repo_path`** (S3's map, D14). The answer carries no absolute path
+   (S4), and dominance needs only counts per distinct (repository, branch). The table prints the top branch's NAME and its percent — which is what makes the sentinel companion of scenario 8 meaningful.
+3. **`NumeratorSums` has a sixth member, `DeltaTotal`** (S3 brief 1). Per 100 delta lines is `100 · Σ numerator over the rounds whose delta is recorded / Σ their delta lines`; the stated five members hold the
+   delta lines but not the numerator over those rounds, and without it scenario 10's `15.00` cannot be computed from sums.
+4. **`ExclusionCount` has `Because`, `ExcludedRound` has `Detail`** (D12's "counted per reason beside the exclusion"): a round excluded as `size unavailable` is in no cell, so its scope word has to
+   travel with the exclusion.
+5. **The exclusions of the JSON list every reason for every asked cohort and period, zeros included** (S5 brief 3: "an absent row and a zero are different claims"), plus any cohort a round was excluded under
+   (the `—` of a round that did not run or was skipped). The plan stage lists only the reasons that can apply to it (it has no diff).
+6. **`RoundAuthorsQuery.Read` returns the list of facts as specified; the source's `EffortRecorded` is derived from them** (`all reviewer rows have the column`), so an empty store reads `true` — it has no older
+   cell to mark. Reviewers, findings and size are read for the IN-window rounds only; a context round carries the empty value of each (the report never counts it), so the touched sessions' thousands of rounds
+   cost one query per table for the rounds that count.
+7. **Scenario 10 re-records a round instead of adding a new one.** The database is a rollback-journal file, not WAL: the reader's transaction holds the shared lock and a writer WAITS for it, so a new round
+   cannot appear half-read (its id is in no earlier query). What a missing transaction tears is an EXISTING round — the row read before, its findings read after — and that is what the test writes between the
+   queries (`Expected rounds to be FindingFacts … the SAME moment`).
+8. **D18's mapping is its own unit, `Store/StoredAuthors.cs`**, not part of the query; the token members of `AuthorRow` are zero (`StoredAuthorRow` carries none; no decision reads them per row).
+9. **Coders are the `wrote here` rows of `subagent` contributors**: `Contributors.Of` decides who is a contributor (D2, E4.S4); the rows come from the same mapped rounds, filtered by the same window rule. A
+   subagent that was only ever a child of one is not a coder.
+10. **`RoundLines`, `ReviewerSet`, `RoundAuthorsCoders`, `RoundAuthorsSumsOf`, `RoundAuthorsExclusions`, `RoundAuthorsHeader`, `ModelFamily`, `RoundAuthorsCountModels`, `StoredAuthors` are extra files** beside the
+    plan's list, for the family's file-size and complexity bounds; `tests/RoundAuthorsFacts.cs` holds the in-memory builders every pure suite shares. The reviewer set prints `provider/model@effort`
+    (an empty model is `unknown`), joined by ` + `.
+11. **CA1502 (cyclomatic complexity 4) is switched on in `.editorconfig` for the report's files** (the security lane's precedent), so the bound is a build error and not a reviewer's count. Six methods were
+    refactored when it was first enabled; each refactor was run against its suite.
+12. **A request refusal sentence is the mode, the flag and the value quoted**; `--kinds` and `--without-elided` with `--stage plan` are refused rather than ignored (S5 brief 1). `elided` excludes a round with ANY
+    elided cell (D11's wording: "any `elided` row"), not only one of a counted kind.
+
+13. **The rules-budget drift guard was re-baselined** (`StageRulesTests…SpendExactlyTheirPinnedBytes`, formerly `…Spend79944Bytes`). Naming `--round-authors` in `.agents/PROJECT.md` — which `ARequestFaultIsNotAnOldBinaryTests`
+    requires in the same commit that wires the mode — adds 19 characters to the base the collector budgets: 17 883 → 17 902, base + tier 79 944 → 79 963, 10 056 → 10 037 left for the rotated tail. The guard went red on that and on nothing
+    else; the three tail canaries, re-run, are green unchanged (the three smallest tail rules still come to 8 683, the fourth would add 3 421). The pin, its message and the three documents that quote it are updated, with the
+    history left as measured (`research/RESULTS_rules_selection_budget.md`, last section). E7 will name `--backfill-authors` in the same file and meet the same guard.
+
+**What is open.** The code gate has not been run (this task ran none) and nothing was pushed. The extension reads no part of this mode, so no TypeScript changed. The report is not yet run against a real store (E7's
+backfill must populate the older rounds first; a run against `%LOCALAPPDATA%\coai-mcp` or the WSL store is the owner's to start). The owner's question of two `--add` stores that share a session stays open (refused).
+`peer running` is unreachable for a still-running peer in production (E5 deviation 8), so `provisional` will read zero until E7's repair leans on the grown-peer-set rule.
+
