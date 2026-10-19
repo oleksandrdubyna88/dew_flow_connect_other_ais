@@ -1,7 +1,8 @@
 # PLAN — Vibe reads a folder of repositories
 
-> Status: **in progress, 2026-10-18: stories E1.1–E1.3 and decision D9 are built on branch `feat/vibe-folder-of-repos`; E1.4 (the
-> product-flow test, the sweep test, the docs, the help, the promotion) is open.** Scope: `src_mcp/src/Server/Consultation/ConsultantPlaces.cs`
+> Status: **built, in review, 2026-10-19: stories E1.1–E1.4 and decision D9 are on branch `feat/vibe-folder-of-repos` (E1.1–E1.3 and D9
+> on 2026-10-18; E1.4 — the product-flow test S15, the docs and the help — on 2026-10-19). The code gate comes next; the promotion
+> to `research/` follows it.** Scope: `src_mcp/src/Server/Consultation/ConsultantPlaces.cs`
 > (the copy loop of a Vibe consultant row), a new repository walk beside it, `QuestionRowLaunch.cs` (the skip notes on the
 > row), `PanelService.ScratchPrefixes` (the crash sweep), their tests, `research/module_runners.md`, `research/module_server.md`,
 > `research/module_tests.md`, the help sentence for a Vibe disk row in `helpContent.ts` and its four translations
@@ -213,9 +214,13 @@ is that, minus the configuration a checkout would carry.
 
 ## Definition of Done
 
-- [ ] S1–S15 green, each seen red first (guards stated); the existing consultant/snapshot suites green.
-- [ ] A Vibe disk row on `d:\rsd` / `~/git` is Owned, live, with the copies disposed after the turn.
-- [ ] `research/module_runners.md`, `research/module_tests.md` and the help updated; this plan promoted when shipped.
+- [x] S1–S19 green, each seen red first (guards stated: S6, S8, S15, S17–S19); the existing consultant/snapshot suites green —
+  the whole `CoaiMcp.Tests` run on 2026-10-19: 11206 tests, 0 failed, 56 skipped (Windows/POSIX arms).
+- [ ] A Vibe disk row on the owner's real root / `~/git` is Owned, live, with the copies disposed after the turn. The product flow is
+  pinned by S15 with a played CLI, and the sizes are measured read-only (E1.4 outcome below); a live row with a real Vibe (a paid turn)
+  has not run, so this stays open until it does.
+- [x] `research/module_runners.md`, `research/module_server.md`, `research/module_tests.md` and the help (five languages) updated.
+- [ ] This plan promoted when shipped (`/promote-plan`, after the code gate).
 
 ## Epics
 
@@ -529,6 +534,28 @@ promotion.
 **Done when:** S15 and S10 green on Windows and Linux CI; the docs and the five help bodies updated; the summary states the
 guards (S6, S8, S15 green from the start) and the reds (S10 if C1); `/promote-plan` run — the plan moves to
 `research/` with `IMPLEMENTED 2026-10-xx`, its deviations (C1–C9 as accepted) recorded; `PlanLifecycleTests` green.
+
+**Outcome of E1.4 (2026-10-19).**
+- **Step 0, measured read-only before anything else** (a throw-away test over `ParentExpansion.PrepareAsync` and `git ls-files`, deleted
+  afterwards; counts only): on the owner's real root the walk and D9 select 13 repositories and leave 394 linked worktrees out (392 the day
+  before). The 13 would copy 10,734 files and 504.5 MiB in total (live listing minus `SnapshotExclusions.Default`); the largest repository
+  is 376.2 MiB in 1,606 files, the one with most files has 2,517. That is under the 2 GB and 50,000-file limits the lead set, under the
+  shared 2 GiB snapshot budget and under each repository's own 512 MiB ceiling; `C:` had 920 GiB free. The copy's wall time was NOT
+  measured (the largest repository is the one to watch against the 60 s per-repository ceiling; about 34 s of the row's 5 minutes go to
+  git's confirmations first). No size bound per row is added; the first live row decides whether one is needed.
+- **S15 is a guard, green from the start** (E1.2 and E1.3 landed first): `AVibeDiskRowReadsAParentFolderThroughTheServiceTests`, a Theory
+  over the Windows and WSL2 hosts. It is a new small class, not an addition to `AVibeQuestionRowReadsACopyOfItsRootsTests` (that file is
+  431 lines and its temp folder is `coai-qvibe-`; the new one uses `testsToDelete-` and the shared `VibeQuestionRowFixture`). Teeth shown
+  once by breaking the code (`tally.Limit` made `tally.Say`): both arms went red on the prompt assertion; restored.
+- **S10 was already built** with E1.2's merge of the D8 branch (`AScratchSweepRunsOnTheConsultationBeatTests`,
+  `AQuestionRowHoldsItsScratchLockWhileItRunsTests`), so E1.4 only documented it.
+- **Docs and help:** `module_runners.md` has the section "A Vibe disk row expands a parent folder into its repositories" (rules, D9, layout,
+  D4, link rule, sweep, measurements, a Mermaid flowchart); `module_server.md` has the question-row bullet, the flowchart node and the files
+  table; `module_tests.md` has a row for each test class of this plan with its recorded red (taken from this plan's red lists where the
+  coders' own run output was not kept). The Vibe disk-row help sentence is rewritten in `helpContent.ts` and the four translations.
+- **Checks run:** full `CoaiMcp.Tests` 11206 / 0 failed / 56 skipped; extension typecheck, lint and `npm test` green (6348 tests in the main
+  run, 0 failed); `dotnet format --verify-no-changes` clean; `plan-lifecycle.mjs` clean.
+- **Not done on purpose:** the promotion (the code gate comes first), and the live row.
 
 ### Spec corrections (the plan against the code) — ACCEPTED 2026-10-18, folded into D1, D3–D6, D8, S10, S12 and the scope line
 

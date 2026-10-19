@@ -7359,11 +7359,17 @@ handed a PLACE — a coai-owned folder for its home and a sanitised copy to stan
   changing, a full disk) or no homes root configured refuses the TURN before anything is launched —
   `FailedTurns.RefusedBeforeTheLaunch` with `ConsultFailure.VendorRefused` and `ConsultantPlaces.Cure` — and the
   conversation stays open, as every refusal before a launch leaves it.
-- **`ask_consultants` — a question row's one-shot copies (D6).** A row whose plan stands in `CwdKind.Snapshot` (Vibe's disk
-  row): `QuestionRowLaunch` makes, in the row's own `coai-question-*` folder, one copy per GRANTED ROOT
-  (`ConsultantPlaces.OneShotAsync`: the snapshot's live mode, limited to that root — a sub-folder of a repository copies that
-  sub-folder only) under `tree`, and the row stands in `tree`; a root outside any Git work tree is refused with a sentence
-  (the copy lists through git), the row ending `refused`. The prompt names the COPIES' paths: the fan-out composes such a
+- **`ask_consultants` — a question row's one-shot copies (D6; a parent folder is expanded, 2026-10-18).** A row whose plan stands
+  in `CwdKind.Snapshot` (Vibe's disk row): `QuestionRowLaunch` makes, in the row's own `coai-question-*` folder, one copy per
+  GRANTED work-tree ROOT (`ConsultantPlaces.OneShotAsync`: the snapshot's live mode, limited to that root — a sub-folder of a
+  repository copies that sub-folder only) under `tree`, and the row stands in `tree`. A granted root that is NOT a work tree is a
+  parent folder: `ParentExpansion` walks it two levels down (`RepositoryWalk`), asks git once per candidate (`RepositoryFacts`),
+  leaves out a linked worktree whose main checkout is copied in the row (D9), bounds the row at 50 repositories, and copies each
+  one through the same `RepositoryCopier` at `tree/<grant index>/<relative path>/snapshot-<id>`. A candidate git does not confirm
+  is skipped with a note; a folder with no repository, a bound passed, or any refused copy refuses the row, ending `refused`.
+  What was skipped is carried on the place (`ConsultantPlace.Notes`) into the row's `note`, redacted, on every arm, and the
+  worktree sentence also reaches the prompt (`ConsultantPlace.Limitations`). Details, the layout and the measured sizes:
+  [module_runners.md](module_runners.md), *A Vibe disk row expands a parent folder into its repositories*. The prompt names the COPIES' paths: the fan-out composes such a
   row's prompt with no roots and hands `RowInput.Launch.NamingCopies` → `RowLaunchInput.PromptNaming`, which the launch
   calls with the copies it made (a row standing in copies with no naming function is a contract violation, never a prompt
   naming the originals). A runtime with a `HomesFolder` keeps its home in the row's folder too (`OwnedScratch`), and its
@@ -7421,7 +7427,7 @@ flowchart TD
   held -->|no| makeat["MakeAtAsync(Live(repo), folder/tree) — replaces a tree a previous server left"]
   refresh --> launch["launch: Workdir = tree · OwnedScratch = folder · prompt names tree"]
   makeat --> launch
-  row["question row, plan Cwd = Snapshot"] --> copies["OneShotAsync(row folder, granted roots) — a copy per root; no Git work tree: refused"]
+  row["question row, plan Cwd = Snapshot"] --> copies["OneShotAsync(row folder, granted roots) — a copy per root; a parent folder expanded into its repositories; none found: refused"]
   copies --> rowlaunch["launch in tree · prompt names the copies · finally: the row folder deleted"]
   rowlaunch -. "holds .coai-question.lock for the row's life" .-> qlock["row scratch lock"]
   beat --> qsweep["PruneOldAnswerDirs — coai-question-* older than six hours"]
@@ -7435,12 +7441,15 @@ flowchart TD
 
 | What | Where |
 |---|---|
-| The place, the one-shot copies, the non-Git refusal | `Server/Consultation/ConsultantPlaces.cs` |
+| The place, the one-shot copies | `Server/Consultation/ConsultantPlaces.cs` |
+| The parent-folder expansion (D1–D9): the walk and its listing seam, git's facts, the worktree selection, the tally, the link rule, the one copy method | `Server/Consultation/ParentExpansion.cs`, `RepositoryWalk.cs`, `FolderListing.cs`, `RepositoryFacts.cs`, `LinkedWorktrees.cs`, `OneShotTally.cs`, `GrantedPaths.cs`, `RepositoryCopier.cs` |
+| The row's `note` carrying what the place skipped | `QuestionRowLaunch.PlaceNotes` |
 | The conversation's snapshot registry | `Server/Consultation/ConversationSnapshots.cs` |
 | The home sweep and `RemoveNow` | `Server/Consultation/ConsultantHomeSweep.cs` |
 | The homes root | `PanelSettings.ConsultantHomesRoot` (`COAI_CONSULTANT_HOMES`, else local application data; empty in hand-built settings, so a test never touches the machine's own) |
 | Wiring | `ConsultationService.RunTurnAsync` / `Sweep` / `CloseAsync`; `QuestionRowLaunch.RunAsync`; `QuestionFanOut.CheckedInput`; `ConsultantCheckTurn.TurnAsync` |
 | Tests | `AVibeConsultationKeepsOneSnapshotTests`, `AVibeQuestionRowReadsACopyOfItsRootsTests`, `ConsultantHomeSweepTests`, `ConsultantCheckTests.AVibeCheck_…` — [module_tests.md](module_tests.md) |
+| Tests of the expansion | `RepositoryWalkTests`, `RepositoryFactsTests`, `AVibeDiskRowExpandsAParentFolderTests`, `AVibeDiskRowSaysWhatItSkippedTests`, `AQuestionRowKeepsWhatItsPlaceSkippedWhateverEndsItTests`, `AVibeDiskRowReadsAParentFolderThroughTheServiceTests` (S15) — [module_tests.md](module_tests.md) |
 | A question row's scratch lock and its sweep (D8) | `QuestionRowLaunch.LockName` / `RunAsync`; `PanelService.ScratchPrefixes`, `DeleteIfDue`; `Runners/Files/FolderLock.cs`; tests `AScratchSweepRunsOnTheConsultationBeatTests`, `AQuestionRowHoldsItsScratchLockWhileItRunsTests` — [module_tests.md](module_tests.md) |
 
 Not done here: one live `consult` and one live question row through the product with a real Vibe (paid turns) — the

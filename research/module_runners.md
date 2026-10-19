@@ -3250,6 +3250,97 @@ judged by the lock, never by a stamp). Vendor-free, like the rest of the class.
 Tests: `VibeConsultantTests`, `ConfinementPlannerTests` (the Vibe question launch), `DeletingAnOwnedTreeNeverEntersALinkTests`,
 `ReviewSnapshotRefreshTests` (`MakeAt…`) — listed in [module_tests.md](module_tests.md).
 
+## A Vibe disk row expands a parent folder into its repositories (2026-10-18, PLAN_vibe_reads_a_folder_of_repositories.md)
+
+The owner's disk row ("projects on this disk") is granted PARENT folders — a drive's project folder on Windows, `~/git` on WSL — not
+repositories. Before this plan `ConsultantPlaces.OneShotAsync` refused any granted root that git did not call a work tree. Now a root that
+is not a work tree is EXPANDED into the Git repositories beneath it, and each one goes through the one copy method a directly granted work
+tree uses (`RepositoryCopier.CopyAsync`: link chain, git's answer again, then `SnapshotSource.Live` minus `SnapshotExclusions.Default`).
+The confinement is D6's, unchanged: Vibe reads only copies coai made, in a folder coai owns, gone after the turn. Nothing else reads the
+parent folder and Vibe never sees a path of it.
+
+**The walk — `RepositoryWalk` (D2, D3, D7; pure, no git).** It reads through two seams: `FolderListings.Read` (a listing: folder, file or
+link entries, or `Unreadable`) for the root and its children, and `FolderListings.GitEntryOf` (one lookup of one name) for the deepest
+level.
+- Depth counts levels below the root: children are depth 1, their children depth 2; the walk goes no deeper. The root is never a candidate.
+- A **candidate** is a folder holding `.git` as a real folder or as a regular FILE (a worktree's or a submodule's top). A `.git` that is a
+  link does not make a candidate. A candidate is added and never entered, so nested repositories and submodules are the repository's own.
+- Skipped without a word: hidden folders, `node_modules`, `bin`, `obj`, links to files. A link to a FOLDER is never followed and is named
+  in ONE note per root (its count and first five names). A depth-2 folder is only probed for `.git`, never listed.
+- A child that cannot be listed is skipped with a note; a ROOT that cannot be listed is refused by name. More than 10,000 folders within two
+  levels: refused. No candidate at all: refused with "holds no Git repository within two levels". Every refusal keeps the notes made
+  before it. Candidates are sorted by ordinal relative path, so order, notes and refusal sentences are the same on every run.
+
+**What git says — `RepositoryFacts` (D2 R1, D9).** ONE call per candidate: `git rev-parse --is-inside-work-tree --show-cdup
+--absolute-git-dir --path-format=absolute --git-common-dir`. A candidate must be the TOP of a work tree (inside AND an empty cdup), or it
+is skipped with a note (an empty `.git` inside another repository is "inside" that one). A **linked worktree** is a checkout whose git dir
+differs from its common dir, both compared as identity keys (`RepositoryIdentity.KeyOf`, case-blind on Windows only). The text of a `.git`
+file is never the authority: a submodule's top holds the same kind of file, and a submodule inside a linked worktree writes a gitdir that
+merely contains `/worktrees/`.
+
+**Selection, bound, copy — `ParentExpansion` (D3, D4, D9).** The order is the contract: every candidate of every parent is validated, THEN
+a linked worktree whose confirmed main checkout (same common dir) is copied in the same row is left out (`LinkedWorktrees.Select`), THEN
+the 50-repository bound counts what is left, THEN the copies are made — so the bound is the row's, the budget's "of" is the real total,
+and every refusal comes before anything is made. A worktree granted DIRECTLY is always copied, once; one with no main in the row, or
+whose main git could not confirm, stays. The left-out ones are ONE note on the row, and the same sentence goes into the prompt that names
+the copies (`ConsultantPlace.Limitations`), so the model knows its copies hold no other branches and no uncommitted files of those
+worktrees.
+
+**The two sides of D4 (the boundary that must not blur).** *Discovery skips, with a note:* a candidate git does not confirm as a top,
+a folder the walk cannot list — one broken checkout never costs the others. *Copy refuses the whole row:* once a confirmed repository is
+handed to `RepositoryCopier`, any refusal (a link, a snapshot ceiling, a path too long) refuses the row and disposes every copy made.
+Nothing catches around the copy. The place carries the notes (`ConsultantPlace.Notes`) and says them to the log's sink; the row writes
+them, redacted through `Redaction.SafeText`, into its `note` on the answered, refused, timed-out and failed arms
+(`QuestionRowLaunch.PlaceNotes`).
+
+**The link rule (D5).** The granted root is link-checked BEFORE the walk (a junction at the root would otherwise be walked through). Each
+found repository's folders from the repository up to and including the granted root (`GrantedPaths.LinkUpTo`) are checked before git
+runs in them and again right before the copy, so a grouping folder that became a link between the walk and the copy refuses the row. The
+remaining check-to-open race is the one `SnapshotCopier` documents; nothing here claims more.
+
+**Layout (D6).** One subfolder per repository: `<row>/tree/<grant index>/<relative path>/snapshot-<id>/…`. The grant index keeps two
+grants' `group/repo` apart; the `snapshot-<id>` leaf makes a collision impossible. De-duplication is by full path across the whole row
+(a directly granted work tree first, then the first parent to find it). The layout adds `<n>/<group>/<repo>/` to every copied path: a
+path that grows too long is a refusal with a sentence ("the path is too long") and so refuses the row, never a silent miss — and Vibe's
+own interpreter is not long-path aware (`VibePathBudget`), so a copy .NET writes can still be a file Vibe cannot open. Empty
+`<n>/<segments>` folders stay until the row's scratch goes.
+
+**A killed server (D8).** The row's copies live in `coai-question-<id>`; `PanelService.ScratchPrefixes` now sweeps that prefix after six
+hours, and the sweep keeps a folder whose `.coai-question.lock` it cannot take (a live row holds it for its whole life) — see
+[module_server.md](module_server.md).
+
+**Measured, read-only, 2026-10-18 and 2026-10-19 on the owner's real root (counts only; no path of the owner's disk is written down).**
+405 candidates, all confirmed by git, 392 linked worktrees left out and 13 selected on the 18th (394 left out on the 19th — agents keep
+making worktrees); the 405 git calls took about 34 s one after another (the walk itself 46 ms). What the 13 would copy
+(`git ls-files --cached --others --exclude-standard` minus the default exclusions): 10,734 files, 504.5 MiB in total, the largest
+repository 376.2 MiB in 1,606 files, the most files in one repository 2,517. That is far under the shared 2 GiB budget and 50,000 files,
+and the largest repository is under its own 512 MiB ceiling; `C:` held 920 GiB free against the 5 GiB floor. **Not measured:** the copy's
+wall time (the per-repository ceiling is 60 s and the row's budget 5 minutes, of which about 34 s go to git's confirmations before the
+first copy); the first live row will tell.
+
+```mermaid
+flowchart TD
+  grant["granted root"] --> link{"root is a link?"}
+  link -->|yes| refuseLink["refused: grant the folder it points at"]
+  link -->|no| git0{"git: inside a work tree?"}
+  git0 -->|"yes (work tree)"| direct["counted at once; copied as it is (RepositoryCopier)"]
+  git0 -->|no| walk["RepositoryWalk: depth 1 and 2, candidates = .git folder or file"]
+  walk -->|"unreadable root, over 10000 folders, none found"| refuseWalk["refused, notes kept"]
+  walk -->|candidates| confirm["one git call per candidate: top of a work tree?"]
+  confirm -->|no| skip["skipped with a note (D4 discovery)"]
+  confirm -->|yes| select["linked worktree whose main is copied: left out, one summary note"]
+  select --> bound{"more than 50 repositories in the row?"}
+  bound -->|yes| refuseBound["refused before any copy"]
+  bound -->|no| copy["each repository in order: links up to the root, then RepositoryCopier (snapshot of the live tree)"]
+  direct --> copy
+  copy -->|"a copy refused: link, ceiling, path too long, budget"| refuseRow["row refused, every copy disposed (D4 copy)"]
+  copy -->|all made| owned["Owned: tree/n/group/repo/snapshot-id, notes on the row, limitation in the prompt"]
+```
+
+Tests: `RepositoryWalkTests`, `RepositoryFactsTests`, `AVibeDiskRowExpandsAParentFolderTests`, `AVibeDiskRowSaysWhatItSkippedTests`,
+`AQuestionRowKeepsWhatItsPlaceSkippedWhateverEndsItTests`, `AVibeDiskRowReadsAParentFolderThroughTheServiceTests` (S15),
+`AScratchSweepRunsOnTheConsultationBeatTests`, `AQuestionRowHoldsItsScratchLockWhileItRunsTests` — listed in [module_tests.md](module_tests.md).
+
 ## Kimi over ACP — the `--ask-acp` shim (2026-10-12, S4 of `todo/PLAN_vibe_and_kimi_runtimes.md`, D15)
 
 Kimi Code is driven over `kimi acp` — the Agent Client Protocol, JSON-RPC 2.0 over newline-delimited stdio — because
