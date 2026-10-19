@@ -89,6 +89,11 @@ nothing for a quota, and an earlier session's notes even suspected a token-rotat
    other `kimi` process runs on that side (the Kimi cell rule): one `coai-mcp --ask-acp` turn on the spent account, its raw ACP
    error and stderr recorded in `research/RESULTS_kimi_confinement.md`. If the window has reset, wait for the next spent window
    or record what a gate round leaves — never spend quota on purpose.
+   **Tried 2026-10-19 with the owner's yes, deferred:** coai's own Kimi reviewers (another session's gate rounds) kept a
+   `kimi.exe` running (PIDs 50920, then 51284); a free gap lasted seconds. A probe that runs `kimi acp` directly does not take
+   `KimiCredentialsLock`, so coai cannot wait for it — starting it in a gap risks two refreshers of one sign-in. So: either run it
+   while no session's queue launches Kimi, or let D4 record it — with the vendor sentence kept, the first real quota answer after
+   the fix writes the measured line, and the quota row is pinned against that fixture (the fixture is then the measurement).
 2. D1–D4 with S1–S6, red-first.
 3. D5 with S7, red-first.
 4. Docs: `research/module_runners.md` (the Kimi failure table), `research/module_tests.md`; D6 in the M-K14 record.
