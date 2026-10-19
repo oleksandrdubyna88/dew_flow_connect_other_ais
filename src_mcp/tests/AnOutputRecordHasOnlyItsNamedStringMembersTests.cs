@@ -23,6 +23,10 @@ public sealed class AnOutputRecordHasOnlyItsNamedStringMembersTests
     [InlineData(typeof(WindowAuthors), "Reasons,State,Window")]
     [InlineData(typeof(RoundAuthors), "CallerSessionId,PeerGates,Reasons,Stage,State")]
     [InlineData(typeof(CheckoutWrites), "Root")]
+    [InlineData(typeof(RoundRef), "Stage,Window")]
+    [InlineData(typeof(Contributor), "AgentType,Associations,CallerSessionId,Efforts,Models,Requested,Who")]
+    [InlineData(typeof(NotSeen), "Stage,Why")]
+    [InlineData(typeof(ContributorSet), "")]
     public void TheStringMembersEqualTheNamedAllowlist(Type type, string allowed) =>
         StringMembers(type).Should().Equal(allowed.Split(',', StringSplitOptions.RemoveEmptyEntries).Order(StringComparer.Ordinal));
 }
