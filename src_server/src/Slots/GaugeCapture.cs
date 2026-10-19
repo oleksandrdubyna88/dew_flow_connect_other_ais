@@ -148,7 +148,7 @@ public sealed class GaugeCapture(
     {
         if (!vendor.Runtime.Equals(CodexRuntime, StringComparison.OrdinalIgnoreCase))
         {
-            return new GaugeCaptured.Skipped(GaugeCodes.SlotNotReadable);
+            return new GaugeCaptured.Skipped(GaugeCodes.NoGaugeForRuntime);
         }
 
         var current = slots.Read(slot.Vendor, slot.Name);
