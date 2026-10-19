@@ -92,7 +92,26 @@ public sealed class BackfillAuthorsBackupTests
             File.ReadAllBytes(Path.Combine(folder, "sessions", name!)).Should().Equal(bytes, $"{name} byte for byte");
         }
 
-        Directory.GetFiles(folder).Select(Path.GetFileName).Should().Equal([RoundsDb.FileName], "one file: no -wal or -shm beside the copy");
+        Directory.GetFiles(folder).Select(Path.GetFileName).Should().BeEquivalentTo([BackfillBackup.VerdictFile, RoundsDb.FileName], "the copy and its verdict: no -wal or -shm beside them");
+    }
+
+    /// <summary>
+    /// Code gate finding 22 (kimi): a backup folder carries its own verdict, so a refused run's folder and a run killed mid-copy are told apart from a
+    /// verified one by what is ON DISK, a year later, by the operator whose store just broke — not by a summary that went to a terminal.
+    /// </summary>
+    [Fact]
+    public async Task TheBackupFolderSaysWhetherItVerified()
+    {
+        using var world = Stripped();
+
+        var run = await RunAsync(world, []);
+
+        run.Code.Should().Be(0, run.Err);
+        var folder = JsonDocument.Parse(run.Out).RootElement.GetProperty("backupDir").GetString()!;
+        var verdict = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(folder, BackfillBackup.VerdictFile))).RootElement;
+        verdict.GetProperty("verified").GetBoolean().Should().BeTrue();
+        verdict.GetProperty("check").GetProperty("rowsMatch").GetBoolean().Should().BeTrue();
+        verdict.GetProperty("check").GetProperty("dataVersionUnchanged").GetBoolean().Should().BeTrue();
     }
 
     // ---------- a backup that does not verify writes nothing ----------
@@ -114,7 +133,10 @@ public sealed class BackfillAuthorsBackupTests
         run.Err.Should().Contain("rowsMatch");
         JsonDocument.Parse(run.Out).RootElement.GetProperty("backupCheck").GetProperty("rowsMatch").GetBoolean().Should().BeFalse();
         Logical(world).Should().Be(logicalAtTheSeam, "the store and every session file are as the concurrent writer left them: the mode wrote nothing");
-        Directory.GetDirectories(BackupsOf(world)).Should().HaveCount(1, "the refused backup's folder is kept");
+        var folder = Directory.GetDirectories(BackupsOf(world)).Should().ContainSingle("the refused backup's folder is kept").Subject;
+        var verdict = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(folder, BackfillBackup.VerdictFile))).RootElement;
+        verdict.GetProperty("verified").GetBoolean().Should().BeFalse("the folder itself says it did not verify");
+        verdict.GetProperty("check").GetProperty("rowsMatch").GetBoolean().Should().BeFalse();
     }
 
     [Fact]

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Security.Cryptography;
+using System.Text.Json;
 using CoaiMcp.Server;
 using Microsoft.Data.Sqlite;
 
@@ -39,6 +40,13 @@ public sealed record BackfillBackupCheck(
 internal sealed record BackupOutcome(string Directory, BackfillBackupCheck Check);
 
 /// <summary>
+/// What a backup folder says about itself, in <see cref="BackfillBackup.VerdictFile"/> (code gate finding 22): whether every check held, and the
+/// checks. A folder WITHOUT this file is a run killed mid-copy; one that says <c>false</c> is a refused backup, kept because nothing is deleted.
+/// A restore treats both as unverified.
+/// </summary>
+public sealed record BackupVerdict(bool Verified, BackfillBackupCheck Check);
+
+/// <summary>
 /// The verified backup that precedes every write (E7.S4, the owner's rule of 2026-10-15): SQLite's ONLINE backup of <c>coai.db</c> and a byte-for-byte
 /// copy of every <c>sessions/session-*.json</c>, into a NEW folder <c>&lt;dataDir&gt;/backfill-backups/&lt;yyyy-MM-ddTHH-mm-ssZ&gt;/</c> beside the store.
 /// </summary>
@@ -50,11 +58,15 @@ internal sealed record BackupOutcome(string Directory, BackfillBackupCheck Check
 /// twice on the mode's OWN connection — each an autocommit statement, no reader left open between — is unchanged (SQLite changes it when ANY OTHER
 /// connection commits, and never for the connection's own commits: counts alone cannot prove quiet, an <c>UPDATE</c> keeps them); every session file's
 /// SHA-256 equals its source's. This verifies a recovery point. It does not stop a server writing afterwards — the write's in-transaction re-read does.</para>
-/// <para><b>Nothing here deletes.</b> A refused backup leaves its folder; a second run makes its own; no backup is ever removed by the mode.</para>
+/// <para><b>Nothing here deletes.</b> A refused backup leaves its folder; a second run makes its own; no backup is ever removed by the mode. Every
+/// folder carries its verdict (<see cref="VerdictFile"/>), so a refused or a half-made backup is told apart from a verified one on disk.</para>
 /// </remarks>
 internal static class BackfillBackup
 {
     public const string FolderName = "backfill-backups";
+
+    /// <summary>The folder's own verdict (code gate finding 22): what the backup was checked against and whether every check held, as JSON.</summary>
+    public const string VerdictFile = "check.json";
 
     private sealed record Counts(SortedDictionary<string, long> Rows, long DataVersion);
 
@@ -67,9 +79,15 @@ internal static class BackfillBackup
         var copied = CopySessions(dataDir, folder);
         seams.DuringBackup?.Invoke();
         var after = Take(source, versionFirst: false);
+        var check = Verify(folder, userVersion, before, after, copied, SessionFilesOf(dataDir));
+        WriteVerdict(folder, check);
 
-        return new BackupOutcome(folder, Verify(folder, userVersion, before, after, copied, SessionFilesOf(dataDir)));
+        return new BackupOutcome(folder, check);
     }
+
+    /// <summary>The folder's own verdict, written after the check whatever it said — the folder is the mode's, not the store's, so this is no write before the gate.</summary>
+    private static void WriteVerdict(string folder, BackfillBackupCheck check) =>
+        File.WriteAllText(Path.Combine(folder, VerdictFile), JsonSerializer.Serialize(new BackupVerdict(check.Verified, check), ServerJsonContext.Default.BackupVerdict));
 
     private static string RoundsDbFile => Store.RoundsDb.FileName;
 

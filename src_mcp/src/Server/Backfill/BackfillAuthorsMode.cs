@@ -194,7 +194,7 @@ internal static class BackfillAuthorsMode
         var counts = new BackfillCounts();
         await Run(settings, options, read, counts, seams, ct);
 
-        return Finish(output, BackfillSummary.Of(counts, options.Since, options.DryRun, backup, watch.ElapsedMilliseconds));
+        return Finish(output, BackfillSummary.Of(counts, options.Since, options.DryRun, backup, watch.ElapsedMilliseconds), counts);
     }
 
     private static BackupOutcome MakeBackup(string dataDir, SqliteConnection read, TimeProvider clock, BackfillSeams seams)
@@ -250,11 +250,12 @@ internal static class BackfillAuthorsMode
 
     // ---------- the answer ----------
 
-    private static int Finish(TextWriter output, BackfillSummary summary)
+    /// <summary>75 on ANY deferral — read from the counts themselves, not from the summary's named fields, so a reason the summary cannot name still says "run again" (code gate finding 19).</summary>
+    private static int Finish(TextWriter output, BackfillSummary summary, BackfillCounts counts)
     {
         Print(output, summary);
 
-        return summary.Deferred.Busy + summary.Deferred.Unreadable + summary.Deferred.ChangedUnderUs + summary.Deferred.PeersUnknown > 0 ? 75 : 0; // EX_TEMPFAIL
+        return counts.Deferred.Total > 0 ? 75 : 0; // EX_TEMPFAIL
     }
 
     private static int Print(TextWriter output, BackfillSummary summary)

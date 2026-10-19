@@ -8,8 +8,8 @@ namespace CoaiMcp.Server;
 /// <summary>
 /// A snapshot rebuilt from the DATABASE, for the session file that lost its own (E7.S3, S1 rule 2(b)): what an older server's save stripped while
 /// the transcript it was read from is gone. The rows come back through <see cref="RoundAuthorsTable.AgentKeyOf"/> — never a second spelling of
-/// <c>"" → main</c> — and the state and reasons are the column's, split on <c>": "</c> and then <c>", "</c>, which is exact because no reason contains
-/// the joiner (E5 §10 item 4).
+/// <c>"" → main</c> — and the state and reasons are the column's, read back through <see cref="AuthorsSnapshot.Split"/>, the one inverse of
+/// <see cref="AuthorsSnapshot.Render"/> (E5 §10 item 4; code gate finding 20).
 /// </summary>
 /// <remarks>
 /// <para><b>What the database never held is UNKNOWN, not empty.</b> <c>Elsewhere</c> and <c>ClaimedByPeer</c> are
@@ -47,7 +47,7 @@ internal static class AuthorsHeal
 
     private static AuthorsSnapshot Build(SqliteDataReader columns, StoredRound round, ImmutableArray<AuthorRow> rows)
     {
-        var (state, reasons) = Split(columns.GetString(0));
+        var (state, reasons) = AuthorsSnapshot.Split(columns.GetString(0));
 
         return new AuthorsSnapshot(
             round.Stage, round.Number, columns.GetString(1), state, reasons, rows,
@@ -59,13 +59,6 @@ internal static class AuthorsHeal
     private static ActivityTotals Totals(SqliteDataReader columns, int at) =>
         new(columns.GetInt32(at), columns.GetInt32(at + 1), columns.GetInt32(at + 2),
             new TokenTerms(columns.GetInt64(at + 3), columns.GetInt64(at + 4), columns.GetInt64(at + 5), columns.GetInt64(at + 6)));
-
-    private static (string State, ImmutableArray<string> Reasons) Split(string stored)
-    {
-        var at = stored.IndexOf(": ", StringComparison.Ordinal);
-
-        return at < 0 ? (stored, []) : (stored[..at], [.. stored[(at + 2)..].Split(", ")]);
-    }
 
     private static ImmutableArray<AuthorRow> RowsOf(Func<SqliteCommand> command, StoredRound round)
     {

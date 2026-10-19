@@ -380,6 +380,7 @@ public sealed record ConsultAnswer(string ConsultationId, int TurnIndex, int Max
 [JsonSerializable(typeof(Store.LoggedLog))]
 [JsonSerializable(typeof(Store.RoundCountsAnswer))]
 [JsonSerializable(typeof(BackfillSummary))]
+[JsonSerializable(typeof(BackupVerdict))]
 [JsonSerializable(typeof(Store.LoggedManyFindings))]
 [JsonSerializable(typeof(Core.Security.SecurityFindingDetails))]
 [JsonSerializable(typeof(List<RoundKeyDto>))]

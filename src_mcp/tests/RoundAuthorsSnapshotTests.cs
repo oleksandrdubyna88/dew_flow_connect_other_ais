@@ -42,6 +42,26 @@ public sealed class RoundAuthorsSnapshotTests : IDisposable
 
     private static AuthorsSnapshot Observed() => AuthorsSnapshot.From(AuthorsOfEveryKind() with { State = ObservationKinds.Observed, Reasons = [] }, CallerSessionId.Registry, 1, 1, 1, 2);
 
+    /// <summary>
+    /// E7 code gate finding 20: the column's format has ONE reader, beside its writer. <see cref="AuthorsSnapshot.Split"/> gives back exactly the state
+    /// and the reasons <see cref="AuthorsSnapshot.Render"/> joined — for a state with no reason, one, and several — so the heal and the backfill's
+    /// decision never spell the joiners a second time.
+    /// </summary>
+    [Theory]
+    [InlineData("observed", new string[0])]
+    [InlineData("partial", new[] { "peer running" })]
+    [InlineData("unobserved", new[] { "no open time", "transcript not found", "read budget" })]
+    public void Split_IsTheInverseOfRender(string state, string[] reasons)
+    {
+        var rendered = (Observed() with { State = state, Reasons = [.. reasons] }).Render();
+
+        var (kind, found) = AuthorsSnapshot.Split(rendered);
+
+        kind.Should().Be(state);
+        found.Should().Equal(reasons);
+        AuthorsSnapshot.IsWellFormed(rendered).Should().BeTrue("every state this round-trips is one the store could have written");
+    }
+
     private static RoundRecord Round(AuthorsSnapshot? authors, string stage = "CodeReview", int number = 1) =>
         new(stage, number, "proceed", 0, "answered", new DateTime(2026, 10, 1, 9, 0, 0, DateTimeKind.Utc))
         {

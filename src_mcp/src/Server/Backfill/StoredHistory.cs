@@ -29,9 +29,13 @@ internal sealed record StoredGate(
     /// <summary>The index of the round in the journal, or -1 when the journal does not list it.</summary>
     public int IndexOf(StoredRound round) => Journal.FindIndex(entry => entry.Stage == round.Stage && entry.Number == round.Number);
 
-    /// <summary>The session as the engine held it BEFORE <paramref name="round"/> was saved: its state, its open time, the rounds that ran earlier.</summary>
+    /// <summary>
+    /// The session as the engine held it BEFORE <paramref name="round"/> was saved. A RECONSTRUCTION: the id, the repository, the branch, the
+    /// open time and the earlier rounds are real; every other member of the state is the type's default and nothing is invented — a stage, in
+    /// particular, is not (code gate finding 21), because the attribution reads none and a plausible value would be trusted by the next reader.
+    /// </summary>
     public PersistedSession Before(StoredRound round, int index) =>
-        new(new SessionState(SessionId, RepoPath, Branch, new PanelConfig()) { Stage = Stage.CodeReview }, index >= 0 ? [.. Journal.Take(index)] : [.. Journal.Where(entry => entry.StartedUtc < round.StartedUtc)])
+        new(new SessionState(SessionId, RepoPath, Branch, new PanelConfig()), index >= 0 ? [.. Journal.Take(index)] : [.. Journal.Where(entry => entry.StartedUtc < round.StartedUtc)])
         {
             OpenedUtc = OpenedUtc,
         };

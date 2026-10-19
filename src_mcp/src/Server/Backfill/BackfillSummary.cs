@@ -69,6 +69,20 @@ public sealed record BackfillSummary(
 
     private static string SinceText(DateTime? since) => since is { } from ? from.ToString("O", System.Globalization.CultureInfo.InvariantCulture) : string.Empty;
 
-    internal static BackfillDeferred DeferredOf(BackfillCounts counts) =>
-        new(counts.Deferred[BackfillWhy.Busy], counts.Deferred[BackfillWhy.FileUnreadable], counts.Deferred[BackfillWhy.ChangedUnderUs], counts.Deferred[BackfillWhy.PeersUnknown]);
+    private static readonly BackfillWhy[] Deferrals = [BackfillWhy.Busy, BackfillWhy.FileUnreadable, BackfillWhy.ChangedUnderUs, BackfillWhy.PeersUnknown];
+
+    /// <summary>
+    /// The four deferral buckets. A reason counted as a deferral that none of them names is refused LOUDLY (code gate finding 19): a summary that
+    /// printed zeros for it would tell the operator "run again" while the four fields read done.
+    /// </summary>
+    internal static BackfillDeferred DeferredOf(BackfillCounts counts)
+    {
+        var stray = counts.Deferred.All.Keys.Where(why => !Deferrals.Contains(why)).ToList();
+        if (stray.Count > 0)
+        {
+            throw new InvalidOperationException("a deferral the summary cannot name: " + string.Join(", ", stray));
+        }
+
+        return new(counts.Deferred[BackfillWhy.Busy], counts.Deferred[BackfillWhy.FileUnreadable], counts.Deferred[BackfillWhy.ChangedUnderUs], counts.Deferred[BackfillWhy.PeersUnknown]);
+    }
 }

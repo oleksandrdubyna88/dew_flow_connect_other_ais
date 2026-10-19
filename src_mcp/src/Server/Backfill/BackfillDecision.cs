@@ -38,14 +38,7 @@ internal static class BackfillDecision
     // ---------- strength ----------
 
     /// <summary><c>observed</c> 3 &gt; <c>partial</c> 2 &gt; <c>unobserved</c> 1 &gt; empty 0 — over the kind of a state the store could have written; a state it refuses counts as empty.</summary>
-    public static int Strength(string state) => AuthorsSnapshot.IsWellFormed(state) ? KindStrength(KindOf(state)) : 0;
-
-    private static string KindOf(string state)
-    {
-        var at = state.IndexOf(": ", StringComparison.Ordinal);
-
-        return at < 0 ? state : state[..at];
-    }
+    public static int Strength(string state) => AuthorsSnapshot.IsWellFormed(state) ? KindStrength(AuthorsSnapshot.Split(state).State) : 0;
 
     private static int KindStrength(string kind) => kind switch
     {
@@ -55,8 +48,9 @@ internal static class BackfillDecision
         _ => 0,
     };
 
+    /// <summary>Whether a well-formed state names <paramref name="reason"/> — read through the format's one inverse, <see cref="AuthorsSnapshot.Split"/>.</summary>
     private static bool ReasonsInclude(string state, string reason) =>
-        AuthorsSnapshot.IsWellFormed(state) && state.IndexOf(": ", StringComparison.Ordinal) is var at && at >= 0 && state[(at + 2)..].Split(", ").Contains(reason);
+        AuthorsSnapshot.IsWellFormed(state) && AuthorsSnapshot.Split(state).Reasons.Contains(reason);
 
     // ---------- selection ----------
 

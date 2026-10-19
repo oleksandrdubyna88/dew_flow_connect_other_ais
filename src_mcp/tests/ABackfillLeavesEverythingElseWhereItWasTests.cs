@@ -304,6 +304,48 @@ public sealed class ABackfillLeavesEverythingElseWhereItWasTests
         StoreDump.Rows(world.DataDir, "SELECT COUNT(*) FROM round_authors WHERE ordinal = 99").Should().Be("1\n", "the live server's row is what both stores hold");
     }
 
+    /// <summary>
+    /// Code gate findings 0, 6 and 18 (vibe, codex, kimi): the fingerprint covers EVERY column of the round and of its rows, not a hand-kept list — a
+    /// live server that re-recorded the round's head would otherwise pass the check, and the size measured from the OLD commits would be written.
+    /// </summary>
+    [Fact]
+    public async Task ARoundChangedUnderTheRun_InAColumnTheBackfillDoesNotWrite_IsDeferredToo()
+    {
+        using var world = BackfillWorld.Of(Fixture);
+        world.RecordLive();
+        world.StripAuthors();
+        using var rig = new BackfillRig(world, beforeWrite: _ => Set(world, "UPDATE rounds SET head_sha = 'ffffffffffffffffffffffffffffffffffffffff'"));
+
+        await rig.RunAsync();
+
+        rig.Counts.Deferred[BackfillWhy.ChangedUnderUs].Should().Be(1, "ANY write to the round since its selection defers it: a re-recorded head makes a size from the old commits stale");
+        rig.Counts.Written.Total.Should().Be(0);
+    }
+
+    /// <summary>
+    /// Code gate finding 18 (kimi): the projection's column list, the heal's and the writer's must agree, and nothing but a test forces it. This pins it:
+    /// the projection reads every column of <c>round_authors</c> the writer fills (the table's own list, less its two keys), and a healed snapshot
+    /// projects to exactly the rows it was built from.
+    /// </summary>
+    [Fact]
+    public async Task TheProjectionAndTheHeal_ReadEveryColumnTheWriterWrites()
+    {
+        var (world, _) = await BackfilledAsync();
+        using var disposing = world;
+        SqliteConnection.ClearAllPools();
+        using var db = AuthorPeers.OpenReadOnly(world.DataDir)!;
+        var round = new StoredHistory(db, world.Store).Gates()[0].Rounds[0];
+        var columns = StoreDump.Rows(world.DataDir, "SELECT name FROM pragma_table_info('round_authors') WHERE name NOT IN ('round_id', 'ordinal')")
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var whole = StoreDump.Rows(world.DataDir, $"SELECT {string.Join(", ", columns)} FROM round_authors WHERE round_id = {round.RoundId} ORDER BY ordinal")
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+        whole.Should().NotBeEmpty("the backfilled round has rows to compare");
+        AuthorsProjection.Read(db, round.RoundId).Skip(1).Should().Equal(whole,
+            "a column added to round_authors that the projection does not compare would hide a live rewrite of it from the equality — and the writer's delete-then-insert would erase it");
+        AuthorsProjection.Agree(AuthorsHeal.From(db.CreateCommand, round)!, db, round.RoundId).Should().BeTrue("a healed snapshot projects to exactly the rows it was rebuilt from");
+    }
+
     [Fact]
     public async Task TheTransactionIsImmediate_ABusyWriterDefersTheRoundAtBegin_NotAtTheFirstUpdate()
     {

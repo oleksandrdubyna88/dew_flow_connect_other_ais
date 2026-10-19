@@ -69,6 +69,15 @@ internal sealed class RoundBackfill(
         }
 
         counts.Selected++;
+        if (action.Verb == BackfillVerb.Defer)
+        {
+            // The WHOLE round waits (code gate finding 7): nothing is measured and nothing is written on either side — a size written to the database
+            // alone while the file did not read would leave the two stores disagreeing on it for ever. Both halves are retried on the next run.
+            counts.Deferred.Add(action.Why);
+
+            return;
+        }
+
         var authors = Authors(facts, action);
         var size = await SizeAsync(facts, ct);
         Commit(facts, authors, size);
@@ -77,14 +86,14 @@ internal sealed class RoundBackfill(
     // ---------- the authors ----------
 
     private AuthorsPlan Authors(RoundFacts facts, BackfillAction action) =>
-        action.Verb is BackfillVerb.Defer or BackfillVerb.Keep ? Counted(action)
+        action.Verb == BackfillVerb.Keep ? Kept(action.Why)
         : action.Verb == BackfillVerb.Heal ? AuthorsPlan.Nothing with { HealFirst = true }
         : action.Verb == BackfillVerb.Reproject ? Settled(facts, facts.Record.Authors!, WrittenAs.Reprojected)
         : Settled(facts, Compute(facts), AsOf(action.Why));
 
-    private AuthorsPlan Counted(BackfillAction action)
+    private AuthorsPlan Kept(BackfillWhy why)
     {
-        (action.Verb == BackfillVerb.Defer ? counts.Deferred : counts.Kept).Add(action.Why);
+        counts.Kept.Add(why);
 
         return AuthorsPlan.Nothing;
     }

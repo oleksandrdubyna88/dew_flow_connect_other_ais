@@ -55,6 +55,29 @@ public sealed class ABackfilledSizeIsWrittenWithItsRowsTests : LiveSizedGateBase
         StoreDump.AuthorsAndSize(Data).Should().Be(before);
     }
 
+    /// <summary>
+    /// Code gate finding 7 (codex): a round whose decision is a DEFERRAL is not recorded on either side — the size waits with the authors. Before the
+    /// fix the authors were deferred and the size was measured and written to the database alone, so the file (unreadable now, readable later) and
+    /// the database disagreed on the size for ever.
+    /// </summary>
+    [Fact]
+    public async Task ADeferredRound_HasNoSizeWrittenEither_TheSessionFileDidNotRead()
+    {
+        await RecordTwoCodeRoundsLiveAsync();
+        StripSizes();
+        var sessionFile = Directory.GetFiles(Path.Combine(Data, "sessions"), "session-*.json").Single();
+        await File.WriteAllTextAsync(sessionFile, "{ torn", Ct);
+        var before = StoreDump.AuthorsAndSize(Data);
+
+        using var rig = Rig();
+        await rig.RunAsync();
+
+        rig.Counts.Deferred[BackfillWhy.FileUnreadable].Should().BeGreaterThan(0, "a file that exists but does not load defers every round of its gate");
+        rig.Counts.SizeWritten.Should().Be(0, "a deferred round is not recorded on either side: the size is retried with the authors, never written to the database alone");
+        rig.Writes.Writes.Should().Be(0);
+        StoreDump.AuthorsAndSize(Data).Should().Be(before);
+    }
+
     [Fact]
     public async Task ALiveSize_IsNeverReplaced()
     {

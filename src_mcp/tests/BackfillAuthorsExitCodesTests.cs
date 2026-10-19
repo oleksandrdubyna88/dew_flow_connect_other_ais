@@ -33,6 +33,21 @@ public sealed class BackfillAuthorsExitCodesTests
         return OneShotProcess.Run(info, TimeSpan.FromMinutes(2));
     }
 
+    /// <summary>
+    /// Code gate finding 19 (kimi): the summary's four deferral fields and the exit-75 check are hand-kept lists over <see cref="BackfillWhy"/>. A deferral
+    /// counted under a reason the summary cannot name must refuse loudly — never print zeros and exit 0 while the counts say "run again".
+    /// </summary>
+    [Fact]
+    public void ADeferralTheSummaryCannotName_IsRefusedLoudly_NeverCountedAsZero()
+    {
+        var counts = new BackfillCounts();
+        counts.Deferred.Add(BackfillWhy.Computed);
+
+        var act = () => BackfillSummary.DeferredOf(counts);
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*Computed*");
+    }
+
     // ---------- 0 ----------
 
     [Fact]
