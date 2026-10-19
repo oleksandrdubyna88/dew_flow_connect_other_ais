@@ -36,6 +36,14 @@ public static class ObservationKinds
     public const string Observed = "observed";
     public const string Partial = "partial";
     public const string Unobserved = "unobserved";
+
+    /// <summary>How bad a kind is: <c>observed</c> 0 &lt; <c>partial</c> 1 &lt; <c>unobserved</c> 2 — the worst wins wherever kinds are rolled up.</summary>
+    public static int Badness(string kind) => kind switch
+    {
+        Unobserved => 2,
+        Partial => 1,
+        _ => 0,
+    };
 }
 
 /// <summary>One message id with ONE instant — its earliest line — and the model that ANSWERED it.</summary>

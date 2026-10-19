@@ -87,7 +87,7 @@ test('a hidden figure names the consumer coai cannot count', () => {
 test('an unavailable figure says why — never 0 and never infinity', () => {
   const line = ratioLine(ratio({ unavailable: 'percent-did-not-rise' }));
 
-  assert.equal(line, 'rounds per 1 % of acme (weekly): unavailable — the percentage did not rise between the last readings');
+  assert.equal(line, 'rounds per 1 % of acme (weekly): unavailable — the percentage has not risen yet');
   assert.doesNotMatch(line, /Infinity|NaN|≈ 0\b/);
   assert.match(ratioLine(ratio({ unavailable: 'window-reset' })), /the window reset between the last readings/);
   assert.match(ratioLine(ratio({ unavailable: 'missing-reading' })), /a launch between the readings has no reading of its own/);

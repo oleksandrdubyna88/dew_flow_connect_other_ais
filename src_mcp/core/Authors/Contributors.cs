@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using Stage = CoaiMcp.Core.Rounds.Stage;
 
 namespace CoaiMcp.Core.Authors;
 
@@ -52,7 +53,7 @@ public static class Contributors
     {
         var set = Of(upToN, withBeforeOpen);
         var round = new RoundRef(stage, number, WindowKind.Round);
-        var first = upToN.FirstOrDefault(candidate => candidate.Stage == "CodeReview");
+        var first = upToN.FirstOrDefault(candidate => candidate.Stage == nameof(Stage.CodeReview));
         var isFirstCode = first is not null && first.Stage == stage && first.Number == number;
 
         return isFirstCode ? set with { Items = [] } : set with { Items = [.. set.Items.Where(item => item.ActiveIn.Contains(round))] };

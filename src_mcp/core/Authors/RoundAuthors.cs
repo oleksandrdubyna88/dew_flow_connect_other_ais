@@ -60,7 +60,8 @@ public sealed record CheckoutWrites(string Root, int Calls);
 /// <summary>
 /// What one round's authors are: the rows, the totals of what is never guessed into a row, the state and, per window, the same.
 /// The round-level members are the roll-up: the WORST window state, reasons distinct in window order, totals summed — and
-/// <see cref="ActivityTotals.Unknown"/> (with <paramref name="UnobservedLaunches"/> = −1) when any window is unobserved.
+/// <see cref="ActivityTotals.Unknown"/> (with <paramref name="UnobservedLaunches"/> = −1) when any window is unobserved. An unobserved
+/// launch with no instant marks EVERY window's count, but the roll-up counts it once: one missing transcript is one item.
 /// </summary>
 public sealed record RoundAuthors(
     string Stage,

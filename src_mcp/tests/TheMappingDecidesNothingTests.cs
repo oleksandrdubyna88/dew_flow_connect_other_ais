@@ -165,6 +165,23 @@ public sealed class TheMappingDecidesNothingTests
     }
 
     [Fact]
+    public void AMessageAndAWriteOfLocalKind_AreReadAsTheInstantTheyName()
+    {
+        var local = new DateTime(2026, 10, 14, 12, 0, 0, DateTimeKind.Local);
+        var write = new ObservedWrite("main", local, local.AddMinutes(1), "Edit", new WriteTarget(WriteTargetKind.Checkout, "d:/x"));
+        var session = Session(ObservationState.Observed, writes: [write]) with
+        {
+            Messages = [new ObservedMessage("main", "m1", local, "opus", "claude-opus-5-5", "high", new TokenUsage(Input: 1, CacheCreation: 0, CacheRead: 0, Output: 1), true)],
+        };
+
+        var observation = AttributionMapping.Observation(session);
+
+        observation.Messages.Single().At.Should().Be(new DateTimeOffset(local.ToUniversalTime()), "a local-kind instant is converted, never relabelled as UTC");
+        observation.Writes.Single().At.Should().Be(new DateTimeOffset(local.ToUniversalTime()));
+        observation.Writes.Single().AnsweredAt.Should().Be(new DateTimeOffset(local.AddMinutes(1).ToUniversalTime()));
+    }
+
+    [Fact]
     public void ARoundWithNoRecordedStart_HasNone()
     {
         var round = Record(RoundRecord.Done) with { StartedUtc = default };

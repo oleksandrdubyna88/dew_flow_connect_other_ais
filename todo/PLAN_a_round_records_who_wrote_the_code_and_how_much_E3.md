@@ -1,6 +1,6 @@
 # PLAN — E3: the caller's own transcript, read text-free (`CallerTranscript` → `ObservedSession`)
 
-> Status: **E3.S1–S5 implemented on `feat/round-authors-e3`, 2026-10-18, rebased onto main `045cd9191` (after #851, #852, #856): S1–S3 at 5d1ff6f79/6698fb40a/6002f001f, the S1–S3 judge fixes c03556bee, S4 50c887f72, S5 97df6cb34; the owner-approved switch of the old copies to the shared helpers 37a9117e2; the S4/S5 judge fixes 308f6e34b; the code-gate fix afc9b0599; three security fixes on write paths 0cef98490, 72a8d7397, 14781fb64 and the gate's fail-closed drive fix 1d3938863. Code gate: round 1 `proceed` (12 of 16 reviewers; 16 rejected with reasons, 1 accepted and fixed), round 2 `proceed` (12 of 16; 8 rejected, 1 accepted and fixed) — §5.1. Not merged; stays in `todo/` until the parent promotes with all its stories documents (planning-docs, *A plan split into epics and stories*).** Epic E3 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
+> Status: **E3.S1–S5 implemented on `feat/round-authors-e3`, 2026-10-18, rebased onto main `045cd9191` (after #851, #852, #856): S1–S3 at 5d1ff6f79/6698fb40a/6002f001f, the S1–S3 judge fixes c03556bee, S4 50c887f72, S5 97df6cb34; the owner-approved switch of the old copies to the shared helpers 37a9117e2; the S4/S5 judge fixes 308f6e34b; the code-gate fix afc9b0599; three security fixes on write paths 0cef98490, 72a8d7397, 14781fb64 and the gate's fail-closed drive fix 1d3938863. Code gate: round 1 `proceed` (12 of 16 reviewers; 16 rejected with reasons, 1 accepted and fixed), round 2 `proceed` (12 of 16; 8 rejected, 1 accepted and fixed), round 3 over the security fixes `good_enough` (13 of 16; 14 rejected, 3 accepted and fixed) after main b531b94f3 was merged in on 2026-10-19 — §5.1. Not merged; stays in `todo/` until the parent promotes with all its stories documents (planning-docs, *A plan split into epics and stories*).** Epic E3 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
 > Scope: `src_mcp/src/Store` — a new reader keyed by the caller's session id, the text-free read helpers lifted out of
 > `AgentLog.cs` (its behaviour kept), and one helper in `src_mcp/runners` widened. No schema step, no call site in
 > `RoundEngine.cs`/`PanelService.cs`, nothing persisted: E5 stores, E4 attributes. Five stories; ONE cornerstone,
@@ -1435,14 +1435,40 @@ S1–S3 landed as three commits on the branch — b24c81ae, 64ee32a6, f9da2839 �
   vendors E1 never measured; performance points re-raised against the measured 273-file bound; `AgentLog.Parse` throwing
   on a non-string `timestamp` is NOT a change of this diff — main's catch was `JsonException` only — and is reported to
   the owner as an older defect; `CallRecord` is a per-read accumulator, not a contract; a pre-existing junction gives the
-  transcript no new capability), 1 accepted and fixed (1d3938863). 72a8d7397 and 14781fb64 landed after round 2 and were
-  not gate-reviewed.
+  transcript no new capability), 1 accepted and fixed (1d3938863). 72a8d7397 and 14781fb64 landed after round 2; round 3
+  reviewed them.
+- **Main merged in, 2026-10-19** (merge, not rebase, by the owner's wish): origin/main b531b94f3 (mcp 0.60.1, #860, #849),
+  no conflicts, merge commit 5bcd1feee.
+- **Code gate, round 3** (`again`, judge session): the base was `gate-base/e3-security` (a619a06d9) — a commit with no
+  working tree, the clean merge of 0cef98490 with origin/main b531b94f3 — so the diff was EXACTLY 1d3938863, 72a8d7397,
+  14781fb64 and 97cb2ac14 (22 KB, 5 files, all shown; main's own changes left out on purpose). Verdict `good_enough`
+  (rounds exhausted), gating count 13 over a threshold of 5, 13 of 16 reviewers (kimi: one timeout, two `exit 77` not
+  signed in). 17 findings: **3 accepted and fixed** — the junction/link residual is now stated in the code
+  (`CheckoutRoots` and `LocalPaths` remarks; doc only, no behaviour); `CallerDeclaration.KnownVendors` said the
+  caller-transcript reader's guard reads it, which is false (the reader uses the closed word shape; only VendorOf and the
+  E3.S5 test read it), so the comment now says what runs; and `KnownVendors` was a writable `string[]`, now an
+  `IReadOnlyList<string>` property — RED first (`TheVendorList_CannotBeRewrittenThroughWhatItExposes`: "no exception was
+  thrown"), GREEN after. **14 rejected with reasons checked in the code**: `KeysOf` already uses `EnumerateFiles` (two
+  findings); `File.Exists`/`Directory.Exists` never throw; `Path.GetPathRoot` does not throw on a drive-rooted string
+  and `DriveInfo`'s throw is caught; a "fallback" for relative paths that does not exist (`AskableDirectory` returns empty
+  on the raw-text rule); the raw-segment differential is what 14781fb64 fixed; the network-drive check is behind
+  `CheckoutProbes`; `module_server.md` documents behaviour, not review history (two findings); a public `Unobserved`
+  factory does not open a door the public record constructors do not already open; and four performance/UX points on a
+  reader with no production caller in E3 (bounded by `ReadBudget` and the 64 KiB meta cap; E5 wires it). The reply was
+  seen in full, with its `commands`: *work autonomously* (applied: RED-GREEN for the code fix, docs updated, the full suite
+  run; the stage sequence's merge and deploy are the coordinator's, not this session's) and *ask the consultants first*
+  (no question was asked).
 - **Full suite, observed once** (`CoaiMcp.Tests.exe` at afc9b0599, lowered, on a machine loaded by other sessions):
   11 321 total, 11 246 passed, 74 skipped, 1 failed — `AskHumanScenarioTests.RequireRefusesTheThirdBatch_AskConsultantsAnswers_AndItsConsultIdOpensAskHuman`,
   which passed alone twice; in the suite the fake CLI received another test's `exec …` call (`fake-cli: unknown verb`), a
   shared-state defect outside E3 (consultants), reported and not fixed here.
-- **Tests, observed (final).** The E3 classes + `AgentLogTests`: 237 total, 234 passed, 3 skipped (platform-specific
-  tests), 0 failed.
+- **Full suite, observed again** (`CoaiMcp.Tests.exe` at the merge 5bcd1feee, with every security fix, lowered, 1 h 03 min
+  on a machine loaded by other sessions): 11 392 total, 11 319 passed, 59 skipped, 14 failed — all timing- or
+  load-bound tests outside E3 (stream and ACP usage bounds, review-tree and snapshot disposal, shutdown, the security
+  context characterisations, a rows budget, a conversation cap). **Each of the 14 passed when run alone** (13 filters,
+  one a 16-case theory: 16 of 16). None of them is in a file E3 changes.
+- **Tests, observed (final, at cb10d7eea).** The E3 classes + `AgentLogTests` + `TheRoundKnowsWhoCalledItTests`: 273
+  total, 270 passed, 3 skipped (platform-specific tests), 0 failed.
 
 ## 6. Defects found in the parent plan (recorded, not fixed here)
 

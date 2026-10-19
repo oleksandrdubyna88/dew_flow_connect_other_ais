@@ -87,7 +87,7 @@ internal sealed class AssociationLadder
     {
         var roots = EvidenceIn(window).Where(write => write.Agent == agent && write.Root.Length > 0).Select(write => write.Root)
             .DistinctBy(Repositories.Normalise, StringComparer.OrdinalIgnoreCase).ToList();
-        var here = roots.Where(root => Repositories.Contains(RepositoryOfGate(window.Gate), root)).ToList();
+        var here = roots.Where(writeRoot => Repositories.Contains(RepositoryOfGate(window.Gate), writeRoot)).ToList();
         var elsewhere = roots.Except(here).Order(StringComparer.Ordinal).ToImmutableArray();
 
         return (here.Count, elsewhere.Length) switch
@@ -99,32 +99,26 @@ internal sealed class AssociationLadder
         };
     }
 
-    private LadderVerdict ChildRung(AgentKey agent, Window window)
-    {
-        if (!_agents.TryGetValue(agent, out var self) || self.Parent.IsMain || !_agents.ContainsKey(self.Parent))
-        {
-            return LadderVerdict.Undecided;
-        }
+    private LadderVerdict ChildRung(AgentKey agent, Window window) =>
+        DeclaredParentOf(agent).Any(parent => Of(parent, window).Association is Association.WroteHere or Association.ChildOf)
+            ? new LadderVerdict(Association.ChildOf, Rung.Child, [])
+            : LadderVerdict.Undecided;
 
-        var parent = Of(self.Parent, window).Association;
-
-        return parent is Association.WroteHere or Association.ChildOf ? new LadderVerdict(Association.ChildOf, Rung.Child, []) : LadderVerdict.Undecided;
-    }
+    /// <summary>The agent's parent when it is a declared subagent; nothing for main, an unknown agent, or a parent nobody declared.</summary>
+    private IEnumerable<AgentKey> DeclaredParentOf(AgentKey agent) =>
+        _agents.TryGetValue(agent, out var self) && !self.Parent.IsMain && _agents.ContainsKey(self.Parent) ? [self.Parent] : [];
 
     private LadderVerdict SessionRung(Window window)
     {
         var destinations = EvidenceIn(window).Where(write => write.Root.Length > 0).Select(write => DestinationOf(write.Root))
             .DistinctBy(Repositories.Normalise, StringComparer.OrdinalIgnoreCase).ToList();
-        var theOne = destinations.Count == 1 && SamePlace(destinations[0], RepositoryOfGate(window.Gate));
+        var theOne = destinations.Count == 1 && Repositories.SameRoot(destinations[0], RepositoryOfGate(window.Gate));
 
         return theOne ? new LadderVerdict(Association.SameSession, Rung.Session, []) : new LadderVerdict(Association.Ambiguous, Rung.NoEvidence, []);
     }
 
     /// <summary>The longest <c>repo_path</c> of any gate in the input that holds the root, else the root itself.</summary>
-    private string DestinationOf(string root) =>
-        _repositoryOf.Values.Where(path => Repositories.Contains(path, root)).OrderByDescending(path => Repositories.Normalise(path).Length)
-            .ThenBy(path => path, StringComparer.Ordinal).FirstOrDefault() ?? root;
-
-    private static bool SamePlace(string left, string right) =>
-        Repositories.Normalise(left).Equals(Repositories.Normalise(right), StringComparison.OrdinalIgnoreCase);
+    private string DestinationOf(string writeRoot) =>
+        _repositoryOf.Values.Where(repoPath => Repositories.Contains(repoPath, writeRoot)).OrderByDescending(repoPath => Repositories.Normalise(repoPath).Length)
+            .ThenBy(repoPath => repoPath, StringComparer.Ordinal).FirstOrDefault() ?? writeRoot;
 }
