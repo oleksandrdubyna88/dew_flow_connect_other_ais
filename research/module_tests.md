@@ -4603,14 +4603,14 @@ checks that.
 
 `EveryWriterOfTheSteeringFileTests` (6) plus the shared parser `TestSourceIndex` (the classes of `src_mcp/tests` read from SOURCE with the
 lexer every census here uses — comments and string contents removed — judged on the CONCRETE class: a base class's calls count through each
-class derived from it; a collection counts only when the concrete class carries it itself; a nested class's code is not its outer's).
+class derived from it; a collection counts only when the concrete class carries it itself; a class NESTED in another counts for its outer class and is not judged alone).
 
 | Test | Guarantee |
 |---|---|
 | `EveryClassThatWritesTheSteeringFile_IsInTheSerialFakeCliEnvCollection` | any concrete class whose lineage calls `FakeCliSteering.Write` / `ReadBack` / `MinimalFile` has `[Collection("…")]` naming a collection defined with `DisableParallelization = true` |
 | `TheScan_StillSeesTheSixKnownWriters_AndTheCollectionTheyAreIn` (companion) | the scan finds the six classes that used to write their own copy, finds the `fakecli-env` definition as serial, and finds the collection on each |
 | `NoTestSourceSpellsTheSteeringFilesName_ButTheHelperAndTheTestsThatPinIt` | no other test source spells `fakecli-minimal.json` or `MinimalSteeringFile` (one writer, one path); the allowed files are found, so the scan reads something |
-| `AClassThatWritesOutsideTheSerialCollection_IsAnOffender`, `ABaseClassesWriteCounts_ThroughEachConcreteDerivedClass`, `ANestedClassesWriteBelongsToTheNestedClass_NotToItsOuter` | the parser on synthetic source: outside / parallel-collection writers are named, a call in a string or a comment is not a call, the abstract base is not judged but each concrete derived class is, primary-constructor and nested classes parse |
+| `AClassThatWritesOutsideTheSerialCollection_IsAnOffender`, `ABaseClassesWriteCounts_ThroughEachConcreteDerivedClass`, `ANestedClassesWriteCountsForItsOuterClass_AndANestedClassIsNotJudgedAlone` | the parser on synthetic source: outside / parallel-collection writers are named, a call in a string or a comment is not a call, the abstract base is not judged but each concrete derived class is, primary-constructor and nested classes parse (a helper nested in a placed class is placed; one nested in an unplaced class makes it the offender) |
 
 **Green today on the six classes; watched RED twice on the real tree, then restored:** `[Collection("fakecli-env")]` taken off
 `QuestionRowOnAgyScenarioTests` → `Expected Offenders(TestSourceIndex.Classes) to be empty … but found at least one item
@@ -4629,3 +4629,25 @@ empty … but found at least one item {"ZzBreak.cs"}`.
 in the default (`none`) workspace the rewritten test STAYED GREEN (both folders empty — the finding that added the worktree mode);
 in `worktree` mode `ARepairTest_SeesOnlyItsOwnRoundsRepairFolder` goes red with the repair launch's folder holding `.git` and `app.cs`. D4 (a round removes its own empty repair folder, E3) will no
 longer turn this test red, because it never looks at the folder after the round.
+
+### C11 + S4 — a class that writes process-wide state runs in a serial collection
+
+`EveryClassThatSetsTheProcessEnvironmentTests` (5), on the same `TestSourceIndex` parser (a class NESTED in another counts for its outer class and is
+not judged alone — a private scoped-variable helper inside a placed class runs inside that class's collection; the first version judged nested helpers
+alone and named two `Canary` classes that were never at fault).
+
+| Test | Guarantee |
+|---|---|
+| `EveryClassThatSetsTheProcessEnvironment_IsInASerialCollection` (rule 1, C11) | no concrete class whose lineage calls `Environment.SetEnvironmentVariable(` is outside a collection defined with `DisableParallelization = true` |
+| `EveryClassThatResetsTheSweepThrottle_IsInASerialCollection` (rule 2, C6/J4) | the same for `PanelService.ForgetTheLastSweep(`: it resets a static of the process, and the next `BuildWork` anywhere walks the real temp folder inside its round's deadline |
+| `TheScans_StillSeeTheClassesTheyKnowAreThere` (companion) | the three serial collections are found by their definitions; the scans find `PanelServiceTests`, `ARequestFaultIsNotAnOldBinaryTests`, `VibeRuntimeTests` (environment) and `AScratchSweepRunsOnTheConsultationBeatTests`, `VibeHomesTests`, `TempDirsAreSwept` (throttle) |
+| two synthetic tests | an offender is named; a call spelled in a string or a comment is not a call; a base class's write counts through each concrete derived class |
+
+**Red, before the classes moved (2026-10-19):** rule 2 named exactly the plan's three — `AScratchSweepRunsOnTheConsultationBeatTests`, `TempDirsAreSwept`,
+`VibeHomesTests`. Rule 1 named THREE real classes, not the plan's two: `ARequestFaultIsNotAnOldBinaryTests` (`COAI_DATA_DIR`), `VibeRuntimeTests`
+(`VIBE_MCP_SERVERS`) and **`TheVaultsRequestsAreShapedForTheKeyTests`** (`COAI_TEST_INHERITED_7F3A`, a uniquely named variable — harmless by its name, the same
+shape by the rule; the plan said every other writer was serial). `FluentAssertions`' `BeEmpty` prints only the FIRST item, so the assertion joins the offenders
+into one string. All six classes moved into `fakecli-env` (the serial collections run one after another, so any one isolates them from the parallel ones).
+
+**Break-it (done, then restored):** `[Collection]` taken off `VibeRuntimeTests` and `VibeHomesTests` → rule 1 names `VibeRuntimeTests.cs: VibeRuntimeTests`, rule 2 names
+`VibeHomesTests.cs: VibeHomesTests`. **Limit, stated in the test:** a scan of each class's OWN code — a write made from a static helper is the helper's.

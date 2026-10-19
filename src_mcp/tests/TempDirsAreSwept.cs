@@ -23,7 +23,11 @@ namespace CoaiMcp.Tests;
 /// <para>It runs ONCE per assembly, deletes only what this project named, only what is older than
 /// <see cref="Rule"/>'s window, and never the product's own working directories — so neither a
 /// directory another test run is using right now nor a live round's is touched.</para>
+/// <para>In the serial <c>fakecli-env</c> collection: <c>TheProductSweeps_AtMostOncePerWindow</c> calls <c>PanelService.ForgetTheLastSweep</c>, which resets a static of
+/// the PROCESS, and the next <c>BuildWork</c> anywhere then walks the real temp folder inside its round's deadline (C6 of
+/// <c>todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md</c>). It is also the assembly fixture; the attribute changes nothing about that.</para>
 /// </remarks>
+[Collection("fakecli-env")]
 public sealed class TempDirsAreSwept
 {
     /// <summary>

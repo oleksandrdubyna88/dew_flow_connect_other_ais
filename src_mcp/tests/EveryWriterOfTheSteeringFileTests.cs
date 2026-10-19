@@ -54,7 +54,7 @@ public sealed class EveryWriterOfTheSteeringFileTests
     [Fact]
     public void EveryClassThatWritesTheSteeringFile_IsInTheSerialFakeCliEnvCollection()
     {
-        Offenders(TestSourceIndex.Classes).Should().BeEmpty(
+        string.Join("; ", Offenders(TestSourceIndex.Classes)).Should().BeEmpty(
             "the steering file is one file beside the binary; a writer outside the serial collection runs beside classes that launch the fake CLI and steers them");
     }
 
@@ -129,17 +129,23 @@ public sealed class EveryWriterOfTheSteeringFileTests
     }
 
     [Fact]
-    public void ANestedClassesWriteBelongsToTheNestedClass_NotToItsOuter()
+    public void ANestedClassesWriteCountsForItsOuterClass_AndANestedClassIsNotJudgedAlone()
     {
         var classes = TestSourceIndex.Parse("Synthetic.cs", Definitions + """
             public sealed class Outer
             {
                 void Fine() { }
-                public sealed class Inner { void A() => FakeCliSteering.Write(null!); }
+                private sealed class Inner { void A() => FakeCliSteering.Write(null!); }
+            }
+            [Collection("fakecli-env")]
+            public sealed class PlacedOuter
+            {
+                private sealed class Helper { void A() => FakeCliSteering.Write(null!); }
             }
             public sealed class WithAPrimaryConstructor(string name) : IDisposable { public void Dispose() => FakeCliSteering.Write(null!); }
             """);
 
-        Offenders(classes).Should().BeEquivalentTo(["Synthetic.cs: Inner", "Synthetic.cs: WithAPrimaryConstructor"]);
+        Offenders(classes).Should().BeEquivalentTo(["Synthetic.cs: Outer", "Synthetic.cs: WithAPrimaryConstructor"],
+            "a helper nested in a placed class runs inside its collection, and one nested in an unplaced class makes that class the offender");
     }
 }

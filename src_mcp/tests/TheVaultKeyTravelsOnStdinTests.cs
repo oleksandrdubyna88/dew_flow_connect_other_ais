@@ -176,6 +176,7 @@ public sealed class TheVaultKeyTravelsOnStdinTests : IDisposable
 /// fake CLI cannot stage: a cancelled probe, a binary that vanishes between probe and read, and the
 /// exact shape of each request.
 /// </summary>
+[Collection("fakecli-env")]
 public sealed class TheVaultsRequestsAreShapedForTheKeyTests
 {
     private const string FakeKey = "cfgk_FAKEFAKEFAKEFAKEFAKEFAKEFAKE";

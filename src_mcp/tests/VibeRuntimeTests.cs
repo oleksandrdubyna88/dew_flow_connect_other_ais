@@ -14,6 +14,11 @@ namespace CoaiMcp.Tests;
 /// how the answer, the usage, a failure and the model are read back — each pinned to the cell of
 /// research/RESULTS_vibe_confinement.md it rests on.
 /// </summary>
+/// <remarks>
+/// In the serial <c>fakecli-env</c> collection: <c>AParentVibeVariable_NeverReachesTheLaunch</c> sets <c>VIBE_MCP_SERVERS</c> in the PROCESS, and outside a
+/// collection that value was visible to every class running beside it (C11 of <c>todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md</c>).
+/// </remarks>
+[Collection("fakecli-env")]
 public sealed class VibeRuntimeTests : IDisposable
 {
     private readonly TempDir _out = TempDir.For("coai-answers-vibe-");

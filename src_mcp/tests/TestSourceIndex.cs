@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.RegularExpressions;
 
 namespace CoaiMcp.Tests;
@@ -10,7 +9,8 @@ namespace CoaiMcp.Tests;
 /// <param name="Bases">The identifiers of its base list — base class and interfaces alike; only the ones that name another class here matter.</param>
 /// <param name="Collections">The names in its own <c>[Collection("…")]</c> attributes.</param>
 /// <param name="DefinesSerialCollection">The name it defines with <c>[CollectionDefinition("…", DisableParallelization = true)]</c>, empty when it defines none.</param>
-/// <param name="Code">Its OWN code: no comments, no string contents, the bodies of classes nested inside it cut out.</param>
+/// <param name="Code">Its code: no comments, no string contents, the bodies of classes nested inside it INCLUDED — they run as part of it.</param>
+/// <param name="IsNested">Declared inside another class: not judged on its own, its code is its outer class's.</param>
 internal sealed record TestClass(
     string File,
     string Name,
@@ -18,7 +18,8 @@ internal sealed record TestClass(
     IReadOnlyList<string> Bases,
     IReadOnlyList<string> Collections,
     string DefinesSerialCollection,
-    string Code);
+    string Code,
+    bool IsNested);
 
 /// <summary>
 /// The classes of <c>src_mcp/tests</c>, read from their source — the one parser the structural scans of the test tree share
@@ -32,7 +33,9 @@ internal sealed record TestClass(
 /// <para><b>Judged on the CONCRETE class.</b> A base class's calls count through each class derived from it
 /// (<see cref="Reaches"/>), and a collection counts only when the concrete class carries it itself — which is also what is written in
 /// every derived class of <c>ConsultScenarioBase</c> today. It is a scan of the classes' own code: a call made from a static helper
-/// is the helper's, and is not seen through the test class that calls the helper.</para>
+/// is the helper's, and is not seen through the test class that calls the helper. A class NESTED in another is part of its outer
+/// class (a private scoped-variable helper inside a test class runs inside that class's collection): its code counts for the outer
+/// class and it is not judged alone.</para>
 /// </remarks>
 internal static class TestSourceIndex
 {
@@ -61,8 +64,8 @@ internal static class TestSourceIndex
     public static IReadOnlySet<string> SerialCollections(IEnumerable<TestClass> classes) =>
         classes.Select(c => c.DefinesSerialCollection).Where(name => name.Length > 0).ToHashSet(StringComparer.Ordinal);
 
-    /// <summary>The classes xUnit can run.</summary>
-    public static IEnumerable<TestClass> Concrete(IEnumerable<TestClass> classes) => classes.Where(c => c.IsConcrete);
+    /// <summary>The classes a scan judges: top-level, neither abstract nor static — the ones xUnit runs.</summary>
+    public static IEnumerable<TestClass> Concrete(IEnumerable<TestClass> classes) => classes.Where(c => c.IsConcrete && !c.IsNested);
 
     /// <summary>Whether the class's own attributes put it in one of the <paramref name="serial"/> collections.</summary>
     public static bool InASerialCollection(TestClass c, IReadOnlySet<string> serial) => c.Collections.Any(serial.Contains);
@@ -141,7 +144,8 @@ internal static class TestSourceIndex
             Bases: [.. Identifier.Matches(span.Declaration.Groups["bases"].Value).Select(m => m.Value)],
             Collections: [.. CollectionName.Matches(header).Select(m => m.Groups["name"].Value)],
             DefinesSerialCollection: SerialDefinition(header),
-            Code: OwnCode(span, all, code));
+            Code: code[span.BodyStart..span.BodyEnd],
+            IsNested: all.Any(other => other != span && other.BodyStart < span.Declaration.Index && span.BodyEnd <= other.BodyEnd));
     }
 
     /// <summary>What stands between the previous statement or brace and <c>class Name</c>: the attributes and modifiers.</summary>
@@ -163,22 +167,6 @@ internal static class TestSourceIndex
         var match = Definition.Match(header);
 
         return match.Success && Serial.IsMatch(match.Groups["args"].Value) ? match.Groups["name"].Value : string.Empty;
-    }
-
-    /// <summary>The class's body without the bodies of the classes declared inside it.</summary>
-    private static string OwnCode(Span span, List<Span> all, string code)
-    {
-        var own = new StringBuilder();
-        var cursor = span.BodyStart;
-        var nested = all.Where(other => other != span && other.Declaration.Index > span.BodyStart && other.BodyEnd <= span.BodyEnd)
-            .OrderBy(other => other.Declaration.Index);
-        foreach (var inner in nested.Where(inner => inner.Declaration.Index >= cursor))
-        {
-            own.Append(code, cursor, inner.Declaration.Index - cursor);
-            cursor = Math.Min(inner.BodyEnd + 1, span.BodyEnd);
-        }
-
-        return own.Append(code, cursor, Math.Max(0, span.BodyEnd - cursor)).ToString();
     }
 
     private static IReadOnlyList<TestClass> Discover()
