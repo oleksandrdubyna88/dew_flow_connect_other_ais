@@ -5,7 +5,7 @@ import { hostKind } from '../hostSide';
 import { readProcVersion } from '../wslNetwork';
 
 /**
- * An unreadable /proc/version is said, once (E3 of todo/PLAN_kimi_and_vibe_on_linux.md, code gate).
+ * An unreadable /proc/version is said, once (E3 of research/PLAN_kimi_and_vibe_on_linux.md, code gate).
  *
  * <p>`hostKind` reads the kernel banner to tell WSL2 from WSL1 and from a native Linux host. When the read fails the host is
  * treated as native Linux — a refusal, never a promise — and that used to happen in silence, so a person on a WSL2 window

@@ -22,7 +22,7 @@ public static class KimiLaunch
     public static string ModelRefusal(string model) => KimiModels.RefusalFor(model, KimiModels.Curated);
 
     /// <summary>
-    /// D18, lifted for WSL2 by DL1 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c> (E6): Kimi only where it was measured — a Windows host starting a Windows <c>kimi</c>, or a WSL2 host. WSL1 is not WSL2 and a native
+    /// D18, lifted for WSL2 by DL1 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c> (E6): Kimi only where it was measured — a Windows host starting a Windows <c>kimi</c>, or a WSL2 host. WSL1 is not WSL2 and a native
     /// Linux host is not measured at all, each refused with its own sentence; a WSL bridge named as the executable of a Windows host is the Linux side by another door. The very sentences Vibe's launch control
     /// answers (<see cref="HostAdmission"/>), with Kimi's name.
     /// </summary>

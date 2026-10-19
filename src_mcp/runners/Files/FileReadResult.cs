@@ -1,5 +1,5 @@
 // Ported from wsl_care (MIT, same copyright holder): src_daemon/src/WslCare.Core/Files/IFileSystem.cs @ 0a5c72d3 — the closed union
-// `FileReadResult` only (DL2 of todo/PLAN_kimi_and_vibe_on_linux.md), verbatim in shape.
+// `FileReadResult` only (DL2 of research/PLAN_kimi_and_vibe_on_linux.md), verbatim in shape.
 namespace CoaiMcp.Runners.Files;
 
 /// <summary>What reading a file produced: its bytes, nothing there, or a file that is there and cannot be read.</summary>

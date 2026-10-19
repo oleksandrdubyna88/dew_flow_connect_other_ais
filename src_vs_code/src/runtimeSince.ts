@@ -45,7 +45,7 @@ export const KIMI_RUNTIME_SINCE = '0.57.0';
 
 /**
  * The first `coai-mcp` that RUNS a Vibe row on a Linux host — on WSL2 only, in that release (DL1 of
- * todo/PLAN_kimi_and_vibe_on_linux.md). `RUNTIME_SINCE` answers "does this server know the runtime"; this answers "does it
+ * research/PLAN_kimi_and_vibe_on_linux.md). `RUNTIME_SINCE` answers "does this server know the runtime"; this answers "does it
  * run it on THIS host", and they are different questions: a 0.57.0 server on WSL knows `vibe` and still refuses the row at
  * launch with the D18 sentence (DL14). The release that carries E2 and E3 is the next `src_mcp` minor after the newest
  * released one (0.58.0 when this was written, `.release-please-manifest.json`), so 0.59.0. <b>Whoever cuts the release keeps
@@ -55,7 +55,7 @@ export const VIBE_ON_LINUX_SINCE = '0.59.0';
 
 /**
  * The first `coai-mcp` that RUNS a Kimi row on a Linux host — on WSL2 only, in that release (DL1 of
- * todo/PLAN_kimi_and_vibe_on_linux.md, E6). Kimi follows Vibe (DL14): 0.58.0 was released from main without either, Vibe-on-Linux shipped
+ * research/PLAN_kimi_and_vibe_on_linux.md, E6). Kimi follows Vibe (DL14): 0.58.0 was released from main without either, Vibe-on-Linux shipped
  * in 0.59.0, and main then released 0.60.0 without Kimi, so Kimi-on-Linux ships in <b>0.61.0</b> at the earliest. Whoever cuts the release keeps it level with the
  * tag, and whichever of the two merges SECOND bumps its constant to the next minor (DL14). `runtimeSinceIsAhead.test.ts` holds this
  * table to the same guard as `RUNTIME_SINCE`.
@@ -132,7 +132,7 @@ export function runtimeSkewNote(installedServerVersion: string, vendors: readonl
 }
 
 /**
- * What a card says about the HOST its row runs on (DL1, DL14 of todo/PLAN_kimi_and_vibe_on_linux.md) — one arm per host
+ * What a card says about the HOST its row runs on (DL1, DL14 of research/PLAN_kimi_and_vibe_on_linux.md) — one arm per host
  * kind, and the arm is what a person is told to DO, so it must be something that works:
  * <ul>
  *   <li><b>wsl2</b>: runs the row from `ON_LINUX_SINCE`, so a server older than that is told to update;</li>

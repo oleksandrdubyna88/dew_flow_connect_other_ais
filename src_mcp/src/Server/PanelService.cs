@@ -1856,7 +1856,7 @@ public sealed class PanelService
     public void SweepScratch() => PruneOldAnswerDirs(_settings.ConsultantHomesRoot, _log);
 
     /// <summary>
-    /// The Kimi lock files of a sign-in folder that is gone or is another folder now, retired (DL7 / F15 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): at server start and on every beat. Linux only — elsewhere
+    /// The Kimi lock files of a sign-in folder that is gone or is another folder now, retired (DL7 / F15 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>): at server start and on every beat. Linux only — elsewhere
     /// <see cref="Runners.Kimi.KimiLockRetirement.Sweep"/> answers 0 at once — and it never throws: a key it cannot decide about is left and logged.
     /// </summary>
     public int SweepKimiLocks() => Runners.Kimi.KimiLockRetirement.Sweep(Runners.Kimi.KimiCredentialsLock.Root, note => _log.Debug("{Note}", note));

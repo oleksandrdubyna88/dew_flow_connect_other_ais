@@ -69,7 +69,7 @@ public sealed class AskAcpSubreaperTests
     public void TheSubreaperSentence_IsThePlansWording()
     {
         LinuxSubreaper.Sentence(13).Should().Be(
-            "coai could not make this process the reaper of its own tree (prctl(PR_SET_CHILD_SUBREAPER) answered errno 13), so it cannot verify Kimi's teardown and does not launch it (DL9 of todo/PLAN_kimi_and_vibe_on_linux.md)");
+            "coai could not make this process the reaper of its own tree (prctl(PR_SET_CHILD_SUBREAPER) answered errno 13), so it cannot verify Kimi's teardown and does not launch it (DL9 of research/PLAN_kimi_and_vibe_on_linux.md)");
         // The real Become() is NEVER called here on Linux: this host would become a subreaper and collect every other test's orphans (as zombies it never reaps).
         // Its Linux arm is the supervise-tree / shim-acp children of SupervisedTeardownLinuxTests, which exit 65 unless it answered Became.
         if (!OperatingSystem.IsLinux())

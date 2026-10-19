@@ -6,7 +6,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// The maker of the ONE link an owned Vibe home may hold (DL2 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>; A1 spec §3.2; S-V3, S-V5,
+/// The maker of the ONE link an owned Vibe home may hold (DL2 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>; A1 spec §3.2; S-V3, S-V5,
 /// S-V6, S-V14, S-V15): judged through a descriptor, names scanned, the buffer zeroed, the link made at a path that does not exist and read
 /// back RAW — and a failure leaves NOTHING at the name and never a copy.
 /// </summary>

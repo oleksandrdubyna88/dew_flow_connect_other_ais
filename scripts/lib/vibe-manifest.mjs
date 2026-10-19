@@ -1,4 +1,4 @@
-// lib/vibe-manifest.mjs — the per-platform half of scripts/vibe-home-manifest.mjs (DL3 of todo/PLAN_kimi_and_vibe_on_linux.md):
+// lib/vibe-manifest.mjs — the per-platform half of scripts/vibe-home-manifest.mjs (DL3 of research/PLAN_kimi_and_vibe_on_linux.md):
 // which entry a write replaces, where a not-yet-enforced entry is kept, and an inventory of a home that never reads through a link.
 // The rule lists (VARYING, VARYING_FOLDERS) stay in the script itself: VibeHomeTests parses them there.
 import { createHash } from 'node:crypto';

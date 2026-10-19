@@ -11,7 +11,7 @@
     "re-run this script after every Vibe update to measure it. `seen` is informational. One entry per version PER PLATFORM",
     "(`platform` as node spells it; an entry without it is win32). `staged`: entries measured for a platform the shipped coai-mcp",
     "does not tell apart yet (it reads `versions` by version alone) - NOT enforced; `--unstage <platform>` moves them into",
-    "`versions` in the change that makes the C# read `platform` (DL3 of todo/PLAN_kimi_and_vibe_on_linux.md)."
+    "`versions` in the change that makes the C# read `platform` (DL3 of research/PLAN_kimi_and_vibe_on_linux.md)."
   ],
   "pinnedPrefix": "logs/session/plugins/",
   "varying": [

@@ -9,7 +9,7 @@ import { DEFAULT_VENDORS, type Vendor } from '../vendors';
 import { panelState, runPanel } from './panelPageHarness';
 
 /**
- * The card note is rendered ESCAPED (E3 of todo/PLAN_kimi_and_vibe_on_linux.md, code gate, security).
+ * The card note is rendered ESCAPED (E3 of research/PLAN_kimi_and_vibe_on_linux.md, code gate, security).
  *
  * <p>`runtimeSkewNote` interpolates `vendor.id` into the sentence a card shows — and a row's id comes from settings a person
  * (or a file somebody else wrote) edits. The note is HTML-escaped where the card draws it (`modelCard.ignoredNote`); this

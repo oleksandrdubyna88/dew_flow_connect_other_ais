@@ -136,7 +136,7 @@ async function answered(underWsl: () => Promise<boolean>): Promise<boolean> {
 }
 
 /**
- * Which host this extension runs on, as far as a Vibe row cares (DL1 of todo/PLAN_kimi_and_vibe_on_linux.md): WSL2 runs it,
+ * Which host this extension runs on, as far as a Vibe row cares (DL1 of research/PLAN_kimi_and_vibe_on_linux.md): WSL2 runs it,
  * a native Linux host and WSL1 are refused, macOS is not measured, Windows is as it always was. One union, one source —
  * `process.platform` alone cannot tell WSL from a desktop Linux, and a POSIX path family cannot tell either from a Mac.
  */

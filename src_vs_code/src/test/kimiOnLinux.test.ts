@@ -11,7 +11,7 @@ import { kimiNoteFor, vendorInstall, vendorUpdate } from '../vendorTerminal';
 import { VENDOR_PRESETS, type Vendor } from '../vendors';
 
 /**
- * Kimi on a Linux host in the extension — E6 of todo/PLAN_kimi_and_vibe_on_linux.md: what the panel says per host, from which
+ * Kimi on a Linux host in the extension — E6 of research/PLAN_kimi_and_vibe_on_linux.md: what the panel says per host, from which
  * coai-mcp, and what the shared limitation rows claim. The install LINE is `kimiLinuxInstall.test.ts`'s; the marker button is
  * `kimiClearMarker.test.ts`'s.
  *
@@ -166,7 +166,7 @@ interface Row {
 }
 
 // reads-another-program: a positive claim about the shared file the server embeds and the Consultant tab prints — the Kimi rows
-// E6 names (`todo/PLAN_kimi_and_vibe_on_linux.md`), from research/RESULTS_kimi_confinement.md section 29.
+// E6 names (`research/PLAN_kimi_and_vibe_on_linux.md`), from research/RESULTS_kimi_confinement.md section 29.
 const ROWS = (JSON.parse(readFileSync(repo('shared', 'consultant-limitations.json'), 'utf8')) as { rows: Row[] }).rows;
 const kimiRow = (platform: string): Row => {
   const row = ROWS.find((one) => one.runtime === 'kimi' && one.platform === platform);

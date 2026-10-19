@@ -5,7 +5,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// The tri-state liveness (DL9 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>, the cadence consult 8df043b8): <c>Gone</c> only for ENOENT, another start time or an exited entry;
+/// The tri-state liveness (DL9 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>, the cadence consult 8df043b8): <c>Gone</c> only for ENOENT, another start time or an exited entry;
 /// <c>Unknown</c> for any other failure — never <c>Gone</c>, because a caller that CLEARS something because a process is gone must not read "could not look" as "gone".
 /// Over a fake <c>/proc</c> and a fake start-time read, so every answer runs on every platform.
 /// </summary>

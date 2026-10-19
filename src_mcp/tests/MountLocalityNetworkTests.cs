@@ -5,7 +5,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// DL6's network-filesystem paragraph (decided 2026-10-17 as a stated default, pending the owner — Q7 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>; E6): a sign-in folder on <c>nfs</c>, <c>nfs4</c>, <c>cifs</c>,
+/// DL6's network-filesystem paragraph (decided 2026-10-17 as a stated default, pending the owner — Q7 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>; E6): a sign-in folder on <c>nfs</c>, <c>nfs4</c>, <c>cifs</c>,
 /// <c>smb3</c>, <c>fuse.sshfs</c>, <c>ceph</c> or <c>glusterfs</c> is refused with its cure by default, because a Kimi on ANOTHER machine sharing that home refreshes the same rotating token and no lock here can see it.
 /// An explicit, default-off override turns the refusal into a one-line warning. Over a fake table, so it runs on every platform.
 /// </summary>
