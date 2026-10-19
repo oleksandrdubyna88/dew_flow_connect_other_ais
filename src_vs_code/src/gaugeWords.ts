@@ -2,7 +2,7 @@ import { clockOf } from './resetWords';
 import type { GaugeReading, GaugeWindow } from './teamServerApi';
 
 /**
- * The vendor's own gauge, as a person reads it (story 6.2 of todo/PLAN_every_round_is_counted.md):
+ * The vendor's own gauge, as a person reads it (story 6.2 of research/PLAN_every_round_is_counted.md):
  * `codex (weekly): 37 % used · resets Thu 07:00 · seen 12 min ago` per reported window, and the window's rounds per 1 %,
  * or why there is none. Pure — every sentence is a test.
  *

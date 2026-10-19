@@ -34,14 +34,14 @@ public abstract record ReviewAttempt
     /// part each; empty for an attempt of one launch.
     /// </summary>
     /// <remarks>
-    /// The LEDGER's (story 3.3 of todo/PLAN_every_round_is_counted.md): <see cref="JobRunner"/> writes one line per part,
+    /// The LEDGER's (story 3.3 of research/PLAN_every_round_is_counted.md): <see cref="JobRunner"/> writes one line per part,
     /// linked by the job's id, while the attempt's own usage stays the sum the job reports.
     /// </remarks>
     public IReadOnlyList<LaunchPart> Launches { get; init; } = [];
 
     /// <summary>
     /// What the attempt's launch RAN WITH — its CLI, that CLI's version, its effort and tier each with its source — for
-    /// every ledger line the attempt writes (story 3.4 of todo/PLAN_every_round_is_counted.md). A follow-up continues the
+    /// every ledger line the attempt writes (story 3.4 of research/PLAN_every_round_is_counted.md). A follow-up continues the
     /// same conversation with the same options, so one value serves both of its lines.
     /// </summary>
     public LaunchOptions RanWith { get; init; } = LaunchOptions.None;
@@ -52,7 +52,7 @@ public abstract record ReviewAttempt
     /// </param>
     /// <param name="Usage">
     /// What the launch reported — the WHOLE usage, cached and reasoning included, so the ledger line carries what the
-    /// vendor said (story 3.1 of todo/PLAN_every_round_is_counted.md: two longs used to drop the rest on the floor).
+    /// vendor said (story 3.1 of research/PLAN_every_round_is_counted.md: two longs used to drop the rest on the floor).
     /// </param>
     public sealed record Answered(string Raw, Usage Usage) : ReviewAttempt
     {
@@ -151,7 +151,7 @@ public sealed class ReviewLauncher(
             var first = Confined(runtime, vendor, job, work, environment);
             var attempt = await AttemptAsync(first, job, ct);
 
-            // Every line the attempt writes says what its launch ran with (story 3.4 of todo/PLAN_every_round_is_counted.md):
+            // Every line the attempt writes says what its launch ran with (story 3.4 of research/PLAN_every_round_is_counted.md):
             // labelled from the confined launch itself — its argv and the slot's environment — never from the job's request.
             return attempt with { RanWith = RanWith(vendor, job, first, environment) };
         }
@@ -194,7 +194,7 @@ public sealed class ReviewLauncher(
     /// The first launch has answered and been billed by the time this runs; a cancellation that escaped from here took
     /// its usage with it, and the runner's catch could write a line for the kill but not for the launch that preceded
     /// it. Caught HERE and nowhere earlier: a first launch that throws has nothing earlier to keep, and the runner's
-    /// own catch records it (story 3.2 of todo/PLAN_every_round_is_counted.md).
+    /// own catch records it (story 3.2 of research/PLAN_every_round_is_counted.md).
     /// </remarks>
     private static async Task<ReviewerLaunch> FollowedUpAsync(ReviewerExecutor executor, ReviewerInvocation followUp, CancellationToken ct)
     {
@@ -274,7 +274,7 @@ public sealed class ReviewLauncher(
     /// <remarks>
     /// The continuation decides — it is the later and the more specific word — and both launches are billed,
     /// whatever it came to: the attempt carries the two launches' usage together, a terminal outcome included
-    /// (story 3.1 of todo/PLAN_every_round_is_counted.md closed the gap this used to document — a continuation that
+    /// (story 3.1 of research/PLAN_every_round_is_counted.md closed the gap this used to document — a continuation that
     /// ended badly dropped the first launch's tokens).
     /// </remarks>
     private static ReviewAttempt Continued(ReviewerLaunch first, ReviewerLaunch second) =>
@@ -282,7 +282,7 @@ public sealed class ReviewLauncher(
             ", and again when asked in the same conversation after an auto-denied command");
 
     /// <summary>
-    /// The two launches as the ledger's two lines (story 3.3 of todo/PLAN_every_round_is_counted.md): the first — whose
+    /// The two launches as the ledger's two lines (story 3.3 of research/PLAN_every_round_is_counted.md): the first — whose
     /// clean exit said nothing, which is what a follow-up is asked after — and the follow-up, each with what IT reported.
     /// </summary>
     /// <remarks>

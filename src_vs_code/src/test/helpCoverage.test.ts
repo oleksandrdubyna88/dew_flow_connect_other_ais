@@ -174,7 +174,7 @@ test('every language says what the Team server tab shows from a newer server —
 });
 
 test('every language says the Team server tab shows the server\'s own rounds, the runs without a round apart, and count unavailable for an older server', () => {
-  // Story 5.2 of todo/PLAN_every_round_is_counted.md: the tab's Vendors column gains a Rounds block counted by the SERVER
+  // Story 5.2 of research/PLAN_every_round_is_counted.md: the tab's Vendors column gains a Rounds block counted by the SERVER
   // over 5 h / 24 h / 7 d. The block's words are English in every language, as every control name here is.
   const article = HELP_ARTICLES.find((one) => one.id === 'the-rounds-log');
   assert.ok(article !== undefined, 'the rounds-log article has been renamed, and this test is now asserting nothing');
@@ -187,7 +187,7 @@ test('every language says the Team server tab shows the server\'s own rounds, th
 });
 
 test('every language says the spending tab prices each line at its own model and marks a floor ≥', () => {
-  // Story 2.5 of todo/PLAN_every_round_is_counted.md: the tab now prices line by line and shows `≥` when a line could not
+  // Story 2.5 of research/PLAN_every_round_is_counted.md: the tab now prices line by line and shows `≥` when a line could not
   // be priced. Same blind spot as above — a translation a release out of date is not a MISSING one — so the one string
   // every language carries, the mark and its example figure, is asked for in all five.
   const article = HELP_ARTICLES.find((one) => one.id === 'what-each-ai-has-used');
@@ -201,7 +201,7 @@ test('every language says the spending tab prices each line at its own model and
 });
 
 test('every language says the Rounds block comes first on the spending tab, and that a count nobody has is words, never 0', () => {
-  // Stories 2.2–2.4 of todo/PLAN_every_round_is_counted.md: the tab's FIRST block counts rounds per vendor row over
+  // Stories 2.2–2.4 of research/PLAN_every_round_is_counted.md: the tab's FIRST block counts rounds per vendor row over
   // 5 h / 24 h / 7 d, and a read that failed (an older coai-mcp, a database that would not open) says *count unavailable*
   // rather than drawing a zero. The block's own words are English in every language, as every control name here is.
   const article = HELP_ARTICLES.find((one) => one.id === 'what-each-ai-has-used');
@@ -215,7 +215,7 @@ test('every language says the Rounds block comes first on the spending tab, and 
 });
 
 test('every language says a probe sits beside the rounds as its own kind, and that every paid launch is its own ledger line', () => {
-  // Story 3.3 of todo/PLAN_every_round_is_counted.md: `coai-mcp --probe-api --model` writes a line per paid completion,
+  // Story 3.3 of research/PLAN_every_round_is_counted.md: `coai-mcp --probe-api --model` writes a line per paid completion,
   // shown on the Rounds block as **probe** and never as a round; and a repair, a follow-up, a retry and a rotated
   // Team-server attempt each write a line of their own, so a vendor's runs count them. The command and the kind's name
   // are English in every language, as every control name here is.

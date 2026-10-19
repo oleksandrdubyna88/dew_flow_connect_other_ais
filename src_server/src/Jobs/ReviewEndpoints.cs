@@ -358,7 +358,7 @@ public static class ReviewEndpoints
             job.TokensOut,
             job.Failure == FailureKind.None ? string.Empty : Wire(job.Failure),
             job.Reason,
-            // A NEW optional field rather than a new failure name (story 3.2 of todo/PLAN_every_round_is_counted.md): every
+            // A NEW optional field rather than a new failure name (story 3.2 of research/PLAN_every_round_is_counted.md): every
             // shipped client branches on `status` and only renders `failure` inside a sentence, and a field an older client
             // never reads is a field it cannot misread — `failure` stays `cancelled`, as it has been.
             job.EndCause,
@@ -375,7 +375,7 @@ public static class ReviewEndpoints
         FailureKind.NotStarted => "not_started",
         FailureKind.Cancelled => "cancelled",
         FailureKind.Lost => "lost",
-        // Its own name (story 4.3 of todo/PLAN_every_round_is_counted.md): the client's shim reads it by name — exit
+        // Its own name (story 4.3 of research/PLAN_every_round_is_counted.md): the client's shim reads it by name — exit
         // `RemoteAsk.NoBudget` — and an older shim renders it inside its failure sentence, as it does every name here.
         FailureKind.NoBudget => "no_budget",
         _ => string.Empty,

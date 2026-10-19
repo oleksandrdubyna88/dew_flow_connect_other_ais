@@ -257,7 +257,7 @@ public sealed record ReviewerInvocation(
     public IReadOnlyList<string> Redact { get; init; } = [];
 
     /// <summary>The effort and the tier this launch put on its CLI's command line — set by the adapter's <c>Build</c>.</summary>
-    /// <remarks>Story 3.4 of todo/PLAN_every_round_is_counted.md: the raw half of what a ledger line says the launch ran
+    /// <remarks>Story 3.4 of research/PLAN_every_round_is_counted.md: the raw half of what a ledger line says the launch ran
     /// with. <see cref="SentOptions"/> says why it sits beside <see cref="Effort"/> rather than replacing it.</remarks>
     public SentOptions Sent { get; init; } = SentOptions.Nothing;
 
@@ -272,7 +272,7 @@ public sealed record ReviewerInvocation(
 
     /// <summary>
     /// The identity of the round this launch belongs to — 32 hex characters the round engine minted when the round
-    /// started (story 4.1 of todo/PLAN_every_round_is_counted.md) — or empty on a launch outside a round: a consultation,
+    /// started (story 4.1 of research/PLAN_every_round_is_counted.md) — or empty on a launch outside a round: a consultation,
     /// a question row, a probe, a harness that builds work by hand.
     /// </summary>
     /// <remarks>
@@ -465,7 +465,7 @@ public interface IReviewerRuntime
     /// by the launcher's kill and repeats nothing. An adapter whose command line REPEATS any of those — the Team server
     /// shim, whose own waiting deadline is an argument fixed when the invocation was built — rebuilds it here, so the
     /// child is told what the parent will enforce (the risk consultation for epic 4 of
-    /// todo/PLAN_every_round_is_counted.md: a repair with forty seconds left advertised the six hundred it was built
+    /// research/PLAN_every_round_is_counted.md: a repair with forty seconds left advertised the six hundred it was built
     /// with). Pure; the executor calls it once per launch, immediately before the process starts.</para>
     /// </remarks>
     ReviewerInvocation ForLaunch(ReviewerInvocation invocation) => invocation;

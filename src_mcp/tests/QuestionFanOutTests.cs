@@ -457,7 +457,7 @@ public sealed class QuestionFanOutTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Story 3.3 of todo/PLAN_every_round_is_counted.md: a failed row's LEDGER line keeps the vendor's reason whole —
+    /// Story 3.3 of research/PLAN_every_round_is_counted.md: a failed row's LEDGER line keeps the vendor's reason whole —
     /// and redacted, like the record. It wrote the summary's 160-character cut, unredacted: the bearer above reached
     /// <c>usage.jsonl</c> though the record had lost it, and the end of a longer sentence never reached it at all.
     /// </summary>

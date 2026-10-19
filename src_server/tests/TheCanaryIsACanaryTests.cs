@@ -5,7 +5,7 @@ using Xunit;
 namespace CoaiServer.Tests;
 
 /// <summary>
-/// The deploy canary is a canary (story 3.5 of <c>todo/PLAN_every_round_is_counted.md</c>): the one real review per
+/// The deploy canary is a canary (story 3.5 of <c>research/PLAN_every_round_is_counted.md</c>): the one real review per
 /// vendor the release script sends is said as its OWN kind, so a spending report tells the deploy's check apart from
 /// a person's review. Until now it was written <c>review</c>, indistinguishable from one except by its token's email
 /// (the paid-path census of <c>research/RESULTS_vendor_quota_gauges.md</c>, row 11).

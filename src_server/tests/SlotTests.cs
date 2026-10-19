@@ -6,7 +6,7 @@ namespace CoaiServer.Tests;
 
 /// <summary>The pure half of the slot machinery: what to launch with, and which account to pick.</summary>
 /// <remarks>
-/// <c>CooldownParserTests</c> lived here until story 5.3b of todo/PLAN_every_round_is_counted.md moved
+/// <c>CooldownParserTests</c> lived here until story 5.3b of research/PLAN_every_round_is_counted.md moved
 /// <c>CooldownParser</c> to the shared runners library; its tests moved with it, to
 /// <c>src_mcp/tests/CooldownParserTests.cs</c>.
 /// </remarks>
@@ -111,7 +111,7 @@ public sealed class SlotSelectorTests
         SlotSelector.Explain([], Now).Should().Contain("no account slots");
     }
 
-    /// <summary>Story 6.1a of todo/PLAN_every_round_is_counted.md: unavailable until recovery proves it safe.</summary>
+    /// <summary>Story 6.1a of research/PLAN_every_round_is_counted.md: unavailable until recovery proves it safe.</summary>
     [Fact]
     public void ABlockedAccountIsNeverPicked_WhateverTheClockSays_AndTheRefusalNamesTheWrongCureAway()
     {

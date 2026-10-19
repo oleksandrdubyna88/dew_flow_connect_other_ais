@@ -381,7 +381,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
 
   /**
    * `--round-counts` and the ledger's last seven days, read at most once a minute and sooner when something ended (story
-   * 2.2 of todo/PLAN_every_round_is_counted.md) — what the Models cards' line and the Rounds block draw from.
+   * 2.2 of research/PLAN_every_round_is_counted.md) — what the Models cards' line and the Rounds block draw from.
    */
   private readonly roundCounts: RoundCountsCache;
 
@@ -847,7 +847,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       // Each model at ITS public list price (3.2, D4) — the window's price book; never this person's typed row rates.
       price: listPriceFrom(PRICE_BOOK),
       now: Date.now(),
-      // The plan prices typed on Setup › Team servers (story 6.2 of todo/PLAN_every_round_is_counted.md) — the share beside a figure.
+      // The plan prices typed on Setup › Team servers (story 6.2 of research/PLAN_every_round_is_counted.md) — the share beside a figure.
       planPrices: planPricesFrom(vscode.workspace.getConfiguration('coai').get(PLAN_PRICES_SETTING)),
     });
   }
@@ -892,7 +892,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       this.usageWindow,
       vendors,
       // Every model the LEDGER names, not only the ones the rows are set to now: a line is priced at the model that
-      // answered it (story 2.5 of todo/PLAN_every_round_is_counted.md), and a row that changed model has history at
+      // answered it (story 2.5 of research/PLAN_every_round_is_counted.md), and a row that changed model has history at
       // the old one, which a map of today's models would leave unpriced.
       await this.modelPrices(vendors, usage.map((line) => line.model)),
       {
@@ -1432,7 +1432,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       cliStatus: await this.vendorCliStatus(vendors),
       cardPrices: await this.cardPrices(vendors),
       roundsSnapshot: this.roundCounts.current(),
-      // Story 6.2 of todo/PLAN_every_round_is_counted.md: the plan prices as stored, and the last one refused at its card.
+      // Story 6.2 of research/PLAN_every_round_is_counted.md: the plan prices as stored, and the last one refused at its card.
       planPrices: planPricesFrom(config.get(PLAN_PRICES_SETTING)),
       planPriceRefusal: this.planPriceRefusal,
       snippetStatus: await pastedSnippetStatus(),
@@ -3948,7 +3948,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    * so deleting them silently is not reversible.</p>
    */
   /**
-   * Save price on Setup › Team servers (story 6.2 of todo/PLAN_every_round_is_counted.md): stored when it is a price (0
+   * Save price on Setup › Team servers (story 6.2 of research/PLAN_every_round_is_counted.md): stored when it is a price (0
    * takes it away), refused AT ITS CARD with the reason when it is not — and then nothing is stored.
    */
   private async savePlanPrice(id: string): Promise<void> {
