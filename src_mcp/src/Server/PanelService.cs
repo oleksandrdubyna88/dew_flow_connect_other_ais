@@ -1923,13 +1923,26 @@ public sealed class PanelService
         session.State.PlanProceeded,
         _settings.Rounds.For(session.State.Stage).Threshold,
         _settings.Rounds.For(session.State.Stage).MaxRounds,
-        session.Rounds)
+        WithoutUnknownMembers(session.Rounds))
     {
         HumanDecision = CurrentAnswer.WordFor(Escalations.DecisionOf(gatesAnswer)),
         HumanAnswer = gatesAnswer?.Answer ?? string.Empty,
         Consultations = _consultations.OpenIn(session.State.RepoPath),
         Pending = session.State.AwaitingResolve ? session.Pending : [],
     };
+
+    /// <summary>
+    /// The rounds as THIS server knows them: the members a newer server wrote (<c>RoundRecord.Unknown</c>, and each reviewer row's)
+    /// belong to the session file, which keeps them, and not to the answer — the extension reads only the members it was built for.
+    /// </summary>
+    private static IReadOnlyList<RoundRecord> WithoutUnknownMembers(IEnumerable<RoundRecord> rounds) =>
+    [
+        .. rounds.Select(r => r with
+        {
+            Unknown = null,
+            ReviewerStates = [.. r.ReviewerStates.Select(v => v with { Unknown = null })],
+        }),
+    ];
 
     private static string Json<T>(T value, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> type) =>
         JsonSerializer.Serialize(value, type);

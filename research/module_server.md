@@ -2019,6 +2019,41 @@ the real one, retried briefly (see *A session is saved under its own scratch nam
 reads as a fresh session rather than a locked repo. Round trail (`RoundRecord`) and pending findings ride in the same file — `status`
 survives a server restart, per the durable-status rule.
 
+### A session file keeps what a newer server wrote (`Unknown` bags)
+
+Several `coai-mcp` processes share one data folder, and a window that was not reloaded after an update runs an OLDER binary.
+That binary used to read a session file with a context that skips what it does not know and write back only what it knew, so
+every member a newer release added was gone after one save (plan:
+[PLAN_a_session_file_keeps_what_a_newer_server_wrote.md](PLAN_a_session_file_keeps_what_a_newer_server_wrote.md)).
+
+- **The bags.** `PersistedSession`, `SessionState`, `PanelConfig`, `RoleGate`, `RoundRecord` and `ReviewerState` each carry
+  `[JsonExtensionData, JsonInclude] Dictionary<string, JsonElement>? Unknown { get; internal set; }` — the members of that record
+  this build does not know, written back as they were; `null` (and not written) when the file had none. The setter is
+  `internal set` on purpose: **`init` builds and then fails at the first load** (`The extension data property 'Unknown' ... cannot
+  bind with a parameter in the deserialization constructor` — the source generator makes an `init` member a constructor
+  parameter), and `private set` does not compile (SYSLIB1038). Nothing mutates the dictionary; `with` copies share it.
+- **The scrub on save.** `SessionStore.Write` serialises `SessionScrub.Scrubbed(session, Retired)`: on a COPY, rebuilt from the
+  reviewer rows up to the session, every bag loses each name of its type's JSON contract (case-insensitive; a known name in a
+  bag would be written twice and the stale copy would win the next read) and each name in `RetiredMembers` (empty today). The
+  caller's snapshot is never changed. A contract's names are worked out once per type (`SessionScrub.KnownNamesOf`), and a bag
+  is copied only when a name has to go. A gate the file never held — a file older than the security lane (2026-10-01) loads
+  `securityLane` as `null`, because the source generator does not run the initializer — is passed through and written as
+  `null`, as before the scrub; the scrub's first version threw `NullReferenceException` there.
+- **The rule for retiring or renaming a member of a bagged type:** add its OLD name to `RetiredMembers.Shipped` and update the
+  committed member list of `EveryBaggedTypesMembers_AreTheListedOnesOrRetired` in the same commit — that test fails the release
+  until both are done. Without it the old name lives in old files' bags for ever; for a rename the old name becomes a bag entry
+  while the new property starts empty.
+- **The answer carries no bag.** `open` and `status` map each round and reviewer row to `Unknown = null`
+  (`PanelService.WithoutUnknownMembers`); the members belong to the file.
+- **What it does not promise.** A record this process builds new has an empty bag (the `SecurityLane` gate the round engine
+  replaces from the settings loses its bag by design). `Finding`, `CallerDeclaration`, `RoundSize` and `PlanSource` are wire
+  types too and have no bag — a member added to one of them is still lost from `pending`, `rejections` and `carried` after an
+  older re-save (an open tail: a persistence projection, a separate plan). The other stores that read and rewrite a JSON
+  record (escalations, consultations, cadence, question-consultant state) have the same exposure and are not fixed here.
+- **Honest limit:** the guard helps only releases AFTER it. A window that still runs an earlier binary strips the file as before.
+- **Checked on the published binary:** the Native AOT `coai-mcp` (win-x64) loaded and saved a planted file through `open` with
+  unknown members at every level: all kept (2026-10-18; before the answer strip the `open` answer still echoed them).
+
 ### The round is written before it runs, not after (`LiveRound`)
 
 A `RoundRecord` is persisted the moment the fan-out is built — `status: running`, `startedUtc`, the
