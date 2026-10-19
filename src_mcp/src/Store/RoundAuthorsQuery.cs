@@ -73,8 +73,7 @@ public static class RoundAuthorsQuery
             return [];
         }
 
-        using var db = new SqliteConnection($"Data Source={file};Pooling=False;Mode=ReadOnly;Default Timeout=5");
-        db.Open();
+        using var db = RoundCounts.OpenReadOnly(file);
         using var snapshot = db.BeginTransaction(deferred: true);
         var facts = Gather(db, new Window(stage, sinceUtc, untilUtc), between);
         snapshot.Commit();

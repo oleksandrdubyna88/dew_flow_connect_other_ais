@@ -42,7 +42,7 @@ public sealed class RoundAuthorsCliScenarioTests : IDisposable
         var parsed = RoundAuthorsMerge.Parse(text);
         parsed.Ok.Should().BeTrue(parsed.Why + " — stdout was: " + text);
 
-        return parsed.Answer;
+        return parsed.Value;
     }
 
     [Fact]

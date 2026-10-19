@@ -37,15 +37,6 @@ internal static class RoundAuthorsMode
     /// <summary>What a request asks for, once it parsed: the selection, the files to add, the rendering and the instant the read ends at.</summary>
     internal sealed record Request(RoundAuthorsSelection Selection, IReadOnlyList<string> Adds, bool Table, string ReadUtc);
 
-    private readonly record struct Step<T>(bool Ok, T Value, string Why)
-    {
-        public static Step<T> Of(T value) => new(true, value, string.Empty);
-
-        public static Step<T> Refuse(string why) => new(false, default!, why);
-
-        public Step<TNext> Then<TNext>(Func<T, Step<TNext>> next) => Ok ? next(Value) : Step<TNext>.Refuse(Why);
-    }
-
     private sealed record Flags(IReadOnlyDictionary<string, IReadOnlyList<string>> Values, IReadOnlySet<string> Switches)
     {
         public string One(string flag) => Values.TryGetValue(flag, out var found) ? found[0] : string.Empty;
@@ -105,7 +96,7 @@ internal static class RoundAuthorsMode
                 return 65;
             }
 
-            answer = added.Answer;
+            answer = added.Value;
         }
 
         output.WriteLine(request.Table ? RoundAuthorsText.Render(answer).TrimEnd('\n') : RoundAuthorsMerge.Serialize(answer));
@@ -113,17 +104,17 @@ internal static class RoundAuthorsMode
         return 0;
     }
 
-    private static MergeOutcome Added(RoundAuthorsAnswer mine, string path, Func<string, string> readFile)
+    private static Outcome<RoundAuthorsAnswer> Added(RoundAuthorsAnswer mine, string path, Func<string, string> readFile)
     {
         try
         {
             var parsed = RoundAuthorsMerge.Parse(readFile(path));
 
-            return parsed.Ok ? RoundAuthorsMerge.Add(mine, parsed.Answer) : parsed;
+            return parsed.Then(theirs => RoundAuthorsMerge.Add(mine, theirs));
         }
         catch (Exception e) when (IsNoReadableFile(e))
         {
-            return new MergeOutcome(false, mine, "it could not be read: " + e.Message);
+            return Outcome<RoundAuthorsAnswer>.Refuse("it could not be read: " + e.Message);
         }
     }
 
@@ -132,15 +123,14 @@ internal static class RoundAuthorsMode
         e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException;
 
     /// <summary>The request, or the refusal sentence — pure over the arguments and the clock.</summary>
-    internal static (bool Ok, Request Value, string Why) Parse(string[] args, TimeProvider clock)
+    internal static Outcome<Request> Parse(string[] args, TimeProvider clock)
     {
         var now = clock.GetUtcNow().UtcDateTime.ToString("O", CultureInfo.InvariantCulture);
-        var step = Tokens(args).Then(flags => WindowOf(flags, now).Then(window => Rest(flags, window)));
 
-        return (step.Ok, step.Value, step.Why);
+        return Tokens(args).Then(flags => WindowOf(flags, now).Then(window => Rest(flags, window)));
     }
 
-    private static Step<Flags> Tokens(string[] args)
+    private static Outcome<Flags> Tokens(string[] args)
     {
         var values = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
         var switches = new HashSet<string>(StringComparer.Ordinal);
@@ -149,11 +139,11 @@ internal static class RoundAuthorsMode
             var problem = Take(args, ref at, values, switches);
             if (problem.Length > 0)
             {
-                return Step<Flags>.Refuse(problem);
+                return Outcome<Flags>.Refuse(problem);
             }
         }
 
-        return Step<Flags>.Of(new Flags(values, switches));
+        return Outcome<Flags>.Of(new Flags(values, switches));
     }
 
     /// <summary>One flag (and its value) taken from the arguments; the refusal sentence, or empty when it was fine.</summary>
@@ -198,7 +188,7 @@ internal static class RoundAuthorsMode
     private static string Refusal(string flag, string value, string what) =>
         value.Length == 0 ? $"{Mode}: `{flag}` {what}" : $"{Mode}: `{flag}` '{value}' {what}";
 
-    private static Step<Window> WindowOf(Flags flags, string now)
+    private static Outcome<Window> WindowOf(Flags flags, string now)
     {
         var since = Instant(flags, "--since", Epoch);
         var until = Instant(flags, "--until", string.Empty);
@@ -206,40 +196,40 @@ internal static class RoundAuthorsMode
         var problem = new[] { since, until, split }.FirstOrDefault(step => !step.Ok);
         if (problem.Why is { Length: > 0 })
         {
-            return Step<Window>.Refuse(problem.Why);
+            return Outcome<Window>.Refuse(problem.Why);
         }
 
         return OrderedWindow(new Window(since.Value, until.Value, split.Value, now));
     }
 
-    private static Step<string> Instant(Flags flags, string flag, string fallback)
+    private static Outcome<string> Instant(Flags flags, string flag, string fallback)
     {
         var text = flags.One(flag);
 
-        return text.Length == 0 ? Step<string>.Of(fallback)
-            : Program.TryParseInstant(text, out var at) ? Step<string>.Of(at.UtcDateTime.ToString("O", CultureInfo.InvariantCulture))
-            : Step<string>.Refuse(Refusal(flag, text, "is not an ISO-8601 UTC instant, such as 2026-10-10T12:00:00Z"));
+        return text.Length == 0 ? Outcome<string>.Of(fallback)
+            : Program.TryParseInstant(text, out var at) ? Outcome<string>.Of(at.UtcDateTime.ToString("O", CultureInfo.InvariantCulture))
+            : Outcome<string>.Refuse(Refusal(flag, text, "is not an ISO-8601 UTC instant, such as 2026-10-10T12:00:00Z"));
     }
 
     /// <summary><c>--until</c> after <c>--since</c>, and <c>--split</c> inside <c>[since, until)</c>: compared textually over the column's own UTC stamps.</summary>
-    private static Step<Window> OrderedWindow(Window window)
+    private static Outcome<Window> OrderedWindow(Window window)
     {
         var until = window.Until.Length == 0 ? window.ReadUtc : window.Until;
 
         return string.CompareOrdinal(until, window.Since) <= 0
-            ? Step<Window>.Refuse($"{Mode}: `--until` '{until}' is not after `--since` '{window.Since}'")
+            ? Outcome<Window>.Refuse($"{Mode}: `--until` '{until}' is not after `--since` '{window.Since}'")
             : SplitInside(window, until);
     }
 
-    private static Step<Window> SplitInside(Window window, string until) =>
+    private static Outcome<Window> SplitInside(Window window, string until) =>
         window.Split.Length > 0 && !Inside(window.Split, window.Since, until)
-            ? Step<Window>.Refuse($"{Mode}: `--split` '{window.Split}' is outside the window [{window.Since}, {until})")
-            : Step<Window>.Of(window);
+            ? Outcome<Window>.Refuse($"{Mode}: `--split` '{window.Split}' is outside the window [{window.Since}, {until})")
+            : Outcome<Window>.Of(window);
 
     private static bool Inside(string at, string since, string until) =>
         string.CompareOrdinal(at, since) >= 0 && string.CompareOrdinal(at, until) < 0;
 
-    private static Step<Request> Rest(Flags flags, Window window)
+    private static Outcome<Request> Rest(Flags flags, Window window)
     {
         var stage = Choice(flags, "--stage", "code", ["code", "plan"]);
         var cohort = Choice(flags, "--cohort", Cohort.First, [Cohort.First, Cohort.Corrective, Cohort.All]);
@@ -247,12 +237,12 @@ internal static class RoundAuthorsMode
         var problem = new[] { stage.Why, cohort.Why, kinds.Why }.FirstOrDefault(why => why.Length > 0);
         if (problem is { Length: > 0 })
         {
-            return Step<Request>.Refuse(problem);
+            return Outcome<Request>.Refuse(problem);
         }
 
         return NoDiffFlags(flags, stage.Value) is { Length: > 0 } conflict
-            ? Step<Request>.Refuse(conflict)
-            : Step<Request>.Of(Compose(flags, window, stage.Value, cohort.Value, kinds.Value));
+            ? Outcome<Request>.Refuse(conflict)
+            : Outcome<Request>.Of(Compose(flags, window, stage.Value, cohort.Value, kinds.Value));
     }
 
     private static Request Compose(Flags flags, Window window, string stage, string cohort, string[] kinds) => new(
@@ -279,21 +269,21 @@ internal static class RoundAuthorsMode
         : flags.Has("--without-elided") ? Refusal("--without-elided", string.Empty, "needs the code stage: a plan has no diff")
         : string.Empty;
 
-    private static (string Value, string Why) Choice(Flags flags, string flag, string fallback, string[] allowed)
+    private static Outcome<string> Choice(Flags flags, string flag, string fallback, string[] allowed)
     {
         var text = flags.Has(flag) ? flags.One(flag) : fallback;
 
-        return allowed.Contains(text) ? (text, string.Empty) : (string.Empty, Refusal(flag, text, $"is not one of {string.Join(", ", allowed)}"));
+        return allowed.Contains(text) ? Outcome<string>.Of(text) : Outcome<string>.Refuse(Refusal(flag, text, $"is not one of {string.Join(", ", allowed)}"));
     }
 
     /// <summary>The kinds counted: a non-empty subset of the five, sorted and made distinct HERE so two spellings of one request are one selection.</summary>
-    private static (string[] Value, string Why) Kinds(Flags flags)
+    private static Outcome<string[]> Kinds(Flags flags)
     {
         var asked = flags.Has("--kinds") ? flags.One("--kinds").Split(',') : ["code", "test"];
         var unknown = asked.FirstOrDefault(kind => !AllKinds.Contains(kind));
 
         return unknown is not null
-            ? ([], Refusal("--kinds", unknown, $"is not one of {string.Join(", ", AllKinds)}"))
-            : ([.. asked.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)], string.Empty);
+            ? Outcome<string[]>.Refuse(Refusal("--kinds", unknown, $"is not one of {string.Join(", ", AllKinds)}"))
+            : Outcome<string[]>.Of([.. asked.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)]);
     }
 }

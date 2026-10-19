@@ -27,9 +27,6 @@ public sealed record RoundAuthorsAnswer(
     IReadOnlyList<ExclusionCount> Exclusions,
     bool EffortMarkerKnown);
 
-/// <summary>A merged answer or the sentence that says why two halves do not add.</summary>
-public sealed record MergeOutcome(bool Ok, RoundAuthorsAnswer Answer, string Why);
-
 /// <summary>
 /// Its OWN source-generated context rather than a line in <c>ServerJsonContext</c>: a report read back from a file must be STRICT — an unknown
 /// property, a missing required one and a null where a value is required are refusals, and those switches are per context. Putting them on the
@@ -60,8 +57,6 @@ internal sealed partial class RoundAuthorsJson : JsonSerializerContext;
 public static class RoundAuthorsMerge
 {
     public const int Format = 1;
-
-    private static readonly RoundAuthorsAnswer Nothing = new(Format, new RoundAuthorsSelection(string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, [], false, false, false), [], [], [], true);
 
     /// <summary>The report of one store: read, decide who is in, count — as an answer of one source. <paramref name="readUtc"/> is the instant the read ends at when <c>--until</c> was not given.</summary>
     public static RoundAuthorsAnswer Report(string dataDir, RoundAuthorsSelection selection, string readUtc)
@@ -97,7 +92,7 @@ public static class RoundAuthorsMerge
     public static string Serialize(RoundAuthorsAnswer answer) => JsonSerializer.Serialize(answer, RoundAuthorsJson.Default.RoundAuthorsAnswer);
 
     /// <summary>A report read back from text. Unknown properties, a missing required one, a wrong type and a null are all refusals, never a guess.</summary>
-    public static MergeOutcome Parse(string text)
+    public static Outcome<RoundAuthorsAnswer> Parse(string text)
     {
         try
         {
@@ -111,10 +106,10 @@ public static class RoundAuthorsMerge
         }
     }
 
-    private static MergeOutcome Accepted(RoundAuthorsAnswer? parsed) =>
+    private static Outcome<RoundAuthorsAnswer> Accepted(RoundAuthorsAnswer? parsed) =>
         parsed is null ? Refused("it holds no report")
         : Misshapen(parsed) is { Length: > 0 } why ? Refused("it is not a round-authors report: " + why)
-        : new MergeOutcome(true, parsed, string.Empty);
+        : Outcome<RoundAuthorsAnswer>.Of(parsed);
 
     /// <summary>
     /// The shapes this program writes and the table and a merge rely on, which the JSON types alone cannot say: an opaque source id of 32
@@ -130,11 +125,11 @@ public static class RoundAuthorsMerge
     private static bool IsSourceId(string id) => id.Length == 32 && id.All(char.IsAsciiHexDigitLower);
 
     /// <summary>Two halves of one population added: the merged answer, or the sentence that says why they are not one population.</summary>
-    public static MergeOutcome Add(RoundAuthorsAnswer mine, RoundAuthorsAnswer theirs)
+    public static Outcome<RoundAuthorsAnswer> Add(RoundAuthorsAnswer mine, RoundAuthorsAnswer theirs)
     {
         var why = Incompatible(mine, theirs);
 
-        return why.Length > 0 ? Refused(why) : new MergeOutcome(true, Merged(mine, theirs), string.Empty);
+        return why.Length > 0 ? Refused(why) : Outcome<RoundAuthorsAnswer>.Of(Merged(mine, theirs));
     }
 
     private static string Incompatible(RoundAuthorsAnswer mine, RoundAuthorsAnswer theirs) =>
@@ -166,8 +161,8 @@ public static class RoundAuthorsMerge
         var sameSource = mine.Sources.Select(source => source.SourceId).Intersect(theirs.Sources.Select(source => source.SourceId), StringComparer.Ordinal).Any();
         var shared = mine.Sources.SelectMany(source => source.Sessions).Intersect(theirs.Sources.SelectMany(source => source.Sessions), StringComparer.Ordinal).Count();
 
-        return sameSource || shared > 0
-            ? $"the reports share {shared} gate session(s){(sameSource ? " and one of them is the same store added twice" : string.Empty)}; adding them would count each twice"
+        return sameSource ? "the same store is added twice; adding it would count each of its gate sessions twice"
+            : shared > 0 ? $"the reports share {shared} gate session(s); adding them would count each twice"
             : string.Empty;
     }
 
@@ -185,5 +180,5 @@ public static class RoundAuthorsMerge
         };
     }
 
-    private static MergeOutcome Refused(string why) => new(false, Nothing, why);
+    private static Outcome<RoundAuthorsAnswer> Refused(string why) => Outcome<RoundAuthorsAnswer>.Refuse(why);
 }

@@ -33,7 +33,7 @@ public static class RoundAuthorsText
     }
 
     private static string SourceLine(RoundAuthorsSource source) =>
-        $"source {source.SourceId[..8]} ({source.Platform}) read {source.ReadUtc}: {source.Sessions.Count} gate session(s)";
+        Printable($"source {source.SourceId[..8]} ({source.Platform}) read {source.ReadUtc}: {source.Sessions.Count} gate session(s)");
 
     private static IEnumerable<string> Section(string cohort, string period, List<CellSums> cells, string stage)
     {
@@ -41,7 +41,7 @@ public static class RoundAuthorsText
         var rows = new List<string[]> { Columns(corrective) };
         rows.AddRange(cells.Select(cell => Row(cell, stage, corrective)));
 
-        return [$"cohort {cohort} | period {period}", .. Aligned(rows), string.Empty];
+        return [Printable($"cohort {cohort} | period {period}"), .. Aligned(rows), string.Empty];
     }
 
     private static string[] Columns(bool corrective) =>
@@ -133,9 +133,17 @@ public static class RoundAuthorsText
         return ["exclusions", .. Aligned(rows)];
     }
 
+    /// <summary>
+    /// A value as the terminal may see it: every control character — an escape that would clear the screen or rewrite a figure, from a store row
+    /// or an <c>--add</c> file — is shown as <c>?</c>. The table's own line breaks are added after, never through here.
+    /// </summary>
+    internal static string Printable(string value) =>
+        value.Any(char.IsControl) ? string.Concat(value.Select(at => char.IsControl(at) ? '?' : at)) : value;
+
     /// <summary>Columns padded to their widest cell, joined by an ASCII separator, the header underlined by dashes — plain text a terminal and a diff both read.</summary>
     private static IEnumerable<string> Aligned(List<string[]> rows)
     {
+        rows = [.. rows.Select(row => row.Select(Printable).ToArray())];
         var widths = Enumerable.Range(0, rows[0].Length).Select(column => rows.Max(row => row[column].Length)).ToArray();
         var lines = rows.Select(row => string.Join(Separator, row.Select((cell, at) => cell.PadRight(widths[at]))).TrimEnd()).ToList();
 

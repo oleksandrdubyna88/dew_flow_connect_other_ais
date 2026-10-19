@@ -55,10 +55,10 @@ public sealed class RoundAuthorsMergeTests : IDisposable
         var union = ReportOf(c);
 
         merged.Ok.Should().BeTrue(merged.Why);
-        merged.Answer.Cells.Should().NotBeEmpty();
-        merged.Answer.Cells.Should().BeEquivalentTo(union.Cells, options => options.WithStrictOrdering());
-        merged.Answer.Exclusions.Should().BeEquivalentTo(union.Exclusions, options => options.WithStrictOrdering());
-        merged.Answer.Sources.Should().HaveCount(2).And.OnlyContain(source => source.Sessions.Count == 2);
+        merged.Value.Cells.Should().NotBeEmpty();
+        merged.Value.Cells.Should().BeEquivalentTo(union.Cells, options => options.WithStrictOrdering());
+        merged.Value.Exclusions.Should().BeEquivalentTo(union.Exclusions, options => options.WithStrictOrdering());
+        merged.Value.Sources.Should().HaveCount(2).And.OnlyContain(source => source.Sessions.Count == 2);
     }
 
     [Fact]
@@ -68,8 +68,8 @@ public sealed class RoundAuthorsMergeTests : IDisposable
         SeedSessions(a, "x1");
         SeedSessions(b, "y1", "y2");
 
-        var one = RoundAuthorsMerge.Add(ReportOf(a), ReportOf(b)).Answer;
-        var other = RoundAuthorsMerge.Add(ReportOf(b), ReportOf(a)).Answer;
+        var one = RoundAuthorsMerge.Add(ReportOf(a), ReportOf(b)).Value;
+        var other = RoundAuthorsMerge.Add(ReportOf(b), ReportOf(a)).Value;
 
         RoundAuthorsMerge.Serialize(WithoutSources(one)).Should().Be(RoundAuthorsMerge.Serialize(WithoutSources(other)));
     }
@@ -82,7 +82,7 @@ public sealed class RoundAuthorsMergeTests : IDisposable
         var first = AnswerOf("one", Sessions("p"), Half("p", 4));
         var second = AnswerOf("two", Sessions("q"), Half("q", 0));
 
-        var merged = RoundAuthorsMerge.Add(first, second).Answer.Cells.Single();
+        var merged = RoundAuthorsMerge.Add(first, second).Value.Cells.Single();
 
         RoundAuthorsCells.Marks(first.Cells.Single()).Should().Equal(["small", "dominated"], "6 rounds, 4 of them on one branch");
         merged.Rounds.Should().Be(12);
@@ -95,7 +95,7 @@ public sealed class RoundAuthorsMergeTests : IDisposable
         var one = AnswerOf("one", ["p"], Round(1, session: "p"));
         var two = AnswerOf("two", ["q"], Round(1, session: "p"));
 
-        var cell = RoundAuthorsMerge.Add(one, two).Answer.Cells.Single();
+        var cell = RoundAuthorsMerge.Add(one, two).Value.Cells.Single();
 
         cell.Rounds.Should().Be(2);
         cell.Sessions.Should().Equal(["p"], "one session id seen by both halves is one session");
@@ -119,6 +119,18 @@ public sealed class RoundAuthorsMergeTests : IDisposable
         RoundAuthorsMerge.Parse("this is not json").Ok.Should().BeFalse();
         RoundAuthorsMerge.Parse("{\"format\":1,\"selection\":{},\"sources\":[],\"exclusions\":[],\"effortMarkerKnown\":true}").Ok.Should().BeFalse("`cells` is missing");
         RoundAuthorsMerge.Parse("null").Ok.Should().BeFalse();
+    }
+
+    /// <summary>The refusal says what is true: an empty store added twice shares no session, so the sentence names the store, not a count of nought.</summary>
+    [Fact]
+    public void TheSameEmptyStoreAddedTwice_IsRefusedAsTheSameStore_WithoutClaimingNoughtSharedSessions()
+    {
+        var empty = AnswerOf("one", []);
+
+        var twice = RoundAuthorsMerge.Add(empty, empty);
+
+        twice.Ok.Should().BeFalse("one store added twice is refused even when it holds nothing");
+        twice.Why.Should().Contain("same store").And.NotContain("share 0", "a count of nought shared sessions says nothing true about why");
     }
 
     [Fact]
@@ -158,7 +170,7 @@ public sealed class RoundAuthorsMergeTests : IDisposable
 
         early.Selection.UntilUtc.Should().BeEmpty("an unset --until is stored as empty, never as the instant it resolved to");
         merged.Ok.Should().BeTrue(merged.Why);
-        merged.Answer.Sources.Select(source => source.ReadUtc).Should().Equal([Stamp(T0.AddDays(10)), Stamp(T0.AddDays(10).AddSeconds(7))]);
+        merged.Value.Sources.Select(source => source.ReadUtc).Should().Equal([Stamp(T0.AddDays(10)), Stamp(T0.AddDays(10).AddSeconds(7))]);
     }
 
     [Fact]
@@ -174,8 +186,8 @@ public sealed class RoundAuthorsMergeTests : IDisposable
 
         before.EffortMarkerKnown.Should().BeFalse("a step-21 file has no reviewer effort");
         merged.Ok.Should().BeTrue(merged.Why);
-        merged.Answer.EffortMarkerKnown.Should().BeFalse();
-        merged.Answer.Cells.Should().BeEquivalentTo(now.Cells, options => options.WithStrictOrdering(), "each cell's reviewer-set key is the one it had before the merge");
+        merged.Value.EffortMarkerKnown.Should().BeFalse();
+        merged.Value.Cells.Should().BeEquivalentTo(now.Cells, options => options.WithStrictOrdering(), "each cell's reviewer-set key is the one it had before the merge");
     }
 
     [Fact]
@@ -189,7 +201,7 @@ public sealed class RoundAuthorsMergeTests : IDisposable
         var parsed = RoundAuthorsMerge.Parse(text);
 
         parsed.Ok.Should().BeTrue(parsed.Why);
-        parsed.Answer.Should().BeEquivalentTo(answer, options => options.WithStrictOrdering());
+        parsed.Value.Should().BeEquivalentTo(answer, options => options.WithStrictOrdering());
         text.Should().NotContain(store).And.NotContain("D:/repo").And.NotContain("D:\\\\", "the document carries no absolute path: no user name, no workspace layout");
         using var document = JsonDocument.Parse(text);
         var numbers = Numbers(document.RootElement).ToList();
