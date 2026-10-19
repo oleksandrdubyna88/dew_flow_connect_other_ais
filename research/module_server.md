@@ -3207,6 +3207,56 @@ creation time, which a save-by-move destroys on Windows and Linux never had; `CO
 points the reader at another CLI's transcripts; and `Open` catches anything at all, because a
 migration step throwing something unlisted must not take down a review it only records.
 
+**The caller's own transcript, read as a record (E3, `src_mcp/src/Store/CallerTranscript.cs`; nothing is persisted until E5).**
+`CallerTranscript.Read(location, budget, fromUtc)` turns the caller's Claude Code session — its main transcript, every
+`subagents/agent-<id>.jsonl` and every `.meta.json` — into an `ObservedSession`: messages, models, effort, tokens, launches, parent
+links and writes, each counted once. It is keyed by the Claude SESSION id and never by `cwd`:
+`Store/CallerTranscriptLocator.cs` takes the id from the session registry (`~/.claude/sessions/<CLAUDE_PID>.json`, read by name), else
+`CLAUDE_CODE_SESSION_ID`, else a stored `rounds.caller`, and finds `<projects>/*/<id>.jsonl` with one non-recursive listing; a stated
+`COAI_CALLER_SESSION` alone is `unobserved: stated id`, a codex or gemini caller `unobserved: no reader for <vendor>`, a missing file
+`unobserved: transcript not found`. `ClaudeHome.Default` is the one place that names the transcript root, and the tests point it at an
+empty temp folder.
+
+**Four states, all distinguishable:** `observed` (also with zero subagents: `IsObservedZero`), `partial: <reason>[ ×N], …` (read on past a
+gap) and `unobserved: <reason>`. A reason is recorded when something was LOST or a counted value is uncertain — an `Agent` call or a meta with
+no transcript, an agent file with no meta, a torn middle line, a torn meta, a line over the cap, a failed read, the read budget, and the
+layout breaks under `inconsistent transcript` (five triggers, the fourth also catching an assistant line with no usable `message.id`).
+A main file with no stamped line is `unobserved: transcript empty` even when the budget stopped the read. A count in `Diagnostics` is enough when the reader could choose between readings and lost
+nothing: a torn LAST line (the CLI's append racing the read), a synthetic line, a refused or unanswered write, a meta that never named a model,
+a value off its shape. Every reason is a const of `ObservationReasons`; nothing read from a transcript can become one.
+
+**Counting, one sentence each.** A message is one `message.id` across all files, its tokens the per-term MAXIMUM over its lines (the last line
+is not always the largest) and its instant its earliest line; `Model`, `Requested` and `Effort` come from that line through closed shapes
+(`TranscriptShapes`) — `Requested` is the meta's alias when it gave one, `Effort` is `unknown` when absent and is never carried over. A launch
+is one agent file or meta (a resumed agent is one); its parent is the file holding the launching `Agent` call, else the meta's
+`parentAgentId`, else main. A write is an `Edit`/`Write`/`MultiEdit`/`NotebookEdit` call whose `tool_result` is present, not an error and
+stamped (`AnsweredUtc`), at its message's instant, in the checkout its path resolved to (`CheckoutRoots`); a shell command is never a write.
+A result that answers no parsed call is ignored, and a repeated block id is one call. A write path is handed to the file
+system only when it is LOCAL (`Store/LocalPaths.cs`, 2026-10-18 security fixes): a drive-rooted path on Windows or a
+single-`/`-rooted one elsewhere, judged on the raw text AND on the normalised directory, never on a network drive (an
+unknown drive type fails closed), never under the host automounts `/net` or `/Network`; anything else is `Unresolved` with
+an empty key, because asking the disk about `\\host\share` makes Windows offer the user's credentials to that host.
+
+**What is read, and what never is.** From a line: `type`, `timestamp`, `agentId`, `isSidechain`, `message.id`, `message.model`, the four usage
+numbers, `requestedModel`, `effort`, a block's `type`, a `tool_use`'s `name` and `id` (and a write tool's one path), a `tool_result`'s
+`tool_use_id` and `is_error`; from a meta `agentType`, `toolUseId`, `parentAgentId` and `model`; from the registry `sessionId`. Never `cwd`, a
+prompt, a description, a message's text, a `toolUseResult`, an object's keys or `tool-results/`. What is KEPT is narrower: every id
+(`message.id`, `agentId`, a block's `id`/`tool_use_id`, a meta's `toolUseId`/`parentAgentId`) only on `TranscriptShapes.Id`, one token of
+letters, digits, `_` and `-` — off it the id reads as absent, and a refused `parentAgentId` leaves the parent unknown. A line is parsed over its raw bytes
+(`TranscriptLine`) and its document disposed before the next line is asked for, so no full-line string exists;
+`NoTextLeavesTheCallerReaderTests` walks every string of every fixture's session for E1's sentinel.
+
+**The bound and the budget.** `fromUtc` bounds a message by its FIRST line. The byte gate (`TranscriptLines.ReadSharedFrom`) skips a line
+stamped before `fromUtc − 3 h` (`StraddleGuard`, 1.5 × the longest message E1 measured) without decoding it; an agent file last written
+before the bound, and one the budget never reached, is read for its head only (off the budget, so every launch keeps its first instant); the main file is always read. `ReadBudget` charges bytes on the SLICE the gate kept and time on
+the whole read. A stop is `partial: read budget`: it drops the stopped file's ids that could still have had a line, lists every launch anyway
+and skips the Agent-count check. `ObservedSession.ReaderVersion` is bumped by any change to a counting rule, and
+`TheReaderVersionIsPinnedToTheFixturesTests` ties it to the fixtures' totals.
+
+`agent_log` is unchanged and still reads through `TranscriptLines.ReadShared`; its property reads go through the same
+`JsonText.StringProperty` (2026-10-18), so a non-string field reads empty there too. The reader has no call site yet: E4 attributes what it reads (the pure core `src_mcp/core/Authors/`, see `module_core.md`, through the one mapping `src/Store/AttributionMapping.cs`)
+and E5 stores it.
+
 **Shape decisions.**
 
 - A **projection, never the source of truth**. The session files are unchanged and still drive every
