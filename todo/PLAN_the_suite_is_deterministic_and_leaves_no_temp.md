@@ -206,6 +206,16 @@ class (one message, always an instant child, only macOS; a 4th failure landed on
 `Expected type to be ReviewerOutcome+Ok, but found ReviewerOutcome+NotStarted`); certain once the stack is seen, which
 Test 1's message will show.
 
+**Outcome (2026-10-19, branch `feat/suite-c2`, E3 S1).** Built as written. `ProcessLauncher` takes a second constructor argument
+`Func<Process, DateTime>? startTimeOf` and reads the start time through `TryStartedAt`: `Win32Exception` or `InvalidOperationException`
+AND `HasExited` → nothing recorded, the launch collects the child's result, `Forget` still runs in `RunAsync`'s `finally`; the
+same exceptions with the child alive → kill, wait, rethrow, as before (`StartedUnidentified` was NOT needed: that verb belongs to the
+ACP transport's supervisor, and `RecordedAsync` already ends a live child itself). RED: `AChildThatExitedBeforeItsStartTimeWasReadTests`
+(S8 at the launcher and through `ReviewerExecutor`, two arms each; S9 two arms) — 4 of 6 red on the unfixed helper (`Win32Exception`,
+`InvalidOperationException`, `NotStarted`), S9 green; S9 watched red once by dropping `&& process.HasExited`. `EndToEndTests.ARoundThatFoundNothing…`
+asserts `all 2` / `all 6 reviewers answered` first. Docs: `module_runners.md` (the launcher row), `module_tests.md` (a section). Open:
+the watch of 20 macOS runs (§10).
+
 ### C3 — a Kimi shim that meets a disposal's probe: a 250 ms stand-in for an instant, inside a 500 ms wait (TIMING, medium)
 
 **Evidence.** `KimiCredentialsLockTests.AShimThatMeetsADisposalsProbe_WaitsItOut_AndTakesItsHold`
@@ -1114,6 +1124,8 @@ the round's `RoundScratch` (`RosterBuilder.cs:107`, `SecurityRoster.cs:30`/`:154
 (defaults under the new stamp on the busy read) then green on Windows, its two companions green throughout; S7 red
 (both folders still exist) then green, with the link and the cannot-remove cases; the four C2 tests not seen in the
 next 20 macOS runs (a watch, §10).
+
+**S1 (C2) status (2026-10-19): built on `feat/suite-c2`, awaiting the macOS CI leg and the 20-run watch** — see C2's Outcome.
 
 **Size.** Three stories: S1 C2 (the launcher helper, S8 both arms, S9, the EndToEnd assertion; the brief pins the
 tracker stand-in's two observations and that the Team server's reader marker is cleared by the launch's normal end) —
