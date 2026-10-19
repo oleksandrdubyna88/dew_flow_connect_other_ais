@@ -31,6 +31,9 @@ public static class GaugeCodes
     /// <summary>The slot is signed out, blocked, or its capture is suspended — nothing was spawned.</summary>
     public const string SlotNotReadable = "slot-not-readable";
 
+    /// <summary>This vendor's runtime has no gauge the server reads (only codex has one today) — nothing was spawned, and the slot is not at fault.</summary>
+    public const string NoGaugeForRuntime = "no-gauge-for-runtime";
+
     /// <summary>The read answered nothing this parser could read: no result, or a result without a limit.</summary>
     public const string Unreadable = "unreadable";
 

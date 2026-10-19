@@ -1725,7 +1725,8 @@ it is answered first and nothing the reader does changes what it is told; then t
 carrying the reading. A requeued attempt (rate-limited, rotated) is not the job's end: no read. The pre-spawn guards,
 each a fixed `GaugeCodes` word in the log:
 
-- a codex slot (`vendor.Runtime`), not signed out, not blocked, capture not suspended (`slot-not-readable`);
+- a codex slot (`vendor.Runtime`): any other runtime has no gauge the server reads and is skipped as `no-gauge-for-runtime` — never as a slot that cannot be read, which is a different thing — before anything else is looked at;
+- a slot not signed out, not blocked, capture not suspended (`slot-not-readable`);
 - a platform that can list descendants — Linux and Windows; macOS refuses to spawn (`platform-unsupported`);
 - **the expiry guard** (`CodexAuthExpiry.Of` → `GaugeCapture.Guard`): the access token's JWT `exp`, read from
   `<slot>/.codex/auth.json` — the one claim decoded, the token never kept or logged — must exceed now by more than
