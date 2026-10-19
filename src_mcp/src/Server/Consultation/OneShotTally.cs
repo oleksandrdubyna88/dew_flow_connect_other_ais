@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Notices;
 using CoaiMcp.Runners.Snapshots;
 
 namespace CoaiMcp.Server;
@@ -23,6 +24,12 @@ internal sealed class OneShotTally(Action<string> sink)
     /// </summary>
     public int Found { get; set; }
 
+    /// <summary>How many candidates the walks have found so far (before git confirms them) — what the budget's refusal names when it ran out while they were being confirmed.</summary>
+    public int Candidates { get; set; }
+
+    /// <summary>The first copy is about to start: everything before it (the walks, git's confirmations) is over — what tells the budget's refusal which phase it ended.</summary>
+    public bool Copying { get; set; }
+
     /// <summary>The repositories the row copies, by full path: a directly granted one first (D6) — whatever its place in the list — then the first parent to find it.</summary>
     public HashSet<string> Planned { get; } = new(GrantedPaths.Comparer);
 
@@ -35,11 +42,15 @@ internal sealed class OneShotTally(Action<string> sink)
     /// <summary>The common-dir keys of the main checkouts the row copies — what a linked worktree is compared with (D9).</summary>
     public HashSet<string> Mains { get; } = [];
 
-    /// <summary>A skip, said to the log's sink and kept on the place for the row.</summary>
+    /// <summary>
+    /// A skip, said to the log's sink and kept on the place for the row — the ONE road every note takes, so it is redacted HERE, once:
+    /// a note names folders on the person's disk, and a folder may be named like a token. The sink and the list get the same text.
+    /// </summary>
     public void Say(string text)
     {
-        Notes.Add(text);
-        sink(text);
+        var safe = Redaction.SafeText(text, Redaction.DetailLimit);
+        Notes.Add(safe);
+        sink(safe);
     }
 
     /// <summary>A limitation: a note, and also a sentence for the prompt.</summary>

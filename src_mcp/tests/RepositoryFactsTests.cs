@@ -136,7 +136,7 @@ public sealed class RepositoryFactsTests : IDisposable
         var main = await RepositoryAsync(_dir.At("main"));
 
         (await AskAsync(plain)).Should().Be(RepositoryFacts.None);
-        (await AskAsync(Path.Combine(main, ".git"))).Should().Be(RepositoryFacts.None, "inside a .git directory is not inside a work tree");
+        (await AskAsync(Path.Combine(main, ".git"))).InsideWorkTree.Should().BeFalse("inside a .git directory is not inside a work tree");
     }
 
     [Fact]
@@ -149,7 +149,7 @@ public sealed class RepositoryFactsTests : IDisposable
         top.IsTop.Should().BeTrue();
         deeper.IsTop.Should().BeFalse();
         crlf.Should().Be(top, "Windows line ends read as the same answer");
-        RepositoryFacts.Parse(0, "false\n/r/app/.git\n/r/app/.git\n").Should().Be(RepositoryFacts.None, "inside a git dir git prints three lines and not true");
+        RepositoryFacts.Parse(0, "false\n/r/app/.git\n/r/app/.git\n").Should().Be(RepositoryFacts.None with { Said = GitSaid.NotAWorkTree }, "inside a git dir git prints three lines and not true: it answered, and not that");
         RepositoryFacts.Parse(128, string.Empty).Should().Be(RepositoryFacts.None);
         var noIdentity = RepositoryFacts.Parse(0, "true\n\n/r/app/.git\n");
         noIdentity.InsideWorkTree.Should().BeTrue("git did call it a work tree");
@@ -214,5 +214,31 @@ public sealed class RepositoryFactsTests : IDisposable
         RepositoryIdentity.Normalised("/Repos/a\\b/.git", StringComparison.Ordinal).Should().Be("/Repos/a\\b/.git", "a backslash is a file-name character there, never a separator");
         RepositoryIdentity.Normalised("/Repos/App/.git", StringComparison.Ordinal).Should().NotBe(RepositoryIdentity.Normalised("/repos/app/.git", StringComparison.Ordinal));
         RepositoryIdentity.KeyOf(string.Empty).Should().BeEmpty("git did not say");
+    }
+
+    [Fact]
+    public void AnAnswerWithoutAGitDir_IsATop_ButNeverAMain()
+    {
+        // Git said true and an empty cdup but no git dir: the common dir alone is no identity to compare a worktree's with.
+        var facts = RepositoryFacts.Parse(0, "true\n\n\n/m/app/.git\n");
+
+        facts.IsTop.Should().BeTrue();
+        facts.IsMain.Should().BeFalse("a main checkout is known by its git dir being its common dir — both known");
+        facts.IsLinked.Should().BeFalse();
+    }
+
+    [Fact]
+    public void WhyGitDidNotConfirm_IsCarried_ASkippedCandidateSaysWhichCase()
+    {
+        var failed = RepositoryFacts.Parse(128, "fatal: not a git repository");
+        var notAWorkTree = RepositoryFacts.Parse(0, "false\n/r/app/.git\n/r/app/.git\n");
+        var inside = RepositoryFacts.Parse(0, "true\n../\n/r/app/.git\n/r/app/.git\n");
+
+        failed.Said.Should().Be(GitSaid.Failed);
+        notAWorkTree.Said.Should().Be(GitSaid.NotAWorkTree);
+        inside.Said.Should().Be(GitSaid.Answered);
+        failed.SkippedBecause("/p/x").Should().Be("/p/x was skipped: git did not confirm it (git failed or gave no answer)");
+        notAWorkTree.SkippedBecause("/p/x").Should().Be("/p/x was skipped: git did not confirm it (git says it is not inside a work tree)");
+        inside.SkippedBecause("/p/x").Should().Be("/p/x was skipped: it is inside another repository's work tree, not the top of its own");
     }
 }

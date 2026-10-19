@@ -35,6 +35,13 @@ public sealed class RepositoryWalkTests
             return this;
         }
 
+        public Disk TooMany(string path)
+        {
+            _listings[path] = new FolderListing.TooMany();
+
+            return this;
+        }
+
         public Disk Denies(string path, string reason)
         {
             _listings[path] = new FolderListing.Unreadable(reason);
@@ -231,7 +238,7 @@ public sealed class RepositoryWalkTests
     }
 
     [Fact]
-    public void TheRealListing_TellsAFolderFromAFileFromALink_AndAMissingFolderIsUnreadable()
+    public void TheRealListing_TellsAFolderFromALink_DropsAPlainFile_AndAMissingFolderIsUnreadable()
     {
         using var dir = TempDir.For("testsToDelete-walk-");
         Directory.CreateDirectory(dir.At("a-folder"));
@@ -240,11 +247,10 @@ public sealed class RepositoryWalkTests
 
         var listed = FolderListings.Read(dir.Path).Should().BeOfType<FolderListing.Listed>().Subject;
 
-        listed.Entries.Should().HaveCount(3);
+        listed.Entries.Should().HaveCount(2, "a plain file is read and let go: the walk needs folders, links to folders and a .git file only");
         listed.Entries.Should().BeEquivalentTo(
         [
             new FolderEntry("a-folder", EntryKind.Folder),
-            new FolderEntry("a-file.txt", EntryKind.File),
             new FolderEntry("a-link", EntryKind.FolderLink),
         ]);
         FolderListings.Read(dir.At("missing")).Should().BeOfType<FolderListing.Unreadable>();
@@ -359,5 +365,86 @@ public sealed class RepositoryWalkTests
 
         Found(Walk(one)).Notes.Should().ContainSingle().Which.Should().Be(
             $"{Root}: 1 linked folder was not entered, because a copy never follows a link (cloud)");
+    }
+
+    // ---------- finding 4: a folder the system hides is skipped like a dot folder ----------
+
+    [Fact]
+    public void AFolderTheSystemHides_IsNeverEntered_AndSaysNothing()
+    {
+        var disk = new Disk()
+            .Has(Root, new FolderEntry("$RECYCLE.BIN", EntryKind.Folder, Hidden: true), new FolderEntry("System Volume Information", EntryKind.Folder, Hidden: true),
+                new FolderEntry("hidden-link", EntryKind.FolderLink, Hidden: true), Dir("plain"))
+            .Has(At("$RECYCLE.BIN"), GitDir)
+            .Has(At("System Volume Information"), GitDir)
+            .Has(At("plain"), GitDir);
+
+        var found = Found(Walk(disk));
+
+        Relative(found).Should().Equal("plain");
+        disk.Asked.Should().Equal([Root, At("plain")], "a hidden or system folder is not listed");
+        found.Notes.Should().BeEmpty("it is skipped without a word, like a dot folder — a hidden link too");
+    }
+
+    [Fact]
+    public void TheRealListing_CarriesTheHiddenAndSystemAttributes_OnWindows()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "the Hidden and System attributes of a folder are Windows'");
+        using var dir = TempDir.For("testsToDelete-walk-hidden-");
+        Directory.CreateDirectory(dir.At("plain"));
+        Directory.CreateDirectory(dir.At("hidden"));
+        Directory.CreateDirectory(dir.At("system"));
+        File.SetAttributes(dir.At("hidden"), FileAttributes.Directory | FileAttributes.Hidden);
+        File.SetAttributes(dir.At("system"), FileAttributes.Directory | FileAttributes.System);
+
+        var entries = Entries(FolderListings.Read(dir.Path));
+
+        entries.Single(entry => entry.Name == "hidden").Hidden.Should().BeTrue();
+        entries.Single(entry => entry.Name == "system").Hidden.Should().BeTrue();
+        entries.Single(entry => entry.Name == "plain").Hidden.Should().BeFalse();
+    }
+
+    // ---------- finding 6: a listing is bounded ----------
+
+    [Fact]
+    public void AFolderWithTooManyEntries_RefusesTheRow_KeepsTheNotes_AndTheWalkStops()
+    {
+        var disk = new Disk()
+            .Has(Root, Dir("denied"), Dir("huge"), Dir("never"))
+            .Denies(At("denied"), "Access is denied")
+            .TooMany(At("huge"))
+            .Has(At("never"), GitDir);
+
+        var refused = Walk(disk).Should().BeOfType<WalkOutcome.Refused>().Subject;
+
+        refused.Reason.Should().Be($"the folder {At("huge")} holds more than {RepositoryWalk.MaxEntries} entries — grant the project folders themselves");
+        refused.Notes.Should().ContainSingle().Which.Should().Contain(At("denied"));
+        disk.Asked.Should().NotContain(At("never"), "the walk stops at the folder that is too big");
+    }
+
+    [Fact]
+    public void ARootWithTooManyEntries_IsRefusedByName()
+    {
+        var disk = new Disk().TooMany(Root);
+
+        Walk(disk).Should().BeOfType<WalkOutcome.Refused>().Which.Reason.Should().Contain(Root).And.Contain("holds more than 100000 entries");
+    }
+
+    [Fact]
+    public void TheRealListing_StopsAtTheBound_AndKeepsOnlyWhatTheWalkNeeds()
+    {
+        using var dir = TempDir.For("testsToDelete-walk-bound-");
+        foreach (var i in Enumerable.Range(0, 5))
+        {
+            File.WriteAllText(dir.At($"file{i}.txt"), "x");
+        }
+
+        FolderListings.Read(dir.Path, 4).Should().BeOfType<FolderListing.TooMany>("five entries are past a bound of four");
+
+        Directory.CreateDirectory(dir.At("a-folder"));
+        File.WriteAllText(dir.At(".git"), "gitdir: /elsewhere");
+        var listed = FolderListings.Read(dir.Path, 100).Should().BeOfType<FolderListing.Listed>().Subject;
+
+        listed.Entries.Select(entry => entry.Name).Should().BeEquivalentTo(["a-folder", ".git"], "plain files are counted while reading and never kept");
     }
 }

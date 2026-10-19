@@ -50,7 +50,7 @@ public sealed class AVibeDiskRowSaysWhatItSkippedTests : IDisposable
         var row = VibeQuestionRowFixture.TheRow(reply);
         row.GetProperty("status").GetString().Should().Be(RowOutcomes.Answered, reply.ToString());
         var note = row.GetProperty("note").GetString();
-        note.Should().Contain("was skipped").And.Contain("broken").And.Contain("git does not confirm it as a work tree");
+        note.Should().Contain("was skipped").And.Contain("broken").And.Contain("git did not confirm it (git failed or gave no answer)");
         vibe.Turns.Should().ContainSingle().Subject.Files.Keys.Should().ContainSingle("only the good repository is copied")
             .Which.Should().EndWith("/Mailer.cs");
     }

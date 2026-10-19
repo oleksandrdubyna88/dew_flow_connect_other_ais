@@ -90,38 +90,54 @@ internal sealed class ParentExpansion(
 
     /// <summary>
     /// Discovery's side of D4: each candidate's links checked, then git asked once — in order. One broken checkout never costs the
-    /// others; a candidate that is not the TOP of a work tree is skipped with a note.
+    /// others; a candidate that is not the TOP of a work tree is skipped with a note that says which cause it was.
     /// </summary>
     private async Task<Discovered> ConfirmedAsync(GrantedFolder grant, IReadOnlyList<FoundRepository> candidates, OneShotTally tally, CancellationToken ct)
     {
+        tally.Candidates += candidates.Count;
         List<ConfirmedRepository> confirmed = [];
         foreach (var repository in candidates)
         {
-            ct.ThrowIfCancellationRequested();
-            if (GrantedPaths.LinkUpTo(repository.Path, grant.Root) is { Length: > 0 } link)
+            var step = await ConfirmOneAsync(grant, repository, tally, ct);
+            if (step.Refusal.Length > 0)
             {
-                return Refusal(GrantedPaths.LinkSentence(link, grant.Root));
+                return Refusal(step.Refusal);
             }
 
-            var facts = await RepositoryFacts.AskAsync(launcher, repository.Path, ct);
-
-            // A confirmation cut short by the budget comes back as "not a work tree": the budget is what ended it, and says so.
-            ct.ThrowIfCancellationRequested();
-            if (!(facts.InsideWorkTree && facts.IsTop))
-            {
-                tally.Say($"{repository.Path} was skipped: it holds a .git, but git does not confirm it as a work tree of its own");
-                continue;
-            }
-
-            var candidate = new ConfirmedRepository(repository, facts);
-            confirmed.Add(candidate);
-            if (Counted(candidate, tally))
-            {
-                return Refusal(RepositoryWalk.TooManyRepositories);
-            }
+            confirmed.AddRange(step.Confirmed);
         }
 
         return confirmed.Count == 0 ? Refusal(RepositoryWalk.NoRepository(grant.Root)) : new Discovered(string.Empty, grant.Index, confirmed);
+    }
+
+    /// <summary>What confirming ONE candidate came to: a refusal of the row, the candidate confirmed, or — both empty — the candidate skipped.</summary>
+    private sealed record Step(string Refusal, IReadOnlyList<ConfirmedRepository> Confirmed);
+
+    /// <summary>One candidate: its links checked, git asked, then taken (and counted) or skipped with its note.</summary>
+    private async Task<Step> ConfirmOneAsync(GrantedFolder grant, FoundRepository repository, OneShotTally tally, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (GrantedPaths.LinkUpTo(repository.Path, grant.Root) is { Length: > 0 } link)
+        {
+            return new Step(GrantedPaths.LinkSentence(link, grant.Root), []);
+        }
+
+        var facts = await RepositoryFacts.AskAsync(launcher, repository.Path, ct);
+
+        // A confirmation cut short by the budget comes back as "not a work tree": the budget is what ended it, and says so.
+        ct.ThrowIfCancellationRequested();
+
+        return facts.InsideWorkTree && facts.IsTop ? Taken(new ConfirmedRepository(repository, facts), tally) : Skipped(repository, facts, tally);
+    }
+
+    private static Step Taken(ConfirmedRepository candidate, OneShotTally tally) =>
+        new(Counted(candidate, tally) ? RepositoryWalk.TooManyRepositories : string.Empty, [candidate]);
+
+    private static Step Skipped(FoundRepository repository, RepositoryFacts facts, OneShotTally tally)
+    {
+        tally.Say(facts.SkippedBecause(repository.Path));
+
+        return new Step(string.Empty, []);
     }
 
     /// <summary>

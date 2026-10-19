@@ -183,7 +183,7 @@ public sealed class AVibeDiskRowExpandsAParentFolderTests : IDisposable
 
         using var place = await places.OneShotAsync(Row, [parent], TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
 
-        place.Refusal.Should().Contain("budget").And.Contain("0 of 0");
+        place.Refusal.Should().Contain("budget").And.Contain("while reading the granted folders, before anything was copied").And.NotContain("0 of 0");
         Snapshots().Should().BeEmpty();
         _bytes.Held.Should().Be(0);
     }
@@ -252,7 +252,7 @@ public sealed class AVibeDiskRowExpandsAParentFolderTests : IDisposable
 
         place.Notes.Should().HaveCount(2);
         place.Notes[0].Should().Contain(denied).And.Contain("could not be listed").And.Contain("Access is denied");
-        place.Notes[1].Should().Contain(Path.Combine(parent, "broken")).And.Contain("git does not confirm it as a work tree");
+        place.Notes[1].Should().Contain(Path.Combine(parent, "broken")).And.Contain("git did not confirm it (git failed or gave no answer)");
         said.Should().Equal(place.Notes, "the sink the log reads gets every note too");
         place.Refusal.Should().BeEmpty();
         Below(place.Roots.Should().ContainSingle().Subject).Should().StartWith("0/good/snapshot-");
@@ -267,7 +267,7 @@ public sealed class AVibeDiskRowExpandsAParentFolderTests : IDisposable
         using var place = await PlaceAsync(Places(), parent);
 
         place.Refusal.Should().Contain("holds no Git repository");
-        place.Notes.Should().ContainSingle().Which.Should().Contain("git does not confirm it as a work tree");
+        place.Notes.Should().ContainSingle().Which.Should().Contain("git did not confirm it (git failed or gave no answer)");
     }
 
     /// <summary>
@@ -494,7 +494,7 @@ public sealed class AVibeDiskRowExpandsAParentFolderTests : IDisposable
 
         place.Refusal.Should().BeEmpty();
         Below(place.Roots.Should().ContainSingle("only the worktree was confirmed, so it is the one copy").Subject).Should().StartWith("0/app-wt/snapshot-");
-        place.Notes.Should().ContainSingle().Which.Should().Contain("app").And.Contain("git does not confirm it as a work tree");
+        place.Notes.Should().ContainSingle().Which.Should().Contain("app").And.Contain("git did not confirm it (git failed or gave no answer)");
     }
 
     [Fact]
@@ -565,7 +565,7 @@ public sealed class AVibeDiskRowExpandsAParentFolderTests : IDisposable
 
         place.Refusal.Should().BeEmpty();
         Below(place.Roots.Should().ContainSingle("a folder inside another work tree is no repository top").Subject).Should().StartWith("0/good/snapshot-");
-        place.Notes.Should().ContainSingle().Which.Should().Contain(sub).And.Contain("git does not confirm it as a work tree");
+        place.Notes.Should().ContainSingle().Which.Should().Contain(sub).And.Contain("it is inside another repository's work tree, not the top of its own");
     }
 
     // ---------- gap (b): a root that could not be listed says so, and keeps what the walk skipped ----------
@@ -684,5 +684,104 @@ public sealed class AVibeDiskRowExpandsAParentFolderTests : IDisposable
         place.Refusal.Should().BeEmpty();
         place.Roots.Should().ContainSingle();
         place.Notes.Should().ContainSingle().Which.Should().Contain("OneDrive").And.Contain("link");
+    }
+
+    // ---------- code gate: the skip sentences (finding 29), the budget while confirming (finding 12), a direct grant after its parent (O) ----------
+
+    [Fact]
+    public async Task ACandidateGitDidNotAnswerFor_IsSkippedWithTheDidNotConfirmSentence_NotTheInsideAnotherOne()
+    {
+        var parent = Parent();
+        await RepositoryAsync(Path.Combine(parent, "good"), true, ("g.txt", "good"));
+        var broken = Path.Combine(parent, "broken");
+        VibeQuestionRowFixture.BrokenCheckout(broken);
+
+        using var place = await PlaceAsync(Places(), parent);
+
+        place.Notes.Should().ContainSingle().Which.Should().Be($"{broken} was skipped: git did not confirm it (git failed or gave no answer)");
+    }
+
+    [Fact]
+    public async Task ACandidateInsideAnotherWorkTree_IsSkippedWithTheInsideAnotherSentence_NotTheDidNotConfirmOne()
+    {
+        var parent = Parent();
+        await RepositoryAsync(Path.Combine(parent, "good"), true, ("g.txt", "good"));
+        var other = await RepositoryAsync(_dir.At("other"), true, ("o.txt", "other"));
+        var x = Directory.CreateDirectory(Path.Combine(parent, "X")).FullName;
+        await DirectoryLink.MakeAsync(_launcher, Path.Combine(x, ".git"), Path.Combine(other, ".git"));
+        var sub = Directory.CreateDirectory(Path.Combine(x, "sub")).FullName;
+        Directory.CreateDirectory(Path.Combine(sub, ".git"));
+
+        using var place = await PlaceAsync(Places(), parent);
+
+        place.Notes.Should().ContainSingle().Which.Should().Be($"{sub} was skipped: it is inside another repository's work tree, not the top of its own");
+    }
+
+    /// <summary>Answers every git call but the ones made in a folder whose path holds <c>hangIn</c>: those wait until the budget cancels them.</summary>
+    private sealed class HangingLauncher(IProcessLauncher inner, string hangIn) : IProcessLauncher
+    {
+        public Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default) =>
+            request.WorkingDirectory.Contains(hangIn, StringComparison.OrdinalIgnoreCase) ? HangAsync(ct) : inner.RunAsync(request, ct);
+
+        private static async Task<ProcessResult> HangAsync(CancellationToken ct)
+        {
+            await Task.Delay(Timeout.Infinite, ct);
+
+            throw new InvalidOperationException("the wait ends only by cancellation");
+        }
+    }
+
+    [Fact]
+    public async Task TheBudgetRunsOutWhileCandidatesAreBeingConfirmed_SaysSo_NotZeroOfZeroCopied()
+    {
+        var parent = Parent();
+        await RepositoryAsync(Path.Combine(parent, "a-fast"), true, ("a.txt", "a"));
+        await RepositoryAsync(Path.Combine(parent, "b-hang"), true, ("b.txt", "b"));
+        var places = new ConsultantPlaces(string.Empty, string.Empty, new HangingLauncher(_launcher, "b-hang"), _ => { })
+        {
+            Maker = SnapshotTestKit.Snapshots(_launcher, budget: _bytes),
+        };
+
+        // The git call for b-hang never returns by itself, so only the budget ends it; the budget is wide enough for the walk and the
+        // other git calls of a busy runner to finish inside it.
+        using var place = await places.OneShotAsync(Row, [parent], TimeSpan.FromSeconds(6), TestContext.Current.CancellationToken);
+
+        place.Refusal.Should().Contain("took longer than the row's budget (6 s)")
+            .And.Contain("the budget ran out while confirming 2 candidates with git, before anything was copied")
+            .And.Contain("grant fewer or smaller folders, or give the row more time (COAI_QCONSULT_ROW_MINUTES)")
+            .And.NotContain("0 of 0");
+        Snapshots().Should().BeEmpty();
+        _bytes.Held.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task AWorktreeGrantedDirectlyAfterTheParentThatFindsIt_IsStillTheDirectGrant_CopiedOnce()
+    {
+        var parent = Parent();
+        var main = await RepositoryAsync(Path.Combine(parent, "app"), true, ("app.txt", "main"));
+        var inside = await WorktreeAsync(main, Path.Combine(parent, "app-wt"), "wt");
+
+        using var place = await PlaceAsync(Places(), parent, inside);
+
+        place.Refusal.Should().BeEmpty();
+        place.Roots.Should().HaveCount(2, "the main checkout once, the worktree once — as the direct grant");
+        place.Roots.Select(Below).Should().Contain(root => root.StartsWith("0/app/snapshot-")).And.Contain(root => root.StartsWith("snapshot-"), "the direct grant sits at the tree's top, whatever its place in the list");
+        place.Notes.Should().BeEmpty("the worktree was granted by name, so it is not one of the skipped");
+    }
+
+    [Fact]
+    public async Task ARepositoryGrantedDirectlyAfterTheParentThatFindsIt_IsCopiedOnce_AsTheDirectGrant()
+    {
+        var parent = Parent();
+        var shared = await RepositoryAsync(Path.Combine(parent, "shared"), true, ("s.txt", "shared"));
+        await RepositoryAsync(Path.Combine(parent, "other"), true, ("o.txt", "other"));
+
+        using var place = await PlaceAsync(Places(), parent, shared);
+
+        place.Refusal.Should().BeEmpty();
+        place.Roots.Should().HaveCount(2, "shared once, other once");
+        place.Roots.Select(Below).Should().Contain(root => root.StartsWith("snapshot-"), "a direct grant always wins, wherever it stands in the list")
+            .And.Contain(root => root.StartsWith("0/other/snapshot-"))
+            .And.NotContain(root => root.StartsWith("0/shared/"));
     }
 }

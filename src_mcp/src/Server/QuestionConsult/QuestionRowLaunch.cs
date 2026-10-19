@@ -242,8 +242,10 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
         row.Plan.Cwd == CwdKind.Snapshot ? await _places.OneShotAsync(scratch, row.Plan.SnapshotSources, budget, ct) : ConsultantPlace.Checkout;
 
     /// <summary>
-    /// What the place skipped (a candidate git did not confirm, a folder it could not list), for the row's <c>note</c>: redacted
-    /// like <see cref="Ended"/>'s reason, because a note names folders on the person's disk and is written down.
+    /// What the place skipped (a candidate git did not confirm, a folder it could not list), for the row's <c>note</c>. Each note was
+    /// redacted once where it was made (<see cref="OneShotTally.Say"/>, for the log and the list alike); what is left to do here is the
+    /// CUT of the joined text to one detail's limit — <see cref="Redaction.SafeText"/> is the one method that cuts with the suffix, and
+    /// redacting text that is already redacted changes nothing.
     /// </summary>
     private static string PlaceNotes(ConsultantPlace place) =>
         place.Notes.Count == 0 ? string.Empty : Redaction.SafeText(string.Join("; ", place.Notes), Redaction.DetailLimit);

@@ -15,14 +15,18 @@ namespace CoaiMcp.Runners.Files;
 /// </remarks>
 public static class FolderLock
 {
+    /// <summary><see cref="RemoveIfFree(string, string, Action{string}, Func{bool})"/> with nothing to do first: the folder goes whenever its lock can be taken.</summary>
+    public static bool RemoveIfFree(string folder, string lockName, Action<string> delete) =>
+        RemoveIfFree(folder, lockName, delete, static () => true);
+
     /// <summary>
     /// Removes <paramref name="folder"/> when its lock <paramref name="lockName"/> can be taken — every entry but the lock first, then
     /// (the lock let go) the folder itself, lock file included. False, with nothing touched, when somebody holds the lock, when it cannot
     /// be opened, or when <paramref name="ready"/> (asked under the lock) says the folder must stay this time.
     /// </summary>
     /// <param name="delete">Removes one entry, or the folder itself; it must take a file as well as a folder (<see cref="GitScratch.DeleteEntry"/>).</param>
-    /// <param name="ready">Work that must precede the removal and needs no live owner — asked only under the lock; null asks nothing.</param>
-    public static bool RemoveIfFree(string folder, string lockName, Action<string> delete, Func<bool>? ready = null)
+    /// <param name="ready">Work that must precede the removal and needs no live owner — asked only under the lock; false keeps the folder this time.</param>
+    public static bool RemoveIfFree(string folder, string lockName, Action<string> delete, Func<bool> ready)
     {
         if (HeldFile.Take(Path.Combine(folder, lockName)) is not Hold.Taken locked)
         {
@@ -31,7 +35,7 @@ public static class FolderLock
 
         using (locked.Stream)
         {
-            if (ready is not null && !ready())
+            if (!ready())
             {
                 return false;
             }

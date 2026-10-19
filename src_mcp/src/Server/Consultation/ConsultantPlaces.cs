@@ -342,7 +342,7 @@ public sealed class ConsultantPlaces(string homesRoot, string store, IProcessLau
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            return Unmade(tally, OutOfBudget(tally.Made.Count, tally.Found, budget));
+            return Unmade(tally, OutOfBudget(tally, budget));
         }
         catch
         {
@@ -368,6 +368,7 @@ public sealed class ConsultantPlaces(string homesRoot, string store, IProcessLau
             return expanded.Refusal;
         }
 
+        tally.Copying = true;
         foreach (var grant in granted.Folders)
         {
             var refused = grant.IsWorkTree
@@ -444,7 +445,14 @@ public sealed class ConsultantPlaces(string homesRoot, string store, IProcessLau
         return new ConsultantPlace.Refused(reason, [.. tally.Notes]);
     }
 
-    private static string OutOfBudget(int copied, int of, TimeSpan budget) =>
-        $"copying the granted folders took longer than the row's budget ({budget.TotalSeconds:0} s): {copied} of {of} copied — "
+    /// <summary>The budget's refusal: what had been done when it ran out — copies made, or (before the first copy) the phase it ended — and the one cure.</summary>
+    private static string OutOfBudget(OneShotTally tally, TimeSpan budget) =>
+        $"copying the granted folders took longer than the row's budget ({budget.TotalSeconds:0} s): {Progress(tally)} — "
         + "grant fewer or smaller folders, or give the row more time (COAI_QCONSULT_ROW_MINUTES)";
+
+    /// <summary>"0 of 0 copied" reads as "nothing found", so before the first copy the sentence says what was going on instead.</summary>
+    private static string Progress(OneShotTally tally) =>
+        tally.Copying ? $"{tally.Made.Count} of {tally.Found} copied"
+        : tally.Candidates == 0 ? "the budget ran out while reading the granted folders, before anything was copied"
+        : $"the budget ran out while confirming {tally.Candidates} {(tally.Candidates == 1 ? "candidate" : "candidates")} with git, before anything was copied";
 }

@@ -129,7 +129,8 @@ public sealed class AScratchSweepRunsOnTheConsultationBeatTests : IDisposable
     [Fact]
     public void AQuestionRowScratch_OlderThanTheWindow_WhoseLockIsHeld_SurvivesTheSweep_UntilTheLockIsReleased()
     {
-        var scratch = StrandedQuestionScratch(TimeSpan.FromHours(7));
+        // Young first, the lock taken, THEN aged: a folder aged while its lock is still free is one the real sweep of a parallel class could take in that window.
+        var scratch = StrandedQuestionScratch(TimeSpan.Zero);
         var copy = Path.Combine(scratch, "0", "repo-a", "a.txt");
         try
         {

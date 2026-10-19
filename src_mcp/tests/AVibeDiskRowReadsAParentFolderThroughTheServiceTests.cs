@@ -40,6 +40,10 @@ public sealed class AVibeDiskRowReadsAParentFolderThroughTheServiceTests : IDisp
         return string.Join('/', parts.Take(Array.FindIndex(parts, part => part.StartsWith("snapshot-", StringComparison.Ordinal)) + 1));
     }
 
+    /// <summary>A Windows path spelled the way WSL2 mounts it (<c>D:\x\y</c> is <c>/mnt/d/x/y</c>); a POSIX path is already that.</summary>
+    private static string AsWslSeesIt(string path) =>
+        path is [var drive, ':', ..] ? $"/mnt/{char.ToLowerInvariant(drive)}{path[2..].Replace('\\', '/')}" : path;
+
     [Theory]
     [InlineData(VibeFlowHost.Windows)]
     [InlineData(VibeFlowHost.Wsl2)]
@@ -83,6 +87,7 @@ public sealed class AVibeDiskRowReadsAParentFolderThroughTheServiceTests : IDisp
         foreach (var original in (string[])[parent, alpha, beta, Path.Combine(parent, "alpha-wt")])
         {
             prompt.Should().NotContain(original, "never an original path, which Vibe cannot read (M-V11)");
+            prompt.Should().NotContain(AsWslSeesIt(original), "nor the /mnt/<drive>/… spelling of it that the WSL2 arm would name");
         }
 
         Directory.Exists(Path.GetDirectoryName(turn.Request.Environment[VibeLaunch.HomeVariable])!).Should().BeFalse("the row's home and every copy are gone once it answered");
