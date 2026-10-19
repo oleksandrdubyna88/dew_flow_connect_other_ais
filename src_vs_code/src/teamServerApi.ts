@@ -555,7 +555,7 @@ export type ServerRounds =
   | { readonly kind: 'unavailable'; readonly reason: string };
 
 /** Why the counts are not shown when the answer has none — a server older than round counting (story 5.1). */
-export const ROUNDS_UNAVAILABLE = 'this Team server does not count rounds yet — it answered without the 5 h / 24 h / 7 d windows';
+export const ROUNDS_UNAVAILABLE = 'this Team server answered without the 5 h / 24 h / 7 d windows — Team servers count rounds from 0.12.0';
 
 /**
  * A usage answer's round counts (story 5.2) — judged by the SHAPE of the answer, never by its status.

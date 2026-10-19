@@ -5,7 +5,7 @@ import { before, test } from 'node:test';
 
 import { modelsTabHtml } from '../modelsTab';
 import { otherStores } from '../roundCountsRead';
-import { roundsBlock, RoundsBlockInput, storeSentence } from '../roundsBlock';
+import { ranOnOf, roundsBlock, RoundsBlockInput, storeSentence } from '../roundsBlock';
 import { LineRate } from '../usage';
 import { DEFAULT_VENDORS } from '../vendors';
 import { panelState } from './panelPageHarness';
@@ -118,6 +118,67 @@ test('AConsultationOnlyWindow_ShowsNoPerRoundFigure — consultations and no rou
 
   assert.deepEqual(cells.slice(1, 4), ['0', '0', '0'], 'counted nought is a real 0');
   assert.match(cells[10]!, /title="no rounds in this window">—/u);
+});
+
+/** A review line the way coai-mcp 0.48.0 and later writes it: one launch, with the attempt and the runtime it ran on. */
+const launchLine = (over: Parameters<typeof usageLine>[0] = {}) => usageLine({ attempt: 'first', cli: 'codex', ...over });
+
+test('TheMedianHeader_SaysPerLaunch_AndAnOlderLineSaysPerRecordedTurnBesideItsNumber', () => {
+  const launches = roundsBlock(input({ snapshot: snapshot(counted(), [launchLine(), launchLine({ attempt: 'retry' })]) }));
+  const older = roundsBlock(input({ snapshot: snapshot(counted(), [launchLine(), usageLine()]) }));
+  const median = (html: string): string => rowCells(html, '>gpt-6-luna<')[7]!;
+
+  assert.match(launches, /<th scope="col">median output per launch<\/th>/u);
+  assert.doesNotMatch(launches, /median output per recorded turn/u);
+  assert.match(median(launches), /^\d/u, 'the launch lines have a median');
+  assert.doesNotMatch(median(launches), /recorded turn/u, 'a group made only of launch lines was told to say per recorded turn');
+  assert.match(median(older), /<span title="[^"]*recorded turn[^"]*">[^<]+<\/span> <span class="hint">per recorded turn<\/span>/u,
+    'one older line in the group must say per recorded turn beside the number, with a tooltip');
+});
+
+test('AModelWithUnknownRounds_AndAMixedWeek_IsDividedPerRecordedTurn — one older line and one launch line, rounds unavailable', () => {
+  const lines = [launchLine({ model: 'gpt-6-astra' }), usageLine({ model: 'gpt-6-astra' })];
+  const cells = rowCells(roundsBlock(input({ snapshot: snapshot(counted(), lines) })), '>gpt-6-astra<');
+
+  assert.match(cells[10]!, /over 2 recorded turns/u, 'the fallback divided by the wrong unit');
+  assert.match(cells[10]!, /<span class="hint">per recorded turn<\/span>/u);
+  assert.doesNotMatch(cells[10]!, /launch/u);
+});
+
+test('AModelWithUnknownRounds_AndOnlyLaunchLines_IsDividedPerLaunch — the tooltip says launches, never launchs', () => {
+  const lines = [launchLine({ model: 'gpt-6-astra' }), launchLine({ model: 'gpt-6-astra', attempt: 'repair' })];
+  const cells = rowCells(roundsBlock(input({ snapshot: snapshot(counted(), lines) })), '>gpt-6-astra<');
+
+  assert.match(cells[10]!, /over 2 launches/u);
+  assert.match(cells[10]!, /<span class="hint">per launch<\/span>/u);
+  assert.doesNotMatch(cells[10]!, /launchs|recorded turn/u);
+});
+
+test('ATeamServerLine_StaysPerRecordedTurn_EvenWithItsRowDeleted — the line says it ran on a Team server, whatever the settings say now', () => {
+  const remote = (over: Parameters<typeof usageLine>[0] = {}) => usageLine({ provider: 'work-codex', model: 'gpt-6-astra', attempt: 'first', cli: 'remote', ...over });
+  const html = roundsBlock(input({ snapshot: snapshot(counted(), [remote(), remote()]), ranOn: ranOnOf([]) }));
+  const cells = rowCells(html, '>gpt-6-astra<');
+
+  assert.match(cells[7]!, /<span class="hint">per recorded turn<\/span>/u, 'a Team-server job total was claimed as one launch');
+  assert.match(cells[10]!, /<span class="hint">per recorded turn<\/span>/u);
+  assert.doesNotMatch(cells[10]!, /launch/u);
+});
+
+test('ALocalRow_StaysPerLaunch_AfterItsRowIsDeleted — the decision is the lines own, no row is looked up', () => {
+  const html = roundsBlock(input({ snapshot: snapshot(counted(), [launchLine({ model: 'gpt-6-astra' })]), ranOn: ranOnOf([]) }));
+  const cells = rowCells(html, '>gpt-6-astra<');
+
+  assert.doesNotMatch(cells[7]!, /recorded turn/u);
+  assert.match(cells[10]!, /<span class="hint">per launch<\/span>/u);
+});
+
+test('TheFootnote_SaysAReviewLineIsOneLaunch — and does not claim it always is', () => {
+  const html = roundsBlock(input());
+
+  assert.match(html, /From coai-mcp 0\.48\.0 a review run on this machine writes one line per launch/u);
+  assert.match(html, /a Team-server row's line and a follow-up in the same conversation can hold more than one launch/u);
+  assert.doesNotMatch(html, /a per-launch figure is not claimed/u);
+  assert.doesNotMatch(html, /\balways\b/iu);
 });
 
 test('a Team-server row is its own row, labelled ran on its server', () => {
