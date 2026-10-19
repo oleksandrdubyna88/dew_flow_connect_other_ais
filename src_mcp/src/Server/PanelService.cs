@@ -1886,7 +1886,9 @@ public sealed class PanelService
         session.State.PlanProceeded,
         _settings.Rounds.For(session.State.Stage).Threshold,
         _settings.Rounds.For(session.State.Stage).MaxRounds,
-        session.Rounds)
+        // Without the authors snapshot: its rows would cost the calling AI up to several KB of context per round, on every reply.
+        // The session file and the rounds page keep it (E5.S1).
+        [.. session.Rounds.Select(round => round with { Authors = null })])
     {
         HumanDecision = CurrentAnswer.WordFor(Escalations.DecisionOf(gatesAnswer)),
         HumanAnswer = gatesAnswer?.Answer ?? string.Empty,
