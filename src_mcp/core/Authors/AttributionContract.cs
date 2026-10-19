@@ -83,7 +83,8 @@ internal static class AttributionContract
         var at = id;
         for (var steps = 0; steps <= parents.Count; steps++)
         {
-            if (!parents.TryGetValue(at, out var parent) || parent.Length == 0 || parent == AgentKey.MainId)
+            var parent = parents.GetValueOrDefault(at, string.Empty);
+            if (parent.Length == 0 || parent == AgentKey.MainId)
             {
                 return true;
             }

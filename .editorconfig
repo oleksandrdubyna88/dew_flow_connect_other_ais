@@ -98,3 +98,13 @@ dotnet_diagnostic.CA1502.severity = error
 
 [src_mcp/src/Store/SecurityPreviewFork.cs]
 dotnet_diagnostic.CA1502.severity = error
+
+# THE ATTRIBUTION CORE'S METHODS STAY WITHIN CYCLOMATIC COMPLEXITY 4 (E4 §2 / §S2.9 item 5).
+#
+# Same switch as the security lane above, same threshold file. Measured 2026-10-19: 10 methods of the
+# attribution core were over the bound (CA1502, complexity 5 or more) before this section existed.
+[src_mcp/core/Authors/*.cs]
+dotnet_diagnostic.CA1502.severity = error
+
+[src_mcp/src/Store/AttributionMapping.cs]
+dotnet_diagnostic.CA1502.severity = error

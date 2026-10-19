@@ -17,17 +17,22 @@ internal sealed class AssignRun
     public AssignRun(AttributionInput input, bool usePriorEnd)
     {
         _input = input;
-        var gates = new[] { input.Gate }.Concat(input.PeersKnown ? input.Peers : []).DistinctBy(gate => gate.GateSessionId, StringComparer.Ordinal).ToList();
+        var gates = GatesOf(input);
         foreach (var gate in gates)
         {
-            var priorEnd = usePriorEnd ? Windows.PriorEnd(gate, gates.Where(other => other.GateSessionId != gate.GateSessionId), input.Caller.CallerSessionId) : null;
-            _windowsOf[gate.GateSessionId] = Windows.Of(gate, priorEnd);
+            _windowsOf[gate.GateSessionId] = Windows.Of(gate, PriorEndOf(gate, gates, input.Caller.CallerSessionId, usePriorEnd));
         }
 
         _ladder = new AssociationLadder(input, gates.ToDictionary(gate => gate.GateSessionId, gate => gate.RepoPath, StringComparer.Ordinal));
         _mine = [.. _windowsOf[input.Gate.GateSessionId].Where(window => window.Stage == input.Stage && window.Number == input.Number)];
         _peerWindows = [.. gates.Where(gate => gate.GateSessionId != input.Gate.GateSessionId).SelectMany(gate => _windowsOf[gate.GateSessionId])];
     }
+
+    private static List<GateTimeline> GatesOf(AttributionInput input) =>
+        [.. new[] { input.Gate }.Concat(input.PeersKnown ? input.Peers : []).DistinctBy(gate => gate.GateSessionId, StringComparer.Ordinal)];
+
+    private static DateTimeOffset? PriorEndOf(GateTimeline gate, List<GateTimeline> gates, string caller, bool usePriorEnd) =>
+        usePriorEnd ? Windows.PriorEnd(gate, gates.Where(other => other.GateSessionId != gate.GateSessionId), caller) : null;
 
     /// <summary>The earliest instant a line can matter: the first of this round's windows and of their claimants'; null when one is unbounded.</summary>
     public DateTimeOffset? ReadFrom()
@@ -44,9 +49,9 @@ internal sealed class AssignRun
     {
         var windows = _mine.Where(window => !window.Blind).ToList();
         var observed = _input.Caller.State.Kind != ObservationKinds.Unobserved;
-        var messages = observed ? windows.SelectMany(Messages).ToList() : [];
-        var launches = observed ? windows.SelectMany(Launches).ToList() : [];
-        var writes = observed ? windows.SelectMany(Writes).ToList() : [];
+        var messages = When(observed, () => windows.SelectMany(Messages)).ToList();
+        var launches = When(observed, () => windows.SelectMany(Launches)).ToList();
+        var writes = When(observed, () => windows.SelectMany(Writes)).ToList();
 
         return new WindowAssignment(
             _input.Gate.GateSessionId,
@@ -57,12 +62,15 @@ internal sealed class AssignRun
             [.. messages.OrderBy(placement => placement.Window, Comparer<Window>.Create(ByWindow)).ThenBy(placement => placement.At).ThenBy(placement => placement.Agent.Id, StringComparer.Ordinal).ThenBy(placement => placement.MessageId, StringComparer.Ordinal)],
             [.. launches.OrderBy(placement => placement.Window, Comparer<Window>.Create(ByWindow)).ThenBy(placement => placement.At).ThenBy(placement => placement.Agent.Id, StringComparer.Ordinal)],
             [.. writes.OrderBy(placement => placement.Window, Comparer<Window>.Create(ByWindow)).ThenBy(placement => placement.At).ThenBy(placement => placement.Agent.Id, StringComparer.Ordinal).ThenBy(placement => placement.Root, StringComparer.Ordinal)],
-            observed ? [.. windows.SelectMany(Unobserved).OrderBy(placement => placement.Window, Comparer<Window>.Create(ByWindow)).ThenBy(placement => placement.At).ThenBy(placement => placement.Parent.Id, StringComparer.Ordinal).ThenBy(placement => placement.Why, StringComparer.Ordinal)] : [],
-            observed ? [.. windows.SelectMany(window => AgentsIn(window, messages, launches, writes)).OrderBy(association => association.Window, Comparer<Window>.Create(ByWindow)).ThenBy(association => association.Agent.Id, StringComparer.Ordinal)] : [],
+            [.. When(observed, () => windows.SelectMany(Unobserved)).OrderBy(placement => placement.Window, Comparer<Window>.Create(ByWindow)).ThenBy(placement => placement.At).ThenBy(placement => placement.Parent.Id, StringComparer.Ordinal).ThenBy(placement => placement.Why, StringComparer.Ordinal)],
+            [.. When(observed, () => windows.SelectMany(window => AgentsIn(window, messages, launches, writes))).OrderBy(association => association.Window, Comparer<Window>.Create(ByWindow)).ThenBy(association => association.Agent.Id, StringComparer.Ordinal)],
             [.. _mine.OrderBy(window => window, Comparer<Window>.Create(ByWindow)).Select(StateOf)],
             ReadFrom(),
             [.. _peerWindows.Select(window => window.Gate).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)]);
     }
+
+    /// <summary>What a caller that was not observed contributes: nothing, and the source is not even read.</summary>
+    private static IEnumerable<T> When<T>(bool observed, Func<IEnumerable<T>> source) => observed ? source() : [];
 
     private static int ByWindow(Window left, Window right)
     {

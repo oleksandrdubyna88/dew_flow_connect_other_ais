@@ -99,17 +99,14 @@ internal sealed class AssociationLadder
         };
     }
 
-    private LadderVerdict ChildRung(AgentKey agent, Window window)
-    {
-        if (!_agents.TryGetValue(agent, out var self) || self.Parent.IsMain || !_agents.ContainsKey(self.Parent))
-        {
-            return LadderVerdict.Undecided;
-        }
+    private LadderVerdict ChildRung(AgentKey agent, Window window) =>
+        DeclaredParentOf(agent).Any(parent => Of(parent, window).Association is Association.WroteHere or Association.ChildOf)
+            ? new LadderVerdict(Association.ChildOf, Rung.Child, [])
+            : LadderVerdict.Undecided;
 
-        var parent = Of(self.Parent, window).Association;
-
-        return parent is Association.WroteHere or Association.ChildOf ? new LadderVerdict(Association.ChildOf, Rung.Child, []) : LadderVerdict.Undecided;
-    }
+    /// <summary>The agent's parent when it is a declared subagent; nothing for main, an unknown agent, or a parent nobody declared.</summary>
+    private IEnumerable<AgentKey> DeclaredParentOf(AgentKey agent) =>
+        _agents.TryGetValue(agent, out var self) && !self.Parent.IsMain && _agents.ContainsKey(self.Parent) ? [self.Parent] : [];
 
     private LadderVerdict SessionRung(Window window)
     {
