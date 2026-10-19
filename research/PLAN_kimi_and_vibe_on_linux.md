@@ -20,7 +20,9 @@
 >
 > - The install button for Kimi's `rg`/`fd` was **not pressed live** in WSL on a machine without `rg` (E6's done-when asked for it). It is proven by tests (S-K17, S-K10) only.
 > - **Native Linux is still refused** for both runtimes, with the WSL2-only sentence (DL1, Q1). It needs one native-Linux run (L-V10 for Vibe; the same for Kimi) before the refusal can lift.
-> - **M-K14** (does the person's own `kimi` TUI have to block coai's turn) is re-judged by the follow-up plan `PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md` (written on branch `docs/kimi-quota-is-not-a-sign-in`, not yet merged at promotion). Q3's default (keep the wait, then Busy) stands until then.
+> - **M-K14** (the refresh-race measurement: do two refreshers of ONE sign-in — coai's turns and the person's own `kimi`, or
+>   several coai servers — break the rotating token) was not run. The exit-77 "not signed in" answers that raised it are
+>   re-judged by the follow-up plan `PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md` (written on branch `docs/kimi-quota-is-not-a-sign-in`, not yet merged at promotion). Q3's default (keep the wait, then Busy) stands until then.
 > - **The Kimi 2.2.0 confinement re-measurement** (a paid probe, on the 3-of-3 rule) was **not run**. The Linux cells in `RESULTS_kimi_confinement.md` §29 are the evidence for the confinement claim.
 >
 > Scope: lifting D18 of
