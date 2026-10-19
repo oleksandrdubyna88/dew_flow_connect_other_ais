@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.60.2](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.60.1...mcp-v0.60.2) (2026-10-19)
+
+
+### Bug Fixes
+
+* **ledger:** a local review line carries its round ([#877](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/877)) ([bb279e3](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/bb279e3dbd7bdeaa49a2aa9d8ba6038415867f0b))
+* **settings:** one bad field in a reviewer row costs that row only ([#866](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/866)) ([6c3d913](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/6c3d913ad8959937d80aa8531c6672ade2e8d829))
+
 ## [0.60.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.60.0...mcp-v0.60.1) (2026-10-18)
 
 
