@@ -51,6 +51,18 @@ internal static class AssignmentViews
     /// <summary>A pair of bounds, typed as <see cref="Bounds"/> returns them, so an expectation reads <c>Be(Span(0, 60))</c>.</summary>
     public static (double? From, double? To) Span(double? from, double? to) => (from, to);
 
+    /// <summary>The authors of one round of a scenario: build the input, assign, aggregate.</summary>
+    public static RoundAuthors AuthorsOf(this AttributionScenario scenario, string gate, string stage, int number)
+    {
+        var input = scenario.Build(gate, stage, number);
+
+        return RoundAuthorsBuilder.Build(input, RoundAttribution.Assign(input));
+    }
+
+    /// <summary>One row in the words a test asserts: window, agent, model, effort, association, launches, turns, write calls.</summary>
+    public static string Show(this AuthorRow row) =>
+        $"{row.Window}|{row.Agent.Id}|{row.Model}|{row.Effort}|{row.Association}|L{row.Launches}|T{row.Turns}|W{row.WriteCalls}";
+
     /// <summary>The same assignment as text — a record holding an <c>ImmutableArray</c> prints the array's type name, so equality by value is judged on this.</summary>
     public static string AsText(this WindowAssignment assignment) => JsonSerializer.Serialize(assignment, Json);
 
