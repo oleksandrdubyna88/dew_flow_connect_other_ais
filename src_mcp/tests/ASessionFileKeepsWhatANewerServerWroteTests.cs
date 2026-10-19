@@ -461,6 +461,25 @@ public sealed class ASessionFileKeepsWhatANewerServerWroteTests : IDisposable
         JsonNode.Parse(File.ReadAllText(file))!["state"]!["config"]!.AsObject().ContainsKey("catalog").Should().BeFalse();
     }
 
+    [Theory]
+    [InlineData("securityLane")]
+    [InlineData("roles")]
+    public void AConfigWrittenBeforeAMemberExisted_StillSaves_AndKeepsItsUnknowns(string absent)
+    {
+        // The scrub walks into the config's gates. A file written before the security lane (2026-10-01) or with no role
+        // budgets has no such member, and the save that read it must still write it — the walk may not be the thing that
+        // turns an old file into a NullReferenceException on every open.
+        var store = new SessionStore(_data);
+        var kept = Planted.Where(p => !p.Where.Contains(absent) && !p.Where.Contains(FirstRole)).ToArray();
+        var file = Plant(store, kept);
+        Edit(file, json => json["state"]!["config"]!.AsObject().Remove(absent));
+
+        var save = () => store.Save(store.Load(Repo, Branch)!);
+
+        save.Should().NotThrow();
+        AssertEveryUnknownIsThere(file, kept);
+    }
+
     private PanelService Service() =>
         new(
             new PanelSettings { Rounds = PanelConfig.Uniform(3, 2, StagePolicy.Human), DataDir = _data },

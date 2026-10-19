@@ -92,6 +92,13 @@ internal static class SessionScrub
 
     private static RoleGate GateOf(RoleGate gate, RetiredMembers retired)
     {
+        // A file written before the security lane existed (2026-10-01) has no such member, and the generator hands over null
+        // rather than the initializer's gate. The save wrote that null before the scrub existed; it must not throw on it now.
+        if (gate is null)
+        {
+            return gate!;
+        }
+
         var bag = Bag(gate.Unknown, ServerJsonContext.Default.RoleGate, retired);
         return ReferenceEquals(bag, gate.Unknown) ? gate : gate with { Unknown = bag };
     }
