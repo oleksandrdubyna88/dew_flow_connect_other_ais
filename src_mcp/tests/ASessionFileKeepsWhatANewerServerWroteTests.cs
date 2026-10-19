@@ -12,7 +12,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// A session file keeps the members a NEWER server wrote into it, when an OLDER server loads it and saves it again
-/// (<c>todo/PLAN_a_session_file_keeps_what_a_newer_server_wrote.md</c>).
+/// (<c>research/PLAN_a_session_file_keeps_what_a_newer_server_wrote.md</c>).
 /// </summary>
 /// <remarks>
 /// <para>Several <c>coai-mcp</c> processes share one data folder, and a window that was not reloaded after an update runs the

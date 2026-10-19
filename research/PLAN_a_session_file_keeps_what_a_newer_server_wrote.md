@@ -1,13 +1,45 @@
 # PLAN — A session file keeps what a newer server wrote
 
-> Status: **plan only, nothing implemented yet, 2026-10-18; plan gate `good_enough` the same day (3 of 4 reviewers; 6 of 8
-> findings applied, 2 rejected with reasons).** Scope: `src_mcp` only — the session records in
+> Status: **IMPLEMENTED, 2026-10-19** (PR #868, branch `docs/plan-session-keeps-unknown-fields`; not merged or released
+> at promotion). Plan gate `good_enough` 2026-10-18 (3 of 4 reviewers; 6 of 8 findings applied, 2 rejected). Code gate
+> `good_enough` 2026-10-19 (12 of 16 reviewers; kimi's four failed, not signed in): 30 findings, 5 accepted, 25 rejected
+> with reasons. Stories S1–S4 shipped as planned, with these **deviations**:
+> 1. The scrub and `RetiredMembers` are their own file, `src_mcp/src/Server/SessionScrub.cs`, not private members of
+>    `SessionStore` (which stood at 733 lines). The test seam is `internal RetiredMembers Retired { get; init; }` on
+>    `SessionStore`.
+> 2. Measured: `JsonTypeInfo.Properties` lists the bag itself (`unknown`) and the `[JsonIgnore]`d `PanelConfig.Catalog`.
+>    The scrub and T10 filter `IsExtensionData`, and `catalog` stays a known name, so a catalog an older build wrote is
+>    dropped on save (extra test `ACatalogAnOlderBuildWroteIntoTheConfig_IsNotCarriedForEver`).
+> 3. The break-it "remove a member from `RoundRecord`" was done as a rename with `[JsonPropertyName]`, which is the form
+>    that compiles. T10 named both the gone and the new name.
+> 4. T1 also plants a member in `state.config.securityLane` (seven members, not six). Two tests were added beyond T1–T10:
+>    the catalog test above and `TheMemberListCheckStillSeesTheTypes`, the companion that keeps T10 from passing on two
+>    empty lists.
+> 5. The AOT run planted its file in a session that the published binary had written itself on a first `open`; a second
+>    process then loaded and saved it. 7 of 7 members were kept, before S2 and again on the final build.
+> 6. **The judge's review found a regression the plan did not foresee:** a session file written before the security lane
+>    existed (2026-10-01) has no `securityLane`, the source generator gives `null`, and the first scrub threw
+>    `NullReferenceException` on save, so `open` would have failed on every such file. `SessionScrub.GateOf` passes a
+>    null gate through (RED/GREEN: `AConfigWrittenBeforeAMemberExisted_StillSaves_AndKeepsItsUnknowns`).
+> 7. From the code gate: each contract's names are worked out once per type (a `FrozenSet` per `JsonTypeInfo`, bounded
+>    by the six types), and a bag is copied only when a name has to go (`ATypesContractNames_AreWorkedOutOncePerType`,
+>    `ABagWithNothingToDrop_IsWrittenFromTheDictionaryItWasGiven`).
+> 8. D8's release note: checked `release-please-config.json` (`$note`, `$order`). A feature PR carries no
+>    `src_vs_code/CHANGELOG.md` line, because the prose for a version is written in that version's release pull request.
+>    So the sentence is in PR #868's body for the releaser, and it must go into the next `## Server <version>` section.
+>
+> **Open tail:** D7 (`Finding`, `CallerDeclaration`, `RoundSize`, `PlanSource` keep no bag) and §9 (six other stores
+> with the same exposure), both as planned. One more from the code gate: an absent `securityLane` still LOADS as `null`
+> rather than the default gate. The scrub now tolerates it, but normalising it where it is read changes what an old
+> file loads as (D4), so it needs its own plan. Not checked: a `Release` AOT publish after deviations 6 and 7 (CI builds it).
+>
+> Scope: `src_mcp` only — the session records in
 > `src_mcp/src/Server/SessionStore.cs` and `src_mcp/core/Rounds/SessionState.cs`, the save in `SessionStore`, the
 > `open`/`status` answer in `src_mcp/src/Server/PanelService.cs`, their tests, and `research/module_server.md`. No
 > schema step, no extension change, no wire change. All references are to `main` at `2b302c65`.
 >
-> Related docs: [module_server.md](../research/module_server.md) (§ *Persistence*, `:2014-2020`), the round-authors
-> epic E5 [PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md](PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md)
+> Related docs: [module_server.md](module_server.md) (§ *Persistence*, `:2014-2020`), the round-authors
+> epic E5 [PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md](../todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md)
 > (§3 *An older server strips the snapshot*, §7 item 18 and §10 item 1 — on branch `feat/round-authors-e5` at
 > `c1216b42`; see §5 below for the boundary). The owner approved this work on 2026-10-18.
 
@@ -309,14 +341,15 @@ there today, and each needs its own D7-style look at where its records are sent.
 
 ## 11. Definition of Done
 
-- [ ] T1 and T2 were RED on `main` with the §1 message, and the message is in the commit body.
-- [ ] The six types carry the bag of D2, `internal set` + `[JsonInclude]`, with the comment that names who sets it.
-- [ ] `SessionStore.Write` scrubs known and retired names on a copy, rebuilt from the leaves up (D3); `RetiredMembers`
+- [x] T1 and T2 were RED on `main` with the §1 message, and the message is in the commit body.
+- [x] The six types carry the bag of D2, `internal set` + `[JsonInclude]`, with the comment that names who sets it.
+- [x] `SessionStore.Write` scrubs known and retired names on a copy, rebuilt from the leaves up (D3); `RetiredMembers`
       exists and is empty; T10's member list is committed.
-- [ ] `open` and `status` carry no bag (D5); T9 proves it through the service.
-- [ ] T1–T10 green; every break-it in §7.3 went red and was restored; the whole suite green, with its count.
-- [ ] The PUBLISHED AOT binary ran on a planted file before S2 started (S1 step 3) and again after S3; no suite run
+- [x] `open` and `status` carry no bag (D5); T9 proves it through the service.
+- [x] T1–T10 green; every break-it in §7.3 went red and was restored; the whole suite run, with its count (PR #868).
+- [x] The PUBLISHED AOT binary ran on a planted file before S2 started (S1 step 3) and again after S3; no suite run
       stands in for it.
-- [ ] `research/module_server.md` § *Persistence* says what the bags keep, what they do not (D6, D7), and D8.
-- [ ] The release note says the guard helps only releases after it (D8).
-- [ ] `node .agents/conventions/tools/plan-lifecycle.mjs` is clean, and this plan is promoted when the work ships.
+- [x] `research/module_server.md` § *Persistence* says what the bags keep, what they do not (D6, D7), and D8.
+- [ ] The release note says the guard helps only releases after it (D8). It is in PR #868's body; the release pull
+      request that ships it writes it into `src_vs_code/CHANGELOG.md` (deviation 8).
+- [x] `node .agents/conventions/tools/plan-lifecycle.mjs` is clean, and this plan is promoted when the work ships.

@@ -355,7 +355,7 @@ S6 may run beside S2–S5 once S1 and E2 have merged. The epic ships as ONE comm
 
 A field added to `RoundRecord` is dropped by any OLDER `coai-mcp` that re-saves the session file; E5's `Authors` is one
 such field. The general guard — a `[JsonExtensionData]` bag on the session's own records, so a re-save keeps what a newer
-server wrote — is [PLAN_a_session_file_keeps_what_a_newer_server_wrote.md](PLAN_a_session_file_keeps_what_a_newer_server_wrote.md),
+server wrote — is [PLAN_a_session_file_keeps_what_a_newer_server_wrote.md](../research/PLAN_a_session_file_keeps_what_a_newer_server_wrote.md) (implemented 2026-10-19),
 not E5. It helps only servers released after it; the binaries already out still strip `Authors`, so E5's database copy
 stays E5's answer for them.
 

@@ -2024,7 +2024,7 @@ survives a server restart, per the durable-status rule.
 Several `coai-mcp` processes share one data folder, and a window that was not reloaded after an update runs an OLDER binary.
 That binary used to read a session file with a context that skips what it does not know and write back only what it knew, so
 every member a newer release added was gone after one save (plan:
-[PLAN_a_session_file_keeps_what_a_newer_server_wrote.md](../todo/PLAN_a_session_file_keeps_what_a_newer_server_wrote.md)).
+[PLAN_a_session_file_keeps_what_a_newer_server_wrote.md](PLAN_a_session_file_keeps_what_a_newer_server_wrote.md)).
 
 - **The bags.** `PersistedSession`, `SessionState`, `PanelConfig`, `RoleGate`, `RoundRecord` and `ReviewerState` each carry
   `[JsonExtensionData, JsonInclude] Dictionary<string, JsonElement>? Unknown { get; internal set; }` — the members of that record
@@ -2035,7 +2035,10 @@ every member a newer release added was gone after one save (plan:
 - **The scrub on save.** `SessionStore.Write` serialises `SessionScrub.Scrubbed(session, Retired)`: on a COPY, rebuilt from the
   reviewer rows up to the session, every bag loses each name of its type's JSON contract (case-insensitive; a known name in a
   bag would be written twice and the stale copy would win the next read) and each name in `RetiredMembers` (empty today). The
-  caller's snapshot is never changed.
+  caller's snapshot is never changed. A contract's names are worked out once per type (`SessionScrub.KnownNamesOf`), and a bag
+  is copied only when a name has to go. A gate the file never held — a file older than the security lane (2026-10-01) loads
+  `securityLane` as `null`, because the source generator does not run the initializer — is passed through and written as
+  `null`, as before the scrub; the scrub's first version threw `NullReferenceException` there.
 - **The rule for retiring or renaming a member of a bagged type:** add its OLD name to `RetiredMembers.Shipped` and update the
   committed member list of `EveryBaggedTypesMembers_AreTheListedOnesOrRetired` in the same commit — that test fails the release
   until both are done. Without it the old name lives in old files' bags for ever; for a rename the old name becomes a bag entry
