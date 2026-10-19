@@ -461,6 +461,34 @@ public sealed class ASessionFileKeepsWhatANewerServerWroteTests : IDisposable
         JsonNode.Parse(File.ReadAllText(file))!["state"]!["config"]!.AsObject().ContainsKey("catalog").Should().BeFalse();
     }
 
+    [Fact]
+    public void ATypesContractNames_AreWorkedOutOncePerType()
+    {
+        // Every save walks every bag; a bag on each round of a long session asked the type for its names again each time
+        // (code gate 2026-10-19). The names of a contract cannot change while the process runs, so they are worked out once.
+        var first = SessionScrub.KnownNamesOf(ServerJsonContext.Default.RoundRecord);
+        var second = SessionScrub.KnownNamesOf(ServerJsonContext.Default.RoundRecord);
+
+        second.Should().BeSameAs(first, "a second bag of the same type must not rebuild the set");
+        first.Should().Contain("verdict").And.Contain("VERDICT", "the names are compared without case")
+            .And.NotContain("unknown", "the bag is the container, not a member of the contract");
+    }
+
+    [Fact]
+    public void ABagWithNothingToDrop_IsWrittenFromTheDictionaryItWasGiven()
+    {
+        // The scrub copies a bag only when a name has to go; a bag of truly unknown members goes out as it came in.
+        var store = new SessionStore(_data);
+        Plant(store, Planted);
+        var loaded = store.Load(Repo, Branch)!;
+        var bag = loaded.Rounds[0].Unknown;
+
+        var scrubbed = SessionScrub.Scrubbed(loaded, RetiredMembers.Shipped);
+
+        scrubbed.Should().BeSameAs(loaded, "nothing in any bag had to go, so no level is rebuilt");
+        scrubbed.Rounds[0].Unknown.Should().BeSameAs(bag);
+    }
+
     [Theory]
     [InlineData("securityLane")]
     [InlineData("roles")]

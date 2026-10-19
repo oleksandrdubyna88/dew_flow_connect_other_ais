@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Collections.Frozen;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using CoaiMcp.Core.Rounds;
@@ -117,26 +119,38 @@ internal static class SessionScrub
         return ReferenceEquals(bag, row.Unknown) ? row : row with { Unknown = bag };
     }
 
+    /// <summary>
+    /// Each contract's names, worked out once: a contract cannot change while the process runs. Bounded by the bagged types
+    /// whose type info reaches the scrub — six, from <c>ServerJsonContext.Default</c>.
+    /// </summary>
+    private static readonly ConcurrentDictionary<JsonTypeInfo, FrozenSet<string>> ContractNames = new();
+
+    /// <summary>
+    /// The names of a type's JSON contract, compared without case. The bag itself is listed among a type's properties
+    /// (measured: "unknown"); it is the container, not a member of the contract.
+    /// </summary>
+    internal static IReadOnlySet<string> KnownNamesOf(JsonTypeInfo type) =>
+        ContractNames.GetOrAdd(
+            type,
+            static t => t.Properties.Where(p => !p.IsExtensionData).Select(p => p.Name).ToFrozenSet(StringComparer.OrdinalIgnoreCase));
+
     /// <summary>The bag without the names this build knows or has retired — the same dictionary when nothing had to go.</summary>
     private static Dictionary<string, JsonElement>? Bag(Dictionary<string, JsonElement>? bag, JsonTypeInfo type, RetiredMembers retired) =>
-        bag is null ? null : Compact(bag, Kept(bag, type, retired));
+        bag is null ? null : Kept(bag, Dropper(type, retired));
 
-    private static Dictionary<string, JsonElement> Kept(Dictionary<string, JsonElement> bag, JsonTypeInfo type, RetiredMembers retired)
+    private static Func<string, bool> Dropper(JsonTypeInfo type, RetiredMembers retired)
     {
-        // The bag itself is listed among a type's properties (measured: "unknown"); it is the container, not a member of the contract.
-        var known = type.Properties.Where(p => !p.IsExtensionData).Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var known = KnownNamesOf(type);
         var gone = retired.Of(type.Type);
-
-        return bag.Where(p => !known.Contains(p.Key) && !gone.Contains(p.Key)).ToDictionary(p => p.Key, p => p.Value);
+        return name => known.Contains(name) || gone.Contains(name);
     }
 
-    private static Dictionary<string, JsonElement>? Compact(Dictionary<string, JsonElement> bag, Dictionary<string, JsonElement> kept) =>
-        kept.Count switch
-        {
-            0 => null,
-            var n when n == bag.Count => bag,
-            _ => kept,
-        };
+    /// <summary>A copy is made only when a name has to go; otherwise the bag the caller gave is the answer.</summary>
+    private static Dictionary<string, JsonElement>? Kept(Dictionary<string, JsonElement> bag, Func<string, bool> drops) =>
+        Compact(bag.Keys.Any(drops) ? bag.Where(p => !drops(p.Key)).ToDictionary(p => p.Key, p => p.Value) : bag);
+
+    /// <summary>A bag that ends empty is no bag, so a file with nothing unknown reads and writes as it always did.</summary>
+    private static Dictionary<string, JsonElement>? Compact(Dictionary<string, JsonElement> bag) => bag.Count == 0 ? null : bag;
 
     private static List<T> Mapped<T>(List<T> items, Func<T, T> scrub)
     {
