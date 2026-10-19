@@ -1674,8 +1674,17 @@ flowchart LR
   `EndCause`: `Round` (the client's 32-hex round id) and `ClientAttempt` (the client's word for the request — `first`,
   `retry`, `repair`, `followUp`), written by the Team server through `RecordJob`'s two new trailing parameters, the
   client's word BESIDE the server's own `attempt` (`first` / `rotated` / `followUp` inside the job), never over it. A
-  local line leaves both empty here — its own `attempt` already is the client's word; whether a local line carries the
-  round is story 4.1's ([module_team_server.md](module_team_server.md), *The round on the wire*).
+  local line leaves `ClientAttempt` empty — its own `attempt` already is the client's word.
+- **The round, on a LOCAL review line (2026-10-19).** The plan's Definition of Done says every new ledger line carries
+  its round; the local ones did not — `ReviewerInvocation.Round` (the key `RoundEngine` mints once per round and
+  `RoundWork.InRound` stamps, carried to later turns by `TurnLoop`) reached only the remote argv, the plan's deviation
+  row having deferred the local line "until the column exists". `UsageLedger.Entry` now writes `Round:
+  invocation.Round`, under the field name the server's lines use, so a local line joins `rounds.round_key`. Every line of
+  one `Record` call shares it (the first launch, a repair, a follow-up, each earlier turn — one invocation feeds them
+  all). A launch outside a round has an empty key and the line says none; `RecordJob` (consultation, question row,
+  probe, chat) still writes no round. The extension's `parseUsageLine` was already source-agnostic (an empty round is
+  absent, a non-empty one kept), and nothing there groups by round, so no figure moves: the Spending tab still shows
+  *reviewers per round* from `coai.db` and claims no per-launch figure.
 - **The guard.** `LaunchLines.Of` writes the parts only when their usage adds up to the turn's exactly; otherwise the
   turn is the one line it always was. A ledger whose lines summed to something the round total did not would be a
   second answer to "what did this cost".
