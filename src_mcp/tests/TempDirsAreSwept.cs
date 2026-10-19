@@ -63,13 +63,19 @@ public sealed class TempDirsAreSwept
     /// The fake CLI's steering file a KILLED run left beside the binary is deleted at this run's start, once — never in the middle of it
     /// (this class is also a test class, and its constructor runs again for every Fact). The file is read by the first vendor-shaped
     /// launch of any later run of the same output folder, so a stale one would steer it (C1 of
-    /// <c>todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md</c>).
+    /// <c>todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md</c>). A flag, not a <see cref="Lazy{T}"/>: a lazy value caches the exception
+    /// of its factory, and an exception here would then fail every test that builds this class instead of one. The delete is best-effort and
+    /// warns on stderr (<see cref="FakeCliSteering.DeleteALeftover"/>), so a leftover that cannot be removed does not stop the run.
     /// </summary>
-    private static readonly Lazy<bool> SteeringLeftoverDeleted = new(FakeCliSteering.DeleteALeftover, isThreadSafe: true);
+    private static int _steeringLeftoverChecked;
 
     public TempDirsAreSwept()
     {
-        _ = SteeringLeftoverDeleted.Value;
+        if (Interlocked.Exchange(ref _steeringLeftoverChecked, 1) == 0)
+        {
+            _ = FakeCliSteering.DeleteALeftover(Console.Error.WriteLine);
+        }
+
         PanelService.PruneOldScratchDirs(
             Path.GetTempPath(), DateTime.UtcNow - Rule.Keeps, [$"{Rule.Prefix}*"], Rule.NeverSwept);
     }

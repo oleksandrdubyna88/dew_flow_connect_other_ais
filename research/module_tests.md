@@ -4580,7 +4580,7 @@ per checkout and configuration. ONE definition: `CoaiMcp.FakeCli.MinimalSteering
 (`AKimiRowRunsThroughTheServiceOnWsl2Tests`, `AskHumanScenarioTests`, `AVibeReviewerRunsThroughAFakeVibeTests`,
 `QuestionConsultScenarioTests`, `QuestionRowLookupScenarioTests`, `QuestionRowOnAgyScenarioTests`) are gone. `FakeCliSteering.Reset` moved
 beside it (own file; it clears the `FAKECLI_*` variables). The assembly fixture (`TempDirsAreSwept`) calls
-`FakeCliSteering.DeleteALeftover` ONCE at the start (a `Lazy`, because that class is also a test class and its constructor runs per Fact),
+`FakeCliSteering.DeleteALeftover(warn)` ONCE at the start (an `Interlocked` flag, because that class is also a test class and its constructor runs per Fact; not a `Lazy`, which would cache a factory's exception and fail every test that builds the class),
 so a file a KILLED run left beside the binary never steers the next run. The Team server's `fakecli-appserver.json` keeps its private-temp
 pattern (one writer, which gives its server a private temp folder).
 
@@ -4593,7 +4593,9 @@ checks that.
 | `AFakeCliSteeringFileIsBesideItsBinaryTests.ASteeringFileAnotherRunLeftInTheUsersTemp_NeverSteersThisRunsFake` (S1) | a decoy `{"FAKECLI_STDOUT":"decoy","FAKECLI_EXIT":"7"}` in a PRIVATE temp folder (the child started with `TEMP`/`TMP`/`TMPDIR` pointed at it through the REQUEST — the test process's own variables are never moved, and the machine's real temp is never written) does not steer a vendor-shaped launch; with nothing beside the binary the fake falls through to its verb mode and exits 64 | `Did not expect result.StdOut "decoy" to contain "decoy" …` and `Expected result.ExitCode to be 64 … but found 7` |
 | `…ASteeringFileBesideTheBinary_SteersTheFake` (S2) | the file `FakeCliSteering.Write` puts beside the binary DOES steer the same launch (stdout, exit 5) | `Expected result.StdOut "" to contain "steered"` |
 | `…TheSteeringFile_SitsInTheFolderOfTheFakesBinary` | the premise of the placement: the file's folder is the folder `FakeCli.exe`/`FakeCli.dll` are in | green first (infrastructure) |
-| `…ASteeringFileAKilledRunLeftBesideTheBinary_IsDeletedAtTheNextRunsStart` | `DeleteALeftover` deletes it and answers whether there was one | green first (the helper is new) |
+| `…ASteeringFileAKilledRunLeftBesideTheBinary_IsDeletedAtTheNextRunsStart` | `DeleteALeftover` deletes it and answers whether a leftover was found and removed | green first (the helper is new) |
+| `…ASteeringFileThatCannotBeDeleted_IsWarnedAbout_AndDoesNotBlockTheRun` (code gate, 2026-10-19; Windows — a held handle blocks a delete only there) | with the file held open (`FileShare.None`), `DeleteALeftover` does not throw, passes ONE warning naming the file's path to `warn` (the fixture writes it to stderr), leaves the file, and removes it on the next start once the handle is gone — a leftover that cannot be deleted must not block the whole assembly | `Did not expect any exception … but found System.IO.IOException: The process cannot access the file '…akecli-minimal.json' because it is being used by another process.`; green after |
+| `…AWritersLeaseThatCannotDeleteTheFile_DoesNotFailItsOwnTest` (same) | a writer's `Lease.Dispose` is best-effort (catches `IOException` / `UnauthorizedAccessException`), as the four classes the helper replaced each were | the same `IOException` out of `Dispose`; green after |
 
 **Break-it (done, then restored):** the two readers (`Program.cs` `MinimalSteering.Load`, `AcpAgent.SteeredScript`) put back on
 `Path.GetTempPath()` → S1 and S2 red as above, and all of `AKimiRowRunsThroughTheServiceOnWsl2Tests` red

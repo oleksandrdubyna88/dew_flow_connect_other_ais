@@ -38,14 +38,38 @@ internal static class FakeCliSteering
 
     /// <summary>
     /// Deletes a steering file a killed run left beside the binary, so the first vendor-shaped launch of this run is not steered
-    /// by a run that never cleaned up. Answers whether there was one.
+    /// by a run that never cleaned up. Answers whether a leftover was found AND removed.
     /// </summary>
-    public static bool DeleteALeftover()
+    /// <remarks>
+    /// Best-effort, and never fatal: the assembly fixture calls this before every test, so an exception here would fail the whole run over a
+    /// file a scanner or an orphan merely holds open. A leftover that cannot be deleted is passed to <paramref name="warn"/> with the path a
+    /// person has to delete, and the run goes on.
+    /// </remarks>
+    public static bool DeleteALeftover(Action<string> warn)
     {
-        var left = File.Exists(MinimalFile);
-        File.Delete(MinimalFile);
+        if (!File.Exists(MinimalFile))
+        {
+            return false;
+        }
 
-        return left;
+        return TryDelete(warn);
+    }
+
+    private static bool TryDelete(Action<string> warn)
+    {
+        try
+        {
+            File.Delete(MinimalFile);
+
+            return true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            warn($"WARNING: the fake CLI's steering file '{MinimalFile}' was left by an earlier run and could not be deleted ({e.GetType().Name}: {e.Message}). "
+                + "A vendor-shaped launch in this run may be steered by it; delete the file by hand.");
+
+            return false;
+        }
     }
 
     /// <summary>Clears every <c>FAKECLI_*</c> variable this process holds.</summary>
@@ -63,14 +87,17 @@ internal static class FakeCliSteering
         }
     }
 
-    /// <summary>Deletes the steering file when disposed — the writer's own cleanup; a killed run's is <see cref="DeleteALeftover"/>'s.</summary>
+    /// <summary>
+    /// Deletes the steering file when disposed — the writer's own cleanup; a killed run's is <see cref="DeleteALeftover"/>'s. Best-effort, as the
+    /// four classes this helper replaced each were: a failing Dispose would fail a test that passed, over a file the next start sweeps.
+    /// </summary>
     private sealed class Lease(bool deletes) : IDisposable
     {
         public void Dispose()
         {
             if (deletes)
             {
-                File.Delete(MinimalFile);
+                _ = TryDelete(static _ => { });
             }
         }
     }

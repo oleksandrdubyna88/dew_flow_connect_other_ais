@@ -93,9 +93,46 @@ public sealed class AFakeCliSteeringFileIsBesideItsBinaryTests : IDisposable
         _ = FakeCliSteering.Write(new Dictionary<string, string> { ["FAKECLI_STDOUT"] = "left behind" });
         File.Exists(FakeCliSteering.MinimalFile).Should().BeTrue("the killed run wrote it");
 
-        FakeCliSteering.DeleteALeftover().Should().BeTrue("there was one to delete");
+        FakeCliSteering.DeleteALeftover(_ => { }).Should().BeTrue("there was one to delete");
 
         File.Exists(FakeCliSteering.MinimalFile).Should().BeFalse();
-        FakeCliSteering.DeleteALeftover().Should().BeFalse("a second start finds none, and that is not a fault");
+        FakeCliSteering.DeleteALeftover(_ => { }).Should().BeFalse("a second start finds none, and that is not a fault");
+    }
+
+    [Fact]
+    public void ASteeringFileThatCannotBeDeleted_IsWarnedAbout_AndDoesNotBlockTheRun()
+    {
+        // A handle another process holds (a scanner, a killed run's orphan) makes the delete throw on Windows. The leftover is the NEXT
+        // run's problem to report, not a reason for the whole assembly to fail: the fixture that calls this runs before every test.
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "deleting a file someone has open succeeds on Unix; the held handle is Windows'");
+        _ = FakeCliSteering.Write(new Dictionary<string, string> { ["FAKECLI_STDOUT"] = "left behind" });
+        var warnings = new List<string>();
+        using (new FileStream(FakeCliSteering.MinimalFile, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            var act = () => FakeCliSteering.DeleteALeftover(warnings.Add);
+
+            act.Should().NotThrow("a leftover that cannot be deleted is reported, never fatal");
+            File.Exists(FakeCliSteering.MinimalFile).Should().BeTrue("the held file is still there");
+        }
+
+        warnings.Should().ContainSingle().Which.Should().Contain(FakeCliSteering.MinimalFile, "the warning names the file a person has to delete");
+        FakeCliSteering.DeleteALeftover(_ => { }).Should().BeTrue("once the handle is gone the next start removes it");
+    }
+
+    [Fact]
+    public void AWritersLeaseThatCannotDeleteTheFile_DoesNotFailItsOwnTest()
+    {
+        // The four classes this helper replaced each deleted best-effort in Dispose; the helper must not be stricter than they were —
+        // a failing Dispose fails a test that passed, over a file the next start sweeps anyway.
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "deleting a file someone has open succeeds on Unix; the held handle is Windows'");
+        var lease = FakeCliSteering.Write(new Dictionary<string, string> { ["FAKECLI_STDOUT"] = "held" });
+        using (new FileStream(FakeCliSteering.MinimalFile, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            var act = lease.Dispose;
+
+            act.Should().NotThrow("a lease's cleanup is best-effort");
+        }
+
+        FakeCliSteering.DeleteALeftover(_ => { }).Should().BeTrue("the file the lease could not delete is the next start's to remove");
     }
 }
