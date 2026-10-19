@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text.Json;
 using System.Text;
 using CoaiMcp.Runners.Files;
 
@@ -50,10 +51,14 @@ public sealed class TreeHold(FileStream signIn, FileStream home) : IDisposable
 /// killed over a still-refreshing <c>kimi</c> must not let a second refresher in. A second inheritable file per HOME
 /// (<c>&lt;root&gt;/coai-tree.lock</c>) lets a disposal ask "is a tree alive on THIS home" without opening the sign-in folder
 /// (<see cref="HomeProbe"/>).</para>
-/// <para><b>The key is the folder's IDENTITY, never its spelling</b> (decision 9): SHA-256 of the upper-cased final path of the opened
-/// folder handle (<c>HandleRead.FinalDirectory</c>). A folder the kernel cannot name has NO key and takes no lock — never a silent
-/// fall-back to the spelling, which would be two keys for one sign-in. On a case-SENSITIVE folder the upper-casing merges two
+/// <para><b>The key is the folder's IDENTITY, never its spelling</b> (decision 9; DL7 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): on Windows SHA-256 of the upper-cased final
+/// path of the opened folder handle; on Linux SHA-256 of <c>dev_major:dev_minor:ino</c> from <c>statx</c> — a symlinked parent, a bind mount and a <c>/proc/self/cwd</c> spelling are one folder and one key; a deleted
+/// folder has no key (<see cref="FolderIdentity"/>). A folder the kernel cannot name has NO key and takes no lock — never a silent
+/// fall-back to the spelling, which would be two keys for one sign-in. On a case-SENSITIVE Windows folder the upper-casing merges two
 /// distinct folders into one key: two sign-ins that wait on each other, the safe direction.</para>
+/// <para><b>What the tree hold covers on Linux</b> (L-K5, L-K4): it is held by the shim and by <c>kimi</c>, the direct child that inherited the descriptor — not by a grandchild <c>kimi</c> starts the ordinary way
+/// (only the agent held fd 3; <c>rg</c> and <c>env</c> held nothing). That is enough while the refresher is <c>kimi</c> itself (L-K4: no descendant of <c>kimi acp</c> was another <c>kimi</c>). What this lock cannot see,
+/// the survivor marker must (A3).</para>
 /// <para><b>The lock folder</b> is <c>&lt;LocalApplicationData&gt;/coai-mcp/kimi-locks/</c> beside the engine leases — NOT under
 /// <c>coai-kimi/</c> (the D20 sweep walks every folder there) and not in temp (no sweep takes it; the files are empty and reused).
 /// Tests override it per async flow (<see cref="RootFor"/>), never by assigning a static: the suite runs eight tests at once.</para>
@@ -98,7 +103,7 @@ public static class KimiCredentialsLock
         return new Restore(before);
     }
 
-    /// <summary>TEST ONLY — null in the product: what names a folder's final path (the product's is <c>HandleRead.FinalDirectory</c>). Per async flow.</summary>
+    /// <summary>TEST ONLY — null in the product: what names a folder's IDENTITY (the product's is <see cref="FolderIdentity.Of"/>). Per async flow.</summary>
     internal static Func<string, string>? Final
     {
         get => _final.Value;
@@ -112,12 +117,12 @@ public static class KimiCredentialsLock
         set => _beforeTheHomeHold.Value = value;
     }
 
-    /// <summary>The key of a sign-in folder, or EMPTY when the kernel cannot name it by its handle (it does not exist, cannot be opened, or is off Windows).</summary>
+    /// <summary>The key of a sign-in folder, or EMPTY when its identity cannot be named (it does not exist, is not a folder, cannot be opened, or the host has no identity rule).</summary>
     public static string KeyFor(string target)
     {
-        var final = (Final ?? HandleRead.FinalDirectory)(target);
+        var identity = (Final ?? FolderIdentity.Of)(target);
 
-        return final.Length == 0 ? string.Empty : Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(final.ToUpperInvariant())))[..16];
+        return identity.Length == 0 ? string.Empty : Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(identity)))[..16];
     }
 
     /// <summary>The gate's file, or EMPTY when there is no key — a caller that gets an empty path refuses; it never hashes the spelling instead.</summary>
@@ -125,6 +130,9 @@ public static class KimiCredentialsLock
 
     /// <summary>The sign-in's tree-hold file, or EMPTY when there is no key.</summary>
     public static string TreePathFor(string target) => Named(target, ".tree.lock");
+
+    /// <summary>The survivor marker's file (A3's), or EMPTY when there is no key: A3's file, this class's key — one identity rule for the two lock files and the marker.</summary>
+    public static string MarkerPathFor(string target) => Named(target, ".survivors.json");
 
     /// <summary>
     /// The server's gate on <paramref name="target"/>'s sign-in, waited for in one-second slices until taken or <paramref name="ct"/>
@@ -147,10 +155,10 @@ public static class KimiCredentialsLock
         while (true)
         {
             ct.ThrowIfCancellationRequested();
-            var hold = await Task.Run(() => HeldFile.TakeWithin(path, Slice), ct);
+            var hold = await Task.Run(() => HeldFile.TakeVerified(path, Slice), ct);
             if (hold is not Hold.Busy)
             {
-                return hold;
+                return Recorded(hold, target);
             }
         }
     }
@@ -164,7 +172,7 @@ public static class KimiCredentialsLock
     public static TreeHolding HoldTree(string target, string root, TimeSpan within) => TakeTreeThrough(target, root, within, Inheritable);
 
     /// <summary>The one place a hold is asked to be INHERITABLE — the product's take; a test passes <see cref="HeldFile.TakeWithin"/> without it (no test holds an inheritable handle in the host).</summary>
-    private static Hold Inheritable(string path, TimeSpan within) => HeldFile.TakeWithin(path, within, inheritable: true);
+    private static Hold Inheritable(string path, TimeSpan within) => HeldFile.TakeVerified(path, within, inheritable: true);
 
     /// <summary>
     /// <see cref="HoldTree"/>'s decisions over a <paramref name="take"/> of one file: no key, no lock folder, the sign-in's file busy or unusable, the
@@ -209,10 +217,44 @@ public static class KimiCredentialsLock
         return new TreeHolding.Unusable(home is Hold.Unusable bad ? bad.Cause : new IOException($"{Path.Combine(root, HomeHoldName)} is held by another process, and nothing but a disposal's probe ever takes it"));
     }
 
+    /// <summary>
+    /// The gate as taken — and, on the FIRST take of the file (it is empty), the record a later retirement sweep reads (<see cref="KimiLockRecord"/>: the identity it was keyed by and the folder the launch
+    /// named), written through the stream already held. A record that cannot be written never refuses the launch: it only serves retirement, and a file with none is left alone by the sweep.
+    /// </summary>
+    private static Hold Recorded(Hold hold, string target)
+    {
+        if (hold is Hold.Taken { Stream: var stream })
+        {
+            WriteRecord(stream, target);
+        }
+
+        return hold;
+    }
+
+    private static void WriteRecord(FileStream stream, string target)
+    {
+        try
+        {
+            if (stream.Length > 0)
+            {
+                return;
+            }
+
+            var record = new KimiLockRecord((Final ?? FolderIdentity.Of)(target), target, DateTimeOffset.UtcNow);
+            stream.Write(JsonSerializer.SerializeToUtf8Bytes(record, KimiLockJsonContext.Default.KimiLockRecord));
+            stream.Flush();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            // Never the reason a launch is refused: the record only serves retirement.
+        }
+    }
+
     private static string Named(string target, string suffix) =>
         KeyFor(target) is { Length: > 0 } key ? Path.Combine(Root, key + suffix) : string.Empty;
 
-    private static string Unnamed(string target) =>
+    /// <summary>The refusal for a folder that has no key (it vanished, or was never keyable) — the one sentence every caller of <see cref="KeyFor"/> says.</summary>
+    internal static string Unnamed(string target) =>
         $"the Kimi sign-in folder {target} cannot be named by its handle, so coai cannot key its lock — refused (D19)";
 
     /// <summary>The lock folder made; the unusable answer when it cannot be (a file where it should be, no access).</summary>

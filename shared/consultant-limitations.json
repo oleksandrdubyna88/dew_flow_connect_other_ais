@@ -273,6 +273,25 @@
       "standing": "unmeasured",
       "text": "Not run here: coai launches Vibe on Windows and WSL2, where it was measured, and refuses it on macOS.",
       "source": "Not measured: no macOS machine has run Vibe for this product (D18 of todo/PLAN_vibe_and_kimi_runtimes.md); the launch is refused until the probe runs there."
+    },
+    {
+      "runtime": "kimi",
+      "platform": "linux",
+      "standing": "unmeasured",
+      "text": "Not run here: Kimi is measured on WSL2 only for now, so coai refuses it on a native Linux host.",
+      "source": "Not measured on native Linux: every Linux Kimi cell is WSL2 (section 29 of research/RESULTS_kimi_confinement.md); the launch is refused until one native-Linux run is recorded (DL1 of todo/PLAN_kimi_and_vibe_on_linux.md)."
+    },
+    {
+      "runtime": "kimi",
+      "platform": "wsl",
+      "standing": "unconfined",
+      "text": "Reads only coai's working folder through Read, but Grep and Glob search the disk directly and can read any file this user can; every write and shell call was refused - measured on kimi 2.2.0 on WSL2, one run per cell.",
+      "measured": {
+        "date": "2026-10-16",
+        "cliVersion": "kimi 2.2.0",
+        "cells": "Section 29, WSL2, one run per cell (n = 1): L-K7: write arms 3 of 3 refused with nothing written, Read served only inside the working folder, a Grep of a path outside it was not stopped; L-K2: the sign-in through a symlink into the 0700 folder 8 of 8, refreshed in place; L-K1: rg on the built PATH, no bin/ in the owned home; the Grep arm outside the working folder ran on WSL2, but Glob's direct disk read is the Windows section 9 (M-K6) measurement, assumed to take the same code path on Linux; the 3-of-3 repeat is still owed",
+        "document": "research/RESULTS_kimi_confinement.md"
+      }
     }
   ]
 }

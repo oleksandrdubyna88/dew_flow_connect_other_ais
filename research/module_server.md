@@ -2019,6 +2019,41 @@ the real one, retried briefly (see *A session is saved under its own scratch nam
 reads as a fresh session rather than a locked repo. Round trail (`RoundRecord`) and pending findings ride in the same file — `status`
 survives a server restart, per the durable-status rule.
 
+### A session file keeps what a newer server wrote (`Unknown` bags)
+
+Several `coai-mcp` processes share one data folder, and a window that was not reloaded after an update runs an OLDER binary.
+That binary used to read a session file with a context that skips what it does not know and write back only what it knew, so
+every member a newer release added was gone after one save (plan:
+[PLAN_a_session_file_keeps_what_a_newer_server_wrote.md](PLAN_a_session_file_keeps_what_a_newer_server_wrote.md)).
+
+- **The bags.** `PersistedSession`, `SessionState`, `PanelConfig`, `RoleGate`, `RoundRecord` and `ReviewerState` each carry
+  `[JsonExtensionData, JsonInclude] Dictionary<string, JsonElement>? Unknown { get; internal set; }` — the members of that record
+  this build does not know, written back as they were; `null` (and not written) when the file had none. The setter is
+  `internal set` on purpose: **`init` builds and then fails at the first load** (`The extension data property 'Unknown' ... cannot
+  bind with a parameter in the deserialization constructor` — the source generator makes an `init` member a constructor
+  parameter), and `private set` does not compile (SYSLIB1038). Nothing mutates the dictionary; `with` copies share it.
+- **The scrub on save.** `SessionStore.Write` serialises `SessionScrub.Scrubbed(session, Retired)`: on a COPY, rebuilt from the
+  reviewer rows up to the session, every bag loses each name of its type's JSON contract (case-insensitive; a known name in a
+  bag would be written twice and the stale copy would win the next read) and each name in `RetiredMembers` (empty today). The
+  caller's snapshot is never changed. A contract's names are worked out once per type (`SessionScrub.KnownNamesOf`), and a bag
+  is copied only when a name has to go. A gate the file never held — a file older than the security lane (2026-10-01) loads
+  `securityLane` as `null`, because the source generator does not run the initializer — is passed through and written as
+  `null`, as before the scrub; the scrub's first version threw `NullReferenceException` there.
+- **The rule for retiring or renaming a member of a bagged type:** add its OLD name to `RetiredMembers.Shipped` and update the
+  committed member list of `EveryBaggedTypesMembers_AreTheListedOnesOrRetired` in the same commit — that test fails the release
+  until both are done. Without it the old name lives in old files' bags for ever; for a rename the old name becomes a bag entry
+  while the new property starts empty.
+- **The answer carries no bag.** `open` and `status` map each round and reviewer row to `Unknown = null`
+  (`PanelService.WithoutUnknownMembers`); the members belong to the file.
+- **What it does not promise.** A record this process builds new has an empty bag (the `SecurityLane` gate the round engine
+  replaces from the settings loses its bag by design). `Finding`, `CallerDeclaration`, `RoundSize` and `PlanSource` are wire
+  types too and have no bag — a member added to one of them is still lost from `pending`, `rejections` and `carried` after an
+  older re-save (an open tail: a persistence projection, a separate plan). The other stores that read and rewrite a JSON
+  record (escalations, consultations, cadence, question-consultant state) have the same exposure and are not fixed here.
+- **Honest limit:** the guard helps only releases AFTER it. A window that still runs an earlier binary strips the file as before.
+- **Checked on the published binary:** the Native AOT `coai-mcp` (win-x64) loaded and saved a planted file through `open` with
+  unknown members at every level: all kept (2026-10-18; before the answer strip the `open` answer still echoed them).
+
 ### The round is written before it runs, not after (`LiveRound`)
 
 A `RoundRecord` is persisted the moment the fan-out is built — `status: running`, `startedUtc`, the
@@ -3256,8 +3291,11 @@ the whole read. A stop is `partial: read budget`: it drops the stopped file's id
 and skips the Agent-count check. `ObservedSession.ReaderVersion` is bumped by any change to a counting rule, and
 `TheReaderVersionIsPinnedToTheFixturesTests` ties it to the fixtures' totals.
 
-`agent_log` is unchanged and still reads through `TranscriptLines.ReadShared`; its property reads go through the same
-`JsonText.StringProperty` (2026-10-18), so a non-string field reads empty there too. The reader has no call site yet: E4 attributes what it reads (the pure core `src_mcp/core/Authors/`, see `module_core.md`, through the one mapping `src/Store/AttributionMapping.cs`)
+`agent_log` is unchanged and still reads through `TranscriptLines.ReadShared`; every property read of a line (`timestamp`, `type`,
+`cwd`, `message`, `content` and its blocks) goes through `JsonText` (2026-10-18; `timestamp` and `message` on 2026-10-19), so a line
+that is valid JSON in the wrong shape never throws out of `AgentLog.Slice`: a non-string field reads empty, and a line whose
+`timestamp` is not a parseable string is skipped. An agent key read from a FILE NAME (`agent-<key>.jsonl`, `.meta.json`) passes the same
+`TranscriptShapes.IsId` gate as every other id; a name that fails it is no agent and is counted in `ValuesOffShape`. The reader has no call site yet: E4 attributes what it reads (the pure core `src_mcp/core/Authors/`, see `module_core.md`, through the one mapping `src/Store/AttributionMapping.cs`)
 and E5 stores it.
 
 **Shape decisions.**
@@ -7454,16 +7492,49 @@ handed a PLACE — a coai-owned folder for its home and a sanitised copy to stan
   changing, a full disk) or no homes root configured refuses the TURN before anything is launched —
   `FailedTurns.RefusedBeforeTheLaunch` with `ConsultFailure.VendorRefused` and `ConsultantPlaces.Cure` — and the
   conversation stays open, as every refusal before a launch leaves it.
-- **`ask_consultants` — a question row's one-shot copies (D6).** A row whose plan stands in `CwdKind.Snapshot` (Vibe's disk
-  row): `QuestionRowLaunch` makes, in the row's own `coai-question-*` folder, one copy per GRANTED ROOT
-  (`ConsultantPlaces.OneShotAsync`: the snapshot's live mode, limited to that root — a sub-folder of a repository copies that
-  sub-folder only) under `tree`, and the row stands in `tree`; a root outside any Git work tree is refused with a sentence
-  (the copy lists through git), the row ending `refused`. The prompt names the COPIES' paths: the fan-out composes such a
+- **`ask_consultants` — a question row's one-shot copies (D6; a parent folder is expanded, 2026-10-18).** A row whose plan stands
+  in `CwdKind.Snapshot` (Vibe's disk row): `QuestionRowLaunch` makes, in the row's own `coai-question-*` folder, one copy per
+  GRANTED work-tree ROOT (`ConsultantPlaces.OneShotAsync`: the snapshot's live mode, limited to that root — a sub-folder of a
+  repository copies that sub-folder only) under `tree`, and the row stands in `tree`. A granted root that is NOT a work tree is a
+  parent folder: `ParentExpansion` walks it two levels down (`RepositoryWalk`), asks git once per candidate (`RepositoryFacts`),
+  leaves out a linked worktree whose main checkout is copied in the row (D9), bounds the row at 50 repositories, and copies each
+  one through the same `RepositoryCopier` at `tree/<grant index>/<relative path>/snapshot-<id>`. A candidate git does not confirm
+  is skipped with a note that names the cause (git failed or gave no answer, or the folder is inside another repository's work
+  tree); a folder with no repository, a bound passed (50 repositories, 10,000 folders, 100,000 entries in one listing), or any
+  refused copy refuses the row, ending `refused`; a budget that runs out before the first copy says it ended while reading or
+  confirming, not "0 of 0 copied". A folder Windows hides (Hidden or System attribute) is skipped like a dot folder.
+  What was skipped is carried on the place (`ConsultantPlace.Notes`) into the row's `note` on every arm — each note redacted
+  once, where `OneShotTally.Say` makes it, so the server log reads the same redacted text — and the
+  worktree sentence also reaches the prompt (`ConsultantPlace.Limitations`). Details, the layout and the measured sizes:
+  [module_runners.md](module_runners.md), *A Vibe disk row expands a parent folder into its repositories*. The prompt names the COPIES' paths: the fan-out composes such a
   row's prompt with no roots and hands `RowInput.Launch.NamingCopies` → `RowLaunchInput.PromptNaming`, which the launch
   calls with the copies it made (a row standing in copies with no naming function is a contract violation, never a prompt
   naming the originals). A runtime with a `HomesFolder` keeps its home in the row's folder too (`OwnedScratch`), and its
   none row stands in an EMPTY `cwd` folder beside it, so a cwd never holds its own home. Everything goes in `finally`
   (`GitScratch.DeleteEvenIfReadOnly`) — on an answer, a refusal and a cancellation alike.
+- **`ask_consultants` — a killed server's row scratch is swept, and a live row's is locked (D8, 2026-10-18,
+  `todo/PLAN_vibe_reads_a_folder_of_repositories.md`).** `finally` never runs when the server is killed, and the product sweep
+  (`PanelService.ScratchPrefixes`) listed only `coai-answers-*`, `coai-repair-*` and `coai-noworkspace-*`, so a row's
+  `coai-question-*` folder — and the repository copies in it — stayed for ever (`shared/temp-sweep.json` keeps it `neverSwept` for the
+  TEST sweep, which says the product sweeps it "on its own clock": it did not). Now `ScratchPrefixes` has `coai-question-*`, and the
+  sweep keeps a folder by its LOCK, not by age alone, because the row budget (`COAI_QCONSULT_ROW_MINUTES`) has no upper bound and a
+  deep write does not move the folder's own time. `QuestionRowLaunch.RunAsync` takes `HeldFile.Take(<scratch>/.coai-question.lock)`
+  (`QuestionRowLaunch.LockName`) right after it makes the scratch and lets go of it in the same `finally`, BEFORE the folder is
+  deleted (a held file keeps the delete from finishing on Windows). `PanelService.DeleteIfDue` asks the age first (taking the lock
+  creates the lock file, which moves the folder's time), then `FolderLock.RemoveIfFree`: a scratch whose lock cannot be taken is kept,
+  and one older than six hours whose lock is free — a killed server's — is emptied around the lock, the lock let go, the folder
+  removed. A lock that cannot be created when the row starts is logged and does not refuse the row; its scratch is then only as safe
+  as the six-hour window. **Two cases the lock does not protect a live row that runs longer than six hours:** (1) a row whose own lock
+  could not be taken (`QuestionRowLaunch.RunAsync` logs it and runs on): to the sweep its scratch looks free, and past six hours it is
+  removed under the row; (2) a live row of an OLDER coai-mcp, which takes no lock, beside a NEW server's sweep: the lock is free by
+  absence, so the same happens. Both are bounded by the six hours and by the row budget (default far under six hours); neither is
+  closed on purpose, and a row that must outlive six hours needs a binary that holds the lock. **No CLI stands next to the lock:** every row whose plan stands in `Scratch` — not only a home-keeping one —
+  gets `ScratchDir = <scratch>/cwd` (`QuestionRowLaunch.StandingFolderIn`, the folder a home-keeping none row already used), because a
+  CLI that reads or indexes its working folder would meet a sharing violation on the held lock on Windows, and the file is noise to the
+  model. `ScratchDir` is read in one place, `ConsultantLaunches.Cwd`, as the child's working directory, so nothing else expected the top. The take-the-lock-or-keep step is `runners/Files/FolderLock.cs`, EXTRACTED from `VibeHomes.SweepOneShot`
+  (reuse-first, step 2.2): the one-shot Vibe homes and the row scratch now use the same code. The test sweep still never touches a
+  `coai-question-*` folder (`neverSwept`). The age is the folder's own last write (the product sweep's rule), so a row that runs
+  past six hours depends on its lock alone.
 - **`--check-consultant` — the check's one-shot copy.** `ConsultantCheckTurn` gives a runtime that asks the same: a copy of
   the scratch repository in the check's own scratch (`own/tree/…`), the home beside it, the prompt naming the copy; gone
   with the check's scratch.
@@ -7497,8 +7568,12 @@ flowchart TD
   held -->|no| makeat["MakeAtAsync(Live(repo), folder/tree) — replaces a tree a previous server left"]
   refresh --> launch["launch: Workdir = tree · OwnedScratch = folder · prompt names tree"]
   makeat --> launch
-  row["question row, plan Cwd = Snapshot"] --> copies["OneShotAsync(row folder, granted roots) — a copy per root; no Git work tree: refused"]
+  row["question row, plan Cwd = Snapshot"] --> copies["OneShotAsync(row folder, granted roots) — a copy per root; a parent folder expanded into its repositories; none found: refused"]
   copies --> rowlaunch["launch in tree · prompt names the copies · finally: the row folder deleted"]
+  rowlaunch -. "holds .coai-question.lock for the row's life" .-> qlock["row scratch lock"]
+  beat --> qsweep["PruneOldAnswerDirs — coai-question-* older than six hours"]
+  qsweep -->|"lock cannot be taken: a live row"| qkept["kept this beat"]
+  qsweep -->|"lock free: a killed server's row"| qgone["emptied around the lock · lock let go · folder removed"]
   beat["ConsultationService.Sweep — at start and every beat"] --> records["records swept first (idle: closed)"]
   records --> sweep["ConsultantHomeSweep over coai-vibe/ and coai-kimi/"]
   sweep -->|"over, or unknown/idle past ConsultIdle, and no turn held"| gone["snapshot released · folder deleted, links unlinked, never entered"]
@@ -7507,12 +7582,16 @@ flowchart TD
 
 | What | Where |
 |---|---|
-| The place, the one-shot copies, the non-Git refusal | `Server/Consultation/ConsultantPlaces.cs` |
+| The place, the one-shot copies | `Server/Consultation/ConsultantPlaces.cs` |
+| The parent-folder expansion (D1–D9): the walk and its listing seam, git's facts, the worktree selection, the tally, the link rule, the one copy method | `Server/Consultation/ParentExpansion.cs`, `RepositoryWalk.cs`, `FolderListing.cs`, `RepositoryFacts.cs`, `LinkedWorktrees.cs`, `OneShotTally.cs`, `GrantedPaths.cs`, `RepositoryCopier.cs` |
+| The row's `note` carrying what the place skipped | `QuestionRowLaunch.PlaceNotes` |
 | The conversation's snapshot registry | `Server/Consultation/ConversationSnapshots.cs` |
 | The home sweep and `RemoveNow` | `Server/Consultation/ConsultantHomeSweep.cs` |
 | The homes root | `PanelSettings.ConsultantHomesRoot` (`COAI_CONSULTANT_HOMES`, else local application data; empty in hand-built settings, so a test never touches the machine's own) |
 | Wiring | `ConsultationService.RunTurnAsync` / `Sweep` / `CloseAsync`; `QuestionRowLaunch.RunAsync`; `QuestionFanOut.CheckedInput`; `ConsultantCheckTurn.TurnAsync` |
 | Tests | `AVibeConsultationKeepsOneSnapshotTests`, `AVibeQuestionRowReadsACopyOfItsRootsTests`, `ConsultantHomeSweepTests`, `ConsultantCheckTests.AVibeCheck_…` — [module_tests.md](module_tests.md) |
+| Tests of the expansion | `RepositoryWalkTests`, `RepositoryFactsTests`, `OneShotTallyTests`, `FolderLockTests`, `AVibeDiskRowExpandsAParentFolderTests`, `AVibeDiskRowSaysWhatItSkippedTests`, `AQuestionRowKeepsWhatItsPlaceSkippedWhateverEndsItTests`, `AVibeDiskRowReadsAParentFolderThroughTheServiceTests` (S15) — [module_tests.md](module_tests.md) |
+| A question row's scratch lock and its sweep (D8) | `QuestionRowLaunch.LockName` / `RunAsync`; `PanelService.ScratchPrefixes`, `DeleteIfDue`; `Runners/Files/FolderLock.cs`; tests `AScratchSweepRunsOnTheConsultationBeatTests`, `AQuestionRowHoldsItsScratchLockWhileItRunsTests` — [module_tests.md](module_tests.md) |
 
 Not done here: one live `consult` and one live question row through the product with a real Vibe (paid turns) — the
 step after the release, recorded then in research/RESULTS_vibe_confinement.md and [module_tests.md](module_tests.md).

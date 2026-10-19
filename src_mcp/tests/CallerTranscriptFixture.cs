@@ -33,13 +33,16 @@ public readonly record struct TranscriptFile(string Key)
 /// case as written on Windows (13 cases mix <c>\</c> and <c>/</c>; Q8's forms are the point) and has <c>\</c> folded to <c>/</c> elsewhere. The
 /// parent folder of every written path is created, because a missing folder is <c>Unresolved</c> and never walked up from.</para>
 /// </remarks>
-public sealed class CallerTranscriptFixture
+public sealed partial class CallerTranscriptFixture
 {
     private const string FixturePrefix = "D:/fixture";
 
     private static readonly JsonSerializerOptions Json = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
     private static readonly UTF8Encoding Utf8 = new(false);
-    private static readonly Regex Renamed = new(@"^k\d+\z", RegexOptions.CultureInvariant);
+    private static readonly string[] IdNames = ["id", "tool_use_id"];
+
+    [GeneratedRegex(@"^k\d+\z", RegexOptions.CultureInvariant)]
+    private static partial Regex Renamed();
 
     private CallerTranscriptFixture(FixtureCase fixtureCase, FixtureRounds rounds, ClaudeHome home, string root)
     {
@@ -164,6 +167,14 @@ public sealed class CallerTranscriptFixture
     public void DeleteMeta(string id) => File.Delete(MetaPathOf(id));
 
     public void DeleteAgentFile(string id) => File.Delete(PathOf(TranscriptFile.Agent(id)));
+
+    /// <summary>Copies <c>agent-&lt;id&gt;.jsonl</c> and its meta to files named for <paramref name="otherName"/>, which need not be an id.</summary>
+    public void CopyAgentUnderName(string id, string otherName)
+    {
+        var folder = Path.Combine(SessionFolder, "subagents");
+        File.Copy(PathOf(TranscriptFile.Agent(id)), Path.Combine(folder, "agent-" + otherName + ".jsonl"));
+        File.Copy(MetaPathOf(id), Path.Combine(folder, "agent-" + otherName + ".meta.json"));
+    }
 
     /// <summary>Overwrites the meta with half of its bytes (G1).</summary>
     public void CorruptMeta(string id)
@@ -374,7 +385,7 @@ public sealed class CallerTranscriptFixture
 
     private static void Pad(JsonObject line, string extra)
     {
-        var key = line.Where(pair => Renamed.IsMatch(pair.Key) && pair.Value is JsonValue value && value.TryGetValue<string>(out _)).Select(pair => pair.Key).FirstOrDefault()
+        var key = line.Where(pair => Renamed().IsMatch(pair.Key) && pair.Value is JsonValue value && value.TryGetValue<string>(out _)).Select(pair => pair.Key).FirstOrDefault()
             ?? throw new InvalidOperationException("The line has no renamed string value to pad.");
         line[key] = line[key]!.GetValue<string>() + extra;
     }
@@ -394,7 +405,7 @@ public sealed class CallerTranscriptFixture
         return content.EnumerateArray().SelectMany(IdsOf).ToList();
     }
 
-    private static IEnumerable<string> CallsIn(string line, string[] tools)
+    private static List<string> CallsIn(string line, string[] tools)
     {
         using var document = JsonDocument.Parse(line);
         if (!document.RootElement.TryGetProperty("message", out var message)
@@ -411,7 +422,7 @@ public sealed class CallerTranscriptFixture
         block.TryGetProperty("type", out var type) && type.GetString() == "tool_use" && tools.Contains(block.GetProperty("name").GetString());
 
     private static IEnumerable<string> IdsOf(JsonElement block) =>
-        new[] { "id", "tool_use_id" }.Where(name => block.TryGetProperty(name, out _)).Select(name => block.GetProperty(name).GetString() ?? string.Empty);
+        IdNames.Where(name => block.TryGetProperty(name, out _)).Select(name => block.GetProperty(name).GetString() ?? string.Empty);
 
     private void EditLine(TranscriptFile file, int n, Action<JsonObject> edit)
     {
@@ -544,7 +555,7 @@ public sealed class CallerTranscriptFixture
 
     private bool RewriteKey(JsonObject owner, string key, bool makeFolder)
     {
-        if (owner[key] is not JsonValue value || !value.TryGetValue<string>(out var path) || !IsUnderARoot(path))
+        if (!TryTextOf(owner, key, out var path) || !IsUnderARoot(path))
         {
             return false;
         }
@@ -554,6 +565,14 @@ public sealed class CallerTranscriptFixture
         _ = !makeFolder || Directory.CreateDirectory(Path.GetDirectoryName(mapped)!).Exists;
 
         return true;
+    }
+
+    /// <summary>The string a key holds, or false for a missing key, a non-string and an empty string.</summary>
+    private static bool TryTextOf(JsonObject owner, string key, out string text)
+    {
+        text = owner[key] is JsonValue value && value.TryGetValue<string>(out var held) ? held : string.Empty;
+
+        return text.Length > 0;
     }
 
     private bool IsUnderARoot(string path)

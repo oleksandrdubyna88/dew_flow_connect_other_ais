@@ -604,4 +604,20 @@ public sealed class TheCallerTranscriptSaysWhatItDidNotSeeTests
         AgentOf(session, C07Depth2).ParentKey.Should().BeEmpty("a parent the meta named off the shape is unknown; reading it as main would be a guess");
         session.Diagnostics.ValuesOffShape.Should().BeGreaterThanOrEqualTo(2, "both refused values are counted");
     }
+
+    [Fact]
+    public void An_agent_file_name_off_the_id_shape_is_never_kept_and_is_counted()
+    {
+        using var dir = TempDir.For(Prefix);
+        var fixture = CallerTranscriptFixture.Materialise("message-as-several-lines", dir);
+        var before = fixture.Read();
+        fixture.CopyAgentUnderName(fixture.AgentKeys[0], "some words here");
+
+        var after = fixture.Read();
+
+        after.Agents.Select(a => a.Key).Should().Equal(before.Agents.Select(a => a.Key), "a file named for free text is not an agent");
+        Ids(after).Should().NotContain(id => id.Contains("words", StringComparison.Ordinal), "an agent key is an id, and a file name is not one until it passes the same gate");
+        after.Diagnostics.ValuesOffShape.Should().Be(before.Diagnostics.ValuesOffShape + 2, "the transcript file and its meta are each refused once");
+        Reasons(after).Should().Be(Reasons(before), "a refused name is not an agent without a meta or a meta without a transcript");
+    }
 }

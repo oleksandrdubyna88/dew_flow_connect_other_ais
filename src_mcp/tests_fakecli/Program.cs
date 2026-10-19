@@ -252,6 +252,32 @@ switch (args0)
         Thread.Sleep(int.Parse(ms));
         return 0;
 
+    // The Linux teardown (DL9, A3), in real processes. `sleep --own-session` calls setsid() first — what rg does in a Grep turn (L-K4); `exit-after` is a managed child that exits with its
+    // own code; the others make orphans for a subreaper, and `supervise-tree` / `shim-acp` ARE that subreaper (a test host must never become one).
+    case ["sleep", "--own-session", var ownMs]:
+        CoaiMcp.FakeCli.SupervisionVerbs.OwnSession();
+        Thread.Sleep(int.Parse(ownMs));
+        return 0;
+
+    case ["exit-after", var afterMs, var afterCode]:
+        Thread.Sleep(int.Parse(afterMs));
+        return int.Parse(afterCode);
+
+    case ["orphan-maker", var orphanDir]:
+        return CoaiMcp.FakeCli.SupervisionVerbs.OrphanMaker(orphanDir);
+
+    case ["spawn-then-exit", var childPidFile, var childMs]:
+        return CoaiMcp.FakeCli.SupervisionVerbs.SpawnThenExit(childPidFile, childMs);
+
+    case ["late-spawn", var trigger, var latePidFile]:
+        return CoaiMcp.FakeCli.SupervisionVerbs.LateSpawn(trigger, latePidFile);
+
+    case ["supervise-tree", var superviseMode, var superviseDir]:
+        return CoaiMcp.FakeCli.SupervisionVerbs.SuperviseTree(superviseMode, superviseDir).GetAwaiter().GetResult();
+
+    case ["shim-acp", var shimScript, var shimMarker, var shimCwd, var shimDeadline]:
+        return CoaiMcp.FakeCli.SupervisionVerbs.ShimAcp(shimScript, shimMarker, shimCwd, int.Parse(shimDeadline)).GetAwaiter().GetResult();
+
     // Reads all of stdin and writes it back, byte for byte. The POSITIVE companion to `sleep`: one
     // proves a child that never reads is still killed on time, this one proves the launcher still
     // delivers every byte to a child that does. Raw streams on both sides, because a decoder in the
@@ -301,6 +327,16 @@ switch (args0)
     // test host itself NEVER holds an inheritable handle: the hold would be inherited by every process the suite starts.
     case ["tree-hold", var mode, var locks, var target, var home]:
         return CoaiMcp.FakeCli.TreeHoldVerb.Run(mode, locks, target, home);
+
+    // S-K3: the PRODUCT's `KimiCredentialsLock.KeyFor` of one path, asked in a child — a `/proc/self/cwd` spelling is only another folder's name from inside its own process.
+    case ["lock-key", var folder]:
+        Console.Out.WriteLine(CoaiMcp.Runners.Kimi.KimiCredentialsLock.KeyFor(folder));
+        return 0;
+
+    // L-N1: the PRODUCT's `HeldFile.Take(path, inheritable: true)` on one file, in a child — `hold` keeps it and starts a sleeping grandchild AFTER the take, `try` takes it
+    // once and says what came back. The test host never takes an inheritable handle itself.
+    case ["hold-file", var mode, var file]:
+        return CoaiMcp.FakeCli.HoldFileVerb.Run(mode, file);
 
     // Takes the REAL EngineLease in its own process, holds it, and prints the window it held it
     // for. Five of these are how the cross-process claim is measured rather than asserted: two

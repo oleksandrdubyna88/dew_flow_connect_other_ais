@@ -23,6 +23,22 @@ export const MODEL_KEYS: readonly string[] = [
   'chatPresetsMoved', 'chatModelName',
 ];
 
+/**
+ * The settings that SWITCH OFF a refusal the server makes for the person's safety — read from the person's own layer too.
+ *
+ * <p>`kimiAllowNetworkSignIn` admits a Kimi sign-in folder on network storage, where a Kimi on another machine can refresh the
+ * same rotating token and sign this one out. A cloned repository's `.vscode/settings.json` must not be able to say "yes" for
+ * the person. Two layers hold that: the manifest declares the key `"scope": "machine"` (a workspace cannot set it, Settings Sync
+ * does not copy it, and a WSL remote window keeps the value of its own machine), and this list sends the READ through the same
+ * door as {@link MODEL_KEYS} — so a value that did reach a workspace layer is still not read. It is a list of its own because
+ * a key here names no model and no program: it must not raise the "a repository cannot choose a program for you" notice
+ * ({@link ignoredWorkspaceValues} walks {@link MODEL_KEYS} only).</p>
+ */
+export const SAFETY_KEYS: readonly string[] = ['kimiAllowNetworkSignIn'];
+
+/** Every key the user-layer door answers: the model-bearing ones and the safety ones. */
+export const USER_LAYER_KEYS: readonly string[] = [...MODEL_KEYS, ...SAFETY_KEYS];
+
 /** What `WorkspaceConfiguration.inspect` answers, narrowed to the layers this rule talks about. */
 export interface Inspected {
   readonly defaultValue?: unknown;
@@ -43,11 +59,11 @@ export interface IgnoredValue {
 type Inspect = (key: string) => Inspected | undefined;
 
 /**
- * A reader that answers a model key from the user layer (then the manifest default), and every other
+ * A reader that answers a model key or a safety key from the user layer (then the manifest default), and every other
  * key exactly as `merged` does.
  */
 export function userLayerReader(merged: ConfigReader, inspect: Inspect): ConfigReader {
-  return (section) => (MODEL_KEYS.includes(section) ? userLayerValue(inspect(section)) : merged(section));
+  return (section) => (USER_LAYER_KEYS.includes(section) ? userLayerValue(inspect(section)) : merged(section));
 }
 
 /** The two reads of a configuration this rule needs — `vscode.WorkspaceConfiguration`'s, narrowed so this stays vscode-free. */

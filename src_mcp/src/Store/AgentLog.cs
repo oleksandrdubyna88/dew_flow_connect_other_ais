@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using CoaiMcp.Core.Authors;
@@ -145,8 +146,7 @@ public static class AgentLog
         using (document)
         {
             var root = document.RootElement;
-            if (!root.TryGetProperty("timestamp", out var stamp)
-                || !DateTime.TryParse(stamp.GetString(), null, System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal, out var utc))
+            if (!DateTime.TryParse(JsonText.StringProperty(root, "timestamp"), CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var utc))
             {
                 return null;
             }
@@ -169,12 +169,9 @@ public static class AgentLog
     /// </remarks>
     private static string Said(JsonElement root)
     {
-        if (!root.TryGetProperty("message", out var message)
-            || !message.TryGetProperty("content", out var content))
-        {
-            return string.Empty;
-        }
-
+        // Child answers "nothing" for a non-object root, a missing property and a non-object message, so a line that is
+        // valid JSON in the wrong shape says nothing instead of throwing out of the slice.
+        var content = JsonText.Child(JsonText.Child(root, "message"), "content");
         if (content.ValueKind == JsonValueKind.String)
         {
             return Cut(content.GetString() ?? string.Empty);

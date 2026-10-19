@@ -175,22 +175,28 @@ public sealed partial class TheCallerTranscriptReadsFromTheBoundTests
     private static long SliceBytes(CallerTranscriptFixture fixture, DateTime bound)
     {
         var boundText = bound.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture);
+
+        return TranscriptTruth.FilesOf(fixture).Sum(file => SliceBytesOf(fixture, file, boundText));
+    }
+
+    /// <summary>One file's share of <see cref="SliceBytes"/>: the bytes of every line the gate keeps, each with its own terminator.</summary>
+    private static long SliceBytesOf(CallerTranscriptFixture fixture, TranscriptFile file, string boundText)
+    {
+        var lengths = fixture.ByteLengths(file);
+        var lines = fixture.Lines(file);
         long total = 0;
-        foreach (var file in TranscriptTruth.FilesOf(fixture))
+        var inHead = true;
+        for (var i = 0; i < lines.Count; i++)
         {
-            var lengths = fixture.ByteLengths(file);
-            var inHead = true;
-            var lines = fixture.Lines(file);
-            for (var i = 0; i < lines.Count; i++)
-            {
-                var hasKey = lines[i].Contains("\"timestamp\":", StringComparison.Ordinal);
-                var stamps = StampText().Matches(lines[i]).Select(m => m.Groups["at"].Value);
-                var kept = inHead || !hasKey || stamps.Any(s => string.CompareOrdinal(s, boundText) >= 0);
-                inHead = inHead && !hasKey;
-                total += kept ? lengths[i] : 0;
-            }
+            var hasKey = lines[i].Contains("\"timestamp\":", StringComparison.Ordinal);
+            total += Kept(lines[i], inHead, hasKey, boundText) ? lengths[i] : 0;
+            inHead = inHead && !hasKey;
         }
 
         return total;
     }
+
+    /// <summary>The gate's decision for one line: in the head, carrying no stamp key, or stamped at or after the bound.</summary>
+    private static bool Kept(string line, bool inHead, bool hasKey, string boundText) =>
+        inHead || !hasKey || StampText().Matches(line).Any(m => string.CompareOrdinal(m.Groups["at"].Value, boundText) >= 0);
 }

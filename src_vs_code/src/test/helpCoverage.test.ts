@@ -394,6 +394,8 @@ const SETTING_ALIAS: Record<string, string> = {
   'coai.qconsultPrompts': 'base prompts',
   'coai.qconsultRoots': 'folders a disk row may read',
   'coai.vibeHomesDirectory': 'vibe homes folder',
+  // E6 of PLAN_kimi_and_vibe_on_linux.md (DL6): the Kimi card's tick-box, by its own label, said in the choose-reviewers article.
+  'coai.kimiAllowNetworkSignIn': 'allow a kimi sign-in on network storage',
   'coai.qconsultRowMinutes': 'minutes one row may run',
   'coai.qconsultQuestionsPerSession': 'questions per session',
   'coai.qconsultFreeBatches': 'question batches that reach you first',

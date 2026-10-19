@@ -214,8 +214,8 @@ public static partial class HandleRead
     /// <summary>
     /// What the kernel says a DIRECTORY handle really names — the handle's final path, every link on the way resolved and each
     /// component spelled with its on-disk casing and long name — or EMPTY when the open fails, the call fails or answers a path
-    /// longer than the buffer, or the host is not Windows (no <c>Real</c>, no <c>realpath</c>: D18 never reaches a non-Windows
-    /// host here, and a non-Windows answer would be a spelling).
+    /// longer than the buffer, or the host is not Windows (no <c>Real</c>, no <c>realpath</c>, and a non-Windows answer would be a spelling): a Linux folder is named by
+    /// <see cref="FolderIdentity"/> (device and inode) for its lock key and by the Unix junction shell for its real path, never by this call.
     /// </summary>
     /// <remarks>
     /// Also the identity a Kimi sign-in's lock is keyed by, and what the junction maker asks to see where a target really is —

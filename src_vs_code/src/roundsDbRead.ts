@@ -4,7 +4,7 @@ import { FileAtRead, FileAtRevision, TOO_OLD_FOR_THE_REVISION } from './openAtRe
 import { MethodSide, RealMethod, RealRead, TOO_OLD_FOR_THE_REAL_METHOD } from './realMethodView';
 import { TOO_OLD_FOR_COMMENTS } from './commentContract';
 import { inBatches, READS_AT_ONCE } from './roundsExport';
-import { capture } from './versionProbe';
+import { capture, type Captured } from './versionProbe';
 import { serverEnv } from './dataDir';
 
 /**
@@ -34,7 +34,7 @@ export const DEFAULT_LIMIT = 200;
 export const MAX_LIMIT = 1000;
 
 /** What a spawn of the server answers: its exit code and everything it wrote. */
-export type Run = (args: readonly string[], capMs: number) => Promise<{ code: number; output: string }>;
+export type Run = (args: readonly string[], capMs: number) => Promise<Captured>;
 
 /** `unknown argument` — what a server too old for a flag exits with. */
 const EX_USAGE = 64;

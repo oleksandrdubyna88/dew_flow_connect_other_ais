@@ -118,13 +118,8 @@ internal sealed class TranscriptRead
     /// <summary>The head only, off the budget: lines up to and including the first stamped one (the gate's head rule, under a bound nothing can pass).</summary>
     private void ReadHead(FileRead file)
     {
-        foreach (var bytes in TranscriptLines.ReadSharedFrom(file.FullName, DateTime.MaxValue, new ScanMeter()))
-        {
-            if (TakeHeadLine(file, bytes))
-            {
-                break;
-            }
-        }
+        // Any stops the (lazy) read at the first line TakeHeadLine answers true for; it takes each line it passes on the way.
+        _ = TranscriptLines.ReadSharedFrom(file.FullName, DateTime.MaxValue, new ScanMeter()).Any(bytes => TakeHeadLine(file, bytes));
     }
 
     private bool TakeHeadLine(FileRead file, ReadOnlyMemory<byte> bytes)

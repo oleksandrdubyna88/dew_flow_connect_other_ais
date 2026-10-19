@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.82.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.81.0...extension-v0.82.0) (2026-10-19)
+
+
+### Features
+
+* **consult:** a Vibe disk row reads a folder of repositories ([#887](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/887)) ([38ecd4e](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/38ecd4e114f8cdb0ba145b39b936e87e3463dbc2))
+
+## [0.81.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.80.2...extension-v0.81.0) (2026-10-19)
+
+
+### Features
+
+* **kimi:** Kimi Code on a WSL2 host ([#879](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/879)) ([cb9ec8b](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/cb9ec8b652ec86afda7eac875ba80193eaf7a494))
+
+## [0.80.2](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.80.1...extension-v0.80.2) (2026-10-19)
+
+
+### Bug Fixes
+
+* **ledger:** a local review line carries its round ([#877](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/877)) ([bb279e3](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/bb279e3dbd7bdeaa49a2aa9d8ba6038415867f0b))
+
 ## [0.80.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.80.0...extension-v0.80.1) (2026-10-18)
 
 
