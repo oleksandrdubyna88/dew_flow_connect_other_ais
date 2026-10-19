@@ -108,10 +108,14 @@ public static class Windows
     private static int KindOrder(Window window) => window.Kind == WindowKind.BeforeOpen ? 0 : 1;
 
     private static DateTimeOffset? Later(DateTimeOffset? left, DateTimeOffset? right) =>
-        left is null ? right : right is null ? left : left > right ? left : right;
+        left is { } a && right is { } b ? Larger(a, b) : left ?? right;
 
     private static DateTimeOffset? Earlier(DateTimeOffset? left, DateTimeOffset? right) =>
-        left is null ? right : right is null ? left : left < right ? left : right;
+        left is { } a && right is { } b ? Smaller(a, b) : left ?? right;
+
+    private static DateTimeOffset Larger(DateTimeOffset left, DateTimeOffset right) => left > right ? left : right;
+
+    private static DateTimeOffset Smaller(DateTimeOffset left, DateTimeOffset right) => left < right ? left : right;
 
     private static DateTimeOffset? SettledPrefixEnd(GateTimeline peer, DateTimeOffset open, string caller, Window own)
     {

@@ -12,6 +12,12 @@ namespace CoaiMcp.Tests;
 /// </summary>
 public sealed class AMissingChildMakesItsWindowPartialTests
 {
+    private static readonly string[] TheTwoMissing = ["agent call without transcript", "meta without transcript"];
+
+    private static readonly string[] ReadBudget = ["read budget"];
+
+    private static readonly string[] NotFound = ["transcript not found"];
+
     private static WindowAssignment C1() => AttributionCases.Case5().Assign("A", "CodeReview", 1);
 
     private static WindowAssignment C2() => AttributionCases.Case5().Assign("A", "CodeReview", 2);
@@ -19,7 +25,7 @@ public sealed class AMissingChildMakesItsWindowPartialTests
     [Fact]
     public void TheWindowHoldingTheCallIsPartialNamingEach() =>
         C1().RoundState().Should().Match<WindowState>(state => state.Kind == ObservationKinds.Partial
-            && state.Reasons.SequenceEqual(new[] { "agent call without transcript", "meta without transcript" }));
+            && state.Reasons.SequenceEqual(TheTwoMissing));
 
     [Fact]
     public void TheOtherWindowStaysObserved()
@@ -65,7 +71,7 @@ public sealed class AMissingChildMakesItsWindowPartialTests
         var second = scenario.Assign("A", "CodeReview", 2);
 
         first.States.Should().OnlyContain(state => state.Kind == ObservationKinds.Partial && state.Reasons.Contains("read budget"));
-        second.States.Should().OnlyContain(state => state.Kind == ObservationKinds.Partial && state.Reasons.SequenceEqual(new[] { "read budget" }));
+        second.States.Should().OnlyContain(state => state.Kind == ObservationKinds.Partial && state.Reasons.SequenceEqual(ReadBudget));
     }
 
     [Fact]
@@ -73,7 +79,7 @@ public sealed class AMissingChildMakesItsWindowPartialTests
     {
         var assignment = AttributionCases.Case5().CallerUnobserved("transcript not found").Assign("A", "CodeReview", 1);
 
-        assignment.States.Should().OnlyContain(state => state.Kind == ObservationKinds.Unobserved && state.Reasons.SequenceEqual(new[] { "transcript not found" }));
+        assignment.States.Should().OnlyContain(state => state.Kind == ObservationKinds.Unobserved && state.Reasons.SequenceEqual(NotFound));
         assignment.Messages.Should().BeEmpty("an unobserved caller has nothing to place");
     }
 

@@ -87,7 +87,7 @@ internal sealed class AssociationLadder
     {
         var roots = EvidenceIn(window).Where(write => write.Agent == agent && write.Root.Length > 0).Select(write => write.Root)
             .DistinctBy(Repositories.Normalise, StringComparer.OrdinalIgnoreCase).ToList();
-        var here = roots.Where(root => Repositories.Contains(RepositoryOfGate(window.Gate), root)).ToList();
+        var here = roots.Where(writeRoot => Repositories.Contains(RepositoryOfGate(window.Gate), writeRoot)).ToList();
         var elsewhere = roots.Except(here).Order(StringComparer.Ordinal).ToImmutableArray();
 
         return (here.Count, elsewhere.Length) switch
@@ -118,7 +118,7 @@ internal sealed class AssociationLadder
     }
 
     /// <summary>The longest <c>repo_path</c> of any gate in the input that holds the root, else the root itself.</summary>
-    private string DestinationOf(string root) =>
-        _repositoryOf.Values.Where(path => Repositories.Contains(path, root)).OrderByDescending(path => Repositories.Normalise(path).Length)
-            .ThenBy(path => path, StringComparer.Ordinal).FirstOrDefault() ?? root;
+    private string DestinationOf(string writeRoot) =>
+        _repositoryOf.Values.Where(repoPath => Repositories.Contains(repoPath, writeRoot)).OrderByDescending(repoPath => Repositories.Normalise(repoPath).Length)
+            .ThenBy(repoPath => repoPath, StringComparer.Ordinal).FirstOrDefault() ?? writeRoot;
 }

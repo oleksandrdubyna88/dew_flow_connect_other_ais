@@ -118,8 +118,11 @@ internal sealed class AssignRun
     private IEnumerable<WritePlacement> Writes(Window window) =>
         _ladder.EvidenceIn(window).Select(write => new WritePlacement(write.Agent, write.At, window, write.Root, WhereOf(window, write.Root)));
 
-    private string WhereOf(Window window, string root) =>
-        root.Length == 0 ? WriteWhere.Outside : Repositories.Contains(_ladder.RepositoryOfGate(window.Gate), root) ? WriteWhere.Here : WriteWhere.Elsewhere;
+    private string WhereOf(Window window, string writeRoot) =>
+        writeRoot.Length == 0 ? WriteWhere.Outside : InGateRepository(window, writeRoot);
+
+    private string InGateRepository(Window window, string writeRoot) =>
+        Repositories.Contains(_ladder.RepositoryOfGate(window.Gate), writeRoot) ? WriteWhere.Here : WriteWhere.Elsewhere;
 
     private IEnumerable<UnobservedLaunchPlacement> Unobserved(Window window) =>
         _input.Caller.Unobserved.Where(item => item.At is { } at && window.Contains(at)).Select(item => new UnobservedLaunchPlacement(item.Parent, item.At!.Value, window, item.Why));

@@ -12,12 +12,12 @@ public static class UtcInstant
     /// </summary>
     public static DateTimeOffset? From(DateTime value) => value.Ticks == 0 ? null : Of(value);
 
+    public static DateTimeOffset? From(DateTime? value) => value is { } instant ? From(instant) : null;
+
     /// <summary>
     /// The rule itself, for a value that is always recorded: a local kind is converted by its known offset, anything else is the UTC
     /// value it was written as. A caller with a non-null instant uses this and never spells <c>SpecifyKind</c> again.
     /// </summary>
     public static DateTimeOffset Of(DateTime value) =>
         new(value.Kind == DateTimeKind.Local ? value.ToUniversalTime() : DateTime.SpecifyKind(value, DateTimeKind.Utc));
-
-    public static DateTimeOffset? From(DateTime? value) => value is { } instant ? From(instant) : null;
 }

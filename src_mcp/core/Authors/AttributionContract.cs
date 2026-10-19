@@ -73,7 +73,7 @@ internal static class AttributionContract
     {
         var parents = caller.Agents.GroupBy(agent => agent.Key.Id, StringComparer.Ordinal).ToDictionary(group => group.Key, group => group.First().Parent.Id, StringComparer.Ordinal);
 
-        return caller.Agents.Select(agent => agent.Key.Id).Distinct(StringComparer.Ordinal).Where(id => Climbs(id, parents) is false)
+        return caller.Agents.Select(agent => agent.Key.Id).Distinct(StringComparer.Ordinal).Where(id => !Climbs(id, parents))
             .Select(id => $"agent '{id}' has a parent chain that does not end at main or at an empty parent");
     }
 

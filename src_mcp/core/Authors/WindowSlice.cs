@@ -88,10 +88,7 @@ internal sealed class WindowSlice
 
         return Row(
             key.Agent,
-            first.Requested,
-            first.Model,
-            first.Effort,
-            first.Association,
+            new RowBody(first.Requested, first.Model, first.Effort, first.Association),
             homes[key.Agent] == key && launched.Contains(key.Agent) ? 1 : 0,
             group.Count(),
             group.Aggregate(new TokenTerms(0, 0, 0, 0), (sum, placement) => RoundAuthorsBuilder.Add(sum, placement.Tokens)),
@@ -117,31 +114,37 @@ internal sealed class WindowSlice
 
     /// <summary>The row a write is counted on: that of the message at the write's own instant (a turn is the unit), else the agent's first row.</summary>
     private static IEnumerable<RowKey> WriteHome(WritePlacement write, Dictionary<AgentKey, RowKey> homes, Dictionary<(AgentKey Agent, DateTimeOffset At), RowKey> atInstant) =>
-        atInstant.TryGetValue((write.Agent, write.At), out var same) ? [same] : homes.TryGetValue(write.Agent, out var home) ? [home] : [];
+        atInstant.TryGetValue((write.Agent, write.At), out var same) ? [same] : HomeOfAgent(write.Agent, homes);
+
+    private static IEnumerable<RowKey> HomeOfAgent(AgentKey agent, Dictionary<AgentKey, RowKey> homes) =>
+        homes.TryGetValue(agent, out var home) ? [home] : [];
 
     private IEnumerable<AuthorRow> LaunchOnlyRows()
     {
         var seen = _messages.Where(placement => RowAssociations.Contains(placement.Association)).Select(placement => placement.Agent).ToHashSet();
 
         return _launches.Where(placement => RowAssociations.Contains(placement.Association) && !seen.Contains(placement.Agent))
-            .Select(placement => Row(placement.Agent, Effort.Unknown, Effort.Unknown, Effort.Unknown, placement.Association, 1, 0, new TokenTerms(0, 0, 0, 0), 0));
+            .Select(placement => Row(placement.Agent, new RowBody(Effort.Unknown, Effort.Unknown, Effort.Unknown, placement.Association), 1, 0, new TokenTerms(0, 0, 0, 0), 0));
     }
 
     private IEnumerable<AuthorRow> TwoRepositoryRows() =>
         _agents.Where(IsTwoRepositories).Select(agent =>
-            Row(agent.Agent, Effort.Unknown, Effort.Unknown, Effort.Unknown, Association.WroteHere, 0, 0, new TokenTerms(0, 0, 0, 0), _writes.Count(write => write.Agent == agent.Agent && write.Where == WriteWhere.Here)));
+            Row(agent.Agent, new RowBody(Effort.Unknown, Effort.Unknown, Effort.Unknown, Association.WroteHere), 0, 0, new TokenTerms(0, 0, 0, 0), _writes.Count(write => write.Agent == agent.Agent && write.Where == WriteWhere.Here)));
 
-    private AuthorRow Row(AgentKey agent, string requested, string model, string effort, string association, int launches, int turns, TokenTerms tokens, int writeCalls) => new(
+    /// <summary>What a row says about its author's messages: the requested model, the model, the effort and the association.</summary>
+    private readonly record struct RowBody(string Requested, string Model, string Effort, string Association);
+
+    private AuthorRow Row(AgentKey agent, RowBody body, int launches, int turns, TokenTerms tokens, int writeCalls) => new(
         _window.Kind,
         _window.Stage,
         _window.Number,
         agent.IsMain ? "main" : "subagent",
         agent,
         _input.Caller.Agents.FirstOrDefault(declared => declared.Key == agent)?.AgentType ?? string.Empty,
-        requested,
-        model,
-        effort,
-        association,
+        body.Requested,
+        body.Model,
+        body.Effort,
+        body.Association,
         launches,
         turns,
         tokens,

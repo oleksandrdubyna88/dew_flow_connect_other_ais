@@ -106,12 +106,14 @@ public sealed class TheAuthorsStateSaysWhatWasNotSeenTests
     public void ThePeersTheRoundSawArePassedThrough() =>
         AttributionCases.Case1().AuthorsOf("A", "CodeReview", 2).PeerGates.Should().Equal("B");
 
+    private static readonly string[] Vendors = ["claude", "codex", "gemini", "kimi", "vibe", "agy"];
+
     [Fact]
     public void NoReasonContainsTheJoiner()
     {
         var reasons = typeof(AttributionReasons).GetFields().Where(field => field.IsLiteral).Select(field => (string)field.GetRawConstantValue()!)
             .Concat(typeof(CoaiMcp.Store.ObservationReasons).GetFields().Where(field => field.IsLiteral).Select(field => (string)field.GetRawConstantValue()!))
-            .Concat(new[] { "claude", "codex", "gemini", "kimi", "vibe", "agy" }.Select(CoaiMcp.Store.ObservationReasons.NoReaderFor))
+            .Concat(Vendors.Select(CoaiMcp.Store.ObservationReasons.NoReaderFor))
             .ToList();
 
         reasons.Should().NotBeEmpty().And.OnlyContain(reason => !reason.Contains(", ", StringComparison.Ordinal), "E5 joins reasons with exactly these two characters");
