@@ -1,5 +1,24 @@
 # Changelog
 
+## Extension 0.82.0 · Server 0.62.0 — 2026-10-19
+
+**Added: a Vibe "Projects on this disk" row can read a folder of repositories.** Before, such a row was refused on a
+folder like `d:\rsd` or `~/git`, because it holds many repositories and Vibe has no trustworthy read-only mode, so it may
+read only a clean Git copy of one work tree. Now coai-mcp opens a granted parent folder and finds the Git repositories
+under it. It copies each one into a folder that coai owns, and it removes the copies after the turn.
+
+**Server (coai-mcp 0.62.0):**
+- The walk goes two levels down. It skips hidden folders, `node_modules`, `bin`, `obj`, Windows hidden and system folders,
+  and every link. It never goes into a repository. One Git call confirms each candidate as the top of a work tree.
+- A broken candidate or an unreadable folder is skipped, and a note says so on the row. Any refusal from a copy refuses the
+  whole row and removes every copy.
+- Links are checked from the granted folder down to each repository, right before its copy.
+- A linked worktree whose main checkout is copied in the same row is left out, and the row and the model's prompt both say so.
+- Limits: 10,000 folders per walk, 100,000 entries per listing and 50 repositories per row. Over 50, the row is refused and
+  the refusal names the cure. The walk and the copies share the row's time budget, and a refusal says which one ran out.
+- After a crash, `coai-question-*` scratch folders are swept after six hours, and only when the sweep can take the row's lock.
+
+**Extension (0.82.0):** the help texts for the disk row now describe the folder of repositories, in all five languages.
 ## Extension 0.81.0 · Server 0.61.0 — 2026-10-19
 
 **Added: Kimi Code runs as a reviewer on a WSL2 host.** Vibe already ran on WSL2 (server 0.59.0). Kimi now uses the same
