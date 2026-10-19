@@ -92,6 +92,17 @@ public sealed class TheAuthorsStateSaysWhatWasNotSeenTests
     }
 
     [Fact]
+    public void AnUnobservedLaunchWithNoInstant_IsCountedOnceInTheRound()
+    {
+        var scenario = AttributionScenario.For().Gate("A", X).Opened(0).Code(1, 60, 70).MissingChild("main", null, "agent call without transcript");
+
+        var round = scenario.AuthorsOf("A", "CodeReview", 1);
+
+        round.Windows.Should().HaveCountGreaterThan(1).And.OnlyContain(window => window.UnobservedLaunches == 1, "each window still says the launch may be in it");
+        round.UnobservedLaunches.Should().Be(1, "one missing transcript is one item in the round, however many windows it marks");
+    }
+
+    [Fact]
     public void ThePeersTheRoundSawArePassedThrough() =>
         AttributionCases.Case1().AuthorsOf("A", "CodeReview", 2).PeerGates.Should().Equal("B");
 
