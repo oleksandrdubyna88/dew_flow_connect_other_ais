@@ -908,3 +908,45 @@ themselves (no `fs` call): `Grep` of `/mnt/c/Windows/System32` was NOT stopped b
 - The `ATTRIB` on the credentials folder: `chmod` or time change is not separable with `inotify`.
 - Folders left for the owner to remove by hand (nothing was deleted): everything under `/tmp/testsToDelete-wsl-kimi-r1/` —
   `home/`, `os/`, `os-b/`, `os-c/`, `os-d/`, `os-e/` (the canary), `os-xdg/`, `xdgcache/`, `repo/`, `outside/`, `locks/`, `logs/`.
+
+## 30. L-N1 — .NET's inheritable hold on Linux is SHARED, and the descriptor IS inherited (2026-10-16, `todo/PLAN_kimi_and_vibe_on_linux.md` DL8; A2 §3)
+
+The question: `HeldFile.Take(path, inheritable: true)` opens with `FileShare.None | FileShare.Inheritable`. On Unix .NET turns a share mode into an advisory `flock`. Is the combined mode still an EXCLUSIVE lock, and does the descriptor reach a child started after the take? Not a Kimi cell: a test, in real child processes (`FakeCli hold-file` for the bare primitive, `FakeCli tree-hold` for the product's `KimiCredentialsLock.HoldTree`), on the `ubuntu-latest` job of `ci.yml`.
+
+**Prediction** (from `SafeFileHandle.Unix.cs`, .NET v10.0.11, read before any run): `LOCK_EX` only when `share == FileShare.None` exactly, otherwise `LOCK_SH`; `O_CLOEXEC` only when `Inheritable` is absent. So (a) exclusive: FAIL; (b) inherited: hold.
+
+**Observed.**
+
+| Run | Arm | Result |
+|---|---|---|
+| CI run 38923199105, job `build · test · family checks` (the primitive, `HeldFileInheritableOnLinuxTests`) | (a) non-inheritable take beside an inheritable hold is Busy | green |
+| same | (a) a SECOND inheritable take is Busy (S-K4) | **RED**: `Expected string to be "busy" … because a second take of an inheritable hold succeeded — the lock is shared, not exclusive (S-K4), but "taken"` |
+| same | (b) the hold outlives its opener's `SIGKILL` while a child started after the take lives (S-K5) | green |
+| CI run 38929393936 (`TheTreeHoldIsExclusiveAndInheritedOnLinuxTests` over `HoldTree`, A2's test commit before the Linux key existed) | all arms | red for the key, not for L-N1: the shim answered `Unusable … cannot be named by its handle` (the Linux key was empty); the lifted `KimiCredentialsLockTests` skips failed the same way |
+
+Both predictions held: the inheritable take is a SHARED lock (a second shim on the same sign-in would have been let in — two refreshers of a rotating token), and the descriptor is inherited.
+
+**Decision (A2 §3.3, row "red / any").** `HeldFile.Take(path, inheritable: true)` on Linux is native: `open(path, O_RDWR|O_CREAT|O_NOCTTY, 0600)` — no `O_CLOEXEC` — then `flock(LOCK_EX|LOCK_NB)`, through `LibraryImport("libc")`, in `LinuxHeldFile`, behind the unchanged `Hold` union (`EWOULDBLOCK` → `Busy`, any other errno → `Unusable`). A `FileStream` built over the descriptor takes no second lock, so .NET's own non-inheritable `LOCK_EX|LOCK_NB` probes refuse against a native holder and the native take refuses against a .NET one. Every other take, on every host, stays .NET's. The `HeldFile` remark says so.
+
+**After the native take** (CI run 38960351979, the first with all of A2; ubuntu job): `HeldFileInheritableOnLinuxTests` (3), `TheTreeHoldIsExclusiveAndInheritedOnLinuxTests` (3) and the three lifted `KimiCredentialsLockTests` (`TheTreeHold_OutlivesItsOpener_WhileAChildLives`, `AShimThatMeetsADisposalsProbe_WaitsItOut_AndTakesItsHold`, `TheGateAlone_DoesNotOutliveItsOpener_…`) were green, with `TwoSpellingsOfOneFolder_GiveOneKey_…` (S-K3), `ABindMountedSpelling_IsTheSameKey` (S-K11) and every `KimiLockRetirementTests` arm. The two ubuntu failures of that run were this work's own and are fixed in the next commit: the Linux listing read `ESRCH` from a process that exited mid-read as "unreadable", and `JunctionsUnix.MakeLink` did not make a missing parent folder.
+
+What the hold covers on Linux is unchanged from §29: the shim and `kimi`, the direct child that inherited the descriptor; not a grandchild `kimi` starts the ordinary way (L-K5). That is enough while the refresher is `kimi` itself (L-K4); what the hold cannot see, A3's survivor marker must.
+
+**L-N1 after the join, and L-N2 / L-N3 (E5 integration, 2026-10-17).** The `/proc/locks` pin (`L_N1a_ProcLocks_NamesTheKindOfFlockTheInheritableHoldTook`) read `READ` while .NET took the lock; with `LinuxHeldFile` in the tree it now asserts `WRITE` (`LOCK_EX`), and it is green on Linux.
+
+L-N2 and L-N3 were measured by A3's Linux tests, which run in a CHILD that is the subreaper (`FakeCli supervise-tree`, `FakeCli shim-acp`) because a test host must never become one. On A3's own branch (CI run 38969031489, ubuntu job `build · test · family checks`: 10831 tests, 1 failed, 82 skipped) the ONLY red was the L-N1 test that A2's `LinuxHeldFile` fixes; every `SupervisedTeardownLinuxTests` arm ran (none skipped) and was green:
+
+| Cell | What ran | Result |
+|---|---|---|
+| L-N2, arm 1 | a subreaper shim, a fake agent that starts a same-group child and a `setsid` child and exits first: after the teardown both are gone | green |
+| L-N2, re-listing | a grandchild born AFTER the first listing is found by the re-listing confirmation (deterministic: the spawn is held until the listing is written) | green |
+| L-N2, zombie | a grandchild that exits by itself before the teardown is reaped by the drain, is not a survivor, and leaves no marker | green |
+| L-N2, signals | the shim `SIGTERM`ed while the agent lives ends its tree; the shim `SIGKILL`ed leaves its `running` marker naming the agent | green |
+| L-N3, real-process arms | gone → cleared; alive → ended by identity → cleared | green |
+| L-N3, still-there-at-the-bound | through the reconcile seam only (nothing ignores `SIGKILL`, so no real process can stage a survivor) | green, everywhere |
+
+After the join (this branch, CI run 39028293182, dispatched on `feat/wsl-kimi-e5` with A2, A3 and the port-fix merged): ubuntu 10957 tests, **0 failed**, 81 skipped (Windows-only arms); the Windows, macOS and extension jobs green. The joined seam is exercised on Linux by `OnLinux_TheShimsHold_IsSupervised_WithoutAnyFlag` and by the A2 `KimiShimHold` tests running over the product's own gate.
+
+What the first join run on Linux found (one red, fixed): `JunctionsTests.ATargetOnADrvfsMount_IsRefused_AndNothingIsMade` named a fake mount point, but the port-fix's `MountLocality` now asks the real `statx` for the mount of the path (id 27, not in the stand-in table) and refuses what it cannot prove — correct for the product, wrong for the stand-in. `Junctions.StandInMountInfo` takes the identity the kernel would give; the test passes `NotAsked`.
+
+DL10, re-decided 2026-10-17 on the owner's WSL2 (`systemd` and `(sd-pam)` hide `/proc/<pid>/exe` from their own account): the three shapes are pinned on the fake `/proc` (`LinuxHiddenExeTests`, 10 red before the fix); on the ubuntu job the real listing of the whole runner was readable (`HostProcessListTests.OnLinux_TheWholeMachinesListing…` no longer skips for a hidden `exe`).

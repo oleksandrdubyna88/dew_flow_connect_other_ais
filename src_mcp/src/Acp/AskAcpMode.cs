@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text.Json.Nodes;
 using CoaiMcp.Runners.Acp;
 using CoaiMcp.Runners.Kimi;
+using CoaiMcp.Runners.Processes;
 
 namespace CoaiMcp.Acp;
 
@@ -70,14 +71,36 @@ internal static class AskAcpMode
     /// <param name="note">Stderr: the refusal or the reason, as sentences.</param>
     /// <param name="output">Stdout: the one JSON object.</param>
     /// <param name="profiles">The profiles this run knows — the build's, unless a test hands in a fake agent's.</param>
-    internal static async Task<int> RunAsync(
+    internal static Task<int> RunAsync(
         string[] args,
         TextReader stdin,
         Action<string> note,
         TextWriter output,
         IReadOnlyList<IAcpProfile>? profiles = null,
+        CancellationToken ct = default) =>
+        RunAsync(args, stdin, note, output, static () => new SubreaperResult.NotLinux(), profiles, ct);
+
+    /// <summary>
+    /// The mode as the product runs it. <paramref name="becomeReaper"/> is the FIRST thing asked, before the profile is looked up (DL9): on Linux this process becomes the child subreaper of its own
+    /// tree — every orphan of the agent's tree, <c>setsid</c> or not, comes home to it, whichever profile — and a failure is exit 65 with the written sentence, never a silent fallback. The product
+    /// passes <see cref="LinuxSubreaper.Become"/>; an in-process test passes nothing (its host must never become a subreaper — it would collect every other test's orphans).
+    /// </summary>
+    internal static async Task<int> RunAsync(
+        string[] args,
+        TextReader stdin,
+        Action<string> note,
+        TextWriter output,
+        Func<SubreaperResult> becomeReaper,
+        IReadOnlyList<IAcpProfile>? profiles = null,
         CancellationToken ct = default)
     {
+        if (becomeReaper() is SubreaperResult.Failed failed)
+        {
+            note(LinuxSubreaper.Sentence(failed.Errno));
+
+            return BadRequest;
+        }
+
         var flags = Program.Flags(args);
         var known = profiles ?? AcpProfiles.All;
         // The one "not found" this mode has, and it is answered before anything else is looked at.
@@ -165,7 +188,7 @@ internal static class AskAcpMode
         AcpOutcome outcome;
         using (held.Hold)
         {
-            outcome = await new AcpClient(profile, new FolderReadBoundary(ask.Cwd, profile.ExcludedNames)).AskAsync(ask with { Deadline = left }, ct);
+            outcome = await new AcpClient(profile, new FolderReadBoundary(ask.Cwd, profile.ExcludedNames), AcpClient.DefaultUsageBound, held.Supervisor).AskAsync(ask with { Deadline = left }, ct);
         }
 
         return await ReportedAsync(profile, outcome, note, output);
@@ -320,6 +343,7 @@ internal static class AskAcpMode
             ["reads"] = new JsonArray([.. outcome.Reads.Select(r => (JsonNode?)new JsonObject { ["path"] = r.Path, ["served"] = r.Served, ["reason"] = r.Reason })]),
             // The three lists are capped by count (AcpSession.MaxTraceEntries), by field (MaxTraceFieldChars) and by their
             // sum (MaxTraceChars); what they could not hold is counted here, so the report stays inside the same bounds.
+            ["survivors"] = new JsonArray([.. outcome.Survivors.Select(s => (JsonNode?)new JsonObject { ["pid"] = s.Pid, ["startedUtc"] = s.StartedUtc.ToString("O") })]),
             ["droppedTraceEntries"] = outcome.DroppedTraceEntries,
             ["truncatedTraceFields"] = outcome.TruncatedTraceFields,
         };

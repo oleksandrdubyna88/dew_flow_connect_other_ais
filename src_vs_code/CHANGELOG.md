@@ -1,5 +1,50 @@
 # Changelog
 
+## Extension 0.81.0 · Server 0.61.0 — 2026-10-19
+
+**Added: Kimi Code runs as a reviewer on a WSL2 host.** Vibe already ran on WSL2 (server 0.59.0). Kimi now uses the same
+host check. WSL2 is admitted. Native Linux, WSL1, macOS and a `wsl.exe` bridge are refused, and the refusal says why.
+
+**Server (coai-mcp 0.61.0):**
+- The Linux mechanisms are in: an exclusive sign-in lock, a file identity key, a mount-locality check, a `/proc` process
+  listing and a teardown that leaves no child behind.
+- `rg` and `fd` are found in the Kimi bin folder, then on PATH, then in `~/.local/bin`. A missing tool is refused with a
+  cure for `apt-get`, `dnf` or a generic host.
+- On Linux, Kimi gets only the environment it needs: HOME, a private cache folder, `KIMI_CODE_HOME`, the no-update flag
+  and PATH.
+- A sign-in folder on NFS, CIFS or sshfs is refused by default, because a Kimi on another computer could refresh the
+  rotating token and sign the person out. The check runs on every launch.
+- A stuck Kimi leaves a survivor marker. The providers answer now reports it, and `--kimi-clear-marker` clears it under
+  the sign-in lock.
+
+**Extension (0.81.0):**
+- The Kimi card has a *Clear the stuck Kimi marker* button.
+- The setting `coai.kimiAllowNetworkSignIn` lets a person allow a network sign-in folder. It is read from the user layer
+  only: a workspace cannot set it, Settings Sync does not copy it, and a config export never carries it.
+- On Linux the Install button runs only the vendor installer and the `apt-get` or `dnf` install of `ripgrep` and
+  `fd-find`.
+## Extension 0.80.2 — 2026-10-19
+
+**No change in what the extension does.** This release ships with coai-mcp 0.60.2, whose local review lines in
+`usage.jsonl` now carry their round. The Usage page already read a line's `round` from either source, so a local line
+keeps the round key the engine stamped, a line with an empty round reads as a line with no round, and the round changes
+no count or total: two launches of one round are still two runs, with their tokens summed once. New tests hold these
+three facts, and the doc comments on the usage entry now describe the local line as it is.
+
+## Server 0.60.2 — 2026-10-19
+
+**Fixed: one bad field in a reviewer row costs that row only.** A hand-edited member of the wrong JSON type in
+`COAI_VENDORS` (for example `"timeoutMinutes":"30"`) used to make the whole list read as empty, so the server quietly
+ran the shipped default reviewers in place of every row the person wrote. A `null` row crashed the server at startup.
+Now the rows are read one by one. A row that does not read is left out on its own, the others still review, and the
+server names the row and the member in `providers`, in the startup and reload notice, and in the panel's toast. If
+every row is refused, no reviewer runs, the same as for an empty list.
+
+**Fixed: a local review line in `usage.jsonl` carries its round.** Every launch of one review turn — the first, a
+repair, a follow-up and every earlier turn of a conversation — now writes the round key the engine stamped, under the
+same `round` field the Team server's lines use, so a local line can be joined to its round. A launch outside a round,
+and consultation, question-row and probe lines, write none.
+
 ## Team server 0.13.1 — 2026-10-18
 
 **Fixed: rounds per 1 % of quota is counted from one rise to the next, and pooled** (the server's half of the same

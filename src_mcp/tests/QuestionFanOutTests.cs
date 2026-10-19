@@ -125,6 +125,22 @@ public sealed class QuestionFanOutTests : IAsyncLifetime
         argv.Should().ContainInConsecutiveOrder(["--max-tokens", "4096"], "the panel's local ceiling, not the record's default");
     }
 
+    // ---------- the review of 2026-10-18 (J): the panel's Kimi network override reaches a question row's launch settings ----------
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AQuestionRowsLaunchSettings_CarryThePanelsNetworkSignInOverride(bool allow)
+    {
+        var settings = Settings([Row("sonnet", "claude", "claude", "sonnet", "question-opinion")]);
+        var fanOut = FanOut(new ScriptedLauncher(_real, _ => Task.FromResult<ScriptedAnswer?>(null)), settings, panel: p => p with { KimiAllowNetworkSignIn = allow });
+
+        var admitted = QuestionAdmission.Admit(settings.Rows[0], settings, [], Core.Api.ApiOverrides.None)
+            .Should().BeOfType<RowAdmission.Admitted>("the row is a plain one; only its settings are asked about").Subject;
+
+        fanOut.SettingsFor(admitted).KimiAllowNetworkSignIn.Should().Be(allow, "a Kimi row — when one is ever admitted here — must be judged by the setting the panel read, as a reviewer's is");
+    }
+
     // ---------- A1: one row past its deadline, the others return ----------
 
     [Fact]
