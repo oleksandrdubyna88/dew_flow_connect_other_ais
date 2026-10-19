@@ -51,7 +51,7 @@ const R = (n) => String(n).padStart(32, '0');
 
 const LEDGER = [
   line(5, 'codex', 'codex', R(1), 30), line(4, 'codex', 'codex', R(2), 31), line(3, 'codex', 'codex', R(3), 33),
-  // A vendor whose limit has no uncounted consumer: one round over 1 %, then one over 2 % — weighted by rounds, 0.75.
+  // A vendor whose limit has no uncounted consumer: one round over 1 %, then one over 2 % — pooled (story 6.2b), 2 rounds ÷ 3 %.
   line(5, 'acme', 'acme', R(4), 10), line(4, 'acme', 'acme', R(5), 11), line(3, 'acme', 'acme', R(6), 13),
 ];
 
@@ -107,7 +107,7 @@ function check({ vendors, usage }) {
   const codex = figures.find((one) => one.vendor === 'codex');
   must(codex?.roundsPerPercent === null && codex.missingConsumer === 'direct-codex-use', `codex's figure did not come back hidden for direct use: ${JSON.stringify(codex)}`);
   const acme = figures.find((one) => one.vendor === 'acme');
-  must(Math.abs((acme?.roundsPerPercent ?? 0) - 0.75) < 1e-9 && acme.intervals === 2, `the uncounted-consumer-free figure did not cross as 0.75 over 2 intervals: ${JSON.stringify(acme)}`);
+  must(Math.abs((acme?.roundsPerPercent ?? 0) - 2 / 3) < 1e-9 && acme.intervals === 2, `the uncounted-consumer-free figure did not cross as 2/3 over 2 intervals: ${JSON.stringify(acme)}`);
 
   const text = teamGaugeBlock({ serverId: 'seam', vendors, usage, prices: { 'seam/acme': 200 }, now: Date.now(), palette: () => '#000' })
     .replace(/<[^>]+>/g, '\n');
