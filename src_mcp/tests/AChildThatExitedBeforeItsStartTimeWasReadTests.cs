@@ -40,7 +40,7 @@ public sealed class AChildThatExitedBeforeItsStartTimeWasReadTests
         result.ExitCode.Should().Be(0, "the child ran to its end; only the bookkeeping about it failed");
         result.StdOut.Should().Contain("hello", "what the child said is the launch's result, however its start time read");
         tracker.Recorded.Should().BeEmpty("an exited child has nothing left for an orphan sweep to find");
-        tracker.Forgotten.Should().ContainSingle("the launch's normal end still tells the tracker's owner it is over, so a 'spawning' marker is cleared");
+        tracker.Forgotten.Should().ContainSingle("the launch's normal end still tells the tracker's owner it is over (the Team server's SlotReaderTracker.Forget does nothing; the marker is cleared by GaugeCapture.ReadAsync, see GaugeCaptureTests)");
     }
 
     [Theory]
