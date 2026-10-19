@@ -552,10 +552,28 @@ test('every language says what a Vibe question row reads, that its web prompt is
 const ROUNDS_ARTICLE_PHRASES: Record<string, readonly string[]> = {
   // fewer than two readings · a launch sent no round id · no round ran between the readings · the replacement for "older extension"
   en: ['fewer than two readings', 'a launch sent no round id', 'no round ran between the readings', 'sent no round id'],
-  de: ['weniger als zwei Lesungen', 'ein Start ohne Runden-ID', 'zwischen den Lesungen lief keine Runde', 'keine Runden-ID'],
-  es: ['menos de dos lecturas', 'un lanzamiento sin id de ronda', 'ninguna ronda entre las lecturas', 'sin id de ronda'],
-  ru: ['меньше двух чтений', 'запуск без id раунда', 'между чтениями не было раунда', 'без id раунда'],
-  uk: ['менше двох читань', 'запуск без id раунду', 'між читаннями не було раунду', 'без id раунду'],
+  de: ['weniger als zwei Lesungen', 'ein Start schickte keine Runden-ID', 'zwischen den Lesungen lief keine Runde', 'keine Runden-ID'],
+  es: ['menos de dos lecturas', 'un lanzamiento no envió id de ronda', 'no corrió ninguna ronda entre las lecturas', 'cuyo cliente no envió id de ronda'],
+  ru: ['меньше двух чтений', 'запуск не прислал id раунда', 'между чтениями не было раунда', 'чей клиент — coai-mcp до 0.49.0'],
+  uk: ['менше двох читань', 'запуск не надіслав id раунду', 'між читаннями не було раунду', 'без id раунду'],
+};
+
+// Wordings a back-translation review found ambiguous or wrong. Each must stay gone: the joined clause made the
+// last reason read as part of the one before it, and the old terms named a unit or a version loosely.
+const STALE_ROUNDS_PHRASES: Record<string, readonly string[]> = {
+  en: ['launches from an older extension'],
+  de: ['keine Runde oder ein Start ohne', 'Starts einer älteren Erweiterung'],
+  es: ['lecturas o un lanzamiento sin', 'llamador de la API', 'lo envió sin id de ronda'],
+  ru: ['раунда или запуск без', 'старше 0.49.0', 'запуски от старого расширения', 'клиент его не прислал'],
+  uk: ['раунду або запуск без', 'старший за 0.49.0', 'запуски від старого розширення'],
+};
+
+const STALE_USAGE_PHRASES: Record<string, readonly string[]> = {
+  en: [],
+  de: ['Die Protokollzeile einer Team-server-Zeile', 'wo eine Zeile mehr als einen Start', 'die mittlere Ausgabe pro Start', 'ihres Jobs'],
+  es: [],
+  ru: ['итог её задания', 'где в строке может быть'],
+  uk: ['підсумок його завдання', 'де в рядку може бути', 'складає виправлення'],
 };
 
 test('EveryLanguagesRoundsArticle_NamesEveryReasonTheGaugeWordsKnow (the rounds labels plan, story 1.5)', () => {
@@ -571,8 +589,12 @@ test('EveryLanguagesRoundsArticle_NamesEveryReasonTheGaugeWordsKnow (the rounds 
       assert.ok(said.includes(phrase), `the ${language} rounds article never says "${phrase}" — a reader cannot learn that reason`);
     }
   }
-  const english = Object.values(bodyFor(article, 'en').body).join(' ');
-  assert.ok(!english.includes('launches from an older extension'), 'the English article still blames an older extension for a run without a round');
+  for (const language of HELP_LANGUAGES) {
+    const said = Object.values(bodyFor(article, language).body).join(' ');
+    for (const stale of STALE_ROUNDS_PHRASES[language] ?? []) {
+      assert.ok(!said.includes(stale), `the ${language} rounds article still says "${stale}" — a wording the back-translation review rejected`);
+    }
+  }
 });
 
 const PER_LAUNCH_PHRASE: Record<string, string> = {
@@ -595,5 +617,9 @@ test('EveryLanguagesUsageArticle_SaysTheMedianIsPerLaunch (the rounds labels pla
       Object.values(body).join(' ').includes(phrase),
       `the ${language} usage article never says "${phrase}" — it still names the median's unit as the recorded turn only`,
     );
+    const said = Object.values(body).join(' ');
+    for (const stale of STALE_USAGE_PHRASES[language] ?? []) {
+      assert.ok(!said.includes(stale), `the ${language} usage article still says "${stale}" — a wording the back-translation review rejected`);
+    }
   }
 });
