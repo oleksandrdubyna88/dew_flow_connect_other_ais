@@ -24,8 +24,12 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class EveryClassThatSetsTheProcessEnvironmentTests
 {
+    /// <summary>
+    /// A write of the process environment: <c>Environment.SetEnvironmentVariable(</c>, or the helper that clears every <c>FAKECLI_*</c>
+    /// variable — <c>FakeCliSteering.Reset(</c> is the same write in a helper's words.
+    /// </summary>
     private static readonly Regex SetsTheEnvironment = new(
-        @"\bEnvironment\s*\.\s*SetEnvironmentVariable\s*\(", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
+        @"\bEnvironment\s*\.\s*SetEnvironmentVariable\s*\(|\bFakeCliSteering\s*\.\s*Reset\s*\(", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
 
     private static readonly Regex ResetsTheSweepThrottle = new(
         @"\bPanelService\s*\.\s*ForgetTheLastSweep\s*\(", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
@@ -51,6 +55,40 @@ public sealed class EveryClassThatSetsTheProcessEnvironmentTests
     }
 
     [Fact]
+    public void NoStaticHelperSetsTheProcessEnvironment_ButFakeCliSteeringItself()
+    {
+        TestSourceIndex.StaticOffenders(TestSourceIndex.Classes, SetsTheEnvironment, allowed: nameof(FakeCliSteering)).Should().BeEmpty(
+            "a static class is placed in no collection, so an environment write from a helper runs in whichever class called it");
+    }
+
+    [Fact]
+    public void AStaticHelperThatSetsTheEnvironmentOrResetsTheFakeCli_IsAnOffender_AndFakeCliSteeringItselfIsNot()
+    {
+        var classes = TestSourceIndex.Parse("Synthetic.cs", Definition + """
+            public static class FakeCliSteering { public static void Reset() => Environment.SetEnvironmentVariable("FAKECLI_X", null); }
+            public static class SetsIt { public static void A() => Environment.SetEnvironmentVariable("X", "1"); }
+            public static class ResetsIt { public static void A() => FakeCliSteering.Reset(); }
+            public static class Quiet { public static string A() => "Environment.SetEnvironmentVariable("; }
+            """);
+
+        TestSourceIndex.StaticOffenders(classes, SetsTheEnvironment, allowed: "FakeCliSteering")
+            .Should().BeEquivalentTo(["Synthetic.cs: SetsIt", "Synthetic.cs: ResetsIt"]);
+    }
+
+    [Fact]
+    public void AClassThatResetsTheFakeCliOutsideASerialCollection_IsAnOffender()
+    {
+        // FakeCliSteering.Reset clears every FAKECLI_* variable of the process: the same rule as writing one.
+        var classes = TestSourceIndex.Parse("Synthetic.cs", Definition + """
+            [Collection("serial-one")]
+            public sealed class Placed { void A() => FakeCliSteering.Reset(); }
+            public sealed class Loose { void A() => FakeCliSteering.Reset(); }
+            """);
+
+        Offenders(classes, SetsTheEnvironment).Should().BeEquivalentTo(["Synthetic.cs: Loose"]);
+    }
+
+    [Fact]
     public void EveryClassThatResetsTheSweepThrottle_IsInASerialCollection()
     {
         string.Join("; ", Offenders(TestSourceIndex.Classes, ResetsTheSweepThrottle)).Should().BeEmpty(
@@ -66,6 +104,7 @@ public sealed class EveryClassThatSetsTheProcessEnvironmentTests
         serial.Should().Contain(["fakecli-env", "console-out", "process-privileges"], "the three collections that run alone are found by their definitions");
         var environmentWriters = TestSourceIndex.Concrete(classes).Where(c => TestSourceIndex.Reaches(c, classes, SetsTheEnvironment)).Select(c => c.Name).ToList();
         environmentWriters.Should().Contain(["PanelServiceTests", "ARequestFaultIsNotAnOldBinaryTests", "VibeRuntimeTests"], "the writers the plan names are found, in a collection or not");
+        environmentWriters.Should().Contain(["KeyVaultProcessTests", "TheVaultIsFoundWhereCredsForDevsInstallsItTests"], "classes whose only environment write is FakeCliSteering.Reset( are found too");
         var throttleResetters = TestSourceIndex.Concrete(classes).Where(c => TestSourceIndex.Reaches(c, classes, ResetsTheSweepThrottle)).Select(c => c.Name).ToList();
         throttleResetters.Should().Contain(["AScratchSweepRunsOnTheConsultationBeatTests", "VibeHomesTests", "TempDirsAreSwept"], "the seven callers of ForgetTheLastSweep sit in these three classes");
     }

@@ -82,13 +82,44 @@ public sealed class EveryWriterOfTheSteeringFileTests
 
         var spelling = sources
             .Where(file => !allowed.Contains(Path.GetFileName(file)))
-            .Where(file => ProductionSources.JoinedWithText(File.ReadAllText(file)).Contains(MinimalSteeringFile.Name, StringComparison.Ordinal)
-                || ProductionSources.Joined(File.ReadAllText(file)).Contains(nameof(MinimalSteeringFile), StringComparison.Ordinal))
+            .Where(SpellsTheFilesName)
             .Select(Path.GetFileName)
             .ToList();
 
         sources.Select(Path.GetFileName).Should().Contain(allowed, "the scan sees the files it allows; a scan that finds none of them reads nothing");
         spelling.Should().BeEmpty("one writer, one path: a test that spells the file's name writes it behind the helper's back and outside the collection check");
+    }
+
+    [Fact]
+    public void NoStaticHelperWritesTheSteeringFile_ButFakeCliSteeringItself()
+    {
+        // A static class is no test class: no collection places it and the scan above never judges it, so a helper calling the
+        // writer would run in whichever class called the helper (code gate, 2026-10-19). FakeCliSteering is the ONE static that may.
+        TestSourceIndex.StaticOffenders(TestSourceIndex.Classes, Writes, allowed: nameof(FakeCliSteering)).Should().BeEmpty(
+            "one writer, one place: a static helper that writes the steering file hides the writer from the collection check");
+    }
+
+    [Fact]
+    public void AStaticHelperThatWritesTheSteeringFile_IsAnOffender_AndFakeCliSteeringItselfIsNot()
+    {
+        var classes = TestSourceIndex.Parse("Synthetic.cs", Definitions + """
+            public static class FakeCliSteering { public static void Write(object o) { var f = FakeCliSteering.MinimalFile; } }
+            public static class Helper { public static void Steer() => FakeCliSteering.Write(null!); }
+            public static class Quiet { public static string A() => "FakeCliSteering.Write("; }
+            [Collection("fakecli-env")]
+            public sealed class Placed { void A() => FakeCliSteering.Write(null!); }
+            """);
+
+        TestSourceIndex.StaticOffenders(classes, Writes, allowed: "FakeCliSteering").Should().BeEquivalentTo(["Synthetic.cs: Helper"]);
+    }
+
+    /// <summary>Whether the source file spells the steering file's name or the type that knows it — each file READ once, then lexed once per view.</summary>
+    private static bool SpellsTheFilesName(string file)
+    {
+        var source = File.ReadAllText(file);
+
+        return ProductionSources.JoinedWithText(source).Contains(MinimalSteeringFile.Name, StringComparison.Ordinal)
+            || ProductionSources.Joined(source).Contains(nameof(MinimalSteeringFile), StringComparison.Ordinal);
     }
 
     // --- the parser, on synthetic source: the scan is red where it must be --------------------------------------------------------

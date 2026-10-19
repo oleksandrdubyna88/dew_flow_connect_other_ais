@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 
 namespace CoaiMcp.Tests;
@@ -11,6 +12,7 @@ namespace CoaiMcp.Tests;
 /// <param name="DefinesSerialCollection">The name it defines with <c>[CollectionDefinition("…", DisableParallelization = true)]</c>, empty when it defines none.</param>
 /// <param name="Code">Its code: no comments, no string contents, the bodies of classes nested inside it INCLUDED — they run as part of it.</param>
 /// <param name="IsNested">Declared inside another class: not judged on its own, its code is its outer class's.</param>
+/// <param name="IsStatic">Declared <c>static</c>: not a class xUnit runs, so no collection places it — <see cref="StaticOffenders"/> judges it.</param>
 internal sealed record TestClass(
     string File,
     string Name,
@@ -19,7 +21,8 @@ internal sealed record TestClass(
     IReadOnlyList<string> Collections,
     string DefinesSerialCollection,
     string Code,
-    bool IsNested);
+    bool IsNested,
+    bool IsStatic = false);
 
 /// <summary>
 /// The classes of <c>src_mcp/tests</c>, read from their source — the one parser the structural scans of the test tree share
@@ -49,11 +52,15 @@ internal static class TestSourceIndex
     private static readonly Regex Definition = new(
         @"\[\s*CollectionDefinition\s*\(\s*""(?<name>[^""]*)""(?<args>[^\]]*)\]", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
 
+    private static readonly Regex StaticModifier = new(@"\bstatic\b", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
+
     private static readonly Regex Abstractness = new(@"\b(?:abstract|static)\b", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
 
     private static readonly Regex Identifier = new(@"\b[A-Za-z_]\w*\b", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
 
     private static readonly Regex Serial = new(@"DisableParallelization\s*=\s*true", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
+
+    private static readonly ConditionalWeakTable<IReadOnlyList<TestClass>, ILookup<string, TestClass>> ByName = new();
 
     private static readonly Lazy<IReadOnlyList<TestClass>> AllClasses = new(Discover, isThreadSafe: true);
 
@@ -67,12 +74,31 @@ internal static class TestSourceIndex
     /// <summary>The classes a scan judges: top-level, neither abstract nor static — the ones xUnit runs.</summary>
     public static IEnumerable<TestClass> Concrete(IEnumerable<TestClass> classes) => classes.Where(c => c.IsConcrete && !c.IsNested);
 
+    /// <summary>
+    /// The top-level STATIC classes, other than <paramref name="allowed"/>, whose code matches <paramref name="what"/>: <c>file: class</c>.
+    /// A static class is no test class, so no collection places it and the scans that judge concrete classes never see it — a helper that
+    /// wrote the steering file or set the environment from there would run in whichever class called it.
+    /// </summary>
+    public static List<string> StaticOffenders(IEnumerable<TestClass> classes, Regex what, string allowed) =>
+    [
+        .. classes
+            .Where(c => c.IsStatic && !c.IsNested && c.Name != allowed && what.IsMatch(c.Code))
+            .Select(c => $"{c.File}: {c.Name}"),
+    ];
+
     /// <summary>Whether the class's own attributes put it in one of the <paramref name="serial"/> collections.</summary>
     public static bool InASerialCollection(TestClass c, IReadOnlySet<string> serial) => c.Collections.Any(serial.Contains);
 
     /// <summary>Whether the code of <paramref name="c"/> or of any class it derives from (by name, within <paramref name="all"/>) matches <paramref name="pattern"/>.</summary>
     public static bool Reaches(TestClass c, IReadOnlyList<TestClass> all, Regex pattern) =>
         Lineage(c, all).Any(member => pattern.IsMatch(member.Code));
+
+    /// <summary>
+    /// The classes by name, built ONCE per list: a lineage is a handful of dictionary reads instead of a pass over every class
+    /// per ancestor (the scans walk every class's lineage, which made the first version quadratic in the size of the test tree).
+    /// </summary>
+    private static ILookup<string, TestClass> NamesIn(IReadOnlyList<TestClass> all) =>
+        ByName.GetValue(all, static list => list.ToLookup(c => c.Name, StringComparer.Ordinal));
 
     /// <summary>The class and every ancestor of it found in <paramref name="all"/> — each once, so a cycle cannot loop.</summary>
     private static IEnumerable<TestClass> Lineage(TestClass c, IReadOnlyList<TestClass> all)
@@ -87,7 +113,7 @@ internal static class TestSourceIndex
             }
 
             yield return next;
-            foreach (var parent in all.Where(candidate => next.Bases.Contains(candidate.Name, StringComparer.Ordinal)))
+            foreach (var parent in next.Bases.SelectMany(name => NamesIn(all)[name]))
             {
                 queue.Enqueue(parent);
             }
@@ -145,7 +171,8 @@ internal static class TestSourceIndex
             Collections: [.. CollectionName.Matches(header).Select(m => m.Groups["name"].Value)],
             DefinesSerialCollection: SerialDefinition(header),
             Code: code[span.BodyStart..span.BodyEnd],
-            IsNested: all.Any(other => other != span && other.BodyStart < span.Declaration.Index && span.BodyEnd <= other.BodyEnd));
+            IsNested: all.Any(other => other != span && other.BodyStart < span.Declaration.Index && span.BodyEnd <= other.BodyEnd),
+            IsStatic: StaticModifier.IsMatch(span.Declaration.Groups["mods"].Value));
     }
 
     /// <summary>What stands between the previous statement or brace and <c>class Name</c>: the attributes and modifiers.</summary>

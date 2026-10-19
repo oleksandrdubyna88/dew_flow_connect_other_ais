@@ -4601,7 +4601,7 @@ checks that.
 
 ### S2b — every writer of the steering file is in the serial collection
 
-`EveryWriterOfTheSteeringFileTests` (6) plus the shared parser `TestSourceIndex` (the classes of `src_mcp/tests` read from SOURCE with the
+`EveryWriterOfTheSteeringFileTests` (8) plus the shared parser `TestSourceIndex` (the classes of `src_mcp/tests` read from SOURCE with the
 lexer every census here uses — comments and string contents removed — judged on the CONCRETE class: a base class's calls count through each
 class derived from it; a collection counts only when the concrete class carries it itself; a class NESTED in another counts for its outer class and is not judged alone).
 
@@ -4610,6 +4610,7 @@ class derived from it; a collection counts only when the concrete class carries 
 | `EveryClassThatWritesTheSteeringFile_IsInTheSerialFakeCliEnvCollection` | any concrete class whose lineage calls `FakeCliSteering.Write` / `ReadBack` / `MinimalFile` has `[Collection("…")]` naming a collection defined with `DisableParallelization = true` |
 | `TheScan_StillSeesTheSixKnownWriters_AndTheCollectionTheyAreIn` (companion) | the scan finds the six classes that used to write their own copy, finds the `fakecli-env` definition as serial, and finds the collection on each |
 | `NoTestSourceSpellsTheSteeringFilesName_ButTheHelperAndTheTestsThatPinIt` | no other test source spells `fakecli-minimal.json` or `MinimalSteeringFile` (one writer, one path); the allowed files are found, so the scan reads something |
+| `NoStaticHelperWritesTheSteeringFile_ButFakeCliSteeringItself` (code gate, 2026-10-19) + its synthetic twin `AStaticHelperThatWritesTheSteeringFile_IsAnOffender_AndFakeCliSteeringItselfIsNot` | a STATIC class is no test class, so no collection places it and the concrete-class scan never judged it: a helper that called `FakeCliSteering.Write` would run in whichever class called the helper. Now any static class other than `FakeCliSteering` whose code calls `Write` / `ReadBack` / `MinimalFile` is an offender (`TestSourceIndex.StaticOffenders`); the twin is red for the helper and green for `FakeCliSteering` itself. The real-tree test is green today (no such helper exists); watched red once by a scratch static class `ZzBreakIt` calling `FakeCliSteering.Write`: `… but found at least one item {"ZzBreakIt.cs: ZzBreakIt"}` (the twin was red first against a stub that returned nothing: `Expected … to be a collection with 1 item(s), but found an empty collection.`) |
 | `AClassThatWritesOutsideTheSerialCollection_IsAnOffender`, `ABaseClassesWriteCounts_ThroughEachConcreteDerivedClass`, `ANestedClassesWriteCountsForItsOuterClass_AndANestedClassIsNotJudgedAlone` | the parser on synthetic source: outside / parallel-collection writers are named, a call in a string or a comment is not a call, the abstract base is not judged but each concrete derived class is, primary-constructor and nested classes parse (a helper nested in a placed class is placed; one nested in an unplaced class makes it the offender) |
 
 **Green today on the six classes; watched RED twice on the real tree, then restored:** `[Collection("fakecli-env")]` taken off
@@ -4632,15 +4633,16 @@ longer turn this test red, because it never looks at the folder after the round.
 
 ### C11 + S4 — a class that writes process-wide state runs in a serial collection
 
-`EveryClassThatSetsTheProcessEnvironmentTests` (5), on the same `TestSourceIndex` parser (a class NESTED in another counts for its outer class and is
+`EveryClassThatSetsTheProcessEnvironmentTests` (8), on the same `TestSourceIndex` parser (a class NESTED in another counts for its outer class and is
 not judged alone — a private scoped-variable helper inside a placed class runs inside that class's collection; the first version judged nested helpers
 alone and named two `Canary` classes that were never at fault).
 
 | Test | Guarantee |
 |---|---|
-| `EveryClassThatSetsTheProcessEnvironment_IsInASerialCollection` (rule 1, C11) | no concrete class whose lineage calls `Environment.SetEnvironmentVariable(` is outside a collection defined with `DisableParallelization = true` |
+| `EveryClassThatSetsTheProcessEnvironment_IsInASerialCollection` (rule 1, C11) | no concrete class whose lineage calls `Environment.SetEnvironmentVariable(` **or `FakeCliSteering.Reset(`** (the helper that clears every `FAKECLI_*` variable — the same write in a helper's words; its 7 calls in 6 classes were all in `fakecli-env` already, so this arm was green from the start; `AClassThatResetsTheFakeCliOutsideASerialCollection_IsAnOffender` was red until the pattern changed; watched red on the real tree by taking `KeyVaultProcessTests` out of its collection) is outside a collection defined with `DisableParallelization = true` |
 | `EveryClassThatResetsTheSweepThrottle_IsInASerialCollection` (rule 2, C6/J4) | the same for `PanelService.ForgetTheLastSweep(`: it resets a static of the process, and the next `BuildWork` anywhere walks the real temp folder inside its round's deadline |
 | `TheScans_StillSeeTheClassesTheyKnowAreThere` (companion) | the three serial collections are found by their definitions; the scans find `PanelServiceTests`, `ARequestFaultIsNotAnOldBinaryTests`, `VibeRuntimeTests` (environment) and `AScratchSweepRunsOnTheConsultationBeatTests`, `VibeHomesTests`, `TempDirsAreSwept` (throttle) |
+| `NoStaticHelperSetsTheProcessEnvironment_ButFakeCliSteeringItself` + `AStaticHelperThatSetsTheEnvironmentOrResetsTheFakeCli_…` (code gate, 2026-10-19) | the static-class arm of the same rule: a static class other than `FakeCliSteering` whose code sets the environment or resets the fake is an offender (green on the real tree; watched red by a scratch static class) |
 | two synthetic tests | an offender is named; a call spelled in a string or a comment is not a call; a base class's write counts through each concrete derived class |
 
 **Red, before the classes moved (2026-10-19):** rule 2 named exactly the plan's three — `AScratchSweepRunsOnTheConsultationBeatTests`, `TempDirsAreSwept`,
@@ -4650,7 +4652,20 @@ shape by the rule; the plan said every other writer was serial). `FluentAssertio
 into one string. All six classes moved into `fakecli-env` (the serial collections run one after another, so any one isolates them from the parallel ones).
 
 **Break-it (done, then restored):** `[Collection]` taken off `VibeRuntimeTests` and `VibeHomesTests` → rule 1 names `VibeRuntimeTests.cs: VibeRuntimeTests`, rule 2 names
-`VibeHomesTests.cs: VibeHomesTests`. **Limit, stated in the test:** a scan of each class's OWN code — a write made from a static helper is the helper's.
+`VibeHomesTests.cs: VibeHomesTests`. **Limit (first version):** a scan of each class's OWN code — a write made from a static helper was the helper's. The code gate (2026-10-19) closed that for the two steering/environment scans with the static-class arm; the limits that remain are listed next.
+
+### The limits of the structural scans (every one, stated once — code gate 2026-10-19)
+
+The scans (`EveryWriterOfTheSteeringFileTests`, `EveryClassThatSetsTheProcessEnvironmentTests`, `TestSourceIndex`) defend against an ACCIDENT — a person adding a writer and forgetting the collection — not against a determined bypass. What they do NOT see:
+
+1. **`using static` and aliases.** `using static CoaiMcp.Tests.FakeCliSteering;` then `Write(…)`, `using Steer = …FakeCliSteering;`, `using static System.Environment;` then `SetEnvironmentVariable(…)`: the patterns look for the spelled `FakeCliSteering.` / `Environment.` prefix. The same for a method group (`Action<string, string?> set = Environment.SetEnvironmentVariable;` has no `(`), reflection, `dynamic`, P/Invoke and `Environment` reached through another type's property.
+2. **Static helpers are judged by their own text only.** The static-class arm names a static class that itself calls the writer or sets the environment; it does not follow a call from one static helper into another (a helper that calls a helper that writes is seen at the second one only if the second is a static class here).
+3. **Collections are read from the class's own `[Collection("literal")]`.** A name held in a constant (`[Collection(Names.X)]`), an assembly-level collection setting, a collection fixture, or `[assembly: CollectionBehavior]` is not seen; xUnit v3 does not inherit the attribute from a base class, so none is looked for there. A `DisableParallelization` written any other way than `= true` in a `[CollectionDefinition]` is not read as serial.
+4. **Classes are matched by simple name.** Two classes of one name in different namespaces are one entry for the lineage walk; a `partial` class split over two files is two entries, each judged alone, so the attribute on one part and the call on the other reads as an offender (a false alarm, never a miss).
+5. **Only `src_mcp/tests/**/*.cs` is read.** The fake CLI (`src_mcp/tests_fakecli`), other test projects (`src_server/tests`, `src_bugs`, `src_bench`), scripts and non-C# sources are outside; so is product code. The Team server's tests have their own collections.
+6. **The lexer's limits are the census lexer's** (`ProductionSources.Joined`): comments and string contents are removed, so a call inside a raw string or an interpolation hole is as the lexer treats it; a call generated by a source generator does not exist in the source.
+7. **A serial collection is necessary, not sufficient.** It makes a class run alone; it does not make a class that forgets to restore a variable harmless to the next serial class (that is `FakeCliSteering.Reset` in a constructor, by convention, not by scan).
+8. **The third steering test reads names, not behaviour:** `NoTestSourceSpellsTheSteeringFilesName_…` finds the file's NAME and `MinimalSteeringFile`; a path built at run time from pieces is not a spelling.
 
 ### E1 — counts and the two-runs proof (2026-10-19, Windows, Debug)
 
