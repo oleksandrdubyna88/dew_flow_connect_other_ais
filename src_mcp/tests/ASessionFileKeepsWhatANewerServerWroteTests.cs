@@ -79,7 +79,7 @@ public sealed class ASessionFileKeepsWhatANewerServerWroteTests : IDisposable
     }
 
     /// <summary>A file as an OLDER server finds it: the baseline session with every <see cref="Planted"/> member added.</summary>
-    private string Plant(SessionStore store, IEnumerable<Planting> unknowns, string repo = Repo)
+    private static string Plant(SessionStore store, IEnumerable<Planting> unknowns, string repo = Repo)
     {
         var json = JsonNode.Parse(JsonSerializer.Serialize(Baseline(repo), ServerJsonContext.Default.PersistedSession))!.AsObject();
         foreach (var unknown in unknowns)
