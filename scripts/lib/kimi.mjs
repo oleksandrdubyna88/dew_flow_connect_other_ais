@@ -19,7 +19,7 @@ export const REAL_HOME = join(homedir(), '.kimi-code');
 
 /**
  * Where Moonshot's installer puts `kimi`: on Windows `~/.kimi-code/bin/kimi.exe` (KimiAcpProfile.InstalledExecutableFor, the shim's
- * own default); elsewhere `<KIMI_INSTALL_DIR or ~/.kimi-code>/bin/kimi` (DL5 of todo/PLAN_kimi_and_vibe_on_linux.md).
+ * own default); elsewhere `<KIMI_INSTALL_DIR or ~/.kimi-code>/bin/kimi` (DL5 of research/PLAN_kimi_and_vibe_on_linux.md).
  */
 export function kimiExecutable(platform = process.platform, env = process.env, home = homedir()) {
   if (platform === 'win32') return win32.join(home, '.kimi-code', 'bin', 'kimi.exe');
@@ -213,7 +213,7 @@ const isLink = (p) => { try { return lstatSync(p).isSymbolicLink(); } catch { re
 
 /**
  * A folder link `link` → `target`: a directory junction on Windows (mklink /J through cmd.exe by its absolute path), a symlink on
- * Linux (DL6 of todo/PLAN_kimi_and_vibe_on_linux.md) — lib/vibe.mjs's dirLink, one maker for both probes. The error text, or ''.
+ * Linux (DL6 of research/PLAN_kimi_and_vibe_on_linux.md) — lib/vibe.mjs's dirLink, one maker for both probes. The error text, or ''.
  */
 export const junction = (link, target) => dirLink(link, target);
 

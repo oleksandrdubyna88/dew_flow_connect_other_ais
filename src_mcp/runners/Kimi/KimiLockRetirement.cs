@@ -5,7 +5,7 @@ using CoaiMcp.Runners.Files;
 namespace CoaiMcp.Runners.Kimi;
 
 /// <summary>
-/// The sweep that retires the lock files of a sign-in folder that is gone or is another folder now (F15 and DL7 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>, A2 §2.5).
+/// The sweep that retires the lock files of a sign-in folder that is gone or is another folder now (F15 and DL7 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>, A2 §2.5).
 /// </summary>
 /// <remarks>
 /// <para><b>Why it exists, and why only on Linux.</b> A Linux key is the folder's inode (<see cref="FolderIdentity"/>), and an inode changes whenever the folder is made again, so the

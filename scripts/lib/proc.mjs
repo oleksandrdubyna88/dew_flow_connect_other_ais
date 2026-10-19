@@ -1,5 +1,5 @@
 // lib/proc.mjs — the Linux halves of the Kimi tree-hold probe (scripts/probe-kimi-tree-hold.mjs, plan §5 of
-// todo/PLAN_kimi_and_vibe_on_linux.md): who is running, read from /proc, and whether a lock file is held, asked of flock(1).
+// research/PLAN_kimi_and_vibe_on_linux.md): who is running, read from /proc, and whether a lock file is held, asked of flock(1).
 // Both are READ-ONLY questions: nothing here ends a process or keeps a lock.
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';

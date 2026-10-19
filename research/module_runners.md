@@ -3044,7 +3044,7 @@ the consultant's launch and the question row are S3's.
 
 Mistral Vibe (`vibe`, the Python CLI, on the person's own Mistral subscription — its sign-in is in the OS keyring,
 research/RESULTS_vibe_confinement.md §12) reviews plans and code as a CLI row, runtime `vibe`. Every flag and every check
-cites the RESULTS cell it rests on — Windows 3 of 3, Vibe 2.26.1 — and, since E2 of `todo/PLAN_kimi_and_vibe_on_linux.md`
+cites the RESULTS cell it rests on — Windows 3 of 3, Vibe 2.26.1 — and, since E2 of `research/PLAN_kimi_and_vibe_on_linux.md`
 (2026-10-16), WSL2 (the scout's cells, n = 1, RESULTS §30): a launch on a Windows host or a **WSL2** host starts; a native Linux
 host, a WSL1 host, macOS and a Windows row naming `wsl.exe` are refused (D18, DL1). Machine-only (D12: `MachineOnlyRuntimes`, so the Team server
 refuses a `vibe` row by name); not in any default vendor list (D11).
@@ -3416,7 +3416,7 @@ CLIENT, so the approvals are coai's. The client half is the unit `src_mcp/runner
 `--ask-api`. `KimiRuntime` above it (E4.4, *The Kimi reviewer* below) builds its request and reads its report; the extension's row (E4.5) is in [module_extension.md](module_extension.md), *Kimi Code on the panel's side*.
 
 **The profile.** Executable `%USERPROFILE%\.kimi-code\bin\kimi.exe` when present, else bare `kimi` for
-`ExecutableResolver` (Windows only; nothing has run Kimi elsewhere, so no path is guessed there — the `agy` rule);
+`ExecutableResolver` (Windows only when this was written, so no path was guessed elsewhere — the `agy` rule; WSL2 and Linux paths have been found since E6, DL5 under *Kimi on WSL2*);
 arguments `["acp"]`; the model through config option `model`; the names declined at any depth: `AGENTS.md`,
 `agents.md`, `.kimi-code`, `.vibe`, `.agents/skills`, `.agents/agents` and `.mcp.json` (the last two joined with M-K9 (e), RESULTS §21 — a sub-agent root Kimi loads from disk and the MCP file it starts servers from when the folder is trusted; `.mcp.json` is a NAME, so refused at every depth, the stricter reading of "project-root"; `SnapshotExclusions.Default` carries the same eight, and `TheBoundaryRefusesExactlyWhatTheSnapshotLeavesOut` pins the pair), `.git`; the known sentences: the subscription `401`
 (`subscription_model`, listed BEFORE the `Authentication required` sentence it begins with → `not_signed_in`) and the
@@ -3757,9 +3757,9 @@ flowchart LR
   folder's entry NAMES, and never opens a credentials file. `KimiCanaryTests` pins that no string coai composes contains a canary from the
   sign-in or from the `moonshot-ai` row's `api_key`; the agent's own stderr and error text are vendor text, outside the pin.
 
-## Linux building blocks for Kimi — the Kimi-independent half of E5 (2026-10-16, `todo/PLAN_kimi_and_vibe_on_linux.md` DL6–DL10; A2 and A3 specs)
+## Linux building blocks for Kimi — the Kimi-independent half of E5 (2026-10-16, `research/PLAN_kimi_and_vibe_on_linux.md` DL6–DL10; A2 and A3 specs)
 
-Mechanical pieces, built before the Kimi launch is opened on Linux (`KimiLaunch.HostRefusal` is NOT lifted — that is E6), **the pieces were built first and wired into nothing; A2 (below) wires the lock, the listing and the junction shell, A3 (below) built the teardown and the survivor marker, and the integration step joins them to A2’s seam**: before A2 no `KimiCredentialsLock`, `KimiLaunch`, `AcpTransport`,
+Mechanical pieces, built before the Kimi launch is opened on Linux (when this was written `KimiLaunch.HostRefusal` was not yet lifted; E6 lifted it for WSL2 on 2026-10-17, see *Kimi on WSL2* below), **the pieces were built first and wired into nothing; A2 (below) wires the lock, the listing and the junction shell, A3 (below) built the teardown and the survivor marker, and the integration step joins them to A2’s seam**: before A2 no `KimiCredentialsLock`, `KimiLaunch`, `AcpTransport`,
 `AskAcpMode`, `ForeignKimi` or `HostProcessList` code calls them. Each file that comes from wsl_care (MIT, the same owner) says so in a header; what was not ported is named there too.
 
 | Piece | File (`src_mcp/runners/…`) | What it is | Tests |
@@ -3825,10 +3825,10 @@ flowchart TD
 
 Retirement, `TakeVerified` and the native take are Linux behaviours; the same code is inert (or .NET's own) on Windows, where the key is path-stable and an open `FileShare.None` file cannot be unlinked.
 
-## The verified teardown, and what a survivor does to the next launch — A3 of E5 (2026-10-16, `todo/PLAN_kimi_and_vibe_on_linux.md` DL9, S-K6, S-K14–S-K16, S-K18, S-K21, S-K22)
+## The verified teardown, and what a survivor does to the next launch — A3 of E5 (2026-10-16, `research/PLAN_kimi_and_vibe_on_linux.md` DL9, S-K6, S-K14–S-K16, S-K18, S-K21, S-K22)
 
 The Linux end of a Kimi tree, and the marker that makes a survivor change the next launch's ELIGIBILITY. **Built and tested; the three call sites that consult the marker (`KimiLaunch.TakeAsync`,
-`KimiShimHold.Taken`, `KimiHome.Alive`) are wired in the integration step with A2's work — until then a Kimi tree is still ended by today's `UnsupervisedTree`, and `KimiLaunch.HostRefusal` still refuses Linux (E6).**
+`KimiShimHold.Taken`, `KimiHome.Alive`) are wired in the integration step with A2's work — until then a Kimi tree is still ended by today's `UnsupervisedTree`, and `KimiLaunch.HostRefusal` still refuses Linux (E6). Historical: the integration step wired all of it and E6 lifted the refusal for WSL2 — see *Kimi on WSL2* below.**
 
 | Piece | File (`src_mcp/…`) | What it is |
 |---|---|---|
@@ -3948,9 +3948,9 @@ flowchart LR
 Tests: `KimiRuntimeTests`, `KimiIsClassifiedFromItsReportTests`, `OneKimiLaunchAtATimeTests`, `KimiIsDiagnosedInItsOwnWordsTests`, `AKimiReviewerRunsThroughTheShimTests`,
 `TheRoundsScratchDisposesItsKimiHomeJunctionFirstTests`, and the S2.45 canary re-run through the round's records in `KimiCanaryTests` — listed in [module_tests.md](module_tests.md).
 
-## Kimi on WSL2 — the host admission, the places, the cache, network storage and the marker report (2026-10-17, E6 server half of `todo/PLAN_kimi_and_vibe_on_linux.md`)
+## Kimi on WSL2 — the host admission, the places, the cache, network storage and the marker report (2026-10-17, E6 server half of `research/PLAN_kimi_and_vibe_on_linux.md`)
 
-E5 built Kimi's Linux mechanisms behind a closed door; E6 opens it, for WSL2 only. The extension's half (hints, install line, the *Clear the stuck Kimi marker* button, `KIMI_ON_LINUX_SINCE`) is `module_extension.md`'s.
+**Shipped 2026-10-19 in coai-mcp 0.61.0** (PR #879; Vibe on WSL2 since 0.59.0) and checked live on a WSL2 machine: the providers answer shows kimi 2.2.0 enabled on its own sign-in, and a plan round got Kimi's answer. **Not proven yet:** the install button pressed live on a machine without `rg`; a native Linux run (native Linux stays refused); the Kimi 2.2.0 confinement re-measurement. The M-K14 question (the person's own `kimi` open) is the follow-up plan `PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md`. E5 built Kimi's Linux mechanisms behind a closed door; E6 opens it, for WSL2 only. The extension's half (hints, install line, the *Clear the stuck Kimi marker* button, `KIMI_ON_LINUX_SINCE`) is `module_extension.md`'s.
 
 ```mermaid
 flowchart TD

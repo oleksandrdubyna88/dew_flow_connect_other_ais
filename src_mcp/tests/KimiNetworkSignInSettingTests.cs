@@ -10,7 +10,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// The default-off override of DL6 (<c>coai.kimiAllowNetworkSignIn</c>, E6 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>) and how it reaches the launch: the extension writes <c>COAI_KIMI_ALLOW_NETWORK_SIGNIN</c> into the data
+/// The default-off override of DL6 (<c>coai.kimiAllowNetworkSignIn</c>, E6 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>) and how it reaches the launch: the extension writes <c>COAI_KIMI_ALLOW_NETWORK_SIGNIN</c> into the data
 /// directory's <c>settings.json</c> like every other <c>COAI_*</c> setting; <see cref="PanelSettings"/> reads it through <c>Flag</c> (an unreadable value stays OFF); the roster puts it on the row's
 /// <see cref="ReviewerSettings"/>; <see cref="KimiRuntime.Build"/> binds the invocation's adapter to it.
 /// </summary>

@@ -1,17 +1,42 @@
 # PLAN — Kimi Code and Mistral Vibe on Linux and WSL
 
-> Status: **E1–E3 released in 0.59.0, E4–E5 built, E6 built and in review for 0.61.0 — 2026-10-18.** (Earlier: E1 done 2026-10-16 — the probes run on Linux; L-V6b, L-V7, L-V8 recorded; E4 measured 2026-10-16.) Scope: lifting D18 of
-> [PLAN_vibe_and_kimi_runtimes.md](PLAN_vibe_and_kimi_runtimes.md) for a coai-mcp that runs ON a Linux host (Remote-WSL first) —
+> Status: **IMPLEMENTED, 2026-10-19.** Vibe on WSL2 shipped in coai-mcp 0.59.0 / extension 0.79.0 (2026-10-17; E1–E3, merged through PR #842).
+> Kimi on WSL2 shipped in coai-mcp 0.61.0 / extension 0.81.0 (2026-10-19; E4–E6, PR #879, squash `cb9ec8b65`; release PRs #883 and #884; the release baseline #886).
+> Checked live on 2026-10-19: the owner pressed *Update* on both sides; the WSL providers answer shows kimi enabled (2.2.0, its own sign-in, no refusal) and vibe 2.26.1 enabled; a live plan round on WSL2 through the installed coai-mcp 0.61.0 got Kimi's answer (verdict `proceed`, 66 s).
+> Q7 (a Kimi sign-in on network storage) was answered by the owner on 2026-10-19: option A.
+>
+> **Deviations — what shipped differently from the plan's letter** (each with its detail in the *Outcome* entries of §Epics):
+>
+> - **DL14, the versions moved.** Vibe took 0.59.0 as planned, with the extension at 0.79.0. Kimi was planned for 0.60.0 at the earliest; main released 0.60.0 (the prompt-cap work, #857) without it, so by the second-merger rule Kimi shipped in 0.61.0 and `KIMI_ON_LINUX_SINCE` is `'0.61.0'`.
+> - **Vibe E1 (probes):** the `linux` manifest entry was STAGED, not put in `versions`; L-V6 was not run (the owner's `.env` is never read); two of DL2's sentences were widened to the measurement (E1 *Outcome*).
+> - **Vibe E2/E3:** A1 spec §3.2 step 2 was wrong (the second turn did not re-judge the link target; now every turn does); the extension card knows five host kinds read from the kernel banner; the WSL row is `confined` on L-V9 3 of 3, not on n = 1.
+> - **Kimi E6 review fixes A–M:** the lead's review of the integrated branch found twelve defects, each fixed red-first on `feat/wsl-kimi-linux` (A–L in the *Outcome of the review*; the reds are in `module_tests.md`, *Kimi on Linux — the review of 2026-10-18*). Two security ones moved the design: `coai.kimiAllowNetworkSignIn` is `scope: machine` and read through the user-layer door (A), and the supply-chain guard on the install line refuses an escalator behind `$(`, a backtick or `&` (E). The `fd` link replaces a link that resolves to a FOLDER and leaves a FILE alone (G, a deviation from the brief).
+> - **A race in a test fixture** was found and fixed inside #879, before the merge.
+> - **Kimi is a reviewer only.** The Kimi consultant and question row are the paused S5 (#839), not this plan.
+> - **No stories documents were written.** The planned `todo/PLAN_kimi_and_vibe_on_linux_E<n>.md` files never existed; E1 ran from this document and its §5 (`PLAN_kimi_and_vibe_on_linux_E2.md` and `_E5.md`, named in the text below, are the names that were reserved, not files).
+> - **Not done on purpose:** the `AsyncLocal` + `Restore` seam copies (`KimiHost.cs`, `KimiRuntime.cs` and five older ones) and the twin `{Path, Pids}` records are a separate refactor; 76 older `TempDir.For("coai-…")` prefixes in `src_mcp/tests` still lack `testsToDelete-`.
+>
+> **Open tail — what is NOT done and NOT proven:**
+>
+> - The install button for Kimi's `rg`/`fd` was **not pressed live** in WSL on a machine without `rg` (E6's done-when asked for it). It is proven by tests (S-K17, S-K10) only.
+> - **Native Linux is still refused** for both runtimes, with the WSL2-only sentence (DL1, Q1). It needs one native-Linux run (L-V10 for Vibe; the same for Kimi) before the refusal can lift.
+> - **M-K14** (the refresh-race measurement: do two refreshers of ONE sign-in — coai's turns and the person's own `kimi`, or
+>   several coai servers — break the rotating token) was not run. The exit-77 "not signed in" answers that raised it are
+>   re-judged by the follow-up plan `PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md` (written on branch `docs/kimi-quota-is-not-a-sign-in`, not yet merged at promotion). Q3's default (keep the wait, then Busy) stands until then.
+> - **The Kimi 2.2.0 confinement re-measurement** (a paid probe, on the 3-of-3 rule) was **not run**. The Linux cells in `RESULTS_kimi_confinement.md` §29 are the evidence for the confinement claim.
+>
+> Scope: lifting D18 of
+> [PLAN_vibe_and_kimi_runtimes.md](../todo/PLAN_vibe_and_kimi_runtimes.md) for a coai-mcp that runs ON a Linux host (Remote-WSL first) —
 > Vibe first, because it is measured; Kimi after its WSL cells. Touches `src_mcp/runners/{Vibe,Kimi,Files,Processes,Platform}`,
 > `src_mcp/src/Acp`, `src_mcp/src/Program.cs` (the `--kimi-clear-marker` one-shot mode), `src_server/src/Slots`
 > (`ReaderReconcile` moves out of it, DL9 — the plan gate for epics 4–6, 2026-10-16, F9), `shared/vibe-home-manifest.json`, `shared/consultant-limitations.json`, `scripts/` (the probes),
 > `src_vs_code/src` (hints, install lines, help in five languages, `officialSources.ts`, `runtimeSince.ts`), and the RESULTS documents.
 >
-> Related docs: [PLAN_vibe_and_kimi_runtimes.md](PLAN_vibe_and_kimi_runtimes.md) (D17–D20, §4 S4),
-> [PLAN_vibe_and_kimi_runtimes_E4.md](PLAN_vibe_and_kimi_runtimes_E4.md) (E4.5's Linux notes),
-> [RESULTS_vibe_confinement.md](../research/RESULTS_vibe_confinement.md), [RESULTS_kimi_confinement.md](../research/RESULTS_kimi_confinement.md),
-> [PLAN_vibe_live_round_fixes.md](../research/PLAN_vibe_live_round_fixes.md) (D2's path budget, D7's `PrivateFolder` Unix leg),
-> [PLAN_a_wsl_consultant_is_checked_from_windows.md](PLAN_a_wsl_consultant_is_checked_from_windows.md) (the Windows→WSL bridge, not this plan).
+> Related docs: [PLAN_vibe_and_kimi_runtimes.md](../todo/PLAN_vibe_and_kimi_runtimes.md) (D17–D20, §4 S4),
+> [PLAN_vibe_and_kimi_runtimes_E4.md](../todo/PLAN_vibe_and_kimi_runtimes_E4.md) (E4.5's Linux notes),
+> [RESULTS_vibe_confinement.md](RESULTS_vibe_confinement.md), [RESULTS_kimi_confinement.md](RESULTS_kimi_confinement.md),
+> [PLAN_vibe_live_round_fixes.md](PLAN_vibe_live_round_fixes.md) (D2's path budget, D7's `PrivateFolder` Unix leg),
+> [PLAN_a_wsl_consultant_is_checked_from_windows.md](../todo/PLAN_a_wsl_consultant_is_checked_from_windows.md) (the Windows→WSL bridge, not this plan).
 
 ## 1. The symptom
 
@@ -87,7 +112,7 @@ Numbered DL1–DL14 so they never collide with the parent plan's D-numbers. Ever
   decided by the plan gate (F10), which closes Q1.** The code is the same, and WSL2 is a real Linux kernel, but every cell is WSL2's,
   and a desktop Linux differs where it matters (a keyring Vibe may use instead of `.env`, other filesystems, other distributions'
   packaging). So 0.59.0 admits `HostKind.Wsl` ONLY; `HostKind.Linux` keeps a refusal whose sentence is new: *"Vibe runs on WSL2 only
-  for now — it is measured on WSL2 and not yet on a native Linux host (DL1 of todo/PLAN_kimi_and_vibe_on_linux.md)"*. It lifts when
+  for now — it is measured on WSL2 and not yet on a native Linux host (DL1 of research/PLAN_kimi_and_vibe_on_linux.md)"*. It lifts when
   at least one native-Linux run of L-V9 is recorded (§5, L-V10). The `linux` limitation rows say exactly that; the `wsl` rows name the
   WSL2 cells. The host refusal becomes per runtime and per stage: Vibe admits WSL from E2, Kimi from E6 (WSL only, by the same rule — the same
   `NamesWsl2` predicate below, so a WSL1 banner is refused for a Kimi row too: the plan gate for epics 4–6, 2026-10-16, F0; S-K20).
@@ -939,13 +964,13 @@ Nothing here has an in-flight state of its own; the homes keep D20's sweep.
 
 | Item | Built by | The other plan's part |
 |---|---|---|
-| D18 lifted for a Linux HOST | this plan | [PLAN_vibe_and_kimi_runtimes.md](PLAN_vibe_and_kimi_runtimes.md) D18 states the refusal; this plan amends it (a note there points here) |
-| Kimi's Linux install line | this plan (DL12) | [PLAN_vibe_and_kimi_runtimes_E4.md](PLAN_vibe_and_kimi_runtimes_E4.md) E4.5 wrote it down "for the day D18 lifts" |
+| D18 lifted for a Linux HOST | this plan | [PLAN_vibe_and_kimi_runtimes.md](../todo/PLAN_vibe_and_kimi_runtimes.md) D18 states the refusal; this plan amends it (a note there points here) |
+| Kimi's Linux install line | this plan (DL12) | [PLAN_vibe_and_kimi_runtimes_E4.md](../todo/PLAN_vibe_and_kimi_runtimes_E4.md) E4.5 wrote it down "for the day D18 lifts" |
 | Kimi as a consultant / question row on Linux | `feat/kimi-consultant` (its own limitation rows) | this plan's E5/E6 give it the Linux launch; whichever merges second bumps its `*_SINCE` (DL14) |
-| A Windows `coai-mcp` running the WSL side | [PLAN_a_wsl_consultant_is_checked_from_windows.md](PLAN_a_wsl_consultant_is_checked_from_windows.md) | this plan keeps it refused (DL1) |
+| A Windows `coai-mcp` running the WSL side | [PLAN_a_wsl_consultant_is_checked_from_windows.md](../todo/PLAN_a_wsl_consultant_is_checked_from_windows.md) | this plan keeps it refused (DL1) |
 | M-K14, the refresh race | the parent plan (later) | unchanged here |
 | macOS | nobody yet | stays refused |
-| `ReaderReconcile` moved from `src_server/src/Slots/ReaderMarker.cs` to `src_mcp/runners/Processes` | this plan (E5, DL9) | the vendor-slot reader barrier ([PLAN_every_round_is_counted.md](../research/PLAN_every_round_is_counted.md) epic 6) keeps its behaviour: `SlotRegistry` calls the moved code, and `ReaderBarrierTests` / `GaugeReaderCrashHarnessTests` pass unchanged (the plan gate for epics 4–6, 2026-10-16, F9) |
+| `ReaderReconcile` moved from `src_server/src/Slots/ReaderMarker.cs` to `src_mcp/runners/Processes` | this plan (E5, DL9) | the vendor-slot reader barrier ([PLAN_every_round_is_counted.md](PLAN_every_round_is_counted.md) epic 6) keeps its behaviour: `SlotRegistry` calls the moved code, and `ReaderBarrierTests` / `GaugeReaderCrashHarnessTests` pass unchanged (the plan gate for epics 4–6, 2026-10-16, F9) |
 
 Disjoint otherwise: chat, the Team server and the bench are out, as in the parent plan.
 

@@ -302,7 +302,7 @@ public sealed class AcpClientTests
     /// stale parent pid — so no red could be shown here; the order was fixed by the finding's own reasoning.
     /// <para>On Linux and macOS an orphan is reparented the moment its parent goes, and a client that is not a SUBREAPER finds
     /// none (CI showed it on 2026-10-12: <i>Expected Gone(grandchild) to be True … but found False</i>). The mechanism that
-    /// closes it is DL9 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>: the SHIM becomes a child subreaper and ends its tree by
+    /// closes it is DL9 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>: the SHIM becomes a child subreaper and ends its tree by
     /// identity (<c>SupervisedTeardown</c>) — which an in-process test cannot show, because the test host must never become a
     /// subreaper. The Linux assertion is <c>SupervisedTeardownLinuxTests.AnAgentThatExitsFirst_LeavesNoSameGroupAndNoSetsidChild</c>
     /// and its twin through the shim, run in a real subreaper child. Here the grandchild is asserted gone on Windows only;

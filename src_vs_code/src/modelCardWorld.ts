@@ -149,7 +149,7 @@ export function versionWarningNote(id: string, reported: CardContext['reported']
 
 /**
  * A Kimi row's STANDING survivor marker, when the server reports one: the line that says what stands and the *Clear the stuck Kimi
- * marker* button (E6 of todo/PLAN_kimi_and_vibe_on_linux.md, DL9). Nothing for any other row, when no marker stands, and from a
+ * marker* button (E6 of research/PLAN_kimi_and_vibe_on_linux.md, DL9). Nothing for any other row, when no marker stands, and from a
  * server older than the field — the Busy sentence carries the way out by hand either way. The button's id is the ROW; the host asks
  * the server again at the press and takes the path from that answer (`kimiMarker.ts`).
  */

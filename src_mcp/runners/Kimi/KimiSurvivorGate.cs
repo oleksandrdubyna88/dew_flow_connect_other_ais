@@ -44,7 +44,7 @@ internal sealed record ReconcileSeams(
 }
 
 /// <summary>
-/// What a standing survivor marker does to the next launch (DL9 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): it is reconciled FIRST — terminate by identity, confirm, then ask every member the
+/// What a standing survivor marker does to the next launch (DL9 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>): it is reconciled FIRST — terminate by identity, confirm, then ask every member the
 /// tri-state question — and only a confirmed-empty tree clears it. Anything else keeps the marker and makes the launch Busy, with the way out in the sentence.
 /// </summary>
 /// <remarks>
@@ -151,14 +151,14 @@ public static class KimiSurvivorGate
         return $"a Kimi started by coai on this sign-in may still be running: the previous turn could not confirm that pid {first.Pid} (started {first.StartedUtc:yyyy-MM-dd HH:mm:ss} UTC) ended, "
             + $"and it is recorded in {blocked.MarkerPath}. coai does not start another Kimi on this sign-in while that stands — two refreshers of one rotating token would sign you out. "
             + $"The file is safe to delete once those processes are gone (check with `ps -p {Pids(blocked.Marker)}`). The Kimi card's *Clear the stuck Kimi marker* button does the same check "
-            + "and deletes it only when every process named is gone (DL9 of todo/PLAN_kimi_and_vibe_on_linux.md)";
+            + "and deletes it only when every process named is gone (DL9 of research/PLAN_kimi_and_vibe_on_linux.md)";
     }
 
     private static string Unverifiable(SurvivorVerdict.Blocked blocked) =>
         $"a Kimi started by coai on this sign-in may still be running: {blocked.Detail}, so coai cannot tell whether it ended; it is recorded in {blocked.MarkerPath}. "
         + "coai does not start another Kimi on this sign-in while that stands. "
         + $"The file is safe to delete once you have checked that those processes are gone{PsHint(blocked.Marker)}. "
-        + "The Kimi card's *Clear the stuck Kimi marker* button refuses while a process cannot be checked (DL9 of todo/PLAN_kimi_and_vibe_on_linux.md)";
+        + "The Kimi card's *Clear the stuck Kimi marker* button refuses while a process cannot be checked (DL9 of research/PLAN_kimi_and_vibe_on_linux.md)";
 
     private static string PsHint(KimiSurvivorMarkerDto marker) => marker.Marker.Tree.Count == 0 ? string.Empty : $" (`ps -p {Pids(marker)}`)";
 
@@ -170,6 +170,6 @@ public static class KimiSurvivorGate
 
         return $"a Kimi started by coai on this sign-in may still be running: the previous turn ended between writing {blocked.MarkerPath} and starting Kimi, so the marker names no process{why}. "
             + "coai does not start another Kimi on this sign-in while that stands. It is cleared automatically once no kimi runs here; the file is safe to delete once you are sure no Kimi started by coai "
-            + "is running. The Kimi card's *Clear the stuck Kimi marker* button does the same check (DL9 of todo/PLAN_kimi_and_vibe_on_linux.md)";
+            + "is running. The Kimi card's *Clear the stuck Kimi marker* button does the same check (DL9 of research/PLAN_kimi_and_vibe_on_linux.md)";
     }
 }

@@ -6,7 +6,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// DL5's Kimi half (E6 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): on a Linux or WSL host the person's places are found where Moonshot's installer put them — <c>~/.kimi-code/bin/kimi</c>, or
+/// DL5's Kimi half (E6 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>): on a Linux or WSL host the person's places are found where Moonshot's installer put them — <c>~/.kimi-code/bin/kimi</c>, or
 /// <c>$KIMI_INSTALL_DIR/bin/kimi</c> — not only on the editor's <c>PATH</c>, and the folder where <c>rg</c> and <c>fd</c> were found (including <c>~/.local/bin</c>) joins the built <c>PATH</c>.
 /// Spelled with <c>/</c> on every machine that runs it: a Linux path is judged the same on a Windows test host.
 /// </summary>

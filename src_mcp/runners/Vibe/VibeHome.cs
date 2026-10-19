@@ -39,7 +39,7 @@ public static class VibeHome
 
     /// <summary>
     /// <see cref="Refusal(string, VibeHomeManifest, VibeHomeEntry)"/> on a host that admits ONE link in an owned home
-    /// (<paramref name="admitted"/>: DL2 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): the person's sign-in, as <c>.env</c> at the top
+    /// (<paramref name="admitted"/>: DL2 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>): the person's sign-in, as <c>.env</c> at the top
     /// level, compared by its RAW target. Any other link — another name, another target, a folder — is refused as before.
     /// </summary>
     public static string Refusal(string home, VibeHomeManifest manifest, VibeHomeEntry entry, AdmittedLink admitted) =>

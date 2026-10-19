@@ -1334,7 +1334,7 @@ macOS through Moonshot's official installer — and an older `coai-mcp` never re
      Kimi looks for `fd`, so the line also makes `~/.local/bin/fd` a link to it (fd's README's own instruction); Fedora
      `sudo dnf install ripgrep fd-find`; otherwise the projects' GitHub release archives. `OFFICIAL_SOURCES` would then
      need `brew install` and `apt-get install` verbs with their package lists — a change of that day, not this story's.
-     *(2026-10-16: that day is planned — DL12 of [PLAN_kimi_and_vibe_on_linux.md](PLAN_kimi_and_vibe_on_linux.md), its epic E6,
+     *(2026-10-16: that day was planned, and it shipped in mcp 0.61.0 on 2026-10-19 — DL12 of [PLAN_kimi_and_vibe_on_linux.md](../research/PLAN_kimi_and_vibe_on_linux.md), its epic E6,
      for Debian/Ubuntu and Fedora; macOS stays refused there.)*
    `kimiUpdate` = `kimiInstall` (re-running the script installs the latest — the scripts, read 2026-10-14; the guarded
    tool steps are skipped when present); NOT `kimi upgrade`: it is documented but unmeasured here, and

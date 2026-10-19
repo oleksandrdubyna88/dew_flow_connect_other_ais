@@ -3,7 +3,7 @@ using CoaiMcp.Runners.Files;
 namespace CoaiMcp.Runners.Vibe;
 
 /// <summary>
-/// The sentences a refused Vibe sign-in file is told in (DL2 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>, A1 spec §1.7, §3.5).
+/// The sentences a refused Vibe sign-in file is told in (DL2 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>, A1 spec §1.7, §3.5).
 /// </summary>
 /// <remarks>
 /// <b>Each is a function of the PATH, a line number and a kind — never of a byte of the file</b> (I4). A name a refusal could echo may be
@@ -12,7 +12,7 @@ namespace CoaiMcp.Runners.Vibe;
 /// </remarks>
 internal static class VibeSignInSentences
 {
-    private const string Plan = "DL2 of todo/PLAN_kimi_and_vibe_on_linux.md";
+    private const string Plan = "DL2 of research/PLAN_kimi_and_vibe_on_linux.md";
 
     /// <summary>The refusal for line <paramref name="line"/> of the sign-in file at <paramref name="path"/> being of <paramref name="kind"/>.</summary>
     public static string Name(string path, int line, DotenvRefusal kind) => kind switch

@@ -194,7 +194,7 @@ export interface PanelState {
   readonly hostFamily?: PathFamily | undefined;
   /**
    * What this window runs on — Windows, WSL2, WSL1, a native Linux host or a Mac — read from the kernel once by the host
-   * (`hostKind`). It decides what a Vibe card says about the host (DL1 of todo/PLAN_kimi_and_vibe_on_linux.md): "update
+   * (`hostKind`). It decides what a Vibe card says about the host (DL1 of research/PLAN_kimi_and_vibe_on_linux.md): "update
    * coai-mcp" on WSL2 only, a refusal on WSL1 and a native host. REQUIRED, with no fallback: the one fallback there could be
    * — this platform's own — maps every Linux platform to a native host, which would draw the refusal on a WSL2 window.
    * Whoever builds a state says what the window runs on (a test names it, so a page is the same on any machine).
@@ -1296,7 +1296,7 @@ export interface CardContext {
   /** The installed `coai-mcp`'s version, or empty when absent or unknown — which is not old. */
   readonly serverVersion: string;
   /**
-   * The saved `coai.kimiAllowNetworkSignIn` for a Kimi card's *Connection* fold (DL6 of todo/PLAN_kimi_and_vibe_on_linux.md), or UNDEFINED where
+   * The saved `coai.kimiAllowNetworkSignIn` for a Kimi card's *Connection* fold (DL6 of research/PLAN_kimi_and_vibe_on_linux.md), or UNDEFINED where
    * there is nothing to admit — a Windows, WSL1 or macOS window has no network mount of a Linux home to judge. Absent draws no box.
    */
   readonly kimiAllowNetworkSignIn?: boolean | undefined;
@@ -3434,7 +3434,7 @@ export const PANEL_COMMANDS = [
   'toggleUse',
   'duplicateModel',
   'removeModel',
-  // A Kimi card's *Clear the stuck Kimi marker* (E6 of todo/PLAN_kimi_and_vibe_on_linux.md): drawn only while the server reports a
+  // A Kimi card's *Clear the stuck Kimi marker* (E6 of research/PLAN_kimi_and_vibe_on_linux.md): drawn only while the server reports a
   // standing marker for the row. Its id is the ROW; the host asks the server again and runs the one-shot mode on the path it names.
   'clearKimiMarker',
   // ✓ Check on a Models card: one paid turn of that row, asked first by the host (D10), kept as `model-<id>`.

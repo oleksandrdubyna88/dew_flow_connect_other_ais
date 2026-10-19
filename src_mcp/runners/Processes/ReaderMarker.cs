@@ -15,7 +15,7 @@ public static class BlockedReasons
 
     /// <summary>
     /// A member the marker names could not be CHECKED after the confirmation (<c>EACCES</c>, <c>EIO</c>, an unparseable <c>stat</c>): that is not evidence it is gone, so the
-    /// marker stays (DL9 of todo/PLAN_kimi_and_vibe_on_linux.md, A3 §6.2).
+    /// marker stays (DL9 of research/PLAN_kimi_and_vibe_on_linux.md, A3 §6.2).
     /// </summary>
     public const string ReaderMemberUnverifiable = "reader-member-unverifiable";
 

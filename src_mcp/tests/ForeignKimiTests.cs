@@ -328,6 +328,6 @@ public sealed class ForeignKimiTests
         var holding = KimiShimHold.Taken(Places(), TimeSpan.FromSeconds(2), new ForeignKimiWatch(new ScriptedList(new ProcessListing.Unreadable("/proc/9/stat: denied")), Shim, Poll, _ => { }));
 
         holding.Should().BeOfType<AcpHolding.Busy>().Which.Sentence.Should().Be(ForeignKimiWatch.UnreadableSentence("/proc/9/stat: denied"));
-        ForeignKimiWatch.UnreadableSentence("x").Should().Contain("cannot tell whether your own Kimi Code is running").And.Contain("DL10 of todo/PLAN_kimi_and_vibe_on_linux.md");
+        ForeignKimiWatch.UnreadableSentence("x").Should().Contain("cannot tell whether your own Kimi Code is running").And.Contain("DL10 of research/PLAN_kimi_and_vibe_on_linux.md");
     }
 }
