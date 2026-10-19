@@ -4430,7 +4430,7 @@ number there — they pin the barriers of the NEW accumulation.
 
 ## A local review line carries its round (2026-10-19, `fix/local-ledger-line-carries-round`)
 
-`ALocalReviewLineCarriesItsRoundTests` (`src_mcp/tests`) — the Definition-of-Done item of `todo/PLAN_every_round_is_counted.md`
+`ALocalReviewLineCarriesItsRoundTests` (`src_mcp/tests`) — the Definition-of-Done item of `research/PLAN_every_round_is_counted.md`
 ("every new ledger line carries round, attempt, effort/tier as sent") that only the Team server's lines met. The tests go
 through the real `UsageLedger.Record` / `RecordJob` and read the JSON line the way the extension would.
 

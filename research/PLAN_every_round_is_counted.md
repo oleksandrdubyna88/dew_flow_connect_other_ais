@@ -773,14 +773,17 @@ plan's own words; an item the plan does not state in so many words says so):
 - **A per-window schema step** — not stated in this plan (checked: it names only schema steps 20 and 21). The gauge
   lives on the ledger line (`gaugeWindows[]`) and the slot's `state.json`, with no `coai.db` table or column per window; a
   step for it was decided "not now" at the hand-off to this record.
-- **A reason-code defect in `GaugeCapture`, fix in flight in a separate pull request** — not stated in this plan. A vendor
-  that has no gauge is logged with the guard code `slot-not-readable` (`module_team_server.md`, *The capture*), which says the slot
-  could not be read when the truth is that nothing exists to read. Until that PR lands, the log reason is wrong for
-  such a vendor; the ledger and the numbers are not affected.
-- **The local ledger line carries no round** — *"The LOCAL ledger line does not carry the round … the key sits on
-  `ReviewerInvocation.Round` for the local writer to take once the column exists"* (deviation 4.1; `module_runners.md` says the same).
-  Checked at promotion: `UsageLedger.RecordJob` builds the local line from an empty place, so a local line still has no `round`; the
-  Team server's lines carry it. Local rounds are counted from `coai.db`, not from the ledger. **A fix is in flight:** branch `fix/local-ledger-line-carries-round` (a pull request being written at the promotion); it ships with the next coai-mcp release.
+- **A reason-code defect in `GaugeCapture` — CLOSED by #875** (merged 2026-10-19; Team server 0.13.2, release PR #880,
+  not yet deployed). Seen live after the 0.13.1 deploy: a vendor that has no gauge (antigravity, claude) was logged as
+  `slot-not-readable`, which says the slot could not be read when nothing exists to read. It now logs
+  `no-gauge-for-runtime`; `slot-not-readable` stays for a codex slot whose state forbids a read. Only the log reason
+  changed; the ledger and the numbers were never affected. Until 0.13.2 is deployed the box still logs the old code.
+- **The local ledger line carried no round — CLOSED by #877** (merged 2026-10-19, coai-mcp 0.60.2): *"The LOCAL ledger
+  line does not carry the round … the key sits on `ReviewerInvocation.Round` for the local writer to take once the column
+  exists"* (deviation 4.1). `UsageLedger.Entry` now writes the invocation's round on every local review line (first
+  launch, repair, follow-up, every earlier turn). What stays open: no extension figure uses the local round yet — the
+  "launches per round" figure of story 2.1 is not built (local rounds are still counted from `coai.db`); a C#→TS contract
+  leg belongs to the change that builds that first consumer.
 - **4.1's probe against the production URL** — *"The probe against the production URL itself waits for the owner (it needs
   a session token for the company server) and runs with E5's deploy."* No record that it ran was found in this plan or in
   `POST_DEPLOY.md`.
@@ -800,6 +803,12 @@ was checked in the code or the plan text it names:
 - **Labels that name the wrong thing.** The Rounds block's *"median output per recorded turn"* (`roundMoney.ts` `MEDIAN_OUTPUT_LABEL`) and its footnote (`roundsBlock.ts` `FOOTNOTE`: *"one ledger line can hold a repair or a follow-up, so a per-launch figure is not claimed"*) were right before story 3.3 and are wrong for review rows written since: E3 writes one line per launch, so the unit is a launch. `ROUNDS_UNAVAILABLE` (`teamServerApi.ts`) says *"this Team server does not count rounds yet"* and names no version (0.12.0 is the first that counts). The help's list of reasons omits `run-without-round` and `no-rounds`, which `gaugeWords.ts` knows, and its phrase "launches from an older extension" is wrong about where such launches come from (a client that sends no round id).
 - **A design point, not a defect:** `/api/usage?scope=me&windows=…` answers `gauges` computed over EVERY caller's lines (the account's gauge is the account's; the answer names a vendor, a window and a ratio, never a person). A non-admin therefore sees a company-wide figure. This is stated in `UsageGauges`'s remarks and is the intended reading; it is recorded so nobody learns it by surprise.
 - **Recorded limits kept, none of them new:** agy's `RESOURCE_EXHAUSTED` line already matches *exhausted*, so its refusal is hopeless whatever the budget (5.3c's row; owned by [PLAN_a_stated_wait_is_read_rather_than_matched.md](../todo/PLAN_a_stated_wait_is_read_rather_than_matched.md)); the budget refusal's exit 79 has no `ReviewerOutcome` of its own (4.3: *"If a round should one day treat 79 as its own ending, that is a story of its own"*); the shim's five-second floor is not a refusal (4.1: *"whether five seconds should become a refusal is 4.3's server rule to decide"*); the transit-margin exception (4.3, and *What must be true* item 6); and percentages are whole numbers, so a one-percent step is the finest the figure can resolve.
+- **A second gauge exists, unread.** Observed by the owner on 2026-10-19: Kimi Code's `/usage` shows its own *Plan
+  usage* — a 5-hour window and a monthly limit, each with used percent and time to reset (that day: 5-hour 100 %,
+  resets in 1 h 2 min; monthly 39 %, resets in 24 days), and its CLI answers `403 … reached your 5-hour limit` when the
+  window is spent. The server reads only codex's gauge (`no-gauge-for-runtime` for every other runtime since #875). A
+  Kimi reader would be a story of its own — its protocol, the containment 6.1a built, and the consumer-scope rule above
+  (a Kimi account used outside coai would give a figure built from server rounds alone).
 
 ## Definition of Done
 
@@ -817,12 +826,12 @@ was checked in the code or the plan text it names:
       with usage not captured and its end cause, on both halves; every paid path the census CLOSED writes a line (rows
       1, 7, 8, and 10 but for its infrastructure throw), and the open rows (2/4, 5 by hand, 9, 10's infrastructure
       throw) are named in the *Open tail* under the deviations; vendor reasons are not clipped.
-- [ ] Every new ledger line carries round, attempt, effort/tier as sent with their source; server lines job and slot;
+- [x] Every new ledger line carries round, attempt, effort/tier as sent with their source; server lines job and slot;
       the canary is `canary` and in no round count. *(Effort/tier with their source: on REVIEW lines — consultation,
       question, probe and chat lines carry them empty; see 3.4 and the Open tail.)*
-      **Open, narrowed at the promotion (2026-10-19):** the Team server's lines carry round, attempt, effort and tier with
-      their source, job and slot, and the canary is `canary`; the LOCAL ledger line carries no `round` — see *Open tail*,
-      "The local ledger line carries no round". **Fix in flight, ships with the next coai-mcp release** (branch `fix/local-ledger-line-carries-round`); the box stays unticked until it lands.
+      The Team server's lines carry round, attempt, effort and tier with their source, job and slot, and the canary is
+      `canary`. The LOCAL review line's `round` was missing at the promotion's first draft and was **fixed by #877**
+      (merged 2026-10-19, coai-mcp 0.60.2 — release PR #881): every local review line carries the round the engine stamped.
 - [x] The server ends a job with too little budget left without starting the vendor, by name, and moves on. Accepted
       exception: a request delayed in transit by more than the margin (`Coai:DeadlineSafetyMarginSeconds`) can still
       be claimed after its caller gave up; the caller's DELETE ends it.
