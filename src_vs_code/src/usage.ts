@@ -72,14 +72,17 @@ export interface UsageEntry {
   readonly endCause?: string;
   /**
    * The id of the ROUND the launch belonged to (story 4.2 of todo/PLAN_every_round_is_counted.md) — 32 hex characters the
-   * client mints per round, written by the Team server on every line of a job whose request carried one. Absent on a line
-   * older than the field, on one whose request sent none, and where the server dropped a malformed id.
+   * client mints per round, written by the Team server on every line of a job whose request carried one, and by `coai-mcp`
+   * on every LOCAL review line (the key the round engine stamped on the invocation, the same on a repair, a follow-up and
+   * every earlier turn). Absent on a line older than the field, on a line outside a round or whose request sent none, where
+   * the server dropped a malformed id, and on consultation, question, probe and chat lines, which are not rounds. An empty
+   * `round` on disk is read as absent, never as a key.
    */
   readonly round?: string;
   /**
    * What the CLIENT called the request — `first`, `retry`, `repair`, `followUp` — beside the server's own `attempt`
-   * (`first`, `rotated`, `followUp` inside the job), never over it. Absent like `round`, and on a local line, whose
-   * `attempt` already is the client's word.
+   * (`first`, `rotated`, `followUp` inside the job), never over it. Absent on a local line — whose `attempt` already is the
+   * client's word, even though a local review line now carries its `round` — and on a line older than the field.
    */
   readonly clientAttempt?: string;
   /**

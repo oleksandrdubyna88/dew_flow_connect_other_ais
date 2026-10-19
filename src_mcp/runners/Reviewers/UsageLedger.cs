@@ -232,9 +232,11 @@ public sealed record UsageEntry(
     /// </summary>
     /// <remarks>
     /// Story 4.2 of todo/PLAN_every_round_is_counted.md: the Team server writes the round its request carried, so a round
-    /// is counted from the lines as one round however many launches it took. Empty on a line older than the field, on a
-    /// line from a client that sent none, and where a malformed id was dropped — never minted in its place. Trailing and
-    /// defaulted like the rest.
+    /// is counted from the lines as one round however many launches it took. A LOCAL review line carries it too: the key
+    /// the round engine stamped on the invocation, the same on the first launch, a repair, a follow-up and every earlier
+    /// turn (<see cref="ReviewerInvocation.Round"/>). Empty on a line older than the field, on a line from a client that
+    /// sent none, where a malformed id was dropped — never minted in its place — on a local launch outside a round, and on
+    /// a consultation, a question row and a probe, which are not rounds. Trailing and defaulted like the rest.
     /// </remarks>
     string Round = "",
 
@@ -435,7 +437,12 @@ public sealed class UsageLedger(string dataDir)
             CostNote: CostNoteOf(usage),
             TokensReasoning: usage.TokensReasoning,
             // Unknown, in words, when the launch ended before its vendor reported anything — never a bare zero.
-            UsageNote: UsageNoteOf(usage)).RanWith(invocation.RanWith);
+            UsageNote: UsageNoteOf(usage),
+            // The round key the engine stamped on the invocation (story 4.1), under the same field name the Team server's lines use, so
+            // a local line joins rounds.round_key. EVERY line of a review turn shares it — the first launch, a repair, a follow-up, an
+            // earlier turn — because they all come off this one invocation. Empty for a launch outside a round, which no reader counts.
+            // Only reviews come through here: a consultation, a question row and a probe go through RecordJob, which carries no round.
+            Round: invocation.Round).RanWith(invocation.RanWith);
 
     /// <summary>Records one job a Team server ran on somebody's behalf.</summary>
     /// <remarks>
