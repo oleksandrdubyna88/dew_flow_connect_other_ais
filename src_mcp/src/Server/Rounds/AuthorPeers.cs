@@ -112,9 +112,13 @@ internal static class AuthorPeers
         }
         catch (Exception e) when (e is SqliteException or InvalidOperationException)
         {
-            return AuthorPeerSet.Unknown(e.GetType().Name + ": " + e.Message);
+            return AuthorPeerSet.Unknown(WhyOf(e));
         }
     }
+
+    /// <summary>A failure as its type and, for SQLite, its error code — never its message, which may carry a path (code gate finding 5).</summary>
+    private static string WhyOf(Exception e) =>
+        e is SqliteException sqlite ? $"{nameof(SqliteException)} (SQLite error {sqlite.SqliteErrorCode})" : e.GetType().Name;
 
     private static AuthorPeerSet Walk(SqliteConnection connection, PeerLookup lookup, Func<string, string, PersistedSession?> load, DateTimeOffset? deadline, TimeProvider clock)
     {
@@ -123,7 +127,7 @@ internal static class AuthorPeers
         var timelines = new List<GateTimeline>();
         foreach (var peer in peers)
         {
-            if (deadline is { } at && clock.GetUtcNow() >= at)
+            if (Expired(deadline, clock))
             {
                 return AuthorPeerSet.Unknown("the deadline passed before every peer file was loaded");
             }
@@ -138,6 +142,9 @@ internal static class AuthorPeers
 
         return new AuthorPeerSet(true, [.. timelines], OfGate(callers, lookup.GateSessionId));
     }
+
+    /// <summary>Whether a deadline is set and has passed; null is unbounded (E7's backfill).</summary>
+    private static bool Expired(DateTimeOffset? deadline, TimeProvider clock) => deadline is { } at && clock.GetUtcNow() >= at;
 
     private static List<PeerRow> PeersOf(SqliteConnection connection, PeerLookup lookup)
     {

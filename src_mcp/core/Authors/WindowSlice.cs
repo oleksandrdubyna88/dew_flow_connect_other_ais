@@ -47,7 +47,7 @@ internal sealed class WindowSlice
     public IEnumerable<string> NestedCheckoutWrites(string gateRepository) =>
         IsUnobserved
             ? []
-            : _writes.Where(write => write.Where == WriteWhere.Here && !Repositories.Normalise(write.Root).Equals(Repositories.Normalise(gateRepository), StringComparison.OrdinalIgnoreCase)).Select(write => write.Root);
+            : _writes.Where(write => write.Where == WriteWhere.Here && !Repositories.SameRoot(write.Root, gateRepository)).Select(write => write.Root);
 
     public IEnumerable<AuthorRow> Rows() => IsUnobserved ? [] : [.. MessageRows(), .. LaunchOnlyRows(), .. TwoRepositoryRows()];
 
@@ -76,59 +76,75 @@ internal sealed class WindowSlice
         var owned = _messages.Where(placement => RowAssociations.Contains(placement.Association)).ToList();
         var homes = owned.GroupBy(placement => placement.Agent).ToDictionary(group => group.Key, group => KeyOf(group.OrderBy(placement => placement.At).ThenBy(placement => placement.MessageId, StringComparer.Ordinal).First()));
         var launched = _launches.Where(placement => RowAssociations.Contains(placement.Association)).Select(placement => placement.Agent).ToHashSet();
-        var writes = _writes.Where(write => write.Where == WriteWhere.Here).ToList();
+        var writeCalls = WriteCallsByRow(homes, owned);
 
-        return owned.GroupBy(KeyOf).Select(group => RowOf(group, homes, launched, writes, owned));
+        return owned.GroupBy(KeyOf).Select(group => RowOf(group, homes, launched, writeCalls));
     }
 
-    private AuthorRow RowOf(IGrouping<RowKey, Placement> group, Dictionary<AgentKey, RowKey> homes, HashSet<AgentKey> launched, List<WritePlacement> writes, List<Placement> owned)
+    private AuthorRow RowOf(IGrouping<RowKey, Placement> group, Dictionary<AgentKey, RowKey> homes, HashSet<AgentKey> launched, Dictionary<RowKey, int> writeCalls)
     {
         var key = group.Key;
         var first = group.First();
 
         return Row(
             key.Agent,
-            first.Requested,
-            first.Model,
-            first.Effort,
-            first.Association,
+            new RowBody(first.Requested, first.Model, first.Effort, first.Association),
             homes[key.Agent] == key && launched.Contains(key.Agent) ? 1 : 0,
             group.Count(),
             group.Aggregate(new TokenTerms(0, 0, 0, 0), (sum, placement) => RoundAuthorsBuilder.Add(sum, placement.Tokens)),
-            writes.Count(write => write.Agent == key.Agent && WriteHome(write, homes, owned) == key));
+            writeCalls.GetValueOrDefault(key));
+    }
+
+    /// <summary>The write calls of each row, every write placed once: this slice's writes here, each on its home row.</summary>
+    private Dictionary<RowKey, int> WriteCallsByRow(Dictionary<AgentKey, RowKey> homes, List<Placement> owned)
+    {
+        var atInstant = new Dictionary<(AgentKey Agent, DateTimeOffset At), RowKey>();
+
+        foreach (var placement in owned)
+        {
+            atInstant.TryAdd((placement.Agent, placement.At), KeyOf(placement));
+        }
+
+        return _writes
+            .Where(write => write.Where == WriteWhere.Here)
+            .SelectMany(write => WriteHome(write, homes, atInstant))
+            .GroupBy(home => home)
+            .ToDictionary(group => group.Key, group => group.Count());
     }
 
     /// <summary>The row a write is counted on: that of the message at the write's own instant (a turn is the unit), else the agent's first row.</summary>
-    private static RowKey? WriteHome(WritePlacement write, Dictionary<AgentKey, RowKey> homes, List<Placement> owned)
-    {
-        var same = owned.FirstOrDefault(placement => placement.Agent == write.Agent && placement.At == write.At);
+    private static IEnumerable<RowKey> WriteHome(WritePlacement write, Dictionary<AgentKey, RowKey> homes, Dictionary<(AgentKey Agent, DateTimeOffset At), RowKey> atInstant) =>
+        atInstant.TryGetValue((write.Agent, write.At), out var same) ? [same] : HomeOfAgent(write.Agent, homes);
 
-        return same is not null ? KeyOf(same) : homes.TryGetValue(write.Agent, out var home) ? home : null;
-    }
+    private static IEnumerable<RowKey> HomeOfAgent(AgentKey agent, Dictionary<AgentKey, RowKey> homes) =>
+        homes.TryGetValue(agent, out var home) ? [home] : [];
 
     private IEnumerable<AuthorRow> LaunchOnlyRows()
     {
         var seen = _messages.Where(placement => RowAssociations.Contains(placement.Association)).Select(placement => placement.Agent).ToHashSet();
 
         return _launches.Where(placement => RowAssociations.Contains(placement.Association) && !seen.Contains(placement.Agent))
-            .Select(placement => Row(placement.Agent, Effort.Unknown, Effort.Unknown, Effort.Unknown, placement.Association, 1, 0, new TokenTerms(0, 0, 0, 0), 0));
+            .Select(placement => Row(placement.Agent, new RowBody(Effort.Unknown, Effort.Unknown, Effort.Unknown, placement.Association), 1, 0, new TokenTerms(0, 0, 0, 0), 0));
     }
 
     private IEnumerable<AuthorRow> TwoRepositoryRows() =>
         _agents.Where(IsTwoRepositories).Select(agent =>
-            Row(agent.Agent, Effort.Unknown, Effort.Unknown, Effort.Unknown, Association.WroteHere, 0, 0, new TokenTerms(0, 0, 0, 0), _writes.Count(write => write.Agent == agent.Agent && write.Where == WriteWhere.Here)));
+            Row(agent.Agent, new RowBody(Effort.Unknown, Effort.Unknown, Effort.Unknown, Association.WroteHere), 0, 0, new TokenTerms(0, 0, 0, 0), _writes.Count(write => write.Agent == agent.Agent && write.Where == WriteWhere.Here)));
 
-    private AuthorRow Row(AgentKey agent, string requested, string model, string effort, string association, int launches, int turns, TokenTerms tokens, int writeCalls) => new(
+    /// <summary>What a row says about its author's messages: the requested model, the model, the effort and the association.</summary>
+    private readonly record struct RowBody(string Requested, string Model, string Effort, string Association);
+
+    private AuthorRow Row(AgentKey agent, RowBody body, int launches, int turns, TokenTerms tokens, int writeCalls) => new(
         _window.Kind,
         _window.Stage,
         _window.Number,
         agent.IsMain ? "main" : "subagent",
         agent,
         _input.Caller.Agents.FirstOrDefault(declared => declared.Key == agent)?.AgentType ?? string.Empty,
-        requested,
-        model,
-        effort,
-        association,
+        body.Requested,
+        body.Model,
+        body.Effort,
+        body.Association,
         launches,
         turns,
         tokens,

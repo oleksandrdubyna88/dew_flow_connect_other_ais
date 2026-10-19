@@ -96,6 +96,13 @@ public static class ExecutableResolver
             .Select(directory => $"{directory.TrimEnd('/')}/{command}")
             .FirstOrDefault(fileExists) ?? string.Empty;
 
+    /// <summary>
+    /// A file that exists and, off Windows, carries an execute bit — what an installed CLI candidate must be to count (DL5 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>: a stray file named <c>vibe</c>, <c>kimi</c> or
+    /// <c>rg</c> is not an install). The one implementation Vibe's and Kimi's searches share.
+    /// </summary>
+    public static bool IsInstalledFile(string path) =>
+        File.Exists(path) && (OperatingSystem.IsWindows() || (File.GetUnixFileMode(path) & (UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute)) != 0);
+
     /// <summary>The same, against this machine.</summary>
     public static string Resolve(string command) =>
         Resolve(command, OperatingSystem.IsWindows(), Environment.GetEnvironmentVariable("PATH"), File.Exists);

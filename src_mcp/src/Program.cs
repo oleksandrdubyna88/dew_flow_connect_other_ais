@@ -148,6 +148,12 @@ internal static class Program
         AskAcp,
 
         /// <summary>
+        /// The card's *Clear the stuck Kimi marker*: reads ONE survivor marker under the Kimi lock root and deletes it only when every process it names is gone — never ends a process.
+        /// See <see cref="Acp.KimiClearMarkerMode"/> (DL9, S-K18).
+        /// </summary>
+        KimiClearMarker,
+
+        /// <summary>
         /// The measurement behind a vendor dialect: the vault read the product's way, <c>GET /models</c>,
         /// and the S0.5 request matrix, printed as an allowlist of fields.
         /// </summary>
@@ -341,6 +347,7 @@ internal static class Program
                 Runners.Reviewers.AntigravityReadOnly.HookArgument => Startup.AgyHook,
                 "--ask-api" => Startup.AskApi,
                 "--ask-acp" => Startup.AskAcp,
+                "--kimi-clear-marker" => Startup.KimiClearMarker,
                 "--probe-api" => Startup.ProbeApi,
                 "--log" => Startup.Log,
                 "--round-counts" => Startup.RoundCounts,
@@ -435,7 +442,16 @@ internal static class Program
             case Startup.AskAcp:
                 // The prompt is stdin to its end — the launcher closes it after writing — and the agent is this
                 // process's own child, started only after the prompt is whole.
-                return await Acp.AskAcpMode.RunAsync(args, Console.In, Note, Console.Out);
+                // SIGTERM and SIGINT reach the shim's token (S-K16): its own finally ends the agent's tree, which the runtime's default exit on a signal would skip. This process is also the
+                // child subreaper of that tree (DL9) — the first thing the mode does.
+                using (var stopping = new CancellationTokenSource())
+                using (Runners.Processes.StopSignals.Into(stopping))
+                {
+                    return await Acp.AskAcpMode.RunAsync(args, Console.In, Note, Console.Out, Runners.Processes.LinuxSubreaper.Become, ct: stopping.Token);
+                }
+
+            case Startup.KimiClearMarker:
+                return await Acp.KimiClearMarkerMode.RunAsync(args, Note, Console.Out);
 
             case Startup.ProbeApi:
                 // The vault is read the way `--providers` reads it: `creds config`, the one child this
@@ -2463,7 +2479,12 @@ internal static class Program
         without --home/--persons-bin/--locks, an environment that is not coai's, a model the session
         does not offer, a hold that cannot be taken), 69 ended before an answer (not started, another
         Kimi still holds the sign-in, the deadline, cancelled), 70 the agent failed, 75 a known spent
-        sentence, 76 the stream broke, 77 a known sign-in or plan refusal.
+        sentence, 76 the stream broke, 77 a known sign-in or plan refusal. On Linux the shim is the child
+        subreaper of its agent's tree and ends it by identity (pidfd); `survivors` lists what was still alive.
+        `--kimi-clear-marker <path>` deletes ONE Kimi survivor marker (a *.survivors.json file under the Kimi
+        lock root, nothing else) once every process it names is gone, and never ends a process: prints one
+        JSON object on stdout; exits 0 cleared or no marker, 65 not a marker under the lock root, 75 a named
+        process still runs, 74 a process or the file could not be checked.
         `--log --paged [--limit 200] [--before <cursor>]` prints a PAGE of the rounds database as
         JSON, with the totals SQL counted over the whole table; without `--paged` it prints the
         older shape, which carries every listed round's findings inline.

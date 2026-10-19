@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { test } from 'node:test';
-import { MODEL_KEYS } from '../modelKeys';
+import { USER_LAYER_KEYS } from '../modelKeys';
 
 /**
  * The model-bearing settings are read through ONE door (PLAN_one_model_catalog.md, E1.1).
@@ -29,7 +29,7 @@ function sourceFiles(dir = ''): string[] {
 
 /** A direct host read of one model key: `.get('vendors')`, `.get<unknown>('vendors')`, `.inspect("vendors")`. */
 const DIRECT_READ = new RegExp(
-  String.raw`\.(?:get|inspect)\s*(?:<[^>()]*>)?\s*\(\s*['"\x60](?:${MODEL_KEYS.join('|')})['"\x60]`,
+  String.raw`\.(?:get|inspect)\s*(?:<[^>()]*>)?\s*\(\s*['"\x60](?:${USER_LAYER_KEYS.join('|')})['"\x60]`,
   'u',
 );
 

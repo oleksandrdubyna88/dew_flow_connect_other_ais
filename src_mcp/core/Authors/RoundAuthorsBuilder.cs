@@ -12,7 +12,7 @@ public static class RoundAuthorsBuilder
     {
         var slices = assignment.Windows.Select(window => new WindowSlice(window, input, assignment)).ToList();
         var windows = slices.Select(slice => slice.Authors()).ToImmutableArray();
-        var worst = windows.Select(window => window.State).DefaultIfEmpty(ObservationKinds.Observed).MaxBy(Badness) ?? ObservationKinds.Observed;
+        var worst = windows.Select(window => window.State).DefaultIfEmpty(ObservationKinds.Observed).MaxBy(ObservationKinds.Badness) ?? ObservationKinds.Observed;
         var unknown = windows.Any(window => window.State == ObservationKinds.Unobserved);
 
         return new RoundAuthors(
@@ -25,18 +25,18 @@ public static class RoundAuthorsBuilder
             Roll(windows, unknown, window => window.Ambiguous),
             Roll(windows, unknown, window => window.Elsewhere),
             Roll(windows, unknown, window => window.ClaimedByPeer),
-            unknown ? -1 : windows.Sum(window => window.UnobservedLaunches),
+            unknown ? -1 : UnobservedLaunchesOf(input, assignment),
             windows,
             assignment.PeerGates,
             OutsideTheGateCheckout(slices, input));
     }
 
-    private static int Badness(string kind) => kind switch
-    {
-        ObservationKinds.Unobserved => 2,
-        ObservationKinds.Partial => 1,
-        _ => 0,
-    };
+    /// <summary>
+    /// Each unobserved launch ONCE: the ones placed at an instant (in exactly one window) plus the ones with no instant, which mark every
+    /// window but are still one missing transcript (decision 9, G4). Summing the windows' counts would count the second kind per window.
+    /// </summary>
+    private static int UnobservedLaunchesOf(AttributionInput input, WindowAssignment assignment) =>
+        assignment.Unobserved.Length + input.Caller.Unobserved.Count(item => item.At is null);
 
     /// <summary>Who, in the order a row is stored: window, stage, number, who, agent, request, model, effort, association — ordinal.</summary>
     private static string RowOrder(AuthorRow row) =>

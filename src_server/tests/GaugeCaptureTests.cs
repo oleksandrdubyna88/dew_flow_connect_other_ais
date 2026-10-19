@@ -351,6 +351,51 @@ public sealed class GaugeCaptureTests : IDisposable
         Slot().Gauge.Should().BeNull();
     }
 
+    /// <summary>
+    /// Seen live on the Team server 2026-10-19 after the 0.13.1 deploy: <c>gauge claude/a: skipped (slot-not-readable)</c>
+    /// and <c>gauge antigravity/a: skipped (slot-not-readable)</c> — both slots healthy. A vendor whose runtime has no gauge
+    /// the server reads is not a slot that cannot be read, and the log must not say so. This skip happens BEFORE the
+    /// platform check, so no tree is needed and it runs on every platform.
+    /// </summary>
+    [Fact]
+    public async Task AVendorWhoseRuntimeHasNoGauge_IsSkippedAsSuch_NeverAsASlotThatCannotBeRead()
+    {
+        File.WriteAllText(
+            Path.Combine(_dir, "vendors.json"),
+            """[{ "id": "claude", "runtime": "claude", "models": ["m"], "slots": ["a"] }]""");
+        var registry = new SlotRegistry(_dir, new JsonFileStore());
+        registry.MarkSignedIn(registry.Read("claude", "a"));
+        var counting = new GaugeFixtures.Counting();
+        var (jobs, runner) = Build(new GaugeFixtures.Reviewer(), counting.For);
+        jobs.Submit(Job("claude"));
+
+        (await runner.PumpAsync("claude", CancellationToken.None)).Should().BeTrue();
+
+        jobs.All().Single().Status.Should().Be(JobStatus.Done, "the job's result is the vendor's, whatever the gauge did");
+        counting.Launches.Should().Be(0, "a runtime with no gauge has no reader to launch");
+        _notes.Should().ContainSingle().Which.Should().Contain($"skipped ({GaugeCodes.NoGaugeForRuntime})")
+            .And.NotContain(GaugeCodes.SlotNotReadable, "the slot is healthy: the vendor simply has no gauge");
+    }
+
+    /// <summary>
+    /// The slot-state skip keeps its own code: a blocked slot IS a slot that cannot be read now. Asked directly — a blocked
+    /// slot is never scheduled, and a job that succeeds lifts a gauge suspension before the capture runs.
+    /// </summary>
+    [Fact]
+    public async Task ABlockedCodexSlot_StillSaysSlotNotReadable()
+    {
+        var registry = new SlotRegistry(_dir, new JsonFileStore());
+        registry.MarkBlocked(registry.Read("codex", "a"), BlockedReasons.ReaderTerminationFailed);
+        var counting = new GaugeFixtures.Counting();
+        var capture = new GaugeCapture(registry, counting.For, "0.0.0-test", _notes.Add);
+
+        var outcome = await capture.CaptureAsync(new VendorConfig("codex", "codex", ["m"], ["a"]), registry.Read("codex", "a"), CancellationToken.None);
+
+        outcome.Should().Be(new GaugeCaptured.Skipped(GaugeCodes.SlotNotReadable));
+        counting.Launches.Should().Be(0);
+        _notes.Should().ContainSingle().Which.Should().Contain($"skipped ({GaugeCodes.SlotNotReadable})");
+    }
+
     [Fact]
     public async Task TheCatalog_ServesTheLatestReadingPerVendor_NamingNoAccount()
     {
@@ -420,8 +465,8 @@ public sealed class GaugeCaptureTests : IDisposable
     private SlotStateDto State() =>
         new JsonFileStore().Read(Path.Combine(Slot().Directory, "state.json"), ServerJsonContext.Default.SlotStateDto)!;
 
-    private static JobRecord Job() =>
-        new(JobId.New(), "dev@example.com", "codex", "m", "Architecture", "review this",
+    private static JobRecord Job(string vendor = "codex") =>
+        new(JobId.New(), "dev@example.com", vendor, "m", "Architecture", "review this",
             JobStatus.Queued, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(10), TimeSpan.FromSeconds(60));
 
     private IReadOnlyList<JsonElement> Lines() =>

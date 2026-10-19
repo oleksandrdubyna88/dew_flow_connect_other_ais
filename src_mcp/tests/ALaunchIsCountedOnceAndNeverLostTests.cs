@@ -61,13 +61,15 @@ public sealed class ALaunchIsCountedOnceAndNeverLostTests
     public void EveryLaunchIsCountedOnceOverTheSession(string name, int agents)
     {
         var scenario = AttributionCases.Named(name);
-        var launches = scenario.AssignEvery().Sum(one =>
-        {
-            var authors = RoundAuthorsBuilder.Build(scenario.Build(one.Gate, one.Stage, one.Number), one.Assignment);
-
-            return authors.Rows.Sum(row => row.Launches) + authors.Windows.Sum(window => window.Ambiguous.Launches);
-        });
+        var launches = scenario.AssignEvery().Sum(one => LaunchesOf(scenario, one));
 
         launches.Should().Be(agents);
+    }
+
+    private static int LaunchesOf(AttributionScenario scenario, AttributionScenario.Assigned one)
+    {
+        var authors = RoundAuthorsBuilder.Build(scenario.Build(one.Gate, one.Stage, one.Number), one.Assignment);
+
+        return authors.Rows.Sum(row => row.Launches) + authors.Windows.Sum(window => window.Ambiguous.Launches);
     }
 }

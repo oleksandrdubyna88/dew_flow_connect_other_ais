@@ -248,7 +248,8 @@ plan's session equalled another's).
 
 ## Round attribution — who wrote the code a round reviewed (2026-10-19, E4 of the round-authors plan)
 
-`src_mcp/core/Authors/`, namespace `CoaiMcp.Core.Authors`: PURE — no clock, no disk, no process, no environment (`TheAttributionCoreTouchesNoClockAndNoDiskTests` scans the folder).
+`src_mcp/core/Authors/`, namespace `CoaiMcp.Core.Authors`: PURE — no clock, no disk, no process, no environment, no working directory (`TheAttributionCoreTouchesNoClockAndNoDiskTests` scans the folder).
+Every method of the folder and of `AttributionMapping.cs` stays within cyclomatic complexity 4: CA1502 is a build error for those files (`.editorconfig`, as for the security lane).
 It turns ONE caller session's observation (`CallerObservation`, filled by the one mapping `src/Store/AttributionMapping.cs` from E3's `ObservedSession`) and the gate
 sessions' journals (`GateTimeline`) into, per round: `RoundAttribution.Assign(AttributionInput) → WindowAssignment` (placements, launches, writes, unobserved launches,
 agent associations, window states, `ReadFrom`, `PeerGates`), `RoundAuthorsBuilder.Build → RoundAuthors` (rows, ambiguous / elsewhere / claimed-by-peer totals, the state
@@ -264,7 +265,8 @@ per window and rolled up) and `Contributors.Of / FixersOf`. Nothing is stored he
 - **Ownership** (`Ownership`): contested activity goes to the SETTLED window that completed first (ties by gate id); the other labels it `claimed by peer`. A window overlapped by a
   not-settled same-caller peer is `partial: peer running` — provisional until E7's backfill recomputes it (`RoundAttribution.PeerStillRuns` is that same overlap test).
 - **States**: `observed < partial < unobserved`, the worst wins, reasons distinct in first-seen order; an unobserved window's totals are `ActivityTotals.Unknown` and its unobserved-launch
-  count is −1, never 0. `RoundAttribution.Version` is bumped by any change to a rule here.
+  count is −1, never 0. The round's totals are the sum of its windows, except the unobserved-launch count: a launch with no instant marks every window and
+  is counted ONCE for the round. `RoundAttribution.Version` is bumped by any change to a rule here.
 - **Contributors** come only from rows, are keyed (caller session, agent), and name the rounds they were not seen in (`NotSeen`).
 - **`AuthorsSnapshot`** (E5.S1, `AuthorsSnapshot.cs`) is what a round STORES of a `RoundAuthors`: every text-free member of it by name — never `WritesOutsideTheGateCheckout`, whose checkout roots must not reach
   a file — plus E5's own five (`IdSource`, `Reader`, `Attribution`, `SubmoduleWrites`, `UncoveredWrites`). `From(authors, …)` is the one constructor from E4's result and `Unknown(…)` the one for a snapshot built

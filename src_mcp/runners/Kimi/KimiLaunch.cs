@@ -22,15 +22,11 @@ public static class KimiLaunch
     public static string ModelRefusal(string model) => KimiModels.RefusalFor(model, KimiModels.Curated);
 
     /// <summary>
-    /// D18: Kimi only where it was measured — a Windows host, starting a Windows <c>kimi</c>. Every number in the RESULTS is
-    /// Windows; a WSL bridge named as the executable is the Linux side by another door. <c>VibeLaunch</c>'s two sentences, for Kimi.
+    /// D18, lifted for WSL2 by DL1 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c> (E6): Kimi only where it was measured — a Windows host starting a Windows <c>kimi</c>, or a WSL2 host. WSL1 is not WSL2 and a native
+    /// Linux host is not measured at all, each refused with its own sentence; a WSL bridge named as the executable of a Windows host is the Linux side by another door. The very sentences Vibe's launch control
+    /// answers (<see cref="HostAdmission"/>), with Kimi's name.
     /// </summary>
-    public static string HostRefusal(HostKind host, string executable) =>
-        host != HostKind.Windows
-            ? $"Kimi is refused on a {HostKinds.Word(host)} host until it is measured there (D18 of todo/PLAN_vibe_and_kimi_runtimes.md) — every Kimi measurement coai has is Windows"
-            : HostKinds.RunsInWsl(executable)
-                ? $"'{executable}' would start Kimi on the Linux side, which is refused until it is measured there (D18 of todo/PLAN_vibe_and_kimi_runtimes.md) — point this row at a Windows kimi"
-                : string.Empty;
+    public static string HostRefusal(HostKind host, string executable, WslGeneration wsl) => HostAdmission.Refusal("Kimi", host, executable, wsl);
 
     /// <summary>The model the request names (<c>--model</c>).</summary>
     public static string ModelOf(ProcessRequest request) => KimiEnvironment.FlagOf(request, AcpWords.ModelFlag);
@@ -55,6 +51,10 @@ public static class KimiLaunch
         public static Prepared Refuse(string refusal) => new(refusal, []);
     }
 
+    /// <summary>A test's way in with a bare kind of host — the kernel's generation is this machine's when the kind is WSL (<see cref="KimiHost.Of"/>).</summary>
+    internal static Task<LaunchTurn> TakeAsync(HostKind host, ProcessRequest request, KimiPlaces places, IProcessLauncher launcher, CancellationToken ct) =>
+        TakeAsync(KimiHost.Of(host), request, places, launcher, ct);
+
     /// <summary>
     /// The whole check, in order, ending holding the home's turn and the sign-in's gate — or a refusal with nothing held.
     /// </summary>
@@ -70,9 +70,9 @@ public static class KimiLaunch
     /// <para>Never reads <c>SpecialFolder.UserProfile</c> or a location from the environment: every path arrives in
     /// <paramref name="places"/>, resolved once in the unredirected parent (decision 4). The one environment read is <see cref="KimiEnvironment.Built(ProcessRequest, KimiPlaces)"/>'s fallback to this process's <c>PATH</c> — a list to keep, never a place to find.</para>
     /// </remarks>
-    public static async Task<LaunchTurn> TakeAsync(HostKind host, ProcessRequest request, KimiPlaces places, IProcessLauncher launcher, CancellationToken ct)
+    public static async Task<LaunchTurn> TakeAsync(KimiHost host, ProcessRequest request, KimiPlaces places, IProcessLauncher launcher, CancellationToken ct, bool allowNetworkSignIn = false)
     {
-        var prepared = Prepare(host, request, places);
+        var prepared = Prepare(host, request, places, allowNetworkSignIn);
         if (prepared.Refusal.Length > 0)
         {
             return LaunchTurn.Refused(prepared.Refusal, RefusalCause.LaunchControl);
@@ -87,7 +87,43 @@ public static class KimiLaunch
             return LaunchTurn.Refused(LockRefusal((Hold.Unusable)gate, places.Credentials), RefusalCause.LaunchControl);
         }
 
-        return await InsideAsync(places, request, prepared.Expected, new Attempt(turn, taken.Stream), launcher, ct);
+        var survivors = await SurvivorsAsync(places, taken, turn, ct);
+        if (survivors.Length > 0)
+        {
+            return LaunchTurn.Refused(survivors, RefusalCause.LaunchControl);
+        }
+
+        return await InsideAsync(places, request, prepared.Expected, NetworkWarning(host, places, allowNetworkSignIn), new Attempt(turn, taken.Stream), launcher, ct);
+    }
+
+    /// <summary>
+    /// The A2-A3 seam (<see cref="IKimiSurvivors"/>), asked with the gate held: a free lock is not a free sign-in while a survivor marker stands. The sentence when one does — both holds given back — or empty; a
+    /// throw or a cancellation gives them back before it propagates.
+    /// </summary>
+    private static async Task<string> SurvivorsAsync(KimiPlaces places, Hold.Taken gate, IDisposable turn, CancellationToken ct)
+    {
+        try
+        {
+            var marker = KimiCredentialsLock.MarkerPathFor(places.Credentials);
+            var standing = marker.Length == 0 ? KimiCredentialsLock.Unnamed(places.Credentials) : await KimiSurvivors.Gate.BlockedAsync(marker, ct);
+            if (standing.Length > 0)
+            {
+                Given(gate, turn);
+            }
+
+            return standing;
+        }
+        catch
+        {
+            Given(gate, turn);
+            throw;
+        }
+    }
+
+    private static void Given(Hold.Taken gate, IDisposable turn)
+    {
+        gate.Stream.Dispose();
+        turn.Dispose();
     }
 
     /// <summary>The gate, taken with the home's turn already held: a throw or a cancellation gives the turn back before it propagates.</summary>
@@ -105,11 +141,11 @@ public static class KimiLaunch
     }
 
     /// <summary>Inside both holds: any throw gives them back, the stream first and then the turn.</summary>
-    private static async Task<LaunchTurn> InsideAsync(KimiPlaces places, ProcessRequest request, byte[] expected, Attempt attempt, IProcessLauncher launcher, CancellationToken ct)
+    private static async Task<LaunchTurn> InsideAsync(KimiPlaces places, ProcessRequest request, byte[] expected, string warning, Attempt attempt, IProcessLauncher launcher, CancellationToken ct)
     {
         try
         {
-            return await VerdictAsync(places, request, expected, attempt, launcher, ct);
+            return await VerdictAsync(places, request, expected, warning, attempt, launcher, ct);
         }
         catch
         {
@@ -119,7 +155,7 @@ public static class KimiLaunch
     }
 
     /// <summary>The shape, the version, the shape again — a refusal gives both holds back — then the go, with the version warning when it was not measured.</summary>
-    private static async Task<LaunchTurn> VerdictAsync(KimiPlaces places, ProcessRequest request, byte[] expected, Attempt attempt, IProcessLauncher launcher, CancellationToken ct)
+    private static async Task<LaunchTurn> VerdictAsync(KimiPlaces places, ProcessRequest request, byte[] expected, string warning, Attempt attempt, IProcessLauncher launcher, CancellationToken ct)
     {
         var shape = KimiHome.Refusal(places, expected);
         if (shape.Length > 0)
@@ -132,8 +168,18 @@ public static class KimiLaunch
 
         return after.Length > 0
             ? Given(attempt, after, asked.CliMissing && asked.Refusal.Length > 0 ? RefusalCause.CliMissing : RefusalCause.LaunchControl)
-            : LaunchTurn.Holding(attempt, WarningFor(asked.Version), "kimi " + asked.Version);
+            : LaunchTurn.Holding(attempt, Joined(warning, WarningFor(asked.Version)), "kimi " + asked.Version);
     }
+
+    /// <summary>
+    /// What the person should know about a sign-in folder the override admitted on network storage (DL6, <c>coai.kimiAllowNetworkSignIn</c>) — one line, or empty (the override is off, or the folder is on a local disk).
+    /// </summary>
+    private static string NetworkWarning(KimiHost host, KimiPlaces places, bool allowNetworkSignIn) =>
+        allowNetworkSignIn ? Junctions.NetworkWarning(host.Kind, places.Credentials) : string.Empty;
+
+    /// <summary>The warnings that are there, in order, on one line each side of a separator.</summary>
+    private static string Joined(string first, string second) =>
+        string.Join("; ", new[] { first, second }.Where(warning => warning.Length > 0));
 
     private static LaunchTurn Given(IDisposable attempt, string refusal, RefusalCause cause = RefusalCause.LaunchControl)
     {
@@ -144,20 +190,22 @@ public static class KimiLaunch
 
     /// <summary>
     /// The person's home must be on a local drive, judged by its SPELLING before anything is read or opened: a UNC or mapped-drive home would
-    /// be connected to (NTLM, or the SMB timeout) by the very first read of its config, before `Junctions` refused it.
+    /// be connected to (NTLM, or the SMB timeout) by the very first read of its config, before `Junctions` refused it. With the network override on, a Linux or WSL host also admits the automount spellings
+    /// (<see cref="Junctions.IsLocalSpelling(HostKind, string, bool)"/>) — the same decision the link's own checks make, so the two cannot disagree.
     /// </summary>
-    private static string LocalHome(KimiPlaces places) =>
-        Junctions.IsLocal(places.Credentials)
+    private static string LocalHome(KimiHost host, KimiPlaces places, bool allowNetworkSignIn) =>
+        Junctions.IsLocalSpelling(host.Kind, places.Credentials, allowNetworkSignIn)
             ? string.Empty
             : $"the Kimi sign-in folder '{places.Credentials}' is not on a local drive — coai reads and links the sign-in from a local drive only, and never connects out to a network or roaming location (D19)";
 
     /// <summary>Everything that can be said before any lock is taken, in order — the first refusal wins; the config bytes the home must hold otherwise.</summary>
-    private static Prepared Prepare(HostKind host, ProcessRequest request, KimiPlaces places)
+    private static Prepared Prepare(KimiHost host, ProcessRequest request, KimiPlaces places, bool allowNetworkSignIn)
     {
         var first = FirstOf(
-            () => HostRefusal(host, places.Executable),
+            () => HostRefusal(host.Kind, places.Executable, host.Wsl),
+            PidfdLayer.Refusal,
             () => places.ToolsRefusal,
-            () => LocalHome(places),
+            () => LocalHome(host, places, allowNetworkSignIn),
             () => ModelRefusal(ModelOf(request)),
             () => KimiEnvironment.Refusal(request, places));
         if (first.Length > 0)
@@ -167,15 +215,22 @@ public static class KimiLaunch
 
         var slot = KimiPersonsConfig.ReadFile(places.PersonsConfig);
 
-        return slot is SlotRead.Found found ? Rendered(host, ModelOf(request), places, found.Slot) : Prepared.Refuse(((SlotRead.Refused)slot).Reason);
+        return slot is SlotRead.Found found ? Rendered(host, ModelOf(request), places, found.Slot, allowNetworkSignIn) : Prepared.Refuse(((SlotRead.Refused)slot).Reason);
     }
 
     /// <summary>The slot is read: the credentials folder, the model block and the render, then the home made.</summary>
-    private static Prepared Rendered(HostKind host, string model, KimiPlaces places, KimiOauthSlot slot)
+    private static Prepared Rendered(KimiHost host, string model, KimiPlaces places, KimiOauthSlot slot, bool allowNetworkSignIn)
     {
         if (!Directory.Exists(places.Credentials))
         {
             return Prepared.Refuse($"not signed in to Kimi Code — {places.PersonsHome} has no credentials folder; run `kimi login` in a terminal and try again");
+        }
+
+        // B of the review of 2026-10-18: where the folder IS is judged on EVERY launch, not only when the home is made — the override may have been switched off, or a mount may have changed under the same folder.
+        var locality = Junctions.Locality(host.Kind, places.Credentials, allowNetworkSignIn);
+        if (locality.Length > 0)
+        {
+            return Prepared.Refuse(locality);
         }
 
         var expected = ExpectedConfig(model, places, slot);
@@ -184,7 +239,7 @@ public static class KimiLaunch
             return expected;
         }
 
-        var made = KimiHome.Made(host, places, expected.Expected);
+        var made = KimiHome.Made(host.Kind, places, expected.Expected, allowNetworkSignIn);
 
         return made.Length > 0 ? Prepared.Refuse(made) : expected;
     }

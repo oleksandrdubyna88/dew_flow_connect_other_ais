@@ -15,7 +15,7 @@ public sealed class TheAttributionCoreTouchesNoClockAndNoDiskTests
     private static readonly string[] Forbidden =
     [
         "DateTime.Now", "DateTime.UtcNow", "DateTime.Today", "DateTimeOffset.Now", "DateTimeOffset.UtcNow", "TimeProvider",
-        "TimeZoneInfo.Local", "Stopwatch", "Process.", "File.", "Directory.", "Environment.", "Guid.NewGuid", "new Random",
+        "TimeZoneInfo.Local", "Stopwatch", "Process.", "File.", "Directory.", "Environment.", "Guid.NewGuid", "new Random", "Path.GetFullPath", "CurrentDirectory",
     ];
 
     private static IEnumerable<string> AuthorsFiles() =>

@@ -3236,6 +3236,9 @@ system only when it is LOCAL (`Store/LocalPaths.cs`, 2026-10-18 security fixes):
 single-`/`-rooted one elsewhere, judged on the raw text AND on the normalised directory, never on a network drive (an
 unknown drive type fails closed), never under the host automounts `/net` or `/Network`; anything else is `Unresolved` with
 an empty key, because asking the disk about `\\host\share` makes Windows offer the user's credentials to that host.
+Not detected, and stated in the code: a custom autofs map on another root, a network file system mounted into a POSIX tree,
+and an existing junction or link under a local path, which the probe follows (its target is the link owner's choice, not
+the transcript's).
 
 **What is read, and what never is.** From a line: `type`, `timestamp`, `agentId`, `isSidechain`, `message.id`, `message.model`, the four usage
 numbers, `requestedModel`, `effort`, a block's `type`, a `tool_use`'s `name` and `id` (and a write tool's one path), a `tool_result`'s
@@ -3627,14 +3630,14 @@ is `done`, so a running row's progress stamp ranks nothing) through `Attribution
 the same query. A round's caller is its own snapshot's session when the file has one, else `authors_session`, else a UUID `caller`, else empty. **It
 sets `PeersKnown = false`** — peers empty, E4 then says `partial: prior windows unknown` — when the store is absent or locked or has no
 `authors_session` column (older than step 24), when a peer's session file does not load or names another session, or when the deadline passes before a peer
-file is loaded (checked before EACH file). Two stated limits: a peer whose only same-caller round is still `running` is not found (`RecordRound` never runs
+file is loaded (checked before EACH file). The step logs WHY at Debug (`AuthorPeerSet.Why`: a closed phrase, or an exception's type and SQLite error code — never its message, which may carry a path); the snapshot only says `prior windows unknown`. Two stated limits: a peer whose only same-caller round is still `running` is not found (`RecordRound` never runs
 for a running round; E7's grown-peer-set rule repairs it), and a RUNNING round of a found peer has no caller on disk, so E4's `peer running` cannot name it
 until it is projected. **The budget** (`AuthorsBudget.Default` = 2 s and 64 MiB of the `fromUtc` SLICE, a parameter of the step): one deadline for the whole
 step, checked between phases; the reader's own limits give `partial: read budget` with the rows read so far; a deadline passed before attribution ran gives
 `Unknown(partial, [read budget])`. `Writes into another checkout` are counts only: `UncoveredWrites` every call, `SubmoduleWrites` those whose root is a
 declared submodule of the checkout's `.gitmodules`, parsed by `GitModules.In` — no process is launched on the answer path. The reader's diagnostics are
 logged at Debug as numbers (`AgentFilesEmpty` included); none becomes a reason, a column or a member. `PanelSettings.TranscriptHome` is the one place the
-default transcripts folder is written (`ClaudeHome.Default.With(AgentLogDir)`); the window over the caller's own work (`RoundEngine.WhatTheCallerWasDoing`) reads it too.
+default transcripts folder is written (`ClaudeHome.Default.With(AgentLogDir)`); the window over the caller's own work (`RoundEngine.WhatTheCallerWasDoing`) reads it too. Every method of `RoundAuthorsStep`, `AuthorPeers`, `AuthorsBudget`, `RoundAuthorsTable` and `RoundAuthorsLog` stays within cyclomatic complexity 4: CA1502 is a build error for those files (`.editorconfig`, as for E4's core).
 
 ### `--backfill-authors` — the authors and the size of the rounds that ran before the live path knew (2026-10-19, `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E7.md` S1–S4)
 
@@ -7254,7 +7257,8 @@ Listed today: `bugzRuntime` (`--collect-bugs --runtime`, E2.1). In PROJECT.md's 
 `VendorDto.TimeoutMinutes` → `ProviderSettings.TimeoutMinutes`: whole minutes 1 to `CatalogLimits.MaxTimeoutMinutes`
 (1440, the extension's `isMinutes`), anything else unset. `RosterBuilder.TimeoutFor` makes it the launch timeout of a
 CLI row in place of `ReviewerTimeout`; an api row keeps the round's launch timeout, its own limit being the whole review
-(`reviewMinutes`). `--features` lists `timeoutMinutes` (`ARowsOwnTimeoutTests`, RED first).
+(`reviewMinutes`). `--features` lists `timeoutMinutes` (`ARowsOwnTimeoutTests`, RED first). A member of the WRONG JSON type (`"timeoutMinutes":"30"`, `30.5`, `30.0`) is not "unset": it
+drops the whole row, and the server says so (the section "One bad field costs its row only", below).
 
 ## A row's prompt cap (2026-10-17, `research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md` S1-S2)
 
@@ -7295,6 +7299,47 @@ paid for; the cap keeps the launch from being made.
   plan and code, a roomy cap changes nothing), `AFeatureIsReviewedEndToEndTests` (the feature skip). Break-its, each observed red
   and restored: `>=` for `>` (the inclusive test), skipping the check for a capped row (the roster and round tests), reading the
   KiB as bytes (the byte and inclusive tests), and dropping the size from the carrier test (the dealt-lens test).
+
+## One bad field costs its row only (2026-10-18, `research/PLAN_one_bad_field_keeps_the_rows.md`)
+
+**Symptom it answers.** `COAI_VENDORS` was read with one `Deserialize` of the whole list, so ONE member of the wrong JSON
+type in ONE row (`"timeoutMinutes":"30"`, `"plan":"false"`, `"model":5`, `"price":{"in":"3"}`) threw, and the catch returned no
+rows. `VendorListFrom` read "no rows from a non-empty text" as "not configured" and ran `COAI_PROVIDERS` or the shipped pair
+(codex and antigravity) in place of every row the person wrote, with nothing logged. A `null` row threw a
+`NullReferenceException` out of `FromEnvironment` instead.
+
+- **The reader.** `VendorRowReader.Read` (`src_mcp/src/Server/VendorRowReader.cs`) parses the text with `JsonDocument` and
+  deserializes each array element with the SAME generated `SettingsJsonContext.Default.VendorDto`, in its own `try`. It
+  answers `VendorRows(Read, Refused, Complaint)`. A `null` or non-object element is refused by a `ValueKind` check (its
+  sentence says what it is: `it is a number, not a row`). The row is named from the RAW element (`IdOf`, ignoring case,
+  only a non-blank string, never `GetProperty`), else by place: `row 2 of 3`. `MemberOf(JsonException.Path)` turns
+  `$.timeoutMinutes` into `timeoutMinutes`, `$.price.in` into `price.in`, and a null, blank or bare `$` path into
+  `one of its members`. It maps nothing: the one mapping to `ProviderSettings` stays in `PanelSettings.MapVendors`, and
+  `ParseVendors` keeps its signature (about 40 callers).
+- **The rule: a row that does not read fails CLOSED.** It does not review, and the other rows do. This is the rule the
+  consultant row already follows (`ConsultantResolver.OptionsOf` answers null, refused by name; `--check-model` the same):
+  both still call `ParseVendors("[<row>]")` and still get no row for a bad member. The alternative (read each typed member
+  as a `JsonElement?`, as `maxPromptKib` does) was rejected: `plan`/`code` default to TRUE, so `"plan":"false"` would
+  become "reviews plans".
+- **The sentence.** One `UnrecognisedSetting` per refused row, no `Kind`, key `COAI_VENDORS[<id>]` or
+  `COAI_VENDORS[row 2 of 3]`: `COAI_VENDORS: the row "claude" (row 2 of 3) is left out of every round — its member
+  timeoutMinutes has a value of the wrong JSON type, or a number it cannot hold. The other rows still review. Write text in quotes,
+  numbers and true/false without them, and minutes as whole numbers from 1 to 1440, ...`. One cure for every member, because the parser does
+  not say whether text lost its quotes, a number gained them, or a number does not fit (`30.5`, `99999999999`). It reaches `providers`
+  (`unrecognised`), the startup and reload notice and the panel toast with no extension change. The key is per ROW because
+  the notice ledger groups on (code, subject): one shared key would fold two bad rows into one notice.
+- **"Configured" when every row is left out** (`VendorListFrom`): a row was read, OR the text is `[]`, OR any row was
+  REFUSED (whether or not its `id` could be read). Then the provider list is empty and the round refuses with its own
+  sentence, as for `[]`. Rows that READ but carry no usable id (`[{}]`, `[{"id":"  "}]`) are not refused, say nothing and
+  still run the shipped pair (#688).
+- **A text that is not a JSON list** (`[{oops`, `{}`) keeps its fallback (`COAI_PROVIDERS`, or the shipped pair) and is now SAID, once, under the
+  bare key `COAI_VENDORS`, with the parser's position (`PanelSettings.Detail`).
+- **Unchanged on purpose.** `maxPromptKib` stays "no cap, not said" for a bad value; a number of the right type but out of
+  range (`timeoutMinutes` 0 or 1441) stays unset and not said; a blank-id row is dropped without a sentence.
+  `COAI_PROMPTS_PER_ROUND` still loses its whole map silently for one bad value (out of scope, named in the plan).
+- **Tests.** `OneBadFieldCostsItsRowOnlyTests`: wrong types in one row (a theory over nine members), the null row, refused rows
+  with no id, every row left out, a list that is not JSON, two bad rows as two notices, `MemberOf`, the `providers` answer, and
+  the guards (a clean list says nothing, `maxPromptKib`, out-of-range numbers, the consultant row still refused).
 
 ## A CLI row's effort (2026-10-05, PLAN_one_model_catalog.md E2.2)
 
