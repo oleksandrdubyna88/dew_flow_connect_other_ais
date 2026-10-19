@@ -3630,14 +3630,14 @@ is `done`, so a running row's progress stamp ranks nothing) through `Attribution
 the same query. A round's caller is its own snapshot's session when the file has one, else `authors_session`, else a UUID `caller`, else empty. **It
 sets `PeersKnown = false`** — peers empty, E4 then says `partial: prior windows unknown` — when the store is absent or locked or has no
 `authors_session` column (older than step 24), when a peer's session file does not load or names another session, or when the deadline passes before a peer
-file is loaded (checked before EACH file). Two stated limits: a peer whose only same-caller round is still `running` is not found (`RecordRound` never runs
+file is loaded (checked before EACH file). The step logs WHY at Debug (`AuthorPeerSet.Why`: a closed phrase, or an exception's type and SQLite error code — never its message, which may carry a path); the snapshot only says `prior windows unknown`. Two stated limits: a peer whose only same-caller round is still `running` is not found (`RecordRound` never runs
 for a running round; E7's grown-peer-set rule repairs it), and a RUNNING round of a found peer has no caller on disk, so E4's `peer running` cannot name it
 until it is projected. **The budget** (`AuthorsBudget.Default` = 2 s and 64 MiB of the `fromUtc` SLICE, a parameter of the step): one deadline for the whole
 step, checked between phases; the reader's own limits give `partial: read budget` with the rows read so far; a deadline passed before attribution ran gives
 `Unknown(partial, [read budget])`. `Writes into another checkout` are counts only: `UncoveredWrites` every call, `SubmoduleWrites` those whose root is a
 declared submodule of the checkout's `.gitmodules`, parsed by `GitModules.In` — no process is launched on the answer path. The reader's diagnostics are
 logged at Debug as numbers (`AgentFilesEmpty` included); none becomes a reason, a column or a member. `PanelSettings.TranscriptHome` is the one place the
-default transcripts folder is written (`ClaudeHome.Default.With(AgentLogDir)`); the window over the caller's own work (`RoundEngine.WhatTheCallerWasDoing`) reads it too.
+default transcripts folder is written (`ClaudeHome.Default.With(AgentLogDir)`); the window over the caller's own work (`RoundEngine.WhatTheCallerWasDoing`) reads it too. Every method of `RoundAuthorsStep`, `AuthorPeers`, `AuthorsBudget`, `RoundAuthorsTable` and `RoundAuthorsLog` stays within cyclomatic complexity 4: CA1502 is a build error for those files (`.editorconfig`, as for E4's core).
 
 ### The gate's history of a piece of work (`GateHistoryQuery`, 2026-09-26, feature review S2.3)
 
