@@ -91,8 +91,12 @@ public static class GitScratch
         }
     }
 
-    /// <summary>One entry of a real directory: a link unlinked, a directory descended, a file deleted whatever its attribute.</summary>
-    private static void DeleteEntry(string entry)
+    /// <summary>
+    /// One entry of a real directory: a link unlinked, a directory descended, a file deleted whatever its attribute. Public for a sweep
+    /// that deletes the entries of a folder one by one around a lock file (<see cref="FolderLock"/>) — unlike
+    /// <see cref="DeleteEvenIfReadOnly"/>, which is for a DIRECTORY and refuses a file.
+    /// </summary>
+    public static void DeleteEntry(string entry)
     {
         if (Snapshots.SnapshotLinks.IsLink(entry))
         {
