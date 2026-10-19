@@ -58,6 +58,14 @@ nothing for a quota, and an earlier session's notes even suspected a token-rotat
   `Limited` with a hopeless reason, the not-yet-started reviewers of the same provider in that round end as `StoodDown`
   (`ReviewerExecutor.cs:254`) with the same sentence instead of launching. Never across rounds: a re-login or a reset can
   change the account (`RetryLadder.cs:86-88` keeps that on purpose). A separate story, shippable after D1–D4.
+- **D7 — Check on a reviewer-only Kimi row does not run a consultant check (seen 2026-10-19).** The owner pressed **Check** on
+  the Kimi card after the 0.61.0 Update and got: "The model-kimi consultant's check ended as unavailable — the vendor 'kimi' runs
+  on 'kimi', which cannot hold a consultation in this build — consultants run on: codex, claude, antigravity, local, api, vibe."
+  Kimi is a reviewer only in this build (the Kimi consultant is the paused S5, #839), so that check can only fail, and its
+  sentence reads like a broken Kimi. The card's Check for a vendor that cannot consult runs a reviewer-shaped check (one short
+  review turn through the shim, the same path a round uses), or, when that is not built, says plainly that the consultant check
+  is not offered for this vendor and that ▶ runs a review. Red: the notice text above for a Kimi row; green: no consultant check
+  is started for a vendor outside `ConsultantResolution`'s list.
 - **D6 — M-K14 is re-judged.** Every exit-77 since 2026-10-16 is re-read against this cause before the refresh-rotation
   suspicion is pursued further; the M-K14 record says which runs were a spent quota.
 
@@ -72,6 +80,8 @@ nothing for a quota, and an earlier session's notes even suspected a token-rotat
 - S6 A diagnosed failure's `DescribeWhole` still carries the vendor sentence. Red: the cure only.
 - S7 (D5) Four Kimi lenses, the first comes back quota-spent → the other three are `StoodDown` with the sentence and never start.
   Red: four launches.
+- S8 (D7) Check on a Kimi row starts no consultant check and never shows "cannot hold a consultation"; it shows the reviewer
+  check's result or the plain "not offered — ▶ runs a review" sentence. Red: the 2026-10-19 notice.
 
 ## 5. Build order
 
