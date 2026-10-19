@@ -76,12 +76,12 @@ internal sealed class WindowSlice
         var owned = _messages.Where(placement => RowAssociations.Contains(placement.Association)).ToList();
         var homes = owned.GroupBy(placement => placement.Agent).ToDictionary(group => group.Key, group => KeyOf(group.OrderBy(placement => placement.At).ThenBy(placement => placement.MessageId, StringComparer.Ordinal).First()));
         var launched = _launches.Where(placement => RowAssociations.Contains(placement.Association)).Select(placement => placement.Agent).ToHashSet();
-        var writes = _writes.Where(write => write.Where == WriteWhere.Here).ToList();
+        var writeCalls = WriteCallsByRow(homes, owned);
 
-        return owned.GroupBy(KeyOf).Select(group => RowOf(group, homes, launched, writes, owned));
+        return owned.GroupBy(KeyOf).Select(group => RowOf(group, homes, launched, writeCalls));
     }
 
-    private AuthorRow RowOf(IGrouping<RowKey, Placement> group, Dictionary<AgentKey, RowKey> homes, HashSet<AgentKey> launched, List<WritePlacement> writes, List<Placement> owned)
+    private AuthorRow RowOf(IGrouping<RowKey, Placement> group, Dictionary<AgentKey, RowKey> homes, HashSet<AgentKey> launched, Dictionary<RowKey, int> writeCalls)
     {
         var key = group.Key;
         var first = group.First();
@@ -95,16 +95,29 @@ internal sealed class WindowSlice
             homes[key.Agent] == key && launched.Contains(key.Agent) ? 1 : 0,
             group.Count(),
             group.Aggregate(new TokenTerms(0, 0, 0, 0), (sum, placement) => RoundAuthorsBuilder.Add(sum, placement.Tokens)),
-            writes.Count(write => write.Agent == key.Agent && WriteHome(write, homes, owned) == key));
+            writeCalls.GetValueOrDefault(key));
+    }
+
+    /// <summary>The write calls of each row, every write placed once: this slice's writes here, each on its home row.</summary>
+    private Dictionary<RowKey, int> WriteCallsByRow(Dictionary<AgentKey, RowKey> homes, List<Placement> owned)
+    {
+        var atInstant = new Dictionary<(AgentKey Agent, DateTimeOffset At), RowKey>();
+
+        foreach (var placement in owned)
+        {
+            atInstant.TryAdd((placement.Agent, placement.At), KeyOf(placement));
+        }
+
+        return _writes
+            .Where(write => write.Where == WriteWhere.Here)
+            .SelectMany(write => WriteHome(write, homes, atInstant))
+            .GroupBy(home => home)
+            .ToDictionary(group => group.Key, group => group.Count());
     }
 
     /// <summary>The row a write is counted on: that of the message at the write's own instant (a turn is the unit), else the agent's first row.</summary>
-    private static RowKey? WriteHome(WritePlacement write, Dictionary<AgentKey, RowKey> homes, List<Placement> owned)
-    {
-        var same = owned.FirstOrDefault(placement => placement.Agent == write.Agent && placement.At == write.At);
-
-        return same is not null ? KeyOf(same) : homes.TryGetValue(write.Agent, out var home) ? home : null;
-    }
+    private static IEnumerable<RowKey> WriteHome(WritePlacement write, Dictionary<AgentKey, RowKey> homes, Dictionary<(AgentKey Agent, DateTimeOffset At), RowKey> atInstant) =>
+        atInstant.TryGetValue((write.Agent, write.At), out var same) ? [same] : homes.TryGetValue(write.Agent, out var home) ? [home] : [];
 
     private IEnumerable<AuthorRow> LaunchOnlyRows()
     {
