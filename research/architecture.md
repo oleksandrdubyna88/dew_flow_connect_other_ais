@@ -878,6 +878,13 @@ own exit (`RemoteAsk.NoBudget`, 79); a shim older than the name renders it insid
 every name, and nothing on either side matches a sentence
 ([module_team_server.md](module_team_server.md), [module_runners.md](module_runners.md)).
 
+**The same key is on the machine's own ledger (2026-10-19, `fix/local-ledger-line-carries-round`).** `coai-mcp` writes the round key
+it minted onto every LOCAL review line of `usage.jsonl` — the same `round` field the Team server writes on its lines, the same on a
+repair, a follow-up and every earlier turn — so a local line joins `rounds.round_key` just as a server line does. It is empty on a launch
+outside a round and on consultation, question, probe and chat lines, which are not rounds; the extension reads an empty `round` as absent
+(`usage.ts`). Nothing crosses a new seam: the field was already a trailing, defaulted `UsageEntry` column, and no diagram labels it
+([module_runners.md](module_runners.md)).
+
 ### A setting whose ABSENCE must mean something (2026-09-08)
 
 `COAI_ENABLED_<ROLE>` crosses the same seam and is shaped by the same lesson, pushed one step

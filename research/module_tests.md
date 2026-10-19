@@ -4520,3 +4520,28 @@ number there — they pin the barriers of the NEW accumulation.
 
 `AReviewWithoutARoundInsideAPlateau_VoidsTheSpan` was renamed `AReviewWithoutARoundOnTheClosingReading_VoidsTheSpan` — the round-less review is on the closing reading, as the test always had it; the inside-the-plateau case is `…_TheReadingAfterIt_OpensTheNextSpan`.
 
+
+## A local review line carries its round (2026-10-19, `fix/local-ledger-line-carries-round`)
+
+`ALocalReviewLineCarriesItsRoundTests` (`src_mcp/tests`) — the Definition-of-Done item of `todo/PLAN_every_round_is_counted.md`
+("every new ledger line carries round, attempt, effort/tier as sent") that only the Team server's lines met. The tests go
+through the real `UsageLedger.Record` / `RecordJob` and read the JSON line the way the extension would.
+
+| Test | Seen red as |
+|---|---|
+| `AReviewLaunchInsideARound_WritesTheInvocationsRound` | `Expected RoundOf(line) to be "0123456789abcdef0123456789abcdef" with a length of 32 because the round key is what joins a local line to rounds.round_key, but "" has a length of 0` |
+| `ARepairOfTheSameReviewer_CarriesTheSameRound` (real `ReviewerExecutor` over `ScriptedResults`: malformed answer, then a repair) | `Expected lines.Select(RoundOf) to be equal to {"0123…cdef", "0123…cdef"} because the malformed first launch and its repair are one round's launches, but {"", ""} differs at index 0.` |
+| `EveryTurnOfAConversation_CarriesTheSameRound` (two earlier turns and a timed-out last one) | `Expected Written(ledger).Select(RoundOf) to be equal to {"0123…cdef" ×3} because two answered turns and the one that timed out are one round's, but {"", "", ""} differs at index 0.` |
+| *guard* `ALaunchOutsideARound_WritesNoRound_NeverAnEmptyKeyAReaderWouldCount` | green before and after — a launch with no key writes an empty round, which no reader counts |
+| *guard* `AConsultOrQuestionLine_WritesNoRound` (theory: `consult`, `question`) | green before and after — `RecordJob` carries no round; pins that the fix did not leak one into the non-round kinds |
+
+The fix is one argument — `Round: invocation.Round` in `UsageLedger.Entry` — because the executor, the follow-up and the turn
+loop all hand `Record` ONE invocation (`TurnLoop` already stamps a later turn's work with the first's key), so every launch of
+a review turn shares the key by construction; the repair and conversation tests pin that, they do not need three writers fixed.
+
+**The extension half is a pin, not a repair.** `ALocalReviewLine_KeepsItsRound_AndTheRoundDoesNotMoveATotal`
+(`src_vs_code/src/test/usagePricing.test.ts`) was green before the C# fix too: `parseUsageLine` reads `round` source-agnostically
+(an empty one is absent), and no extension reader groups ledger lines by round — the Spending tab's rounds block takes
+*reviewers per round* from `coai.db` and states that it claims no per-launch figure (`roundsBlock.ts`, `roundMoney.ts`). So the
+"launches per round" figure story 2.1 promised for lines that carry a round is NOT built in the extension; carrying the round
+on local lines is the precondition, and the test pins that two local lines of one round are two runs and sum once.
