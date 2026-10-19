@@ -7,7 +7,7 @@ namespace CoaiMcp.Store;
 
 /// <summary>
 /// Reading a transcript its CLI is still appending to — shared by <see cref="AgentLog"/> and the caller-transcript reader, so the
-/// two cannot drift (E3.S1 of <c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E3.md</c>).
+/// two cannot drift (E3.S1 of <c>PLAN_a_round_records_who_wrote_the_code_and_how_much_E3.md</c>).
 /// </summary>
 /// <remarks>
 /// <para><b>Two reads.</b> <see cref="ReadShared"/> is <c>AgentLog</c>'s own and is exactly what it was: strings, every line.
@@ -152,20 +152,7 @@ internal static class TranscriptLines
 
     internal static bool Mentions(string line, IReadOnlyList<string> days)
     {
-        if (days.Count == 0)
-        {
-            return true;
-        }
-
-        foreach (var day in days)
-        {
-            if (line.Contains(day, StringComparison.Ordinal))
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return days.Count == 0 || days.Any(day => line.Contains(day, StringComparison.Ordinal));
     }
 
     /// <summary>

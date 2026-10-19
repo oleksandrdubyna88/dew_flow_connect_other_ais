@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 
@@ -144,7 +145,7 @@ public static class AgentLog
         using (document)
         {
             var root = document.RootElement;
-            if (!DateTime.TryParse(JsonText.StringProperty(root, "timestamp"), null, System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal, out var utc))
+            if (!DateTime.TryParse(JsonText.StringProperty(root, "timestamp"), CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var utc))
             {
                 return null;
             }

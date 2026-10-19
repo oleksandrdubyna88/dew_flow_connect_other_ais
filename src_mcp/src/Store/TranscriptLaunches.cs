@@ -155,8 +155,15 @@ internal sealed class TranscriptLaunches
         holder is not null && meta.ParentAgentId.Length > 0 && meta.ParentAgentId != holder.Key;
 
     /// <summary>The meta's own word: its <c>parentAgentId</c>; none written means main; one written off the id shape is unknown (<c>""</c>).</summary>
-    private static string NamedParent(MetaFacts meta) =>
-        meta.ParentUnknown ? string.Empty : meta.ParentAgentId.Length > 0 ? meta.ParentAgentId : "main";
+    private static string NamedParent(MetaFacts meta)
+    {
+        if (meta.ParentUnknown)
+        {
+            return string.Empty;
+        }
+
+        return meta.ParentAgentId.Length > 0 ? meta.ParentAgentId : "main";
+    }
 
     private static ObservedAgent Describe(Launched launch) => new(
         launch.Key, launch.ParentKey, launch.Meta.ToolUseId, launch.Meta.AgentType, launch.Meta.Alias, launch.FirstStamp, launch.CalledUtc, launch.Present);

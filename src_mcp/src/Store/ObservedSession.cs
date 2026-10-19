@@ -4,7 +4,7 @@ namespace CoaiMcp.Store;
 
 /// <summary>
 /// What the caller's Claude session and every subagent it launched actually did, read from the session's own transcript files
-/// (E3.S4 of <c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E3.md</c>; the contract E4 reads, §3 there).
+/// (E3.S4 of <c>PLAN_a_round_records_who_wrote_the_code_and_how_much_E3.md</c>; the contract E4 reads, §3 there).
 /// </summary>
 /// <remarks>Never a byte of prompt, description or message text: every string member is an id, a closed-shape value, a tool name
 /// from <see cref="WriteTools.Names"/> or a path KEY — see <see cref="TranscriptShapes"/>.</remarks>
@@ -208,8 +208,15 @@ internal static partial class TranscriptShapes
     /// The value when it matches <paramref name="shape"/>; empty when it is absent (not off-shape: nothing was written) or when it
     /// fails the shape, which is counted so the diagnostics can say a value was refused.
     /// </summary>
-    public static Admitted Admit(string raw, Func<string, bool> shape) =>
-        raw.Length == 0 ? new Admitted(string.Empty, 0) : shape(raw) ? new Admitted(raw, 0) : new Admitted(string.Empty, 1);
+    public static Admitted Admit(string raw, Func<string, bool> shape)
+    {
+        if (raw.Length == 0)
+        {
+            return new Admitted(string.Empty, 0);
+        }
+
+        return shape(raw) ? new Admitted(raw, 0) : new Admitted(string.Empty, 1);
+    }
 }
 
 /// <summary>A transcript string after its shape gate: the string itself or empty, and 1 when a PRESENT value was refused.</summary>

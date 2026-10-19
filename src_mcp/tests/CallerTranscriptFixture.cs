@@ -33,13 +33,16 @@ public readonly record struct TranscriptFile(string Key)
 /// case as written on Windows (13 cases mix <c>\</c> and <c>/</c>; Q8's forms are the point) and has <c>\</c> folded to <c>/</c> elsewhere. The
 /// parent folder of every written path is created, because a missing folder is <c>Unresolved</c> and never walked up from.</para>
 /// </remarks>
-public sealed class CallerTranscriptFixture
+public sealed partial class CallerTranscriptFixture
 {
     private const string FixturePrefix = "D:/fixture";
 
     private static readonly JsonSerializerOptions Json = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
     private static readonly UTF8Encoding Utf8 = new(false);
-    private static readonly Regex Renamed = new(@"^k\d+\z", RegexOptions.CultureInvariant);
+    private static readonly string[] IdNames = ["id", "tool_use_id"];
+
+    [GeneratedRegex(@"^k\d+\z", RegexOptions.CultureInvariant)]
+    private static partial Regex Renamed();
 
     private CallerTranscriptFixture(FixtureCase fixtureCase, FixtureRounds rounds, ClaudeHome home, string root)
     {
@@ -382,7 +385,7 @@ public sealed class CallerTranscriptFixture
 
     private static void Pad(JsonObject line, string extra)
     {
-        var key = line.Where(pair => Renamed.IsMatch(pair.Key) && pair.Value is JsonValue value && value.TryGetValue<string>(out _)).Select(pair => pair.Key).FirstOrDefault()
+        var key = line.Where(pair => Renamed().IsMatch(pair.Key) && pair.Value is JsonValue value && value.TryGetValue<string>(out _)).Select(pair => pair.Key).FirstOrDefault()
             ?? throw new InvalidOperationException("The line has no renamed string value to pad.");
         line[key] = line[key]!.GetValue<string>() + extra;
     }
@@ -402,7 +405,7 @@ public sealed class CallerTranscriptFixture
         return content.EnumerateArray().SelectMany(IdsOf).ToList();
     }
 
-    private static IEnumerable<string> CallsIn(string line, string[] tools)
+    private static List<string> CallsIn(string line, string[] tools)
     {
         using var document = JsonDocument.Parse(line);
         if (!document.RootElement.TryGetProperty("message", out var message)
@@ -419,7 +422,7 @@ public sealed class CallerTranscriptFixture
         block.TryGetProperty("type", out var type) && type.GetString() == "tool_use" && tools.Contains(block.GetProperty("name").GetString());
 
     private static IEnumerable<string> IdsOf(JsonElement block) =>
-        new[] { "id", "tool_use_id" }.Where(name => block.TryGetProperty(name, out _)).Select(name => block.GetProperty(name).GetString() ?? string.Empty);
+        IdNames.Where(name => block.TryGetProperty(name, out _)).Select(name => block.GetProperty(name).GetString() ?? string.Empty);
 
     private void EditLine(TranscriptFile file, int n, Action<JsonObject> edit)
     {

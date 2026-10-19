@@ -1489,6 +1489,7 @@ S1–S3 landed as three commits on the branch — b24c81ae, 64ee32a6, f9da2839 �
   303 total, 300 passed, 3 skipped (platform-specific), 0 failed.
 - **Tests, observed (final, at cb10d7eea).** The E3 classes + `AgentLogTests` + `TheRoundKnowsWhoCalledItTests`: 273
   total, 270 passed, 3 skipped (platform-specific tests), 0 failed.
+- **SonarCloud on #867 (2026-10-19), behaviour unchanged, no RED test possible.** The two BLOCKER `S2178` at `TranscriptMessages.cs:98` were intentional (`Differs(ref …)` records the first value it sees, so all three fields must be read): now three named reads and one `||`, pinned first by the new `AMessageEntryReportsAClashOnceTests` (7 cases, green before and after); the five `S3358` nested ternaries became `if` statements, `S3267` loops `Any`, `S6580` an explicit `InvariantCulture` (the repo sets `InvariantGlobalization`, so the old `null` already meant it), the three `S1135` hits were the `todo/` path inside a plan reference (path prefix dropped), and the test-only `CA1859`/`SYSLIB1045`/`CA1861` hits were fixed; E3 classes + `AgentLogTests` + `TheRoundKnowsWhoCalledItTests`: 310 total, 307 passed, 3 skipped, 0 failed.
 
 ## 6. Defects found in the parent plan (recorded, not fixed here)
 

@@ -93,8 +93,15 @@ internal sealed class LineIntake(ReadTally tally, TranscriptMessages messages)
     private static bool IsUsable(LineFacts line) => line.Stamp is not null && line.MessageId.Length > 0;
 
     /// <summary>The file wins (S4-4); a sidechain line in the MAIN file belongs to the agent its <c>agentId</c> names, or to none (S4-12).</summary>
-    private static string AgentKeyOf(FileRead file, LineFacts line) =>
-        !file.IsMain ? file.Key : line.Sidechain ? line.AgentId : file.Key;
+    private static string AgentKeyOf(FileRead file, LineFacts line)
+    {
+        if (!file.IsMain || !line.Sidechain)
+        {
+            return file.Key;
+        }
+
+        return line.AgentId;
+    }
 
     private void Record(FileRead file, string key, LineFacts line)
     {

@@ -94,8 +94,15 @@ internal sealed class MessageEntry
     }
 
     /// <summary>Two PRESENT values of one field that differ. An absent value never differs (G14).</summary>
-    private bool Clashes(MessageValues values) =>
-        Differs(ref _anyModel, values.Model) | Differs(ref _anyRequested, values.Requested) | Differs(ref _anyEffort, values.Effort);
+    private bool Clashes(MessageValues values)
+    {
+        // Differs also RECORDS the first present value it sees, so all three fields are read on every call, never short-circuited.
+        var model = Differs(ref _anyModel, values.Model);
+        var requested = Differs(ref _anyRequested, values.Requested);
+        var effort = Differs(ref _anyEffort, values.Effort);
+
+        return model || requested || effort;
+    }
 
     private static bool Differs(ref string seen, string value)
     {
