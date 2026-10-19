@@ -4,7 +4,7 @@ namespace CoaiMcp.Store;
 
 /// <summary>
 /// Handing a page's row ids to a read-only query — the one binder every page-scoped reader of <c>--log</c> shares
-/// (<see cref="RoundChangesLog"/>, <see cref="RoundPlanSources"/>).
+/// (<see cref="RoundChangesLog"/>, <see cref="RoundPlanSources"/>, <see cref="RoundAuthorsLog"/>).
 /// </summary>
 internal static class PageIds
 {

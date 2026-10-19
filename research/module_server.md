@@ -3596,6 +3596,16 @@ all read as an absent member; a malformed row never fails the page (`TheLogNames
 ignores the member (`anOlderExtensionReadsALogPageCarryingASize.test.ts`), and its rounds-log line reads the session file, not this
 (`module_extension.md`).
 
+**`--log` names the state of each round's authors** (story E5.S3 of `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`).
+`LoggedRound` gains a third init property, `AuthorsState` (`string?`, JSON `authorsState`), absent when null. `RoundsQuery.Rounds` chains
+`RoundAuthorsLog.Attach` (its own file, the `RoundPlanSources` shape) after `RoundPlanSources.Attach` — one call, no fourth rung on the SQL
+ladder. It runs ONE query per page, `SELECT id, authors_state FROM rounds WHERE authors_state <> '' AND id IN (SELECT value FROM
+json_each($ids))`, only when the page has ids and `HasColumn(db, "rounds", "authors_state")` — a step-23 file is asked, answers with no
+query, is logged exactly as before and stays at twenty-three; `--round-counts` reads nothing new and leaves it byte for byte
+(`TheLogNamesEachRoundsAuthorsTests`). Rounds are matched by their OWN id (`PageIds`), never by list position. **Not recorded is never a
+word:** an empty column and a value `AuthorsSnapshot.IsWellFormed` refuses read as an absent member, judged per ROW and never around the query
+(a catch around the query would swallow *no such column* and hide what the `HasColumn` guard prevents).
+
 ### The gate's history of a piece of work (`GateHistoryQuery`, 2026-09-26, feature review S2.3)
 
 The feature review ([PLAN_feature_review.md](../todo/PLAN_feature_review.md) §4.8) sends its reviewer
