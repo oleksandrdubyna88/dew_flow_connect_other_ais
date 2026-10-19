@@ -164,6 +164,17 @@ test('ATeamServerLine_StaysPerRecordedTurn_EvenWithItsRowDeleted — the line sa
   assert.doesNotMatch(cells[10]!, /launch/u);
 });
 
+test('AnAntigravityFollowUp_KeepsItsModelPerRecordedTurn — a follow-up may be cumulative, so one in the group takes median and division back', () => {
+  const local = (over: Parameters<typeof usageLine>[0] = {}) => usageLine({ model: 'gpt-6-astra', attempt: 'first', cli: 'antigravity', ...over });
+  const html = roundsBlock(input({ snapshot: snapshot(counted(), [local(), local({ attempt: 'followUp' })]), ranOn: ranOnOf([]) }));
+  const cells = rowCells(html, '>gpt-6-astra<');
+
+  assert.match(cells[7]!, /<span class="hint">per recorded turn<\/span>/u, 'a possibly cumulative follow-up was claimed as a launch in the median');
+  assert.match(cells[10]!, /over 2 recorded turns/u);
+  assert.match(cells[10]!, /<span class="hint">per recorded turn<\/span>/u);
+  assert.doesNotMatch(cells[10]!, /launch/u);
+});
+
 test('ALocalRow_StaysPerLaunch_AfterItsRowIsDeleted — the decision is the lines own, no row is looked up', () => {
   const html = roundsBlock(input({ snapshot: snapshot(counted(), [launchLine({ model: 'gpt-6-astra' })]), ranOn: ranOnOf([]) }));
   const cells = rowCells(html, '>gpt-6-astra<');

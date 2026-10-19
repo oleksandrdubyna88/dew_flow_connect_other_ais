@@ -21,7 +21,7 @@ import type { Vendor } from './vendors';
  * the consultations, questions and chat that spent the same vendor beside them (as recorded turns — a ledger line is a
  * turn, and one consultation can be several), reviewers per round from the database's history, tokens in / cached /
  * out / reasoning and the money over 7 d with `roundMoney`'s floors, and ~$ per round. Under each row its MODEL lines —
- * a model change inside a window is two lines — each with its own rounds, the median output per recorded turn, and
+ * a model change inside a window is two lines — each with its own rounds, the median output per launch, or per recorded turn beside the figure when a line can hold more than one launch, and
  * ~$ per round over the rounds that used it; and its consult / question / chat lines, per recorded turn.</p>
  *
  * <p><b>Unavailable is never 0.</b> Before the first read the block says it is counting; a read that failed says

@@ -83,7 +83,7 @@ export interface Rollup {
   readonly money: Estimate;
   /**
    * True when EVERY line behind this is a launch line ({@link isLaunchLine}), captured or not. False for an empty set —
-   * nothing in the window is not launches — so a label falls back to the safe *per recorded turn*.
+   * an empty set is not claimed as launches — so a label falls back to the safe *per recorded turn*.
    */
   readonly linesAreLaunches: boolean;
 }
