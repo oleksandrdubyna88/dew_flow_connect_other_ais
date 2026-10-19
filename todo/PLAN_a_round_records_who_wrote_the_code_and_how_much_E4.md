@@ -954,7 +954,7 @@ public sealed record RoundAuthors(
     string Stage, int Number,   // added by the 2026-10-16 plan gate: S4's NotSeen and FixersOf need them for a round with no rows; announced to E5
     string CallerSessionId, string State, ImmutableArray<string> Reasons,   // the roll-up: the WORST window state; reasons distinct, in window order
     ImmutableArray<AuthorRow> Rows,
-    ActivityTotals Ambiguous, ActivityTotals Elsewhere, ActivityTotals ClaimedByPeer, int UnobservedLaunches,   // the roll-up: sums; Unknown (and UnobservedLaunches = -1, M1) when any window is unobserved
+    ActivityTotals Ambiguous, ActivityTotals Elsewhere, ActivityTotals ClaimedByPeer, int UnobservedLaunches,   // the roll-up: sums — except UnobservedLaunches, which counts each launch ONCE (one with no instant marks every window but is one item; §12 item 10); Unknown (and UnobservedLaunches = -1, M1) when any window is unobserved
     ImmutableArray<WindowAuthors> Windows,                            // G9: the per-window state and totals E6 needs when it leaves before-open out
     ImmutableArray<string> PeerGates,                                 // G3 (iii): carried from WindowAssignment; ids only
     ImmutableArray<CheckoutWrites> WritesOutsideTheGateCheckout);   // gate finding 0, below
@@ -1649,7 +1649,7 @@ the test named for it, restored, rebuilt and watched green. S5's acceptance test
 `ObservationReason` `:98`, `ObservationReasons` `:134`; main is listed with `LaunchedUtc = null` and `TranscriptPresent = true` (`TranscriptLaunches.cs:101`) — the mapping leaves it out of
 `Agents`; there is one `UnobservedLaunch` per meta without a file (`TranscriptLaunches.cs:167-171`) and one per `Agent` call without a meta (`:194`); `WriteTarget.Where` is a normalised KEY
 (`RepositoryIdentity.Normalised`), compared to the gate's `repo_path` by `Repositories` (separators folded, case ignored) and never resolved. E4's own anchors on this tree:
-`AgentLog.InRepo` is now one line, `AgentLog.cs:228`, calling `Repositories.Contains`; `WhatTheCallerWasDoing` is `RoundEngine.cs:899`; the save appends the record at `SessionStore.cs:595`.
+`AgentLog.InRepo` is now one line, `AgentLog.cs:228`, calling `Repositories.Contains`; `WhatTheCallerWasDoing` is `RoundEngine.cs:899`; the save appends the record at `RoundEngine.cs:595` (*was cited `SessionStore.cs:595`; corrected 2026-10-19, re-verified after the merges of E3 `24cced19a` and main `bb279e3db`*).
 
 **Deviations from the text above, each the smallest change that keeps the intent.** None changes a type E5 consumes: `RoundAuthors`, `WindowAuthors`, `PeerGates`,
 `RoundAttribution.Version`, `StateReason` and the settled and final rules are as specified.
@@ -1682,6 +1682,25 @@ Items 4 and 5 below need no §S2 change.
    `prior windows unknown`, whatever `Peers` holds). An unobserved caller places nothing, and its windows are `unobserved`. `RoundAttribution.PeerStillRuns(input)` exists (E7 item 9, below).
    The round-level `Agents` count of a total is the SUM of the windows' counts (§S3 "totals summed"), so an agent in two windows counts in both. `NotSeen.Why` reads `<state>: <reasons joined by ", ">`.
    A contributor's `Models`, `Requested` and `Efforts` include `unknown` when a launch-only or two-repositories row carries it. A `claimed by peer` placement keeps this gate's own ladder rung.
+
+**The judge's review, 2026-10-19** (Opus, after Fable's; four findings, each fixed by a Sonnet coder in its own commit, RED then GREEN):
+
+9. **Cyclomatic complexity ≤ 4 is a build error now, not a habit.** Measured with Roslyn's CA1502 (threshold file `src_mcp/CodeMetricsConfig.txt`, `CA1502: 4`; a
+   lambda counts toward the method that holds it), ten methods were over the bound: the `AssignRun` constructor and `Build`, `AssociationLadder.ChildRung`,
+   `AttributionContract.Climbs`, `Repositories.IsAbsolute`, `WindowStates.CallerChanged`, `Windows.ClaimsBefore`, `First`, `Compare` and `BlindReason`. `.editorconfig`
+   now sets CA1502 to `error` for `src_mcp/core/Authors/*.cs` and `src_mcp/src/Store/AttributionMapping.cs`, beside the security lane. RED was the build failing on
+   those methods; GREEN is a refactor with no behaviour change (`ae65d3abb`).
+10. **The round counts an unobserved launch with no instant ONCE** (S3's "the roll-up: sums" is narrowed for this one member). Such a launch marks every window,
+   and each window's `UnobservedLaunches` still counts it; but summing the windows counted it twice in a first round (before-open + round), so one missing
+   transcript read as two, against decision 9 (G4). The round's `UnobservedLaunches` is now the placed launches plus the launches with no instant
+   (`RoundAuthorsBuilder.UnobservedLaunchesOf`). RED `AnUnobservedLaunchWithNoInstant_IsCountedOnceInTheRound`: expected 1, found 2 (`6fe57e5d7`). The other
+   totals are still the sum of the windows.
+11. **One place per rule** (reuse-first). `Repositories.SameRoot` replaces three copies of the same-root test (`Windows`, `AssociationLadder`, `WindowSlice`);
+   `ObservationKinds.Badness` replaces two copies; the stage words are `nameof(Stage.PlanReview)` and `nameof(Stage.CodeReview)`; and `AttributionMapping` reads
+   every message and write instant through `UtcInstant.Of` (the rule `UtcInstant.From` now calls) instead of its own `SpecifyKind`. RED: a Local-kind instant
+   on this +02:00 machine (`2684ab8d1`). E3 parses stamps as UTC, so no stored value changes.
+12. **The purity scan also forbids a working-directory lookup** (`Path.GetFullPath`, `CurrentDirectory`), which is S1's rule "never resolved against a working
+   directory". A planted `GetFullPath` turned it red (`c210f9318`).
 
 **The two confirmations E7 asked for (E7 §10 items 8 and 9):**
 
