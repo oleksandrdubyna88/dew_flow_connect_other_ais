@@ -33,6 +33,12 @@ public abstract class ConsultantPlace : IDisposable
     /// <summary>Why there is no place — empty when there is one.</summary>
     public virtual string Refusal => string.Empty;
 
+    /// <summary>What the place skipped, in the order it met it — a folder it could not list, a candidate git did not confirm, the linked worktrees it left out; empty when nothing was.</summary>
+    public virtual IReadOnlyList<string> Notes => [];
+
+    /// <summary>What the copies do NOT hold, as a sentence the model must read too (a prompt that names the copies says it) — a subset of <see cref="Notes"/>; empty when the copies are all there is.</summary>
+    public virtual IReadOnlyList<string> Limitations => [];
+
     /// <summary>The checkout itself: every adapter that asks for no copy, exactly as before.</summary>
     public static ConsultantPlace Checkout { get; } = new InTheCheckout();
 
@@ -49,22 +55,38 @@ public abstract class ConsultantPlace : IDisposable
 
     private sealed class InTheCheckout : ConsultantPlace;
 
-    /// <summary>No place, and the sentence the launch's refusal carries.</summary>
-    public sealed class Refused(string reason) : ConsultantPlace
+    /// <summary>No place, and the sentence the launch's refusal carries — with what the place had skipped before it refused.</summary>
+    public sealed class Refused(string reason, IReadOnlyList<string> notes) : ConsultantPlace
     {
+        public Refused(string reason)
+            : this(reason, [])
+        {
+        }
+
         public override string Refusal => reason;
+
+        public override IReadOnlyList<string> Notes => notes;
     }
 
     /// <summary>A coai-owned folder and copies in it, held until the launch has been read.</summary>
-    public sealed class Owned(string folder, string workdir, IReadOnlyList<string> roots, IReadOnlyList<IDisposable> held) : ConsultantPlace
+    public sealed class Owned(string folder, string workdir, IReadOnlyList<string> roots, IReadOnlyList<IDisposable> held, IReadOnlyList<string> notes, IReadOnlyList<string> limitations) : ConsultantPlace
     {
         private int _released;
+
+        public Owned(string folder, string workdir, IReadOnlyList<string> roots, IReadOnlyList<IDisposable> held, IReadOnlyList<string> notes)
+            : this(folder, workdir, roots, held, notes, [])
+        {
+        }
 
         public override string Folder => folder;
 
         public override string Workdir => workdir;
 
         public override IReadOnlyList<string> Roots => roots;
+
+        public override IReadOnlyList<string> Notes => notes;
+
+        public override IReadOnlyList<string> Limitations => limitations;
 
         protected override void Release()
         {
@@ -106,6 +128,15 @@ public sealed class ConsultantPlaces(string homesRoot, string store, IProcessLau
 
     /// <summary>What makes every copy — the product's ceilings and the shared budget; a test's seam for a slow copy.</summary>
     internal ReviewSnapshots Maker { get; set; } = new(launcher, SnapshotOptions.Default, SnapshotBudget.Shared, note);
+
+    /// <summary>The walk's listing — a test's seam for an unreadable folder and for a budget that runs out during the walk.</summary>
+    internal Func<string, FolderListing> Listing { get; set; } = FolderListings.Read;
+
+    /// <summary>The walk's look for a <c>.git</c> in a folder of the deepest level — it never lists that folder; a test's seam.</summary>
+    internal Func<string, FolderListing> Probing { get; set; } = FolderListings.GitEntryOf;
+
+    /// <summary>Called with a repository's path right before its link chain is checked — a test's seam for a folder that becomes a link between the walk and the copy.</summary>
+    internal Action<string> BeforeCopyOf { get; set; } = static _ => { };
 
     /// <summary>
     /// The place one turn of conversation <paramref name="consultationId"/> stands in: its folder under
@@ -249,7 +280,7 @@ public sealed class ConsultantPlaces(string homesRoot, string store, IProcessLau
     {
         stamping.Begin();
 
-        return new ConsultantPlace.Owned(folder, string.Empty, [], [stamping, .. held]);
+        return new ConsultantPlace.Owned(folder, string.Empty, [], [stamping, .. held], []);
     }
 
     /// <summary>The stamp a conversation's folder carries for a turn: begun when the copy is ready, ended when it is given back.</summary>
@@ -268,7 +299,7 @@ public sealed class ConsultantPlaces(string homesRoot, string store, IProcessLau
             stamping.Begin();
 
             // The stamp is ended FIRST, while the locks still hold, so a sweep never sees a free folder with a running stamp.
-            return new ConsultantPlace.Owned(Path.GetDirectoryName(made.Snapshot.Root)!, made.Snapshot.Root, [made.Snapshot.Root], [stamping, .. held]);
+            return new ConsultantPlace.Owned(Path.GetDirectoryName(made.Snapshot.Root)!, made.Snapshot.Root, [made.Snapshot.Root], [stamping, .. held], []);
         }
 
         foreach (var one in held)
@@ -285,118 +316,143 @@ public sealed class ConsultantPlaces(string homesRoot, string store, IProcessLau
     /// under <c>tree</c>, the launch standing in <c>tree</c> itself. Disposing it deletes the copies and gives their bytes back; any refusal deletes what was made.
     /// </summary>
     /// <remarks>
-    /// The copies are made one after another, before the launch, so they are bounded TOGETHER by <paramref name="budget"/> —
-    /// the row's own (the #811 checkpoint round: ten roots near D6's 60 s ceiling each would spend ten minutes before Vibe
-    /// started). Past it the place is refused naming how many roots were copied of how many, and every copy made is disposed;
-    /// the caller's own cancellation still leaves as one.
+    /// <para>A source that is a Git work tree is copied as it is. A source that is NOT one — a parent folder of repositories —
+    /// is expanded into the repositories beneath it (D1–D7, D9 of <c>todo/PLAN_vibe_reads_a_folder_of_repositories.md</c>,
+    /// <see cref="ParentExpansion"/>), each copied through the same method at <c>tree/&lt;grant index&gt;/&lt;relative path&gt;/snapshot-&lt;id&gt;</c>.</para>
+    /// <para>The order is: every granted folder asked of git once and counted; every repository beneath every parent confirmed; the
+    /// linked worktrees whose main checkout is copied left out; the bound judged over what is left — and only then the copies, made one
+    /// after another before the launch, so they are bounded TOGETHER by <paramref name="budget"/> — the row's own (the #811 checkpoint
+    /// round: ten roots near D6's 60 s ceiling each would spend ten minutes before Vibe started). Past it the place is refused naming how
+    /// many copy targets were copied of how many were reached, and every copy made is disposed; the caller's own cancellation still
+    /// leaves as one.</para>
     /// </remarks>
     public async Task<ConsultantPlace> OneShotAsync(string folder, IReadOnlyList<string> sources, TimeSpan budget, CancellationToken ct)
     {
         var tree = Path.Combine(folder, ConversationSnapshots.TreeName);
-        List<ReviewSnapshot> made = [];
+        var tally = new OneShotTally(note);
         using var copying = CancellationTokenSource.CreateLinkedTokenSource(ct);
         copying.CancelAfter(budget);
         try
         {
-            var refused = await CopiedAsync(sources, tree, made, copying.Token);
+            var refused = await CopiedAsync(sources, tree, tally, copying.Token);
 
-            return refused.Length == 0 ? new ConsultantPlace.Owned(folder, tree, [.. made.Select(snapshot => snapshot.Root)], [.. made]) : Unmade(made, refused);
+            return refused.Length == 0
+                ? new ConsultantPlace.Owned(folder, tree, [.. tally.Made.Select(snapshot => snapshot.Root)], [.. tally.Made], [.. tally.Notes], [.. tally.Limitations])
+                : Unmade(tally, refused);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            return Unmade(made, OutOfBudget(made.Count, sources.Count, budget));
+            return Unmade(tally, OutOfBudget(tally, budget));
         }
         catch
         {
-            Unmade(made, string.Empty);
+            Unmade(tally, string.Empty);
             throw;
         }
     }
 
-    /// <summary>Each source copied in turn into <paramref name="made"/> — or the first refusal, or the budget's, when it ran out.</summary>
-    private async Task<string> CopiedAsync(IReadOnlyList<string> sources, string tree, List<ReviewSnapshot> made, CancellationToken copying)
+    /// <summary>The granted folders, the parents expanded, then every copy in the order of the grants — or the first refusal, or the budget's.</summary>
+    private async Task<string> CopiedAsync(IReadOnlyList<string> sources, string tree, OneShotTally tally, CancellationToken copying)
     {
-        foreach (var source in sources)
+        var granted = await GrantedAsync(sources, tally, copying);
+        if (granted.Refusal.Length > 0)
         {
-            var outcome = await CopyOfAsync(source, tree, copying);
-            if (outcome is SnapshotOutcome.Made copy)
-            {
-                made.Add(copy.Snapshot);
-            }
+            return granted.Refusal;
+        }
 
-            // A copy cut short by the budget comes back as a refusal of its own (a git listing "did not answer in time"),
-            // and one that finished past it is past it: the budget is what ended them, and the sentence says so.
-            copying.ThrowIfCancellationRequested();
-            if (outcome is SnapshotOutcome.Refused refused)
+        var copier = new RepositoryCopier(Maker, launcher);
+        var expansion = new ParentExpansion(launcher, copier, Listing, Probing, BeforeCopyOf);
+        var expanded = await expansion.PrepareAsync(granted.Folders, tally, copying);
+        if (expanded.Refusal.Length > 0)
+        {
+            return expanded.Refusal;
+        }
+
+        tally.Copying = true;
+        foreach (var grant in granted.Folders)
+        {
+            var refused = grant.IsWorkTree
+                ? await DirectAsync(grant, tree, copier, tally, copying)
+                : await expansion.CopyAsync(grant, expanded.ToCopy[grant.Index], tree, tally, copying);
+            if (refused.Length > 0)
             {
-                return refused.Reason;
+                return refused;
             }
         }
 
         return string.Empty;
     }
 
-    /// <summary>Every copy made disposed, and the refusal the place carries.</summary>
-    private static ConsultantPlace.Refused Unmade(List<ReviewSnapshot> made, string reason)
-    {
-        made.ForEach(snapshot => snapshot.Dispose());
-
-        return new ConsultantPlace.Refused(reason);
-    }
-
-    private static string OutOfBudget(int copied, int of, TimeSpan budget) =>
-        $"copying the granted folders took longer than the row's budget ({budget.TotalSeconds:0} s): {copied} of {of} copied — "
-        + "grant fewer or smaller folders, or give the row more time (COAI_QCONSULT_ROW_MINUTES)";
+    /// <summary>The row's granted folders as the place first meets them, or the refusal of one that is not there — or of a row that already holds too many.</summary>
+    private sealed record Granted(string Refusal, IReadOnlyList<GrantedFolder> Folders);
 
     /// <summary>
-    /// A copy of one source — the live tree as git lists it, limited to that folder — or the refusal of a folder git has no
-    /// work tree for: the copy lists through git (D6), and a plain folder has no listing to trust until a mode for one exists.
+    /// Each source asked of git ONCE, before anything is copied: a work tree granted directly is counted at once (D3 — the bound is the row's,
+    /// whatever its place in the list) and, when it is the top of a work tree that is not linked, remembered as a main checkout (D9). A
+    /// folder that does not exist stays a refusal.
     /// </summary>
-    /// <remarks>
-    /// A granted root reached through a LINK is refused too (P1 of the S3 plan round): the root itself, or any folder above
-    /// it up to its work tree's top — a copy through one would be of whatever it points at. Folders above the work tree are
-    /// the machine's own layout (a relocated profile; macOS's <c>/var</c>) and are not asked. Inside the root, a link git
-    /// lists is refused by the snapshot itself.
-    /// </remarks>
-    private async Task<SnapshotOutcome> CopyOfAsync(string source, string tree, CancellationToken ct) =>
-        await OutsideAGitTreeAsync(source, ct) is { Length: > 0 } why ? new SnapshotOutcome.Refused(why)
-        : LinkUpToTheWorkTree(source) is { Length: > 0 } link
-            ? new SnapshotOutcome.Refused($"{link} is a link, and the granted folder {source} is reached through it — grant the folder it points at instead")
-            : await Maker.MakeAsync(new SnapshotSource.Live(source), tree, ct);
-
-    /// <summary>The first folder from <paramref name="source"/> up to its work tree's top that is a link, or empty.</summary>
-    private static string LinkUpToTheWorkTree(string source) =>
-        UpToTheWorkTree(Path.GetFullPath(source)).FirstOrDefault(OwnedPaths.IsLinkIfThere) ?? string.Empty;
-
-    /// <summary>The folder and each one above it, up to and including the first that holds a <c>.git</c>.</summary>
-    private static IEnumerable<string> UpToTheWorkTree(string folder)
+    private async Task<Granted> GrantedAsync(IReadOnlyList<string> sources, OneShotTally tally, CancellationToken copying)
     {
-        for (var at = folder; at is not null; at = Path.GetDirectoryName(at))
+        List<GrantedFolder> folders = [];
+        foreach (var (index, source) in sources.Index())
         {
-            yield return at;
-            if (HoldsGit(at))
+            var root = GrantedPaths.Keyed(source);
+            if (!Directory.Exists(root))
             {
-                yield break;
+                return new Granted($"the folder {root} does not exist", []);
             }
+
+            folders.Add(await GrantedAsync(index, root, tally, copying));
         }
+
+        return tally.Found > RepositoryWalk.MaxRepositories ? new Granted(RepositoryWalk.TooManyRepositories, []) : new Granted(string.Empty, folders);
     }
 
-    private static bool HoldsGit(string folder) =>
-        Directory.Exists(Path.Combine(folder, ".git")) || File.Exists(Path.Combine(folder, ".git"));
-
-    private async Task<string> OutsideAGitTreeAsync(string source, CancellationToken ct)
+    private async Task<GrantedFolder> GrantedAsync(int index, string root, OneShotTally tally, CancellationToken copying)
     {
-        if (!Directory.Exists(source))
+        var facts = await RepositoryFacts.AskAsync(launcher, root, copying);
+
+        // A question cut short by the budget comes back as "not a work tree": the budget is what ended it, and says so.
+        copying.ThrowIfCancellationRequested();
+        if (!facts.InsideWorkTree)
         {
-            return $"the folder {source} does not exist";
+            return new GrantedFolder(index, root, facts, Duplicate: false);
         }
 
-        var asked = await launcher.RunAsync(
-            new ProcessRequest("git", ["rev-parse", "--is-inside-work-tree"], source) { Timeout = TimeSpan.FromSeconds(30) }, ct);
+        var first = tally.Planned.Add(root);
+        if (first)
+        {
+            tally.Found++;
+        }
 
-        return asked.ExitCode == 0 && asked.StdOut.Trim() == "true"
-            ? string.Empty
-            : $"the folder {source} is not inside a Git work tree — this runtime reads a copy coai makes through Git (D6 of "
-              + "todo/PLAN_vibe_and_kimi_runtimes.md), and a plain folder cannot be copied that way yet; grant a folder of a repository";
+        if (first && facts.IsMain)
+        {
+            tally.Mains.Add(facts.CommonDir);
+        }
+
+        return new GrantedFolder(index, root, facts, Duplicate: !first);
     }
+
+    /// <summary>A source that is a work tree: copied as before, at <c>tree/snapshot-&lt;id&gt;</c> — unless an earlier grant already names it.</summary>
+    private static async Task<string> DirectAsync(GrantedFolder grant, string tree, RepositoryCopier copier, OneShotTally tally, CancellationToken copying) =>
+        grant.Duplicate ? string.Empty : tally.Record(await copier.CopyAsync(grant.Root, tree, string.Empty, copying), copying);
+
+    /// <summary>Every copy made disposed, and the refusal the place carries — with what it had skipped.</summary>
+    private static ConsultantPlace.Refused Unmade(OneShotTally tally, string reason)
+    {
+        tally.Made.ForEach(snapshot => snapshot.Dispose());
+
+        return new ConsultantPlace.Refused(reason, [.. tally.Notes]);
+    }
+
+    /// <summary>The budget's refusal: what had been done when it ran out — copies made, or (before the first copy) the phase it ended — and the one cure.</summary>
+    private static string OutOfBudget(OneShotTally tally, TimeSpan budget) =>
+        $"copying the granted folders took longer than the row's budget ({budget.TotalSeconds:0} s): {Progress(tally)} — "
+        + "grant fewer or smaller folders, or give the row more time (COAI_QCONSULT_ROW_MINUTES)";
+
+    /// <summary>"0 of 0 copied" reads as "nothing found", so before the first copy the sentence says what was going on instead.</summary>
+    private static string Progress(OneShotTally tally) =>
+        tally.Copying ? $"{tally.Made.Count} of {tally.Found} copied"
+        : tally.Candidates == 0 ? "the budget ran out while reading the granted folders, before anything was copied"
+        : $"the budget ran out while confirming {tally.Candidates} {(tally.Candidates == 1 ? "candidate" : "candidates")} with git, before anything was copied";
 }
