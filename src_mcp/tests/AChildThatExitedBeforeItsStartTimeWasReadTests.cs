@@ -64,10 +64,10 @@ public sealed class AChildThatExitedBeforeItsStartTimeWasReadTests
         // The guard the fix keeps: a child that is ALIVE and cannot be recorded is the one state nothing can clean up
         // after (story 6.1a of todo/PLAN_every_round_is_counted.md), so the launcher ends it and the failure travels.
         var tracker = new RecordingTracker();
-        var seen = new List<int>();
+        var seen = new List<(int Pid, DateTime StartedUtc)>();
         var launcher = new ProcessLauncher(tracker, process =>
         {
-            seen.Add(process.Id);
+            seen.Add((process.Id, process.StartTime.ToUniversalTime()));
 
             throw Failure(spelling);
         });
@@ -79,7 +79,7 @@ public sealed class AChildThatExitedBeforeItsStartTimeWasReadTests
         thrown.Which.GetType().Name.Should().Be(spelling, "the caller still learns that the child could not be recorded");
         tracker.Recorded.Should().BeEmpty();
         seen.Should().ContainSingle();
-        IsGone(seen[0]).Should().BeTrue("a child that is alive and unrecorded must not be left running");
+        IsGone(seen[0].Pid, seen[0].StartedUtc).Should().BeTrue("a child that is alive and unrecorded must not be left running");
     }
 
     [Theory]
@@ -109,6 +109,17 @@ public sealed class AChildThatExitedBeforeItsStartTimeWasReadTests
         await act.Should().NotThrowAsync("a child that ended within the wait is a child that is gone, not one that could not be recorded");
         aliveWhenTheReadFailed.Should().BeTrue("the test is only a test of the race if the child had NOT yet exited when the read failed");
         tracker.Recorded.Should().BeEmpty("an ended child has nothing left for an orphan sweep to find");
+    }
+
+    [Fact]
+    public void AProcessWithTheSamePidButAnotherStartTime_IsNotTheChildThatWasLaunched()
+    {
+        // The pid of a child that ended can be handed to an unrelated process: "the pid is alive" then says nothing about the child.
+        // This process stands for it — alive, with a start time that is not the one recorded at launch.
+        using var self = Process.GetCurrentProcess();
+
+        IsGone(self.Id, self.StartTime.ToUniversalTime().AddHours(-1)).Should().BeTrue("a live process that started at another time is not the child launched");
+        IsGone(self.Id, self.StartTime.ToUniversalTime()).Should().BeFalse("with the recorded start time it IS that process, and it is alive");
     }
 
     [Fact]
@@ -147,15 +158,19 @@ public sealed class AChildThatExitedBeforeItsStartTimeWasReadTests
         _ => new InvalidOperationException("Cannot process request because the process has exited."),
     };
 
-    private static bool IsGone(int pid)
+    /// <summary>
+    /// Whether the child launched with this pid and start time is gone. A pid alone is not an identity — an ended child's pid can be handed to
+    /// an unrelated process — so a live process whose start time is not the one recorded at launch is a stranger, and the child is gone.
+    /// </summary>
+    private static bool IsGone(int pid, DateTime startedUtc)
     {
         try
         {
             using var process = Process.GetProcessById(pid);
 
-            return process.HasExited;
+            return process.HasExited || process.StartTime.ToUniversalTime() != startedUtc;
         }
-        catch (ArgumentException)
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException or Win32Exception)
         {
             return true;
         }

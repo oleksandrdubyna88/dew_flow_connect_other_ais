@@ -226,9 +226,7 @@ public sealed class QuestionRowLookupScenarioTests : IAsyncLifetime
         // in plan mode CAN write (research/RESULTS_agy_searches_through_coai.md §3).
         Steer(Stream("Looking.\n" + Block("list ."), 100, 5), Stream("never reached", 200, 9));
         var written = Path.Combine(_repo, "written-by-the-row.txt");
-        var steering = FakeCliSteering.ReadBack();
-        steering["FAKECLI_SIDE_EFFECT"] = written;
-        _steering = FakeCliSteering.Write(steering);
+        _steering = FakeCliSteering.Write(new Dictionary<string, string>(FakeCliSteering.ReadBack()) { ["FAKECLI_SIDE_EFFECT"] = written });
 
         var row = Row(await AskAsync());
 

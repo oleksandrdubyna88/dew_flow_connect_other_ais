@@ -32,8 +32,8 @@ internal static class FakeCliSteering
         return new Lease(deletes: true);
     }
 
-    /// <summary>What the steering file holds now — for a test that adds one name to it.</summary>
-    public static Dictionary<string, string> ReadBack() =>
+    /// <summary>What the steering file holds now — for a test that adds one name to it by building a NEW dictionary from this one.</summary>
+    public static IReadOnlyDictionary<string, string> ReadBack() =>
         JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(MinimalFile)) ?? [];
 
     /// <summary>
