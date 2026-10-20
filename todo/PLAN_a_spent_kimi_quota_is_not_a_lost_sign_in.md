@@ -317,6 +317,10 @@ every story; **Sonnet** codes.
 - **Done when:** Kimi, Gemini and remote rows render the disabled button with "the consultant check is not offered for <runtime>
   — this row reviews plans and code only"; Codex, Claude, antigravity, local, api and Vibe rows are unchanged; `module_extension.md` names the rule and
   the reviewer-shaped check as a follow-up. No server change.
+- **Status and deviation (2026-10-20, coded on `feat/kimi-quota-s4`, merged into this branch):** the title says "— this row
+  reviews plans and code only" instead of the first draft's "— ▶ runs a review", because ▶ on a card opens the vendor's CLI in
+  a terminal; it does not run a review, so that title would have promised something false. The wording lives in one place
+  (`checkNotOffered`, `src_vs_code/src/modelCardWorld.ts:96-98`); the test pins it for kimi, gemini and remote rows.
 
 ## Review record (2026-10-20)
 
