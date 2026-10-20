@@ -22,7 +22,7 @@
  * that reason. Per-file isolation costs a process start and removes the need for anybody to know
  * which file is the special one.</p>
  */
-import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import fs, { readFileSync, readdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { availableParallelism, hostname, tmpdir } from 'node:os';
 import { randomBytes } from 'node:crypto';
@@ -147,29 +147,58 @@ function ownStartSeconds() {
 /**
  * Makes this invocation's own temp folder inside `realTmp`, with its owner claim beside it, and answers its path. One per call: two
  * runners at once each get theirs, and never the C# run's.
+ *
+ * <p><b>Exclusive:</b> `mkdirSync` without `recursive` throws `EEXIST` on a name that exists, and a run that drew a taken name draws again (up to
+ * `tries` times) — it never shares a folder, and never claims one it did not make. After the last collision it throws, and `beginRun` then runs
+ * without a folder of its own (with a line saying so). `suffix` and `io` are seams for the test that forces a collision.</p>
  */
-export function makeRunTemp(realTmp) {
-  const folder = join(realTmp, RUN_PREFIX + randomBytes(3).toString('hex'));
-  mkdirSync(folder);
+export function makeRunTemp(realTmp, { suffix = () => randomBytes(3).toString('hex'), tries = 5, io = fs } = {}) {
+  const folder = freeFolder(realTmp, suffix, tries, io);
   try {
-    writeFileSync(`${folder}.owner`, claimText({ host: hostname(), platform: process.platform, pid: process.pid, startSeconds: ownStartSeconds() }));
+    io.writeFileSync(`${folder}.owner`, claimText({ host: hostname(), platform: process.platform, pid: process.pid, startSeconds: ownStartSeconds() }));
   } catch (error) {
-    console.log(`run-tests: the owner claim for ${folder} could not be written (${error.message}); a killed run's folder then has only the janitor's age rule`);
+    console.log(`run-tests: the owner claim for ${folder} could not be written (${error.message}); a killed run's folder is then collected only by the family janitor's age rule, after one hour`);
   }
   return folder;
 }
 
-/** Removes the folder and its claim. Idempotent, and it never throws: a leftover is reported and left to the janitor. */
-export function removeRunTemp(folder) {
+/** The first `tries` draws that `mkdirSync` can make; an existing name is skipped, any other failure is the caller's. */
+function freeFolder(realTmp, suffix, tries, io) {
+  for (let attempt = 0; attempt < tries; attempt += 1) {
+    const folder = join(realTmp, RUN_PREFIX + suffix());
+    try {
+      io.mkdirSync(folder);
+      return folder;
+    } catch (error) {
+      if (error.code !== 'EEXIST') {
+        throw error;
+      }
+    }
+  }
+  throw new Error(`no free name for a run folder in ${realTmp} after ${tries} draws (EEXIST each time)`);
+}
+
+/**
+ * Removes the folder, then its claim — the claim ONLY when the folder is gone, so a folder that could not be removed (a file still held) keeps the
+ * claim that says whose it was. Idempotent, and it never throws: a leftover is reported and left to the family janitor.
+ */
+export function removeRunTemp(folder, io = fs) {
   if (folder === '') {
     return;
   }
-  for (const target of [folder, `${folder}.owner`]) {
-    try {
-      rmSync(target, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
-    } catch (error) {
-      console.log(`run-tests: ${target} could not be removed (${error.message}); the family janitor takes it later`);
-    }
+  if (removed(folder, io)) {
+    removed(`${folder}.owner`, io);
+  }
+}
+
+/** One removal; answers whether it went, and says why when it did not. */
+function removed(target, io) {
+  try {
+    io.rmSync(target, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+    return true;
+  } catch (error) {
+    console.log(`run-tests: ${target} could not be removed (${error.message}); the family janitor takes it later`);
+    return false;
   }
 }
 

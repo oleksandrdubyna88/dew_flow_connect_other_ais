@@ -172,3 +172,84 @@ test('X3 a runner that stops at once (no compiled tests) leaves no folder and no
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+// ---------------------------------------------------------------------------------------------
+// The code gate and judge of epic E2 (2026-10-20): one format, two writers, one future reader — and a folder is only ever the run's own.
+// ---------------------------------------------------------------------------------------------
+const vectors = JSON.parse(fs.readFileSync(path.join(repoRoot, 'shared', 'owner-claim-vectors.json'), 'utf8'));
+
+test('G0/G1 the claim text is exactly what the shared golden vectors say (the C# writer reads the same file)', () => {
+  for (const row of vectors.format) {
+    assert.equal(
+      claimText({ host: row.host, platform: row.os, pid: row.pid, startSeconds: row.start }),
+      row.text,
+      `the vector for ${row.os} host ${JSON.stringify(row.host)}`,
+    );
+  }
+});
+
+test('J2 the Linux start is the formula of the shared vectors (the C# side reads the same file)', () => {
+  for (const row of vectors.linuxStart) {
+    assert.equal(linuxStartSeconds(row.stat, row.procStat), row.startSeconds ?? undefined, row.stat);
+  }
+});
+
+test('J1 this machine\'s host in the claim is os.hostname(), the spelling the sweeper compares', () => {
+  const root = privateRoot();
+  try {
+    const folder = makeRunTemp(root);
+    const host = fs.readFileSync(`${folder}.owner`, 'utf8').split('@')[0];
+
+    assert.equal(host, claimText({ host: os.hostname(), platform: 'x', pid: 0 }).split('@')[0]);
+    removeRunTemp(folder);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('G2/J4 a name that already exists is never shared: a new suffix is drawn, and the existing folder is left alone', () => {
+  const root = privateRoot();
+  try {
+    const taken = path.join(root, `${prefix}aaaaaa`);
+    fs.mkdirSync(taken);
+    const draws = ['aaaaaa', 'aaaaaa', 'bbbbbb'];
+
+    const folder = makeRunTemp(root, { suffix: () => draws.shift() });
+
+    assert.equal(path.basename(folder), `${prefix}bbbbbb`, 'the colliding draws were skipped');
+    assert.ok(fs.existsSync(`${folder}.owner`), 'the new folder is claimed');
+    assert.equal(fs.existsSync(`${taken}.owner`), false, 'the folder that was already there is not claimed by this run');
+    assert.deepEqual(draws, [], 'all three draws were used');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('G2/J4 when every draw collides the runner gives up with an error, and shares nothing', () => {
+  const root = privateRoot();
+  try {
+    fs.mkdirSync(path.join(root, `${prefix}aaaaaa`));
+
+    assert.throws(() => makeRunTemp(root, { suffix: () => 'aaaaaa', tries: 3 }), /free name|EEXIST/u);
+    assert.equal(fs.existsSync(path.join(root, `${prefix}aaaaaa.owner`)), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('J3 a claim is removed only when its folder is gone: a folder that could not be removed keeps its claim', () => {
+  const root = privateRoot();
+  try {
+    const folder = makeRunTemp(root);
+    const failing = { ...fs, rmSync: (target, options) => { if (target === folder) { throw new Error('held by a scanner'); } return fs.rmSync(target, options); } };
+
+    assert.doesNotThrow(() => removeRunTemp(folder, failing));
+
+    assert.ok(fs.existsSync(folder), 'the folder is still there');
+    assert.ok(fs.existsSync(`${folder}.owner`), 'so its claim stays: a claimless folder could only ever be collected by age');
+    removeRunTemp(folder);
+    assert.equal(fs.existsSync(`${folder}.owner`), false, 'once the folder goes, the claim goes');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
