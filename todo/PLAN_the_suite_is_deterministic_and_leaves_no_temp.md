@@ -1301,6 +1301,24 @@ folded; where the code said otherwise, it is written here instead of in the plan
   confirmed only for a request that ends its own child). Folded into D4: remove only an EMPTY folder, non-recursive; a
   non-empty one is left to the six-hour sweep; S7 gains a grandchild arm.
 
+### The risk consult for epic 2 (299c4b94, 2026-10-20) — 4 findings, verified, binding on E2
+- **E2 is built on `RunTempFixture`, a dedicated fixture with NO test methods** — E1's text above ("its assembly-start step lives
+  in `TempDirsAreSwept` that E2 extends") is superseded for E2. The module initializer ALSO registers an idempotent cleanup at
+  normal process exit, so a run that never builds the fixture — `--list-tests`, `--help`, a filter that matches nothing — leaves
+  no run folder and no `.owner` file. Those three runs are scenarios of E2, each asserting both are gone.
+- **The two-field owner claim on Windows and macOS (no start time) can make a dead run look alive after its pid is reused.**
+  That is a LEAK, never a deletion; a claim whose identity cannot be established keeps its folder. The family janitor's
+  one-hour age rule is safe only while no run is in flight. Both limits are stated in D2 and in `module_tests.md`; a
+  deterministic test feeds the sweeper a live pid with an older recorded start and expects the folder kept.
+- **Initializer ordering: no early `GetTempPath()` capture was found**; S5 proves it twice — a static field captured in the test
+  assembly, and the temp path a real confined child is given.
+- **The extension gets its OWN per-invocation folder**, shared by its `node --test` descendants and never the C# run's; proven
+  with a child and a grandchild, cleanup on success and on failure, and two runners at once (removing one leaves the other's
+  folder). Interoperability with E5's real Node sweeper is a deferred integration proof until E5's helper exists.
+- **Case C24 (added 2026-10-20, from another session's PR #876):** `SupervisedTeardownLinuxTests.AGrandchildBornAfterTheFirstListing_IsFoundByTheReListing`
+  failed once on Linux with the late grandchild's `/proc` state still `R` (expected gone). Timing, belongs to E5; root cause to
+  be read from its log before a fix.
+
 ### One finding of our own, from reading the C22 log
 
 The report that reached this plan said the real-editor job "failed although the scenario passed" (`1/1 scenarios
