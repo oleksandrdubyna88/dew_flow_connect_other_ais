@@ -115,7 +115,8 @@ test('${outcome}', () => {
 
 /** The runner as a CHILD of this test: `NODE_TEST_CONTEXT` is dropped, or its own `node --test` would see itself as nested and skip every file. */
 function runTheRunner(cwd, machinesTemp, seen) {
-  const { NODE_TEST_CONTEXT: _nested, ...env } = process.env;
+  const env = { ...process.env };
+      delete env.NODE_TEST_CONTEXT;
   return spawnSync(process.execPath, [path.join(scripts, 'run-tests.mjs')], {
     cwd,
     encoding: 'utf8',

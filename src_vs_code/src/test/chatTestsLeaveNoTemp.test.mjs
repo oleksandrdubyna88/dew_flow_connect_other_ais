@@ -29,7 +29,8 @@ for (const name of files) {
     assert.ok(fs.existsSync(file), `${file} is not compiled — run the compile step first`);
     const privateTemp = fs.mkdtempSync(path.join(os.tmpdir(), 'testsToDelete-chatleak-'));
     try {
-      const { NODE_TEST_CONTEXT: _nested, ...env } = process.env;
+      const env = { ...process.env };
+      delete env.NODE_TEST_CONTEXT;
       const result = spawnSync(process.execPath, ['--test', file], {
         encoding: 'utf8',
         env: { ...env, TEMP: privateTemp, TMP: privateTemp, TMPDIR: privateTemp },
