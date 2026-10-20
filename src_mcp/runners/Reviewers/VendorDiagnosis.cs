@@ -1,3 +1,4 @@
+using CoaiMcp.Runners.Acp;
 using CoaiMcp.Runners.Kimi;
 using CoaiMcp.Runners.Platform;
 
@@ -63,6 +64,10 @@ public static class VendorDiagnosis
         ("balance_spent:",
             "the Kimi allowance is spent (D14) — waiting does not clear it; top up or wait for the plan's reset.",
             DiagnosisKind.Refused),
+        // The 5-hour plan quota (the owner's kimi 2.2.0, 2026-10-19): Kimi wraps it in the sign-in's own prefix, so the shim's name is the only thing that says
+        // it is not a lost sign-in. The sentence is KimiQuotaWords' — one string in the shim's cure, here and in the reviewer's reason. `Refused` as the row above
+        // is: there is no Spent kind here, and the rate-limit path reads the report's field, not this table.
+        (KimiAcpProfile.QuotaSpent + ":", KimiQuotaWords.Fixed, DiagnosisKind.Refused),
         ("model_not_offered",
             "the Kimi session does not offer this model — pick one the plan has (the shim's message lists what the session offered).",
             DiagnosisKind.Refused),

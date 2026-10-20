@@ -169,6 +169,33 @@ public sealed class AskAcpModeTests
     }
 
     [Fact]
+    public async Task AQuotaBehindTheSignInPrefix_Exits75_NamedKimiQuotaSpent()
+    {
+        using var agent = new FakeAcpAgent([FakeAcpAgent.Chunk("x")],
+            ""","promptError":"Authentication required: 429 You've reached your 5-hour usage limit. Your quota will reset …" """);
+
+        var code = await RunAsync(agent, failures: new KimiAcpProfile().KnownFailures);
+
+        code.Should().Be(75, Stderr);
+        Report().GetProperty("failure").GetString().Should().Be("kimi_quota_spent");
+        Stderr.Should().Contain("quota is used up").And.NotContain("kimi login", "signing in again does not clear a spent quota");
+    }
+
+    [Fact]
+    public async Task AProviderErrorBehindTheSignInPrefix_Exits70_InTheVendorsWords_WithNoCure()
+    {
+        using var agent = new FakeAcpAgent([FakeAcpAgent.Chunk("x")],
+            ""","promptError":"Authentication required: 503 Service Unavailable" """);
+
+        var code = await RunAsync(agent, failures: new KimiAcpProfile().KnownFailures);
+
+        code.Should().Be(70, Stderr);
+        Report().GetProperty("failure").GetString().Should().Be("provider_error");
+        Stderr.Should().Contain("provider_error: ").And.Contain("503 Service Unavailable").And.NotContain("kimi login");
+        Stderr.Should().NotContain(" — ", "no cure follows the name: a known shape with nothing to do about it");
+    }
+
+    [Fact]
     public async Task TheAgentsOwnError_Exits70_WithItsWords()
     {
         using var agent = new FakeAcpAgent([FakeAcpAgent.Chunk("x")], ""","promptError":"model exploded" """);

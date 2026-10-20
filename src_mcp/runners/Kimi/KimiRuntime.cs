@@ -262,12 +262,17 @@ public sealed class KimiRuntime(string id, KimiHost host, KimiSeams seams, Seril
         var text = report.Label.Length > 0 ? $"{report.Label}: {report.Reason}" : report.Reason;
 
         // The cure FIRST: the summary cuts a line at 160 characters, and the shim's reason (a list of offered models) can be longer than that.
-        return VendorDiagnosis.For(text) is { } cure ? $"{cure} (the shim said: {text})" : text;
+        return VendorDiagnosis.For(text) is { } cure ? $"{Cured(report, cure)} (the shim said: {text})" : text;
     }
 
+    /// <summary>The cure to lead with: a spent plan quota quotes Kimi's own reset clause (<see cref="KimiQuotaWords.Said"/>); every other cure stands as the table wrote it.</summary>
+    private static string Cured(KimiReport report, string cure) =>
+        report.Failure == KimiAcpProfile.QuotaSpent ? KimiQuotaWords.Said(report.Reason) : cure;
+
     /// <summary>
-    /// Rate limited ONLY when the shim exited with its spent-allowance code AND its report names <c>balance_spent</c> (D14) — the reason carries
-    /// <c>insufficient balance</c> so the ladder stops, and the verdict carries the report's usage. Every other exit is an ordinary failure, whatever
+    /// Rate limited ONLY when the shim exited with its spent-allowance code AND its report names one of the table's Spent rows
+    /// (<see cref="KimiAcpProfile.SpentNames"/> — <c>balance_spent</c> (D14) or the plan quota <c>kimi_quota_spent</c>) — the reason is the shim's one sentence
+    /// (<see cref="Said(KimiReport)"/>) so the ladder stops, and the verdict carries the report's usage. Every other exit is an ordinary failure, whatever
     /// text its trace holds.
     /// </summary>
     public RateLimitVerdict RateLimited(ReviewerInvocation invocation, ProcessResult result)
@@ -275,7 +280,7 @@ public sealed class KimiRuntime(string id, KimiHost host, KimiSeams seams, Seril
         var report = KimiReport.Parse(result.StdOut);
         Said(invocation, result, report);
 
-        return result.ExitCode == AcpWords.SpentExit && report.Failure == KimiAcpProfile.BalanceSpent
+        return result.ExitCode == AcpWords.SpentExit && KimiAcpProfile.SpentNames.Contains(report.Failure)
             ? RateLimitVerdict.Because(SpentReason(report), report.Usage)
             : RateLimitVerdict.No;
     }
@@ -301,10 +306,11 @@ public sealed class KimiRuntime(string id, KimiHost host, KimiSeams seams, Seril
             report.Usage.NotCaptured ? "not captured" : "captured");
     }
 
+    /// <summary>The shim's one sentence, built once; when the vendor's words alone would not stop the ladder, the matched row's own phrase from the table is added.</summary>
     private static string SpentReason(KimiReport report)
     {
-        var text = $"{report.Failure}: {report.Reason}";
+        var said = Said(report);
 
-        return RateLimit.Hopeless(text) ? text : $"{text} (insufficient balance)";
+        return RateLimit.Hopeless(said) ? said : $"{said} ({KimiAcpProfile.SpentPhraseOf(report.Failure)})";
     }
 }

@@ -301,7 +301,7 @@ internal static class AskAcpMode
 
         if (Diagnosed(outcome.End, diagnosis))
         {
-            note($"{diagnosis.Name}: {outcome.Reason} — {diagnosis.Cure}");
+            note(DiagnosedNote(outcome, diagnosis));
 
             return DiagnosedExit(diagnosis.Kind);
         }
@@ -315,8 +315,17 @@ internal static class AskAcpMode
     private static bool Diagnosed(AcpEnd end, AcpDiagnosis diagnosis) =>
         diagnosis.Known && end is not (AcpEnd.Deadline or AcpEnd.Cancelled or AcpEnd.ModelNotOffered);
 
-    /// <summary>A known failure's exit: a spent allowance, or a refusal.</summary>
-    private static int DiagnosedExit(AcpFailureKind kind) => kind == AcpFailureKind.Spent ? Spent : Refused;
+    /// <summary>A known failure's sentence: its name, the agent's reason, and the cure — when there is one (a known shape with no cure ends at the reason).</summary>
+    private static string DiagnosedNote(AcpOutcome outcome, AcpDiagnosis diagnosis) =>
+        diagnosis.Cure.Length > 0 ? $"{diagnosis.Name}: {outcome.Reason} — {diagnosis.Cure}" : $"{diagnosis.Name}: {outcome.Reason}";
+
+    /// <summary>A known failure's exit: a spent allowance, the agent's own failure in a known shape, or a refusal.</summary>
+    private static int DiagnosedExit(AcpFailureKind kind) => kind switch
+    {
+        AcpFailureKind.Spent => Spent,
+        AcpFailureKind.Failed => Failed,
+        _ => Refused,
+    };
 
     /// <summary>An undiagnosed end's exit: the agent's own failure, a broken stream, or ended before an answer.</summary>
     private static int EndExit(AcpEnd end) => end switch

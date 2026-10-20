@@ -67,6 +67,9 @@ public enum AcpFailureKind
 
     /// <summary>An allowance ran out — a billing or quota refusal; waiting does not clear it.</summary>
     Spent,
+
+    /// <summary>The agent failed in its own words — a known shape with no cure; the agent's own exit (70).</summary>
+    Failed,
 }
 
 /// <summary>One sentence a vendor writes, the name coai records it under, and what a person does about it.</summary>
