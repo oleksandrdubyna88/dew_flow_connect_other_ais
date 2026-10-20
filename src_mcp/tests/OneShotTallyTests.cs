@@ -6,7 +6,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// What a one-shot place says while it works (E1 of <c>todo/PLAN_vibe_reads_a_folder_of_repositories.md</c>, code gate finding 5 and 13):
+/// What a one-shot place says while it works (E1 of <c>research/PLAN_vibe_reads_a_folder_of_repositories.md</c>, code gate finding 5 and 13):
 /// every note goes through ONE road, <see cref="OneShotTally.Say"/>, and a note names folders on the person's disk — so it is redacted
 /// there, once, for the log's sink and for the place's own list alike.
 /// </summary>
