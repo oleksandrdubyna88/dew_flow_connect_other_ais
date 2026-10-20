@@ -11,7 +11,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// What a Vibe disk row's place skipped reaches the row's <c>note</c> on EVERY way the row can end (E1.3 of
-/// <c>todo/PLAN_vibe_reads_a_folder_of_repositories.md</c> wrote it for the answered and the refused arm; the review of
+/// <c>research/PLAN_vibe_reads_a_folder_of_repositories.md</c> wrote it for the answered and the refused arm; the review of
 /// 2026-10-18 found the timed-out and the failed arm still dropped it, and a follow-up turn replacing the seed).
 /// </summary>
 /// <remarks>The Vibe CLI is played in process (<see cref="PlayedVibe"/>); git is real.</remarks>

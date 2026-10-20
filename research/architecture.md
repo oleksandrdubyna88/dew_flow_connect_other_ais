@@ -1297,7 +1297,7 @@ hands the row its own snapshot comparison as the tree check `ConsultantTurn` ask
 conditions changes all three ([module_runners.md](module_runners.md), [module_server.md](module_server.md)). Nothing
 reaches the extension: the record, the reply and the ledger keep their shapes; a turn cut short is written `interrupted`.
 
-### A Vibe disk row reads a PARENT folder of repositories (2026-10-19, `todo/PLAN_vibe_reads_a_folder_of_repositories.md`)
+### A Vibe disk row reads a PARENT folder of repositories (2026-10-19, `research/PLAN_vibe_reads_a_folder_of_repositories.md`)
 
 Inside `coai-mcp`, across modules, not across a container: the Server's consultation flow — `QuestionRowLaunch` asks `ConsultantPlaces.OneShotAsync` for a
 row's place — now EXPANDS a granted root that git does not call a work tree into the repositories beneath it (`ParentExpansion`, with `RepositoryWalk`

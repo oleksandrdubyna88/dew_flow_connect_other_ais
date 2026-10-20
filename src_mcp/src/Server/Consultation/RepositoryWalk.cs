@@ -23,7 +23,7 @@ public abstract record WalkOutcome(IReadOnlyList<string> Notes)
 
 /// <summary>
 /// Finds the folders holding a <c>.git</c> beneath a granted root that is not itself a work tree (E1.1 of
-/// <c>todo/PLAN_vibe_reads_a_folder_of_repositories.md</c>; D2, D3's folder bound, D7). Pure: it reads through two seams and never
+/// <c>research/PLAN_vibe_reads_a_folder_of_repositories.md</c>; D2, D3's folder bound, D7). Pure: it reads through two seams and never
 /// asks git — whether a candidate really is a work tree is the copy's question (D4's discovery side).
 /// </summary>
 /// <remarks>
