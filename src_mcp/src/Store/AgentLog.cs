@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using CoaiMcp.Core.Authors;
 
 namespace CoaiMcp.Store;
 
@@ -221,20 +222,7 @@ public static class AgentLog
     /// repository, and the first version answered no and fell back to every project on the machine.
     /// The separator is part of the test, so <c>/repo-two</c> is not inside <c>/repo</c>.
     /// </remarks>
-    private static bool InRepo(string cwd, string repoPath)
-    {
-        if (cwd.Length == 0 || repoPath.Length == 0)
-        {
-            return false;
-        }
-
-        var (where, repo) = (Normalise(cwd), Normalise(repoPath));
-
-        return where.Equals(repo, StringComparison.OrdinalIgnoreCase)
-            || where.StartsWith(repo + "/", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static string Normalise(string path) => path.Replace('\\', '/').TrimEnd('/');
+    private static bool InRepo(string cwd, string repoPath) => Repositories.Contains(repoPath, cwd);
 
     /// <summary>The slice as JSON, capped, saying what it had to leave out.</summary>
     private static string Render(IReadOnlyList<Entry> entries)
