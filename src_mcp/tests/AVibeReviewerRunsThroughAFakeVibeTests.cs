@@ -231,6 +231,8 @@ public sealed class AVibeReviewerRunsThroughAFakeVibeTests : IAsyncLifetime
     [InlineData(VibeFlowHost.Wsl2)]
     public async Task APlanRoundOnAnUnmeasuredVibe_RunsTheReviewer_AndItsStateCarriesTheWarning(string mode)
     {
+        // Not about the home budget: the run folder adds 29 characters to every temp path, and this home sat 6 under the limit on a short profile name.
+        using var noBudget = VibePathBudget.Using(VibePathBudget.None);
         using var flow = VibeFlowHost.Enter(mode, _dir.At("flow"));
         var (repo, data) = await RepositoryAsync();
         Steer(Clean, version: "2.27.0");
