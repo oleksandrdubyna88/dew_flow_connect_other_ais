@@ -29,8 +29,14 @@ public static class RoundAuthorsText
 
         lines.AddRange(ExclusionsTable(answer.Exclusions));
 
-        return string.Join('\n', lines) + "\n";
+        return Joined(lines);
     }
+
+    /// <summary>
+    /// THE one place the lines of the table become text: every line goes through <see cref="Printable"/> here, so a header sentence, a source line or a
+    /// line a later edit adds cannot reach the terminal with a control character, whatever word of an <c>--add</c> file it carries. The line breaks are ours.
+    /// </summary>
+    private static string Joined(IEnumerable<string> lines) => string.Join('\n', lines.Select(Printable)) + "\n";
 
     private static string SourceLine(RoundAuthorsSource source) =>
         Printable($"source {source.SourceId[..8]} ({source.Platform}) read {source.ReadUtc}: {source.Sessions.Count} gate session(s)");

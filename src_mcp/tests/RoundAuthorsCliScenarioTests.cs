@@ -180,6 +180,38 @@ public sealed class RoundAuthorsCliScenarioTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// A cell key's cohort and period, and an exclusion's, are words this program writes — <c>first</c> or <c>corrective</c>, <c>all</c>,
+    /// <c>before</c> or <c>after</c>. A file that carries any other word (an escape sequence among them) is refused at <c>--add</c> with 65 and the
+    /// argument as typed, before any table is printed — defense in depth beside the table printing nothing but printable text.
+    /// </summary>
+    [Fact]
+    public void AnAddWithACohortOrPeriodWordThisProgramNeverWrites_Is65_NamingTheArgumentAsTyped()
+    {
+        var (a, b) = (Store("a"), Store("b"));
+        Sessions(a, true, "x1");
+        Sessions(b, true, "y1");
+        var report = Answer(Run(b, [.. Window()]).Out);
+        var crafted = new Dictionary<string, RoundAuthorsAnswer>
+        {
+            ["cell-cohort.json"] = report with { Cells = [.. report.Cells.Select(cell => cell with { Key = cell.Key with { Cohort = "first\u001b]8;;http://x\u0007" } })] },
+            ["cell-period.json"] = report with { Cells = [.. report.Cells.Select(cell => cell with { Key = cell.Key with { Period = "during" } })] },
+            ["exclusion-cohort.json"] = report with { Exclusions = [.. report.Exclusions.Select(count => count with { Cohort = "first\u001b[2J" })] },
+        };
+
+        foreach (var (name, answer) in crafted)
+        {
+            var path = _root.At(name);
+            File.WriteAllText(path, RoundAuthorsMerge.Serialize(answer));
+
+            var run = Run(a, [.. Window(), "--add", path, "--table"]);
+
+            run.Code.Should().Be(65, $"--add '{path}' carries a word this program never writes; stderr was: {run.Err}");
+            run.Out.Should().BeEmpty();
+            run.Err.Should().Contain($"--add '{path}'", "the argument as typed").And.NotContain("\u001b", "the refusal does not echo the word");
+        }
+    }
+
     [Fact]
     public void AStoreThatWillNotRead_Is74()
     {

@@ -113,14 +113,38 @@ public static class RoundAuthorsMerge
 
     /// <summary>
     /// The shapes this program writes and the table and a merge rely on, which the JSON types alone cannot say: an opaque source id of 32
-    /// lower-case hex digits, and every branch and requested-to-answered name two words joined by ONE newline. A file that breaks one is refused
-    /// (65), never rendered into a crash. Empty when the answer is well shaped.
+    /// lower-case hex digits, every branch and requested-to-answered name two words joined by ONE newline, and a cohort and period that are words
+    /// this program writes (an <c>--add</c> file is attacker-controllable text). A file that breaks one is refused (65), never rendered into a crash
+    /// or onto a terminal. Empty when the answer is well shaped; the sentence never echoes the offending word.
     /// </summary>
     internal static string Misshapen(RoundAuthorsAnswer answer) =>
-        answer.Sources.Any(source => !IsSourceId(source.SourceId)) ? "a source id is not 32 lower-case hex digits"
-        : answer.Cells.SelectMany(cell => cell.Branches.Concat(cell.Requested)).Any(pair => pair.Name.Count(at => at == '\n') != 1)
+        ShapeChecks.Select(check => check(answer)).FirstOrDefault(why => why.Length > 0) ?? string.Empty;
+
+    private const string CohortOrPeriodFault = "a cohort or period is not one of the words this report writes";
+
+    private static readonly Func<RoundAuthorsAnswer, string>[] ShapeChecks = [SourceIdFault, NameFault, CellWordFault, ExclusionWordFault];
+
+    private static readonly string[] CountedCohorts = [Cohort.First, Cohort.Corrective];
+
+    private static readonly string[] ExcludedCohorts = [Cohort.First, Cohort.Corrective, ExclusionWords.NoCohort];
+
+    private static readonly string[] PeriodWords = [Period.All, Period.Before, Period.After];
+
+    private static string SourceIdFault(RoundAuthorsAnswer answer) =>
+        answer.Sources.Any(source => !IsSourceId(source.SourceId)) ? "a source id is not 32 lower-case hex digits" : string.Empty;
+
+    private static string NameFault(RoundAuthorsAnswer answer) =>
+        answer.Cells.SelectMany(cell => cell.Branches.Concat(cell.Requested)).Any(pair => pair.Name.Count(at => at == '\n') != 1)
             ? "a branch or requested-to-answered name is not two words joined by one newline"
-        : string.Empty;
+            : string.Empty;
+
+    private static string CellWordFault(RoundAuthorsAnswer answer) =>
+        answer.Cells.Any(cell => !IsWord(CountedCohorts, cell.Key.Cohort) || !IsWord(PeriodWords, cell.Key.Period)) ? CohortOrPeriodFault : string.Empty;
+
+    private static string ExclusionWordFault(RoundAuthorsAnswer answer) =>
+        answer.Exclusions.Any(count => !IsWord(ExcludedCohorts, count.Cohort) || !IsWord(PeriodWords, count.Period)) ? CohortOrPeriodFault : string.Empty;
+
+    private static bool IsWord(string[] words, string word) => words.Contains(word, StringComparer.Ordinal);
 
     private static bool IsSourceId(string id) => id.Length == 32 && id.All(char.IsAsciiHexDigitLower);
 

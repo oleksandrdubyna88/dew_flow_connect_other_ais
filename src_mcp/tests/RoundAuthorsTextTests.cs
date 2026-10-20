@@ -2,6 +2,7 @@ using CoaiMcp.Store;
 using FluentAssertions;
 using Xunit;
 using static CoaiMcp.Tests.RoundAuthorsFacts;
+using static CoaiMcp.Tests.RoundAuthorsSeed;
 
 namespace CoaiMcp.Tests;
 
@@ -12,6 +13,8 @@ namespace CoaiMcp.Tests;
 public sealed class RoundAuthorsTextTests
 {
     private const string Escape = "\u001b[2J\u001b[31m";
+
+    private const string HostileCohort = "first\u001b]8;;http://x\u0007";
 
     [Fact]
     public void AControlCharacterInADisplayedValue_NeverReachesTheTerminal()
@@ -25,5 +28,23 @@ public sealed class RoundAuthorsTextTests
 
         text.Where(at => char.IsControl(at) && at != '\n').Should().BeEmpty("the table prints no control character but its own line breaks");
         text.Should().Contain("feat/", "the branch is still shown, with its control characters made visible");
+    }
+
+    /// <summary>
+    /// The header is printed too: a cohort word comes from the report's own cell keys, and an <c>--add</c> file is attacker-controllable JSON, so
+    /// a crafted key must not reach the terminal as an OSC 8 link or an escape — whichever line prints it.
+    /// </summary>
+    [Fact]
+    public void ACohortWordFromAnAddFile_NeverReachesTheTerminalThroughTheHeader()
+    {
+        var selection = Sel(split: Stamp(T0.AddHours(2.5)));
+        var sums = RoundAuthorsCells.Count(RoundAuthorsPopulation.Of([Round(1)], selection), selection);
+        var crafted = sums.Cells.Select(cell => cell with { Key = cell.Key with { Cohort = HostileCohort } }).ToList();
+        var answer = new RoundAuthorsAnswer(1, selection, [new RoundAuthorsSource(new string('a', 32), "linux", "2026-10-19T00:00:00Z", true, ["s"])], crafted, sums.Exclusions, true);
+
+        var text = RoundAuthorsText.Render(answer);
+
+        text.Where(at => char.IsControl(at) && at != '\n').Should().BeEmpty("every line of the table, header included, prints no control character but its own line breaks");
+        text.Should().Contain("Cohort first?]8;;http://x?", "the header still names the cohort, with its control characters made visible");
     }
 }
