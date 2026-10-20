@@ -621,7 +621,8 @@ The list, and why each name is on it: `PATH` (the CLI is found through it and st
 through it); `LANG`, `LC_ALL`, `LC_CTYPE`, `TERM`, `TZ`, `NO_COLOR` (encoding and colour); `TMPDIR`,
 `TMP`, `TEMP`; the six proxy spellings, `SSL_CERT_FILE`, `SSL_CERT_DIR`, `NODE_EXTRA_CA_CERTS` (a box
 behind a corporate proxy reaches its vendor through them, and a reviewer that cannot reach its vendor
-is a review that never happens); `XDG_RUNTIME_DIR`. On Windows also `SystemRoot`, `SystemDrive`,
+is a review that never happens); `XDG_RUNTIME_DIR`. (`TMPDIR`, `TMP` and `TEMP` are also how a TEST run's per-run temp folder reaches every child: `CoaiMcp.Tests`' module initializer points all three at
+`testsToDelete-coai-run-<6>`, so the answers/repair/no-workspace folders and the loose prompt files a round makes land inside it — `research/module_tests.md`, "epic E2". Do not drop one of the three from either list without reading that section.) On Windows also `SystemRoot`, `SystemDrive`,
 `windir`, `ComSpec`, `PATHEXT` (every vendor CLI is an npm `.cmd` shim there), the profile and program
 directories, `NUMBER_OF_PROCESSORS` and `PROCESSOR_ARCHITECTURE`. Names are compared the way the
 platform compares them — case-insensitive on Windows, where `Path` and `PATH` are one variable, and

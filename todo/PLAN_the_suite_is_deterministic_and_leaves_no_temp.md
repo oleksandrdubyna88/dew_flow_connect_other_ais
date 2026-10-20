@@ -1,7 +1,7 @@
 # PLAN — the suite is deterministic and leaves no temp
 
 > Status: **in progress, 2026-10-20.** E1 (no run sees another) and C2 (E3 S1) are **merged** in #893
-> (`e86fe17f8`, 2026-10-20); **E2 (one temp folder per run) is in progress** on `feat/suite-e2-run-temp`; E3's rest, E4
+> (`e86fe17f8`, 2026-10-20); **E2 (one temp folder per run) is coded** on `feat/suite-e2-run-temp` (its Outcome is below; not merged yet); E3's rest, E4
 > and E5 are open; the §10 CI watch of E1 and C2 is running. Scope: the fake CLI's steering files
 > (`src_mcp/tests_fakecli`), the fixed-name temp paths of the C# and extension tests, the flaky cases found in CI and
 > locally between 2026-09-26 and 2026-10-19 (product code where the cause is in the product), and the `coai-*` folders
@@ -797,8 +797,8 @@ class, the first code of the assembly to run — before any type is touched, inc
 fixtures and static initializers), not the assembly fixture: it records the REAL temp folder in `RunTemp.Real`, makes
 `testsToDelete-coai-run-<6 chars>` inside it, and points `TEMP`, `TMP` and `TMPDIR` of the test process at the new one.
 The existing `[assembly: AssemblyFixture]` (`TempDirsAreSwept.cs:5`) then only sweeps the REAL folder (through
-`RunTemp.Real`, as today), and at the end restores the three variables and removes the run folder — the fixture
-removes and restores, it never sets. `src_vs_code/scripts/run-tests.mjs` does the same for the `node --test` children
+`RunTemp.Real`, as today); the end — restoring the three variables, removing the run folder and its claim — belongs to the dedicated
+`RunTempFixture` and the process-exit handler, which restore and remove and never set. `src_vs_code/scripts/run-tests.mjs` does the same for the `node --test` children
 it starts (the variables are set in the parent before the first child, once). `Path.GetTempPath()` and `os.tmpdir()`
 read those variables on every call, and every child inherits them — the suite already relies on this in
 `AVibeHomesNeverLiveUnderTempTests.cs:15-60`, the ONE class that moves `TEMP` during a run; it is in `fakecli-env`
@@ -1160,8 +1160,9 @@ run makes sits in ONE folder the run removes, so no other run's sweep (C12) and 
 
 **Scope.** D2: a `[ModuleInitializer]` in the C# test assembly (`RunTemp`) records the real temp folder in
 `RunTemp.Real`, makes `testsToDelete-coai-run-<6>` and points `TEMP`/`TMP`/`TMPDIR` of the test process at it, ONCE,
-before any type is touched; the existing assembly fixture (`TempDirsAreSwept.cs:5`) only sweeps the real folder,
-restores the three variables and removes the run folder at the end — it never sets; the folder carries E5's owner claim
+before any type is touched; `TempDirsAreSwept` (also an assembly fixture) only sweeps the real folder (`RunTemp.Real`);
+the DEDICATED `RunTempFixture` (no test methods) and a process-exit handler, both calling one idempotent `RunTemp.EndOfRun`, restore the
+three variables and remove the run folder and its claim at the end — neither ever sets, and `TempDirsAreSwept` neither restores nor removes; the folder carries E5's owner claim
 (`<folder>.owner`, `<host>@<os>:<pid>[:<start>]`, §7's one-writer rule). `src_vs_code/scripts/run-tests.mjs` does the
 same for its `node --test` children and removes the folder BEFORE `process.exit`. The two "never under TEMP" guards
 (`AntigravityReadOnlyTests.cs:118`, `KimiCredentialsLockTests.cs:237`) compare against `RunTemp.Real`; the S5b scan
@@ -1188,6 +1189,24 @@ skipped and the count grown by exactly E2's new scenarios (§10); `shared/temp-s
 helper, §7), S5, S5b and the proofs (the cornerstone, Fable spec; first). S2 the extension runner and its exit-path
 proof (parallel with S1; the same spec covers it). S3 D6's seven sites (parallel). S4 the S6 measurement before and
 after, recorded in `research/module_tests.md` (a scout gathers, the caller records).
+
+**Outcome (2026-10-20, branch `feat/suite-e2-run-temp`; the tests, their reds, the break-its and the S6 numbers are in `research/module_tests.md`, section "The suite is deterministic — epic E2").**
+Built in seven commits, each red first: (1) D2 in C# — `RunTemp` module initializer, `RunTempFolder`, `RunTempFixture`, `OwnerClaim`, S5a–S5i, S5b-scan; (2) D6's six C# sites;
+(3) the extension runner and X1–X3; (4) D6's four extension files; (5) two Vibe test classes that the 29 extra characters pushed over the home budget; (6) the owner-claim judge's
+host/OS/refused-lookup rules (the lead's extra input of 2026-10-20); (7) docs. Break-its (a)–(g) of the spec were all done and restored. S6: a whole `CoaiMcp.Tests.exe` and a
+whole `npm test` on a private stand-in for the machine's temp folder leave nothing of their own (the extension leaves only node's own `node-compile-cache`); `--list-tests`, `--help`
+and an empty filter leave no run folder and no `.owner`. Deviations, each decided on what the code showed:
+- **`RunTempFolder.Create` takes one `RunTempSeams` record**, not `(realRoot, setVariable, getVariable)`: it also needs the register-restore, claim-writer, deleter and warning seams for S5f and for the failed-delete test.
+- **`OwnerClaim` also holds `Format`, `ForThisProcess`, `Judge` and `ProcessIsAlive`**, and is `public`. `Judge` and `ProcessIsAlive` are the lead's extra rules (same host and OS only; `ArgumentException`/`InvalidOperationException` dead, `Win32Exception` alive), verified against the benchmark's and the RAG repository's own liveness code. `Verdict`'s `liveStartUnixSeconds` cannot change the verdict today; it stays in the signature for E5's call shape.
+- **`<os>` is Node's spelling** (`win32`/`linux`/`darwin`) and `OwnerClaim.Verdict` stays in the test tree until E5 S3 adopts both (the lead's decisions).
+- **`EveryClassThatSetsTheProcessEnvironmentTests` was extended**, not only reused: the initializer is a static class that sets `TEMP`/`TMP`/`TMPDIR`, which the rule 1 static arm named at once (`found at least one item {"RunTemp.cs: RunTemp"}`). `TestSourceIndex.StaticOffenders` gained a set overload; `RunTemp` is the one other allowed writer; a synthetic case keeps any other static helper an offender.
+- **D6 found more sites than the plan named:** besides `coai-plan-said-` and `coai-check-model-`, four more `PanelServiceTests` folders (`coai-record-`, `coai-cwd-`, `coai-deal-`, `coai-deal-plan-`) were never removed. All six use `TempDir.For` now; `TheLeakingTestSitesRemoveWhatTheyMadeTests` runs each. The extension's four files are proven by `chatTestsLeaveNoTemp.test.mjs` (a child per file on a private temp).
+- **The path budget cost two more fixes than the spec foresaw:** 17 `VibeLaunchControlTests` failed at once (that class now builds its runtime with `VibePathBudget.None`), and a run with a 16-character-longer temp showed four more — `VibePathBudgetTests` rooted its fixed-length homes at the temp folder (now at the drive root) and the unmeasured-Vibe plan round of `AVibeReviewerRunsThroughAFakeVibeTests` sat 6 characters under the limit (now `VibePathBudget.Using(None)`). Kimi's classes needed nothing. Nothing was shortened.
+- **X3 only has teeth because the runner makes its folder BEFORE the "no compiled tests" exit** (the spec's `main()` shape); the early exit is then a `return 1` inside the `try/finally`, not a `process.exit`.
+- **The X2/X3 driver drops `NODE_TEST_CONTEXT`** from the runner's environment, or the runner's own `node --test` treats itself as nested and skips every file.
+- **The S6 proof uses a private stand-in for the machine's temp**, because other sessions' suites write the real folder at the same time and a before/after count of it cannot be attributed (it is also recorded: 1,000 new `coai-*` from them in 18 minutes, none of the run's kind).
+- **Two tests failed once each in a full run and pass alone** (listed, not called flakes, in `module_tests.md`): `AStreamsUsageIsNeverZeroTests.A_stream_over_the_answer_cap_is_unknown` and `AReviewerThatAsksForSourceIsAskedAgainTests.AConversationThatOutlivesItsCap_…` — the second is C13's family (E5).
+**Open tail:** E5's Node sweeper must use the same claim rules (same host and OS; only `ESRCH` dead, `EPERM` alive) and keep an age backstop in days; the pid-reuse leak on Windows/macOS and the janitor's one-hour rule are stated limits; the Windows CI leg shows first whether any other Vibe home under temp is now near its limit; `CoaiServer.Tests` and `run-host.mjs` are untouched.
 
 ### E3 — Product defects the tests found
 
