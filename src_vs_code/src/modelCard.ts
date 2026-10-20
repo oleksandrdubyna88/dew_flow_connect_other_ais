@@ -146,7 +146,7 @@ function actions(vendor: Vendor, id: string, facts: ModelCardFacts, locked: stri
     body: removeBody(vendor, facts.references), ...(locked.length > 0 ? { refused: locked, describedBy: lockLineId(vendor) } : {}),
   });
 
-  return `<div class="actions">${checkButton(id, facts.check)}<button type="button" class="link" data-command="duplicateModel" data-id="${id}" title="Add a copy with its own id">⧉ Duplicate</button>${remove}</div>`;
+  return `<div class="actions">${checkButton(id, vendor.runtime, facts.check)}<button type="button" class="link" data-command="duplicateModel" data-id="${id}" title="Add a copy with its own id">⧉ Duplicate</button>${remove}</div>`;
 }
 
 /** What this side's coai-mcp ignores on a row, asked through the one `skew` road — by capability (E3's plan round). */

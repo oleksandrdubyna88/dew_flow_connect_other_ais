@@ -11758,6 +11758,18 @@ flowchart LR
   `failureWhat` when the record has no reason (a reason still wins) — e.g. "…did not answer: exit 70: the answer
   from the local engine at … was cut at the token limit (max_tokens 8192)" (`modelCheck.test.ts`, over the real
   record parser; research/PLAN_local_effort_reaches_every_local_launch.md, S1.3).
+- **✓ Check is a CONSULTANT check, so it is offered only where a consultation can run (2026-10-20, D7 / S8 of
+  `todo/PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md`).** `modelCardWorld.offersCheck(runtime)` asks the generated
+  `CONSULTING` list (`shared/feature-availability.json` → `features.consultant`; today codex, claude, antigravity, local,
+  api, vibe). For any other row — today **kimi, gemini and remote** — `checkButton(id, runtime, check)` draws the button
+  `disabled`, WITHOUT `data-command` / `data-id` (nothing is bound, nothing is posted, no paid-turn prompt), with the title
+  `checkNotOffered(runtime)` = "the consultant check is not offered for <runtime> — this row reviews plans and code only".
+  The wording lives in that one function. The button stays on the card; a runtime added to `features.consultant` turns
+  its Check on with no code change. Why: the press used to ask the person to pay for a turn the server then refused by
+  name (`ConsultantCheckMode.CheckRowAsync`), seen on the Kimi card 2026-10-19; that server refusal stays as the backstop
+  for a stale page, and `ConsultantHealthPanel.checkModel` and its paid-turn prompt are unchanged. A reviewer-shaped
+  check of a Kimi/Gemini/remote row (through `KimiRuntime`/`KimiLaunch`, the cross-process gate at `KimiLaunch.cs:134`, a
+  short deadline, asked first) is a named FOLLOW-UP, not built. Tests: `theCheckButtonIsNotOfferedOnAReviewerOnlyRow.test.ts`.
 - coai-mcp's verdict ("coai-mcp will run it", or the current card's "cannot review"), kept apart from the check.
 - The CLI: its version and a newer one (`cliStatusNote`), and the current card's ▶ ⤓ ⟳ / ⟳ ⇄ / ≡ (`headButtons`,
   `endpointButton` — the same commands, by name).
