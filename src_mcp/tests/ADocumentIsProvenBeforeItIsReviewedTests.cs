@@ -22,14 +22,24 @@ public sealed class ADocumentIsProvenBeforeItIsReviewedTests : IDisposable
 {
     private readonly string _repo = Directory.CreateTempSubdirectory("coai-doc-repo-").FullName;
 
+    /// <summary>
+    /// Somewhere that is not the repository, and is this test's own: the documents the refusals point at live here, never at a fixed name in the machine's
+    /// shared temp folder, where a second run (or a person) using the same name changes the result (C10 of
+    /// <c>todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md</c>).
+    /// </summary>
+    private readonly string _elsewhere = Directory.CreateTempSubdirectory("testsToDelete-doc-elsewhere-").FullName;
+
     public void Dispose()
     {
-        try
+        foreach (var folder in (string[])[_repo, _elsewhere])
         {
-            Directory.Delete(_repo, recursive: true);
+            try
+            {
+                Directory.Delete(folder, recursive: true);
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
         }
-        catch (IOException) { }
-        catch (UnauthorizedAccessException) { }
     }
 
     private string Write(string relative, string text)
@@ -116,18 +126,11 @@ public sealed class ADocumentIsProvenBeforeItIsReviewedTests : IDisposable
     [Fact]
     public void APathOutsideTheRepository_IsRefused()
     {
-        var outside = Path.Combine(Path.GetTempPath(), "coai-not-in-the-repo.md");
+        var outside = Path.Combine(_elsewhere, "not-in-the-repo.md");
         File.WriteAllText(outside, Body);
 
-        try
-        {
-            Refusal(Read(new DocumentRequest(Path: outside)))
-                .Should().Contain("inside").And.Contain("documentText");
-        }
-        finally
-        {
-            File.Delete(outside);
-        }
+        Refusal(Read(new DocumentRequest(Path: outside)))
+            .Should().Contain("inside").And.Contain("documentText");
     }
 
     /// <summary>
@@ -139,7 +142,7 @@ public sealed class ADocumentIsProvenBeforeItIsReviewedTests : IDisposable
     public void ASymlinkEscapingTheRepository_IsRefused()
     {
         var link = Write("docs/innocent.md", Body);
-        var elsewhere = Path.Combine(Path.GetTempPath(), "secrets.env");
+        var elsewhere = Path.Combine(_elsewhere, "secrets.env");
 
         Refusal(Read(new DocumentRequest(Path: link), followLink: _ => elsewhere))
             .Should().Contain("inside");
@@ -273,7 +276,7 @@ public sealed class ADocumentIsProvenBeforeItIsReviewedTests : IDisposable
     [Fact]
     public void AParentDirectorySymlink_IsRefused()
     {
-        var elsewhere = Path.Combine(Path.GetTempPath(), "coai-outside-the-repo");
+        var elsewhere = Path.Combine(_elsewhere, "outside-the-repo");
         Directory.CreateDirectory(elsewhere);
         Write("docs/spec.md", Body);
 
@@ -282,15 +285,8 @@ public sealed class ADocumentIsProvenBeforeItIsReviewedTests : IDisposable
         string Link(string p) =>
             p.Replace("\\", "/").EndsWith("/docs", StringComparison.Ordinal) ? elsewhere : p;
 
-        try
-        {
-            Refusal(Read(new DocumentRequest(Path: Path.Combine(_repo, "docs", "spec.md")), followLink: Link))
-                .Should().Contain("inside");
-        }
-        finally
-        {
-            Directory.Delete(elsewhere, recursive: true);
-        }
+        Refusal(Read(new DocumentRequest(Path: Path.Combine(_repo, "docs", "spec.md")), followLink: Link))
+            .Should().Contain("inside");
     }
 
     /// <summary>

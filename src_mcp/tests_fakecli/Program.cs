@@ -485,7 +485,9 @@ sealed class Steering
 
 /// <summary>
 /// The vendor mode's steering for a child that was started with a MINIMAL environment: a JSON object of
-/// the same `FAKECLI_*` names, in the temp directory — the one place such a child can still find.
+/// the same `FAKECLI_*` names, BESIDE THE FAKE'S OWN BINARY (<see cref="CoaiMcp.FakeCli.MinimalSteeringFile"/>) — the one place such a child can
+/// still find whatever its environment says, and one no other run of the suite shares. It is not in the user's temp folder: that is every
+/// run's, and one run's file steered another's.
 /// </summary>
 /// <remarks>
 /// Read ONLY when the environment carries no mode and the argv is a vendor's shape (codex's `exec` or
@@ -495,8 +497,6 @@ sealed class Steering
 /// </remarks>
 static class MinimalSteering
 {
-    public const string FileName = "fakecli-minimal.json";
-
     public static Dictionary<string, string>? Load(string[] args)
     {
         if (Environment.GetEnvironmentVariable("FAKECLI_MODE") is { Length: > 0 } || args.Length == 0 || !IsVendorShape(args))
@@ -504,7 +504,7 @@ static class MinimalSteering
             return null;
         }
 
-        var path = Path.Combine(Path.GetTempPath(), FileName);
+        var path = CoaiMcp.FakeCli.MinimalSteeringFile.Location;
         if (!File.Exists(path))
         {
             return null;
