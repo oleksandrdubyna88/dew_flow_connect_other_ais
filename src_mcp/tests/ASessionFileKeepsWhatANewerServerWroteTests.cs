@@ -18,7 +18,7 @@ namespace CoaiMcp.Tests;
 /// <para>Several <c>coai-mcp</c> processes share one data folder, and a window that was not reloaded after an update runs the
 /// older binary. That binary read the file with a context that skips what it does not know, and wrote back only what it
 /// knew — so a member a newer release added was gone after one save. The fixtures here plant members no type declares
-/// (<c>futureRoot</c>, <c>authors</c>, …): they stand for what a newer release will add, and the test is that they come back
+/// (<c>futureRoot</c>, <c>futureRound</c>, …): they stand for what a newer release will add, and the test is that they come back
 /// out of <see cref="SessionStore.Save"/> with the same value.</para>
 /// <para>Every fixture carries <c>"rejections": []</c> because it is built by serialising a real session — a hand-made file
 /// without the member loads with a default <c>ImmutableArray</c> and the next save throws (plan §3, side finding).</para>
@@ -47,7 +47,7 @@ public sealed class ASessionFileKeepsWhatANewerServerWroteTests : IDisposable
         new Planting(["state", "config"], "futureConfig", "42.5"),
         new Planting(["state", "config", "securityLane"], "futureLane", """["x",null]"""),
         new Planting(["state", "config", "roles", FirstRole], "futureGate", """{"n":null,"m":[]}"""),
-        new Planting(["rounds[0]"], "authors", """{"claude":{"lines":12,"files":[1,2,3]},"codex":{"lines":0,"files":[]}}"""),
+        new Planting(["rounds[0]"], "futureRound", """{"claude":{"lines":12,"files":[1,2,3]},"codex":{"lines":0,"files":[]}}"""),
         new Planting(["rounds[0]", "reviewerStates[0]"], "futureReviewer", "\"r\""),
     ];
 
@@ -363,7 +363,7 @@ public sealed class ASessionFileKeepsWhatANewerServerWroteTests : IDisposable
     [Fact]
     public void ARetiredMember_IsDroppedOnSave()
     {
-        var retired = new RetiredMembers([(typeof(RoundRecord), "authors"), (typeof(PersistedSession), "FUTUREROOT")]);
+        var retired = new RetiredMembers([(typeof(RoundRecord), "futureRound"), (typeof(PersistedSession), "FUTUREROOT")]);
         var store = new SessionStore(_data) { Retired = retired };
         var file = Plant(store, Planted);
 
@@ -371,8 +371,8 @@ public sealed class ASessionFileKeepsWhatANewerServerWroteTests : IDisposable
 
         var json = JsonNode.Parse(File.ReadAllText(file))!.AsObject();
         json.ContainsKey("futureRoot").Should().BeFalse("a retired name is dropped, whatever its case");
-        json["rounds"]![0]!.AsObject().ContainsKey("authors").Should().BeFalse("authors was registered as retired");
-        AssertEveryUnknownIsThere(file, Planted.Where(p => p.Name is not ("authors" or "futureRoot")));
+        json["rounds"]![0]!.AsObject().ContainsKey("futureRound").Should().BeFalse("futureRound was registered as retired");
+        AssertEveryUnknownIsThere(file, Planted.Where(p => p.Name is not ("futureRound" or "futureRoot")));
     }
 
     [Fact]
@@ -409,7 +409,7 @@ public sealed class ASessionFileKeepsWhatANewerServerWroteTests : IDisposable
         (ServerJsonContext.Default.RoleGate,
             ["maxRounds", "threshold", "enabled"]),
         (ServerJsonContext.Default.RoundRecord,
-            ["stage", "number", "verdict", "gatingCount", "reviewers", "completedUtc", "status", "startedUtc", "runnerPid", "sha", "planKey", "epicNumber", "cadenceNote", "note", "key", "admittedBy", "repeats", "loggedNote", "reviewerStates", "caller", "size", "gitlinks", "planSource", "subject", "tokensIn", "tokensOut", "costUsd", "costNote", "usageNote"]),
+            ["stage", "number", "verdict", "gatingCount", "reviewers", "completedUtc", "status", "startedUtc", "runnerPid", "sha", "planKey", "epicNumber", "cadenceNote", "note", "key", "admittedBy", "repeats", "loggedNote", "reviewerStates", "caller", "size", "gitlinks", "planSource", "subject", "tokensIn", "tokensOut", "costUsd", "costNote", "usageNote", "authors"]),
         (ServerJsonContext.Default.ReviewerState,
             ["provider", "role", "status", "findings", "note", "seconds", "model", "effort", "warning"]),
     ];
@@ -548,7 +548,7 @@ public sealed class ASessionFileKeepsWhatANewerServerWroteTests : IDisposable
         foreach (var answer in new[] { opened, status })
         {
             JsonNode.Parse(answer)!["rounds"]!.AsArray().Should().ContainSingle("the planted round is in the answer");
-            foreach (var name in new[] { "authors", "futureReviewer" })
+            foreach (var name in new[] { "futureRound", "futureReviewer" })
             {
                 answer.Should().NotContain($"\"{name}\"", $"the answer names no member this build does not know ({name})");
             }
