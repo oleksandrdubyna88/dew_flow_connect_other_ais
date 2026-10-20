@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import { test } from 'node:test';
 import { HELP_ARTICLES, HELP_LANGUAGES, bodyFor } from '../helpContent';
 import { COPY_ANSWER } from '../chatPage';
+import { REASON_CODES } from '../gaugeWords';
 import { BLOCK_CONTROL_TERMS } from '../renderAnswer';
 import { TEAM_TAB_LABEL } from '../teamServerTabPage';
 import { TEAM_SERVER_WITH_PEOPLE } from '../teamServerTab';
@@ -549,14 +550,73 @@ test('every language says what a Vibe question row reads, that its web prompt is
   }
 });
 
+/**
+ * The phrase each language's `the-rounds-log` article uses for each reason code the gauge words know
+ * (`REASON_CODES`, from `gaugeWords.ts` — the source of truth). Two codes share a phrase where the article says them as one
+ * clause (a reading is missing or stale). A code with no phrase here fails the test below: a new reason must be written
+ * into every language's article before it ships.
+ */
+const REASON_PHRASES: Record<string, Readonly<Record<string, string>>> = {
+  en: {
+    'too-few-readings': 'fewer than two readings',
+    'percent-did-not-rise': 'the percentage has not risen yet',
+    'window-reset': 'the window reset',
+    'stale-reading': 'a reading is missing or stale',
+    'missing-reading': 'a reading is missing or stale',
+    'run-without-round': 'a launch sent no round id',
+    'no-rounds': 'no round ran between the readings',
+    'local-capture-deferred': 'a local codex card says this machine does not read the gauge',
+  },
+  de: {
+    'too-few-readings': 'weniger als zwei Lesungen',
+    'percent-did-not-rise': 'der Prozentwert ist noch nicht gestiegen',
+    'window-reset': 'das Fenster wurde zurückgesetzt',
+    'stale-reading': 'eine Lesung fehlt oder ist veraltet',
+    'missing-reading': 'eine Lesung fehlt oder ist veraltet',
+    'run-without-round': 'ein Start schickte keine Runden-ID',
+    'no-rounds': 'zwischen den Lesungen lief keine Runde',
+    'local-capture-deferred': 'eine lokale codex-Karte sagt, dass diese Maschine die Anzeige nicht liest',
+  },
+  es: {
+    'too-few-readings': 'menos de dos lecturas',
+    'percent-did-not-rise': 'el porcentaje aún no ha subido',
+    'window-reset': 'la ventana se reinició',
+    'stale-reading': 'falta una lectura o está anticuada',
+    'missing-reading': 'falta una lectura o está anticuada',
+    'run-without-round': 'un lanzamiento no envió id de ronda',
+    'no-rounds': 'no corrió ninguna ronda entre las lecturas',
+    'local-capture-deferred': 'una tarjeta local de codex dice que esta máquina no lee el indicador',
+  },
+  ru: {
+    'too-few-readings': 'меньше двух чтений',
+    'percent-did-not-rise': 'процент ещё не поднялся',
+    'window-reset': 'окно сбросилось',
+    'stale-reading': 'чтения нет или оно устарело',
+    'missing-reading': 'чтения нет или оно устарело',
+    'run-without-round': 'запуск не прислал id раунда',
+    'no-rounds': 'между чтениями не было раунда',
+    'local-capture-deferred': 'локальная карточка codex говорит, что эта машина датчик не читает',
+  },
+  uk: {
+    'too-few-readings': 'менше двох читань',
+    'percent-did-not-rise': 'відсоток ще не зріс',
+    'window-reset': 'вікно скинулося',
+    'stale-reading': 'читання немає або воно застаріле',
+    'missing-reading': 'читання немає або воно застаріле',
+    'run-without-round': 'запуск не надіслав id раунду',
+    'no-rounds': 'між читаннями не було раунду',
+    'local-capture-deferred': 'локальна картка codex каже, що ця машина датчик не читає',
+  },
+};
+
+// The two phrases that are not a reason code: the replacement for "launches from an older extension", and a line the
+// server wrote before it read the round id.
 const ROUNDS_ARTICLE_PHRASES: Record<string, readonly string[]> = {
-  // fewer than two readings · a launch sent no round id · no round ran between the readings · the replacement for "older extension"
-  // · (fifth) a line the server wrote before it read the round id
-  en: ['fewer than two readings', 'a launch sent no round id', 'no round ran between the readings', 'sent no round id', 'before it read the round id'],
-  de: ['weniger als zwei Lesungen', 'ein Start schickte keine Runden-ID', 'zwischen den Lesungen lief keine Runde', 'keine Runden-ID', 'bevor er die Runden-ID las'],
-  es: ['menos de dos lecturas', 'un lanzamiento no envió id de ronda', 'no corrió ninguna ronda entre las lecturas', 'cuyo cliente no envió id de ronda', 'antes de leer el id de ronda'],
-  ru: ['меньше двух чтений', 'запуск не прислал id раунда', 'между чтениями не было раунда', 'чей клиент — coai-mcp до 0.49.0', 'до того, как прочитал id раунда'],
-  uk: ['менше двох читань', 'запуск не надіслав id раунду', 'між читаннями не було раунду', 'без id раунду', 'ще не прочитавши id раунду'],
+  en: ['whose client sent no round id', 'before it read the round id'],
+  de: ['deren Client keine Runden-ID schickte', 'älter als 0.49.0 oder ein anderer Aufrufer der API des Servers oder eine Zeile', 'bevor er die Runden-ID las'],
+  es: ['cuyo cliente no envió id de ronda', 'antes de leer el id de ronda'],
+  ru: ['чей клиент — coai-mcp до 0.49.0', 'до того, как прочитал id раунда'],
+  uk: ['без id раунду', 'ще не прочитавши id раунду'],
 };
 
 // Wordings a back-translation review found ambiguous or wrong. Each must stay gone: the joined clause made the
@@ -583,11 +643,19 @@ test('EveryLanguagesRoundsArticle_NamesEveryReasonTheGaugeWordsKnow (the rounds 
   for (const language of HELP_LANGUAGES) {
     const phrases = ROUNDS_ARTICLE_PHRASES[language];
     assert.ok(phrases !== undefined, `the test has no phrases for ${language}, so it would assert nothing there`);
+    const reasons = REASON_PHRASES[language];
+    assert.ok(reasons !== undefined, `the test maps no reason phrases for ${language}, so it would assert nothing there`);
     const { body, fallback } = bodyFor(article, language);
     const said = Object.values(body).join(' ');
     assert.equal(fallback, false, `the ${language} rounds article is missing`);
+    assert.ok(REASON_CODES.length > 0, 'REASON_CODES is empty, so no reason is checked');
+    for (const code of REASON_CODES) {
+      const reason = reasons[code];
+      assert.ok(reason !== undefined, `reason code "${code}" has no ${language} phrase in REASON_PHRASES — a reason the gauge words know is not mapped, so no article can be checked for it — add it to REASON_PHRASES in src_vs_code/src/test/helpCoverage.test.ts`);
+      assert.ok(said.includes(reason), `the ${language} rounds article never says "${reason}" (reason "${code}") — a reader cannot learn that reason; add it to the article, or fix REASON_PHRASES in src_vs_code/src/test/helpCoverage.test.ts`);
+    }
     for (const phrase of phrases) {
-      assert.ok(said.includes(phrase), `the ${language} rounds article never says "${phrase}" — a reader cannot learn that reason`);
+      assert.ok(said.includes(phrase), `the ${language} rounds article never says "${phrase}" — a reader cannot learn that reason; add it to the article, or fix ROUNDS_ARTICLE_PHRASES in src_vs_code/src/test/helpCoverage.test.ts`);
     }
   }
   for (const language of HELP_LANGUAGES) {

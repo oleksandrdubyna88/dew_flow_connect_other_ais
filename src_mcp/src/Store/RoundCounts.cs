@@ -89,6 +89,27 @@ public static class RoundCounts
     /// here — <c>Mode=ReadOnly</c> refuses to, and the existence check keeps that refusal from reading
     /// as a disk that would not answer.
     /// </remarks>
+    /// <summary>
+    /// The read-only open of an existing <c>coai.db</c> that the readers of the counter and the round-authors report share: <c>Mode=ReadOnly</c> (a
+    /// reader never migrates, and never creates a file), unpooled, and a five-second busy wait. Opened; the caller disposes it.
+    /// </summary>
+    internal static SqliteConnection OpenReadOnly(string file)
+    {
+        var db = new SqliteConnection($"Data Source={file};Pooling=False;Mode=ReadOnly;Default Timeout=5");
+        try
+        {
+            db.Open();
+
+            return db;
+        }
+        catch
+        {
+            db.Dispose();
+
+            throw;
+        }
+    }
+
     public static RoundCountsAnswer Read(string dataDir, DateTime nowUtc)
     {
         var file = Path.Combine(dataDir, RoundsDb.FileName);
@@ -97,8 +118,7 @@ public static class RoundCounts
             return new RoundCountsAnswer(Stamp(nowUtc), [.. Windows.Select(window => Cut(window, nowUtc, []))], null);
         }
 
-        using var db = new SqliteConnection($"Data Source={file};Pooling=False;Mode=ReadOnly;Default Timeout=5");
-        db.Open();
+        using var db = OpenReadOnly(file);
         var modelsRecorded = RoundsQuery.HasColumn(db, "reviewers", "model");
         var launches = Launches(db, Stamp(nowUtc - Windows[^1].Length), Stamp(nowUtc), modelsRecorded);
 
