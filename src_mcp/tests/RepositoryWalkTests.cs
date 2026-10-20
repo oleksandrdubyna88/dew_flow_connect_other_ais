@@ -6,7 +6,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// The walk that finds the Git repositories beneath a granted parent folder (E1.1 of
-/// <c>todo/PLAN_vibe_reads_a_folder_of_repositories.md</c>; D2, D3's folder bound, D7): pure over a listing seam, so no test
+/// <c>research/PLAN_vibe_reads_a_folder_of_repositories.md</c>; D2, D3's folder bound, D7): pure over a listing seam, so no test
 /// here touches the disk except the one over <see cref="FolderListings.Read"/>.
 /// </summary>
 public sealed class RepositoryWalkTests

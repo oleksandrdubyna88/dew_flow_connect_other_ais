@@ -7576,7 +7576,7 @@ handed a PLACE — a coai-owned folder for its home and a sanitised copy to stan
   none row stands in an EMPTY `cwd` folder beside it, so a cwd never holds its own home. Everything goes in `finally`
   (`GitScratch.DeleteEvenIfReadOnly`) — on an answer, a refusal and a cancellation alike.
 - **`ask_consultants` — a killed server's row scratch is swept, and a live row's is locked (D8, 2026-10-18,
-  `todo/PLAN_vibe_reads_a_folder_of_repositories.md`).** `finally` never runs when the server is killed, and the product sweep
+  `research/PLAN_vibe_reads_a_folder_of_repositories.md`).** `finally` never runs when the server is killed, and the product sweep
   (`PanelService.ScratchPrefixes`) listed only `coai-answers-*`, `coai-repair-*` and `coai-noworkspace-*`, so a row's
   `coai-question-*` folder — and the repository copies in it — stayed for ever (`shared/temp-sweep.json` keeps it `neverSwept` for the
   TEST sweep, which says the product sweeps it "on its own clock": it did not). Now `ScratchPrefixes` has `coai-question-*`, and the

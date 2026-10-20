@@ -1568,7 +1568,7 @@ built two one-shot modes in the server, `--consultants` and `--check-consultant`
   rather than as a fourth copy. Its header states the residual: on Unix .NET implements `FileShare.None` as an advisory
   `flock` — honoured between .NET processes, not across the WSL/Windows 9P boundary.
 - **`FolderLock`** (`runners/Files/FolderLock.cs`) — the sweep's keep-test for a folder whose owner holds a lock file in it, EXTRACTED
-  from `VibeHomes.SweepOneShot` when a question row's scratch needed the same (D8 of `todo/PLAN_vibe_reads_a_folder_of_repositories.md`):
+  from `VibeHomes.SweepOneShot` when a question row's scratch needed the same (D8 of `research/PLAN_vibe_reads_a_folder_of_repositories.md`):
   `RemoveIfFree(folder, lockName, delete)` — or, with a step to ask under the lock, `RemoveIfFree(folder, lockName, delete, ready)` (two
   overloads; the step is never a nullable callback) — takes the lock or answers false with nothing touched, empties the folder around the
   lock, lets go, removes the folder. The caller asks its own age first, because taking the lock creates the file and moves the
@@ -3288,6 +3288,10 @@ Tests: `VibeConsultantTests`, `ConfinementPlannerTests` (the Vibe question launc
 `ReviewSnapshotRefreshTests` (`MakeAt…`) — listed in [module_tests.md](module_tests.md).
 
 ## A Vibe disk row expands a parent folder into its repositories (2026-10-18, PLAN_vibe_reads_a_folder_of_repositories.md)
+
+> **Live, Windows, 2026-10-20 (coai-mcp 0.62.0):** the expansion works — `d:\rsd` was copied in ~30 s with 411 linked worktrees
+> skipped — but the row answered nothing on a broad question: exit 3 at `VibeLimits.ConsultantTurns` (20). The prompt lists the copy
+> roots and nothing in them, and `read_file` cannot list a folder. Open: M-V19 of `todo/PLAN_a_vibe_row_is_told_what_its_folders_hold.md`.
 
 The owner's disk row ("projects on this disk") is granted PARENT folders — a drive's project folder on Windows, `~/git` on WSL — not
 repositories. Before this plan `ConsultantPlaces.OneShotAsync` refused any granted root that git did not call a work tree. Now a root that
