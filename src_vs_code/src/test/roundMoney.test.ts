@@ -3,7 +3,7 @@ import { test } from 'node:test';
 
 import { ChatTurnRecord } from '../chatUsage';
 import {
-  chatLedgerLines, isLaunchLine, LedgerLine, MEDIAN_OUTPUT_LABEL, moneyGroups, PER_LAUNCH, perUnit, rollUp, tokenText, unitDivisor,
+  chatLedgerLines, isLaunchLine, LedgerLine, medianOutputLabel, medianUnitOf, moneyGroups, PER_LAUNCH, perUnit, rollUp, tokenText, unitDivisor,
 } from '../roundMoney';
 import { LineRate, parseUsage } from '../usage';
 
@@ -110,6 +110,10 @@ test('ALineIsALaunch_OnlyWhenItSaysSo — an attempt that is not a follow-up and
   assert.equal(isLaunchLine(launch({ cli: '' })), false);
   assert.equal(isLaunchLine(line({ cli: 'codex' })), false, 'no attempt is a line from before 0.48.0');
   assert.equal(isLaunchLine(launch({ attempt: '' })), false);
+  assert.equal(isLaunchLine(launch({ attempt: 'retry' })), true, 'a rate-limit retry is one launch of its own');
+  assert.equal(isLaunchLine(launch({ attempt: 'repair' })), true, 'a repair is one launch of its own');
+  assert.equal(isLaunchLine(launch({ attempt: 'rotated' })), false, 'a Team-server attempt word coai-mcp writes — not a local launch');
+  assert.equal(isLaunchLine(launch({ attempt: 'whatever' })), false, 'an attempt this build does not know is not claimed as one launch');
 });
 
 test('AChatTurn_StaysPerRecordedTurn — a chat turn read into the ledger shape says neither attempt nor cli', () => {
@@ -138,8 +142,17 @@ test('TwoLaunches_ReadAsLaunches_NotLaunchs — the plural of launch has an es',
   assert.equal(perUnit({ usd: 4, known: true, floor: false, estimated: false }, { per: 'round', count: 2 }).note, 'over 2 rounds', 'every other unit keeps its plain s');
 });
 
-test('TheMedianLabel_SaysLaunch — the header names the unit a launch line holds', () => {
-  assert.equal(MEDIAN_OUTPUT_LABEL, 'median output per launch');
+test('TheMedianLabel_FollowsTheGroupsItHeads — one shared unit is named, mixed units or no groups name none', () => {
+  const launch = (over: Partial<LedgerLine> = {}): LedgerLine => line({ attempt: 'first', cli: 'codex', ...over });
+  const [launches] = moneyGroups([launch()], WINDOW, rateOf);
+  const [older] = moneyGroups([line()], WINDOW, rateOf);
+
+  assert.equal(medianUnitOf(launches!), PER_LAUNCH);
+  assert.equal(medianUnitOf(older!), 'recorded turn');
+  assert.equal(medianOutputLabel([launches!, launches!]), 'median output per launch');
+  assert.equal(medianOutputLabel([older!, older!]), 'median output per recorded turn');
+  assert.equal(medianOutputLabel([launches!, older!]), 'median output', 'a mixed page named a unit half of its cells do not hold');
+  assert.equal(medianOutputLabel([]), 'median output', 'no median to head names no unit');
 });
 
 test('the money is reported where the vendor billed it, estimated per line otherwise, and a floor when a line was unpriced', () => {

@@ -31,7 +31,8 @@ import { costText, Estimate, LineRate, lineCost, shortNumber, totalCost, uncaptu
  * job's total; a follow-up in the same conversation may be cumulative; a line with no `cli` says nowhere it ran. What
  * is claimed is decided by the lines themselves ({@link isLaunchLine}), never by a row looked up: a group whose EVERY
  * line is a launch line says *per launch* ({@link Rollup.linesAreLaunches}), any other says *per recorded turn*.
- * Consultation, question, chat and probe lines stay one line per turn and stay *per recorded turn*.</p>
+ * Consultation, question, chat and probe lines stay one line per turn and stay *per recorded turn*. The median column's
+ * header follows the groups it heads ({@link medianOutputLabel}): one shared unit is named, mixed units are not.</p>
  */
 
 /** One ledger line as this module reads it — a parsed `usage.jsonl` line, or a chat turn read into the same shape. */
@@ -39,13 +40,26 @@ export type LedgerLine = Pick<UsageEntry, 'utc' | 'provider' | 'model' | 'tokens
   | 'usageNote' | 'tokensCached' | 'tokensReasoning' | 'kind' | 'attempt' | 'cli'>;
 
 /**
- * Whether one ledger line is ONE launch: it names its attempt, that attempt is not a follow-up (an antigravity follow-up
- * continues one conversation and its usage may be cumulative), and it names the runtime it ran on, which is not `remote`
- * (a Team-server job is written locally as one line holding the whole job). A line from before coai-mcp 0.48.0, a chat
- * turn and anything that says nothing of where it ran are not claimed.
+ * The attempts coai-mcp writes for ONE local launch (`LaunchAttempts`, `src_mcp/runners/Reviewers/LaunchParts.cs:22–37`): the
+ * turn's first launch, a rate-limit retry and a repair — each its own paid launch on its own ledger line.
+ *
+ * <p>`followUp` is OUT on purpose: an antigravity follow-up continues one conversation, and antigravity may report usage
+ * cumulatively in it, so the line may include the first launch (research/PLAN_the_reviewer_follow_up_is_billed_once.md is
+ * in todo/ until it measures that). `rotated` is a Team-server attempt, which also says `cli: remote`.</p>
+ *
+ * <p>An allow-list, not a deny-list: an attempt word this build does not know — a newer coai-mcp's, a typo — is NOT
+ * claimed as one launch. The safe answer to "is this one launch?" is no, which only costs the label *per recorded turn*.</p>
+ */
+const ONE_LAUNCH_ATTEMPTS: ReadonlySet<string> = new Set(['first', 'retry', 'repair']);
+
+/**
+ * Whether one ledger line is ONE launch: its attempt is one of {@link ONE_LAUNCH_ATTEMPTS} (so not a follow-up, not a word
+ * this build does not know, and not absent), and it names the runtime it ran on, which is not `remote` (a Team-server job
+ * is written locally as one line holding the whole job). A line from before coai-mcp 0.48.0, a chat turn and anything that
+ * says nothing of where it ran are not claimed.
  */
 export function isLaunchLine(line: Pick<LedgerLine, 'attempt' | 'cli'>): boolean {
-  return says(line.attempt) && says(line.cli) && line.attempt !== 'followUp' && line.cli !== 'remote';
+  return ONE_LAUNCH_ATTEMPTS.has(line.attempt ?? '') && says(line.cli) && line.cli !== 'remote';
 }
 
 function says(value: string | undefined): boolean {
@@ -119,11 +133,30 @@ export const PER_RECORDED_TURN = 'recorded turn';
 export const PER_LAUNCH = 'launch';
 
 /**
- * The medians' header — per launch, which is what a review line is since coai-mcp 0.48.0 (story 3.3). A cell whose group
- * holds a line that can hold more than one launch says *per recorded turn* beside its number
- * (`Rollup.linesAreLaunches`).
+ * The unit a group's median output is in: per launch when every line of the group is one launch
+ * ({@link Rollup.linesAreLaunches}), else per recorded turn — a line of it can hold more than one launch.
  */
-export const MEDIAN_OUTPUT_LABEL = `median output per ${PER_LAUNCH}`;
+export function medianUnitOf(group: Pick<Rollup, 'linesAreLaunches'>): string {
+  return unitOfLines(group.linesAreLaunches);
+}
+
+/**
+ * The unit the median column's header names, from the groups the block actually draws a median for: the one unit they
+ * all share, or an empty string when they differ — or when there are none, so nothing is claimed about a cell that is
+ * not drawn. A cell names its own unit only when it differs from this one.
+ */
+export function medianHeaderUnit(groups: readonly Pick<Rollup, 'linesAreLaunches'>[]): string {
+  const units = new Set(groups.map(medianUnitOf));
+
+  return units.size === 1 ? [...units][0]! : '';
+}
+
+/** The median column's header: *per launch*, *per recorded turn*, or the neutral *median output* ({@link medianHeaderUnit}). */
+export function medianOutputLabel(groups: readonly Pick<Rollup, 'linesAreLaunches'>[]): string {
+  const unit = medianHeaderUnit(groups);
+
+  return unit === '' ? 'median output' : `median output per ${unit}`;
+}
 
 /** Plurals that are not `+s`. */
 const PLURAL_OF: Readonly<Record<string, string>> = { [PER_LAUNCH]: 'launches' };

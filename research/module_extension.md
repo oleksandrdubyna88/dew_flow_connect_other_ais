@@ -7794,7 +7794,8 @@ rows and lists). `moneyGroups(lines, window, rateOf)` answers, inside a trailing
 (review / consult / question / chat; a Team-server row is its own row): tokens in / cached / out / reasoning — an
 uncaptured line adds nothing, marks the totals `≥`, and only-uncaptured is `unknown`, never 0 (`tokenText`) — recorded
 turns, failed, the median input and output per ledger line, `linesAreLaunches` (every line is ONE launch by
-`isLaunchLine`: it names an `attempt` that is not `followUp` and a `cli` that is not `remote` — a line from before
+`isLaunchLine`: its `attempt` is one of `ONE_LAUNCH_ATTEMPTS` — `first`, `retry`, `repair`, an allow-list, so an
+unknown attempt word is never claimed — and its `cli` is set and not `remote` — a line from before
 coai-mcp 0.48.0, a Team-server row's local line, which is the job's total, and an antigravity follow-up, which may be
 cumulative, are not; the lines decide, never a row looked up; [PLAN_the_rounds_labels_say_what_they_count.md](PLAN_the_rounds_labels_say_what_they_count.md)),
 and the money (`Estimate`). `rollUp` makes a vendor row or the window from groups (no medians; `linesAreLaunches` only
@@ -7843,8 +7844,10 @@ tab's own tick (`usageTab`). The tab's
 FIRST block, above the window buttons — its windows are its own — is `roundsBlock.ts`'s `roundsBlock(input)`, rendered
 by the host and handed to `usageTabHtml` as `extras.rounds`: per vendor row, rounds over 5 h / 24 h / 7 d, the 7 d rounds
 by stage, the consultations / questions / chat beside them as recorded turns, reviewers per round from the database's
-history, the median output per launch (`MEDIAN_OUTPUT_LABEL`; a model line whose group is not all launch lines shows
-*per recorded turn* beside its number, with a tooltip), tokens in / cached / out / reasoning and money over 7 d through
+history, the median output (`medianOutputLabel`: the header names the unit the drawn medians share — *per launch*
+when every one is, *per recorded turn* when none is, no unit on a mixed page or an unread ledger — and a cell whose
+unit differs from the header's names it beside its number, the recorded-turn one with a tooltip), tokens in / cached
+/ out / reasoning and money over 7 d through
 `roundMoney` (its floors, its `perUnit` rules — a window with consultations and no rounds is a dash saying *no rounds in
 this window*); under each row a line per model (a model change inside the window is two lines; rounds per model exist
 only from `modelsKnownSince`, else *not recorded*) and a line per kind beside. A `remote` row is *ran on <server>*

@@ -15,7 +15,13 @@
 > it in every language, and the help first said a follow-up "is not yet split" (it has its own line) and listed a
 > rotated Team-server attempt as a local line. (5) Two tests the plan called RED are guards (the mixed-week fallback,
 > the remote line's cells): the old code already said per recorded turn there; their teeth were shown by removing the
-> condition. Residual, as planned: a folded local line (`LaunchParts.cs:87–91`) carries nothing that shows it.
+> condition. (6) The gate round on this record at promotion (session 81e0ca68) found three things, fixed in the
+> promotion PR: `isLaunchLine` became an allow-list (`ONE_LAUNCH_ATTEMPTS`: `first`, `retry`, `repair`), so an unknown
+> attempt word is never claimed; the median header follows the cells (`medianOutputLabel`: per launch, per recorded
+> turn, or no unit on a mixed page) instead of always saying per launch; and the help test derives the reason codes
+> from `REASON_WORDS` (`REASON_CODES`), so a ninth code with no phrase fails it. Residual, as planned: a folded local
+> line (`LaunchParts.cs:87–91`) carries nothing that shows it — with the allow-list, a writer that ever stamps it
+> with its own attempt word is excluded for free.
 >
 > Scope: `src_vs_code/src/roundMoney.ts`, `roundsBlock.ts`, `teamServerApi.ts`, `helpContent.ts` and its four
 > translations (`helpDe.ts`, `helpEs.ts`, `helpRu.ts`, `helpUk.ts`). No server or coai-mcp change.
