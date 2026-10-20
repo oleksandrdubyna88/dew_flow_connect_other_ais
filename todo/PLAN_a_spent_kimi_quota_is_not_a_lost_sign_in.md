@@ -1,6 +1,7 @@
 # PLAN — a spent Kimi quota is not a lost sign-in
 
-> Status: **plan only, nothing implemented yet, 2026-10-20.** The 0.61.0 and 0.62.0 releases shipped (tags
+> Status: **partly built, 2026-10-20: stories 1, 2, 3 and 4 are coded on `docs/kimi-quota-is-not-a-sign-in`; the capture step (§5 step 1) has NOT run, so the real ACP sentence is
+> still unmeasured, and the plan is NOT promoted.** Deviations are in §8 (story 3). The 0.61.0 and 0.62.0 releases shipped (tags
 > `extension-v0.61.0`, `extension-v0.62.0`), so the owner's "release first, fix after" block is lifted. The plan gate ran once
 > (session def84902, `good_enough`, 11 findings, all accepted), an Opus judge read it (12 findings, all verified by the lead)
 > and the question consultant was asked (consult 4eaa848c); all three are folded below and the plan is split into four stories
@@ -122,6 +123,8 @@ the same answer looks when it comes over ACP is a hypothesis until step 1 of §5
   removed after the round. The M-K14 record (`research/module_runners.md`, `research/RESULTS_kimi_confinement.md:36,561,568`)
   gets one note: the 2026-10-18/19 exit-77s coincided with a 100 %-used 5-hour quota and may have been quota answers; the
   refresh-rotation suspicion is neither confirmed nor cleared by them.
+  **Annotated 2026-10-20 (story 3)**, in these places: `RESULTS_kimi_confinement.md` (the summary line and the end of §25), `research/module_runners.md` (the residual sentence of the Kimi home
+  section) and `PLAN_vibe_and_kimi_runtimes.md` (the M-K14 risk, one line pointing here). Each carries the same facts; none re-judges M-K14.
 - **D7 — Check on a Kimi (or any non-consultant) row is disabled, with a plain title; no paid-turn prompt** (gate 2, 3, 6, 7; judge
   J8+J9). Seen 2026-10-19: the owner pressed **Check** on the Kimi card after the 0.61.0 Update and got "The model-kimi consultant's
   check ended as unavailable — the vendor 'kimi' runs on 'kimi', which cannot hold a consultation in this build — consultants run
@@ -190,6 +193,20 @@ the same answer looks when it comes over ACP is a hypothesis until step 1 of §5
      `research/RESULTS_kimi_confinement.md` (a new section "the quota answer over ACP") and replaces S1's constructed envelope in
      `KimiAcpProfileTests` and the `observed` row in `GateReportingTests`. If the line shows S9's outcome, that is recorded instead.
    - Never spend quota on purpose; never run a probe while any coai session launches Kimi.
+   - **The step as written (story 3, 2026-10-20) — a procedure, never executed by a coder; nobody runs `kimi` for it.** The full text is `research/RESULTS_kimi_confinement.md` §31, with an
+     empty "The record" table to fill. In short:
+     - **When:** the first gate round after stories 1 and 2 ship in a released coai-mcp, in which a Kimi reviewer meets a spent quota. **Who:** the lead of the session that owns that round; if the
+       owner sees it first on the card or in the Rounds block, the owner tells that lead, and the lead does the copy.
+     - **Which lines:** the ledger line of that launch (`usage.jsonl` in the data directory of the side that ran the round, field `outcome`) and the log line `reviewer kimi/<role> FAILED after …s: …`
+       (`<data dir>/<side>/logs/<UTC day>/`); both are `DescribeWhole`. Copy the text after ` — the vendor said: ` with the tool.
+     - **The real Moonshot id shape is NOT measured, so the first real line is checked against the `moonshot-id` pattern** (`org-`/`ak-` + 8–128 letters and digits with at least one digit; `Redaction.cs` and its
+       twin in `src_vs_code/src/notifications.ts`): an id that is still readable in the ledger or the log line was not matched — record only its SHAPE (prefix, length, character classes), never the id; if the real
+       id has no digit or has `_`/`-`, widen the pattern in both halves with a test in each, before anything else. Whatever is left is replaced by hand with `org-REDACTED` / `<ak-REDACTED>`.
+       **A real id or any credential content is never written into the repository** (fixture, record, commit message or plan).
+     - **How it becomes the fixture:** §31 gets the record (date, Kimi version, round id, the line); the real inner text replaces the constructed envelope in `KimiAcpProfileTests` and `PromptError` in
+       `ASpentKimiQuotaReadsAsAQuotaTests`, and goes in the `observed` row of `GateReportingTests` for `reached your 5-hour usage limit`; the Kimi profile tests, `GateReportingTests` and S7 are re-run.
+     - **If the line is S9's outcome** (a bare `Authentication required`, no 429 text): record that in §31, do NOT widen the sign-in cure, and say here that D1's quota row never fires over ACP.
+     - **Promotion** waits for this record (§7 item 1). Until then the status line says: stories 1–4 coded, capture pending.
 2. **Story 1** (cornerstone): D1, D2, D3 with S1–S4b, S9's guard, red-first.
 3. **Story 2:** D4 with S6, S6b, red-first; then the capture step's first chance.
 4. **Story 3:** S7 (the product-level scenario, S5 inside it), the docs, D6's annotation.
@@ -270,6 +287,19 @@ every story; **Sonnet** codes.
   alone → the summary is right and the ledger lacks the clause.
 - **Done when:** S7 is green on the merged tree; the docs describe the six rows, the derived Spent set and the kept sentence;
   the M-K14 record carries D6's note; the plan is promoted only after the capture step (DoD item 1).
+- **Status and deviations (2026-10-20, coded; capture pending):**
+  - **Built:** `src_mcp/tests/ASpentKimiQuotaReadsAsAQuotaTests.cs` (both S7 tests); the docs in `module_runners.md`, `module_tests.md` and `module_core.md`; D6's note in all four places named
+    in D6 (`RESULTS_kimi_confinement.md` summary and §25, `module_runners.md` at the residual sentence, `PLAN_vibe_and_kimi_runtimes.md` at the M-K14 risk); the capture step written into §5 and
+    `RESULTS_kimi_confinement.md` §31 (empty record). The help sentence in the five languages was story 2's.
+  - **Deviation 1 — S7 found an integration bug the unit tests of stories 1 and 2 could not, and a production line changed.** Every line said the cure TWICE: story 1's `KimiRuntime` reason for a Spent
+    failure led with the cure (`{cure} (the shim said: …)`), and story 2's `Because` then diagnosed that reason by its marker and put the table's cure in front of "the vendor said: {the whole reason}".
+    S7's red was `Expected line "… quota is used up - signing in again will not help - the vendor said: the Kimi plan quota is used up - "Your quota will reset at 14:00 UTC."; signing in again will not help (the
+    shim said: kimi_quota_spent: …" to contain "the Kimi plan quota is used up" exactly 1 time, but found it 2 times` — in the summary, the ledger and the log. **The fix:** `KimiRuntime.SpentReason` returns the shim's
+    own words (`name: reason`) with no cure; the cure comes from the table, once, in `Because`. Two assertions of story 1 (`KimiQuotaIsNotASignInTests`) that pinned the old reason were updated.
+    **Consequence:** the quoted reset clause (`KimiQuotaWords.Said`, D3) now leads only the `WhyItFailed` road; on the rate-limit road the clause is in the vendor's line, whole in the ledger and the log, and in the
+    160-character summary only while the vendor's sentence is short (the fixture's is 165 characters with its name, and keeps `Your quota will reset at 14:00 U…`). If the real sentence is longer, the capture step shows it.
+  - **Deviation 2 — the same doubling exists, unproven, on the NonZeroExit road:** the shim's stderr line is `<name>: <reason> — <cure>`, and `Because` quotes that whole line after the cure. No test of this story reaches it
+    (a quota never takes that road); it is a candidate for a follow-up, not changed here (seen once, not asserted: in S7's red run with story 1's table reverted, the exit-77 ledger line ended `… the vendor said: not_signed_in: … Authentication required: 429 …  - run `kimi login` in a terminal and try again`, the shim's own cure quoted a second time).
 
 ### Story 4 — the Check button tells the truth (D7)
 

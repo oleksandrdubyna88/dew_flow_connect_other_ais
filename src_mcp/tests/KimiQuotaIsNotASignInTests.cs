@@ -157,7 +157,8 @@ public sealed class KimiQuotaIsNotASignInTests
 
         verdict.Limited.Should().BeTrue("exit 75 and a Spent name is a limit");
         RateLimit.Hopeless(verdict.Reason).Should().BeTrue("the vendor's own words ride in the reason: " + verdict.Reason);
-        verdict.Reason.Should().NotContain("(insufficient balance)").And.NotContain("kimi login").And.Contain(KimiQuotaWords.Opening);
+        verdict.Reason.Should().NotContain("(insufficient balance)").And.NotContain("kimi login").And.StartWith("kimi_quota_spent: ").And.Contain(KimiQuotaWords.ResetOpening);
+        verdict.Reason.Should().NotContain(KimiQuotaWords.Opening, "the reason is the vendor's words; whoever writes the line puts the cure in front (S7), so it is never said twice");
         verdict.Usage.Should().Be(Usage.Unknown);
     }
 
@@ -182,7 +183,8 @@ public sealed class KimiQuotaIsNotASignInTests
 
         verdict.Limited.Should().BeTrue();
         RateLimit.Hopeless(verdict.Reason).Should().BeTrue(verdict.Reason);
-        verdict.Reason.Should().Contain("the Kimi allowance is spent (D14)").And.Contain("insufficient balance").And.NotContain("quota is used up");
+        verdict.Reason.Should().StartWith("balance_spent: ").And.Contain("insufficient balance")
+            .And.NotContain("the Kimi allowance is spent (D14)", "whoever writes the line puts the cure in front, once").And.NotContain("quota is used up");
     }
 
     // ---------- S9 ----------

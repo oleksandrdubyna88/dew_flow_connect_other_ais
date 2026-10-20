@@ -33,7 +33,8 @@
 > (started 1 of 1 when trusted). Also: the inventory is DATA only — admission by name, no manifest (§18); the auto-update
 > preflight never runs under `kimi acp` and the pin works where it does run (§20); `/usage` is cumulative across
 > `session/load` (§23); the person's home was byte-identical but for `credentials/` across all 53 owned-home launches (§24).
-> M-K14 was NOT run (the owner's answer: later).
+> M-K14 was NOT run (the owner's answer: later). **M-K14 note, 2026-10-20 (D6 of `todo/PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md`):** the Kimi exit 77s recorded since
+> 2026-10-16 cannot be classified and may be quota answers — see the note at the end of §25 and the capture step in §31.
 >
 > **E4.3's cell (§27, 2026-10-15): M-K15 — the shim's inheritable tree hold, with the real Kimi 2.1.1.** 16 launches of the shipped
 > `coai-mcp --ask-acp --profile kimi` on owned homes (12 in the recorded run, 4 smoke runs of the script). **The hold gates:** after a normal end
@@ -569,6 +570,11 @@ lock handle and outlives `kimi` (measured by E4.3 on 2026-10-15, §27: nothing d
 every turn's end can cut a refresh); and a sign-in folder on a volume with no drive letter (an admin VHD mount), which
 `GetFinalPathNameByHandle` may not name — refused fail-closed by E4.2, unmeasured.
 
+**M-K14 note, 2026-10-20 (`todo/PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md` D6).** Every Kimi exit 77 recorded since 2026-10-16 is **unclassifiable**: coai kept only the cure,
+never the vendor's text, and no `kimi-code.log` survives (the homes are removed after each round). On 2026-10-18/19 they coincided with a 100 %-used 5-hour quota, and over ACP a
+quota answer may have been filed as `not_signed_in`. So a quota cause existed and cannot be excluded; the refresh-rotation suspicion is neither confirmed nor cleared by these
+exits. From the first coai-mcp release after 0.62.0 that carries story 2 of that plan (the line `— the vendor said: …`), the vendor's sentence is kept, and a new exit 77 can be read.
+
 Added 2026-10-15 (E4.3 review): **many `device_id`s per sign-in** — each refreshed owned home writes a NEW `device_id` (§27), so one sign-in accumulates one id per home that refreshed; whether many ids per sign-in matter to the vendor is unmeasured.
 
 ## 26. What this changes in the plan (for the plan's owner to decide)
@@ -950,3 +956,51 @@ After the join (this branch, CI run 39028293182, dispatched on `feat/wsl-kimi-e5
 What the first join run on Linux found (one red, fixed): `JunctionsTests.ATargetOnADrvfsMount_IsRefused_AndNothingIsMade` named a fake mount point, but the port-fix's `MountLocality` now asks the real `statx` for the mount of the path (id 27, not in the stand-in table) and refuses what it cannot prove — correct for the product, wrong for the stand-in. `Junctions.StandInMountInfo` takes the identity the kernel would give; the test passes `NotAsked`.
 
 DL10, re-decided 2026-10-17 on the owner's WSL2 (`systemd` and `(sd-pam)` hide `/proc/<pid>/exe` from their own account): the three shapes are pinned on the fake `/proc` (`LinuxHiddenExeTests`, 10 red before the fix); on the ubuntu job the real listing of the whole runner was readable (`HostProcessListTests.OnLinux_TheWholeMachinesListing…` no longer skips for a hidden `exe`).
+
+## 31. The quota answer over ACP — the CAPTURE STEP (written 2026-10-20, NOT yet run; `todo/PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md` §5 step 1, S9)
+
+Status: **no real line has been captured yet.** Everything below the line "The record" is empty on purpose. This section is the procedure, so the next person does not have to
+rediscover it, and the place where the answer is written down. The fixture in `KimiAcpProfileTests` and in `ASpentKimiQuotaReadsAsAQuotaTests` (`PromptError`) is CONSTRUCTED:
+the inner sentence is the owner's own CLI line (kimi 2.2.0, 2026-10-19: "You've reached your 5-hour usage limit. Your quota will reset …"), and the wrapper
+`Authentication required: 429 …` is a hypothesis. What Kimi really sends over ACP is unknown.
+
+**When.** The first gate round after stories 1 and 2 ship in a released coai-mcp, in which a Kimi reviewer meets a spent quota. Never spend quota on purpose. Never run a probe
+while any coai session launches Kimi (a probe of `kimi acp` takes no `KimiCredentialsLock`, and two refreshers of one sign-in is the risk M-K14 names).
+**This step is written, not executed: nobody runs `kimi` for it.**
+
+**Who.** The lead of the session that owns that round. If the owner sees the quota first (on the card or in the Rounds block), the owner tells that lead; the lead does the copy.
+
+**Which lines.** Two lines hold the same text, both written by `ReviewerSummaryFactory.DescribeWhole` (the vendor's line whole, up to 4,000 characters, redacted):
+1. the ledger line of that launch — `usage.jsonl` in the data directory of the side that ran the round (the Windows side and the WSL side keep separate data directories), field `outcome`;
+2. the coai-mcp log line `reviewer kimi/<role> FAILED after …s: …` in `<data dir>/<side>/logs/<UTC day>/`.
+The text to copy is what follows ` — the vendor said: `. Copy it with the tool, do not retype it.
+
+**How the first real line is checked against the redaction pattern (the real Moonshot id shape is NOT measured).** The `moonshot-id` pattern (`Redaction.cs` and its twin in
+`src_vs_code/src/notifications.ts`) takes `org-` or `ak-` followed by 8–128 letters and digits with at least one digit. Before the line goes anywhere:
+1. Look at the copied line. Anything shaped like an account id (`org-…`, `ak-…`, or any long opaque token next to the word "account") must already read `[redacted]` (`Redaction.Redacted`) — the ledger and the log are
+   written through the redactor, so an id that is still readable there was NOT matched. That is a defect in the pattern, not in the copy.
+2. If an id is readable: write down only its SHAPE in this section (prefix, length, the character classes it uses — letters, digits, `_`, `-`, upper case), never the id. If the real id has no digit,
+   or contains `_` or `-`, the pattern is wrong. Widen it in both halves (C# and TypeScript) with a test in each, in the same change, before anything else is recorded.
+3. If every id is already redacted, write `moonshot-id matched: yes` in the record.
+4. Then replace by hand every remaining account detail in the line with `org-REDACTED` / `<ak-REDACTED>`. **Never write a real id, a token, an e-mail, a name or any credential content into
+   this repository** — not in this section, not in a test, not in a commit message, not in a plan.
+
+**How it becomes the fixture.** (1) Fill "The record" below: date, Kimi version, round id, the redacted line, and the pattern check. (2) Replace the constructed envelope in
+`KimiAcpProfileTests` and `PromptError` in `ASpentKimiQuotaReadsAsAQuotaTests` with the real inner text. (3) Put the real line in the `observed` row of `GateReportingTests` for
+`reached your 5-hour usage limit`. (4) Re-run the Kimi profile tests, `GateReportingTests` and `ASpentKimiQuotaReadsAsAQuotaTests`.
+
+**If the line is S9's outcome** — a bare `Authentication required`, with no 429 text — record exactly that in "The record", do NOT widen the sign-in cure, and say in the plan that D1's quota row never
+fires over ACP: `not_signed_in` is then what the vendor said, and the kept sentence is the only place the truth shows.
+
+**Promotion.** The plan is promoted from `todo/` to `research/` only after this record is filled (plan §7, item 1). Until then its status line says: stories 1–4 shipped, capture pending.
+
+### The record
+
+| Item | Value |
+|---|---|
+| Date (UTC) | *not captured yet* |
+| Kimi version | *not captured yet* |
+| Round id | *not captured yet* |
+| The line (after ` — the vendor said: `, ids redacted by hand) | *not captured yet* |
+| `moonshot-id` matched the real id | *not captured yet* |
+| Outcome (quota text over ACP / S9: bare sign-in) | *not captured yet* |
