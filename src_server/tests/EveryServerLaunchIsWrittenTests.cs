@@ -8,7 +8,7 @@ using Xunit;
 namespace CoaiServer.Tests;
 
 /// <summary>
-/// Every paid launch is written — story 3.3 of <c>todo/PLAN_every_round_is_counted.md</c>, the Team server's half: an
+/// Every paid launch is written — story 3.3 of <c>research/PLAN_every_round_is_counted.md</c>, the Team server's half: an
 /// attempt a rate-limited account handed back to the queue writes its own line, a follow-up in the same conversation
 /// writes its own, and every line of one job carries the job's id as its turn and says which attempt it was.
 /// </summary>

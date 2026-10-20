@@ -8,7 +8,7 @@ using Xunit;
 namespace CoaiServer.Tests;
 
 /// <summary>
-/// The Team server captures the codex gauge, safely — story 6.1a of <c>todo/PLAN_every_round_is_counted.md</c>: inside
+/// The Team server captures the codex gauge, safely — story 6.1a of <c>research/PLAN_every_round_is_counted.md</c>: inside
 /// the slot's lease, after the job, behind the expiry guard, suspended on an authentication error, never changing the
 /// job's result, never logging what the reader said.
 /// </summary>
@@ -27,7 +27,7 @@ namespace CoaiServer.Tests;
 [Collection(ServerCollection.Name)]
 public sealed class GaugeCaptureTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "coai-gauge-" + Guid.NewGuid().ToString("N"));
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "testsToDelete-gauge-" + Guid.NewGuid().ToString("N"));
 
     private readonly List<string> _notes = [];
 
@@ -259,6 +259,34 @@ public sealed class GaugeCaptureTests : IDisposable
         Slot().Blocked.Should().BeEmpty("a reader that exited with nothing behind it blocks no slot");
         State().Reader.Should().BeNull("the marker is cleared: the tree is confirmed gone");
         Slot().Gauge!.Stale.Should().BeTrue("the last reading is kept and marked as the last the vendor said");
+        var next = await new SlotRegistry(_dir, new JsonFileStore()).AcquireAsync(Slot(), TimeSpan.Zero);
+        next.Should().BeOfType<Acquisition.Taken>("the next job on the slot is not held up");
+        (next as Acquisition.Taken)?.Lease.Dispose();
+    }
+
+    /// <summary>
+    /// The server-side half of the launcher's "a child that exited before its start time was read" path
+    /// (todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md, C2): the launch RETURNED and <c>Record</c> was never called, so
+    /// the reader marker still says "spawning". The capture's own end clears it — the gauge is stored and the slot is not
+    /// blocked. A guard: it is green against the code as it stands, written because the plan's first draft claimed this
+    /// outcome for a reason that was wrong.
+    /// </summary>
+    [Fact]
+    public async Task ALaunchThatReturnedWithoutRecord_ClearsTheMarker_StoresTheGauge_AndBlocksNoSlot()
+    {
+        RequiresATree();
+        var reader = new GaugeFixtures.Reader(GaugeFixtures.Answer + "\n") { RecordsItsIdentity = false };
+        var (jobs, runner) = Build(new GaugeFixtures.Reviewer(), reader.For);
+        jobs.Submit(Job());
+
+        await runner.PumpAsync("codex", CancellationToken.None);
+
+        reader.Requests.Should().ContainSingle("the reader ran; only the identity was never recorded");
+        jobs.All().Single().Status.Should().Be(JobStatus.Done);
+        State().Reader.Should().BeNull("the capture's own end clears the marker (GaugeCapture.ReadAsync, ClearReader) — nothing else would");
+        Slot().Gauge.Should().NotBeNull("the answer the reader gave is stored");
+        Slot().Gauge!.PlanType.Should().Be("prolite");
+        Slot().Blocked.Should().BeEmpty("a marker cleared by the launch's own end blocks nothing");
         var next = await new SlotRegistry(_dir, new JsonFileStore()).AcquireAsync(Slot(), TimeSpan.Zero);
         next.Should().BeOfType<Acquisition.Taken>("the next job on the slot is not held up");
         (next as Acquisition.Taken)?.Lease.Dispose();

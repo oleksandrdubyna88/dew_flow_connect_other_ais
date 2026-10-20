@@ -3,7 +3,7 @@ using CoaiMcp.Runners.Reviewers;
 namespace CoaiServer;
 
 /// <summary>
-/// Rounds per 1 % of each gauge window, as <c>/api/usage</c> answers it (story 6.2 of todo/PLAN_every_round_is_counted.md):
+/// Rounds per 1 % of each gauge window, as <c>/api/usage</c> answers it (story 6.2 of research/PLAN_every_round_is_counted.md):
 /// the server's ledger lines handed to the ONE derivation both halves use, <see cref="RoundsPerPercent"/>.
 /// </summary>
 /// <remarks>

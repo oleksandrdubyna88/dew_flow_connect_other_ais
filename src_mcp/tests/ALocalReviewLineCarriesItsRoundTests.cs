@@ -11,7 +11,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// A LOCAL review line carries the round it belongs to — the Definition-of-Done item of
-/// <c>todo/PLAN_every_round_is_counted.md</c> ("every new ledger line carries round, attempt, effort/tier as sent with their
+/// <c>research/PLAN_every_round_is_counted.md</c> ("every new ledger line carries round, attempt, effort/tier as sent with their
 /// source"), which only the Team server's lines met.
 /// </summary>
 /// <remarks>

@@ -208,7 +208,7 @@ export function slotSentence(vendor: CatalogVendor, nowMs: number = Date.now(), 
 }
 
 /**
- * ` — the first in 89 h (Wed 04:49)` from the catalog's `resetsUtc` (story 5.3b of todo/PLAN_every_round_is_counted.md),
+ * ` — the first in 89 h (Wed 04:49)` from the catalog's `resetsUtc` (story 5.3b of research/PLAN_every_round_is_counted.md),
  * or nothing: a server older than the field, no account parked, or a reset already past.
  */
 function firstBack(slots: SlotSummary, nowMs: number, timeZone: string | undefined): string {

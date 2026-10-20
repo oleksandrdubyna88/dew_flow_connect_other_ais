@@ -5,7 +5,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// DL6's rule (S-K12, S-K12b of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): a sign-in folder on a Windows filesystem is refused by the TYPE of the mount
+/// DL6's rule (S-K12, S-K12b of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>): a sign-in folder on a Windows filesystem is refused by the TYPE of the mount
 /// that holds its real path, never by a prefix of the path. Over a fake table, so it runs on every platform.
 /// </summary>
 public sealed class MountLocalityTests

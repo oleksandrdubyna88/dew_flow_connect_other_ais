@@ -43,7 +43,7 @@ public sealed record UsageLine(
 
     /// <summary>
     /// What the launch ran with — its CLI and that CLI's version, its effort and tier with their sources (story 3.4 of
-    /// todo/PLAN_every_round_is_counted.md); <see cref="LaunchOptions.None"/> on a line older than the fields.
+    /// research/PLAN_every_round_is_counted.md); <see cref="LaunchOptions.None"/> on a line older than the fields.
     /// </summary>
     /// <remarks>The ledger writer's own record, read back whole, so this reader and the writer cannot spell it two ways.</remarks>
     public LaunchOptions RanWith { get; init; } = LaunchOptions.None;
@@ -56,13 +56,13 @@ public sealed record UsageLine(
 
     /// <summary>
     /// WHY a <c>Cancelled</c> line was cancelled — one of <c>EndCauses</c> — empty on every other ending and on a line
-    /// older than the field (story 3.2 of todo/PLAN_every_round_is_counted.md).
+    /// older than the field (story 3.2 of research/PLAN_every_round_is_counted.md).
     /// </summary>
     public string EndCause { get; init; } = string.Empty;
 
     /// <summary>
     /// The client's id for the round the line's launch belonged to — empty on a line older than the field and on one whose
-    /// request sent none (story 4.2 of todo/PLAN_every_round_is_counted.md). What story 5.1 counts rounds by.
+    /// request sent none (story 4.2 of research/PLAN_every_round_is_counted.md). What story 5.1 counts rounds by.
     /// </summary>
     public string Round { get; init; } = string.Empty;
 
@@ -74,7 +74,7 @@ public sealed record UsageLine(
 
     /// <summary>
     /// The vendor's own gauge as read on the account right after this launch (story 6.1a of
-    /// todo/PLAN_every_round_is_counted.md); <see cref="GaugeOnLine.None"/> on a line older than the fields, on a local
+    /// research/PLAN_every_round_is_counted.md); <see cref="GaugeOnLine.None"/> on a line older than the fields, on a local
     /// line, and on a job after which nothing was read. The writer's own record, read back whole.
     /// </summary>
     public GaugeOnLine Gauge { get; init; } = GaugeOnLine.None;
@@ -220,7 +220,7 @@ public sealed class UsageReader(string dataDir)
                 entry.TokensOut,
                 entry.CostUsd,
                 kind,
-                // Read whole (story 3.1 of todo/PLAN_every_round_is_counted.md): a line from before these fields
+                // Read whole (story 3.1 of research/PLAN_every_round_is_counted.md): a line from before these fields
                 // reads 0 / 0 / empty, which is what it always meant.
                 entry.TokensCached,
                 entry.TokensReasoning,

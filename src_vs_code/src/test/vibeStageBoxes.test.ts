@@ -10,7 +10,7 @@ import { panelState, runPanel } from './panelPageHarness';
 
 /**
  * The Vibe card's "Use for" boxes follow the HELD runtime, not any note on the card (E3 of
- * todo/PLAN_kimi_and_vibe_on_linux.md, code review).
+ * research/PLAN_kimi_and_vibe_on_linux.md, code review).
  *
  * <p>`modelCard.useFor` switched the boxes off whenever `runtimeNote` was non-empty. That was one reason once — a server
  * that does not know the runtime — and it is two now: a note about the HOST (WSL2 on an old server, WSL1, a native Linux host)

@@ -11,7 +11,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// The survivor-marker report on the Kimi row of the providers answer (DL9 and F16 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>, E6): <c>survivorMarker = { "path": …, "pids": […] }</c>, ABSENT when no marker stands,
+/// The survivor-marker report on the Kimi row of the providers answer (DL9 and F16 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>, E6): <c>survivorMarker = { "path": …, "pids": […] }</c>, ABSENT when no marker stands,
 /// <c>pids</c> empty for a marker that names nothing, never a marker of another sign-in, and a path <c>--kimi-clear-marker</c> accepts. The card's button appears only when the field does.
 /// </summary>
 public sealed class KimiSurvivorMarkerReportTests : IDisposable

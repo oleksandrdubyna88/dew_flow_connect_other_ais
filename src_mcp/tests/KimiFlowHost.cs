@@ -7,7 +7,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// The host a scenario-harness Kimi flow runs as (E6 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>, §8): the real service builds its own <see cref="KimiRuntime"/>, which takes <see cref="KimiHost.Current"/> and
+/// The host a scenario-harness Kimi flow runs as (E6 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>, §8): the real service builds its own <see cref="KimiRuntime"/>, which takes <see cref="KimiHost.Current"/> and
 /// <see cref="KimiSeams.Real"/>, so a flow that must run as a WSL2 host on a CI runner that is not one — with a FAKE person's <c>~/.kimi-code</c> and THIS repository's <c>coai-mcp</c> as the shim — gives both through the
 /// per-flow seams (<see cref="KimiHost.Using"/>, <see cref="KimiSeams.Using"/>), and the sign-in lock root of its own.
 /// </summary>

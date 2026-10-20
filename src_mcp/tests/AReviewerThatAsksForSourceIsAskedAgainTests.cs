@@ -383,7 +383,7 @@ public sealed class AReviewerThatAsksForSourceIsAskedAgainTests : IAsyncLifetime
 
         var ledger = new UsageLedger(_dir.At("ledger-repair"));
         ledger.Record(slow.Invocation, timedOut, "m", "FeatureReview", TimeSpan.FromSeconds(4));
-        // One line per paid launch since story 3.3 of todo/PLAN_every_round_is_counted.md: turn 1's, then turn 2's
+        // One line per paid launch since story 3.3 of research/PLAN_every_round_is_counted.md: turn 1's, then turn 2's
         // malformed launch and its repair that timed out — the folded line used to carry both of turn 2's.
         var lines = File.ReadAllLines(ledger.Path);
         lines.Should().HaveCount(3, "turn 1's line, and turn 2's two launches each on its own");
@@ -421,7 +421,7 @@ public sealed class AReviewerThatAsksForSourceIsAskedAgainTests : IAsyncLifetime
 
         var ledger = new UsageLedger(_dir.At("ledger-continuing"));
         ledger.Record(work.Invocation, ok, "m", "FeatureReview", TimeSpan.FromSeconds(4));
-        // One line per paid launch since story 3.3 of todo/PLAN_every_round_is_counted.md — turn 1's malformed launch,
+        // One line per paid launch since story 3.3 of research/PLAN_every_round_is_counted.md — turn 1's malformed launch,
         // its refused repair and the ladder's retry, then turn 2 — and turn 1's lines still add up to its 1700.
         var lines = File.ReadAllLines(ledger.Path)
             .Select(l => System.Text.Json.JsonSerializer.Deserialize(l, LedgerJsonContext.Default.UsageEntry)!).ToList();

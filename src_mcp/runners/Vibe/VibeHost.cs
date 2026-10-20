@@ -4,7 +4,7 @@ namespace CoaiMcp.Runners.Vibe;
 
 /// <summary>
 /// The three facts about the machine a Vibe launch is judged against (D18 of <c>todo/PLAN_vibe_and_kimi_runtimes.md</c>, DL1 and DL2 of
-/// <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): which kind of host this is, which WSL it is when it is one, and where the person's Vibe
+/// <c>research/PLAN_kimi_and_vibe_on_linux.md</c>): which kind of host this is, which WSL it is when it is one, and where the person's Vibe
 /// sign-in lives. Resolved once, where the adapter is made.
 /// </summary>
 /// <param name="Kind">The host (<see cref="HostKinds.Current"/> for this process).</param>

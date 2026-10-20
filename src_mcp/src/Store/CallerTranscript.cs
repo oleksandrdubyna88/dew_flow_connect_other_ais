@@ -3,7 +3,7 @@ namespace CoaiMcp.Store;
 /// <summary>
 /// The caller's own transcript, read text-free: what its Claude session and every subagent it launched did — messages, models, effort,
 /// tokens, launches, parent links, writes — counted exactly once and keyed by the session id, never by <c>cwd</c> (E3.S4 of
-/// <c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E3.md</c>; the read algorithm and its decisions are there).
+/// <c>PLAN_a_round_records_who_wrote_the_code_and_how_much_E3.md</c>; the read algorithm and its decisions are there).
 /// </summary>
 /// <remarks>
 /// <para>It reads <c>&lt;session&gt;.jsonl</c>, every <c>subagents/agent-&lt;id&gt;.jsonl</c> and every <c>.meta.json</c>, through

@@ -97,7 +97,7 @@ export function modelsTabHtml(shown: PanelState): string {
     firstSeen: state.firstSeen ?? {}, now,
     roundsLine: cardRoundsLine(state.roundsSnapshot, row.id),
     resetLine: cardResetLine(state.roundsSnapshot, row.id),
-    // The vendor's own gauge (story 6.2 of todo/PLAN_every_round_is_counted.md), from the cached catalogs and answer.
+    // The vendor's own gauge (story 6.2 of research/PLAN_every_round_is_counted.md), from the cached catalogs and answer.
     gaugeLines: cardGaugeLines(row, teamServers, state.roundsSnapshot, now),
   }));
 

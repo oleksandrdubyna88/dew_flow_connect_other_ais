@@ -124,7 +124,12 @@ internal static class TranscriptLine
             return LineKind.Other;
         }
 
-        return type.ValueEquals("assistant") ? LineKind.Assistant : type.ValueEquals("user") ? LineKind.User : LineKind.Other;
+        if (type.ValueEquals("assistant"))
+        {
+            return LineKind.Assistant;
+        }
+
+        return type.ValueEquals("user") ? LineKind.User : LineKind.Other;
     }
 
     private static DateTime? StampOf(JsonElement root) =>

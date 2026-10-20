@@ -1,4 +1,4 @@
-// node --test scripts/lib/*.test.mjs — DL2's names grammar (todo/PLAN_kimi_and_vibe_on_linux.md) as a reference, held against the
+// node --test scripts/lib/*.test.mjs — DL2's names grammar (research/PLAN_kimi_and_vibe_on_linux.md) as a reference, held against the
 // vectors python-dotenv itself produced (shared/dotenv-name-vectors.json, L-V6b, written by scripts/dotenv-name-vectors.mjs with
 // Vibe 2.26.1's own Python). The grammar reads NAMES only — the value after `=` is never parsed — so these tests assert the
 // IMPLICATION the plan's soundness argument rests on: whatever the reference ADMITS binds no name but MISTRAL_API_KEY in

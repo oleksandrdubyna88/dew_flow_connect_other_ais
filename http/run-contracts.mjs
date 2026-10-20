@@ -148,7 +148,7 @@ writeFileSync(
 // and the thirty-day chart a launch in today's bucket, so those shapes are actually checked. The line
 // is the shape `coai-mcp`'s `UsageLedger` writes (mirrored by `UsageEntryDto` on the reading side).
 //
-// Then the round lines story 5.1 counts (todo/PLAN_every_round_is_counted.md), stamped a minute ago so the 5 h window
+// Then the round lines story 5.1 counts (research/PLAN_every_round_is_counted.md), stamped a minute ago so the 5 h window
 // holds them: two rounds through every client word, a retry whose job met a refusing account first (two lines, one
 // request), a cancelled repair, a budget refusal, and a deploy canary. The first line above has no round — an older
 // client — so `usage/usage.http` can assert every count BY VALUE rather than its type.

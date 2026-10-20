@@ -3,7 +3,7 @@ using System.Runtime.Versioning;
 namespace CoaiMcp.Runners.Files;
 
 /// <summary>
-/// DL6 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>: the FILESYSTEM that holds the sign-in's real path, read from <c>/proc/self/mountinfo</c> — a
+/// DL6 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>: the FILESYSTEM that holds the sign-in's real path, read from <c>/proc/self/mountinfo</c> — a
 /// Windows filesystem (<c>9p</c> with <c>aname=drvfs</c>, <c>drvfs</c>, <c>virtiofs</c>) is refused wherever it is mounted; <c>/mnt/&lt;letter&gt;/</c> is the
 /// example, the mount type is the rule.
 /// </summary>
@@ -16,7 +16,7 @@ public static class MountLocality
 {
     public const string MountInfoPath = "/proc/self/mountinfo";
 
-    private const string Plan = "DL6 of todo/PLAN_kimi_and_vibe_on_linux.md";
+    private const string Plan = "DL6 of research/PLAN_kimi_and_vibe_on_linux.md";
 
     /// <summary>Empty when the real path lies on a non-Windows, non-network filesystem; else the sentence. <paramref name="mountInfo"/> reads the table (a test hands a string). The mount is found by the KERNEL's
     /// own answer for the path (<see cref="Identify"/>), so a mount laid over another cannot hide the one that really holds it.</summary>

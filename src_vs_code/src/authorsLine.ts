@@ -132,7 +132,14 @@ function stateOf(authors: object): State | undefined {
   return kind === undefined || reasons === undefined ? undefined : checked({ kind, reasons });
 }
 
+/** The snapshot's own kinds. A kind that already carries its reasons is the database's rendered column, never a snapshot's state. */
+const KINDS: ReadonlySet<string> = new Set(['observed', 'partial', 'unobserved']);
+
 function checked(state: State): State | undefined {
+  if (!KINDS.has(state.kind)) {
+    return undefined;
+  }
+
   const text = state.reasons.length === 0 ? state.kind : `${state.kind}: ${state.reasons.join(JOINER)}`;
 
   return isWellFormedAuthorsState(text) ? state : undefined;

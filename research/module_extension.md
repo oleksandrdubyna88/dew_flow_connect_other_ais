@@ -2729,7 +2729,7 @@ family that answered:
 | `claudeModels.ts` | the pure half: `familyOf`, `answeredAsAsked`, `modelThatAnswered`, `stillGood`, `claudeModels`, `claudeNote` |
 | `claudeProbe.ts` | the run: one small request per candidate, SEQUENTIALLY, through `versionProbe.ts`'s `capture` |
 | `claudeProbeFile.ts` | `claude-models.json` in the data directory — parsed entry by entry, written atomically |
-| `probeUsageFile.ts` | what the probe SPENT (2026-10-11, story 3.3 of `todo/PLAN_every_round_is_counted.md`): `recordingRun` wraps the probe's `run` at the launch boundary and appends one `UsageEntry`-shaped line per request — kind `probe`, provider `claude`, the candidate as the model, Claude's own usage and billed cost through `claudeAdapter.classify`, *usage not captured* for a request that did not finish — to `probe-usage.jsonl`, through `jsonlLedger.appendLine`. Its own file because every reader of `chat-usage.jsonl` reads a line there as a conversation. `PanelProvider.readUsage` and the Rounds block's loader read it beside `usage.jsonl`; it is in `DATA_TO_MOVE` |
+| `probeUsageFile.ts` | what the probe SPENT (2026-10-11, story 3.3 of `research/PLAN_every_round_is_counted.md`): `recordingRun` wraps the probe's `run` at the launch boundary and appends one `UsageEntry`-shaped line per request — kind `probe`, provider `claude`, the candidate as the model, Claude's own usage and billed cost through `claudeAdapter.classify`, *usage not captured* for a request that did not finish — to `probe-usage.jsonl`, through `jsonlLedger.appendLine`. Its own file because every reader of `chat-usage.jsonl` reads a line there as a conversation. `PanelProvider.readUsage` and the Rounds block's loader read it beside `usage.jsonl`; it is in `DATA_TO_MOVE` |
 
 **A discovery that cannot run never subtracts.** The three ways the probe fails are all states this
 installation is really in: an allowance that is spent (issue #165 measured four reviewers meeting
@@ -3876,7 +3876,7 @@ empty `models`. Every server string goes through `escapeHtml`.
   prices a dash that makes its total a floor (`≥`). Person, vendor and summary totals add those; the note says the
   server's lines carry no cached count, so cache-heavy input is overstated. ~$ and *last seen* become sorts when the
   answer can serve them (`sorts` in the push; the page disables and labels the others). The figure itself — `Estimate`,
-  `UNKNOWN`, `totalCost`, `costText` — moved to `usage.ts` with story 2.5 of `todo/PLAN_every_round_is_counted.md`, where
+  `UNKNOWN`, `totalCost`, `costText` — moved to `usage.ts` with story 2.5 of `research/PLAN_every_round_is_counted.md`, where
   the spending tab prices each ledger line by the same three states; `teamCost.ts` re-exports them unchanged.
 - *The chart (3.3, D7).* `teamChart.ts`: an inline SVG of the dense 30 UTC days, stacked by vendor, drawn to one scale,
   its axis labelled *launches*, coloured through the vendor palette (theme colours, no hex), the days the server's
@@ -3885,7 +3885,7 @@ empty `models`. Every server string goes through `escapeHtml`.
   the way the cards are, so a push keeps it open; the axis label sits at the plot's left edge, start-anchored, where the
   svg cannot clip it; it says its 30 calendar days are not the Month window.
 
-**The server's own rounds (story 5.2 of `todo/PLAN_every_round_is_counted.md`, 2026-10-11).** A COMPANY request
+**The server's own rounds (story 5.2 of `research/PLAN_every_round_is_counted.md`, 2026-10-11).** A COMPANY request
 (`fetchUsage` → `usageRoute`) also asks `&windows=5h,24h,week` (`ROUND_WINDOWS`), so the rounds come from the same
 request, scan and cached answer as the figures they sit beside, whatever window chip is pressed; a personal request asks
 none. `serverRounds` in `teamServerApi.ts` reads the answer by its SHAPE, never its status: the counts are believed only
@@ -7784,7 +7784,7 @@ marks. `within('day')` is since local midnight now, by the operator's ruling; we
 stay rolling. A Team server's own block on this tab is this account's spending on it (`scope=me`); the company view is
 the **Team server** tab (2026-10-09), and a window press re-asks the servers for the new window at once.
 
-**Each ledger line is priced at its own model (2026-10-10, story 2.5 of `todo/PLAN_every_round_is_counted.md`).**
+**Each ledger line is priced at its own model (2026-10-10, story 2.5 of `research/PLAN_every_round_is_counted.md`).**
 `totalsByVendor` priced a row's whole history at the row's CURRENT model, all input at the full rate and never at a
 long-context tier — after the Gemini row moved to `flash-medium` on 2026-10-02, every earlier `flash-low` line was
 priced as `flash-medium`. Now:
@@ -7823,7 +7823,7 @@ this window*. How many rounds were FULLY priced is not knowable until a line car
 says only that some of it was not. The round counts come from `coai-mcp --round-counts` (story 2.1), read as below.
 
 **The counts are read once a minute, and the Spending tab's first block is Rounds (2026-10-10, stories 2.2–2.4 of
-`todo/PLAN_every_round_is_counted.md`).** Four files, pure where the page can import them:
+`research/PLAN_every_round_is_counted.md`).** Four files, pure where the page can import them:
 
 - `roundCounts.ts` — the mode's contract as data (`RoundCountsAnswer`: `nowUtc`, three windows `5h` / `24h` / `7d`
   half-open `(from, to]`, each a row per vendor with rounds by stage, the reviewer rows and the rounds per model;
@@ -12606,7 +12606,7 @@ and **Chat** now lay their repeated cards out the way Models does — by the SAM
   reaches a Chat model block while one still reaches a Models card block. Design record:
   [PLAN_settings_tabs_two_columns.md](PLAN_settings_tabs_two_columns.md).
 
-## The vendor's own gauge, rounds per 1 % and a plan's share (2026-10-12, story 6.2 of `todo/PLAN_every_round_is_counted.md`)
+## The vendor's own gauge, rounds per 1 % and a plan's share (2026-10-12, story 6.2 of `research/PLAN_every_round_is_counted.md`)
 
 The Team server reads the codex account's gauge after each job (story 6.1a, [module_team_server.md](module_team_server.md))
 and derives rounds per 1 % of each window in the shared runners library ([module_runners.md](module_runners.md)). The
@@ -12730,8 +12730,8 @@ flowchart LR
   Never in `DEFAULT_VENDORS`. Its hint names what a person meets first: Windows, and WSL2 from coai-mcp 0.59.0
   (when coai-mcp itself runs there — a VS Code window attached to WSL; the sign-in there is `~/.vibe/.env`, made by
   `vibe --setup`, linked by coai and never copied), "On a native Linux host coai-mcp refuses Vibe for now — it is measured on
-  WSL2 only" (E3 of `todo/PLAN_kimi_and_vibe_on_linux.md`, which lifted D18 for WSL2), and the coai-mcp release that
-  knows the runtime. Kimi's hint is unchanged: Windows only.
+  WSL2 only" (E3 of `research/PLAN_kimi_and_vibe_on_linux.md`, which lifted D18 for WSL2), and the coai-mcp release that
+  knows the runtime. Kimi's hint was unchanged then: Windows only (Kimi on WSL2 came with 0.61.0, see *Kimi on Linux and WSL, on the panel's side* below).
 - **The models** (D10): `VIBE_MODELS` is the curated list coai-mcp's `VibeModels.Curated` launches on —
   `mistral-medium-3.5` (Vibe's default) and `glm-5-3`, seen accepted on Vibe 2.26.1 (`VIBE_MODELS_SEEN_ON`).
   `modelsFor('vibe')` offers it (an unknown runtime used to fall to the Gemini list); a typed alias stays in its own
@@ -13010,9 +13010,9 @@ flowchart LR
   live round through the product with the version warning shown; a `live-kimi-runtime-compat.mjs` beside Vibe's (that a released 0.55.0 refuses a
   kimi row by name is inferred from the Vibe measurement, not measured).
 
-## Vibe on Linux and WSL, on the panel's side (2026-10-16, E3 of `todo/PLAN_kimi_and_vibe_on_linux.md`)
+## Vibe on Linux and WSL, on the panel's side (2026-10-16, E3 of `research/PLAN_kimi_and_vibe_on_linux.md`)
 
-The extension's half of lifting D18 for WSL2 (DL1, DL2, DL14); the server's half is E2 (`module_runners.md`). Kimi's half is the next section.
+The extension's half of lifting D18 for WSL2 (DL1, DL2, DL14); the server's half is E2 (`module_runners.md`). Kimi's half is the next section. **Shipped in extension 0.79.0 with coai-mcp 0.59.0 (2026-10-17), checked live on WSL2 (2026-10-19).**
 
 - **`VIBE_ON_LINUX_SINCE = '0.59.0'`** (`runtimeSince.ts`), in a second table `ON_LINUX_SINCE` beside `RUNTIME_SINCE`. The first
   answers "does this server know the runtime", the second "does it run it on THIS host" — a 0.57.0 server on WSL knows `vibe`
@@ -13049,10 +13049,10 @@ The extension's half of lifting D18 for WSL2 (DL1, DL2, DL14); the server's half
   its host-side diagnostics carry the `ConnectOtherAIs:` prefix into the extension-host log) naming the cause and that the host is treated as
   native Linux (`hostKindLogsAnUnreadableBanner.test.ts`).
 
-## Kimi on Linux and WSL, on the panel's side (2026-10-17, E6 of `todo/PLAN_kimi_and_vibe_on_linux.md`)
+## Kimi on Linux and WSL, on the panel's side (2026-10-17, E6 of `research/PLAN_kimi_and_vibe_on_linux.md`)
 
 The extension's half of lifting D18 for Kimi on WSL2 (DL1, DL12, DL14, Q3, S-K9, S-K10, S-K17, S-K18); the server's half is E5/E6
-(`module_runners.md`). It reuses the Vibe section's host-kind shape above — `HostKind` (`windows | wsl2 | wsl1 | linux | darwin`),
+(`module_runners.md`). **Shipped in extension 0.81.0 with coai-mcp 0.61.0 (2026-10-19), checked live on WSL2; the Linux install line was not yet pressed live on a machine without `rg`.** It reuses the Vibe section's host-kind shape above — `HostKind` (`windows | wsl2 | wsl1 | linux | darwin`),
 `PanelState.hostKind`, `hostKindOfPlatform`, `runtimeSkewNote(version, vendors, host)` — and adds no second one.
 
 - **`KIMI_ON_LINUX_SINCE = '0.61.0'`** (`runtimeSince.ts`): 0.58.0 was released from main without either runtime, Vibe-on-Linux shipped in 0.59.0, and main then released 0.60.0 without Kimi, so Kimi on Linux ships in 0.61.0 (DL14, whoever merges second bumps). It joins `ON_LINUX_SINCE`; the

@@ -20,7 +20,7 @@ namespace CoaiServer;
 /// <param name="Blocked">
 /// A <see cref="BlockedReasons"/> code while the account is UNAVAILABLE until recovery proves it safe — a gauge reader
 /// of a crashed server that could not be named, or one that would not die (story 6.1a of
-/// todo/PLAN_every_round_is_counted.md). Empty otherwise. Neither a cooldown (no clock clears it) nor needs-sign-in
+/// research/PLAN_every_round_is_counted.md). Empty otherwise. Neither a cooldown (no clock clears it) nor needs-sign-in
 /// (the credentials are fine); every later acquisition reconciles it again, and a human may clear the marker.
 /// </param>
 /// <param name="GaugeSuspended">

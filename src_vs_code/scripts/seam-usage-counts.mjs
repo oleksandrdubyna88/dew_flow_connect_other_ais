@@ -1,5 +1,5 @@
 /**
- * The usage-counts leg of the seam (story 5.1/5.2 of todo/PLAN_every_round_is_counted.md — E5's plan round decision).
+ * The usage-counts leg of the seam (story 5.1/5.2 of research/PLAN_every_round_is_counted.md — E5's plan round decision).
  *
  * <p>The Team server WRITES the round counts into `/api/usage` and the extension READS them through its own parser
  * (`serverRounds` in `teamServerApi.ts`); each side has its own suite, and each suite compares its side against its own

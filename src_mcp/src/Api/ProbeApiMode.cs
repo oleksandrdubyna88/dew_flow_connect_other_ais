@@ -140,7 +140,7 @@ internal static class ProbeApiMode
         // No client-wide timeout: each call carries its own, below.
         http.Timeout = Timeout.InfiniteTimeSpan;
         // Every completion sent with the real key is written down as it is spent (story 3.3 of
-        // todo/PLAN_every_round_is_counted.md) — into this machine's one ledger, under the row it probed.
+        // research/PLAN_every_round_is_counted.md) — into this machine's one ledger, under the row it probed.
         var ledger = new UsageLedger(SettingsFile.DataDirFrom(env).Path);
         var report = await ProbeAsync(probe, key, http, note, spent => Written(ledger, row?.Provider ?? vendor, probe.Model, spent));
         await output.WriteLineAsync(Render(probe, report));
@@ -270,7 +270,7 @@ internal static class ProbeApiMode
 
     /// <summary>
     /// One completion as a ledger line — kind <c>probe</c>, stage <c>Probe</c>, the variant as its role, the model it
-    /// asked, and what the endpoint reported (story 3.3 of todo/PLAN_every_round_is_counted.md).
+    /// asked, and what the endpoint reported (story 3.3 of research/PLAN_every_round_is_counted.md).
     /// </summary>
     /// <remarks>
     /// <para>Before this the matrix spent ten completions per run against a metered key and wrote nothing — row 7 of the

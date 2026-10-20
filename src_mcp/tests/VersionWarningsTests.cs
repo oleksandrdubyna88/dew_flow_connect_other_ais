@@ -16,7 +16,7 @@ public sealed class VersionWarningsTests
 {
     /// <summary>
     /// The sentence <c>VibeLaunch</c> produces for 2.27.0 against a manifest that knows 2.26.1 — pinned as a string. Since the manifest is per
-    /// platform (DL3 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>) it names each measured version with the platform it was measured on, so a
+    /// platform (DL3 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>) it names each measured version with the platform it was measured on, so a
     /// version measured on another platform only says where.
     /// </summary>
     private const string VibeBefore =

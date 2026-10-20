@@ -94,7 +94,7 @@ public sealed class VibeRuntime(string id, VibeHost host, VibePathBudget? budget
     /// </summary>
     /// <remarks>
     /// <para><b>Windows:</b> <c>%USERPROFILE%\.local\bin\vibe.exe</c> when it is there, else bare <c>vibe</c>.</para>
-    /// <para><b>WSL (and a Linux host):</b> (DL5 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>) the folders <c>uv tool install</c> puts an
+    /// <para><b>WSL (and a Linux host):</b> (DL5 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>) the folders <c>uv tool install</c> puts an
     /// executable in, in UV'S OWN order — <c></c>, <c></c>, <c>/../bin</c>, <c>~/.local/bin</c>
     /// (<c>uv tool dir --bin</c>, read from uv 0.13.0's own help) — each counting only when <c>vibe</c> is THERE and executable; then
     /// bare <c>vibe</c> (the <c>PATH</c> walk); then the install cure when starting it fails. <b>The installer's folder comes before

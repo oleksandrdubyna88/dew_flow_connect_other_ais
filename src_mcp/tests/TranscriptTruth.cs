@@ -37,19 +37,31 @@ internal static class TranscriptTruth
     {
         using var document = JsonDocument.Parse(text);
         var root = document.RootElement;
-        if (!root.TryGetProperty("type", out var type) || type.GetString() != "assistant" || !root.TryGetProperty("message", out var message))
-        {
-            return null;
-        }
 
-        var model = message.TryGetProperty("model", out var m) ? m.GetString() ?? string.Empty : string.Empty;
-        if (model.Length == 0 || model[0] == '<' || !message.TryGetProperty("usage", out var usage))
-        {
-            return null;
-        }
-
-        return new RawAssistant(file.Key, number, message.GetProperty("id").GetString() ?? string.Empty, StampOf(root), UsageOf(usage));
+        return IsAssistant(root, out var message) && IsCounted(message, out var usage)
+            ? new RawAssistant(file.Key, number, message.GetProperty("id").GetString() ?? string.Empty, StampOf(root), UsageOf(usage))
+            : null;
     }
+
+    /// <summary>An <c>assistant</c> line that carries a message.</summary>
+    private static bool IsAssistant(JsonElement root, out JsonElement message)
+    {
+        message = default;
+
+        return root.TryGetProperty("type", out var type) && type.GetString() == "assistant" && root.TryGetProperty("message", out message);
+    }
+
+    /// <summary>A message with a real model (a synthetic one is named <c>&lt;synthetic&gt;</c>) and a usage block.</summary>
+    private static bool IsCounted(JsonElement message, out JsonElement usage)
+    {
+        usage = default;
+        var model = ModelOf(message);
+
+        return model.Length > 0 && model[0] != '<' && message.TryGetProperty("usage", out usage);
+    }
+
+    private static string ModelOf(JsonElement message) =>
+        message.TryGetProperty("model", out var model) ? model.GetString() ?? string.Empty : string.Empty;
 
     private static DateTime StampOrMin(string line)
     {
