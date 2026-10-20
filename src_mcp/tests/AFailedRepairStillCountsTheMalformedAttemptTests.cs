@@ -80,7 +80,7 @@ public sealed class AFailedRepairStillCountsTheMalformedAttemptTests : IDisposab
         outcome.LastTurnUsage.TokensOut.Should().Be(50);
         outcome.TotalUsage.TokensIn.Should().Be(1000, "exactly once: no earlier turn to add it to twice");
 
-        // One line per paid launch since story 3.3 of todo/PLAN_every_round_is_counted.md — this test asserted the
+        // One line per paid launch since story 3.3 of research/PLAN_every_round_is_counted.md — this test asserted the
         // folded single line until then; the sum is what it always was.
         var lines = Recorded(outcome, "ledger-" + repairArgs[0]);
         lines.Should().HaveCount(2, "the malformed first launch and the failed repair, each its own line in one turn");
@@ -118,7 +118,7 @@ public sealed class AFailedRepairStillCountsTheMalformedAttemptTests : IDisposab
         (await File.ReadAllLinesAsync(counter, TestContext.Current.CancellationToken)).Should().HaveCount(3, "three malformed first launches, one per step");
         outcome.TotalUsage.TokensIn.Should().Be(3000, "each step's cost rides forward on the next step's outcome");
 
-        // One line per paid launch since story 3.3 of todo/PLAN_every_round_is_counted.md: each step's malformed launch
+        // One line per paid launch since story 3.3 of research/PLAN_every_round_is_counted.md: each step's malformed launch
         // and its refused repair, the steps after the first named retries — and the sum is what the folded line said.
         var lines = Recorded(outcome, "ledger-ladder");
         lines.Select(l => l.Attempt).Should().Equal(

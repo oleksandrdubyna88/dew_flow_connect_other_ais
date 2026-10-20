@@ -353,7 +353,7 @@ test('an OLD server after a new one: the sorts it cannot serve go back to saying
   assert.doesNotMatch(page.element('team-people').textContent, /last seen/, 'an old server\'s card shows a last-seen it cannot know');
 });
 
-// ---------- story 5.2 of todo/PLAN_every_round_is_counted.md: the server's own round counts ----------
+// ---------- story 5.2 of research/PLAN_every_round_is_counted.md: the server's own round counts ----------
 
 /** A NEW server's answer with the three round windows beside it (story 5.1's `windows`). */
 function countedCompany(): Usage {
@@ -394,7 +394,7 @@ test('AnOlderServer_ShowsUnavailable_NotZero — on the page: a 200 without the 
   assert.doesNotMatch(vendors, /5 h 0|7 d 0|\b0 runs without a round/, 'a server that cannot count rounds was shown as having none');
 });
 
-// ---------- story 6.2 of todo/PLAN_every_round_is_counted.md: the vendor's own gauge ----------
+// ---------- story 6.2 of research/PLAN_every_round_is_counted.md: the vendor's own gauge ----------
 
 /** A server whose catalog carries the codex account's reading, and whose company answer carries the derived figures. */
 function pushGauged(figures: readonly Record<string, unknown>[], planPrices: Readonly<Record<string, number>> = {}): TeamPush {

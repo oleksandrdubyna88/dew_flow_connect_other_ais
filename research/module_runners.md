@@ -39,7 +39,7 @@ sequenceDiagram
 
 | Type | File | Role |
 |---|---|---|
-| `IProcessLauncher` / `ProcessLauncher` | `Processes/ProcessLauncher.cs` | the ONE process seam; one deadline over the write, the read and the wait, and it kills the entire tree; `StdIn` carries every long or multi-line input, BOM-less UTF-8, and a child that exits before reading is not an exception; each stream is kept up to `MaxOutputChars` and says so when it is cut; a request with `InheritsEnvironment = false` starts the child from `ProcessEnvironment.Passthrough` instead of this process's whole environment, the request's own names on top either way |
+| `IProcessLauncher` / `ProcessLauncher` | `Processes/ProcessLauncher.cs` | the ONE process seam; one deadline over the write, the read and the wait, and it kills the entire tree; `StdIn` carries every long or multi-line input, BOM-less UTF-8, and a child that exits before reading is not an exception; each stream is kept up to `MaxOutputChars` and says so when it is cut; a request with `InheritsEnvironment = false` starts the child from `ProcessEnvironment.Passthrough` instead of this process's whole environment, the request's own names on top either way. Its start-time read for the tracker goes through one helper (`TryStartedAt`, a seam: an `internal` second constructor `ProcessLauncher(IProcessTracker, Func<Process, DateTime>)`; the public constructor is `ProcessLauncher(IProcessTracker? = null)` and reads `Process.StartTime`): when the read throws `Win32Exception` (macOS) or `InvalidOperationException` AND the child has ended — decided by `HasEnded`, which gives the child up to 100 ms (`WaitForExit`) because one `HasExited` read at the moment of exit can still say false, and counts "no process is associated" as ended — nothing is recorded (`IProcessTracker.Record` is not called), the launch goes on to collect the child's real result, and `RunAsync`'s `finally` still calls `Forget`; the Team server's reader marker (`SlotReaderTracker`) then stays `spawning` — what it holds between `Started` and `Record` anyway — until `GaugeCapture.ReadAsync` clears it at the launch's normal end. That window **fails closed**: a `spawning` marker with no live child does NOT reconcile as "nothing to kill" — `ReaderMarkerDto.Unidentified` is true for every phase but Running and `ReaderReconcile.RunAsync` answers `Blocked(ReaderIdentityMissing)`, a slot that needs a person — so a server that crashes inside it blocks the slot until a person acts; it is the same window that exists today between `MarkReaderExpected` and `Record`, not a new one. A child still ALIVE when the read fails is killed, waited for, and the exception rethrown, as before (2026-10-19, C2: an instant reviewer on macOS was reported `NotStarted`) |
 | `ProcessEnvironment` | `Processes/ProcessEnvironment.cs` | the allowlist a confined launch starts from — an allowlist because what is being kept out is not a known name; compared the platform's way (`Path` is `PATH` on Windows and is not on Linux); `HOME` is on it for a measured reason, below |
 | `ExecutableResolver` | `Processes/ExecutableResolver.cs` | npm Windows shims: the PATHEXT resolution `Process.Start` does not do |
 | `WorktreeManager`, `WorktreeLease` | `Worktrees/WorktreeManager.cs` | one detached tree per round, `coai-wt-` prefix under OUR storage (`%LOCALAPPDATA%\coai-mcp\round-worktrees`, or `COAI_ROUND_WORKTREES` — a LOCAL path; a shorter root is also the way to more path ceiling on a git that ignores `core.longpaths`; review trees move with `COAI_REVIEW_ROOT` instead, never with this one); prune-on-open; disposal = finally; never touches a human's worktree |
@@ -79,8 +79,8 @@ sequenceDiagram
 | `QuestionResolution` | `Consultation/QuestionResolution.cs` | which answering runtime a question row's vendor gets: `api` → `ApiConsultant`, the rest `ConsultantResolution.For` — `ConsultantResolution.Consulting` is NOT widened |
 | `ProcessEnvironment.Minimal`, `ProcessRequest.Passthrough` | `Processes/ProcessEnvironment.cs`, `ProcessLauncher.cs` | the measured minimal list a question child starts from (S2c), chosen per request: the launcher's filter took its allowlist from the request rather than growing a second flag |
 | `FeatureOutlineBuilder.BuildAtHeadAsync` | `Feature/FeatureOutlineBuilder.cs` | the outline of what EXISTS at a commit — against the repository's empty tree, no member hunks — what an api question row is shown of the code |
-| `RetryLadder` | `Reviewers/RetryLadder.cs` | the waits and when to stop: four steps, jittered, bounded by the reviewer's own deadline; pure, so the jitter is a table rather than a stopwatch. `ResetOutlasts(reason, left, now)` (story 5.3c of todo/PLAN_every_round_is_counted.md): a STATED reset beyond what is left of the budget — the ladder then takes no step |
-| `RoundsPerPercent`, `GaugeLine`, `GaugeRatio`, `GaugeAnswer`, `GaugeReasons`, `GaugeConsumers` | `Reviewers/RoundsPerPercent.cs` | rounds per 1 % of a vendor's gauge window, computed ONCE for both halves (story 6.2, corrected by 6.2b — a plateau keeps its rounds, a barrier voids the whole span, a percentage outside [0, 100] is a missing reading, the figure is pooled Σ rounds ÷ Σ rise, of todo/PLAN_every_round_is_counted.md): pure, ledger lines in, one figure per vendor × window out — or `null` with a fixed reason; a known uncounted consumer (`direct-codex-use` for the `codex` limit) hides it. The Team server answers it in `/api/usage`'s `gauges`; `coai-mcp --round-counts` answers `NotReadHere` (`local-capture-deferred`) — the section *Rounds per 1 % of a gauge window* |
+| `RetryLadder` | `Reviewers/RetryLadder.cs` | the waits and when to stop: four steps, jittered, bounded by the reviewer's own deadline; pure, so the jitter is a table rather than a stopwatch. `ResetOutlasts(reason, left, now)` (story 5.3c of research/PLAN_every_round_is_counted.md): a STATED reset beyond what is left of the budget — the ladder then takes no step |
+| `RoundsPerPercent`, `GaugeLine`, `GaugeRatio`, `GaugeAnswer`, `GaugeReasons`, `GaugeConsumers` | `Reviewers/RoundsPerPercent.cs` | rounds per 1 % of a vendor's gauge window, computed ONCE for both halves (story 6.2, corrected by 6.2b — a plateau keeps its rounds, a barrier voids the whole span, a percentage outside [0, 100] is a missing reading, the figure is pooled Σ rounds ÷ Σ rise, of research/PLAN_every_round_is_counted.md): pure, ledger lines in, one figure per vendor × window out — or `null` with a fixed reason; a known uncounted consumer (`direct-codex-use` for the `codex` limit) hides it. The Team server answers it in `/api/usage`'s `gauges`; `coai-mcp --round-counts` answers `NotReadHere` (`local-capture-deferred`) — the section *Rounds per 1 % of a gauge window* |
 | `CooldownParser` | `Reviewers/CooldownParser.cs` | the vendor's own rate-limit sentence → an instant — ONE parser for both halves since story 5.3b (moved from `src_server/src/Slots`): `Until` (always an answer; the Team server parks a slot on it, falling back to a doubling guess) and `StatedReset` (only what the vendor NAMED — a duration up to 14 days, a date, a clock time — else null; the local ledger and the ladder read this one) |
 | `ClaudeCapability`, `RestrictedSupport` | `Reviewers/ClaudeCapability.cs` | what the INSTALLED claude's own `--help` says about `--restricted` — `Declared`, `NotDeclared`, `Unknown` (the help did not come back), or `Unprobed` — read through the launcher (10 s per ask, tree-killed, one retry on `Unknown`) on every launch, never cached. Carried into a pure `Build` on `ReviewerSettings.ClaudeCli` (default `Unprobed`, which the consultant's `Build` refuses); the reviewer is planned to read it too (the section *The claude consultant is confined by an allowlist*) |
 | `ConsultantPreparation` (`Ready` / `Refused`) | `Consultation/IConsultantRuntime.cs` | what `IConsultantRuntime.PrepareAsync` concluded before `Build`: a launch with the confinement it will be SENT and a log note, or a classified refusal the service applies like any failure |
@@ -116,9 +116,9 @@ sequenceDiagram
   rule name)*. Two rounds of one fix therefore show identical rules, which is the defect the plan was
   opened for, while different branches order the rest of the corpus differently. **That second half
   reaches one to three rules in this repository since the operator raised the budget to 90 000 bytes
-  (2026-10-16; `RuleFiles.DefaultBudgetBytes`)** — the base and the tier spend **79 967** bytes (79 944 until 2026-10-18), which
+  (2026-10-16; `RuleFiles.DefaultBudgetBytes`)** — the base and the tier spend **79 986** bytes (79 944 until 2026-10-18, 79 967 until 2026-10-19), which
   left **56** at the old 80 000 (the tail took nothing, so `common/test-leftovers.md` reached no
-  reviewer) and leave **10 033** now (10 056 until 2026-10-18); the smallest rule outside the tier is 2 197. Over 3 000 branch
+  reviewer) and leave **10 014** now (10 056 until 2026-10-18, 10 033 until 2026-10-19, when PROJECT.md named `--round-authors`); the smallest rule outside the tier is 2 197. Over 3 000 branch
   names the tail takes one rule on 30 %, two on 62 %, three on 8 % (mean 1.78), and
   `common/test-leftovers.md` is drawn on 9.8 % — drawn, not owed: a rule that must reach every reviewer
   belongs in the tier. Numbers: `research/RESULTS_rules_selection_budget.md` (last section).
@@ -136,8 +136,8 @@ sequenceDiagram
 
   The 1 145 / 77 562 / 78 855 figures in this paragraph are the 2026-09-18 measurements at 80 000 bytes
   and stay as the history of the CRLF defect. The rotation has room since 2026-10-16;
-  `StageRulesTests.AtNinetyKilobytes_TheBaseAndTheTier_SpendExactly79967Bytes` (the measuring test and drift
-  guard: 17 906 + 62 061),
+  `StageRulesTests.AtNinetyKilobytes_TheBaseAndTheTier_SpendExactlyTheirPinnedBytes` (the measuring test and drift
+  guard: 17 925 + 62 061 since 2026-10-19; 17 906 + 62 061 before `.agents/PROJECT.md` named `--round-authors`),
   `AtNinetyKilobytes_TheRotatedTail_FitsAtMostThreeRules` (the exact three tail rules on the canary branch,
   the measured maximum elsewhere),
   `AtNinetyKilobytes_EveryBranchReachesAtLeastOneTailRule` (at least one) and
@@ -252,7 +252,7 @@ sequenceDiagram
   **A cancellation that lands during a WAIT ends the turn as the refusal it last saw** — the ladder's own ending
   when its budget runs out — and never throws (`BoundedScheduler.WaitedOut`): no launch was killed, and the launches
   the turn had already paid for live only in the ladder's locals, so a throw dropped them from the ledger (the
-  epic-3 code round of `todo/PLAN_every_round_is_counted.md`; `ACancelDuringTheLaddersWait_KeepsTheLaunchesAlreadyPaid`).
+  epic-3 code round of `research/PLAN_every_round_is_counted.md`; `ACancelDuringTheLaddersWait_KeepsTheLaunchesAlreadyPaid`).
 - **Antigravity (`agy`) is the closest fit to this product's contract**: `--json-schema` puts the
   finding schema straight into `result.response`, the same envelope carries `usage`, and the model
   ids carry their own reasoning effort. Its prompt rides `--input-format stream-json` on stdin as
@@ -562,7 +562,7 @@ Twelve reviewers of twelve answered; thirty-five findings, and these are the one
   too slow for its budget and belongs in the retry ladder, the other is a job nobody is waiting for and
   must never be retried. The token's STATE decides, never the exception's type. `Truncated` lets a
   caller tell a cut answer from a bad one without parsing an English sentence.
-  **And the executor reads it, since story 3.2 of `todo/PLAN_every_round_is_counted.md` (2026-10-11).**
+  **And the executor reads it, since story 3.2 of `research/PLAN_every_round_is_counted.md` (2026-10-11).**
   `ReviewerExecutor.LaunchAsync` checked only `TimedOut` for a year, so a kill by the caller's token — which
   sets BOTH flags — was filed as the vendor's timeout: the deployed Team server's own line for a review its
   client withdrew after 8.4 s says `TimedOut` (`src_server/tests/fixtures/usage/timed-out-withdrawal.jsonl`).
@@ -1085,7 +1085,7 @@ Four things about it are not obvious from the shape:
   collect. The shim writes a claim to a job file the moment the server accepts, and the executor calls
   `IReviewerRuntime.AbandonAsync` on **every** kill path — its own timeout, a cancellation the launcher
   reports (`ProcessResult.Cancelled`, its own `Cancelled` ending since story 3.2 of
-  `todo/PLAN_every_round_is_counted.md`), and a cancellation a launcher throws — which is where
+  `research/PLAN_every_round_is_counted.md`), and a cancellation a launcher throws — which is where
   `RemoteRuntime` reads that claim and sends the `DELETE`. `AWithdrawnRemoteReviewer_StillSendsTheDelete`
   pins the reported branch: the one a withdrawal actually takes, and the one an early return would skip.
 
@@ -1224,7 +1224,7 @@ would subsume the vocabulary; no sample of the string has been observed from a v
 runs, and this file already records what writing a rule against an imagined string cost once.
 *(Superseded in part 2026-10-11 — the next section: a stated RESET is now read and compared, on the observed agy line.)*
 
-### A stated reset is never waited out locally (2026-10-11, stories 5.3b and 5.3c of `todo/PLAN_every_round_is_counted.md`)
+### A stated reset is never waited out locally (2026-10-11, stories 5.3b and 5.3c of `research/PLAN_every_round_is_counted.md`)
 
 agy's verbatim refusal — *"Individual quota reached. Please upgrade your subscription to increase your limits. Resets in
 88h49m9s."* — says none of `Spent`'s words, so a local agy row climbed the whole ladder, four launches each refused,
@@ -1568,7 +1568,7 @@ built two one-shot modes in the server, `--consultants` and `--check-consultant`
   rather than as a fourth copy. Its header states the residual: on Unix .NET implements `FileShare.None` as an advisory
   `flock` — honoured between .NET processes, not across the WSL/Windows 9P boundary.
 - **`FolderLock`** (`runners/Files/FolderLock.cs`) — the sweep's keep-test for a folder whose owner holds a lock file in it, EXTRACTED
-  from `VibeHomes.SweepOneShot` when a question row's scratch needed the same (D8 of `todo/PLAN_vibe_reads_a_folder_of_repositories.md`):
+  from `VibeHomes.SweepOneShot` when a question row's scratch needed the same (D8 of `research/PLAN_vibe_reads_a_folder_of_repositories.md`):
   `RemoveIfFree(folder, lockName, delete)` — or, with a step to ask under the lock, `RemoveIfFree(folder, lockName, delete, ready)` (two
   overloads; the step is never a nullable callback) — takes the lock or answers false with nothing touched, empties the folder around the
   lock, lets go, removes the folder. The caller asks its own age first, because taking the lock creates the file and moves the
@@ -1654,7 +1654,7 @@ scheduler's abandoned `NotStarted` keeps only the earlier TURNS.
 
 ## Every paid launch is its own ledger line (story 3.3, 2026-10-10)
 
-`todo/PLAN_every_round_is_counted.md`, story 3.3, closing the paid-path census of
+`research/PLAN_every_round_is_counted.md`, story 3.3, closing the paid-path census of
 `research/RESULTS_vendor_quota_gauges.md` §5. A ledger line was one terminal TURN: a repair, a follow-up and every
 step of the rate-limit ladder were folded into their turn's line, so a week's retries, repairs and follow-ups could
 only be inferred from sums. Now each paid launch writes its own line, and the turn's sums — `LastTurnUsage`,
@@ -1716,7 +1716,7 @@ flowchart LR
 
 ## Each ledger line says what its launch ran with (story 3.4, 2026-10-11)
 
-`todo/PLAN_every_round_is_counted.md`, story 3.4 — the plan's symptom 6: a codex row's effort is kept and never sent
+`research/PLAN_every_round_is_counted.md`, story 3.4 — the plan's symptom 6: a codex row's effort is kept and never sent
 (`RosterBuilder.EffortFor`), so every local codex launch ran at whatever `~/.codex/config.toml` said (`high` on the
 operator's machine) and its tier came from the same file until fast mode; the ledger named neither, nor the CLI. Eight
 trailing, defaulted `UsageEntry` fields now say it: `cli`, `cliVersion`, `effort`, `effortFrom`, `tier`, `tierFrom`, and
@@ -1923,7 +1923,7 @@ key's vendor — so its cost is worked out here, from the rates the row carried.
   `Usage.Unknown` is the value. Three sources set it: `ReviewerOutcome.TimedOut` (a launch killed on its
   own deadline) carries `Usage = Usage.Unknown` — `Usage.None` only for the turn `TurnLoop` never launched
   because the conversation's cap was spent; `ReviewerOutcome.Cancelled` (a launch the caller's token killed,
-  its own ending since story 3.2 of `todo/PLAN_every_round_is_counted.md`) carries it too, and the
+  its own ending since story 3.2 of `research/PLAN_every_round_is_counted.md`) carries it too, and the
   executor's `ReviewerLaunch.Usage` for that branch is `Unknown` as well, so the Team server's attempt —
   which reads the LAUNCH's usage, not the outcome's — says *usage not captured* where the deployed server
   wrote a free 0/0; and
@@ -2632,7 +2632,7 @@ sequenceDiagram
     Args-->>Site: Off+RefusesStandard: no tier, else as before
 ```
 
-## A round has an identity on the wire, and every launch says what it is and how long it can wait (2026-10-11, story 4.1 of `todo/PLAN_every_round_is_counted.md`)
+## A round has an identity on the wire, and every launch says what it is and how long it can wait (2026-10-11, story 4.1 of `research/PLAN_every_round_is_counted.md`)
 
 The client half of epic 4. One `POST /api/reviews` was one role for one vendor and carried nothing that tied launches
 together (symptom 3 of the plan), and the shim's own waiting deadline was fixed when the invocation was BUILT, so a
@@ -2706,7 +2706,7 @@ Tests: `ARoundHasAnIdOnTheWireTests`, `ARoundIsMintedAKeyTests`, `TheRoundKeyIsS
 `RemoteShimScenarioTests.TheRoundTheAttemptAndTheSecondsLeft_GoOut_WithTheRealBinary`, `reviewBody.contract.ts` —
 listed in [module_tests.md](module_tests.md).
 
-## The shim reads a refusal by name — exit 79 (2026-10-11, story 4.3 of `todo/PLAN_every_round_is_counted.md`)
+## The shim reads a refusal by name — exit 79 (2026-10-11, story 4.3 of `research/PLAN_every_round_is_counted.md`)
 
 The Team server now ends a job whose caller can no longer wait for a launch's start-up — at claim, nothing launched,
 counted in its ledger ([module_team_server.md](module_team_server.md), *No start without budget*) — and says so with a
@@ -2746,7 +2746,7 @@ sequenceDiagram
 
 Tests: `TheServerRefusesForBudgetByNameTests` (mcp) — listed in [module_tests.md](module_tests.md).
 
-## A request that ends its child on an answer owns the tree it ends (2026-10-11, story 6.1a of `todo/PLAN_every_round_is_counted.md`)
+## A request that ends its child on an answer owns the tree it ends (2026-10-11, story 6.1a of `research/PLAN_every_round_is_counted.md`)
 
 The Team server's gauge reader is a child that is a SERVER: `codex app-server` answers one request and then serves
 until it is told to stop, and the way this product stops a child is the tree kill. Three things were widened on the
@@ -2818,7 +2818,7 @@ directory, because a confined launch is handed no `FAKECLI_*` variable (`tests_f
 
 Tests: `AReaderIsEndedWithItsTreeTests` (mcp) — listed in [module_tests.md](module_tests.md).
 
-## Rounds per 1 % of a gauge window (2026-10-12, story 6.2 of `todo/PLAN_every_round_is_counted.md`)
+## Rounds per 1 % of a gauge window (2026-10-12, story 6.2 of `research/PLAN_every_round_is_counted.md`)
 
 `RoundsPerPercent.Derive(lines)` (`Reviewers/RoundsPerPercent.cs`) is the formula E6's plan round fixed, in the library
 both halves compile against so it exists once. Pure: `GaugeLine`s in — when the line was written, its vendor, its
@@ -3289,6 +3289,10 @@ Tests: `VibeConsultantTests`, `ConfinementPlannerTests` (the Vibe question launc
 
 ## A Vibe disk row expands a parent folder into its repositories (2026-10-18, PLAN_vibe_reads_a_folder_of_repositories.md)
 
+> **Live, Windows, 2026-10-20 (coai-mcp 0.62.0):** the expansion works — `d:\rsd` was copied in ~30 s with 411 linked worktrees
+> skipped — but the row answered nothing on a broad question: exit 3 at `VibeLimits.ConsultantTurns` (20). The prompt lists the copy
+> roots and nothing in them, and `read_file` cannot list a folder. Open: M-V19 of `todo/PLAN_a_vibe_row_is_told_what_its_folders_hold.md`.
+
 The owner's disk row ("projects on this disk") is granted PARENT folders — a drive's project folder on Windows, `~/git` on WSL — not
 repositories. Before this plan `ConsultantPlaces.OneShotAsync` refused any granted root that git did not call a work tree. Now a root that
 is not a work tree is EXPANDED into the Git repositories beneath it, and each one goes through the one copy method a directly granted work
@@ -3376,7 +3380,10 @@ making worktrees); the 405 git calls took about 34 s one after another (the walk
 repository 376.2 MiB in 1,606 files, the most files in one repository 2,517. That is far under the shared 2 GiB budget and 50,000 files,
 and the largest repository is under its own 512 MiB ceiling; `C:` held 920 GiB free against the 5 GiB floor. **Not measured:** the copy's
 wall time (the per-repository ceiling is 60 s and the row's budget 5 minutes, of which about 34 s go to git's confirmations before the
-first copy); the first live row will tell.
+first copy). **Measured live, Windows, 2026-10-20 (coai-mcp 0.62.0):** the whole of `d:\rsd` was walked, confirmed and copied in
+~30 s (server log 13:30:20 → 13:30:50), with 411 linked worktrees skipped — the git confirmations and the copies together, not the copy
+alone, which was not timed separately; no repository came near the 60 s ceiling. That row then answered nothing (the 20-turn cap; see the
+note at the top of this section). The WSL row (`~/git`) is still unmeasured.
 
 ```mermaid
 flowchart TD

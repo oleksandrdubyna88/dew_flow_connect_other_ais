@@ -7,7 +7,7 @@ namespace CoaiMcp.Runners.Reviewers;
 /// </summary>
 /// <remarks>
 /// <para>Extracted from <see cref="NoMcpServers"/> (issue #514), which needed the file's MCP server names, when story 3.4 of
-/// todo/PLAN_every_round_is_counted.md needed two of its root keys: <c>model_reasoning_effort</c> and <c>service_tier</c>,
+/// research/PLAN_every_round_is_counted.md needed two of its root keys: <c>model_reasoning_effort</c> and <c>service_tier</c>,
 /// read to LABEL a ledger line whose launch sent neither. One locator, so "which config.toml does this launch read" has
 /// one answer — on a Team server the SLOT's, never the server's (our own code reviewer, #514).</para>
 /// <para><b>Not a TOML parser, and unsure means silent.</b> A value is read only from a root-level <c>key = value</c>

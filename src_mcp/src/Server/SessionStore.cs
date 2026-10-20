@@ -137,7 +137,7 @@ public sealed record RoundRecord(
 
     /// <summary>
     /// The round's identity across the wire — 32 hex characters minted when it started
-    /// (<see cref="RoundKeys"/>, story 4.1 of todo/PLAN_every_round_is_counted.md), which every launch of the round
+    /// (<see cref="RoundKeys"/>, story 4.1 of research/PLAN_every_round_is_counted.md), which every launch of the round
     /// carries to a Team server. Empty for a round recorded before the field existed, and for a skipped round, which
     /// launched nothing.
     /// </summary>
@@ -233,6 +233,17 @@ public sealed record RoundRecord(
     /// <see cref="PlanSource.Commit"/> is the engine's own resolved commit, so a pasted plan has one too.
     /// </remarks>
     public PlanSource? PlanSource { get; init; }
+
+    /// <summary>Who wrote the code a settled plan or code round reviewed — observed, partial or unobserved, never guessed. Null when not recorded.</summary>
+    /// <remarks>
+    /// <para><b>Nullable, and NOT normalised on the way in</b>, for <see cref="Caller"/>'s reason: a round written before this field,
+    /// a skipped, interrupted or running round and every feature or document round say nothing about authors, and a getter that
+    /// materialised an empty snapshot would turn "not recorded" into "recorded as nothing" the next time the session is saved — on
+    /// every progress tick (<c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md</c> §3).</para>
+    /// <para>Text-free by construction (ids, closed words, counts, tokens). Kept in the file and in <c>coai.db</c>; the <c>open</c> and
+    /// <c>status</c> answers strip it — the rows would cost the calling AI up to several KB of context per round.</para>
+    /// </remarks>
+    public Core.Authors.AuthorsSnapshot? Authors { get; init; }
 
     /// <summary>
     /// What this round was ABOUT — the plan's file name or its title.

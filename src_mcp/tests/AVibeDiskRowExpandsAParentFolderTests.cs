@@ -7,7 +7,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// A granted root that is a PARENT of repositories (E1.2 of <c>todo/PLAN_vibe_reads_a_folder_of_repositories.md</c>, D1, D3–D6):
+/// A granted root that is a PARENT of repositories (E1.2 of <c>research/PLAN_vibe_reads_a_folder_of_repositories.md</c>, D1, D3–D6):
 /// <see cref="ConsultantPlaces.OneShotAsync"/> expands it into the repositories beneath it, each copied through the one
 /// method a work-tree root goes through. The boundary these tests hold: a candidate git does not confirm is SKIPPED with a
 /// note; a copy that is refused REFUSES THE ROW and every copy made is disposed.

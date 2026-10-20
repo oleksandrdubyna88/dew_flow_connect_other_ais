@@ -98,7 +98,7 @@ public sealed class BoundedScheduler(
 {
     /// <summary>
     /// The clock a stated reset is read against — injected, so a vendor that names a clock time can be tested on a pinned
-    /// one (story 5.3c of todo/PLAN_every_round_is_counted.md). A stated DURATION needs no clock at all.
+    /// one (story 5.3c of research/PLAN_every_round_is_counted.md). A stated DURATION needs no clock at all.
     /// </summary>
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
 
@@ -618,7 +618,7 @@ public sealed class BoundedScheduler(
         var attempts = 1;
         var outcome = await executor.RunAsync(w.Invocation, w.Repair, ct);
         // Every launch of every step, for the ledger's one line per launch (story 3.3 of
-        // todo/PLAN_every_round_is_counted.md) — set on the outcome only once a step was retried.
+        // research/PLAN_every_round_is_counted.md) — set on the outcome only once a step was retried.
         var launches = LaunchLines.StepOf(outcome, watch.Elapsed, LaunchAttempts.First);
 
         while (outcome is ReviewerOutcome.RateLimited limited && !Hopeless(limited, watch.Elapsed, budget))
@@ -643,7 +643,7 @@ public sealed class BoundedScheduler(
             attempts += 1;
             var started = watch.Elapsed;
             // What is LEFT of the deadline, never the whole of it again — and the launch stamped as the retry it is
-            // (story 4.1 of todo/PLAN_every_round_is_counted.md); its repair stays a repair, which the executor stamps.
+            // (story 4.1 of research/PLAN_every_round_is_counted.md); its repair stays a repair, which the executor stamps.
             var next = await executor.RunAsync(
                 RetryLadder.WithinRemaining(w.Invocation, watch.Elapsed, budget) with { Attempt = LaunchAttempts.Retry },
                 w.Repair is null ? null : RetryLadder.WithinRemaining(w.Repair, watch.Elapsed, budget),
@@ -666,7 +666,7 @@ public sealed class BoundedScheduler(
     /// the vendor STATED beyond what is left of the reviewer's budget (<see cref="RetryLadder.ResetOutlasts"/>).
     /// </summary>
     /// <remarks>
-    /// The second half is story 5.3c of todo/PLAN_every_round_is_counted.md: agy's <i>"Resets in 88h49m9s"</i> said none
+    /// The second half is story 5.3c of research/PLAN_every_round_is_counted.md: agy's <i>"Resets in 88h49m9s"</i> said none
     /// of the spent words, and the ladder climbed four launches into a reset days away. A stated reset inside the budget
     /// is still waited out by the ladder's own steps.
     /// </remarks>
@@ -677,7 +677,7 @@ public sealed class BoundedScheduler(
     /// <summary>
     /// Waits out one step of the ladder; <c>false</c> when the round ended first. Never throws the cancellation — the
     /// launches the turn already paid for live only in the ladder's locals, and a throw would drop them from the ledger
-    /// (the epic-3 code round of todo/PLAN_every_round_is_counted.md).
+    /// (the epic-3 code round of research/PLAN_every_round_is_counted.md).
     /// </summary>
     private static async Task<bool> WaitedOut(TimeSpan wait, CancellationToken ct)
     {
@@ -741,7 +741,7 @@ public static class ReviewerSummaryFactory
 
     /// <summary>
     /// The same sentence with the vendor's line WHOLE — for the ledger's outcome and the log's reason, which are where a
-    /// refusal is read back later (story 3.3 of todo/PLAN_every_round_is_counted.md).
+    /// refusal is read back later (story 3.3 of research/PLAN_every_round_is_counted.md).
     /// </summary>
     /// <remarks>
     /// The cut at <see cref="ReasonLength"/> is right for a cell and was wrong here: agy's weekly refusal reached the
@@ -759,7 +759,7 @@ public static class ReviewerSummaryFactory
     private static string Described(ReviewerOutcome outcome, int cap) => outcome switch
     {
         ReviewerOutcome.TimedOut => "timeout",
-        // Its own word (story 3.2 of todo/PLAN_every_round_is_counted.md): the caller's token killed it, and "timeout"
+        // Its own word (story 3.2 of research/PLAN_every_round_is_counted.md): the caller's token killed it, and "timeout"
         // sent a person to look at a vendor that was never slow.
         ReviewerOutcome.Cancelled => "cancelled",
         // The real number, because after the ladder it is not always one — and a round that says

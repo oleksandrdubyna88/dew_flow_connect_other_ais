@@ -1,17 +1,31 @@
 # PLAN — Vibe reads a folder of repositories
 
-> Status: **built, in review, 2026-10-19: stories E1.1–E1.4 and decision D9 are on branch `feat/vibe-folder-of-repos` (E1.1–E1.3 and D9
-> on 2026-10-18; E1.4 — the product-flow test S15, the docs and the help — on 2026-10-19). The epic-1 code gate ran on 2026-10-19
-> (verdict good_enough; its entry is the last section, "Code gate (2026-10-19)", with the fixes G-A to G-P it caused); the promotion
-> to `research/` follows the live row.** Scope: `src_mcp/src/Server/Consultation/ConsultantPlaces.cs`
+> Status: **IMPLEMENTED, 2026-10-19.** A Vibe disk row on a PARENT folder is expanded into the Git repositories beneath it and
+> each is copied through the existing snapshot; released as coai-mcp 0.62.0 + extension 0.82.0 (#887, squashed 38ecd4e11;
+> release PRs #889, #890; baseline #892). Still owed: the live row on WSL (`~/git`) was not run — a verification tail, not a gap.
+>
+> **Live row, Windows, 2026-10-20** (coai-mcp 0.62.0, one `ask_consultants` with a broad "how do the other projects do X"
+> question, root `d:\rsd`): the refusal of §1 is gone — the root was expanded and copied in ~30 s for the whole root (server log
+> 13:30:20 → 13:30:50), 411 linked worktrees were skipped and named in the row's note (D9), and no repository came near the
+> 60 s per-repository ceiling. **But the Vibe row answered nothing:** exit 3 at coai's cap of 20 assistant turns
+> (`VibeLimits.ConsultantTurns`), after 141 s. Cause, read from the code: the row's prompt lists the ~13 `snapshot-<id>` copy
+> roots (~10.7 k files) and nothing inside them, and Vibe's only tool, `read_file`, cannot list a folder — so a broad question
+> becomes name-guessing, one request per guess. This plan widened the search space without giving the row a way to see it;
+> the cure (a listing in the prompt) is the open measurement M-V19 of
+> [PLAN_a_vibe_row_is_told_what_its_folders_hold.md](../todo/PLAN_a_vibe_row_is_told_what_its_folders_hold.md), which now
+> carries this run as evidence. The two other disk rows of the same question (on other runtimes) answered, in 176 s and 225 s.
+>
+> History: built on branch `feat/vibe-folder-of-repos` (E1.1–E1.3 and D9 on 2026-10-18; E1.4 — the product-flow test S15, the
+> docs and the help — on 2026-10-19). The epic-1 code gate ran on 2026-10-19 (verdict good_enough; its entry is the last
+> section, "Code gate (2026-10-19)", with the fixes G-A to G-P it caused). Scope: `src_mcp/src/Server/Consultation/ConsultantPlaces.cs`
 > (the copy loop of a Vibe consultant row), a new repository walk beside it, `QuestionRowLaunch.cs` (the skip notes on the
 > row), `PanelService.ScratchPrefixes` (the crash sweep), their tests, `research/module_runners.md`, `research/module_server.md`,
 > `research/module_tests.md`, the help sentence for a Vibe disk row in `helpContent.ts` and its four translations
 > (`helpDe/Es/Ru/Uk.ts`). Spec corrections C1–C9 of the story split were accepted 2026-10-18 and are folded into D1–D8 below. D9
 > (linked worktrees) and the review fixes R1–R9 (section "Review fixes", end of the file) were added the same day.
 >
-> Related docs: [PLAN_vibe_and_kimi_runtimes.md](PLAN_vibe_and_kimi_runtimes.md) (D6 — Vibe reads a copy coai makes through Git),
-> [module_runners.md](../research/module_runners.md).
+> Related docs: [PLAN_vibe_and_kimi_runtimes.md](../todo/PLAN_vibe_and_kimi_runtimes.md) (D6 — Vibe reads a copy coai makes through Git),
+> [module_runners.md](module_runners.md).
 
 ## 1. The symptom
 

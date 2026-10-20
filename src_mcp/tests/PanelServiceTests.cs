@@ -112,7 +112,9 @@ public sealed class PanelServiceTests : IAsyncLifetime
         int threshold = 2,
         StagePolicy onExhausted = StagePolicy.Human,
         int maxRounds = 3,
-        bool deal = false) =>
+        bool deal = false,
+        IProcessLauncher? through = null,
+        string workspace = "none") =>
         new(
             new PanelSettings
             {
@@ -127,10 +129,11 @@ public sealed class PanelServiceTests : IAsyncLifetime
                 RateLimitBackoff = TimeSpan.FromMilliseconds(5),
                 DealPlanLenses = deal,
                 DealCodeLenses = deal,
+                CodeWorkspace = workspace,
             },
             VaultKeys.None("no vault in tests"),
             default,
-            _launcher,
+            through ?? _launcher,
             Logger.None, Noticing.None);
 
     private static JsonElement Parse(string json) => JsonDocument.Parse(json).RootElement;
@@ -242,38 +245,120 @@ public sealed class PanelServiceTests : IAsyncLifetime
         // the checkout again invites the same exploration that produced the empty answer — the
         // plan stage learned this at ten minutes a round, and antigravity failed intermittently on
         // the code stage until the repair stopped carrying a workspace.
-        var record = Directory.CreateTempSubdirectory("coai-record-").FullName;
-        Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
+        var repairs = await RepairLaunchesOfACodeRoundAsync();
+
+        repairs.Should().NotBeEmpty("the first answers were not the schema's JSON, so every reviewer was repaired — a test that saw no repair saw nothing");
+        repairs.Should().OnlyContain(repair => Path.GetFileName(repair.WorkingDirectory).StartsWith("coai-repair-", StringComparison.Ordinal),
+            "the repair launch runs in a directory of its own, never in the checkout it was refused");
+        repairs.Should().OnlyContain(repair => repair.EntriesAtLaunch.Count == 0,
+            "an empty directory is what makes an agentic CLI answer instead of explore");
+    }
+
+    /// <summary>
+    /// The positive control of the repair test must be a control of the CODE round: in a workspace mode where the review launch runs in an
+    /// empty folder, it has to FAIL — and not be satisfied by a plan-round launch made earlier through the same recording launcher
+    /// (code gate, 2026-10-19: the control used to read every review launch since the service was built).
+    /// </summary>
+    [Fact]
+    public async Task TheRepairTestsControl_IsRedWhenTheCodeRoundsReviewsRanInAnEmptyFolder()
+    {
+        var act = () => RepairLaunchesOfACodeRoundAsync(workspace: "none");
+
+        await act.Should().ThrowAsync<Xunit.Sdk.XunitException>("the code round's review launches saw an empty folder, so the control has nothing to prove with");
+    }
+
+    /// <summary>One launch the repair prompt rode in: where it ran, and what that folder held at the moment it started.</summary>
+    private sealed record RepairLaunch(string WorkingDirectory, IReadOnlyList<string> EntriesAtLaunch);
+
+    /// <summary>
+    /// A code round whose first answers are not the schema's JSON, so each reviewer is launched a second time with the repair prompt;
+    /// the answers to the repair are clean. Returns the repair launches, each with its folder's entries read BEFORE it started.
+    /// </summary>
+    private async Task<IReadOnlyList<RepairLaunch>> RepairLaunchesOfACodeRoundAsync(string workspace = "worktree")
+    {
+        const string Marker = "YOUR PREVIOUS ATTEMPT";
+        var seen = new SeenRepairs(_launcher, Marker);
         try
         {
-            var service = Service();
+            // The review launch runs IN the checkout, so a repair that carried the workspace would be seen as not empty.
+            var service = Service(through: seen, workspace: workspace);
             await service.OpenAsync(_repo, "feature");
             await service.ReviewPlanAsync(_repo, "feature", "the plan");
             await service.ResolveAsync(_repo, "feature", "[]");
-            foreach (var file in Directory.GetFiles(record))
-            {
-                File.Delete(file);
-            }
 
+            SetAnswer("this is prose, not the schema's JSON");
+            Environment.SetEnvironmentVariable("FAKECLI_REPAIR_MARKER", Marker);
+            Environment.SetEnvironmentVariable("FAKECLI_TURN1_REPAIR_STDOUT", CleanReview);
+            Environment.SetEnvironmentVariable("FAKECLI_TURN1_REPAIR_OUTFILE_TEXT", CleanReview);
+
+            seen.StartRecording();
             await service.ReviewCodeAsync(_repo, "feature", "main", Scope);
 
-            // Every recorded launch is the FIRST attempt here (the fake answers correctly), so the
-            // assertion is on how the repair was BUILT: its working directory is not the worktree.
-            var session = new SessionStore(_data).Load(_repo, "feature");
-            session.Should().NotBeNull();
-            Directory.EnumerateDirectories(Path.GetTempPath(), "coai-repair-*")
-                .Should().NotBeEmpty("the repair launch runs in a directory of its own");
-            foreach (var dir in Directory.EnumerateDirectories(Path.GetTempPath(), "coai-repair-*"))
-            {
-                Directory.EnumerateFileSystemEntries(dir).Should().BeEmpty(
-                    "an empty directory is what makes an agentic CLI answer instead of explore");
-            }
+            seen.Reviews.Should().Contain(review => review.EntriesAtLaunch.Count > 0, "in worktree mode the review launched in the checkout, so the repair folder being empty is a choice and not an accident");
+
+            return [.. seen.Repairs];
         }
         finally
         {
-            Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", null);
-            Directory.Delete(record, recursive: true);
+            foreach (var name in (string[])["FAKECLI_REPAIR_MARKER", "FAKECLI_TURN1_REPAIR_STDOUT", "FAKECLI_TURN1_REPAIR_OUTFILE_TEXT"])
+            {
+                Environment.SetEnvironmentVariable(name, null);
+            }
         }
+    }
+
+    /// <summary>The real launcher, noting each launch that carries the repair prompt — and what its folder held before it started.</summary>
+    private sealed class SeenRepairs(IProcessLauncher real, string marker) : IProcessLauncher
+    {
+        private readonly System.Collections.Concurrent.ConcurrentQueue<RepairLaunch> _repairs = new();
+
+        private readonly System.Collections.Concurrent.ConcurrentQueue<RepairLaunch> _reviews = new();
+
+        private volatile bool _recording;
+
+        /// <summary>From here on launches are noted: the plan round before it is not the code round the test is about.</summary>
+        public void StartRecording() => _recording = true;
+
+        public IReadOnlyCollection<RepairLaunch> Repairs => _repairs;
+
+        /// <summary>The other launches of the fake CLI — the reviews — with the same two facts.</summary>
+        public IReadOnlyCollection<RepairLaunch> Reviews => _reviews;
+
+        public Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
+        {
+            if (_recording)
+            {
+                Note(request);
+            }
+
+            return real.RunAsync(request, ct);
+        }
+
+        private void Note(ProcessRequest request)
+        {
+            var carriesTheRepair = request.StdIn.Contains(marker, StringComparison.Ordinal)
+                || request.Arguments.Any(argument => argument.Contains(marker, StringComparison.Ordinal));
+            var launch = new RepairLaunch(request.WorkingDirectory, EntriesOf(request.WorkingDirectory));
+            if (carriesTheRepair)
+            {
+                _repairs.Enqueue(launch);
+            }
+            else if (IsAReview(request))
+            {
+                _reviews.Enqueue(launch);
+            }
+        }
+
+        /// <summary>
+        /// A launch of the fake CLI that carries a prompt. The code round also asks the fake `--version` from the round's checkout, which has
+        /// no prompt and is no review — counted as one, it satisfied the positive control in a mode where every real review ran in an empty folder.
+        /// </summary>
+        private static bool IsAReview(ProcessRequest request) =>
+            Path.GetFileNameWithoutExtension(request.Executable) == "FakeCli" && request.StdIn.Length > 0;
+
+        /// <summary>What the folder holds — nothing for a folder that is not there: noting a launch must never be what fails it.</summary>
+        private static IReadOnlyList<string> EntriesOf(string directory) =>
+            Directory.Exists(directory) ? [.. Directory.EnumerateFileSystemEntries(directory)] : [];
     }
 
     [Fact]

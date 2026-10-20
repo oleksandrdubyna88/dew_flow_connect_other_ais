@@ -8,7 +8,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// What ONE git call says about a folder, and how a linked worktree is told from every other checkout (D9 of
-/// <c>todo/PLAN_vibe_reads_a_folder_of_repositories.md</c>). The decision is git's answer — the absolute git dir against the common
+/// <c>research/PLAN_vibe_reads_a_folder_of_repositories.md</c>). The decision is git's answer — the absolute git dir against the common
 /// dir — never the text of a <c>.git</c> file: a submodule's top has such a file too, and a submodule INSIDE a linked worktree writes a
 /// gitdir that contains <c>/worktrees/</c> (<c>src_vs_code/src/projectIdentity.ts</c> documents the trap; its scenarios are mirrored here).
 /// </summary>

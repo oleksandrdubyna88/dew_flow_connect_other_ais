@@ -2260,7 +2260,7 @@ answer through `Api/BoundedBody` — streamed after the headers (`ResponseHeader
 `Content-Length` over 8 MiB refused unread, an undeclared one refused the moment the count passes it —
 because `ReadAsStringAsync` buffered the whole body before any cap ran (epic 1's code round). The shim itself, its exit
 codes and the probe are in [module_runners.md](module_runners.md#a-hosted-api-is-a-direct-call-with-a-vault-key--the-api-runtime-2026-09-25-plan_feature_review-s12).
-**Since story 3.3 of `todo/PLAN_every_round_is_counted.md` (2026-10-10) `--probe-api --model` writes the ledger**: one
+**Since story 3.3 of `research/PLAN_every_round_is_counted.md` (2026-10-10) `--probe-api --model` writes the ledger**: one
 `usage.jsonl` line per completion sent with the real key, as it answers — kind `probe` (`UsageKinds.Probe`, local-only),
 stage `Probe`, the variant as its role, the row it probed and the model it asked, `ok` / `HTTP <status> (refused
 <field>)` / `no answer` as its outcome (the allowlist's words, never the vendor's text) and what the endpoint reported
@@ -3451,7 +3451,7 @@ apart. Tests: `ALogSplitByPeriodTests` (red first; red again with the period con
 `0000` against `started_utc`, matching nothing — so a malformed cursor answered with an EMPTY page
 instead of the first one, which is the opposite of treating it as absent.
 
-### `--round-counts` — rounds per vendor row over 5 h / 24 h / 7 d (2026-10-10, `todo/PLAN_every_round_is_counted.md` story 2.1)
+### `--round-counts` — rounds per vendor row over 5 h / 24 h / 7 d (2026-10-10, `research/PLAN_every_round_is_counted.md` story 2.1)
 
 The operator's question of 2026-10-09 — *"my plan used to allow ~250 rounds comfortably; now it hits the limit at
 ~150"* — had no surface that counted ROUNDS: the Spending tab counted reviewer launches per row, and a round is one
@@ -3548,7 +3548,7 @@ opened read-only cannot run the step and does not try — `--round-counts` on a 
 byte for byte.
 
 **Schema step 21 — `rounds.round_key`** (`Schema.TheRoundsKey`, appended after step 20; story 4.1 of
-`todo/PLAN_every_round_is_counted.md`). The round's identity across the wire — 32 lower-case hex characters the engine
+`research/PLAN_every_round_is_counted.md`). The round's identity across the wire — 32 lower-case hex characters the engine
 mints when the round starts (`RoundKeys.Mint`) — as `RoundRecord.Key` in the session file and here, written by
 `RoundsDb.RecordRoundRow` from the record (the upsert on `(session, stage, number)` rewrites it with the rest). **Empty
 means "not recorded"**: every row from before the step, and a skipped round (`RoundSkips.Record`), which launched
@@ -3584,6 +3584,29 @@ Reached through both preview-fork shapes as step 22 is, and a read-only `--log` 
 twenty-two (`ThePlanSourceIsStepTwentyThreeTests`). `ThePairsThemselvesTests`' step-12 re-run drops the column with the
 rest.
 
+**Schema step 24 — who wrote the code a round reviewed** (`Schema.TheRoundsAuthors`, appended after step 23; story E5.S2 of
+`todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`). `round_authors` holds one row per row of the round's
+`AuthorsSnapshot` — `who` (`main` | `subagent`), `agent` (the opaque id, **empty for main**), `requested`, `model`, `effort`,
+`agent_type`, `association`, `window` (`before-open` | `round`), `launches`, `turns`, the four token terms and `write_calls`, keyed
+`(round_id, ordinal)`; the round's own stage and number are its `round_id`'s. Fourteen columns join `rounds`: `authors_state` (the
+card text, `State` or `State: reasons`), `authors_session`, `authors_id_source` (`registry` | `environment` | `stored` | `healed`),
+`authors_reader` and `authors_attribution` (E3's reader version and E4's `RoundAttribution.Version`; `0` = that component did not run),
+`submodule_writes`, `uncovered_writes` and the seven `ambiguous_*` totals; `rounds_by_authors_session` serves the peer lookup
+that runs on EVERY round. **`RoundAuthorsTable.Record(db, roundId, snapshot)`** (its own file, the `RoundChangesTable` shape)
+is called from `RecordRound` inside its transaction and is the second caller E7's backfill joins: it opens **no transaction of its
+own**, and `TheWriterJoinsTheCallersTransaction` / `AFaultAfterTheWriter_LeavesNoAuthors` prove a rollback or a later fault leaves
+nothing behind. It projects FROM `round.Authors`, never a `RoundContext`, so a deleted database re-projected from the session files
+comes back identical; a null snapshot writes NOTHING (a backfilled row survives a live re-record) and the upsert is NOT widened.
+**An unknown is `-1`, never `0`** — the ambiguous totals of an unobserved round, and both write counts of any snapshot no attribution
+produced; `authors_state = ''` means *not recorded* and a reader checks it first. `main` ↔ `''` is `RoundAuthorsTable`'s one
+mapping (`AgentColumn`) and its one inverse (`AgentKeyOf`), which E6's read and E7's heal call. The older-server limit, stated: a
+`coai-mcp` released before step 24 re-saves a session file WITHOUT the snapshot (no session type carries `JsonExtensionData`; measured on
+the released 0.58.0, `open` on a throwaway repository over a data directory whose file carried a snapshot on two rounds: `authors`
+was gone from every round after one `open`, and `open` never opened `coai.db`); the database keeps the projected columns, because its
+upsert names none of them, it runs no step on a file past its own and never touches `round_authors` (`AnOlderServersReSave_LeavesTheProjectedAuthorsInPlace`). What is lost is the card line, the rebuild path and the members the database never held; E7's recompute
+repairs them while the transcript exists. Reached through both preview-fork shapes as step 23 is; `ThePairsThemselvesTests`' step-12
+re-run drops the index first (SQLite refuses `DROP COLUMN` on an indexed column), then the fourteen columns.
+
 **`--log` names each round's size** (story E2.S5, contract C3). `LoggedRound` gains an init property `Size`
 (`RoundSize?`, JSON `size`): `{ whole: { state, from, cells[] }, delta: { … }, origin }`, one cell per (coverage, kind) with
 `files`, `added`, `removed`. `RoundsQuery.Rounds` hands the page's rounds to `RoundChangesLog.Attach` (which finds each round's id in its own cursor) (its own file, the
@@ -3613,6 +3636,110 @@ wraps each row's deserialise ONLY, never the query, so a missing column is still
 all read as an absent member; a malformed row never fails the page (`TheLogNamesEachPlansSourceTests`). The extension's parser
 ignores the member (`anOlderExtensionReadsALogPageCarryingASize.test.ts`), and its rounds-log line reads the session file, not this
 (`module_extension.md`).
+
+**`--log` names the state of each round's authors** (story E5.S3 of `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`).
+`LoggedRound` gains a third init property, `AuthorsState` (`string?`, JSON `authorsState`), absent when null. `RoundsQuery.Rounds` chains
+`RoundAuthorsLog.Attach` (its own file, the `RoundPlanSources` shape) after `RoundPlanSources.Attach` — one call, no fourth rung on the SQL
+ladder. It runs ONE query per page, `SELECT id, authors_state FROM rounds WHERE authors_state <> '' AND id IN (SELECT value FROM
+json_each($ids))`, only when the page has ids and `HasColumn(db, "rounds", "authors_state")` — a step-23 file is asked, answers with no
+query, is logged exactly as before and stays at twenty-three; `--round-counts` reads nothing new and leaves it byte for byte
+(`TheLogNamesEachRoundsAuthorsTests`). Rounds are matched by their OWN id (`PageIds`), never by list position. **Not recorded is never a
+word:** an empty column and a value `AuthorsSnapshot.IsWellFormed` refuses read as an absent member, judged per ROW and never around the query
+(a catch around the query would swallow *no such column* and hide what the `HasColumn` guard prevents).
+
+**The authors step — who wrote what a round reviewed, on the answer path** (story E5.S4 of
+`todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`). `RoundAuthorsStep.For(session, record)` (`src/Server/Rounds/`) runs in
+`RoundEngine` as ONE statement after the record's `with` block — `record = record with { Authors = _authors.For(session, record) }` — before the
+save and before the projection opens the database. It answers null (not recorded) for any round that E4 does not call *settled* (a plan or
+code round, `done`, not `skipped`): a skipped, interrupted or running round and every feature or document round; `Assign` is never
+called for one. The order: **locate** (`CallerTranscriptLocator.Locate`, the vendor from the round's own `Caller`, the identity from the
+step's INJECTED environment — `PanelService` gains one optional `environment` parameter and never reads the process's variables here); a
+refusal ends the step as `AuthorsSnapshot.Unknown(…, "unobserved", [reason])` with no peer query → **the peers and the gate's own timeline**
+(`AuthorPeers.Find`, one read-only connection that waits a second) → `RoundAttribution.ReadFrom` → the reader, bounded by the time left and
+the byte budget → `AttributionMapping` (the one mapping: `Observation`, `Timeline`, `Universe`) → `Assign` → `RoundAuthorsBuilder.Build` →
+`AuthorsSnapshot.From`. `ArgumentException` from `Assign` is `unobserved: invalid input`; any other exception is `unobserved: reader failed`
+(logged with its TYPE only) — the round still answers and is saved. **`Unknown(...)` carries `Reader = 0` / `Attribution = 0` for the component that
+did not run**, and `-1` in every count; an `unobserved` result from E4 itself gets `-1` write counts too.
+
+**`AuthorPeers.Find(connection, lookup, load, deadline, clock)`** is the ONE peer build, called by the live path and by E7's backfill (deadline null =
+unbounded). It asks which OTHER gate sessions hold a plan or code round whose `authors_session` — else, when empty, a UUID `rounds.caller` — is this
+caller, builds each peer's `GateTimeline` from its SESSION FILE (`OpenedUtc` from the file, never `sessions.opened_utc`; a round's completion only when it
+is `done`, so a running row's progress stamp ranks nothing) through `AttributionMapping.Timeline`, and reads the caller of this gate's earlier rounds in
+the same query. A round's caller is its own snapshot's session when the file has one, else `authors_session`, else a UUID `caller`, else empty. **It
+sets `PeersKnown = false`** — peers empty, E4 then says `partial: prior windows unknown` — when the store is absent or locked or has no
+`authors_session` column (older than step 24), when a peer's session file does not load or names another session, or when the deadline passes before a peer
+file is loaded (checked before EACH file). The step logs WHY at Debug (`AuthorPeerSet.Why`: a closed phrase, or an exception's type and SQLite error code — never its message, which may carry a path); the snapshot only says `prior windows unknown`. Two stated limits: a peer whose only same-caller round is still `running` is not found (`RecordRound` never runs
+for a running round; E7's grown-peer-set rule repairs it), and a RUNNING round of a found peer has no caller on disk, so E4's `peer running` cannot name it
+until it is projected. **The budget** (`AuthorsBudget.Default` = 2 s and 64 MiB of the `fromUtc` SLICE, a parameter of the step): one deadline for the whole
+step, checked between phases; the reader's own limits give `partial: read budget` with the rows read so far; a deadline passed before attribution ran gives
+`Unknown(partial, [read budget])`. `Writes into another checkout` are counts only: `UncoveredWrites` every call, `SubmoduleWrites` those whose root is a
+declared submodule of the checkout's `.gitmodules`, parsed by `GitModules.In` — no process is launched on the answer path. The reader's diagnostics are
+logged at Debug as numbers (`AgentFilesEmpty` included); none becomes a reason, a column or a member. `PanelSettings.TranscriptHome` is the one place the
+default transcripts folder is written (`ClaudeHome.Default.With(AgentLogDir)`); the window over the caller's own work (`RoundEngine.WhatTheCallerWasDoing`) reads it too. Every method of `RoundAuthorsStep`, `AuthorPeers`, `AuthorsBudget`, `RoundAuthorsTable` and `RoundAuthorsLog` stays within cyclomatic complexity 4: CA1502 is a build error for those files (`.editorconfig`, as for E4's core).
+
+### `--round-authors` — who wrote the code, against what the reviewers found (2026-10-19, E6 of `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much.md`)
+
+The owner's question — *"is the code better or worse since the coders moved to Sonnet?"* — answered from data the rounds already
+record: the authors of a round (E3–E5) beside what the reviewers found. `coai-mcp --round-authors` reads `coai.db` read-only and
+prints **sums**; the figures, the marks and the header are made from them at render time. **An association, never a cause** — the
+first line of every report says so. The stories are `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E6.md`; its decisions
+D1–D19 are the rules below by reference.
+
+**The contract.** `--round-authors [--since <utc>] [--until <utc>] [--split <utc>] [--stage code|plan] [--cohort first|corrective|all]
+[--with-before-open] [--kinds <k,…>] [--without-elided] [--with-uncovered] [--add <file.json>]… [--table]`. Defaults: the epoch, the clock,
+no split, `code`, `first`, `code,test`. Stdout is ONE JSON document (`format` 1: the selection, `sources`, `cells`, `exclusions`,
+`effortMarkerKnown` — integers, sets and counts; no figure, no mark, no header, **no absolute path**) or, with `--table`, the report.
+Exit **0** an answer (an empty one when no database exists; nothing is created), **65** a bad request — an unknown or repeated flag, an
+unparseable instant, `--until` not after `--since`, `--split` outside the window, `--stage plan` with `--kinds` or `--without-elided`, an
+`--add` that cannot be read, parsed or added — an empty or malformed path, a missing file, a report whose source id is not 32 lower-case hex or whose
+branch / requested-to-answered names are not two words joined by one newline (its sentence names the argument as typed) — **74** a database that
+will not read, **never 64**. Every refusal travels as the report's one outcome shape, `Store/Outcome.cs` (`Outcome<T>`: ok, value, why — the C#
+doctrine §5), never a per-call-site tuple.
+
+```mermaid
+flowchart LR
+  db[("coai.db<br/>read-only, one snapshot")] --> q["RoundAuthorsQuery.Read<br/>text-free RoundFacts"]
+  q --> pop["RoundAuthorsPopulation.Of<br/>cohort · D3 state · one exclusion"]
+  pop --> cnt["RoundAuthorsCells.Count<br/>additive CellSums"]
+  cnt --> rep["RoundAuthorsMerge.Report<br/>the answer of one source"]
+  file["--add file.json"] --> parse["RoundAuthorsMerge.Parse"]
+  rep --> add["RoundAuthorsMerge.Add<br/>one population only"]
+  parse --> add
+  add --> out{"--table?"}
+  out -- no --> json["JSON of sums"]
+  out -- yes --> txt["RoundAuthorsText.Render<br/>header · figures · marks · exclusions"]
+```
+
+| Unit (`src_mcp/src/…`) | Job |
+|---|---|
+| `Store/RoundAuthorsQuery.cs` | The read: the rounds of every session the window touches, in ONE deferred read transaction on the counter's read-only open (`RoundCounts.OpenReadOnly`, the one spelling of that connection string for both readers; a writer waits for it, so a round is seen whole or not at all). `HasColumn` per schema step (24 → authors, 22 → size and reviewer effort, 20 → reviewer model); a malformed stored state is *not recorded* per ROW; no text column is selected. The size is `RoundChangesLog.Read`'s |
+| `Store/StoredAuthors.cs` | D18 — the stored columns and rows as E4.S3's `RoundAuthors`, through `RoundAuthorsTable.AgentKeyOf`; `Contributors.Of` is the one union |
+| `Store/RoundAuthorsPopulation.cs`, `RoundAuthorsCoders.cs`, `RoundLines.cs`, `RoundAuthorsSumsOf.cs`, `ModelFamily.cs` | WHO is in: cohorts over E4's *settled* rounds (D1), contributors (D2), the worst state of the union (D3) and the coverage of the union (D12: a contributing round's `uncovered_writes > 0` leaves the round `size not covered`, its `-1` leaves it `size coverage unknown`), coder mix with `unknown` a suffix and never a family (D4), effort and main model (D5), the reviewer set (D6, D7), lines (D10), one exclusion per round in D12's order |
+| `Store/RoundAuthorsCells.cs`, `RoundAuthorsExclusions.cs`, `RoundAuthorsHeader.cs` | HOW they are counted: one-round cells folded by `Add` — the same function `--add` uses — figures as ratios of sums (D16), marks (D14), every exclusion reason listed with its count, the header (D15) |
+| `Store/RoundAuthorsMerge.cs` | The JSON of sums, its own strict context, `Report`, `Parse`, `Add` |
+| `Store/RoundAuthorsText.cs`, `Server/RoundAuthorsMode.cs` | The table (every control character of a displayed value — a store row or an `--add` file — printed as `?`, so no terminal escape reaches the screen); the flags and the exit codes |
+
+**What the report will not say, and says.** The state it reads for a round is the roll-up over its two windows — per-window states live in the
+session file only and step 24 does not project them — so with `before-open` left out a round whose before-open window alone is partial or
+unobserved is still read partial or excluded; the error goes toward exclusion, never toward a claim (D3; `RoundAuthorsHeader.RollUpLimit`). A
+`peer running` round is counted as partial and provisional until E7's backfill finalises it. `uncovered_writes = -1` is *unknown*, excluded as
+`size coverage unknown`, never read as covered (`--with-uncovered` takes both reasons in) — and both reasons are decided over the round's
+CONTRIBUTING rounds, as its state is: the whole change of round N carries what every earlier window wrote, so a write round 1 made into a submodule
+is one round N's size does not cover either (judge review 2026-10-19). A corrective round whose delta is unavailable stays in
+the whole figures, leaves the delta figures and is counted per reason — its whole lines are never a delta denominator. The label `sonnet+unknown` is
+what a coder row with no model claim adds to a mix; the rank allocation of ambiguous activity is an accounting convention, stated in the header.
+
+**Two halves add only as one population.** The same `format`, the same selection field by field (`kinds` arrives sorted; an unset `--until` is `""`
+and each source keeps its own `readUtc`), and **no shared gate session** — a store added twice, or a copy of one read under another path, would count
+every session twice. That refusal is ONE method (`RoundAuthorsMerge.Overlap`); **the owner confirmed it on 2026-10-19: two `--add` stores that share a gate session are
+REFUSED** (a store added twice is named as that). A source is an opaque id (32 hex of the SHA-256 of the canonical data-directory path), never the path.
+
+**Deviations from the stories, each the smallest change that keeps the intent** (the record is in the stories document, §5): the JSON has its own
+`JsonSerializerContext` (`RoundAuthorsJson`) because strict reading — unknown member, missing member, null — is a per-context switch and the server's
+shared context must stay lenient for old session files; the branch map is keyed by an opaque repository id beside the branch name, because the answer
+carries no absolute path; `NumeratorSums` carries `DeltaTotal` (the per-100-delta figure needs the findings of the rounds whose delta is recorded);
+reviewers, findings and size are read for the in-window rounds only; `ExclusionCount` carries `Because` (the per-word split of `size unavailable`);
+CA1502 (cyclomatic complexity 4) is switched on in `.editorconfig` for the report's files.
 
 ### The gate's history of a piece of work (`GateHistoryQuery`, 2026-09-26, feature review S2.3)
 
@@ -7317,7 +7444,7 @@ no such sentence. The review stages ask before they build (`RosterBuilder.CodexT
 from `ReviewPlanAsync`, `ReviewCodeAsync`, `ReviewDocumentAsync` and `FeatureStage`); a codex question row asks in
 `QuestionRowLaunch.TierProbedAsync`, which now takes the fan-out's launcher.
 
-## A round is minted its identity when it starts (2026-10-11, story 4.1 of `todo/PLAN_every_round_is_counted.md`)
+## A round is minted its identity when it starts (2026-10-11, story 4.1 of `research/PLAN_every_round_is_counted.md`)
 
 `RoundEngine.RunStageAsync` mints `RoundKeys.Mint()` beside `RoundNumber.Next` — once per round that runs, so `again`,
 the escalation ladder and a person's Continue/Fix (each a fresh pass through the engine) start a new round with a new
@@ -7513,7 +7640,7 @@ handed a PLACE — a coai-owned folder for its home and a sanitised copy to stan
   none row stands in an EMPTY `cwd` folder beside it, so a cwd never holds its own home. Everything goes in `finally`
   (`GitScratch.DeleteEvenIfReadOnly`) — on an answer, a refusal and a cancellation alike.
 - **`ask_consultants` — a killed server's row scratch is swept, and a live row's is locked (D8, 2026-10-18,
-  `todo/PLAN_vibe_reads_a_folder_of_repositories.md`).** `finally` never runs when the server is killed, and the product sweep
+  `research/PLAN_vibe_reads_a_folder_of_repositories.md`).** `finally` never runs when the server is killed, and the product sweep
   (`PanelService.ScratchPrefixes`) listed only `coai-answers-*`, `coai-repair-*` and `coai-noworkspace-*`, so a row's
   `coai-question-*` folder — and the repository copies in it — stayed for ever (`shared/temp-sweep.json` keeps it `neverSwept` for the
   TEST sweep, which says the product sweeps it "on its own clock": it did not). Now `ScratchPrefixes` has `coai-question-*`, and the
@@ -7595,6 +7722,10 @@ flowchart TD
 
 Not done here: one live `consult` and one live question row through the product with a real Vibe (paid turns) — the
 step after the release, recorded then in research/RESULTS_vibe_confinement.md and [module_tests.md](module_tests.md).
+**Update 2026-10-20:** one live question row with a real Vibe HAS run through the product (Windows, coai-mcp 0.62.0, root `d:\rsd`): the
+parent folder was expanded and copied (~30 s including git's confirmations, 411 linked worktrees skipped), and the row ended at the
+20-turn cap without an answer — [PLAN_vibe_reads_a_folder_of_repositories.md](PLAN_vibe_reads_a_folder_of_repositories.md). The live
+`consult` and the WSL row are still not run.
 
 ### The home sweep and the place, hardened before the S3 gate (2026-10-13 — the plan round and risk consultation ee1eecf4)
 

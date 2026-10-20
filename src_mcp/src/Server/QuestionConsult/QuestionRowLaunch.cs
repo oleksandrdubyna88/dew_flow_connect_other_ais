@@ -42,7 +42,7 @@ public sealed record RowLaunchInput(
 
 /// <summary>The copies a row stands in, as the prompt that names them needs them: where they are, and what they do not hold.</summary>
 /// <param name="Paths">The absolute root of each copy, in the order of the granted roots they were made from.</param>
-/// <param name="Limitations">What the copies left out (D9 of <c>todo/PLAN_vibe_reads_a_folder_of_repositories.md</c>: the linked worktrees whose main checkouts are copied) — sentences the model reads too.</param>
+/// <param name="Limitations">What the copies left out (D9 of <c>research/PLAN_vibe_reads_a_folder_of_repositories.md</c>: the linked worktrees whose main checkouts are copied) — sentences the model reads too.</param>
 public sealed record CopiedRoots(IReadOnlyList<string> Paths, IReadOnlyList<string> Limitations)
 {
     /// <summary>Nothing copied yet — what a prompt composed before the launch has made its copies names.</summary>
@@ -91,7 +91,7 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
 {
     public const string ScratchPrefix = "coai-question-";
 
-    /// <summary>The lock file a row holds in its scratch folder for its whole life — what tells the scratch sweep the row is alive (D8 of <c>todo/PLAN_vibe_reads_a_folder_of_repositories.md</c>).</summary>
+    /// <summary>The lock file a row holds in its scratch folder for its whole life — what tells the scratch sweep the row is alive (D8 of <c>research/PLAN_vibe_reads_a_folder_of_repositories.md</c>).</summary>
     public const string LockName = ".coai-question.lock";
 
     /// <summary>Makes a row's scratch folder; a test's seam for a folder that cannot be made.</summary>
@@ -160,7 +160,7 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
     }
 
     /// <summary>
-    /// The row's lock in its scratch folder, held until the row ends (D8 of <c>todo/PLAN_vibe_reads_a_folder_of_repositories.md</c>): the
+    /// The row's lock in its scratch folder, held until the row ends (D8 of <c>research/PLAN_vibe_reads_a_folder_of_repositories.md</c>): the
     /// scratch sweep keeps a <c>coai-question-*</c> folder whose lock it cannot take, because the row's budget has no upper bound and age
     /// alone would delete the copies a live row is reading. A lock that cannot be taken is said, never a reason to refuse the row.
     /// </summary>
@@ -370,7 +370,7 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
 
     /// <remarks>
     /// The vendor's reason WHOLE and redacted (<see cref="ReviewerSummaryFactory.DescribeWhole"/>, story 3.3 of
-    /// todo/PLAN_every_round_is_counted.md): it was the summary's 160-character cut, unredacted — the record lost a
+    /// research/PLAN_every_round_is_counted.md): it was the summary's 160-character cut, unredacted — the record lost a
     /// bearer token that the ledger line beside it kept.
     /// </remarks>
     private static string Outcome(ReviewerLaunch final) =>
@@ -451,7 +451,7 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
     /// </summary>
     /// <remarks>The whole <see cref="Usage"/>, not its three scalars: the cached count and the not-captured / no-price
     /// markers belong on the line too (PR #692, CodeRabbit). And the reset a refused turn STATED (epic 5's code round of
-    /// todo/PLAN_every_round_is_counted.md) — empty for an answer, an interrupted turn, and a refusal that named no time.</remarks>
+    /// research/PLAN_every_round_is_counted.md) — empty for an answer, an interrupted turn, and a refusal that named no time.</remarks>
     private void Record(RowLaunchInput input, string ranOn, string outcome, Usage usage, TimeSpan elapsed, string resetsUtc) =>
         ledger.RecordJob(
             string.Empty, input.Row.Provider.Provider, ModelRan.Of(ranOn, input.Settings.Model), ConsultantRoles.Question,

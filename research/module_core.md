@@ -269,6 +269,10 @@ per window and rolled up) and `Contributors.Of / FixersOf`. Nothing is stored he
   count is −1, never 0. The round's totals are the sum of its windows, except the unobserved-launch count: a launch with no instant marks every window and
   is counted ONCE for the round. `RoundAttribution.Version` is bumped by any change to a rule here.
 - **Contributors** come only from rows, are keyed (caller session, agent), and name the rounds they were not seen in (`NotSeen`).
+- **`AuthorsSnapshot`** (E5.S1, `AuthorsSnapshot.cs`) is what a round STORES of a `RoundAuthors`: every text-free member of it by name — never `WritesOutsideTheGateCheckout`, whose checkout roots must not reach
+  a file — plus E5's own five (`IdSource`, `Reader`, `Attribution`, `SubmoduleWrites`, `UncoveredWrites`). `From(authors, …)` is the one constructor from E4's result and `Unknown(…)` the one for a snapshot built
+  WITHOUT E4 (no row, `-1` in every unmeasured member, `Reader`/`Attribution` `0` for the component that did not run). `Render()` and `IsWellFormed(string)` are the state as text and the one rule for a stored state
+  (`shared/authors-state-vectors.json`, read by the extension too). `ActivityTotals.IsUnknown` is `[JsonIgnore]`, so a session file carries exactly the four members. The reflection fact fails when E4 adds a member the snapshot lacks.
 
 Design record: `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E4.md` (S2 is the cornerstone). Tests: `tests/Attribution*`, the `A…Tests` classes named in that plan, and the twenty recorded
 sessions of `tests/fixtures/caller-transcripts` through `AttributionHoldsOnTheRecordedSessionsTests`.

@@ -175,7 +175,7 @@ function modelFiltersScript(): string {
 }
 
 /**
- * Save price on Setup › Team servers (story 6.2 of todo/PLAN_every_round_is_counted.md): the account and what was typed in
+ * Save price on Setup › Team servers (story 6.2 of research/PLAN_every_round_is_counted.md): the account and what was typed in
  * the box beside the button, as one command — the host reads it, stores it or refuses it at the card.
  */
 function planPriceScript(): string {

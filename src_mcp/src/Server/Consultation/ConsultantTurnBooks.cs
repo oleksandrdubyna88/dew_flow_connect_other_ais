@@ -44,7 +44,7 @@ internal static class ConsultantTurnBooks
     /// The WHOLE usage reaches the line — a usage the vendor never reported as <c>usage not captured</c>, not a free 0/0
     /// (the whole-branch review, C) — for a consultation (<c>consult</c>) and a check (<c>consult-check</c>) alike.
     /// <para><paramref name="resetsUtc"/> is the reset a refused turn STATED (<see cref="UsageLedger.StatedResetOf"/>), or
-    /// empty — epic 5's code round of todo/PLAN_every_round_is_counted.md: a consultation refused with
+    /// empty — epic 5's code round of research/PLAN_every_round_is_counted.md: a consultation refused with
     /// <i>Resets in 88h49m9s</i> wrote no reset, so the extension could not say when the vendor comes back.</para>
     /// </remarks>
     public static void Billed(

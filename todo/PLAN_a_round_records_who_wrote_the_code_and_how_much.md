@@ -118,7 +118,7 @@ model fields only):
 
 | Item | Which plan builds it | The other's part |
 |---|---|---|
-| Rounds per vendor row and window; reviewers' tokens and money | [PLAN_every_round_is_counted.md](PLAN_every_round_is_counted.md) | reads `rounds`/`reviewers`; this plan adds caller-side data it never reads, and one `reviewers.effort` column it may |
+| Rounds per vendor row and window; reviewers' tokens and money | [PLAN_every_round_is_counted.md](../research/PLAN_every_round_is_counted.md) | reads `rounds`/`reviewers`; this plan adds caller-side data it never reads, and one `reviewers.effort` column it may |
 | What a reviewer token column means per vendor | [PLAN_usage_that_compares.md](PLAN_usage_that_compares.md) | this plan stores the CALLER's Claude usage in Claude's own four terms and compares no vendors |
 | Which model a Team server actually ran | [PLAN_the_log_names_the_model.md](PLAN_the_log_names_the_model.md) | reviewer side; this is the caller side |
 

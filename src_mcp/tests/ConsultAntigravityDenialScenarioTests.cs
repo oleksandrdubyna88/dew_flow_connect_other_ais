@@ -252,7 +252,7 @@ public sealed class ConsultAntigravityDenialScenarioTests : ConsultScenarioBase
     }
 
     /// <summary>
-    /// Epic 5's code round (gating finding) of todo/PLAN_every_round_is_counted.md: a CONSULTATION refused with a stated
+    /// Epic 5's code round (gating finding) of research/PLAN_every_round_is_counted.md: a CONSULTATION refused with a stated
     /// reset wrote its ledger row without <c>resetsUtc</c> — only the reviewer path read the reset — so the extension
     /// could not say when the vendor comes back after a consultation met the quota.
     /// </summary>

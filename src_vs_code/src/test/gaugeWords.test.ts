@@ -5,7 +5,7 @@ import { type GaugeRatio, gaugeLines, ratioLine, windowName } from '../gaugeWord
 import type { GaugeReading } from '../teamServerApi';
 
 /**
- * The vendor's own gauge, as a person reads it (story 6.2 of todo/PLAN_every_round_is_counted.md): one line per reported
+ * The vendor's own gauge, as a person reads it (story 6.2 of research/PLAN_every_round_is_counted.md): one line per reported
  * window — `codex (weekly): 37 % used · resets Thu 07:00 · seen 12 min ago` — and the window's rounds per 1 %, or why
  * there is none. Reset first: a passed reset with no newer reading says so and never infers that the quota is back.
  */

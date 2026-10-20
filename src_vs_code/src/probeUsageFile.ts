@@ -7,7 +7,7 @@ import { USAGE_NOT_CAPTURED } from './roundsLog';
 import type { UsageEntry } from './usage';
 
 /**
- * What the extension's Claude model probe spent, written down (story 3.3 of todo/PLAN_every_round_is_counted.md —
+ * What the extension's Claude model probe spent, written down (story 3.3 of research/PLAN_every_round_is_counted.md —
  * the paid-path census of research/RESULTS_vendor_quota_gauges.md, row 8).
  *
  * <p>The probe asks `claude --model <candidate> -p hi --output-format json` for up to four candidates a week; every

@@ -7,7 +7,7 @@ namespace CoaiServer.Tests;
 
 /// <summary>
 /// A stated reset parks the account until then — and not after (story 5.3a of
-/// <c>todo/PLAN_every_round_is_counted.md</c>).
+/// <c>research/PLAN_every_round_is_counted.md</c>).
 /// </summary>
 /// <remarks>
 /// <para>The scenario as deep as this server's harness reaches without a product seam: the real <see cref="JobRunner"/>,

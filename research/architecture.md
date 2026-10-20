@@ -94,7 +94,7 @@ Two crossings changed between the extension and the Team server, both read-only 
   session in an allowed domain — three fields, never a token or an expiry. The admin decision is the
   same one `/api/usage` makes for company scope.
 - **The server counts rounds (2026-10-11, stories 5.1–5.2 of
-  [../todo/PLAN_every_round_is_counted.md](../todo/PLAN_every_round_is_counted.md)).** Every vendor total gains the
+  [PLAN_every_round_is_counted.md](PLAN_every_round_is_counted.md)).** Every vendor total gains the
   round counts (additive), and a company request from the tab also sends `windows=5h,24h,week`, answered as a trailing
   `windows[]` from the same scan. An older server ignores the parameter and answers 200 without the key — the tab reads
   that SHAPE as *count unavailable*, never 0. The seam suite reads the real server through the extension's own parser.
@@ -783,6 +783,13 @@ plan round, and a step-22 database all send NO member — never an empty one —
 malformed row cannot fail the page. An older extension ignores it (`parseLog` reads field by field); the extension's own
 rounds-log line reads the SESSION FILE's copy, not this member (`module_extension.md`).
 
+**And a third (2026-10-19): `LoggedRound.AuthorsState`.** The state of who wrote the code a round reviewed (`rounds.authors_state`,
+schema step 24, E5) rides `--log` as an optional member `authorsState` — `observed`, `partial: <reasons>` or `unobserved: <reasons>` — an init
+property read by a page-scoped reader (`RoundAuthorsLog`) after `RoundPlanSources`. A round with no recorded state, every round of a step-23
+database, and a stored value the shared rule refuses (`shared/authors-state-vectors.json`, read by the server and the extension alike) all send
+NO member: the words "not recorded" are never printed. An older extension ignores it (`anOlderExtensionReadsALogPageCarryingASize.test.ts`); the
+extension's own round card reads the SESSION FILE's snapshot, never this member.
+
 ### The second one: the review ROLES (2026-09-12)
 
 The same shape, arrived at the same way. `coai-mcp` held five roles and twenty-five prompts as a C#
@@ -863,7 +870,7 @@ runtime's listed levels, a cap) and the accepted answer names what it dropped or
 or a server that still says 1 — into the reviewer's note, so "sent" is never read as "applied". The minimum stays
 1: nothing an older half reads has changed shape.
 
-**Still contract 2 (2026-10-11, story 4.1 of todo/PLAN_every_round_is_counted.md):** a review also carries the round's
+**Still contract 2 (2026-10-11, story 4.1 of research/PLAN_every_round_is_counted.md):** a review also carries the round's
 identity (`round`, 32 hex characters the engine mints when the round starts — every launch of the round, retries,
 repairs and follow-ups included, sends the same one), what the launch is inside its turn (`attempt`: `first`, `retry`,
 `repair`, `followUp`) and the seconds left on the shim's own deadline at submit (`remainingSeconds`, relative — never
@@ -939,7 +946,7 @@ What the server writes, and where it is observed:
 | What | Observed at | Code |
 |---|---|---|
 | Every refusal returned to a calling AI | `Refusal.Answer` — the one place an `ErrorAnswer` is built (story 2.1's boundary) | `refused` |
-| Every reviewer that did not answer | `LiveRound.Report`, where the outcome arrives | `reviewer-timed-out`, `reviewer-cancelled` (the caller's token killed it — story 3.2 of `todo/PLAN_every_round_is_counted.md`), `reviewer-rate-limited`, `reviewer-exit`, `reviewer-not-started`, `reviewer-unparseable` |
+| Every reviewer that did not answer | `LiveRound.Report`, where the outcome arrives | `reviewer-timed-out`, `reviewer-cancelled` (the caller's token killed it — story 3.2 of `research/PLAN_every_round_is_counted.md`), `reviewer-rate-limited`, `reviewer-exit`, `reviewer-not-started`, `reviewer-unparseable` |
 | A setting this build cannot read, and a legacy settings file adopted | `Program` at startup, AND `PanelServiceHost.Build` on every settings RELOAD — which is what a person editing the panel causes | `unrecognised-setting`, `settings-adopted` |
 | What it found on the DISK | `Program` at startup only: the survey stats the data directory, and re-running it on a settings change would stat a configured NAS (issue #115) | `storage-note` |
 | A run that never finished (epic 3, 2026-09-23) | the NEXT start, sweeping `runs/` — nobody else is left to say it | `unclean-exit`, carrying the DEAD run's `run` and `pid` |
@@ -1290,7 +1297,7 @@ hands the row its own snapshot comparison as the tree check `ConsultantTurn` ask
 conditions changes all three ([module_runners.md](module_runners.md), [module_server.md](module_server.md)). Nothing
 reaches the extension: the record, the reply and the ledger keep their shapes; a turn cut short is written `interrupted`.
 
-### A Vibe disk row reads a PARENT folder of repositories (2026-10-19, `todo/PLAN_vibe_reads_a_folder_of_repositories.md`)
+### A Vibe disk row reads a PARENT folder of repositories (2026-10-19, `research/PLAN_vibe_reads_a_folder_of_repositories.md`)
 
 Inside `coai-mcp`, across modules, not across a container: the Server's consultation flow — `QuestionRowLaunch` asks `ConsultantPlaces.OneShotAsync` for a
 row's place — now EXPANDS a granted root that git does not call a work tree into the repositories beneath it (`ParentExpansion`, with `RepositoryWalk`

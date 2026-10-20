@@ -8,7 +8,7 @@ using Xunit;
 namespace CoaiServer.Tests;
 
 /// <summary>
-/// A parked account is heard — story 5.3b of <c>todo/PLAN_every_round_is_counted.md</c>, the Team server's half.
+/// A parked account is heard — story 5.3b of <c>research/PLAN_every_round_is_counted.md</c>, the Team server's half.
 /// </summary>
 /// <remarks>
 /// <para><b>What was missing.</b> Since 5.3a the server parks an exhausted slot until the instant its vendor stated, and

@@ -1,6 +1,6 @@
 # RESULTS — what spends the subscription: rounds, consultations and tokens, 2026-09-07 → 2026-10-09
 
-> Status: **record, 2026-10-09.** The measurement behind [PLAN_every_round_is_counted.md](../todo/PLAN_every_round_is_counted.md).
+> Status: **record, 2026-10-09.** The measurement behind [PLAN_every_round_is_counted.md](PLAN_every_round_is_counted.md).
 > Read-only: nothing was changed on the Team server or on this machine while it was taken.
 
 ## The question

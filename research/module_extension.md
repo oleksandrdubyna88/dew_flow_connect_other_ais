@@ -2729,7 +2729,7 @@ family that answered:
 | `claudeModels.ts` | the pure half: `familyOf`, `answeredAsAsked`, `modelThatAnswered`, `stillGood`, `claudeModels`, `claudeNote` |
 | `claudeProbe.ts` | the run: one small request per candidate, SEQUENTIALLY, through `versionProbe.ts`'s `capture` |
 | `claudeProbeFile.ts` | `claude-models.json` in the data directory — parsed entry by entry, written atomically |
-| `probeUsageFile.ts` | what the probe SPENT (2026-10-11, story 3.3 of `todo/PLAN_every_round_is_counted.md`): `recordingRun` wraps the probe's `run` at the launch boundary and appends one `UsageEntry`-shaped line per request — kind `probe`, provider `claude`, the candidate as the model, Claude's own usage and billed cost through `claudeAdapter.classify`, *usage not captured* for a request that did not finish — to `probe-usage.jsonl`, through `jsonlLedger.appendLine`. Its own file because every reader of `chat-usage.jsonl` reads a line there as a conversation. `PanelProvider.readUsage` and the Rounds block's loader read it beside `usage.jsonl`; it is in `DATA_TO_MOVE` |
+| `probeUsageFile.ts` | what the probe SPENT (2026-10-11, story 3.3 of `research/PLAN_every_round_is_counted.md`): `recordingRun` wraps the probe's `run` at the launch boundary and appends one `UsageEntry`-shaped line per request — kind `probe`, provider `claude`, the candidate as the model, Claude's own usage and billed cost through `claudeAdapter.classify`, *usage not captured* for a request that did not finish — to `probe-usage.jsonl`, through `jsonlLedger.appendLine`. Its own file because every reader of `chat-usage.jsonl` reads a line there as a conversation. `PanelProvider.readUsage` and the Rounds block's loader read it beside `usage.jsonl`; it is in `DATA_TO_MOVE` |
 
 **A discovery that cannot run never subtracts.** The three ways the probe fails are all states this
 installation is really in: an allowance that is spent (issue #165 measured four reviewers meeting
@@ -3876,7 +3876,7 @@ empty `models`. Every server string goes through `escapeHtml`.
   prices a dash that makes its total a floor (`≥`). Person, vendor and summary totals add those; the note says the
   server's lines carry no cached count, so cache-heavy input is overstated. ~$ and *last seen* become sorts when the
   answer can serve them (`sorts` in the push; the page disables and labels the others). The figure itself — `Estimate`,
-  `UNKNOWN`, `totalCost`, `costText` — moved to `usage.ts` with story 2.5 of `todo/PLAN_every_round_is_counted.md`, where
+  `UNKNOWN`, `totalCost`, `costText` — moved to `usage.ts` with story 2.5 of `research/PLAN_every_round_is_counted.md`, where
   the spending tab prices each ledger line by the same three states; `teamCost.ts` re-exports them unchanged.
 - *The chart (3.3, D7).* `teamChart.ts`: an inline SVG of the dense 30 UTC days, stacked by vendor, drawn to one scale,
   its axis labelled *launches*, coloured through the vendor palette (theme colours, no hex), the days the server's
@@ -3885,12 +3885,13 @@ empty `models`. Every server string goes through `escapeHtml`.
   the way the cards are, so a push keeps it open; the axis label sits at the plot's left edge, start-anchored, where the
   svg cannot clip it; it says its 30 calendar days are not the Month window.
 
-**The server's own rounds (story 5.2 of `todo/PLAN_every_round_is_counted.md`, 2026-10-11).** A COMPANY request
+**The server's own rounds (story 5.2 of `research/PLAN_every_round_is_counted.md`, 2026-10-11).** A COMPANY request
 (`fetchUsage` → `usageRoute`) also asks `&windows=5h,24h,week` (`ROUND_WINDOWS`), so the rounds come from the same
 request, scan and cached answer as the figures they sit beside, whatever window chip is pressed; a personal request asks
 none. `serverRounds` in `teamServerApi.ts` reads the answer by its SHAPE, never its status: the counts are believed only
 when every round window came back by name and every vendor row in it — people's included — carries every count
-(`ROUND_COUNT_FIELDS`) as a whole number; otherwise `unavailable` with `ROUNDS_UNAVAILABLE`. That is exactly what a server
+(`ROUND_COUNT_FIELDS`) as a whole number; otherwise `unavailable` with `ROUNDS_UNAVAILABLE` (*"this Team server answered
+without the 5 h / 24 h / 7 d windows — Team servers count rounds from 0.12.0"*). That is exactly what a server
 older than story 5.1 produces: it binds only `window` and answers 200 with its own range, no `windows`, no counts. A
 window that came back with no vendor in it is a counted 0. Nothing is cast — every field is read by hand.
 `teamRounds.ts` (pure) draws the **Rounds** block at the end of the Vendors part (no new page part): one line per vendor
@@ -6486,6 +6487,29 @@ Tests: `rounds.test.ts` (the function), `roundsLog.test.ts` (the row, the line, 
 `bundledPage.test.ts` (the page as it ships, opened with and without a source); `LogRow` gained a required field, so the five
 fixtures that build one carry `reviewedFrom: ''`.
 
+**The "written with" line — who wrote what a round reviewed** (E5.S6 of `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`).
+An opened round shows one more dimmed line under *asked by* and *reviewed from*: *written with Opus 5.5 (main) · 3 Sonnet coders · +412 −88 in 9
+files*, *… · partial — peer running*, *authors not observed — transcript not found*, and nothing for a round without a snapshot.
+`RoundRecord` gains `authors?: unknown` and `size?: unknown` (E2 added no TypeScript). `writtenWith(authors, size)` lives in `src/authorsLine.ts` — its own
+module, because `rounds.ts` would pass ESLint's 800-line ceiling with it — and reads both through `member()`, every member checked, no type
+assertion: an AUTHORS member of the wrong type, or a state the shared rule refuses (a `state` that already carries its reasons included), makes the
+whole line `''`, never half a sentence; a `size` of the wrong shape (a non-object, a cell with a non-numeric count, a coverage word other than
+`RoundSize.cs`'s `shown`/`elided`/`excluded`/`binary`) only drops the size clause and keeps the author line. **Main** is the distinct
+displayed models of the `who = main` rows (both windows counted; none → *main model unknown*); **coders** are the DISTINCT `agent` ids of subagent rows with
+association `wrote here` (a straddler once), grouped by family — one family *N Family coder(s)* (the noun is *coder* when the TOTAL is 1), two families
+the larger group first with a tie by family NAME (*1 Opus + 1 Sonnet coders*), more than two *N coders (mixed)*, none *main only*; `other` and `unknown`
+are groups of their own, as the report counts them. **Size** is the `delta` scope when its state is `recorded`, else the `whole` scope when it is, else
+no clause: lines of the `shown` and `elided` cells, files of those and the `binary` ones — a binary has files and no lines, never 0, and a measured
+zero reads *+0 −0 in 0 files*. `partial` appends *· partial — <reasons>*, `uncoveredWrites > 0` appends *· size not covered* and `-1` appends nothing. The
+card reads the round roll-up only, never `windows` or `peerGates`. **Two shared files hold it to the server:** `shared/authors-state-vectors.json` (which
+stored state is well formed — `AuthorsSnapshot.IsWellFormed` reads it too) and `shared/model-display-vectors.json` (`claude-<family>-<major>-<minor>[-<date>]`
+is *Family major.minor*, anything else verbatim and family `other`, `""`/`unknown` family `unknown`; the report's family function reads the same rows).
+Read from the SESSION FILE only: `--log`'s `authorsState` (`module_server.md`) is not this page's source. `LogRow` gained `writtenWith`;
+`writtenWithHtml(line, escape)` is embedded by assignment beside `reviewedFromHtml`, uses only its parameters, escapes the line, and `detail(row)` adds it
+to the `asked` expression; `.reviewer.authors` is dimmed like `.reviewer.source`. No CSV column, no new action. Tests: `authorsLine.test.ts` (the function and both
+vectors files), `roundsLog.test.ts` (the row, the line, a hostile model id), `bundledPage.test.ts` (the page as it ships — `writtenWithHtml` joins `EMBEDDED`;
+break-it: the term deleted from `detail` → the two page tests red while every unit test stays green); five fixtures carry `writtenWith: ''`.
+
 ### A reviewer's row is two lines, split at a seam it already had (2026-09-12)
 
 Issue #132. The model name was added to a reviewer's line on 2026-09-08 and doubled its length:
@@ -7763,7 +7787,7 @@ marks. `within('day')` is since local midnight now, by the operator's ruling; we
 stay rolling. A Team server's own block on this tab is this account's spending on it (`scope=me`); the company view is
 the **Team server** tab (2026-10-09), and a window press re-asks the servers for the new window at once.
 
-**Each ledger line is priced at its own model (2026-10-10, story 2.5 of `todo/PLAN_every_round_is_counted.md`).**
+**Each ledger line is priced at its own model (2026-10-10, story 2.5 of `research/PLAN_every_round_is_counted.md`).**
 `totalsByVendor` priced a row's whole history at the row's CURRENT model, all input at the full rate and never at a
 long-context tier — after the Gemini row moved to `flash-medium` on 2026-10-02, every earlier `flash-low` line was
 priced as `flash-medium`. Now:
@@ -7792,17 +7816,22 @@ vendor `chatRowProvider` names, answered/stopped not failures) and a `RateOf` lo
 rows and lists). `moneyGroups(lines, window, rateOf)` answers, inside a trailing window, per vendor row × model × kind
 (review / consult / question / chat; a Team-server row is its own row): tokens in / cached / out / reasoning — an
 uncaptured line adds nothing, marks the totals `≥`, and only-uncaptured is `unknown`, never 0 (`tokenText`) — recorded
-turns, failed, the median input and output **per recorded turn** (`MEDIAN_OUTPUT_LABEL`: a repair or a follow-up is two
-launches on one line until story 3.3, so no per-launch figure is claimed), and the money (`Estimate`). `rollUp` makes
-a vendor row or the window from groups (no medians). `perUnit(money, unitDivisor(kind, count, turns))` divides: a
-MODEL line by the rounds that used it when the caller knows them, else per recorded turn; a vendor row or the total by
+turns, failed, the median input and output per ledger line, `linesAreLaunches` (every line is ONE launch by
+`isLaunchLine`: its `attempt` is one of `ONE_LAUNCH_ATTEMPTS` — `first`, `retry`, `repair`, an allow-list, so an
+unknown attempt word is never claimed — and its `cli` is set and not `remote` — a line from before
+coai-mcp 0.48.0, a Team-server row's local line, which is the job's total, and an antigravity follow-up, which may be
+cumulative, are not; the lines decide, never a row looked up; [PLAN_the_rounds_labels_say_what_they_count.md](PLAN_the_rounds_labels_say_what_they_count.md)),
+and the money (`Estimate`). `rollUp` makes a vendor row or the window from groups (no medians; `linesAreLaunches` only
+when every group's is). `perUnit(money, unitDivisor(kind, count, turns, linesAreLaunches))` divides: a MODEL line by the
+rounds that used it when the caller knows them, else by its lines — per launch when they are launches, else per
+recorded turn (`perUnit` pluralises `launch` as `launches`); a vendor row or the total by
 every round in the window; consultations and questions by their own counts. Every unit is the denominator, never only
 the priced ones; the floor is carried (`≥ ~$0.31`); nothing priced is a dash; zero units is a dash with *no rounds in
 this window*. How many rounds were FULLY priced is not knowable until a line carries its round (story 4.1), so the note
 says only that some of it was not. The round counts come from `coai-mcp --round-counts` (story 2.1), read as below.
 
 **The counts are read once a minute, and the Spending tab's first block is Rounds (2026-10-10, stories 2.2–2.4 of
-`todo/PLAN_every_round_is_counted.md`).** Four files, pure where the page can import them:
+`research/PLAN_every_round_is_counted.md`).** Four files, pure where the page can import them:
 
 - `roundCounts.ts` — the mode's contract as data (`RoundCountsAnswer`: `nowUtc`, three windows `5h` / `24h` / `7d`
   half-open `(from, to]`, each a row per vendor with rounds by stage, the reviewer rows and the rounds per model;
@@ -7838,7 +7867,10 @@ tab's own tick (`usageTab`). The tab's
 FIRST block, above the window buttons — its windows are its own — is `roundsBlock.ts`'s `roundsBlock(input)`, rendered
 by the host and handed to `usageTabHtml` as `extras.rounds`: per vendor row, rounds over 5 h / 24 h / 7 d, the 7 d rounds
 by stage, the consultations / questions / chat beside them as recorded turns, reviewers per round from the database's
-history, the median output per recorded turn, tokens in / cached / out / reasoning and money over 7 d through
+history, the median output (`medianOutputLabel`: the header names the unit the drawn medians share — *per launch*
+when every one is, *per recorded turn* when none is, no unit on a mixed page or an unread ledger — and a cell whose
+unit differs from the header's names it beside its number, the recorded-turn one with a tooltip), tokens in / cached
+/ out / reasoning and money over 7 d through
 `roundMoney` (its floors, its `perUnit` rules — a window with consultations and no rounds is a dash saying *no rounds in
 this window*); under each row a line per model (a model change inside the window is two lines; rounds per model exist
 only from `modelsKnownSince`, else *not recorded*) and a line per kind beside. A `remote` row is *ran on <server>*
@@ -7876,8 +7908,9 @@ writes a line per paid completion, of kind `probe`; `roundsBlock`'s `BESIDE` nam
 reaches a model line or a round — a row's money still holds every kind. `usage.ts`'s parser reads the two new ledger
 fields, `turn` and `attempt` (`launchFields`: present only when the line says them, so old lines with no turn never read
 as one turn). A repair, a follow-up, a retry and a rotated Team-server attempt are each a line since this story, so the
-spending tab's `runs` count them; the median is still labelled per recorded turn, because a seven-day window holds lines
-from both sides of the change. The help's spending article says both, in five languages
+spending tab's `runs` count them. The median was labelled per recorded turn at first, because a seven-day window held
+lines from both sides of the change; since the labels plan it is per launch whenever every line of the group is a
+launch line (see `isLaunchLine` above). The help's spending article says both, in five languages
 (`helpCoverage.test.ts` asks every language for `**probe**`, `--probe-api --model` and `` `turn` ``).
 The extension's own Claude model probe (`claudeProbe.ts`) still writes nothing — no sanctioned writer fits; see the
 plan's deviations.
@@ -12597,7 +12630,7 @@ and **Chat** now lay their repeated cards out the way Models does — by the SAM
   reaches a Chat model block while one still reaches a Models card block. Design record:
   [PLAN_settings_tabs_two_columns.md](PLAN_settings_tabs_two_columns.md).
 
-## The vendor's own gauge, rounds per 1 % and a plan's share (2026-10-12, story 6.2 of `todo/PLAN_every_round_is_counted.md`)
+## The vendor's own gauge, rounds per 1 % and a plan's share (2026-10-12, story 6.2 of `research/PLAN_every_round_is_counted.md`)
 
 The Team server reads the codex account's gauge after each job (story 6.1a, [module_team_server.md](module_team_server.md))
 and derives rounds per 1 % of each window in the shared runners library ([module_runners.md](module_runners.md)). The

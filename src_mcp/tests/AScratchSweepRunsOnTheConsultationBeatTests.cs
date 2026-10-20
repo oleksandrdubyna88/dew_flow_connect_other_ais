@@ -13,6 +13,12 @@ namespace CoaiMcp.Tests;
 /// would have left its snapshot in temp for ever, because <c>PruneOldAnswerDirs</c> ran only on the round's build path. The
 /// consultation beat — which runs while the server serves, round or no round — now calls the same throttled sweep.
 /// </summary>
+/// <remarks>
+/// <para>In the serial <c>fakecli-env</c> collection: it calls <c>PanelService.ForgetTheLastSweep</c>, which resets a static of the PROCESS, and the next
+/// <c>BuildWork</c> anywhere then walks the real temp folder — inside whatever round deadline that call runs under (C6 of
+/// <c>todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md</c>).</para>
+/// </remarks>
+[Collection("fakecli-env")]
 public sealed class AScratchSweepRunsOnTheConsultationBeatTests : IDisposable
 {
     private readonly string _dir = Directory.CreateTempSubdirectory("coai-sweeper-").FullName;
@@ -73,7 +79,7 @@ public sealed class AScratchSweepRunsOnTheConsultationBeatTests : IDisposable
     }
 
     /// <summary>
-    /// A question row's scratch as a killed server leaves it (D8 of <c>todo/PLAN_vibe_reads_a_folder_of_repositories.md</c>): a copy
+    /// A question row's scratch as a killed server leaves it (D8 of <c>research/PLAN_vibe_reads_a_folder_of_repositories.md</c>): a copy
     /// of a repository in a numbered sub-folder, the row's lock file with nobody holding it, and a folder time of <paramref name="age"/> ago.
     /// Made in the REAL temp root under the row's own prefix, which is what the product's sweep walks.
     /// </summary>

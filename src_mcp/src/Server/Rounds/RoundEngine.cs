@@ -34,6 +34,7 @@ internal sealed class RoundEngine(
     Store.Projection projection,
     CallerSessions callers,
     RemoteProbe remote,
+    RoundAuthorsStep authors,
     Func<Stage, IReadOnlyList<string>> excludedFrom,
     Func<Stage, RoundWork, string> noReviewerRefusal)
 {
@@ -49,6 +50,7 @@ internal sealed class RoundEngine(
     private readonly Store.Projection _projection = projection;
     private readonly CallerSessions _callers = callers;
     private readonly RemoteProbe _remote = remote;
+    private readonly RoundAuthorsStep _authors = authors;
     private readonly RoundCommands _commands = commands;
     private readonly Func<Stage, IReadOnlyList<string>> _excludedFrom = excludedFrom;
     private readonly Func<Stage, RoundWork, string> _noReviewerRefusal = noReviewerRefusal;
@@ -316,7 +318,7 @@ internal sealed class RoundEngine(
             // feature-review plan). The counter keeps counting rounds for the budget; this is the
             // round's name.
             var number = RoundNumber.Next(session.Rounds, stage.Stage);
-            // And the identity it carries across the wire (story 4.1 of todo/PLAN_every_round_is_counted.md): minted
+            // And the identity it carries across the wire (story 4.1 of research/PLAN_every_round_is_counted.md): minted
             // here, once per round that RUNS — `again`, the ladder and a person's Continue/Fix each come through here
             // again and so get a new one — stamped on every launch of the round below, and kept on its record.
             var key = RoundKeys.Mint();
@@ -495,6 +497,9 @@ internal sealed class RoundEngine(
                 AdmittedBy = FeatureSecondRound.AdmittedBy(session.State),
                 PlanSource = PlanSources.Stamp(stage, planText, sha),
             };
+            // Who wrote what this round reviewed: computed HERE, before the save below and before the projection opens the database, and
+            // never part of the `with` above (its initializer cannot name the record it is building). Null for a round that is not settled.
+            record = record with { Authors = _authors.For(session, record) };
             // The operator's own switches, read for THIS call: the settings file is stamped and
             // reloaded per tool call, so a box ticked a second ago governs this round.
             var caller = RoundCommands.CallerFor(session);
@@ -900,7 +905,7 @@ internal sealed class RoundEngine(
     {
         var previous = session.Rounds.Count > 0 ? session.Rounds[^1].CompletedUtc : DateTime.MinValue;
         var from = previous > session.OpenedUtc ? previous : session.OpenedUtc;
-        var transcripts = _settings.AgentLogDir.Length > 0 ? _settings.AgentLogDir : Store.AgentLog.DefaultProjectsDir;
+        var transcripts = _settings.TranscriptHome.ProjectsDir;
 
         return from == DateTime.MinValue
             ? string.Empty

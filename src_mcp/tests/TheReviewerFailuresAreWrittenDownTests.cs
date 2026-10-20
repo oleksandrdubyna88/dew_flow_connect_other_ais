@@ -103,7 +103,7 @@ public sealed class TheReviewerFailuresAreWrittenDownTests : IDisposable
         new Dictionary<Type, Func<ReviewerOutcome>>
         {
             [typeof(ReviewerOutcome.TimedOut)] = () => new ReviewerOutcome.TimedOut(),
-            // The sixth ending (story 3.2 of todo/PLAN_every_round_is_counted.md): the caller's token killed the launch.
+            // The sixth ending (story 3.2 of research/PLAN_every_round_is_counted.md): the caller's token killed the launch.
             [typeof(ReviewerOutcome.Cancelled)] = () => new ReviewerOutcome.Cancelled(),
             [typeof(ReviewerOutcome.RateLimited)] = () => new ReviewerOutcome.RateLimited("quota", 2),
             [typeof(ReviewerOutcome.NonZeroExit)] = () => new ReviewerOutcome.NonZeroExit(3, "boom"),
