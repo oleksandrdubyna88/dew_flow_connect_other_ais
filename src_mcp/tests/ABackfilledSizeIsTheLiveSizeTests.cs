@@ -14,6 +14,7 @@ namespace CoaiMcp.Tests;
 /// the live round recorded; never re-based on a merge-base taken today. Driven over a REAL <see cref="PanelService"/>, real git and FakeCli: two
 /// code rounds are recorded live, their sizes stripped, and rebuilt by <see cref="StoredSizer"/>.
 /// </summary>
+[Collection("fakecli-env")]
 public sealed class ABackfilledSizeIsTheLiveSizeTests : LiveSizedGateBase
 {
     // ---------- the main one ----------

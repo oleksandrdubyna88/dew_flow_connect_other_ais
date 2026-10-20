@@ -11,6 +11,7 @@ namespace CoaiMcp.Tests;
 /// E7.S3, the size half — a stored code round's size is written through the two shipped writers inside ONE transaction, carries the backfill origin
 /// in the file and in the database alike, and survives a live re-record that measured nothing. Over a real <see cref="PanelService"/>, real git and FakeCli.
 /// </summary>
+[Collection("fakecli-env")]
 public sealed class ABackfilledSizeIsWrittenWithItsRowsTests : LiveSizedGateBase
 {
     private BackfillRig Rig(Action<WritePoint>? fault = null) =>
