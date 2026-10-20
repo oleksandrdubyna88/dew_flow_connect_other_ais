@@ -212,6 +212,42 @@ public sealed class RoundAuthorsCliScenarioTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// A refusal's sentence quotes what it refuses — the selection words two reports disagree on, a member name the JSON has no place for — and that
+    /// text comes from an <c>--add</c> file. Whatever it holds, stderr prints no control character but a line break, and the refusal is still 65
+    /// naming the argument as typed.
+    /// </summary>
+    [Fact]
+    public void ARefusalThatQuotesAnAddFile_NeverWritesAControlCharacterToStderr()
+    {
+        var (a, b) = (Store("a"), Store("b"));
+        Sessions(a, true, "x1");
+        Sessions(b, true, "y1");
+        var reportText = Run(b, [.. Window()]).Out;
+        var report = Answer(reportText);
+        const string Hostile = "x\u001b]8;;http://x\u0007\u001b[2J";
+        var crafted = new Dictionary<string, string>
+        {
+            ["selection-cohort.json"] = RoundAuthorsMerge.Serialize(report with { Selection = report.Selection with { Cohort = Hostile } }),
+            ["selection-stage.json"] = RoundAuthorsMerge.Serialize(report with { Selection = report.Selection with { Stage = Hostile } }),
+            ["selection-kinds.json"] = RoundAuthorsMerge.Serialize(report with { Selection = report.Selection with { Kinds = [Hostile] } }),
+            ["unknown-member.json"] = "{\"member\\u001b[2J\\u0007\": 1," + reportText.TrimStart()[1..],
+        };
+
+        foreach (var (name, text) in crafted)
+        {
+            var path = _root.At(name);
+            File.WriteAllText(path, text);
+
+            var run = Run(a, [.. Window(), "--add", path, "--table"]);
+
+            run.Code.Should().Be(65, $"--add '{path}' is a bad request; stderr was: {run.Err}");
+            run.Out.Should().BeEmpty();
+            run.Err.Where(at => char.IsControl(at) && at != '\n' && at != '\r').Should().BeEmpty($"stderr for {name} carries no control character but a line break");
+            run.Err.Should().Contain($"--add '{path}'", "the argument as typed");
+        }
+    }
+
     [Fact]
     public void AStoreThatWillNotRead_Is74()
     {
