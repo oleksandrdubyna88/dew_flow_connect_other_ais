@@ -14,7 +14,7 @@ public enum StatedBudgetState
 }
 
 /// <summary>
-/// What a request said about its caller's remaining time — story 4.3 of <c>todo/PLAN_every_round_is_counted.md</c>.
+/// What a request said about its caller's remaining time — story 4.3 of <c>research/PLAN_every_round_is_counted.md</c>.
 /// </summary>
 /// <remarks>
 /// <para><b>Absent and dropped are different facts, so they are different states.</b> Both leave the job without a

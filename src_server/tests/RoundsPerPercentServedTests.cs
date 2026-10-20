@@ -8,7 +8,7 @@ using Xunit;
 namespace CoaiServer.Tests;
 
 /// <summary>
-/// <c>/api/usage</c> answers rounds per 1 % of each gauge window (story 6.2 of todo/PLAN_every_round_is_counted.md) — the
+/// <c>/api/usage</c> answers rounds per 1 % of each gauge window (story 6.2 of research/PLAN_every_round_is_counted.md) — the
 /// shared library's figure over the server's own ledger, beside the round windows it is asked with.
 /// </summary>
 public sealed class RoundsPerPercentServedTests

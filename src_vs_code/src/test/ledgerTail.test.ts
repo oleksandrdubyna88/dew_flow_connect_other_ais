@@ -9,7 +9,7 @@ import { roundsLoader } from '../roundCountsRead';
 import { parseUsageLine } from '../usage';
 
 /**
- * The ledger read for the Rounds block stops at the oldest window (story 2.2 of todo/PLAN_every_round_is_counted.md):
+ * The ledger read for the Rounds block stops at the oldest window (story 2.2 of research/PLAN_every_round_is_counted.md):
  * a year of history before the 7 d window costs one chunk, not a year's parse per refresh.
  */
 

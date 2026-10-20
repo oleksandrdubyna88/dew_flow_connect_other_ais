@@ -285,7 +285,7 @@ real and named here rather than implied:
 | Add a reviewer FROM a Team server | decisions only | `remoteVendorRow.test.ts`, `remoteVendorCard.test.ts` — the row shape, the catalog-fed model list, the canonical server match, and the fields a remote row must not show. The quick-pick itself needs an extension host |
 | A reviewer the server cannot run, badged on its card | decisions only | `providersBadge.test.ts` — the three states and that only `unavailable` draws anything, the parser against every shape a different build could hand it, and a row the server did not mention reading as UNKNOWN rather than as fine. The spawn of `--providers` itself is the row below |
 | Team-server spending, and *Company* | decisions only | `teamUsage.test.ts` — the per-server block, the admin gate, and what a server that has not answered renders as |
-| The spending tab's money LINE BY LINE, and tokens and money per vendor row × model × kind (story 2.5 of `todo/PLAN_every_round_is_counted.md`, 2026-10-10) | decisions, the card's text, and the help | `usagePricing.test.ts` — `TheParser_KeepsCachedReasoningAndKind` (an old line: 0, 0, `review`), `APastLine_IsPricedAtItsOwnModel` (and the row's typed rate still winning), `CachedInput_IsPricedAtTheCachedRate` (and a list with no cached rate pricing it at the input rate), `ALongContextTier_AppliesPerLine`, `AReportedCost_IsNeverReEstimated` (`$0.4200 + ~$3.00` through `spend`), `AnUnpricedLine_MakesTheTotalAFloor` (an unpriced and an uncaptured line each `≥`, a whole row not, nothing priced a dash). Each went red on the unfixed code with the real symptom (*expected 1.1, got 2*; *expected 0.56, got 2*; *expected 2.7, got 1.8*; *expected 3, got null*; *an unpriced line was counted as free*; *the cached subset was dropped*), and each was re-reddened by reverting its one production line in the built `usage.js`, `priceOfLine`'s line-model lookup included. `roundMoney.test.ts` — grouping and the window (a Team-server row apart), the four token columns, `AnUncapturedLine_MakesATokenTotalAFloor_NeverZero`, `ARepairedTurn_IsOneRecordedTurn_NotOneLaunch`, the money's three states, `APerRoundFigure_CountsEveryRound_AndCarriesTheFloor`, `AModelLine_DividesByTheRoundsThatUsedIt`, `AConsultationOnlyWindow_ShowsNoPerRoundFigure`, chat turns as kind `chat`, and a parsed real-shape line; each guarantee re-reddened by removing it from the built module. `helpCoverage.test.ts` asks all five languages' spending article for `**≥**` and its example. NOT covered: the provider handing the tab every model the ledger names (`modelPrices(vendors, ledger)` needs an extension host), and the Rounds block, card line and `readRoundCounts` that will consume `roundMoney.ts` (stories 2.2–2.4) |
+| The spending tab's money LINE BY LINE, and tokens and money per vendor row × model × kind (story 2.5 of `research/PLAN_every_round_is_counted.md`, 2026-10-10) | decisions, the card's text, and the help | `usagePricing.test.ts` — `TheParser_KeepsCachedReasoningAndKind` (an old line: 0, 0, `review`), `APastLine_IsPricedAtItsOwnModel` (and the row's typed rate still winning), `CachedInput_IsPricedAtTheCachedRate` (and a list with no cached rate pricing it at the input rate), `ALongContextTier_AppliesPerLine`, `AReportedCost_IsNeverReEstimated` (`$0.4200 + ~$3.00` through `spend`), `AnUnpricedLine_MakesTheTotalAFloor` (an unpriced and an uncaptured line each `≥`, a whole row not, nothing priced a dash). Each went red on the unfixed code with the real symptom (*expected 1.1, got 2*; *expected 0.56, got 2*; *expected 2.7, got 1.8*; *expected 3, got null*; *an unpriced line was counted as free*; *the cached subset was dropped*), and each was re-reddened by reverting its one production line in the built `usage.js`, `priceOfLine`'s line-model lookup included. `roundMoney.test.ts` — grouping and the window (a Team-server row apart), the four token columns, `AnUncapturedLine_MakesATokenTotalAFloor_NeverZero`, `ARepairedTurn_IsOneRecordedTurn_NotOneLaunch`, the money's three states, `APerRoundFigure_CountsEveryRound_AndCarriesTheFloor`, `AModelLine_DividesByTheRoundsThatUsedIt`, `AConsultationOnlyWindow_ShowsNoPerRoundFigure`, chat turns as kind `chat`, and a parsed real-shape line; each guarantee re-reddened by removing it from the built module. `helpCoverage.test.ts` asks all five languages' spending article for `**≥**` and its example. NOT covered: the provider handing the tab every model the ledger names (`modelPrices(vendors, ledger)` needs an extension host), and the Rounds block, card line and `readRoundCounts` that will consume `roundMoney.ts` (stories 2.2–2.4) |
 | Mirroring the settings to the file the server reads | decisions, the CONTENTION, and the SEAM | `settingsSync.test.ts`, `settingsLock.test.ts`. Covered: that a change reaches the file with no panel open; that an older build stands down from a newer stamp and says so once per version; that a file which cannot be READ is not a file that is not there; that the read, the comparison and the write happen in that order inside one section; that two syncs over one lock and one file interleave to exactly one writer and one whole payload; and when a lock left by a dead window may be broken, including a clock that went backwards. NOT covered: the lock itself — `fs.open(…, 'wx')`, the owner token, the stale break and the atomic rename all need a real filesystem and two real extension hosts, which is the row below. **The seam IS covered live**: `npm run test:seam` (`scripts/run-seam.mjs`) writes the file with the extension's own `serverSettingsJson`, signs a throwaway data directory in at the token path both sides derive independently, serves a catalog from a loopback HTTP server, and runs the REAL `coai-mcp --providers` against it — asserting the Team-server row resolves under the name its SERVER knows. Watched failing with `remoteVendor` removed from `vendorsEnv`, which is the defect of 2026-09-07 reproduced by the two implementations rather than described by a fixture |
 | A SIDE's settings file and log root, across the seam | decisions, the shared vectors, and the SEAM | `TheSettingsFileKnowsItsSideTests.cs` + `TheSideAdoptsTheRootSettingsTests.cs` (server), `dataDirAgreesWithTheServer.test.ts` (extension), `DataSideVectorTests.cs` over the shared `shared/data-side-vectors.json`, and **leg five of `npm run test:seam`** (`scripts/run-seam.mjs`). The defect, 2026-09-18: `COAI_DATA_SIDE` partitioned `coai.db`, `sessions/` and the tokens while `settings.json` and `logs/` stayed in the root, because `SettingsFile.DataDirFrom` was a SECOND resolver with no side and no trim — two installations sharing one NAS overwrote each other's configuration in silence. Covered as decisions: that the two resolvers agree for every shape of input INCLUDING refusing alike (a property over dir × side, not a list of answers); that the log root moves through the same call and no rule of its own; and the whole adoption protocol — the root file surviving, a kill before publication leaving adoption still possible, a root file that does not parse being named and left, and the RACE, in which the other window publishes in the one instant between this side's check and its rename (a hook, because the first version of that test created the destination first and so never reached `File.Move(overwrite: false)` at all — it passed with the guard deleted). Watched failing with `overwrite: true` planted: *the loser of the race overwrote the winner's file*. **And that the sentences reach a caller**: `Layer` takes a required sink, because the first build adopted and dropped what it returned while the comment beside it claimed startup logged it — six reviewers across three vendors found it; planting the discard turns two tests red with *the collection is empty*. The `settingsPath`/`logsPath` of every vector are asserted by BOTH suites, refused cases included, since the DIRECTORY alone could not see this defect — the directory was already right. **Leg five is the live half**: the extension's own `coaiDataDir()` chooses the path, the REAL binary is started with the same two variables, and it must find the row — agreement by CONSEQUENCE rather than by comparing two strings, which is what a fixture cannot do. It also proves the root adoption against the real binary and that the root file survives it. **NOT covered**: two machines actually mounting one NAS |
 | **The two notice serialisers, over one corpus** | decisions, and the two implementations against EACH OTHER | `npm run test:parity` (`scripts/run-parity.mjs`), driving `NoticeTool` — a test-only executable built by the solution and never published, the FakeCli pattern. It exists because `server-notices.jsonl` is written by C# and read by TypeScript and BOTH halves redact: two suites that each compare themselves against their own expectations can be wrong in the same direction, and here that is a secret written by one half that the other would have removed. `src/test/noticeShapes.ts` generates the corpus — every secret shape crossed with eleven wraps including Russian and German prose, quotes, an emoji and a tab; control characters by CODE POINT; each length boundary; a surrogate pair straddling the cut; and values longer than a pattern's own bound. **346 shapes at both limits, compared as UTF-16 code units**, plus three whole records and the fourteen codes. **What it compares and what it cannot**: `safeText` byte for byte; the LINE through the extension's own parser, because `JSON.stringify` writes properties in the caller's insertion order and C# has a fixed list — the first version demanded byte equality and reported 4408 identical units in a different order. So the line is asserted to parse, to agree field by field, and to be a FIXED POINT of the parser. **Watched failing twice, both times by this harness rather than by reasoning**: the transport's first version sent strings through `UnsafeRelaxedJsonEscaping` and turned the lone surrogate `slice` leaves at a cut into U+FFFD (the port was right, the transport was lying); and replacing the redactor's ASCII lookbehind with .NET's Unicode `\b` left `token abcdefghijklmnop` and `basic YWxhZGRpbjpvcGVuc2VzYW1l` unredacted after Cyrillic text while the extension removed them. **NOT covered**: that either half is RIGHT — it proves they are the same, and `notifications.test.ts` is what says the contract is what it should be |
@@ -3190,7 +3190,7 @@ section is declared for the settings surface.
 | `refusedSelect.test.ts`: a `'consultants'` composite write snaps back | a consultant PICK (`savePick`) snaps back |
 | `catalogRow.test.ts`, `theOldPagePricesWhatItShows.test.ts` (since 2026-10-09 `theCardsArePricedFromEveryRow.test.ts`, pinning the per-row prices instead) name `shownOnTheOldPage` | `isReviewerRow` |
 
-## The local round counter — `--round-counts` and schema step 20 (2026-10-10, story 2.1 of `todo/PLAN_every_round_is_counted.md`)
+## The local round counter — `--round-counts` and schema step 20 (2026-10-10, story 2.1 of `research/PLAN_every_round_is_counted.md`)
 
 Three suites, real SQLite over temp directories, and the mode run as the PROCESS the extension will run
 (`OneShotProcess`, the one-shot runner written once for this scenario; on 2026-10-11 `LogCliScenarioTests`,
@@ -3214,7 +3214,7 @@ opening it); the 74 for a database that will not read, reached only through the 
 `--log --paged` already exercises; a stage name this build does not know (counted under no stage — no such row can be
 written by this build). The extension's side is the section below.
 
-## The extension reads the counter, and the Spending tab's Rounds block (2026-10-10, stories 2.2–2.4 of `todo/PLAN_every_round_is_counted.md`)
+## The extension reads the counter, and the Spending tab's Rounds block (2026-10-10, stories 2.2–2.4 of `research/PLAN_every_round_is_counted.md`)
 
 `vscode`-free throughout: the spawn is a `Run` handed in, the clock is a function, the ledger is a temp file, and the
 `--round-counts` answer is one fixture (`roundCountsFixtures.ts`, `ANSWER_JSON`) parsed through the REAL parser — a
@@ -3236,7 +3236,7 @@ before this session observed it, so every behaviour was re-reddened by reverting
 `extension.ts` (thin `vscode` wiring over the tested cache — `forget()` itself is tested); the CSS of the block and the
 card line (no behaviour to assert).
 
-## The deployed ledger's own lines as fixtures (2026-10-10, story 1.2 of `todo/PLAN_every_round_is_counted.md`, E1)
+## The deployed ledger's own lines as fixtures (2026-10-10, story 1.2 of `research/PLAN_every_round_is_counted.md`, E1)
 
 Three lines of the Team server's live `usage.jsonl`, copied read-only on 2026-10-10 through the operator's credential
 vault — the last `ok`, the last `TimedOut` under ten seconds, the last `RateLimited` — with the person's email replaced
@@ -3265,7 +3265,7 @@ catalogue id. The reader test proves the deployed server's bytes parse through t
 widened reader will — that is `AnOldLedgerLine_StillReads`, owed by E3, and these fixtures are its input. Nothing here
 reaches the live ledger beyond the three lines that were copied.
 
-## The server reads a stated duration (2026-10-11, story 5.3a of `todo/PLAN_every_round_is_counted.md`)
+## The server reads a stated duration (2026-10-11, story 5.3a of `research/PLAN_every_round_is_counted.md`)
 
 The scenario reaches as deep as the Team server's harness goes without a product seam: the real `JobRunner`,
 `ReviewLauncher`, antigravity adapter and `SlotRegistry` on disk, with a fake `IProcessLauncher` standing in for the
@@ -3280,7 +3280,7 @@ paid agy process. Run: `./src_server/tests/bin/Debug/net10.0/CoaiServer.Tests.ex
 **NOT covered:** the HTTP host (`Program.cs` builds the launcher inline — a vendor double there needs a product seam);
 a real agy refusal on the deployed box — checked live at the next deploy.
 
-## The server ledger tells the truth — the whole usage, and the canary's own kind (2026-10-10, stories 3.1 and 3.5 of `todo/PLAN_every_round_is_counted.md`)
+## The server ledger tells the truth — the whole usage, and the canary's own kind (2026-10-10, stories 3.1 and 3.5 of `research/PLAN_every_round_is_counted.md`)
 
 The seam rule of the plan's test plan: a defect BELOW `IReviewLauncher` is tested through the real `ReviewLauncher` with
 a fake `IProcessLauncher` (`TheWholeUsageTravelsTests.Codex` writes the `-o` answer file and prints a codex event
@@ -3301,7 +3301,7 @@ answered the kind with its 400 and got a second, plain submit; a new one got one
 (below, *Epic 3's code round*) runs the real `canary` against a stub curl in the ordinary suite; until then the suite
 asserted only the script's TEXT and the stub run above was the behaviour, recorded once.
 
-## Every paid launch is written, and written whole (2026-10-10, story 3.3 of `todo/PLAN_every_round_is_counted.md`)
+## Every paid launch is written, and written whole (2026-10-10, story 3.3 of `research/PLAN_every_round_is_counted.md`)
 
 The launcher is faked IN PROCESS for the local half (the defect sits above `IProcessLauncher`, in the executor, the
 ladder and the ledger, so the real ones run); the server half runs the real `ReviewLauncher` and `JobRunner` with a fake
@@ -3322,7 +3322,7 @@ RED for its real symptom first, then GREEN, then RED again with the fix's own li
 deviations); a consultation's and a question row's continued turns still fold per turn; a cancellation during a repair
 (story 3.2's); the cumulative difference of an agy follow-up (`todo/PLAN_the_reviewer_follow_up_is_billed_once.md`).
 
-## Each line says what it ran with (2026-10-11, story 3.4 of `todo/PLAN_every_round_is_counted.md`)
+## Each line says what it ran with (2026-10-11, story 3.4 of `research/PLAN_every_round_is_counted.md`)
 
 The comparison is with what the launcher RECEIVED — the argv and the environment — never with the row's configured
 values: the local round runs the real `PanelService` with the fake CLI behind a recording `IProcessLauncher`, the server
@@ -3340,7 +3340,7 @@ line of the fix planted back.
 empty — "not recorded"); claude's own settings are not read for a label; the client's line for a Team-server row records
 the effort it SENT (`row`) — what the server applied is the server's line's.
 
-## How a job ended is said, not guessed (2026-10-11, story 3.2 of `todo/PLAN_every_round_is_counted.md`)
+## How a job ended is said, not guessed (2026-10-11, story 3.2 of `research/PLAN_every_round_is_counted.md`)
 
 The seam rule again: the shared half runs the real `ReviewerExecutor` over a scripted `IProcessLauncher`
 (`ScriptedResults`, extracted from `EveryPaidLaunchIsWrittenTests` rather than copied a fourth time); the Team server's
@@ -3365,7 +3365,7 @@ restored and the exe REBUILT (a stale exe showed a restored plant as a failure o
 stays covered by `OneRowPastItsDeadline_…`; the local executor's cause (none is written); a job ended by an
 infrastructure throw (no line, as before); `TimedOut`'s launch usage on the server's attempt (still `None`).
 
-## The extension's Claude model probe writes what it spent (2026-10-11, story 3.3 of `todo/PLAN_every_round_is_counted.md`)
+## The extension's Claude model probe writes what it spent (2026-10-11, story 3.3 of `research/PLAN_every_round_is_counted.md`)
 
 | Suite | What it holds | Seen red as |
 |---|---|---|
@@ -3375,7 +3375,7 @@ infrastructure throw (no line, as before); `TimedOut`'s launch usage on the serv
 **NOT covered:** `ClaudeProbeCache` and `PanelProvider.readUsage` passing the probe ledger (thin `vscode` wiring over the
 tested wrapper and loader).
 
-## Epic 3's code round (2026-10-11, `todo/PLAN_every_round_is_counted.md`)
+## Epic 3's code round (2026-10-11, `research/PLAN_every_round_is_counted.md`)
 
 Three accepted findings of the gate's code round for epic 3/6; two were rejected with reasons (the plan's deviation
 table says which).
@@ -3399,7 +3399,7 @@ case active for the whole half hour). Reproduced here in Git bash (a shim that e
 a 60 s bound that kills the tree. Break-it: `Python()` planted to return `python3` → all three red in 1 s, `Expected
 Path.IsPathRooted(python) to be True … but found False` — a failure, no longer a hang.
 
-## The server reads a stated duration (2026-10-11, story 5.3a of `todo/PLAN_every_round_is_counted.md`)
+## The server reads a stated duration (2026-10-11, story 5.3a of `research/PLAN_every_round_is_counted.md`)
 
 The scenario reaches as deep as the Team server's harness goes without a product seam: the real `JobRunner`,
 `ReviewLauncher`, antigravity adapter and `SlotRegistry` on disk, with a fake `IProcessLauncher` standing in for the
@@ -3415,7 +3415,7 @@ paid agy process. Run: `./src_server/tests/bin/Debug/net10.0/CoaiServer.Tests.ex
 **NOT covered:** the HTTP host (`Program.cs` builds the launcher inline — a vendor double there needs a product seam);
 a real agy refusal on the deployed box — checked live at the next deploy.
 
-## The server records the round (2026-10-11, story 4.2 of `todo/PLAN_every_round_is_counted.md`)
+## The server records the round (2026-10-11, story 4.2 of `research/PLAN_every_round_is_counted.md`)
 
 The request half goes through the REAL `POST /api/reviews` with RAW JSON bodies (a typed client cannot send `{}` where a
 string goes); the line half runs the job the endpoint STORED through the real `JobRunner` and `UsageLedger`, with
@@ -3471,7 +3471,7 @@ directory, `/api/health` bounded, a signed-in `GET /api/usage` asserted, each CL
 **NOT covered here:** a real container (no docker daemon in the suite) — the `server-image` job's two legs run it on
 every pull request that touches the image's files or `smoke-image.sh`.
 
-## A round has an identity on the wire (2026-10-11, story 4.1 of `todo/PLAN_every_round_is_counted.md`)
+## A round has an identity on the wire (2026-10-11, story 4.1 of `research/PLAN_every_round_is_counted.md`)
 
 The client half of epic 4. The seam: the real `BoundedScheduler`, `ReviewerExecutor` and `RemoteRuntime` over a
 recording `IProcessLauncher` for what the parent decides; the real `--ask-remote` code (`AskRemote.RunAsync` over
@@ -3497,7 +3497,7 @@ stamp through a spy adapter, the wire through the real executor and the real shi
 the local ledger line (carries no round yet); a feature-stage follow-up turn through the real stage (`OneMoreTurn`
 stands in for `SourceConversation`); the server's reading of the fields and its refusal (stories 4.2 / 4.3).
 
-## No start without budget (2026-10-11, story 4.3 of `todo/PLAN_every_round_is_counted.md`)
+## No start without budget (2026-10-11, story 4.3 of `research/PLAN_every_round_is_counted.md`)
 
 The rule is the store's (`JobStore.TryClaim`) and the line is the runner's, so the fakes sit at `IReviewLauncher` — a
 launcher that COUNTS, because the guarantee is that nothing launched. The wire half goes through the REAL client code:
@@ -3541,7 +3541,7 @@ over `ClientDeadlineUtc` (none exists, by decision); the extension's `remoteAsk.
 reviews — read: it renders any `failure` string inside a sentence; no test added, `src_vs_code` untouched); the
 deployed server (the rule ships with E5's deploy).
 
-## Epic 4's code round (2026-10-11, `todo/PLAN_every_round_is_counted.md`)
+## Epic 4's code round (2026-10-11, `research/PLAN_every_round_is_counted.md`)
 
 One gating finding, accepted: `JobRecord.RemainingSeconds = 0` meant both "the request sent no budget" and "it sent a
 malformed one that was dropped" — two facts as one value. `StatedBudget` (`src_server/src/Jobs/StatedBudget.cs`) is now
@@ -3553,7 +3553,7 @@ malformed one that was dropped" — two facts as one value. `StatedBudget` (`src
 | `TheServerRecordsTheRoundTests` (changed on purpose) | the malformed matrix also asserts `StatedBudget.State` `Dropped` (for `remainingSeconds`) with the note's reason, `Absent` otherwise; absent/null asserts `StatedBudget.Absent`; a well-formed value asserts `Stated` with its seconds | RED on the inert shape (the type wired through, `RoundFields` always answering `Absent`): `Expected job.StatedBudget.State to be StatedBudgetState.Dropped {value: 2} … but found StatedBudgetState.Absent {value: 0}` for every malformed `remainingSeconds` row; GREEN 65/65 with the budget tests, server suite 530/530 |
 | `NoStartWithoutBudgetTests` (helper only) | its job builder states a budget through `StatedBudget.Of`, `Absent` for none | — unchanged behaviour |
 
-## The server counts rounds, and the Team server tab shows them (2026-10-11, stories 5.1 and 5.2 of `todo/PLAN_every_round_is_counted.md`)
+## The server counts rounds, and the Team server tab shows them (2026-10-11, stories 5.1 and 5.2 of `research/PLAN_every_round_is_counted.md`)
 
 Every behaviour was RED on an inert shape first (the fields present and always 0, `UsageWindow.Several` answering no
 windows, `5h`/`24h` not yet names; `serverRounds` answering `unavailable`, `teamRoundsBlock` drawing nothing, the
@@ -3595,7 +3595,7 @@ personal answer's windows have no surface in the extension (only the seam leg as
 failed httpyac run to exit 4 *configuration* rather than 1 (`httpyac exited 20`, seen at plant 1 — a pre-existing
 mismatch between the pinned httpyac and `run-contracts.mjs`, not changed here).
 
-## A stated reset is read locally, and never waited out (2026-10-11, stories 5.3b and 5.3c of `todo/PLAN_every_round_is_counted.md`)
+## A stated reset is read locally, and never waited out (2026-10-11, stories 5.3b and 5.3c of `research/PLAN_every_round_is_counted.md`)
 
 Every new behaviour was seen RED first against an INERT shape (the new member present and answering nothing), then
 GREEN, then re-reddened from a byte copy of the fixed file (restored, LastWriteTime touched, rebuilt green). The mcp
@@ -3622,7 +3622,7 @@ process starts. Run: `./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filt
 **NOT covered:** a reset older than the 7-day ledger tail is not shown; the shim's queued line is
 tested through `PollTracker`, not through a running `--ask-remote` against a real server holding a parked slot.
 
-## Epic 5's code round (2026-10-11, `todo/PLAN_every_round_is_counted.md`)
+## Epic 5's code round (2026-10-11, `research/PLAN_every_round_is_counted.md`)
 
 Three findings accepted. One changed behaviour and was seen RED first; two are quality changes guarded by the tests that
 already existed.
@@ -3634,7 +3634,7 @@ already existed.
 | `TheWindowAnswerKeepsItsBytesTests` (test-only change) | `WithoutTheCounts` builds a filtered COPY of the parsed answer instead of removing keys from it in place (the repository's no-mutation rule) | no RED: a test helper's shape, not behaviour — its two tests stay green against the same golden text |
 | `RoundCountsTests`, `SeveralWindowsTests`, `RoundCountsEndpointTests` (unchanged — the guard) | `UsageRounds` counts retries, repairs and follow-ups in ONE pass (`RequestsByWord`) instead of one pass per word | no RED: a refactor that must not change a number — the 24 tests and the seam leg are the guard, green before and after |
 
-## The Team server captures the codex gauge, safely (2026-10-11, story 6.1a of `todo/PLAN_every_round_is_counted.md`)
+## The Team server captures the codex gauge, safely (2026-10-11, story 6.1a of `research/PLAN_every_round_is_counted.md`)
 
 The riskiest code of the plan — a read that can rotate a shared account's refresh token — so the proof is the real
 binary under a crash, not a fake under a clock. Run, server: `dotnet build src_server/tests -v q`, then
@@ -3662,7 +3662,7 @@ real (the seam stands in); macOS (the capture refuses to spawn there, and the ha
 version (inspected at 0.160.0 — re-check on an upgrade); `systemd`'s control-group kill (checked at deploy, never
 asserted from repo text); the older-client check runs by hand (`npm run test:gauge-compat`, the network).
 
-## The gauge is shown, and rounds per 1 % derived once (2026-10-12, story 6.2 of `todo/PLAN_every_round_is_counted.md`)
+## The gauge is shown, and rounds per 1 % derived once (2026-10-12, story 6.2 of `research/PLAN_every_round_is_counted.md`)
 
 Run, mcp: `dotnet build src_mcp/tests -v q`, then `./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-class "*RoundsPerPercentTests" --filter-class "*RoundCountsTests"`;
 server: `./src_server/tests/bin/Debug/net10.0/CoaiServer.Tests.exe --filter-class "*RoundsPerPercent*"`; extension:
@@ -4495,7 +4495,7 @@ behaviour and not a compile error. A row marked *guard* passed at once and says 
 
 ### Story 6.2b — the figure, corrected (2026-10-16)
 
-Owner decision 2026-10-16 (`todo/PLAN_every_round_is_counted.md`, story 6.2b): a plateau keeps its rounds, a barrier voids the
+Owner decision 2026-10-16 (`research/PLAN_every_round_is_counted.md`, story 6.2b): a plateau keeps its rounds, a barrier voids the
 whole span, a percentage outside [0, 100] is a missing reading for the derivation, and the figure is pooled (Σ rounds ÷ Σ rise).
 Run: `dotnet build src_mcp/tests -v q`, then `CoaiMcp.Tests.exe --filter-class "*RoundsPerPercent*" --filter-class "*RoundCounts*"`;
 server: `CoaiServer.Tests.exe --filter-class "*RoundsPerPercentServedTests"`. "Red" is the OLD derivation (`git show HEAD:…`) run
@@ -4541,7 +4541,7 @@ number there — they pin the barriers of the NEW accumulation.
 
 ## A local review line carries its round (2026-10-19, `fix/local-ledger-line-carries-round`)
 
-`ALocalReviewLineCarriesItsRoundTests` (`src_mcp/tests`) — the Definition-of-Done item of `todo/PLAN_every_round_is_counted.md`
+`ALocalReviewLineCarriesItsRoundTests` (`src_mcp/tests`) — the Definition-of-Done item of `research/PLAN_every_round_is_counted.md`
 ("every new ledger line carries round, attempt, effort/tier as sent") that only the Team server's lines met. The tests go
 through the real `UsageLedger.Record` / `RecordJob` and read the JSON line the way the extension would.
 

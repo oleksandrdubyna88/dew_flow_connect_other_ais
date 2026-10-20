@@ -79,8 +79,8 @@ sequenceDiagram
 | `QuestionResolution` | `Consultation/QuestionResolution.cs` | which answering runtime a question row's vendor gets: `api` → `ApiConsultant`, the rest `ConsultantResolution.For` — `ConsultantResolution.Consulting` is NOT widened |
 | `ProcessEnvironment.Minimal`, `ProcessRequest.Passthrough` | `Processes/ProcessEnvironment.cs`, `ProcessLauncher.cs` | the measured minimal list a question child starts from (S2c), chosen per request: the launcher's filter took its allowlist from the request rather than growing a second flag |
 | `FeatureOutlineBuilder.BuildAtHeadAsync` | `Feature/FeatureOutlineBuilder.cs` | the outline of what EXISTS at a commit — against the repository's empty tree, no member hunks — what an api question row is shown of the code |
-| `RetryLadder` | `Reviewers/RetryLadder.cs` | the waits and when to stop: four steps, jittered, bounded by the reviewer's own deadline; pure, so the jitter is a table rather than a stopwatch. `ResetOutlasts(reason, left, now)` (story 5.3c of todo/PLAN_every_round_is_counted.md): a STATED reset beyond what is left of the budget — the ladder then takes no step |
-| `RoundsPerPercent`, `GaugeLine`, `GaugeRatio`, `GaugeAnswer`, `GaugeReasons`, `GaugeConsumers` | `Reviewers/RoundsPerPercent.cs` | rounds per 1 % of a vendor's gauge window, computed ONCE for both halves (story 6.2, corrected by 6.2b — a plateau keeps its rounds, a barrier voids the whole span, a percentage outside [0, 100] is a missing reading, the figure is pooled Σ rounds ÷ Σ rise, of todo/PLAN_every_round_is_counted.md): pure, ledger lines in, one figure per vendor × window out — or `null` with a fixed reason; a known uncounted consumer (`direct-codex-use` for the `codex` limit) hides it. The Team server answers it in `/api/usage`'s `gauges`; `coai-mcp --round-counts` answers `NotReadHere` (`local-capture-deferred`) — the section *Rounds per 1 % of a gauge window* |
+| `RetryLadder` | `Reviewers/RetryLadder.cs` | the waits and when to stop: four steps, jittered, bounded by the reviewer's own deadline; pure, so the jitter is a table rather than a stopwatch. `ResetOutlasts(reason, left, now)` (story 5.3c of research/PLAN_every_round_is_counted.md): a STATED reset beyond what is left of the budget — the ladder then takes no step |
+| `RoundsPerPercent`, `GaugeLine`, `GaugeRatio`, `GaugeAnswer`, `GaugeReasons`, `GaugeConsumers` | `Reviewers/RoundsPerPercent.cs` | rounds per 1 % of a vendor's gauge window, computed ONCE for both halves (story 6.2, corrected by 6.2b — a plateau keeps its rounds, a barrier voids the whole span, a percentage outside [0, 100] is a missing reading, the figure is pooled Σ rounds ÷ Σ rise, of research/PLAN_every_round_is_counted.md): pure, ledger lines in, one figure per vendor × window out — or `null` with a fixed reason; a known uncounted consumer (`direct-codex-use` for the `codex` limit) hides it. The Team server answers it in `/api/usage`'s `gauges`; `coai-mcp --round-counts` answers `NotReadHere` (`local-capture-deferred`) — the section *Rounds per 1 % of a gauge window* |
 | `CooldownParser` | `Reviewers/CooldownParser.cs` | the vendor's own rate-limit sentence → an instant — ONE parser for both halves since story 5.3b (moved from `src_server/src/Slots`): `Until` (always an answer; the Team server parks a slot on it, falling back to a doubling guess) and `StatedReset` (only what the vendor NAMED — a duration up to 14 days, a date, a clock time — else null; the local ledger and the ladder read this one) |
 | `ClaudeCapability`, `RestrictedSupport` | `Reviewers/ClaudeCapability.cs` | what the INSTALLED claude's own `--help` says about `--restricted` — `Declared`, `NotDeclared`, `Unknown` (the help did not come back), or `Unprobed` — read through the launcher (10 s per ask, tree-killed, one retry on `Unknown`) on every launch, never cached. Carried into a pure `Build` on `ReviewerSettings.ClaudeCli` (default `Unprobed`, which the consultant's `Build` refuses); the reviewer is planned to read it too (the section *The claude consultant is confined by an allowlist*) |
 | `ConsultantPreparation` (`Ready` / `Refused`) | `Consultation/IConsultantRuntime.cs` | what `IConsultantRuntime.PrepareAsync` concluded before `Build`: a launch with the confinement it will be SENT and a log note, or a classified refusal the service applies like any failure |
@@ -252,7 +252,7 @@ sequenceDiagram
   **A cancellation that lands during a WAIT ends the turn as the refusal it last saw** — the ladder's own ending
   when its budget runs out — and never throws (`BoundedScheduler.WaitedOut`): no launch was killed, and the launches
   the turn had already paid for live only in the ladder's locals, so a throw dropped them from the ledger (the
-  epic-3 code round of `todo/PLAN_every_round_is_counted.md`; `ACancelDuringTheLaddersWait_KeepsTheLaunchesAlreadyPaid`).
+  epic-3 code round of `research/PLAN_every_round_is_counted.md`; `ACancelDuringTheLaddersWait_KeepsTheLaunchesAlreadyPaid`).
 - **Antigravity (`agy`) is the closest fit to this product's contract**: `--json-schema` puts the
   finding schema straight into `result.response`, the same envelope carries `usage`, and the model
   ids carry their own reasoning effort. Its prompt rides `--input-format stream-json` on stdin as
@@ -562,7 +562,7 @@ Twelve reviewers of twelve answered; thirty-five findings, and these are the one
   too slow for its budget and belongs in the retry ladder, the other is a job nobody is waiting for and
   must never be retried. The token's STATE decides, never the exception's type. `Truncated` lets a
   caller tell a cut answer from a bad one without parsing an English sentence.
-  **And the executor reads it, since story 3.2 of `todo/PLAN_every_round_is_counted.md` (2026-10-11).**
+  **And the executor reads it, since story 3.2 of `research/PLAN_every_round_is_counted.md` (2026-10-11).**
   `ReviewerExecutor.LaunchAsync` checked only `TimedOut` for a year, so a kill by the caller's token — which
   sets BOTH flags — was filed as the vendor's timeout: the deployed Team server's own line for a review its
   client withdrew after 8.4 s says `TimedOut` (`src_server/tests/fixtures/usage/timed-out-withdrawal.jsonl`).
@@ -1085,7 +1085,7 @@ Four things about it are not obvious from the shape:
   collect. The shim writes a claim to a job file the moment the server accepts, and the executor calls
   `IReviewerRuntime.AbandonAsync` on **every** kill path — its own timeout, a cancellation the launcher
   reports (`ProcessResult.Cancelled`, its own `Cancelled` ending since story 3.2 of
-  `todo/PLAN_every_round_is_counted.md`), and a cancellation a launcher throws — which is where
+  `research/PLAN_every_round_is_counted.md`), and a cancellation a launcher throws — which is where
   `RemoteRuntime` reads that claim and sends the `DELETE`. `AWithdrawnRemoteReviewer_StillSendsTheDelete`
   pins the reported branch: the one a withdrawal actually takes, and the one an early return would skip.
 
@@ -1224,7 +1224,7 @@ would subsume the vocabulary; no sample of the string has been observed from a v
 runs, and this file already records what writing a rule against an imagined string cost once.
 *(Superseded in part 2026-10-11 — the next section: a stated RESET is now read and compared, on the observed agy line.)*
 
-### A stated reset is never waited out locally (2026-10-11, stories 5.3b and 5.3c of `todo/PLAN_every_round_is_counted.md`)
+### A stated reset is never waited out locally (2026-10-11, stories 5.3b and 5.3c of `research/PLAN_every_round_is_counted.md`)
 
 agy's verbatim refusal — *"Individual quota reached. Please upgrade your subscription to increase your limits. Resets in
 88h49m9s."* — says none of `Spent`'s words, so a local agy row climbed the whole ladder, four launches each refused,
@@ -1654,7 +1654,7 @@ scheduler's abandoned `NotStarted` keeps only the earlier TURNS.
 
 ## Every paid launch is its own ledger line (story 3.3, 2026-10-10)
 
-`todo/PLAN_every_round_is_counted.md`, story 3.3, closing the paid-path census of
+`research/PLAN_every_round_is_counted.md`, story 3.3, closing the paid-path census of
 `research/RESULTS_vendor_quota_gauges.md` §5. A ledger line was one terminal TURN: a repair, a follow-up and every
 step of the rate-limit ladder were folded into their turn's line, so a week's retries, repairs and follow-ups could
 only be inferred from sums. Now each paid launch writes its own line, and the turn's sums — `LastTurnUsage`,
@@ -1716,7 +1716,7 @@ flowchart LR
 
 ## Each ledger line says what its launch ran with (story 3.4, 2026-10-11)
 
-`todo/PLAN_every_round_is_counted.md`, story 3.4 — the plan's symptom 6: a codex row's effort is kept and never sent
+`research/PLAN_every_round_is_counted.md`, story 3.4 — the plan's symptom 6: a codex row's effort is kept and never sent
 (`RosterBuilder.EffortFor`), so every local codex launch ran at whatever `~/.codex/config.toml` said (`high` on the
 operator's machine) and its tier came from the same file until fast mode; the ledger named neither, nor the CLI. Eight
 trailing, defaulted `UsageEntry` fields now say it: `cli`, `cliVersion`, `effort`, `effortFrom`, `tier`, `tierFrom`, and
@@ -1923,7 +1923,7 @@ key's vendor — so its cost is worked out here, from the rates the row carried.
   `Usage.Unknown` is the value. Three sources set it: `ReviewerOutcome.TimedOut` (a launch killed on its
   own deadline) carries `Usage = Usage.Unknown` — `Usage.None` only for the turn `TurnLoop` never launched
   because the conversation's cap was spent; `ReviewerOutcome.Cancelled` (a launch the caller's token killed,
-  its own ending since story 3.2 of `todo/PLAN_every_round_is_counted.md`) carries it too, and the
+  its own ending since story 3.2 of `research/PLAN_every_round_is_counted.md`) carries it too, and the
   executor's `ReviewerLaunch.Usage` for that branch is `Unknown` as well, so the Team server's attempt —
   which reads the LAUNCH's usage, not the outcome's — says *usage not captured* where the deployed server
   wrote a free 0/0; and
@@ -2632,7 +2632,7 @@ sequenceDiagram
     Args-->>Site: Off+RefusesStandard: no tier, else as before
 ```
 
-## A round has an identity on the wire, and every launch says what it is and how long it can wait (2026-10-11, story 4.1 of `todo/PLAN_every_round_is_counted.md`)
+## A round has an identity on the wire, and every launch says what it is and how long it can wait (2026-10-11, story 4.1 of `research/PLAN_every_round_is_counted.md`)
 
 The client half of epic 4. One `POST /api/reviews` was one role for one vendor and carried nothing that tied launches
 together (symptom 3 of the plan), and the shim's own waiting deadline was fixed when the invocation was BUILT, so a
@@ -2706,7 +2706,7 @@ Tests: `ARoundHasAnIdOnTheWireTests`, `ARoundIsMintedAKeyTests`, `TheRoundKeyIsS
 `RemoteShimScenarioTests.TheRoundTheAttemptAndTheSecondsLeft_GoOut_WithTheRealBinary`, `reviewBody.contract.ts` —
 listed in [module_tests.md](module_tests.md).
 
-## The shim reads a refusal by name — exit 79 (2026-10-11, story 4.3 of `todo/PLAN_every_round_is_counted.md`)
+## The shim reads a refusal by name — exit 79 (2026-10-11, story 4.3 of `research/PLAN_every_round_is_counted.md`)
 
 The Team server now ends a job whose caller can no longer wait for a launch's start-up — at claim, nothing launched,
 counted in its ledger ([module_team_server.md](module_team_server.md), *No start without budget*) — and says so with a
@@ -2746,7 +2746,7 @@ sequenceDiagram
 
 Tests: `TheServerRefusesForBudgetByNameTests` (mcp) — listed in [module_tests.md](module_tests.md).
 
-## A request that ends its child on an answer owns the tree it ends (2026-10-11, story 6.1a of `todo/PLAN_every_round_is_counted.md`)
+## A request that ends its child on an answer owns the tree it ends (2026-10-11, story 6.1a of `research/PLAN_every_round_is_counted.md`)
 
 The Team server's gauge reader is a child that is a SERVER: `codex app-server` answers one request and then serves
 until it is told to stop, and the way this product stops a child is the tree kill. Three things were widened on the
@@ -2818,7 +2818,7 @@ directory, because a confined launch is handed no `FAKECLI_*` variable (`tests_f
 
 Tests: `AReaderIsEndedWithItsTreeTests` (mcp) — listed in [module_tests.md](module_tests.md).
 
-## Rounds per 1 % of a gauge window (2026-10-12, story 6.2 of `todo/PLAN_every_round_is_counted.md`)
+## Rounds per 1 % of a gauge window (2026-10-12, story 6.2 of `research/PLAN_every_round_is_counted.md`)
 
 `RoundsPerPercent.Derive(lines)` (`Reviewers/RoundsPerPercent.cs`) is the formula E6's plan round fixed, in the library
 both halves compile against so it exists once. Pure: `GaugeLine`s in — when the line was written, its vendor, its

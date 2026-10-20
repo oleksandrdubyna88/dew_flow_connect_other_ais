@@ -45,7 +45,7 @@ public sealed class SlotLease(AccountSlot slot, FileStream handle, Action<Accoun
 }
 /// <summary>What taking an account answered: the lease, a holder that would not let go in time, or a barrier.</summary>
 /// <remarks>
-/// A closed set rather than a nullable lease, since story 6.1a of todo/PLAN_every_round_is_counted.md: "busy" and
+/// A closed set rather than a nullable lease, since story 6.1a of research/PLAN_every_round_is_counted.md: "busy" and
 /// "unavailable until recovery proves it safe" have different cures — one is a wait, the other a look at the box —
 /// and <c>login</c> has to say which it met.
 /// </remarks>
@@ -161,7 +161,7 @@ public sealed class SlotRegistry(
     /// </param>
     /// <remarks>
     /// <b>The barrier is here, under the lock, for every caller</b> — a job, <c>login</c>, the startup sweep (story 6.1a
-    /// of todo/PLAN_every_round_is_counted.md). The moment the lock opens, the previous holder's reader marker, if there
+    /// of research/PLAN_every_round_is_counted.md). The moment the lock opens, the previous holder's reader marker, if there
     /// is one, is reconciled by <see cref="ReaderReconcile"/>: what it names is killed and confirmed gone before the
     /// lease is usable, and a marker that cannot be cleared keeps the handle closed and the account blocked. A startup
     /// sweep alone could not do this: the lease used to be handed back the moment the lock opened.

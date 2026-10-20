@@ -9,7 +9,7 @@ import { parseUsageLine } from './usage';
 
 /**
  * Asking `coai-mcp --round-counts`, and the ledger's last seven days beside it (story 2.2 of
- * todo/PLAN_every_round_is_counted.md).
+ * research/PLAN_every_round_is_counted.md).
  *
  * <p><b>Through `serverRun`</b>, the one door that hands the child this window's data directory, like every other read
  * of the rounds database — a child left to inherit the window's environment would count the DEFAULT directory's rounds

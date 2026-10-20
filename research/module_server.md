@@ -2260,7 +2260,7 @@ answer through `Api/BoundedBody` — streamed after the headers (`ResponseHeader
 `Content-Length` over 8 MiB refused unread, an undeclared one refused the moment the count passes it —
 because `ReadAsStringAsync` buffered the whole body before any cap ran (epic 1's code round). The shim itself, its exit
 codes and the probe are in [module_runners.md](module_runners.md#a-hosted-api-is-a-direct-call-with-a-vault-key--the-api-runtime-2026-09-25-plan_feature_review-s12).
-**Since story 3.3 of `todo/PLAN_every_round_is_counted.md` (2026-10-10) `--probe-api --model` writes the ledger**: one
+**Since story 3.3 of `research/PLAN_every_round_is_counted.md` (2026-10-10) `--probe-api --model` writes the ledger**: one
 `usage.jsonl` line per completion sent with the real key, as it answers — kind `probe` (`UsageKinds.Probe`, local-only),
 stage `Probe`, the variant as its role, the row it probed and the model it asked, `ok` / `HTTP <status> (refused
 <field>)` / `no answer` as its outcome (the allowlist's words, never the vendor's text) and what the endpoint reported
@@ -3451,7 +3451,7 @@ apart. Tests: `ALogSplitByPeriodTests` (red first; red again with the period con
 `0000` against `started_utc`, matching nothing — so a malformed cursor answered with an EMPTY page
 instead of the first one, which is the opposite of treating it as absent.
 
-### `--round-counts` — rounds per vendor row over 5 h / 24 h / 7 d (2026-10-10, `todo/PLAN_every_round_is_counted.md` story 2.1)
+### `--round-counts` — rounds per vendor row over 5 h / 24 h / 7 d (2026-10-10, `research/PLAN_every_round_is_counted.md` story 2.1)
 
 The operator's question of 2026-10-09 — *"my plan used to allow ~250 rounds comfortably; now it hits the limit at
 ~150"* — had no surface that counted ROUNDS: the Spending tab counted reviewer launches per row, and a round is one
@@ -3548,7 +3548,7 @@ opened read-only cannot run the step and does not try — `--round-counts` on a 
 byte for byte.
 
 **Schema step 21 — `rounds.round_key`** (`Schema.TheRoundsKey`, appended after step 20; story 4.1 of
-`todo/PLAN_every_round_is_counted.md`). The round's identity across the wire — 32 lower-case hex characters the engine
+`research/PLAN_every_round_is_counted.md`). The round's identity across the wire — 32 lower-case hex characters the engine
 mints when the round starts (`RoundKeys.Mint`) — as `RoundRecord.Key` in the session file and here, written by
 `RoundsDb.RecordRoundRow` from the record (the upsert on `(session, stage, number)` rewrites it with the rest). **Empty
 means "not recorded"**: every row from before the step, and a skipped round (`RoundSkips.Record`), which launched
@@ -7380,7 +7380,7 @@ no such sentence. The review stages ask before they build (`RosterBuilder.CodexT
 from `ReviewPlanAsync`, `ReviewCodeAsync`, `ReviewDocumentAsync` and `FeatureStage`); a codex question row asks in
 `QuestionRowLaunch.TierProbedAsync`, which now takes the fan-out's launcher.
 
-## A round is minted its identity when it starts (2026-10-11, story 4.1 of `todo/PLAN_every_round_is_counted.md`)
+## A round is minted its identity when it starts (2026-10-11, story 4.1 of `research/PLAN_every_round_is_counted.md`)
 
 `RoundEngine.RunStageAsync` mints `RoundKeys.Mint()` beside `RoundNumber.Next` — once per round that runs, so `again`,
 the escalation ladder and a person's Continue/Fix (each a fresh pass through the engine) start a new round with a new

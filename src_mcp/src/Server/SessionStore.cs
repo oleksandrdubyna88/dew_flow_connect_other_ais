@@ -137,7 +137,7 @@ public sealed record RoundRecord(
 
     /// <summary>
     /// The round's identity across the wire — 32 hex characters minted when it started
-    /// (<see cref="RoundKeys"/>, story 4.1 of todo/PLAN_every_round_is_counted.md), which every launch of the round
+    /// (<see cref="RoundKeys"/>, story 4.1 of research/PLAN_every_round_is_counted.md), which every launch of the round
     /// carries to a Team server. Empty for a round recorded before the field existed, and for a skipped round, which
     /// launched nothing.
     /// </summary>

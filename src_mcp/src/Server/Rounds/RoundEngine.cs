@@ -318,7 +318,7 @@ internal sealed class RoundEngine(
             // feature-review plan). The counter keeps counting rounds for the budget; this is the
             // round's name.
             var number = RoundNumber.Next(session.Rounds, stage.Stage);
-            // And the identity it carries across the wire (story 4.1 of todo/PLAN_every_round_is_counted.md): minted
+            // And the identity it carries across the wire (story 4.1 of research/PLAN_every_round_is_counted.md): minted
             // here, once per round that RUNS — `again`, the ladder and a person's Continue/Fix each come through here
             // again and so get a new one — stamped on every launch of the round below, and kept on its record.
             var key = RoundKeys.Mint();

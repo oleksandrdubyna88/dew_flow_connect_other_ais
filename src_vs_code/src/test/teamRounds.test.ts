@@ -6,7 +6,7 @@ import { teamRoundsBlock } from '../teamRounds';
 import { pageTree } from './pageTree';
 
 /**
- * The Team server's own round counts, read and drawn (story 5.2 of todo/PLAN_every_round_is_counted.md).
+ * The Team server's own round counts, read and drawn (story 5.2 of research/PLAN_every_round_is_counted.md).
  *
  * <p>An older server is judged by the SHAPE of its answer, never its status: today's server binds only `window`, so it
  * answers `?windows=5h,24h,week` with 200 and today's range — no `windows`, no count fields. Every test of "unavailable"

@@ -1,6 +1,6 @@
 namespace CoaiMcp.Runners.Reviewers;
 
-/// <summary>One ledger line as the rounds-per-1 % derivation reads it (story 6.2 of todo/PLAN_every_round_is_counted.md).</summary>
+/// <summary>One ledger line as the rounds-per-1 % derivation reads it (story 6.2 of research/PLAN_every_round_is_counted.md).</summary>
 /// <param name="AtUtc">When the line was written.</param>
 /// <param name="Vendor">The vendor row the launch belonged to.</param>
 /// <param name="Account">The account (the Team server's slot) the launch ran on — readings of two accounts are never paired.</param>

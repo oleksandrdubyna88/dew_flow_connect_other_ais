@@ -575,7 +575,7 @@ internal static class Schema
 
     /// <summary>
     /// Step 20: which MODEL each reviewer launch ran, and the index the round counter joins on
-    /// (<c>todo/PLAN_every_round_is_counted.md</c>, story 2.1).
+    /// (<c>research/PLAN_every_round_is_counted.md</c>, story 2.1).
     /// </summary>
     /// <remarks>
     /// <para>The reviewers table recorded the provider and the role and never the model, so no count
@@ -600,7 +600,7 @@ internal static class Schema
         """;
 
     /// <summary>
-    /// Step 21: the round's identity across the wire (<c>todo/PLAN_every_round_is_counted.md</c>, story 4.1).
+    /// Step 21: the round's identity across the wire (<c>research/PLAN_every_round_is_counted.md</c>, story 4.1).
     /// </summary>
     /// <remarks>
     /// <para>Thirty-two hex characters the engine mints when a round starts (<c>RoundKeys</c>), carried by every launch of

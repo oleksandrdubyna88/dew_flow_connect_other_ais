@@ -327,7 +327,7 @@ public sealed class ConsultScenarioTests : ConsultScenarioBase
     }
 
     /// <summary>
-    /// Story 3.3 of todo/PLAN_every_round_is_counted.md: a failed turn's ledger row keeps the vendor's reason whole, and
+    /// Story 3.3 of research/PLAN_every_round_is_counted.md: a failed turn's ledger row keeps the vendor's reason whole, and
     /// redacted. It was the summary's 160-character cut of the CLI's stderr, unredacted.
     /// </summary>
     [Fact]

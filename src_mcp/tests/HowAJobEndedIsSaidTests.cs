@@ -12,7 +12,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// How a job ended is said, not guessed — story 3.2 of <c>todo/PLAN_every_round_is_counted.md</c>, the half both
+/// How a job ended is said, not guessed — story 3.2 of <c>research/PLAN_every_round_is_counted.md</c>, the half both
 /// binaries share: a launch the CALLER's token killed is its own ending, <see cref="ReviewerOutcome.Cancelled"/>, and
 /// never the vendor's timeout.
 /// </summary>

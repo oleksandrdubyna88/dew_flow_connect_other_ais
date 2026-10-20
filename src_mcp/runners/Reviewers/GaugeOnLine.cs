@@ -10,7 +10,7 @@ public sealed record GaugeWindowOnLine(string LimitId, string Kind, long? Mins, 
 
 /// <summary>
 /// The vendor's own gauge as a ledger line carries it: the reading taken on the account right after the launch, EVERY
-/// window of EVERY limit it reported (story 6.1a of todo/PLAN_every_round_is_counted.md; widened by epic 6's code round).
+/// window of EVERY limit it reported (story 6.1a of research/PLAN_every_round_is_counted.md; widened by epic 6's code round).
 /// </summary>
 /// <param name="ObservedUtc">When the reading arrived, UTC (<c>O</c>) — empty for no reading.</param>
 /// <param name="PlanType">The vendor's plan word, or empty.</param>

@@ -29,7 +29,7 @@ public enum RemoteState
 /// <param name="Waiting">
 /// Why a QUEUED review cannot start now, in the server's words — <i>every account is rate-limited; the first comes back
 /// at …</i> — or empty: a review that is not queued, one an account could take, and every answer from a server older
-/// than the field (story 5.3b of todo/PLAN_every_round_is_counted.md).
+/// than the field (story 5.3b of research/PLAN_every_round_is_counted.md).
 /// </param>
 public sealed record RemotePoll(
     RemoteState State,
@@ -75,7 +75,7 @@ public static class RemoteAsk
 
     /// <summary>
     /// The Team server ended the review before anything launched: by the time an account was free, this reviewer could
-    /// no longer wait for a launch's start-up (story 4.3 of todo/PLAN_every_round_is_counted.md). Nothing was spent.
+    /// no longer wait for a launch's start-up (story 4.3 of research/PLAN_every_round_is_counted.md). Nothing was spent.
     /// </summary>
     /// <remarks>
     /// Read off the status BY NAME — <see cref="NoBudgetFailure"/> — never off the server's sentence; and its own code
@@ -116,7 +116,7 @@ public static class RemoteAsk
 
     /// <summary>The body of <c>POST /api/reviews</c>.</summary>
     /// <remarks>Contract 2's fields are left out when empty, so a row with neither sends what a contract-1 client sent.</remarks>
-    /// <param name="round">The round's identity, 32 hex characters — left out when empty (story 4.1 of todo/PLAN_every_round_is_counted.md).</param>
+    /// <param name="round">The round's identity, 32 hex characters — left out when empty (story 4.1 of research/PLAN_every_round_is_counted.md).</param>
     /// <param name="attempt">What this launch is inside its turn, one of <see cref="LaunchAttempts"/> — left out when empty.</param>
     /// <param name="remainingSeconds">The whole seconds left on the shim's own deadline at submit — left out when not positive (never 0).</param>
     public static string RequestBody(
@@ -315,7 +315,7 @@ public static class RemoteAsk
 
     /// <summary>
     /// The same, and — when the server said so — why no account can take it now: <i>every account is rate-limited; the
-    /// first comes back at …</i> (story 5.3b of todo/PLAN_every_round_is_counted.md). The stem is
+    /// first comes back at …</i> (story 5.3b of research/PLAN_every_round_is_counted.md). The stem is
     /// <see cref="QueuedMessage(string, int)"/>'s, so <see cref="IsProgress"/> still knows the line for progress.
     /// </summary>
     public static string QueuedMessage(string serverUrl, int position, string waiting) =>
@@ -380,7 +380,7 @@ public static class RemoteAsk
     }
 }
 
-/// <param name="Round">The round's identity (story 4.1 of todo/PLAN_every_round_is_counted.md) — absent when the launch is outside a round.</param>
+/// <param name="Round">The round's identity (story 4.1 of research/PLAN_every_round_is_counted.md) — absent when the launch is outside a round.</param>
 /// <param name="Attempt">What the launch is inside its turn — absent when the shim was not told.</param>
 /// <param name="RemainingSeconds">The seconds left on the shim's own deadline at submit, relative — never an instant, so a clock on either side cannot enter; absent rather than 0.</param>
 /// <remarks>

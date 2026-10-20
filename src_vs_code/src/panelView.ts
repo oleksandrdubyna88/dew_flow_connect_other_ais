@@ -386,13 +386,13 @@ export interface PanelState {
    */
   readonly cardPrices: Readonly<Record<string, ModelPrice>>;
   /**
-   * The rounds each Models card's line counts (story 2.4 of todo/PLAN_every_round_is_counted.md) — the CACHED snapshot,
+   * The rounds each Models card's line counts (story 2.4 of research/PLAN_every_round_is_counted.md) — the CACHED snapshot,
    * never a read of its own (`roundCountsCache.ts`); absent before the first read, and the card then says nothing.
    */
   readonly roundsSnapshot?: RoundsSnapshot | undefined;
   /**
    * The monthly plan prices typed on Setup › Team servers, by `<server>/<vendor>` (story 6.2 of
-   * todo/PLAN_every_round_is_counted.md, `planPrice.ts`) — absent or empty when none is typed.
+   * research/PLAN_every_round_is_counted.md, `planPrice.ts`) — absent or empty when none is typed.
    */
   readonly planPrices?: PlanPrices | undefined;
   /** The last plan price refused at its card, drawn beside the box with what was typed — absent when none was. */
@@ -2539,7 +2539,7 @@ export /**
  * ~$3.00`, because a sum of the two is a number nobody can check. An estimate with no rate behind it
  * is a guess dressed as a number, so that stays a dash. The tilde is load-bearing — it is the
  * difference between what somebody charged and what we worked out — and `≥` says some line could not
- * be priced at all (story 2.5 of todo/PLAN_every_round_is_counted.md).</p>
+ * be priced at all (story 2.5 of research/PLAN_every_round_is_counted.md).</p>
  */
 function spend(row: { costUsd: number | null; estimatedUsd: number | null; floor?: boolean }): string {
   return atLeast(row.floor === true, total(row.costUsd, row.estimatedUsd));
@@ -3426,7 +3426,7 @@ export const PANEL_COMMANDS = [
   'signInTeamServer',
   'signOutTeamServer',
   'removeTeamServer',
-  // Save price on Setup › Team servers (story 6.2 of todo/PLAN_every_round_is_counted.md): the id is `<server>/<vendor>|<typed>`,
+  // Save price on Setup › Team servers (story 6.2 of research/PLAN_every_round_is_counted.md): the id is `<server>/<vendor>|<typed>`,
   // posted by the page's own handler (it reads the box beside the button); the host validates and refuses at the card.
   'savePlanPrice',
   // The Settings page's Models tab (PLAN_one_model_catalog.md E3.2): a use ticked on a row (id `<row>|<use>`), a

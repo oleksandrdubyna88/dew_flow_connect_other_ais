@@ -10,7 +10,7 @@ using Xunit;
 namespace CoaiServer.Tests;
 
 /// <summary>
-/// The server records the round — story 4.2 of <c>todo/PLAN_every_round_is_counted.md</c>: a review request may carry
+/// The server records the round — story 4.2 of <c>research/PLAN_every_round_is_counted.md</c>: a review request may carry
 /// the client's <c>round</c> id, its <c>attempt</c> word and the <c>remainingSeconds</c> on its own deadline; the job
 /// keeps all three and every ledger line of the job carries the round and the client's attempt.
 /// </summary>
