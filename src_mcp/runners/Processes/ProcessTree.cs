@@ -17,7 +17,7 @@ public sealed record ProcessIdentity(int Pid, DateTime StartedUtc);
 /// <remarks>
 /// <para><b>Why this exists.</b> <c>Process.Kill(entireProcessTree: true)</c> walks the tree itself, and that is enough
 /// to END a tree; it says nothing afterwards about whether every member died, and it cannot name the members at all. A
-/// reader of a shared vendor account (story 6.1a of todo/PLAN_every_round_is_counted.md) must CONFIRM that nothing it
+/// reader of a shared vendor account (story 6.1a of research/PLAN_every_round_is_counted.md) must CONFIRM that nothing it
 /// started is still holding the account's token set before the account's lease is released — so the members are
 /// listed BEFORE the kill, written down, and each one checked by pid and start time after it.</para>
 /// <para><b>Platforms are mapped explicitly and an unmeasured one fails closed</b> (common.platform-limits): Linux reads

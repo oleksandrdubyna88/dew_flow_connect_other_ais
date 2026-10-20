@@ -5,7 +5,7 @@ namespace CoaiServer;
 
 /// <summary>The fixed codes a gauge capture is suspended or skipped with — never a vendor's sentence.</summary>
 /// <remarks>
-/// Story 6.1a of todo/PLAN_every_round_is_counted.md: the reader logs allow-listed numbers and fixed codes, never a raw
+/// Story 6.1a of research/PLAN_every_round_is_counted.md: the reader logs allow-listed numbers and fixed codes, never a raw
 /// protocol message, stderr, an account id or a machine name (research/RESULTS_vendor_quota_gauges.md §2.6).
 /// </remarks>
 public static class GaugeCodes

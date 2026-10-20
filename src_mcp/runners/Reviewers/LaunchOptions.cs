@@ -2,7 +2,7 @@ namespace CoaiMcp.Runners.Reviewers;
 
 /// <summary>
 /// Where an effort or a tier on a ledger line came from — the closed vocabulary of <c>effortFrom</c> and <c>tierFrom</c>
-/// (story 3.4 of todo/PLAN_every_round_is_counted.md).
+/// (story 3.4 of research/PLAN_every_round_is_counted.md).
 /// </summary>
 /// <remarks>
 /// <para>Here, in the library both halves compile against, for the reason <see cref="UsageKinds"/> and
@@ -117,7 +117,7 @@ public sealed record OptionChoice(string Sent, string SentFrom, string NotSentAs
 
 /// <summary>
 /// What a launch RAN WITH, as its ledger line says it: which CLI, which release of it, and the effort and tier each with
-/// its source (story 3.4 of todo/PLAN_every_round_is_counted.md).
+/// its source (story 3.4 of research/PLAN_every_round_is_counted.md).
 /// </summary>
 /// <param name="Cli">The runtime that ran the launch, in the catalog's words — <c>codex</c>, <c>claude</c>, <c>antigravity</c>,
 /// <c>gemini</c>, <c>local</c>, <c>api</c>, <c>remote</c>. A cross-vendor measurement must say which CLI ran each model, and

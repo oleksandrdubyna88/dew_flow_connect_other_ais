@@ -2,7 +2,7 @@ using CoaiMcp.Runners.Reviewers;
 
 namespace CoaiServer;
 
-/// <summary>What a group of ledger lines says about ROUNDS, beside what it cost (story 5.1 of todo/PLAN_every_round_is_counted.md).</summary>
+/// <summary>What a group of ledger lines says about ROUNDS, beside what it cost (story 5.1 of research/PLAN_every_round_is_counted.md).</summary>
 /// <remarks>Folded into each <see cref="VendorTotal"/> — the company's rows and each person's alike, by the one fold.</remarks>
 internal sealed record RoundCounts(
     int Rounds,

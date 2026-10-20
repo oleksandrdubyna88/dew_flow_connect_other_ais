@@ -8,7 +8,7 @@ using Xunit;
 namespace CoaiServer.Tests;
 
 /// <summary>
-/// The Team server captures the codex gauge, safely — story 6.1a of <c>todo/PLAN_every_round_is_counted.md</c>: inside
+/// The Team server captures the codex gauge, safely — story 6.1a of <c>research/PLAN_every_round_is_counted.md</c>: inside
 /// the slot's lease, after the job, behind the expiry guard, suspended on an authentication error, never changing the
 /// job's result, never logging what the reader said.
 /// </summary>

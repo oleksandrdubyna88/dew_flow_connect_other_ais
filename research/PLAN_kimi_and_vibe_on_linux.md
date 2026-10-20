@@ -970,7 +970,7 @@ Nothing here has an in-flight state of its own; the homes keep D20's sweep.
 | A Windows `coai-mcp` running the WSL side | [PLAN_a_wsl_consultant_is_checked_from_windows.md](../todo/PLAN_a_wsl_consultant_is_checked_from_windows.md) | this plan keeps it refused (DL1) |
 | M-K14, the refresh race | the parent plan (later) | unchanged here |
 | macOS | nobody yet | stays refused |
-| `ReaderReconcile` moved from `src_server/src/Slots/ReaderMarker.cs` to `src_mcp/runners/Processes` | this plan (E5, DL9) | the vendor-slot reader barrier ([PLAN_every_round_is_counted.md](../todo/PLAN_every_round_is_counted.md) epic 6) keeps its behaviour: `SlotRegistry` calls the moved code, and `ReaderBarrierTests` / `GaugeReaderCrashHarnessTests` pass unchanged (the plan gate for epics 4–6, 2026-10-16, F9) |
+| `ReaderReconcile` moved from `src_server/src/Slots/ReaderMarker.cs` to `src_mcp/runners/Processes` | this plan (E5, DL9) | the vendor-slot reader barrier ([PLAN_every_round_is_counted.md](PLAN_every_round_is_counted.md) epic 6) keeps its behaviour: `SlotRegistry` calls the moved code, and `ReaderBarrierTests` / `GaugeReaderCrashHarnessTests` pass unchanged (the plan gate for epics 4–6, 2026-10-16, F9) |
 
 Disjoint otherwise: chat, the Team server and the bench are out, as in the parent plan.
 

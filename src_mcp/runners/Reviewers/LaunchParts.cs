@@ -4,7 +4,7 @@ namespace CoaiMcp.Runners.Reviewers;
 
 /// <summary>
 /// What one paid launch WAS inside its reviewer turn, as the ledger spells it (story 3.3 of
-/// todo/PLAN_every_round_is_counted.md).
+/// research/PLAN_every_round_is_counted.md).
 /// </summary>
 /// <remarks>
 /// <para>Here, in the library both halves compile against, for the reason <see cref="UsageKinds"/> lives here: the

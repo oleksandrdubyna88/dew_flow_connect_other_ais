@@ -370,7 +370,7 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
 
     /// <remarks>
     /// The vendor's reason WHOLE and redacted (<see cref="ReviewerSummaryFactory.DescribeWhole"/>, story 3.3 of
-    /// todo/PLAN_every_round_is_counted.md): it was the summary's 160-character cut, unredacted — the record lost a
+    /// research/PLAN_every_round_is_counted.md): it was the summary's 160-character cut, unredacted — the record lost a
     /// bearer token that the ledger line beside it kept.
     /// </remarks>
     private static string Outcome(ReviewerLaunch final) =>
@@ -451,7 +451,7 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
     /// </summary>
     /// <remarks>The whole <see cref="Usage"/>, not its three scalars: the cached count and the not-captured / no-price
     /// markers belong on the line too (PR #692, CodeRabbit). And the reset a refused turn STATED (epic 5's code round of
-    /// todo/PLAN_every_round_is_counted.md) — empty for an answer, an interrupted turn, and a refusal that named no time.</remarks>
+    /// research/PLAN_every_round_is_counted.md) — empty for an answer, an interrupted turn, and a refusal that named no time.</remarks>
     private void Record(RowLaunchInput input, string ranOn, string outcome, Usage usage, TimeSpan elapsed, string resetsUtc) =>
         ledger.RecordJob(
             string.Empty, input.Row.Provider.Provider, ModelRan.Of(ranOn, input.Settings.Model), ConsultantRoles.Question,

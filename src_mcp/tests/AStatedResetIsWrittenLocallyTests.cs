@@ -10,7 +10,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// A stated reset is read locally and written down — story 5.3b of <c>todo/PLAN_every_round_is_counted.md</c>, the
+/// A stated reset is read locally and written down — story 5.3b of <c>research/PLAN_every_round_is_counted.md</c>, the
 /// writer's half: the refusal's stated reset becomes the ledger line's <c>resetsUtc</c>, read by the one parser both
 /// halves use, so the extension shows it without a second parser of vendor sentences.
 /// </summary>

@@ -40,17 +40,17 @@ export interface ModelCardFacts {
   readonly now: number;
   /**
    * `7 days: 214 rounds · 31 consult turns · 5 h: 12` — from the CACHED round counts, never a read per render (story 2.4
-   * of todo/PLAN_every_round_is_counted.md, `cardRoundsLine`); empty before the first read, and then nothing is drawn.
+   * of research/PLAN_every_round_is_counted.md, `cardRoundsLine`); empty before the first read, and then nothing is drawn.
    */
   readonly roundsLine?: string;
   /**
    * `quota out — resets in 89 h (Wed 04:49)` — the reset the row's last refusal stated, from the same cached snapshot
-   * (story 5.3b of todo/PLAN_every_round_is_counted.md, `cardResetLine`); empty when none is ahead, and then nothing is drawn.
+   * (story 5.3b of research/PLAN_every_round_is_counted.md, `cardResetLine`); empty when none is ahead, and then nothing is drawn.
    */
   readonly resetLine?: string;
   /**
    * The vendor's own gauge, a line per reported window — a Team server's reading for a row that runs there, or why this
-   * machine reads none (story 6.2 of todo/PLAN_every_round_is_counted.md, `cardGaugeLines`); none drawn when empty.
+   * machine reads none (story 6.2 of research/PLAN_every_round_is_counted.md, `cardGaugeLines`); none drawn when empty.
    */
   readonly gaugeLines?: readonly string[];
 }

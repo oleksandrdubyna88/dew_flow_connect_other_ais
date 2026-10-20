@@ -12,7 +12,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// Each ledger line says what its launch RAN WITH — story 3.4 of <c>todo/PLAN_every_round_is_counted.md</c>, the local half:
+/// Each ledger line says what its launch RAN WITH — story 3.4 of <c>research/PLAN_every_round_is_counted.md</c>, the local half:
 /// which CLI and which release of it, and the effort and tier as actually sent, each with its source.
 /// </summary>
 /// <remarks>
