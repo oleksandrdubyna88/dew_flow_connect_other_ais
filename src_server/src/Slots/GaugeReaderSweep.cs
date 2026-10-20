@@ -2,7 +2,7 @@ namespace CoaiServer;
 
 /// <summary>
 /// The startup sweep for gauge readers a dead server left behind — through the same slot-locked path every acquisition
-/// takes, never a sweep of its own (story 6.1a of todo/PLAN_every_round_is_counted.md, the epic-6 risk consultation).
+/// takes, never a sweep of its own (story 6.1a of research/PLAN_every_round_is_counted.md, the epic-6 risk consultation).
 /// </summary>
 /// <remarks>
 /// <para>At boot, every configured slot is acquired for an instant and released: <c>SlotRegistry.AcquireAsync</c>

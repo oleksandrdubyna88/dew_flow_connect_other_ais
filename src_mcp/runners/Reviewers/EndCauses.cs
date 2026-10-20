@@ -2,7 +2,7 @@ namespace CoaiMcp.Runners.Reviewers;
 
 /// <summary>
 /// WHY a launch the caller's token killed was killed — the ledger's <c>endCause</c> column, as the Team server spells
-/// it (story 3.2 of todo/PLAN_every_round_is_counted.md).
+/// it (story 3.2 of research/PLAN_every_round_is_counted.md).
 /// </summary>
 /// <remarks>
 /// <para>A <see cref="ReviewerOutcome.Cancelled"/> launch cannot say why its token fired: the token does not carry a

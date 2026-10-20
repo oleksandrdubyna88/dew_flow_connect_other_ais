@@ -8,7 +8,7 @@ namespace CoaiMcp.Tests;
 /// executor, the ladder, the ledger.
 /// </summary>
 /// <remarks>
-/// Extracted from <c>EveryPaidLaunchIsWrittenTests</c> by story 3.2 of todo/PLAN_every_round_is_counted.md, which
+/// Extracted from <c>EveryPaidLaunchIsWrittenTests</c> by story 3.2 of research/PLAN_every_round_is_counted.md, which
 /// needed the same shape and would have been the fourth private copy of it (reuse-first). It answers at once and
 /// never looks at the token: a test that needs a launch to WAIT for its token writes a launcher of its own and says so.
 /// </remarks>

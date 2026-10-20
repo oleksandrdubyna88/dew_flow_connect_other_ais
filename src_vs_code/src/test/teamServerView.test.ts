@@ -325,7 +325,7 @@ test('a kind a newer server invents is shown as it named it, never as markup', (
   assert.match(html, /&lt;img/);
 });
 
-test('the deploy canary is named for a person, apart from the reviews (story 3.5 of todo/PLAN_every_round_is_counted.md)', () => {
+test('the deploy canary is named for a person, apart from the reviews (story 3.5 of research/PLAN_every_round_is_counted.md)', () => {
   const html = kindLine([
     { kind: 'review', runs: 12, failed: 0, tokensIn: 900, tokensOut: 100, seconds: 60 },
     { kind: 'canary', runs: 2, failed: 0, tokensIn: 40, tokensOut: 10, seconds: 9 },

@@ -10,7 +10,7 @@ import { roundsLoader } from '../roundCountsRead';
 import { parseUsage } from '../usage';
 
 /**
- * The extension's Claude model probe writes what it spent (story 3.3 of todo/PLAN_every_round_is_counted.md, the
+ * The extension's Claude model probe writes what it spent (story 3.3 of research/PLAN_every_round_is_counted.md, the
  * paid-path census row 8): up to four billed requests a week used to write nothing at all.
  *
  * <p>Its own ledger, `probe-usage.jsonl`, written by the extension's one append helper — the consultation of

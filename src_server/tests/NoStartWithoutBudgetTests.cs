@@ -7,7 +7,7 @@ using Xunit;
 namespace CoaiServer.Tests;
 
 /// <summary>
-/// No start without budget — story 4.3 of <c>todo/PLAN_every_round_is_counted.md</c>, the store's and the runner's half:
+/// No start without budget — story 4.3 of <c>research/PLAN_every_round_is_counted.md</c>, the store's and the runner's half:
 /// a job whose caller can no longer wait for a launch's start-up is ENDED at claim with its own name, nothing launched,
 /// its one ledger line written, the poller woken — and the claim moves on to the next job in the same pass.
 /// </summary>

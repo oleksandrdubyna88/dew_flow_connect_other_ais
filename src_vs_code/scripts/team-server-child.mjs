@@ -3,7 +3,7 @@
  * owns — and stopped, tree and all.
  *
  * <p>Extracted from `run-contract.mjs` when a second runner needed it (the usage-counts leg of `run-seam.mjs`, story 5.1
- * of todo/PLAN_every_round_is_counted.md): two copies of how to start, wait for and kill a server would drift, and the
+ * of research/PLAN_every_round_is_counted.md): two copies of how to start, wait for and kill a server would drift, and the
  * one that drifted would be the one nobody runs.</p>
  *
  * <p>Every failure THROWS, naming what went wrong; the caller decides how its run ends. A started server is stopped by

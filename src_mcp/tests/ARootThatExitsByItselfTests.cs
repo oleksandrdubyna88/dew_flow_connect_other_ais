@@ -6,7 +6,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// A child the launcher ends itself may leave BY ITSELF — and the tree it started must not outlive it unnoticed (the
-/// CodeRabbit finding on PR #790 against story 6.1a of <c>todo/PLAN_every_round_is_counted.md</c>).
+/// CodeRabbit finding on PR #790 against story 6.1a of <c>research/PLAN_every_round_is_counted.md</c>).
 /// </summary>
 /// <remarks>
 /// <para>Against a REAL child, like <see cref="AReaderIsEndedWithItsTreeTests"/>, whose helpers are shared: the fake CLI's

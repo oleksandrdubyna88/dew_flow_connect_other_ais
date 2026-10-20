@@ -94,7 +94,7 @@ Two crossings changed between the extension and the Team server, both read-only 
   session in an allowed domain — three fields, never a token or an expiry. The admin decision is the
   same one `/api/usage` makes for company scope.
 - **The server counts rounds (2026-10-11, stories 5.1–5.2 of
-  [../todo/PLAN_every_round_is_counted.md](../todo/PLAN_every_round_is_counted.md)).** Every vendor total gains the
+  [PLAN_every_round_is_counted.md](PLAN_every_round_is_counted.md)).** Every vendor total gains the
   round counts (additive), and a company request from the tab also sends `windows=5h,24h,week`, answered as a trailing
   `windows[]` from the same scan. An older server ignores the parameter and answers 200 without the key — the tab reads
   that SHAPE as *count unavailable*, never 0. The seam suite reads the real server through the extension's own parser.
@@ -863,7 +863,7 @@ runtime's listed levels, a cap) and the accepted answer names what it dropped or
 or a server that still says 1 — into the reviewer's note, so "sent" is never read as "applied". The minimum stays
 1: nothing an older half reads has changed shape.
 
-**Still contract 2 (2026-10-11, story 4.1 of todo/PLAN_every_round_is_counted.md):** a review also carries the round's
+**Still contract 2 (2026-10-11, story 4.1 of research/PLAN_every_round_is_counted.md):** a review also carries the round's
 identity (`round`, 32 hex characters the engine mints when the round starts — every launch of the round, retries,
 repairs and follow-ups included, sends the same one), what the launch is inside its turn (`attempt`: `first`, `retry`,
 `repair`, `followUp`) and the seconds left on the shim's own deadline at submit (`remainingSeconds`, relative — never
@@ -939,7 +939,7 @@ What the server writes, and where it is observed:
 | What | Observed at | Code |
 |---|---|---|
 | Every refusal returned to a calling AI | `Refusal.Answer` — the one place an `ErrorAnswer` is built (story 2.1's boundary) | `refused` |
-| Every reviewer that did not answer | `LiveRound.Report`, where the outcome arrives | `reviewer-timed-out`, `reviewer-cancelled` (the caller's token killed it — story 3.2 of `todo/PLAN_every_round_is_counted.md`), `reviewer-rate-limited`, `reviewer-exit`, `reviewer-not-started`, `reviewer-unparseable` |
+| Every reviewer that did not answer | `LiveRound.Report`, where the outcome arrives | `reviewer-timed-out`, `reviewer-cancelled` (the caller's token killed it — story 3.2 of `research/PLAN_every_round_is_counted.md`), `reviewer-rate-limited`, `reviewer-exit`, `reviewer-not-started`, `reviewer-unparseable` |
 | A setting this build cannot read, and a legacy settings file adopted | `Program` at startup, AND `PanelServiceHost.Build` on every settings RELOAD — which is what a person editing the panel causes | `unrecognised-setting`, `settings-adopted` |
 | What it found on the DISK | `Program` at startup only: the survey stats the data directory, and re-running it on a settings change would stat a configured NAS (issue #115) | `storage-note` |
 | A run that never finished (epic 3, 2026-09-23) | the NEXT start, sweeping `runs/` — nobody else is left to say it | `unclean-exit`, carrying the DEAD run's `run` and `pid` |

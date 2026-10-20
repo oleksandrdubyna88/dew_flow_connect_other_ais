@@ -153,8 +153,8 @@ internal sealed class ConsultationFailedTurns(
         var failure = Kept(consultant, final, ConsultFailures.Classify(consultant.Runtime, final, facts.Record.Runtime, killedAs));
 
         // The ledger's outcome: the vendor's reason whole and redacted, never the summary's unredacted 160-character
-        // cut (story 3.3 of todo/PLAN_every_round_is_counted.md).
-        // And the reset the refusal stated, for the same row (epic 5's code round of todo/PLAN_every_round_is_counted.md).
+        // cut (story 3.3 of research/PLAN_every_round_is_counted.md).
+        // And the reset the refusal stated, for the same row (epic 5's code round of research/PLAN_every_round_is_counted.md).
         return final.Terminal is { } terminal
             ? ConsultationFailing.Terminal(facts, failure, ReviewerSummaryFactory.DescribeWhole(terminal)) with
             {

@@ -5,7 +5,7 @@ using Xunit;
 namespace CoaiServer.Tests;
 
 /// <summary>
-/// The deploy canary's fallback RUNS (story 3.5 of <c>todo/PLAN_every_round_is_counted.md</c>, the epic-3 code round):
+/// The deploy canary's fallback RUNS (story 3.5 of <c>research/PLAN_every_round_is_counted.md</c>, the epic-3 code round):
 /// <c>deploy/systemd-release.sh</c> sends <c>"kind":"canary"</c>, and a server older than the kind refuses it with a 400
 /// before any vendor starts — so the script asks once more as a plain review rather than rolling back a release that is
 /// fine. This drives the REAL <c>canary</c> function, sourced from the script, against a stub <c>curl</c> on PATH that

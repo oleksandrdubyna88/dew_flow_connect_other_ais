@@ -5,7 +5,7 @@ namespace CoaiMcp.Server;
 
 /// <summary>
 /// What a review launch of one ROW ran with, labelled for its ledger line — story 3.4 of
-/// todo/PLAN_every_round_is_counted.md, the local half.
+/// research/PLAN_every_round_is_counted.md, the local half.
 /// </summary>
 /// <remarks>
 /// <para><b>Here, and not in the adapters.</b> An adapter's <c>Build</c> knows what it put on the argv

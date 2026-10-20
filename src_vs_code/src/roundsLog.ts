@@ -952,7 +952,7 @@ export interface UsageTabExtras {
   readonly teamServers?: readonly TeamServerState[];
   /** The chat's own two ledgers. */
   readonly chat?: ChatLedgers;
-  /** The Rounds block, rendered by the host (`roundsBlock.ts`, story 2.3 of todo/PLAN_every_round_is_counted.md). */
+  /** The Rounds block, rendered by the host (`roundsBlock.ts`, story 2.3 of research/PLAN_every_round_is_counted.md). */
   readonly rounds?: string;
 }
 
@@ -1496,7 +1496,7 @@ ${TEXT_CONTROLS_CSS}
   .tabs .tab, .windows .tab { background: transparent; color: var(--vscode-foreground); border: none; border-bottom: 2px solid transparent; border-radius: 0; padding: 6px 10px; opacity: .75; }
   .tabs .tab.on, .windows .tab.on { opacity: 1; border-bottom-color: var(--vscode-focusBorder); }
   .windows { display: flex; gap: 6px; margin: 0 0 10px; }
-  /* THE ROUNDS BLOCK (story 2.3 of todo/PLAN_every_round_is_counted.md), FIRST on the tab: its windows are its own
+  /* THE ROUNDS BLOCK (story 2.3 of research/PLAN_every_round_is_counted.md), FIRST on the tab: its windows are its own
      (5 h / 24 h / 7 d, trailing), so it sits above the buttons that choose the chart's. One table, the vendor row in
      bold, its model and kind lines indented under it; wide, so it scrolls sideways rather than squeezing ten columns. */
   .rounds-block { margin: 0 0 16px; }

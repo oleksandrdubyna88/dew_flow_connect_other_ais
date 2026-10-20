@@ -4,7 +4,7 @@ using System.Text.Json;
 /// <summary>
 /// The stand-in for a CLI that is a SERVER: it answers one request over stdio and goes on living — the shape of
 /// <c>codex app-server</c>, which the Team server's gauge reader starts and must end itself (story 6.1a of
-/// todo/PLAN_every_round_is_counted.md).
+/// research/PLAN_every_round_is_counted.md).
 /// </summary>
 /// <remarks>
 /// <para>Two doors into the same behaviour. The <c>serve</c> VERB takes everything on argv, for the launcher's own

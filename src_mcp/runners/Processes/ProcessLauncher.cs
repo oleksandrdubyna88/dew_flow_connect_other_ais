@@ -325,7 +325,7 @@ public sealed class ProcessLauncher : IProcessLauncher
     /// <remarks>
     /// <see cref="ProcessTracking.Record"/> never throws; a tracker that writes a slot's reader marker can (a disk, a
     /// permission). A child alive with its identity on nobody's disk is the one state the containment of story 6.1a
-    /// of todo/PLAN_every_round_is_counted.md has no answer to — a marker still saying "spawning" would then be read as
+    /// of research/PLAN_every_round_is_counted.md has no answer to — a marker still saying "spawning" would then be read as
     /// "nothing was spawned" — so the launcher closes that door itself: a record that fails is a child that is killed,
     /// its tree with it, and waited for, before the exception reaches the caller.
     /// <para><b>A child that is already gone is not a child that could not be recorded.</b> A reviewer that answers at once
@@ -665,7 +665,7 @@ public sealed class ProcessLauncher : IProcessLauncher
     /// behind it. Closing our own end fails the write at once, whoever else is holding theirs.
     /// (codex, code round.)</para>
     /// <para><b>A request that ends its child itself owns the tree it ends</b> (story 6.1a of
-    /// todo/PLAN_every_round_is_counted.md): the descendants are listed BEFORE the kill — a killed parent's children
+    /// research/PLAN_every_round_is_counted.md): the descendants are listed BEFORE the kill — a killed parent's children
     /// are reparented and cannot be found afterwards — and written to the tracker before the signal is sent, so a
     /// crash in the middle of this still leaves every member named on disk; after the kill each member is checked by
     /// pid and start time, and the ones still there at the bound come back as survivors. A request without a

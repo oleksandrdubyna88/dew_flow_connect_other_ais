@@ -8,7 +8,7 @@ using Xunit;
 namespace CoaiServer.Tests;
 
 /// <summary>
-/// The server counts rounds (story 5.1 of todo/PLAN_every_round_is_counted.md): per vendor, the DISTINCT round ids its review
+/// The server counts rounds (story 5.1 of research/PLAN_every_round_is_counted.md): per vendor, the DISTINCT round ids its review
 /// lines carry, the review lines that carry none apart, the client's retries, repairs and follow-ups, the cancelled and the
 /// budget-refused, and the launches per kind — over <c>vendors[]</c> and <c>people[].vendors[]</c> alike.
 /// </summary>

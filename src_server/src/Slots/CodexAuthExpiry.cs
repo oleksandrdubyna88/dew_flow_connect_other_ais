@@ -20,7 +20,7 @@ public abstract record Expiry
 
 /// <summary>
 /// The pre-spawn expiry guard's reading of a slot's <c>auth.json</c>: the access token's JWT <c>exp</c> claim, decoded
-/// and discarded — never the token, never logged, never kept (story 6.1a of todo/PLAN_every_round_is_counted.md).
+/// and discarded — never the token, never logged, never kept (story 6.1a of research/PLAN_every_round_is_counted.md).
 /// </summary>
 /// <remarks>
 /// <para><b>What it guards, and what it does not.</b> codex 0.160.0 refreshes its token set PROACTIVELY before every

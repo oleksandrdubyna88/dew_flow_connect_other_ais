@@ -135,7 +135,7 @@ public sealed class ReviewEndpointTests
         var after = await client.GetFromJsonAsync<ReviewStatusDto>($"/api/reviews/{accepted.Id}");
         after!.Status.Should().Be("failed");
         after.Failure.Should().Be("cancelled", "the failure name every shipped client renders is unchanged");
-        // Story 3.2 of todo/PLAN_every_round_is_counted.md: WHY travels as a new optional field an older client never
+        // Story 3.2 of research/PLAN_every_round_is_counted.md: WHY travels as a new optional field an older client never
         // reads, so it can tell a withdrawal from the server's backstop without matching a sentence.
         after.EndCause.Should().Be(CoaiMcp.Runners.Reviewers.EndCauses.Withdrawn);
     }
