@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { test } from 'node:test';
 
 import { ChatTurnRecord } from '../chatUsage';
 import {
-  chatLedgerLines, isLaunchLine, LedgerLine, MEDIAN_OUTPUT_LABEL, moneyGroups, PER_LAUNCH, perUnit, rollUp, tokenText, unitDivisor,
+  chatLedgerLines, isLaunchLine, LedgerLine, medianOutputLabel, medianUnitOf, moneyGroups, NOT_ONE_LAUNCH_ATTEMPTS, ONE_LAUNCH_ATTEMPTS, PER_LAUNCH, perUnit,
+  rollUp, tokenText, unitDivisor,
 } from '../roundMoney';
 import { LineRate, parseUsage } from '../usage';
 
@@ -110,6 +113,10 @@ test('ALineIsALaunch_OnlyWhenItSaysSo — an attempt that is not a follow-up and
   assert.equal(isLaunchLine(launch({ cli: '' })), false);
   assert.equal(isLaunchLine(line({ cli: 'codex' })), false, 'no attempt is a line from before 0.48.0');
   assert.equal(isLaunchLine(launch({ attempt: '' })), false);
+  assert.equal(isLaunchLine(launch({ attempt: 'retry' })), true, 'a rate-limit retry is one launch of its own');
+  assert.equal(isLaunchLine(launch({ attempt: 'repair' })), true, 'a repair is one launch of its own');
+  assert.equal(isLaunchLine(launch({ attempt: 'rotated' })), false, 'a Team-server attempt word coai-mcp writes — not a local launch');
+  assert.equal(isLaunchLine(launch({ attempt: 'whatever' })), false, 'an attempt this build does not know is not claimed as one launch');
 });
 
 test('AChatTurn_StaysPerRecordedTurn — a chat turn read into the ledger shape says neither attempt nor cli', () => {
@@ -138,8 +145,17 @@ test('TwoLaunches_ReadAsLaunches_NotLaunchs — the plural of launch has an es',
   assert.equal(perUnit({ usd: 4, known: true, floor: false, estimated: false }, { per: 'round', count: 2 }).note, 'over 2 rounds', 'every other unit keeps its plain s');
 });
 
-test('TheMedianLabel_SaysLaunch — the header names the unit a launch line holds', () => {
-  assert.equal(MEDIAN_OUTPUT_LABEL, 'median output per launch');
+test('TheMedianLabel_FollowsTheGroupsItHeads — one shared unit is named, mixed units or no groups name none', () => {
+  const launch = (over: Partial<LedgerLine> = {}): LedgerLine => line({ attempt: 'first', cli: 'codex', ...over });
+  const [launches] = moneyGroups([launch()], WINDOW, rateOf);
+  const [older] = moneyGroups([line()], WINDOW, rateOf);
+
+  assert.equal(medianUnitOf(launches!), PER_LAUNCH);
+  assert.equal(medianUnitOf(older!), 'recorded turn');
+  assert.equal(medianOutputLabel([launches!, launches!]), 'median output per launch');
+  assert.equal(medianOutputLabel([older!, older!]), 'median output per recorded turn');
+  assert.equal(medianOutputLabel([launches!, older!]), 'median output', 'a mixed page named a unit half of its cells do not hold');
+  assert.equal(medianOutputLabel([]), 'median output', 'no median to head names no unit');
 });
 
 test('the money is reported where the vendor billed it, estimated per line otherwise, and a floor when a line was unpriced', () => {
@@ -218,4 +234,37 @@ test('a line parsed from the real ledger shape reaches the groups with its cache
 
   assert.equal(group?.kind, 'question');
   assert.equal(group?.tokens.cached, 800_000);
+});
+
+/** The string constants `public const string X = "value";` of one C# static class, comments stripped first. */
+function constantsOf(file: string, klass: string): readonly string[] {
+  const at = path.join(process.cwd(), '..', file);
+  assert.ok(fs.existsSync(at), `${file} has moved — this test is reading nothing`);
+  const code = fs.readFileSync(at, 'utf8').replace(/\/\*[\s\S]*?\*\//gu, ' ').replace(/^\s*\/\/.*$/gmu, '');
+  // The body ends at the first closing brace: the constants come before `Known`, whose `{ get; }` is the first one.
+  const found = new RegExp('public static class ' + klass + '\\s*[{]([^}]*)[}]', 'u').exec(code);
+  assert.ok(found !== null, `${klass} is no longer declared in ${file}`);
+
+  return [...(found[1] ?? '').matchAll(/public const string \w+ = "(\w+)";/gu)].map((one) => one[1] ?? '');
+}
+
+test('EveryAttemptCoaiMcpWrites_IsDecidedHere — one launch or not, and nothing here that coai-mcp no longer writes', () => {
+  const written = constantsOf('src_mcp/runners/Reviewers/LaunchParts.cs', 'LaunchAttempts');
+  const decided = [...ONE_LAUNCH_ATTEMPTS, ...Object.keys(NOT_ONE_LAUNCH_ATTEMPTS)];
+
+  assert.ok(written.length >= 5, `LaunchAttempts read as ${written.length} words (${written.join(', ')}) — the reader is wrong, not the contract`);
+  for (const word of written) {
+    const sides = [ONE_LAUNCH_ATTEMPTS.has(word), word in NOT_ONE_LAUNCH_ATTEMPTS].filter(Boolean).length;
+    assert.equal(sides, 1, `coai-mcp writes the attempt "${word}" and it is in ${sides} of ONE_LAUNCH_ATTEMPTS / NOT_ONE_LAUNCH_ATTEMPTS — decide it in roundMoney.ts`);
+  }
+  for (const word of decided) {
+    assert.ok(written.includes(word), `roundMoney.ts decides the attempt "${word}" but LaunchAttempts no longer has it — a word nothing writes`);
+  }
+});
+
+test('TheTwoAttemptSets_AreDisjoint_AndEachNotOneLaunchWordSaysWhy', () => {
+  for (const [word, why] of Object.entries(NOT_ONE_LAUNCH_ATTEMPTS)) {
+    assert.ok(!ONE_LAUNCH_ATTEMPTS.has(word), `"${word}" is in both attempt sets`);
+    assert.ok(why.length > 0, `"${word}" is not one launch and says nothing of why`);
+  }
 });

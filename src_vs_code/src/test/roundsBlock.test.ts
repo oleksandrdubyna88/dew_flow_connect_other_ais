@@ -123,17 +123,80 @@ test('AConsultationOnlyWindow_ShowsNoPerRoundFigure — consultations and no rou
 /** A review line the way coai-mcp 0.48.0 and later writes it: one launch, with the attempt and the runtime it ran on. */
 const launchLine = (over: Parameters<typeof usageLine>[0] = {}) => usageLine({ attempt: 'first', cli: 'codex', ...over });
 
-test('TheMedianHeader_SaysPerLaunch_AndAnOlderLineSaysPerRecordedTurnBesideItsNumber', () => {
-  const launches = roundsBlock(input({ snapshot: snapshot(counted(), [launchLine(), launchLine({ attempt: 'retry' })]) }));
-  const older = roundsBlock(input({ snapshot: snapshot(counted(), [launchLine(), usageLine()]) }));
-  const median = (html: string): string => rowCells(html, '>gpt-6-luna<')[7]!;
+/** The text of the median column's header, whole. */
+function medianHeader(html: string): string {
+  const header = /<th scope="col">(median output[^<]*)<\/th>/u.exec(html);
+  assert.ok(header !== null, 'the block draws no median column header');
 
-  assert.match(launches, /<th scope="col">median output per launch<\/th>/u);
-  assert.doesNotMatch(launches, /median output per recorded turn/u);
-  assert.match(median(launches), /^\d/u, 'the launch lines have a median');
-  assert.doesNotMatch(median(launches), /recorded turn/u, 'a group made only of launch lines was told to say per recorded turn');
-  assert.match(median(older), /<span title="[^"]*recorded turn[^"]*">[^<]+<\/span> <span class="hint">per recorded turn<\/span>/u,
+  return header[1]!;
+}
+
+const medianCellOf = (html: string, model: string): string => rowCells(html, model)[7]!;
+
+test('TheMedianHeader_SaysPerLaunch_WhenEveryMedianIsPerLaunch_AndNoCellRepeatsIt', () => {
+  const lines = [launchLine(), launchLine({ attempt: 'retry' }), launchLine({ model: 'gpt-6-astra', attempt: 'repair' })];
+  const html = roundsBlock(input({ snapshot: snapshot(counted(), lines) }));
+
+  assert.equal(medianHeader(html), 'median output per launch');
+  for (const model of ['>gpt-6-luna<', '>gpt-6-astra<']) {
+    assert.match(medianCellOf(html, model), /^\d/u, 'the launch lines have a median');
+    assert.doesNotMatch(medianCellOf(html, model), /hint|recorded turn|per launch/u, 'a cell repeated the unit its header already says');
+  }
+});
+
+test('TheMedianHeader_SaysPerRecordedTurn_WhenNoLineIsALaunch_AndNoCellRepeatsIt — an all Team-server page, and an all pre-0.48.0 page', () => {
+  const remote = (over: Parameters<typeof usageLine>[0] = {}) => usageLine({ provider: 'work-codex', attempt: 'first', cli: 'remote', ...over });
+  const teamServer = roundsBlock(input({ snapshot: snapshot(counted(), [remote({ model: 'gpt-6-nova' }), remote({ model: 'gpt-6-astra' })]), ranOn: ranOnOf([]) }));
+  const older = roundsBlock(input({ snapshot: snapshot(counted(), [usageLine(), usageLine({ model: 'gpt-6-astra' })]) }));
+
+  for (const [html, models] of [[teamServer, ['>gpt-6-nova<', '>gpt-6-astra<']], [older, ['>gpt-6-luna<', '>gpt-6-astra<']]] as const) {
+    assert.equal(medianHeader(html), 'median output per recorded turn', 'the header claimed a unit every cell contradicts');
+    for (const model of models) {
+      assert.match(medianCellOf(html, model), /^\d/u);
+      assert.doesNotMatch(medianCellOf(html, model), /hint|recorded turn|per launch/u, 'a cell repeated the unit its header already says');
+    }
+  }
+});
+
+test('TheMedianHeader_IsNeutral_OnAMixedPage_AndEveryCellNamesItsUnit', () => {
+  const html = roundsBlock(input({ snapshot: snapshot(counted(), [launchLine(), usageLine({ model: 'gpt-6-astra' })]) }));
+
+  assert.equal(medianHeader(html), 'median output', 'a mixed page named one unit in its header');
+  assert.match(medianCellOf(html, '>gpt-6-luna<'), /^\d[^<]* <span class="hint">per launch<\/span>$/u, 'the launch cell did not name its unit');
+  assert.match(medianCellOf(html, '>gpt-6-astra<'), /<span title="[^"]*recorded turn[^"]*">[^<]+<\/span> <span class="hint">per recorded turn<\/span>/u,
+    'the older cell did not name its unit, with a tooltip');
+});
+
+test('AnOlderLineInAGroup_SaysPerRecordedTurnBesideItsNumber_WhileAnotherGroupIsPerLaunch', () => {
+  const html = roundsBlock(input({ snapshot: snapshot(counted(), [launchLine(), usageLine(), launchLine({ model: 'gpt-6-astra' })]) }));
+
+  assert.match(medianCellOf(html, '>gpt-6-luna<'), /<span title="[^"]*recorded turn[^"]*">[^<]+<\/span> <span class="hint">per recorded turn<\/span>/u,
     'one older line in the group must say per recorded turn beside the number, with a tooltip');
+  assert.doesNotMatch(medianCellOf(html, '>gpt-6-astra<'), /recorded turn/u);
+});
+
+test('TheMedianHeader_NamesNoUnit_WhenTheLedgerDidNotRead — no median is drawn, so none is claimed', () => {
+  // Launch lines ARE in the snapshot beside the failure: usage can read while the probe ledger fails (roundCountsRead.ts), and
+  // then the groups exist but no cell is drawn from them. With no lines at all the empty set would pass without the guard.
+  const html = roundsBlock(input({ snapshot: snapshot(counted(), [launchLine(), launchLine({ attempt: 'retry' })], 'EACCES') }));
+
+  assert.equal(medianHeader(html), 'median output', 'a header claimed a unit for medians that the unreadable ledger did not draw');
+});
+
+test('TheMedianHeader_IgnoresAGroupWithNoCapturedLine — a group with no median is not a cell, so it cannot set the header', () => {
+  // astra's only line is an older one whose usage was not captured: its group has no median and draws a dash.
+  const html = roundsBlock(input({ snapshot: snapshot(counted(), [launchLine(), usageLine({ model: 'gpt-6-astra', usageNote: 'ended before usage' })]) }));
+
+  assert.equal(medianHeader(html), 'median output per launch', 'a group with no median set the header to a neutral one');
+  assert.equal(medianCellOf(html, '>gpt-6-astra<'), '—');
+});
+
+test('TheMedianHeader_IgnoresAGroupWithNoModel — a group that is never drawn must not set the header', () => {
+  // A line with an empty model has no model line (modelsOf drops it), so no median cell is drawn for it.
+  const html = roundsBlock(input({ snapshot: snapshot(counted(), [launchLine(), launchLine({ attempt: 'retry' }), usageLine({ model: '' })]) }));
+
+  assert.equal(medianHeader(html), 'median output per launch', 'an old line with no model made the header neutral for a cell nobody sees');
+  assert.doesNotMatch(medianCellOf(html, '>gpt-6-luna<'), /hint/u);
 });
 
 test('AModelWithUnknownRounds_AndAMixedWeek_IsDividedPerRecordedTurn — one older line and one launch line, rounds unavailable', () => {
@@ -156,7 +219,7 @@ test('AModelWithUnknownRounds_AndOnlyLaunchLines_IsDividedPerLaunch — the tool
 
 test('ATeamServerLine_StaysPerRecordedTurn_EvenWithItsRowDeleted — the line says it ran on a Team server, whatever the settings say now', () => {
   const remote = (over: Parameters<typeof usageLine>[0] = {}) => usageLine({ provider: 'work-codex', model: 'gpt-6-astra', attempt: 'first', cli: 'remote', ...over });
-  const html = roundsBlock(input({ snapshot: snapshot(counted(), [remote(), remote()]), ranOn: ranOnOf([]) }));
+  const html = roundsBlock(input({ snapshot: snapshot(counted(), [remote(), remote(), launchLine()]), ranOn: ranOnOf([]) }));
   const cells = rowCells(html, '>gpt-6-astra<');
 
   assert.match(cells[7]!, /<span class="hint">per recorded turn<\/span>/u, 'a Team-server job total was claimed as one launch');
@@ -166,7 +229,7 @@ test('ATeamServerLine_StaysPerRecordedTurn_EvenWithItsRowDeleted — the line sa
 
 test('AnAntigravityFollowUp_KeepsItsModelPerRecordedTurn — a follow-up may be cumulative, so one in the group takes median and division back', () => {
   const local = (over: Parameters<typeof usageLine>[0] = {}) => usageLine({ model: 'gpt-6-astra', attempt: 'first', cli: 'antigravity', ...over });
-  const html = roundsBlock(input({ snapshot: snapshot(counted(), [local(), local({ attempt: 'followUp' })]), ranOn: ranOnOf([]) }));
+  const html = roundsBlock(input({ snapshot: snapshot(counted(), [local(), local({ attempt: 'followUp' }), launchLine()]), ranOn: ranOnOf([]) }));
   const cells = rowCells(html, '>gpt-6-astra<');
 
   assert.match(cells[7]!, /<span class="hint">per recorded turn<\/span>/u, 'a possibly cumulative follow-up was claimed as a launch in the median');

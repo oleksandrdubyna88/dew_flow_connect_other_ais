@@ -208,8 +208,8 @@ budget (4 706 bytes of the 10 056 left).
 `src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-class "*.StageRulesTests"` (and
 `--filter-class "*.RuleFilesTests"` for the number itself).
 - `RuleFilesTests.TheDefaultBudget_IsTheOperatorsNinetyKilobytes` — the constant is 90 000.
-- `StageRulesTests.AtNinetyKilobytes_TheBaseAndTheTier_SpendExactly79967Bytes` (named ...79944Bytes until 2026-10-18) — **the measuring test and the
-  drift guard**: base 17 906 + tier 62 061 = 79 967 (17 883 + 62 061 = 79 944 until 2026-10-18, see the last measurement). Its failure message prints the three numbers it found,
+- `StageRulesTests.AtNinetyKilobytes_TheBaseAndTheTier_SpendExactlyTheirPinnedBytes` (named ...79944Bytes until 2026-10-18 and ...79967Bytes until 2026-10-19) — **the measuring test and the
+  drift guard**: base 17 947 + tier 62 061 = 80 008 (17 883 + 62 061 = 79 944 until 2026-10-18, 17 906 + 62 061 = 79 967 until 2026-10-19, 17 925 + 62 061 = 79 986 until 2026-10-20, see the last three measurements). Its failure message prints the three numbers it found,
   so a conventions bump or an edit to this repository's own instruction files that moves them turns it red and
   the figures in this file are re-measured from that message. The unit is the collector's own: characters of
   the line-ending-normalised text.
@@ -261,6 +261,27 @@ effect of that was measured here.
 one to three rules, the distribution and every rule's reach are unchanged, and `common/test-leftovers.md` is still drawn on 294 of 3 000 (9.8 %). What changed is the two numbers the pin states and the byte count of the
 canary branch. Re-pinned: `StageRulesTests.AtNinetyKilobytes_TheBaseAndTheTier_SpendExactly79967Bytes` (base 17 906 + tier 62 061 = 79 967); the at-most-three test, the at-least-one test and the
 test-leftovers test are unchanged because the measurement leaves them true. The 2026-10-16 table above stays as history, with its 79 944 / 10 056.
+
+## RE-BASELINED, 2026-10-19 — 19 more characters of the base (E6's one-shot-mode entry)
+
+> **Subject:** the merged tree of `feat/round-authors-e6` (E5 final `8172eb193` and `main` at mcp 0.61.0 merged in), conventions pin `e29883f8`. **Cause:** E6 names its one-shot mode `--round-authors` in
+> `.agents/PROJECT.md`'s one-shot list in the same commit that wires it (`ARequestFaultIsNotAnOldBinaryTests` requires it). **Harness:** the measuring test itself — its failure message printed
+> `base 17925 + tier 62061 = 79986`; the 3 000-branch loop of the section above was NOT re-run.
+
+| | 2026-10-18 | 2026-10-19 |
+|---|---|---|
+| base | 17 906 | **17 925** (+19, `.agents/PROJECT.md`) |
+| the eight tier rules | 62 061 | 62 061 |
+| base + tier | 79 967 | **79 986** |
+| **left for the rotated tail**, of 90 000 | 10 033 | **10 014** |
+| files shown on the canary branch | 16, 88 689 bytes | 16, 88 708 bytes (computed: the same three tail rules, asserted by the canary) |
+
+**Reading it.** The leftover is still more than the three smallest rules outside the tier together (8 683) and less than the fourth smallest added to them (12 143), so the tail is still one to three rules.
+The three canaries (`AtNinetyKilobytes_TheRotatedTail_FitsAtMostThreeRules`, `…EveryBranchReachesAtLeastOneTailRule`, `…TheTestLeftoversRule_IsShownOnTheBranchesThatDrawIt`) were re-run and are green unchanged.
+The 3 000-branch distribution and the per-rule reach are not re-measured: a set of tail rules whose size falls between 10 014 and 10 033 would now be refused, so those figures above are the 2026-10-18 ones.
+The measuring test is renamed `…SpendExactlyTheirPinnedBytes` so the next re-baseline changes its pins, not its name. Re-pinned: base 17 925 + tier 62 061 = 79 986.
+
+**Re-measured once more, 2026-10-20, on the merge of E7 (`feat/round-authors-e7`) with `main` (which holds E6):** `.agents/PROJECT.md` names both `--round-authors` (+19) and `--backfill-authors` (+22), and the measuring test printed `base 17947 + tier 62061 = 80008` — 9 992 left of 90 000, still above the three smallest tail rules (8 683) and below the fourth added (12 143); the three canaries are green unchanged, and this supersedes both branch pins (E6 79 986, E7 79 989). Re-pinned: base 17 947 + tier 62 061 = 80 008.
 
 ## What this does not settle
 
