@@ -548,3 +548,89 @@ test('every language says what a Vibe question row reads, that its web prompt is
     }
   }
 });
+
+const ROUNDS_ARTICLE_PHRASES: Record<string, readonly string[]> = {
+  // fewer than two readings · a launch sent no round id · no round ran between the readings · the replacement for "older extension"
+  // · (fifth) a line the server wrote before it read the round id
+  en: ['fewer than two readings', 'a launch sent no round id', 'no round ran between the readings', 'sent no round id', 'before it read the round id'],
+  de: ['weniger als zwei Lesungen', 'ein Start schickte keine Runden-ID', 'zwischen den Lesungen lief keine Runde', 'keine Runden-ID', 'bevor er die Runden-ID las'],
+  es: ['menos de dos lecturas', 'un lanzamiento no envió id de ronda', 'no corrió ninguna ronda entre las lecturas', 'cuyo cliente no envió id de ronda', 'antes de leer el id de ronda'],
+  ru: ['меньше двух чтений', 'запуск не прислал id раунда', 'между чтениями не было раунда', 'чей клиент — coai-mcp до 0.49.0', 'до того, как прочитал id раунда'],
+  uk: ['менше двох читань', 'запуск не надіслав id раунду', 'між читаннями не було раунду', 'без id раунду', 'ще не прочитавши id раунду'],
+};
+
+// Wordings a back-translation review found ambiguous or wrong. Each must stay gone: the joined clause made the
+// last reason read as part of the one before it, and the old terms named a unit or a version loosely.
+const STALE_ROUNDS_PHRASES: Record<string, readonly string[]> = {
+  en: ['launches from an older extension'],
+  de: ['keine Runde oder ein Start ohne', 'Starts einer älteren Erweiterung'],
+  es: ['lecturas o un lanzamiento sin', 'llamador de la API', 'lo envió sin id de ronda'],
+  ru: ['раунда или запуск без', 'старше 0.49.0', 'запуски от старого расширения', 'клиент его не прислал'],
+  uk: ['раунду або запуск без', 'старший за 0.49.0', 'запуски від старого розширення'],
+};
+
+const STALE_USAGE_PHRASES: Record<string, readonly string[]> = {
+  en: ['a Team server attempt moved to another account each write one', 'is not yet split'],
+  de: ['und ein Versuch des Team servers, der auf ein anderes Konto wechselte, schreiben je eine', 'noch nicht aufgeteilt', 'Die Protokollzeile einer Team-server-Zeile', 'wo eine Zeile mehr als einen Start', 'die mittlere Ausgabe pro Start', 'ihres Jobs'],
+  es: ['y un intento del Team server que pasó a otra cuenta escriben', 'aún no se divide'],
+  ru: ['итог её задания', 'где в строке может быть', 'и попытка Team server, переведённая на другой аккаунт, пишут', 'пока не разделено'],
+  uk: ['підсумок його завдання', 'де в рядку може бути', 'складає виправлення', 'й спроба Team server, переведена на інший обліковий запис, пишуть', 'поки не розділене'],
+};
+
+test('EveryLanguagesRoundsArticle_NamesEveryReasonTheGaugeWordsKnow (the rounds labels plan, story 1.5)', () => {
+  const article = HELP_ARTICLES.find((one) => one.id === 'the-rounds-log');
+  assert.ok(article !== undefined, 'the rounds article has been renamed, and this test is now asserting nothing');
+  for (const language of HELP_LANGUAGES) {
+    const phrases = ROUNDS_ARTICLE_PHRASES[language];
+    assert.ok(phrases !== undefined, `the test has no phrases for ${language}, so it would assert nothing there`);
+    const { body, fallback } = bodyFor(article, language);
+    const said = Object.values(body).join(' ');
+    assert.equal(fallback, false, `the ${language} rounds article is missing`);
+    for (const phrase of phrases) {
+      assert.ok(said.includes(phrase), `the ${language} rounds article never says "${phrase}" — a reader cannot learn that reason`);
+    }
+  }
+  for (const language of HELP_LANGUAGES) {
+    const said = Object.values(bodyFor(article, language).body).join(' ');
+    for (const stale of STALE_ROUNDS_PHRASES[language] ?? []) {
+      assert.ok(!said.includes(stale), `the ${language} rounds article still says "${stale}" — a wording the back-translation review rejected`);
+    }
+  }
+});
+
+const FOLLOW_UP_PHRASE: Record<string, string> = {
+  en: 'has its own line, but its usage may include the first launch',
+  de: 'hat eine eigene Zeile, doch ihr Verbrauch kann den des ersten Starts',
+  es: 'tiene su propia línea, pero su uso puede incluir el del primer lanzamiento',
+  ru: 'есть своя строка, но её расход может включать расход первого запуска',
+  uk: 'має власний рядок, але його витрата може містити витрату першого запуску',
+};
+
+const PER_LAUNCH_PHRASE: Record<string, string> = {
+  en: 'per launch',
+  de: 'pro Start',
+  es: 'por lanzamiento',
+  ru: 'на запуск',
+  uk: 'на запуск',
+};
+
+test('EveryLanguagesUsageArticle_SaysTheMedianIsPerLaunch (the rounds labels plan, story 1.5)', () => {
+  const article = HELP_ARTICLES.find((one) => one.id === 'what-each-ai-has-used');
+  assert.ok(article !== undefined, 'the usage article has been renamed, and this test is now asserting nothing');
+  for (const language of HELP_LANGUAGES) {
+    const phrase = PER_LAUNCH_PHRASE[language];
+    assert.ok(phrase !== undefined, `the test has no phrase for ${language}, so it would assert nothing there`);
+    const { body, fallback } = bodyFor(article, language);
+    assert.equal(fallback, false, `the ${language} usage article is missing`);
+    assert.ok(
+      Object.values(body).join(' ').includes(phrase),
+      `the ${language} usage article never says "${phrase}" — it still names the median's unit as the recorded turn only`,
+    );
+    const said = Object.values(body).join(' ');
+    const followUp = FOLLOW_UP_PHRASE[language];
+    assert.ok(followUp !== undefined && said.includes(followUp), `the ${language} usage article never says "${followUp}" — the antigravity follow-up is described as unsplit, or not at all`);
+    for (const stale of STALE_USAGE_PHRASES[language] ?? []) {
+      assert.ok(!said.includes(stale), `the ${language} usage article still says "${stale}" — a wording the back-translation review rejected`);
+    }
+  }
+});
