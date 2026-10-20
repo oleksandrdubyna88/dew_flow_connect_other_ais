@@ -148,7 +148,7 @@ internal static class TestSourceIndex
         var depth = 1;
         for (var at = from; at < code.Length; at++)
         {
-            depth += code[at] switch { '{' => 1, '}' => -1, _ => 0 };
+            depth += DepthChange(code[at]);
             if (depth == 0)
             {
                 return at;
@@ -157,6 +157,9 @@ internal static class TestSourceIndex
 
         return code.Length;
     }
+
+    /// <summary>How one character moves the brace depth: an opening brace goes one deeper, a closing one one shallower.</summary>
+    private static int DepthChange(char c) => c switch { '{' => 1, '}' => -1, _ => 0 };
 
     private static TestClass ClassOf(string file, Span span, List<Span> all, string code, string text)
     {

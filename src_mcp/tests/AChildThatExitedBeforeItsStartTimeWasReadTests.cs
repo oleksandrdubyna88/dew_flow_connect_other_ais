@@ -91,14 +91,15 @@ public sealed class AChildThatExitedBeforeItsStartTimeWasReadTests
         // the child is provably alive when the read fails (checked inside the seam) and ends a few milliseconds after.
         var tracker = new RecordingTracker();
         var aliveWhenTheReadFailed = false;
+        // The end of the child has to land AFTER the failed read, inside the launcher's wait: a synchronous Kill in the seam does not do
+        // that — on Windows Kill returns once the child is gone, so the launcher's first look already sees it ended and the test could
+        // not tell the single `HasExited` read from the waiting `HasEnded` (watched: the break-it stayed green). So the end is a task the
+        // test OWNS — kept in a variable, awaited in the `finally` below so its failure is seen and it never outlives the test.
+        var ending = Task.CompletedTask;
         var launcher = new ProcessLauncher(tracker, process =>
         {
             aliveWhenTheReadFailed = !process.HasExited;
-            _ = Task.Run(async () =>
-            {
-                await Task.Delay(TimeSpan.FromMilliseconds(10));
-                KillIfStillThere(process);
-            });
+            ending = EndsTheChildSoon(process);
 
             throw Failure(spelling);
         });
@@ -106,9 +107,16 @@ public sealed class AChildThatExitedBeforeItsStartTimeWasReadTests
 
         var act = () => launcher.RunAsync(request, TestContext.Current.CancellationToken);
 
-        await act.Should().NotThrowAsync("a child that ended within the wait is a child that is gone, not one that could not be recorded");
-        aliveWhenTheReadFailed.Should().BeTrue("the test is only a test of the race if the child had NOT yet exited when the read failed");
-        tracker.Recorded.Should().BeEmpty("an ended child has nothing left for an orphan sweep to find");
+        try
+        {
+            await act.Should().NotThrowAsync("a child that ended within the wait is a child that is gone, not one that could not be recorded");
+            aliveWhenTheReadFailed.Should().BeTrue("the test is only a test of the race if the child had NOT yet exited when the read failed");
+            tracker.Recorded.Should().BeEmpty("an ended child has nothing left for an orphan sweep to find");
+        }
+        finally
+        {
+            await ending;
+        }
     }
 
     [Fact]
@@ -139,6 +147,13 @@ public sealed class AChildThatExitedBeforeItsStartTimeWasReadTests
 
         throw Failure(spelling);
     };
+
+    /// <summary>Ends the child a few milliseconds from now — after the failed start-time read, within the launcher's 100 ms wait.</summary>
+    private static async Task EndsTheChildSoon(Process process)
+    {
+        await Task.Delay(TimeSpan.FromMilliseconds(10));
+        KillIfStillThere(process);
+    }
 
     private static void KillIfStillThere(Process process)
     {

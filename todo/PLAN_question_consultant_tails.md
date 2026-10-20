@@ -1,8 +1,8 @@
 # PLAN — the question consultant's tails
 
 > Status: **plan only, nothing implemented yet.** Scope: `src_mcp/runners` (the shipped consultant's and
-> reviewer's confinement, the api runtime), `src_mcp/src/Store` (question-consult pruning), `src_mcp/tests` (one flaky
-> test), `shared/runtime-capabilities.json`.
+> reviewer's confinement, the api runtime), `src_mcp/src/Store` (question-consult pruning),
+> `shared/runtime-capabilities.json`.
 >
 > Related docs: [PLAN_question_consultant.md](PLAN_question_consultant.md) §9 (where these were set aside),
 > [RESULTS_question_consultant_capabilities.md](../research/RESULTS_question_consultant_capabilities.md) (the
@@ -10,7 +10,7 @@
 
 ## Goal
 
-The question consultant shipped (stories S1–S5 of its plan) with five things deliberately left out, plus one flaky test
+The question consultant shipped (stories S1–S5 of its plan) with five things deliberately left out, plus one flaky test (moved to another plan, see §6)
 found while building it and one gap the live check found (item 7). Each is small, but none can be done well inside that plan. One of them is a security release in its own
 right: the deny list the **existing** consultant and reviewer rely on was measured leaking.
 

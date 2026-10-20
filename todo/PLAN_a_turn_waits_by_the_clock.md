@@ -1,7 +1,7 @@
 # PLAN — a file turn waits by the clock, not by a count of tries
 
 > Status: **plan only, nothing implemented yet, 2026-10-03.** Scope: `src_mcp/src/Server/SessionStore.cs`
-> (`SessionTurn.Take`), its callers (`CadenceStore`, `ConsultationStore`, `Escalations`, `SessionStore`), and the
+> (`SessionTurn.Take`), its callers (`CadenceStore`, `Escalations`, `RecordFiles`, `QuestionConsultStore`, `QuestionPhaseStore`, and `SessionStore` itself), and the
 > review-tree setup's git timeout in the test harness.
 >
 > Related docs: [module_server.md](../research/module_server.md); found while building
@@ -57,6 +57,6 @@ under load lose one. A user's gate call on a loaded machine can meet the same se
 |---|---|---|
 | `SessionTurn.Take` waits to a deadline (this plan, all of it) | **this plan** | that plan orders it (§9: any time, no clock seam needed) and keeps its CI evidence (§3, C19) |
 | The evidence since 2026-10-03 | — | `CadenceStoreTests.ManyClosesAtOnce_AllLand` failed in CI on 2026-09-28 (Linux), 2026-10-13 (Linux) and **2026-10-19 on `main`** (Windows) |
-| Two corrections | **this plan** | the caller list is stale — `ConsultationStore` no longer calls `Take` directly; `RecordFiles.cs:51`, `QuestionConsultStore.cs:104` and `QuestionPhaseStore.cs:87`, `:108` now do; and the clock-based wait already exists — `HeldFile.TakeWithin` (`src_mcp/runners/Files/HeldFile.cs:167-180`), so the fix calls it rather than writing a second one |
+| Two corrections | **this plan** | the caller list was stale — `ConsultationStore` does not call `Take` directly (removed from the scope line above); `RecordFiles.cs:51`, `QuestionConsultStore.cs:104` and `QuestionPhaseStore.cs:87`, `:108` do, next to `CadenceStore.cs:53`, `:66`, `Escalations.cs:272`, `:299`, `:343` and `SessionStore.cs:534`, `:572`; and the clock-based wait already exists — `HeldFile.TakeWithin` (`src_mcp/runners/Files/HeldFile.cs:167-180`), so the fix calls it rather than writing a second one |
 
 Disjoint: that plan builds nothing in `SessionStore`.
