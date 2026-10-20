@@ -48,11 +48,14 @@ internal static class RoundAuthorsMode
 
     /// <param name="env">The environment the data directory is resolved from, exactly as <c>--round-counts</c> resolves it.</param>
     /// <param name="output">stdout — the answer, and nothing else ever.</param>
-    /// <param name="note">stderr — a refusal's sentence, through the channel this binary already prefixes.</param>
+    /// <param name="stderr">stderr — a refusal's sentence, through the channel this binary already prefixes. Every sentence of the mode is written through
+    /// <see cref="Printed"/> HERE, the one place the mode writes stderr: a refusal quotes what it refuses (a flag value, a selection word or a member name
+    /// of an <c>--add</c> file, an exception message), and none of that may carry a terminal escape.</param>
     /// <param name="clock">Where an unset <c>--until</c> ends the window.</param>
     /// <param name="readFile">Reads an <c>--add</c> file as text; <c>File.ReadAllText</c> in production, which honours a byte-order mark.</param>
-    internal static int Run(string[] args, Func<string, string?> env, TextWriter output, Action<string> note, TimeProvider clock, Func<string, string> readFile)
+    internal static int Run(string[] args, Func<string, string?> env, TextWriter output, Action<string> stderr, TimeProvider clock, Func<string, string> readFile)
     {
+        Action<string> note = sentence => stderr(Printed(sentence));
         var parsed = Parse(args, clock);
         if (!parsed.Ok)
         {
@@ -64,6 +67,13 @@ internal static class RoundAuthorsMode
 
         return Answer(parsed.Value, PanelSettings.FromEnvironment(env).DataDir, output, note, readFile);
     }
+
+    /// <summary>
+    /// A sentence as the terminal may see it: through <see cref="RoundAuthorsText.Printable"/> (the one sanitiser), whole. Every refusal of this mode
+    /// is ONE line and the channel adds its own line end, so a line break inside the sentence is never ours — it came from quoted input, and an
+    /// <c>--add</c> file that could place one would forge a second line of this binary's own voice. It is shown as <c>?</c> like any other.
+    /// </summary>
+    internal static string Printed(string sentence) => RoundAuthorsText.Printable(sentence);
 
     private static int Answer(Request request, string dataDir, TextWriter output, Action<string> note, Func<string, string> readFile)
     {
