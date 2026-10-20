@@ -85,7 +85,7 @@ internal static class AcpAgent
     }
 
     /// <summary>
-    /// The script beside the work folder — <c>&lt;cwd&gt;/../agent.json</c>, the place <c>FakeAcpAgent</c> writes it — else the one the steering file in the temp directory names
+    /// The script beside the work folder — <c>&lt;cwd&gt;/../agent.json</c>, the place <c>FakeAcpAgent</c> writes it — else the one the steering file beside the fake's binary (<see cref="MinimalSteeringFile"/>) names
     /// (<c>FAKECLI_ACP_SCRIPT</c>, the same file a minimal-environment vendor launch reads: a round's snapshot is a folder no test can name beforehand, and a launch that builds the agent's
     /// environment from scratch carries no variable) — or empty when there is none.
     /// </summary>
@@ -98,7 +98,7 @@ internal static class AcpAgent
 
     private static string SteeredScript()
     {
-        var steering = Path.Combine(Path.GetTempPath(), "fakecli-minimal.json");
+        var steering = MinimalSteeringFile.Location;
         if (!File.Exists(steering))
         {
             return string.Empty;

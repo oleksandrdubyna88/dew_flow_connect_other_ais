@@ -21,7 +21,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 /// <remarks>
 /// The child gets the MINIMAL environment, so no <c>FAKECLI_*</c> variable reaches it: the fake is steered by the file in
-/// the temp directory (<c>fakecli-minimal.json</c>), which is why this class shares the <c>fakecli-env</c> collection.
+/// the file beside the fake's binary (<c>FakeCliSteering</c>), which is why this class shares the <c>fakecli-env</c> collection.
 /// </remarks>
 [Collection("fakecli-env")]
 public sealed class AVibeReviewerRunsThroughAFakeVibeTests : IAsyncLifetime
@@ -30,9 +30,8 @@ public sealed class AVibeReviewerRunsThroughAFakeVibeTests : IAsyncLifetime
 
     private static string FakeCliExe => Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "FakeCli.exe" : "FakeCli");
 
-    private static string SteeringFile => Path.Combine(Path.GetTempPath(), "fakecli-minimal.json");
-
     private readonly ProcessLauncher _launcher = new();
+    private IDisposable _steering = FakeCliSteering.Unwritten;
     private readonly TempDir _dir = TempDir.For("coai-answers-vibefake-");
     private string? _parentMcp;
 
@@ -49,7 +48,7 @@ public sealed class AVibeReviewerRunsThroughAFakeVibeTests : IAsyncLifetime
     public ValueTask DisposeAsync()
     {
         Environment.SetEnvironmentVariable("VIBE_MCP_SERVERS", _parentMcp);
-        File.Delete(SteeringFile);
+        _steering.Dispose();
         _dir.Dispose();
 
         return ValueTask.CompletedTask;
@@ -66,7 +65,7 @@ public sealed class AVibeReviewerRunsThroughAFakeVibeTests : IAsyncLifetime
         """{"outcome":"finished","usage":{"input_tokens":1200,"output_tokens":34,"cached_input_tokens":0,"total_tokens":1234},"cost_usd":0.01,"config":{"active_model":"{{env:VIBE_ACTIVE_MODEL}}"}}""";
 
     private void Steer(string answer, string envRecord = "", string homeWrite = "", string recordDir = "", string version = "2.26.1") =>
-        File.WriteAllText(SteeringFile, JsonSerializer.Serialize(new Dictionary<string, string>
+        _steering = FakeCliSteering.Write(new Dictionary<string, string>
         {
             ["FAKECLI_STDOUT"] = Array(answer),
             ["FAKECLI_EXPORT_TEXT"] = Export,
@@ -74,7 +73,7 @@ public sealed class AVibeReviewerRunsThroughAFakeVibeTests : IAsyncLifetime
             ["FAKECLI_RECORD_ENV"] = envRecord,
             ["FAKECLI_HOME_WRITE"] = homeWrite,
             ["FAKECLI_RECORD_DIR"] = recordDir,
-        }));
+        });
 
     private ReviewerInvocation Invocation()
     {
