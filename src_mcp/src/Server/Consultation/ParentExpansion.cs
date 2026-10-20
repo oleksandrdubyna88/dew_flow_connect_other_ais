@@ -22,7 +22,7 @@ internal sealed record Expanded(string Refusal, IReadOnlyDictionary<int, IReadOn
 
 /// <summary>
 /// A granted root that is NOT a work tree, expanded into the repositories beneath it (D1–D7 and D9 of
-/// <c>todo/PLAN_vibe_reads_a_folder_of_repositories.md</c>): the walk, git's confirmation of each candidate as the TOP of a work tree,
+/// <c>research/PLAN_vibe_reads_a_folder_of_repositories.md</c>): the walk, git's confirmation of each candidate as the TOP of a work tree,
 /// the linked worktrees left out, the bound — all of it over the WHOLE row before the first copy — and then each selected
 /// repository through the one copy method.
 /// </summary>

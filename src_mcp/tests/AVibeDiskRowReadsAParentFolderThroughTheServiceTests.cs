@@ -8,7 +8,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// S15 of <c>todo/PLAN_vibe_reads_a_folder_of_repositories.md</c> — the product flow: a REAL Vibe question-consultant row, the whole
+/// S15 of <c>research/PLAN_vibe_reads_a_folder_of_repositories.md</c> — the product flow: a REAL Vibe question-consultant row, the whole
 /// <c>ask_consultants</c> service, git for real, the vibe CLI played in process, granted a PARENT folder. The pieces are pinned one by one
 /// in <c>AVibeDiskRowExpandsAParentFolderTests</c> and <c>AVibeDiskRowSaysWhatItSkippedTests</c>; this is the only test that drives all
 /// of them together from the person's side: where the launch stands, what it can read, what the prompt says, and what is left after it.

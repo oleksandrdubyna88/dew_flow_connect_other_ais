@@ -12,7 +12,7 @@ namespace CoaiMcp.Runners.Context;
 /// (epic 2's plan round, gemini) — and it lives HERE, the neutral side, with the review trees delegating
 /// to it, so neither capability depends on the other (epic 2's code round, codex).</para>
 /// <para>A Vibe disk row asks the same question of every repository it finds (D9 of
-/// <c>todo/PLAN_vibe_reads_a_folder_of_repositories.md</c>): a linked worktree is a checkout whose git dir is not its
+/// <c>research/PLAN_vibe_reads_a_folder_of_repositories.md</c>): a linked worktree is a checkout whose git dir is not its
 /// common dir, and the key of that common dir says which main checkout it belongs to.</para>
 /// </remarks>
 public static class RepositoryIdentity
