@@ -197,17 +197,19 @@ test('the Settings sheet is byte-identical after its tokens, chips and badges mo
   // Settings tabs' two columns, bd11f64a) from main's own file — built against this tree's settingsPage, never from
   // the merged sheet — so it still proves the extraction changed nothing. A deliberate change re-pins it, on purpose:
   // re-pinned 2026-10-10 for the Models card's lock line (`.catalog .card .lock`, one rule added in catalogCss.ts),
-  // and again for the card's `.rounds-line` rule (story 2.4 of todo/PLAN_every_round_is_counted.md): the sheet with
+  // and again for the card's `.rounds-line` rule (story 2.4 of research/PLAN_every_round_is_counted.md): the sheet with
   // that comment and rule taken out still hashes to the lock line's pin, a7f97106…2aa5. Re-pinned 2026-10-11 when
   // paths per side E5 (`.tab-mark`, `.path-missing`/`.path-unknown` sharing `.skew`'s shape) met it on main: main's
   // sheet alone pinned e6185fd3…f4ab, E5's alone ddad3645…a103; this sheet carries both changes and nothing else.
-  // Re-pinned 2026-10-11 for the card's `.reset-line` rule (story 5.3b of todo/PLAN_every_round_is_counted.md) and for
+  // Re-pinned 2026-10-11 for the card's `.reset-line` rule (story 5.3b of research/PLAN_every_round_is_counted.md) and for
   // paths per side E4 (`fieldset.other-side` and its legend, after `.path-mark`), when the two met: each alone pinned
   // 456ad98a…fff8 (`.reset-line`) and bddeea71…4791 (paths per side E4) over becbdd07…877c; this sheet carries both.
   // Re-pinned 2026-10-13 for the card's `.skew.warned` rule (a row coai-mcp runs with a warning — an unmeasured Vibe):
   // the sheet with that comment and rule taken out still hashes to the previous pin, 4536314c…92a1.
+  // Re-pinned 2026-10-19 when that plan moved from todo/ to research/: the `.rounds-line` comment names the plan's path,
+  // and the sheet with only that path put back hashes to the previous pin, 1d7f4705…d514.
   assert.equal(createHash('sha256').update(CATALOG_CSS).digest('hex'),
-    '1d7f4705db0a6186499c0ba791ca503868e8250086da4c75bcef77606effd514');
+    '862e9808b1d116fa30806fd2cc1c944a9a351413adbc9ebf391fbc57ceb9d82e');
   for (const piece of [CATALOG_TOKENS, CATALOG_CHIPS, CATALOG_BADGES]) {
     assert.ok(CATALOG_CSS.includes(piece) && TEAM_TAB_CSS.includes(piece), 'both sheets wear the one shared piece');
   }

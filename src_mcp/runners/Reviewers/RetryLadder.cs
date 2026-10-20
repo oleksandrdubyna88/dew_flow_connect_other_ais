@@ -78,7 +78,7 @@ public static class RetryLadder
     /// <param name="reason">The vendor's own words (<see cref="ReviewerOutcome.RateLimited.Reason"/>).</param>
     /// <param name="left">What is left of the reviewer's own deadline — <see cref="Remaining"/>.</param>
     /// <remarks>
-    /// <para>Story 5.3c of todo/PLAN_every_round_is_counted.md, as E5's plan round narrowed it: <b>a stated reset is never
+    /// <para>Story 5.3c of research/PLAN_every_round_is_counted.md, as E5's plan round narrowed it: <b>a stated reset is never
     /// waited out locally.</b> agy's verbatim <i>"Individual quota reached … Resets in 88h49m9s."</i> says none of
     /// <c>RateLimit.Spent</c>'s words, so a local agy row climbed the whole ladder — four launches, each refused — into a
     /// reset days away. The reset is read by <see cref="CooldownParser.StatedReset"/>, the parser the Team server parks a

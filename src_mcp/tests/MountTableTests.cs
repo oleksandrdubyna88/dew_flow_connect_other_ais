@@ -5,7 +5,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// The ported mount table (DL6 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): which mount holds a path, and what a mount is. The refusal built on it is
+/// The ported mount table (DL6 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>): which mount holds a path, and what a mount is. The refusal built on it is
 /// <see cref="MountLocality"/> (<c>MountLocalityTests</c>). Pure text — these run on every platform.
 /// </summary>
 /// <remarks>

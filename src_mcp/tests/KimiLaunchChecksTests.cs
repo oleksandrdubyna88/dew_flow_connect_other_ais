@@ -180,7 +180,7 @@ public sealed class KimiLaunchChecksTests
         KimiEnvironment.FlagOf(Raw("--model"), "--model").Should().BeEmpty("a flag with no value after it has none");
     }
 
-    // ---------- S2.24, lifted for WSL2 by DL1 of todo/PLAN_kimi_and_vibe_on_linux.md (E6) ----------
+    // ---------- S2.24, lifted for WSL2 by DL1 of research/PLAN_kimi_and_vibe_on_linux.md (E6) ----------
 
     [Theory]
     [InlineData(HostKind.MacOs)]

@@ -8,7 +8,7 @@ import {
 import { LineRate, parseUsage } from '../usage';
 
 /**
- * Tokens and money beside every count (story 2.5 of todo/PLAN_every_round_is_counted.md): per vendor row × model × kind,
+ * Tokens and money beside every count (story 2.5 of research/PLAN_every_round_is_counted.md): per vendor row × model × kind,
  * tokens in / cached / out / reasoning with the uncaptured lines counted apart, recorded turns, medians per RECORDED
  * TURN, money reported or estimated with its floor — and the per-round division the Rounds block will show once the
  * round counts arrive (stories 2.1–2.3).

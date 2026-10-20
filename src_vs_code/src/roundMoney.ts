@@ -3,7 +3,7 @@ import { chatRowProvider, ChatVendorOf } from './chatSpendRows';
 import { costText, Estimate, LineRate, lineCost, shortNumber, totalCost, uncaptured, UNKNOWN, UsageEntry } from './usage';
 
 /**
- * Tokens and money beside every count (story 2.5 of todo/PLAN_every_round_is_counted.md).
+ * Tokens and money beside every count (story 2.5 of research/PLAN_every_round_is_counted.md).
  *
  * <p>Per vendor row × model × kind — review, consult, question, chat — inside one window: tokens in / cached / out /
  * reasoning, the recorded turns and the failed ones, the median input and output per ledger line, and the money. And

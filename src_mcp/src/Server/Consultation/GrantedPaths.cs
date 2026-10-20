@@ -1,5 +1,6 @@
 using CoaiMcp.Runners.Context;
 using CoaiMcp.Runners.Files;
+using CoaiMcp.Runners.Worktrees;
 
 namespace CoaiMcp.Server;
 
@@ -55,13 +56,10 @@ internal static class GrantedPaths
         for (var at = folder; at is not null; at = Path.GetDirectoryName(at))
         {
             yield return at;
-            if (HoldsGit(at))
+            if (GitMarker.HasGit(at))
             {
                 yield break;
             }
         }
     }
-
-    private static bool HoldsGit(string folder) =>
-        Directory.Exists(Path.Combine(folder, ".git")) || File.Exists(Path.Combine(folder, ".git"));
 }

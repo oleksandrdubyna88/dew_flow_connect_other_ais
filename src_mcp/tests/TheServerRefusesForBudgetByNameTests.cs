@@ -6,7 +6,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// The client half of "no start without budget" — story 4.3 of <c>todo/PLAN_every_round_is_counted.md</c>: the Team
+/// The client half of "no start without budget" — story 4.3 of <c>research/PLAN_every_round_is_counted.md</c>: the Team
 /// server ends a job whose caller can no longer wait with its OWN name on the wire, <c>no_budget</c>, and the shim reads
 /// that name — never the sentence beside it — into its own exit, <see cref="RemoteAsk.NoBudget"/>.
 /// </summary>

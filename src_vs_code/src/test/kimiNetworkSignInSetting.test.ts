@@ -17,7 +17,7 @@ import { pageTree } from './pageTree';
 import { lastWrite, panelState, runPanel } from './panelPageHarness';
 
 /**
- * `coai.kimiAllowNetworkSignIn` — E6 of todo/PLAN_kimi_and_vibe_on_linux.md, DL6 and Q7. The server half (coai-mcp) refuses a Kimi sign-in
+ * `coai.kimiAllowNetworkSignIn` — E6 of research/PLAN_kimi_and_vibe_on_linux.md, DL6 and Q7. The server half (coai-mcp) refuses a Kimi sign-in
  * folder on network storage (nfs, cifs, sshfs …) by default, because a Kimi on ANOTHER machine that shares the folder can refresh the
  * same rotating token and sign this one out. This is the person's way to say "I never run Kimi elsewhere": a setting, written to the
  * data directory's `settings.json` as `COAI_KIMI_ALLOW_NETWORK_SIGNIN` — which `PanelSettings.KimiAllowNetworkSignIn` reads — and a

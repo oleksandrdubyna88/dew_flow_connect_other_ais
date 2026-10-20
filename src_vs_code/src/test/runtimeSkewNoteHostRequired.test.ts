@@ -5,7 +5,7 @@ import { runtimeSkewNote } from '../runtimeSince';
 import type { Vendor } from '../vendors';
 
 /**
- * The host is a REQUIRED argument of `runtimeSkewNote` (E3 of todo/PLAN_kimi_and_vibe_on_linux.md, code gate).
+ * The host is a REQUIRED argument of `runtimeSkewNote` (E3 of research/PLAN_kimi_and_vibe_on_linux.md, code gate).
  *
  * <p>It used to default to `'windows'`, so a caller that forgot it gave a WSL2 or native-Linux card no host note at all —
  * silently the Windows answer. A missing argument must be a compile error. That is a property of the TYPE, which a runtime

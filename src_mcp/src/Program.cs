@@ -293,7 +293,7 @@ internal static class Program
 
         /// <summary>
         /// Rounds per vendor row over the trailing 5 h / 24 h / 7 d, by stage, from the rounds database —
-        /// the local counter the Spending tab reads (story 2.1 of <c>todo/PLAN_every_round_is_counted.md</c>).
+        /// the local counter the Spending tab reads (story 2.1 of <c>research/PLAN_every_round_is_counted.md</c>).
         /// </summary>
         /// <remarks>
         /// Its own <c>args[0]</c> for the reason <c>--findings-many</c> is: a flag on <c>--log</c> would

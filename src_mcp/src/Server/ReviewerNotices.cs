@@ -48,7 +48,7 @@ internal static class ReviewerNotices
         new Dictionary<Type, string>
         {
             [typeof(ReviewerOutcome.TimedOut)] = ServerNoticeCodes.ReviewerTimedOut,
-            // The sixth ending (story 3.2 of todo/PLAN_every_round_is_counted.md), written down like the five: a reviewer
+            // The sixth ending (story 3.2 of research/PLAN_every_round_is_counted.md), written down like the five: a reviewer
             // the caller's token killed may well have been billed, and until this row it was filed as a timeout.
             [typeof(ReviewerOutcome.Cancelled)] = ServerNoticeCodes.ReviewerCancelled,
             [typeof(ReviewerOutcome.RateLimited)] = ServerNoticeCodes.ReviewerRateLimited,

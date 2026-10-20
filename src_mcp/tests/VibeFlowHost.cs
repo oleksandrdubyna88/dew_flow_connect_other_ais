@@ -7,7 +7,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// The host a scenario-harness Vibe flow runs as (E2 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>, §8): the real service builds its own
+/// The host a scenario-harness Vibe flow runs as (E2 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>, §8): the real service builds its own
 /// <see cref="VibeRuntime"/>, which takes <see cref="VibeHost.Current"/>, so a flow that must run as a WSL2 host on a CI runner that is not
 /// one gives it through the per-flow seam (<see cref="VibeHost.Using"/>) — with a fake person's <c>~/.vibe/.env</c> in the flow's own scratch
 /// folder, never the machine's.

@@ -58,7 +58,7 @@
 //   M-K7b  one answered turn per curated id (k3, kimi-for-coding); the highspeed 401 re-run once
 //   M-K5b  /usage after a session/load on the same cwd: cumulative or per turn
 //
-// Linux (E1 of todo/PLAN_kimi_and_vibe_on_linux.md, §5 — for E4's L-K cells): `kimi` and the shim without `.exe`
+// Linux (E1 of research/PLAN_kimi_and_vibe_on_linux.md, §5 — for E4's L-K cells): `kimi` and the shim without `.exe`
 // (`<KIMI_INSTALL_DIR or ~/.kimi-code>/bin/kimi`, DL5), the credentials link a directory SYMLINK removed by `unlink` of its own name
 // (DL6), the built environment MinimalUnix with HOME alone redirected (DL11), the canaries `python3`, and the ACP client's agent
 // in its own process group so its end reaches the group (lib/kimi.mjs). No Kimi cell is run by E1: these arms are tested by the

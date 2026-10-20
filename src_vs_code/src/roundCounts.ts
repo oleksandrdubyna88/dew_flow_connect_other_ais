@@ -1,5 +1,5 @@
 /**
- * What `coai-mcp --round-counts` answers, read as data (story 2.2 of todo/PLAN_every_round_is_counted.md).
+ * What `coai-mcp --round-counts` answers, read as data (story 2.2 of research/PLAN_every_round_is_counted.md).
  *
  * <p>Types and pure functions only, so the page and the tests can import it: the spawn is `roundCountsRead.ts`, through
  * `serverRun`. The contract is the mode's (`src_mcp/src/Server/RoundCountsMode.cs`, documented in
@@ -53,7 +53,7 @@ export interface RoundCountsAnswer {
   readonly modelsKnownSince: string | null;
   /**
    * Why this machine's answer carries no vendor gauge figure — the shared derivation's code (`local-capture-deferred`
-   * today: story 6.1b is deferred), read from `gauge.unavailable` (story 6.2 of todo/PLAN_every_round_is_counted.md).
+   * today: story 6.1b is deferred), read from `gauge.unavailable` (story 6.2 of research/PLAN_every_round_is_counted.md).
    * Absent from a `coai-mcp` older than the field, and then nothing is said about a gauge.
    */
   readonly gaugeUnavailable?: string;

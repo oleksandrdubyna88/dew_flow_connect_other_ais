@@ -13,7 +13,7 @@ import { costText, shortNumber } from './usage';
 import type { Vendor } from './vendors';
 
 /**
- * The Spending tab's first block: Rounds (story 2.3 of todo/PLAN_every_round_is_counted.md), and the Models card's
+ * The Spending tab's first block: Rounds (story 2.3 of research/PLAN_every_round_is_counted.md), and the Models card's
  * line beside it (story 2.4).
  *
  * <p>Pure: the counts (`--round-counts`, through the cache), the last seven days of the ledger, the chat lines, the
@@ -69,7 +69,7 @@ function serverOf(row: Vendor): string {
 /**
  * The kinds that spend a vendor beside its rounds, and what one of their lines is called.
  *
- * <p>`probe` since story 3.3 of todo/PLAN_every_round_is_counted.md: `coai-mcp --probe-api --model` writes a line per
+ * <p>`probe` since story 3.3 of research/PLAN_every_round_is_counted.md: `coai-mcp --probe-api --model` writes a line per
  * paid completion. Its money is the row's — a row's total holds every kind — and it is said here as its own kind, so it
  * is never read as a round: it has no model line and no round.</p>
  */

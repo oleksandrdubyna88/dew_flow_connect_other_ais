@@ -6,7 +6,7 @@ namespace CoaiMcp.Runners.Processes;
 public sealed record TreeEnd(IReadOnlyList<ProcessIdentity> Survivors);
 
 /// <summary>
-/// Who ends an ACP agent's tree, and what it writes down while it does (DL9 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): the transport asks it to end the agent instead of killing
+/// Who ends an ACP agent's tree, and what it writes down while it does (DL9 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>): the transport asks it to end the agent instead of killing
 /// the tree itself, so a Linux Kimi turn is ended under a subreaper, by identity, with a survivor marker — and every other profile and host keeps today's end.
 /// </summary>
 public interface ITreeSupervisor

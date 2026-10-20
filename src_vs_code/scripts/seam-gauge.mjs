@@ -1,5 +1,5 @@
 /**
- * The vendor-gauge leg of the seam (story 6.2 of todo/PLAN_every_round_is_counted.md — E6's plan round: a real-product
+ * The vendor-gauge leg of the seam (story 6.2 of research/PLAN_every_round_is_counted.md — E6's plan round: a real-product
  * scenario from the stored reading to what an admin reads).
  *
  * <p>The Team server WRITES the gauge in two places — the slot's `state.json` (served as the catalog's `slots.gauge`,

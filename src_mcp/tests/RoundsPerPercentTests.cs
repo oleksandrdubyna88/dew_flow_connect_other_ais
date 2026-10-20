@@ -5,7 +5,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// Rounds per 1 % of a vendor's window (story 6.2 of todo/PLAN_every_round_is_counted.md) — the formula E6's plan round
+/// Rounds per 1 % of a vendor's window (story 6.2 of research/PLAN_every_round_is_counted.md) — the formula E6's plan round
 /// fixed: per window (limit identity + duration), between a baseline reading and the first later reading of the SAME window instance (same
 /// <c>resetsAt</c>) whose percentage rose, the rounds counted between them over the rise; an interval is unusable — never 0 or infinity — when
 /// the window reset, or a reading is stale or missing; a plateau (no rise) keeps its rounds until the percentage rises (story

@@ -9,7 +9,7 @@
 // junction (the token refresh, RESULTS §11). A junction is removed by its OWN name (rmdirSync on the link), never through it;
 // after every disposal the target folder must still hold the files it held.
 //
-// Linux (E1 of todo/PLAN_kimi_and_vibe_on_linux.md): the "junction" is a directory SYMLINK there (DL6), removed by `unlink` of its
+// Linux (E1 of research/PLAN_kimi_and_vibe_on_linux.md): the "junction" is a directory SYMLINK there (DL6), removed by `unlink` of its
 // own name (rmdir refuses a symlink, ENOTDIR — measured red on WSL first); the built environment is MinimalUnix and the OS-home
 // redirect is HOME alone (DL11). Every platform fact takes the platform as an argument.
 import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, rmdirSync, writeFileSync } from 'node:fs';
@@ -185,7 +185,7 @@ export function builtEnv({ home, pin = true, profile = '', personsBin = '', plat
 }
 
 /**
- * The Linux arm (DL11 of todo/PLAN_kimi_and_vibe_on_linux.md): MinimalUnix plus the same two variables; the OS-home redirect is
+ * The Linux arm (DL11 of research/PLAN_kimi_and_vibe_on_linux.md): MinimalUnix plus the same two variables; the OS-home redirect is
  * `HOME` alone (Kimi derives its XDG folders from it — the Unix minimal set carries no XDG_*); the person's bin first on a
  * `:`-separated PATH. No Windows name, and no NoDefaultCurrentDirectoryInExePath (a Windows-only variable).
  */

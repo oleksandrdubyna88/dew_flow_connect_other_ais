@@ -27,7 +27,7 @@ public enum StandardTier
 /// <param name="Printed">
 /// The release the <c>--version</c> answer named, in the CLI's spelling — <c>codex-cli 0.160.0</c> — else empty. It is
 /// the one version of a local launch's CLI this machine already asks for, so a ledger line names it rather than spawn a
-/// second <c>--version</c> per launch (story 3.4 of todo/PLAN_every_round_is_counted.md).
+/// second <c>--version</c> per launch (story 3.4 of research/PLAN_every_round_is_counted.md).
 /// </param>
 /// <remarks>
 /// <para><b>Why the argv has to ask.</b> Measured 2026-10-07 (research/RESULTS_codex_service_tier_versions_2026-10-07.md):

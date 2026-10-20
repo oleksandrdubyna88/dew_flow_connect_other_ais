@@ -45,7 +45,7 @@ export const OFFICIAL_SOURCES = {
   wingetIds: ['Git.Git', 'BurntSushi.ripgrep.MSVC', 'sharkdp.fd'],
   /**
    * What `apt-get install` and `dnf install` may be handed — the Linux Kimi line provisions the same two tools the Windows
-   * line does (DL12 of todo/PLAN_kimi_and_vibe_on_linux.md), from the distribution's OWN packages, named as the projects'
+   * line does (DL12 of research/PLAN_kimi_and_vibe_on_linux.md), from the distribution's OWN packages, named as the projects'
    * READMEs name them: `ripgrep`, and `fd-find` (Debian and Ubuntu install its program as `fdfind`, Fedora as `fd`). Nothing
    * else: a package of the caller's own, a local `.deb` and a pinned release are each outside the list.
    */
@@ -160,7 +160,7 @@ type Verb = (typeof VERBS)[number];
  *
  * <p>A step that names a privilege escalator ANYWHERE in its text is read by {@link privilegedStep} instead, and that is a rule of
  * its own: until it existed `sudo` was invisible here, because a step is refused only when it carries an install word — so `sudo rm -rf …` or
- * `sudo chmod …` beside one admitted URL was ADMITTED (S-K10 of todo/PLAN_kimi_and_vibe_on_linux.md, red against that parser). A step
+ * `sudo chmod …` beside one admitted URL was ADMITTED (S-K10 of research/PLAN_kimi_and_vibe_on_linux.md, red against that parser). A step
  * whose first command is a fetcher is refused unless it carries an admitted URL ({@link fetchesFromAdmittedUrl}).</p>
  */
 function stepPackages(step: string): number {

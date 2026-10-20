@@ -73,14 +73,14 @@ public static class CatalogEndpoints
 
     /// <summary>
     /// The newest gauge reading among the vendor's accounts, or null when none has one (story 6.1a of
-    /// todo/PLAN_every_round_is_counted.md). The reading only: which account read it stays on the box.
+    /// research/PLAN_every_round_is_counted.md). The reading only: which account read it stays on the box.
     /// </summary>
     private static GaugeReadingDto? LatestGauge(IReadOnlyList<AccountSlot> slots) =>
         slots.Select(s => s.Gauge).OfType<GaugeReadingDto>().MaxBy(reading => reading.ObservedUtc);
 
     /// <summary>
     /// When the first parked account comes back, in UTC — or empty when none is parked (story 5.3b of
-    /// todo/PLAN_every_round_is_counted.md). The instant only: which account it is stays on the box.
+    /// research/PLAN_every_round_is_counted.md). The instant only: which account it is stays on the box.
     /// </summary>
     private static string FirstBack(IReadOnlyList<AccountSlot> slots, DateTimeOffset nowUtc) =>
         slots.Where(s => s.IsCoolingDown(nowUtc)).Min(s => s.CooldownUntilUtc) is { } first
@@ -169,7 +169,7 @@ public sealed class VendorHealthCache(IProcessLauncher launcher, TimeSpan? ttl =
     /// <summary>
     /// The first line of what <paramref name="runtime"/>'s CLI last said of its own version, however long ago — or empty
     /// when nobody has asked yet, or it did not answer. NEVER a probe: this is what a job's ledger line names
-    /// (story 3.4 of todo/PLAN_every_round_is_counted.md), and a launch per job is the cost this cache exists to avoid.
+    /// (story 3.4 of research/PLAN_every_round_is_counted.md), and a launch per job is the cost this cache exists to avoid.
     /// </summary>
     /// <remarks>
     /// Stale is acceptable here where it is not for the catalog: a CLI is upgraded on the box in months, and the catalog's

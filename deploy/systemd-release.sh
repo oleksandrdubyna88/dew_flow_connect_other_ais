@@ -163,7 +163,7 @@ canary() {
     printf 'header = "Authorization: Bearer %s"\n' "$(session_token)" >"$cfg"
     trap 'rm -f "$cfg"' RETURN
 
-    # The canary says it is the deploy's OWN review (story 3.5 of todo/PLAN_every_round_is_counted.md), so a spending
+    # The canary says it is the deploy's OWN review (story 3.5 of research/PLAN_every_round_is_counted.md), so a spending
     # report can tell it from a person's — it used to be an ordinary `review`, told apart only by its token's email.
     # A server older than the kind refuses it with a 400 that says "'canary' is not a kind of job", before any vendor
     # starts, so the canary asks once more as a plain review rather than rolling back a release that is fine.

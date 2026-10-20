@@ -95,12 +95,12 @@ export interface SlotSummary {
   readonly needsSignIn: number;
   /**
    * When the first parked account comes back, in UTC — empty when none is parked (story 5.3b of
-   * todo/PLAN_every_round_is_counted.md). Absent from a server older than the field; an instant, never an account name.
+   * research/PLAN_every_round_is_counted.md). Absent from a server older than the field; an instant, never an account name.
    */
   readonly resetsUtc?: string;
   /**
    * The latest reading of the vendor's own gauge among this vendor's accounts (story 6.1a of
-   * todo/PLAN_every_round_is_counted.md) — absent from a server older than the field AND from one that never captured
+   * research/PLAN_every_round_is_counted.md) — absent from a server older than the field AND from one that never captured
    * a reading: the same absence, which story 6.2 renders as unavailable, never 0 %. Numbers, the vendor's own words and
    * instants only; never an account name.
    */
@@ -183,7 +183,7 @@ export interface VendorUsage {
    */
   readonly models?: readonly ModelUsage[];
   /**
-   * The server's own round counts (story 5.1 of todo/PLAN_every_round_is_counted.md) — a newer server only. Absent is an
+   * The server's own round counts (story 5.1 of research/PLAN_every_round_is_counted.md) — a newer server only. Absent is an
    * OLDER server, never a count of none: read them through {@link serverRounds}, which says "unavailable" for that.
    */
   readonly rounds?: number;
@@ -502,7 +502,7 @@ export function fetchUsage(
  * The usage route for a window and a scope.
  *
  * <p>A company request — the Team server tab's — also asks for the round windows (story 5.2 of
- * todo/PLAN_every_round_is_counted.md), so the rounds come from the same request, the same scan and the same answer as the
+ * research/PLAN_every_round_is_counted.md), so the rounds come from the same request, the same scan and the same answer as the
  * figures they sit beside, whatever window the admin chose. A server older than round counting ignores the parameter and
  * answers its own range; {@link serverRounds} tells that by the shape. Nothing personal shows server rounds, so a `me`
  * request asks for none.</p>

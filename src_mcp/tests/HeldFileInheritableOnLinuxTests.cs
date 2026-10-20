@@ -7,7 +7,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// L-N1 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c> (DL8; S-K4 and S-K5), on the primitive itself: <c>HeldFile.Take(path, inheritable: true)</c> on Linux. On Unix .NET turns a share mode into an
+/// L-N1 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c> (DL8; S-K4 and S-K5), on the primitive itself: <c>HeldFile.Take(path, inheritable: true)</c> on Linux. On Unix .NET turns a share mode into an
 /// advisory <c>flock</c>; two facts are unproven there — (a) that the combined share mode <c>None | Inheritable</c> still takes an EXCLUSIVE lock, (b) that the descriptor reaches a child started after
 /// the take and outlives its opener. Each arm is its own test, so a red names exactly the premise that broke.
 /// </summary>

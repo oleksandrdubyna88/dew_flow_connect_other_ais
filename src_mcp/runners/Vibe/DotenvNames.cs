@@ -20,7 +20,7 @@ public abstract record DotenvVerdict
     public sealed record Refused(int Line, DotenvRefusal Kind) : DotenvVerdict;
 }
 
-/// <summary>Why a line of the person's Vibe sign-in file is refused (DL2 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): four kinds, never one.</summary>
+/// <summary>Why a line of the person's Vibe sign-in file is refused (DL2 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>): four kinds, never one.</summary>
 public enum DotenvRefusal
 {
     /// <summary>Invalid UTF-8 (python-dotenv cannot decode it, so Vibe would not start), or a NUL byte on this line (python-dotenv DOES read and bind it — L-V6b — but Vibe cannot put that value in its environment). Refused either way.</summary>
@@ -37,7 +37,7 @@ public enum DotenvRefusal
 }
 
 /// <summary>
-/// The NAME grammar of the person's <c>~/.vibe/.env</c> (DL2 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>, A1 spec): which
+/// The NAME grammar of the person's <c>~/.vibe/.env</c> (DL2 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>, A1 spec): which
 /// variable names python-dotenv — the reader Vibe uses — would bind from the file's bytes, judged WITHOUT ever reading a value.
 /// </summary>
 /// <remarks>

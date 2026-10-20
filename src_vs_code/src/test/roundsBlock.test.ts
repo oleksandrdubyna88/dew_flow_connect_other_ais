@@ -13,7 +13,7 @@ import { BundledLog, bundledLogModule, runningDomPage } from './roundsLogPageHar
 import { counted, hoursAgo, NO_CHAT, snapshot, UNAVAILABLE, usageLine } from './roundCountsFixtures';
 
 /**
- * The Spending tab's first block, Rounds (story 2.3 of todo/PLAN_every_round_is_counted.md), and the Models card's line
+ * The Spending tab's first block, Rounds (story 2.3 of research/PLAN_every_round_is_counted.md), and the Models card's line
  * (story 2.4): counts per vendor row over three windows and by stage, model lines, the kinds beside, tokens and money
  * with their floors, the store named — and an unavailable read drawn as *count unavailable*, never a zero.
  */
@@ -100,7 +100,7 @@ test('consultations, questions and chat sit beside the rounds as recorded turns,
 });
 
 test('AProbe_IsItsOwnKind_NeverARound — a --probe-api completion sits beside the rounds as a probe, on no model line', () => {
-  // Story 3.3 of todo/PLAN_every_round_is_counted.md: `coai-mcp --probe-api --model` now writes a line per paid
+  // Story 3.3 of research/PLAN_every_round_is_counted.md: `coai-mcp --probe-api --model` now writes a line per paid
   // completion, of kind `probe`. Its money is the row's, but it is not a review — it must show as its own kind.
   const lines = [usageLine(), usageLine({ model: 'gpt-6-astra', kind: 'probe', role: 'json_schema' })];
   const html = roundsBlock(input({ snapshot: snapshot(counted(), lines) }));

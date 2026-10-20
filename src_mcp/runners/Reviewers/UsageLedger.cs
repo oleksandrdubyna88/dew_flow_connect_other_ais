@@ -43,13 +43,13 @@ public static class UsageKinds
 
     /// <summary>
     /// The deploy's own check — one real review per vendor the release script sends after a swap (story 3.5 of
-    /// todo/PLAN_every_round_is_counted.md). A Team-server kind: written by the server, never by this machine.
+    /// research/PLAN_every_round_is_counted.md). A Team-server kind: written by the server, never by this machine.
     /// </summary>
     public const string Canary = "canary";
 
     /// <summary>
     /// A MEASUREMENT a person ran from a terminal — <c>coai-mcp --probe-api --model</c>, whose request matrix makes
-    /// ten real completions against a metered key (story 3.3 of todo/PLAN_every_round_is_counted.md). It wrote nothing
+    /// ten real completions against a metered key (story 3.3 of research/PLAN_every_round_is_counted.md). It wrote nothing
     /// before, which is how a probe's spend sat in the vendor's bill and in no record here; it is its own kind rather
     /// than a review, because a probe is not a round and must never be counted as one.
     /// </summary>
@@ -148,7 +148,7 @@ public sealed record UsageEntry(
     /// the Team server rotated onto another account — or empty.
     /// </summary>
     /// <remarks>
-    /// Story 3.3 of todo/PLAN_every_round_is_counted.md: one ledger line per paid launch, and this is what ties them
+    /// Story 3.3 of research/PLAN_every_round_is_counted.md: one ledger line per paid launch, and this is what ties them
     /// back together, so retries, repairs and follow-ups are COUNTED from lines rather than inferred from a folded
     /// sum. Twelve hex characters of a fresh GUID on this machine (a turn lives inside one process, so it only has to
     /// be unique among the lines it sits beside); the job id on a Team server, where a job IS one turn. Empty on a
@@ -165,7 +165,7 @@ public sealed record UsageEntry(
 
     /// <summary>The runtime that ran the launch — <see cref="LaunchOptions.Cli"/> — or empty.</summary>
     /// <remarks>
-    /// <para><b>The eight fields below are story 3.4 of todo/PLAN_every_round_is_counted.md</b>: each line says what its
+    /// <para><b>The eight fields below are story 3.4 of research/PLAN_every_round_is_counted.md</b>: each line says what its
     /// launch RAN WITH. A cross-vendor measurement must say which CLI ran each model and at which effort and tier, and
     /// the ledger could not — the plan's hand-built answer had to reconstruct that a codex row inherited
     /// <c>~/.codex/config.toml</c>'s <c>high</c> effort and, for a while, its <c>priority</c> tier.</para>
@@ -217,7 +217,7 @@ public sealed record UsageEntry(
     /// WHY a launch the caller's token killed was killed — one of <see cref="EndCauses"/> — or empty.
     /// </summary>
     /// <remarks>
-    /// Story 3.2 of todo/PLAN_every_round_is_counted.md. Written by the Team server from the STORE's terminal record
+    /// Story 3.2 of research/PLAN_every_round_is_counted.md. Written by the Team server from the STORE's terminal record
     /// (the store fires the token at the transition and is the only thing that knows why), never from the runner's own
     /// recomputation; the line's <paramref name="Outcome"/> stays the failure's name (<c>Cancelled</c>), so a reader
     /// that groups by outcome is unchanged and one that asks "how many withdrawals against how many backstops" has a
@@ -231,7 +231,7 @@ public sealed record UsageEntry(
     /// of it (retries, repairs and follow-ups included) — or empty.
     /// </summary>
     /// <remarks>
-    /// Story 4.2 of todo/PLAN_every_round_is_counted.md: the Team server writes the round its request carried, so a round
+    /// Story 4.2 of research/PLAN_every_round_is_counted.md: the Team server writes the round its request carried, so a round
     /// is counted from the lines as one round however many launches it took. A LOCAL review line carries it too: the key
     /// the round engine stamped on the invocation, the same on the first launch, a repair, a follow-up and every earlier
     /// turn (<see cref="ReviewerInvocation.Round"/>). Empty on a line older than the field, on a line from a client that
@@ -256,7 +256,7 @@ public sealed record UsageEntry(
     /// The instant the vendor STATED its quota comes back, in UTC (<c>O</c> format) — or empty.
     /// </summary>
     /// <remarks>
-    /// Story 5.3b of todo/PLAN_every_round_is_counted.md: the last line of a turn that ended rate-limited carries the
+    /// Story 5.3b of research/PLAN_every_round_is_counted.md: the last line of a turn that ended rate-limited carries the
     /// reset its refusal stated — agy's <i>"Resets in 88h49m9s"</i> — read by <see cref="CooldownParser.StatedReset"/>,
     /// the parser the Team server parks a slot on, so the extension shows it without parsing vendor sentences itself.
     /// Empty on every other line, on a refusal that stated no time (never the server's guess), on a line older than the
@@ -269,7 +269,7 @@ public sealed record UsageEntry(
     /// When the vendor's own gauge was read on the account right after this launch, UTC (<c>O</c>) — or empty.
     /// </summary>
     /// <remarks>
-    /// <para><b>The three gauge fields are story 6.1a of todo/PLAN_every_round_is_counted.md</b>: the Team server reads
+    /// <para><b>The three gauge fields are story 6.1a of research/PLAN_every_round_is_counted.md</b>: the Team server reads
     /// <c>codex app-server</c> · <c>account/rateLimits/read</c> inside the slot's lease after each job, and every line of
     /// that job carries the reading (<see cref="GaugeOnLine"/>): when, the plan word, and EVERY window of EVERY limit the
     /// vendor reported, each with its limit, kind, length, use and reset. Story 6.2 derives rounds per 1 % from
@@ -346,7 +346,7 @@ public sealed class UsageLedger(string dataDir)
     /// whatever the outcome is: a reviewer whose turn 2 timed out, was cancelled or came back unreadable
     /// still cost what turn 1 cost, and a ledger that read only the terminal usage would file that turn
     /// as free — the very under-report this method was first fixed for, one turn over.</para>
-    /// <para><b>One line per launch, since story 3.3 of todo/PLAN_every_round_is_counted.md.</b> A turn that took a
+    /// <para><b>One line per launch, since story 3.3 of research/PLAN_every_round_is_counted.md.</b> A turn that took a
     /// repair, a follow-up or a step of the rate-limit ladder was ONE line, its launches summed into it, so a week's
     /// retries, repairs and follow-ups could not be counted. Each launch is its own line now, naming its attempt and
     /// sharing its turn's id; the lines add up to exactly what the folded line said, and a split that would not is
@@ -408,7 +408,7 @@ public sealed class UsageLedger(string dataDir)
 
     /// <summary>
     /// The reset a rate-limited ending STATED, as a UTC instant — or empty for any other ending, and for a refusal that
-    /// named no time (story 5.3b of todo/PLAN_every_round_is_counted.md). Read by the parser the Team server parks on.
+    /// named no time (story 5.3b of research/PLAN_every_round_is_counted.md). Read by the parser the Team server parks on.
     /// </summary>
     /// <remarks>
     /// Public since epic 5's code round: every LOCAL path that records a refusal — a reviewer's turn here, a consultation,
@@ -502,7 +502,7 @@ public sealed class UsageLedger(string dataDir)
     /// </remarks>
     /// <param name="resetsUtc">
     /// The reset the turn's refusal STATED — <see cref="StatedResetOf"/> of its terminal outcome — or empty. Epic 5's code
-    /// round of todo/PLAN_every_round_is_counted.md: a consultation, a consultant check and a question row are local
+    /// round of research/PLAN_every_round_is_counted.md: a consultation, a consultant check and a question row are local
     /// refusals like a reviewer's, and only the reviewer path wrote one, so the extension could not say when the vendor
     /// comes back after a consultation met its quota. Never set on a Team-server line: the overload below has no such
     /// parameter, because the server keeps the reset on the slot and says it in its catalog.
@@ -515,7 +515,7 @@ public sealed class UsageLedger(string dataDir)
     /// <summary>One Team-server launch of a job: the overload above, with what the launch ran with and where.</summary>
     /// <remarks>
     /// <para><paramref name="round"/> and <paramref name="clientAttempt"/> are what the job's REQUEST carried (story 4.2 of
-    /// todo/PLAN_every_round_is_counted.md) — the client's round id and its own word for the request — each empty when the
+    /// research/PLAN_every_round_is_counted.md) — the client's round id and its own word for the request — each empty when the
     /// request sent none or sent one the server dropped.</para>
     /// <para><paramref name="gauge"/> is the vendor's own gauge as read on the account right after the job (story 6.1a),
     /// <see cref="GaugeOnLine.None"/> when nothing was read. Required rather than defaulted, as <paramref name="ranWith"/>

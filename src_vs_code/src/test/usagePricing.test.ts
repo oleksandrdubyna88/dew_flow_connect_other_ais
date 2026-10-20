@@ -7,7 +7,7 @@ import { parseUsage, totalsByVendor, UsageEntry } from '../usage';
 import { Vendor } from '../vendors';
 
 /**
- * The spending tab prices each ledger LINE (story 2.5 of todo/PLAN_every_round_is_counted.md): by the model that
+ * The spending tab prices each ledger LINE (story 2.5 of research/PLAN_every_round_is_counted.md): by the model that
  * answered it, its cached input at the cached rate, a long-context tier per request, a reported cost never re-estimated,
  * and a total that could not price every line marked as a floor. The arithmetic is `TokenPrice.CostOf`'s
  * (`src_mcp/core/Findings/TokenPrice.cs`) — one rule on both halves.
@@ -46,7 +46,7 @@ test('TheParser_KeepsCachedReasoningAndKind — a new line keeps its cached, rea
 });
 
 test('TheParser_KeepsTheTurnAndTheAttempt — a launch line keeps the turn it shares and what it was; an old line has neither', () => {
-  // Story 3.3 of todo/PLAN_every_round_is_counted.md: one ledger line per paid launch, tied to its turn — read, not dropped.
+  // Story 3.3 of research/PLAN_every_round_is_counted.md: one ledger line per paid launch, tied to its turn — read, not dropped.
   const [repair, old] = parseUsage([
     '{"utc":"2026-10-10T10:00:00Z","provider":"gemini","model":"gemini-3.7-flash-low","tokensIn":200,"tokensOut":7,'
     + '"kind":"review","outcome":"ok","turn":"3f9a0c1b2d4e","attempt":"repair"}',
@@ -60,7 +60,7 @@ test('TheParser_KeepsTheTurnAndTheAttempt — a launch line keeps the turn it sh
 });
 
 test('TheParser_KeepsTheEndCause — a cancelled Team-server line keeps why it was cancelled; an old line and any other ending have none', () => {
-  // Story 3.2 of todo/PLAN_every_round_is_counted.md: the store that fired the token writes the cause, the outcome stays
+  // Story 3.2 of research/PLAN_every_round_is_counted.md: the store that fired the token writes the cause, the outcome stays
   // `Cancelled`, and this side reads the column rather than dropping it — so a withdrawal can be told from the backstop.
   const [withdrawn, deadline, old] = parseUsage([
     '{"utc":"2026-10-11T10:00:00Z","provider":"codex","model":"gpt-6-luna","tokensIn":0,"tokensOut":0,"outcome":"Cancelled",'
@@ -76,7 +76,7 @@ test('TheParser_KeepsTheEndCause — a cancelled Team-server line keeps why it w
 });
 
 test('TheParser_KeepsTheRoundAndTheClientAttempt — a Team-server line keeps the round its request carried and the client\'s word beside the server\'s; an old line has neither', () => {
-  // Story 4.2 of todo/PLAN_every_round_is_counted.md: the server writes the client's round id and its own word for the
+  // Story 4.2 of research/PLAN_every_round_is_counted.md: the server writes the client's round id and its own word for the
   // request (`clientAttempt`) on every line of the job, beside — never over — its own `attempt`.
   const [server, noRound, old] = parseUsage([
     '{"utc":"2026-10-11T10:00:00Z","provider":"codex","model":"gpt-6-luna","tokensIn":3,"tokensOut":1,"outcome":"ok",'
@@ -129,7 +129,7 @@ test('ALocalLine_ReadsItsRound_AndAnEmptyRoundIsNoRound — a key is kept as wri
 });
 
 test('TheParser_KeepsWhatTheLaunchRanWith —a line keeps its CLI, version, effort and tier with their sources, job and slot; an old line has none', () => {
-  // Story 3.4 of todo/PLAN_every_round_is_counted.md — AnOldLedgerLine_StillReads, the extension's half: read, not dropped.
+  // Story 3.4 of research/PLAN_every_round_is_counted.md — AnOldLedgerLine_StillReads, the extension's half: read, not dropped.
   const [server, local, old] = parseUsage([
     '{"utc":"2026-10-11T10:00:00Z","provider":"codex","model":"gpt-6-luna","tokensIn":200,"tokensOut":7,"outcome":"ok",'
     + '"cli":"codex","cliVersion":"codex-cli 0.160.0","effort":"low","effortFrom":"cli-config","tier":"default","tierFrom":"server",'
@@ -154,7 +154,7 @@ test('TheParser_KeepsWhatTheLaunchRanWith —a line keeps its CLI, version, effo
 });
 
 test('TheParser_KeepsTheGaugeReading — a Team-server line keeps the gauge read after its launch; an absent window is absent, never 0; an old line has none', () => {
-  // Story 6.1a of todo/PLAN_every_round_is_counted.md — the extension's half of the gauge fields, read not dropped; since
+  // Story 6.1a of research/PLAN_every_round_is_counted.md — the extension's half of the gauge fields, read not dropped; since
   // epic 6's code round the line carries EVERY window of EVERY limit as a list.
   const [read, oneWindow, old] = parseUsage([
     '{"utc":"2026-10-11T10:00:00Z","provider":"codex","model":"gpt-6-luna","tokensIn":200,"tokensOut":7,"outcome":"ok",'

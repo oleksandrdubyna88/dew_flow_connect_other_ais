@@ -13,7 +13,7 @@ import { pageTree } from './pageTree';
 import { panelState, runPanel } from './panelPageHarness';
 
 /**
- * The Kimi card's *Clear the stuck Kimi marker* button — E6 of todo/PLAN_kimi_and_vibe_on_linux.md, DL9, S-K18.
+ * The Kimi card's *Clear the stuck Kimi marker* button — E6 of research/PLAN_kimi_and_vibe_on_linux.md, DL9, S-K18.
  *
  * <p>The field relied on is `providers[].survivorMarker` = `{ "path": "<marker file>", "pids": [<pid>, …] }` on the Kimi row of
  * `coai-mcp --providers` (A3's spec does not name a providers field; this is the proposal, flagged in E6's report). The exit codes

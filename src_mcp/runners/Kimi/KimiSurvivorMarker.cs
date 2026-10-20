@@ -7,7 +7,7 @@ namespace CoaiMcp.Runners.Kimi;
 
 /// <summary>
 /// The members of a coai-started Kimi tree that may still be alive, keyed by the sign-in and kept until a confirmed-empty re-listing clears it (DL9 of
-/// <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>; A3 §6.1).
+/// <c>research/PLAN_kimi_and_vibe_on_linux.md</c>; A3 §6.1).
 /// </summary>
 /// <param name="Marker">The moved <see cref="ReaderMarkerDto"/>: phase (<c>spawning</c> / <c>running</c>), the SHIM as owner, and the tree — pid and start of each member. Reused, not copied.</param>
 /// <param name="OwnedRoot">The coai-owned Kimi root (<c>--home</c>) — what <c>KimiHome.Alive</c> matches on, ordinal, trailing separator trimmed.</param>
