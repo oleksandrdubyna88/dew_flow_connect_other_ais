@@ -46,13 +46,13 @@ internal sealed class BackfillRun(
     }
 
     /// <summary>The facts of every settled round at or after <c>--since</c>, gate by gate in the order each gate ran them.</summary>
-    private List<RoundFacts> Selected(IEnumerable<StoredGate> gates, StoredFacts facts) =>
+    private List<StoredRoundFacts> Selected(IEnumerable<StoredGate> gates, StoredFacts facts) =>
     [
         .. gates.SelectMany(gate => gate.Rounds.Where(round => BackfillDecision.IsSelected(round, since)).Select(round => facts.Of(gate, round))),
     ];
 
     /// <summary>Which transcript bound each caller needs: the probe records it for every round that will be computed and reads nothing.</summary>
-    private void Plan(List<RoundFacts> rounds, BackfillAttribution attribution)
+    private void Plan(List<StoredRoundFacts> rounds, BackfillAttribution attribution)
     {
         foreach (var found in rounds.Where(round => BackfillDecision.Decide(round.Input(since)).Verb == BackfillVerb.Compute))
         {

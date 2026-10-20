@@ -137,7 +137,7 @@ internal sealed class BackfillWorld : IDisposable
 /// <summary>What a run of the backfill's units computes over a <see cref="BackfillWorld"/> — the same loop the mode makes, without the writes.</summary>
 internal static class BackfillDriver
 {
-    public sealed record Computed(StoredRound Round, RoundFacts Facts, BackfillAction Action, AuthorsSnapshot? Snapshot);
+    public sealed record Computed(StoredRound Round, StoredRoundFacts Facts, BackfillAction Action, AuthorsSnapshot? Snapshot);
 
     /// <summary>
     /// Gathers the facts of every round ONCE (the peers are looked up once per round), plans (no transcript read), then computes every round that
@@ -165,7 +165,7 @@ internal static class BackfillDriver
         return [.. rounds.Select(round => Settled(round.Facts, round.Action, attribution))];
     }
 
-    private static Computed Settled(RoundFacts found, BackfillAction action, BackfillAttribution attribution)
+    private static Computed Settled(StoredRoundFacts found, BackfillAction action, BackfillAttribution attribution)
     {
         var snapshot = action.Verb == BackfillVerb.Compute
             ? attribution.Compute(found.Before, found.Record, found.CallerId, found.Peers, found.Round.AuthorsIdSource, planning: false)

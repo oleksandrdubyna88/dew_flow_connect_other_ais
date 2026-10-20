@@ -60,7 +60,7 @@ internal sealed class RoundBackfill(
         [SizeVerb.NoHeadRecorded] = "size: no head recorded",
     };
 
-    public async Task ProcessAsync(RoundFacts facts, CancellationToken ct)
+    public async Task ProcessAsync(StoredRoundFacts facts, CancellationToken ct)
     {
         var action = BackfillDecision.Decide(facts.Input(since));
         if (action.Verb == BackfillVerb.NotSelected)
@@ -85,7 +85,7 @@ internal sealed class RoundBackfill(
 
     // ---------- the authors ----------
 
-    private AuthorsPlan Authors(RoundFacts facts, BackfillAction action) =>
+    private AuthorsPlan Authors(StoredRoundFacts facts, BackfillAction action) =>
         action.Verb == BackfillVerb.Keep ? Kept(action.Why)
         : action.Verb == BackfillVerb.Heal ? AuthorsPlan.Nothing with { HealFirst = true }
         : action.Verb == BackfillVerb.Reproject ? Settled(facts, facts.Record.Authors!, WrittenAs.Reprojected)
@@ -98,7 +98,7 @@ internal sealed class RoundBackfill(
         return AuthorsPlan.Nothing;
     }
 
-    private AuthorsSnapshot Compute(RoundFacts facts) =>
+    private AuthorsSnapshot Compute(StoredRoundFacts facts) =>
         attribution.Compute(facts.Before, facts.Record, facts.CallerId, facts.Peers, facts.Round.AuthorsIdSource, planning: false);
 
     private static WrittenAs AsOf(BackfillWhy why) => why switch
@@ -109,7 +109,7 @@ internal sealed class RoundBackfill(
     };
 
     /// <summary>A result meets what the database holds: written, kept stronger (healing the file instead), or unchanged.</summary>
-    private AuthorsPlan Settled(RoundFacts facts, AuthorsSnapshot snapshot, WrittenAs written)
+    private AuthorsPlan Settled(StoredRoundFacts facts, AuthorsSnapshot snapshot, WrittenAs written)
     {
         var round = facts.Round;
         var settlement = BackfillDecision.Settle(new SettleInput(
@@ -130,7 +130,7 @@ internal sealed class RoundBackfill(
 
     // ---------- the size ----------
 
-    private async Task<SizeOutcome.Measured?> SizeAsync(RoundFacts facts, CancellationToken ct)
+    private async Task<SizeOutcome.Measured?> SizeAsync(StoredRoundFacts facts, CancellationToken ct)
     {
         var verb = BackfillDecision.SizeOf(facts.Round, since);
         if (verb != SizeVerb.Compute)
@@ -163,7 +163,7 @@ internal sealed class RoundBackfill(
 
     // ---------- the write ----------
 
-    private void Commit(RoundFacts facts, AuthorsPlan authors, SizeOutcome.Measured? size)
+    private void Commit(StoredRoundFacts facts, AuthorsPlan authors, SizeOutcome.Measured? size)
     {
         if (HealRefused(facts, authors))
         {
@@ -176,11 +176,11 @@ internal sealed class RoundBackfill(
         }
     }
 
-    private bool HealRefused(RoundFacts facts, AuthorsPlan authors) => authors.HealFirst && !Healed(facts);
+    private bool HealRefused(StoredRoundFacts facts, AuthorsPlan authors) => authors.HealFirst && !Healed(facts);
 
     private static bool HasSomethingToWrite(AuthorsPlan authors, SizeOutcome.Measured? size) => authors.Step != Step.Nothing || size is not null;
 
-    private void Submit(RoundFacts facts, AuthorsPlan authors, SizeOutcome.Measured? size)
+    private void Submit(StoredRoundFacts facts, AuthorsPlan authors, SizeOutcome.Measured? size)
     {
         var result = writes.Write(WriteOf(facts, authors, size));
         if (result == WriteResult.Written)
@@ -196,15 +196,15 @@ internal sealed class RoundBackfill(
     private static BackfillWhy DeferredWhy(WriteResult result) => result == WriteResult.DeferredBusy ? BackfillWhy.Busy : BackfillWhy.ChangedUnderUs;
 
     /// <summary>The round's write: the snapshot (null when only the size changes), the size and its gitlink count, and the fingerprint it was selected with.</summary>
-    private static RoundWrite WriteOf(RoundFacts facts, AuthorsPlan authors, SizeOutcome.Measured? size) =>
+    private static RoundWrite WriteOf(StoredRoundFacts facts, AuthorsPlan authors, SizeOutcome.Measured? size) =>
         new(facts.Gate, facts.Round, KindOf(facts, authors, size), authors.Snapshot, size?.Size, size?.Gitlinks, facts.Fingerprint);
 
-    private static WriteHalves KindOf(RoundFacts facts, AuthorsPlan authors, SizeOutcome.Measured? size) =>
+    private static WriteHalves KindOf(StoredRoundFacts facts, AuthorsPlan authors, SizeOutcome.Measured? size) =>
         !facts.Presence.Holds ? WriteHalves.DatabaseOnly
         : authors.Step == Step.FileOnly && size is null ? WriteHalves.FileOnly
         : WriteHalves.Both;
 
-    private bool Healed(RoundFacts facts)
+    private bool Healed(StoredRoundFacts facts)
     {
         var result = writes.Heal(facts.Gate, facts.Round, facts.Fingerprint);
         if (result == WriteResult.Written)
@@ -219,7 +219,7 @@ internal sealed class RoundBackfill(
         return false;
     }
 
-    private void Written(RoundFacts facts, AuthorsPlan authors, SizeOutcome.Measured? size)
+    private void Written(StoredRoundFacts facts, AuthorsPlan authors, SizeOutcome.Measured? size)
     {
         if (authors.Step != Step.Nothing)
         {
@@ -235,7 +235,7 @@ internal sealed class RoundBackfill(
         Overlay(facts, authors, size);
     }
 
-    private void CountAuthors(RoundFacts facts, AuthorsPlan authors)
+    private void CountAuthors(StoredRoundFacts facts, AuthorsPlan authors)
     {
         counts.Written.Add(authors.As == WrittenAs.Corrected || facts.Presence.Holds ? authors.As : WrittenAs.DatabaseOnly);
         if (authors.Snapshot is { State: ObservationKinds.Unobserved } unobserved)
@@ -245,7 +245,7 @@ internal sealed class RoundBackfill(
     }
 
     /// <summary>The journal learns what was written: the next round of the session reads its earlier callers and its delta's predecessor from it.</summary>
-    private static void Overlay(RoundFacts facts, AuthorsPlan authors, SizeOutcome.Measured? size)
+    private static void Overlay(StoredRoundFacts facts, AuthorsPlan authors, SizeOutcome.Measured? size)
     {
         if (facts.Index < 0)
         {

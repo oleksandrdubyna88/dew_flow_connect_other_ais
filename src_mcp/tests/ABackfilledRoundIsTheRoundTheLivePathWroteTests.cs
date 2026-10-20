@@ -196,7 +196,7 @@ public sealed class ABackfilledRoundIsTheRoundTheLivePathWroteTests
         return id;
     }
 
-    private static (RoundFacts Facts, StoredGate Gate) FactsOf(BackfillWorld world, System.Collections.Immutable.ImmutableArray<string> named)
+    private static (StoredRoundFacts Facts, StoredGate Gate) FactsOf(BackfillWorld world, System.Collections.Immutable.ImmutableArray<string> named)
     {
         using var db = AuthorPeers.OpenReadOnly(world.DataDir)!;
         var attribution = new BackfillAttribution(world.Settings, Serilog.Core.Logger.None, world.Store, Reader(), TimeProvider.System);

@@ -10,7 +10,7 @@ namespace CoaiMcp.Server;
 /// <param name="CallerId">The caller's session id: <c>rounds.authors_session</c>, else a UUID <c>rounds.caller</c>, else empty (E5 §3's order).</param>
 /// <param name="Fingerprint">The round's <see cref="RoundFingerprint"/> when it was selected: what the write validates against, inside its lock.</param>
 /// <param name="Peers">THE one peer lookup of the round — shared by the decision and the compute, so a round asks its store once.</param>
-internal sealed record RoundFacts(
+internal sealed record StoredRoundFacts(
     StoredRound Round,
     StoredGate Gate,
     int Index,
@@ -47,7 +47,7 @@ internal sealed record RoundFacts(
 /// </remarks>
 internal sealed class StoredFacts(SqliteConnection db, PanelSettings settings, BackfillAttribution attribution)
 {
-    public RoundFacts Of(StoredGate gate, StoredRound round)
+    public StoredRoundFacts Of(StoredGate gate, StoredRound round)
     {
         var index = gate.IndexOf(round);
         var record = gate.RecordOf(round, index);
@@ -58,7 +58,7 @@ internal sealed class StoredFacts(SqliteConnection db, PanelSettings settings, B
             ? PeersOf(gate, round, index, record, caller, presence)
             : (AuthorPeerSet.Unknown("no transcript, no peer lookup"), PeerStatus.Nobody);
 
-        return new RoundFacts(round, gate, index, caller, location, peers, presence, status, Agrees(presence, record, db, round), RoundFingerprint.Read(db.CreateCommand, round.RoundId));
+        return new StoredRoundFacts(round, gate, index, caller, location, peers, presence, status, Agrees(presence, record, db, round), RoundFingerprint.Read(db.CreateCommand, round.RoundId));
     }
 
     private (AuthorPeerSet Peers, PeerStatus Status) PeersOf(StoredGate gate, StoredRound round, int index, RoundRecord record, string caller, SnapshotPresence presence)
