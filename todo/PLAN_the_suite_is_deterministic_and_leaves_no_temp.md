@@ -827,8 +827,8 @@ NOT yet on its `main`): the start only where the OS gives it without spawning a 
 two-field form on Windows and macOS), written AFTER the folder exists and the restore is registered. Reuse rule: if
 E5's C# helper (`owned` for .NET, E5 S3) is on `main` when E2 starts, `RunTemp` calls it; otherwise `RunTemp` holds the
 one claim writer (one static method, the format above, a test that pins the regex) and E5 S3 adopts it — never two
-writers. Until E5's sweep lands, the folder is collected by the family janitor (`.agents/conventions/common/test-leftovers.md`)
-after an hour; after it lands, an age backstop in days stays beside the liveness sweep (§11, the E5 plan's open item). *Loses:* a temp-root parameter through the product (`RosterBuilder`, `RosterAssembly`, `SecurityRoster`,
+writers. Until E5's sweep lands, the FOLDER is collected by the family janitor (`.agents/conventions/common/test-leftovers.md`)
+after an hour — it matches directories only (`-type d` / `-Directory`), so a killed run's `.owner` FILE stays until E5's sweep removes orphan claims (E2 judge J5); after it lands, an age backstop in days stays beside the liveness sweep (§11, the E5 plan's open item). *Loses:* a temp-root parameter through the product (`RosterBuilder`, `RosterAssembly`, `SecurityRoster`,
 every runtime's output folder) — a product change for a test concern, the follow-up leftovers-E5's D5 proposed; the
 operating system already offers this seam. *Risk, measured in its story:* the folder adds about 25 characters to every
 temp path, and some tests sit near a path budget (Kimi's 260, Vibe's 102 — Vibe homes no longer live under temp,
@@ -1191,13 +1191,13 @@ proof (parallel with S1; the same spec covers it). S3 D6's seven sites (parallel
 after, recorded in `research/module_tests.md` (a scout gathers, the caller records).
 
 **Outcome (2026-10-20, branch `feat/suite-e2-run-temp`; the tests, their reds, the break-its and the S6 numbers are in `research/module_tests.md`, section "The suite is deterministic — epic E2").**
-Built in seven commits, each red first: (1) D2 in C# — `RunTemp` module initializer, `RunTempFolder`, `RunTempFixture`, `OwnerClaim`, S5a–S5i, S5b-scan; (2) D6's six C# sites;
+Built in seven commits, each red first (the code gate and judge of 2026-10-20 then added six more, see "The E2 code gate and judge" at the end): (1) D2 in C# — `RunTemp` module initializer, `RunTempFolder`, `RunTempFixture`, `OwnerClaim`, S5a–S5i, S5b-scan; (2) D6's six C# sites;
 (3) the extension runner and X1–X3; (4) D6's four extension files; (5) two Vibe test classes that the 29 extra characters pushed over the home budget; (6) the owner-claim judge's
 host/OS/refused-lookup rules (the lead's extra input of 2026-10-20); (7) docs. Break-its (a)–(g) of the spec were all done and restored. S6: a whole `CoaiMcp.Tests.exe` and a
-whole `npm test` on a private stand-in for the machine's temp folder leave nothing of their own (the extension leaves only node's own `node-compile-cache`); `--list-tests`, `--help`
+whole `npm test` on a private stand-in for the machine's temp folder leave nothing of their own (the extension leaves only node's own `node-compile-cache` — one stable, reused folder, measured); `--list-tests`, `--help`
 and an empty filter leave no run folder and no `.owner`. Deviations, each decided on what the code showed:
 - **`RunTempFolder.Create` takes one `RunTempSeams` record**, not `(realRoot, setVariable, getVariable)`: it also needs the register-restore, claim-writer, deleter and warning seams for S5f and for the failed-delete test.
-- **`OwnerClaim` also holds `Format`, `ForThisProcess`, `Judge` and `ProcessIsAlive`**, and is `public`. `Judge` and `ProcessIsAlive` are the lead's extra rules (same host and OS only; `ArgumentException`/`InvalidOperationException` dead, `Win32Exception` alive), verified against the benchmark's and the RAG repository's own liveness code. `Verdict`'s `liveStartUnixSeconds` cannot change the verdict today; it stays in the signature for E5's call shape.
+- **`OwnerClaim` also holds `Format`, `ForThisProcess`, `Judge` and `ProcessIsAlive`**, and is `public`. `Judge` and `ProcessIsAlive` are the lead's extra rules (same host and OS only; `ArgumentException`/`InvalidOperationException` dead, `Win32Exception` alive), verified against the benchmark's and the RAG repository's own liveness code. A live pid always keeps; `Verdict` has no start parameter (comparing a start is E5's, after the gate's G13/G17).
 - **`<os>` is Node's spelling** (`win32`/`linux`/`darwin`) and `OwnerClaim.Verdict` stays in the test tree until E5 S3 adopts both (the lead's decisions).
 - **`EveryClassThatSetsTheProcessEnvironmentTests` was extended**, not only reused: the initializer is a static class that sets `TEMP`/`TMP`/`TMPDIR`, which the rule 1 static arm named at once (`found at least one item {"RunTemp.cs: RunTemp"}`). `TestSourceIndex.StaticOffenders` gained a set overload; `RunTemp` is the one other allowed writer; a synthetic case keeps any other static helper an offender.
 - **D6 found more sites than the plan named:** besides `coai-plan-said-` and `coai-check-model-`, four more `PanelServiceTests` folders (`coai-record-`, `coai-cwd-`, `coai-deal-`, `coai-deal-plan-`) were never removed. All six use `TempDir.For` now; `TheLeakingTestSitesRemoveWhatTheyMadeTests` runs each. The extension's four files are proven by `chatTestsLeaveNoTemp.test.mjs` (a child per file on a private temp).
@@ -1206,7 +1206,7 @@ and an empty filter leave no run folder and no `.owner`. Deviations, each decide
 - **The X2/X3 driver drops `NODE_TEST_CONTEXT`** from the runner's environment, or the runner's own `node --test` treats itself as nested and skips every file.
 - **The S6 proof uses a private stand-in for the machine's temp**, because other sessions' suites write the real folder at the same time and a before/after count of it cannot be attributed (it is also recorded: 1,000 new `coai-*` from them in 18 minutes, none of the run's kind).
 - **Two tests failed once each in a full run and pass alone** (listed, not called flakes, in `module_tests.md`): `AStreamsUsageIsNeverZeroTests.A_stream_over_the_answer_cap_is_unknown` and `AReviewerThatAsksForSourceIsAskedAgainTests.AConversationThatOutlivesItsCap_…` — the second is C13's family (E5).
-**Open tail:** E5's Node sweeper must use the same claim rules (same host and OS; only `ESRCH` dead, `EPERM` alive) and keep an age backstop in days; the pid-reuse leak on Windows/macOS and the janitor's one-hour rule are stated limits; the Windows CI leg shows first whether any other Vibe home under temp is now near its limit; `CoaiServer.Tests` and `run-host.mjs` are untouched.
+**Open tail:** E5's Node sweeper must pass `shared/owner-claim-vectors.json`, use the same claim rules (same host and OS; only `ESRCH` dead, `EPERM` alive) and keep an age backstop in days; the pid-reuse leak on Windows/macOS and the janitor's one-hour rule are stated limits; the Windows CI leg shows first whether any other Vibe home under temp is now near its limit; `CoaiServer.Tests` and `run-host.mjs` are untouched.
 
 ### E3 — Product defects the tests found
 
@@ -1402,3 +1402,35 @@ passed`, exit 0, `Unexpected SIGPIPE`). The job log says otherwise: those three 
 missing-root launch, one scenario, passed); the FIRST launch printed no scenario line at all, VS Code logged
 `CodeWindow: detected unresponsive` and exited 1, and the harness reported exactly that (`Test run failed with code 1`).
 The job's pass/fail rule worked; what was missing is a sentence that tells the two apart — C22.
+
+### The E2 code gate and judge (coai session `8fd6b7ff`, 2026-10-20) — verdict `proceed` from both; the accepted findings folded into the branch
+
+Each accepted finding that changes behaviour was red first and has its break-it watched red (`research/module_tests.md`, "Code gate and judge (2026-10-20) — what changed after review"). Numbers are the gate's (`G…`) and the Opus judge's (`J…`).
+
+| # | Finding | Decision | Folded as |
+|---|---|---|---|
+| J1 (major) | The claim's host: C# `Environment.MachineName` (`BUILD01`) vs Node `os.hostname()` (`build01`) — a Node sweeper would judge every C# claim "another host" and keep it for ever | **Accepted** | `Dns.GetHostName()`; a live test asks Node for its own spelling (red `"BUILD01" differs near "BUI"`); the reader compares the host without regard to case |
+| G0/G1 | Two writers of one format with no check that they agree | **Accepted** | `shared/owner-claim-vectors.json`, read by a C# test and a Node test; break-it: change one side → only that side red. **E5's reader must pass the same vectors** |
+| J2 | The Linux start field was computed two ways (about a second apart) | **Accepted** | one formula both sides (`/proc/self/stat` field 22 ÷ 100 + `btime`), pinned by the vectors; a start from any other source needs a ±2 s tolerance |
+| G13/G17 | `Verdict`'s `liveStartUnixSeconds` accepted and ignored | **Accepted** | parameter removed; a live pid always keeps; comparing a start is E5's, with its own precision rule |
+| G2 = J4 | `CreateDirectory` succeeds on an existing folder: two runs could share one | **Accepted** | exclusive create with a bounded redraw, through a seam (C#); redraw on `EEXIST` (Node). Limit stated: check-then-create is two calls |
+| J3 | The `.owner` was removed even when the folder could not be | **Accepted** | claim deleted only once the folder is gone, both sides |
+| G18 | Claim deleted with a hard-coded `File.Delete` | **Accepted** | its own seam; a failure names the file |
+| G8 | Trimming the temp path leaves `""` for `/` and `C:` for `C:\` | **Accepted** | `RunTemp.Trimmed` keeps a root |
+| G14, G15 | The creation and claim warnings did not say the consequence or what to do | **Accepted** | `CreationWarning` (path, "WITHOUT isolation", make TEMP writable or point TMP/TMPDIR elsewhere), `ClaimWarning` ("only the janitor's age rule, after one hour") |
+| J5 | The janitor matches directories only: a killed run's `.owner` file stays | **Accepted (text)** | `RunTemp` remark and D2 corrected; E5's open tail gains "remove orphan `.owner` files whose folder is gone" |
+| J6 | S5e allowed a trailing newline on Linux | **Accepted** | strict read (`IsWellFormed`, no `\n`/`\r`, digits only); break-it: the writer appends a line feed |
+| J7 | The never-toggled proof was not built | **Accepted** | `NoTestMovesTempButTheRunTempInitializerTests`; limits and the three by-name exemptions stated |
+| G3 | `node-compile-cache` in the machine temp | **Accepted (measured, then text)** | measured: one stable folder, 70 files, the same after one and three runs — node's own reused cache, not growth; the guarantee says "nothing of its OWN" |
+| J8 | The done-when's test-count proof was missing | **Accepted** | base `e86fe17f8` and head counted the same way in throwaway worktrees; the delta and the names are in `module_tests.md` |
+| 4 | `temp-sweep.json` wording | **Rejected** (the lead's decision) | the `why` carries the one sentence the spec asked for; `neverSwept` is untouched |
+| 5 | A cross-repository CI check of the claim format | **Rejected** | one repository's CI cannot run another's; the golden vectors in this repository are the check, and E5's reader must pass them |
+| 6 | Plant files for the product's sweep | **Rejected** | it would write into the machine's temp folder, the thing E2 removes, to test a product sweep E2 does not change |
+| 7 | An opt-out switch for the run folder | **Rejected** | a switch would let a run silently share the folder; the only degraded mode is the fallback, and it now says so (G14) |
+| 9 | Catch `Exception` in `Remove` | **Rejected** | `PathTooLongException` and `DirectoryNotFoundException` are `IOException`s, already caught; an unclassified failure should surface |
+| 10–12 | Strip exception messages from the warnings | **Rejected** | the warnings go to the local stderr of a test run and carry paths the person needs to delete a leftover |
+| 16 | Batch the four chat-file children into one | **Rejected** | one child per file keeps a leak attributable to its file; the cost is a process start each |
+
+The decisions on 4–7, 10–12 and 16 are the lead's; only 9's reason came with it, and the reasons written for the others are the coder's wording of the decision, not the reviewers'.
+
+**Open tail added by the gate and judge:** E5's reader must pass `shared/owner-claim-vectors.json` and compare the host without regard to case; E5's sweeper removes orphan `.owner` files whose folder is gone (the janitor matches directories only); a start comparison needs its own precision rule and a ±2 s tolerance against any start not computed by the shared formula; the exclusive create narrows but does not close the two-call race (stated).

@@ -15,7 +15,8 @@ namespace CoaiMcp.Tests;
 /// <c>coai-answers-</c> / <c>-repair-</c> / <c>-noworkspace-</c> folders and the loose <c>api-*.prompt</c> files land inside it too.</para>
 /// <para><b>The end.</b> <see cref="EndOfRun"/> runs from <see cref="RunTempFixture"/>'s disposal AND from the process-exit handler registered here, so a run that never builds a fixture
 /// (<c>--list-tests</c>, <c>--help</c>, a filter that matches nothing) leaves nothing either. A KILLED run leaves exactly one folder plus its <c>.owner</c> claim: the family
-/// janitor takes it after an hour (<c>.agents/conventions/common/test-leftovers.md</c>) until the conventions' owner-liveness sweep replaces it.</para>
+/// janitor takes the FOLDER after an hour (<c>.agents/conventions/common/test-leftovers.md</c>) until the conventions' owner-liveness sweep replaces it — but it matches
+/// DIRECTORIES only, so the <c>.owner</c> FILE of a killed run stays until E5's sweep removes orphan claims whose folder is gone (E5's open tail, recorded in the plan).</para>
 /// <para><b>Never throws.</b> A throw from a module initializer kills the process. If the folder cannot be made, ONE warning goes to stderr, the variables stay as they were
 /// and <see cref="Folder"/> is <see cref="Real"/> — the run then behaves as it did before this existed.</para>
 /// </remarks>
