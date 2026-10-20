@@ -135,7 +135,7 @@ the same answer looks when it comes over ACP is a hypothesis until step 1 of §5
   promises "One real, paid turn of this model in a scratch folder — you are asked first" whatever the runtime. **The one behaviour
   chosen:** for every runtime outside the consultant list (`shared/feature-availability.json:25` — today that is `kimi`, `gemini`
   and `remote` rows; the extension reads it through the generated `src/featureAvailability.generated.ts`), the Check button is
-  rendered **disabled** with the title "the consultant check is not offered for <vendor> — ▶ runs a review"; it never asks for a
+  rendered **disabled** with the title "the consultant check is not offered for <runtime> — this row reviews plans and code only"; it never asks for a
   paid turn and never sends `checkModel`. A real reviewer-shaped check (one short review turn through `KimiRuntime`/`KimiLaunch`,
   so it takes the cross-process gate at `src_mcp/runners/Kimi/KimiLaunch.cs:134`, with a short deadline, asked first) is a
   **named follow-up**, not this plan.
@@ -170,7 +170,7 @@ the same answer looks when it comes over ACP is a hypothesis until step 1 of §5
   the log line each say "quota is used up", each quote the reset clause, none says "kimi login" or "exit 77", and the reviewer
   ends `RateLimited`, hopeless, after **one** launch. Red: today's three lines.
 - **S8** (D7, extension node tests) A rendered Kimi card and a rendered Gemini card each show `✓ Check` **disabled** with the title
-  "the consultant check is not offered for kimi — ▶ runs a review" (resp. gemini) and no `data-command="checkModel"`; a Codex card
+  "the consultant check is not offered for kimi — this row reviews plans and code only" (resp. gemini) and no `data-command="checkModel"`; a Codex card
   is unchanged. Red: both cards render the enabled button with "One real, paid turn … you are asked first".
 - **S9 — the outcome where D1 never fires** (judge J10): if the real ACP answer to a spent quota is a **bare** "Authentication
   required" with no 429 text, S1 cannot be made green by any row; then `not_signed_in` is what the vendor said, D4's kept sentence
@@ -233,7 +233,7 @@ Stories 1 and 2 are independent of each other; 3 needs both; 4 needs none of the
       never "kimi login"; a 5xx behind the same prefix reads as the vendor's words with no cure.
 - [ ] `RateLimit.Spent` holds Kimi's phrase with its verbatim sample; no "(insufficient balance)" is appended to a quota.
 - [ ] Moonshot account ids are redacted wherever a vendor sentence is written.
-- [ ] Check on a Kimi or Gemini card is disabled with the "not offered — ▶ runs a review" title; no paid-turn prompt (S8).
+- [ ] Check on a Kimi or Gemini card is disabled with the "not offered — this row reviews plans and code only" title; no paid-turn prompt (S8).
 - [ ] D5 is recorded as a follow-up with its three constraints; D6's annotation is in the M-K14 record.
 - [ ] Docs updated (`module_runners.md`'s Kimi failure table and rate-limit path, `module_extension.md`'s card, `module_tests.md`);
       this plan promoted when shipped.
@@ -314,8 +314,8 @@ every story; **Sonnet** codes.
   beside `aModelsCardPricesItsOwnRow.test.ts`.
 - **Red-first, expected reds:** S8 → the Kimi and Gemini cards render an enabled `✓ Check` with `data-command="checkModel"` and
   the title "One real, paid turn of this model in a scratch folder — you are asked first".
-- **Done when:** Kimi, Gemini and remote rows render the disabled button with "the consultant check is not offered for <vendor>
-  — ▶ runs a review"; Codex, Claude, antigravity, local, api and Vibe rows are unchanged; `module_extension.md` names the rule and
+- **Done when:** Kimi, Gemini and remote rows render the disabled button with "the consultant check is not offered for <runtime>
+  — this row reviews plans and code only"; Codex, Claude, antigravity, local, api and Vibe rows are unchanged; `module_extension.md` names the rule and
   the reviewer-shaped check as a follow-up. No server change.
 
 ## Review record (2026-10-20)
