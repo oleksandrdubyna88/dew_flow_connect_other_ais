@@ -1610,3 +1610,27 @@ The Opus draft of S4 and S5 asked five questions. Each is decided here, on a sta
    again.
 5. **Stale line references in C14 and D4: re-pinned by the coder of each story** when that story opens the file; the
    briefs carry the current numbers. C24 keeps only its review-record entry until E5 reads its log (it is E5's).
+
+### The E3 plan round (coai session `ac57ee60`, 2026-10-20, verdict proceed) — 2 findings, both accepted; they supersede parts of the text above
+
+Only one of three reviewers read the plan: the Gemini preset received it cut off (`PLAN_INCOMPLETE` — the plan is now
+~183 KB), and Kimi returned an empty answer. Codex read it whole. Its two findings are taken, and where this section and
+the text above disagree, **this section governs**:
+
+1. **C25 / S5 — a retried IN-PLACE write is not safe; the session write becomes atomic instead.** `File.WriteAllText`
+   opens with `FileMode.Create`, so the file is truncated the moment the open succeeds; an I/O error after that loses the
+   previous session, and a retry loop only repeats the risk. **S5 is changed:** the turn-held path stops writing in place
+   and writes the same way the turn-less path does — a temp file beside the session, then the one shared, bounded move
+   retry (`MoveOverExisting`'s loop, extracted once and used by both paths). A failure at any point before the move leaves
+   the previous session whole. **S26 gains a fault arm:** a write that fails AFTER the temp file is written (a seam that
+   throws at the move) leaves the old session byte-for-byte intact and removes its temp file. The C25 text and the E3
+   Scope line that say "the in-place write is retried" are superseded by this item.
+2. **The orphan temp files of a killed writer — an owner and a rule (supersedes decision 1 of the lead's decisions).** The
+   owner is the writer itself: before `AtomicFile.Write` (and the session store's write) writes its own temp file, it
+   removes temp files of THE SAME RECORD (`<record>.<guid>.tmp` beside it) whose last write is older than one hour —
+   never another record's, never a fresh one, best effort (a failure to remove is ignored and retried on the next write).
+   A live writer's temp lives for milliseconds, so one hour cannot take it. **Bound:** at most one orphan per record per
+   killed write, removed on that record's next write after an hour; a record that is never written again keeps at most
+   the orphans of the kills that hit it — at today's kill rate (an operator stopping a server mid-write) single digits per
+   month. **Scenario S27:** an orphan temp file of the record, two hours old, is gone after the next write; a fresh one
+   (one second old) and another record's old one are both kept.
