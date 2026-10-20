@@ -333,8 +333,8 @@ against the code or a run before it went in here — the question consultant had
   — whether Kimi opens its credentials through a symlink, whether it refuses or re-`chmod`s a linked folder, and whether a
   refresh through the link lands in the person's folder, are unmeasured; the WSL/Linux run of the Kimi probe answers them
   before D18 lifts for Kimi.
-  - **Amended 2026-10-16 — the lifting is planned in [PLAN_kimi_and_vibe_on_linux.md](PLAN_kimi_and_vibe_on_linux.md).**
-    The boundary, the same table there (§10): that plan lifts D18 for a coai-mcp whose own HOST is Linux or WSL — Vibe first
+  - **Amended 2026-10-16, shipped 2026-10-19 (Vibe on WSL2 in mcp 0.59.0, Kimi on WSL2 in 0.61.0; native Linux still refused) — the lifting is recorded in [PLAN_kimi_and_vibe_on_linux.md](../research/PLAN_kimi_and_vibe_on_linux.md).**
+    The boundary, the same table there (§10): that plan LIFTED D18 (2026-10-19) for a coai-mcp whose own HOST is WSL2 (a native Linux host stays refused) — Vibe first
     (measured on WSL2 2026-10-16: on Linux the sign-in is `~/.vibe/.env`, linked into the owned home, never copied), Kimi after
     its WSL cells; a Windows host starting the Linux side (`HostKinds.RunsInWsl`) and macOS stay refused here. Its DL9 changes
     S4's Linux mechanism (a child subreaper instead of a process group) and keeps S4's test.

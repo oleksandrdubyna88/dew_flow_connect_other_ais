@@ -295,7 +295,7 @@ export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })
   // Mistral's own CLI on the person's own Mistral subscription (todo/PLAN_vibe_and_kimi_runtimes.md S2). A preset and
   // never a default (D11). The hint carries what a person meets first: coai-mcp runs it on Windows, and on WSL2 from
   // VIBE_ON_LINUX_SINCE with the sign-in in `~/.vibe/.env`, while a native Linux host is refused until it is measured (DL1 of
-  // todo/PLAN_kimi_and_vibe_on_linux.md, which lifts D18 for WSL2), and an older coai-mcp does not know the runtime (D13 —
+  // research/PLAN_kimi_and_vibe_on_linux.md, which lifts D18 for WSL2), and an older coai-mcp does not know the runtime (D13 —
   // `runtimeSince.ts`).
   {
     label: 'Mistral Vibe',
@@ -311,7 +311,7 @@ export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })
   },
   // Moonshot's own CLI on the person's own Kimi Code plan (todo/PLAN_vibe_and_kimi_runtimes_E4.md E4.5). A preset and never a
   // default (D11). The hint carries what a person meets first: the sign-in is Kimi's own, coai-mcp runs it on Windows and on
-  // WSL2 from KIMI_ON_LINUX_SINCE (DL1 of todo/PLAN_kimi_and_vibe_on_linux.md lifts D18 for WSL2 only), the person's own open kimi
+  // WSL2 from KIMI_ON_LINUX_SINCE (DL1 of research/PLAN_kimi_and_vibe_on_linux.md lifts D18 for WSL2 only), the person's own open kimi
   // makes coai's turns wait (Q3), an older coai-mcp does not know the runtime (D13 — `runtimeSince.ts`), and the three reviewers of a round
   // run one after another because they share one sign-in (D19).
   {

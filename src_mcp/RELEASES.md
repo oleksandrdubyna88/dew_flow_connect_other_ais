@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.62.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.61.0...mcp-v0.62.0) (2026-10-19)
+
+
+### Features
+
+* **consult:** a Vibe disk row reads a folder of repositories ([#887](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/887)) ([38ecd4e](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/38ecd4e114f8cdb0ba145b39b936e87e3463dbc2))
+
+## [0.61.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.60.2...mcp-v0.61.0) (2026-10-19)
+
+
+### Features
+
+* **kimi:** Kimi Code on a WSL2 host ([#879](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/879)) ([cb9ec8b](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/cb9ec8b652ec86afda7eac875ba80193eaf7a494))
+
 ## [0.60.2](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.60.1...mcp-v0.60.2) (2026-10-19)
 
 

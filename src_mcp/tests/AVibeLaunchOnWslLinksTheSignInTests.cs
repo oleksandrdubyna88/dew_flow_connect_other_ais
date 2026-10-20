@@ -10,7 +10,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// The Vibe launch control on a WSL2 host (DL1, DL2, DL3 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>; S-V1, S-V2, S-V8, S-V9, S-V15,
+/// The Vibe launch control on a WSL2 host (DL1, DL2, DL3 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>; S-V1, S-V2, S-V8, S-V9, S-V15,
 /// S-V16, S-V17): the sign-in is LINKED into the owned home — after the shape check, before <c>--version</c> — the manifest entry is the
 /// host's platform's, and a link that cannot be made costs the launch its sign-in and nothing more.
 /// </summary>

@@ -1377,7 +1377,7 @@ public sealed class PanelService
     /// round rather than an opt-in. Empty directories are cheap; an unbounded count of them is not.
     /// </remarks>
     private static readonly string[] ScratchPrefixes =
-        ["coai-answers-*", "coai-repair-*", "coai-noworkspace-*"];
+        ["coai-answers-*", "coai-repair-*", "coai-noworkspace-*", "coai-question-*"];
 
     /// <summary>Deletes a directory that git has been in — <see cref="Runners.Files.GitScratch"/> says why that needs care.</summary>
     private static void DeleteEvenIfReadOnly(string dir) => Runners.Files.GitScratch.DeleteEvenIfReadOnly(dir);
@@ -1503,11 +1503,27 @@ public sealed class PanelService
     /// </summary>
     private static void DeleteIfDue(string dir, DateTime cutoff, IReadOnlyList<string> except, Action<string>? warn)
     {
-        if (Directory.GetLastWriteTimeUtc(dir) < cutoff && !Kept(dir, except) && KimiHomesDisposed(dir, warn))
+        if (Directory.GetLastWriteTimeUtc(dir) >= cutoff || Kept(dir, except))
+        {
+            return;
+        }
+
+        if (IsAQuestionRowScratch(dir))
+        {
+            // A row's budget has no upper bound, so age cannot say it is dead: it holds a lock for its whole life (D8 of
+            // todo/PLAN_vibe_reads_a_folder_of_repositories.md), and a scratch whose lock cannot be taken is kept — the one keep-test
+            // the one-shot Vibe homes use.
+            Runners.Files.FolderLock.RemoveIfFree(dir, QuestionRowLaunch.LockName, Runners.Files.GitScratch.DeleteEntry, () => KimiHomesDisposed(dir, warn));
+        }
+        else if (KimiHomesDisposed(dir, warn))
         {
             DeleteEvenIfReadOnly(dir);
         }
     }
+
+    /// <summary>A question row's own scratch folder (<see cref="QuestionRowLaunch.ScratchPrefix"/>), whose live owner holds a lock in it.</summary>
+    private static bool IsAQuestionRowScratch(string dir) =>
+        Path.GetFileName(dir).StartsWith(QuestionRowLaunch.ScratchPrefix, StringComparison.Ordinal);
 
     /// <summary>
     /// D19's order for a Kimi home in a due scratch (E4.4 review B1): the folder's own home and every <c>kh-*</c> child have their <c>credentials</c> junction
@@ -1840,7 +1856,7 @@ public sealed class PanelService
     public void SweepScratch() => PruneOldAnswerDirs(_settings.ConsultantHomesRoot, _log);
 
     /// <summary>
-    /// The Kimi lock files of a sign-in folder that is gone or is another folder now, retired (DL7 / F15 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): at server start and on every beat. Linux only — elsewhere
+    /// The Kimi lock files of a sign-in folder that is gone or is another folder now, retired (DL7 / F15 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>): at server start and on every beat. Linux only — elsewhere
     /// <see cref="Runners.Kimi.KimiLockRetirement.Sweep"/> answers 0 at once — and it never throws: a key it cannot decide about is left and logged.
     /// </summary>
     public int SweepKimiLocks() => Runners.Kimi.KimiLockRetirement.Sweep(Runners.Kimi.KimiCredentialsLock.Root, note => _log.Debug("{Note}", note));
@@ -1907,13 +1923,26 @@ public sealed class PanelService
         session.State.PlanProceeded,
         _settings.Rounds.For(session.State.Stage).Threshold,
         _settings.Rounds.For(session.State.Stage).MaxRounds,
-        session.Rounds)
+        WithoutUnknownMembers(session.Rounds))
     {
         HumanDecision = CurrentAnswer.WordFor(Escalations.DecisionOf(gatesAnswer)),
         HumanAnswer = gatesAnswer?.Answer ?? string.Empty,
         Consultations = _consultations.OpenIn(session.State.RepoPath),
         Pending = session.State.AwaitingResolve ? session.Pending : [],
     };
+
+    /// <summary>
+    /// The rounds as THIS server knows them: the members a newer server wrote (<c>RoundRecord.Unknown</c>, and each reviewer row's)
+    /// belong to the session file, which keeps them, and not to the answer — the extension reads only the members it was built for.
+    /// </summary>
+    private static IReadOnlyList<RoundRecord> WithoutUnknownMembers(IEnumerable<RoundRecord> rounds) =>
+    [
+        .. rounds.Select(r => r with
+        {
+            Unknown = null,
+            ReviewerStates = [.. r.ReviewerStates.Select(v => v with { Unknown = null })],
+        }),
+    ];
 
     private static string Json<T>(T value, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> type) =>
         JsonSerializer.Serialize(value, type);

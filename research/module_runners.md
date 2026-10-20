@@ -1567,6 +1567,16 @@ built two one-shot modes in the server, `--consultants` and `--check-consultant`
   their own copy of that open and its two catches; they now call this, and the consultant check's lock is built on it
   rather than as a fourth copy. Its header states the residual: on Unix .NET implements `FileShare.None` as an advisory
   `flock` — honoured between .NET processes, not across the WSL/Windows 9P boundary.
+- **`FolderLock`** (`runners/Files/FolderLock.cs`) — the sweep's keep-test for a folder whose owner holds a lock file in it, EXTRACTED
+  from `VibeHomes.SweepOneShot` when a question row's scratch needed the same (D8 of `todo/PLAN_vibe_reads_a_folder_of_repositories.md`):
+  `RemoveIfFree(folder, lockName, delete)` — or, with a step to ask under the lock, `RemoveIfFree(folder, lockName, delete, ready)` (two
+  overloads; the step is never a nullable callback) — takes the lock or answers false with nothing touched, empties the folder around the
+  lock, lets go, removes the folder. The caller asks its own age first, because taking the lock creates the file and moves the
+  folder's time. Used by the one-shot Vibe homes (`VibeHomes`, the age being the newest write below the folder) and by
+  `PanelService.DeleteIfDue` for `coai-question-*` (the age being the folder's last write). `GitScratch.DeleteEntry` is public for it:
+  it takes a FILE as well as a folder, which `DeleteEvenIfReadOnly` (a directory's deleter) refuses. **Known limit:** `HomeIo.Real.Delete`
+  (the deleter `VibeHomes.SweepOneShot` hands to `FolderLock`) is still `DeleteEvenIfReadOnly`, so a FILE at the top level of a one-shot
+  Vibe home would make that sweep fail on it; today a one-shot home holds only folders, and nothing observable depends on it.
 - **`GitScratch.DeleteEvenIfReadOnly`** (`runners/Files/GitScratch.cs`) — moved out of `PanelService` (git marks
   object files read-only, and `Directory.Delete` refuses them); the check deletes and sweeps its scratch repositories
   with it.
@@ -2913,7 +2923,7 @@ flowchart TD
 ```
 
 - **Two sources, one copy.** `SnapshotSource.Pinned(worktree)` copies what `git ls-files --stage` lists in the round's
-  pinned tree, descending into every populated submodule (the populator's own `HasGit` answers "populated"); never
+  pinned tree, descending into every populated submodule (`GitMarker.HasGit` in `Worktrees/GitMarker.cs`, shared with the populator, the caller-transcript `CheckoutRoots` and `GrantedPaths`' work-tree walk (moved there from `ConsultantPlaces` by #887), answers "populated"); never
   `git archive`, whose `export-ignore` / `export-subst` attributes would drop or rewrite reviewed bytes
   (`AnExportIgnoredOrSubstitutedFile_KeepsItsReviewedBytes`). `SnapshotSource.Live(checkout)` adds the untracked-not-
   ignored files, copies the bytes as they are now, and leaves a deleted path absent; an untracked NESTED REPOSITORY,
@@ -3034,7 +3044,7 @@ the consultant's launch and the question row are S3's.
 
 Mistral Vibe (`vibe`, the Python CLI, on the person's own Mistral subscription — its sign-in is in the OS keyring,
 research/RESULTS_vibe_confinement.md §12) reviews plans and code as a CLI row, runtime `vibe`. Every flag and every check
-cites the RESULTS cell it rests on — Windows 3 of 3, Vibe 2.26.1 — and, since E2 of `todo/PLAN_kimi_and_vibe_on_linux.md`
+cites the RESULTS cell it rests on — Windows 3 of 3, Vibe 2.26.1 — and, since E2 of `research/PLAN_kimi_and_vibe_on_linux.md`
 (2026-10-16), WSL2 (the scout's cells, n = 1, RESULTS §30): a launch on a Windows host or a **WSL2** host starts; a native Linux
 host, a WSL1 host, macOS and a Windows row naming `wsl.exe` are refused (D18, DL1). Machine-only (D12: `MachineOnlyRuntimes`, so the Team server
 refuses a `vibe` row by name); not in any default vendor list (D11).
@@ -3277,6 +3287,124 @@ judged by the lock, never by a stamp). Vendor-free, like the rest of the class.
 Tests: `VibeConsultantTests`, `ConfinementPlannerTests` (the Vibe question launch), `DeletingAnOwnedTreeNeverEntersALinkTests`,
 `ReviewSnapshotRefreshTests` (`MakeAt…`) — listed in [module_tests.md](module_tests.md).
 
+## A Vibe disk row expands a parent folder into its repositories (2026-10-18, PLAN_vibe_reads_a_folder_of_repositories.md)
+
+The owner's disk row ("projects on this disk") is granted PARENT folders — a drive's project folder on Windows, `~/git` on WSL — not
+repositories. Before this plan `ConsultantPlaces.OneShotAsync` refused any granted root that git did not call a work tree. Now a root that
+is not a work tree is EXPANDED into the Git repositories beneath it, and each one goes through the one copy method a directly granted work
+tree uses (`RepositoryCopier.CopyAsync`: link chain, git's answer again, then `SnapshotSource.Live` minus `SnapshotExclusions.Default`).
+The confinement is D6's, unchanged: Vibe reads only copies coai made, in a folder coai owns, gone after the turn. Nothing else reads the
+parent folder and Vibe never sees a path of it.
+
+**The walk — `RepositoryWalk` (D2, D3, D7; pure, no git).** It reads through two seams: `FolderListings.Read` (a listing: folder, file or
+link entries, or `Unreadable`) for the root and its children, and `FolderListings.GitEntryOf` (one lookup of one name) for the deepest
+level.
+- Depth counts levels below the root: children are depth 1, their children depth 2; the walk goes no deeper. The root is never a candidate.
+- A **candidate** is a folder holding `.git` as a real folder or as a regular FILE (a worktree's or a submodule's top). A `.git` that is a
+  link does not make a candidate. A candidate is added and never entered, so nested repositories and submodules are the repository's own.
+- Skipped without a word: hidden folders — a dot name, and on Windows a folder with the Hidden or System attribute (`$RECYCLE.BIN`,
+  `System Volume Information` when a drive root is granted; `FolderEntry.Hidden`, set by `FolderListings.Read` on Windows only) —
+  `node_modules`, `bin`, `obj`, links to files. A link to a FOLDER is never followed and is named in ONE note per root (its count and
+  first five names). A depth-2 folder is only probed for `.git`, never listed.
+- **A listing is bounded and streamed.** `FolderListings.Read` reads at most `RepositoryWalk.MaxEntries` (100,000) entries of the root or
+  of a depth-1 folder as they stream, and keeps only what the walk needs — a folder, a link to a folder, a `.git` file; a plain file is
+  counted and let go, so a folder of a million files costs time up to the bound and no memory. Past the bound the listing is
+  `FolderListing.TooMany` and the walk refuses the ROW by name ("the folder X holds more than 100000 entries — grant the project
+  folders themselves"), keeping the notes.
+- A child that cannot be listed is skipped with a note; a ROOT that cannot be listed is refused by name. More than 10,000 folders within two
+  levels: refused. No candidate at all: refused with "holds no Git repository within two levels". Every refusal keeps the notes made
+  before it. Candidates are sorted by ordinal relative path, so order, notes and refusal sentences are the same on every run.
+
+**What git says — `RepositoryFacts` (D2 R1, D9).** ONE call per candidate: `git rev-parse --is-inside-work-tree --show-cdup
+--absolute-git-dir --path-format=absolute --git-common-dir`. A candidate must be the TOP of a work tree (inside AND an empty cdup), or it
+is skipped with a note. The facts carry WHY (`RepositoryFacts.Said`, a closed enum `GitSaid`), so the note names the real cause: git failed
+or gave no answer — "{path} was skipped: git did not confirm it (git failed or gave no answer)" (or "…git says it is not inside a work
+tree"); or git ran and the folder is inside ANOTHER repository's work tree (an empty or broken `.git` folder) — "{path} was skipped: it is
+inside another repository's work tree, not the top of its own". A **linked worktree** is a checkout whose git dir
+differs from its common dir, both compared as identity keys (`RepositoryIdentity.KeyOf`, case-blind on Windows only). A **main checkout**
+(`IsMain`) is a top whose git dir is KNOWN and equals its common dir — a common dir alone, with no git dir, is no identity and never makes
+a main. The text of a `.git`
+file is never the authority: a submodule's top holds the same kind of file, and a submodule inside a linked worktree writes a gitdir that
+merely contains `/worktrees/`.
+
+**Selection, bound, copy — `ParentExpansion` (D3, D4, D9).** The order is the contract: every candidate of every parent is validated, THEN
+a linked worktree whose confirmed main checkout (same common dir) is copied in the same row is left out (`LinkedWorktrees.Select`), THEN
+the 50-repository bound counts what is left, THEN the copies are made — so the bound is the row's, the budget's "of" is the real total,
+and every refusal comes before anything is made. A worktree granted DIRECTLY is always copied, once; one with no main in the row, or
+whose main git could not confirm, stays. The left-out ones are ONE note on the row, and the same sentence goes into the prompt that names
+the copies (`ConsultantPlace.Limitations`), so the model knows its copies hold no other branches and no uncommitted files of those
+worktrees. Validation stops early when the bound is certainly passed by repositories no selection can remove; that never changes
+Owned versus refused, but it can change WHICH refusal sentence and which notes appear (parent 1 with 51 repositories and parent 2 a junction
+says "more than 50", not parent 2's link sentence; later skip notes and the worktree summary are not made) — accepted behaviour (D9).
+The per-candidate step (`ConfirmOneAsync`) returns a small `Step` — a refusal, the candidate confirmed, or both empty for a skip — so
+the loop stays simple.
+
+**The budget, by phase.** The row's one budget covers the walks, git's confirmations and the copies. When it runs out BEFORE the first
+copy the refusal says what was going on — "copying the granted folders took longer than the row's budget (N s): the budget ran out while
+confirming K candidates with git, before anything was copied — grant fewer or smaller folders, or give the row more time
+(COAI_QCONSULT_ROW_MINUTES)" (or "…while reading the granted folders…" when no candidate was reached yet), never "0 of 0 copied", which
+reads as "nothing found"; from the first copy on it names "k of n copied" as before (`OneShotTally.Candidates`, `OneShotTally.Copying`).
+
+**The two sides of D4 (the boundary that must not blur).** *Discovery skips, with a note:* a candidate git does not confirm as a top,
+a folder the walk cannot list — one broken checkout never costs the others. *Copy refuses the whole row:* once a confirmed repository is
+handed to `RepositoryCopier`, any refusal (a link, a snapshot ceiling, a path too long) refuses the row and disposes every copy made.
+Nothing catches around the copy. The place carries the notes (`ConsultantPlace.Notes`) and says them to the log's sink. Every note takes
+ONE road, `OneShotTally.Say`, which redacts it once with `Redaction.SafeText` — a note names folders on the person's disk, and a folder
+may be named like a token — so the log and the place's list read the same redacted text; the row writes them into its `note` on the
+answered, refused, timed-out and failed arms (`QuestionRowLaunch.PlaceNotes`, which only joins and cuts them to one detail's limit).
+
+**The link rule (D5).** The granted root is link-checked BEFORE the walk (a junction at the root would otherwise be walked through). Each
+found repository's folders from the repository up to and including the granted root (`GrantedPaths.LinkUpTo`) are checked before git
+runs in them and again right before the copy, so a grouping folder that became a link between the walk and the copy refuses the row. The
+remaining check-to-open race is the one `SnapshotCopier` documents; nothing here claims more.
+
+**Layout (D6).** One subfolder per repository: `<row>/tree/<grant index>/<relative path>/snapshot-<id>/…`. The grant index keeps two
+grants' `group/repo` apart; the `snapshot-<id>` leaf makes a collision impossible. De-duplication is by full path across the whole row
+(a directly granted work tree always wins, wherever it stands in the list, then the first parent to find it; `OneShotTally.Planned`). The layout adds `<n>/<group>/<repo>/` to every copied path: a
+path that grows too long is a refusal with a sentence ("the path is too long") and so refuses the row, never a silent miss — and Vibe's
+own interpreter is not long-path aware (`VibePathBudget`), so a copy .NET writes can still be a file Vibe cannot open. Empty
+`<n>/<segments>` folders stay until the row's scratch goes.
+
+**A killed server (D8).** The row's copies live in `coai-question-<id>`; `PanelService.ScratchPrefixes` now sweeps that prefix after six
+hours, and the sweep keeps a folder whose `.coai-question.lock` it cannot take (a live row holds it for its whole life) — see
+[module_server.md](module_server.md).
+
+**Measured, read-only, 2026-10-18 and 2026-10-19 on the owner's real root (counts only; no path of the owner's disk is written down).**
+405 candidates, all confirmed by git, 392 linked worktrees left out and 13 selected on the 18th (394 left out on the 19th — agents keep
+making worktrees); the 405 git calls took about 34 s one after another (the walk itself 46 ms). What the 13 would copy
+(`git ls-files --cached --others --exclude-standard` minus the default exclusions): 10,734 files, 504.5 MiB in total, the largest
+repository 376.2 MiB in 1,606 files, the most files in one repository 2,517. That is far under the shared 2 GiB budget and 50,000 files,
+and the largest repository is under its own 512 MiB ceiling; `C:` held 920 GiB free against the 5 GiB floor. **Not measured:** the copy's
+wall time (the per-repository ceiling is 60 s and the row's budget 5 minutes, of which about 34 s go to git's confirmations before the
+first copy); the first live row will tell.
+
+```mermaid
+flowchart TD
+  grant["granted root"] --> exists{"the folder exists?"}
+  exists -->|no| refuseMissing["refused: the folder does not exist"]
+  exists -->|yes| git0{"git, asked first (GrantedAsync): inside a work tree?"}
+  git0 -->|"yes (work tree)"| direct["counted at once, before any parent is walked"]
+  git0 -->|"no (a parent)"| link{"root is a link? (DiscoverAsync)"}
+  link -->|yes| refuseLink["refused: grant the folder it points at"]
+  link -->|no| walk["RepositoryWalk: depth 1 and 2, candidates = .git folder or file"]
+  walk -->|"unreadable root, over 10000 folders, over 100000 entries, none found"| refuseWalk["refused, notes kept"]
+  walk -->|candidates| confirm["links up to the root, then one git call per candidate: top of a work tree?"]
+  confirm -->|no| skip["skipped with a note that names the cause (D4 discovery)"]
+  confirm -->|yes| select["linked worktree whose main is copied: left out, one summary note"]
+  select --> bound{"more than 50 repositories in the row?"}
+  bound -->|yes| refuseBound["refused before any copy"]
+  bound -->|no| copy["each repository in order: links up to the root, git again, then the snapshot of the live tree"]
+  direct --> copyDirect["a direct work tree: links up to its top (RepositoryCopier), git again, then the snapshot"]
+  copyDirect --> copy
+  copy -->|"a copy refused: link, ceiling, path too long"| refuseRow["row refused, every copy disposed (D4 copy)"]
+  copy -->|"budget ran out"| refuseBudget["refused: says if it ended while confirming or while copying"]
+  copy -->|all made| owned["Owned: tree/n/group/repo/snapshot-id, notes on the row, limitation in the prompt"]
+```
+
+Tests: `RepositoryWalkTests`, `RepositoryFactsTests`, `AVibeDiskRowExpandsAParentFolderTests`, `AVibeDiskRowSaysWhatItSkippedTests`,
+`AQuestionRowKeepsWhatItsPlaceSkippedWhateverEndsItTests`, `AVibeDiskRowReadsAParentFolderThroughTheServiceTests` (S15),
+`AScratchSweepRunsOnTheConsultationBeatTests`, `AQuestionRowHoldsItsScratchLockWhileItRunsTests` — listed in [module_tests.md](module_tests.md).
+
 ## Kimi over ACP — the `--ask-acp` shim (2026-10-12, S4 of `todo/PLAN_vibe_and_kimi_runtimes.md`, D15)
 
 Kimi Code is driven over `kimi acp` — the Agent Client Protocol, JSON-RPC 2.0 over newline-delimited stdio — because
@@ -3288,7 +3416,7 @@ CLIENT, so the approvals are coai's. The client half is the unit `src_mcp/runner
 `--ask-api`. `KimiRuntime` above it (E4.4, *The Kimi reviewer* below) builds its request and reads its report; the extension's row (E4.5) is in [module_extension.md](module_extension.md), *Kimi Code on the panel's side*.
 
 **The profile.** Executable `%USERPROFILE%\.kimi-code\bin\kimi.exe` when present, else bare `kimi` for
-`ExecutableResolver` (Windows only; nothing has run Kimi elsewhere, so no path is guessed there — the `agy` rule);
+`ExecutableResolver` (Windows only when this was written, so no path was guessed elsewhere — the `agy` rule; WSL2 and Linux paths have been found since E6, DL5 under *Kimi on WSL2*);
 arguments `["acp"]`; the model through config option `model`; the names declined at any depth: `AGENTS.md`,
 `agents.md`, `.kimi-code`, `.vibe`, `.agents/skills`, `.agents/agents` and `.mcp.json` (the last two joined with M-K9 (e), RESULTS §21 — a sub-agent root Kimi loads from disk and the MCP file it starts servers from when the folder is trusted; `.mcp.json` is a NAME, so refused at every depth, the stricter reading of "project-root"; `SnapshotExclusions.Default` carries the same eight, and `TheBoundaryRefusesExactlyWhatTheSnapshotLeavesOut` pins the pair), `.git`; the known sentences: the subscription `401`
 (`subscription_model`, listed BEFORE the `Authentication required` sentence it begins with → `not_signed_in`) and the
@@ -3629,9 +3757,9 @@ flowchart LR
   folder's entry NAMES, and never opens a credentials file. `KimiCanaryTests` pins that no string coai composes contains a canary from the
   sign-in or from the `moonshot-ai` row's `api_key`; the agent's own stderr and error text are vendor text, outside the pin.
 
-## Linux building blocks for Kimi — the Kimi-independent half of E5 (2026-10-16, `todo/PLAN_kimi_and_vibe_on_linux.md` DL6–DL10; A2 and A3 specs)
+## Linux building blocks for Kimi — the Kimi-independent half of E5 (2026-10-16, `research/PLAN_kimi_and_vibe_on_linux.md` DL6–DL10; A2 and A3 specs)
 
-Mechanical pieces, built before the Kimi launch is opened on Linux (`KimiLaunch.HostRefusal` is NOT lifted — that is E6), **the pieces were built first and wired into nothing; A2 (below) wires the lock, the listing and the junction shell, A3 (below) built the teardown and the survivor marker, and the integration step joins them to A2’s seam**: before A2 no `KimiCredentialsLock`, `KimiLaunch`, `AcpTransport`,
+Mechanical pieces, built before the Kimi launch is opened on Linux (when this was written `KimiLaunch.HostRefusal` was not yet lifted; E6 lifted it for WSL2 on 2026-10-17, see *Kimi on WSL2* below), **the pieces were built first and wired into nothing; A2 (below) wires the lock, the listing and the junction shell, A3 (below) built the teardown and the survivor marker, and the integration step joins them to A2’s seam**: before A2 no `KimiCredentialsLock`, `KimiLaunch`, `AcpTransport`,
 `AskAcpMode`, `ForeignKimi` or `HostProcessList` code calls them. Each file that comes from wsl_care (MIT, the same owner) says so in a header; what was not ported is named there too.
 
 | Piece | File (`src_mcp/runners/…`) | What it is | Tests |
@@ -3697,10 +3825,10 @@ flowchart TD
 
 Retirement, `TakeVerified` and the native take are Linux behaviours; the same code is inert (or .NET's own) on Windows, where the key is path-stable and an open `FileShare.None` file cannot be unlinked.
 
-## The verified teardown, and what a survivor does to the next launch — A3 of E5 (2026-10-16, `todo/PLAN_kimi_and_vibe_on_linux.md` DL9, S-K6, S-K14–S-K16, S-K18, S-K21, S-K22)
+## The verified teardown, and what a survivor does to the next launch — A3 of E5 (2026-10-16, `research/PLAN_kimi_and_vibe_on_linux.md` DL9, S-K6, S-K14–S-K16, S-K18, S-K21, S-K22)
 
 The Linux end of a Kimi tree, and the marker that makes a survivor change the next launch's ELIGIBILITY. **Built and tested; the three call sites that consult the marker (`KimiLaunch.TakeAsync`,
-`KimiShimHold.Taken`, `KimiHome.Alive`) are wired in the integration step with A2's work — until then a Kimi tree is still ended by today's `UnsupervisedTree`, and `KimiLaunch.HostRefusal` still refuses Linux (E6).**
+`KimiShimHold.Taken`, `KimiHome.Alive`) are wired in the integration step with A2's work — until then a Kimi tree is still ended by today's `UnsupervisedTree`, and `KimiLaunch.HostRefusal` still refuses Linux (E6). Historical: the integration step wired all of it and E6 lifted the refusal for WSL2 — see *Kimi on WSL2* below.**
 
 | Piece | File (`src_mcp/…`) | What it is |
 |---|---|---|
@@ -3820,9 +3948,9 @@ flowchart LR
 Tests: `KimiRuntimeTests`, `KimiIsClassifiedFromItsReportTests`, `OneKimiLaunchAtATimeTests`, `KimiIsDiagnosedInItsOwnWordsTests`, `AKimiReviewerRunsThroughTheShimTests`,
 `TheRoundsScratchDisposesItsKimiHomeJunctionFirstTests`, and the S2.45 canary re-run through the round's records in `KimiCanaryTests` — listed in [module_tests.md](module_tests.md).
 
-## Kimi on WSL2 — the host admission, the places, the cache, network storage and the marker report (2026-10-17, E6 server half of `todo/PLAN_kimi_and_vibe_on_linux.md`)
+## Kimi on WSL2 — the host admission, the places, the cache, network storage and the marker report (2026-10-17, E6 server half of `research/PLAN_kimi_and_vibe_on_linux.md`)
 
-E5 built Kimi's Linux mechanisms behind a closed door; E6 opens it, for WSL2 only. The extension's half (hints, install line, the *Clear the stuck Kimi marker* button, `KIMI_ON_LINUX_SINCE`) is `module_extension.md`'s.
+**Shipped 2026-10-19 in coai-mcp 0.61.0** (PR #879; Vibe on WSL2 since 0.59.0) and checked live on a WSL2 machine: the providers answer shows kimi 2.2.0 enabled on its own sign-in, and a plan round got Kimi's answer. **Not proven yet:** the install button pressed live on a machine without `rg`; a native Linux run (native Linux stays refused); the Kimi 2.2.0 confinement re-measurement. The M-K14 question (the person's own `kimi` open) is the follow-up plan `PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md`. E5 built Kimi's Linux mechanisms behind a closed door; E6 opens it, for WSL2 only. The extension's half (hints, install line, the *Clear the stuck Kimi marker* button, `KIMI_ON_LINUX_SINCE`) is `module_extension.md`'s.
 
 ```mermaid
 flowchart TD

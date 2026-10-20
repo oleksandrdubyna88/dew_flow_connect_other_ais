@@ -15,7 +15,7 @@ import { pageTree } from './pageTree';
 import { panelState, runPanel } from './panelPageHarness';
 
 /**
- * Vibe on a Linux host — E3 of todo/PLAN_kimi_and_vibe_on_linux.md: what the panel says on the WSL side, once coai-mcp
+ * Vibe on a Linux host — E3 of research/PLAN_kimi_and_vibe_on_linux.md: what the panel says on the WSL side, once coai-mcp
  * 0.59.0 runs a Vibe row there.
  *
  * <p>The facts every text below must agree on (DL1, DL2, DL14): WSL2 runs Vibe from 0.59.0; the sign-in coai uses is
@@ -345,7 +345,7 @@ interface Row {
 }
 
 // reads-another-program: a positive claim about the shared file the server embeds and the Consultant tab prints — the
-// rows the E3 plan names (`todo/PLAN_kimi_and_vibe_on_linux.md`). The C# loader's own tests hold the file's shape.
+// rows the E3 plan names (`research/PLAN_kimi_and_vibe_on_linux.md`). The C# loader's own tests hold the file's shape.
 const ROWS = (JSON.parse(readFileSync(repo('shared', 'consultant-limitations.json'), 'utf8')) as { rows: Row[] }).rows;
 const vibeRow = (platform: string): Row => {
   const row = ROWS.find((one) => one.runtime === 'vibe' && one.platform === platform);

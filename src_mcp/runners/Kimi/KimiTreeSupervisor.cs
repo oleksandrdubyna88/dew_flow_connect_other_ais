@@ -18,7 +18,7 @@ public abstract record SupervisorBegin
 }
 
 /// <summary>
-/// The Kimi <see cref="ITreeSupervisor"/> (DL9 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): the survivor marker's phases around <see cref="SupervisedTeardown"/>. A SIGKILLed shim leaves a
+/// The Kimi <see cref="ITreeSupervisor"/> (DL9 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>): the survivor marker's phases around <see cref="SupervisedTeardown"/>. A SIGKILLed shim leaves a
 /// <c>running</c> marker naming the agent; a clean teardown deletes it; a survivor keeps it.
 /// </summary>
 /// <remarks>
@@ -68,7 +68,7 @@ public sealed class KimiTreeSupervisor : ITreeSupervisor
         startedAt(shimPid) is { } started
             ? Begin(markerPath, ownedRoot, signInFolder, shimPid, started, teardown, note)
             : new SupervisorBegin.Refused(
-                $"coai cannot read the start time of its own shim (pid {shimPid}), so the survivor marker could not name its owner; coai does not start Kimi without it (DL9 of todo/PLAN_kimi_and_vibe_on_linux.md)");
+                $"coai cannot read the start time of its own shim (pid {shimPid}), so the survivor marker could not name its owner; coai does not start Kimi without it (DL9 of research/PLAN_kimi_and_vibe_on_linux.md)");
 
     internal static SupervisorBegin Begin(
         string markerPath, string ownedRoot, string signInFolder, int shimPid, DateTime shimStartedUtc, Teardown teardown, Action<string> note)
@@ -83,7 +83,7 @@ public sealed class KimiTreeSupervisor : ITreeSupervisor
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             return new SupervisorBegin.Refused(
-                $"the survivor marker {markerPath} could not be written ({e.Message}); coai does not start Kimi without it (DL9 of todo/PLAN_kimi_and_vibe_on_linux.md)");
+                $"the survivor marker {markerPath} could not be written ({e.Message}); coai does not start Kimi without it (DL9 of research/PLAN_kimi_and_vibe_on_linux.md)");
         }
     }
 

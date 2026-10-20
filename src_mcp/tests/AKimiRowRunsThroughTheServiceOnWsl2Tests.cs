@@ -10,7 +10,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// A Kimi reviewer row through the REAL service on a WSL2 host (E6 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>, §8, S-K20): a plan round and a code round, each the real roster, the real launch control, the real
+/// A Kimi reviewer row through the REAL service on a WSL2 host (E6 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>, §8, S-K20): a plan round and a code round, each the real roster, the real launch control, the real
 /// <c>coai-mcp --ask-acp</c> shim as a child process and the FAKE ACP agent as <c>kimi acp</c> — plus the two refused hosts (a native Linux host and a WSL1 kernel), which start nothing. The host is GIVEN through the per-flow seam
 /// (<see cref="KimiFlowHost"/>), so the flows run on a runner that is not a WSL2 machine.
 /// </summary>

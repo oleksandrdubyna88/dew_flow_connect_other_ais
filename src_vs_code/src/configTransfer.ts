@@ -33,7 +33,7 @@ export const NEVER_TRANSFERRED: Readonly<Record<string, string>> = {
   dataSide: 'which side of this machine this window is',
   alsoWatchDataDirectories: 'paths on this machine',
   vibeHomesDirectory: 'a path on this machine',
-  // A risk decision about THIS machine's home folder (DL6 of todo/PLAN_kimi_and_vibe_on_linux.md): carried to a machine whose home is
+  // A risk decision about THIS machine's home folder (DL6 of research/PLAN_kimi_and_vibe_on_linux.md): carried to a machine whose home is
   // somebody else's share, an import would switch the refusal off there without its person ever having said so.
   kimiAllowNetworkSignIn: 'a safety decision about the home folder of this machine',
   // The question consultant's disk roots are folders of the machine that wrote them (research/PLAN_paths_per_side.md E1.6,

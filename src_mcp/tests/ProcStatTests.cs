@@ -5,7 +5,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// The one reader of a <c>/proc/&lt;pid&gt;/stat</c> line (DL10 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>), extracted from <c>ProcessTree</c>: pid, parent, <c>comm</c> and
+/// The one reader of a <c>/proc/&lt;pid&gt;/stat</c> line (DL10 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>), extracted from <c>ProcessTree</c>: pid, parent, <c>comm</c> and
 /// state, over fake lines and a fake <see cref="IProcReads"/>. The name field is the trap — the kernel prints any thread name between brackets, spaces and brackets
 /// included — and a process that has exited (<c>Z</c>, <c>X</c>) must read as that. <c>TheTreeIsReadByIdentityTests</c> stays green unchanged: that is the proof nothing moved.
 /// </summary>

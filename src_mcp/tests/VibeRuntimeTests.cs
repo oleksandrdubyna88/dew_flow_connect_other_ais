@@ -305,7 +305,7 @@ public sealed class VibeRuntimeTests : IDisposable
     private static Func<string, string?> Env(params (string Name, string Value)[] set) => name => set.Where(pair => pair.Name == name).Select(pair => pair.Value).FirstOrDefault();
 
     /// <summary>
-    /// S-V11 (DL5 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>), one row per step of the precedence on WSL. The row's own CLI path wins before
+    /// S-V11 (DL5 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>), one row per step of the precedence on WSL. The row's own CLI path wins before
     /// any of this is asked (<c>VibeRuntime.Build</c>); what is asked here is what the row did NOT set. Every candidate counts only when its
     /// file is THERE, so each arm's `exists` is the list of files the machine has.
     /// </summary>

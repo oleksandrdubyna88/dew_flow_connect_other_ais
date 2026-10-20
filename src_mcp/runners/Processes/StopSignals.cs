@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 namespace CoaiMcp.Runners.Processes;
 
 /// <summary>
-/// <c>SIGTERM</c> and <c>SIGINT</c> turned into a cancelled token, for a process whose own <c>finally</c> must run (S-K16 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>, DL9): the
+/// <c>SIGTERM</c> and <c>SIGINT</c> turned into a cancelled token, for a process whose own <c>finally</c> must run (S-K16 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>, DL9): the
 /// <c>--ask-acp</c> shim ends its agent's tree in a <c>finally</c>, and without a registration the runtime exits on the signal and skips it.
 /// </summary>
 /// <remarks>

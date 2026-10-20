@@ -7,7 +7,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// What a standing survivor marker does to the next launch (DL9 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>; S-K14, S-K18, L-N3; A3 §6): reconciled first — terminate by identity, confirm, then
+/// What a standing survivor marker does to the next launch (DL9 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>; S-K14, S-K18, L-N3; A3 §6): reconciled first — terminate by identity, confirm, then
 /// ask every member the tri-state question — cleared only when every member is GONE, with the way out in the Busy sentence. The process control is a seam (the <c>ReaderBarrierTests</c> precedent: no
 /// test machine can safely make a process that refuses to die), so every arm runs on every platform.
 /// </summary>

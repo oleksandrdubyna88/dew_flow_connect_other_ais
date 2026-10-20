@@ -6,7 +6,7 @@
 > `research/module_runners.md`, `research/module_tests.md`.
 >
 > Related docs: [PLAN_vibe_and_kimi_runtimes.md](PLAN_vibe_and_kimi_runtimes.md) (the Kimi shim, M-K14),
-> [PLAN_kimi_and_vibe_on_linux.md](PLAN_kimi_and_vibe_on_linux.md).
+> [PLAN_kimi_and_vibe_on_linux.md](../research/PLAN_kimi_and_vibe_on_linux.md).
 
 ## 1. The symptom
 

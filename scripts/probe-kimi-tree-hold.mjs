@@ -22,7 +22,7 @@
 //
 //   node scripts/probe-kimi-tree-hold.mjs [--shim <coai-mcp.exe>] [--scratch <dir>] [--repeats 3] [--arms normal,normal-tools,killed,killed-rg]
 //
-// Linux (E1 of todo/PLAN_kimi_and_vibe_on_linux.md, §5; the cells it serves are E4's L-K4/L-K6): the process list is read from
+// Linux (E1 of research/PLAN_kimi_and_vibe_on_linux.md, §5; the cells it serves are E4's L-K4/L-K6): the process list is read from
 // /proc (lib/proc.mjs — pid, parent, comm; read-only), a lock file's state is asked of flock(1) — .NET turns FileShare.None into
 // an advisory flock there, which a plain open does not see — the shim is `coai-mcp` without `.exe`, the sign-in link is a
 // symlink (DL6), the shim's environment is MinimalUnix with HOME alone redirected (DL11), and the killed-rg arm searches /usr.

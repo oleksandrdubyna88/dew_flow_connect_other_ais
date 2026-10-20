@@ -1,4 +1,4 @@
-// lib/dotenv-names.mjs — DL2's names grammar (todo/PLAN_kimi_and_vibe_on_linux.md) as a REFERENCE: what coai reads from the
+// lib/dotenv-names.mjs — DL2's names grammar (research/PLAN_kimi_and_vibe_on_linux.md) as a REFERENCE: what coai reads from the
 // person's ~/.vibe/.env before it links that file into an owned Vibe home. Names only — everything after the `=` is the value,
 // and the value is never parsed, kept or returned. The product's C# (E2) is held to the verdicts this reference recorded in
 // shared/dotenv-name-vectors.json, and those verdicts are held to python-dotenv itself (L-V6b, scripts/dotenv-name-vectors.mjs).

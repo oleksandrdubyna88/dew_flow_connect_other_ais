@@ -1,7 +1,7 @@
 namespace CoaiMcp.Runners.Platform;
 
 /// <summary>
-/// The ONE host admission for a runtime that is measured on Windows and on WSL2 (DL1 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): Vibe's since E2, Kimi's since E6. The sentences are written
+/// The ONE host admission for a runtime that is measured on Windows and on WSL2 (DL1 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>): Vibe's since E2, Kimi's since E6. The sentences are written
 /// once and take the runtime's name, so the two runtimes cannot word the same refusal two ways.
 /// </summary>
 /// <remarks>
@@ -11,7 +11,7 @@ namespace CoaiMcp.Runners.Platform;
 /// </remarks>
 public static class HostAdmission
 {
-    private const string Plan = "DL1 of todo/PLAN_kimi_and_vibe_on_linux.md";
+    private const string Plan = "DL1 of research/PLAN_kimi_and_vibe_on_linux.md";
 
     private const string Parent = "D18 of todo/PLAN_vibe_and_kimi_runtimes.md";
 

@@ -44,7 +44,7 @@
 //   M-V16  an mcp.json canary planted in the cached BUILT-IN plugin package of a primed owned home, the BUILT environment
 //          (D17), the shipped flags; control: primed, nothing planted (RESULTS §25)
 //
-// Linux (E1 of todo/PLAN_kimi_and_vibe_on_linux.md, §5): the same cells, with the Linux arms — a folder link is `ln -s`'s symlink,
+// Linux (E1 of research/PLAN_kimi_and_vibe_on_linux.md, §5): the same cells, with the Linux arms — a folder link is `ln -s`'s symlink,
 // the minimal environment is MinimalUnix, the canaries run `python3`, Vibe's own Python is uv's `bin/python`. On Linux a Vibe home
 // is signed in only through `<home>/.env` (L-V1: no keyring on WSL), so every short home this probe makes gets the `.env` LINK to
 // the person's Vibe home's `.env` (made by lstat alone — never opened, read or copied), and an arm that would have run on the
