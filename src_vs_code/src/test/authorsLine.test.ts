@@ -169,6 +169,8 @@ test('a size of the wrong shape adds no size clause and does not spoil the line'
   assert.equal(writtenWith(snapshot([opusMain]), 'big'), 'written with Opus 5.5 (main) · main only');
   assert.equal(writtenWith(snapshot([opusMain]), size(scope('recorded', [cell('shown', 'code', 1, 3, 0), 'x']), scope('unavailable: first round', []))), 'written with Opus 5.5 (main) · main only');
   assert.equal(writtenWith(snapshot([opusMain]), size(scope('recorded', [{ coverage: 'shown', kind: 'code', files: 'two', added: 1, removed: 1 }]), scope('unavailable: first round', []))), 'written with Opus 5.5 (main) · main only');
+  // A coverage word the server never writes (RoundSize.cs: shown, elided, excluded, binary) is a cell of the wrong shape, not a counted one.
+  assert.equal(writtenWith(snapshot([opusMain]), size(scope('recorded', [cell('bogus', 'code', 4, 10, 2)]), scope('unavailable: first round', []))), 'written with Opus 5.5 (main) · main only');
 });
 
 test('every model vector is shown and grouped as the shared file says', () => {

@@ -288,11 +288,20 @@ function cellOf(cell: unknown): SizeCell | undefined {
   return isObject(cell) ? readCell(cell) : undefined;
 }
 
+/** The coverage words the server writes (`RoundSize.cs`: Shown, Elided, Excluded, Binary); any other word is a cell of the wrong shape. */
+const COVERAGES: ReadonlySet<string> = new Set(['shown', 'elided', 'excluded', 'binary']);
+
 function readCell(cell: object): SizeCell | undefined {
-  const coverage = textOf(cell, 'coverage');
+  const coverage = knownCoverage(cell);
   const numbers = cellNumbers(cell);
 
   return coverage !== undefined && textOf(cell, 'kind') !== undefined && numbers !== undefined ? { coverage, ...numbers } : undefined;
+}
+
+function knownCoverage(cell: object): string | undefined {
+  const coverage = textOf(cell, 'coverage');
+
+  return coverage !== undefined && COVERAGES.has(coverage) ? coverage : undefined;
 }
 
 function cellNumbers(cell: object): Pick<SizeCell, 'files' | 'added' | 'removed'> | undefined {
