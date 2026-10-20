@@ -167,6 +167,42 @@ public sealed class ABackfillLeavesEverythingElseWhereItWasTests
         }
     }
 
+    /// <summary>
+    /// The mirror of the authors case — "a live size is never replaced". An AUTHORS-ONLY write carries no size because the decision kept the database's
+    /// size row, so whatever size the session file holds (a backfilled one, a different measurement) must not be projected over it. Before the guard the
+    /// projection came from the reloaded file whatever the write held.
+    /// </summary>
+    [Fact]
+    public async Task AnAuthorsOnlyWrite_NeverProjectsTheFilesSizeOverTheRowTheDecisionKept()
+    {
+        var (world, _) = await BackfilledAsync();
+        using (world)
+        {
+            using var db = RoundsDb.OpenExisting(world.DataDir, Serilog.Core.Logger.None)!;
+            using var read = AuthorPeers.OpenReadOnly(world.DataDir)!;
+            var writer = new BackfillWriter(world.DataDir, world.Store, db, TimeSpan.FromMilliseconds(300));
+            var gate = new StoredHistory(read, world.Store).Gates().Single();
+            var round = gate.Rounds.Single();
+            var kept = new RoundSize(ScopeSize.ObservedZero("abc1234"), ScopeSize.Unavailable(ScopeState.FirstRound), SizeOrigin.Live);
+            writer.Write(new RoundWrite(gate, round, WriteHalves.Both, null, kept, 0, RoundFingerprint.Read(read.CreateCommand, round.RoundId))).Should().Be(WriteResult.Written);
+            var gateSession = world.Fixture.Rounds.GateSessions[0];
+            var file = world.Store.Load(world.RepoOf(gateSession), BackfillWorld.BranchOf(gateSession))!;
+            var other = new RoundSize(ScopeSize.ObservedZero("def5678"), ScopeSize.Unavailable(ScopeState.NoPredecessorSha), SizeOrigin.Backfill);
+            world.Store.Save(file with { Rounds = [.. file.Rounds.Select(entry => entry with { Size = other, Gitlinks = 7 })] });
+            const string sizeOnly = "SELECT size_state, delta_state, delta_from, size_origin, size_gitlinks FROM rounds ORDER BY id";
+            var columnsBefore = StoreDump.Rows(world.DataDir, sizeOnly);
+            var rowsBefore = StoreDump.Rows(world.DataDir, "SELECT * FROM round_changes ORDER BY round_id, scope, coverage, kind");
+            columnsBefore.Should().Contain(SizeOrigin.Live, "positive control: the database holds the live size the decision kept");
+
+            var result = writer.Write(new RoundWrite(gate, round, WriteHalves.Both, gate.Journal[0].Authors, null, null, RoundFingerprint.Read(read.CreateCommand, round.RoundId)));
+
+            result.Should().Be(WriteResult.Written);
+            world.Store.Load(world.RepoOf(gateSession), BackfillWorld.BranchOf(gateSession))!.Rounds[0].Size!.Origin.Should().Be(SizeOrigin.Backfill, "positive control: the file still holds the other size");
+            StoreDump.Rows(world.DataDir, sizeOnly).Should().Be(columnsBefore, "a write without a size leaves the size columns as the decision kept them");
+            StoreDump.Rows(world.DataDir, "SELECT * FROM round_changes ORDER BY round_id, scope, coverage, kind").Should().Be(rowsBefore);
+        }
+    }
+
     [Fact]
     public async Task TheTwoVersionsAreOnEveryWrittenRound()
     {

@@ -169,12 +169,17 @@ internal sealed class BackfillWriter(string dataDir, SessionStore store, RoundsD
 
     /// <summary>
     /// The database half, FROM the verified copy and never from the in-memory result: the size rows, then the authors columns and rows. Both
-    /// writers delete before they insert and join this transaction; a null half writes nothing. The authors are projected only when the WRITE carries a
-    /// snapshot: a size-only write means the decision kept the database row, and the file's own snapshot (a healed one, an older reader's) must not replace it.
+    /// writers delete before they insert and join this transaction; a null half writes nothing.
     /// </summary>
+    /// <remarks>
+    /// A half is projected only when the WRITE carries it — the authors when it carries a snapshot, the size when it carries a size. A write without
+    /// one means the decision kept the database row, and the file's own copy (a healed snapshot, an older reader's, a different size) must not
+    /// replace it: a live size is never replaced.
+    /// </remarks>
     private WriteResult Project(RoundWrite write, Verified verified)
     {
-        RoundChangesTable.Record(db, write.Round.RoundId, verified.Size, verified.Gitlinks);
+        var (size, gitlinks) = write.Size is null ? ((RoundSize?)null, (int?)null) : (verified.Size, verified.Gitlinks);
+        RoundChangesTable.Record(db, write.Round.RoundId, size, gitlinks);
         at?.Invoke(WritePoint.ChangesRecorded);
         RoundAuthorsTable.Record(db, write.Round.RoundId, write.Authors is null ? null : verified.Authors);
 
