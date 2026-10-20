@@ -67,9 +67,32 @@ public sealed class RoundAuthorsTextTests
 
         var text = RoundAuthorsText.Render(answer);
 
-        text.Where(at => at != '\n' && IsTerminalUnsafe(at)).Should().BeEmpty("the table prints nothing a terminal acts on or a reader cannot see, but its own line breaks");
+        UnsafeIn(text).Should().BeEmpty("the table prints nothing a terminal acts on or a reader cannot see, but its own line breaks");
         text.Should().Contain("feat/?evil", "the branch is still shown, with its bidi override made visible").And.Contain("sonnet?").And.Contain("x?y?");
     }
+
+    /// <summary>A character above U+FFFF is a surrogate PAIR: judged by code point, a TAG character (invisible, "ASCII smuggling") or a musical format control is hidden like any other format character, and an emoji survives whole.</summary>
+    [Fact]
+    public void ABranchWithATagCharacterAboveTheBasicPlane_NeverReachesTheTerminal()
+    {
+        var selection = Sel();
+        var sums = RoundAuthorsCells.Count(RoundAuthorsPopulation.Of([Round(1, branch: "feat/\U000E0041\U000E0042evil\U0001D173")], selection), selection);
+        var answer = new RoundAuthorsAnswer(1, selection, [new RoundAuthorsSource(new string('a', 32), "linux", "2026-10-19T00:00:00Z", true, ["s"])], sums.Cells, sums.Exclusions, true);
+
+        var text = RoundAuthorsText.Render(answer);
+
+        UnsafeIn(text).Should().BeEmpty("the table prints no TAG character or format control, whether the code point is one UTF-16 unit or two");
+        text.Should().Contain("feat/??evil?", "the branch is still shown, one question mark per hidden code point");
+    }
+
+    /// <summary>
+    /// A lone surrogate is not text at all (invalid UTF-16): it is shown as <c>?</c>. So is U+FFFD, the replacement character — what enumerating
+    /// a string yields for such a unit, so the two cannot be told apart and a value that already holds one is shown as <c>?</c> too. Pinned, not assumed.
+    /// </summary>
+    [Fact]
+    public void ALoneSurrogate_AndTheReplacementCharacter_AreShownAsAQuestionMark() =>
+        new[] { "a\uD800b", "a\uDC00b", "a\uD800", "\uDC00\uD800", "a\uFFFDb" }.Select(RoundAuthorsText.Printable)
+            .Should().Equal("a?b", "a?b", "a?", "??", "a?b");
 
     [Theory]
     [InlineData("first\u009B2J", "first?2J")]
@@ -81,6 +104,10 @@ public sealed class RoundAuthorsTextTests
     [InlineData("x\u0085y\u000Cz", "x?y?z")]
     [InlineData("x\u00ADy\u2066z\u2069", "x?y?z?")]
     [InlineData("x\ny\rz", "x?y?z")]
+    [InlineData("a\U000E0041b", "a?b")]
+    [InlineData("a\U000E0001b\U000E007Fc", "a?b?c")]
+    [InlineData("a\U0001D173b\U0001D17Ac", "a?b?c")]
+    [InlineData("a\U0001F600b", "a\U0001F600b")]
     [InlineData("feat/émoji-😀 — ok", "feat/émoji-😀 — ok")]
     public void Printable_ShowsWhatATerminalWouldActOnAsAQuestionMark_AndKeepsTheRest(string value, string shown) =>
         RoundAuthorsText.Printable(value).Should().Be(shown);

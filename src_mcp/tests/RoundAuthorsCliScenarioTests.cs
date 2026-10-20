@@ -236,7 +236,7 @@ public sealed class RoundAuthorsCliScenarioTests : IDisposable
         foreach (var (word, shown) in new[]
         {
             (HostileWord, HostileShown), ("first\nforged", "first?forged"), ("first\u2028forged", "first?forged"), ("first\u0085forged", "first?forged"),
-            ("first\u000Cforged", "first?forged"), ("first\u009B2J", "first?2J"), ("\uFEFFfirst", "?first"), ("a\u007Fb", "a?b"), ("first\u202Eforged", "first?forged"),
+            ("first\u000Cforged", "first?forged"), ("first\u009B2J", "first?2J"), ("\uFEFFfirst", "?first"), ("a\u007Fb", "a?b"), ("first\u202Eforged", "first?forged"), ("first\U000E0041x", "first?x"), ("first\U0001D173x", "first?x"),
         })
         {
             crafted.Add(($"cohort-{crafted.Count}", RoundAuthorsMerge.Serialize(report with { Selection = report.Selection with { Cohort = word } }), shown));
@@ -252,7 +252,7 @@ public sealed class RoundAuthorsCliScenarioTests : IDisposable
             var err = run.Err.Replace("\r\n", "\n", StringComparison.Ordinal);
             run.Code.Should().Be(65, $"--add '{path}' is a bad request; stderr was: {run.Err}");
             run.Out.Should().BeEmpty();
-            err.Where(at => at != '\n' && RoundAuthorsFacts.IsTerminalUnsafe(at)).Should().BeEmpty($"stderr for {name} carries nothing the terminal would act on");
+            RoundAuthorsFacts.UnsafeIn(err).Should().BeEmpty($"stderr for {name} carries nothing the terminal would act on");
             err.TrimEnd('\n').Split('\n').Should().HaveCount(1, $"stderr for {name} is one line: the file cannot forge another");
             err.Should().Contain($"--add '{path}'", "the argument as typed");
             err.Should().Contain(shown.Length == 0 ? "--add" : shown, $"the quoted word of {name} is shown with its unsafe characters made visible");
