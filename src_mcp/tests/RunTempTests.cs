@@ -108,13 +108,15 @@ public sealed class RunTempTests : IClassFixture<RunTempTests.TempSeenByAClassFi
     {
         var text = File.ReadAllText(RunTemp.Folder + ".owner");
 
-        text.Should().MatchRegex(Claim.ToString(), "<host>@<os>:<pid>[:<start>], one line, no trailing newline — the family's owner claim");
+        OwnerClaim.IsWellFormed(text).Should().BeTrue("<host>@<os>:<pid>[:<start>], read STRICTLY (whole-text anchors): the family's owner claim");
+        text.Should().NotEndWith("\n", "no trailing newline: .NET's $ matches before a final line feed, so a lenient regex would let one through").And.NotContain("\r");
         var fields = text.Split('@')[1].Split(':');
         fields[1].Should().Be(Environment.ProcessId.ToString(), "the claim names THIS process");
         fields.Length.Should().Be(OperatingSystem.IsLinux() ? 3 : 2, "only Linux gives a start time without spawning a process");
         if (OperatingSystem.IsLinux())
         {
-            Math.Abs(long.Parse(fields[2]) - new DateTimeOffset(System.Diagnostics.Process.GetCurrentProcess().StartTime).ToUnixTimeSeconds())
+            long.TryParse(fields[2], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var recorded).Should().BeTrue("digits only, no whitespace");
+            Math.Abs(recorded - new DateTimeOffset(System.Diagnostics.Process.GetCurrentProcess().StartTime).ToUnixTimeSeconds())
                 .Should().BeLessThanOrEqualTo(2, "the start field is this process's own start");
         }
     }
@@ -225,24 +227,23 @@ public sealed class RunTempTests : IClassFixture<RunTempTests.TempSeenByAClassFi
     }
 
     /// <summary>The verdict table of <see cref="OwnerClaim.Verdict"/>: what the sweeper may take, and what it must keep.</summary>
-    public static TheoryData<string, bool, long?, ClaimVerdict> Verdicts() => new()
+    public static TheoryData<string, bool, ClaimVerdict> Verdicts() => new()
     {
-        { "host@linux:4242:1000", true, 5000L, ClaimVerdict.Keep },
-        { "host@linux:4242:1000", true, null, ClaimVerdict.Keep },
-        { "host@win32:4242", true, null, ClaimVerdict.Keep },
-        { "host@win32:4242", false, null, ClaimVerdict.Leftover },
-        { "host@darwin:4242", false, null, ClaimVerdict.Leftover },
-        { "host@linux:4242:1000", false, null, ClaimVerdict.Leftover },
-        { "not a claim at all", false, null, ClaimVerdict.Keep },
-        { string.Empty, false, null, ClaimVerdict.Keep },
-        { "host@plan9:4242", false, null, ClaimVerdict.Keep },
-        { "host@win32:4242\nsecond line", false, null, ClaimVerdict.Keep },
+        { "host@linux:4242:1000", true, ClaimVerdict.Keep },
+        { "host@win32:4242", true, ClaimVerdict.Keep },
+        { "host@win32:4242", false, ClaimVerdict.Leftover },
+        { "host@darwin:4242", false, ClaimVerdict.Leftover },
+        { "host@linux:4242:1000", false, ClaimVerdict.Leftover },
+        { "not a claim at all", false, ClaimVerdict.Keep },
+        { string.Empty, false, ClaimVerdict.Keep },
+        { "host@plan9:4242", false, ClaimVerdict.Keep },
+        { "host@win32:4242\nsecond line", false, ClaimVerdict.Keep },
     };
 
     [Theory]
     [MemberData(nameof(Verdicts))]
-    public void TheSweepersVerdict_KeepsWhatItCannotProveDead(string claim, bool pidAlive, long? liveStart, ClaimVerdict expected) =>
-        OwnerClaim.Verdict(claim, pidAlive, liveStart).Should().Be(expected, "a live pid — even one with an older recorded start, a reused pid — and a claim that does not parse are LEAKS, never deletions");
+    public void TheSweepersVerdict_KeepsWhatItCannotProveDead(string claim, bool pidAlive, ClaimVerdict expected) =>
+        OwnerClaim.Verdict(claim, pidAlive).Should().Be(expected, "a live pid — whatever its start, a reused pid included — and a claim that does not parse are LEAKS, never deletions");
 
     private static string TestsExe => Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "CoaiMcp.Tests.exe" : "CoaiMcp.Tests");
 
