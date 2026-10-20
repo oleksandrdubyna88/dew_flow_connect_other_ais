@@ -254,7 +254,7 @@ internal static class AcpAgent
 
         if (Text(script, "promptError") is { Length: > 0 } failure)
         {
-            Error(id, -32000, failure);
+            Error(id, -32000, failure, script.TryGetProperty("promptErrorData", out var data) ? JsonNode.Parse(data.GetRawText()) : null);
 
             return;
         }
@@ -454,12 +454,13 @@ internal static class AcpAgent
     private static void Reply(JsonElement id, JsonObject result) =>
         Write(new JsonObject { ["jsonrpc"] = "2.0", ["id"] = JsonNode.Parse(id.GetRawText()), ["result"] = result }.ToJsonString());
 
-    private static void Error(JsonElement id, int code, string message) =>
+    /// <summary>A JSON-RPC error; <paramref name="data"/> is the error's own optional <c>data</c> member, where a server may keep the detail its message leaves out.</summary>
+    private static void Error(JsonElement id, int code, string message, JsonNode? data = null) =>
         Write(new JsonObject
         {
             ["jsonrpc"] = "2.0",
             ["id"] = JsonNode.Parse(id.GetRawText()),
-            ["error"] = new JsonObject { ["code"] = code, ["message"] = message },
+            ["error"] = new JsonObject { ["code"] = code, ["message"] = message, ["data"] = data },
         }.ToJsonString());
 
     private static void Write(string line)

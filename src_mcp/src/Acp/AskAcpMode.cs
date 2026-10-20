@@ -217,11 +217,15 @@ internal static class AskAcpMode
     /// <summary>The report printed, the exit made from the outcome.</summary>
     private static async Task<int> ReportedAsync(IAcpProfile profile, AcpOutcome outcome, Action<string> note, TextWriter output)
     {
-        var diagnosis = AcpDiagnosis.Of(outcome.Reason + "\n" + outcome.StdErr, profile.KnownFailures);
+        var diagnosis = Diagnose(profile, outcome);
         await output.WriteLineAsync(Report(outcome, diagnosis));
 
         return Exit(outcome, diagnosis, note);
     }
+
+    /// <summary>The known failure an outcome names, from the text of the turn: its reason and its stderr.</summary>
+    internal static AcpDiagnosis Diagnose(IAcpProfile profile, AcpOutcome outcome) =>
+        AcpDiagnosis.Of(outcome.Reason, outcome.StdErr, profile.KnownFailures);
 
     /// <summary>Why this shim will not even start the agent — or empty when it will. Every one of these is 65.</summary>
     internal static string Refusal(IAcpProfile profile, IReadOnlyDictionary<string, string> flags, string cwd, string model) =>

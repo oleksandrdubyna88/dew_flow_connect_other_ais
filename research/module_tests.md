@@ -4656,3 +4656,21 @@ computed. NOT covered: the real Kimi's answer (the capture step is written, not 
 
 The fix: `AcpDiagnosis.Note`/`CureSeparator`/`WithoutCure` (the shim's note shape written once, read back once; `AskAcpMode.DiagnosedNote` now calls `Note`), `Because`' `VendorSaid` quoting the note without the shim's cure, and `Quote` redacting
 through `VendorReason.Written` before it cuts, and redacting a tagged line whole. NOT covered: the reasons of `NotStarted`, `StoodDown` and `Unparseable` outcomes (adapter-composed, not cut).
+
+## Code gate and judge fixes (2026-10-20, K1–K7; session def84902 verdict `proceed`, Opus judge: no blockers)
+
+Each behaviour fix was seen red first; the break-it column is a change to the fixed code that turns the test red again, then restored. Every id is made up.
+
+| Test | Seen red as | Break-it (went red) |
+|---|---|---|
+| K1 `ASpentKimiQuotaReadsAsAQuotaTests` (assertion strengthened: the WHOLE clause in its quoted form `"Your quota will reset at 14:00 UTC."`, which only the cure writes) and the new `ALongVendorSentence_StillQuotesTheWholeResetClause_InTheSummary` | *Expected line "kimi/Architecture: rate limited (after 1 attempt): the Kimi plan quota is used up - signing in again will not help - the vendor said: kimi_quota_spent: … Your quota will reset at 14:00." to contain ""Your quota will reset at 14:00 UTC.""* (summary, ledger, log); the long case: *… the gateway added a long explanation before the vendor said anything u." to contain "Your quota will reset"* — the old assertion checked only the prefix `Your quota will reset`, which is why it stayed green | the `QuotaMarker` arm removed from `VendorDiagnosis.CureOn` |
+| K1 `KimiQuotaIsNotASignInTests.TheQuotaMarker_BecomesTheQuotaSentence_WhichNeverSaysKimiLogin` (changed: the cure is `KimiQuotaWords.Said` of the text; a line with no clause says "the vendor named no reset") | red with the old `Fixed` cure once the arm exists | — |
+| K2 `TheCureIsSaidOnceAndTheIdIsHiddenOnEveryRoadTests.ASecondProfilesNote_IsStrippedTheSameWay_ThroughTheCatalogAlone` | *error CS0117: 'AcpProfiles' does not contain a definition for 'WithoutCure'* (the catalog route did not exist; `BoundedScheduler` named `KimiAcpProfile`) | the catalog overload reading `All` instead of the profiles it is given: *… differ at index 50: ".out of widgets - order."* |
+| K3 `…AProviderErrorWithALongBody_IsTheVendorsText_CutInTheSummary_WholeInTheLedger` | *Expected round.Summary.Length to be less than 280 … but found 730*; the summary showed `[coai-mcp] provider_error: …` | a tagged note kept whole again (`QuoteOurs` back to `Written(line)`): the same red |
+| K4 `AskAcpModeTests.TheReasonIsMatchedFirst_AndStderrOnlyWhenTheReasonMatchesNoRow` | *Expected AskAcpMode.Diagnose(…Outcome("Authentication required", "Authentication required: 503 from the gateway")).Name to be … "not_signed_in", but … "provider_error"* | reason and stderr matched in one pass again: the same red |
+| K5 `AskAcpModeTests.ADetailKeptInTheErrorsData_IsPartOfTheReason_AndReadsAsAQuota` and `AStringInTheErrorsData_IsKeptAsItIs` | *Expected code to be 75 because not_signed_in: the agent answered with an error (-32000): Authentication required - run `kimi login` … but found 77*; *Expected reason "the agent answered with an error (-32000): model exploded" to contain "the gateway said: out of widgets"* (the fake agent's `promptErrorData` carries the `data` member) | `ErrorText` ignoring `data`: the same two reds |
+| K6 `SecretCheckTests` (two new `moonshot-id` rows; the refusal text never quotes the id; `org-settings-panel` stays clean) | a PIN of existing behaviour: green when written | `moonshot-id` removed from `Shapes`: *Expected type to be …Refused, but found …Clean* |
+| K7 a comment in `theCheckButtonIsNotOfferedOnAReviewerOnlyRow.test.ts` (`research/PLAN_…` → `todo/PLAN_…`) | no behaviour: no test needed | — |
+
+The fix: `VendorDiagnosis.CureOn` takes the text and quotes the clause (K1; `KimiRuntime.Cured` removed); `AcpProfiles.WithoutCure`/`CurelessReason` over the catalog and `AcpDiagnosis.CurelessReason` (K2, K3; `BoundedScheduler.QuoteOurs`);
+`AcpDiagnosis.Of(reason, stderr, known)` (K4); `AcpMessages.ErrorText` (K5). `AKimiRound`'s `TheRound` and the fake agent's `promptErrorData` are test infrastructure.

@@ -265,12 +265,8 @@ public sealed class KimiRuntime(string id, KimiHost host, KimiSeams seams, Seril
         var text = Words(report);
 
         // The cure FIRST: the summary cuts a line at 160 characters, and the shim's reason (a list of offered models) can be longer than that.
-        return VendorDiagnosis.For(text) is { } cure ? $"{Cured(report, cure)} (the shim said: {text})" : text;
+        return VendorDiagnosis.For(text) is { } cure ? $"{cure} (the shim said: {text})" : text;
     }
-
-    /// <summary>The cure to lead with: a spent plan quota quotes Kimi's own reset clause (<see cref="KimiQuotaWords.Said"/>); every other cure stands as the table wrote it.</summary>
-    private static string Cured(KimiReport report, string cure) =>
-        report.Failure == KimiAcpProfile.QuotaSpent ? KimiQuotaWords.Said(report.Reason) : cure;
 
     /// <summary>
     /// Rate limited ONLY when the shim exited with its spent-allowance code AND its report names one of the table's Spent rows

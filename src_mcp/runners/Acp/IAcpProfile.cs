@@ -88,6 +88,13 @@ public sealed record AcpDiagnosis(string Name, string Cure, AcpFailureKind Kind)
     /// <summary>True when a phrase matched.</summary>
     public bool Known => Name.Length > 0;
 
+    /// <summary>
+    /// The known failure the agent's REASON names, or — only when the reason names none — the one its stderr does (K4 of the code gate). The two used to be matched in
+    /// one pass, so a bare sign-in reason plus any stderr line holding a longer row's phrase took that row's name, whatever the agent had said about the turn itself.
+    /// </summary>
+    public static AcpDiagnosis Of(string reason, string stderr, IReadOnlyList<AcpKnownFailure> known) =>
+        Of(reason, known) is { Known: true } named ? named : Of(stderr, known);
+
     /// <summary>What stands between the agent's reason and the cure in the shim's note.</summary>
     public const string CureSeparator = " — ";
 
@@ -103,6 +110,15 @@ public sealed record AcpDiagnosis(string Name, string Cure, AcpFailureKind Kind)
     /// </summary>
     public static string WithoutCure(string note, IReadOnlyList<AcpKnownFailure> known) =>
         known.FirstOrDefault(failure => EndsWithItsCure(note, failure)) is { } hit ? note[..^(CureSeparator.Length + hit.Cure.Length)] : note;
+
+    /// <summary>
+    /// The agent's reason out of a note whose row has NO cure (a known shape the shim quotes in the vendor's own words, such as <c>provider_error</c>) — the note without our
+    /// failure-name prefix; empty for a note that names no such row. That text is the vendor's, whatever tag carried it.
+    /// </summary>
+    public static string CurelessReason(string note, IReadOnlyList<AcpKnownFailure> known) =>
+        known.FirstOrDefault(failure => failure.Cure.Length == 0 && note.StartsWith(failure.Name + ": ", StringComparison.Ordinal)) is { } hit
+            ? note[(hit.Name.Length + 2)..]
+            : string.Empty;
 
     private static bool EndsWithItsCure(string note, AcpKnownFailure failure) =>
         failure.Cure.Length > 0

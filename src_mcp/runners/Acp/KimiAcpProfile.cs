@@ -191,6 +191,23 @@ public static class AcpProfiles
     /// <summary>The profiles, in the order a refusal lists them.</summary>
     public static readonly IReadOnlyList<IAcpProfile> All = [new KimiAcpProfile()];
 
+    /// <summary>
+    /// <paramref name="note"/> without the cure the shim appended (<see cref="AcpDiagnosis.Note"/>), looked up in the rows of every profile of <paramref name="profiles"/> — the one
+    /// way a reader outside this layer (the reviewers' summary) strips it, so a second profile needs a row here and nothing in the reader.
+    /// </summary>
+    public static string WithoutCure(string note, IReadOnlyList<IAcpProfile> profiles) =>
+        AcpDiagnosis.WithoutCure(note, [.. profiles.SelectMany(profile => profile.KnownFailures)]);
+
+    /// <summary>The vendor's own words out of a cure-less note of any of <paramref name="profiles"/> (<see cref="AcpDiagnosis.CurelessReason"/>), or empty.</summary>
+    public static string CurelessReason(string note, IReadOnlyList<IAcpProfile> profiles) =>
+        AcpDiagnosis.CurelessReason(note, [.. profiles.SelectMany(profile => profile.KnownFailures)]);
+
+    /// <summary><see cref="CurelessReason(string, IReadOnlyList{IAcpProfile})"/> over the profiles this build ships.</summary>
+    public static string CurelessReason(string note) => CurelessReason(note, All);
+
+    /// <summary><see cref="WithoutCure(string, IReadOnlyList{IAcpProfile})"/> over the profiles this build ships.</summary>
+    public static string WithoutCure(string note) => WithoutCure(note, All);
+
     /// <summary>The names, for a refusal that says what this build knows.</summary>
     public static IEnumerable<string> Names(IReadOnlyList<IAcpProfile> profiles) => profiles.Select(profile => profile.Name);
 

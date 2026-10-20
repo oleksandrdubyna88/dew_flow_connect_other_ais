@@ -71,7 +71,7 @@ public static class VendorDiagnosis
         // The 5-hour plan quota (the owner's kimi 2.2.0, 2026-10-19): Kimi wraps it in the sign-in's own prefix, so the shim's name is the only thing that says
         // it is not a lost sign-in. The sentence is KimiQuotaWords' — one string in the shim's cure, here and in the reviewer's reason. `Refused` as the row above
         // is: there is no Spent kind here, and the rate-limit path reads the report's field, not this table.
-        (KimiAcpProfile.QuotaSpent + ":", KimiQuotaWords.Fixed, DiagnosisKind.Refused),
+        (QuotaMarker, KimiQuotaWords.Fixed, DiagnosisKind.Refused),
         ("model_not_offered",
             "the Kimi session does not offer this model — pick one the plan has (the shim's message lists what the session offered).",
             DiagnosisKind.Refused),
@@ -205,19 +205,27 @@ public static class VendorDiagnosis
 
         var known = Known.FirstOrDefault(k => text.Contains(k.Marker, StringComparison.OrdinalIgnoreCase));
 
-        return known.Sentence is not null ? new Diagnosis(known.Kind, CureOn(known.Marker, known.Sentence, host), known.Marker) : null;
+        return known.Sentence is not null ? new Diagnosis(known.Kind, CureOn(known.Marker, known.Sentence, host, text), known.Marker) : null;
     }
 
     /// <summary>Vibe's signed-out marker (§11 of research/RESULTS_vibe_confinement.md; L-V1 on WSL): the same words on every host.</summary>
     private const string MistralMarker = "Missing MISTRAL_API_KEY environment variable";
 
     /// <summary>
-    /// The cure for a recognised sentence on this host. Only Vibe's differs: off Windows its sign-in is the file <c>~/.vibe/.env</c>, which
+    /// The cure for a recognised sentence on this host, given the text it was found in. Vibe's differs by host, and a spent Kimi quota quotes the vendor's reset clause out of <paramref name="text"/> (
+    /// <see cref="KimiQuotaWords.Said"/>) — so every reader of the diagnosis, the round summary included, leads with the clause and not only the 160-character cut of the vendor's line. Vibe's: off Windows its sign-in is the file <c>~/.vibe/.env</c>, which
     /// coai LINKS into its own homes and never copies — and a sign-in kept in a desktop keyring is invisible to coai's launches, whose built
     /// environment carries no D-Bus session (<c>ProcessEnvironment.MinimalUnix</c>).
     /// </summary>
-    private static string CureOn(string marker, string sentence, HostKind host) =>
-        marker == MistralMarker && host != HostKind.Windows ? MistralSignedOutOffWindows : sentence;
+    private static string CureOn(string marker, string sentence, HostKind host, string text) => marker switch
+    {
+        MistralMarker when host != HostKind.Windows => MistralSignedOutOffWindows,
+        QuotaMarker => KimiQuotaWords.Said(text),
+        _ => sentence,
+    };
+
+    /// <summary>The shim's name for a spent Kimi plan quota, with its colon — the one marker whose cure also QUOTES a clause of the vendor's own text (K1 of the code gate).</summary>
+    private const string QuotaMarker = KimiAcpProfile.QuotaSpent + ":";
 
     internal const string MistralSignedOutOffWindows =
         "Vibe is installed but not signed in for this user — run `vibe --setup` in a terminal on this side; the sign-in is ~/.vibe/.env, "

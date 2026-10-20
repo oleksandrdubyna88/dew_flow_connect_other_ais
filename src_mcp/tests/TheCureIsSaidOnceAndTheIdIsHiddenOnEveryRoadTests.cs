@@ -1,3 +1,4 @@
+using CoaiMcp.Runners.Acp;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
 using FluentAssertions;
@@ -47,6 +48,19 @@ public sealed class TheCureIsSaidOnceAndTheIdIsHiddenOnEveryRoadTests : IDisposa
     }
 
     [Fact]
+    public void ASecondProfilesNote_IsStrippedTheSameWay_ThroughTheCatalogAlone()
+    {
+        // K2 of the code gate: the reviewers layer asks the profile CATALOG for the shim's cure, never one vendor's table — so a second profile needs a row in the catalog
+        // and nothing in BoundedScheduler. A profile the catalog does not hold is not guessed at.
+        using var agent = new FakeAcpAgent([FakeAcpAgent.Chunk("x")]);
+        var row = new AcpKnownFailure("out of widgets", "widgets_gone", "order more widgets", AcpFailureKind.Refused);
+        var note = new AcpDiagnosis(row.Name, row.Cure, row.Kind).Note("the vendor said it is out of widgets");
+
+        AcpProfiles.WithoutCure(note, [agent.Profile(failures: [row])]).Should().Be("widgets_gone: the vendor said it is out of widgets");
+        AcpProfiles.WithoutCure(note).Should().Be(note, "the shipped catalog holds Kimi only");
+    }
+
+    [Fact]
     public async Task AProviderErrorWithAnId_ShowsNoIdFragment_InTheSummary_TheLedger_AndTheLog()
     {
         var round = await new AKimiRound(_dir).RunAsync($"Authentication required: 503 Service Unavailable for {FakeOrg} <{FakeKey}>");
@@ -55,6 +69,27 @@ public sealed class TheCureIsSaidOnceAndTheIdIsHiddenOnEveryRoadTests : IDisposa
         round.Outcome.Should().BeOfType<ReviewerOutcome.NonZeroExit>().Which.ExitCode.Should().Be(70);
         NoIdFragmentIn(round);
         round.Summary.Should().Contain("503 Service Unavailable", "redaction is not a cut");
+    }
+
+    [Fact]
+    public async Task AProviderErrorWithALongBody_IsTheVendorsText_CutInTheSummary_WholeInTheLedger()
+    {
+        // K3 of the code gate: a tagged note whose row has no cure is the VENDOR's text. It used to reach the 160-character summary whole, with our tag on it.
+        var body = string.Join(' ', Enumerable.Repeat("the gateway explained the outage at some length", 12));
+        var round = await new AKimiRound(_dir).RunAsync($"Authentication required: 503 Service Unavailable {body} THE-END");
+
+        using var scope = new AssertionScope();
+        round.Outcome.Should().BeOfType<ReviewerOutcome.NonZeroExit>().Which.ExitCode.Should().Be(70);
+        round.Summary.Length.Should().BeLessThan(280, "the summary cuts the vendor's part at 160 characters, as it does for every vendor");
+        round.Summary.Should().EndWith("…").And.NotContain("THE-END");
+        foreach (var (where, line) in round.Lines)
+        {
+            line.Should().NotContain("[coai-mcp]", $"the {where} must not carry our tag on the vendor's words").And.NotContain("provider_error:");
+            line.Should().Contain("503 Service Unavailable");
+        }
+
+        round.Ledger.Should().Contain("THE-END", "the ledger keeps the vendor's line whole, up to the safety cap");
+        round.Log.Should().Contain("THE-END");
     }
 
     [Fact]

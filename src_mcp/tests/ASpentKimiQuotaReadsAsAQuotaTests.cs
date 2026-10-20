@@ -31,6 +31,7 @@ public sealed class ASpentKimiQuotaReadsAsAQuotaTests : IDisposable
     {
         line.Should().Contain(KimiQuotaWords.Opening, $"the {where} says the quota is used up");
         line.Should().Contain(KimiQuotaWords.ResetOpening, $"the {where} quotes the reset clause Kimi gave");
+        line.Should().Contain("\"Your quota will reset at 14:00 UTC.\"", $"the {where} quotes the WHOLE reset clause, in the cure — not a prefix of it, and not only the vendor's line that the summary cuts");
         line.Should().NotContain("kimi login", $"the {where} never sends a person to sign in again — it would not help");
         line.Should().NotContain("exit 77", $"the {where} is not a sign-in refusal");
         line.Should().Contain(KimiQuotaWords.Opening, Exactly.Once(), $"the {where} says the cure once — two seams quoting it is an integration bug");
@@ -49,6 +50,20 @@ public sealed class ASpentKimiQuotaReadsAsAQuotaTests : IDisposable
         limited.Attempts.Should().Be(1);
         RateLimit.Hopeless(limited.Reason).Should().BeTrue("the vendor's own words say the allowance is spent: " + limited.Reason);
         round.Shims.Should().Be(1, "a spent quota is never climbed: the ladder does not start");
+    }
+
+    [Fact]
+    public async Task ALongVendorSentence_StillQuotesTheWholeResetClause_InTheSummary()
+    {
+        // Moonshot's real sentence is not measured and may be much longer than the owner's CLI line: the summary cuts the vendor's line at 160 characters, so the clause
+        // must come from the CURE, which is never cut.
+        var preface = string.Join(' ', Enumerable.Repeat("the gateway added a long explanation before the vendor said anything useful", 4));
+        var round = await new AKimiRound(_dir).RunAsync(PromptError.Replace("You've reached", preface + ". You've reached", StringComparison.Ordinal));
+
+        using var scope = new AssertionScope();
+        round.Summary.Length.Should().BeLessThan(700, "the summary is a cell, not the whole line");
+        ReadsAsAQuota("round summary", round.Summary);
+        ReadsAsAQuota("ledger line", round.Ledger);
     }
 
     [Fact]

@@ -11,7 +11,7 @@ import { runPageHtml } from './pageScriptHarness';
 
 /**
  * The Models card's ✓ Check is a CONSULTANT check, so it is offered only on a runtime that can hold a consultation
- * (research/PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md, D7 / S8).
+ * (todo/PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md, D7 / S8).
  *
  * <p>Seen 2026-10-19: the owner pressed ✓ Check on the Kimi card, was asked to pay for one turn, and the server answered
  * that "the vendor 'kimi' runs on 'kimi', which cannot hold a consultation in this build". The button promised a paid

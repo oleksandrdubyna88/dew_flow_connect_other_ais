@@ -296,8 +296,8 @@ every story; **Sonnet** codes.
     S7's red was `Expected line "… quota is used up - signing in again will not help - the vendor said: the Kimi plan quota is used up - "Your quota will reset at 14:00 UTC."; signing in again will not help (the
     shim said: kimi_quota_spent: …" to contain "the Kimi plan quota is used up" exactly 1 time, but found it 2 times` — in the summary, the ledger and the log. **The fix:** `KimiRuntime.SpentReason` returns the shim's
     own words (`name: reason`) with no cure; the cure comes from the table, once, in `Because`. Two assertions of story 1 (`KimiQuotaIsNotASignInTests`) that pinned the old reason were updated.
-    **Consequence:** the quoted reset clause (`KimiQuotaWords.Said`, D3) now leads only the `WhyItFailed` road; on the rate-limit road the clause is in the vendor's line, whole in the ledger and the log, and in the
-    160-character summary only while the vendor's sentence is short (the fixture's is 165 characters with its name, and keeps `Your quota will reset at 14:00 U…`). If the real sentence is longer, the capture step shows it.
+    **Consequence (first version, superseded by K1 below):** the quoted reset clause (`KimiQuotaWords.Said`, D3) then led only the `WhyItFailed` road; on the rate-limit road the clause was in the vendor's line, whole in the ledger and the log, and in the
+    160-character summary only while the vendor's sentence was short (the fixture's is 165 characters with its name, and keeps `Your quota will reset at 14:00 U…`). If the real sentence is longer, the capture step shows it.
   - **Deviation 2 — the same doubling existed on the NonZeroExit road. FIXED 2026-10-20 (follow-up commit on the same branch).** The shim's stderr line is `<name>: <reason> — <cure>`, and `Because` quoted all of it after its own cure,
     so an exit-77 line said `kimi login` twice in the summary, the ledger and the log. Red: `Expected line "… exit 77: Kimi is not signed in … — the vendor said: not_signed_in: … Authentication required — run kimi login in a terminal and try again" to contain "kimi login" exactly 1 time … but found it 2 times`.
     Fix: `AcpDiagnosis.Note` is the one place the note's shape is written and `AcpDiagnosis.WithoutCure` reads it back; `Because` quotes `<name>: <reason>` (the vendor's words whole) behind the table's cure. Test: `TheCureIsSaidOnceAndTheIdIsHiddenOnEveryRoadTests`.
@@ -377,3 +377,25 @@ every story; **Sonnet** codes.
   because it needs the cross-process gate and a deadline of its own — more than a card change.
 - **One line citation of the lead's** (`ConsultantCheckMode.cs:200-210`) pointed at the consultant-kind preflight; the row refusal
   is `CheckRowAsync` at :210-221. Substance unchanged, lines corrected in J8's row.
+
+## Code gate and judge (2026-10-20)
+
+The coai code gate (session def84902, verdict `proceed`) and an Opus judge (no blockers) read the whole diff. Findings are input, not orders: each below is accepted or rejected with its reason; every accepted behaviour fix was
+seen red first (the messages are in `research/module_tests.md`, "Code gate and judge fixes").
+
+**Accepted and fixed (K1–K7):**
+- **K1 (judge 1, MAJOR) — the reset clause (D3) was lost from the round summary on the real road.** A spent quota is exit 75 → `RateLimited`, which returns before `WhyItFailed`, so `KimiQuotaWords.Said` never ran for a real quota, and the
+  160-character summary cut the vendor's line before "Your quota will reset". S7 asserted only a prefix of the clause, which is why it stayed green. Red: `… to contain ""Your quota will reset at 14:00 UTC.""`. Fix: `VendorDiagnosis.CureOn` returns
+  `KimiQuotaWords.Said(text)` for the quota marker, so the cure — never cut — carries the clause; the cure is still said once. `KimiRuntime.Cured` (the dead road) is removed. This supersedes deviation 1's consequence.
+- **K2 — the vendor-neutral reviewers layer named one vendor's table.** `BoundedScheduler.VendorSaid` stripped the shim's cure with `KimiAcpProfile.Failures`. Now `AcpProfiles.WithoutCure` goes through the profile catalog (`AcpProfiles.All`); a second profile needs a row there and nothing in `BoundedScheduler`. Red: the catalog API did not exist (CS0117).
+- **K3 — a `provider_error` line reached the summary whole, with our tag.** A shim-tagged note whose row has no cure is the vendor's text: `AcpDiagnosis.CurelessReason` takes the tag and the failure name off, then it is redacted and cut at 160 (4,000 in the ledger and the log). Red: summary 730 characters, showing `[coai-mcp] provider_error:`.
+- **K4 — reason and stderr were diagnosed in ONE first-match pass.** A bare sign-in reason plus any stderr line holding "Authentication required:" became `provider_error` (no `kimi login` cure). Now the reason is matched first, stderr only when the reason names no row. Red: `provider_error` for `not_signed_in`.
+- **K5 — `error.data` was dropped.** A bare "Authentication required" with the 429 in `data` read as S9's lost sign-in. Now `data` is kept in the reason (`message (data: …)`, a string as it is, other JSON compact, redacted, capped at 2,000). Red: exit 77, `not_signed_in`, for a quota. RESULTS §31 says so.
+- **K6 — the `moonshot-id` shape also refuses a consultant context (`SecretCheck`) and is applied to served files.** Kept (an account id is a personal identifier; refusing to send it to an internet row is the conservative choice), and pinned: two `SecretCheckTests` rows, `org-settings-panel` stays clean, `module_core.md` says where it applies.
+- **K7 — a comment in `theCheckButtonIsNotOfferedOnAReviewerOnlyRow.test.ts` cited `research/PLAN_…`; the plan is in `todo/`.** Path fixed; comment only, no test.
+
+**Rejected (with the reason):**
+- German help text: localisation is by design, not a defect of this change.
+- Widening the id pattern: its real shape is not measured; the capture step (§5 step 1, RESULTS §31) is where that is decided, with a test in each half.
+- A literal instead of `KimiAcpProfile.QuotaSpent`: the constant is the one name shared by the table, the shim and the diagnosis row — a literal would be a second copy.
+- Performance of `FirstLineWith` and of `Classify`: both run once per failed reviewer over a short stderr tail; measured nothing, so nothing is changed.

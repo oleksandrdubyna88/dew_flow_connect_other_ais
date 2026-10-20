@@ -959,7 +959,7 @@ DL10, re-decided 2026-10-17 on the owner's WSL2 (`systemd` and `(sd-pam)` hide `
 
 ## 31. The quota answer over ACP — the CAPTURE STEP (written 2026-10-20, NOT yet run; `todo/PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md` §5 step 1, S9)
 
-Status: **no real line has been captured yet.** Everything below the line "The record" is empty on purpose. This section is the procedure, so the next person does not have to
+Status: **no real line has been captured yet.** (Since 2026-10-20 the shim also keeps a JSON-RPC error's `data` member in the reason — `message (data: …)`, redacted, capped at 2,000 — so if Kimi puts the 429 detail there, the captured line shows it and S9's "bare `Authentication required`" is no longer possible by omission.) Everything below the line "The record" is empty on purpose. This section is the procedure, so the next person does not have to
 rediscover it, and the place where the answer is written down. The fixture in `KimiAcpProfileTests` and in `ASpentKimiQuotaReadsAsAQuotaTests` (`PromptError`) is CONSTRUCTED:
 the inner sentence is the owner's own CLI line (kimi 2.2.0, 2026-10-19: "You've reached your 5-hour usage limit. Your quota will reset …"), and the wrapper
 `Authentication required: 429 …` is a hypothesis. What Kimi really sends over ACP is unknown.

@@ -861,7 +861,7 @@ public static class ReviewerSummaryFactory
     /// </remarks>
     private static string VendorSaid(string text, string marker, int cap) =>
         FirstLineWith(text, marker) is { Length: > 0 } line
-            ? $" — the vendor said: {Cut(VendorReason.Written(AcpDiagnosis.WithoutCure(ShimNotes.Message(line), KimiAcpProfile.Failures)), cap)}"
+            ? $" — the vendor said: {Cut(VendorReason.Written(AcpProfiles.WithoutCure(ShimNotes.Message(line))), cap)}"
             : string.Empty;
 
     /// <summary>The first line of the text that holds the marker (as <see cref="VendorDiagnosis"/> matches it), or empty.</summary>
@@ -905,7 +905,14 @@ public static class ReviewerSummaryFactory
     /// <see cref="VendorReason.SafetyCap"/> for the ledger and the log (<see cref="DescribeWhole"/>).</para>
     /// </remarks>
     private static string Quote(string line, int cap) =>
-        ShimNotes.Ours(line) ? VendorReason.Written(line) : Cut(VendorReason.Written(line), cap);
+        ShimNotes.Ours(line) ? QuoteOurs(line, cap) : Cut(VendorReason.Written(line), cap);
+
+    /// <summary>
+    /// A line our shim tagged. Our own sentences are redacted and kept whole (they carry the cures); a note whose row has no cure is the VENDOR's text in our tag
+    /// (<see cref="AcpDiagnosis.CurelessReason"/>, K3 of the code gate), so the tag and the failure name come off and it is cut like any vendor's line.
+    /// </summary>
+    private static string QuoteOurs(string line, int cap) =>
+        AcpProfiles.CurelessReason(ShimNotes.Message(line)) is { Length: > 0 } vendor ? Cut(VendorReason.Written(vendor), cap) : VendorReason.Written(line);
 
     private static bool Announces(string line) =>
         Announcements.Any(a => line.Contains(a, StringComparison.OrdinalIgnoreCase));

@@ -331,7 +331,7 @@ internal sealed class AcpSession(AcpTransport transport, IAcpReadBoundary bounda
         if (response.Error.ValueKind == JsonValueKind.Object)
         {
             waiting.TrySetException(new AcpAgentException(
-                AcpMessages.Number(response.Error, "code"), AcpMessages.Text(response.Error, "message")));
+                AcpMessages.Number(response.Error, "code"), AcpMessages.ErrorText(response.Error)));
         }
         else
         {

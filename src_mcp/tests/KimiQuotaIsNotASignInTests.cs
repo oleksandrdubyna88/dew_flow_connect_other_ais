@@ -116,7 +116,10 @@ public sealed class KimiQuotaIsNotASignInTests
 
         diagnosis.Should().NotBeNull();
         diagnosis!.Kind.Should().Be(DiagnosisKind.Refused);
-        diagnosis.Cure.Should().Be(KimiQuotaWords.Fixed);
+        diagnosis.Cure.Should().Be(KimiQuotaWords.Said($"kimi_quota_spent: {Inner}"), "the cure quotes the vendor's reset clause itself (K1): every reader of the diagnosis leads with it");
+        diagnosis.Cure.Should().Contain(KimiQuotaWords.Opening).And.Contain(KimiQuotaWords.ResetOpening);
+        VendorDiagnosis.Classify("kimi_quota_spent: Authentication required: 429 You've reached your 5-hour usage limit.", wsl: false)!.Cure
+            .Should().Be(KimiQuotaWords.Said("x"), "a vendor line with no reset clause says the vendor named none");
         diagnosis.Cure.Should().NotContain("kimi login").And.NotContain("waiting is the only cure");
     }
 
