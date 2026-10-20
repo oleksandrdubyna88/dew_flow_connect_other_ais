@@ -13,7 +13,7 @@ import { costText, shortNumber } from './usage';
 import type { Vendor } from './vendors';
 
 /**
- * The Spending tab's first block: Rounds (story 2.3 of todo/PLAN_every_round_is_counted.md), and the Models card's
+ * The Spending tab's first block: Rounds (story 2.3 of research/PLAN_every_round_is_counted.md), and the Models card's
  * line beside it (story 2.4).
  *
  * <p>Pure: the counts (`--round-counts`, through the cache), the last seven days of the ledger, the chat lines, the
@@ -21,7 +21,7 @@ import type { Vendor } from './vendors';
  * the consultations, questions and chat that spent the same vendor beside them (as recorded turns — a ledger line is a
  * turn, and one consultation can be several), reviewers per round from the database's history, tokens in / cached /
  * out / reasoning and the money over 7 d with `roundMoney`'s floors, and ~$ per round. Under each row its MODEL lines —
- * a model change inside a window is two lines — each with its own rounds, the median output per recorded turn, and
+ * a model change inside a window is two lines — each with its own rounds, the median output per launch, or per recorded turn beside the figure when a line can hold more than one launch, and
  * ~$ per round over the rounds that used it; and its consult / question / chat lines, per recorded turn.</p>
  *
  * <p><b>Unavailable is never 0.</b> Before the first read the block says it is counting; a read that failed says
@@ -69,7 +69,7 @@ function serverOf(row: Vendor): string {
 /**
  * The kinds that spend a vendor beside its rounds, and what one of their lines is called.
  *
- * <p>`probe` since story 3.3 of todo/PLAN_every_round_is_counted.md: `coai-mcp --probe-api --model` writes a line per
+ * <p>`probe` since story 3.3 of research/PLAN_every_round_is_counted.md: `coai-mcp --probe-api --model` writes a line per
  * paid completion. Its money is the row's — a row's total holds every kind — and it is said here as its own kind, so it
  * is never read as a round: it has no model line and no round.</p>
  */
@@ -112,8 +112,10 @@ function unavailableNote(read: RoundCountsRead): string {
 }
 
 const FOOTNOTE = '<p class="hint">Tokens and money are the last 7 days, read from this side\'s usage ledger. '
-  + `Consultations, questions and chat are counted in recorded turns, and the median output is per ${PER_RECORDED_TURN}: `
-  + 'one ledger line can hold a repair or a follow-up, so a per-launch figure is not claimed. Reviewers per round is from '
+  + `Consultations, questions and chat are counted in ${PER_RECORDED_TURN}s. `
+  + 'From coai-mcp 0.48.0 a review run on this machine writes one line per launch, so its median output is per launch. '
+  + 'A line from before 0.48.0, a Team-server row\'s line and a follow-up in the same conversation can hold more than one '
+  + `launch, and a figure that includes such a line says per ${PER_RECORDED_TURN}. Reviewers per round is from `
   + 'the rounds database\'s history. ≥ means some of it could not be priced or its usage was not captured.</p>';
 
 /** What the block draws from one snapshot. */
@@ -315,16 +317,29 @@ function modelRounds(read: RoundCountsRead, window: WindowName, provider: string
   return read.state === 'counted' ? rowIn(read.answer, window, provider)?.models.find((one) => one.model === model)?.rounds : undefined;
 }
 
-/** A model line divides by the rounds that used it when they are known, else per recorded turn — labelled either way. */
+/**
+ * A model line divides by the rounds that used it when they are known, else by its lines — per launch when every one is
+ * a launch line, else per recorded turn — and names the unit beside the figure whenever it is not a round.
+ */
 function modelPerRoundCell(part: Rollup, rounds: number | undefined): string {
-  const figure = perUnit(part.money, unitDivisor('review', rounds, part.turns));
-  const per = figure.per === PER_RECORDED_TURN ? ` <span class="hint">per ${PER_RECORDED_TURN}</span>` : '';
+  const figure = perUnit(part.money, unitDivisor('review', rounds, part.turns, part.linesAreLaunches));
+  const per = rounds === undefined ? ` <span class="hint">per ${figure.per}</span>` : '';
 
   return `<span title="${escapeHtml(figure.note)}">${escapeHtml(figure.text)}</span>${per}`;
 }
 
+const MEDIAN_NOTE = 'The column says per launch, but a line from before coai-mcp 0.48.0, a Team-server row\'s line or a follow-up '
+  + `can hold more than one launch — so this median is per ${PER_RECORDED_TURN}.`;
+
+/** The model line's median output — with *per recorded turn* beside it when a line of the group can hold more than one launch. */
 function medianCell(group: MoneyGroup | undefined): string {
-  return group?.medianOut === null || group === undefined ? '—' : shortNumber(group.medianOut);
+  return group?.medianOut === null || group === undefined ? '—' : medianFigure(shortNumber(group.medianOut), group.linesAreLaunches);
+}
+
+function medianFigure(figure: string, linesAreLaunches: boolean): string {
+  return linesAreLaunches
+    ? figure
+    : `<span title="${escapeHtml(MEDIAN_NOTE)}">${figure}</span> <span class="hint">per ${PER_RECORDED_TURN}</span>`;
 }
 
 /** One line per kind that spent the row beside its rounds — every model together, per recorded turn. */

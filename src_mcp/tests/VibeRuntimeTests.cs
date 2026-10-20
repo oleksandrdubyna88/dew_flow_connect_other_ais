@@ -14,6 +14,11 @@ namespace CoaiMcp.Tests;
 /// how the answer, the usage, a failure and the model are read back — each pinned to the cell of
 /// research/RESULTS_vibe_confinement.md it rests on.
 /// </summary>
+/// <remarks>
+/// In the serial <c>fakecli-env</c> collection: <c>AParentVibeVariable_NeverReachesTheLaunch</c> sets <c>VIBE_MCP_SERVERS</c> in the PROCESS, and outside a
+/// collection that value was visible to every class running beside it (C11 of <c>todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md</c>).
+/// </remarks>
+[Collection("fakecli-env")]
 public sealed class VibeRuntimeTests : IDisposable
 {
     private readonly TempDir _out = TempDir.For("coai-answers-vibe-");
@@ -305,7 +310,7 @@ public sealed class VibeRuntimeTests : IDisposable
     private static Func<string, string?> Env(params (string Name, string Value)[] set) => name => set.Where(pair => pair.Name == name).Select(pair => pair.Value).FirstOrDefault();
 
     /// <summary>
-    /// S-V11 (DL5 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>), one row per step of the precedence on WSL. The row's own CLI path wins before
+    /// S-V11 (DL5 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>), one row per step of the precedence on WSL. The row's own CLI path wins before
     /// any of this is asked (<c>VibeRuntime.Build</c>); what is asked here is what the row did NOT set. Every candidate counts only when its
     /// file is THERE, so each arm's `exists` is the list of files the machine has.
     /// </summary>

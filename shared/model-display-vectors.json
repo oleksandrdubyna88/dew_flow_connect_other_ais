@@ -3,7 +3,7 @@
     "Golden vectors for ONE question: how is the model id a transcript recorded SHOWN, and which FAMILY does it count under?",
     "",
     "The round card reads `written with Opus 5.5 (main) · 3 Sonnet coders · …`; the report E6 builds counts the same coders by the",
-    "same family. Two implementations of one rule drift, so both answer THIS file (`rounds.test.ts` for the extension; E6's C#",
+    "same family. Two implementations of one rule drift, so both answer THIS file (`authorsLine.test.ts` for the extension; E6's C#",
     "family function reads it too — never a retyped copy).",
     "",
     "The rule: `claude-<family>-<major>-<minor>[-<date>]` — <family> lower-case letters, <major> digits, <minor> one or two digits, an",

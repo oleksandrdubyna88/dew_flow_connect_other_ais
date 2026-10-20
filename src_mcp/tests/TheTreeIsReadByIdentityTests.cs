@@ -7,7 +7,7 @@ namespace CoaiMcp.Tests;
 /// <summary>
 /// The two decisions <see cref="ProcessTree"/> makes from the process table, on tables no machine could be made to
 /// produce on demand: a child listed under a REUSED parent number, and a zombie leader whose other threads still run
-/// (the review of epic 6's Linux fix, <c>todo/PLAN_every_round_is_counted.md</c>).
+/// (the review of epic 6's Linux fix, <c>research/PLAN_every_round_is_counted.md</c>).
 /// </summary>
 public sealed class TheTreeIsReadByIdentityTests
 {

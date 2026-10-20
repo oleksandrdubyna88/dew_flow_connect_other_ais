@@ -8,7 +8,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// DL7's lock-file retirement (F15, S-K19 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): an identity key changes whenever the sign-in folder is made again, so on Linux the
+/// DL7's lock-file retirement (F15, S-K19 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>): an identity key changes whenever the sign-in folder is made again, so on Linux the
 /// <c>&lt;key&gt;.lock</c> and <c>&lt;key&gt;.tree.lock</c> files would pile up. The gate records, once, the identity it was keyed by and the folder spelling; a sweep removes a key's files when
 /// it can take BOTH at once without waiting AND the folder is gone or is another folder. Removing a lock file under a lock is the classic two-holders race, so every taker verifies
 /// after its take that the path still names the file it locked (<see cref="HeldFile.TakeVerified(string, TimeSpan, bool)"/>). Linux only: Windows keys are path-stable and a file held with

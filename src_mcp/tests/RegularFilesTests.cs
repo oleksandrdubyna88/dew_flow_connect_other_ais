@@ -8,7 +8,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// <see cref="RegularFiles"/>, the Linux leg ported from wsl_care (DL2 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>; S-V14): a file a
+/// <see cref="RegularFiles"/>, the Linux leg ported from wsl_care (DL2 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>; S-V14): a file a
 /// person NAMED is read only when it is a regular file their own account alone may write, only up to the cap of bytes actually read, and
 /// never through a link — all judged from one open descriptor. A FIFO, a socket or a device is refused at once, never waited on.
 /// </summary>

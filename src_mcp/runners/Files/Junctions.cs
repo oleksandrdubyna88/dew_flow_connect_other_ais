@@ -21,7 +21,7 @@ namespace CoaiMcp.Runners.Files;
 /// ordinary machine, so <see cref="Refusal(HostKind, string, string)"/> admits it, asks the kernel where the target really is
 /// (<c>HandleRead.FinalDirectory</c>) and refuses only a resolution that leaves the local drives. The junction keeps the SPELLING
 /// as its target — one level.</para>
-/// <para><b>The hosts that admit Kimi</b> (<see cref="HostKinds.HasKimiLockFamily(HostKind)"/> says which; D18 lifted for them by E5 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): on a Linux or WSL host the link is a directory symbolic link (<c>JunctionsUnix</c>), and the filesystem that holds the real path
+/// <para><b>The hosts that admit Kimi</b> (<see cref="HostKinds.HasKimiLockFamily(HostKind)"/> says which; D18 lifted for them by E5 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>): on a Linux or WSL host the link is a directory symbolic link (<c>JunctionsUnix</c>), and the filesystem that holds the real path
 /// is judged by its mount type (<see cref="MountLocality"/>), never by a <c>/mnt</c> prefix; on any other host <see cref="Refusal"/> answers the D18 sentence and nothing is made.</para>
 /// <para>Nothing Kimi-specific lives here: no config, no launch — only the shape of a link into somebody else's folder.</para>
 /// </remarks>

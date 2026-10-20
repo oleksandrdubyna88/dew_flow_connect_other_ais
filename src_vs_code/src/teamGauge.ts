@@ -4,7 +4,7 @@ import { planPriceKey, type PlanPrices, shareLine } from './planPrice';
 import type { CatalogVendor, GaugeReading } from './teamServerApi';
 
 /**
- * The Team server tab's gauge block (story 6.2 of todo/PLAN_every_round_is_counted.md) — pure, so every sentence an admin
+ * The Team server tab's gauge block (story 6.2 of research/PLAN_every_round_is_counted.md) — pure, so every sentence an admin
  * reads is a test.
  *
  * <p><b>Two answers, each read by hand.</b> The vendor's own windows come from the CATALOG (`slots.gauge`, the newest

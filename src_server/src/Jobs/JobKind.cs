@@ -37,7 +37,7 @@ public enum JobKind
     /// <remarks>
     /// A review in every rule — it carries a role and is refused without one — and its own kind only so a spending
     /// report can tell it from a person's review; it was written <c>review</c> before, and told apart only by its
-    /// token's email (story 3.5 of todo/PLAN_every_round_is_counted.md).
+    /// token's email (story 3.5 of research/PLAN_every_round_is_counted.md).
     /// </remarks>
     Canary,
 }

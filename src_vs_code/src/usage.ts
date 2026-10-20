@@ -38,7 +38,7 @@ export interface UsageEntry {
   /** What the line WAS — `review`, `consult`, `question`, `chat`, `probe`; a line older than the field is a review. */
   readonly kind?: string;
   /**
-   * The id every launch of one reviewer turn shares (story 3.3 of todo/PLAN_every_round_is_counted.md) — a repair, a
+   * The id every launch of one reviewer turn shares (story 3.3 of research/PLAN_every_round_is_counted.md) — a repair, a
    * follow-up, a retry and a rotated Team-server attempt each write a line of their own, and this ties them back to
    * their turn. Absent on a line older than the field, and on a kind with no turns.
    */
@@ -46,7 +46,7 @@ export interface UsageEntry {
   /** What the launch was inside its turn — `first`, `repair`, `followUp`, `retry`, `rotated`; absent like `turn`. */
   readonly attempt?: string;
   /**
-   * What the launch RAN WITH (story 3.4 of todo/PLAN_every_round_is_counted.md): the runtime that ran it, the first line
+   * What the launch RAN WITH (story 3.4 of research/PLAN_every_round_is_counted.md): the runtime that ran it, the first line
    * of that CLI's `--version` where one was already asked, the effort and the tier each with its source (`row`, `server`,
    * `ignored`, `dropped`, `cli-config` — `OptionSources` in `src_mcp/runners/Reviewers/LaunchOptions.cs`), and on a Team
    * server the job and the account slot by its name. Each is absent on a line older than the field, and where the line
@@ -64,14 +64,14 @@ export interface UsageEntry {
   readonly effortNotSent?: string;
   readonly tierNotSent?: string;
   /**
-   * WHY a cancelled Team-server launch was cancelled (story 3.2 of todo/PLAN_every_round_is_counted.md) — `withdrawn`,
+   * WHY a cancelled Team-server launch was cancelled (story 3.2 of research/PLAN_every_round_is_counted.md) — `withdrawn`,
    * `abandoned`, `backstop`, `queueExpired`, `hostStopped` (`EndCauses` in `src_mcp/runners/Reviewers/EndCauses.cs`).
    * Absent on a line older than the field, on every other ending, and on a local line, which does not know which
    * token fired. The outcome stays `Cancelled`; this is the column that tells a withdrawal from the server's backstop.
    */
   readonly endCause?: string;
   /**
-   * The id of the ROUND the launch belonged to (story 4.2 of todo/PLAN_every_round_is_counted.md) — 32 hex characters the
+   * The id of the ROUND the launch belonged to (story 4.2 of research/PLAN_every_round_is_counted.md) — 32 hex characters the
    * client mints per round, written by the Team server on every line of a job whose request carried one, and by `coai-mcp`
    * on every LOCAL review line (the key the round engine stamped on the invocation, the same on a repair, a follow-up and
    * every earlier turn). Absent on a line older than the field, on a line outside a round or whose request sent none, where
@@ -86,7 +86,7 @@ export interface UsageEntry {
    */
   readonly clientAttempt?: string;
   /**
-   * The instant the vendor STATED its quota comes back, in UTC (story 5.3b of todo/PLAN_every_round_is_counted.md) —
+   * The instant the vendor STATED its quota comes back, in UTC (story 5.3b of research/PLAN_every_round_is_counted.md) —
    * written by `coai-mcp` on the last line of a turn that ended rate-limited, read from the refusal by the one parser both
    * halves use (`CooldownParser.StatedReset`). Absent on every other line, on a refusal that stated no time, and on a
    * line older than the field; `statedReset.ts` turns it into the words a person reads.
@@ -94,7 +94,7 @@ export interface UsageEntry {
   readonly resetsUtc?: string;
   /**
    * The vendor's own gauge as read on the Team server's account right after this launch (story 6.1a of
-   * todo/PLAN_every_round_is_counted.md): when, the plan word, and EVERY window of EVERY limit it reported (epic 6's code
+   * research/PLAN_every_round_is_counted.md): when, the plan word, and EVERY window of EVERY limit it reported (epic 6's code
    * round — the first shape kept one limit's two windows and lost the rest). Each field is present only when the line
    * says it: absent on a line older than the fields, on a local line, and on a job after which nothing was read; a window
    * the vendor did not report, or one that is not whole, is not in the list — never a 0 %.
@@ -190,7 +190,7 @@ const GAUGE_TEXT_FIELDS = ['gaugeObservedUtc', 'gaugePlan'] as const;
 type GaugeTextField = (typeof GAUGE_TEXT_FIELDS)[number];
 
 /**
- * The vendor's gauge as read after a Team-server launch (story 6.1a of todo/PLAN_every_round_is_counted.md), by
+ * The vendor's gauge as read after a Team-server launch (story 6.1a of research/PLAN_every_round_is_counted.md), by
  * `launchFields`' rule: a text field is present only when non-empty, and the windows only when the line carries some.
  */
 function gaugeFields(parsed: Partial<UsageEntry>): Pick<UsageEntry, GaugeTextField | 'gaugeWindows'> {
@@ -245,7 +245,7 @@ function gaugeTexts(parsed: Partial<UsageEntry>): Partial<Record<GaugeTextField,
 
 
 /**
- * The three fields the panel did not read until story 2.5 of todo/PLAN_every_round_is_counted.md, though `coai-mcp` has
+ * The three fields the panel did not read until story 2.5 of research/PLAN_every_round_is_counted.md, though `coai-mcp` has
  * written them for months: without the cached subset every input token was priced at the full rate, and without the
  * kind a consultation could not be told from a review. An old line has none of them: no cache count is zero — the
  * vendor did not say — and no kind is a review, because a review was all a line could be before the field existed
@@ -260,7 +260,7 @@ function ledgerExtras(parsed: Partial<UsageEntry>): Required<Pick<UsageEntry, 't
 }
 
 /**
- * The two fields story 3.3 of todo/PLAN_every_round_is_counted.md added — the turn a launch shares and what the launch
+ * The two fields story 3.3 of research/PLAN_every_round_is_counted.md added — the turn a launch shares and what the launch
  * was — present only when the line says them. An older line has neither, and an empty one is absent rather than an id:
  * every old line with an empty turn would otherwise read as one turn.
  */
@@ -282,7 +282,7 @@ function attemptOf(value: unknown): Pick<UsageEntry, 'attempt'> {
 }
 
 /**
- * Why a cancelled Team-server launch was cancelled (story 3.2 of todo/PLAN_every_round_is_counted.md) — present only
+ * Why a cancelled Team-server launch was cancelled (story 3.2 of research/PLAN_every_round_is_counted.md) — present only
  * when the line says it, by `launchFields`' rule: an older line, every other ending and a local line say nothing, and an
  * empty value is absent rather than a cause.
  */
@@ -291,7 +291,7 @@ function endCauseOf(value: unknown): Pick<UsageEntry, 'endCause'> {
 }
 
 /**
- * The reset a refusal stated (story 5.3b of todo/PLAN_every_round_is_counted.md) — present only when the line says it,
+ * The reset a refusal stated (story 5.3b of research/PLAN_every_round_is_counted.md) — present only when the line says it,
  * by `launchFields`' rule: an empty value is absent rather than an instant.
  */
 function resetOf(value: unknown): Pick<UsageEntry, 'resetsUtc'> {
@@ -300,7 +300,7 @@ function resetOf(value: unknown): Pick<UsageEntry, 'resetsUtc'> {
 
 /**
  * The round a Team-server launch belonged to and the client's word for its request (story 4.2 of
- * todo/PLAN_every_round_is_counted.md) — each present only when the line says it, by `launchFields`' rule: an empty round
+ * research/PLAN_every_round_is_counted.md) — each present only when the line says it, by `launchFields`' rule: an empty round
  * is absent rather than an id every old client's line would share.
  */
 function roundFields(parsed: Partial<UsageEntry>): Pick<UsageEntry, 'round' | 'clientAttempt'> {
@@ -311,7 +311,7 @@ function roundFields(parsed: Partial<UsageEntry>): Pick<UsageEntry, 'round' | 'c
 }
 
 /**
- * The text fields story 3.4 of todo/PLAN_every_round_is_counted.md added — what the launch ran with — and the two
+ * The text fields story 3.4 of research/PLAN_every_round_is_counted.md added — what the launch ran with — and the two
  * not-sent facts the consultation of 2026-10-11 split off them.
  */
 const RAN_WITH_FIELDS = [
@@ -416,7 +416,7 @@ export function totalsByVendor(
 }
 
 /**
- * One vendor row's totals, its money priced LINE BY LINE (story 2.5 of todo/PLAN_every_round_is_counted.md).
+ * One vendor row's totals, its money priced LINE BY LINE (story 2.5 of research/PLAN_every_round_is_counted.md).
  *
  * <p>It priced the row's whole history at the row's CURRENT model, all input at the full rate and never at a
  * long-context tier: after the Gemini row moved to `flash-medium` on 2026-10-02, every earlier `flash-low` line was
@@ -676,7 +676,7 @@ function listRate(published: ListedRate | undefined): LineRate | undefined {
  * published list price is a general estimate about a model.</p>
  *
  * <p><b>The list price is the LINE's model, never the row's current one</b> (story 2.5 of
- * todo/PLAN_every_round_is_counted.md). It used to fall back to the row's current model whenever the
+ * research/PLAN_every_round_is_counted.md). It used to fall back to the row's current model whenever the
  * row still existed, so a row that changed model re-priced its whole history at the new one.</p>
  */
 export function priceOfLine(

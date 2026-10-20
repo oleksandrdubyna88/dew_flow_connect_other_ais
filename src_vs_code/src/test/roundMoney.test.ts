@@ -3,12 +3,12 @@ import { test } from 'node:test';
 
 import { ChatTurnRecord } from '../chatUsage';
 import {
-  chatLedgerLines, LedgerLine, MEDIAN_OUTPUT_LABEL, moneyGroups, perUnit, rollUp, tokenText, unitDivisor,
+  chatLedgerLines, isLaunchLine, LedgerLine, MEDIAN_OUTPUT_LABEL, moneyGroups, PER_LAUNCH, perUnit, rollUp, tokenText, unitDivisor,
 } from '../roundMoney';
 import { LineRate, parseUsage } from '../usage';
 
 /**
- * Tokens and money beside every count (story 2.5 of todo/PLAN_every_round_is_counted.md): per vendor row × model × kind,
+ * Tokens and money beside every count (story 2.5 of research/PLAN_every_round_is_counted.md): per vendor row × model × kind,
  * tokens in / cached / out / reasoning with the uncaptured lines counted apart, recorded turns, medians per RECORDED
  * TURN, money reported or estimated with its floor — and the per-round division the Rounds block will show once the
  * round counts arrive (stories 2.1–2.3).
@@ -82,8 +82,64 @@ test('ARepairedTurn_IsOneRecordedTurn_NotOneLaunch — a repair is two launches 
   assert.equal(group?.turns, 3, 'the repaired turn was counted as two launches');
   assert.equal(group?.medianOut, 2_000);
   assert.equal(group?.medianIn, 30_000);
-  assert.match(MEDIAN_OUTPUT_LABEL, /per recorded turn/u);
-  assert.doesNotMatch(MEDIAN_OUTPUT_LABEL, /launch/u, 'a per-launch median cannot be computed from the ledger and must not be claimed');
+  assert.equal(group?.linesAreLaunches, false, 'lines with no attempt are older than one-line-per-launch — they may hold a repair, so the group is not claimed as launches');
+  assert.equal(unitDivisor('review', undefined, group!.turns, group!.linesAreLaunches).per, 'recorded turn', 'the fallback division claimed a launch for an older line');
+});
+
+test('AGroupOfLaunchLines_AreLaunches_AndOneOlderLineIsNot — one line without an attempt takes the whole group back to recorded turns', () => {
+  const launch = (over: Partial<LedgerLine> = {}): LedgerLine => line({ attempt: 'first', cli: 'codex', ...over });
+  const [launches] = moneyGroups([launch(), launch({ attempt: 'retry' }), launch({ attempt: 'repair' })], WINDOW, rateOf);
+  const [mixed] = moneyGroups([launch(), line()], WINDOW, rateOf);
+  const [unCaptured] = moneyGroups([launch(), launch({ tokensIn: 0, usageNote: 'usage not captured' })], WINDOW, rateOf);
+
+  assert.equal(launches?.linesAreLaunches, true);
+  assert.equal(mixed?.linesAreLaunches, false, 'one pre-0.48.0 line in the week was labelled a launch');
+  assert.equal(unCaptured?.linesAreLaunches, true, 'a line that was not captured is still one launch — the rule covers every line, captured or not');
+  assert.equal(rollUp([launches!, unCaptured!]).linesAreLaunches, true);
+  assert.equal(rollUp([launches!, mixed!]).linesAreLaunches, false, 'a roll-up with one group of older lines was claimed as launches');
+  assert.equal(rollUp([]).linesAreLaunches, false, 'an empty roll-up is nothing in this window, not launches');
+});
+
+test('ALineIsALaunch_OnlyWhenItSaysSo — an attempt that is not a follow-up and a cli that is not the Team server', () => {
+  const launch = (over: Partial<LedgerLine>): LedgerLine => line({ attempt: 'first', cli: 'codex', ...over });
+
+  assert.equal(isLaunchLine(launch({})), true);
+  assert.equal(isLaunchLine(launch({ cli: 'remote' })), false, 'a Team-server job line holds the job total');
+  assert.equal(isLaunchLine(launch({ attempt: 'followUp' })), false, 'a follow-up may be cumulative — it is not claimed');
+  assert.equal(isLaunchLine(line({ attempt: 'first' })), false, 'a line that says nothing of where it ran is not claimed');
+  assert.equal(isLaunchLine(launch({ cli: '' })), false);
+  assert.equal(isLaunchLine(line({ cli: 'codex' })), false, 'no attempt is a line from before 0.48.0');
+  assert.equal(isLaunchLine(launch({ attempt: '' })), false);
+});
+
+test('AChatTurn_StaysPerRecordedTurn — a chat turn read into the ledger shape says neither attempt nor cli', () => {
+  const [turn] = chatLedgerLines([{
+    utc: '2026-10-09T10:00:00Z', provider: 'codex', model: 'gpt-6-luna', tokensIn: 10, tokensOut: 5, costUsd: null, seconds: 3,
+    outcome: 'answered', conversation: 'c1', title: 't',
+  }]);
+
+  assert.equal(turn?.attempt, undefined);
+  assert.equal(turn?.cli, undefined);
+  assert.equal(isLaunchLine(turn!), false);
+});
+
+test('unitDivisor answers per launch only for an unknown count whose lines are launches', () => {
+  assert.deepEqual(unitDivisor('review', undefined, 3, true), { per: PER_LAUNCH, count: 3 });
+  assert.deepEqual(unitDivisor('review', undefined, 3, false), { per: 'recorded turn', count: 3 });
+  assert.deepEqual(unitDivisor('review', undefined, 3), { per: 'recorded turn', count: 3 }, 'every existing caller keeps its unit');
+  assert.deepEqual(unitDivisor('review', 4, 3, true), { per: 'round', count: 4 }, 'a known round count still wins');
+});
+
+test('TwoLaunches_ReadAsLaunches_NotLaunchs — the plural of launch has an es', () => {
+  const figure = perUnit({ usd: 0, known: false, floor: false, estimated: false }, { per: PER_LAUNCH, count: 2 });
+
+  assert.equal(figure.note, 'nothing in these 2 launches was priced');
+  assert.equal(perUnit({ usd: 0, known: false, floor: false, estimated: false }, { per: PER_LAUNCH, count: 0 }).note, 'no launches in this window');
+  assert.equal(perUnit({ usd: 4, known: true, floor: false, estimated: false }, { per: 'round', count: 2 }).note, 'over 2 rounds', 'every other unit keeps its plain s');
+});
+
+test('TheMedianLabel_SaysLaunch — the header names the unit a launch line holds', () => {
+  assert.equal(MEDIAN_OUTPUT_LABEL, 'median output per launch');
 });
 
 test('the money is reported where the vendor billed it, estimated per line otherwise, and a floor when a line was unpriced', () => {

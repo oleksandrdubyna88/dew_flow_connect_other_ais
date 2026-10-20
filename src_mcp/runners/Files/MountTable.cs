@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 namespace CoaiMcp.Runners.Files;
 
 // Ported from wsl_care (MIT, same owner) src_daemon/src/WslCare.Core/Files/MountTable.cs — Parse, Holding, MountEntry.IsDrvfs; the whole-drive half (IsWholeDrive) is not ported: nothing here asks it.
-// wsl_care has no tests of the parser itself (DL6 and §8 of todo/PLAN_kimi_and_vibe_on_linux.md said it had): MountTableTests are written fresh.
+// wsl_care has no tests of the parser itself (DL6 and §8 of research/PLAN_kimi_and_vibe_on_linux.md said it had): MountTableTests are written fresh.
 
 /// <summary>One line of <c>/proc/self/mountinfo</c>: <c>id parent major:minor root mount-point options [optional…] - type source
 /// super-options</c>, its root, mount point and source decoded from the kernel's octal escapes (<c>\040</c> space, <c>\011</c> tab,
@@ -71,7 +71,7 @@ public abstract record MountHolder
 /// The kernel's mount table: parsed once, asked which mount holds a path. A sign-in folder on a Windows filesystem is shared with
 /// a Windows program that no Linux lock can see, and such a filesystem reaches Linux through <c>/mnt/c</c>, a custom
 /// <c>mount -t drvfs</c> point, a bind mount or <c>virtiofs</c> — so the rule is the TYPE of the mount that holds the path, never
-/// a prefix of the path (DL6 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>).
+/// a prefix of the path (DL6 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>).
 /// </summary>
 public static partial class MountTable
 {

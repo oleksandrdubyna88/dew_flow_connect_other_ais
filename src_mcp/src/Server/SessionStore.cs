@@ -62,6 +62,18 @@ public sealed record ReviewerState(
     /// </summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public string? Warning { get; init; }
+
+    /// <summary>
+    /// Members of this reviewer row in the file that THIS build does not know, kept so that a save by an older build does not
+    /// strip what a newer build wrote. Null when the file had none.
+    /// </summary>
+    /// <remarks>
+    /// Set by the deserialiser, by the save scrub (<c>SessionScrub</c>) and by the answer strip — nothing changes the dictionary
+    /// itself, because <c>with</c> copies share it. <c>internal set</c> with <c>[JsonInclude]</c>, never <c>init</c> (the
+    /// generator binds it to a constructor parameter and the first load throws) and never <c>private set</c> (SYSLIB1038).
+    /// </remarks>
+    [System.Text.Json.Serialization.JsonExtensionData, System.Text.Json.Serialization.JsonInclude]
+    public Dictionary<string, JsonElement>? Unknown { get; internal set; }
 }
 
 /// <summary>
@@ -125,7 +137,7 @@ public sealed record RoundRecord(
 
     /// <summary>
     /// The round's identity across the wire — 32 hex characters minted when it started
-    /// (<see cref="RoundKeys"/>, story 4.1 of todo/PLAN_every_round_is_counted.md), which every launch of the round
+    /// (<see cref="RoundKeys"/>, story 4.1 of research/PLAN_every_round_is_counted.md), which every launch of the round
     /// carries to a Team server. Empty for a round recorded before the field existed, and for a skipped round, which
     /// launched nothing.
     /// </summary>
@@ -271,6 +283,18 @@ public sealed record RoundRecord(
     /// <see cref="CostUsd"/>, which are then a FLOOR: the unknown share is not in them, and it is not zero.
     /// </remarks>
     public string UsageNote { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Members of this round in the file that THIS build does not know, kept so that a save by an older build does not
+    /// strip what a newer build wrote. Null when the file had none.
+    /// </summary>
+    /// <remarks>
+    /// Set by the deserialiser, by the save scrub (<c>SessionScrub</c>) and by the answer strip — nothing changes the dictionary
+    /// itself, because <c>with</c> copies share it. <c>internal set</c> with <c>[JsonInclude]</c>, never <c>init</c> (the
+    /// generator binds it to a constructor parameter and the first load throws) and never <c>private set</c> (SYSLIB1038).
+    /// </remarks>
+    [System.Text.Json.Serialization.JsonExtensionData, System.Text.Json.Serialization.JsonInclude]
+    public Dictionary<string, JsonElement>? Unknown { get; internal set; }
 }
 
 /// <summary>What the store persists: the state machine's state plus the human-readable trail.</summary>
@@ -376,6 +400,18 @@ public sealed record PersistedSession(SessionState State, List<RoundRecord> Roun
         get => field ??= [];
         init => field = value ?? [];
     }
+
+    /// <summary>
+    /// Members of this session file in the file that THIS build does not know, kept so that a save by an older build does not
+    /// strip what a newer build wrote. Null when the file had none.
+    /// </summary>
+    /// <remarks>
+    /// Set by the deserialiser, by the save scrub (<c>SessionScrub</c>) and by the answer strip — nothing changes the dictionary
+    /// itself, because <c>with</c> copies share it. <c>internal set</c> with <c>[JsonInclude]</c>, never <c>init</c> (the
+    /// generator binds it to a constructor parameter and the first load throws) and never <c>private set</c> (SYSLIB1038).
+    /// </remarks>
+    [System.Text.Json.Serialization.JsonExtensionData, System.Text.Json.Serialization.JsonInclude]
+    public Dictionary<string, JsonElement>? Unknown { get; internal set; }
 }
 
 /// <summary>
@@ -447,6 +483,9 @@ internal sealed class SessionTurn : IDisposable
 
 public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
 {
+    /// <summary>The names a release retired from the types whose file members are kept; the save drops them. A test registers its own.</summary>
+    internal RetiredMembers Retired { get; init; } = RetiredMembers.Shipped;
+
     private string SessionsDir => Path.Combine(dataDir, "sessions");
 
     /// <summary>
@@ -539,7 +578,8 @@ public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
         // tried to move it, and the loser died with `UnauthorizedAccessException: Access to the path
         // is denied` out of `LiveRound.Persist`. Twice in one morning's log before it was understood.
         var temp = $"{file}.{Environment.ProcessId}-{Guid.NewGuid().ToString("N")[..8]}.tmp";
-        var json = JsonSerializer.Serialize(session, ServerJsonContext.Default.PersistedSession);
+        // The bags are cleaned on a copy, once, here — the only place a session is serialised (SessionScrub says what it drops).
+        var json = JsonSerializer.Serialize(SessionScrub.Scrubbed(session, Retired), ServerJsonContext.Default.PersistedSession);
         using (var turn = SessionTurn.Take(file))
         {
             if (turn.Held)

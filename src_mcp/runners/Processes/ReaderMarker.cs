@@ -2,7 +2,7 @@ namespace CoaiMcp.Runners.Processes;
 
 /// <summary>The fixed codes a slot is blocked with — unavailable until recovery proves it safe.</summary>
 /// <remarks>
-/// Story 6.1a of todo/PLAN_every_round_is_counted.md, the epic-6 risk consultation: availability is the price of an
+/// Story 6.1a of research/PLAN_every_round_is_counted.md, the epic-6 risk consultation: availability is the price of an
 /// ambiguous crash. A code, never a sentence, so the catalog, the log and the state file say one word each.
 /// </remarks>
 public static class BlockedReasons
@@ -15,7 +15,7 @@ public static class BlockedReasons
 
     /// <summary>
     /// A member the marker names could not be CHECKED after the confirmation (<c>EACCES</c>, <c>EIO</c>, an unparseable <c>stat</c>): that is not evidence it is gone, so the
-    /// marker stays (DL9 of todo/PLAN_kimi_and_vibe_on_linux.md, A3 §6.2).
+    /// marker stays (DL9 of research/PLAN_kimi_and_vibe_on_linux.md, A3 §6.2).
     /// </summary>
     public const string ReaderMemberUnverifiable = "reader-member-unverifiable";
 
@@ -99,7 +99,7 @@ public abstract record Reconciled
 /// and CONFIRMS the exit before the lease is usable.
 /// </summary>
 /// <remarks>
-/// <para>The order the epic-6 risk consultation fixed (todo/PLAN_every_round_is_counted.md): take the lock, reconcile,
+/// <para>The order the epic-6 risk consultation fixed (research/PLAN_every_round_is_counted.md): take the lock, reconcile,
 /// and only then hand the lease out. A process whose start time no longer matches the record is somebody else's under
 /// a reused number and is left alone; a marker that names nothing blocks; a member still alive at the bound blocks.
 /// Blocking is re-tried on every later acquisition, so a slot blocked over a member that later dies by itself comes

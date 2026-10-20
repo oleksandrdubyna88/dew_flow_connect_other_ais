@@ -1,7 +1,7 @@
 namespace CoaiMcp.Runners.Kimi;
 
 /// <summary>
-/// THE A2-A3 SEAM (§0 of both cornerstone specs of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): what a survivor marker does to a free lock. A Kimi launch's locks cannot see a descendant that
+/// THE A2-A3 SEAM (§0 of both cornerstone specs of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>): what a survivor marker does to a free lock. A Kimi launch's locks cannot see a descendant that
 /// inherited nothing (L-K5) or sits in its own session (L-K4); only A3's survivor marker can. A2 asks THIS interface in three places before it treats a free lock as a free sign-in —
 /// <c>KimiLaunch.TakeAsync</c> (after the gate), <c>KimiShimHold.Taken</c> (after both tree files) and <c>KimiHome.Alive</c> (a marker keeps the home) — and in the retirement sweep; A3 implements it.
 /// </summary>

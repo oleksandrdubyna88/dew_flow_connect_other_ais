@@ -6,7 +6,7 @@ namespace CoaiMcp.Runners.Processes;
 // Ported in part from wsl_care (MIT, same owner) src_daemon/src/WslCare.Core/Processes/ProcessSignals.cs: `IPidfdCalls` (:85-99) and `LibcPidfdCalls` (:281-332), glibc spelled
 // "libc" (the AppendOnlyFile precedent) and not "libc.so.6". NOT ported: wsl_care's `ProcessIdentity(Pid, long StartTicks)`, which clashes by name with this repository's
 // `ProcessIdentity(Pid, DateTime StartedUtc)` — the one identity here — and the shell around it (see TreeSignals). NEW here, decided by DL9 of
-// todo/PLAN_kimi_and_vibe_on_linux.md (the plan gate for epics 4-6, 2026-10-16, F4): `RawSyscallPidfdCalls` and the `PidfdLayer` that picks between the two and refuses a kernel with no pidfd.
+// research/PLAN_kimi_and_vibe_on_linux.md (the plan gate for epics 4-6, 2026-10-16, F4): `RawSyscallPidfdCalls` and the `PidfdLayer` that picks between the two and refuses a kernel with no pidfd.
 
 /// <summary>The pidfd calls: a descriptor that PINS one process, a signal sent through it, and a wait for its end. The seam the layer is tested on.</summary>
 public interface IPidfdCalls

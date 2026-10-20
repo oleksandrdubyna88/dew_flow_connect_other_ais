@@ -49,7 +49,7 @@ public static class KimiTools
 
     /// <summary>
     /// The refusal naming the missing tool(s) and the cure of THIS host, or empty when both are found: on Windows the two <c>winget</c> lines; elsewhere (DL12 of
-    /// <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>) the <c>apt-get</c> or <c>dnf</c> line when that manager resolves on <paramref name="path"/>, else one generic sentence. Never <c>winget</c> off Windows.
+    /// <c>research/PLAN_kimi_and_vibe_on_linux.md</c>) the <c>apt-get</c> or <c>dnf</c> line when that manager resolves on <paramref name="path"/>, else one generic sentence. Never <c>winget</c> off Windows.
     /// </summary>
     public static string Refusal(bool isWindows, string bin, string? path, string? pathext, Func<string, bool> exists, string localBin = "")
     {

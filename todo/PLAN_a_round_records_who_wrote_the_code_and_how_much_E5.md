@@ -792,11 +792,11 @@ S6 may run beside S2–S5 once S1 has merged (E2 has). The epic ships as ONE com
     guard (`[JsonExtensionData]` on both, stripped from the `open`/`status` answer, with a round-trip test) would protect
     every field added AFTER the release that carries it; it cannot protect E5's own field from the binaries already out.
     It is a change to the two types every stage saves — the main session's to schedule, not this epic's.
-    *Update 2026-10-19:* `research/PLAN_a_session_file_keeps_what_a_newer_server_wrote.md` (a file of PR #868's branch, so not linked: the link would not resolve on this branch) is that change, open as
-    PR #868 and NOT on `main` yet. It adds a §8 to THIS document — a boundary table between the guard and E5 — which is not carried here:
-    when `main` brings #868 in, keep its §8 (this document's own §8 is the E4 reconciliation, so one of the two takes a new number), and point this item at it.
-    Until then the boundary is: E5 adds `Authors` as a KNOWN member and depends on no bag; the guard protects only servers released after it; whichever of the
-    two lands second puts its strip of the `open`/`status` answer in the same method (`SessionAnswerFor`, where S1's strip of `Authors` already is).
+    *Update 2026-10-20:* that change is [PLAN_a_session_file_keeps_what_a_newer_server_wrote.md](../research/PLAN_a_session_file_keeps_what_a_newer_server_wrote.md),
+    merged as PR #868. Its boundary table with E5 is §13 of THIS document (it came as a §8; this document's own §8 is the E4 reconciliation, so the guard's
+    section was renumbered when E5 merged `main`). E5 adds `Authors` as a KNOWN member and depends on no bag; the guard protects only servers released after it.
+    E5 landed second, so both strips of the `open`/`status` answer sit in one place: `SessionAnswerFor` hands `WithoutUnknownMembers` the rounds with
+    `Authors` already set to null.
 19. **`authors_reader` versions E3's reader only** (E7 §10 item 3). E3's `ReaderVersion` is bumped by a COUNTING rule; an
     E4 attribution-rule change with no E3 change leaves it equal, and E7's "equal reader → keep" would keep a row an older
     rule attributed. E5 stores what parent §9 names (E3's constant); if E4 adds an attribution version, it needs its own
@@ -1134,3 +1134,20 @@ accepted**; 8 and 9 stay findings for E6/E7. Two defects were fixed red-green in
 `ARoundRecordsWhoWroteItEndToEndTests.ADeletedDatabase_…`, was a plan round that answered `call_human` after 40 s under the suite's load (the FakeCli reviewer has
 the repository's usual 30 s timeout); its class passed alone three times out of three (4 of 4 each, about 30 s). `npm test`: 6 554 tests, 6 551 passed, 0 failed,
 3 skipped, exit 0. `dotnet format --verify-no-changes` on the changed files: clean. `plan-lifecycle`: clean; `pin-check`: OK.
+
+## 13. Boundary with the session-file guard (added 2026-10-18 by PR #868; renumbered from §8 when E5 merged main)
+
+A field added to `RoundRecord` is dropped by any OLDER `coai-mcp` that re-saves the session file; E5's `Authors` is one
+such field. The general guard — a `[JsonExtensionData]` bag on the session's own records, so a re-save keeps what a newer
+server wrote — is [PLAN_a_session_file_keeps_what_a_newer_server_wrote.md](../research/PLAN_a_session_file_keeps_what_a_newer_server_wrote.md) (implemented 2026-10-19),
+not E5. It helps only servers released after it; the binaries already out still strip `Authors`, so E5's database copy
+stays E5's answer for them.
+
+| Item | Who builds it | The other one's part |
+|---|---|---|
+| The bag on `RoundRecord` and five other session types, and the save scrub | **the guard plan** | E5 adds `Authors` as a KNOWN member; nothing in E5 depends on the bag |
+| The bags stripped from the `open`/`status` answer | **the guard plan** | E5 S1 strips `Authors` from the same answer; whichever lands second puts its strip in the same method |
+| `Authors` stripped by servers released BEFORE the guard | nobody can | E5's database copy (and E7's repair) |
+| The snapshot, the schema step, the card line | **E5** | none |
+
+Either can land first. Nothing else is shared.

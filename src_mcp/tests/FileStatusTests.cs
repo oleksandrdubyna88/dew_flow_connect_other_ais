@@ -6,7 +6,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// The ported file status and its <c>statx</c> read (DL7 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): a folder is named by its device and inode, never by its
+/// The ported file status and its <c>statx</c> read (DL7 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>): a folder is named by its device and inode, never by its
 /// spelling. The layout half is pure and runs on every platform; the half that asks the kernel runs on Linux.
 /// </summary>
 [SupportedOSPlatform("linux")]

@@ -1,7 +1,7 @@
 import type { GaugeRatio } from './gaugeWords';
 
 /**
- * A subscription's share (story 6.2 of todo/PLAN_every_round_is_counted.md) — the operator's "price" for a flat plan.
+ * A subscription's share (story 6.2 of research/PLAN_every_round_is_counted.md) — the operator's "price" for a flat plan.
  *
  * <p>A monthly plan price, typed ONCE per vendor account (one subscription serves every model on it, so it lives with the
  * account — a Team server's vendor on Setup › Team servers — never on each model card), never looked up. A finite number

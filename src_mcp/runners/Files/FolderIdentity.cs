@@ -3,7 +3,7 @@ using System.Runtime.Versioning;
 namespace CoaiMcp.Runners.Files;
 
 /// <summary>
-/// The text a folder's IDENTITY is hashed from — per platform, never a spelling; EMPTY when the platform cannot say (DL7 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>).
+/// The text a folder's IDENTITY is hashed from — per platform, never a spelling; EMPTY when the platform cannot say (DL7 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>).
 /// </summary>
 /// <remarks>
 /// Windows: the upper-cased final path of the opened folder handle (<see cref="HandleRead.FinalDirectory"/>) — path-stable, which is why Windows lock files never pile up.

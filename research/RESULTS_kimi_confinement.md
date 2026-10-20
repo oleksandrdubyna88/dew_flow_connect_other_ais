@@ -700,9 +700,9 @@ awaiting), a round with two Kimi rows or a Kimi row beside another vendor, a ret
 
 Spend: 4 paid launches, 4 answered; nothing was refused.
 
-## 29. Kimi Code 2.2.0 on Linux (WSL2) — cells L-K1, L-K2, L-K3, L-K4, L-K6, L-K7, run for `todo/PLAN_kimi_and_vibe_on_linux.md` E4 (2026-10-16)
+## 29. Kimi Code 2.2.0 on Linux (WSL2) — cells L-K1, L-K2, L-K3, L-K4, L-K6, L-K7, run for `research/PLAN_kimi_and_vibe_on_linux.md` E4 (2026-10-16)
 
-> Scout run, epic E4 of `todo/PLAN_kimi_and_vibe_on_linux.md`. WSL2 Ubuntu (kernel 6.18, x86_64, ext4 under `/tmp` and `~`),
+> Scout run, epic E4 of `research/PLAN_kimi_and_vibe_on_linux.md`. WSL2 Ubuntu (kernel 6.18, x86_64, ext4 under `/tmp` and `~`),
 > Kimi Code **2.2.0** (`~/.kimi-code/bin/kimi`, dynamically linked ELF), ripgrep 14.1.0 at `/usr/bin/rg`, `fd` in `~/.kimi-code/bin`.
 > **8 paid turns** (T1, T2, T3, T5 answered; K4-none answered; K4-parent, K4-pid, K4-group cut by the kill). All free calls were
 > `kimi --version`, `kimi acp --help`, and `/proc` reads.
@@ -909,7 +909,7 @@ themselves (no `fs` call): `Grep` of `/mnt/c/Windows/System32` was NOT stopped b
 - Folders left for the owner to remove by hand (nothing was deleted): everything under `/tmp/testsToDelete-wsl-kimi-r1/` —
   `home/`, `os/`, `os-b/`, `os-c/`, `os-d/`, `os-e/` (the canary), `os-xdg/`, `xdgcache/`, `repo/`, `outside/`, `locks/`, `logs/`.
 
-## 30. L-N1 — .NET's inheritable hold on Linux is SHARED, and the descriptor IS inherited (2026-10-16, `todo/PLAN_kimi_and_vibe_on_linux.md` DL8; A2 §3)
+## 30. L-N1 — .NET's inheritable hold on Linux is SHARED, and the descriptor IS inherited (2026-10-16, `research/PLAN_kimi_and_vibe_on_linux.md` DL8; A2 §3)
 
 The question: `HeldFile.Take(path, inheritable: true)` opens with `FileShare.None | FileShare.Inheritable`. On Unix .NET turns a share mode into an advisory `flock`. Is the combined mode still an EXCLUSIVE lock, and does the descriptor reach a child started after the take? Not a Kimi cell: a test, in real child processes (`FakeCli hold-file` for the bare primitive, `FakeCli tree-hold` for the product's `KimiCredentialsLock.HoldTree`), on the `ubuntu-latest` job of `ci.yml`.
 

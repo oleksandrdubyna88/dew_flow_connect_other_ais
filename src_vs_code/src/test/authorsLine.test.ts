@@ -142,7 +142,15 @@ test('a round with no snapshot says nothing at all', () => {
 });
 
 test('a state the rule refuses is not recorded, whatever else the snapshot holds', () => {
-  for (const [state, reasons] of [['partial', []], ['observed', ['x']], ['done', []], ['partial', ['read budget ×2']], ['partial', ['read budget', 'read budget']]] as const) {
+  for (const [state, reasons] of [
+    ['partial', []],
+    ['observed', ['x']],
+    ['done', []],
+    ['partial', ['read budget ×2']],
+    ['partial', ['read budget', 'read budget']],
+    // A state that already carries its reasons is the database's rendered column, not the snapshot's kind.
+    ['unobserved: transcript not found', []],
+  ] as const) {
     assert.equal(writtenWith(snapshot([opusMain], { state, reasons }), undefined), '', `${state}: ${reasons.join(', ')}`);
   }
   assert.equal(writtenWith(snapshot([opusMain], { reasons: 'peer running', state: 'partial' }), undefined), '', 'reasons that is not a list');

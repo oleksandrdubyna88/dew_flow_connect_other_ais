@@ -6,7 +6,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// The BUILT environment of a Kimi launch on a Linux or WSL host (S-K8 and DL11 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>, E6): <c>HOME</c> alone redirects the OS home (no <c>USERPROFILE</c>, <c>HOMEDRIVE</c>,
+/// The BUILT environment of a Kimi launch on a Linux or WSL host (S-K8 and DL11 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>, E6): <c>HOME</c> alone redirects the OS home (no <c>USERPROFILE</c>, <c>HOMEDRIVE</c>,
 /// <c>HOMEPATH</c>), and <c>XDG_CACHE_HOME</c> points at a <c>cache/</c> folder beside <c>os/</c> — NOT inside <c>KIMI_CODE_HOME</c> — so Kimi's native-file extraction (L-K3: about 2 MB into
 /// <c>$HOME/.cache/kimi-code/native/…</c> on every launch) leaves <c>os/</c> empty. The pure decisions run on every machine through the explicit platform flag.
 /// </summary>

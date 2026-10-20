@@ -258,7 +258,7 @@ public sealed class ProbeApiModeTests : IDisposable
 
     /// <summary>
     /// The matrix makes paid completions against a metered key — and wrote nothing (story 3.3 of
-    /// todo/PLAN_every_round_is_counted.md; RESULTS_vendor_quota_gauges.md §5.1, row 7): one ledger line per completion
+    /// research/PLAN_every_round_is_counted.md; RESULTS_vendor_quota_gauges.md §5.1, row 7): one ledger line per completion
     /// sent with the real key, of kind <c>probe</c>, never a review.
     /// </summary>
     [Fact]

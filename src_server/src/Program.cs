@@ -85,7 +85,7 @@ var minimumContract = config.GetValue("Coai:MinimumClientContract", ContractVers
 var acceptedRoles = AcceptedRoles.From(
     SplitCsv(config["Coai:ExtraRoles"]),
     config.GetValue("Coai:AllowAnyRole", false));
-// The budget rule's two numbers (story 4.3 of todo/PLAN_every_round_is_counted.md), refused at boot for the same reason
+// The budget rule's two numbers (story 4.3 of research/PLAN_every_round_is_counted.md), refused at boot for the same reason
 // as the roles above: a negative margin or a start-up allowance of nought is a server that starts work for callers who
 // have already gone, and nobody would see why.
 var clientBudget = ClientBudgetPolicy.From(
@@ -193,7 +193,7 @@ var jobRunner = new JobRunner(
     new UsageLedger(dataDir),
     (message, error) => reportSessionFailure?.Invoke(message, error),
     // The vendor's own gauge, read after each codex job inside the slot's lease (story 6.1a of
-    // todo/PLAN_every_round_is_counted.md). The reader's launcher is built around the tracker that writes the child's
+    // research/PLAN_every_round_is_counted.md). The reader's launcher is built around the tracker that writes the child's
     // identity into the slot's marker; the log gets codes and numbers, never a line of what the reader said.
     new GaugeCapture(slotRegistry, tracker => new ProcessLauncher(tracker), Startup.Version, message => reportCatalog?.Invoke(message)));
 builder.Services.AddSingleton(jobs);
@@ -331,7 +331,7 @@ app.MapReviewEndpoints(
     catalog,
     gate,
     acceptedRoles,
-    // What a queued job behind a parked or signed-out account is told (story 5.3b of todo/PLAN_every_round_is_counted.md):
+    // What a queued job behind a parked or signed-out account is told (story 5.3b of research/PLAN_every_round_is_counted.md):
     // read from the same registry the runner claims from.
     new QueueWaiting(catalog, slotRegistry),
     // How long a review may WAIT for a free account before giving up, having spent nothing. Not how

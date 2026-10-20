@@ -8,7 +8,7 @@ using CoaiMcp.Runners.Processes;
 namespace CoaiMcp.FakeCli;
 
 /// <summary>
-/// The Linux teardown of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c> DL9 (A3), played in REAL processes: a test host must never become a child subreaper (it would collect every other test's
+/// The Linux teardown of <c>research/PLAN_kimi_and_vibe_on_linux.md</c> DL9 (A3), played in REAL processes: a test host must never become a child subreaper (it would collect every other test's
 /// orphans), so the shim's part is a child of the test — <c>supervise-tree</c> drives the product's <see cref="SupervisedTeardown"/> directly, <c>shim-acp</c> is the whole ACP client run the way
 /// <c>--ask-acp</c> runs it (subreaper, <c>SIGTERM</c>/<c>SIGINT</c> into a token, the Kimi supervisor and its marker). Children here redirect all three streams: they hold none of ours.
 /// </summary>

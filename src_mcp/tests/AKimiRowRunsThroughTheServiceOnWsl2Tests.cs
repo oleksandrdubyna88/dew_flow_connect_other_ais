@@ -10,12 +10,12 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// A Kimi reviewer row through the REAL service on a WSL2 host (E6 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>, §8, S-K20): a plan round and a code round, each the real roster, the real launch control, the real
+/// A Kimi reviewer row through the REAL service on a WSL2 host (E6 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>, §8, S-K20): a plan round and a code round, each the real roster, the real launch control, the real
 /// <c>coai-mcp --ask-acp</c> shim as a child process and the FAKE ACP agent as <c>kimi acp</c> — plus the two refused hosts (a native Linux host and a WSL1 kernel), which start nothing. The host is GIVEN through the per-flow seam
 /// (<see cref="KimiFlowHost"/>), so the flows run on a runner that is not a WSL2 machine.
 /// </summary>
 /// <remarks>
-/// <para>The agent is steered by the temp-directory file (<c>fakecli-minimal.json</c>) because the shim builds its environment from scratch and no <c>FAKECLI_*</c> variable reaches it, which is why this class shares the
+/// <para>The agent is steered by the steering file beside the fake CLI's binary (<c>FakeCliSteering</c>) because the shim builds its environment from scratch and no <c>FAKECLI_*</c> variable reaches it, which is why this class shares the
 /// <c>fakecli-env</c> collection. <b>There is no consult and no question-row flow for Kimi:</b> in this build Kimi is a reviewer only (<c>RuntimeCapabilities.Runtimes</c> and <c>ConsultantResolution</c> do not list it; the
 /// consultant is <c>feat/kimi-consultant</c>'s).</para>
 /// </remarks>
@@ -29,9 +29,8 @@ public sealed class AKimiRowRunsThroughTheServiceOnWsl2Tests : IAsyncLifetime
         be gone when the round ends. When it is done: the round counts its answer, and nothing of it is left in temp.
         """;
 
-    private static string SteeringFile => Path.Combine(Path.GetTempPath(), "fakecli-minimal.json");
-
     private readonly ProcessLauncher _launcher = new();
+    private IDisposable _steering = FakeCliSteering.Unwritten;
     private readonly TempDir _dir = TempDir.For("testsToDelete-kimiflow-");
     private readonly KimiFixture _person = new();
     private FakeAcpAgent? _agent;
@@ -45,7 +44,7 @@ public sealed class AKimiRowRunsThroughTheServiceOnWsl2Tests : IAsyncLifetime
 
     public ValueTask DisposeAsync()
     {
-        File.Delete(SteeringFile);
+        _steering.Dispose();
         _agent?.Dispose();
         _person.Dispose();
         _dir.Dispose();
@@ -58,11 +57,11 @@ public sealed class AKimiRowRunsThroughTheServiceOnWsl2Tests : IAsyncLifetime
     {
         _agent = new FakeAcpAgent([FakeAcpAgent.Chunk(KimiShimScripts.CleanReview)], FakeAcpAgent.Models("kimi-code/k3"));
         _agent.WithFields(_agent.EnvField());
-        File.WriteAllText(SteeringFile, JsonSerializer.Serialize(new Dictionary<string, string>
+        _steering = FakeCliSteering.Write(new Dictionary<string, string>
         {
             ["FAKECLI_VERSION_STDOUT"] = "kimi 2.1.1\r\n",
             ["FAKECLI_ACP_SCRIPT"] = _agent.Script,
-        }));
+        });
 
         return _agent;
     }
