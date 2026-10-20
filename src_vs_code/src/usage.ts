@@ -104,6 +104,14 @@ export interface UsageEntry {
   readonly gaugeObservedUtc?: string;
   readonly gaugePlan?: string;
   readonly gaugeWindows?: readonly GaugeWindowOnLine[];
+  /**
+   * The CONSULTATION the line's turn belongs to (E3.S4 of todo/PLAN_the_round_counter_tail_E3.md) — the id every turn of one
+   * consultation shares, written by `coai-mcp` on a local consult line. Absent on a line older than the field, on a consultant
+   * check and on a consultation refused before it began, none of which has a consultation behind it; an empty value on
+   * disk is read as absent, never as an id. The Rounds block divides consult money by the DISTINCT ids, an absent one
+   * being its own unit.
+   */
+  readonly consultation?: string;
 }
 
 export type Window = 'day' | 'week' | 'month' | 'year';
@@ -168,6 +176,7 @@ export function parseUsageLine(line: string): UsageEntry | undefined {
       ...launchFields(parsed),
       ...ranWithFields(parsed),
       ...endCauseOf(parsed.endCause),
+      ...consultationOf(parsed.consultation),
       ...roundFields(parsed),
       ...resetOf(parsed.resetsUtc),
       ...gaugeFields(parsed),
@@ -273,6 +282,11 @@ function launchFields(parsed: Partial<UsageEntry>): Pick<UsageEntry, 'turn' | 'a
 /** A text field the line actually says — a non-empty string; anything else is silence. */
 function saidText(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0;
+}
+
+/** The consultation a consult line's turn belongs to — present only when the line says it, by `endCauseOf's` rule. */
+function consultationOf(value: unknown): Pick<UsageEntry, 'consultation'> {
+  return saidText(value) ? { consultation: value } : {};
 }
 
 function turnOf(value: unknown): Pick<UsageEntry, 'turn'> {

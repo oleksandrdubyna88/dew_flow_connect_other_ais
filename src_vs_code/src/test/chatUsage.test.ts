@@ -291,3 +291,37 @@ test('a running total is money, not float noise', () => {
 
   assert.strictEqual(total.costUsd, 0.3);
 });
+
+// E3.S3 of todo/PLAN_the_round_counter_tail_E3.md — the chat line names the CLI that ran it, and the version already asked.
+
+const FINISHED = {
+  utc: '2026-10-20T10:00:00.000Z', provider: 'work-codex', vendor: 'codex', model: 'gpt-6-luna', conversation: 'tab-1',
+  title: 'PLAN_x.md', seconds: 4, outcome: 'answered' as const, usage: { tokensIn: 10, tokensOut: 2, costUsd: null },
+};
+
+test('AChatLine_SaysWhichCliRanIt_AndItsVersion', () => {
+  const written = chatTurnRecord({ ...FINISHED, cli: 'codex', cliVersion: 'codex-cli 0.131.0' });
+  const [back] = parseChatUsage(chatUsageLine(written));
+
+  assert.equal(written.cli, 'codex', 'the line does not say which CLI ran it');
+  assert.equal(written.cliVersion, 'codex-cli 0.131.0', 'the line does not say the version that was already asked');
+  assert.deepEqual([back?.cli, back?.cliVersion], ['codex', 'codex-cli 0.131.0'], 'the reader dropped what the line says');
+});
+
+test('AnOldChatLine_ReadsNoCliAndNoVersion — never derived from vendor (D7)', () => {
+  const [old] = parseChatUsage('{"utc":"2026-09-09T20:00:00.000Z","provider":"codex","model":"sonnet","tokensIn":1,"tokensOut":2,'
+    + '"costUsd":null,"seconds":3,"outcome":"answered","conversation":"c","title":"t","vendor":"codex"}');
+
+  assert.equal(old?.vendor, 'codex');
+  assert.equal(old?.cli, undefined, 'an old line has no cli — it must not be copied from vendor');
+  assert.equal(old?.cliVersion, undefined);
+  assert.equal('cli' in (old ?? {}), false, 'the property itself is absent, not present and undefined');
+});
+
+test('AnEmptyCliOrVersion_IsNotWritten — absent means not recorded', () => {
+  const written = chatTurnRecord({ ...FINISHED, cli: 'codex', cliVersion: '' });
+  const bare = chatTurnRecord(FINISHED);
+
+  assert.equal('cliVersion' in written, false, 'an empty version was written as if it were one');
+  assert.deepEqual(['cli' in bare, 'cliVersion' in bare], [false, false]);
+});

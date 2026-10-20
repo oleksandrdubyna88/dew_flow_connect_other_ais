@@ -702,3 +702,17 @@ test('EveryLanguagesUsageArticle_SaysTheMedianIsPerLaunch (the rounds labels pla
     }
   }
 });
+
+test('every language says consultation money is per consultation, and what the label says for older lines', () => {
+  // E3.S4 of todo/PLAN_the_round_counter_tail_E3.md: the Rounds block divides a consult line's money by CONSULTATIONS
+  // (the new `consultation` field), and a window holding a line without one says *per consultation (older lines per turn)*.
+  // The label's words are English in every language, as every control name here is.
+  const article = HELP_ARTICLES.find((one) => one.id === 'what-each-ai-has-used');
+  assert.ok(article !== undefined, 'the spending article has been renamed, and this test is now asserting nothing');
+  for (const language of HELP_LANGUAGES) {
+    const said = Object.values(bodyFor(article, language).body).join(' ');
+    for (const named of ['*per consultation*', '*per consultation (older lines per turn)*']) {
+      assert.ok(said.includes(named), `the ${language} spending article never says “${named}” — stale rather than missing`);
+    }
+  }
+});

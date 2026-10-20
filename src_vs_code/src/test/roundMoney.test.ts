@@ -5,7 +5,7 @@ import { test } from 'node:test';
 
 import { ChatTurnRecord } from '../chatUsage';
 import {
-  chatLedgerLines, isLaunchLine, LedgerLine, medianOutputLabel, medianUnitOf, moneyGroups, NOT_ONE_LAUNCH_ATTEMPTS, ONE_LAUNCH_ATTEMPTS, PER_LAUNCH, perUnit,
+  chatLedgerLines, consultationLabel, consultationNote, consultationUnits, isLaunchLine, LedgerLine, medianOutputLabel, medianUnitOf, moneyGroups, NOT_ONE_LAUNCH_ATTEMPTS, ONE_LAUNCH_ATTEMPTS, PER_LAUNCH, perUnit,
   rollUp, tokenText, unitDivisor,
 } from '../roundMoney';
 import { LineRate, parseUsage } from '../usage';
@@ -267,4 +267,59 @@ test('TheTwoAttemptSets_AreDisjoint_AndEachNotOneLaunchWordSaysWhy', () => {
     assert.ok(!ONE_LAUNCH_ATTEMPTS.has(word), `"${word}" is in both attempt sets`);
     assert.ok(why.length > 0, `"${word}" is not one launch and says nothing of why`);
   }
+});
+
+// E3.S3 / E3.S4 of todo/PLAN_the_round_counter_tail_E3.md.
+
+test('ChatLedgerLines_CarryTheCli — and a chat line is still not a launch line', () => {
+  const [named, old] = chatLedgerLines([
+    { utc: '2026-10-09T10:00:00Z', provider: 'work-codex', vendor: 'codex', cli: 'codex', model: 'gpt-6-luna', tokensIn: 10, tokensOut: 5, costUsd: null,
+      seconds: 3, outcome: 'answered', conversation: 'c1', title: 't' },
+    { utc: '2026-10-09T10:00:00Z', provider: 'codex', vendor: 'codex', model: 'gpt-6-luna', tokensIn: 10, tokensOut: 5, costUsd: null,
+      seconds: 3, outcome: 'answered', conversation: 'c1', title: 't' },
+  ]);
+
+  assert.equal(named?.cli, 'codex', 'the mapped chat line lost its cli');
+  assert.equal(old?.cli, undefined, 'an old chat line must read no cli — never derived from vendor (D7)');
+  assert.equal(isLaunchLine(named!), false, 'a chat line has no attempt, so it is not a launch whatever its cli says');
+});
+
+const consult = (over: Partial<LedgerLine> = {}): LedgerLine => line({ kind: 'consult', model: 'gpt-6-astra', ...over });
+
+test('PerConsultationMoney_DividesByDistinctConsultations_AndAnOldLineIsItsOwnUnit', () => {
+  const groups = moneyGroups([
+    consult({ consultation: 'A' }), consult({ consultation: 'A' }), consult({ consultation: 'A' }),
+    consult({ consultation: 'B' }), consult(), consult({ consultation: '' }),
+  ], WINDOW, rateOf);
+
+  const units = consultationUnits(groups);
+
+  assert.deepEqual(units, { count: 4, withoutId: 2 }, '3 lines of A, 1 of B and 2 with no id are 4 consultations, not 6 turns');
+  assert.deepEqual(unitDivisor('consult', units.count, 6), { per: 'consultation', count: 4 });
+});
+
+test('TheSameConsultationInTwoModelGroups_IsCountedOnce', () => {
+  const groups = moneyGroups([
+    consult({ consultation: 'A' }), consult({ consultation: 'A', model: 'gpt-6-luna' }), consult({ consultation: 'B' }),
+  ], WINDOW, rateOf);
+
+  assert.equal(groups.length, 2);
+  assert.deepEqual(consultationUnits(groups), { count: 2, withoutId: 0 });
+});
+
+test('AWindowOfIdentifiedLines_SaysPerConsultation_AndAMixedOne_SaysOlderLinesPerTurn', () => {
+  const identified = moneyGroups([consult({ consultation: 'A' }), consult({ consultation: 'B' })], WINDOW, rateOf);
+  const mixed = moneyGroups([consult({ consultation: 'A' }), consult()], WINDOW, rateOf);
+
+  assert.equal(consultationLabel(consultationUnits(identified)), 'per consultation');
+  assert.equal(consultationLabel(consultationUnits(mixed)), 'per consultation (older lines per turn)');
+  assert.match(consultationNote(consultationUnits(mixed)), /1 line without a consultation id counted one each/u,
+    'the tooltip must say how many lines were counted one each');
+  assert.equal(consultationNote(consultationUnits(identified)), '', 'a window of identified lines has nothing to explain');
+});
+
+test('AConsultLine_WithNoId_IsItsOwnUnit_EvenWhenOnlyOldLinesExist — the unit count equals the turn count', () => {
+  const groups = moneyGroups([consult(), consult(), consult()], WINDOW, rateOf);
+
+  assert.deepEqual(consultationUnits(groups), { count: 3, withoutId: 3 });
 });
