@@ -105,7 +105,7 @@ the same answer looks when it comes over ACP is a hypothesis until step 1 of §5
   needs. The vendor part of the 160-character `Describe` summary passes the same redactor, after the cure. **Redaction gains a
   pattern for Moonshot account ids** (`org-…`, `ak-…`): the one measured balance sample carries both
   (`GateReportingTests.cs:209-211`, redacted by hand there), and `Redaction.VendorPattern` (`src_mcp/core/Notices/Redaction.cs:83-84`)
-  lists `sk-`, `ghp_`, `gho_`, `ghu_`, `ghs_`, `github_pat_`, `xox…` and nothing of Moonshot's. Without the pattern D4 would write
+  lists OpenAI's, GitHub's and Slack's token prefixes and nothing of Moonshot's. Without the pattern D4 would write
   an account id into the ledger that the 160-character cut used to hide by accident. One pattern, one test.
 - **D5 — DROPPED from this plan (decision G, judge J6+J7).** The earlier draft stood the provider's other Kimi lenses down for the
   round after one quota answer. Two verified facts remove it: a 429 on a spent quota is answered at once and spends no quota, so
