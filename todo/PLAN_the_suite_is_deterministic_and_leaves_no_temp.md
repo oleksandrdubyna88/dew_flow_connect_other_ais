@@ -1376,6 +1376,15 @@ folded; where the code said otherwise, it is written here instead of in the plan
 - **Case C24 (added 2026-10-20, from another session's PR #876):** `SupervisedTeardownLinuxTests.AGrandchildBornAfterTheFirstListing_IsFoundByTheReListing`
   failed once on Linux with the late grandchild's `/proc` state still `R` (expected gone). Timing, belongs to E5; root cause to
   be read from its log before a fix.
+- **Case C25 (added 2026-10-20, seen in E2's own full run):** `SessionStoreConcurrencyTests.EightWritersOnOneSession_DoNotDenyEachOther`
+  failed once with an `IOException` (the session file in use) during a 38-minute full run on a loaded Windows machine, and
+  passed 3 of 3 alone (4–7 s). The test asserts that concurrent writers of ONE session never deny each other, so a sharing
+  violation under load is a candidate PRODUCT defect (the store's write path), not a test defect. Not touched by E2. Belongs to
+  E3 (product) once its cause is read: the store's open mode and retry, against the test's eight writers.
+- **Also seen once in E2's runs, passing alone, already in the census:** `AReviewerThatAsksForSourceIsAskedAgainTests` (C13, E5),
+  `AStreamsUsageIsNeverZeroTests.A_stream_over_the_answer_cap_is_unknown` (exit 69 vs 70 under load — to be read with C13's
+  family), `AReaderIsEndedWithItsTreeTests` (C4), `ConsultationSweeperTests` (C14), and the real-editor job (C22; a different
+  scenario, "a deletion the mirror carries…", on 2026-10-20).
 
 ### The E2 plan round (coai session `8fd6b7ff`, 2026-10-20, verdict good_enough) — 13 findings: 11 accepted, 2 rejected
 
