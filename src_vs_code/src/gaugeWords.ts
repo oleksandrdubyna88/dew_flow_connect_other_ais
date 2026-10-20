@@ -125,6 +125,9 @@ const REASON_WORDS: Readonly<Record<string, string>> = {
   'local-capture-deferred': 'this machine does not read the gauge; a Team server does',
 };
 
+/** Every reason code the words above know — what the help's rounds article must name (`helpCoverage.test.ts`). */
+export const REASON_CODES: readonly string[] = Object.keys(REASON_WORDS);
+
 /** The consumers coai cannot count, in words. */
 const CONSUMER_WORDS: Readonly<Record<string, string>> = {
   'direct-codex-use': 'direct codex use outside coai spends the same limit and is not counted',

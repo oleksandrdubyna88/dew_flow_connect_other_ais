@@ -1,12 +1,34 @@
 # PLAN — the Rounds labels say what they count
 
-> Status: **built on its branch, 2026-10-19 — not merged.** Plan gate `proceed` and code gate `proceed` (session c098d202); the epic's cadence and risk consultations closed as solved; an Opus code review's help corrections folded in. Scope: the extension's Rounds block and its help —
-> `src_vs_code/src/roundMoney.ts`, `roundsBlock.ts`, `teamServerApi.ts`, `helpContent.ts` and its four translations
-> (`helpDe.ts`, `helpEs.ts`, `helpRu.ts`, `helpUk.ts`). No server or coai-mcp change.
+> Status: **IMPLEMENTED, 2026-10-20 (#891).** The Rounds block's median and its fallback division say *per launch* only
+> when every line of the group is one launch (`isLaunchLine`), the footnote and `ROUNDS_UNAVAILABLE` say what is true,
+> and the help names every reason in five languages. Still owed: it reaches people with the next extension release,
+> whose release PR carries the `## Extension` changelog section (a release step, not a gap).
 >
-> Related docs: [PLAN_every_round_is_counted.md](../research/PLAN_every_round_is_counted.md) (its *Open tail*, item
+> **What shipped differently.** (1) The plan first judged a Team-server row by `ranOn`, today's row; the epic's risk
+> consultation showed a deleted row reads as local there, and that the line itself says `cli: remote` — the rule became
+> per LINE, with no row lookup. (2) The same consultation found that an antigravity follow-up continues one
+> conversation whose usage may be cumulative, so `attempt: followUp` is not claimed as one launch until
+> [PLAN_the_reviewer_follow_up_is_billed_once.md](../todo/PLAN_the_reviewer_follow_up_is_billed_once.md) measures it.
+> (3) The cadence consultation added a second help article (`what-each-ai-has-used`) and the `launchs` plural.
+> (4) Two back-translation reviews corrected all four translations: the last reason had merged into the clause before
+> it in every language, and the help first said a follow-up "is not yet split" (it has its own line) and listed a
+> rotated Team-server attempt as a local line. (5) Two tests the plan called RED are guards (the mixed-week fallback,
+> the remote line's cells): the old code already said per recorded turn there; their teeth were shown by removing the
+> condition. (6) The gate round on this record at promotion (session 81e0ca68) found three things, fixed in the
+> promotion PR: `isLaunchLine` became an allow-list (`ONE_LAUNCH_ATTEMPTS`: `first`, `retry`, `repair`), so an unknown
+> attempt word is never claimed; the median header follows the cells (`medianOutputLabel`: per launch, per recorded
+> turn, or no unit on a mixed page) instead of always saying per launch; and the help test derives the reason codes
+> from `REASON_WORDS` (`REASON_CODES`), so a ninth code with no phrase fails it. Residual, as planned: a folded local
+> line (`LaunchParts.cs:87–91`) carries nothing that shows it — with the allow-list, a writer that ever stamps it
+> with its own attempt word is excluded for free.
+>
+> Scope: `src_vs_code/src/roundMoney.ts`, `roundsBlock.ts`, `teamServerApi.ts`, `helpContent.ts` and its four
+> translations (`helpDe.ts`, `helpEs.ts`, `helpRu.ts`, `helpUk.ts`). No server or coai-mcp change.
+>
+> Related docs: [PLAN_every_round_is_counted.md](PLAN_every_round_is_counted.md) (its *Open tail*, item
 > "Labels that name the wrong thing", found by the Opus whole-feature review of 2026-10-19),
-> [module_extension.md](../research/module_extension.md).
+> [module_extension.md](module_extension.md).
 
 ## The symptom
 
@@ -58,7 +80,7 @@ is incomplete.
    - an antigravity `followUp` continues the same conversation (`AntigravityRuntime.FollowUp`, `AntigravityRuntime.cs:99`;
      every other runtime has none, `ReviewerRuntime.cs:462`), and antigravity reports usage cumulatively in a
      conversation — measured for consultations, unmeasured for a reviewer follow-up
-     ([PLAN_the_reviewer_follow_up_is_billed_once.md](PLAN_the_reviewer_follow_up_is_billed_once.md)). Until that plan
+     ([PLAN_the_reviewer_follow_up_is_billed_once.md](../todo/PLAN_the_reviewer_follow_up_is_billed_once.md)). Until that plan
      measures it, a `followUp` line is not claimed as one launch;
    - a line with no `cli` is not claimed either (nothing says where it ran).
 
@@ -120,8 +142,8 @@ One epic, branch `fix/rounds-labels-say-what-they-count`.
 
   | | fewer than two readings | a launch sent no round id | no round ran between the readings | no round id (replaces "older extension") |
   |---|---|---|---|---|
-  | en | `fewer than two readings` | `a launch sent no round id` | `no round ran between the readings` | `sent no round id` |
-  | de | `weniger als zwei Lesungen` | `ein Start schickte keine Runden-ID` | `zwischen den Lesungen lief keine Runde` | `keine Runden-ID` |
+  | en | `fewer than two readings` | `a launch sent no round id` | `no round ran between the readings` | `whose client sent no round id` |
+  | de | `weniger als zwei Lesungen` | `ein Start schickte keine Runden-ID` | `zwischen den Lesungen lief keine Runde` | `deren Client keine Runden-ID schickte` |
   | es | `menos de dos lecturas` | `un lanzamiento no envió id de ronda` | `no corrió ninguna ronda entre las lecturas` | `cuyo cliente no envió id de ronda` |
   | ru | `меньше двух чтений` | `запуск не прислал id раунда` | `между чтениями не было раунда` | `чей клиент — coai-mcp до 0.49.0` |
   | uk | `менше двох читань` | `запуск не надіслав id раунду` | `між читаннями не було раунду` | `без id раунду` |
@@ -180,4 +202,4 @@ must stay green unchanged — they are the guard that 1.2 did not over-reach. Th
 - [x] `research/module_extension.md` says the median and fallback division are per launch when the lines are launches.
 - [x] The round-counter plan's *Open tail* item "Labels that name the wrong thing" points to this plan as closing it.
 - [ ] A `## Extension <version>` changelog section on the release PR that ships it.
-- [ ] This plan promoted to `research/` with its deviations.
+- [x] This plan promoted to `research/` with its deviations.
