@@ -6487,6 +6487,29 @@ Tests: `rounds.test.ts` (the function), `roundsLog.test.ts` (the row, the line, 
 `bundledPage.test.ts` (the page as it ships, opened with and without a source); `LogRow` gained a required field, so the five
 fixtures that build one carry `reviewedFrom: ''`.
 
+**The "written with" line — who wrote what a round reviewed** (E5.S6 of `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`).
+An opened round shows one more dimmed line under *asked by* and *reviewed from*: *written with Opus 5.5 (main) · 3 Sonnet coders · +412 −88 in 9
+files*, *… · partial — peer running*, *authors not observed — transcript not found*, and nothing for a round without a snapshot.
+`RoundRecord` gains `authors?: unknown` and `size?: unknown` (E2 added no TypeScript). `writtenWith(authors, size)` lives in `src/authorsLine.ts` — its own
+module, because `rounds.ts` would pass ESLint's 800-line ceiling with it — and reads both through `member()`, every member checked, no type
+assertion: an AUTHORS member of the wrong type, or a state the shared rule refuses (a `state` that already carries its reasons included), makes the
+whole line `''`, never half a sentence; a `size` of the wrong shape (a non-object, a cell with a non-numeric count, a coverage word other than
+`RoundSize.cs`'s `shown`/`elided`/`excluded`/`binary`) only drops the size clause and keeps the author line. **Main** is the distinct
+displayed models of the `who = main` rows (both windows counted; none → *main model unknown*); **coders** are the DISTINCT `agent` ids of subagent rows with
+association `wrote here` (a straddler once), grouped by family — one family *N Family coder(s)* (the noun is *coder* when the TOTAL is 1), two families
+the larger group first with a tie by family NAME (*1 Opus + 1 Sonnet coders*), more than two *N coders (mixed)*, none *main only*; `other` and `unknown`
+are groups of their own, as the report counts them. **Size** is the `delta` scope when its state is `recorded`, else the `whole` scope when it is, else
+no clause: lines of the `shown` and `elided` cells, files of those and the `binary` ones — a binary has files and no lines, never 0, and a measured
+zero reads *+0 −0 in 0 files*. `partial` appends *· partial — <reasons>*, `uncoveredWrites > 0` appends *· size not covered* and `-1` appends nothing. The
+card reads the round roll-up only, never `windows` or `peerGates`. **Two shared files hold it to the server:** `shared/authors-state-vectors.json` (which
+stored state is well formed — `AuthorsSnapshot.IsWellFormed` reads it too) and `shared/model-display-vectors.json` (`claude-<family>-<major>-<minor>[-<date>]`
+is *Family major.minor*, anything else verbatim and family `other`, `""`/`unknown` family `unknown`; the report's family function reads the same rows).
+Read from the SESSION FILE only: `--log`'s `authorsState` (`module_server.md`) is not this page's source. `LogRow` gained `writtenWith`;
+`writtenWithHtml(line, escape)` is embedded by assignment beside `reviewedFromHtml`, uses only its parameters, escapes the line, and `detail(row)` adds it
+to the `asked` expression; `.reviewer.authors` is dimmed like `.reviewer.source`. No CSV column, no new action. Tests: `authorsLine.test.ts` (the function and both
+vectors files), `roundsLog.test.ts` (the row, the line, a hostile model id), `bundledPage.test.ts` (the page as it ships — `writtenWithHtml` joins `EMBEDDED`;
+break-it: the term deleted from `detail` → the two page tests red while every unit test stays green); five fixtures carry `writtenWith: ''`.
+
 ### A reviewer's row is two lines, split at a seam it already had (2026-09-12)
 
 Issue #132. The model name was added to a reviewer's line on 2026-09-08 and doubled its length:

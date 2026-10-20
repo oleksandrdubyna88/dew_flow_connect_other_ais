@@ -108,3 +108,10 @@ dotnet_diagnostic.CA1502.severity = error
 
 [src_mcp/src/Store/AttributionMapping.cs]
 dotnet_diagnostic.CA1502.severity = error
+
+# THE AUTHORS STEP AND ITS STORE STAY WITHIN CYCLOMATIC COMPLEXITY 4 (E5 §2 — the same bound as E4's core above).
+[src_mcp/src/Server/Rounds/{RoundAuthorsStep,AuthorPeers,AuthorsBudget}.cs]
+dotnet_diagnostic.CA1502.severity = error
+
+[src_mcp/src/Store/{RoundAuthorsTable,RoundAuthorsLog}.cs]
+dotnet_diagnostic.CA1502.severity = error

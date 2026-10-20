@@ -3584,6 +3584,29 @@ Reached through both preview-fork shapes as step 22 is, and a read-only `--log` 
 twenty-two (`ThePlanSourceIsStepTwentyThreeTests`). `ThePairsThemselvesTests`' step-12 re-run drops the column with the
 rest.
 
+**Schema step 24 — who wrote the code a round reviewed** (`Schema.TheRoundsAuthors`, appended after step 23; story E5.S2 of
+`todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`). `round_authors` holds one row per row of the round's
+`AuthorsSnapshot` — `who` (`main` | `subagent`), `agent` (the opaque id, **empty for main**), `requested`, `model`, `effort`,
+`agent_type`, `association`, `window` (`before-open` | `round`), `launches`, `turns`, the four token terms and `write_calls`, keyed
+`(round_id, ordinal)`; the round's own stage and number are its `round_id`'s. Fourteen columns join `rounds`: `authors_state` (the
+card text, `State` or `State: reasons`), `authors_session`, `authors_id_source` (`registry` | `environment` | `stored` | `healed`),
+`authors_reader` and `authors_attribution` (E3's reader version and E4's `RoundAttribution.Version`; `0` = that component did not run),
+`submodule_writes`, `uncovered_writes` and the seven `ambiguous_*` totals; `rounds_by_authors_session` serves the peer lookup
+that runs on EVERY round. **`RoundAuthorsTable.Record(db, roundId, snapshot)`** (its own file, the `RoundChangesTable` shape)
+is called from `RecordRound` inside its transaction and is the second caller E7's backfill joins: it opens **no transaction of its
+own**, and `TheWriterJoinsTheCallersTransaction` / `AFaultAfterTheWriter_LeavesNoAuthors` prove a rollback or a later fault leaves
+nothing behind. It projects FROM `round.Authors`, never a `RoundContext`, so a deleted database re-projected from the session files
+comes back identical; a null snapshot writes NOTHING (a backfilled row survives a live re-record) and the upsert is NOT widened.
+**An unknown is `-1`, never `0`** — the ambiguous totals of an unobserved round, and both write counts of any snapshot no attribution
+produced; `authors_state = ''` means *not recorded* and a reader checks it first. `main` ↔ `''` is `RoundAuthorsTable`'s one
+mapping (`AgentColumn`) and its one inverse (`AgentKeyOf`), which E6's read and E7's heal call. The older-server limit, stated: a
+`coai-mcp` released before step 24 re-saves a session file WITHOUT the snapshot (no session type carries `JsonExtensionData`; measured on
+the released 0.58.0, `open` on a throwaway repository over a data directory whose file carried a snapshot on two rounds: `authors`
+was gone from every round after one `open`, and `open` never opened `coai.db`); the database keeps the projected columns, because its
+upsert names none of them, it runs no step on a file past its own and never touches `round_authors` (`AnOlderServersReSave_LeavesTheProjectedAuthorsInPlace`). What is lost is the card line, the rebuild path and the members the database never held; E7's recompute
+repairs them while the transcript exists. Reached through both preview-fork shapes as step 23 is; `ThePairsThemselvesTests`' step-12
+re-run drops the index first (SQLite refuses `DROP COLUMN` on an indexed column), then the fourteen columns.
+
 **`--log` names each round's size** (story E2.S5, contract C3). `LoggedRound` gains an init property `Size`
 (`RoundSize?`, JSON `size`): `{ whole: { state, from, cells[] }, delta: { … }, origin }`, one cell per (coverage, kind) with
 `files`, `added`, `removed`. `RoundsQuery.Rounds` hands the page's rounds to `RoundChangesLog.Attach` (which finds each round's id in its own cursor) (its own file, the
@@ -3613,6 +3636,46 @@ wraps each row's deserialise ONLY, never the query, so a missing column is still
 all read as an absent member; a malformed row never fails the page (`TheLogNamesEachPlansSourceTests`). The extension's parser
 ignores the member (`anOlderExtensionReadsALogPageCarryingASize.test.ts`), and its rounds-log line reads the session file, not this
 (`module_extension.md`).
+
+**`--log` names the state of each round's authors** (story E5.S3 of `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`).
+`LoggedRound` gains a third init property, `AuthorsState` (`string?`, JSON `authorsState`), absent when null. `RoundsQuery.Rounds` chains
+`RoundAuthorsLog.Attach` (its own file, the `RoundPlanSources` shape) after `RoundPlanSources.Attach` — one call, no fourth rung on the SQL
+ladder. It runs ONE query per page, `SELECT id, authors_state FROM rounds WHERE authors_state <> '' AND id IN (SELECT value FROM
+json_each($ids))`, only when the page has ids and `HasColumn(db, "rounds", "authors_state")` — a step-23 file is asked, answers with no
+query, is logged exactly as before and stays at twenty-three; `--round-counts` reads nothing new and leaves it byte for byte
+(`TheLogNamesEachRoundsAuthorsTests`). Rounds are matched by their OWN id (`PageIds`), never by list position. **Not recorded is never a
+word:** an empty column and a value `AuthorsSnapshot.IsWellFormed` refuses read as an absent member, judged per ROW and never around the query
+(a catch around the query would swallow *no such column* and hide what the `HasColumn` guard prevents).
+
+**The authors step — who wrote what a round reviewed, on the answer path** (story E5.S4 of
+`todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`). `RoundAuthorsStep.For(session, record)` (`src/Server/Rounds/`) runs in
+`RoundEngine` as ONE statement after the record's `with` block — `record = record with { Authors = _authors.For(session, record) }` — before the
+save and before the projection opens the database. It answers null (not recorded) for any round that E4 does not call *settled* (a plan or
+code round, `done`, not `skipped`): a skipped, interrupted or running round and every feature or document round; `Assign` is never
+called for one. The order: **locate** (`CallerTranscriptLocator.Locate`, the vendor from the round's own `Caller`, the identity from the
+step's INJECTED environment — `PanelService` gains one optional `environment` parameter and never reads the process's variables here); a
+refusal ends the step as `AuthorsSnapshot.Unknown(…, "unobserved", [reason])` with no peer query → **the peers and the gate's own timeline**
+(`AuthorPeers.Find`, one read-only connection that waits a second) → `RoundAttribution.ReadFrom` → the reader, bounded by the time left and
+the byte budget → `AttributionMapping` (the one mapping: `Observation`, `Timeline`, `Universe`) → `Assign` → `RoundAuthorsBuilder.Build` →
+`AuthorsSnapshot.From`. `ArgumentException` from `Assign` is `unobserved: invalid input`; any other exception is `unobserved: reader failed`
+(logged with its TYPE only) — the round still answers and is saved. **`Unknown(...)` carries `Reader = 0` / `Attribution = 0` for the component that
+did not run**, and `-1` in every count; an `unobserved` result from E4 itself gets `-1` write counts too.
+
+**`AuthorPeers.Find(connection, lookup, load, deadline, clock)`** is the ONE peer build, called by the live path and by E7's backfill (deadline null =
+unbounded). It asks which OTHER gate sessions hold a plan or code round whose `authors_session` — else, when empty, a UUID `rounds.caller` — is this
+caller, builds each peer's `GateTimeline` from its SESSION FILE (`OpenedUtc` from the file, never `sessions.opened_utc`; a round's completion only when it
+is `done`, so a running row's progress stamp ranks nothing) through `AttributionMapping.Timeline`, and reads the caller of this gate's earlier rounds in
+the same query. A round's caller is its own snapshot's session when the file has one, else `authors_session`, else a UUID `caller`, else empty. **It
+sets `PeersKnown = false`** — peers empty, E4 then says `partial: prior windows unknown` — when the store is absent or locked or has no
+`authors_session` column (older than step 24), when a peer's session file does not load or names another session, or when the deadline passes before a peer
+file is loaded (checked before EACH file). The step logs WHY at Debug (`AuthorPeerSet.Why`: a closed phrase, or an exception's type and SQLite error code — never its message, which may carry a path); the snapshot only says `prior windows unknown`. Two stated limits: a peer whose only same-caller round is still `running` is not found (`RecordRound` never runs
+for a running round; E7's grown-peer-set rule repairs it), and a RUNNING round of a found peer has no caller on disk, so E4's `peer running` cannot name it
+until it is projected. **The budget** (`AuthorsBudget.Default` = 2 s and 64 MiB of the `fromUtc` SLICE, a parameter of the step): one deadline for the whole
+step, checked between phases; the reader's own limits give `partial: read budget` with the rows read so far; a deadline passed before attribution ran gives
+`Unknown(partial, [read budget])`. `Writes into another checkout` are counts only: `UncoveredWrites` every call, `SubmoduleWrites` those whose root is a
+declared submodule of the checkout's `.gitmodules`, parsed by `GitModules.In` — no process is launched on the answer path. The reader's diagnostics are
+logged at Debug as numbers (`AgentFilesEmpty` included); none becomes a reason, a column or a member. `PanelSettings.TranscriptHome` is the one place the
+default transcripts folder is written (`ClaudeHome.Default.With(AgentLogDir)`); the window over the caller's own work (`RoundEngine.WhatTheCallerWasDoing`) reads it too. Every method of `RoundAuthorsStep`, `AuthorPeers`, `AuthorsBudget`, `RoundAuthorsTable` and `RoundAuthorsLog` stays within cyclomatic complexity 4: CA1502 is a build error for those files (`.editorconfig`, as for E4's core).
 
 ### The gate's history of a piece of work (`GateHistoryQuery`, 2026-09-26, feature review S2.3)
 
