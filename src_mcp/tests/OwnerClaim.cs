@@ -1,3 +1,6 @@
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Globalization;
 using System.Text.RegularExpressions;
 
 namespace CoaiMcp.Tests;
@@ -24,7 +27,7 @@ public enum ClaimVerdict
 /// </remarks>
 public static partial class OwnerClaim
 {
-    [GeneratedRegex(@"\A[^@\s]+@(?:win32|linux|darwin):\d+(?::\d+)?\z", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
+    [GeneratedRegex(@"\A(?<host>[^@\s]+)@(?<os>win32|linux|darwin):(?<pid>\d+)(?::\d+)?\z", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
     private static partial Regex Shape();
 
     /// <summary>
@@ -39,6 +42,68 @@ public static partial class OwnerClaim
     /// </param>
     public static ClaimVerdict Verdict(string claim, bool pidAlive, long? liveStartUnixSeconds) =>
         Shape().IsMatch(claim.Trim()) && !pidAlive ? ClaimVerdict.Leftover : ClaimVerdict.Keep;
+
+    /// <summary>
+    /// What a sweeper does with a claim it reads on <paramref name="thisHost"/> / <paramref name="thisOs"/>: the whole rule in one place. A claim written on
+    /// ANOTHER host or operating system is never judged dead (a pid means something only where it was written, so the process lookup is not even asked);
+    /// a claim that does not parse is kept; otherwise <see cref="Verdict"/> decides from the lookup.
+    /// </summary>
+    /// <param name="claim">The claim file's text.</param>
+    /// <param name="thisHost">This machine's name, as the claim recorded it (compared without regard to case).</param>
+    /// <param name="thisOs">This machine's operating system in <see cref="NodeSpelling"/>'s words.</param>
+    /// <param name="processIsAlive">Asks THIS machine whether a pid runs — <see cref="ProcessIsAlive(int)"/> in real use.</param>
+    public static ClaimVerdict Judge(string claim, string thisHost, string thisOs, Func<int, bool> processIsAlive)
+    {
+        var match = Shape().Match(claim.Trim());
+        if (!match.Success || !OnThisMachine(match, thisHost, thisOs)
+            || !int.TryParse(match.Groups["pid"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var pid))
+        {
+            return ClaimVerdict.Keep;
+        }
+
+        return Verdict(claim, processIsAlive(pid), liveStartUnixSeconds: null);
+    }
+
+    private static bool OnThisMachine(Match claim, string thisHost, string thisOs) =>
+        string.Equals(claim.Groups["host"].Value, thisHost, StringComparison.OrdinalIgnoreCase)
+        && string.Equals(claim.Groups["os"].Value, thisOs, StringComparison.Ordinal);
+
+    /// <summary>Whether a pid on THIS machine runs, asking the operating system.</summary>
+    public static bool ProcessIsAlive(int pid) =>
+        ProcessIsAlive(pid, static candidate =>
+        {
+            using var process = Process.GetProcessById(candidate);
+            if (process.HasExited)
+            {
+                throw new InvalidOperationException("the process ended");
+            }
+        });
+
+    /// <summary>
+    /// The three outcomes of a lookup are three different facts, and only two mean "gone": <see cref="ArgumentException"/> (no such pid) and
+    /// <see cref="InvalidOperationException"/> (it ended between the lookup and the question) are dead; <see cref="Win32Exception"/> (access denied, a
+    /// protected process) is ALIVE — being refused an answer is not being told the process ended. Any other failure propagates. (The rule of the benchmark's
+    /// <c>WorkerLiveness.ProcessIsAlive</c>; Node's twin is: only <c>ESRCH</c> is dead, <c>EPERM</c> is alive.)
+    /// </summary>
+    /// <param name="pid">The process to ask about.</param>
+    /// <param name="probe">Throws as <see cref="Process.GetProcessById(int)"/> and <c>HasExited</c> do; returns when the process is there.</param>
+    public static bool ProcessIsAlive(int pid, Action<int> probe)
+    {
+        try
+        {
+            probe(pid);
+
+            return true;
+        }
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException)
+        {
+            return false;
+        }
+        catch (Win32Exception)
+        {
+            return true;
+        }
+    }
 
     /// <summary>The claim's text — one line, no trailing newline; the start field only when it is given.</summary>
     public static string Format(string host, string os, int pid, long? startUnixSeconds) =>
