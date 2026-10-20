@@ -40,6 +40,9 @@ internal sealed record TestClass(
 /// class (a private scoped-variable helper inside a test class runs inside that class's collection): its code counts for the outer
 /// class and it is not judged alone.</para>
 /// </remarks>
+/// <summary>A source file of the test tree as its spelling (comments removed, string contents kept).</summary>
+internal sealed record SourceFile(string File, string Text);
+
 internal static class TestSourceIndex
 {
     private static readonly Regex ClassDeclaration = new(
@@ -64,8 +67,16 @@ internal static class TestSourceIndex
 
     private static readonly Lazy<IReadOnlyList<TestClass>> AllClasses = new(Discover, isThreadSafe: true);
 
+    private static readonly Lazy<IReadOnlyList<SourceFile>> AllFiles = new(DiscoverFiles, isThreadSafe: true);
+
     /// <summary>Every class of every source file under <c>src_mcp/tests</c> (build output excluded).</summary>
     public static IReadOnlyList<TestClass> Classes => AllClasses.Value;
+
+    /// <summary>Every source file of <c>src_mcp/tests</c> as its SPELLING: comments gone, string contents kept — for a scan whose subject is a name that is a literal.</summary>
+    public static IReadOnlyList<SourceFile> Files => AllFiles.Value;
+
+    /// <summary>One source text as a <see cref="SourceFile"/> — the seam the scans' own tests use.</summary>
+    public static SourceFile ParseFile(string file, string source) => new(file, ProductionSources.JoinedWithText(source));
 
     /// <summary>The names of the collections whose definition says <c>DisableParallelization = true</c> — the ones that run alone.</summary>
     public static IReadOnlySet<string> SerialCollections(IEnumerable<TestClass> classes) =>
@@ -204,6 +215,17 @@ internal static class TestSourceIndex
         var match = Definition.Match(header);
 
         return match.Success && Serial.IsMatch(match.Groups["args"].Value) ? match.Groups["name"].Value : string.Empty;
+    }
+
+    private static IReadOnlyList<SourceFile> DiscoverFiles()
+    {
+        var tests = Path.Combine(RepoPaths.Root(), "src_mcp", "tests");
+        var bin = $"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}";
+        var obj = $"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}";
+
+        return [.. Directory.EnumerateFiles(tests, "*.cs", SearchOption.AllDirectories)
+            .Where(file => !file.Contains(bin, StringComparison.Ordinal) && !file.Contains(obj, StringComparison.Ordinal))
+            .Select(file => ParseFile(Path.GetFileName(file), File.ReadAllText(file)))];
     }
 
     private static IReadOnlyList<TestClass> Discover()
