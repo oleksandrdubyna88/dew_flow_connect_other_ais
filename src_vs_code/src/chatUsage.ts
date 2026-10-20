@@ -70,6 +70,18 @@ export interface ChatTurnRecord {
    * (CodeRabbit, PR #209.)</p>
    */
   readonly vendor?: string;
+  /**
+   * What RAN the turn: the runtime of the row that answered (`claude`, `codex`, …), written by the turn and never derived
+   * from `vendor` by a reader (E3.S3 of todo/PLAN_the_round_counter_tail_E3.md, D7). `vendor` says whose ROW the line belongs
+   * in; `cli` says what ran — the usage ledger keeps `provider` and `cli` apart for the same reason. Absent on a line
+   * older than the field, and an old line is never given one.
+   */
+  readonly cli?: string;
+  /**
+   * The version that CLI said when the catalog probe last asked it — read from that answer's memory, never from a spawn on the
+   * turn's road. Absent when nobody had asked, and on a line older than the field.
+   */
+  readonly cliVersion?: string;
 }
 
 /** What a vendor said about a turn's tokens, before anything is normalised. */
@@ -191,6 +203,9 @@ export interface FinishedTurn {
   readonly provider: string;
   /** WHOSE row it belongs in, resolved by the caller: the runtime behind that row. */
   readonly vendor?: string;
+  /** What RAN the turn, and the version the catalog probe last read for it — see {@link ChatTurnRecord.cli}. */
+  readonly cli?: string;
+  readonly cliVersion?: string;
   readonly model: string;
   readonly conversation: string;
   readonly title: string;
@@ -238,7 +253,17 @@ export function chatTurnRecord(turn: FinishedTurn): ChatTurnRecord {
     // another vendor. Absent when the caller could not say, which the reader then resolves the old
     // way. (CodeRabbit, PR #209.)
     ...(turn.vendor !== undefined && turn.vendor.length > 0 ? { vendor: turn.vendor } : {}),
+    ...ranWith(turn.cli, turn.cliVersion),
   };
+}
+
+/** The CLI and its version, each present only when the turn said it — an empty value is "not recorded", never a value. */
+function ranWith(cli: string | undefined, cliVersion: string | undefined): Pick<ChatTurnRecord, 'cli' | 'cliVersion'> {
+  return { ...(said(cli) ? { cli } : {}), ...(said(cliVersion) ? { cliVersion } : {}) };
+}
+
+function said(value: string | undefined): value is string {
+  return value !== undefined && value.length > 0;
 }
 
 /** One record, as the line that goes on the end of the file. */
@@ -290,6 +315,7 @@ export function parseChatUsageLine(line: string): ChatTurnRecord | undefined {
     conversation: asText(row['conversation']),
     title: asText(row['title']),
     ...(asText(row['vendor']).length > 0 ? { vendor: asText(row['vendor']) } : {}),
+    ...ranWith(asText(row['cli']), asText(row['cliVersion'])),
   };
 }
 

@@ -31,13 +31,15 @@ import { costText, Estimate, LineRate, lineCost, shortNumber, totalCost, uncaptu
  * job's total; a follow-up in the same conversation may be cumulative; a line with no `cli` says nowhere it ran. What
  * is claimed is decided by the lines themselves ({@link isLaunchLine}), never by a row looked up: a group whose EVERY
  * line is a launch line says *per launch* ({@link Rollup.linesAreLaunches}), any other says *per recorded turn*.
- * Consultation, question, chat and probe lines stay one line per turn and stay *per recorded turn*. The median column's
- * header follows the groups it heads ({@link medianOutputLabel}): one shared unit is named, mixed units are not.</p>
+ * Consultation, question, chat and probe lines stay one line per turn. A consult line written since the coai-mcp release that added the field carries its
+ * `consultation` (E3.S4 of todo/PLAN_the_round_counter_tail_E3.md), so consult money divides by DISTINCT consultations
+ * ({@link consultationUnits}); a line without one is its own unit. Question, chat and probe stay *per recorded turn*. The
+ * median column's header follows the groups it heads ({@link medianOutputLabel}): one shared unit is named, mixed units are not.</p>
  */
 
 /** One ledger line as this module reads it — a parsed `usage.jsonl` line, or a chat turn read into the same shape. */
 export type LedgerLine = Pick<UsageEntry, 'utc' | 'provider' | 'model' | 'tokensIn' | 'tokensOut' | 'costUsd' | 'outcome'
-  | 'usageNote' | 'tokensCached' | 'tokensReasoning' | 'kind' | 'attempt' | 'cli'>;
+  | 'usageNote' | 'tokensCached' | 'tokensReasoning' | 'kind' | 'attempt' | 'cli' | 'consultation'>;
 
 /**
  * The attempts coai-mcp writes for ONE local launch (`LaunchAttempts`, `src_mcp/runners/Reviewers/LaunchParts.cs:22–37`): the
@@ -110,6 +112,19 @@ export interface Rollup {
   readonly linesAreLaunches: boolean;
 }
 
+/** The consultations behind a consult group's lines: each distinct id once, and the lines that carry none. */
+export interface ConsultationIds {
+  readonly ids: readonly string[];
+  /** Lines with no `consultation` — a line older than the field, or a consultant check — each its own unit. */
+  readonly withoutId: number;
+}
+
+/** What a consult figure is divided by: the distinct consultations plus the lines without an id, one each. */
+export interface ConsultationUnits {
+  readonly count: number;
+  readonly withoutId: number;
+}
+
 /** One vendor row × model × kind inside the window. */
 export interface MoneyGroup extends Rollup {
   readonly provider: string;
@@ -119,6 +134,8 @@ export interface MoneyGroup extends Rollup {
   readonly medianIn: number | null;
   /** The median output per ledger line over the captured lines, or null when none was captured. */
   readonly medianOut: number | null;
+  /** The consultations behind a consult group; empty for every other kind. */
+  readonly consultations: ConsultationIds;
 }
 
 /** What a figure is divided by, and what one of it is called. */
@@ -225,6 +242,16 @@ function group(members: readonly LedgerLine[], rateOf: RateOf): MoneyGroup {
     medianOut: median(captured.map((one) => one.tokensOut)),
     money: totalCost(members.map((one) => lineCost(one, rateOf(one.provider, one.model)))),
     linesAreLaunches: members.length > 0 && members.every(isLaunchLine),
+    consultations: kindOf(first) === 'consult' ? consultationsOf(members) : NO_CONSULTATIONS,
+  };
+}
+
+const NO_CONSULTATIONS: ConsultationIds = { ids: [], withoutId: 0 };
+
+function consultationsOf(members: readonly LedgerLine[]): ConsultationIds {
+  return {
+    ids: [...new Set(members.map((one) => one.consultation ?? '').filter(says))],
+    withoutId: members.filter((one) => !says(one.consultation)).length,
   };
 }
 
@@ -304,6 +331,32 @@ function unitOfLines(linesAreLaunches: boolean): string {
 }
 
 /**
+ * What the consult groups of one vendor row are divided by (E3.S4 of todo/PLAN_the_round_counter_tail_E3.md): every DISTINCT
+ * consultation once — the same id in two model groups is one consultation — plus each line that carries no id, which is
+ * its own unit because nothing says it belongs to another. `count` is the divisor; `withoutId` is what the label and its
+ * tooltip say was counted one each.
+ */
+export function consultationUnits(groups: readonly Pick<MoneyGroup, 'consultations'>[]): ConsultationUnits {
+  const withoutId = sum(groups.map((one) => one.consultations.withoutId));
+
+  return { count: new Set(groups.flatMap((one) => one.consultations.ids)).size + withoutId, withoutId };
+}
+
+/** The unit beside a consult figure: *per consultation*, or the qualified one when any line of the window carries no id (D9). */
+export function consultationLabel(units: Pick<ConsultationUnits, 'withoutId'>): string {
+  return units.withoutId > 0 ? 'per consultation (older lines per turn)' : 'per consultation';
+}
+
+/** The tooltip's extra sentence: how many lines were counted one each and why — empty when every line carried an id. */
+export function consultationNote(units: Pick<ConsultationUnits, 'withoutId'>): string {
+  const lines = units.withoutId === 1 ? '1 line' : `${units.withoutId} lines`;
+
+  return units.withoutId === 0
+    ? ''
+    : `${lines} without a consultation id counted one each — a line written before the field, or a consultant check`;
+}
+
+/**
  * The money divided by its divisor. EVERY unit is the denominator — never only the priced ones — and the total's floor
  * is carried: `≥ ~$0.31` per round. Nothing priced is a dash, never an average of the priced few; zero units is a dash
  * saying so, never a division by zero. How many of the N rounds were FULLY priced is not knowable until a ledger line
@@ -344,6 +397,7 @@ export function chatLedgerLines(turns: readonly ChatTurnRecord[], vendorOf: Chat
     tokensCached: 0,
     tokensReasoning: 0,
     kind: 'chat',
+    ...(turn.cli === undefined ? {} : { cli: turn.cli }),
   }));
 }
 
