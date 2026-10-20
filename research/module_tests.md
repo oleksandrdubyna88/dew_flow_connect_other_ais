@@ -4641,5 +4641,18 @@ Every account id is made up.
 | `KimiQuotaIsNotASignInTests.AShimExit75NamedQuotaSpent_IsALimitedVerdict_Hopeless_WithoutABorrowedPhrase` and `…ASpentBalance_KeepsItsOwnWords` (story 1's, ASSERTS CHANGED) | they pinned the old reason (*to contain "the Kimi plan quota is used up"*, resp. *"the Kimi allowance is spent (D14)"*); now they pin the new one: the reason starts with the shim's name, holds the vendor's words (the reset clause, `insufficient balance`), and holds NO cure — red on the old `SpentReason`: *Expected verdict.Reason to start with "kimi_quota_spent: ", but "the Kimi plan quota is used up - "Your quota will reset …"; signing in again will not help (the shim said: kimi_quota_spent: …)" differs near "the" (index 0)* (resp. *… "balance_spent: ", but "the Kimi allowance is spent (D14) - … (the shim said: balance_spent: …)" …*) | the cure put back in front |
 
 The fix of this story is one production member: `KimiRuntime.SpentReason` returns `Words(report)` (the shim's `name: reason`) instead of `Said(report)`; `Words` is the part of `Said` that was already
-computed. NOT covered: the real Kimi's answer (the capture step is written, not run); the doubled cure on the `NonZeroExit` road (a shim line is `<name>: <reason> — <cure>` and `Because` quotes
-all of it) — no scenario of this story takes that road; an undiagnosed vendor line in the 160-character summary (`Quote`) is cut without redaction (a cut id head can show), which is outside D4's diagnosed path.
+computed. NOT covered: the real Kimi's answer (the capture step is written, not run). The doubled cure on the `NonZeroExit` road and the unredacted cut of an undiagnosed line, found here, are fixed and tested in the section below.
+
+## The cure once, the id never — on every road (2026-10-20, follow-ups of story 3; deviations 2 and 3 of `todo/PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md`)
+
+`TheCureIsSaidOnceAndTheIdIsHiddenOnEveryRoadTests` (`src_mcp/tests`), over the same `AKimiRound` harness as S7 (the real shim, runtime, executor, scheduler, ledger and round audit; `AKimiRound` was extracted from
+`ASpentKimiQuotaReadsAsAQuotaTests` so both use one). Every id is made up. Each assertion runs over the summary, the ledger line and the log line. All three tests were seen red on the code of `abb3872e5` first.
+
+| Test | Seen red as | Break-it (went red) |
+|---|---|---|
+| `ASignInRefusal_SaysItsCureOnce_InTheSummary_TheLedger_AndTheLog` (bare `Authentication required`, shim exit 77) | *Expected line "kimi/Architecture: exit 77: Kimi is not signed in on this machine - run `kimi login` once in a terminal … - the vendor said: not_signed_in: the agent answered with an error (-32000): Authentication required - run `kimi login` in a terminal and try again" to contain "kimi login" exactly 1 time … but found it 2 times* (×3 lines) | `Because` quoting the whole note again (`WithoutCure` removed): the same red |
+| `AProviderErrorWithAnId_ShowsNoIdFragment_InTheSummary_TheLedger_AndTheLog` (shim exit 70, a tagged line) | *Did not expect line "kimi/Architecture: exit 70: [coai-mcp] provider_error: … 503 Service Unavailable for org-0a1b2c3d4e5f6a7b <ak-9z8y7x6w5v4u3t2s>" to contain "org-0"* — the WHOLE id, unredacted, in the summary only (the ledger and the log were already redacted) | `Quote` back to returning a tagged line as it is: the same red (the unfixed code) |
+| `AnUndiagnosedVendorLine_IsRedactedBeforeTheCut_NotLeftAsAnIdHead` (an untagged stderr line whose id starts 8 characters before the 160 cut) | *Did not expect line "kimi/Architecture: exit 1: Error: wwww… org-0a1." to contain "org-0"* | cut BEFORE redacting (`Written(Cut(line, cap))`): *… wwww org-0a1…" to contain "org-0"* — red |
+
+The fix: `AcpDiagnosis.Note`/`CureSeparator`/`WithoutCure` (the shim's note shape written once, read back once; `AskAcpMode.DiagnosedNote` now calls `Note`), `Because`' `VendorSaid` quoting the note without the shim's cure, and `Quote` redacting
+through `VendorReason.Written` before it cuts, and redacting a tagged line whole. NOT covered: the reasons of `NotStarted`, `StoodDown` and `Unparseable` outcomes (adapter-composed, not cut).

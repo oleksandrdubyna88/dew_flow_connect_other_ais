@@ -1,16 +1,7 @@
-using System.Text.Json;
-using CoaiMcp.Acp;
-using CoaiMcp.Core.Findings;
-using CoaiMcp.Core.Rounds;
-using CoaiMcp.Runners.Acp;
 using CoaiMcp.Runners.Kimi;
-using CoaiMcp.Runners.Platform;
-using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
-using CoaiMcp.Server;
 using FluentAssertions;
 using FluentAssertions.Execution;
-using Serilog;
 using Xunit;
 
 namespace CoaiMcp.Tests;
@@ -36,58 +27,6 @@ public sealed class ASpentKimiQuotaReadsAsAQuotaTests : IDisposable
 
     public void Dispose() => _dir.Dispose();
 
-    private static BoundedScheduler Scheduler() => new(retryLadder: [TimeSpan.FromMilliseconds(1), TimeSpan.FromMilliseconds(1), TimeSpan.FromMilliseconds(1)]);
-
-    private static KimiRuntime Kimi() => new("kimi", HostKind.Windows, new KimiSeams(
-        root => new KimiPlaces(root, "persons", "persons-bin", [], string.Empty, "kimi.exe"), () => ("coai-mcp.exe", [])));
-
-    private ReviewerInvocation Invocation() =>
-        new("kimi", RoleCatalog.ArchitectureRole, new ProcessRequest("coai-mcp.exe", ["--ask-acp"], _dir) { Timeout = TimeSpan.FromSeconds(30) }, string.Empty, new KimiReadSide(Kimi()), Model: "kimi-code/k3");
-
-    /// <summary>What the real shim leaves for a turn whose agent answers with <paramref name="promptError"/>: exit, stdout report, and stderr as the parent captures it (tagged).</summary>
-    private static async Task<ProcessResult> TheShimSaysAsync(string promptError)
-    {
-        using var agent = new FakeAcpAgent([FakeAcpAgent.Chunk("x")], $$""","promptError":"{{promptError}}" """);
-        var notes = new List<string>();
-        var stdout = new StringWriter();
-
-        var code = await AskAcpMode.RunAsync(
-            ["--ask-acp", "--profile", "fake", "--model", "m-1", "--cwd", agent.Cwd, "--deadline-seconds", "30"],
-            new StringReader("say hello"), notes.Add, stdout, [agent.Profile(failures: new KimiAcpProfile().KnownFailures)]);
-
-        return new ProcessResult(code, stdout.ToString(), string.Join("\n", notes.Select(note => ShimNotes.Prefix + note)), TimedOut: false);
-    }
-
-    /// <summary>The three lines one round writes about the reviewer, and the outcome they came from.</summary>
-    private sealed record TheRound(ReviewerOutcome Outcome, string Summary, string Ledger, string Log, int Shims);
-
-    private async Task<TheRound> OneRoundAsync(string promptError)
-    {
-        var said = await TheShimSaysAsync(promptError);
-        var kimi = new ScriptedKimi(_ => said);
-        var invocation = Invocation();
-        var sink = new ListSink();
-        var audit = new RoundAudit(new LoggerConfiguration().WriteTo.Sink(sink).CreateLogger(), "CodeReview", 1);
-        var ledger = new UsageLedger(_dir.At("quota"));
-
-        var results = await Scheduler().RunAllAsync(
-            [new ReviewerWork(invocation)], new ReviewerExecutor(kimi), TestContext.Current.CancellationToken,
-            onProgress: progress =>
-            {
-                audit.Moved(progress);
-                if (progress.Outcome is { } outcome)
-                {
-                    ledger.Record(invocation, outcome, "kimi-code/k3", "CodeReview", progress.Elapsed);
-                }
-            });
-
-        var written = File.ReadAllLines(ledger.Path).Select(line => JsonSerializer.Deserialize(line, LedgerJsonContext.Default.UsageEntry)!).Single();
-
-        return new TheRound(
-            results.Single().Outcome, ReviewerSummaryFactory.From(results).Failures.Single(), written.Outcome,
-            sink.Lines.Single(line => line.Contains("FAILED", StringComparison.Ordinal)), kimi.Shims);
-    }
-
     private static void ReadsAsAQuota(string where, string line)
     {
         line.Should().Contain(KimiQuotaWords.Opening, $"the {where} says the quota is used up");
@@ -100,7 +39,7 @@ public sealed class ASpentKimiQuotaReadsAsAQuotaTests : IDisposable
     [Fact]
     public async Task ASpentQuota_ReadsAsAQuota_InTheSummary_TheLedger_AndTheLog_AfterOneLaunch()
     {
-        var round = await OneRoundAsync(PromptError);
+        var round = await new AKimiRound(_dir).RunAsync(PromptError);
 
         using var scope = new AssertionScope();
         ReadsAsAQuota("round summary", round.Summary);
@@ -115,10 +54,10 @@ public sealed class ASpentKimiQuotaReadsAsAQuotaTests : IDisposable
     [Fact]
     public async Task AnAccountIdInTheVendorsSentence_ReachesNoneOfTheThreeLines()
     {
-        var round = await OneRoundAsync(PromptError.Replace(" Your quota", " Your account org-0a1b2c3d4e5f6a7b <ak-9z8y7x6w5v4u3t2s>. Your quota", StringComparison.Ordinal));
+        var round = await new AKimiRound(_dir).RunAsync(PromptError.Replace(" Your quota", " Your account org-0a1b2c3d4e5f6a7b <ak-9z8y7x6w5v4u3t2s>. Your quota", StringComparison.Ordinal));
 
         using var scope = new AssertionScope();
-        foreach (var (where, line) in new[] { ("round summary", round.Summary), ("ledger line", round.Ledger), ("log line", round.Log) })
+        foreach (var (where, line) in round.Lines)
         {
             line.Should().NotContain("0a1b2c3d4e5f6a7b", $"the {where} must not carry the account id").And.NotContain("9z8y7x6w5v4u3t2s");
             line.Should().Contain(KimiQuotaWords.Opening, $"the {where} still says what happened");

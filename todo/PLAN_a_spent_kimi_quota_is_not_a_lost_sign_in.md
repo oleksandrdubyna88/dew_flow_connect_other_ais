@@ -298,8 +298,12 @@ every story; **Sonnet** codes.
     own words (`name: reason`) with no cure; the cure comes from the table, once, in `Because`. Two assertions of story 1 (`KimiQuotaIsNotASignInTests`) that pinned the old reason were updated.
     **Consequence:** the quoted reset clause (`KimiQuotaWords.Said`, D3) now leads only the `WhyItFailed` road; on the rate-limit road the clause is in the vendor's line, whole in the ledger and the log, and in the
     160-character summary only while the vendor's sentence is short (the fixture's is 165 characters with its name, and keeps `Your quota will reset at 14:00 U…`). If the real sentence is longer, the capture step shows it.
-  - **Deviation 2 — the same doubling exists, unproven, on the NonZeroExit road:** the shim's stderr line is `<name>: <reason> — <cure>`, and `Because` quotes that whole line after the cure. No test of this story reaches it
-    (a quota never takes that road); it is a candidate for a follow-up, not changed here (seen once, not asserted: in S7's red run with story 1's table reverted, the exit-77 ledger line ended `… the vendor said: not_signed_in: … Authentication required: 429 …  - run `kimi login` in a terminal and try again`, the shim's own cure quoted a second time).
+  - **Deviation 2 — the same doubling existed on the NonZeroExit road. FIXED 2026-10-20 (follow-up commit on the same branch).** The shim's stderr line is `<name>: <reason> — <cure>`, and `Because` quoted all of it after its own cure,
+    so an exit-77 line said `kimi login` twice in the summary, the ledger and the log. Red: `Expected line "… exit 77: Kimi is not signed in … — the vendor said: not_signed_in: … Authentication required — run kimi login in a terminal and try again" to contain "kimi login" exactly 1 time … but found it 2 times`.
+    Fix: `AcpDiagnosis.Note` is the one place the note's shape is written and `AcpDiagnosis.WithoutCure` reads it back; `Because` quotes `<name>: <reason>` (the vendor's words whole) behind the table's cure. Test: `TheCureIsSaidOnceAndTheIdIsHiddenOnEveryRoadTests`.
+  - **Deviation 3 — an undiagnosed vendor line was cut without redaction, and a tagged one reached the summary whole. FIXED 2026-10-20 (same follow-up).** `Quote` (the road of every undiagnosed line, `provider_error` included) cut a plain line at
+    160 characters with no redaction, so `org-0a1b` could show, and returned a shim-tagged line whole and unredacted, so a whole id could show in the summary. Rule now: redact BEFORE any cut. `Quote` runs `VendorReason.Written` and then `Cut`;
+    a tagged line is redacted whole. Red: `Did not expect line "… exit 1: Error: wwww… org-0a1." to contain "org-0"`, and the whole id in the `provider_error` summary. Not changed: the reasons of `NotStarted`, `StoodDown` and `Unparseable`, which are adapter-composed and not cut.
 
 ### Story 4 — the Check button tells the truth (D7)
 

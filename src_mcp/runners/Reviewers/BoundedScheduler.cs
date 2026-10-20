@@ -1,4 +1,5 @@
 using CoaiMcp.Core.Rounds;
+using CoaiMcp.Runners.Acp;
 
 namespace CoaiMcp.Runners.Reviewers;
 
@@ -860,7 +861,7 @@ public static class ReviewerSummaryFactory
     /// </remarks>
     private static string VendorSaid(string text, string marker, int cap) =>
         FirstLineWith(text, marker) is { Length: > 0 } line
-            ? $" — the vendor said: {Cut(VendorReason.Written(ShimNotes.Message(line)), cap)}"
+            ? $" — the vendor said: {Cut(VendorReason.Written(AcpDiagnosis.WithoutCure(ShimNotes.Message(line), KimiAcpProfile.Failures)), cap)}"
             : string.Empty;
 
     /// <summary>The first line of the text that holds the marker (as <see cref="VendorDiagnosis"/> matches it), or empty.</summary>
@@ -888,7 +889,7 @@ public static class ReviewerSummaryFactory
             : $": {Quote(lines[^1], cap)}";
 
     /// <summary>
-    /// The line, capped — unless we wrote it.
+    /// The line, redacted and then capped — the cap is not applied to a line we wrote, which is redacted whole.
     /// </summary>
     /// <remarks>
     /// <para><see cref="ReasonLength"/> exists for a VENDOR's line, which can be any length at all.
@@ -898,11 +899,13 @@ public static class ReviewerSummaryFactory
     /// of a 340-character verdict, ending mid-word, with every cure it names past the cut. The plan's
     /// own Definition of Done said "reports <c>QueuedOutMessage</c>, WHOLE", and it did not.
     /// (codex, three findings across two roles.)</para>
+    /// <para><b>Redacted FIRST, cut SECOND, on every road</b> (story 3, deviation 3): a cut made first leaves the head of an account id (`org-0a1b`) that no pattern then matches, and a line we
+    /// wrote (the shim's tagged note) used to reach the summary whole and unredacted.</para>
     /// <para><paramref name="cap"/> is <see cref="ReasonLength"/> for a sentence a person reads in a cell, and
     /// <see cref="VendorReason.SafetyCap"/> for the ledger and the log (<see cref="DescribeWhole"/>).</para>
     /// </remarks>
     private static string Quote(string line, int cap) =>
-        ShimNotes.Ours(line) || line.Length <= cap ? line : $"{line[..cap]}…";
+        ShimNotes.Ours(line) ? VendorReason.Written(line) : Cut(VendorReason.Written(line), cap);
 
     private static bool Announces(string line) =>
         Announcements.Any(a => line.Contains(a, StringComparison.OrdinalIgnoreCase));

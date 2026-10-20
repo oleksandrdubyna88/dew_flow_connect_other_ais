@@ -88,6 +88,27 @@ public sealed record AcpDiagnosis(string Name, string Cure, AcpFailureKind Kind)
     /// <summary>True when a phrase matched.</summary>
     public bool Known => Name.Length > 0;
 
+    /// <summary>What stands between the agent's reason and the cure in the shim's note.</summary>
+    public const string CureSeparator = " — ";
+
+    /// <summary>
+    /// The shim's note for this failure: its name, the agent's reason, and the cure — when there is one (a known shape with no cure ends at the reason).
+    /// The ONE place the note's shape is written; <see cref="WithoutCure"/> reads it back.
+    /// </summary>
+    public string Note(string reason) => Cure.Length > 0 ? $"{Name}: {reason}{CureSeparator}{Cure}" : $"{Name}: {reason}";
+
+    /// <summary>
+    /// <paramref name="note"/> without the cure the shim appended (<see cref="Note"/>), so a reader that puts its OWN cure in front of the vendor's words
+    /// does not say a cure twice. The note unchanged when it names no row of <paramref name="known"/> or does not end with that row's cure.
+    /// </summary>
+    public static string WithoutCure(string note, IReadOnlyList<AcpKnownFailure> known) =>
+        known.FirstOrDefault(failure => EndsWithItsCure(note, failure)) is { } hit ? note[..^(CureSeparator.Length + hit.Cure.Length)] : note;
+
+    private static bool EndsWithItsCure(string note, AcpKnownFailure failure) =>
+        failure.Cure.Length > 0
+        && note.StartsWith(failure.Name + ": ", StringComparison.Ordinal)
+        && note.EndsWith(CureSeparator + failure.Cure, StringComparison.Ordinal);
+
     /// <summary>
     /// The FIRST known failure whose phrase is in <paramref name="text"/>, in the profile's order — so a
     /// profile lists the specific sentence before the general one it contains (the subscription 401 begins

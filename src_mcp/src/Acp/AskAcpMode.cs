@@ -317,7 +317,7 @@ internal static class AskAcpMode
 
     /// <summary>A known failure's sentence: its name, the agent's reason, and the cure — when there is one (a known shape with no cure ends at the reason).</summary>
     private static string DiagnosedNote(AcpOutcome outcome, AcpDiagnosis diagnosis) =>
-        diagnosis.Cure.Length > 0 ? $"{diagnosis.Name}: {outcome.Reason} — {diagnosis.Cure}" : $"{diagnosis.Name}: {outcome.Reason}";
+        diagnosis.Note(outcome.Reason);
 
     /// <summary>A known failure's exit: a spent allowance, the agent's own failure in a known shape, or a refusal.</summary>
     private static int DiagnosedExit(AcpFailureKind kind) => kind switch
