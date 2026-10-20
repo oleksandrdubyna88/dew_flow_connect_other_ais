@@ -80,9 +80,16 @@ internal static class TestSourceIndex
     /// wrote the steering file or set the environment from there would run in whichever class called it.
     /// </summary>
     public static List<string> StaticOffenders(IEnumerable<TestClass> classes, Regex what, string allowed) =>
+        StaticOffenders(classes, what, [allowed]);
+
+    /// <summary>
+    /// The same, with SEVERAL static classes allowed — the ones that ARE a single sanctioned writer: <c>FakeCliSteering</c> for the steering file and the
+    /// environment, and <c>RunTemp</c> (the per-run temp folder's module initializer) for the environment alone.
+    /// </summary>
+    public static List<string> StaticOffenders(IEnumerable<TestClass> classes, Regex what, IReadOnlyCollection<string> allowed) =>
     [
         .. classes
-            .Where(c => c.IsStatic && !c.IsNested && c.Name != allowed && what.IsMatch(c.Code))
+            .Where(c => c.IsStatic && !c.IsNested && !allowed.Contains(c.Name) && what.IsMatch(c.Code))
             .Select(c => $"{c.File}: {c.Name}"),
     ];
 
