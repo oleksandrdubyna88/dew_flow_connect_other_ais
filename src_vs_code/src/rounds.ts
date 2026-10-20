@@ -96,6 +96,14 @@ export interface RoundRecord {
    * and every plan round written by a server older than the field.
    */
   readonly planSource?: PlanSourceRecord;
+  /**
+   * Who wrote the code a settled plan or code round reviewed (E5 of `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`) —
+   * the snapshot the server keeps on the round. Absent for a round written before it, a skipped, interrupted or running round and every
+   * feature or document round. `unknown` because nothing off the disk has been validated: `writtenWith` reads it member by member.
+   */
+  readonly authors?: unknown;
+  /** What a code round changed, by scope — the server's `RoundSize`. Absent when none was recorded. `unknown`, read by `writtenWith`. */
+  readonly size?: unknown;
 }
 
 /**
@@ -194,7 +202,7 @@ function shortHash(value: unknown): string | undefined {
 }
 
 /** A member of an object read off a disk, by name — `Reflect.get`, so no type assertion stands in for validating it. */
-function member(source: object, key: string): unknown {
+export function member(source: object, key: string): unknown {
   return Reflect.get(source, key);
 }
 
