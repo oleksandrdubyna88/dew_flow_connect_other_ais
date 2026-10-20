@@ -6492,7 +6492,9 @@ An opened round shows one more dimmed line under *asked by* and *reviewed from*:
 files*, *… · partial — peer running*, *authors not observed — transcript not found*, and nothing for a round without a snapshot.
 `RoundRecord` gains `authors?: unknown` and `size?: unknown` (E2 added no TypeScript). `writtenWith(authors, size)` lives in `src/authorsLine.ts` — its own
 module, because `rounds.ts` would pass ESLint's 800-line ceiling with it — and reads both through `member()`, every member checked, no type
-assertion: a member of the wrong type, or a state the shared rule refuses, makes the whole line `''`, never half a sentence. **Main** is the distinct
+assertion: an AUTHORS member of the wrong type, or a state the shared rule refuses (a `state` that already carries its reasons included), makes the
+whole line `''`, never half a sentence; a `size` of the wrong shape (a non-object, a cell with a non-numeric count, a coverage word other than
+`RoundSize.cs`'s `shown`/`elided`/`excluded`/`binary`) only drops the size clause and keeps the author line. **Main** is the distinct
 displayed models of the `who = main` rows (both windows counted; none → *main model unknown*); **coders** are the DISTINCT `agent` ids of subagent rows with
 association `wrote here` (a straddler once), grouped by family — one family *N Family coder(s)* (the noun is *coder* when the TOTAL is 1), two families
 the larger group first with a tie by family NAME (*1 Opus + 1 Sonnet coders*), more than two *N coders (mixed)*, none *main only*; `other` and `unknown`
