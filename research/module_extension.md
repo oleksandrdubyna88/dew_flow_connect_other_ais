@@ -3890,7 +3890,8 @@ empty `models`. Every server string goes through `escapeHtml`.
 request, scan and cached answer as the figures they sit beside, whatever window chip is pressed; a personal request asks
 none. `serverRounds` in `teamServerApi.ts` reads the answer by its SHAPE, never its status: the counts are believed only
 when every round window came back by name and every vendor row in it — people's included — carries every count
-(`ROUND_COUNT_FIELDS`) as a whole number; otherwise `unavailable` with `ROUNDS_UNAVAILABLE`. That is exactly what a server
+(`ROUND_COUNT_FIELDS`) as a whole number; otherwise `unavailable` with `ROUNDS_UNAVAILABLE` (*"this Team server answered
+without the 5 h / 24 h / 7 d windows — Team servers count rounds from 0.12.0"*). That is exactly what a server
 older than story 5.1 produces: it binds only `window` and answers 200 with its own range, no `windows`, no counts. A
 window that came back with no vendor in it is a counted 0. Nothing is cast — every field is read by hand.
 `teamRounds.ts` (pure) draws the **Rounds** block at the end of the Vendors part (no new page part): one line per vendor
@@ -7813,10 +7814,14 @@ vendor `chatRowProvider` names, answered/stopped not failures) and a `RateOf` lo
 rows and lists). `moneyGroups(lines, window, rateOf)` answers, inside a trailing window, per vendor row × model × kind
 (review / consult / question / chat; a Team-server row is its own row): tokens in / cached / out / reasoning — an
 uncaptured line adds nothing, marks the totals `≥`, and only-uncaptured is `unknown`, never 0 (`tokenText`) — recorded
-turns, failed, the median input and output **per recorded turn** (`MEDIAN_OUTPUT_LABEL`: a repair or a follow-up is two
-launches on one line until story 3.3, so no per-launch figure is claimed), and the money (`Estimate`). `rollUp` makes
-a vendor row or the window from groups (no medians). `perUnit(money, unitDivisor(kind, count, turns))` divides: a
-MODEL line by the rounds that used it when the caller knows them, else per recorded turn; a vendor row or the total by
+turns, failed, the median input and output per ledger line, `linesAreLaunches` (every line is ONE launch by
+`isLaunchLine`: it names an `attempt` that is not `followUp` and a `cli` that is not `remote` — a line from before
+coai-mcp 0.48.0, a Team-server row's local line, which is the job's total, and an antigravity follow-up, which may be
+cumulative, are not; the lines decide, never a row looked up; [PLAN_the_rounds_labels_say_what_they_count.md](../todo/PLAN_the_rounds_labels_say_what_they_count.md)),
+and the money (`Estimate`). `rollUp` makes a vendor row or the window from groups (no medians; `linesAreLaunches` only
+when every group's is). `perUnit(money, unitDivisor(kind, count, turns, linesAreLaunches))` divides: a MODEL line by the
+rounds that used it when the caller knows them, else by its lines — per launch when they are launches, else per
+recorded turn (`perUnit` pluralises `launch` as `launches`); a vendor row or the total by
 every round in the window; consultations and questions by their own counts. Every unit is the denominator, never only
 the priced ones; the floor is carried (`≥ ~$0.31`); nothing priced is a dash; zero units is a dash with *no rounds in
 this window*. How many rounds were FULLY priced is not knowable until a line carries its round (story 4.1), so the note
@@ -7859,7 +7864,8 @@ tab's own tick (`usageTab`). The tab's
 FIRST block, above the window buttons — its windows are its own — is `roundsBlock.ts`'s `roundsBlock(input)`, rendered
 by the host and handed to `usageTabHtml` as `extras.rounds`: per vendor row, rounds over 5 h / 24 h / 7 d, the 7 d rounds
 by stage, the consultations / questions / chat beside them as recorded turns, reviewers per round from the database's
-history, the median output per recorded turn, tokens in / cached / out / reasoning and money over 7 d through
+history, the median output per launch (`MEDIAN_OUTPUT_LABEL`; a model line whose group is not all launch lines shows
+*per recorded turn* beside its number, with a tooltip), tokens in / cached / out / reasoning and money over 7 d through
 `roundMoney` (its floors, its `perUnit` rules — a window with consultations and no rounds is a dash saying *no rounds in
 this window*); under each row a line per model (a model change inside the window is two lines; rounds per model exist
 only from `modelsKnownSince`, else *not recorded*) and a line per kind beside. A `remote` row is *ran on <server>*
@@ -7897,8 +7903,9 @@ writes a line per paid completion, of kind `probe`; `roundsBlock`'s `BESIDE` nam
 reaches a model line or a round — a row's money still holds every kind. `usage.ts`'s parser reads the two new ledger
 fields, `turn` and `attempt` (`launchFields`: present only when the line says them, so old lines with no turn never read
 as one turn). A repair, a follow-up, a retry and a rotated Team-server attempt are each a line since this story, so the
-spending tab's `runs` count them; the median is still labelled per recorded turn, because a seven-day window holds lines
-from both sides of the change. The help's spending article says both, in five languages
+spending tab's `runs` count them. The median was labelled per recorded turn at first, because a seven-day window held
+lines from both sides of the change; since the labels plan it is per launch whenever every line of the group is a
+launch line (see `isLaunchLine` above). The help's spending article says both, in five languages
 (`helpCoverage.test.ts` asks every language for `**probe**`, `--probe-api --model` and `` `turn` ``).
 The extension's own Claude model probe (`claudeProbe.ts`) still writes nothing — no sanctioned writer fits; see the
 plan's deviations.
