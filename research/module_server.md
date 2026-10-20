@@ -3295,7 +3295,7 @@ and skips the Agent-count check. `ObservedSession.ReaderVersion` is bumped by an
 `cwd`, `message`, `content` and its blocks) goes through `JsonText` (2026-10-18; `timestamp` and `message` on 2026-10-19), so a line
 that is valid JSON in the wrong shape never throws out of `AgentLog.Slice`: a non-string field reads empty, and a line whose
 `timestamp` is not a parseable string is skipped. An agent key read from a FILE NAME (`agent-<key>.jsonl`, `.meta.json`) passes the same
-`TranscriptShapes.IsId` gate as every other id; a name that fails it is no agent and is counted in `ValuesOffShape`. The reader has no call site yet: E4 attributes what it reads
+`TranscriptShapes.IsId` gate as every other id; a name that fails it is no agent and is counted in `ValuesOffShape`. The reader has no call site yet: E4 attributes what it reads (the pure core `src_mcp/core/Authors/`, see `module_core.md`, through the one mapping `src/Store/AttributionMapping.cs`)
 and E5 stores it.
 
 **Shape decisions.**
