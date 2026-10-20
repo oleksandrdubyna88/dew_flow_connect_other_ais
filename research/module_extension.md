@@ -7796,7 +7796,7 @@ uncaptured line adds nothing, marks the totals `≥`, and only-uncaptured is `un
 turns, failed, the median input and output per ledger line, `linesAreLaunches` (every line is ONE launch by
 `isLaunchLine`: it names an `attempt` that is not `followUp` and a `cli` that is not `remote` — a line from before
 coai-mcp 0.48.0, a Team-server row's local line, which is the job's total, and an antigravity follow-up, which may be
-cumulative, are not; the lines decide, never a row looked up; [PLAN_the_rounds_labels_say_what_they_count.md](../todo/PLAN_the_rounds_labels_say_what_they_count.md)),
+cumulative, are not; the lines decide, never a row looked up; [PLAN_the_rounds_labels_say_what_they_count.md](PLAN_the_rounds_labels_say_what_they_count.md)),
 and the money (`Estimate`). `rollUp` makes a vendor row or the window from groups (no medians; `linesAreLaunches` only
 when every group's is). `perUnit(money, unitDivisor(kind, count, turns, linesAreLaunches))` divides: a MODEL line by the
 rounds that used it when the caller knows them, else by its lines — per launch when they are launches, else per
