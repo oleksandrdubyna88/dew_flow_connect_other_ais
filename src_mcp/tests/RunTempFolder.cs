@@ -17,6 +17,12 @@ public sealed record RunTempSeams(Action<string, string?> SetVariable, Func<stri
     /// <summary>The ONE deleter the suite uses: read-only files and folders go too.</summary>
     public Action<string> Delete { get; init; } = Runners.Files.GitScratch.DeleteEvenIfReadOnly;
 
+    /// <summary>Deletes the claim FILE — its own seam, because <see cref="Delete"/> is for a directory; called only once the folder is gone.</summary>
+    public Action<string> DeleteClaim { get; init; } = File.Delete;
+
+    /// <summary>The random part of the folder's name: six lower-case hex characters. A seam so a test can force a collision.</summary>
+    public Func<string> Suffix { get; init; } = static () => Guid.NewGuid().ToString("N")[..6];
+
     /// <summary>Where a leftover that could not be removed is reported.</summary>
     public Action<string> Warn { get; init; } = Console.Error.WriteLine;
 }
@@ -36,6 +42,8 @@ public sealed class RunTempFolder
 {
     /// <summary>The prefix every folder carries — the family rule: <c>testsToDelete-</c> marks a folder only a test run makes.</summary>
     public const string Prefix = "testsToDelete-coai-run-";
+
+    private const int Tries = 5;
 
     private readonly RunTempSeams _seams;
     private readonly IReadOnlyDictionary<string, string?> _before;
@@ -70,7 +78,7 @@ public sealed class RunTempFolder
     public static RunTempFolder Create(string realRoot, RunTempSeams seams)
     {
         var before = Variables.ToDictionary(name => name, seams.GetVariable);
-        var folder = Directory.CreateDirectory(Path.Combine(realRoot, Prefix + Guid.NewGuid().ToString("N")[..6])).FullName;
+        var folder = MakeFreeFolder(realRoot, seams.Suffix);
         var run = new RunTempFolder(folder, seams, before);
 
         seams.RegisterRestore(run);
@@ -84,7 +92,30 @@ public sealed class RunTempFolder
         return run;
     }
 
-    /// <summary>Puts the old values back (a variable that was absent is removed), then removes the folder and the claim. Idempotent; never throws.</summary>
+    /// <summary>
+    /// A folder that did not exist, made now: a name that is taken — a folder of another run, or a claim a killed run left — is skipped and a new suffix drawn, up to
+    /// <see cref="Tries"/> times, and then <see cref="IOException"/>. <c>Directory.CreateDirectory</c> succeeds on an existing folder, so without this two runs that drew the
+    /// same six characters would share one folder and each remove it. <b>Limit:</b> the check and the creation are two calls, so two runs drawing the same name in the same
+    /// instant (1 in 16 million, then a microsecond window) could still meet; the claim file is written after, and a run never removes a folder it did not make by name.
+    /// </summary>
+    private static string MakeFreeFolder(string root, Func<string> suffix)
+    {
+        for (var draw = 0; draw < Tries; draw++)
+        {
+            var path = Path.Combine(root, Prefix + suffix());
+            if (!Directory.Exists(path) && !File.Exists(path + ".owner"))
+            {
+                return Directory.CreateDirectory(path).FullName;
+            }
+        }
+
+        throw new IOException($"no free name for a run folder in '{root}' after {Tries} draws");
+    }
+
+    /// <summary>
+    /// Puts the old values back (a variable that was absent is removed), then removes the folder, and the claim ONLY once the folder is gone — a folder that could not be
+    /// removed keeps the claim that says whose it was. Idempotent; never throws.
+    /// </summary>
     public void Restore()
     {
         if (Interlocked.Exchange(ref _restored, 1) != 0)
@@ -97,19 +128,25 @@ public sealed class RunTempFolder
             _seams.SetVariable(name, value);
         }
 
-        Remove(() => _seams.Delete(Folder), Folder);
-        Remove(() => File.Delete(ClaimFile), ClaimFile);
+        if (!Directory.Exists(Folder) || Remove(() => _seams.Delete(Folder), Folder))
+        {
+            Remove(() => _seams.DeleteClaim(ClaimFile), ClaimFile);
+        }
     }
 
-    private void Remove(Action delete, string what)
+    private bool Remove(Action delete, string what)
     {
         try
         {
             delete();
+
+            return true;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             _seams.Warn($"WARNING: the test run's temp leftover '{what}' could not be removed ({e.GetType().Name}: {e.Message}); the family janitor takes it later, or delete it by hand.");
+
+            return false;
         }
     }
 }

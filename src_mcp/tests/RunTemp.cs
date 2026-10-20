@@ -32,7 +32,7 @@ public static class RunTemp
     [ModuleInitializer]
     internal static void Start()
     {
-        Real = Path.GetTempPath().TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        Real = Trimmed(Path.GetTempPath());
         Folder = Real;
         try
         {
@@ -41,9 +41,30 @@ public static class RunTemp
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            Console.Error.WriteLine($"WARNING: the test run's temp folder could not be made ({e.GetType().Name}: {e.Message}); the run uses the machine's temp folder as before.");
+            Console.Error.WriteLine(CreationWarning(Real, e));
         }
     }
+
+    /// <summary>
+    /// The machine's temp path without its trailing separator — but never trimmed to nothing or to a bare drive letter: a temp folder that IS a root (<c>/</c>, <c>C:</c>) keeps it,
+    /// or <c>Path.Combine("", name)</c> would make the run folder a RELATIVE path.
+    /// </summary>
+    internal static string Trimmed(string path)
+    {
+        var root = Path.GetPathRoot(path) ?? string.Empty;
+
+        return path.Length <= root.Length ? path : path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+    }
+
+    /// <summary>The one warning of a run that could not make its folder: the path tried, that the run goes on WITHOUT isolation, and what to do.</summary>
+    internal static string CreationWarning(string root, Exception e) =>
+        $"WARNING: the test run's temp folder could not be made in '{root}' ({e.GetType().Name}: {e.Message}). The run CONTINUES in the machine's temp folder WITHOUT isolation: "
+        + "its leftovers share the folder with every other run's. Make the folder writable, or point TMP / TMPDIR (TEMP on Windows) at a writable one, and run again.";
+
+    /// <summary>The warning of a claim that could not be written: the consequence, plainly.</summary>
+    internal static string ClaimWarning(string folder, Exception e) =>
+        $"WARNING: the owner claim for '{folder}' could not be written ({e.GetType().Name}: {e.Message}). The run goes on, but if it is killed its folder is collected ONLY by the family "
+        + "janitor's age rule — after one hour (.agents/conventions/common/test-leftovers.md) — not by owner liveness.";
 
     /// <summary>Restores the three variables and removes the folder and its claim. Idempotent: whichever of the fixture and the process exit comes first does the work.</summary>
     internal static void EndOfRun() => _run.Restore();
@@ -64,7 +85,7 @@ public static class RunTemp
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            Console.Error.WriteLine($"WARNING: the test run's owner claim for '{folder}' could not be written ({e.GetType().Name}: {e.Message}); a killed run's folder then has only the janitor's age rule.");
+            Console.Error.WriteLine(ClaimWarning(folder, e));
         }
     }
 }
