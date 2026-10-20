@@ -1634,3 +1634,33 @@ the text above disagree, **this section governs**:
    the orphans of the kills that hit it — at today's kill rate (an operator stopping a server mid-write) single digits per
    month. **Scenario S27:** an orphan temp file of the record, two hours old, is gone after the next write; a fresh one
    (one second old) and another record's old one are both kept.
+
+### The risk consult for epic 3 (`0060db13`, 2026-10-20) — 5 points, each verified against the code, binding on E3
+
+1. **The 500 ms retry window is a tolerance, not a guarantee** — verified: `AtomicFile.Write` arms its deadline with
+   `DateTime.UtcNow + sharingRetry` (`src_mcp/runners/Files/AtomicFile.cs:40`), wall time. **S4:** the window is measured
+   on a monotonic clock (`Stopwatch` / an injected `TimeProvider`), and S24 gains a never-released arm: the destination
+   held through the whole window → the caller gets the failure, the ORIGINAL bytes survive, the temp file is removed.
+   Retrying `UnauthorizedAccessException` does not bypass a real ACL: a persistent denial still throws, after the window.
+2. **S5 — atomic replacement confirmed; the turn stays held through the move.** Verified: session readers go through
+   `ReadShared` (`SessionStore.cs:543`), which opens, reads to the end and disposes; nothing keeps a handle and re-reads by
+   offset. S26's arms: a failure while the temp file is written AND a failure at the move each leave the previous session
+   byte-for-byte; the next load after a successful write sees it. **And one helper, not two:** the session write uses
+   `AtomicFile.Write` with S4's retry (S5 builds on S4, same coder, after it) — `SessionStore.MoveOverExisting`'s loop is
+   REMOVED, not extracted, because after S4 it is a second copy of `AtomicFile.MoveOver` (the reuse rule).
+3. **S25 must fail the WRITE, not the projection.** Verified: `projected` runs AFTER the file is written
+   (`QuestionConsultStore.cs:51-56`), so throwing there tests only the catch. S25 injects the failure at the write (the
+   S24 hold seam, never released, on a heartbeat-only write); a guard arm proves the server's sweep keeps a question whose
+   heartbeat writes fail while its pid is alive (`Orphaned` needs a stale heartbeat AND a dead pid,
+   `QuestionConsultStore.cs:179-182`). The extension's "interrupted" after two minutes without a heartbeat
+   (`src_vs_code/src/questionConsults.ts:78`) is a display that recovers on the next published beat — accepted, named
+   in `module_extension.md`.
+4. **S27's one-hour rule could delete a live temp — corrected.** A writer suspended after closing its temp file but before
+   the move (a debugger, a suspended process) can hold a temp older than an hour; age is scope, not proof of death. **The
+   rule now needs proof:** the temp file's name carries its writer's pid (`<record>.<pid>.<guid>.tmp`), and a writer
+   removes a same-record temp only when it is older than one hour AND that pid is not alive on this machine — the
+   product's own `ProcessLiveness.IsAlive` (`src_mcp/src/Server/ProcessLiveness.cs:19`; if `AtomicFile`'s layer cannot
+   reference it, it MOVES down to `runners`, it is never copied). A reused pid keeps the file: a leak, never a deletion.
+   S27 gains the arm the consultant named: writer A paused after its temp is written, the temp aged past an hour, writer B
+   writes the same record → A's temp is kept (A's pid is alive), and A's move then lands.
+5. **S2 and RoundScratch are sound within their stated limits** (no change).
