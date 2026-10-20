@@ -36,6 +36,8 @@ public sealed record ActivityTotals(int Agents, int Launches, int Turns, TokenTe
 
     public static ActivityTotals Unknown { get; } = new(-1, -1, -1, new TokenTerms(-1, -1, -1, -1));
 
+    /// <summary>A computed property is not a stored copy of the rule: it is <c>[JsonIgnore]</c>, as <see cref="AgentKey.IsMain"/> is, so the totals a session file keeps have exactly their four members (E5 §8 item 3).</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
     public bool IsUnknown => Agents < 0;
 }
 

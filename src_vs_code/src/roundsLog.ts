@@ -17,6 +17,7 @@ import { DEFAULT_PERIOD, LogPeriod, periodButtonsHtml } from './logPeriod';
 // Moved to a leaf so the sidebar's cadence line can use it without an import cycle; still exported here.
 export { repoNameOf };
 import { Vendor } from './vendors';
+import { writtenWith } from './authorsLine';
 import { calledBy, decideSecondsOf, MAX_PLAUSIBLE_SECONDS, noteOf, reviewedFrom, reviewerLines, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
 import { vendorPalette, VendorPalette } from './vendorColour';
 import {
@@ -157,6 +158,12 @@ export interface LogRow {
    * older server wrote. Empty is "not recorded", and the page then draws no line at all.
    */
   readonly reviewedFrom: string;
+  /**
+   * Who wrote what this round reviewed, as one line (E5.S6 of `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`) — from the
+   * session file's `authors` snapshot and `size`, never from the database. Empty for a round that recorded none: an older server's, a
+   * skipped one, a chat turn. Empty is "not recorded", and the page then draws no line at all.
+   */
+  readonly writtenWith: string;
   /** Parallel to `reviewers`: the vendor word's colour, so the page needs no palette of its own. */
   readonly reviewerColours: readonly string[];
   /**
@@ -389,6 +396,7 @@ function chatRow(record: ChatTurnRecord, turn: number, priceOf: PriceOfModel): L
     // second, quieter claim about the same thing.
     calledBy: '',
     reviewedFrom: '',
+    writtenWith: '',
     reviewerColours: [],
     found: [],
     foundCount: 0,
@@ -484,6 +492,18 @@ export function reviewedFromHtml(reviewedFrom: string, escape: (value: string) =
   return reviewedFrom === '' ? '' : '<div class="reviewer source">reviewed from ' + escape(reviewedFrom) + '</div>';
 }
 
+/**
+ * The "written with" line of an opened round — the function the PAGE runs, as `reviewedFromHtml` is.
+ *
+ * <p>Embedded by assignment, so it uses ONLY its parameters. The sentence itself — models, coders, size — is built host-side by
+ * `writtenWith`; this wraps the finished line and escapes it, because a model id is text a transcript wrote.</p>
+ *
+ * <p>An empty line renders nothing at all: a round that recorded no authors is not a round nobody wrote.</p>
+ */
+export function writtenWithHtml(line: string, escape: (value: string) => string): string {
+  return line === '' ? '' : '<div class="reviewer authors">' + escape(line) + '</div>';
+}
+
 function rowFrom(
   session: SessionFile,
   round: RoundRecord,
@@ -539,6 +559,7 @@ function rowFrom(
     reviewers: reviewerLines(round),
     calledBy: calledBy(round.caller),
     reviewedFrom: reviewedFrom(round.planSource),
+    writtenWith: writtenWith(round.authors, round.size),
     reviewerColours: rows.map((r) => colour(r.provider)),
     found,
     foundCount,
@@ -1473,6 +1494,8 @@ ${TEXT_CONTROLS_CSS}
   .reviewer.asked { color: var(--vscode-descriptionForeground); margin-bottom: 4px; }
   /* What a plan round REVIEWED, under who asked for it. The same dimmed context line: it names the input, not a result. */
   .reviewer.source { color: var(--vscode-descriptionForeground); margin-bottom: 4px; }
+  /* Who WROTE what the round reviewed, under what it reviewed. The same dimmed context line: it names the input, not a result. */
+  .reviewer.authors { color: var(--vscode-descriptionForeground); margin-bottom: 4px; }
   .who { font-weight: 600; }
   .badge { display: inline-block; padding: 0 6px; border-radius: 8px; font-size: .88em; }
   .badge.running { background: var(--vscode-charts-blue); color: var(--vscode-editor-background); }
@@ -1660,6 +1683,7 @@ ${teamSectionHtml(waitingFor())}
   var compareRows = ${compareRows.toString()};
   var askedByHtml = ${askedByHtml.toString()};
   var reviewedFromHtml = ${reviewedFromHtml.toString()};
+  var writtenWithHtml = ${writtenWithHtml.toString()};
   var rowMatches = ${rowMatches.toString()};
   var money = ${money.toString()};
   var cost3 = ${cost3.toString()};
@@ -1759,7 +1783,7 @@ ${teamSectionHtml(waitingFor())}
     // WHO asked for the round, above the reviewers that answered it. Before the early return on
     // purpose: a session written by an older server has no reviewer detail, and one written by a
     // newer one against an older extension is the case this line exists for.
-    var asked = askedByHtml(row.calledBy, esc) + reviewedFromHtml(row.reviewedFrom, esc);
+    var asked = askedByHtml(row.calledBy, esc) + reviewedFromHtml(row.reviewedFrom, esc) + writtenWithHtml(row.writtenWith, esc);
     // A skip has no reviewers because nobody COULD run — not because an older server wrote it — and
     // nothing to have found. What it has is the server's reason, which is the one thing worth saying.
     if (row.status === 'skipped') {
