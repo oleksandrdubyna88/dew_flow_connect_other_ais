@@ -7722,6 +7722,10 @@ flowchart TD
 
 Not done here: one live `consult` and one live question row through the product with a real Vibe (paid turns) — the
 step after the release, recorded then in research/RESULTS_vibe_confinement.md and [module_tests.md](module_tests.md).
+**Update 2026-10-20:** one live question row with a real Vibe HAS run through the product (Windows, coai-mcp 0.62.0, root `d:\rsd`): the
+parent folder was expanded and copied (~30 s including git's confirmations, 411 linked worktrees skipped), and the row ended at the
+20-turn cap without an answer — [PLAN_vibe_reads_a_folder_of_repositories.md](PLAN_vibe_reads_a_folder_of_repositories.md). The live
+`consult` and the WSL row are still not run.
 
 ### The home sweep and the place, hardened before the S3 gate (2026-10-13 — the plan round and risk consultation ee1eecf4)
 

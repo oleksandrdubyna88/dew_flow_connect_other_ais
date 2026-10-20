@@ -3380,7 +3380,10 @@ making worktrees); the 405 git calls took about 34 s one after another (the walk
 repository 376.2 MiB in 1,606 files, the most files in one repository 2,517. That is far under the shared 2 GiB budget and 50,000 files,
 and the largest repository is under its own 512 MiB ceiling; `C:` held 920 GiB free against the 5 GiB floor. **Not measured:** the copy's
 wall time (the per-repository ceiling is 60 s and the row's budget 5 minutes, of which about 34 s go to git's confirmations before the
-first copy); the first live row will tell.
+first copy). **Measured live, Windows, 2026-10-20 (coai-mcp 0.62.0):** the whole of `d:\rsd` was walked, confirmed and copied in
+~30 s (server log 13:30:20 → 13:30:50), with 411 linked worktrees skipped — the git confirmations and the copies together, not the copy
+alone, which was not timed separately; no repository came near the 60 s ceiling. That row then answered nothing (the 20-turn cap; see the
+note at the top of this section). The WSL row (`~/git`) is still unmeasured.
 
 ```mermaid
 flowchart TD
