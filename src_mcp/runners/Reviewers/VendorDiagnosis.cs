@@ -32,8 +32,12 @@ public enum DiagnosisKind
     UnknownOption,
 }
 
-/// <summary>A recognised vendor sentence: what kind of failure it is, and what to do about it.</summary>
-public sealed record Diagnosis(DiagnosisKind Kind, string Cure);
+/// <summary>A recognised vendor sentence: what kind of failure it is, what to do about it, and the table's marker that matched it.</summary>
+/// <remarks>
+/// <see cref="Marker"/> is empty for a cure that is our own sentence (the unreachable local engine, which already quotes the address):
+/// there is then no vendor line to keep after the cure (D4 of todo/PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md).
+/// </remarks>
+public sealed record Diagnosis(DiagnosisKind Kind, string Cure, string Marker = "");
 
 /// <summary>
 /// Failures a vendor CLI reports in its own words, translated into what to DO about them.
@@ -201,7 +205,7 @@ public static class VendorDiagnosis
 
         var known = Known.FirstOrDefault(k => text.Contains(k.Marker, StringComparison.OrdinalIgnoreCase));
 
-        return known.Sentence is not null ? new Diagnosis(known.Kind, CureOn(known.Marker, known.Sentence, host)) : null;
+        return known.Sentence is not null ? new Diagnosis(known.Kind, CureOn(known.Marker, known.Sentence, host), known.Marker) : null;
     }
 
     /// <summary>Vibe's signed-out marker (§11 of research/RESULTS_vibe_confinement.md; L-V1 on WSL): the same words on every host.</summary>

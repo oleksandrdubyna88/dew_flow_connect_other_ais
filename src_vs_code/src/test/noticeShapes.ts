@@ -73,6 +73,9 @@ const SHAPES: readonly string[] = [
   'github_pat_abcdefghijklmnop',
   'xoxb-abcdefghijklmnop',
   'xoxp-abcdefghijklmnop',
+  // A Moonshot account id (org-… / ak-…): redacted when the body holds a digit, left alone when it is an ordinary word.
+  'Your account org-0a1b2c3d4e5f6a7b <ak-9z8y7x6w5v4u3t2s> is suspended',
+  'the org-wide setting and org-settings-panel',
   // PARAMETER: the name decides, and these two are the pair that matters.
   '?access_token=xyzabcdef',
   '?api-version=2024-02-01',

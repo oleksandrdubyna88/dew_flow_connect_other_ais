@@ -4595,3 +4595,29 @@ The fix is the table (`KimiAcpProfile.Failures`: six rows, the colon as the disc
 (`AskAcpMode.DiagnosedNote` / `DiagnosedExit`), `KimiQuotaWords` (the one sentence; the clause quoted and redacted), one `VendorDiagnosis` row, one `RateLimit.Spent` phrase with its
 observed sample, and `KimiRuntime` classifying by `KimiAcpProfile.SpentNames` with the reason built once by `Said`. NOT covered: the real Kimi's answer for a spent quota is the owner's one
 line with its ellipsis — the live capture step replaces the sample; the ledger/log/summary carrying the clause is story 2 (`BoundedScheduler`).
+
+## The vendor's words survive the cure, redacted (2026-10-20, story 2 of `todo/PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md`; D4, S6, S6b)
+
+`TheVendorsWordsSurviveTheCureTests` (`src_mcp/tests`) plus a row in `ServerNoticeLineTests`, two shapes in `TheRedactorCannotBeMadeToHangTests`, and the extension's `notifications.test.ts` /
+`noticeShapes.ts` (the parity corpus). Every account id in them is made up (`org-0a1b2c3d4e5f6a7b`, `ak-9z8y7x6w5v4u3t2s`); no real Moonshot id is in the repository. Every test was seen red on the unfixed
+code first (the console shows the dash of ` — the vendor said: ` as `-`).
+
+| Test | Seen red as | Break-it (went red) |
+|---|---|---|
+| `ASpentBalance_KeepsTheVendorsSentence_AfterTheCure` (S6-a) | *Expected said "rate limited (after 1 attempt): the Kimi allowance is spent (D14) - waiting does not clear it; top up or wait for the plan's reset." to contain "is suspended due to insufficient balance, please recharge your account".* | `Because` back on `VendorDiagnosis.For` (cure only) |
+| `AShimLine_IsKeptWithoutItsTag` (S6-b) | *Expected said "exit 77: Kimi is not signed in on this machine - run `kimi login` once … never signs in for you)." to contain "Authentication required".* | the line kept with its `[coai-mcp] ` tag (`ShimNotes.Message` dropped): the test goes red on the tag |
+| `OnlyTheLineThatCarriesTheMarker_IsKept` (S6-c) | *Expected said "exit 1: Google has retired Gemini Code Assist … 'antigravity'." to contain " - the vendor said: Code Assist for individuals.".* | the whole stderr kept instead of the first marker line (frames and `Node.js v` appear) |
+| `TheSummaryCutsTheVendorsPart_AfterTheCure` (S6-d; a TAGGED 600-character line, as the shim writes it) | *Expected said "rate limited … reset." to contain " - the vendor said: ".* | `Quote` instead of the plain cut: `Quote` never cuts a line our shim tagged, so the vendor part is 600 long |
+| `AWholeVendorSentence_IsBoundedByTheSafetyCap` (S6-e) | *Expected said "rate limited … reset." to contain " - the vendor said: ".* | the cap removed (length over 4,100) |
+| `TheVendorsSentence_NeverCarriesAMoonshotId` (S6b-2; written AFTER S6-a was green) | *Did not expect said "… Your account org-0a1b2c3d4e5f6a7b <ak-9z8y7x6w5v4u3t2s> is suspended due to insufficient balance, please recharge your ac." to contain "0a1b2c3d4e5f6a7b".* | the pattern removed from `Redaction` |
+| `AnIdAtTheCut_IsRedactedBeforeTheCut_NotLeftAsItsHead` | *Did not expect said "… wwww org-0a1b2." to contain "org-0" because the id is redacted whole, and only then is the line cut.* | cut BEFORE redacting in `VendorSaid` (the head `org-0a1b2` is too short for the pattern and survives) |
+| `ServerNoticeLineTests.EachShape_IsRedactedExactlyAsTheExtensionRedactsIt` (S6b-1, new row) | *Expected Safe(given) to be the same string, but they differ at index 17: "…account org-0a1b2c3d…" / "…account org-[redacted]…"* | the pattern removed |
+| `ServerNoticeLineTests.AnOrdinaryString_IsLeftExactlyAlone` (new rows `the org-wide setting`, `org-settings-panel`, `Slovak-language`, `peak-hours`) | green before and after — the guard for the digit rule | the digit look-ahead dropped: `org-settings-panel` went red |
+| `ServerNoticeLineTests.EveryPattern_IsNonBacktracking_OrSaysExactlyWhyItCannotBe` | the count guard now says six patterns (the Moonshot id is the fourth shape) | — |
+| `TheRedactorCannotBeMadeToHangTests` (`org-` + 200,000 `a`; twenty thousand `ak-abcdefgh`) | green before and after — they prove the look-ahead is bounded | — |
+| `notifications.test.ts` `a Moonshot account id is redacted, and an ordinary word that starts alike is not` (S6b-3) | *AssertionError … + actual 'Your account org-0a1b2c3d4e5f6a7b <ak-9z8y7x6w5v4u3t2s> is suspended' - expected 'Your account org-[redacted] <ak-[redacted]> is suspended'* | the pattern removed |
+| `npm run test:parity` (the same shape and `the org-wide setting and org-settings-panel` in `noticeShapes.ts`) | green before (both halves leave the id alone) and after | the pattern removed from `notifications.ts` only: *safeText at 1000: 11 of 445 cases differ*, exit 1 |
+
+The fix: `Diagnosis.Marker` (the table's marker that matched; empty for the unreachable-engine cure), `ReviewerSummaryFactory.Because` writing `{cure} — the vendor said: {line}` through `VendorSaid`
+(the FIRST line holding the marker, tag removed, `VendorReason.Written` first, then a plain cut at the cap: 160 for `Describe`, 4,000 for `DescribeWhole`), and the `moonshot-id` redaction pattern in both
+halves of the redactor.

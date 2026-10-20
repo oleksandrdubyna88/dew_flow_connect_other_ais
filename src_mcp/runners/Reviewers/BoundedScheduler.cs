@@ -802,7 +802,7 @@ public static class ReviewerSummaryFactory
     /// What the vendor's own adapter recovered about its own failure, or empty.
     /// </param>
     /// <remarks>
-    /// <b>The precedence, in one place:</b> a diagnosed cure, then a stderr line that ANNOUNCES a
+    /// <b>The precedence, in one place:</b> a diagnosed cure (WITH the vendor's own line after it — <see cref="VendorSaid"/>), then a stderr line that ANNOUNCES a
     /// failure, then what the adapter recovered, then whatever stderr did say, then the honest
     /// nothing. Announcing beats recovered because a vendor writing `error:` on stderr means it;
     /// recovered beats a non-announcing line because a deprecation warning is not why anything
@@ -813,9 +813,9 @@ public static class ReviewerSummaryFactory
         // A vendor that named a closed door gets its cure quoted instead of its stack trace. The
         // Gemini retirement was mistaken for three different things because the sentence a reader
         // saw was `exit 1` and the sentence that mattered was eight lines inside a node stack.
-        if (VendorDiagnosis.For(stdErrTail) is { } cure)
+        if (VendorDiagnosis.Classify(stdErrTail) is { } known)
         {
-            return $": {cure}";
+            return $": {known.Cure}{VendorSaid(stdErrTail, known.Marker, cap)}";
         }
 
         var lines = stdErrTail
@@ -846,6 +846,31 @@ public static class ReviewerSummaryFactory
 
         return meaningful.Count == 0 ? NothingButScaffolding(lines, cap) : $": {Quote(meaningful[0], cap)}";
     }
+
+    /// <summary>
+    /// The vendor's own line that a diagnosis matched, after the cure: ` — the vendor said: …`, or nothing.
+    /// </summary>
+    /// <remarks>
+    /// <para>D4 of todo/PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md. A cure alone threw away the one line the capture step
+    /// needs — what Kimi actually said about a spent quota. Only the FIRST line that holds the table's marker is kept (never a
+    /// stack frame or a version banner), without our shim's tag.</para>
+    /// <para><b>Redacted first, cut second.</b> A cut made first can leave the head of an account id that no pattern then matches.
+    /// The cut is plain, not <see cref="Quote"/>: <see cref="Quote"/> never cuts a line our shim tagged, and this line carries
+    /// the vendor's text.</para>
+    /// </remarks>
+    private static string VendorSaid(string text, string marker, int cap) =>
+        FirstLineWith(text, marker) is { Length: > 0 } line
+            ? $" — the vendor said: {Cut(VendorReason.Written(ShimNotes.Message(line)), cap)}"
+            : string.Empty;
+
+    /// <summary>The first line of the text that holds the marker (as <see cref="VendorDiagnosis"/> matches it), or empty.</summary>
+    private static string FirstLineWith(string text, string marker) =>
+        marker.Length == 0
+            ? string.Empty
+            : text.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                .FirstOrDefault(l => l.Contains(marker, StringComparison.OrdinalIgnoreCase)) ?? string.Empty;
+
+    private static string Cut(string text, int cap) => text.Length <= cap ? text : $"{text[..cap]}…";
 
     /// <summary>
     /// Every line was scaffolding, so there is no reason to quote — say which kind of nothing.
