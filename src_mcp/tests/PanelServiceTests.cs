@@ -364,7 +364,7 @@ public sealed class PanelServiceTests : IAsyncLifetime
     [Fact]
     public async Task CodeStage_FansOutThreeRolesPerProvider_WithThreeDistinctPrompts()
     {
-        var record = Directory.CreateTempSubdirectory("coai-record-").FullName;
+        using var record = TempDir.For("coai-record-");
         Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
         try
         {
@@ -402,7 +402,7 @@ public sealed class PanelServiceTests : IAsyncLifetime
     {
         // A ten-minute plan round was an agentic CLI reading the repository it had been handed.
         // The role is to judge the DOCUMENT; only the code stage needs a tree.
-        var record = Directory.CreateTempSubdirectory("coai-cwd-").FullName;
+        using var record = TempDir.For("coai-cwd-");
         Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
         try
         {
@@ -434,7 +434,7 @@ public sealed class PanelServiceTests : IAsyncLifetime
         // checkout away is not the same as SAYING so. A plan reviewer stood in an empty scratch
         // directory while its prompt claimed a read-only checkout was under it — and an agentic CLI
         // that believes that goes looking, is refused the permission headlessly, and answers nothing.
-        var record = Directory.CreateTempSubdirectory("coai-plan-said-").FullName;
+        using var record = TempDir.For("coai-plan-said-");
         Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
         try
         {
@@ -480,7 +480,7 @@ public sealed class PanelServiceTests : IAsyncLifetime
     [Fact]
     public async Task WithDealingOn_ACodeRound_AsksEachRoleOnce_AcrossTheVendors()
     {
-        var record = Directory.CreateTempSubdirectory("coai-deal-").FullName;
+        using var record = TempDir.For("coai-deal-");
         Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
         try
         {
@@ -508,7 +508,7 @@ public sealed class PanelServiceTests : IAsyncLifetime
     [Fact]
     public async Task WithDealingOn_ThePlanRound_SpendsADifferentLensPerVendor()
     {
-        var record = Directory.CreateTempSubdirectory("coai-deal-plan-").FullName;
+        using var record = TempDir.For("coai-deal-plan-");
         Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
         try
         {
