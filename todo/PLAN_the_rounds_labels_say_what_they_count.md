@@ -175,9 +175,9 @@ must stay green unchanged — they are the guard that 1.2 did not over-reach. Th
 
 ## Definition of Done
 
-- [ ] 1.1–1.5 built, each test observed RED before its fix and GREEN after; the whole extension suite green.
-- [ ] coai gate: plan round `proceed`, code round `proceed`, every finding resolved with a reason.
-- [ ] `research/module_extension.md` says the median and fallback division are per launch when the lines are launches.
-- [ ] The round-counter plan's *Open tail* item "Labels that name the wrong thing" points to this plan as closing it.
+- [x] 1.1–1.5 built, each test observed RED before its fix and GREEN after (or named as a guard, see the test table); the whole extension suite green (6420 pass, 0 fail, 2026-10-19).
+- [x] coai gate: plan round `proceed`, code round `proceed`, every finding resolved with a reason (session c098d202).
+- [x] `research/module_extension.md` says the median and fallback division are per launch when the lines are launches.
+- [x] The round-counter plan's *Open tail* item "Labels that name the wrong thing" points to this plan as closing it.
 - [ ] A `## Extension <version>` changelog section on the release PR that ships it.
 - [ ] This plan promoted to `research/` with its deviations.

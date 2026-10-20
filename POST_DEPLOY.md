@@ -19,6 +19,20 @@ one of them arriving wrong.
 
 Target: the released **extension** version — `--target 0.33.1`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
 
+Last verified: 2026-10-19 · mcp **0.61.0** and extension **0.81.0** (released; the panel's Update installed them, and
+every running `coai-mcp` reports `coai-mcp 0.61.0`) · server **0.14.0** deployed (run 39262211638) — the box serves
+0.14.0 · automated items 1, 2, 7, 9 and 10 (the checker prints the row labelled 7 as 6 — it numbers rows by position)
+PASS as the checker printed them: `PASS 1 — all six RIDs present`, `PASS 2 — marketplace serves 0.81.0`, `PASS 6` (the
+row labelled 7) — client-config answered 200 and the catalog answered 401 without a session, the expected answer,
+`PASS 9 — all six RIDs present`, `PASS 10 — 200 {"ok":true,"version":"0.14.0"}`; the checker ended "every automated item
+passed". Run locally:
+`MCP_VERSION=0.61.0 SERVER_VERSION=0.14.0 node .agents/conventions/tools/post-deploy-check.mjs --target 0.81.0`. Manual
+item **8 observed** (the binary the extension spawns is the 0.61.0 one, started after the Update), and the deploy's own
+canary ran one real review per configured vendor: `codex: done`, `antigravity: done`, `claude: done`. The local
+`providers` probe found every enabled vendor's CLI with its own sign-in; it warns that Kimi is now **2.2.0**, a version
+coai has not measured (its confinement numbers are 2.1.1's). Manual items 3, 4, 5, 7, 11 and 12 were not run.
+Server 0.14.0 is the release proposed as 0.13.2: release-please moved it to a minor version when #879 landed first.
+
 Last verified: 2026-10-19 · mcp **0.60.1** and extension **0.80.1** (released) · server **0.13.1** deployed (run
 39166313743) — the box serves 0.13.1 · automated items 1, 2, 7, 9 and 10 (the checker prints the row labelled 7 as 6 —
 it numbers rows by position) PASS as the checker printed them:
