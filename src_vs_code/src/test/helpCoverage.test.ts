@@ -612,8 +612,8 @@ const REASON_PHRASES: Record<string, Readonly<Record<string, string>>> = {
 // The two phrases that are not a reason code: the replacement for "launches from an older extension", and a line the
 // server wrote before it read the round id.
 const ROUNDS_ARTICLE_PHRASES: Record<string, readonly string[]> = {
-  en: ['sent no round id', 'before it read the round id'],
-  de: ['keine Runden-ID', 'bevor er die Runden-ID las'],
+  en: ['whose client sent no round id', 'before it read the round id'],
+  de: ['deren Client keine Runden-ID schickte', 'älter als 0.49.0 oder ein anderer Aufrufer der API des Servers oder eine Zeile', 'bevor er die Runden-ID las'],
   es: ['cuyo cliente no envió id de ronda', 'antes de leer el id de ronda'],
   ru: ['чей клиент — coai-mcp до 0.49.0', 'до того, как прочитал id раунда'],
   uk: ['без id раунду', 'ще не прочитавши id раунду'],
@@ -651,11 +651,11 @@ test('EveryLanguagesRoundsArticle_NamesEveryReasonTheGaugeWordsKnow (the rounds 
     assert.ok(REASON_CODES.length > 0, 'REASON_CODES is empty, so no reason is checked');
     for (const code of REASON_CODES) {
       const reason = reasons[code];
-      assert.ok(reason !== undefined, `reason code "${code}" has no ${language} phrase in REASON_PHRASES — a reason the gauge words know is not mapped, so no article can be checked for it`);
-      assert.ok(said.includes(reason), `the ${language} rounds article never says "${reason}" (reason "${code}") — a reader cannot learn that reason`);
+      assert.ok(reason !== undefined, `reason code "${code}" has no ${language} phrase in REASON_PHRASES — a reason the gauge words know is not mapped, so no article can be checked for it — add it to REASON_PHRASES in src_vs_code/src/test/helpCoverage.test.ts`);
+      assert.ok(said.includes(reason), `the ${language} rounds article never says "${reason}" (reason "${code}") — a reader cannot learn that reason; add it to the article, or fix REASON_PHRASES in src_vs_code/src/test/helpCoverage.test.ts`);
     }
     for (const phrase of phrases) {
-      assert.ok(said.includes(phrase), `the ${language} rounds article never says "${phrase}" — a reader cannot learn that reason`);
+      assert.ok(said.includes(phrase), `the ${language} rounds article never says "${phrase}" — a reader cannot learn that reason; add it to the article, or fix ROUNDS_ARTICLE_PHRASES in src_vs_code/src/test/helpCoverage.test.ts`);
     }
   }
   for (const language of HELP_LANGUAGES) {

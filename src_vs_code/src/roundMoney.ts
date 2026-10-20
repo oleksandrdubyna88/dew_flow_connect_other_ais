@@ -44,13 +44,21 @@ export type LedgerLine = Pick<UsageEntry, 'utc' | 'provider' | 'model' | 'tokens
  * turn's first launch, a rate-limit retry and a repair — each its own paid launch on its own ledger line.
  *
  * <p>`followUp` is OUT on purpose: an antigravity follow-up continues one conversation, and antigravity may report usage
- * cumulatively in it, so the line may include the first launch (research/PLAN_the_reviewer_follow_up_is_billed_once.md is
- * in todo/ until it measures that). `rotated` is a Team-server attempt, which also says `cli: remote`.</p>
+ * cumulatively in it, so the line may include the first launch (todo/PLAN_the_reviewer_follow_up_is_billed_once.md
+ * measures that). `rotated` is a Team-server attempt, which also says `cli: remote`.</p>
  *
  * <p>An allow-list, not a deny-list: an attempt word this build does not know — a newer coai-mcp's, a typo — is NOT
- * claimed as one launch. The safe answer to "is this one launch?" is no, which only costs the label *per recorded turn*.</p>
+ * claimed as one launch. The safe answer to "is this one launch?" is no, which only costs the label *per recorded turn*.
+ * Together with {@link NOT_ONE_LAUNCH_ATTEMPTS} it must name every word of `LaunchAttempts`: a contract test reads that
+ * class, so a word coai-mcp adds fails the suite until somebody decides which side of the line it is on.</p>
  */
-const ONE_LAUNCH_ATTEMPTS: ReadonlySet<string> = new Set(['first', 'retry', 'repair']);
+export const ONE_LAUNCH_ATTEMPTS: ReadonlySet<string> = new Set(['first', 'retry', 'repair']);
+
+/** The attempts coai-mcp names that are NOT one launch, each with why — the other half of the contract test's vocabulary. */
+export const NOT_ONE_LAUNCH_ATTEMPTS: Readonly<Record<string, string>> = {
+  followUp: 'an antigravity follow-up continues one conversation and its usage may be cumulative, so the line may include the first launch',
+  rotated: "the Team server's own attempt word (a job that took more than one account), written with `cli: remote` — never a local line",
+};
 
 /**
  * Whether one ledger line is ONE launch: its attempt is one of {@link ONE_LAUNCH_ATTEMPTS} (so not a follow-up, not a word
@@ -151,11 +159,14 @@ export function medianHeaderUnit(groups: readonly Pick<Rollup, 'linesAreLaunches
   return units.size === 1 ? [...units][0]! : '';
 }
 
+/** The median column's header for one header unit ({@link medianHeaderUnit}): *median output per launch*, or the neutral one for ''. */
+export function medianLabelOfUnit(unit: string): string {
+  return unit === '' ? 'median output' : `median output per ${unit}`;
+}
+
 /** The median column's header: *per launch*, *per recorded turn*, or the neutral *median output* ({@link medianHeaderUnit}). */
 export function medianOutputLabel(groups: readonly Pick<Rollup, 'linesAreLaunches'>[]): string {
-  const unit = medianHeaderUnit(groups);
-
-  return unit === '' ? 'median output' : `median output per ${unit}`;
+  return medianLabelOfUnit(medianHeaderUnit(groups));
 }
 
 /** Plurals that are not `+s`. */

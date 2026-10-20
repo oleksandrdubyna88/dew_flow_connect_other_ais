@@ -142,8 +142,8 @@ One epic, branch `fix/rounds-labels-say-what-they-count`.
 
   | | fewer than two readings | a launch sent no round id | no round ran between the readings | no round id (replaces "older extension") |
   |---|---|---|---|---|
-  | en | `fewer than two readings` | `a launch sent no round id` | `no round ran between the readings` | `sent no round id` |
-  | de | `weniger als zwei Lesungen` | `ein Start schickte keine Runden-ID` | `zwischen den Lesungen lief keine Runde` | `keine Runden-ID` |
+  | en | `fewer than two readings` | `a launch sent no round id` | `no round ran between the readings` | `whose client sent no round id` |
+  | de | `weniger als zwei Lesungen` | `ein Start schickte keine Runden-ID` | `zwischen den Lesungen lief keine Runde` | `deren Client keine Runden-ID schickte` |
   | es | `menos de dos lecturas` | `un lanzamiento no envió id de ronda` | `no corrió ninguna ronda entre las lecturas` | `cuyo cliente no envió id de ronda` |
   | ru | `меньше двух чтений` | `запуск не прислал id раунда` | `между чтениями не было раунда` | `чей клиент — coai-mcp до 0.49.0` |
   | uk | `менше двох читань` | `запуск не надіслав id раунду` | `між читаннями не було раунду` | `без id раунду` |

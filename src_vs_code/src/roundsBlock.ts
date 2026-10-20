@@ -5,7 +5,7 @@ import {
 } from './roundCounts';
 import { RoundsSnapshot } from './roundCountsCache';
 import {
-  inside, LedgerLine, medianHeaderUnit, medianOutputLabel, medianUnitOf, MoneyGroup, moneyGroups, PER_LAUNCH, PER_RECORDED_TURN, perUnit,
+  inside, LedgerLine, medianHeaderUnit, medianLabelOfUnit, medianUnitOf, MoneyGroup, moneyGroups, PER_LAUNCH, PER_RECORDED_TURN, perUnit,
   RateOf, rollUp, Rollup, TimeWindow, tokenText, unitDivisor,
 } from './roundMoney';
 import { cardResetLine } from './statedReset';
@@ -26,7 +26,7 @@ import type { Vendor } from './vendors';
  *
  * <p><b>The median's header follows its cells.</b> A median is per launch when every line of its model group is one launch
  * and per recorded turn when a line can hold more than one ({@link medianUnitOf}). The header is computed from the groups
- * the block actually draws a median for ({@link medianOutputLabel}): *per launch* when all of them are, *per recorded
+ * the block actually draws a median for ({@link medianHeaderUnit}): *per launch* when all of them are, *per recorded
  * turn* when none is, a neutral *median output* when they differ or none is drawn. A cell names its unit beside its
  * number only when that differs from the header's — so a page of Team-server lines, or of lines from before coai-mcp
  * 0.48.0, never has a header that every cell contradicts, and a mixed page names the unit in every cell.</p>
@@ -150,16 +150,21 @@ function body(input: RoundsBlockInput, snapshot: RoundsSnapshot): string {
   return `<div class="table-scroll"><table class="rounds"><thead><tr>${headerCells(facts)}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
-/** The model groups the block draws a median for: review groups with a captured line, and none when the ledger did not read. */
+/**
+ * The model groups the block draws a median for: review groups with a model and a captured line, and none when the ledger
+ * did not read. A group that is never drawn — no model line (`modelsOf`), or no median — must not set the header.
+ */
 function medianGroups(facts: Pick<Facts, 'ledgerFailure' | 'groups'>): readonly MoneyGroup[] {
-  return facts.ledgerFailure.length > 0 ? [] : facts.groups.filter((one) => one.kind === 'review' && one.medianOut !== null);
+  return facts.ledgerFailure.length > 0
+    ? []
+    : facts.groups.filter((one) => one.kind === 'review' && one.model.length > 0 && one.medianOut !== null);
 }
 
-/** The header row — its median column follows the groups drawn under it ({@link medianOutputLabel}). */
+/** The header row — its median column carries the unit the facts computed once from the groups drawn under it. */
 function headerCells(facts: Facts): string {
   return [
     'Vendor row / model', ...WINDOW_NAMES.map((name) => WINDOW_LABEL[name]), 'By stage (7 d)', 'Beside (7 d)',
-    'Reviewers per round', escapeHtml(medianOutputLabel(medianGroups(facts))), 'Tokens (7 d)', 'Money (7 d)', 'Per round (7 d)',
+    'Reviewers per round', escapeHtml(medianLabelOfUnit(facts.medianUnit)), 'Tokens (7 d)', 'Money (7 d)', 'Per round (7 d)',
   ].map(headerCell).join('');
 }
 
@@ -347,6 +352,9 @@ function modelPerRoundCell(part: Rollup, rounds: number | undefined): string {
 const MEDIAN_NOTE = `A line from before coai-mcp 0.48.0, a Team-server row's line or a follow-up can hold more than one launch `
   + `— so this median is per ${PER_RECORDED_TURN}.`;
 
+/** The tooltip, escaped once — it is the same text in every cell that carries it. */
+const MEDIAN_NOTE_HTML = escapeHtml(MEDIAN_NOTE);
+
 /**
  * The model line's median output. Its unit ({@link medianUnitOf}) is named beside the number only when it differs from
  * the header's — and *per recorded turn* then carries the tooltip that says why a line can hold more than one launch.
@@ -362,7 +370,7 @@ function medianFigure(figure: string, unit: string, headerUnit: string): string 
 
   return unit === PER_LAUNCH
     ? `${figure} <span class="hint">per ${PER_LAUNCH}</span>`
-    : `<span title="${escapeHtml(MEDIAN_NOTE)}">${figure}</span> <span class="hint">per ${PER_RECORDED_TURN}</span>`;
+    : `<span title="${MEDIAN_NOTE_HTML}">${figure}</span> <span class="hint">per ${PER_RECORDED_TURN}</span>`;
 }
 
 /** One line per kind that spent the row beside its rounds — every model together, per recorded turn. */

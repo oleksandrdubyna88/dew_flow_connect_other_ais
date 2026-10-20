@@ -176,9 +176,27 @@ test('AnOlderLineInAGroup_SaysPerRecordedTurnBesideItsNumber_WhileAnotherGroupIs
 });
 
 test('TheMedianHeader_NamesNoUnit_WhenTheLedgerDidNotRead — no median is drawn, so none is claimed', () => {
-  const html = roundsBlock(input({ snapshot: snapshot(counted(), [], 'EACCES') }));
+  // Launch lines ARE in the snapshot beside the failure: usage can read while the probe ledger fails (roundCountsRead.ts), and
+  // then the groups exist but no cell is drawn from them. With no lines at all the empty set would pass without the guard.
+  const html = roundsBlock(input({ snapshot: snapshot(counted(), [launchLine(), launchLine({ attempt: 'retry' })], 'EACCES') }));
 
-  assert.equal(medianHeader(html), 'median output');
+  assert.equal(medianHeader(html), 'median output', 'a header claimed a unit for medians that the unreadable ledger did not draw');
+});
+
+test('TheMedianHeader_IgnoresAGroupWithNoCapturedLine — a group with no median is not a cell, so it cannot set the header', () => {
+  // astra's only line is an older one whose usage was not captured: its group has no median and draws a dash.
+  const html = roundsBlock(input({ snapshot: snapshot(counted(), [launchLine(), usageLine({ model: 'gpt-6-astra', usageNote: 'ended before usage' })]) }));
+
+  assert.equal(medianHeader(html), 'median output per launch', 'a group with no median set the header to a neutral one');
+  assert.equal(medianCellOf(html, '>gpt-6-astra<'), '—');
+});
+
+test('TheMedianHeader_IgnoresAGroupWithNoModel — a group that is never drawn must not set the header', () => {
+  // A line with an empty model has no model line (modelsOf drops it), so no median cell is drawn for it.
+  const html = roundsBlock(input({ snapshot: snapshot(counted(), [launchLine(), launchLine({ attempt: 'retry' }), usageLine({ model: '' })]) }));
+
+  assert.equal(medianHeader(html), 'median output per launch', 'an old line with no model made the header neutral for a cell nobody sees');
+  assert.doesNotMatch(medianCellOf(html, '>gpt-6-luna<'), /hint/u);
 });
 
 test('AModelWithUnknownRounds_AndAMixedWeek_IsDividedPerRecordedTurn — one older line and one launch line, rounds unavailable', () => {
