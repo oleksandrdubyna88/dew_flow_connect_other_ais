@@ -47,4 +47,41 @@ public sealed class RoundAuthorsTextTests
         text.Where(at => char.IsControl(at) && at != '\n').Should().BeEmpty("every line of the table, header included, prints no control character but its own line breaks");
         text.Should().Contain("Cohort first?]8;;http://x?", "the header still names the cohort, with its control characters made visible");
     }
+
+    /// <summary>
+    /// A control character is not the only thing a reader cannot trust: a bidi override reorders a row (Trojan Source), a zero-width character hides
+    /// in a word, a line or paragraph separator starts a line the table did not write. Every displayed value of a cell and of an exclusion is held to
+    /// the same rule — branch, coder mix, coder effort, main model, reviewer set, the exclusion reason and what it names.
+    /// </summary>
+    [Fact]
+    public void AValueWithABidiOverrideOrAZeroWidthCharacter_NeverReachesTheTerminal()
+    {
+        var selection = Sel();
+        var sums = RoundAuthorsCells.Count(RoundAuthorsPopulation.Of([Round(1, branch: "feat/\u202Eevil")], selection), selection);
+        var cells = sums.Cells.Select(cell => cell with
+        {
+            Key = cell.Key with { CoderMix = "sonnet\u200B", CoderEffort = "high\u2066", MainModel = "opus\uFEFF", ReviewerSet = "codex\u00AD" },
+        }).ToList();
+        var exclusions = sums.Exclusions.Select(count => count with { Reason = "x\u2028y\u2029", Because = [new NamedCount("n\u200Fm\u0085", 1)] }).ToList();
+        var answer = new RoundAuthorsAnswer(1, selection, [new RoundAuthorsSource(new string('a', 32), "linux", "2026-10-19T00:00:00Z", true, ["s"])], cells, exclusions, true);
+
+        var text = RoundAuthorsText.Render(answer);
+
+        text.Where(at => at != '\n' && IsTerminalUnsafe(at)).Should().BeEmpty("the table prints nothing a terminal acts on or a reader cannot see, but its own line breaks");
+        text.Should().Contain("feat/?evil", "the branch is still shown, with its bidi override made visible").And.Contain("sonnet?").And.Contain("x?y?");
+    }
+
+    [Theory]
+    [InlineData("first\u009B2J", "first?2J")]
+    [InlineData("a\u007Fb", "a?b")]
+    [InlineData("\uFEFFfirst", "?first")]
+    [InlineData("sonnet\u200B", "sonnet?")]
+    [InlineData("feat/\u202Eevil", "feat/?evil")]
+    [InlineData("x\u2028y\u2029z", "x?y?z")]
+    [InlineData("x\u0085y\u000Cz", "x?y?z")]
+    [InlineData("x\u00ADy\u2066z\u2069", "x?y?z?")]
+    [InlineData("x\ny\rz", "x?y?z")]
+    [InlineData("feat/émoji-😀 — ok", "feat/émoji-😀 — ok")]
+    public void Printable_ShowsWhatATerminalWouldActOnAsAQuestionMark_AndKeepsTheRest(string value, string shown) =>
+        RoundAuthorsText.Printable(value).Should().Be(shown);
 }

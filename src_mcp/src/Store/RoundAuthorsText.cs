@@ -140,11 +140,17 @@ public static class RoundAuthorsText
     }
 
     /// <summary>
-    /// A value as the terminal may see it: every control character — an escape that would clear the screen or rewrite a figure, from a store row
-    /// or an <c>--add</c> file — is shown as <c>?</c>. The table's own line breaks are added after, never through here.
+    /// A value as the terminal may see it: every character it would act on, or a reader cannot see, is shown as <c>?</c> — a control (an escape that
+    /// would clear the screen or rewrite a figure), a format character (a bidi override that reorders a row, a zero-width character, a byte-order mark,
+    /// a soft hyphen), a line or paragraph separator, an unassigned code point. A value comes from a store row or an <c>--add</c> file. Surrogates are
+    /// kept: an emoji is a pair of them. The table's own line breaks are added after, never through here.
     /// </summary>
     internal static string Printable(string value) =>
-        value.Any(char.IsControl) ? string.Concat(value.Select(at => char.IsControl(at) ? '?' : at)) : value;
+        value.Any(Unprintable) ? string.Concat(value.Select(at => Unprintable(at) ? '?' : at)) : value;
+
+    private static bool Unprintable(char at) =>
+        CharUnicodeInfo.GetUnicodeCategory(at) is UnicodeCategory.Control or UnicodeCategory.Format or UnicodeCategory.LineSeparator
+            or UnicodeCategory.ParagraphSeparator or UnicodeCategory.OtherNotAssigned;
 
     /// <summary>Columns padded to their widest cell, joined by an ASCII separator, the header underlined by dashes — plain text a terminal and a diff both read.</summary>
     private static IEnumerable<string> Aligned(List<string[]> rows)

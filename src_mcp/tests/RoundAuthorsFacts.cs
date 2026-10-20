@@ -63,4 +63,13 @@ internal static class RoundAuthorsFacts
 
     public static RoundAuthorsSelection Sel(string stage = "CodeReview", string cohort = "all", string[]? kinds = null, string split = "", bool beforeOpen = false, bool withoutElided = false, bool withUncovered = false) =>
         new(stage, string.Empty, string.Empty, split, cohort, kinds ?? CodeAndTest, beforeOpen, withoutElided, withUncovered);
+
+    /// <summary>
+    /// The tests' own spelling of "a character a terminal would act on or a reader cannot see": a control, a format character (zero-width, bidi
+    /// override, BOM, soft hyphen), a line or paragraph separator, or an unassigned code point. Spelled here, apart from <c>Printable</c>, so a test
+    /// of that method is not graded by the method itself.
+    /// </summary>
+    public static bool IsTerminalUnsafe(char at) =>
+        System.Globalization.CharUnicodeInfo.GetUnicodeCategory(at) is System.Globalization.UnicodeCategory.Control or System.Globalization.UnicodeCategory.Format
+            or System.Globalization.UnicodeCategory.LineSeparator or System.Globalization.UnicodeCategory.ParagraphSeparator or System.Globalization.UnicodeCategory.OtherNotAssigned;
 }

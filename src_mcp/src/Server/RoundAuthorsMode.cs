@@ -68,9 +68,12 @@ internal static class RoundAuthorsMode
         return Answer(parsed.Value, PanelSettings.FromEnvironment(env).DataDir, output, note, readFile);
     }
 
-    /// <summary>A sentence as the terminal may see it: each line through <see cref="RoundAuthorsText.Printable"/> (the one sanitiser), the line breaks kept.</summary>
-    internal static string Printed(string sentence) =>
-        string.Join('\n', sentence.ReplaceLineEndings("\n").Split('\n').Select(RoundAuthorsText.Printable));
+    /// <summary>
+    /// A sentence as the terminal may see it: through <see cref="RoundAuthorsText.Printable"/> (the one sanitiser), whole. Every refusal of this mode
+    /// is ONE line and the channel adds its own line end, so a line break inside the sentence is never ours — it came from quoted input, and an
+    /// <c>--add</c> file that could place one would forge a second line of this binary's own voice. It is shown as <c>?</c> like any other.
+    /// </summary>
+    internal static string Printed(string sentence) => RoundAuthorsText.Printable(sentence);
 
     private static int Answer(Request request, string dataDir, TextWriter output, Action<string> note, Func<string, string> readFile)
     {
