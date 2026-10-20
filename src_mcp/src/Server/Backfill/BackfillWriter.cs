@@ -159,7 +159,7 @@ internal sealed class BackfillWriter(string dataDir, SessionStore store, RoundsD
     {
         at?.Invoke(WritePoint.FileSaved);
 
-        return write.Halves == WriteHalves.FileOnly ? WriteResult.Written : Project(write.Round, verified);
+        return write.Halves == WriteHalves.FileOnly ? WriteResult.Written : Project(write, verified);
     }
 
     private string Fingerprint(StoredRound round) => RoundFingerprint.Read(db.Command, round.RoundId);
@@ -169,13 +169,14 @@ internal sealed class BackfillWriter(string dataDir, SessionStore store, RoundsD
 
     /// <summary>
     /// The database half, FROM the verified copy and never from the in-memory result: the size rows, then the authors columns and rows. Both
-    /// writers delete before they insert and join this transaction; a null half writes nothing.
+    /// writers delete before they insert and join this transaction; a null half writes nothing. The authors are projected only when the WRITE carries a
+    /// snapshot: a size-only write means the decision kept the database row, and the file's own snapshot (a healed one, an older reader's) must not replace it.
     /// </summary>
-    private WriteResult Project(StoredRound round, Verified verified)
+    private WriteResult Project(RoundWrite write, Verified verified)
     {
-        RoundChangesTable.Record(db, round.RoundId, verified.Size, verified.Gitlinks);
+        RoundChangesTable.Record(db, write.Round.RoundId, verified.Size, verified.Gitlinks);
         at?.Invoke(WritePoint.ChangesRecorded);
-        RoundAuthorsTable.Record(db, round.RoundId, verified.Authors);
+        RoundAuthorsTable.Record(db, write.Round.RoundId, write.Authors is null ? null : verified.Authors);
 
         return WriteResult.Written;
     }

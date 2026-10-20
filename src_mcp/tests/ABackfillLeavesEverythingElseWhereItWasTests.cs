@@ -1,5 +1,6 @@
 using System.Text.Json;
 using CoaiMcp.Core.Authors;
+using CoaiMcp.Core.Context;
 using CoaiMcp.Core.Findings;
 using CoaiMcp.Server;
 using CoaiMcp.Store;
@@ -129,6 +130,40 @@ public sealed class ABackfillLeavesEverythingElseWhereItWasTests
             }
 
             StoreDump.AuthorsAndSize(world.DataDir).Should().Be(before, "the same round written twice leaves the round_authors and round_changes multisets and every count identical");
+        }
+    }
+
+    /// <summary>
+    /// Code review (CodeRabbit, PR 865): a SIZE-ONLY write carries no snapshot because the decision kept the database row, so the file's own snapshot
+    /// — a healed one, or an older reader's — must not be projected over it. Before the fix the projection came from the reloaded file whatever the
+    /// write held, and <c>authors_id_source</c> and <c>authors_reader</c> took the file's values.
+    /// </summary>
+    [Fact]
+    public async Task ASizeOnlyWrite_NeverProjectsTheFilesSnapshotOverTheRowTheDecisionKept()
+    {
+        var (world, _) = await BackfilledAsync();
+        using (world)
+        {
+            var gateSession = world.Fixture.Rounds.GateSessions[0];
+            var file = world.Store.Load(world.RepoOf(gateSession), BackfillWorld.BranchOf(gateSession))!;
+            world.Store.Save(file with { Rounds = [.. file.Rounds.Select(round => round with { Authors = round.Authors! with { IdSource = "healed", Reader = 0 } })] });
+            const string authorsOnly = "SELECT authors_id_source, authors_reader, authors_attribution, authors_state FROM rounds ORDER BY id";
+            var columnsBefore = StoreDump.Rows(world.DataDir, authorsOnly);
+            var rowsBefore = StoreDump.Rows(world.DataDir, "SELECT * FROM round_authors ORDER BY round_id, ordinal");
+            columnsBefore.Should().NotContain("healed", "positive control: the database does not hold what the file now says");
+            using var db = RoundsDb.OpenExisting(world.DataDir, Serilog.Core.Logger.None)!;
+            using var read = AuthorPeers.OpenReadOnly(world.DataDir)!;
+            var writer = new BackfillWriter(world.DataDir, world.Store, db, TimeSpan.FromMilliseconds(300));
+            var gate = new StoredHistory(read, world.Store).Gates().Single();
+            var round = gate.Rounds.Single();
+            var size = new RoundSize(ScopeSize.ObservedZero("abc1234"), ScopeSize.Unavailable(ScopeState.FirstRound), SizeOrigin.Backfill);
+
+            var result = writer.Write(new RoundWrite(gate, round, WriteHalves.Both, null, size, 0, RoundFingerprint.Read(read.CreateCommand, round.RoundId)));
+
+            result.Should().Be(WriteResult.Written);
+            StoreDump.Rows(world.DataDir, "SELECT size_state FROM rounds").Should().Be($"{ScopeState.Recorded}\n", "positive control: the size half was written");
+            StoreDump.Rows(world.DataDir, authorsOnly).Should().Be(columnsBefore, "a write without a snapshot leaves the authors columns as the decision kept them");
+            StoreDump.Rows(world.DataDir, "SELECT * FROM round_authors ORDER BY round_id, ordinal").Should().Be(rowsBefore);
         }
     }
 
@@ -294,13 +329,12 @@ public sealed class ABackfillLeavesEverythingElseWhereItWasTests
         world.RecordLive();
         var file = File.ReadAllBytes(File0(world));
         Set(world, $"UPDATE rounds SET authors_reader = {ObservedSession.ReaderVersion - 1}");
-        using var rig = new BackfillRig(world, beforeWrite: _ => Set(world, "INSERT INTO round_authors (round_id, ordinal, who) VALUES (1, 99, 'main')"));
+        using var rig = new BackfillRig(world, beforeWrite: _ => Set(world, "INSERT INTO round_authors (round_id, ordinal, who) SELECT id, 99, 'main' FROM rounds"));
 
         await rig.RunAsync();
 
         rig.Counts.Deferred[BackfillWhy.ChangedUnderUs].Should().Be(1, "four unchanged columns do not prove unchanged rows");
-        File.ReadAllBytes(File0(world)).Should().NotBeEmpty();
-        file.Should().NotBeEmpty();
+        File.ReadAllBytes(File0(world)).Should().Equal(file, "a round changed under the run is deferred before the file is saved");
         StoreDump.Rows(world.DataDir, "SELECT COUNT(*) FROM round_authors WHERE ordinal = 99").Should().Be("1\n", "the live server's row is what both stores hold");
     }
 

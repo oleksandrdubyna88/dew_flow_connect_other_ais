@@ -253,7 +253,7 @@ public sealed class BackfillAuthorsBackupTests
         await RunAsync(world, [], clock: clock);
         await RunAsync(world, [], clock: clock);
 
-        Directory.GetDirectories(BackupsOf(world)).Select(Path.GetFileName).Should().Equal("2026-10-19T12-00-00Z", "2026-10-19T12-00-00Z-2");
+        Directory.GetDirectories(BackupsOf(world)).Select(Path.GetFileName).Order(StringComparer.Ordinal).Should().Equal("2026-10-19T12-00-00Z", "2026-10-19T12-00-00Z-2");
     }
 
     private sealed class FixedClock(DateTimeOffset at) : TimeProvider

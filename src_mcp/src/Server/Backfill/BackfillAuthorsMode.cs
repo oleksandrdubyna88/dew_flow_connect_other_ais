@@ -62,16 +62,7 @@ internal static class BackfillAuthorsMode
 
     private sealed record Options(DateTime? Since, bool DryRun);
 
-    private sealed class Parsing
-    {
-        public DateTime? Since { get; set; }
-
-        public bool SinceSeen { get; set; }
-
-        public bool DryRun { get; set; }
-
-        public string Why { get; set; } = string.Empty;
-    }
+    private sealed record Parsing(DateTime? Since = null, bool SinceSeen = false, bool DryRun = false, string Why = "");
 
     internal static async Task<int> RunAsync(
         string[] args, Func<string, string?> env, TextWriter output, Action<string> note, TimeProvider clock, BackfillSeams? seams = null, CancellationToken ct = default)
@@ -109,50 +100,28 @@ internal static class BackfillAuthorsMode
         var parsing = new Parsing();
         for (var at = 1; at >= 0 && at < args.Length;)
         {
-            at = Take(args, at, parsing);
+            (at, parsing) = Take(args, at, parsing);
         }
 
         return parsing;
     }
 
-    private static int Take(string[] args, int at, Parsing parsing) => args[at] switch
+    private static (int Next, Parsing State) Take(string[] args, int at, Parsing parsing) => args[at] switch
     {
         "--since" => TakeSince(args, at, parsing),
         "--dry-run" => TakeDryRun(at, parsing),
         _ => Fail(parsing),
     };
 
-    private static int TakeSince(string[] args, int at, Parsing parsing)
-    {
-        if (parsing.SinceSeen || at + 1 >= args.Length || !Program.TryParseInstant(args[at + 1], out var instant))
-        {
-            return Fail(parsing);
-        }
+    private static (int Next, Parsing State) TakeSince(string[] args, int at, Parsing parsing) =>
+        parsing.SinceSeen || at + 1 >= args.Length || !Program.TryParseInstant(args[at + 1], out var instant)
+            ? Fail(parsing)
+            : (at + 2, parsing with { Since = instant.UtcDateTime, SinceSeen = true });
 
-        parsing.Since = instant.UtcDateTime;
-        parsing.SinceSeen = true;
+    private static (int Next, Parsing State) TakeDryRun(int at, Parsing parsing) =>
+        parsing.DryRun ? Fail(parsing) : (at + 1, parsing with { DryRun = true });
 
-        return at + 2;
-    }
-
-    private static int TakeDryRun(int at, Parsing parsing)
-    {
-        if (parsing.DryRun)
-        {
-            return Fail(parsing);
-        }
-
-        parsing.DryRun = true;
-
-        return at + 1;
-    }
-
-    private static int Fail(Parsing parsing)
-    {
-        parsing.Why = Usage;
-
-        return -1;
-    }
+    private static (int Next, Parsing State) Fail(Parsing parsing) => (-1, parsing with { Why = Usage });
 
     // ---------- one run ----------
 

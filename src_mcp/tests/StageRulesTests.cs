@@ -199,7 +199,7 @@ public sealed class StageRulesTests : IDisposable
     /// was 56 and NOTHING in the tail fitted on any branch, so <c>common/test-leftovers.md</c> (4 706) reached
     /// no reviewer. Now the walk takes whatever fits in the order the branch draws: over 3 000 branch names
     /// one rule on 30 %, two on 62 %, three on 8 % — never four, because the three smallest rules together
-    /// are 8 683 and the fourth smallest adds 3 421 against 9 992.</para>
+    /// are 8 683 and the fourth smallest adds 3 460 (12 143 together) against 9 992.</para>
     /// <para><b>Two assertions.</b> On the canary branch the tail is EXACTLY <c>common/gpu-lease.md</c>,
     /// <c>csharp/nuget-packages.md</c> and <c>common/durable-status.md</c> in that order (88 730 characters
     /// in all) — the identities and the count, not a bound, because "at most three" is satisfied by a tail
