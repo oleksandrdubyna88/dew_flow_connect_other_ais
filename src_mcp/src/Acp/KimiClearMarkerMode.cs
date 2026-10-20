@@ -6,7 +6,7 @@ using CoaiMcp.Runners.Processes;
 namespace CoaiMcp.Acp;
 
 /// <summary>
-/// <c>coai-mcp --kimi-clear-marker &lt;path&gt;</c> — the card's <i>Clear the stuck Kimi marker</i> (DL9 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>, S-K18): one survivor marker under the Kimi lock root,
+/// <c>coai-mcp --kimi-clear-marker &lt;path&gt;</c> — the card's <i>Clear the stuck Kimi marker</i> (DL9 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>, S-K18): one survivor marker under the Kimi lock root,
 /// deleted only when every process it names is gone. It signals NOTHING, ever — a person who wants a process ended ends it, then presses again.
 /// </summary>
 /// <remarks>

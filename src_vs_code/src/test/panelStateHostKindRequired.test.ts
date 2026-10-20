@@ -6,7 +6,7 @@ import type { Vendor } from '../vendors';
 import { panelState } from './panelPageHarness';
 
 /**
- * `PanelState.hostKind` is REQUIRED (E3 of todo/PLAN_kimi_and_vibe_on_linux.md, code gate): there is no fallback path.
+ * `PanelState.hostKind` is REQUIRED (E3 of research/PLAN_kimi_and_vibe_on_linux.md, code gate): there is no fallback path.
  *
  * <p>The fallback it replaces was `hostKindOfPlatform(hostPlatform())`, which maps every Linux platform to a NATIVE host —
  * so a state built without the kind, on a WSL2 window, drew the native-Linux refusal on a host that runs Vibe. Whoever builds

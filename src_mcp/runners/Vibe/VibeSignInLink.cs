@@ -60,7 +60,7 @@ internal sealed record SignInSteps(
 
 /// <summary>
 /// Makes the ONE link an owned Vibe home may hold: <c>&lt;home&gt;/.env</c> → the person's sign-in file (DL2 of
-/// <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>). Never a copy, never a read of the target by path, never a <c>chmod</c>, never a log line.
+/// <c>research/PLAN_kimi_and_vibe_on_linux.md</c>). Never a copy, never a read of the target by path, never a <c>chmod</c>, never a log line.
 /// </summary>
 /// <remarks>
 /// In order: the target is judged through one descriptor and its NAMES scanned (<see cref="DotenvNames"/>), the buffer zeroed after the

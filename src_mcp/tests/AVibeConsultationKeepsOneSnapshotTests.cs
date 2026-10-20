@@ -44,7 +44,7 @@ public sealed class AVibeConsultationKeepsOneSnapshotTests : ConsultScenarioBase
     private JsonElement RecordFile() =>
         JsonDocument.Parse(File.ReadAllText(Directory.EnumerateFiles(Path.Combine(_data, "consultations"), "*.json").Single())).RootElement;
 
-    /// <summary>The consult flow, as a Windows host and as a WSL2 host (E2 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): on WSL2 each turn's home holds the one admitted .env link, and the close takes it with the folder.</summary>
+    /// <summary>The consult flow, as a Windows host and as a WSL2 host (E2 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>): on WSL2 each turn's home holds the one admitted .env link, and the close takes it with the folder.</summary>
     [Theory]
     [InlineData(VibeFlowHost.Windows)]
     [InlineData(VibeFlowHost.Wsl2)]

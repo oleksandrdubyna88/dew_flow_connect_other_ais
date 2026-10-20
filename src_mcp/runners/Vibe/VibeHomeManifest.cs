@@ -9,7 +9,7 @@ public sealed record VibePinnedFile(string Path, string Sha256);
 /// <summary>What one Vibe version writes into an empty coai-owned home ON ONE PLATFORM — the plugin files it unpacks, by hash.</summary>
 public sealed record VibeHomeEntry(string Version, IReadOnlyList<VibePinnedFile> Pinned)
 {
-    /// <summary>The platform an entry that names none was measured on — today's only entry was Windows' (DL3 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>).</summary>
+    /// <summary>The platform an entry that names none was measured on — today's only entry was Windows' (DL3 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>).</summary>
     public const string DefaultPlatform = "win32";
 
     /// <summary>The platform the entry was measured on, as node spells it (<c>win32</c> | <c>linux</c>); an entry with none reads as <see cref="DefaultPlatform"/>.</summary>

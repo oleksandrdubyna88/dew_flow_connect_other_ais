@@ -412,7 +412,7 @@ public sealed class AWriteIsKnownOnlyByItsPathTests
     /// POSIX rules on any host: the local-path rule of the POSIX arm, and a normaliser that answers what POSIX <c>GetFullPath</c> +
     /// <c>GetDirectoryName</c> answer for these exact inputs (a lookup, so it cannot be more permissive than the real one).
     /// </summary>
-    private static PathRules PosixRules(IReadOnlyDictionary<string, string> directoryOf) =>
+    private static PathRules PosixRules(Dictionary<string, string> directoryOf) =>
         new(path => LocalPaths.IsLocalRooted(path, windows: false, foldCase: false), path => directoryOf[path]);
 
     [Fact]

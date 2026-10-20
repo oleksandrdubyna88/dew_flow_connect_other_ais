@@ -81,18 +81,21 @@ internal sealed class AttributionScenario
         string verdict = "proceed",
         string? caller = null)
     {
-        var completed = completedAt ?? (startedAt ?? 0) + 10;
         Current.Rounds.Add(new GateRound(
             stage,
             number,
-            startedAt is { } started ? At(started) : null,
+            AtOrNone(startedAt),
             status,
             verdict,
             caller ?? _caller,
-            At(completed)));
+            At(CompletedOf(startedAt, completedAt))));
 
         return this;
     }
+
+    private static DateTimeOffset? AtOrNone(double? minutes) => minutes is { } at ? At(at) : null;
+
+    private static double CompletedOf(double? startedAt, double? completedAt) => completedAt ?? (startedAt ?? 0) + 10;
 
     public AttributionScenario Code(int number, double startedAt, double completedAt) => Round("CodeReview", number, startedAt, completedAt);
 

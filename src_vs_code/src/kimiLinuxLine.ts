@@ -1,7 +1,7 @@
 import { KIMI_ON_LINUX_SINCE } from './runtimeSince';
 
 /**
- * The ⤓ / ⟳ line for Kimi on a Linux host — DL12 of todo/PLAN_kimi_and_vibe_on_linux.md (E6).
+ * The ⤓ / ⟳ line for Kimi on a Linux host — DL12 of research/PLAN_kimi_and_vibe_on_linux.md (E6).
  *
  * <p>`rg` and `fd` are provisioned by the install button, because the owner's two rules (set it up once; every action is a
  * button) exclude "install them by hand", and coai-mcp refuses a Kimi launch when either does not resolve. One press, each step

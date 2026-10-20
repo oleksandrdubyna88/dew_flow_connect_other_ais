@@ -51,7 +51,7 @@ public sealed class TreeHold(FileStream signIn, FileStream home) : IDisposable
 /// killed over a still-refreshing <c>kimi</c> must not let a second refresher in. A second inheritable file per HOME
 /// (<c>&lt;root&gt;/coai-tree.lock</c>) lets a disposal ask "is a tree alive on THIS home" without opening the sign-in folder
 /// (<see cref="HomeProbe"/>).</para>
-/// <para><b>The key is the folder's IDENTITY, never its spelling</b> (decision 9; DL7 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>): on Windows SHA-256 of the upper-cased final
+/// <para><b>The key is the folder's IDENTITY, never its spelling</b> (decision 9; DL7 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>): on Windows SHA-256 of the upper-cased final
 /// path of the opened folder handle; on Linux SHA-256 of <c>dev_major:dev_minor:ino</c> from <c>statx</c> — a symlinked parent, a bind mount and a <c>/proc/self/cwd</c> spelling are one folder and one key; a deleted
 /// folder has no key (<see cref="FolderIdentity"/>). A folder the kernel cannot name has NO key and takes no lock — never a silent
 /// fall-back to the spelling, which would be two keys for one sign-in. On a case-SENSITIVE Windows folder the upper-casing merges two

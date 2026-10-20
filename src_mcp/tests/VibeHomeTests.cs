@@ -356,7 +356,7 @@ public sealed class VibeHomeTests : IDisposable
         Refusal().Should().Contain("linked").And.Contain("link");
     }
 
-    // ---- the ONE admitted link (DL2 of todo/PLAN_kimi_and_vibe_on_linux.md; A1 spec section 3.4; S-V2, S-V3, S-V4)
+    // ---- the ONE admitted link (DL2 of research/PLAN_kimi_and_vibe_on_linux.md; A1 spec section 3.4; S-V2, S-V3, S-V4)
 
     private const string Persons = "/home/p/.vibe/.env";
 

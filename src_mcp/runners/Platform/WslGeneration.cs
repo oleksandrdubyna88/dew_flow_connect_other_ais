@@ -11,7 +11,7 @@ public enum WslGeneration
 }
 
 /// <summary>
-/// WSL2 is not WSL1 (DL1 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>, cadence consult a3933362): <see cref="VendorDiagnosis.NamesWsl"/>
+/// WSL2 is not WSL1 (DL1 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>, cadence consult a3933362): <see cref="VendorDiagnosis.NamesWsl"/>
 /// answers yes for ANY banner holding <c>microsoft</c> or <c>WSL</c>, so a WSL1 kernel (<c>4.4.0-…-Microsoft</c>, no real <c>/proc</c>
 /// process tree or <c>flock</c> semantics of its own) reads as <see cref="HostKind.Wsl"/>. "Measured on WSL2" must mean WSL2, so a
 /// runtime's admission asks this second, narrower predicate. <see cref="VendorDiagnosis.NamesWsl"/> itself is NOT narrowed: its other

@@ -12730,8 +12730,8 @@ flowchart LR
   Never in `DEFAULT_VENDORS`. Its hint names what a person meets first: Windows, and WSL2 from coai-mcp 0.59.0
   (when coai-mcp itself runs there — a VS Code window attached to WSL; the sign-in there is `~/.vibe/.env`, made by
   `vibe --setup`, linked by coai and never copied), "On a native Linux host coai-mcp refuses Vibe for now — it is measured on
-  WSL2 only" (E3 of `todo/PLAN_kimi_and_vibe_on_linux.md`, which lifted D18 for WSL2), and the coai-mcp release that
-  knows the runtime. Kimi's hint is unchanged: Windows only.
+  WSL2 only" (E3 of `research/PLAN_kimi_and_vibe_on_linux.md`, which lifted D18 for WSL2), and the coai-mcp release that
+  knows the runtime. Kimi's hint was unchanged then: Windows only (Kimi on WSL2 came with 0.61.0, see *Kimi on Linux and WSL, on the panel's side* below).
 - **The models** (D10): `VIBE_MODELS` is the curated list coai-mcp's `VibeModels.Curated` launches on —
   `mistral-medium-3.5` (Vibe's default) and `glm-5-3`, seen accepted on Vibe 2.26.1 (`VIBE_MODELS_SEEN_ON`).
   `modelsFor('vibe')` offers it (an unknown runtime used to fall to the Gemini list); a typed alias stays in its own
@@ -13010,9 +13010,9 @@ flowchart LR
   live round through the product with the version warning shown; a `live-kimi-runtime-compat.mjs` beside Vibe's (that a released 0.55.0 refuses a
   kimi row by name is inferred from the Vibe measurement, not measured).
 
-## Vibe on Linux and WSL, on the panel's side (2026-10-16, E3 of `todo/PLAN_kimi_and_vibe_on_linux.md`)
+## Vibe on Linux and WSL, on the panel's side (2026-10-16, E3 of `research/PLAN_kimi_and_vibe_on_linux.md`)
 
-The extension's half of lifting D18 for WSL2 (DL1, DL2, DL14); the server's half is E2 (`module_runners.md`). Kimi's half is the next section.
+The extension's half of lifting D18 for WSL2 (DL1, DL2, DL14); the server's half is E2 (`module_runners.md`). Kimi's half is the next section. **Shipped in extension 0.79.0 with coai-mcp 0.59.0 (2026-10-17), checked live on WSL2 (2026-10-19).**
 
 - **`VIBE_ON_LINUX_SINCE = '0.59.0'`** (`runtimeSince.ts`), in a second table `ON_LINUX_SINCE` beside `RUNTIME_SINCE`. The first
   answers "does this server know the runtime", the second "does it run it on THIS host" — a 0.57.0 server on WSL knows `vibe`
@@ -13049,10 +13049,10 @@ The extension's half of lifting D18 for WSL2 (DL1, DL2, DL14); the server's half
   its host-side diagnostics carry the `ConnectOtherAIs:` prefix into the extension-host log) naming the cause and that the host is treated as
   native Linux (`hostKindLogsAnUnreadableBanner.test.ts`).
 
-## Kimi on Linux and WSL, on the panel's side (2026-10-17, E6 of `todo/PLAN_kimi_and_vibe_on_linux.md`)
+## Kimi on Linux and WSL, on the panel's side (2026-10-17, E6 of `research/PLAN_kimi_and_vibe_on_linux.md`)
 
 The extension's half of lifting D18 for Kimi on WSL2 (DL1, DL12, DL14, Q3, S-K9, S-K10, S-K17, S-K18); the server's half is E5/E6
-(`module_runners.md`). It reuses the Vibe section's host-kind shape above — `HostKind` (`windows | wsl2 | wsl1 | linux | darwin`),
+(`module_runners.md`). **Shipped in extension 0.81.0 with coai-mcp 0.61.0 (2026-10-19), checked live on WSL2; the Linux install line was not yet pressed live on a machine without `rg`.** It reuses the Vibe section's host-kind shape above — `HostKind` (`windows | wsl2 | wsl1 | linux | darwin`),
 `PanelState.hostKind`, `hostKindOfPlatform`, `runtimeSkewNote(version, vendors, host)` — and adds no second one.
 
 - **`KIMI_ON_LINUX_SINCE = '0.61.0'`** (`runtimeSince.ts`): 0.58.0 was released from main without either runtime, Vibe-on-Linux shipped in 0.59.0, and main then released 0.60.0 without Kimi, so Kimi on Linux ships in 0.61.0 (DL14, whoever merges second bumps). It joins `ON_LINUX_SINCE`; the

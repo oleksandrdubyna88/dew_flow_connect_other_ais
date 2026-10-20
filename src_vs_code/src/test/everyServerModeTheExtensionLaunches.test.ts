@@ -43,7 +43,7 @@ type Launch =
   | 'survey, held by the extension'
   /**
    * Launched on a person's act, and it never reads or writes the DATA directory at all: it deletes one survivor marker under the Kimi lock
-   * root (`--kimi-clear-marker`, DL9 of todo/PLAN_kimi_and_vibe_on_linux.md) and nothing else. It is not a `WriterModes` member, so
+   * root (`--kimi-clear-marker`, DL9 of research/PLAN_kimi_and_vibe_on_linux.md) and nothing else. It is not a `WriterModes` member, so
    * neither generic server test runs it against a missing named root; `KimiClearMarkerModeTests.cs` holds it, and a test below checks that.
    */
   | 'a person acts, outside the data directory'

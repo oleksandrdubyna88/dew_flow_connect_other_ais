@@ -6,7 +6,7 @@ import { fromOfficialSources, OFFICIAL_SOURCES } from '../vendorTerminal';
 
 /**
  * What `fromOfficialSources` says about the Linux install line's two new verbs and about `sudo` — S-K10 of
- * todo/PLAN_kimi_and_vibe_on_linux.md, DL12 (E6; the supply-chain judgement the plan gives to Fable).
+ * research/PLAN_kimi_and_vibe_on_linux.md, DL12 (E6; the supply-chain judgement the plan gives to Fable).
  *
  * <p>Three facts, each with the case that proves it. `apt-get install` and `dnf install` are admitted for the two distribution
  * packages `ripgrep` and `fd-find`, with `-y` as the only flag. A step that runs through `sudo` is admitted only when what

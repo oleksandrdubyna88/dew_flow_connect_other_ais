@@ -9,7 +9,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// Every deleter of a coai-owned Vibe home leaves the person's <c>~/.vibe/.env</c> as it found it (DL2 of
-/// <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>; A1 spec §5; S-V10): the link inside the home is gone, and the file it pointed at keeps its
+/// <c>research/PLAN_kimi_and_vibe_on_linux.md</c>; A1 spec §5; S-V10): the link inside the home is gone, and the file it pointed at keeps its
 /// bytes, its mode and its mtime — on a <c>0600</c> target and on a <c>0400</c> one.
 /// </summary>
 /// <remarks>

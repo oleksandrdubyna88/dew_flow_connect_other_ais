@@ -69,6 +69,7 @@ public sealed class NoTextLeavesTheCallerReaderTests
         [nameof(CallerTranscriptFixture.AnswerCall)] = new("two-repositories-one-session", f => f.AnswerCall(TranscriptFile.Main, f.CallIds(TranscriptFile.Main, "Edit")[1])),
         [nameof(CallerTranscriptFixture.CopyLineInto)] = new(C02, f => f.CopyLineInto(1, C02Agent)),
         [nameof(CallerTranscriptFixture.GrowOutputAcross)] = new(C02, f => f.GrowOutputAcross("8d01ee")),
+        [nameof(CallerTranscriptFixture.CopyAgentUnderName)] = new(C02, f => f.CopyAgentUnderName(C02Agent, "some words here")),
     };
 
     private static IReadOnlyList<FixtureCase> CasesOnDisk() =>

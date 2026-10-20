@@ -9,7 +9,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// The Linux teardown, in REAL processes (DL9 of <c>todo/PLAN_kimi_and_vibe_on_linux.md</c>; S-K6, S-K15, S-K16, S-K22, L-N2, L-N3; A3 §4, §10). A test host must never become a child subreaper — it would
+/// The Linux teardown, in REAL processes (DL9 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>; S-K6, S-K15, S-K16, S-K22, L-N2, L-N3; A3 §4, §10). A test host must never become a child subreaper — it would
 /// collect every other test's orphans — so the subreaper is a child of the test: <c>FakeCli supervise-tree</c> drives the product's <see cref="SupervisedTeardown"/> directly, <c>FakeCli shim-acp</c> runs the
 /// ACP client the way <c>--ask-acp</c> runs it (subreaper, <c>SIGTERM</c>/<c>SIGINT</c> into a token, the Kimi supervisor and its marker) against the scripted agent. Linux CI only; elsewhere they skip.
 /// </summary>
