@@ -87,6 +87,17 @@ test('S-N4: M-K12 keeps its question — (a) and the control read the REAL OS ho
   for (const spec of [a, b, control]) assert.deepEqual(spec.expect, { skill: CANARY.skillName, agentsMd: CANARY.word });
 });
 
+test('J2/G24: M-K12 (a) and its -p control keep the REAL OS home but name the cache of the owned root, so the native files of Kimi never land in the real ~/.cache', () => {
+  const arms = table().arms['M-K12'];
+  const direct = [arms[0], arms[2]].map((arm) => arm.setup(join(RUN, arm.arm), 1));
+
+  for (const spec of direct) {
+    const env = builtEnv({ home: slashed(spec.home), profile: slashed(spec.profile ?? ''), platform: 'linux', parent: { PATH: '/usr/bin', HOME: '/home/op' } });
+    assert.equal(env.HOME, '/home/op', 'HOME must stay real — the canary measurement needs it');
+    assert.equal(env.XDG_CACHE_HOME, `${slashed(rootOfHome(spec.home))}/cache`, 'the arm has no owned XDG_CACHE_HOME — Kimi extracts into the real ~/.cache');
+  }
+});
+
 test('S-N4: each run gets its OWN owned home, and the arms\' prompts and canaries are untouched', () => {
   const { arms, homes } = table();
 

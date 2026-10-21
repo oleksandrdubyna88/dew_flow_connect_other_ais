@@ -70,7 +70,7 @@ export const fileHash = (path) => sha256(readFileSync(path));
 export const isCredentialPath = (rel) => rel === 'credentials' || rel.startsWith('credentials/');
 
 /** A credential slot's name carries its hex (`kimi-code-env-<16 hex>.json`); the record keeps the shape and drops the slot (DN9: redacted). */
-const redactSlot = (rel) => rel.replaceAll(/[0-9a-f]{8,}/giu, '<hex>');
+export const redactSlot = (rel) => rel.replaceAll(/[0-9a-f]{8,}/giu, '<hex>');
 
 /** `lstat:<size>:<mode>:<mtime ms>` — a file recorded WITHOUT opening it; a rotated refresh token moves the size or the time. */
 function lstatShape(path) {
@@ -289,17 +289,20 @@ export function syncCredentials(from, to) {
 export class CredentialGuard {
   #real;
   #last;
+  #read;
   rotates = null; // unknown until a refresh of the real home has been seen
   events = [];
 
-  constructor(real) {
+  /** `read` is injected so a test proves WHEN the person's credential files are opened (S-N2's twin: never for an owned-only run). */
+  constructor(real, { read = credentialFingerprint } = {}) {
     this.#real = real;
-    this.#last = credentialFingerprint(real);
+    this.#read = read;
+    this.#last = read(real);
   }
 
   /** After a launch on the real home: learn whether the refresh token rotated. */
   afterRealRun(tag) {
-    const now = credentialFingerprint(this.#real);
+    const now = this.#read(this.#real);
     const fileMoved = JSON.stringify(now) !== JSON.stringify(this.#last);
     if (fileMoved) {
       this.rotates = !sameRefresh(now, this.#last);
@@ -318,18 +321,74 @@ export class CredentialGuard {
   /** After a launch on a copied home: if it refreshed and rotation is possible, the live pair goes back to the real home. */
   afterCopiedRun(home, tag) {
     if (!existsSync(join(home, 'credentials'))) return false;
-    const copy = credentialFingerprint(home);
+    const copy = this.#read(home);
     if (sameRefresh(copy, this.#last)) return false;
     const refreshedInCopy = Object.keys(copy).length > 0;
     if (refreshedInCopy && (this.rotates ?? true)) {
       this.events.push({ tag, where: 'copy', rotatedInCopy: true, writtenBack: syncCredentials(home, this.#real) });
-      this.#last = credentialFingerprint(this.#real);
+      this.#last = this.#read(this.#real);
       return true;
     }
     this.events.push({ tag, where: 'copy', rotatedInCopy: refreshedInCopy, writtenBack: [] });
     return false;
   }
 }
+
+/**
+ * A home's credential files by `lstat` ALONE — name, inode, size, mtime; no file is opened (J1 of the Opus judge on E1: an owned launch must not read
+ * the person's refresh token to learn that a refresh happened — a refresh rewrites the file, so its size or time moves). `list`/`stat` are injected.
+ */
+export function credentialShape(home, { list = readdirSync, stat = lstatSync } = {}) {
+  const dir = join(home, 'credentials');
+  if (!existsSync(dir)) return {};
+  return Object.fromEntries(list(dir).filter((n) => n.endsWith('.json')).sort((a, b) => a.localeCompare(b)).map((n) => {
+    const s = stat(join(dir, n));
+    return [n, `${s.ino}:${s.size}:${Math.round(s.mtimeMs)}`];
+  }));
+}
+
+/**
+ * The sign-in watch of one probe run. Every launch is watched by SHAPE (`credentialShape` — nothing opened). The content-reading
+ * `CredentialGuard` — which parses every credential file and hashes its refresh token — is built LAZILY, by `content()`, only when a copied-credentials
+ * (legacy) cell actually runs; once built, real-home runs feed it too, so the rotation is still learned. `read` is injected for the S-N2 twin.
+ */
+export class CredentialWatch {
+  #real;
+  #read;
+  #shape;
+  #last;
+  #content = null;
+  #events = [];
+
+  constructor(real, { read = credentialFingerprint, shape = credentialShape } = {}) {
+    this.#real = real;
+    this.#read = read;
+    this.#shape = shape;
+    this.#last = JSON.stringify(shape(real));
+  }
+
+  /** The content-reading guard — built on the first call, never before. */
+  content() {
+    this.#content ??= new CredentialGuard(this.#real, { read: this.#read });
+    return this.#content;
+  }
+
+  get rotates() { return this.#content?.rotates ?? null; }
+  get events() { return [...this.#events, ...(this.#content?.events ?? [])]; }
+
+  /** After a launch on the real home or an owned home: did the sign-in's files move (by shape)? Whether the token rotated is unknown here. */
+  afterRealRun(tag) {
+    const now = JSON.stringify(this.#shape(this.#real));
+    const moved = now !== this.#last;
+    if (moved) this.#events.push({ tag, where: 'real', refreshed: true, rotated: null });
+    this.#last = now;
+    const contentMoved = this.#content?.afterRealRun(tag) ?? false;
+    return moved || contentMoved;
+  }
+}
+
+/** The refusal of a cell that would COPY the person's sign-in (and so read it): not unless the person passed `--allow-copied-credentials`. */
+export const copiedCredentialsRefusal = (allowed) => (allowed ? '' : 'this cell copies the credentials of the person into a scratch home and reads them to keep the refresh token alive; it is refused unless --allow-copied-credentials is passed (a native-host series never passes it)');
 
 // ----------------------------------------------------------------------------------------------- configs and canaries
 

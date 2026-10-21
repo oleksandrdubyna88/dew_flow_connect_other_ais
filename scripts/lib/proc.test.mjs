@@ -4,9 +4,10 @@
 // Makes folders only under this user's own temp folder, and removes them; ends only the pid it started. Runs no real kimi.
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { after, test } from 'node:test';
 import { FLOCK, isKimi, linuxProcesses, lockState, parseProcStat, parseStartTime, waitForNoOtherKimi } from './proc.mjs';
 
@@ -306,3 +307,46 @@ test('a reused pid (same number, another start time) and an unreadable start tim
   assert.equal(await reused.run(), false);
   assert.equal(await unreadable.run(), false);
 });
+
+// G19 of the code gate on E1: lockState reported what flock(1) did NOT say. 75 is the one exit that means Held (-E 75); every other ending is Unknown and must name
+// itself - flock's own error exits (69 included) by their number, a flock killed by the timeout by its signal, a flock that could not start by the error code.
+test('G19: lockState names every ending flock(1) can have - 0 Free, 75 Held, any other exit by its own number (69 stays Unknown:69), a signal or a spawn error by its name', () => {
+  const file = join(base, 'fake-flock.lock');
+  writeFileSync(file, '');
+  const asked = [];
+  const answers = (result) => (_exe, args) => { asked.push(args); return result; };
+  const state = (result) => lockState(file, { flock: '/fake/flock', spawn: answers(result) });
+
+  assert.equal(state({ status: 0 }), 'Free');
+  assert.equal(state({ status: 75 }), 'Held');
+  assert.equal(state({ status: 69 }), 'Unknown:69', 'an exit that is not the conflict code was read as something else');
+  assert.equal(state({ status: 1 }), 'Unknown:1');
+  assert.equal(state({ status: null, signal: 'SIGTERM' }), 'Unknown:SIGTERM', 'the timeout killed flock: that is a signal, not "undefined"');
+  assert.equal(state({ status: null, error: { code: 'ENOENT' } }), 'Unknown:ENOENT');
+  assert.equal(state({ status: null }), 'Unknown:no-exit');
+  assert.deepEqual(asked[0], ['-n', '-E', '75', file, 'true']);
+});
+
+// ------------------------------------------------------------------------------------------ the shared identity vectors (G22)
+// The same cases the product's KimiIdentityVectorTests (src_mcp/tests) read: shared/kimi-identity-vectors.json. A process described by its exe link (or
+// argv[0] when the exe is hidden) and its comm must come out with the name the listing reads and the isKimi answer in the file - so a change to either
+// side's rule is red on that side, and a change to the file is red on both.
+const VECTORS = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'shared', 'kimi-identity-vectors.json'), 'utf8')).vectors;
+
+test('G22: the vector file is not empty and has unique ids (a loop over nothing proves nothing)', () => {
+  assert.ok(VECTORS.length >= 12);
+  assert.equal(new Set(VECTORS.map((v) => v.id)).size, VECTORS.length);
+});
+
+for (const v of VECTORS) {
+  test(`G22: shared Kimi identity - ${v.id}`, () => {
+    const machine = fakeProc().running(1, 0, '/sbin/init', 'init');
+    if (v.exe === null) machine.hidden(5000, 1, v.argv, v.comm);
+    else machine.running(5000, 1, v.exe, v.comm);
+
+    const entry = listed(machine).find((e) => e.pid === 5000);
+
+    assert.equal(entry.name, v.name, `the name the listing reads for ${v.id}`);
+    assert.equal(isKimi(entry), v.isKimi, `${v.id}: the probe's isKimi disagrees with shared/kimi-identity-vectors.json (name ${entry.name}, comm ${entry.comm})`);
+  });
+}

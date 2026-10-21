@@ -352,3 +352,8 @@ test('S-N17: --arms picks M-V7 arms by the name before the colon, so the free li
   assert.deepEqual(names.filter((n) => armWanted(n, [])), names, 'no filter = every arm');
   assert.deepEqual(names.filter((n) => armWanted(n, ['a'])), [names[0]], 'a does not match a2, a3 or a3c');
 });
+
+test('G18: armWanted treats a missing filter (null or undefined) as "every arm", not as a crash on .length', () => {
+  assert.equal(armWanted('a3: forced backend', undefined), true);
+  assert.equal(armWanted('a3: forced backend', null), true);
+});

@@ -10,9 +10,17 @@ import { fwd } from './vibe.mjs';
  * home): `ownedHome` makes `<runDir>/kh/home` beside an empty `os/`; `owned: true` puts the launch in the BUILT environment, and `profile` is the root's
  * `os/` so a direct launch redirects the OS home (and, with it, the cache folder beside `os/`, DL11).
  */
-function ownedSpec(ownedHome, runDir) {
-  const home = ownedHome(runDir);
-  return { home: home.path, owned: true, requireOwned: true, profile: join(rootOfHome(home.path), 'os'), notes: home.notes };
+export function ownedSpec(ownedHome, runDir) {
+  return ownedSpecFor(ownedHome(runDir));
+}
+
+/**
+ * The same fields for a home already made (`home`: { path, notes }) - the D19 cells share one home across launches, or make it with extras / a model id (G10: one
+ * enforcement pattern for every confinement-probe arm, so `ownedRefusal` judges them all). `realOsHome: true` keeps the REAL OS home (`profile: ''`) for the
+ * `kimi -p` arms that measure it; a shim arm never takes it (the shim redirects the OS home itself and refuses an arm that says otherwise).
+ */
+export function ownedSpecFor(home, { realOsHome = false } = {}) {
+  return { home: home.path, owned: true, requireOwned: true, profile: realOsHome ? '' : join(rootOfHome(home.path), 'os'), notes: home.notes };
 }
 
 /**

@@ -352,4 +352,4 @@ export function keyringSetup(arm, platform = process.platform, { scratch }) {
 }
 
 /** `--arms a3,a3c` (the Vibe probe): an arm runs when no filter is given, or when its name up to the first colon (`a3: forced backend …` → `a3`) is listed. */
-export const armWanted = (arm, filter) => filter.length === 0 || filter.includes(arm.split(':')[0]);
+export const armWanted = (arm, filter) => !filter || filter.length === 0 || filter.includes(arm.split(':')[0]);

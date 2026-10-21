@@ -214,9 +214,24 @@ test('S-N3: the Linux built environment names XDG_CACHE_HOME as the cache folder
   assert.equal(shim.XDG_CACHE_HOME, '/r/cache');
 });
 
-test('S-N3: with no OS-home redirect there is no os/ to protect and no cache variable; Windows never has one', () => {
-  assert.equal('XDG_CACHE_HOME' in builtEnv({ home: '/r/home', platform: 'linux', parent: { PATH: '/usr/bin' } }), false);
+// J2 of the Opus judge on E1: this test used to pin "no profile -> no cache variable", which let every launch with the REAL OS home (M-K12 (a) and its
+// control, N-K5 / M-K11c's `kimi --version`) extract Kimi's native files into the person's real ~/.cache. The cache is named whenever the home is an owned
+// `<root>/home`, with or without the OS-home redirect; a home that is not an owned one still gets none.
+test('J2: an owned <root>/home names XDG_CACHE_HOME even with no OS-home redirect (HOME stays the parent one); a home that is not <root>/home gets none; Windows never has one', () => {
+  const parent = { PATH: '/usr/bin', HOME: '/home/op' };
+  const real = builtEnv({ home: '/r/home', platform: 'linux', parent });
+  assert.equal(real.XDG_CACHE_HOME, '/r/cache', 'a launch on an owned home with the real OS home writes the native files of Kimi into the real ~/.cache of the person');
+  assert.equal(real.HOME, '/home/op', 'the real OS home is kept — M-K12 (a) measures it');
+  assert.equal('XDG_CACHE_HOME' in builtEnv({ home: '/somewhere/else', platform: 'linux', parent }), false, 'not an owned root: nothing to name');
   assert.equal('XDG_CACHE_HOME' in builtEnv({ home: 'C:/r/home', profile: 'C:/r/os', platform: 'win32', parent: {} }), false);
+});
+
+test('G0: an explicit cacheDir names the cache folder, over the derivations; the default keeps the derivation beside os/', () => {
+  const parent = { PATH: '/usr/bin' };
+  assert.equal(builtEnv({ home: '/r/home', profile: '/r/os', cacheDir: '/elsewhere/cache', platform: 'linux', parent }).XDG_CACHE_HOME, '/elsewhere/cache');
+  assert.equal(builtEnv({ home: '/x/home', cacheDir: '/elsewhere/cache', platform: 'linux', parent }).XDG_CACHE_HOME, '/elsewhere/cache', 'even for a home that is no owned root');
+  assert.equal(builtEnv({ home: '/r/home', profile: '/r/os', platform: 'linux', parent }).XDG_CACHE_HOME, '/r/cache');
+  assert.equal('XDG_CACHE_HOME' in builtEnv({ home: 'C:/r/home', cacheDir: 'C:/c', platform: 'win32', parent: {} }), false);
 });
 
 test('S-N3: an owned root of a Linux host also holds the cache folder beside os/ (owner-only), as KimiHome.MakeCache makes it; a Windows root does not', () => {
@@ -242,4 +257,30 @@ test('the ~/.agents canary is removed by its own exact paths only: a stranger\'s
   rmSync(stranger);
   removeAgentsCanary(plan);
   assert.equal(existsSync(plan.agents), false);
+});
+
+// J4 of the Opus judge on E1: the "does it exist" check ran at PLAN time, the write came later - a file the owner created in between was overwritten.
+test('J4: makeAgentsCanary never overwrites an AGENTS.md the owner created after the plan was made, and leaves nothing of its own behind', () => {
+  const osHome = join(base, 'os-home-race');
+  mkdirSync(osHome);
+  const plan = agentsCanaryPlan(osHome, { skillName: 'coai-probe-canary-ff22', word: 'GANNET-7' });
+  mkdirSync(plan.agents, { recursive: true });
+  writeFileSync(plan.agentsMd, 'the owner wrote this after the start check');
+
+  assert.throws(() => makeAgentsCanary(plan), /EEXIST|exists/u);
+
+  assert.equal(readFileSync(plan.agentsMd, 'utf8'), 'the owner wrote this after the start check', "the canary overwrote the owner's AGENTS.md");
+  assert.equal(existsSync(plan.skillDir), false, 'the canary skill it had already written was not taken back');
+});
+
+test('J4: makeAgentsCanary writes both files with an exclusive create - a skill file that appeared after the plan stops it and is left alone', () => {
+  const osHome = join(base, 'os-home-race2');
+  mkdirSync(osHome);
+  const plan = agentsCanaryPlan(osHome, { skillName: 'coai-probe-canary-ff23', word: 'GANNET-7' });
+  mkdirSync(plan.skillDir, { recursive: true });
+  writeFileSync(plan.skillFile, 'not ours');
+
+  assert.throws(() => makeAgentsCanary(plan), /exists/u);
+  assert.equal(readFileSync(plan.skillFile, 'utf8'), 'not ours');
+  assert.equal(existsSync(plan.agentsMd), false);
 });

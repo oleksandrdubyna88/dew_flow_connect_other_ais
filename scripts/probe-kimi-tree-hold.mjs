@@ -50,7 +50,7 @@ import { randomBytes } from 'node:crypto';
 import { minimalWindowsEnv } from './lib/vibe.mjs';
 import { DEFAULT_MODEL, KIMI_EXE, REAL_HOME, scratchRefusal } from './lib/kimi.mjs';
 import { credentialNames, disposeOwnedHome, makeOwnedHome, ownedRoot, shimEnv } from './lib/kimi-home.mjs';
-import { KILL_ARMS, armsRefusal, buildSchedule, defaultArms, isLiveArm, killRecord, killSignal, liveSurvivor, liveVerdict, nextRow, refusalText, survivorMarkers } from './lib/kimi-schedule.mjs';
+import { KILL_ARMS, armsRefusal, buildSchedule, defaultArms, isLiveArm, killRecord, killSignal, liveSurvivor, liveVerdict, nextRow, refusalText, survivorMarkers, survivorsOf } from './lib/kimi-schedule.mjs';
 import { FLOCK, isKimi, listProcesses, lockState, startTimeOfPid, waitForNoOtherKimi } from './lib/proc.mjs';
 
 const WINDOWS = process.platform === 'win32';
@@ -254,9 +254,11 @@ async function runOne(entry) {
   const exited = new Promise((resolve) => child.on('exit', (code) => resolve({ code, at: now() })));
   child.stdin.end(arm.prompt);
 
-  const seen = new Map(); // pid -> { comm, name }, every descendant of the shim ever listed
+  const seen = new Map(); // pid -> { comm, name, startTime }, every descendant of the shim ever listed
   const sample = () => {
-    for (const p of descendantsOf(child.pid, listProcesses())) seen.set(p.pid, { comm: p.comm ?? '', name: p.name });
+    // comm and name follow the latest listing (kimi renames its main thread); the START TIME is the one read when the descendant was first listed (J7: not 300 ms
+    // after the kill, when the pid may belong to another process) - an unread one is retried.
+    for (const p of descendantsOf(child.pid, listProcesses())) seen.set(p.pid, { comm: p.comm ?? '', name: p.name, startTime: seen.get(p.pid)?.startTime || startTimeOfPid(p.pid) });
   };
   const row = { arm: armName, n, label, ...(entry.after ? { pairedWith: entry.after } : {}), ...(survivorGoneAfterMs === undefined ? {} : { survivorGoneAfterMs }), killedAfterMs: 0, shim: { exit: null }, files: {}, descendants: [] };
 
@@ -354,7 +356,7 @@ async function watchAfterShim(row, exitedAt, homeFile, seen) {
  */
 async function recordOrphans(row, armName, markers, seen) {
   await sleep(300);
-  const survivors = [...seen.entries()].filter(([pid]) => alive(pid)).map(([pid, entry]) => ({ pid, ...entry, startTime: startTimeOfPid(pid) }));
+  const survivors = survivorsOf(seen, { alive, startTimeOf: startTimeOfPid });
   Object.assign(row, killRecord({ arm: armName, markers, survivors, listing: listProcesses() }));
 }
 

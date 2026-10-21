@@ -434,7 +434,40 @@ M-K12's arms changed shape because the shim always redirects the OS home (so an 
 (`kind: 'acp'`) on the owned home; (b) the redirected OS home runs through the shim, whose `<root>/os` is the empty folder; the control is `-p` on an owned home with the real OS home (it used to run on
 the person's own KIMI_CODE_HOME). The canary stays in the person's REAL `~/.agents`, written and removed by exact paths only (`makeAgentsCanary` / `removeAgentsCanary`: `rmSync` on named files,
 `rmdirSync` — never recursive — on named folders, a pre-existing `AGENTS.md` refused); a new test proves a stranger's file inside the canary folder survives and the removal fails loudly (break-it: a
-recursive delete: red, restored). Arms (a) and the control leave the OS home real on purpose, so Kimi's native-file extraction lands in the person's real `~/.cache` there (it is what the arm measures).
+recursive delete: red, restored). Arms (a) and the control leave the OS home real on purpose — `HOME` stays real because Kimi finds `~/.agents` through it, and that is what the arm measures. (First written: *so Kimi's native-file extraction lands in the person's real `~/.cache` there* — wrong; the cache folder is not the question, and since J2 below they name the owned root's `cache/`.)
+
+**Code gate and judge fixes (2026-10-21) — the Kimi probes' items.** The code gate (verdict *good enough*) and the Opus judge (*not ready: one blocker*) were accepted in full; this block is the
+Kimi-probe half (the host-facts script, `scripts/native/*` and `HostFactsMode.cs` are other hands'). Each behaviour fix was watched RED, fixed, GREEN, broken again on purpose and restored.
+
+- **J1 (the blocker) — an owned launch no longer reads a refresh token.** `probe-kimi-confinement.mjs` built `new CredentialGuard(REAL_HOME)` at start and called `afterRealRun` after every owned
+  launch; the guard's fingerprint parses every `credentials/*.json` and hashes the `refresh_token`. Now `lib/kimi.mjs` `CredentialWatch` watches by `credentialShape` (lstat: name, inode, size, mtime; nothing
+  opened) for every launch; the content-reading `CredentialGuard` is built LAZILY by `content()`, only for a copied-credentials (legacy) cell, and `copiedHome()` refuses such a cell unless
+  `--allow-copied-credentials` is passed (the series template never passes it; the refusal is an arm row *setup failed: this cell copies the credentials of the person …*, before any byte is copied). The S-N2
+  twin injects the reader: *the credential reader was called for the real home — a refresh token was read by an owned launch* (RED, 3 calls: construction and two launches; and *Expected 0, actual 1*
+  for the lazy case); break-it (build the guard in the constructor): red, restored. Rotation is unknown without reading (`rotates: null`), and says so in the record.
+- **J2 (with G0 and G24) — no Kimi launch writes into the person's real `~/.cache`.** `unixBuiltEnv` named `XDG_CACHE_HOME` only with an OS-home redirect (`kimi-home.test.mjs` pinned *no profile → no
+  variable*, now flipped). It now names `<root>/cache` whenever `home` is an owned `<root>/home`, profile or not, and takes an explicit `cacheDir` (G0; default derivation unchanged). That covers M-K12 arm (a)
+  and its `-p` control, N-K5's and M-K11c's `kimi --version` (`versionLaunch` builds `builtEnv({ home })`). RED: *a launch on an owned home with the real OS home writes the native files of Kimi into the
+  real ~/.cache of the person (actual undefined, expected '/r/cache')*, *the arm has no owned XDG_CACHE_HOME — Kimi extracts into the real ~/.cache* (M-K12 (a) and the control, HOME still real), and for
+  `cacheDir` *actual '/r/cache', expected '/elsewhere/cache'*; break-its (home derivation removed; `cacheDir` ignored): red, restored. **Does this change what M-K12 measures? No.** The arm asks whether Kimi finds
+  `~/.agents` through `HOME`, and `HOME` is still the real one; only the cache folder moved. (The corrected sentence replaces *it is what the arm measures* in Follow-up 2 above, which was wrong about the cache.)
+  Not done here: N-K0's `kimi --version` / `kimi acp --help` in the host-facts script, and its missing "no other kimi" guard — `scripts/lib/host-facts.mjs` is the other coder's.
+- **J4** — `makeAgentsCanary` writes both files with `{ flag: 'wx' }`; a file the owner made after the start check is never overwritten, and the skill it had already written is taken back (its own paths only).
+  RED: *Missing expected exception* (the canary overwrote `AGENTS.md`); break-it (flag removed): red, restored.
+- **J7** — the survivor's start time is read when a descendant is FIRST listed (`sample()` in `probe-kimi-tree-hold.mjs`) and must still match at the kill: `survivorsOf` in `lib/kimi-schedule.mjs` drops a pid
+  that now has another start time and keeps an unidentified one with `startTime: ''` (so `liveSurvivor` never picks it). RED: *pid 200 now has another start time - a different process … actual [[100,'T1'],[200,'T9'],[300,'T3']]*;
+  break-it (start time never compared): red, restored.
+- **G10** — the D19 cells (M-K11, M-K13, M-K9e, M-K7b) build their specs through `ownedSpecFor` in `lib/kimi-arms.mjs` like every other arm, so `requireOwned` and `ownedRefusal` judge them too; M-K13's two `-p` arms
+  keep the REAL OS home (`realOsHome`, `profile: ''`) as before. RED: *M-K11 owned home: junction + admitted, OK: not marked requireOwned*; break-it (`requireOwned` dropped): red, restored.
+- **G18** — `armWanted(arm, filter)` treats a missing filter as "every arm". RED: *TypeError: Cannot read properties of undefined (reading 'length')*.
+- **G19** — `lockState` (`lib/proc.mjs`) takes an injected `flock`/`spawn`. The finding said exit 69 became `Unknown:75`; it does not — 69 already reads `Unknown:69` and a test now pins it. What the new test did find
+  is a flock killed by the 10 s timeout, which read `Unknown:undefined`; it now reads `Unknown:SIGTERM` (a spawn error by its code, nothing at all as `Unknown:no-exit`). RED: *the timeout killed flock: that is a signal,
+  not "undefined" — actual 'Unknown:undefined'*; break-it: red, restored. (The lead should confirm this was the intended defect.)
+- **G22 — the Kimi identity contract.** `shared/kimi-identity-vectors.json` (process by `exe` / hidden-exe `argv` and `comm` → the name the listing reads → `isKimi`; 15 vectors) is read by `proc.test.mjs`
+  (`isKimi` over `linuxProcesses`) AND by the new `src_mcp/tests/KimiIdentityVectorTests.cs` (`ForeignKimiWatch.IsKimi` over `LinuxProcessListing`). Break-it, one side at a time: comm compared ignoring case in the
+  probe → only *comm-is-case-sensitive: the probe's isKimi disagrees with shared/kimi-identity-vectors.json* (node) red; the same change in `ForeignKimi.cs` → only the C# theory red; both restored.
+- **J8 (the slot-hex redaction only)** — one `redactSlot` exported from `lib/kimi.mjs` replaces the copies in `manifest` and `lib/kimi-schedule.mjs` (`host-facts.mjs` imports it, the other coder's change). Pinned by
+  a test; break-it (`{9,}`): red, restored. The `FAIL_BACKEND` import and the keyring DAEMON rule are not mine.
 
 **Left for the lead (not run by the coder, by instruction).**
 

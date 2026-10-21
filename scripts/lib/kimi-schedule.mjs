@@ -11,6 +11,7 @@
 // Reads names and modification times of the lock folder, never a content.
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { redactSlot } from './kimi.mjs';
 import { isKimi } from './proc.mjs';
 
 /**
@@ -57,14 +58,11 @@ export function buildSchedule(armNames, repeats) {
   }));
 }
 
-/** A credential slot's / lock key's hex is not recorded (DN9): runs of 8+ hex digits become `<hex>`. */
-const redacted = (name) => name.replaceAll(/[0-9a-f]{8,}/giu, '<hex>');
-
 /** The survivor markers (`<key>.survivors.json`, KimiCredentialsLock.MarkerPathFor) in a lock folder: name (hex redacted) and mtime — no content. */
 export function survivorMarkers(locksDir) {
   if (!existsSync(locksDir)) return [];
   return readdirSync(locksDir).filter((n) => n.endsWith('.survivors.json')).sort((a, b) => a.localeCompare(b))
-    .map((n) => ({ name: redacted(n), mtimeMs: Math.round(statSync(join(locksDir, n)).mtimeMs) }));
+    .map((n) => ({ name: redactSlot(n), mtimeMs: Math.round(statSync(join(locksDir, n)).mtimeMs) }));
 }
 
 /** `survivor` (`{ pid, comm, name, startTime? }`, as seen while it ran) with its NEW parent, read from the `listing` taken after the kill. */
@@ -138,5 +136,17 @@ export function refusalText(stdout, stderr) {
   } catch {
     fromReport = '';
   }
-  return redacted(fromReport || String(stderr ?? '')).slice(0, 1500);
+  return redactSlot(fromReport || String(stderr ?? '')).slice(0, 1500);
+}
+
+/**
+ * The descendants `seen` (pid -> { comm, name, startTime }, the start time read when each was FIRST listed) that are still the SAME process now: alive, with the
+ * start time they had. A pid reused in the moment between the kill and this read is another process and is dropped (J7); a descendant whose start time could not
+ * be read at first sight stays, without identity (`startTime: ''` - liveSurvivor then never picks it).
+ */
+export function survivorsOf(seen, { alive, startTimeOf }) {
+  return [...seen.entries()].filter(([pid]) => alive(pid)).flatMap(([pid, entry]) => {
+    const unchanged = !entry.startTime || startTimeOf(pid) === entry.startTime;
+    return unchanged ? [{ pid, ...entry }] : [];
+  });
 }

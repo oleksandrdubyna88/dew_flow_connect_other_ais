@@ -161,11 +161,11 @@ export async function waitForNoOtherKimi(label, { list = listProcesses, sleep = 
  * instead: `flock -n -E 75 <file> true` tries an EXCLUSIVE lock without waiting — 75 means another holder would keep a second
  * taker out. The try itself holds the lock for the instant `true` runs, the same window the Windows open had.
  */
-export function lockState(path) {
+export function lockState(path, { flock = FLOCK, spawn = spawnSync } = {}) {
   if (!existsSync(path)) return 'Absent';
-  const r = spawnSync(FLOCK, ['-n', '-E', '75', path, 'true'], { encoding: 'utf8', timeout: 10_000 });
+  const r = spawn(flock, ['-n', '-E', '75', path, 'true'], { encoding: 'utf8', timeout: 10_000 });
   if (r.status === 0) return 'Free';
-  return r.status === 75 ? 'Held' : `Unknown:${r.status ?? r.error?.code}`;
+  return r.status === 75 ? 'Held' : `Unknown:${r.status ?? r.error?.code ?? r.signal ?? 'no-exit'}`;
 }
 
 /**

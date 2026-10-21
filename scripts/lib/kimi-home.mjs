@@ -177,11 +177,11 @@ export function realHomeVerdict(diff, { owned }) {
  * exactly `KIMI_CODE_HOME` and `KIMI_CODE_NO_AUTO_UPDATE=1` (documented by Kimi: "fully disable the update preflight",
  * docs/en/configuration/env-vars.md). `pin: false` is M-K13's control; `profile` redirects `USERPROFILE`/`HOME`/
  * `HOMEDRIVE`/`HOMEPATH` to a folder — M-K12 (b)'s question whether that closes `~/.agents/*` (on Linux `HOME` alone, DL11).
- * `personsBin` puts the person's tool folder first on PATH. `platform` picks the arm (this process's by default) and `parent`
+ * `personsBin` puts the person's tool folder first on PATH. `cacheDir` names `XDG_CACHE_HOME` outright (Linux; G0 of the code gate on E1). `platform` picks the arm (this process's by default) and `parent`
  * is the environment the minimal names are taken from.
  */
-export function builtEnv({ home, pin = true, profile = '', personsBin = '', platform = process.platform, parent = process.env }) {
-  return platform === 'win32' ? windowsBuiltEnv({ home, pin, profile, personsBin, parent }) : unixBuiltEnv({ home, pin, profile, personsBin, parent });
+export function builtEnv({ home, pin = true, profile = '', personsBin = '', cacheDir = '', platform = process.platform, parent = process.env }) {
+  return platform === 'win32' ? windowsBuiltEnv({ home, pin, profile, personsBin, parent }) : unixBuiltEnv({ home, pin, profile, personsBin, cacheDir, parent });
 }
 
 /**
@@ -189,17 +189,29 @@ export function builtEnv({ home, pin = true, profile = '', personsBin = '', plat
  * `HOME` alone (Kimi derives its XDG folders from it — the Unix minimal set carries no XDG_*); the person's bin first on a
  * `:`-separated PATH. No Windows name, and no NoDefaultCurrentDirectoryInExePath (a Windows-only variable).
  */
-function unixBuiltEnv({ home, pin, profile, personsBin, parent }) {
+function unixBuiltEnv({ home, pin, profile, personsBin, cacheDir, parent }) {
   const minimal = minimalEnv('linux', parent);
+  const cache = cacheFolder({ home, profile, cacheDir });
   return {
     ...minimal,
     KIMI_CODE_HOME: home,
     ...(pin && { KIMI_CODE_NO_AUTO_UPDATE: '1' }),
     ...(personsBin && { PATH: [personsBin, minimal.PATH ?? ''].filter(Boolean).join(':') }),
-    // DL11: Kimi extracts ~2 MB of native files per launch into $XDG_CACHE_HOME, else $HOME/.cache — inside os/, which must stay empty. So the
-    // cache folder BESIDE os/ is named, as KimiEnvironment.cs:34/:94 does (KimiPlaces.Cache = <root>/cache). No redirect, no os/ to protect.
-    ...(profile && { HOME: profile, XDG_CACHE_HOME: posix.join(posix.dirname(profile), OWNED_CACHE) }),
+    ...(profile && { HOME: profile }),
+    // DL11: Kimi extracts ~2 MB of native files per launch into $XDG_CACHE_HOME, else $HOME/.cache — inside os/, or, with the REAL OS home kept (M-K12 (a),
+    // its control, `kimi --version`), the person's own ~/.cache. So the cache folder BESIDE os/ is named, as KimiEnvironment.cs does (KimiPlaces.Cache = <root>/cache).
+    ...(cache && { XDG_CACHE_HOME: cache }),
   };
+}
+
+/**
+ * Where `XDG_CACHE_HOME` points: `cacheDir` when a caller names it (G0), else the folder beside the OS-home redirect's `os/`, else — with the
+ * real OS home kept — the `cache/` beside an owned `<root>/home` (J2: it used to be none, so those launches wrote into the person's ~/.cache). '' = none.
+ */
+function cacheFolder({ home, profile, cacheDir }) {
+  if (cacheDir) return cacheDir;
+  if (profile) return posix.join(posix.dirname(profile), OWNED_CACHE);
+  return posix.basename(home ?? '') === OWNED_HOME ? posix.join(posix.dirname(home), OWNED_CACHE) : '';
 }
 
 function windowsBuiltEnv({ home, pin, profile, personsBin, parent }) {
@@ -261,9 +273,22 @@ export function makeAgentsCanary(plan) {
   if (!plan.madeAgentsMd) throw new Error(`${plan.agentsMd} already exists — the canary would edit the person's own file; refusing`);
   if (existsSync(plan.skillDir)) throw new Error(`${plan.skillDir} already exists; refusing`);
   mkdirSync(plan.skillDir, { recursive: true });
-  writeFileSync(plan.skillFile, `---\nname: ${plan.skillName}\ndescription: A probe skill. Mention its name when asked which skills you have.\n---\nSay ${plan.word}-S.\n`);
-  writeFileSync(plan.agentsMd, `# Probe\n\nBegin every answer with the word ${plan.word}.\n`);
+  writeFileSync(plan.skillFile, `---\nname: ${plan.skillName}\ndescription: A probe skill. Mention its name when asked which skills you have.\n---\nSay ${plan.word}-S.\n`, { flag: 'wx' });
+  try {
+    writeFileSync(plan.agentsMd, `# Probe\n\nBegin every answer with the word ${plan.word}.\n`, { flag: 'wx' });
+  } catch (e) {
+    takeBackSkill(plan); // only what this call wrote; the AGENTS.md that stopped it is not ours
+    throw e;
+  }
   return [plan.skillFile, plan.agentsMd];
+}
+
+/** The skill file and folder `makeAgentsCanary` wrote, and the `skills/` and `.agents/` folders only when this plan made them and they are empty. */
+function takeBackSkill(plan) {
+  rmSync(plan.skillFile, { force: true });
+  rmdirSync(plan.skillDir);
+  if (plan.madeSkills && existsSync(plan.skills) && readdirSync(plan.skills).length === 0) rmdirSync(plan.skills);
+  if (plan.madeAgents && existsSync(plan.agents) && readdirSync(plan.agents).length === 0) rmdirSync(plan.agents);
 }
 
 /** Removes exactly what makeAgentsCanary made and verifies it is gone; returns what was removed. */

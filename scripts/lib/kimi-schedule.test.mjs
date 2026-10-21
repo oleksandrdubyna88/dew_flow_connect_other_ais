@@ -7,7 +7,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, utimesSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
-import { KILL_ARMS, armsRefusal, buildSchedule, defaultArms, isKilledArm, killRecord, killSignal, liveSurvivor, liveVerdict, nextRow, orphanRecord, refusalText, survivorMarkers } from './kimi-schedule.mjs';
+import { KILL_ARMS, armsRefusal, buildSchedule, defaultArms, isKilledArm, killRecord, killSignal, liveSurvivor, liveVerdict, nextRow, orphanRecord, refusalText, survivorMarkers, survivorsOf } from './kimi-schedule.mjs';
 
 const base = mkdtempSync(join(realpathSync.native(tmpdir()), 'testsToDelete-kimi-schedule-'));
 after(() => rmSync(base, { recursive: true, force: true }));
@@ -173,4 +173,21 @@ test('S-N18 live: a survivor\'s start time rides in its record', () => {
 
   assert.deepEqual(orphanRecord({ pid: 321, comm: 'MainThread', name: 'kimi', startTime: '777' }, listing),
     { pid: 321, comm: 'MainThread', exe: 'kimi', startTime: '777', newParent: { pid: 1, comm: 'systemd', exe: 'systemd' } });
+});
+
+// J7 of the Opus judge on E1: recordOrphans read each survivor's start time at the KILL, 300 ms after it, from whatever held the pid by then - a pid reused in
+// that window was recorded as the killed arm's orphan and, being a live kimi, could be the one the live variant leaves alone. The start time is now read when the
+// descendant is FIRST listed and must still match at the kill.
+test('J7: a pid reused between first sight and the kill is not a survivor; one whose start time is unchanged is, and an unread first start time stays without identity', () => {
+  const seen = new Map([
+    [100, { comm: 'MainThread', name: 'kimi', startTime: 'T1' }],
+    [200, { comm: 'MainThread', name: 'kimi', startTime: 'T2' }],
+    [300, { comm: 'rg', name: 'rg', startTime: '' }],
+    [400, { comm: 'rg', name: 'rg', startTime: 'T4' }],
+  ]);
+  const startTimes = { 100: 'T1', 200: 'T9', 300: 'T3', 400: 'T4' };
+
+  const survivors = survivorsOf(seen, { alive: (pid) => pid !== 400, startTimeOf: (pid) => startTimes[pid] });
+
+  assert.deepEqual(survivors.map((s) => [s.pid, s.startTime]), [[100, 'T1'], [300, '']], 'pid 200 now has another start time - a different process; 400 is gone; 300 was never identified');
 });

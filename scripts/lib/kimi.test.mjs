@@ -8,7 +8,7 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, rmdirSync, 
 import { homedir, tmpdir } from 'node:os';
 import { join, parse } from 'node:path';
 import { after, test } from 'node:test';
-import { CredentialGuard, canaryCommand, copyHome, homeBin, isCredentialPath, kimiExecutable, manifest, manifestDiff, parseStreamJson, scratchRefusal, scrubHome, withoutTrailingSeparators } from './kimi.mjs';
+import { CredentialGuard, CredentialWatch, canaryCommand, copiedCredentialsRefusal, copyHome, credentialFingerprint, credentialShape, redactSlot, homeBin, isCredentialPath, kimiExecutable, manifest, manifestDiff, parseStreamJson, scratchRefusal, scrubHome, withoutTrailingSeparators } from './kimi.mjs';
 
 const WINDOWS = process.platform === 'win32';
 const base = mkdtempSync(join(realpathSync.native(tmpdir()), 'testsToDelete-kimi-scratch-test-'));
@@ -238,4 +238,62 @@ test('S-N2: `skip` makes more paths lstat-only without ever un-protecting creden
   assert.equal(isCredentialPath('credentials/kimi-code.json'), true);
   assert.equal(isCredentialPath('credentials-old/x'), false);
   assert.equal(isCredentialPath('config.toml'), false);
+});
+
+// ------------------------------------------------------------------------------------------------- the sign-in watch: shape for owned launches (J1)
+// The Opus judge's blocker on E1: the probe built `new CredentialGuard(REAL_HOME)` at start, and its constructor parses every credentials/*.json and
+// hashes the refresh token — then again after EVERY owned launch. An owned launch now watches the sign-in by lstat SHAPE; the content-reading guard is
+// built only when a copied-credentials (legacy) cell runs. `read` is injected, so S-N2's twin proves when the reader is called.
+
+test('S-N2 twin: an owned-only run never calls the credential reader for the real home, yet still sees the sign-in move', () => {
+  const real = fakeKimiHome('watch-owned', ['kimi-code-env-x.json']);
+  const opened = [];
+  const watch = new CredentialWatch(real, { read: (home) => { opened.push(home); return {}; } });
+
+  assert.equal(watch.afterRealRun('quiet'), false, 'nothing moved');
+  writeFileSync(join(real, 'credentials', 'kimi-code-env-x.json'), '{"refresh_token":"SECRET-WORD-ROTATED-AND-LONGER"}');
+  assert.equal(watch.afterRealRun('refreshed'), true, 'a rewritten credential file is seen by its shape');
+
+  assert.deepEqual(opened, [], 'the credential reader was called for the real home — a refresh token was read by an owned launch');
+  assert.equal(watch.rotates, null, 'rotation is unknown without reading, and says so');
+  assert.deepEqual(watch.events, [{ tag: 'refreshed', where: 'real', refreshed: true, rotated: null }]);
+  assert.equal(JSON.stringify(watch.events).includes('SECRET-WORD'), false);
+});
+
+test('the content guard is built lazily by content(), once, and a built guard also hears the real-home runs', () => {
+  const real = homeWith('watch-lazy', 'R1');
+  const opened = [];
+  const read = (home) => { opened.push(home); return credentialFingerprint(home); };
+  const watch = new CredentialWatch(real, { read });
+  assert.equal(opened.length, 0);
+
+  const guard = watch.content();
+  assert.equal(opened.length, 1, 'built on demand: one read of the real home');
+  assert.equal(watch.content(), guard, 'the same guard on a second call');
+
+  writeFileSync(join(real, 'credentials', 'kimi.json'), JSON.stringify({ refresh_token: 'R2', access_token: 'b', expires_at: 2 }));
+  assert.equal(watch.afterRealRun('r'), true);
+  assert.equal(watch.rotates, true, 'with the guard built, a real-home refresh still teaches whether the token rotates');
+});
+
+test('a cell that would copy the person\'s sign-in is refused unless --allow-copied-credentials was passed', () => {
+  assert.match(copiedCredentialsRefusal(false), /--allow-copied-credentials/u);
+  assert.equal(copiedCredentialsRefusal(true), '');
+});
+
+test('credentialShape lists names with inode, size and mtime, opens nothing, and is empty for a home with no credentials/', () => {
+  const home = fakeKimiHome('shape', ['b.json', 'a.json']);
+  writeFileSync(join(home, 'credentials', 'note.txt'), 'not a credential file');
+  const s = credentialShape(home);
+  assert.deepEqual(Object.keys(s), ['a.json', 'b.json']);
+  assert.match(s['a.json'], /^\d+:\d+:\d+$/u);
+  assert.deepEqual(credentialShape(join(base, 'no-such-home')), {});
+});
+
+// J8: one slot-hex redaction for the manifest, the survivor markers and the refusal text (it was spelled three times).
+test('J8: redactSlot turns a run of 8 or more hex digits into <hex> and leaves shorter runs and words alone', () => {
+  assert.equal(redactSlot('kimi-code-env-0123456789abcdef.json'), 'kimi-code-env-<hex>.json');
+  assert.equal(redactSlot('0123ABCD.survivors.json'), '<hex>.survivors.json');
+  assert.equal(redactSlot('kimi-code-env-x.json'), 'kimi-code-env-x.json');
+  assert.equal(redactSlot('abc1234.json'), 'abc1234.json', 'seven digits is not a slot');
 });

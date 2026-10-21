@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import { files, fwd } from './vibe.mjs';
 import { mcpJson, trustInHome } from './kimi.mjs';
 import { inventory, modelAlias, outputTokens, parseUsageLine } from './kimi-home.mjs';
+import { ownedSpecFor } from './kimi-arms.mjs';
 
 export const D19_CELLS = ['M-K11', 'M-K11c', 'M-K12', 'M-K13', 'M-K9e', 'M-K7b', 'M-K5b', 'M-K11b'];
 
@@ -34,8 +35,7 @@ export function d19Arms(ctx) {
         arm: 'owned home: junction + admitted, OK',
         setup(runDir) {
           const workdir = workWithNotes(runDir);
-          const home = ownedHome(runDir);
-          return { workdir, home: home.path, owned: true, ...OK, notes: home.notes };
+          return { workdir, ...ownedSpecFor(ownedHome(runDir)), ...OK };
         },
       },
       {
@@ -43,9 +43,8 @@ export function d19Arms(ctx) {
         setup(runDir, n) {
           const workdir = join(runDir, 'work');
           write(join(workdir, 'notes.txt'), `the marker is GULL-${n}0${n}\n`);
-          const home = ownedHome(runDir);
           return {
-            workdir, home: home.path, owned: true, expect: { grepMarker: `GULL-${n}0${n}`, globName: 'notes.txt' }, notes: home.notes,
+            workdir, ...ownedSpecFor(ownedHome(runDir)), expect: { grepMarker: `GULL-${n}0${n}`, globName: 'notes.txt' },
             prompt: 'Use the Grep tool with pattern GULL in the current folder and output_mode content; then use the Glob tool with pattern *.txt '
               + 'in the current folder. Reply on one line with the text Grep found and the file names Glob found; write FAILED for a tool that errored.',
           };
@@ -70,7 +69,7 @@ export function d19Arms(ctx) {
         setup(runDir, n, shared) {
           const workdir = workWithNotes(runDir);
           const home = shared.home ?? (shared.home = ownedHome(runDir));
-          return { workdir, home: home.path, owned: true, versionAround: true, ...OK, notes: `${home.notes}; launch ${n} on the same home` };
+          return { workdir, ...ownedSpecFor(home), versionAround: true, ...OK, notes: `${home.notes}; launch ${n} on the same home` };
         },
       },
       {
@@ -78,8 +77,7 @@ export function d19Arms(ctx) {
         control: true,
         setup(runDir) {
           const workdir = workWithNotes(runDir);
-          const home = ownedHome(runDir);
-          return { workdir, home: home.path, owned: true, pin: false, versionAround: true, ...OK, notes: home.notes };
+          return { workdir, ...ownedSpecFor(ownedHome(runDir)), pin: false, versionAround: true, ...OK };
         },
       },
       // Under `kimi acp` the preflight did not run at all (the first pass, 2026-10-13: `updates/` absent with AND without the
@@ -90,8 +88,7 @@ export function d19Arms(ctx) {
         control: true,
         setup(runDir) {
           const workdir = workWithNotes(runDir);
-          const home = ownedHome(runDir);
-          return { workdir, home: home.path, owned: true, pin, kind: 'prompt', versionAround: true, ...OK, notes: home.notes };
+          return { workdir, ...ownedSpecFor(ownedHome(runDir), { realOsHome: true }), pin, kind: 'prompt', versionAround: true, ...OK };
         },
       })),
     ],
@@ -108,7 +105,7 @@ export function d19Arms(ctx) {
         const canaries = { ...projectKit(workdir, runDir), ...extendedKit(workdir, runDir, write) };
         const home = ownedHome(runDir);
         const notes = a.trust ? `${home.notes}; trust entry ${trustInHome(home.path, workdir).split(/[\\/]/u).at(-1)}` : home.notes;
-        return { workdir, home: home.path, owned: true, prompt: KIT_PROMPT, expect: { ...KIT_EXPECT, ...EXTENDED_EXPECT }, canaries, notes };
+        return { workdir, ...ownedSpecFor(home), prompt: KIT_PROMPT, expect: { ...KIT_EXPECT, ...EXTENDED_EXPECT }, canaries, notes };
       },
     })),
 
@@ -120,7 +117,7 @@ export function d19Arms(ctx) {
         const workdir = workWithNotes(runDir);
         // The home's coai-written config carries THIS id's model block — a home written for k3-256k refuses any other id (exit 70).
         const home = ownedHome(runDir, [], id);
-        return { workdir, home: home.path, owned: true, model: id, deadline: 180, ...OK, notes: home.notes };
+        return { workdir, ...ownedSpecFor(home), model: id, deadline: 180, ...OK };
       },
     })),
   };

@@ -73,7 +73,7 @@ import { fileURLToPath } from 'node:url';
 import { resolved } from '../.github/scripts/lib/resolved.mjs';
 import { files, fwd, pythonCommand, run } from './lib/vibe.mjs';
 import {
-  CredentialGuard, DEFAULT_MODEL, KIMI_EXE, REAL_HOME, acpTurn, copyHome, fileHash, hooksToml, inWire, junction, manifest, manifestDiff, mcpJson,
+  CredentialWatch, DEFAULT_MODEL, KIMI_EXE, REAL_HOME, acpTurn, copiedCredentialsRefusal, copyHome, fileHash, hooksToml, inWire, junction, manifest, manifestDiff, mcpJson,
   ownedRefusal, parseStreamJson, promptMode, rootOfHome, scratchRefusal, scrubHome, sessionFacts, sha256, shimArgs, shimRefusal, trustInHome,
 } from './lib/kimi.mjs';
 import { table } from './lib/kimi-report.mjs';
@@ -92,6 +92,8 @@ const flag = (name, fallback) => {
 };
 const ALL_CELLS = ['M-K1', 'M-K2', 'M-K3', 'M-K4', 'M-K5', 'M-K6', 'M-K7', 'M-K8', 'M-K8b', 'M-K9', 'M-K10', ...D19_CELLS];
 const allowAgentsCanary = argv.includes('--allow-agents-canary');
+// The legacy cells that COPY the person's sign-in into a scratch home (and read it to keep the refresh token alive) run only behind this flag; a native-host series never passes it (J1).
+const allowCopiedCredentials = argv.includes('--allow-copied-credentials');
 const admitFlag = flag('--admit', '').split(',').filter(Boolean);
 /** `--arms a,b` runs only the arms whose name contains one of the substrings — a re-run of one arm, never a new cell. */
 const armFilter = flag('--arms', '').split(',').filter(Boolean);
@@ -105,7 +107,7 @@ const repeats = Number.parseInt(flag('--repeats', '3'), 10);
 const cells = flag('--cells', ALL_CELLS.join(',')).split(',').filter(Boolean);
 const unknown = cells.filter((c) => !ALL_CELLS.includes(c));
 if (unknown.length > 0 || !Number.isInteger(repeats) || repeats <= 0 || admitFlag.some((c) => !CANDIDATES.includes(c))) {
-  console.error(`usage: probe-kimi-confinement.mjs [--shim <exe>] [--kimi <exe>] [--scratch <dir>] [--repeats N] [--model <id>] [--cells ${ALL_CELLS.join(',')}] [--admit ${CANDIDATES.join(',')}] [--allow-agents-canary]`);
+  console.error(`usage: probe-kimi-confinement.mjs [--shim <exe>] [--kimi <exe>] [--scratch <dir>] [--repeats N] [--model <id>] [--cells ${ALL_CELLS.join(',')}] [--admit ${CANDIDATES.join(',')}] [--allow-agents-canary] [--allow-copied-credentials]`);
   process.exit(65);
 }
 // M-K12 writes a canary skill and an AGENTS.md line into the person's REAL ~/.agents (removed in the finally). Never by accident.
@@ -151,6 +153,8 @@ const copiedHomes = [];
  * `<scratch>/h<n>/os`. `at` places the HOME elsewhere (the deep arm) — it must be `<root>/home`, and its `os` is made beside it.
  */
 function copiedHome(options = {}, at = '') {
+  const refusal = options.credentials === false ? '' : copiedCredentialsRefusal(allowCopiedCredentials);
+  if (refusal) throw new Error(refusal);
   const home = at || ownedRoot(join(scratch, `h${++homes}`)).home;
   if (at) ownedRoot(rootOfHome(at));
   copyHome(REAL_HOME, home, options);
@@ -373,7 +377,8 @@ function gitInit(workdir) {
 
 // ------------------------------------------------------------------------------------------------------------ launching
 
-const guard = reparse ? null : new CredentialGuard(REAL_HOME);
+// By SHAPE (lstat) for every launch; the content-reading guard exists only if a copied-credentials cell runs (--allow-copied-credentials) — lib/kimi.mjs CredentialWatch.
+const watch = reparse ? null : new CredentialWatch(REAL_HOME);
 
 function childEnv(spec) {
   // The shim's own environment on an owned root (E4.3): the runtime's — the OS-home redirect and the person's bin first on PATH included.
@@ -407,7 +412,7 @@ async function launch(runDir, tag, spec, load = '') {
   const versionBefore = spec.versionAround ? versionLaunch(spec.home, join(runDir, `version-before${tag}`), childEnv(spec)) : null;
   // A home whose credentials ARE the person's (a junction, M-K8b, every D19 home) is watched as the real home: nothing is synced or written back.
   const copiedCredentials = Boolean(spec.home) && !spec.sharedCredentials && !spec.owned;
-  if (copiedCredentials) guard.beforeCopiedRun(spec.home, `${basename(runDir)}${tag}`);
+  if (copiedCredentials) watch.content().beforeCopiedRun(spec.home, `${basename(runDir)}${tag}`);
   const t0 = performance.now();
   launches++;
   console.error(`[probe] launch ${launches} (${kind}): ${basename(runDir)}${tag} …`);
@@ -431,7 +436,7 @@ async function launch(runDir, tag, spec, load = '') {
   }
   writeFileSync(join(runDir, `stdout${tag}.json`), r.stdout ?? '');
   const seconds = Math.round((performance.now() - t0) / 100) / 10;
-  const refreshed = copiedCredentials ? guard.afterCopiedRun(spec.home, `${basename(runDir)}${tag}`) : guard.afterRealRun(`${basename(runDir)}${tag}`);
+  const refreshed = copiedCredentials ? watch.content().afterCopiedRun(spec.home, `${basename(runDir)}${tag}`) : watch.afterRealRun(`${basename(runDir)}${tag}`);
   const report = parseReport(kind, r.stdout ?? '');
   const session = sessionFacts(home, report.sessionId);
   const sessionLogPath = join(runDir, `session-log${tag}.txt`);
@@ -679,14 +684,14 @@ try {
   const vendorWritten = /^(sessions\/|session_index\.jsonl$|workspaces\.json$|logs\/|user-history\/|telemetry\/|cache\/|credentials\/|updates\/|workspace-trust\/|file-history\/)/u;
   const realHome = { changes: diff.length, vendorWritten: diff.filter((d) => vendorWritten.test(d.path)).map((d) => `${d.change} ${d.path}`),
     other: diff.filter((d) => !vendorWritten.test(d.path)).map((d) => `${d.change} ${d.path}`) };
-  const credentials = { rotates: guard.rotates, events: guard.events };
+  const credentials = { rotates: watch.rotates, events: watch.events };
   // One record per invocation into this scratch: a later `--cells` run adds its own rather than overwriting the first one's.
   const agents = { before: agentsBefore, after: agentsAfter, identical: JSON.stringify(agentsBefore) === JSON.stringify(agentsAfter) };
   const invocation = { started: results.started, finished: new Date().toISOString(), cells, launches, credentials, scrubbed, realHome, disposed, agents, admitted: ADMITTED, stopped };
   results = { ...results, launches: (results.launches ?? 0) + launches, finished: invocation.finished, credentials, scrubbed, realHome, disposed, agents, stopped, invocations: [...(results.invocations ?? []), invocation] };
   writeFileSync(resultsPath, JSON.stringify(results, null, 2));
   console.error(`[probe] real home: ${realHome.changes} changed paths, ${realHome.other.length} outside Kimi's own stores${realHome.other.length ? `: ${realHome.other.join(', ')}` : ''}`);
-  console.error(`[probe] credentials: rotates=${guard.rotates}; ${guard.events.length} events; copies scrubbed: ${scrubbed.length}`);
+  console.error(`[probe] credentials: rotates=${watch.rotates}; ${watch.events.length} events; copies scrubbed: ${scrubbed.length}`);
   console.error(`[probe] owned homes disposed: ${disposed.length}; junction-first ok: ${disposed.filter((d) => d.homeGone && d.targetIntact).length}; errors: ${disposed.filter((d) => d.error).map((d) => `${d.home}: ${d.error}`).join('; ') || 'none'}`);
   console.error(`[probe] ~/.agents: ${agents.before === null ? 'absent before' : `${agents.before.length} files before`}, ${agents.after === null ? 'absent after' : `${agents.after.length} files after`} — ${agents.identical ? 'identical' : 'DIFFERENT'}`);
 }
