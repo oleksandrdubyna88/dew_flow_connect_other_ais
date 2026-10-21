@@ -439,6 +439,7 @@ written — the prediction precedes every observation, including an exploratory 
 4. **Q5's Windows figure was an observation made before the prediction was written** (plan defect 4). Only the WSL figure was a real prediction.
 5. **The check of three rounds per side was weaker than planned.** A second script, not the harness, recomputed the window counts for rounds at the 10th, 50th and 90th percentile. Nobody read the lines. The E1 RESULTS file says so.
 6. **The follow-up #851 changed published fixtures.** It re-cut c12, c17 and c19 so that every kept write call has its `tool_result`; added per-case `checkouts` to `manifest.json`; widened the model-ref vocabulary with seven `[1m]` ids and re-cut eight cases; and updated `ApprovedAllowlistSha256`. Its record is [PLAN_e1_fixtures_keep_the_write_results.md](PLAN_e1_fixtures_keep_the_write_results.md).
+7. **The torn-tail frequency under heavy writing was not measured to a conclusion.** E1 sampled 0 torn last lines in 9 379 reads (4 107 on Windows, 5 272 on WSL). That is "never seen", not "cannot happen". `TornTailCountsAsPartial` stays `false`.
 
 The check boxes in *Definition of Done* above were not ticked as work landed. Where they differ from this record, this record is right: the `/clear` probe and the hand check of three rounds do not hold.
 

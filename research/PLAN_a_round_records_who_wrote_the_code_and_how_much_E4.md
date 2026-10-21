@@ -1,6 +1,6 @@
 # PLAN — E4 stories: attribution — windows, the association ladder, ambiguous totals, contributors
 
-> Status: **IMPLEMENTED, 2026-10-20.** E4.S1–S5 merged as #862 (`2e47d990b`). Fable accepted every deviation of §12 on 2026-10-19; the coai code gate said `good_enough` (4 findings accepted). No story has an unbuilt half. Stored ownership that was decided while a peer round was still running is marked `partial: peer running`. Only the live backfill repairs it, and it has not run on a live store ([PLAN_round_authors_backfill_on_the_live_stores.md](../todo/PLAN_round_authors_backfill_on_the_live_stores.md), N7 and N8). Deviations are in §12 and in *Promotion record* below. Epic E4 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
+> Status: **IMPLEMENTED, 2026-10-20.** E4.S1–S5 merged as #862 (`2e47d990b`). Fable accepted every deviation of §12 on 2026-10-19; the coai code gate said `good_enough` (4 findings accepted). No story has an unbuilt half. **Partial by decision: one state is unreachable in production.** The rule that marks stored ownership `partial: peer running` exists in `core/Authors`, but production cannot reach it for a still-running peer round (E5 §12 deviation 8). The grown-peer-set rule carries the repair, and the live backfill has not run on a live store ([PLAN_round_authors_backfill_on_the_live_stores.md](../todo/PLAN_round_authors_backfill_on_the_live_stores.md), N7 and N8). This is named here, in *Promotion record* and in its *open tail*. Deviations are in §12 and in *Promotion record* below. Epic E4 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
 >
 > Status before promotion (kept as history): **code built, code gate `good_enough`, 2026-10-19 — S1–S5 implemented on `feat/round-authors-e4` (pull request #862, not merged; the coai code gate ran one round, 13 of 16 reviewers, 4 findings accepted and fixed or recorded, §12); Fable reviewed the code on 2026-10-19 and ACCEPTED every deviation of §12, and its wording changes are applied in place below; §12 is the implementation record — its deviations and the two E7 confirmations. Plan 2026-10-14, revised 2026-10-16 and 2026-10-17.** Epic E4 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
 >
@@ -1748,6 +1748,7 @@ E3 never emits a default instant; equal sort keys are equal records; the perform
 4. **An unobserved launch with no instant counts once in a round** (item 10), not once per window.
 5. **`Assign` throws `ArgumentException` on a contract violation**, and the closed vocabularies stay `string` constants. Both were recorded and not changed (items 15 and 16).
 6. **The one `ObservedSession` → `AttributionInput` mapping is `AttributionMapping`**, built by E4.S5 and called by E5 and E7 (judge review B1).
+7. **`partial: peer running` is unreachable in production for a still-running peer round.** The rule exists in `core/Authors`. A running round has no caller on disk, so no caller can name it (E5 §12 deviation 8). The grown-peer-set rule carries the repair. **This is the partial-by-decision item of E4.**
 
 The check boxes in *Definition of Done* in this document are not the authority. This record and §12 are.
 
@@ -1755,6 +1756,6 @@ The check boxes in *Definition of Done* in this document are not the authority. 
 
 | Item | Where it lives |
 |---|---|
-| Rows stored as `partial: peer running` stay provisional until the live backfill recomputes them | [PLAN_round_authors_backfill_on_the_live_stores.md](../todo/PLAN_round_authors_backfill_on_the_live_stores.md), N7 and N8 |
-| `peer running` cannot be written for a peer round that is still running, because that round has no caller on disk | Not planned. By decision (E5 §12 deviation 8). |
-| The attribution rules have been checked on fixtures and on rounds recorded after E5, not against real older rounds | the same plan, N9 |
+| A stored row whose peer set grew after it was stored stays provisional until the live backfill recomputes it (the grown-peer-set rule) | [PLAN_round_authors_backfill_on_the_live_stores.md](../todo/PLAN_round_authors_backfill_on_the_live_stores.md), N7 and N8 |
+| **Partial by decision:** `peer running` cannot be written for a peer round that is still running, because that round has no caller on disk | Not planned. By decision (E5 §12 deviation 8). |
+| The attribution rules have been checked on E1's fixtures and in temp-store end-to-end tests only, not against real older rounds | the same plan, N9 |

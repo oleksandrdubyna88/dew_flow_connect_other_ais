@@ -22,17 +22,17 @@ The goal of this plan: **the owner's question is answered from a `research/RESUL
 
 ## 2. The boundary with the promoted E7 plan, on both sides
 
-The promoted [E7 stories](../research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E7.md) carry the same table (§12 there). Order: items 1–3 go first, because the live runs need them.
+The promoted [E7 stories](../research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E7.md) carry the same table (*Boundary with the live-backfill plan* there). Items 2–4 go first, because the live runs need them.
 
 | # | Item | Built by | The other plan's part |
 |---|---|---|---|
-| 1 | S1–S4: the decider, the stored-history rebuild, the narrow writer, the mode, its backup and dry run | **E7 (shipped, #865)** | This plan runs the mode. It changes none of its code. A defect that J1 finds gets a RED-test story here (§6, N6), and the fix lands in the files E7 shipped. |
-| 2 | `scripts/backfill-preflight-servers.ps1` and `.sh` | **this plan, N1** | E7 §6 O1 names the script and its exit codes. |
-| 3 | `scripts/round-authors-dump.mjs` and its tests | **this plan, N2** | E7 §6 J1 names the script and says it is "written and reviewed in O1". |
-| 4 | The `--round-authors` JSON identity in the S4 scenario | **this plan, N3** | E7 S4 lists the test. The shipped scenario uses a canonical store dump instead (E7 §11, deviation 6), because E6 was not on the E7 branch. |
-| 5 | O1–O4 and J1: the release record, the rehearsal, the dry runs, the two live runs, the hand-check, the `RESULTS_` file | **this plan, N5–N9** | E7 §6 is the design text. This plan is the work. |
-| 6 | O5: module docs, `.agents/PROJECT.md` entries, and the promotion of the parent with its seven stories documents | **done by the promotion commit of 2026-10-21** | This plan adds only the run's own record to `module_server.md`. |
-| 7 | E1 leftovers: the attended `/clear` probe, the line-by-line hand read, the torn-tail frequency | **this plan, N4** | The [E1 stories](../research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E1.md) and the E1 RESULTS file name them as open. |
+| 1 | S1–S4: the decider, the stored-history rebuild, the narrow writer, the mode, its backup and dry run | **E7 (shipped, #865)** | The live-backfill plan runs the mode and changes none of its code. A defect J1 finds gets a RED-test story in the live-backfill plan (N6). |
+| 2 | `scripts/backfill-preflight-servers.ps1` and `.sh` | **the live-backfill plan, N1** | E7 §6 O1 names the script and its exit codes. |
+| 3 | `scripts/round-authors-dump.mjs` and its tests | **the live-backfill plan, N2** | E7 §6 J1 names the script. |
+| 4 | The `--round-authors` JSON identity in the S4 scenario | **the live-backfill plan, N3** | E7 S4 lists the test. The shipped scenario uses `StoreDump` (E7 §11 deviation 6). |
+| 5 | O1–O4 and J1: the release record, rehearsal, dry runs, two live runs, hand-check, the `RESULTS_` file | **the live-backfill plan, N5–N10** | E7 §6 is the design text. The live-backfill plan is the work. |
+| 6 | O5: module docs, `.agents/PROJECT.md` entries, the promotion of the parent with its seven stories | **the promotion commit of 2026-10-21** | The live-backfill plan adds the run's own paragraph to `module_server.md`. |
+| 7 | E1 leftovers: the attended `/clear` probe, the line-by-line hand read, the torn-tail frequency | **the live-backfill plan, N4** | E1's *Open tail* names them. |
 
 The two plans share no code. Items 1–7 are the complete list. Nothing else in the round-authors family is open work (the unbuilt items that stay unbuilt by decision are in §7).
 

@@ -1219,13 +1219,13 @@ The check boxes in *Definition of Done* above were not ticked as work landed. Th
 
 | # | Item | Built by | The other plan's part |
 |---|---|---|---|
-| 1 | S1–S4: the decider, the stored-history rebuild, the narrow writer, the mode, its backup and dry run | **this plan (shipped, #865)** | The new plan runs the mode and changes none of its code. A defect J1 finds gets a RED-test story there (N6). |
-| 2 | `scripts/backfill-preflight-servers.ps1` and `.sh` | **the new plan, N1** | §6 O1 names the script and its exit codes. |
-| 3 | `scripts/round-authors-dump.mjs` and its tests | **the new plan, N2** | §6 J1 names the script. |
-| 4 | The `--round-authors` JSON identity in the S4 scenario | **the new plan, N3** | S4 lists the test. The shipped scenario uses `StoreDump` (§11 deviation 6). |
-| 5 | O1–O4 and J1: the release record, rehearsal, dry runs, two live runs, hand-check, the `RESULTS_` file | **the new plan, N5–N10** | §6 is the design text. The new plan is the work. |
-| 6 | O5: module docs, `.agents/PROJECT.md` entries, the promotion of the parent with its seven stories | **this promotion, 2026-10-21** | The new plan adds the run's own paragraph to `module_server.md`. |
-| 7 | E1 leftovers: the attended `/clear` probe, the line-by-line hand read, the torn-tail frequency | **the new plan, N4** | E1's *Open tail* names them. |
+| 1 | S1–S4: the decider, the stored-history rebuild, the narrow writer, the mode, its backup and dry run | **E7 (shipped, #865)** | The live-backfill plan runs the mode and changes none of its code. A defect J1 finds gets a RED-test story in the live-backfill plan (N6). |
+| 2 | `scripts/backfill-preflight-servers.ps1` and `.sh` | **the live-backfill plan, N1** | E7 §6 O1 names the script and its exit codes. |
+| 3 | `scripts/round-authors-dump.mjs` and its tests | **the live-backfill plan, N2** | E7 §6 J1 names the script. |
+| 4 | The `--round-authors` JSON identity in the S4 scenario | **the live-backfill plan, N3** | E7 S4 lists the test. The shipped scenario uses `StoreDump` (E7 §11 deviation 6). |
+| 5 | O1–O4 and J1: the release record, rehearsal, dry runs, two live runs, hand-check, the `RESULTS_` file | **the live-backfill plan, N5–N10** | E7 §6 is the design text. The live-backfill plan is the work. |
+| 6 | O5: module docs, `.agents/PROJECT.md` entries, the promotion of the parent with its seven stories | **the promotion commit of 2026-10-21** | The live-backfill plan adds the run's own paragraph to `module_server.md`. |
+| 7 | E1 leftovers: the attended `/clear` probe, the line-by-line hand read, the torn-tail frequency | **the live-backfill plan, N4** | E1's *Open tail* names them. |
 
 The two plans share no code. Items 1–7 are the complete list.
 
@@ -1239,4 +1239,4 @@ The two plans share no code. Items 1–7 are the complete list.
 | The two live backfills (owner approval for each, verified backup first) | the same plan, N7 and N8 |
 | The hand-check of ten rounds per side | the same plan, N9 |
 | The `RESULTS_who_wrote_the_code_under_review.md` file | the same plan, N10 |
-| A connection-string builder for every store opener (§11.3, the owner has not answered) | the same plan, §7 and §9 |
+| A connection-string builder for every store opener (§11.3, the owner has not answered) | Not planned. The owner question is recorded in the [new plan](../todo/PLAN_round_authors_backfill_on_the_live_stores.md), §9 item 4. |

@@ -1,6 +1,6 @@
 # PLAN — a round records who wrote the code under review, and how big the change was
 
-> Status: **IMPLEMENTED, 2026-10-21.** The code of the seven epics is merged: E1 (#828) and E2 (#829) on 2026-10-15, E3 (#867) on 2026-10-19, E4 (#862), E5 (#863) and E6 (#864) on 2026-10-20, E7 (#865, merge `42eb3a95a`) on 2026-10-21. **Partial by decision: the owner's question is not answered yet.** Four parts of this plan are unbuilt. Each one is named here, in *Promotion record* and in its *open tail*: (1) the backfill never ran on the live Windows store or on the live WSL store, because E7 O1–O5 need a released binary and the owner's approval after a verified backup of both stores; (2) the hand-check of ten rounds per side (J1) was not made and there is no `RESULTS_who_wrote_the_code_under_review.md`; (3) the two scripts the run needs, `scripts/backfill-preflight-servers.*` and `scripts/round-authors-dump.mjs`, do not exist; (4) the attended `/clear` probe of E1 never ran. Four more items stay unbuilt by decision: authors for feature and merge-time rounds, readers for codex and gemini callers, a per-window schema step (the owner said "not now" on 2026-10-18, question 12), and a reachable `peer running` state for a peer round that is still running. The unbuilt work is the open tail. It moves to [PLAN_round_authors_backfill_on_the_live_stores.md](../todo/PLAN_round_authors_backfill_on_the_live_stores.md).
+> Status: **IMPLEMENTED, 2026-10-21.** The code of the seven epics is merged: E1 (#828) and E2 (#829) on 2026-10-15, E3 (#867) on 2026-10-19, E4 (#862), E5 (#863) and E6 (#864) on 2026-10-20, E7 (#865, merge `42eb3a95a`) on 2026-10-21. **Partial by decision: the owner's question is not answered yet.** Five parts of this plan are unbuilt. Each one is named here, in *Promotion record* and in its *open tail*: (1) the backfill never ran on the live Windows store or on the live WSL store, because E7 O1–O5 need a released binary and the owner's approval after a verified backup of both stores; (2) the hand-check of ten rounds per side (J1) was not made and there is no `RESULTS_who_wrote_the_code_under_review.md`; (3) the two scripts the run needs, `scripts/backfill-preflight-servers.*` and `scripts/round-authors-dump.mjs`, do not exist; (4) the attended `/clear` probe of E1 never ran; (5) the `--round-authors` JSON oracle in the S4 scenario was not built (E7 §11 deviation 6). Four more items stay unbuilt by decision: authors for feature and merge-time rounds, readers for codex and gemini callers, a per-window schema step (the owner said "not now" on 2026-10-18, question 12), and a reachable `peer running` state for a peer round that is still running. The unbuilt work is the open tail. It moves to [PLAN_round_authors_backfill_on_the_live_stores.md](../todo/PLAN_round_authors_backfill_on_the_live_stores.md).
 >
 > Status before promotion (kept as history): **plan only for epics E4–E7; epic E1 (the measurements and fixtures, #828) and epic E2 (the size, its schema
 > step and `--log`, #829) are implemented and merged, 2026-10-15; epic E3 (the text-free caller-transcript reader) is
@@ -630,20 +630,21 @@ Each epic records its own deviations: E1 and E2 in their *Promotion record*, E3 
 5. **E7's code goes first and the run follows, as D16 planned, but the WSL build step is gone.** The WSL side installs the released `linux-x64` asset (E7 §6 O1). No release contains E7 yet.
 6. **The backfill is stricter than the plan.** A result from an older reader never replaces a newer row. A deferral stops the whole round. The fingerprint hashes whole rows. Each backup folder carries `check.json` (E7 §11 deviations 5, 14–16).
 7. **This plan is promoted before the live run, not after it.** E7 O5 planned the promotion for the end. The code is finished and merged, so the plan moves now and the run becomes a new plan.
+8. **Two scripts and one test oracle were not built.** `scripts/backfill-preflight-servers.ps1` and `.sh`, `scripts/round-authors-dump.mjs`, and the `--round-authors` JSON oracle in the S4 scenario do not exist. The live-backfill plan builds them (N1–N3).
 
 ### Boundary with the live-backfill plan
 
-[PLAN_round_authors_backfill_on_the_live_stores.md](../todo/PLAN_round_authors_backfill_on_the_live_stores.md) carries the same table. Items 2–7 go first, because the live runs need them.
+[PLAN_round_authors_backfill_on_the_live_stores.md](../todo/PLAN_round_authors_backfill_on_the_live_stores.md) carries the same table. Items 2–4 go first, because the live runs need them.
 
 | # | Item | Built by | The other plan's part |
 |---|---|---|---|
-| 1 | Reader, attribution, snapshot, schema step 24, `--log`, the card line, the report, the backfill mode (E1–E7 S1–S4) | **this plan (shipped)** | The new plan runs the mode and changes none of its code. |
-| 2 | `scripts/backfill-preflight-servers.ps1` and `.sh` | **the new plan, N1** | E7 §6 O1 names it. |
-| 3 | `scripts/round-authors-dump.mjs` and its tests | **the new plan, N2** | E7 §6 J1 names it. |
-| 4 | The `--round-authors` JSON identity in the S4 scenario | **the new plan, N3** | E7 S4 lists the test. |
-| 5 | The attended `/clear` probe and the other E1 leftovers | **the new plan, N4** | E1's *Open tail* names them. |
-| 6 | O1–O4 and J1: release record, rehearsal, dry runs, two live runs, hand-check, the `RESULTS_` file | **the new plan, N5–N10** | E7 §6 is the design text. |
-| 7 | O5: module docs, `.agents/PROJECT.md` entries, the promotion of this plan with its stories | **done by the promotion commit of 2026-10-21** | The new plan adds the run's own paragraph to `module_server.md`. |
+| 1 | S1–S4: the decider, the stored-history rebuild, the narrow writer, the mode, its backup and dry run | **E7 (shipped, #865)** | The live-backfill plan runs the mode and changes none of its code. A defect J1 finds gets a RED-test story in the live-backfill plan (N6). |
+| 2 | `scripts/backfill-preflight-servers.ps1` and `.sh` | **the live-backfill plan, N1** | E7 §6 O1 names the script and its exit codes. |
+| 3 | `scripts/round-authors-dump.mjs` and its tests | **the live-backfill plan, N2** | E7 §6 J1 names the script. |
+| 4 | The `--round-authors` JSON identity in the S4 scenario | **the live-backfill plan, N3** | E7 S4 lists the test. The shipped scenario uses `StoreDump` (E7 §11 deviation 6). |
+| 5 | O1–O4 and J1: the release record, rehearsal, dry runs, two live runs, hand-check, the `RESULTS_` file | **the live-backfill plan, N5–N10** | E7 §6 is the design text. The live-backfill plan is the work. |
+| 6 | O5: module docs, `.agents/PROJECT.md` entries, the promotion of the parent with its seven stories | **the promotion commit of 2026-10-21** | The live-backfill plan adds the run's own paragraph to `module_server.md`. |
+| 7 | E1 leftovers: the attended `/clear` probe, the line-by-line hand read, the torn-tail frequency | **the live-backfill plan, N4** | E1's *Open tail* names them. |
 
 The two plans share no code. Items 1–7 are the complete list.
 
@@ -659,7 +660,7 @@ The check boxes below were not ticked as work landed. This table is the authorit
 | The backfill saves the snapshot first; exit codes 0 / 65 / 74 / 75, never 64 | Met in code and tests (E7). |
 | A code round records its size by scope, coverage and kind | Met (E2). |
 | `reviewers.effort` persisted | Met (E2). |
-| Every round records `authors_state`; no field is filled by a guess | Met for rounds recorded after E5. **Not met for older rounds** until the live backfill runs. |
+| Every round records `authors_state`; no field is filled by a guess | Met only by a server that carries E5. None was released when this was written, 2026-10-21: the newest tag, `mcp-v0.62.0`, predates E5, and `mcp-v0.63.0` is being released now. **Not met for older rounds** until the live backfill runs. |
 | Attribution passes every acceptance case | Met (E4.S5). |
 | No text stored or printed; sentinel test | Met (E3.S5, E5.S5, E7). |
 | No test reads the developer's `~/.claude`; `severe` and `gate_count` named apart | Met (E3, E6). |
@@ -673,7 +674,7 @@ The check boxes below were not ticked as work landed. This table is the authorit
 
 | Item | Where it lives |
 |---|---|
-| The two scripts; the report oracle in the S4 scenario; the attended `/clear` probe | [PLAN_round_authors_backfill_on_the_live_stores.md](../todo/PLAN_round_authors_backfill_on_the_live_stores.md), N1–N4 |
+| The two scripts; the report oracle in the S4 scenario; the attended `/clear` probe, the line-by-line hand read, the torn-tail frequency (N4) | [PLAN_round_authors_backfill_on_the_live_stores.md](../todo/PLAN_round_authors_backfill_on_the_live_stores.md), N1–N4 |
 | The release, the rehearsal, the dry runs, the two live backfills, the hand-check, the `RESULTS_` file | the same plan, N5–N10 |
 | Authors for feature and merge-time rounds (§7) | Not planned. A later plan, if the owner asks. |
 | Readers for codex and gemini callers (§3) | Not planned. Those rounds read `unobserved: no reader for <vendor>`. |
