@@ -7840,7 +7840,8 @@ says only that some of it was not. The round counts come from `coai-mcp --round-
   in Setup › MCP server*, 65 refused, 74 the database would not read, -1 a timeout or a spawn that failed, an exit-0
   answer outside the contract *something this build cannot read*. Rows `[]` on exit 0 is a count of nought. Never a zero
   standing in for "nobody knows" — `COUNT_UNAVAILABLE` is what every surface prints instead.
-- `roundCountsRead.ts` — `readRoundCounts(executable, run)` through `serverRun` from `roundsDbRead.ts`, the one door
+- `roundCountsRead.ts` — `readRoundCounts(executable, snapshotPaths, run)` (since E6 it asks `--round-counts-merged` FIRST, with the other
+  stores' snapshot paths — see *Both stores* below) through `serverRun` from `roundsDbRead.ts`, the one door
   that hands the child this window's data directory (a child inheriting the window's environment would count the
   DEFAULT directory's rounds); `roundsLoader` spawns it and reads the ledger's tail in parallel; `otherStores` asks only
   whether another installation's `coai.db` EXISTS. Its own file because `roundsDbRead.ts` is at 796 of its 800 lines,
@@ -7886,6 +7887,50 @@ consultation is several ledger lines; *consult turns unavailable* when the ledge
 unavailable`, or nothing before a read — from `PanelState.roundsSnapshot`,
 the cached snapshot: the card never reads. The help's spending article (five languages) describes the block and no longer
 says the product ships no price table.
+
+**Both stores, and launches per round (2026-10-21; E6 S1's extension half, S2 and S3 of `todo/PLAN_the_round_counter_tail_E6.md`).**
+The wording of the block, the card and the help is S4's and is NOT changed here; what changed is what the snapshot holds.
+
+- *The read (S1).* `roundCounts.ts` parses the merged answer on top of the plain one: `RoundCountsAnswer.stores?` (`RoundStore`: `id`, `live`,
+  `platform`, `host`, `wslDistro`, `side`, `directory`, `paths[]` — every spelling that reached the store —, `asOf`, `quiet`, `truncated`,
+  `coaiMcpVersion`) and `storesNotIncluded?` (`path`, `reason` kept as TEXT so a newer word survives, `detail`); each `RoundsRow` gains
+  `roundKeys`, `roundsWithoutKey` (also on the plain answer — an older binary reads as `[]` / 0), and on the merged answer `keyStore` (key to
+  the store id that owns the round) and `parts[]` (the row's count per store). An answer without `stores[]` parses as it always did.
+  `readRoundCounts(executable, snapshotPaths, run)` asks `--round-counts-merged <snapshot paths…>` first — also with no path, because
+  launches per round needs this side's keys (D5). Exit **64** falls back to `--round-counts` and answers as today; a **timeout** (-1) does too,
+  and every snapshot path is recorded on the answer as `storesNotIncluded` with reason `timeout` / *did not answer in time* — never a number from
+  a call that did not answer (D7); 65, 74 and any other exit are `unavailable` with their reason and are NOT retried through the plain mode
+  (a fault must not be hidden by a fallback).
+- *The other stores' ledger tails (S2).* `foreignLedgers.ts`: the directories the window was told about (`coai.alsoWatchDataDirectories`, via
+  `usableDirs(...).slice(1)`, handed to `roundsLoader` as a function so a changed setting is seen) give each store's `usage.jsonl`, read from its
+  END by `readTailSince` — an append-only text file, which is what makes the boundary safe; the other side's `coai.db` is still never opened.
+  A directory is mapped to its store through the merged answer's `stores[].paths[]` (`join(dir, 'round-counts-snapshot.json')`); a store two
+  directories reach is **read once** (the first), a directory the answer puts under the LIVE store is this side's own store through another
+  spelling and is **not read at all**, and a directory no answer named stands for its own store (its path is its id). Lines are tagged with the
+  store id in memory only (`StoredLine.store`; this side's lines carry the live id once the answer named one). **Every foreign read races the D7
+  deadline** (`CAP_MS`, 8 s): a read that loses is `otherLedgers[]` failure *did not answer in time*, this side's counts and money are published
+  without it, and the pending read is KEPT — at most one in flight per store, the next refresh awaits the same promise and takes its lines if it
+  has settled. A foreign failure is `RoundsSnapshot.otherLedgers[]` (`{store, directory, failure}`, one per store read, empty failure when it read)
+  and NEVER the global `ledgerFailure`, which hides every money cell of this side. `RoundsSnapshot.ledger` stays one list.
+- *Stores are not accounts (S2).* `storeLedger.ts` (pure): `ownedLines(snapshot)` — a line that carries a round key counts only from the store
+  `keyStore` attributes that key to (so a copied store is one round, one launch, one dollar), and a key with NO entry (its round began before the
+  window, is still running, a snapshot is stale) is counted from the store it was read in — ownership never drops spend. `ledgerView` resolves each
+  line's store and whether it is **foreign**; `moneyGroups(lines, window, rateOf, listRateOf?)` prices a foreign line with no reported cost at the
+  published LIST rate (`RoundsBlockInput.listRateOf` = `priceOfLine(provider, model, [], …)`, no vendor row, so this side's typed override never
+  prices another store), marks it (`Estimate.listPrice` → *list-price estimate* beside the figure) or, when no list carries its model, *cost
+  unknown* (`Estimate.costUnknown`). A stated reset is per (provider, store): `cardResetLine` states each store's own newest-line reset, named
+  (*WSL: Ubuntu: quota out — resets in 89 h…*), when lines come from several stores — one store's success never hides another's refusal; with one
+  store it is today's sentence. `storeWords.ts` names a store (*this machine*, *WSL: Ubuntu*, *Windows*, *Linux*, *macOS*; an id no answer named is
+  its directory). The block says *Money from <store> not included: <why>* for a foreign tail that did not read.
+- *Launches per round (S3).* `launchesPerRound.ts` (pure): a launch is `isLaunchLine` (never a second allow-list) of THIS row's vendor, whose round
+  is in the row's `roundKeys`, from the store `keyStore` names; the figure is launches over the KEYED rounds, with the keyed rounds that no line
+  names (*N rounds carry no launch count*) and the rounds with no key (*written before coai-mcp 0.60.2*, said only of those) reported apart.
+  `launchesCell.ts` words it: the 7 d figure in the cell beside *Reviewers per round* (new header; model and kind lines carry an empty cell), 5 h
+  and 24 h with their counts and the fact in its tooltip; a Team-server row is a dash *launches run on <server>, not recorded here*; a ledger that
+  did not read is *unavailable*, an unavailable count *count unavailable*. `LAUNCHES_PER_ROUND` sits beside `PER_LAUNCH` in `roundMoney.ts`.
+
+NOT done here (S4, S5): the store sentence and the footnote, the cell tooltips naming each store's part, the render-path reachability cache, the
+help in five languages, the live seam leg; a key present in two stores whose copies differ is not yet said (*conflicting copies*).
 
 **Story 5.3b (2026-10-11): a stated reset is shown.** `coai-mcp` writes `resetsUtc` — the instant the vendor STATED, read
 by the one `CooldownParser` both halves use — on the last ledger line of a turn that ended rate-limited, and `usage.ts`

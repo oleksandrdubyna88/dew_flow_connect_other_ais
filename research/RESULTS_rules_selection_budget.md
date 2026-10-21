@@ -209,7 +209,7 @@ budget (4 706 bytes of the 10 056 left).
 `--filter-class "*.RuleFilesTests"` for the number itself).
 - `RuleFilesTests.TheDefaultBudget_IsTheOperatorsNinetyKilobytes` — the constant is 90 000.
 - `StageRulesTests.AtNinetyKilobytes_TheBaseAndTheTier_SpendExactlyTheirPinnedBytes` (named ...79944Bytes until 2026-10-18 and ...79967Bytes until 2026-10-19) — **the measuring test and the
-  drift guard**: base 17 947 + tier 62 061 = 80 008 (17 883 + 62 061 = 79 944 until 2026-10-18, 17 906 + 62 061 = 79 967 until 2026-10-19, 17 925 + 62 061 = 79 986 until 2026-10-20, see the last three measurements). Its failure message prints the three numbers it found,
+  drift guard**: base 17 972 + tier 62 061 = 80 033 (17 947 + 62 061 = 80 008 until 2026-10-21; 17 883 + 62 061 = 79 944 until 2026-10-18, 17 906 + 62 061 = 79 967 until 2026-10-19, 17 925 + 62 061 = 79 986 until 2026-10-20, see the last three measurements). Its failure message prints the three numbers it found,
   so a conventions bump or an edit to this repository's own instruction files that moves them turns it red and
   the figures in this file are re-measured from that message. The unit is the collector's own: characters of
   the line-ending-normalised text.
@@ -282,6 +282,8 @@ The 3 000-branch distribution and the per-rule reach are not re-measured: a set 
 The measuring test is renamed `…SpendExactlyTheirPinnedBytes` so the next re-baseline changes its pins, not its name. Re-pinned: base 17 925 + tier 62 061 = 79 986.
 
 **Re-measured once more, 2026-10-20, on the merge of E7 (`feat/round-authors-e7`) with `main` (which holds E6):** `.agents/PROJECT.md` names both `--round-authors` (+19) and `--backfill-authors` (+22), and the measuring test printed `base 17947 + tier 62061 = 80008` — 9 992 left of 90 000, still above the three smallest tail rules (8 683) and below the fourth added (12 143); the three canaries are green unchanged, and this supersedes both branch pins (E6 79 986, E7 79 989). Re-pinned: base 17 947 + tier 62 061 = 80 008.
+
+**Re-measured again, 2026-10-21 (E6.S1, `--round-counts-merged`):** `.agents/PROJECT.md` names the one-shot mode `--round-counts-merged` (+25, which that file must do — `ARequestFaultIsNotAnOldBinaryTests`), and the measuring test printed `base 17972 + tier 62061 = 80033` — 9 967 left of 90 000, still above the three smallest tail rules (8 683) and below the fourth added (12 143); the three canaries were re-run and are green unchanged. Re-pinned: base 17 972 + tier 62 061 = 80 033.
 
 ## What this does not settle
 

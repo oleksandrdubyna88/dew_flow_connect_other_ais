@@ -8,8 +8,11 @@ import {
   consultationLabel, consultationNote, consultationUnits, inside, LedgerLine, medianHeaderUnit, medianLabelOfUnit, medianUnitOf, MoneyGroup,
   moneyGroups, PER_LAUNCH, PER_RECORDED_TURN, PerUnit, perUnit, RateOf, rollUp, Rollup, TimeWindow, tokenText, unitDivisor,
 } from './roundMoney';
+import { launchesCell, remoteLaunchesCell } from './launchesCell';
 import { cardResetLine } from './statedReset';
-import { costText, shortNumber } from './usage';
+import { ownedLines, storesOfRead } from './storeLedger';
+import { storeNameOf } from './storeWords';
+import { costText, type Estimate, shortNumber } from './usage';
 import type { Vendor } from './vendors';
 
 /**
@@ -52,6 +55,12 @@ export interface RoundsBlockInput {
   /** The chat ledger's turns as ledger lines (`chatLedgerLines`); cut to the window here. */
   readonly chat: readonly LedgerLine[];
   readonly rateOf: RateOf;
+  /**
+   * The published LIST rate by provider and model, without the vendor row's typed override — what a line from ANOTHER store with
+   * no reported cost is estimated at (E6.S2): the override is a fact about this side's account, not the other store's. Absent,
+   * a foreign line falls back to {@link rateOf}.
+   */
+  readonly listRateOf?: RateOf;
   /** The Team server a row ran on — empty for a row that runs on this machine. */
   readonly ranOn: (provider: string) => string;
   readonly store: StoreFacts;
@@ -91,7 +100,7 @@ export function roundsBlock(input: RoundsBlockInput): string {
     return `${head}<p class="hint">Counting…</p></section>`;
   }
 
-  return `${head}${unavailableNote(input.snapshot.read)}${ledgerNote(input.snapshot.ledgerFailure)}${body(input, input.snapshot)}${FOOTNOTE}</section>`;
+  return `${head}${unavailableNote(input.snapshot.read)}${ledgerNote(input.snapshot.ledgerFailure)}${otherLedgersNote(input.snapshot)}${body(input, input.snapshot)}${FOOTNOTE}</section>`;
 }
 
 /** What a cell drawn from the ledger says when the ledger did not read. */
@@ -101,6 +110,26 @@ function ledgerNote(failure: string): string {
   return failure.length === 0
     ? ''
     : `<p class="warn">Tokens and money: ${LEDGER_UNAVAILABLE} — the usage ledger could not be read: ${escapeHtml(failure)}.</p>`;
+}
+
+/**
+ * Which other store's money is not in the figures below, and why (E6.S2) — said apart from {@link ledgerNote}, because a foreign
+ * tail that would not read must not hide this side's money. A tail that read says nothing.
+ */
+function otherLedgersNote(snapshot: RoundsSnapshot): string {
+  const stores = storesOfRead(snapshot.read);
+
+  return (snapshot.otherLedgers ?? [])
+    .filter((one) => one.failure.length > 0)
+    .map((one) => `<p class="warn">Money from ${escapeHtml(storeNameOf(stores, one.store))} not included: ${escapeHtml(one.failure)}.</p>`)
+    .join('');
+}
+
+/** A money cell: the figure, and beside it what is not a bill — a foreign line priced at the list rate, or one no list prices. */
+function moneyCell(money: Estimate): string {
+  const notes = [money.listPrice === true ? 'list-price estimate' : '', money.costUnknown === true ? 'cost unknown' : ''].filter((one) => one.length > 0);
+
+  return notes.length === 0 ? costText(money) : `${costText(money)} <span class="hint">${notes.join(' · ')}</span>`;
 }
 
 /** A cell drawn from the ledger: *unavailable* when the ledger did not read — never a zero standing in for it. */
@@ -137,6 +166,8 @@ interface Facts {
   /** The unit the median header names — empty when it names none, and then every median cell names its own. */
   readonly medianUnit: string;
   readonly providers: readonly string[];
+  /** The ledger lines that count — store-resolved, a keyed line only from the store that owns its round (E6.S2). */
+  readonly lines: readonly LedgerLine[];
   readonly input: RoundsBlockInput;
   readonly ledgerFailure: string;
   /** The snapshot itself — what a row's stated reset is read from (story 5.3b), at the snapshot's own clock. */
@@ -168,7 +199,7 @@ function medianGroups(facts: Pick<Facts, 'ledgerFailure' | 'groups'>): readonly 
 function headerCells(facts: Facts): string {
   return [
     'Vendor row / model', ...WINDOW_NAMES.map((name) => WINDOW_LABEL[name]), 'By stage (7 d)', 'Beside (7 d)',
-    'Reviewers per round', escapeHtml(medianLabelOfUnit(facts.medianUnit)), 'Tokens (7 d)', 'Money (7 d)', 'Per round (7 d)',
+    'Reviewers per round', 'Launches per round', escapeHtml(medianLabelOfUnit(facts.medianUnit)), 'Tokens (7 d)', 'Money (7 d)', 'Per round (7 d)',
   ].map(headerCell).join('');
 }
 
@@ -184,11 +215,12 @@ function sevenDays(snapshot: RoundsSnapshot): TimeWindow {
 
 function factsOf(input: RoundsBlockInput, snapshot: RoundsSnapshot): Facts {
   const window = sevenDays(snapshot);
-  const groups = moneyGroups([...snapshot.ledger, ...input.chat], window, input.rateOf);
+  const lines = ownedLines(snapshot);
+  const groups = moneyGroups([...lines, ...input.chat], window, input.rateOf, input.listRateOf);
 
   return {
     read: snapshot.read, window, groups, medianUnit: medianHeaderUnit(medianGroups({ ledgerFailure: snapshot.ledgerFailure, groups })),
-    providers: providersOf(snapshot.read, groups), input, ledgerFailure: snapshot.ledgerFailure, snapshot,
+    providers: providersOf(snapshot.read, groups), lines, input, ledgerFailure: snapshot.ledgerFailure, snapshot,
   };
 }
 
@@ -213,9 +245,23 @@ function rowLine(facts: Facts, provider: string, mine: readonly MoneyGroup[]): s
 
   return tr('row', [
     name, ...WINDOW_NAMES.map((window) => roundsCell(facts.read, window, provider)), stagesCell(facts.read, provider),
-    spent(facts, () => besideCell(mine)), reviewersCell(facts.read, provider), '', spent(facts, () => tokensCell(all)),
-    spent(facts, () => costText(all.money)), spent(facts, () => perRoundCell(all, rowRounds(facts.read, provider))),
+    spent(facts, () => besideCell(mine)), reviewersCell(facts.read, provider), launchesCellOf(facts, provider), '', spent(facts, () => tokensCell(all)),
+    spent(facts, () => moneyCell(all.money)), spent(facts, () => perRoundCell(all, rowRounds(facts.read, provider))),
   ]);
+}
+
+/**
+ * The launches-per-round cell: a Team-server row's launches run elsewhere, a count or a ledger that is unavailable says so, and
+ * otherwise the figure over the keyed rounds (E6.S3).
+ */
+function launchesCellOf(facts: Facts, provider: string): string {
+  const server = facts.input.ranOn(provider);
+  const read = facts.read;
+  if (server.length > 0) {
+    return remoteLaunchesCell(server);
+  }
+
+  return read.state === 'counted' ? spent(facts, () => launchesCell(read.answer, facts.lines, provider)) : COUNT_UNAVAILABLE;
 }
 
 /** The row's stated reset beside its name (story 5.3b) — `quota out — resets in 89 h (Wed 04:49)` — or nothing. */
@@ -319,7 +365,7 @@ function modelLine(facts: Facts, provider: string, model: string, mine: readonly
   return tr('model', [
     `<span class="indent">${escapeHtml(model)}</span>`,
     ...WINDOW_NAMES.map((window) => modelRoundsCell(facts.read, window, provider, model)),
-    '', '', '', spent(facts, () => medianCell(group, facts.medianUnit)), spent(facts, () => tokensCell(part)), spent(facts, () => costText(part.money)),
+    '', '', '', '', spent(facts, () => medianCell(group, facts.medianUnit)), spent(facts, () => tokensCell(part)), spent(facts, () => moneyCell(part.money)),
     spent(facts, () => modelPerRoundCell(part, modelRounds(facts.read, '7d', provider, model))),
   ]);
 }
@@ -387,8 +433,8 @@ function kindLine(mine: readonly MoneyGroup[], kind: string, word: string): stri
   const { figure, label } = kindFigure(kind, groups, part);
 
   return tr('kind', [
-    `<span class="indent">${word} · ${part.turns} recorded turns</span>`, '', '', '', '', '', '', '',
-    tokensCell(part), costText(part.money), `<span title="${escapeHtml(figure.note)}">${escapeHtml(figure.text)}</span> <span class="hint">${label}</span>`,
+    `<span class="indent">${word} · ${part.turns} recorded turns</span>`, '', '', '', '', '', '', '', '',
+    tokensCell(part), moneyCell(part.money), `<span title="${escapeHtml(figure.note)}">${escapeHtml(figure.text)}</span> <span class="hint">${label}</span>`,
   ]);
 }
 

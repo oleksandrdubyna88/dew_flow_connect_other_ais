@@ -116,7 +116,7 @@ sequenceDiagram
   rule name)*. Two rounds of one fix therefore show identical rules, which is the defect the plan was
   opened for, while different branches order the rest of the corpus differently. **That second half
   reaches one to three rules in this repository since the operator raised the budget to 90 000 bytes
-  (2026-10-16; `RuleFiles.DefaultBudgetBytes`)** — the base and the tier spend **80 008** bytes (79 944 until 2026-10-18, 79 967 until 2026-10-19, 79 986 until 2026-10-20), which
+  (2026-10-16; `RuleFiles.DefaultBudgetBytes`)** — the base and the tier spend **80 033** bytes (80 008 until 2026-10-21, when PROJECT.md named `--round-counts-merged`; 79 944 until 2026-10-18, 79 967 until 2026-10-19, 79 986 until 2026-10-20), which
   left **56** at the old 80 000 (the tail took nothing, so `common/test-leftovers.md` reached no
   reviewer) and leave **9 976** now (10 056 until 2026-10-18, 10 033 until 2026-10-19, when PROJECT.md named `--round-authors`, 10 014 until 2026-10-20, when it also named `--backfill-authors`, 9 992 until 2026-10-21, when it named `--host-facts`); the smallest rule outside the tier is 2 197. Over 3 000 branch
   names the tail takes one rule on 30 %, two on 62 %, three on 8 % (mean 1.78), and
@@ -1438,6 +1438,10 @@ give-back are the server's half ([module_server.md](module_server.md)).
   record it was replacing stays whole. A reused pid on the same machine keeps the file: a leak, never a deletion.
   `AtomicJson.WriteUnderTurn` (`Escalations.cs`) writes through it, so `AtomicFile`'s list of open-coded copies is three now
   (`ConsultSchemaFile`, `RemoteRuntime`, `ArtifactStore`); `SessionStore.Write` writes through it too since E3 S5 (its ten-attempt `MoveOverExisting` loop was removed, not extracted), and the seam gained `WriteText` (fail the temp write half way).
+  **A new caller since E6.S1:** `RoundCountsSnapshot.TryWrite` (`src_mcp/src/Store/RoundCountsSnapshot.cs`) writes `round-counts-snapshot.json` through it with `SharingRetry`, after every
+  round — the file the OTHER side's counter reads across the WSL boundary, which is why a reader must never see half of it (`todo/PLAN_the_round_counter_tail_E6.md` §4.1–4.3). The caller
+  reaches the seams through an `Action<string,string>` of its own (as `SessionStore` does), because `AtomicSeams` is internal to this assembly; `RoundCountsSnapshotTests.TheDefaultWriter_IsTheAtomicOne`
+  pins that the default writer IS this class (only it removes a dead writer's orphan temp).
   `MoveOver` catches `IOException` and `UnauthorizedAccessException` explicitly. Tests: `AMoveOverAHeldFileIsRetriedTests`, `AnOrphanTempFileIsRemovedByItsRecordsNextWriteTests`.
 - **`FilesystemInvariant.SnapshotAsync`** throws `OperationCanceledException` for a cancelled token. The
   launcher never throws on cancellation (it reports `TimedOut: true, Cancelled: true`), so a `git status` killed
