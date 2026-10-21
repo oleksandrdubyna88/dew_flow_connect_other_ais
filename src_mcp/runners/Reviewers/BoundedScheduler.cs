@@ -459,7 +459,7 @@ public sealed class BoundedScheduler(
     {
         Report(onProgress, w.Invocation, "running");
         var watch = System.Diagnostics.Stopwatch.StartNew();
-        var loop = new TurnLoop((turn, token) => RunWithLadderAsync(turn, executor, onProgress, token), onProgress);
+        var loop = new TurnLoop((turn, token) => RunWithLadderAsync(turn, executor, onProgress, token), onProgress, _clock);
         try
         {
             // Settled HERE, before anybody is told: the ledger, the live view, the audit, the stand-down count and the

@@ -737,6 +737,36 @@ the allow-list emptied (5 offenders), with the ladder's entry removed (1 offende
 - **Roles.** Opus brief, Sonnet code, Opus review; Fable reads the diff against tables 3 and 4 and the `BoundedScheduler`
   rule (one clock per scheduler, nothing else moved).
 
+### S4 — status: built 2026-10-21 (Sonnet; the spec above governed, deviations listed)
+
+**Built.** Product: `TurnLoop` (`TimeProvider? clock = null` last; the one `Stopwatch` and its five reads are `_clock.GetTimestamp()` / `GetElapsedTime(...)`; `using System.Diagnostics` removed), `BoundedScheduler.cs:462` passes its `_clock`, `SourceResolver` (`clock` after `readDeadline`; `readTimer` declared first, `deadline` linked second). Nothing threaded through `PanelService`/`RoundEngine`; the three resolver construction sites and `PanelService`'s scheduler are untouched. Tests: `AReviewerThatAsksForSourceIsAskedAgainTests` (the in-process `ClockedLauncher` with one `ClockHandshake` per launch and a 20-launch ceiling, a driver loop on the test's thread, `SlowShow` waiting with `Task.Delay(delay, clock, ct)` and a `TokenCancelled` task, the zero-deadline arm); the scan's set gained `TurnLoop.cs` and `SourceResolver.cs` (one line each, plus two path constants).
+
+**Order, with what was seen.**
+
+1. *Seams alone, whole suite on the default clock.* 13140 tests, 13016 passed, 120 skipped, 4 failed — all four are timing cases that the suite-load makes lose (three other coders ran whole suites on the same machine): `AConversationPlaceTests.CopiesThatOutrunTheRowsBudget...` (C17, S3's), `ConsultAntigravityDenialScenarioTests.AHungFollowUp...` (a 11 s wall bound, found 12.3 s), `AFeatureIsReviewedEndToEndTests.TheRoundsDeadline_IsScaledByTheFollowUps...` (C6, S5's) and `AConversationThatOutlivesItsCap...` (C13, S4's own RED subject). Listed, not called flaky: the last three were re-run alone (`--filter-method`) and passed; the first passed alone by method and failed by class (S3's case, untouched by S4). None touches `TurnLoop` or `SourceResolver` except C13, which is the case being fixed.
+2. *The scan.* With the two files added and no seam: red on exactly the three sites — `TurnLoop.cs` `var clock = Stopwatch.StartNew()`, `TurnLoop.cs` the `Stopwatch clock` parameter, `SourceResolver.cs` `.CancelAfter(_readDeadline)` — green (6 of 6) with the seams.
+3. *REDs on today's code (the tests moved onto the clock, the seams stashed):* (a) `Expected outcome.EarlierTurns not to be empty because the turns that answered before the cap are kept.` (b) `Expected outcome.EarlierTurns.Count to be between 1 and 3 because ... but found 0.` — these were seen on the OLD tests with `FAKECLI_SLEEP_MS` 800 / 950 (the brief's way to force the failure with a real process: every run); (c) `Expected tail ... to contain "### src/Cart.cs lines 28-35" because the turn goes on with what was served.` (old test, `Cart.cs` slowed as well: both reads "timed out: git did not answer within 0.3 s"). Then all three green on the manual clock.
+4. *Counts, exact.* Cap test: 4 launches, timeouts `700, 700, 600, 200 ms`, `EarlierTurns.Count == 3` each 400 ms, `TimedOut` with `Usage.Unknown`, the clock moved exactly 1400 ms. Work-cap test: 3 launches, `EarlierTurns.Count == 3`, `TimedOut` with `Usage.None`, clock 900 ms.
+
+**Break-its (each red, restored, rebuilt, the diff re-checked identical to the seams).**
+
+- B11 (`left <= TimeSpan.Zero` made unreachable): the work-cap test red — `Expected launcher.Count to be 3 because nothing was left of the 900 ms for a fourth launch, but found 4.` See deviation 2.
+- B12 (`:45` and the `left` read back on `Stopwatch`): both turn tests red on the ceiling — `launcher.Count ... found 21` and `Expected type to be ...TimedOut ... but found ...NonZeroExit`.
+- B13 (resolver back on `CancelAfter`): the resolver test red — `TimeoutException: gave up after 30 s waiting for the read deadline AND the slow read's delay to be armed on the clock`.
+- B14 (`BoundedScheduler.cs:462` without `_clock`): both turn tests red the same way as B12 (`found 21`, `NonZeroExit`).
+
+**Loop.** `AReviewerThatAsksForSourceIsAskedAgainTests` 20 times in a row: before the fix (seam present, old tests moved back by the REDs' form) the class failed in 13 of 20 runs (C13's cap test 12 times, plus the work-cap test, the resolver test and one unrelated repair-timeout test under the load of three parallel suites); after: 0 of 20.
+
+**Deviations.**
+
+1. **Test count +1** (the zero-deadline arm), as written. The scan's two self-test counts are unchanged (6).
+2. **B11 does not turn the cap test red** — the brief and §8 expected both turn tests to. With the check removed, the cap test's fourth launch is bounded to 200 ms and the stand-in ends it `TimedOut` anyway, so the outcome is the same; the work-cap test (exactly 900 ms spent, `left == 0`) is the arm that sees the check, through the launch count. The §8 sentence "(a) ends in the stand-in's ceiling failure" holds for B12 and B14, not B11.
+3. **The `ClockedLauncher` driver reads arrivals from a channel**, not one reused handshake: `ClockHandshake` is single-shot (S1 deviation 6), so each launch makes its own and posts it; the driver (the test's thread) waits for the launch, advances `min(turn, timeout)` and releases it. A `ReleaseAll()` in the test's `finally` frees every parked launch.
+4. **A bounded `WaitingForAsync` helper** names the thing a guard waited for, so B13 reads as a sentence and not a bare timeout.
+5. **The wall-time claim in the resolver test.** The slow read's `TokenCancelled` is asserted `true` BEFORE the turn is awaited, as §15 point 3 says; `clock.GetUtcNow() - Epoch == 301 ms` is asserted at the end: nobody but the test moved the clock.
+
+**What the module docs must say (held for the docs pass of §9).** `module_runners.md`: `TurnLoop` reads one `TimeProvider` (the scheduler's — a loop inside a scheduler on clock X is on clock X); its per-turn timer is the launcher's; a turn is launched whenever anything is left, bounded to what is left, so `timeout × (1 + follow-ups)` of exact turns gives a final launch bounded to the remainder, unless the remainder is exactly zero. `SourceResolver`'s read deadline is its own timer source on its clock, linked after the timer; a zero deadline is refused as timed out before any time passes. `module_tests.md` ("E4 S4"): the `ClockedLauncher` shape (signal, wait, driver advances `min(turn, timeout)`, 20-launch ceiling), the resolver proof (two timers armed, advance through the deadline only, token cancelled, then the outcome), B11–B14 with their results and deviation 2, the scan's set now of three product classes beyond `BoundedScheduler`.
+
 ### S5 — C6: the round deadline pinned without wall time + S13 (after S4)
 
 - **Goal.** The end-to-end test stops deciding its outcome on wall time; the subject it stood for — the round's deadline
