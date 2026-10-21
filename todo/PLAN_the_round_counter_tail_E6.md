@@ -82,8 +82,10 @@ OTHER side writes no snapshot and that store is *not included: no snapshot* — 
 
 ## 3. Decisions the parent left open (decided here)
 
-- **D1 — the store id is `RoundAuthorsMerge.SourceIdOf`, computed by the owner.** A snapshot carries the id its writer computed
-  from ITS OWN canonical directory; two UNC spellings that open one file read byte-equal ids and merge to one store, whose
+- **D1 — the store id is `RoundAuthorsMerge.SourceIdOf`, computed by the owner, over its HOST as well as its directory.** The
+  owner hashes `<platform>|<wslDistro or empty>|<canonical dataDir>` (plan round finding 0: two WSL distributions share the default
+  `/home/<user>/.local/share/coai-mcp`, so the directory alone would merge two stores into one). A snapshot carries the id its writer computed
+  from ITS OWN host and canonical directory; two UNC spellings that open one file read byte-equal ids and merge to one store, whose
   `paths[]` names both spellings. *Reason:* one id rule in the repository (reuse-first step 1); nothing on the reading side
   has to know that `\\wsl$` and `\\wsl.localhost` are one host.
 - **D2 — the write point is after the projection returns, through `RoundCountsSnapshot.TryWrite(dataDir, nowUtc, log)`**, a
@@ -164,7 +166,7 @@ shape), so Native AOT publishes it.
 | `schema` | integer, **1** | The handshake (§4.5). Bumped only on a change a schema-1 reader could misread; an added field keeps 1. |
 | `writtenUtc` | `"O"` UTC stamp | The writer's clock at the write — the reader's `asOf`. Never clamped: a WSL clock ahead of Windows after a sleep is shown ahead. |
 | `coaiMcpVersion` | string | `Program`'s own version, for the cure sentence of a newer schema. |
-| `store.id` | 32 lower-case hex | `RoundAuthorsMerge.SourceIdOf(dataDir)` (D1). |
+| `store.id` | 32 lower-case hex | `RoundAuthorsMerge.SourceIdOf` over `<platform>|<wslDistro>|<dataDir>` (D1). |
 | `store.platform` | `windows` / `linux` / `macos` / `other` | `RoundAuthorsMerge.PlatformFamily()` (made internal). |
 | `store.host` | `HostKind.Current` as its word (`HostKind.cs:72`: `wsl`, …) | Tells WSL from native Linux. |
 | `store.wslDistro` | string | `WSL_DISTRO_NAME` when `host` is `wsl`, else empty. |
@@ -193,8 +195,8 @@ in the clear.
 2. Reads `RoundCounts.LaunchesIn(dataDir, nowUtc)` (D3; `round_key` behind `HasColumn`), groups by round id, orders newest
    first, applies the cap (§4.3), serialises, `AtomicFile.Write`.
 3. **Catches everything** (`Projection.Write`'s rule, `Projection.cs:34-37`: a projection must never take a round down) and
-   logs ONE warning: *the round-counts snapshot could not be written: {e.Message}* — numbers and the exception's sentence,
-   never a path's content. The round's answer is already built; nothing about it changes.
+   logs ONE warning: *the round-counts snapshot could not be written: {e.GetType().Name}* — the exception's TYPE only, never its
+   message (a filesystem message carries the destination path, and with it the user's name; plan round finding 4). The round's answer is already built; nothing about it changes.
 
 Best effort is the whole contract: a snapshot older than the latest round is a STALE store, visible through `writtenUtc`, and
 the next round's write cures it. `--round-counts` and `--round-counts-merged` write nothing — `AReaderModeNeverMakesTheDataDirectoryTests`
@@ -234,7 +236,7 @@ ones, and a relative path is relative to a working directory the extension does 
 **Reading.**
 
 1. *This side* — `RoundCounts.LaunchesIn(dataDir, nowUtc)`; a missing `coai.db` is this side with no rounds (as today, exit 0);
-   one that will not read is **74** with `Program.WhyUnreadable` (as today). This side's store entry: `id` = `SourceIdOf(dataDir)`,
+   one that will not read is **74** with `Program.WhyUnreadable` (as today). This side's store entry: `id` = the D1 id of this side,
    `live: true`, `asOf: nowUtc`, `paths: []`.
 2. *Each snapshot path* — `File.ReadAllText`, then the document. Every failure is a row of `storesNotIncluded[]`, never an exit
    code and never a 0:
@@ -257,6 +259,12 @@ ones, and a relative path is relative to a working directory the extension does 
 cut by the ONE `RoundCounts.Cut` at the one `nowUtc` (`:159-168`, `Inside` `:178-179`): a round in a snapshot 4 h 59 m before
 `--now` is in `5h`; one exactly 5 h before is in `24h` and not `5h` — the same edge rule as this side's. Rows per vendor as today
 (`RowOf`), with per-store `parts[]` computed by the same `StagesOf` over the subset of each store.
+
+**A key in two stores is ONE round, attributed to ONE store** (plan round finding 3). A non-empty `round_key` that appears in more
+than one store is counted once, in the store that comes first in this order: this side, then the snapshots in argument order. Only
+that store's `parts[]` count it, so the parts always sum to the row. The answer carries no ledger lines; S3 applies the same rule to
+the lines, so launches reconcile too: the row's `roundKeys` come with `keyStore` (key → store id), and a launch line counts only
+when it comes from that store's ledger tail.
 
 **The answer** (exit 0, one JSON document on stdout; `RoundCountsMergedAnswer`, registered in `ServerJsonContext`):
 
@@ -366,6 +374,8 @@ flowchart LR
 | Test | Arrange → asserts | RED today because |
 |---|---|---|
 | `ARecordedRound_LeavesASnapshotBesideTheStore_WithItsKey` | a round through `RoundEngine` with a fake reviewer (the `ARoundIsMintedAKeyTests` shape) → `round-counts-snapshot.json` exists, `schema` 1, one round with the 32-hex key the projection wrote, `store.id == SourceIdOf(dir)` | no such file is written |
+| `TwoDistributionsWithTheDefaultDirectory_AreTwoStores` | two snapshots, same `dataDir`, `wslDistro` Ubuntu and Debian → two `stores[]` entries, both counted (plan round finding 0); RED with the directory-only id: one store, one distro's rounds dropped |
+| `AKeyInTwoStores_IsOneRound_AttributedToTheFirst` | the same non-empty key in this side and in a snapshot → the row counts 1, only this side's `parts[]` has it, `keyStore` names this side (finding 3); RED: parts sum to 2 against a total of 1 |
 | `TheReadModes_WriteNothing` (`RoundCountsTests` +1, `AReaderModeNeverMakesTheDataDirectoryTests` +1) | `--round-counts` and `--round-counts-merged` over a store → the directory's listing is byte-identical before and after; a missing named root is not made | — (guard; a plant that writes the snapshot from `Read` goes red) |
 | `OnlyTheLastSevenDays_AreInTheSnapshot` | rounds at −6 d 23 h and −7 d 1 h → the first in, the second out; `fromUtc` = `now − 7 d` | — (new writer) |
 | `PastTheCap_TheNewestAreKept_AndTruncatedIsSaid` | 5 001 rounds in one transaction → 5 000 entries, newest first, `truncated: true`; 5 000 → `false` | — (new writer) |
@@ -466,7 +476,8 @@ row, the Rounds block paragraph: *tokens and money are both sides' ledgers*).
 
 **The brief.** `launchesPerRound.ts` (new, pure): `launchesPerRound(rows: {window, provider, roundKeys, roundsWithoutKey}, lines:
 LedgerLine[]) → { launches, rounds, perRound, keyedWithoutLaunch, withoutKey }` — a launch is a line with `isLaunchLine(line)`
-true AND `line.round` in the row's `roundKeys`; membership in the keys IS the window cut (the round started inside it), so no
+true AND `line.provider` equal to the row's provider (plan round finding 1: one round key is in every vendor row of a
+multi-vendor round) AND `line.round` in the row's `roundKeys` AND the line from the store `keyStore` names for that key (§4.4); membership in the keys IS the window cut (the round started inside it), so no
 second time comparison. `roundsBlock.ts` — one cell in `rowLine` (`:209-219`) and one header (`:168-173`), the words
 `LAUNCHES_PER_ROUND` beside `PER_LAUNCH` in `roundMoney.ts`. The population is both sides' lines (S2) against both sides'
 keys (S1).
@@ -482,7 +493,7 @@ keys (S1).
 |---|---|---|
 | `TwoStoresAreCountedTogether_EachNamedWithItsPart` (the parent's row 17) | a merged answer with two stores → the sentence *Counted from two stores — this machine (C:\…) and WSL: Ubuntu (/home/…, as of 3 min ago)*, each row's count the merged number, the tooltip on a count cell naming each store's part | `storeSentence` says *this side's store only* and names the other as *not included* |
 | `AQuietStore_IsNoughtAsOfItsWrite` | `quiet: true`, `asOf` 9 d ago → *WSL: Ubuntu — 0 rounds as of 9 d ago*; never *not included* | — (new) |
-| `AMissingStore_IsNotIncludedWithItsReason_NeverZero` | `storesNotIncluded: missing` → today's sentence for that store with *no snapshot — update coai-mcp on that side*; `unreadable` and `newer-schema` word their detail; the row's counts carry no part for it | — (new) |
+| `AMissingStore_IsNotIncludedWithItsReason_NeverZero` | `storesNotIncluded: missing` → today's sentence for that store with *no snapshot yet — update coai-mcp on that side; the snapshot is written after the next round there* (plan round finding 2); `unreadable` and `newer-schema` word their detail; the row's counts carry no part for it | — (new) |
 | `AStoreAheadOfThisClock_IsSaidSo` | `asOf` 40 min in the future → *as of 40 min ahead of this clock* — never clamped to *now* | — (new) |
 | `AWindowThatBeginsAfterAStoresWrite_SaysAsOf` | `asOf` 6 h ago, the 5 h cell → the cell's tooltip says the WSL part is *as of 6 h ago* (its 5 h window began after the write) | — (new) |
 | `TheCardLine_SumsBothStores` | `cardRoundsLine` → the merged `rowRounds` (it already reads `totalRounds`; the test pins it over a merged answer) | — (guard; green if S1's parser is right) |
