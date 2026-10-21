@@ -110,11 +110,115 @@ public sealed class PanelServiceHostTests : IDisposable
         File.WriteAllText(bad, """{"state":null,"rounds":[]}"""); // a session the startup sweep cannot survive
 
         Touch(() => WriteVendors("""[{"id":"codex","runtime":"codex","model":"gpt-5.6-mini","baseUrl":""}]"""));
-        host.Invoking(h => h.Current).Should().Throw<Exception>("the rebuild met the bad session");
+        // By design (gate G3, E3 S2): `Current` never throws to its callers, so the reload that met the bad session
+        // answers with the last good settings. The retry on the NEXT call, which this test pins, is kept.
+        CodexModel(host).Should().Be("gpt-5.6-terra", "the rebuild met the bad session, so the old settings stay");
 
         File.Delete(bad);
-        host.Current.Settings.Providers.Single(p => p.Provider == "codex").Model.Should().Be("gpt-5.6-mini",
+        CodexModel(host).Should().Be("gpt-5.6-mini",
             "the failed reload is tried again, so the panel's change still arrives");
+    }
+
+    /// <summary>
+    /// E3 S2 (C14, gate G3): `Current` is read by twenty callers on every tool call and by the sweeper's beat, so a rebuild
+    /// that throws must never reach them — it answers with the last good settings under the OLD stamp, and each later call
+    /// tries again until the cause is gone.
+    /// </summary>
+    [Fact]
+    public void CurrentNeverThrows_WhenTheRebuildThrows()
+    {
+        WriteVendors("""[{"id":"codex","runtime":"codex","model":"gpt-5.6-terra","baseUrl":""}]""");
+        var host = NewHost();
+        var sessions = Directory.CreateDirectory(Path.Combine(_dataDir, "sessions")).FullName;
+        var bad = Path.Combine(sessions, "session-bad.json");
+        File.WriteAllText(bad, """{"state":null,"rounds":[]}"""); // a session the startup sweep cannot survive
+        Touch(() => WriteVendors("""[{"id":"codex","runtime":"codex","model":"gpt-5.6-mini","baseUrl":""}]"""));
+
+        var first = Record.Exception(() => host.Current);
+        var second = Record.Exception(() => host.Current);
+
+        first.Should().BeNull("a rebuild that throws is answered with the last good settings");
+        second.Should().BeNull("and so is the retry on the next call, while the cause is still there");
+        File.Delete(bad);
+        CodexModel(host).Should().Be("gpt-5.6-mini", "the next call after the cause is gone shows the new file");
+    }
+
+    /// <summary>
+    /// E3 S2 (C14): the settings file is held by its writer at the moment the server reloads it. The read used to turn
+    /// that sharing violation into EMPTY settings and publish them under the new stamp, so the server ran on defaults
+    /// until the file changed again. Busy keeps the last good settings and the old stamp; the next read after the release
+    /// shows the new file.
+    /// </summary>
+    [Fact]
+    public void ASettingsFileHeldOpenByItsWriter_KeepsTheLastGoodSettings()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "the share-mode refusal is Windows'");
+        WriteVendors("""[{"id":"codex","runtime":"codex","model":"gpt-5.6-terra","baseUrl":""}]""");
+        var host = NewHost();
+        Touch(() => WriteVendors("""[{"id":"codex","runtime":"codex","model":"gpt-5.6-mini","baseUrl":""}]"""));
+
+        string whileHeld;
+        using (new FileStream(SettingsPath, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            whileHeld = CodexModel(host);
+        }
+
+        whileHeld.Should().Be("gpt-5.6-terra", "a file its writer still holds is not a file with no settings in it");
+        CodexModel(host).Should().Be("gpt-5.6-mini", "the stamp did not move, so the next call after the release reads the new file");
+    }
+
+    /// <summary>
+    /// E3 S2 (C14, decision 4 of the lead's decisions): a file locked down by mistake must never pin the last good settings
+    /// for ever, so a permission denial is NOT busy — it keeps today's answer, the defaults. The denial comes through the
+    /// host's internal read seam, not a real ACL (an ACL is Windows-only, needs cleanup that can fail, and tests the OS).
+    /// </summary>
+    [Fact]
+    public void ADeniedSettingsFile_IsNotKeptAsTheLastGood()
+    {
+        WriteVendors("""[{"id":"codex","runtime":"codex","model":"gpt-5.6-terra","baseUrl":""}]""");
+        var denied = false;
+        var host = new PanelServiceHost(
+            Env, VaultKeys.None("no vault in this test"), default, new ProcessLauncher(), _log, Noticing.None,
+            path => denied ? throw new UnauthorizedAccessException($"Access to the path '{path}' is denied.") : File.ReadAllText(path));
+        Touch(() => WriteVendors("""[{"id":"codex","runtime":"codex","model":"gpt-5.6-mini","baseUrl":""}]"""));
+        denied = true;
+
+        CodexModel(host).Should().Be(DefaultCodexModel(), "a denial is not a holder: the person sees the defaults, not stale settings for ever");
+    }
+
+    [Fact]
+    public void AMalformedFileOnReload_GivesDefaults()
+    {
+        WriteVendors("""[{"id":"codex","runtime":"codex","model":"gpt-5.6-terra","baseUrl":""}]""");
+        var host = NewHost();
+
+        Touch(() => File.WriteAllText(SettingsPath, """{ "COAI_VENDORS": [ not json"""));
+
+        CodexModel(host).Should().Be(DefaultCodexModel(), "a person who wrote a broken file sees the defaults and a warning, as before");
+    }
+
+    [Fact]
+    public void AnEmptyFileOnReload_GivesDefaults()
+    {
+        WriteVendors("""[{"id":"codex","runtime":"codex","model":"gpt-5.6-terra","baseUrl":""}]""");
+        var host = NewHost();
+
+        Touch(() => File.WriteAllText(SettingsPath, string.Empty));
+
+        CodexModel(host).Should().Be(DefaultCodexModel(), "an empty file is an explicit thing too: defaults, as before");
+    }
+
+    private static string CodexModel(PanelServiceHost host) =>
+        host.Current.Settings.Providers.FirstOrDefault(p => p.Provider == "codex")?.Model ?? "(no codex row)";
+
+    /// <summary>What a data directory with no settings file at all gives the codex row.</summary>
+    private static string DefaultCodexModel()
+    {
+        using var empty = TempDir.For("testsToDelete-host-defaults-");
+
+        return CodexModel(new PanelServiceHost(
+            name => name == "COAI_DATA_DIR" ? empty.Path : null,
+            VaultKeys.None("no vault in this test"), default, new ProcessLauncher(), Serilog.Core.Logger.None, Noticing.None));
     }
 
     private void Touch(Action write)

@@ -96,7 +96,7 @@ boundary both survey. The extension reads `consultants.json` only and never sees
 |---|---|
 | The background start, its failure (`ServerStartFailed`) and stop semantics | `Server/StartingHost.cs`, `Program.StartedAsync` |
 | The sweeper waits for the start through the source (`Ready`), then asks for the current service per beat | `ConsultationSweeper.RunAsync(IPanelServiceSource, …)` |
-| A settings reload publishes the new stamp only with a service that built | `PanelServiceHost.Current` |
+| A settings reload publishes the new stamp only with a service that built. **A reload that cannot be used keeps the last good service AND the old stamp** (E3 S2, C14), so the next call tries again, with one warning per stamp: the file is held open by its writer (`SettingsFile.TryLayer` answers `SettingsLayer.Busy` — ONLY a Windows sharing or lock violation, HResult `0x80070020`/`0x80070021`), or the rebuild threw. `Current` never throws. A permission denial is NOT busy (empty settings, as before, so a file locked down by mistake never pins stale settings), and a malformed or empty file gives the defaults, as before. The values the read returned are the ones the rebuild uses (one read per reload); START (`Start()`) reads as it always did. `SettingsFile.Read` and `Layer`'s eight callers are unchanged. | `PanelServiceHost.Current`/`Reload`/`Kept`, `SettingsFile.TryRead`/`TryLayer`, `SettingsRead.cs` |
 | The held set, its cache and fail-closed answer | `Server/SessionHolds.cs`, `SessionStore.HeldQuestions` |
 | Judged first, held asked once per sweep | `Server/EscalationRetention.cs` |
 | The two settings | `Server/ServerPace.cs` (`PanelSettings.Pace`) |

@@ -496,22 +496,22 @@ margin is 300 ms), medium-high and medium for the other two (no failure text kep
 
 ### C14 — `ConsultationSweeperTests`: a settings reload read while the file is half written (PRODUCT, low-medium)
 
-`TheLoop_LapsesAnIdleConsultation_AndKeepsDoingSoAfterASettingsReload` (`src_mcp/tests/ConsultLimitsScenarioTests.cs:156-170`)
+`TheLoop_LapsesAnIdleConsultation_AndKeepsDoingSoAfterASettingsReload` (`src_mcp/tests/ConsultLimitsScenarioTests.cs:155-170`)
 failed once in 488 ms in a full local run on 2026-10-03 and passed 15 of 15 alone (`PLAN_question_consultant_tails.md`
 §6); no CI failure, no message kept. 488 ms rules out the ten-second waits; it is an assertion on the test thread, most
 likely `:165` ("the reload happened"). The class has no collection, so its 50 ms beat runs beside the parallel suite.
 
 **Cause, a hypothesis with a mechanism the code shows.** The test writes `settings.json` with `File.WriteAllText`
 (`:164`) while the sweeper thread reads `host.Current` every 50 ms. `PanelServiceHost.Current`
-(`src_mcp/src/Server/PanelServiceHost.cs:64-85`) compares a stamp and rebuilds; its own comment says "a rebuild that
+(`src_mcp/src/Server/PanelServiceHost.cs:64-84`) compares a stamp and rebuilds; its own comment says "a rebuild that
 throws leaves the old stamp in place, so the next call tries again" (`:76-78`). But `SettingsFile.Read`
-(`src_mcp/src/Server/SettingsFile.cs:84-93`) turns an `IOException` — a sharing violation while the writer still holds the
+(`src_mcp/src/Server/SettingsFile.cs:60-94`) turns an `IOException` — a sharing violation while the writer still holds the
 file — into an EMPTY settings set, so the rebuild does NOT throw, and the host publishes DEFAULT settings under the new
 stamp until the file changes again. In production that is a server that silently runs on defaults after a reload that
 met a busy file. The same `catch` takes `JsonException` (`SettingsFile.cs:90-93`), which is what a HALF-written file
 reads as. **Fix (the lead's decision on gate C14 and judge J3):** a **tri-state read on the RELOAD path only.**
 `SettingsFile.Read` keeps today's signature and behaviour for its callers — `SettingsFile.Layer`'s eight call sites
-(`ProbeApiMode.cs:97`, `Program.cs:633`, `:712`, `:2097`, `CadenceReadMode.cs:32`, `ConsultantCheckMode.cs:47`,
+(`ProbeApiMode.cs:97`, `Program.cs:646`, `:725`, `:2110`, `CadenceReadMode.cs:32`, `ConsultantCheckMode.cs:47`,
 `ConsultantsReadMode.cs:221`, `PanelServiceHost.cs:101`) see no change. A new `SettingsFile.TryRead` answers one of
 three: `Read(values)`, `Missing`, or **`Busy`** — and `Busy` is ONLY a sharing violation (Windows HResult
 `0x80070020` / ERROR_SHARING_VIOLATION, or an `IOException` the open could not take because another process holds the file
@@ -521,18 +521,18 @@ stale settings for ever (cadence consult 589e4647, verified); a malformed file a
 values, exactly what they are today. S10 gains a denial arm that must NOT keep the last good settings. **One existing
 test changes by design:** `PanelServiceHostTests.AReloadThatFails_IsTriedAgainOnTheNextCall_RatherThanHiddenBehindTheNewStamp`
 (`:113`) asserts `Current` THROWS; under "Current never throws" it asserts the old settings come back and the next call
-still retries — the retry it pins is kept, only the throw goes. `PanelServiceHost.Current` (`:64-85`) uses it on the rebuild: on `Busy` it keeps `_current` AND the old
+still retries — the retry it pins is kept, only the throw goes. `PanelServiceHost.Current` (`:64-84`) uses it on the rebuild: on `Busy` it keeps `_current` AND the old
 stamp, warns once per stamp, and tries again on the next call; on everything else it behaves as today. **Why malformed
 and empty are not kept-last-good:** a person who writes a broken file did an explicit thing, and today's answer to it
 (defaults, a warning) is the answer they can see and fix; a torn write — the writer mid-file — already heals by itself,
-because the stamp is `(LastWriteTimeUtc, Length)` (`PanelServiceHost.cs:152-157`) and the finished file has another
+because the stamp is `(LastWriteTimeUtc, Length)` (`PanelServiceHost.cs:152-160`) and the finished file has another
 length, so the next call rebuilds. Only the busy case has no cure today, and only the busy case is cured. **`Current`
 never throws to its callers (gate C14):** `Build(first: false)` is inside a `try` whose catch logs the reason and
 returns `_current` under the OLD stamp — the comment at `:76-78` already promises the retry, and this makes the promise
 true for a throwing rebuild too. **Blast radius:** `PanelServiceHost.Current` (the 20 `.Current` readers in `src_mcp/src`
 go through it) on the reload path only; START (`Build(first: true)`, `:60`) is untouched — a busy file at start still
 yields defaults with a warning, as today, a server that refuses to start being worse. Nothing in `SettingsFile.Layer`,
-`--providers`, the cadence or consultant read modes changes. Also: the test's `Host()` (`:116-118`) passes no consultant-homes folder, so every beat
+`--providers`, the cadence or consultant read modes changes. Also: the test's `Host()` (`:114-125`) passes no consultant-homes folder, so every beat
 sweeps the machine's real per-user folders and walks the real temp folder — `ConsultScenarioBase` documents `homes` for
 exactly this; the test passes its own. **RED first (Windows, no timing):** hold `settings.json` open for write with
 `FileShare.None` and new content flushed; read `host.Current`; release; read again — today the first read (busy)
@@ -540,6 +540,20 @@ shows the defaults under the new stamp; after the fix it shows the last good set
 new file. Two companions that are GREEN today and stay green, pinning the decision: a malformed file on reload gives
 defaults, and an empty file on reload gives defaults (as today). **Confidence: low-medium** — the mechanism is real in
 the code; that it is THIS failure is not proven.
+
+**Outcome (2026-10-21, branch `feat/suite-e3-s2`, E3 S2).** Built as decided. `SettingsFile.TryRead` answers a closed union (`SettingsRead`: `Values`, `Missing`, `Busy`; `SettingsRead.cs`); `Busy`
+is ONLY Windows HResult `0x80070020`/`0x80070021` (one `private static` predicate); a denial, a malformed and an empty file are `Values` with nothing in them, as before. `SettingsFile.TryLayer` adopts first and reads the file ONCE, and
+`PanelServiceHost.Current` uses it on the reload path: `Busy` or a throwing rebuild keeps the last good service AND the old stamp, with one warning per stamp; `Current` never throws; START (`Start()`) is untouched. `Read`,
+`Layer`'s public signature and its eight callers are unchanged (no diff in those files). The denial arm uses an `internal` constructor of `PanelServiceHost` (and `Layer`/`Read` overloads) taking the read function. RED: the S10 busy
+test (`Expected whileHeld to be "gpt-5.6-terra" … but "" has a length of 0` — the defaults under the new stamp) and `CurrentNeverThrows_…` (`NullReferenceException` out of `Current`); green after; the denial, malformed and empty
+companions green throughout; four break-its seen red and restored (busy read as empty; a denial read as busy; no catch around the rebuild; `Kept` publishing the new stamp). The sweeper test's `Host()` passes its own
+`COAI_CONSULTANT_HOMES`; the class passed 20 of 20 beside a whole-suite run. Tests: 5 → 10 in `PanelServiceHostTests`; `CoaiMcp.Tests` 13 053 → 13 058. Docs: `module_server.md` (the reload row), `module_tests.md` (a section).
+**Deviations.** (1) `AReloadThatFails_…` (`:113`) asserts the old settings instead of a throw — by design (G3); its retry assertion is kept. (2) The text above says a denial keeps "empty settings with a warning
+(`SettingsFile.cs:90`)": there is NO warning in `Read` today (it returns `[]` silently), and none was added — the denial answer is exactly today's. (3) `HeldFile.Take` was not reused: it reads EVERY non-path `IOException` as a holder, which is
+right for a lock that is taken but would call a failing disk "somebody is writing" on a read; the HResult check is the narrower rule this plan decided. (4) The constructor's build is now `Start()` and the shared tail `Assemble(first, configuration)`
+(the old `Build(first)` is gone); `StartupNotices`'s doc `cref` followed. (5) The line references of this section were re-pinned to `adb299b5e`. **Not measured:** the sweeper loop on the OLD code (the original failure had no kept message; S10 is the proof). **Suite-only failure
+seen once in a whole-suite run on a machine running five suites at once:** `AConversationPlaceTests.CopiesThatOutrunTheRowsBudget_RefuseThePlace_SayingHowManyWereCopied_AndKeepNone` (the 1 s copy budget ran out before the copy: C17's
+mechanism); it passes alone (10 of 10) and is not touched by this story.
 
 ### C15 — `ConsultAntigravityDenialScenarioTests`: a whole-turn stopwatch for a launch-level claim (TIMING, medium-high)
 
@@ -1370,6 +1384,7 @@ Built as the plan round and the risk consult say, not as the first brief: `Sessi
 - **The seam is `SessionStore.FileWriter`** (`internal` init), not a `BusyPause` property: the pause lives in `AtomicSeams`, so the store needs only the write road. `AtomicSeams` gained `WriteText` so S26 can fail the temp write half way.
 - **S26 has four arms and a guard** (the temp write fails; the move fails; the busy file lands after release; the turn is held through the move; held-through fails and keeps the old bytes), not the brief's two.
 - **The §10 watch was run:** 15 of 20 runs of `SessionStoreConcurrencyTests` failed before, 0 of 20 after, each beside a loaded suite. The 20 Windows CI runs of the plan's watch are still to come.
+**S2 (C14) status (2026-10-21): built on `feat/suite-e3-s2`, awaiting CI and the merge** — see C14's Outcome.
 
 **Size.** Five stories: S1 C2 (the launcher helper, S8 both arms, S9, the EndToEnd assertion; the brief pins the
 tracker stand-in's two observations and that the Team server's reader marker is cleared by the launch's normal end) —

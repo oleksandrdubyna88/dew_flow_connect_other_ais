@@ -4896,3 +4896,33 @@ The three reds other than the first were red because the unfixed store did not u
 **Counts.** Whole `CoaiMcp.Tests.exe`: 13,077 total, 12,956 passed, 120 skipped, 1 failed in the suite: `AConversationPlaceTests.CopiesThatOutrunTheRowsBudget_…` ("0 of 2 copied", a 1 s budget on a loaded machine) — it also failed in S4's run, and passes alone (3 of 3, 10 tests). Not called a flake; it measures a 1 s copy budget and is not touched by the session store. The new class has 5 tests; the total grew by 6 from S4's 13,071 (one more than the 5 added — not explained: no other test file changed).
 
 **A consequence CI showed (run 39580935495, Linux and macOS).** `AnUnrecordedRoundIsNotAnAnswerTests.ARoundThatCouldNotBeRecorded_…` made the save fail with a READ-ONLY session file; a rename over a read-only file succeeds on Unix, so now the save landed and the assertion (`error` present, "could not be recorded") saw a success. The assertions are unchanged; the ARRANGEMENT adds a folder nobody may create a file in on Unix (`ReadOnlyFolder`, mode restored on dispose). Product meaning: on Unix a read-only session file no longer blocks a save, because the save replaces the file instead of opening it; the Windows leg still refuses the move over a read-only file.
+
+## The suite is deterministic — E3 S2 (C14): a settings reload that meets a busy file (2026-10-21)
+
+Source: `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md`, C14 and scenario S10. **Product defect**, found as one unexplained local failure of
+`ConsultationSweeperTests.TheLoop_LapsesAnIdleConsultation_AndKeepsDoingSoAfterASettingsReload` (488 ms, 2026-10-03; no message was kept, D5). The mechanism
+the code shows: `SettingsFile.Read` turned the sharing violation of a file its writer still held into EMPTY settings, so `PanelServiceHost.Current` published
+the defaults under the new stamp and kept them until the file changed again. Fixed on the reload path only: `SettingsFile.TryRead` answers a closed union
+(`Values`, `Missing`, `Busy`; `SettingsRead.cs`), `Busy` is ONLY Windows HResult `0x80070020`/`0x80070021`; `PanelServiceHost` keeps the last good service AND the old
+stamp on `Busy` or on a throwing rebuild (one warning per stamp) and `Current` never throws. A permission denial is not busy. `SettingsFile.Read`, `Layer` and its
+eight callers are unchanged. The denial arm goes through an `internal` read seam (`PanelServiceHost` internal constructor taking `Func<string, string> readText`,
+`SettingsFile.Layer`/`Read` overloads) — no public API change, no real ACL.
+
+| Test (`PanelServiceHostTests`) | Seen red as |
+|---|---|
+| `ASettingsFileHeldOpenByItsWriter_KeepsTheLastGoodSettings` (S10, Windows; skipped elsewhere: "the share-mode refusal is Windows'") | `Expected whileHeld to be "gpt-5.6-terra" with a length of 13 because a file its writer still holds is not a file with no settings in it, but "" has a length of 0` — the defaults, published under the new stamp; green after |
+| `CurrentNeverThrows_WhenTheRebuildThrows` (gate G3; a session the startup sweep cannot survive) | `Expected first to be <null> because a rebuild that throws is answered with the last good settings, but found System.NullReferenceException … at SessionStore.Normalised … at PanelServiceHost.get_Current()`; green after (two calls with the cause present, then the new file after it is removed) |
+| `AReloadThatFails_IsTriedAgainOnTheNextCall_…` — **changed by design (G3)**: it asserted `Current` THROWS (`:113`); it now asserts the old settings come back (`gpt-5.6-terra`), and its retry assertion (the new `gpt-5.6-mini` after the cause is removed) is kept | red on the old code as `NullReferenceException` out of `CodexModel(host)`; green after |
+| `ADeniedSettingsFile_IsNotKeptAsTheLastGood` (denial through the seam) | **green before and after** (pins that denial is not `Busy`); seen red by the break-it below |
+| `AMalformedFileOnReload_GivesDefaults`, `AnEmptyFileOnReload_GivesDefaults` | **green before and after** (companions that pin today's answer) |
+
+**Break-its, each seen red and restored (the three of the brief plus one):** (a) `IsSharingViolation` made `false` (busy read as empty settings again) → the S10 busy test red with the
+same message as the original red; (b) `UnauthorizedAccessException` also read as `Busy` → `Expected CodexModel(host) to be the same string because a denial is not a holder: the person sees the
+defaults, not stale settings for ever`; (c) the catch around the rebuild removed → `CurrentNeverThrows_…` and `AReloadThatFails_…` red (`NullReferenceException`); (d) `Kept` also publishing the new stamp →
+the busy test's second read, `AReloadThatFails_…` and `CurrentNeverThrows_…` red (`Expected CodexModel(host) to be … because the stamp did not move, so the next call after the release reads the new file`).
+
+`ConsultationSweeperTests.Host()` now sets `COAI_CONSULTANT_HOMES` to a folder under the test's own directory, so the 50 ms beat no longer walks the machine's real per-user folders; no assertion changed.
+The class passed 20 of 20 runs while a whole-suite run went on beside it. NOT measured: the same loop on the old code (C14's original failure had no kept message, and the mechanism needs the file held at the moment of
+the beat — S10 is the deterministic proof, not the loop). Test count: 5 `PanelServiceHostTests` before, 10 after (+5: `CurrentNeverThrows_WhenTheRebuildThrows`, `ASettingsFileHeldOpenByItsWriter_KeepsTheLastGoodSettings`,
+`ADeniedSettingsFile_IsNotKeptAsTheLastGood`, `AMalformedFileOnReload_GivesDefaults`, `AnEmptyFileOnReload_GivesDefaults`); whole `CoaiMcp.Tests`: 13 058 after (13 053 before).
+Limit: `Busy` is the Windows share-mode refusal; on Unix .NET reports a held file differently and the read keeps today's answer there.
