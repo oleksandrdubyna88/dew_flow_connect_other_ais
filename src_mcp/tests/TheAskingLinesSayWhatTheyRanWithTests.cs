@@ -189,7 +189,8 @@ public sealed class TheAskingLinesSayWhatTheyRanWithTests : ConsultScenarioBase
     {
         var row = new ProviderSettings("claude") { Runtime = "claude", Model = "claude-opus-5", CliEffort = "high", Fast = FastMode.On };
         var settings = ConsultantTurnInputs.Settings(row, row.Model, TimeSpan.FromMinutes(5), new PanelSettings { DataDir = _data }, VaultKeys.None("t"))
-            with { ClaudeCli = ClaudeCapability.WithRestricted };
+            with
+        { ClaudeCli = ClaudeCapability.WithRestricted };
 
         var built = ConsultantResolution.For(row.Identity())!
             .Build(new ConsultantLaunch("D:/rsd/some-checkout", "help me", string.Empty, "D:/answers", settings, "D:/answers/schema.json"));

@@ -325,7 +325,8 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
         // And labelled with what it runs with, from the settings the launch was built with — a codex row's tier probe is in them (E3.S1 of
         // todo/PLAN_the_round_counter_tail_E3.md); a ready continuation keeps its first launch's labels the same way it keeps the redaction.
         var invocation = ready ?? (RowLaunchOptions.Answering(consultant.Build(launch), input.Row.Provider, launch.Settings)
-            with { Redact = ConsultantTurnInputs.Redacted(input.Row.Provider.SystemPrompt) });
+            with
+        { Redact = ConsultantTurnInputs.Redacted(input.Row.Provider.SystemPrompt) });
         var clock = Stopwatch.StartNew();
         var landed = new List<ReviewerLaunch>();
         var ended = false;
