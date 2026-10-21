@@ -446,3 +446,15 @@ Kimi failure table), `research/module_tests.md`, `research/RESULTS_kimi_confinem
 sighting as "seen in prompt mode; the ACP form still unmeasured").
 
 **Done when.** S10–S13 red then green with break-its; the guards green; the whole suite green; released with the next mcp minor.
+
+**Story 5's plan round (coai session `c7c16214`, 2026-10-21, verdict proceed) — 3 findings: 2 accepted, 1 rejected.**
+- *Accepted — the ACP shape is unmeasured, so the claim is narrowed.* `AcpDiagnosis.Of` matches a row as a case-blind SUBSTRING of the
+  error text plus stderr, so the monthly row fires wherever the measured sentence appears, whatever envelope wraps it; what stays
+  unverified is that ACP delivers the sentence at all (and not, say, a bare `Authentication required` — S9's outcome). The release note
+  and the DoD say exactly that: "a monthly-quota answer that carries Kimi's measured sentence reads as a spent quota"; the ACP form is
+  recorded by the capture step (§5 step 1) at its first sighting, and S10's constructed envelope is replaced then.
+- *Accepted — the clause's end.* `ClauseOf` already ends a clause at the first period followed by whitespace (the #900 CodeRabbit
+  fix), so the monthly clause stops at "cycle." and the sales sentence and the URL after it stay out. S12 gains that assertion: the
+  clause does NOT contain "purchase" or "https://".
+- *Rejected — case sensitivity:* `ClauseOf` already searches with `OrdinalIgnoreCase` (`KimiQuotaWords.cs:41`), and
+  `AcpDiagnosis.Of` matches rows case-blind; the new opening joins the same search.
