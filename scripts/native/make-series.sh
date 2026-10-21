@@ -13,9 +13,11 @@
 #   3. writes run/path.txt: the VALUE of the `PATH=` entry of the VS Code server's environment (the server is the process whose exe
 #      lies under ~/.vscode-server/) — that one variable and nothing else of the environment is kept. No server → exit 69, "Remote-SSH
 #      must be connected";
-#   4. audits that PATH: an EMPTY or RELATIVE entry, or a directory that is world-writable or owned by neither uid 0 nor the user
-#      running this script, at or BEFORE the directory a used tool (node, vibe, kimi, rg, fd) resolves to, refuses with exit 77 and
-#      names the entry — a root-run step would otherwise run a stranger's program;
+#   4. audits that PATH: an EMPTY or RELATIVE entry, an absolute entry that is MISSING, or a directory that is world-writable,
+#      group-writable (unless the group is root's) or owned by neither uid 0 nor the user running this script, at or BEFORE the directory
+#      a used tool (node, vibe, kimi, rg, fd, git, python3) resolves to, refuses with exit 77 and names the entry — a root-run step
+#      would otherwise run a stranger's program. A symlinked entry is judged twice and never refused for being a link (Ubuntu's
+#      merged-usr /bin is one): its realpath TARGET, and the folder that HOLDS the link (whoever can write that folder can repoint it);
 #   5. resolves node ONCE through that PATH, realpath, into run/node.txt — every root-run step runs THAT path, never `node` by PATH.
 #
 # Exit codes: 0 made; 69 no VS Code server; 77 PATH refused; 78 this place is wrong.
@@ -69,7 +71,7 @@ ENTRIES=(); REST="$SERVER_PATH:"
 while [ -n "$REST" ]; do ENTRIES+=("${REST%%:*}"); REST="${REST#*:}"; done
 
 LIMIT=-1; NODE_CANDIDATE=""
-for TOOL in node vibe kimi rg fd; do
+for TOOL in node vibe kimi rg fd git python3; do
   I=0
   for ENTRY in "${ENTRIES[@]}"; do
     CANDIDATE="${ENTRY:-.}/$TOOL"
@@ -84,19 +86,54 @@ done
 if [ -z "$NODE_CANDIDATE" ]; then echo "refused: node is on no entry of the VS Code server's PATH" >&2; exit 78; fi
 
 ME="$(id -u)"
+
+# Why a directory cannot be trusted to hold a program a root-run step will run — or nothing, when it can. `stat -L` reads where a symlink POINTS.
+# World-writable: anyone can plant a file. Group-writable: so can the group, unless it is root's own (gid 0). Owned by neither root nor the user
+# running this script: the owner can plant one.
+untrusted() {
+  local facts mode owner group
+  facts="$(stat -L -c '%a %u %g' -- "$1" 2>/dev/null)" || { echo "unreadable"; return 0; }
+  read -r mode owner group <<< "$facts"
+  if (( (8#$mode & 8#002) != 0 )); then
+    echo "world-writable (mode $mode)"
+  elif (( (8#$mode & 8#020) != 0 )) && [ "$group" != 0 ]; then
+    echo "group-writable (mode $mode, group $group)"
+  elif [ "$owner" != 0 ] && [ "$owner" != "$ME" ]; then
+    echo "owned by uid $owner"
+  fi
+  return 0
+}
+
+# One absolute, existing PATH entry. A symlink is judged TWICE: where it points (the realpath target) and the folder that HOLDS the link,
+# because whoever can write that folder can repoint the link later. A link is not refused for being a link — Ubuntu's merged-usr /bin is
+# one, in a root-owned folder, pointing at a root-owned one.
+entry_problem() {
+  local plain="${1%/}" real why HOLDER=""
+  plain="${plain:-/}"
+  real="$(realpath -e -- "$1" 2>/dev/null)" || { echo "unresolvable"; return 0; }
+  why="$(untrusted "$real")"
+  if [ -n "$why" ]; then
+    if [ "$real" = "$plain" ]; then echo "$why"; else echo "a link to $real, which is $why"; fi
+    return 0
+  fi
+  if [ -L "$plain" ] || [ "$real" != "$plain" ]; then HOLDER="$(dirname -- "$plain")"; fi
+  if [ -n "$HOLDER" ]; then
+    why="$(untrusted "$HOLDER")"
+    if [ -n "$why" ]; then echo "a link whose folder $HOLDER is $why"; fi
+  fi
+  return 0
+}
+
 for ((J = 0; J <= LIMIT; J++)); do
   ENTRY="${ENTRIES[$J]}"; WHY=""
   if [ -z "$ENTRY" ]; then
-    WHY="an empty entry (the current folder)"
+    WHY="an empty entry (= the current directory)"
   elif [ "${ENTRY#/}" = "$ENTRY" ]; then
     WHY="a relative entry"
-  elif [ -d "$ENTRY" ]; then
-    DIRSTAT="$(stat -c '%a %u' -- "$ENTRY")"
-    if (( (8#${DIRSTAT% *} & 8#002) != 0 )); then
-      WHY="world-writable (mode ${DIRSTAT% *})"
-    elif [ "${DIRSTAT#* }" != 0 ] && [ "${DIRSTAT#* }" != "$ME" ]; then
-      WHY="owned by uid ${DIRSTAT#* }"
-    fi
+  elif [ ! -d "$ENTRY" ]; then
+    WHY="missing (no such directory)"
+  else
+    WHY="$(entry_problem "$ENTRY")"
   fi
   if [ -n "$WHY" ]; then
     printf 'refused: PATH entry %d %q is %s\n' "$J" "$ENTRY" "$WHY" >&2

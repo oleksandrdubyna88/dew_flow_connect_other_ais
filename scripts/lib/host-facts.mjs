@@ -11,13 +11,17 @@
 // the test's spy fails the build the day it is called for anything else. The two Python programs below ask for a backend's CLASS
 // NAME and a list of installed distributions; neither asks for a password.
 import { posix } from 'node:path';
-import { builtEnv as vibeBuiltEnv, personsVibeHome, vibePython } from './vibe.mjs';
+import { KEYRING_FAIL_BACKEND, builtEnv as vibeBuiltEnv, personsVibeHome, vibePython } from './vibe.mjs';
 import { builtEnv as kimiBuiltEnv } from './kimi-home.mjs';
 
-/** A keyring daemon by the start of its `comm` (cut at 15 characters by the kernel: `gnome-keyring-d`). */
-export const DAEMON_PREFIXES = ['gnome-keyring', 'kwalletd', 'keepassxc'];
-/** What Python's keyring forced to FAIL answers (keyring/backends/fail.py): the class DN10 of the plan makes coai's Vibe launch carry. */
-const FAIL_BACKEND = 'keyring.backends.fail.Keyring';
+/**
+ * What counts as a desktop keyring daemon, by an executable name or a `comm` (the kernel cuts it at 15 characters: `gnome-keyring-d`). This is THIS
+ * script's own reading of a definition the product shares (src_mcp/runners/Platform/KeyringSessionFacts.cs): shared/keyring-daemon-vectors.json holds
+ * the cases, and host-facts.test.mjs and KeyringSessionFactsTests.cs each hold their own reading to them. `keepassxc-proxy` is NOT a daemon.
+ */
+export const DAEMON_NAMES = ['gnome-keyring-daemon', 'gnome-keyring-d', 'keepassxc'];
+export const DAEMON_PREFIXES = ['kwalletd'];
+export const isKeyringDaemon = (name) => typeof name === 'string' && (DAEMON_NAMES.includes(name) || DAEMON_PREFIXES.some((prefix) => name.startsWith(prefix)));
 /** Installed distributions whose name holds a keyring-related word, as `[[name, version], …]` — names and versions, nothing else. */
 export const PY_DISTRIBUTIONS = "import importlib.metadata as m,json;w=('keyring','secretstorage','jeepney','dbus','dotenv');print(json.dumps(sorted([d.metadata['Name'],d.version] for d in m.distributions() if d.metadata['Name'] and any(x in d.metadata['Name'].lower() for x in w))))";
 /** The module and class name of the backend `keyring` would pick — `get_keyring()` and nothing after it. */
@@ -38,23 +42,42 @@ const iso = (ms) => new Date(ms).toISOString();
 /** A slot's hex is a name of the person's account, not a fact about the host: any run of 8 or more hex digits becomes `<hex>`. */
 export const redactSlot = (name) => name.replaceAll(/[0-9a-f]{8,}/giu, '<hex>');
 
-/** One path by `lstat` ALONE — type, size, mode, owner, mtime; `{ path, exists: false }` when it is not there. The file is never opened. */
+/** A read that could not tell, as data: the error's code (`EACCES`, `EIO`, …) or `unknown`. It is NOT "absent" — a file that cannot be read may well be there. */
+const unreadable = (error) => ({ state: 'unreadable', code: String(error?.code ?? 'unknown') });
+
+/** Runs a read: `{ value }`, with `absent` as the value for ENOENT (the only error that means "not there"), or `{ failed: unreadable(error) }` for any other (G23). */
+const readOr = (read, absent) => {
+  try {
+    return { value: read() };
+  } catch (error) {
+    return error?.code === 'ENOENT' ? { value: absent } : { failed: unreadable(error) };
+  }
+};
+
+/**
+ * One path by `lstat` ALONE — type, size, mode, owner, mtime; `{ path, exists: false }` when it is not there (ENOENT), and
+ * `{ path, state: 'unreadable', code }` for any other failure. The file is never opened.
+ */
 export function signInRecord(fsx, path) {
-  const st = attempt(() => fsx.lstat(path), null);
+  const { value: st, failed } = readOr(() => fsx.lstat(path), null);
+  if (failed) return { path, ...failed };
   return st === null ? { path, exists: false }
     : { path, exists: true, type: typeOf(st), size: st.size, mode: modeText(st.mode), uid: st.uid, mtime: iso(st.mtimeMs) };
 }
 
-/** A folder's entries by `readdir` + `lstat`: the first level only, names verbatim. */
-const entriesOf = (fsx, dir, rename = (name) => name) => attempt(() => fsx.readdir(dir), []).map((name) => {
-  const { path: _path, ...facts } = signInRecord(fsx, posix.join(dir, name));
-  return { name: rename(name), ...facts };
-});
+/** A folder's entries by `readdir` + `lstat`: the first level only, names verbatim. A folder that cannot be listed is `{ state: 'unreadable', code }`, never `[]`. */
+const entriesOf = (fsx, dir, rename = (name) => name) => {
+  const { value: names, failed } = readOr(() => fsx.readdir(dir), []);
+  return failed ?? names.map((name) => {
+    const { path: _path, ...facts } = signInRecord(fsx, posix.join(dir, name));
+    return { name: rename(name), ...facts };
+  });
+};
 
 /** The credentials folder: NAMES with the slot's hex redacted, and each entry's lstat facts. No file under it is opened. */
 export function credentialsRecord(fsx, dir) {
   const folder = signInRecord(fsx, dir);
-  return folder.exists ? { ...folder, entries: entriesOf(fsx, dir, redactSlot) } : folder;
+  return folder.exists === true ? { ...folder, entries: entriesOf(fsx, dir, redactSlot) } : folder;
 }
 
 /** `/proc/version`: its text, whether it names Microsoft or WSL, and `read: false` when it is absent, unreadable or empty. */
@@ -98,7 +121,7 @@ export function keyringSession({ env, serverNames, uid, fsx, listing }) {
 }
 
 const daemonsIn = (list) => list.flatMap((entry) => {
-  const hit = [entry.comm, entry.name].find((n) => typeof n === 'string' && DAEMON_PREFIXES.some((p) => n.startsWith(p)));
+  const hit = [entry.comm, entry.name].find(isKeyringDaemon);
   return hit === undefined ? [] : [hit];
 });
 
@@ -137,6 +160,9 @@ export function pathEntries(fsx, pathText) {
   });
 }
 
+/** One short progress line before a slow step, through the injected sink (the probe writes it to STDERR; stdout stays the one JSON record). */
+const say = (deps, line) => deps.progress?.(line);
+
 const firstLine = (text) => String(text ?? '').trim().split('\n')[0] ?? '';
 const pathDirs = (pathText) => pathText.split(':').filter((d) => d.startsWith('/'));
 
@@ -170,14 +196,16 @@ function toolsOf(fsx, env, home, pathText) {
   };
 }
 
-function coaiMcpOf({ fsx, run, hash }, binary) {
+function coaiMcpOf({ run, hash, ...deps }, binary) {
   if (!binary) return { asked: false };
+  say(deps, 'asking coai-mcp --version and --host-facts...');
   const version = firstLine(run(binary, ['--version'], {}).stdout);
   return { path: binary, version, sha256: attempt(() => hash(binary), ''), hostFacts: hostFactsMode(run, binary) };
 }
 
 function h1Of(deps, seriesPath) {
   const { fsx, env, uid, home, platform } = deps;
+  say(deps, 'reading the kernel banner, the OS and the mounts...');
   const mountinfo = attempt(() => fsx.readFile('/proc/self/mountinfo'), '');
   const nodeAbs = deps.series ? attempt(() => fsx.readFile(`${deps.series}/run/node.txt`).trim(), '') : '';
   return {
@@ -207,17 +235,25 @@ const python = (run, interpreter, program, env, cwd) => {
   return r.status === 0 ? String(r.stdout ?? '').trim() : '';
 };
 
-function keyringReadings({ fsx, run, env, scratch }, interpreter) {
+function keyringReadings(deps, interpreter) {
+  const { fsx, run, env, scratch } = deps;
   const freshHome = (name) => {
     const home = posix.join(scratch, name);
     fsx.mkdir?.(home);
     return home;
   };
   const built = vibeBuiltEnv(freshHome('v0-home-built'), 'none', 'linux', env);
-  const forced = { ...vibeBuiltEnv(freshHome('v0-home-forced'), 'none', 'linux', env), PYTHON_KEYRING_BACKEND: FAIL_BACKEND };
+  const forced = { ...vibeBuiltEnv(freshHome('v0-home-forced'), 'none', 'linux', env), PYTHON_KEYRING_BACKEND: KEYRING_FAIL_BACKEND };
+  say(deps, "asking Vibe's Python for its keyring class (built environment)...");
   const builtEnvironment = python(run, interpreter, PY_KEYRING_CLASS, built, scratch);
+  say(deps, "asking Vibe's Python for its keyring class (fail backend forced)...");
   const withFailBackend = python(run, interpreter, PY_KEYRING_CLASS, forced, scratch);
-  return { builtEnvironment, withFailBackend, failBackendForced: withFailBackend === FAIL_BACKEND };
+  return { builtEnvironment, withFailBackend, failBackendForced: withFailBackend === KEYRING_FAIL_BACKEND };
+}
+
+function distributionsOf(deps, interpreter, readEnv) {
+  say(deps, "asking Vibe's Python for its keyring-related distributions...");
+  return attempt(() => JSON.parse(python(deps.run, interpreter, PY_DISTRIBUTIONS, readEnv, deps.scratch)), []);
 }
 
 function v0Of(deps) {
@@ -232,22 +268,33 @@ function v0Of(deps) {
     signIn: signInRecord(fsx, posix.join(vibeHome, '.env')),
     names: entriesOf(fsx, vibeHome),
     python: { path: interpreter, found: hasPython },
-    distributions: hasPython ? attempt(() => JSON.parse(python(run, interpreter, PY_DISTRIBUTIONS, readEnv, scratch)), []) : [],
+    distributions: hasPython ? distributionsOf(deps, interpreter, readEnv) : [],
     keyringBackend: hasPython ? keyringReadings(deps, interpreter) : { status: 'no python' },
     keyringrc: configHomes.map((base) => signInRecord(fsx, posix.join(base, 'python_keyring', 'keyringrc.cfg'))),
     keyringSession: keyringSession({ env, serverNames: attempt(() => serverEnvNames(), []), uid, fsx, listing }),
   };
 }
 
+/**
+ * kimi's environment for N-K0: an OWNED root (`<scratch>/k0` = home/ + an empty os/ + cache/, kimi-home.mjs's layout) so HOME is the empty os/,
+ * KIMI_CODE_HOME the root's home/ and XDG_CACHE_HOME its cache/ — kimi's native-file extraction never lands in the person's ~/.cache (J2).
+ */
+function k0Environment({ env, scratch, ownedRoot }) {
+  const owned = ownedRoot(posix.join(scratch, 'k0'));
+  return kimiBuiltEnv({ home: owned.home, profile: owned.os, platform: 'linux', parent: env });
+}
+
 function k0Of(deps, pathText) {
   const { fsx, run, env, home, scratch, kimi } = deps;
   if (!kimi) return { asked: false };
+  // The "no other kimi" guard (DN5): the probe's main() waits for it BEFORE the record is collected and hands the answer in as `kimiClear`.
+  if (deps.kimiClear === false) return { asked: false, skipped: 'another kimi was running when N-K0 was due - two refreshers could sign the person out, so kimi was not started' };
   const kimiHome = posix.join(env.KIMI_CODE_HOME || posix.join(home, '.kimi-code'));
-  const fresh = posix.join(scratch, 'k0-home');
-  fsx.mkdir?.(fresh);
-  const built = kimiBuiltEnv({ home: fresh, platform: 'linux', parent: env });
+  const built = k0Environment(deps);
   const asked = (args) => run(kimi, args, { env: built, cwd: scratch });
+  say(deps, 'asking kimi --version...');
   const version = firstLine(asked(['--version']).stdout);
+  say(deps, 'asking kimi acp --help...');
   const help = asked(['acp', '--help']);
   return {
     asked: true,
@@ -262,10 +309,14 @@ function k0Of(deps, pathText) {
 /**
  * The whole record: N-H1 (`h1`), N-V0 (`v0`), N-K0 (`k0`, only when a kimi path is named — the owner installs and signs in first).
  * `deps` is the injected world (see the top of this file); `series` names the series folder whose `run/path.txt` and `run/node.txt`
- * make-series.sh wrote — '' when there is none.
+ * make-series.sh wrote — '' when there is none. Three more injected seams beyond the file system and the runners: `progress(line)` (one short
+ * line before each slow step; optional), `ownedRoot(path)` (kimi-home.mjs's — makes N-K0's `<scratch>/k0` home/os/cache), and `kimiClear`
+ * (false = another kimi runs, N-K0 is skipped; the probe waits for it with proc.mjs's `waitForNoOtherKimi` before calling this).
  */
 export function collectHostFacts(deps) {
   const serverPath = deps.series ? attempt(() => deps.fsx.readFile(`${deps.series}/run/path.txt`).trim(), '') : '';
+  const h1 = h1Of(deps, serverPath);
+  const v0 = v0Of(deps);
   const k0 = k0Of(deps, serverPath === '' ? deps.env.PATH ?? '' : serverPath);
-  return { schema: 'native-host-facts/1', at: deps.now().toISOString(), h1: h1Of(deps, serverPath), v0: v0Of(deps), k0 };
+  return { schema: 'native-host-facts/1', at: deps.now().toISOString(), h1, v0, k0 };
 }

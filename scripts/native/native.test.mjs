@@ -702,11 +702,21 @@ linuxTest('J3: the leader gone and a group member that STARTED EARLIER than the 
   assert.ok(alive(id), 'a member older than the recorded leader was signalled — the group id had been reused');
 });
 
-test('G5: no table-key expansion of abort.sh is a bare "${!TABLE[@]}" — an EMPTY table would trip `set -u` on a bash older than 4.4; they all go through keys_of', () => {
+test('G5: abort.sh\'s owned tables are ASSIGNED empty at once (a declared-never-assigned associative array is "unbound" to `set -u` on bash 5.3), and every key listing goes through keys_of', () => {
   const text = nativeText('abort.sh');
+  assert.match(text, /^OWNED=\(\); OWNED_GROUP=\(\)$/mu, 'OWNED and OWNED_GROUP are declared but never assigned — an empty owned set aborts `${#OWNED[@]}` under set -u');
   const bare = text.split('\n').filter((line) => line.includes('"${!') && !line.includes('printf'));
-  assert.deepEqual(bare, [], 'a bare "${!TABLE[@]}" expansion of a possibly empty associative array');
+  assert.deepEqual(bare, [], 'a key listing outside keys_of');
   assert.match(text, /keys_of\(\)/u);
+});
+
+linuxTest('G5: abort.sh survives an EMPTY owned set under `set -u` — the group\'s only member ends between the listing and the snapshot (the path every owned loop and the count line take)', () => {
+  // The deterministic part of that race: source abort.sh's own table declarations and key helper, and read an empty OWNED the way the script does.
+  const text = nativeText('abort.sh');
+  const declarations = text.split('\n').filter((line) => /^(declare -A |OWNED=\(\)|keys_of\(\))/u.test(line)).join('\n');
+  const r = spawnSync('/bin/bash', ['-c', `set -eu\n${declarations}\necho "owned set of \${#OWNED[@]} = $(keys_of OWNED | tr -d '\\n')"\nfor k in $(keys_of OWNED); do echo "never: $k"; done\necho done`], { encoding: 'utf8' });
+  assert.equal(r.status, 0, `an empty owned set aborted under set -u: ${r.stderr}`);
+  assert.match(r.stdout, /owned set of 0 = \ndone|owned set of 0 =\s*\ndone/u);
 });
 
 linuxTest('TEETH (J3): an abort.sh that does not require pid == pgid kills the bystander group a forged handle names', async () => {
