@@ -29,6 +29,17 @@ still answers nothing it could not find by name, and a stuck consultant's conver
 whether it executes code of the model's own outside the tool policy (a file write through the runtime's own API, a
 network call) — was never a cell. That is a confinement question, not a cost one.
 
+**New evidence, 2026-10-20 — a parent folder makes it worse.** Since coai-mcp 0.62.0
+([PLAN_vibe_reads_a_folder_of_repositories.md](../research/PLAN_vibe_reads_a_folder_of_repositories.md)) a disk row on a
+parent folder is expanded into one `snapshot-<id>` copy per repository. The first live row on `d:\rsd` (one broad
+`ask_consultants` question, "how do the other projects on this disk do X — name the project, file and method") was handed
+~13 copy roots holding ~10.7 k files, with nothing inside them listed (`QuestionPrompt.Compose` writes only the roots under
+"The folders you may read"; the row's `Toolbox` is empty — only antigravity gets coai's lookups, `QuestionFanOut.cs:203`).
+It ran into the 20-turn cap (`VibeLimits.ConsultantTurns`) and answered nothing: exit 3 after 141 s, while two disk rows on
+other runtimes answered the same question. A question that names no file is the normal shape on a parent folder, so on such
+a root the row is now useless until it can see what it holds. This raises M-V19's priority; the listing it measures should
+include a parent-folder arm (several copy roots, the listing per root, a byte cap).
+
 ## 2. Measurements before any code (scouts' briefs)
 
 Every arm: Windows, `vibe` 2.26.1, the BUILT environment (minimal set + `VIBE_HOME` a fresh `C:\testsToDelete-vl<n>`,

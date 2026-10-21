@@ -1512,7 +1512,7 @@ public sealed class PanelService
         if (IsAQuestionRowScratch(dir))
         {
             // A row's budget has no upper bound, so age cannot say it is dead: it holds a lock for its whole life (D8 of
-            // todo/PLAN_vibe_reads_a_folder_of_repositories.md), and a scratch whose lock cannot be taken is kept — the one keep-test
+            // research/PLAN_vibe_reads_a_folder_of_repositories.md), and a scratch whose lock cannot be taken is kept — the one keep-test
             // the one-shot Vibe homes use.
             Runners.Files.FolderLock.RemoveIfFree(dir, QuestionRowLaunch.LockName, Runners.Files.GitScratch.DeleteEntry, () => KimiHomesDisposed(dir, warn));
         }

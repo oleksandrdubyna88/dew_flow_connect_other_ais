@@ -3,7 +3,7 @@ namespace CoaiMcp.Runners.Files;
 /// <summary>
 /// A folder whose owner HOLDS a lock file inside it for its whole life (<see cref="HeldFile"/>), and the one way a sweep removes it:
 /// only when the sweep can take that lock itself — the keep-test of the one-shot Vibe homes (<c>VibeHomes.SweepOneShot</c>, D3 of
-/// <c>research/PLAN_vibe_live_round_fixes.md</c>) and of a question row's scratch (D8 of <c>todo/PLAN_vibe_reads_a_folder_of_repositories.md</c>).
+/// <c>research/PLAN_vibe_live_round_fixes.md</c>) and of a question row's scratch (D8 of <c>research/PLAN_vibe_reads_a_folder_of_repositories.md</c>).
 /// </summary>
 /// <remarks>
 /// <para><b>Age alone is never the test.</b> A deep write does not move a folder's own timestamp, and a row's budget has no upper bound, so

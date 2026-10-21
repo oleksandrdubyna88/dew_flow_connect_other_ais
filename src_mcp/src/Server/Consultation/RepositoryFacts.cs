@@ -18,7 +18,7 @@ internal enum GitSaid
 
 /// <summary>
 /// What ONE git call says about a folder: is it inside a work tree, is it the top of one, and which git dir and common dir it has
-/// (D9 of <c>todo/PLAN_vibe_reads_a_folder_of_repositories.md</c>). The answer to "is this a linked worktree" is git's, never a
+/// (D9 of <c>research/PLAN_vibe_reads_a_folder_of_repositories.md</c>). The answer to "is this a linked worktree" is git's, never a
 /// reading of the <c>.git</c> file's text: a submodule's top holds the same kind of file, and a submodule inside a linked worktree
 /// writes a gitdir that merely CONTAINS <c>/worktrees/</c> (<c>src_vs_code/src/projectIdentity.ts</c> names the trap).
 /// </summary>

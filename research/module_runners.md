@@ -1568,7 +1568,7 @@ built two one-shot modes in the server, `--consultants` and `--check-consultant`
   rather than as a fourth copy. Its header states the residual: on Unix .NET implements `FileShare.None` as an advisory
   `flock` — honoured between .NET processes, not across the WSL/Windows 9P boundary.
 - **`FolderLock`** (`runners/Files/FolderLock.cs`) — the sweep's keep-test for a folder whose owner holds a lock file in it, EXTRACTED
-  from `VibeHomes.SweepOneShot` when a question row's scratch needed the same (D8 of `todo/PLAN_vibe_reads_a_folder_of_repositories.md`):
+  from `VibeHomes.SweepOneShot` when a question row's scratch needed the same (D8 of `research/PLAN_vibe_reads_a_folder_of_repositories.md`):
   `RemoveIfFree(folder, lockName, delete)` — or, with a step to ask under the lock, `RemoveIfFree(folder, lockName, delete, ready)` (two
   overloads; the step is never a nullable callback) — takes the lock or answers false with nothing touched, empties the folder around the
   lock, lets go, removes the folder. The caller asks its own age first, because taking the lock creates the file and moves the
@@ -3289,6 +3289,10 @@ Tests: `VibeConsultantTests`, `ConfinementPlannerTests` (the Vibe question launc
 
 ## A Vibe disk row expands a parent folder into its repositories (2026-10-18, PLAN_vibe_reads_a_folder_of_repositories.md)
 
+> **Live, Windows, 2026-10-20 (coai-mcp 0.62.0):** the expansion works — `d:\rsd` was copied in ~30 s with 411 linked worktrees
+> skipped — but the row answered nothing on a broad question: exit 3 at `VibeLimits.ConsultantTurns` (20). The prompt lists the copy
+> roots and nothing in them, and `read_file` cannot list a folder. Open: M-V19 of `todo/PLAN_a_vibe_row_is_told_what_its_folders_hold.md`.
+
 The owner's disk row ("projects on this disk") is granted PARENT folders — a drive's project folder on Windows, `~/git` on WSL — not
 repositories. Before this plan `ConsultantPlaces.OneShotAsync` refused any granted root that git did not call a work tree. Now a root that
 is not a work tree is EXPANDED into the Git repositories beneath it, and each one goes through the one copy method a directly granted work
@@ -3376,7 +3380,10 @@ making worktrees); the 405 git calls took about 34 s one after another (the walk
 repository 376.2 MiB in 1,606 files, the most files in one repository 2,517. That is far under the shared 2 GiB budget and 50,000 files,
 and the largest repository is under its own 512 MiB ceiling; `C:` held 920 GiB free against the 5 GiB floor. **Not measured:** the copy's
 wall time (the per-repository ceiling is 60 s and the row's budget 5 minutes, of which about 34 s go to git's confirmations before the
-first copy); the first live row will tell.
+first copy). **Measured live, Windows, 2026-10-20 (coai-mcp 0.62.0):** the whole of `d:\rsd` was walked, confirmed and copied in
+~30 s (server log 13:30:20 → 13:30:50), with 411 linked worktrees skipped — the git confirmations and the copies together, not the copy
+alone, which was not timed separately; no repository came near the 60 s ceiling. That row then answered nothing (the 20-turn cap; see the
+note at the top of this section). The WSL row (`~/git`) is still unmeasured.
 
 ```mermaid
 flowchart TD

@@ -12,7 +12,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// A question row says it is alive by HOLDING a lock file in its scratch folder (D8 of
-/// <c>todo/PLAN_vibe_reads_a_folder_of_repositories.md</c>): the row's budget has no upper bound, so the scratch sweep cannot tell a
+/// <c>research/PLAN_vibe_reads_a_folder_of_repositories.md</c>): the row's budget has no upper bound, so the scratch sweep cannot tell a
 /// live row from a stranded one by age. The sweep's half is <c>AScratchSweepRunsOnTheConsultationBeatTests</c>; this is the row's.
 /// </summary>
 /// <remarks>The Vibe CLI is played in process (<see cref="PlayedVibe"/>), git is real, and the lock is probed from inside the turn.</remarks>

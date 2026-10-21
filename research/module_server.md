@@ -3717,7 +3717,7 @@ flowchart LR
 | `Store/RoundAuthorsPopulation.cs`, `RoundAuthorsCoders.cs`, `RoundLines.cs`, `RoundAuthorsSumsOf.cs`, `ModelFamily.cs` | WHO is in: cohorts over E4's *settled* rounds (D1), contributors (D2), the worst state of the union (D3) and the coverage of the union (D12: a contributing round's `uncovered_writes > 0` leaves the round `size not covered`, its `-1` leaves it `size coverage unknown`), coder mix with `unknown` a suffix and never a family (D4), effort and main model (D5), the reviewer set (D6, D7), lines (D10), one exclusion per round in D12's order |
 | `Store/RoundAuthorsCells.cs`, `RoundAuthorsExclusions.cs`, `RoundAuthorsHeader.cs` | HOW they are counted: one-round cells folded by `Add` — the same function `--add` uses — figures as ratios of sums (D16), marks (D14), every exclusion reason listed with its count, the header (D15) |
 | `Store/RoundAuthorsMerge.cs` | The JSON of sums, its own strict context, `Report`, `Parse`, `Add` |
-| `Store/RoundAuthorsText.cs`, `Server/RoundAuthorsMode.cs` | The table (every control character of a displayed value — a store row or an `--add` file — printed as `?`, so no terminal escape reaches the screen); the flags and the exit codes |
+| `Store/RoundAuthorsText.cs`, `Server/RoundAuthorsMode.cs` | The table (EVERY line — header, sources, tables — goes through `Printable` once, where the lines are joined, so a control, format (bidi override, zero-width, BOM, TAG character), line/paragraph-separator or unassigned CODE POINT (judged per rune, so a character above U+FFFF is not let through as two surrogates; a lone surrogate and U+FFFD show as `?`) of a store row or an `--add` file is printed as `?` and no terminal escape reaches the screen; `Misshapen` also refuses at `--add` (65) a cell or exclusion whose cohort or period is not a word this report writes); the flags and the exit codes — every refusal sentence is written to stderr through `RoundAuthorsMode.Printed` (the same `Printable`, on the whole sentence — a refusal is ONE line, so a line break in quoted input shows as `?` and cannot forge a second line), so a quoted selection word, member name or flag value never carries a terminal escape |
 
 **What the report will not say, and says.** The state it reads for a round is the roll-up over its two windows — per-window states live in the
 session file only and step 24 does not project them — so with `before-open` left out a round whose before-open window alone is partial or
@@ -7640,7 +7640,7 @@ handed a PLACE — a coai-owned folder for its home and a sanitised copy to stan
   none row stands in an EMPTY `cwd` folder beside it, so a cwd never holds its own home. Everything goes in `finally`
   (`GitScratch.DeleteEvenIfReadOnly`) — on an answer, a refusal and a cancellation alike.
 - **`ask_consultants` — a killed server's row scratch is swept, and a live row's is locked (D8, 2026-10-18,
-  `todo/PLAN_vibe_reads_a_folder_of_repositories.md`).** `finally` never runs when the server is killed, and the product sweep
+  `research/PLAN_vibe_reads_a_folder_of_repositories.md`).** `finally` never runs when the server is killed, and the product sweep
   (`PanelService.ScratchPrefixes`) listed only `coai-answers-*`, `coai-repair-*` and `coai-noworkspace-*`, so a row's
   `coai-question-*` folder — and the repository copies in it — stayed for ever (`shared/temp-sweep.json` keeps it `neverSwept` for the
   TEST sweep, which says the product sweeps it "on its own clock": it did not). Now `ScratchPrefixes` has `coai-question-*`, and the
@@ -7722,6 +7722,10 @@ flowchart TD
 
 Not done here: one live `consult` and one live question row through the product with a real Vibe (paid turns) — the
 step after the release, recorded then in research/RESULTS_vibe_confinement.md and [module_tests.md](module_tests.md).
+**Update 2026-10-20:** one live question row with a real Vibe HAS run through the product (Windows, coai-mcp 0.62.0, root `d:\rsd`): the
+parent folder was expanded and copied (~30 s including git's confirmations, 411 linked worktrees skipped), and the row ended at the
+20-turn cap without an answer — [PLAN_vibe_reads_a_folder_of_repositories.md](PLAN_vibe_reads_a_folder_of_repositories.md). The live
+`consult` and the WSL row are still not run.
 
 ### The home sweep and the place, hardened before the S3 gate (2026-10-13 — the plan round and risk consultation ee1eecf4)
 
