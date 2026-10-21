@@ -8,7 +8,7 @@ import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
-import { FLOCK, isKimi, linuxProcesses, lockState, parseProcStat, waitForNoOtherKimi } from './proc.mjs';
+import { FLOCK, isKimi, linuxProcesses, lockState, parseProcStat, parseStartTime, waitForNoOtherKimi } from './proc.mjs';
 
 const WINDOWS = process.platform === 'win32';
 const base = mkdtempSync(join(realpathSync.native(tmpdir()), 'testsToDelete-proc-test-'));
@@ -207,7 +207,7 @@ test('the Windows image name is the name: kimi.exe, in any case, is Kimi; a bare
 // ------------------------------------------------------------------------------------------ the shared "no other kimi" guard
 
 /** A listing source that answers the given listings in order, then the last one for ever; the clock and the sleep are the test's. */
-function guardRig(listings, { waitMs = 600_000, pollMs = 10_000 } = {}) {
+function guardRig(listings, { waitMs = 600_000, pollMs = 10_000, except = [], startTimeOf = () => '' } = {}) {
   let asked = 0;
   let clock = 0;
   const log = [];
@@ -221,6 +221,8 @@ function guardRig(listings, { waitMs = 600_000, pollMs = 10_000 } = {}) {
       log: (line) => log.push(line),
       waitMs,
       pollMs,
+      except,
+      startTimeOf,
     }),
   };
 }
@@ -266,4 +268,41 @@ test('the lock probe says Held while another process holds an exclusive flock, F
     await new Promise((done) => { if (holder.exitCode !== null) done(); else holder.on('exit', done); });
   }
   assert.equal(lockState(file), 'Free');
+});
+
+// ------------------------------------------------------------------------------------------ the live-survivor exception (killed-hard-live)
+// N-K2's live variant launches the next turn while the killed arm's OWN orphan still runs, to see the product's gate refuse. The probe's guard is
+// bypassed for exactly that orphan — its pid AND its start time (a reused pid is a stranger), never its name — and every other kimi still blocks.
+
+const ORPHAN = { pid: 100, ppid: 1, comm: 'MainThread', name: 'kimi' };
+const STRANGER = { pid: 300, ppid: 1, comm: 'MainThread', name: 'kimi' };
+const startTimes = (table) => (pid) => table[pid] ?? '';
+
+test('a stat line\'s start time is field 22, cut after the LAST ")"; a short or odd line gives ""', () => {
+  assert.equal(parseStartTime('100 (kimi) S 1 100 100 0 -1 4194560 7 0 0 0 1 1 0 0 20 0 3 0 98765 123 4'), '98765');
+  assert.equal(parseStartTime('100 (a) b (c)) S 1 100 100 0 -1 4194560 7 0 0 0 1 1 0 0 20 0 3 0 4242 123 4'), '4242');
+  assert.equal(parseStartTime('100 (kimi) S 1 100'), '');
+  assert.equal(parseStartTime('garbage'), '');
+});
+
+test('the guard lets the named orphan through by pid AND start time, and says nothing is waited for', async () => {
+  const rig = guardRig([[ORPHAN]], { except: [{ pid: 100, name: 'kimi', startTime: 'T1' }], startTimeOf: startTimes({ 100: 'T1' }) });
+
+  assert.equal(await rig.run(), true, 'the killed arm\'s own orphan was waited for — the live variant could never launch');
+  assert.equal(rig.log.length, 0);
+});
+
+test('every OTHER kimi still blocks — a second kimi with the same NAME is not the orphan', async () => {
+  const rig = guardRig([[ORPHAN, STRANGER]], { except: [{ pid: 100, name: 'kimi', startTime: 'T1' }], startTimeOf: startTimes({ 100: 'T1', 300: 'T7' }), waitMs: 20_000, pollMs: 10_000 });
+
+  assert.equal(await rig.run(), false, 'a kimi that is not the orphan was let through — two refreshers could race');
+  assert.match(rig.log.at(-1), /pids 300\)/u, 'the refusal must name the stranger and not the orphan');
+});
+
+test('a reused pid (same number, another start time) and an unreadable start time are not the orphan — the exception fails closed', async () => {
+  const reused = guardRig([[ORPHAN]], { except: [{ pid: 100, name: 'kimi', startTime: 'T1' }], startTimeOf: startTimes({ 100: 'T9' }), waitMs: 0 });
+  const unreadable = guardRig([[ORPHAN]], { except: [{ pid: 100, name: 'kimi', startTime: '' }], startTimeOf: startTimes({ 100: '' }), waitMs: 0 });
+
+  assert.equal(await reused.run(), false);
+  assert.equal(await unreadable.run(), false);
 });

@@ -136,10 +136,14 @@ const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  * Kimi to end — two refreshers can race the rotating refresh token and sign the person out. True = none runs; false = one still did when the wait
  * ran out, and the launch must be SKIPPED. The listing, the clock and the sleep are injected, so the rule is tested without a real process.
  */
-export async function waitForNoOtherKimi(label, { list = listProcesses, sleep = pause, now = () => performance.now(), log = console.error, waitMs = 600_000, pollMs = 10_000, tag = 'probe' } = {}) {
+export async function waitForNoOtherKimi(label, { list = listProcesses, sleep = pause, now = () => performance.now(), log = console.error, waitMs = 600_000, pollMs = 10_000, tag = 'probe', except = [], startTimeOf = startTimeOfPid } = {}) {
   const until = now() + waitMs;
+  // `except`: processes the caller owns and may leave running (N-K2's live variant lets the killed arm's OWN orphan stand), each `{ pid, startTime }`.
+  // A process is excepted only when its pid AND its start time still match what was recorded — a reused pid is a stranger — and a start time that
+  // could not be read excepts nothing. Never by name: every other kimi blocks.
+  const excepted = (p) => except.some((e) => e.pid === p.pid && e.startTime !== '' && startTimeOf(p.pid) === e.startTime);
   while (true) {
-    const others = list().filter(isKimi);
+    const others = list().filter(isKimi).filter((p) => !excepted(p));
     if (others.length === 0) return true;
     const pids = others.map((p) => p.pid).join(', ');
     if (now() > until) {
@@ -162,4 +166,23 @@ export function lockState(path) {
   const r = spawnSync(FLOCK, ['-n', '-E', '75', path, 'true'], { encoding: 'utf8', timeout: 10_000 });
   if (r.status === 0) return 'Free';
   return r.status === 75 ? 'Held' : `Unknown:${r.status ?? r.error?.code}`;
+}
+
+/**
+ * A process's start time — field 22 of its `/proc/<pid>/stat` (clock ticks since boot), the other half of an identity (a pid alone can be reused) —
+ * or '' when the line has no such field.
+ */
+export function parseStartTime(line) {
+  const close = line.lastIndexOf(')');
+  const field = close < 0 ? '' : (line.slice(close + 1).trim().split(/\s+/u)[19] ?? '');
+  return /^\d+$/u.test(field) ? field : '';
+}
+
+/** The start time of `pid` now, or '' when it is gone or unreadable (and always '' off Linux). */
+export function startTimeOfPid(pid, reads = procReads('/proc')) {
+  try {
+    return parseStartTime(reads.stat(pid));
+  } catch {
+    return '';
+  }
 }

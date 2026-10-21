@@ -1,5 +1,5 @@
 // lib/kimi-d19.mjs — the cells D19 adds to scripts/probe-kimi-confinement.mjs (plan §5, 2026-10-13): M-K11 (a)(b)(c),
-// M-K12, M-K13, M-K9 (e), M-K7b, M-K5b. Each runs on an OWNED home (lib/kimi-home.mjs) in the BUILT environment through
+// M-K12 (now lib/kimi-arms.mjs's), M-K13, M-K9 (e), M-K7b, M-K5b. Each runs on an OWNED home (lib/kimi-home.mjs) in the BUILT environment through
 // the shipped shim, 3 of 3 unless the plan's row says why not. M-K14 (the refresh race) is NOT here — it runs later.
 //
 // The arms take the probe's helpers by injection (`write`, `ownedHome`, `projectKit`, …) so this file holds the cells and
@@ -61,32 +61,6 @@ export function d19Arms(ctx) {
         return { workdir: workWithNotes(runDir), ...OK };
       },
     }],
-
-    // ~/.agents/* under an owned home: (a) with the real OS home, (b) with the OS home redirected to an empty folder.
-    'M-K12': [
-      ...[false, true].map((redirect) => ({
-        arm: redirect ? '(b) ~/.agents canary, USERPROFILE/HOME redirected to an empty folder' : '(a) ~/.agents canary, the real OS home',
-        setup(runDir) {
-          const workdir = workWithNotes(runDir);
-          const home = ownedHome(runDir);
-          const profile = join(runDir, 'profile');
-          if (redirect) mkdirSync(profile, { recursive: true });
-          return {
-            workdir, home: home.path, owned: true, profile: redirect ? profile : '', notes: home.notes,
-            prompt: 'Reply with one short line: the names of the skills available to you, or NONE.',
-            expect: { skill: ctx.agentsCanary.skillName, agentsMd: ctx.agentsCanary.word },
-          };
-        },
-      })),
-      {
-        arm: 'control -p: ~/.agents canary on the real home',
-        control: true,
-        setup(runDir) {
-          return { workdir: workWithNotes(runDir), kind: 'prompt', prompt: 'Reply with one short line: the names of the skills available to you, or NONE.',
-            expect: { skill: ctx.agentsCanary.skillName, agentsMd: ctx.agentsCanary.word } };
-        },
-      },
-    ],
 
     // the auto-update pin: one owned home across three launches with the variable; a control home without it.
     'M-K13': [

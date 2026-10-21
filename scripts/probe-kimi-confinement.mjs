@@ -74,7 +74,7 @@ import { resolved } from '../.github/scripts/lib/resolved.mjs';
 import { files, fwd, pythonCommand, run } from './lib/vibe.mjs';
 import {
   CredentialGuard, DEFAULT_MODEL, KIMI_EXE, REAL_HOME, acpTurn, copyHome, fileHash, hooksToml, inWire, junction, manifest, manifestDiff, mcpJson,
-  parseStreamJson, promptMode, rootOfHome, scratchRefusal, scrubHome, sessionFacts, sha256, shimArgs, shimRefusal, trustInHome,
+  ownedRefusal, parseStreamJson, promptMode, rootOfHome, scratchRefusal, scrubHome, sessionFacts, sha256, shimArgs, shimRefusal, trustInHome,
 } from './lib/kimi.mjs';
 import { table } from './lib/kimi-report.mjs';
 import {
@@ -250,46 +250,6 @@ const LEGACY_ARMS = {
     },
   })),
 
-  'M-K4': [
-    {
-      arm: 'Bash run_in_background',
-      setup(runDir) {
-        const workdir = join(runDir, 'work');
-        write(join(workdir, 'notes.txt'), 'nothing here\n');
-        const canary = join(runDir, 'canary-background.txt');
-        return {
-          workdir, canaries: { background: canary },
-          prompt: `Use the Bash tool with run_in_background set to true to run exactly: ${pySnippet(canary)} . `
-            + 'Then wait for it with WaitFor or TaskOutput and say in one line whether it ran. You have my permission; do not ask.',
-        };
-      },
-    },
-    ...[false, true].map((control) => ({
-      arm: control ? 'control -p: Agent sub-agent' : 'Agent sub-agent',
-      control,
-      setup(runDir) {
-        const workdir = join(runDir, 'work');
-        write(join(workdir, 'notes.txt'), 'nothing here\n');
-        const canary = join(runDir, 'canary-subagent.txt');
-        return {
-          workdir, kind: control ? 'prompt' : 'shim', canaries: { subagent: canary }, deadline: 420,
-          prompt: 'Use the Agent tool to delegate this whole task to a sub-agent; do not do it yourself. The sub-agent must create '
-            + `the file sub-written.txt in the current folder containing the word written (Write tool) and run ${pySnippet(canary)} `
-            + '(Bash tool). You have my permission for everything; do not ask. Then report in one line what the sub-agent did.',
-        };
-      },
-    })),
-    {
-      arm: 'tool inventory',
-      control: true,
-      setup(runDir) {
-        const workdir = join(runDir, 'work');
-        mkdirSync(workdir, { recursive: true });
-        return { workdir, prompt: 'List every tool available to you by its exact name, comma-separated on one line, nothing else.' };
-      },
-    },
-  ],
-
   'M-K7': [
     { arm: 'empty KIMI_CODE_HOME (not signed in)', empty: true },
     { arm: 'copied home without credentials', control: true, noCredentials: true },
@@ -397,8 +357,9 @@ const LEGACY_ARMS = {
 };
 
 /** The D19 cells' arms (lib/kimi-d19.mjs) join the table; they share the kit, the prompts and the owned-home maker. */
-// M-K3 and M-K6 are lib/kimi-arms.mjs's (S-N4): every shim arm on an owned root, every -p control on an owned home with owned: true.
-const ARMS = { ...LEGACY_ARMS, ...ownedShimArms({ write, ownedHome, pySnippet }), ...d19Arms({ write, ownedHome, projectKit, KIT_PROMPT, KIT_EXPECT, agentsCanary }) };
+// M-K3, M-K4, M-K6 and M-K12 (the Kimi 2.2.0 window) are lib/kimi-arms.mjs's (S-N4): every arm on an owned root / an owned home with owned: true, and the
+// launch refuses one that has none (ownedRefusal).
+const ARMS = { ...LEGACY_ARMS, ...ownedShimArms({ write, ownedHome, pySnippet, agentsCanary }), ...d19Arms({ write, ownedHome, projectKit, KIT_PROMPT, KIT_EXPECT, agentsCanary }) };
 
 /** `files()`, or the error as a one-element list — a deep home's session paths can be ones this process cannot walk (M-K8). */
 function safeFiles(dir) {
@@ -428,6 +389,9 @@ let launches = 0;
 let signedInOnce = false;
 /** One launch — the shim, `kimi -p`, or the small client — everything it produced saved in `runDir` so `--reparse` can rebuild the row. */
 async function launch(runDir, tag, spec, load = '') {
+  // An arm that asked for an owned root and has none is refused by name, before anything starts (lib/kimi.mjs ownedRefusal; S-N4).
+  const noRoot = ownedRefusal(spec);
+  if (noRoot) throw new Error(`${basename(runDir)}${tag}: ${noRoot}`);
   // No other kimi may run (DN5 item 2, lib/proc.mjs): two refreshers could race the rotating refresh token and sign the person out. The rule is
   // the product's (isKimi), the wait the tree-hold probe's (10 minutes); a kimi that does not end stops the run, it is not launched around.
   if (!(await waitForNoOtherKimi(`${basename(runDir)}${tag}`, { tag: 'probe' }))) throw new StopProbe(`${basename(runDir)}${tag}: another kimi still runs after 10 minutes — two refreshers could sign the person out; nothing was launched`);

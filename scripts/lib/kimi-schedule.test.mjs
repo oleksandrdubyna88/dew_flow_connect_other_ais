@@ -7,7 +7,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, utimesSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
-import { KILL_ARMS, buildSchedule, isKilledArm, killRecord, killSignal, nextRow, orphanRecord, survivorMarkers } from './kimi-schedule.mjs';
+import { KILL_ARMS, armsRefusal, buildSchedule, defaultArms, isKilledArm, killRecord, killSignal, liveSurvivor, liveVerdict, nextRow, orphanRecord, refusalText, survivorMarkers } from './kimi-schedule.mjs';
 
 const base = mkdtempSync(join(realpathSync.native(tmpdir()), 'testsToDelete-kimi-schedule-'));
 after(() => rmSync(base, { recursive: true, force: true }));
@@ -42,7 +42,7 @@ test('S-N18: killed-hard sends SIGKILL, killed and killed-rg SIGTERM — the shi
   assert.equal(killSignal('killed-hard'), 'SIGKILL', 'killed-hard does not send SIGKILL — a clean next launch would prove nothing about an abandoned marker');
   assert.equal(killSignal('killed'), 'SIGTERM');
   assert.equal(killSignal('killed-rg'), 'SIGTERM');
-  assert.deepEqual(Object.keys(KILL_ARMS), ['killed', 'killed-hard', 'killed-rg']);
+  assert.deepEqual(Object.keys(KILL_ARMS), ['killed', 'killed-hard', 'killed-hard-live', 'killed-rg']);
   assert.equal(isKilledArm('normal'), false);
 });
 
@@ -104,4 +104,73 @@ test('S-N18: survivorMarkers lists *.survivors.json by name (hex redacted) and m
   assert.deepEqual(found, [{ name: '<hex>.survivors.json', mtimeMs: 1_700_000_000_000 }]);
   assert.equal(JSON.stringify(found).includes('CONTENT-WORD'), false);
   assert.deepEqual(survivorMarkers(join(base, 'no-such-folder')), []);
+});
+
+// ------------------------------------------------------------------------------------------------------ killed-hard-live (N-K2, the C2 cornerstone)
+// The cornerstone: a survivor keeps the next launch blocked, and only its confirmed disappearance clears the marker (KimiSurvivorGate). The plain
+// `killed-hard` pair cannot show it — the probe waits for the orphan to end first. `killed-hard-live` launches the next turn while the killed arm's OWN
+// orphan still runs, expects the product's gate to refuse it (Busy, naming the survivor, nothing started), and only after the orphan ends — watched by
+// pid and start time — launches a third turn that reconciles and clears. If the gate fails, two refreshers share one sign-in: owner-allowed hosts only.
+
+test('S-N18 live: killed-hard-live is a TRIPLE — the kill, the next launch while the orphan lives, the launch after it ended — nothing between', () => {
+  const schedule = buildSchedule(['killed-hard-live'], 2);
+
+  assert.deepEqual(labels(schedule), ['killed-hard-live-1', 'killed-hard-live-1-next', 'killed-hard-live-1-after', 'killed-hard-live-2', 'killed-hard-live-2-next', 'killed-hard-live-2-after'],
+    "the schedule has no live-survivor pair — the next launch never starts while the killed arm's own orphan lives");
+  assert.deepEqual(schedule.slice(0, 3).map((s) => [s.arm, s.kind, s.after]), [['killed-hard-live', 'arm', undefined], ['normal', 'next-live', 'killed-hard-live-1'], ['normal', 'after-live', 'killed-hard-live-1']]);
+});
+
+test('S-N18 live: killed-hard-live sends SIGKILL and is the only live arm; the default arms never include it', () => {
+  assert.equal(killSignal('killed-hard-live'), 'SIGKILL');
+  assert.deepEqual(Object.entries(KILL_ARMS).filter(([, a]) => a.live).map(([name]) => name), ['killed-hard-live']);
+  assert.deepEqual(defaultArms(['normal', 'killed', 'killed-hard', 'killed-hard-live', 'killed-rg']), ['normal', 'killed', 'killed-hard', 'killed-rg']);
+});
+
+test('S-N18 live: the live arm is refused without --allow-live-survivor, and off Linux, with the reason in the sentence', () => {
+  const without = armsRefusal(['killed-hard-live'], { allowLive: false, platform: 'linux' });
+
+  assert.match(without, /--allow-live-survivor/u);
+  assert.match(without, /two refreshers/u);
+  assert.equal(armsRefusal(['killed-hard-live'], { allowLive: true, platform: 'linux' }), '');
+  assert.match(armsRefusal(['killed-hard-live'], { allowLive: true, platform: 'win32' }), /\/proc/u);
+  assert.equal(armsRefusal(['killed-hard', 'normal'], { allowLive: false, platform: 'win32' }), '', 'the other arms need no flag');
+});
+
+test('S-N18 live: the survivor to leave alone is the killed arm\'s kimi, by pid and start time; a helper (rg) is not it', () => {
+  const orphans = [{ pid: 9, comm: 'rg', exe: 'rg', startTime: '5' }, { pid: 321, comm: 'MainThread', exe: 'kimi', startTime: '777' }];
+
+  assert.deepEqual(liveSurvivor(orphans), { pid: 321, name: 'kimi', startTime: '777' });
+  assert.equal(liveSurvivor([{ pid: 9, comm: 'rg', exe: 'rg', startTime: '5' }]), null);
+  assert.equal(liveSurvivor([{ pid: 321, comm: 'MainThread', exe: 'kimi', startTime: '' }]), null, 'no start time = no identity = nothing to leave alone');
+  assert.equal(liveSurvivor([{ pid: 321, comm: 'MainThread', exe: 'kimi', startTime: '777', gone: true }]), null);
+});
+
+const BEFORE = [{ name: '<hex>.survivors.json', mtimeMs: 5 }];
+const refused = { markerBefore: BEFORE, markerAfter: BEFORE, survivor: { pid: 321 }, survivorAliveBefore: true, survivorAliveAfter: true, shimExit: 77, report: { end: 'busy' }, text: 'a Kimi turn may still be running: pid 321 …' };
+
+test('S-N18 live: the verdict — Busy naming the survivor, nothing started, the marker kept, the survivor untouched — is the expected answer', () => {
+  assert.match(liveVerdict(refused), /^as expected/u);
+});
+
+test('S-N18 live: every other outcome is named — a launch that ANSWERED, a cleared marker, a killed survivor, a refusal that names nobody, an orphan already gone', () => {
+  assert.match(liveVerdict({ ...refused, shimExit: 0, report: { end: 'answered' } }), /^UNEXPECTED.*started/u);
+  assert.match(liveVerdict({ ...refused, markerAfter: [] }), /^UNEXPECTED.*marker/u);
+  assert.match(liveVerdict({ ...refused, survivorAliveAfter: false }), /^UNEXPECTED.*survivor/u);
+  assert.match(liveVerdict({ ...refused, text: 'busy' }), /^UNEXPECTED.*name/u);
+  assert.match(liveVerdict({ ...refused, survivorAliveBefore: false }), /^not evidence/u);
+});
+
+test('S-N18 live: the refusal text comes out of the shim\'s report (failure, reason) or its stderr, hex redacted, capped', () => {
+  const json = JSON.stringify({ end: 'failed', failure: 'busy', reason: 'a Kimi started by coai is recorded in /tmp/locks/0123456789abcdef.survivors.json' });
+
+  assert.equal(refusalText(json, ''), 'busy: a Kimi started by coai is recorded in /tmp/locks/<hex>.survivors.json');
+  assert.equal(refusalText('not json', 'stderr said busy'), 'stderr said busy');
+  assert.equal(refusalText('', 'x'.repeat(5000)).length, 1500);
+});
+
+test('S-N18 live: a survivor\'s start time rides in its record', () => {
+  const listing = [{ pid: 1, ppid: 0, comm: 'systemd', name: 'systemd' }, { pid: 321, ppid: 1, comm: 'MainThread', name: 'kimi' }];
+
+  assert.deepEqual(orphanRecord({ pid: 321, comm: 'MainThread', name: 'kimi', startTime: '777' }, listing),
+    { pid: 321, comm: 'MainThread', exe: 'kimi', startTime: '777', newParent: { pid: 1, comm: 'systemd', exe: 'systemd' } });
 });

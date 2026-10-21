@@ -548,3 +548,13 @@ export function acpTurn({ exe, cwd, env, deadlineMs, model = '', prompt = '', lo
     })().catch((e) => finish(`client: ${String(e?.message ?? e)}`));
   });
 }
+
+/**
+ * The sentence that refuses an arm which asked for an owned root (`requireOwned`, set by lib/kimi-arms.mjs for the cells of the 2.2.0 window) and has none —
+ * no `<root>/home` beside `<root>/os`, or not marked `owned` — or '' (an arm that never asked is not judged). Checked before anything launches.
+ */
+export function ownedRefusal(spec) {
+  if (!spec.requireOwned) return '';
+  if (spec.owned === true && rootOfHome(spec.home ?? '') !== '') return '';
+  return 'this arm has no owned root (<root>/home beside <root>/os) - it is refused, not run on the real KIMI_CODE_HOME (E4.3)';
+}

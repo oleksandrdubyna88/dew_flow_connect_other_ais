@@ -227,3 +227,19 @@ test('S-N3: an owned root of a Linux host also holds the cache folder beside os/
   assert.deepEqual(readdirSync(made.os), [], 'os/ must stay empty');
   assert.equal(existsSync(ownedRoot(join(base, 'kh-nocache'), { platform: 'win32' }).cache ?? ''), false, 'Windows has no such variable and no such folder');
 });
+
+test('the ~/.agents canary is removed by its own exact paths only: a stranger\'s file inside the canary folder survives, and the removal says so instead of deleting it', () => {
+  const osHome = join(base, 'os-home-stranger');
+  mkdirSync(osHome);
+  const plan = agentsCanaryPlan(osHome, { skillName: 'coai-probe-canary-ee11', word: 'GANNET-7' });
+  makeAgentsCanary(plan);
+  const stranger = join(plan.skillDir, 'not-ours.txt');
+  writeFileSync(stranger, 'somebody else\'s');
+
+  assert.throws(() => removeAgentsCanary(plan), /still there|not empty|ENOTEMPTY/u, 'a removal that cannot be exact must fail loudly');
+  assert.equal(readFileSync(stranger, 'utf8'), 'somebody else\'s', 'the removal deleted a file it did not make (a recursive delete)');
+  assert.equal(existsSync(plan.skillFile), false, 'the canary\'s own file is removed');
+  rmSync(stranger);
+  removeAgentsCanary(plan);
+  assert.equal(existsSync(plan.agents), false);
+});

@@ -17,6 +17,12 @@
 //   killed-hard (E1.S3, N-K2) the same as `killed` with SIGKILL instead of SIGTERM: the shim handles TERM and ends the agent's tree itself, so only a KILL
 //               leaves a survivor marker (`<key>.survivors.json` in the lock folder) abandoned. It COUNTS only when a marker existed at the kill (the row
 //               says "not evidence" otherwise).
+//   killed-hard-live (E1.S3 follow-up; N-K2 / cornerstone C2: a survivor keeps the next launch blocked, and only its confirmed disappearance clears the
+//               marker — KimiSurvivorGate) a TRIPLE: the SIGKILL, then `-next` started WHILE the killed arm's own kimi (the "survivor") still runs, then `-after`
+//               once it has ended. The "no other kimi" wait is bypassed for exactly that survivor — by pid AND start time, never by name; every other kimi
+//               still blocks. Expected: `-next` is refused Busy naming the survivor and nothing starts; `-after` reconciles and clears. Recorded: the marker
+//               before and after, the refusal text, the survivor's new parent and a verdict. RUNS ONLY with `--allow-live-survivor`, on a host where the owner
+//               allowed that window: if the product's gate failed, two refreshers of one rotating token would sign the person out.
 //
 // Every killed arm's repetition is a PAIR (lib/kimi-schedule.mjs): `<arm>-<n>`, then at once `<arm>-<n>-next`, a normal launch that records the marker
 // before it, the shim's report and the marker after it — where the next launch's reconcile of the abandoned marker is observed. Each killed row names every
@@ -44,8 +50,8 @@ import { randomBytes } from 'node:crypto';
 import { minimalWindowsEnv } from './lib/vibe.mjs';
 import { DEFAULT_MODEL, KIMI_EXE, REAL_HOME, scratchRefusal } from './lib/kimi.mjs';
 import { credentialNames, disposeOwnedHome, makeOwnedHome, ownedRoot, shimEnv } from './lib/kimi-home.mjs';
-import { KILL_ARMS, buildSchedule, killRecord, killSignal, nextRow, survivorMarkers } from './lib/kimi-schedule.mjs';
-import { FLOCK, isKimi, listProcesses, lockState, waitForNoOtherKimi } from './lib/proc.mjs';
+import { KILL_ARMS, armsRefusal, buildSchedule, defaultArms, isLiveArm, killRecord, killSignal, liveSurvivor, liveVerdict, nextRow, refusalText, survivorMarkers } from './lib/kimi-schedule.mjs';
+import { FLOCK, isKimi, listProcesses, lockState, startTimeOfPid, waitForNoOtherKimi } from './lib/proc.mjs';
 
 const WINDOWS = process.platform === 'win32';
 
@@ -63,6 +69,8 @@ const ARMS = {
   // The signal each killed arm sends, and what it waits for first, are lib/kimi-schedule.mjs's KILL_ARMS (tested there: killed-hard is SIGKILL).
   killed: { prompt: 'Reply with exactly: OK', killed: true, ...KILL_ARMS.killed },
   'killed-hard': { prompt: 'Reply with exactly: OK', killed: true, ...KILL_ARMS['killed-hard'] },
+  // The LIVE variant (N-K2, cornerstone C2): the next launch starts while this arm's own kimi still runs. Only with --allow-live-survivor (see the header).
+  'killed-hard-live': { prompt: 'Reply with exactly: OK', killed: true, ...KILL_ARMS['killed-hard-live'] },
   // A pattern no file holds, over a big read-only tree, so `rg` runs for seconds — long enough to kill the shim while it is alive.
   'killed-rg': {
     prompt: `Use your Grep tool to search for the text zzqxjv-no-such-text-anywhere recursively in the folder ${WINDOWS ? String.raw`C:\Windows\System32` : '/usr'} (a case-insensitive plain search is fine). Report only how many matches there were.`,
@@ -73,9 +81,14 @@ const ARMS = {
 const here = dirname(fileURLToPath(import.meta.url));
 const shim = flag('--shim', '') || join(here, '..', 'src_mcp', 'src', 'bin', 'Debug', 'net10.0', WINDOWS ? 'coai-mcp.exe' : 'coai-mcp');
 const repeats = Number.parseInt(flag('--repeats', '3'), 10);
-const armNames = flag('--arms', Object.keys(ARMS).join(',')).split(',').filter(Boolean);
+const armNames = flag('--arms', defaultArms(Object.keys(ARMS)).join(',')).split(',').filter(Boolean);
 if (armNames.some((a) => !(a in ARMS)) || !Number.isInteger(repeats) || repeats <= 0) {
-  console.error(`usage: probe-kimi-tree-hold.mjs [--shim <exe>] [--scratch <dir>] [--repeats N] [--arms ${Object.keys(ARMS).join(',')}]`);
+  console.error(`usage: probe-kimi-tree-hold.mjs [--shim <exe>] [--scratch <dir>] [--repeats N] [--arms ${Object.keys(ARMS).join(',')}] [--allow-live-survivor]`);
+  process.exit(65);
+}
+const liveRefusal = armsRefusal(armNames, { allowLive: argv.includes('--allow-live-survivor'), platform: process.platform });
+if (liveRefusal) {
+  console.error(`refusing: ${liveRefusal}`);
   process.exit(65);
 }
 const SUPPORTED = WINDOWS || process.platform === 'linux';
@@ -127,7 +140,23 @@ const alive = (pid) => {
 };
 
 /** Waits (up to 10 minutes) for any other kimi process to end; false = it did not, and the run is skipped. The guard is lib/proc.mjs's, shared with the confinement probe. */
-const noOtherKimi = (label) => waitForNoOtherKimi(label, { tag: 'mk15' });
+const noOtherKimi = (label, except = []) => waitForNoOtherKimi(label, { tag: 'mk15', except });
+
+/** The killed arm's kimi is still THAT process: alive, and its start time still the one recorded (a reused pid is a stranger). */
+const survivorLives = (survivor) => alive(survivor.pid) && startTimeOfPid(survivor.pid) === survivor.startTime;
+
+/** Waits (up to 5 minutes) for the survivor to end, watched by pid and start time: the ms it took, or -1 when it still runs. */
+async function waitForSurvivorEnd(survivor) {
+  const t0 = now();
+  while (now() - t0 < 5 * 60_000) {
+    if (!survivorLives(survivor)) return Math.round(now() - t0);
+    await sleep(100);
+  }
+  return -1;
+}
+
+/** killed-hard-live: kill label -> { survivor, orphan, dispose } — what the `-next` and `-after` launches of the same repetition need. */
+const live = new Map();
 
 // ------------------------------------------------------------------------------------------------------ the lock files
 
@@ -192,8 +221,16 @@ function shimEnvironment(root) {
 async function runOne(entry) {
   const { arm: armName, n, label } = entry;
   const arm = ARMS[armName];
-  const markerBefore = entry.kind === 'next' ? survivorMarkers(locks) : [];
-  if (!(await noOtherKimi(label))) return { arm: armName, n, label, skipped: 'another kimi process was running for 10 minutes' };
+  const pair = entry.kind === 'next-live' || entry.kind === 'after-live' ? live.get(entry.after) : undefined;
+  if (entry.kind.endsWith('-live') && !pair) return { arm: armName, n, label, pairedWith: entry.after, skipped: 'the killed arm left no live kimi with a readable identity, so the live variant did not happen' };
+  let survivorGoneAfterMs;
+  if (entry.kind === 'after-live') {
+    survivorGoneAfterMs = await waitForSurvivorEnd(pair.survivor);
+    if (survivorGoneAfterMs < 0) return { arm: armName, n, label, pairedWith: entry.after, skipped: 'the survivor still ran after 5 minutes (it is left alone; its run folder is kept)' };
+  }
+  const markerBefore = entry.kind === 'arm' ? [] : survivorMarkers(locks);
+  if (!(await noOtherKimi(label, entry.kind === 'next-live' ? [pair.survivor] : []))) return { arm: armName, n, label, skipped: 'another kimi process was running for 10 minutes' };
+  const survivorAliveBefore = entry.kind === 'next-live' && survivorLives(pair.survivor);
   const root = join(scratch, `kh-${label}`);
   const work = join(scratch, `work-${label}`);
   ownedRoot(root); // the product's layout: home/ beside an empty os/, and on Linux the cache/ folder XDG_CACHE_HOME names (DL11)
@@ -221,7 +258,7 @@ async function runOne(entry) {
   const sample = () => {
     for (const p of descendantsOf(child.pid, listProcesses())) seen.set(p.pid, { comm: p.comm ?? '', name: p.name });
   };
-  const row = { arm: armName, n, label, ...(entry.kind === 'next' ? { pairedWith: entry.after } : {}), killedAfterMs: 0, shim: { exit: null }, files: {}, descendants: [] };
+  const row = { arm: armName, n, label, ...(entry.after ? { pairedWith: entry.after } : {}), ...(survivorGoneAfterMs === undefined ? {} : { survivorGoneAfterMs }), killedAfterMs: 0, shim: { exit: null }, files: {}, descendants: [] };
 
   if (arm.killed) {
     // The shim takes the tree hold immediately before it starts kimi, so the file going Held is "the agent is starting". Then sample until the
@@ -244,7 +281,10 @@ async function runOne(entry) {
       const killedAt = now();
       process.kill(child.pid, killSignal(armName));
       row.killedAfterMs = Math.round(killedAt - t0);
-      await Promise.all([recordOrphans(row, armName, markers, seen), watchAfterKill(row, killedAt, homeFile, seen)]);
+      const recording = recordOrphans(row, armName, markers, seen);
+      // The live variant leaves the orphan RUNNING into the next launch: it does not wait for it to end (the `-after` launch does, by pid and start time).
+      if (isLiveArm(armName)) await recording;
+      else await Promise.all([recording, watchAfterKill(row, killedAt, homeFile, seen)]);
     } else {
       row.note = 'the shim ended before the trigger';
     }
@@ -258,17 +298,40 @@ async function runOne(entry) {
   const done = await exited;
   row.shim = { exit: done.code, seconds: Math.round((done.at - t0) / 100) / 10 };
   row.report = reportOf(stdout);
-  if (entry.kind === 'next') Object.assign(row, nextRow({ markerBefore, report: row.report, markerAfter: survivorMarkers(locks) }));
+  if (entry.kind !== 'arm') Object.assign(row, nextRow({ markerBefore, report: row.report, markerAfter: survivorMarkers(locks) }));
+  if (entry.kind === 'next-live') Object.assign(row, liveNextFields(pair, survivorAliveBefore, row, done.code, refusalText(stdout, stderr)));
   row.stderrTail = stderr.slice(-300);
   row.descendants = [...new Set([...seen.values()].map(displayName))];
   row.credentials = { namesIntact: credentialsBefore.every((c) => credentialNames(REAL_HOME).includes(c)), rotated: JSON.stringify(shapeBefore) !== JSON.stringify(credentialShape()) };
   row.homeAfter = readdirSync(join(root, 'home')).filter((n) => n !== 'credentials').sort((a, b) => a.localeCompare(b));
-  // D19's order, the product's: the junction first, by its own name, the person's folder verified — then the home, then the rest of the root.
-  const disposed = disposeOwnedHome(join(root, 'home'), REAL_HOME, credentialsBefore);
-  rmSync(root, { recursive: true, force: true });
-  row.disposed = `link removed ${disposed.linkRemoved}, target intact ${disposed.targetIntact}, home gone ${disposed.homeGone}, root gone ${!existsSync(root)}`;
+  const dispose = () => {
+    // D19's order, the product's: the junction first, by its own name, the person's folder verified — then the home, then the rest of the root.
+    const disposed = disposeOwnedHome(join(root, 'home'), REAL_HOME, credentialsBefore);
+    rmSync(root, { recursive: true, force: true });
+    return `link removed ${disposed.linkRemoved}, target intact ${disposed.targetIntact}, home gone ${disposed.homeGone}, root gone ${!existsSync(root)}`;
+  };
+  const survivor = isLiveArm(armName) ? liveSurvivor(row.orphans ?? []) : null;
+  if (survivor) {
+    // The orphan still runs on this owned home (its junction to the sign-in included): the folder is disposed only after it has ended — by the `-after` launch.
+    live.set(label, { survivor, orphan: row.orphans.find((o) => o.pid === survivor.pid), dispose });
+    row.survivor = survivor;
+    row.disposed = 'deferred: the survivor still runs on this home; disposed by the -after launch';
+  } else {
+    if (isLiveArm(armName)) row.note = `${row.note ?? ''} no live kimi with a readable identity was left, so the live variant will not happen`.trim();
+    row.disposed = dispose();
+  }
+  if (entry.kind === 'after-live') row.killRunDisposed = pair.dispose();
 
   return row;
+}
+
+/** The live `-next` launch's own record: the survivor, whether it lived before and after, the refusal text, the survivor's new parent, and the verdict against the cornerstone. */
+function liveNextFields(pair, survivorAliveBefore, row, shimExit, text) {
+  const survivorAliveAfter = survivorLives(pair.survivor);
+  return {
+    survivor: pair.survivor, survivorAliveBefore, survivorAliveAfter, survivorNewParent: pair.orphan?.newParent ?? null, refusal: text,
+    verdict: liveVerdict({ markerAfter: row.markerAfter, survivor: pair.survivor, survivorAliveBefore, survivorAliveAfter, shimExit, report: row.report, text }),
+  };
 }
 
 /** The shim exited by itself: when does each file become Free, polled every 50 ms for up to 15 s. */
@@ -291,7 +354,7 @@ async function watchAfterShim(row, exitedAt, homeFile, seen) {
  */
 async function recordOrphans(row, armName, markers, seen) {
   await sleep(300);
-  const survivors = [...seen.entries()].filter(([pid]) => alive(pid)).map(([pid, entry]) => ({ pid, ...entry }));
+  const survivors = [...seen.entries()].filter(([pid]) => alive(pid)).map(([pid, entry]) => ({ pid, ...entry, startTime: startTimeOfPid(pid) }));
   Object.assign(row, killRecord({ arm: armName, markers, survivors, listing: listProcesses() }));
 }
 

@@ -4040,5 +4040,11 @@ Scripts only (`scripts/`); no product code changed and no answer of any runner c
 - **N-K2 sees an abrupt death and the next launch** (`scripts/lib/kimi-schedule.mjs`, `scripts/probe-kimi-tree-hold.mjs`). A new arm `killed-hard` ends the shim with SIGKILL (the shim handles SIGTERM and ends the agent's
   tree itself, so TERM proves nothing about an abandoned survivor marker); it counts only when a `*.survivors.json` existed in the lock folder at the kill. Every killed arm's repetition is a PAIR — `<arm>-<n>`, then at
   once `<arm>-<n>-next`, a normal launch recording the marker before it, the shim's report and the marker after it — repeat-outer; each survivor of a kill is recorded with its NEW parent (pid, comm, exe basename).
+- **The live-survivor arm** (`killed-hard-live`, `scripts/probe-kimi-tree-hold.mjs`; N-K2 / cornerstone C2): SIGKILL, then a `-next` launch started WHILE the killed arm's own kimi runs — the probe's "no other kimi"
+  wait is bypassed for exactly that process, by pid and start time (`waitForNoOtherKimi({ except })`), every other kimi still blocking — then an `-after` launch once it has ended. It records the marker before and after,
+  the refusal text, the survivor's new parent and a verdict against `KimiSurvivorGate`'s promise (Busy naming the survivor, nothing started, the marker stands). Runs only with `--allow-live-survivor`, on a host
+  where the owner allowed the window: a failure of the gate would put two refreshers on one sign-in. (The gate's reconcile may also END an orphan by identity when the writing shim is gone; the verdict reports that as `UNEXPECTED`.)
+- **The 2.2.0 window's cells run on owned roots** (`scripts/lib/kimi-arms.mjs`: M-K3, M-K4, M-K6, M-K12). Every arm carries `requireOwned` and the launch refuses one with no `<root>/home` beside `<root>/os`
+  (`ownedRefusal`). M-K12's `~/.agents` canary still lives in the person's real `~/.agents`, written and removed by exact paths only.
 
 Tests: `proc.test.mjs`, `kimi.test.mjs`, `kimi-home.test.mjs`, `kimi-arms.test.mjs`, `vibe.test.mjs`, `kimi-schedule.test.mjs` — listed in [module_tests.md](module_tests.md) (section *E1.S3*). No paid or live run was made.
