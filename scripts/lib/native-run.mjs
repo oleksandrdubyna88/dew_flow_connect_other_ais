@@ -47,8 +47,16 @@ const quoted = (word) => `'${word}'`;
 function probeCommand(probe, args) {
   checked(PROBE, 'the probe', probe);
   if (!Array.isArray(args)) refuse('the probe arguments', args);
-  return [quoted(`scripts/${probe}`), ...args.map((arg) => quoted(checked(ARG, 'a probe argument', arg)))].join(' ');
+  return [quoted(`scripts/${probe}`), ...args.map((arg) => quoted(unreserved(checked(ARG, 'a probe argument', arg))))].join(' ');
 }
+
+/**
+ * The flags the series itself owns or the host forbids: the run script appends its own `--scratch "$SERIES/$PHASE"` (a caller's would move the
+ * probe out of the series folder), and the two `--allow-…` flags switch on arms the owner permits on the Windows machine only (J5).
+ */
+const RESERVED_FLAGS = ['--scratch', '--allow-agents-canary', '--allow-live-survivor'];
+const isReserved = (arg) => RESERVED_FLAGS.some((flag) => arg === flag || arg.startsWith(`${flag}=`));
+const unreserved = (arg) => (isReserved(arg) ? refuse('a probe argument naming a flag the series or the host owns', arg) : arg);
 
 /** The run script of one phase: the template with the series, the phase and the probe command filled in (replacers are functions, so no `$` in a value is ever special). */
 export function renderRunScript({ series, phase, probe, args = [], root = '/tmp' }) {

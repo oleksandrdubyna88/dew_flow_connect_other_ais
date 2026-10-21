@@ -9,7 +9,9 @@
 // Vibe's `.env` by lstat, the names in ~/.vibe, Vibe's tool Python, the keyring-related distributions, the class name
 // keyring.get_keyring() picks under the built environment AND under it plus PYTHON_KEYRING_BACKEND=keyring.backends.fail.Keyring, the
 // keyring-session facts (by THIS script's own raw reading — an independent second reading beside coai-mcp --host-facts, DN10); and,
-// only when --kimi names an installed kimi, `kimi --version`, `kimi acp --help` and the credentials folder's NAMES.
+// only when --kimi names an installed kimi, `kimi --version`, `kimi acp --help` (in an OWNED root under the scratch, after waiting for any other
+// kimi to end - DN5) and the credentials folder's NAMES. A file that cannot be read is recorded "unreadable", never absent. One short line per slow
+// step goes to STDERR before it starts; stdout stays the one JSON record.
 //
 // NEVER: it does not open, hash, copy or print the contents of ~/.vibe/.env or any file under ~/.kimi-code/credentials (lstat and
 // readdir only — lib/host-facts.test.mjs fails if the file reader is ever called for either), never asks keyring for a password,
@@ -25,7 +27,8 @@ import { lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkS
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { collectHostFacts } from './lib/host-facts.mjs';
-import { linuxProcesses } from './lib/proc.mjs';
+import { ownedRoot } from './lib/kimi-home.mjs';
+import { linuxProcesses, waitForNoOtherKimi } from './lib/proc.mjs';
 import { minimalEnv } from './lib/vibe.mjs';
 
 const EXIT = { ok: 0, badRequest: 65, unavailable: 69 };
@@ -70,7 +73,13 @@ const processes = () => linuxProcesses().map((p) => ({ pid: p.pid, ppid: p.ppid,
 const sha256 = (path) => createHash('sha256').update(readFileSync(path)).digest('hex');
 const glibc = () => process.report?.getReport?.().header?.glibcVersionRuntime ?? '';
 
-function main() {
+/** One short line on STDERR before a slow step, so a person watching the run knows it is working; stdout stays the one JSON record. */
+const progress = (line) => process.stderr.write(`[native-facts] ${line}\n`);
+
+/** N-K0 starts kimi, which can refresh the person's sign-in: wait for any other kimi first (DN5). True when none runs, or when no kimi is asked for. */
+const noOtherKimi = (kimi) => (kimi === '' ? Promise.resolve(true) : waitForNoOtherKimi('N-K0', { tag: 'native-facts' }));
+
+async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (!args.ok) {
     process.stderr.write(`usage: node scripts/probe-native-linux-host.mjs [${FLAGS.map((f) => `${f} <value>`).join('] [')}]\n`);
@@ -85,10 +94,12 @@ function main() {
   try {
     mkdirSync(scratch, { recursive: true, mode: 0o700 });
     const home = homedir();
+    const kimi = args.values['--kimi'] ?? '';
+    const kimiClear = await noOtherKimi(kimi);
     const facts = collectHostFacts({
       fsx, run, env: process.env, uid: process.getuid(), home, platform: { node: process.version, glibc: glibc() }, listing: processes,
       serverEnvNames: () => serverEnvNames(home), series: args.values['--series'] ?? '', scratch, hash: sha256, now: () => new Date(),
-      coaiMcp: args.values['--coai-mcp'] ?? '', kimi: args.values['--kimi'] ?? '',
+      coaiMcp: args.values['--coai-mcp'] ?? '', kimi, kimiClear, ownedRoot, progress,
     });
     const text = `${JSON.stringify(facts, null, 2)}\n`;
     if (!own) writeFileSync(join(scratch, 'host-facts.json'), text);
@@ -99,4 +110,4 @@ function main() {
   }
 }
 
-process.exitCode = main();
+process.exitCode = await main();

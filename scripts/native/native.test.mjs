@@ -346,10 +346,19 @@ function makeSeries(series, home, text = readFileSync(join(NATIVE, 'make-series.
   return spawnSync('/bin/bash', ['--', join(series, 'make-series.sh')], { env: scriptEnv({ HOME: home }), encoding: 'utf8', timeout: 60_000 });
 }
 
+/** A server whose PATH is `pathValue`, then make-series.sh over a fresh series: the result of spawnSync. */
+function withPath(pathValue, text) {
+  const series = bareSeries();
+  const home = fakeHome();
+  fakeServer(home, pathValue);
+  return makeSeries(series, home, text);
+}
+
 function pathDirs() {
   const clean = join(ROOT, `clean-${randomBytes(2).toString('hex')}`);
   const wide = join(ROOT, `wide-${randomBytes(2).toString('hex')}`);
   mkdirSync(clean);
+  chmodSync(clean, 0o755);
   mkdirSync(wide);
   chmodSync(wide, 0o777);
   symlinkSync(NODE, join(clean, 'node'));
@@ -373,7 +382,7 @@ linuxTest('make-series.sh with a clean PATH: a private tree, SERIES_PATH, ONLY t
 });
 
 for (const [name, entryOf, mention] of [
-  ['an empty entry', () => '', /PATH entry 0 '' is an empty entry/u],
+  ['an empty entry', () => '', /PATH entry 0 '' is an empty entry \(= the current directory\)/u],
   ['the entry "."', () => '.', /PATH entry 0 \. is a relative entry/u],
   ['a relative entry', () => 'rel/bin', /PATH entry 0 rel\/bin is a relative entry/u],
   ['a mode-777 directory', (dirs) => dirs.wide, /world-writable \(mode 777\)/u],
@@ -504,11 +513,251 @@ linuxTest('TEETH (B3): an abort that takes no snapshot of descendants leaves the
 });
 
 linuxTest('TEETH (B5): a make-series.sh that does not judge a relative PATH entry accepts it — "a relative, empty or world-writable PATH entry before the node directory was accepted"', () => {
-  const blind = mutated(nativeText('make-series.sh'), 'elif [ "${ENTRY#/}" = "$ENTRY" ]; then\n    WHY="a relative entry"\n  ', '');
+  // the relative entry is then judged as nothing at all (removing the branch would let it fall to "missing", which refuses it for another reason)
+  const blind = mutated(nativeText('make-series.sh'), 'WHY="a relative entry"', 'WHY=""');
   const series = bareSeries();
   const home = fakeHome();
   const dirs = pathDirs();
   fakeServer(home, `rel/bin:${dirs.clean}:/usr/bin:/bin`);
   const r = makeSeries(series, home, blind);
   assert.equal(r.status, 0, `the mutant still refused (${r.status}), so the relative-entry cases above cannot go red: ${r.stderr}`);
+});
+
+// ---------------------------------------------------------------- the PATH audit, second round (code gate G3, G4, G13; judge J6)
+const spacedNodeDir = () => {
+  const dir = join(ROOT, `node dir ${randomBytes(2).toString('hex')}`);
+  mkdirSync(dir, { mode: 0o755 });
+  chmodSync(dir, 0o755);
+  symlinkSync(NODE, join(dir, 'node'));
+  return dir;
+};
+
+/** A folder holding an executable `name`; `mode` is the folder's own mode. */
+function dirWith(name, mode = 0o755) {
+  const dir = join(ROOT, `with-${name}-${randomBytes(2).toString('hex')}`);
+  mkdirSync(dir);
+  chmodSync(dir, mode);
+  writeFileSync(join(dir, name), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  return dir;
+}
+
+/** A folder `mode` holding a symlink `link` to `target`; returns the symlink's path. */
+function linkIn(mode, target) {
+  const folder = join(ROOT, `holder-${randomBytes(2).toString('hex')}`);
+  mkdirSync(folder);
+  chmodSync(folder, mode);
+  const link = join(folder, 'link');
+  symlinkSync(target, link);
+  return link;
+}
+
+linuxTest('G3: a node directory with a SPACE in its name works end to end — make-series.sh resolves it, node.txt holds the absolute realpath, and the run script runs exactly that', async () => {
+  const series = bareSeries();
+  const home = fakeHome();
+  const spaced = spacedNodeDir();
+  fakeServer(home, `${spaced}:/usr/bin:/bin`);
+  const r = makeSeries(series, home);
+  assert.equal(r.status, 0, `a node directory with a space was refused or broke the script: ${r.stdout}${r.stderr}`);
+  assert.equal(readFileSync(join(series, 'run', 'node.txt'), 'utf8'), `${NODE}\n`);
+
+  const run = provisioned();
+  writeFileSync(join(run, 'run', 'node.txt'), `${join(spaced, 'node')}\n`); // the path WITH the space, as a rendered script reads it
+  await running(run, 'n-v2', 'idle');
+  assert.equal(readyOf(run, 'n-v2').execPath, NODE, 'the run script did not run the node whose path holds a space');
+  endGroup(run, 'n-v2');
+});
+
+linuxTest('G4: an EMPTY entry is named "empty (= the current directory)" — not "missing" — and refused; a missing absolute entry is refused as missing', () => {
+  const dirs = pathDirs();
+  const empty = withPath(`:${dirs.clean}:/usr/bin:/bin`);
+  assert.equal(empty.status, 77, `${empty.stdout}${empty.stderr}`);
+  assert.match(empty.stderr, /PATH entry 0 '' is an empty entry \(= the current directory\)/u);
+  assert.doesNotMatch(empty.stderr, /missing/u, 'an empty entry was reported as a missing folder');
+
+  const gone = `${ROOT}/no-such-${randomBytes(2).toString('hex')}`;
+  const missing = withPath(`${gone}:${dirs.clean}:/usr/bin:/bin`);
+  assert.equal(missing.status, 77, `${missing.stdout}${missing.stderr}`);
+  assert.match(missing.stderr, new RegExp(`PATH entry 0 ${gone} is missing`, 'u'));
+});
+
+linuxTest('G4: only the entries up to the folder a used tool resolves to are judged — a missing and an empty entry AFTER node\'s folder are ignored', () => {
+  const dirs = pathDirs();
+  const r = withPath(`${dirs.clean}:${ROOT}/no-such-after::`);
+  assert.equal(r.status, 0, `${r.stdout}${r.stderr}`);
+});
+
+linuxTest('J6: a group-writable folder before node\'s is refused (the group is not root\'s)', () => {
+  const dirs = pathDirs();
+  const group = join(ROOT, `group-${randomBytes(2).toString('hex')}`);
+  mkdirSync(group);
+  chmodSync(group, 0o775);
+  const r = withPath(`${group}:${dirs.clean}:/usr/bin:/bin`);
+  assert.equal(r.status, 77, `${r.stdout}${r.stderr}`);
+  assert.match(r.stderr, /group-writable \(mode 775, group \d+\)/u);
+});
+
+for (const tool of ['git', 'python3']) {
+  linuxTest(`J6: ${tool} is a USED tool — a world-writable folder before the one ${tool} resolves to is refused, and ignored when ${tool} is nowhere on the PATH`, () => {
+    const { clean, wide } = pathDirs();
+    const refused = withPath(`${clean}:${wide}:${dirWith(tool)}`);
+    assert.equal(refused.status, 77, `${tool} is not in the audited tool list, so the cut-off stopped before the world-writable folder: ${refused.stdout}${refused.stderr}`);
+    assert.match(refused.stderr, /world-writable \(mode 777\)/u);
+    const other = withPath(`${clean}:${wide}:${dirWith('not-a-tool')}`);
+    assert.equal(other.status, 0, `the control: no ${tool} anywhere, so nothing reaches the world-writable folder: ${other.stdout}${other.stderr}`);
+  });
+}
+
+linuxTest('G13: a symlinked entry whose FOLDER is mode 777 is refused naming the entry — the link can be repointed by anyone — though its target is clean', () => {
+  const { clean } = pathDirs();
+  const link = linkIn(0o777, clean);
+  const r = withPath(`${link}:/usr/bin:/bin`);
+  assert.equal(r.status, 77, `a symlink in a world-writable folder was accepted: ${r.stdout}${r.stderr}`);
+  assert.match(r.stderr, new RegExp(`PATH entry 0 ${link} is a link whose folder .* is world-writable \\(mode 777\\)`, 'u'));
+});
+
+linuxTest('G13: a symlinked entry in a SAFE folder whose target is safe is accepted (Ubuntu\'s /bin -> usr/bin is one); one whose TARGET is world-writable is refused', () => {
+  const { clean, wide } = pathDirs();
+  const fine = withPath(`${linkIn(0o755, clean)}:/usr/bin:/bin`);
+  assert.equal(fine.status, 0, `a symlink in a safe folder with a safe target was refused: ${fine.stdout}${fine.stderr}`);
+  const link = linkIn(0o755, wide);
+  const bad = withPath(`${link}:${clean}:/usr/bin:/bin`);
+  assert.equal(bad.status, 77, `${bad.stdout}${bad.stderr}`);
+  assert.match(bad.stderr, new RegExp(`PATH entry 0 ${link} is a link to ${wide}, which is world-writable \\(mode 777\\)`, 'u'));
+});
+
+linuxTest('TEETH (G13): a make-series.sh that judges only the link\'s TARGET (not the folder that holds the link) accepts a symlink in a mode-777 folder', () => {
+  const blind = mutated(nativeText('make-series.sh'), 'if [ -n "$HOLDER" ]; then', 'if false; then');
+  const { clean } = pathDirs();
+  const r = withPath(`${linkIn(0o777, clean)}:/usr/bin:/bin`, blind);
+  assert.equal(r.status, 0, `the mutant still refused (${r.status}), so the symlink-folder case above cannot go red: ${r.stderr}`);
+});
+
+linuxTest('TEETH (J6): a make-series.sh whose tool list lacks git and python3 stops auditing before the world-writable folder', () => {
+  const old = mutated(nativeText('make-series.sh'), 'for TOOL in node vibe kimi rg fd git python3; do', 'for TOOL in node vibe kimi rg fd; do');
+  const { clean, wide } = pathDirs();
+  const r = withPath(`${clean}:${wide}:${dirWith('git')}`, old);
+  assert.equal(r.status, 0, `the mutant still refused (${r.status}), so the git case above cannot go red: ${r.stderr}`);
+});
+
+// ---------------------------------------------------------------- abort.sh, second round (code gate G5; judge J3)
+const abortOf = (series) => spawnSync('/bin/bash', ['--', join(series, 'run', 'abort.sh'), 'n-v2'], { env: scriptEnv(), encoding: 'utf8', timeout: 60_000 });
+const writeHandle = (series, pid, pgid, start) => writeFileSync(logs(series, 'n-v2', 'handle'), `${pid} ${pgid} ${start}\n`);
+/** A process the test owns, apart from every group of the run: its own session and group, so its pid is its pgid. */
+function bystander() {
+  const child = spawn('/bin/sleep', ['600'], { detached: true, stdio: 'ignore' });
+  child.on('error', () => {});
+  return track(child.pid);
+}
+/** The pid of a process that has ended (and was reaped), so no process answers to it. */
+async function deadPid() {
+  const child = spawn('/bin/true', [], { stdio: 'ignore' });
+  child.on('error', () => {});
+  await new Promise((resolve) => child.once('exit', resolve));
+  assert.equal(procStat(child.pid), null, 'the scenario needs a pid nothing answers to');
+  return child.pid;
+}
+/**
+ * Runs `forge` (it writes a handle that lies) and then `check`; the TRUE handle is written back in `finally`, because the suite's own clean-up
+ * (`endGroup`) reads the handle, and a forged one left behind would make it end the wrong group and leave the real run script alive — which keeps
+ * the whole test runner waiting.
+ */
+async function withForgedHandle(series, handle, forge, check) {
+  try {
+    forge();
+    await check();
+  } finally {
+    writeHandle(series, handle.pid, handle.pgid, handle.start);
+    endGroup(series, 'n-v2');
+  }
+}
+
+linuxTest('J3: a handle whose pid is NOT its process-group id signals nothing — a live leader plus another group\'s id would otherwise end that whole group', async () => {
+  const series = provisioned();
+  const { handle } = await running(series, 'n-v2', 'idle');
+  const other = bystander();
+  await withForgedHandle(series, handle, () => writeHandle(series, handle.pid, other.pid, handle.start), () => {
+    const r = abortOf(series); // the leader is real and its start time matches; the group id is somebody else's
+    assert.equal(r.status, 4, `a handle with pid != pgid was acted on — it signalled a group the run script never owned: ${r.stdout}${r.stderr}`);
+    assert.match(r.stdout + r.stderr, /nothing signalled/u);
+    assert.ok(alive(other), 'the bystander in the named group was ended');
+    assert.ok(alive({ pid: handle.pid, start: handle.start }), 'the run script was ended by a refused abort');
+  });
+});
+
+linuxTest('J3: a DEAD leader\'s handle that names another live group (pid != pgid, members that started after the recorded time) signals nothing', async () => {
+  const series = provisioned();
+  const gone = await deadPid();
+  const other = bystander();
+  writeHandle(series, gone, other.pid, Number(other.start) - 1);
+  const r = abortOf(series);
+  assert.equal(r.status, 4, `a dead leader's handle naming a stranger's group was acted on: ${r.stdout}${r.stderr}`);
+  assert.ok(alive(other), 'the bystander in the named group was ended');
+});
+
+linuxTest('J3: a process-group id of 1 or 0 — even with pid equal to it — is never ours: nothing is signalled', async () => {
+  const series = provisioned();
+  const { handle } = await running(series, 'n-v2', 'idle');
+  await withForgedHandle(series, handle, () => {}, () => {
+    for (const id of [0, 1]) {
+      writeHandle(series, id, id, handle.start);
+      const r = abortOf(series);
+      assert.equal(r.status, 4, `a handle naming pgid ${id} was acted on: ${r.stdout}${r.stderr}`);
+    }
+    assert.ok(alive({ pid: handle.pid, start: handle.start }));
+  });
+});
+
+linuxTest('J3: the leader alive with a matching start time but NOT leading the named group (its current pgrp differs) — nothing is signalled', () => {
+  const series = provisioned();
+  const sleeper = spawn('/bin/sleep', ['600'], { stdio: 'ignore' }); // same group as the test runner: its pid is not its pgrp
+  sleeper.on('error', () => {});
+  const id = track(sleeper.pid);
+  assert.notEqual(procStat(id.pid)?.pgrp, id.pid, 'the scenario needs a process that leads no group');
+  writeHandle(series, id.pid, id.pid, id.start);
+  const r = abortOf(series);
+  assert.equal(r.status, 4, `a leader that no longer leads the group was acted on: ${r.stdout}${r.stderr}`);
+  assert.ok(alive(id), 'the process was ended although it was not the group leader the handle claimed');
+});
+
+linuxTest('J3: the leader gone and a group member that STARTED EARLIER than the recorded leader (a reused group id) — nothing is signalled, exit 4', async () => {
+  const series = provisioned();
+  const leader = spawn('/usr/bin/setsid', ['/bin/sh', '-c', '/bin/sleep 600 & exit 0'], { stdio: 'ignore' });
+  leader.on('error', () => {});
+  await new Promise((resolve) => leader.once('exit', resolve));
+  const member = readdirSync('/proc').filter((n) => /^\d+$/u.test(n)).map(Number).find((pid) => procStat(pid)?.pgrp === leader.pid);
+  assert.ok(member !== undefined, 'the scenario did not leave a member in the dead leader\'s group');
+  const id = track(member);
+  writeHandle(series, leader.pid, leader.pid, Number(id.start) + 100_000); // a "leader" that started long AFTER the member
+  const r = abortOf(series);
+  assert.equal(r.status, 4, `${r.stdout}${r.stderr}`);
+  assert.match(r.stdout, /started before the recorded leader/u);
+  assert.ok(alive(id), 'a member older than the recorded leader was signalled — the group id had been reused');
+});
+
+test('G5: abort.sh\'s owned tables are ASSIGNED empty at once (a declared-never-assigned associative array is "unbound" to `set -u` on bash 5.3), and every key listing goes through keys_of', () => {
+  const text = nativeText('abort.sh');
+  assert.match(text, /^OWNED=\(\); OWNED_GROUP=\(\)$/mu, 'OWNED and OWNED_GROUP are declared but never assigned — an empty owned set aborts `${#OWNED[@]}` under set -u');
+  const bare = text.split('\n').filter((line) => line.includes('"${!') && !line.includes('printf'));
+  assert.deepEqual(bare, [], 'a key listing outside keys_of');
+  assert.match(text, /keys_of\(\)/u);
+});
+
+linuxTest('G5: abort.sh survives an EMPTY owned set under `set -u` — the group\'s only member ends between the listing and the snapshot (the path every owned loop and the count line take)', () => {
+  // The deterministic part of that race: source abort.sh's own table declarations and key helper, and read an empty OWNED the way the script does.
+  const text = nativeText('abort.sh');
+  const declarations = text.split('\n').filter((line) => /^(declare -A |OWNED=\(\)|keys_of\(\))/u.test(line)).join('\n');
+  const r = spawnSync('/bin/bash', ['-c', `set -eu\n${declarations}\necho "owned set of \${#OWNED[@]} = $(keys_of OWNED | tr -d '\\n')"\nfor k in $(keys_of OWNED); do echo "never: $k"; done\necho done`], { encoding: 'utf8' });
+  assert.equal(r.status, 0, `an empty owned set aborted under set -u: ${r.stderr}`);
+  assert.match(r.stdout, /owned set of 0 = \ndone/u);
+});
+
+linuxTest('TEETH (J3): an abort.sh that does not require pid == pgid kills the bystander group a dead leader\'s forged handle names', async () => {
+  // With a LIVE leader the "leads the named group" check refuses on its own, so the teeth are shown where only pid == pgid can: a dead leader.
+  const lax = mutated(nativeText('abort.sh'), 'if [ "$PID" != "$PGID" ]; then', 'if false; then');
+  const series = provisioned('n-v2', { abortText: lax });
+  const gone = await deadPid();
+  const other = bystander();
+  writeHandle(series, gone, other.pid, Number(other.start) - 1);
+  const r = abortOf(series);
+  assert.equal(alive(other), false, `the mutant left the bystander alone (exit ${r.status}), so the pid == pgid case above cannot go red: ${r.stdout}`);
 });

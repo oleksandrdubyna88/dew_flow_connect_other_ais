@@ -3,10 +3,12 @@
 # Copied into <series>/run/ and run by its path: `/bin/bash -- <series>/run/abort.sh <phase>`. It never ends anything by NAME
 # (no pkill, no killall): only a (pid, start time) it proved to be the phase's own.
 #
-#   1. the phase's .handle (written by the run script: pid, process-group id, start time = field 22 of /proc/<pid>/stat). If the
-#      leader lives, its start time must EQUAL the recorded one — else the pid was reused and nothing is signalled. If the leader is
-#      gone, the group may still live (a group id is not reused while a member holds it), and every member must have started at or
-#      after the recorded time — else nothing is signalled;
+#   1. the phase's .handle (written by the run script: pid, process-group id, start time = field 22 of /proc/<pid>/stat). setsid made the
+#      run script its own group leader, so the pid MUST equal the group id (and the group id is never 0 or 1) — a handle that says
+#      otherwise names a group the run script never led, and nothing is signalled (exit 4). If the leader lives, its start time must
+#      EQUAL the recorded one — else the pid was reused — and it must still lead that group (its current pgrp = the recorded one). If the
+#      leader is gone, the group may still live (a group id is not reused while a member holds it), and every member must have started
+#      at or after the recorded time — else the group id was reused and nothing is signalled;
 #   2. the OWNED set is snapshotted BEFORE any signal: every process of the group, plus every descendant (by parent pid) of the leader
 #      and of each member — which catches a child that called setsid and left the group while its parent still lived — each as
 #      (pid, start time);
@@ -48,8 +50,15 @@ for NUMBER in "${PID:-}" "${PGID:-}" "${START:-}"; do
   if ! [[ $NUMBER =~ ^[0-9]+$ ]]; then echo "abort $PHASE: the handle does not hold three integers — nothing signalled" >&2; exit 4; fi
 done
 if [ "$PGID" -le 1 ]; then echo "abort $PHASE: a process-group id of $PGID is never ours — nothing signalled" >&2; exit 4; fi
+if [ "$PID" != "$PGID" ]; then echo "abort $PHASE: the handle's pid $PID is not its process-group id $PGID — the run script leads its own group; nothing signalled" >&2; exit 4; fi
 
+# An associative array that is declared and NEVER assigned is "unbound" to `set -u` on bash 5.3 (`${#OWNED[@]}` then aborts the script), and
+# the owned set CAN be empty: every member of the group can end between the listing and the snapshot. So both owned tables are assigned empty at once.
 declare -A PPID_OF PGRP_OF START_OF STATE_OF OWNED OWNED_GROUP
+OWNED=(); OWNED_GROUP=()
+
+# The keys of an associative array, one per line; an empty table gives one empty line, which the word splitting of `$(keys_of ...)` drops.
+keys_of() { local -n _table="$1"; printf '%s\n' "${!_table[@]}"; }
 
 # One pass over /proc into the four tables. A process that ends between the listing and its read is skipped.
 scan() {
@@ -84,21 +93,24 @@ is_owned() { [ -n "${START_OF[$1]:-}" ] && [ -n "${OWNED[$1:${START_OF[$1]}]+x}"
 snapshot() {
   scan
   local pid parent changed=1
-  for pid in "${!PGRP_OF[@]}"; do
+  for pid in $(keys_of PGRP_OF); do
     if [ "${PGRP_OF[$pid]}" = "$PGID" ] && [ "$pid" != "$$" ]; then own "$pid"; fi
   done
   if [ -n "${START_OF[$PID]:-}" ] && [ "${START_OF[$PID]}" = "$START" ]; then own "$PID"; fi
   while [ "$changed" = 1 ]; do
     changed=0
-    for pid in "${!PPID_OF[@]}"; do
+    for pid in $(keys_of PPID_OF); do
       parent="${PPID_OF[$pid]}"
       if [ "$pid" != "$$" ] && ! is_owned "$pid" && is_owned "$parent"; then own "$pid"; changed=1; fi
     done
   done
 }
 
-group_members() { local pid; for pid in "${!PGRP_OF[@]}"; do if [ "${PGRP_OF[$pid]}" = "$PGID" ] && [ "${STATE_OF[$pid]}" != Z ]; then echo "$pid"; fi; done; }
-owned_alive() { local key; for key in "${!OWNED[@]}"; do if alive "${OWNED[$key]}" "${key#*:}"; then echo "${OWNED[$key]}"; fi; done; }
+# Live (non-zombie) members of the group. `group_members_all` is every one; `group_members` keeps only those that started at or after the handle's
+# start time — a member that is older cannot be the leader's, so a reused group id never makes a stranger ours.
+group_members_all() { local pid; for pid in $(keys_of PGRP_OF); do if [ "${PGRP_OF[$pid]}" = "$PGID" ] && [ "${STATE_OF[$pid]}" != Z ]; then echo "$pid"; fi; done; }
+group_members() { local pid; for pid in $(group_members_all); do if [ "${START_OF[$pid]}" -ge "$START" ]; then echo "$pid"; fi; done; }
+owned_alive() { local key; for key in $(keys_of OWNED); do if alive "${OWNED[$key]}" "${key#*:}"; then echo "${OWNED[$key]}"; fi; done; }
 
 # Step 1: identity.
 scan
@@ -107,9 +119,13 @@ if [ -n "${START_OF[$PID]:-}" ]; then
     echo "abort $PHASE: pid $PID is alive with start time ${START_OF[$PID]}, the handle says $START — the pid was reused; nothing signalled"
     exit 4
   fi
+  if [ "${PGRP_OF[$PID]}" != "$PGID" ]; then
+    echo "abort $PHASE: pid $PID is alive with the right start time but leads group ${PGRP_OF[$PID]}, not $PGID — nothing signalled"
+    exit 4
+  fi
   echo "abort $PHASE: leader $PID is alive and its start time matches"
 else
-  MEMBERS="$(group_members)"
+  MEMBERS="$(group_members_all)"
   if [ -z "$MEMBERS" ]; then echo "abort $PHASE: the leader and its group are gone — nothing to end"; exit 0; fi
   for MEMBER in $MEMBERS; do
     if [ "${START_OF[$MEMBER]}" -lt "$START" ]; then
@@ -129,7 +145,7 @@ if [ -n "$(group_members)" ]; then
   kill -TERM -- "-$PGID" 2>/dev/null || true
   echo "abort $PHASE: TERM to group $PGID"
 fi
-for KEY in "${!OWNED[@]}"; do
+for KEY in $(keys_of OWNED); do
   if [ "${OWNED_GROUP[$KEY]}" != "$PGID" ] && alive "${OWNED[$KEY]}" "${KEY#*:}"; then
     kill -TERM -- "${OWNED[$KEY]}" 2>/dev/null || true
     echo "abort $PHASE: TERM to pid ${OWNED[$KEY]} (outside the group)"
@@ -146,7 +162,7 @@ if pending; then
     kill -KILL -- "-$PGID" 2>/dev/null || true
     echo "abort $PHASE: KILL to group $PGID (still alive after ${GRACE}s)"
   fi
-  for KEY in "${!OWNED[@]}"; do
+  for KEY in $(keys_of OWNED); do
     if alive "${OWNED[$KEY]}" "${KEY#*:}"; then
       kill -KILL -- "${OWNED[$KEY]}" 2>/dev/null || true
       echo "abort $PHASE: KILL to pid ${OWNED[$KEY]}"

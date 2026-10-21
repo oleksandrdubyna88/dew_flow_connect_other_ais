@@ -4,12 +4,13 @@
 // on every platform over fakes; it opens no real file, starts no process, and never sees a real sign-in.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { collectHostFacts, DAEMON_PREFIXES, hostFactsMode, keyringSession, mountTypeOf, pathEntries, PY_DISTRIBUTIONS, PY_KEYRING_CLASS, readBanner, redactSlot, resolveTool, signInRecord } from './host-facts.mjs';
+import { KEYRING_FAIL_BACKEND as FAIL_BACKEND } from './vibe.mjs';
+import { collectHostFacts, hostFactsMode, keyringSession, mountTypeOf, pathEntries, PY_DISTRIBUTIONS, PY_KEYRING_CLASS, readBanner, redactSlot, resolveTool, signInRecord } from './host-facts.mjs';
 
 const PROBE = join(dirname(fileURLToPath(import.meta.url)), '..', 'probe-native-linux-host.mjs');
 const LINUX = process.platform === 'linux';
@@ -17,7 +18,7 @@ const base = mkdtempSync(join(realpathSync.native(tmpdir()), 'testsToDelete-host
 after(() => rmSync(base, { recursive: true, force: true }));
 const SECRET = 'MISTRAL_API_KEY=SENTINEL-SECRET-DO-NOT-READ';
 const TOKEN = '{"refresh_token":"SENTINEL-TOKEN-DO-NOT-READ"}';
-const FAIL_BACKEND = 'keyring.backends.fail.Keyring';
+const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 /** An in-memory file system: `tree` maps a path to `{ content, mode, uid, mtimeMs }` or `{ socket }`; folders are implied. `reads` records every readFile. */
 function fakeFs(tree) {
@@ -94,7 +95,7 @@ test('S-N19: the facts record holds ~/.vibe/.env and the credentials by lstat an
 
 test('S-N19: the credentials folder is recorded by NAMES with the slot hex redacted, modes and owners — no file is opened', () => {
   const fsx = fakeFs(world());
-  const facts = collectHostFacts(baseDeps(fsx, { kimi: '/opt/kimi/bin/kimi' }));
+  const facts = collectHostFacts(baseDeps(fsx, { kimi: '/opt/kimi/bin/kimi', ownedRoot: fakeOwnedRoot([]) }));
   const names = facts.k0.credentials.entries.map((e) => e.name);
   assert.deepEqual(names, ['kimi-code-<hex>.json', 'kimi-code-env-x.json']);
   assert.equal(facts.k0.credentials.entries[0].mode, '0600');
@@ -103,6 +104,36 @@ test('S-N19: the credentials folder is recorded by NAMES with the slot hex redac
   assert.equal(JSON.stringify(facts).includes('0123456789abcdef'), false, 'the slot hex never reaches the record');
   assert.equal(redactSlot('kimi-code-0123456789abcdef.json'), 'kimi-code-<hex>.json');
   assert.equal(redactSlot('config.toml'), 'config.toml');
+});
+
+const failing = (fsx, path, code, method = 'lstat') => ({ ...fsx, [method]: (p) => { if (p === path) throw Object.assign(new Error(`${code} ${p}`), { code }); return fsx[method](p); } });
+
+test('G23: only ENOENT is "absent" — EACCES, EIO and an error without a code are an explicit "unreadable" state, never exists:false', () => {
+  const path = `${HOME}/.vibe/.env`;
+  for (const code of ['EACCES', 'EIO', 'ELOOP']) {
+    assert.deepEqual(signInRecord(failing(fakeFs(world()), path, code), path), { path, state: 'unreadable', code }, `an ${code} on lstat was recorded as something else`);
+  }
+  const bare = { lstat: () => { throw new Error('no code'); } };
+  assert.deepEqual(signInRecord(bare, path), { path, state: 'unreadable', code: 'unknown' });
+  assert.deepEqual(signInRecord(failing(fakeFs({}), path, 'ENOENT'), path), { path, exists: false }, 'the absent case stays what it was');
+});
+
+test('G23: a folder that cannot be listed is "unreadable" in the record, not an empty list — the credentials folder and ~/.vibe alike', () => {
+  const credentials = `${HOME}/.kimi-code/credentials`;
+  const fsx = failing(failing(fakeFs(world()), credentials, 'EACCES', 'readdir'), `${HOME}/.vibe`, 'EIO', 'readdir');
+  const facts = collectHostFacts(baseDeps(fsx, { kimi: '/opt/kimi/bin/kimi', ownedRoot: fakeOwnedRoot([]) }));
+  assert.deepEqual(facts.k0.credentials.entries, { state: 'unreadable', code: 'EACCES' }, 'a credentials folder that failed to list was recorded as holding nothing');
+  assert.deepEqual(facts.v0.names, { state: 'unreadable', code: 'EIO' });
+  const absent = collectHostFacts(baseDeps(failing(fakeFs(world()), credentials, 'ENOENT', 'readdir'), { kimi: '/opt/kimi/bin/kimi', ownedRoot: fakeOwnedRoot([]) }));
+  assert.deepEqual(absent.k0.credentials.entries, [], 'ENOENT on readdir (the folder left between the stat and the listing) is an empty folder, as before');
+});
+
+test('G23: an unreadable ~/.vibe/.env in the whole record is "unreadable" — a person reading it is not told the sign-in is missing', () => {
+  const fsx = failing(fakeFs(world()), `${HOME}/.vibe/.env`, 'EACCES');
+  const signIn = collectHostFacts(baseDeps(fsx)).v0.signIn;
+  assert.equal(signIn.exists, undefined);
+  assert.equal(signIn.state, 'unreadable');
+  assert.equal(signIn.code, 'EACCES');
 });
 
 test('S-N19: an absent sign-in is a record that says so, not an exception or an empty fact', () => {
@@ -137,7 +168,25 @@ test('S-N19: a keyring daemon in the listing is named by its comm prefix (comm i
   const blind = keyringSession({ ...base, listing: () => { throw new Error('EACCES'); } });
   assert.deepEqual(blind.daemons, []);
   assert.equal(blind.listing, 'cannot tell');
-  assert.deepEqual(DAEMON_PREFIXES, ['gnome-keyring', 'kwalletd', 'keepassxc']);
+});
+
+const DAEMON_VECTORS = JSON.parse(readFileSync(join(REPO, 'shared', 'keyring-daemon-vectors.json'), 'utf8')).vectors;
+
+test("J8/G21: this script's reading of \"a keyring daemon\" is held to shared/keyring-daemon-vectors.json — the SAME cases the product's KeyringSessionFactsTests reads, by comm and by name", () => {
+  assert.ok(DAEMON_VECTORS.some((v) => v.daemon) && DAEMON_VECTORS.some((v) => !v.daemon), 'the vector file holds both kinds of case');
+  const base = { env: {}, serverNames: [], uid: 1, fsx: fakeFs({}) };
+  for (const { name, daemon } of DAEMON_VECTORS) {
+    for (const field of ['comm', 'name']) {
+      const found = keyringSession({ ...base, listing: () => [{ pid: 1, [field]: name }] }).daemons;
+      assert.deepEqual(found, daemon ? [name] : [], `${name} (as ${field}) ${daemon ? 'is' : 'is not'} a keyring daemon in the shared definition`);
+    }
+  }
+});
+
+test("J8: the facts script spells the forced keyring backend in no place of its own — it takes vibe.mjs's KEYRING_FAIL_BACKEND", () => {
+  const source = readFileSync(join(REPO, 'scripts', 'lib', 'host-facts.mjs'), 'utf8');
+  assert.equal(/keyring\.backends\.fail/u.test(source), false, 'host-facts.mjs re-spells the fail backend instead of importing KEYRING_FAIL_BACKEND');
+  assert.match(source, /KEYRING_FAIL_BACKEND/u);
 });
 
 test('S-N19: coai-mcp --host-facts is recorded as its line; exit 64 is "no such mode", never an empty fact', () => {
@@ -219,13 +268,44 @@ test("N-V0 is honest when Vibe's Python is absent: the fact is \"no python\", an
   assert.equal(facts.v0.keyringBackend.status, 'no python');
 });
 
+/** A stand-in for kimi-home.mjs's ownedRoot over the injected file system: <root>/home, <root>/os, <root>/cache — posix, recorded. */
+function fakeOwnedRoot(made) {
+  return (root) => {
+    made.push(root);
+    return { root, home: `${root}/home`, os: `${root}/os`, cache: `${root}/cache` };
+  };
+}
+
+test("N-K0 (J2): kimi runs in an OWNED root — HOME is its empty os/, KIMI_CODE_HOME its home/, XDG_CACHE_HOME its cache/ — so its native-file extraction never lands in the person's ~/.cache", () => {
+  const made = [];
+  const run = fakeRunner((file, args) => okRun(args[0] === '--version' ? 'kimi 2.2.0\n' : 'usage: kimi acp\n'));
+  collectHostFacts(baseDeps(fakeFs(world()), { run, kimi: '/opt/kimi/bin/kimi', ownedRoot: fakeOwnedRoot(made) }));
+  assert.deepEqual(made, ['/scratch/k0'], 'the owned root is <scratch>/k0');
+  assert.equal(run.calls.length, 2);
+  for (const call of run.calls) {
+    const env = call.options.env;
+    assert.equal(env.XDG_CACHE_HOME, '/scratch/k0/cache', `kimi ${call.args.join(' ')} ran without an owned XDG_CACHE_HOME — it would write the person's ~/.cache`);
+    assert.equal(env.HOME, '/scratch/k0/os', 'HOME is the empty os/ of the owned root');
+    assert.equal(env.KIMI_CODE_HOME, '/scratch/k0/home');
+    assert.equal(call.options.cwd, '/scratch');
+  }
+});
+
+test('N-K0 (J2): another kimi running means N-K0 is SKIPPED with the reason — no kimi is started, and the record says so (never an empty answer)', () => {
+  const run = fakeRunner();
+  const facts = collectHostFacts(baseDeps(fakeFs(world()), { run, kimi: '/opt/kimi/bin/kimi', kimiClear: false, ownedRoot: fakeOwnedRoot([]) }));
+  assert.equal(run.calls.length, 0, 'kimi was started although another kimi was running — two refreshers can sign the person out');
+  assert.equal(facts.k0.asked, false);
+  assert.match(facts.k0.skipped, /another kimi/u);
+});
+
 test('N-K0 runs only when a kimi path is named, asks --version and acp --help, and never a login', () => {
   const fsx = fakeFs(world());
   const without = fakeRunner();
   assert.equal(collectHostFacts(baseDeps(fsx, { run: without })).k0.asked, false);
   assert.equal(without.calls.length, 0);
   const run = fakeRunner((file, args) => okRun(args[0] === '--version' ? 'kimi 2.2.0\n' : 'usage: kimi acp\n'));
-  const facts = collectHostFacts(baseDeps(fsx, { run, kimi: '/opt/kimi/bin/kimi' }));
+  const facts = collectHostFacts(baseDeps(fsx, { run, kimi: '/opt/kimi/bin/kimi', ownedRoot: fakeOwnedRoot([]) }));
   assert.deepEqual(run.calls.map((c) => [c.file, ...c.args]), [['/opt/kimi/bin/kimi', '--version'], ['/opt/kimi/bin/kimi', 'acp', '--help']]);
   assert.equal(facts.k0.version, 'kimi 2.2.0');
   assert.equal(run.calls.some((c) => c.args.some((a) => /login|logout|setup/u.test(a))), false);
@@ -242,6 +322,29 @@ test('N-H1: the banner, the OS, the glibc, the uid, protected_symlinks and the m
   assert.equal(h1.mounts[`${HOME}/.vibe`], 'ext4');
   assert.equal(h1.mounts[`${HOME}/.kimi-code/credentials`], 'ext4');
   assert.equal(`${HOME}/.local/share` in h1.mounts, true);
+});
+
+test('G8: every slow step says what it is about to do BEFORE it starts — one short line each through the injected progress sink, ahead of the process it announces', () => {
+  const log = [];
+  const fsx = fakeFs(world({ [`${HOME}/.local/share/uv/tools/mistral-vibe/bin/python`]: { content: '', mode: 0o755 }, '/opt/coai-mcp': { content: 'bin', mode: 0o755 } }));
+  const run = fakeRunner((file, args) => {
+    log.push(`RUN ${args[1] === PY_DISTRIBUTIONS ? 'distributions' : args[1] === PY_KEYRING_CLASS ? 'keyring-class' : [file.split('/').at(-1), ...args].join(' ')}`);
+    return okRun(args[1] === PY_DISTRIBUTIONS ? '[]' : 'x\n');
+  });
+  const progress = (line) => log.push(`SAY ${line}`);
+  collectHostFacts(baseDeps(fsx, { run, progress, coaiMcp: '/opt/coai-mcp', kimi: '/opt/kimi/bin/kimi', ownedRoot: fakeOwnedRoot([]) }));
+  const at = (pattern, from = 0) => log.findIndex((line, i) => i >= from && pattern.test(line));
+  const said = log.filter((line) => line.startsWith('SAY '));
+  assert.ok(said.length >= 7 && said.every((line) => line.length <= 110), `short lines, one per slow step: ${said.join(' | ')}`);
+  assert.ok(at(/^SAY .*kernel banner/u) >= 0, 'the kernel banner line');
+  const announces = [[/^SAY .*coai-mcp/u, /^RUN coai-mcp --version/u], [/^SAY .*distributions/u, /^RUN distributions/u], [/^SAY .*keyring class.*built/u, /^RUN keyring-class/u],
+    [/^SAY .*keyring class.*fail/u, /^RUN keyring-class/u], [/^SAY .*kimi --version/u, /^RUN kimi --version/u], [/^SAY .*kimi acp --help/u, /^RUN kimi acp --help/u]];
+  for (const [say, ran] of announces) {
+    const sayAt = at(say);
+    assert.ok(sayAt >= 0, `no progress line matched ${say}: ${said.join(' | ')}`);
+    assert.ok(at(ran, sayAt) > sayAt, `the line ${say} did not come BEFORE the process it announces (${ran})`);
+  }
+  assert.ok(at(/^RUN keyring-class/u) < at(/^SAY .*keyring class.*fail/u), 'the fail-backend line comes after the first class reading, not before it');
 });
 
 test('N-H1: the installed coai-mcp is recorded by path, version, sha256 and its --host-facts answer (an old binary: "no such mode")', () => {
@@ -276,6 +379,7 @@ test('[Linux only: reads /proc — runs on the Linux CI job] the probe, run for 
   const scratch = join(base, 'scratch');
   const r = probe(['--scratch', scratch], { HOME: home });
   assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stderr, /kernel banner/u, 'G8: the slow steps announce themselves on stderr');
   const facts = JSON.parse(r.stdout);
   assert.equal(facts.schema, 'native-host-facts/1');
   assert.equal(facts.h1.banner.read, true, 'a real /proc/version was read');

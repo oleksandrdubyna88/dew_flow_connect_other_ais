@@ -1,5 +1,6 @@
 using CoaiMcp.Runners.Kimi;
 using CoaiMcp.Runners.Platform;
+using System.Text.Json;
 using FluentAssertions;
 using Xunit;
 
@@ -90,6 +91,34 @@ public sealed class KeyringSessionFactsTests
         facts.Listing.Should().Be(KeyringSessionFacts.Read);
         facts.BusAddressSet.Should().BeFalse();
         facts.BusSocket.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// The definition of "a keyring daemon" is ONE file, <c>shared/keyring-daemon-vectors.json</c>, read by this product reading AND by the facts script's own
+    /// independent reading (<c>scripts/lib/host-facts.test.mjs</c>). Every name is tried as the executable name and as the comm; a missing file fails loudly.
+    /// </summary>
+    public static TheoryData<string, bool> SharedDaemonVectors()
+    {
+        var path = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "shared", "keyring-daemon-vectors.json"));
+        using var document = JsonDocument.Parse(File.ReadAllBytes(path));
+        var data = new TheoryData<string, bool>();
+        foreach (var vector in document.RootElement.GetProperty("vectors").EnumerateArray())
+        {
+            data.Add(vector.GetProperty("name").GetString()!, vector.GetProperty("daemon").GetBoolean());
+        }
+
+        return data;
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedDaemonVectors))]
+    public void ANameIsADaemon_ExactlyWhenTheSharedDefinitionSaysSo_AsNameAndAsComm(string name, bool daemon)
+    {
+        var asName = Facts(Environment(), _ => false, Running((name, "other"))).Daemons;
+        var asComm = Facts(Environment(), _ => false, Running(("other", name))).Daemons;
+
+        asName.Should().Equal(daemon ? [name] : [], $"{name} (as the executable name) {(daemon ? "is" : "is not")} a keyring daemon in shared/keyring-daemon-vectors.json");
+        asComm.Should().Equal(daemon ? [name] : [], $"{name} (as the comm) {(daemon ? "is" : "is not")} a keyring daemon in shared/keyring-daemon-vectors.json");
     }
 
     [Fact]
