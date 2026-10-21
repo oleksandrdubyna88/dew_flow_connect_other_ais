@@ -2,7 +2,7 @@
 
 > Status: **in progress, 2026-10-20.** E1 (no run sees another) and C2 (E3 S1) are **merged** in #893
 > (`e86fe17f8`, 2026-10-20); **E2 (one temp folder per run) is coded** on `feat/suite-e2-run-temp` (its Outcome is below; not merged yet); E3's rest, E4
-> and E5 are open — E3 gained two product stories on 2026-10-20 (C18's product angle, C25); the §10 CI watch of E1 and C2 is running; **E4's stories document and its cornerstone spec were written on 2026-10-21** ([PLAN_the_suite_is_deterministic_and_leaves_no_temp_E4.md](PLAN_the_suite_is_deterministic_and_leaves_no_temp_E4.md), nothing coded). Scope: the fake CLI's steering files
+> and E5 are open — E3 gained two product stories on 2026-10-20 (C18's product angle, C25); the §10 CI watch of E1 and C2 is running; **E4's stories document and its cornerstone spec were written on 2026-10-21** ([PLAN_the_suite_is_deterministic_and_leaves_no_temp_E4.md](PLAN_the_suite_is_deterministic_and_leaves_no_temp_E4.md), nothing coded), **and its plan round (`67791431`, proceed), its risk consult (`d4afeda2`) and the cadence consult for epics 4-5 (`15f733c7`) were folded the same day** — the E4 document's §14–§16, and `### E5` below, which is restructured by that consult (C23 moved to E4 S2; C24, C26 and the new C27 given sections and owners). Scope: the fake CLI's steering files
 > (`src_mcp/tests_fakecli`), the fixed-name temp paths of the C# and extension tests, the flaky cases found in CI and
 > locally between 2026-09-26 and 2026-10-19 (product code where the cause is in the product), and the `coai-*` folders
 > the suites leave in `%TEMP%`. The owner put this "tail" at the very end of the queue; it was written so the causes
@@ -80,13 +80,18 @@ are work in progress and are not in this table unless §4 says otherwise.
 | `AReaderIsEndedWithItsTreeTests.TheDescendantsOfALiveServer_…` | 1 (Windows) | `fix/flaky-size-deadline-test` | 10-16 | C4 | shared file, fixed by #849 | — |
 | `PidfdLayerTests.AZombie_IsGone_NotSignalled` | 1 (Linux, run 39276863927, PR #868) | a store PR | 10-19 | C21 | timing inside the test | this plan |
 | the job `extension · a real editor` — the editor exited before the host ran a scenario (run 39282963558 attempt 1, PR #888) | 1 (Linux; the job is `continue-on-error`, so the run stayed green) | a docs branch (1) | 10-19 | C22 | timing in the editor's own start | this plan |
+| `AcpClientTests.TheCancelReachesAnAgentThatIsStillListening` (added 2026-10-21) | 1 (Windows, run 39325900821 attempt 1 — the same run and attempt as C18's product-angle failure) | #893's branch `docs/flaky-tests-and-temp-leak` (1; it touches no ACP code) | 10-19 | C23 | timing — C5's mechanism (the 5 s turn deadline also pays the agent's start) | this plan (**E4 S2**, the `AcpClient` clock) |
+| `SupervisedTeardownLinuxTests.AGrandchildBornAfterTheFirstListing_IsFoundByTheReListing` (added 2026-10-21; first recorded in the Review record on 10-20) | 1 (Linux, the Sonar/coverage job of PR #876 — another session's branch, a store change) | 1 (1) | 10-20 | C24 | timing inside the test, cause NOT yet read | this plan (E5, diagnosis gate first) |
+| `HeldFileInheritableOnLinuxTests.ATakeWhoseStreamCannotBeMade_ClosesItsDescriptor_AndLeavesTheFileFree` (added 2026-10-21) | 1 (Linux, run 39473785590, the coverage job of PR #897 — E2's branch, which does not touch it) | 1 (1) | 10-21 | C26 | shared state across parallel tests (inferred: an inheritable descriptor caught by another test's fork) | this plan (E5, diagnosis gate first) |
+| `AStreamsUsageIsNeverZeroTests.A_stream_over_the_answer_cap_is_unknown` (added 2026-10-21) | 0 CI; **1 local** (E2's full `src_mcp` run on a loaded Windows machine, 2026-10-20: exit 69 where 70 was expected; passes alone) | — | 10-20 | C27 | cause NOT yet read (69 is `ApiRuntime.EndedBeforeAnAnswerExit`, 70 is `AskApiMode.Failed`: under load the stream ENDED before the 8 MiB cap stopped it) | this plan (E5, diagnosis first) |
 
 **Seen only in local whole-suite runs** (no CI failure in the 174 logs): the steering-file collision (C1), the three
 `AReviewerThatAsksForSourceIsAskedAgainTests` budgets (C13), `AFeatureIsReviewedEndToEndTests.TheRoundsDeadline_…` (C6),
 `AReaderIsEndedWithItsTreeTests.AServerThatNeverAnswers_…` (C4), `ConsultationSweeperTests` (C14),
-`SqliteMigratorTests` (C7), the extension's `processLauncher.test.ts` "many lines" test (C9) and
+`SqliteMigratorTests` (C7), the extension's `processLauncher.test.ts` "many lines" test (C9),
 `SessionStoreConcurrencyTests.EightWritersOnOneSession_DoNotDenyEachOther` (C25, 2026-10-20, in E2's full run and once in
-another plan's baseline run). **Found by reading, not by a failure:** C10, C11, C12.
+another plan's baseline run) and `AStreamsUsageIsNeverZeroTests.A_stream_over_the_answer_cap_is_unknown` (C27, the same
+E2 run). **Found by reading, not by a failure:** C10, C11, C12.
 
 The macOS leg is not a required check, so auto-merge passes over its red — which is how C2 and C8 lived for three
 weeks: 54 of the 174 failed runs hold one of those two tests on that leg, and 60 hold one of them on any leg.
@@ -778,7 +783,57 @@ medium** on the cause (the unresponsive line and the empty host output are certa
 actor on the timeline, but no CPU or disk figure was kept); high that (1) makes the next failure legible, and
 measured — not assumed — that (3) removes it: the streak step's count over the next 20 runs of `main`.
 
-*(C23 is unused; C24 — `SupervisedTeardownLinuxTests`, E5 — is recorded only in the Review record until its log is read.)*
+### C23 — the ACP cancel test: a 5 s turn deadline that also pays the agent's start (TIMING, high — the C5 family; E4 S2)
+
+*(Reconciled 2026-10-21 by the cadence consult for epics 4-5: this line used to say "C23 is unused" while the session
+notes of 2026-10-19 had already named an ACP-cancel C23 from run 39325900821. It is one case, this one.)*
+
+**Evidence.** `AcpClientTests.TheCancelReachesAnAgentThatIsStillListening` (`src_mcp/tests/AcpClientTests.cs:660-671`)
+failed on the Windows leg in run 39325900821 attempt 1 (2026-10-19, #893's branch `docs/flaky-tests-and-temp-leak`, which
+touches no ACP code — the same run and attempt in which C18's heartbeat write threw), after 5 s:
+`Expected agent.Received("session/cancel") to contain a single item, but the collection is empty`. Not in the 174 logs
+(the run finished after the census was taken, like 39269879269 and 39276863927); never seen locally.
+
+**Cause.** The test gives the turn a 5 s deadline (`:666`) and means "the deadline strikes while the agent is listening,
+so `session/cancel` reaches it" — the fake's script is `AwaitCancel` then a late chunk (`:662`). But the deadline is
+armed right after the agent process starts (`AcpClient.cs:119`, `deadline.CancelAfter(ask.Deadline)` — the C5 site), so
+those 5 s also hold the fake's cold start, `initialize`, `session/new` and the config call; the test's own remark
+(`:664-665`) records a loaded machine spending one second before the prompt was even sent, on 2026-10-12, and raising the
+deadline from one second to five. When the deadline struck before `session/new` had answered, there was no session for
+`GracefulAsync` to cancel — `session/cancel` was never sent, and the assertion saw an empty list. The product did the
+right thing for what happened; the test's deadline paid a cost it did not mean. It is C5's mechanism on the same class.
+
+**Fix (E4 S2 — not E5).** No new seam: `AcpClient`'s clock, landed by S2 for C5, carries this test too. The test waits
+until the turn timer is armed on the manual clock AND the fake has received `session/prompt` (its log, as `Received`
+reads it today), then advances 5 s: `End == Deadline`, `session/cancel` received once, the agent gone — the
+"unresponsive peer still reaches a bounded teardown" arm the E4 risk consult asked for, since the fake answers nothing
+until the cancel. **RED first:** `startDelayMs: 5500` in the fake's script against the 5 s deadline — the CI sentence,
+every run. **Confidence: high** (the sentence, the 5 s duration and the test's own remark all name the same cost; the
+clock placement is `:119`). Owner: E4 S2 (the E4 document, §8 S2 and §16). Why not E5: E5's stories wait for an event
+and none needs the manual clock — this one does, and the class that owns its timer is seamed in E4.
+
+### C24 — a grandchild born after the first listing is still `R` after the teardown (TIMING inside the test, cause NOT yet read; E5)
+
+**Evidence.** `SupervisedTeardownLinuxTests.AGrandchildBornAfterTheFirstListing_IsFoundByTheReListing`
+(`src_mcp/tests/SupervisedTeardownLinuxTests.cs:136-146`) failed once on Linux, on the Sonar/coverage job of PR #876
+(another session's store change, 2026-10-20): the late grandchild's `/proc` state was still `R` where `gone` was
+expected (`StateOf(report, "late.pid")`, `:144`). The log was reported second-hand (the Review record, 2026-10-20); its
+full text is not yet in this plan.
+
+**What the code shows, and why a generic event wait is NOT a demonstrated fix (cadence consult 15f733c7, point 3).**
+The fake's `late` mode already waits for the late child's pid BEFORE it signals: `SupervisionVerbs.Listed`
+(`src_mcp/tests_fakecli/SupervisionVerbs.cs:195-206`) writes the trigger, then `Waited(() => File.Exists(… "late.pid"))`
+at `:204`, and only then writes `listed.txt` (`:205`) — "the call waits for it, so it exists before the first signal"
+(its own remark, `:195`). So the grandchild EXISTS before the teardown's re-listing; a fix that "waits for the late child
+to be born" would add a wait the fake already performs and change nothing. Whatever went wrong is downstream of that: the
+re-listing not finding a pid that exists, the kill not reaching it, or `StateOf` reading `/proc` before the kernel
+retired the entry — three different fixes, and the kept log decides which.
+
+**Diagnosis gate.** The story opens only on a KEPT failure (D5): the job's full log (the test's report JSON — the
+`survivors`, the states, the pids — and the fake's stderr) attached to this section. From it: which step saw `R` (the
+re-listing, the confirmation, or the final `StateOf`), and whether the pid was in the re-listing's set. Then the RED is
+written for THAT step; a fix that lands without the log is refused at the gate. Until then the test stays in the suite,
+unchanged. **Confidence: low** on any cause; **high** that the "wait for the birth" reading is wrong.
 
 ### C25 — eight writers of one session: the in-place write meets a writer that went without the turn (PRODUCT, high on the mechanism)
 
@@ -822,6 +877,54 @@ whose inner `IOException` says the file "is being used by another process", and 
 green before and after: a holder never released — `Save` throws `SessionStoreException` naming the branch, and `Load`
 still returns the OLD session whole. **Confidence: high** on the mechanism (the two roads are read, the refusal is
 measured with the E2 message's exact text); **medium** that it is the E2 failure (its stack was not kept).
+
+### C26 — an inheritable lock descriptor caught by another test's fork (SHARED STATE across parallel tests, inferred; E5)
+
+**Evidence.** `HeldFileInheritableOnLinuxTests.ATakeWhoseStreamCannotBeMade_ClosesItsDescriptor_AndLeavesTheFileFree`
+(`src_mcp/tests/HeldFileInheritableOnLinuxTests.cs:117`; the class at `:21` is in NO collection) failed once on Linux
+(run 39473785590, the coverage job of PR #897 — E2's branch, which does not touch it), after 7 ms:
+`Expected HeldFile.Probe(LockFile) to be LockProbe.Free … because the descriptor leaked with its flock … but found
+LockProbe.Held`. The full reading is in the Review record ("Case C26", 2026-10-21): the product closes the handle on the
+failure path (`src_mcp/runners/Files/LinuxHeldFile.cs:52-69`) and the lock file is unique per test (`TempDir.For`), so
+neither the code nor the path explains it.
+
+**Cause (inferred, not yet shown by a kept trace).** The descriptor is opened INHERITABLE by design (the shim's tree hold);
+in the window between its open and its close another test in the same process forked a child, which inherited the
+descriptor and with it the `flock`, so the probe saw `Held` until that child exited. Not caused by E2.
+
+**Diagnosis gate, then the fix.** The RED is deterministic by construction once the mechanism is confirmed: a test that
+holds a fork open across the take's failure (a child started between the open and the close, kept alive) must turn
+today's probe `Held` on every run; if it does not, the inference is wrong and the kept log of the next failure decides.
+Only then the fix — the class moves into a serial collection beside every process-spawning class, OR the probe waits
+for inheritors to end — chosen on what the RED shows is cheaper and still names the mechanism. Grouped with C21 and C24
+(E5's Linux process-lifecycle group). **Confidence: medium** on the mechanism, **low** that it is this failure until
+the RED is seen.
+
+### C27 — the streaming answer cap: exit 69 where 70 was expected, under load (cause NOT yet read; E5)
+
+**Evidence.** `AStreamsUsageIsNeverZeroTests.A_stream_over_the_answer_cap_is_unknown`
+(`src_mcp/tests/AStreamsUsageIsNeverZeroTests.cs:85-95`) failed once in E2's full `src_mcp` run on a loaded Windows machine
+(2026-10-20; listed, not called a flake, in `module_tests.md`'s E2 section and in this plan's E2 Outcome): the exit was
+69 where 70 was expected; it passes alone. No CI failure; no message kept beyond the two numbers.
+
+**What the two numbers say.** The test streams seventeen 512 KiB chunks — over `AskApiMode`'s 8 MiB answer cap, each
+under its 1 MiB line ceiling, "so the CAP is what stops it" (`:87`) — and expects 70, `AskApiMode.Failed`
+(`src_mcp/src/Api/AskApiMode.cs:39`, EX_SOFTWARE: the runtime's own refusal). 69 is `ApiRuntime.EndedBeforeAnAnswerExit`
+(`src_mcp/runners/Reviewers/ApiRuntime.cs:39`): the stream ENDED before an answer was complete — the exit the test above
+it (`:60-66`, a stream cut mid-answer) expects. So under load the stub's stream ended, or the client's read ended, BEFORE
+the eighth-plus megabyte reached the cap check. Candidates, none proven: the `ApiEndpointStub`'s chunked writer losing
+the connection under load (its `StreamedAsync`, `ApiEndpointStub.cs:192-209`, writes and flushes each chunk and
+`Abort()`s on `drop` only); the client's own read bound; the 20 s `timeoutSeconds` default of `AskAsync` (`:119`)
+striking inside 8.5 MiB of loopback traffic on a starved machine — which would make it a C5-shaped deadline on the system
+clock, but through `HttpClient`, not through any of E4's four classes.
+
+**Diagnosis first (D5).** The next failure is kept with the stub's journal (`Noted`, `:176`/`:180` — it says which
+exception the handler saw) and the runtime's stderr; the §10 loop (20 runs beside a whole suite) is run on this test to
+reproduce. The fix follows the mechanism: a stub that cannot stream 8.5 MiB under load is a stub defect (E5: the stream is
+driven to completion by an event, not by throughput); a 20 s read bound struck by loopback traffic is a timeout that does
+NOT get lengthened — the test then asserts the cap on a stream whose SIZE, not duration, is what is served (a handler
+that serves the bytes from memory in one write). **Confidence: low** — two numbers and no stack. Owner: E5
+(diagnosis first; a coder story only once a cause is shown).
 
 ## 5. The temp folder — what is in it, who made it, why it stays
 
@@ -1461,29 +1564,117 @@ story only when its gate opens. C8's own plan's step 3 starts after S4 merges.
 
 ### E5 — Tests that wait for an event
 
-**Goal.** Eight tests and one CI job stop measuring the scheduler: each waits for the event it means, or measures the
-cost it means (CPU), and the clock leaves the outcome.
+> **Restructured 2026-10-21 by the cadence consult for epics 4-5 (`15f733c7`) — its four points, each verified against
+> the code at `d9cdccf0e`, are folded at the end of this section.** The story list below is the fresher one; where §9
+> item 5 or the DoD still list E5's cases the old way, this section governs. C23 LEFT this epic for E4 S2 (point 3,
+> §4 C23); C24, C26 and C27 JOINED it with diagnosis gates.
 
-**Scope.** C16 (`ApiEndpointStub.Dispose` waits for in-flight handlers, bounded, with a sentence), C3 (the probe released
-at the shim's first busy answer through `WhenTheHomeFileIsBusy` on the Kimi call site, `KimiCredentialsLock.cs:209` —
-never inside `HeldFile`; the shim's take staying INHERITABLE), C18 (beats seen through the store's `projected` callback,
-the row released after three), C15 (launch 2's recorded timeout asserted directly), C9 (`replayingFan`'s CPU bound; the
-real-child smoke test keeps exit 0 and every character and waits on `onExit`/`onError` with no 10 s timer), C21 (the kill
-only after the parent's `comm` reads `sleep`), C22 (`run-host.mjs`: the sentence names an editor that exited before the
-host ran a scenario and quotes VS Code's last main line; the download out of the launch budget; one retry of the LAUNCH
-only, said in the log and counted by the streak step), C7 (a kept failure per D5, else the slow step sized from a
-measurement). Scenarios S11, S17, S18, S19, S20, S22, S23.
+**Goal.** Nine tests and one CI job stop measuring the scheduler: each waits for the event it means, or measures the
+cost it means (CPU), or — for the three Linux process-lifecycle cases — is fixed only from a kept log, and the clock
+leaves the outcome.
 
-**Depends on.** E1 only. Nothing here needs the clock seam, so E5 may run BESIDE E2–E4; its number is 5 because its
-stories are the smallest value each.
+**Scope.** C22 (`run-host.mjs`: the sentence names an editor that exited before the host ran a scenario and quotes VS
+Code's last main line; the download out of the launch budget; one retry of the LAUNCH only, said in the log and counted
+by the streak step); C21 (the kill only after the parent's `comm` reads `sleep`), C24 and C26 (diagnosis gates, §4);
+C16 (`ApiEndpointStub.Dispose` rewritten: close admission, abort, drain with a bound, stop — below); C3 (the probe
+released at the shim's first busy answer through `WhenTheHomeFileIsBusy` on the Kimi call site,
+`KimiCredentialsLock.cs:209` — never inside `HeldFile`; the shim's take staying INHERITABLE); C18's timing half (beats
+seen through the store's `projected` callback, the row released after three); C15 (launch 2's recorded timeout asserted
+directly, the smoke test's exposure stated — below); C9 (`replayingFan`'s CPU bound; the real-child smoke test keeps exit
+0 and every character and waits on `onExit`/`onError` with no 10 s timer); C27 (the streaming cap, diagnosis first);
+C7 (a kept failure per D5, else the slow step sized from a measurement). Scenarios S11, S17, S18, S19, S20, S22, S23.
+
+**Depends on.** E1 only. **No E5 story needs `ManualClock`** (point 4, verified story by story below): C3, C18 and C16
+wait on events of their own making; C15 asserts a recorded number; C9 measures CPU; C21, C24, C26 are process-lifecycle
+cases on `/proc` and `flock`; C22 is the extension harness; C27 and C7 are diagnoses. The one case that DID need the
+clock — C23 — is E4's now. So E5 starts BESIDE E4 (and beside E2–E3's remainder); its number is 5 because its stories are
+the smallest value each.
+
+**The stories (one coder each, different files):**
+
+- **E5.S1 — C22, the real-editor start (its own, independently accepted HARNESS story).** `run-host.mjs` and
+  `scenarios.ts` only, no product code, no C# — S23's two arms. It is accepted on its own PR, on its own evidence (S23
+  red → green plus the streak step's annotation count), and never waits for or blocks the other stories; its CI job is
+  `continue-on-error`, so its merge is on the harness's reviewers, not the suite's.
+- **E5.S2 — the Linux process-lifecycle group: C21, C24, C26 — with DIAGNOSIS GATES.** C21 has its deterministic RED
+  already (S22, the `bash … sleep 2; exec sleep 600` arm) and lands first. C24 and C26 open only on their gates (§4):
+  C24 on the kept log of the `late` run — its fake ALREADY waits for the late child's pid before signalling
+  (`tests_fakecli/SupervisionVerbs.cs:204`), so a generic event wait is not a demonstrated fix and is refused; C26 on
+  the RED that holds a fork open across the take's failure and turns the probe `Held` on every run — then the serial
+  collection or the inheritor wait, whichever the RED shows. One coder, in that order, because all three read `/proc`
+  through `ProcStat` and share the fake's supervision verbs.
+- **E5.S3 — C16, the HTTP stub (S11, both arms, rewritten — below).**
+- **E5.S4 — C3, the Kimi shim's probe (S17; the 100-run loop before and after).**
+- **E5.S5 — C18's timing half (S18).** The product angle is E3 S4's, built; this story is the test's gate on three
+  distinct beats.
+- **E5.S6 — C15, the follow-up launch's timeout (S19) — with the smoke test's exposure stated (below).**
+- **E5.S7 — C9, the extension's `replayingFan` (S20).**
+- **E5.S8 — C27, the streaming cap: diagnosis first (§4 C27).** A scout keeps the next failure's journal and runs the
+  §10 loop; a coder story only once a cause is shown.
+- **E5.S9 — C7's measurement.** A scout collects the failure or measures the slow step; a coder story only if a cause
+  is shown.
+
+No cornerstone: nothing here compounds — each story is one test file (or one harness file) with its own RED, and a wrong
+one fails its own test on the next run. (Point 4 asked to mark one only if found; none was.)
 
 **Done when.** S11, S18, S19, S20, S22, S23 red with their §8 sentence then green; S17's 100-run loop before and after
-recorded; C7 fixed from a kept stack or closed with the recorded measurement; C3, C9, C15, C16, C18, C21 not seen in
-the next 20 CI runs of their legs and C22 not seen in the streak step's next 20 runs of `main` (a watch, §10); C9's,
-C15's and C22's PRs each say why the new assertion is at least as strong as the old.
+recorded; C24 and C26 either fixed from their gates (the kept log; the fork RED) or still gated — never "fixed" without
+them; C27 and C7 fixed from a kept stack or closed with a recorded measurement; C3, C9, C15, C16, C18, C21 (and C24,
+C26, C27 when built) not seen in the next 20 CI runs of their legs and C22 not seen in the streak step's next 20 runs
+of `main` (a watch, §10); C9's, C15's and C22's PRs each say why the new assertion is at least as strong as the old;
+C15's and C16's PRs state the exposure and the contract below.
 
-**Size.** Eight stories, all parallel, one coder each, different files. C7 starts as a scout (collect the failure or
-measure the step) and becomes a coder story only if a cause is shown. No cornerstone.
+**Size.** Nine stories, all parallel but S2's three in order, one coder each. No cornerstone.
+
+#### The cadence consult for epics 4-5 (`15f733c7`, 2026-10-21) — 4 points, each verified, folded here and in the E4 document's §16
+
+1. **E4 S5 removes C6's fake sleep but the 2 s reviewer timeout and the real round timer stay; C15 keeps a 6 s fake
+   sleep inside an 8 s launch budget — separate the deterministic budget tests from the real-process smoke tests and
+   state the remaining exposure.** Verified: `RoundEngine.cs:287-289` computes the budget and arms `new
+   CancellationTokenSource(budget)` on the system clock BEFORE `WarmRemoteRolesAsync` (`:300`) and the sha (`:306`) —
+   C6's side is folded in the E4 document (§8 S5 "What the end-to-end test still pays"). C15's side: the test
+   (`ConsultAntigravityDenialScenarioTests.cs:368-397`) sets `FAKECLI_SLEEP_MS=6000` (`:375`) under an 8 s budget
+   (`:377`), and the product's cap is `RetryLadder.Lesser(left, next)` at `ConsultantTurn.cs:107`, with `left` read from
+   a `Stopwatch` at `:89`/`:101` (`Remaining` at `:94` decides whether a follow-up is offered at all). **Folded into
+   E5.S6:** (a) the DETERMINISTIC budget test is `ConsultantTurnTests.cs:90` (exists) plus S19's new assertion through
+   the launcher wrapper — launch 2's recorded `ProcessRequest.Timeout` is at most `8 s − launch 1's elapsed` and it
+   ended `TimedOut`; no stopwatch, no wall time; (b) the REAL-PROCESS SMOKE TEST keeps its 6 s sleep and its 8 s budget
+   — it proves the whole consult path kills a hung follow-up through the launcher (two launches, the record
+   `Interrupted`, the handle kept, the ledger's tokens) — and its remaining deadline exposure is STATED in its remark
+   and in the PR: a first `FakeCli` launch whose cold start exceeds 2 s under load is itself killed at the 8 s budget,
+   `Offered` then returns null for a terminal launch (`ConsultantTurn.cs:94-98`) and `Launches().HaveCount(2)` (`:391`)
+   fails — a smoke failure that names the machine's load, not the cap; a kept failure of it (D5) is read against the
+   cold start, never answered with a longer budget. The two wall-clock lines (`:378`, `:386-387`) go, as C15 already
+   said.
+2. **C16's spec contradicted itself.** Verified: `ApiEndpointStub.cs:157` calls `Answers(seen)` SYNCHRONOUSLY on the
+   serving thread, so a test handler that blocks on a gate blocks that thread inside `Answers` — and the first spec
+   wanted `Dispose` to wait for that handler to finish, AND to return at its bound, AND the gate to open only after
+   `Dispose` returned: a handler that cannot finish before `Dispose` returns cannot be waited for by it. `Dispose`
+   (`:219-229`) tracks nothing today. **C16's fix, rewritten:** `Dispose` (1) CLOSES ADMISSION first — the accept loop
+   stops taking contexts and any context taken but not yet handled is aborted; (2) ABORTS every in-flight response it
+   tracks (`HttpListenerResponse.Abort()`, the call `:183` already makes); (3) DRAINS the tracked handler tasks with a
+   bound, and when the bound expires says which handler outlived it (its `seen.Method seen.Path`); (4) only then
+   `Stop()`/`Close()`. **The handler contract becomes cancellation-aware:** a handler holds the stub's `Disposing` token
+   (or reads its `IsDisposed`) and a late callback — one that returns from `Answers` after `Dispose` returned — can NO
+   LONGER touch the response: its context is untracked and aborted, its write throws into the handler's own catch
+   (`:178-188`), which `Abort()`s an already-aborted response (idempotent) and journals the exception, and the listener
+   is never stopped while a header is being written because every tracked response was aborted before `Stop()`.
+   **S11's second arm, fixed accordingly:** `AHandlerStillActivePastTheBound_IsAbortedBeforeTheListenerStops_AndDisposeDoesNotThrow`
+   — the handler blocks in `Answers` on a gate; `Dispose` returns AT its bound, without throwing, with its sentence
+   naming the handler; THEN the test opens the gate; the late handler's write fails on the aborted response and is
+   journaled; nothing reaches the listener. The first arm is unchanged (a handler released, then sleeping 300 ms
+   before it writes: `Dispose` returns only after it finished). RED today for the second arm: `Stop()` races the
+   writer — the CI `NullReferenceException` from `FormatHeaders`, or `Dispose` returns with the handler still writing.
+3. **Unowned work.** (a) The streaming-cap failure is **C27** (§3 row, §4 section, E5.S8, diagnosis first). (b) **C23
+   reconciled:** the "C23 is unused" line at §4 and the session notes' ACP-cancel C23 were one case — it has its §4
+   section and its census row, and its owner is **E4 S2** (the `AcpClient` clock: its cause is C5's), not E5. (c) **C24
+   and C26** have §4 sections, census rows and done-when entries with DIAGNOSIS GATES: C24's fake already waits for the
+   late child's pid before signalling (`SupervisionVerbs.cs:195-206`, the wait at `:204`), so "wait for the birth" is not
+   a demonstrated fix — the kept log decides which step saw `R`; C26's gate is the fork RED.
+4. **E5 structure.** No E5 story needs `ManualClock` (verified above, story by story), so E5 starts beside E4. The
+   stories are restructured as listed: C22 as its own independently accepted harness story (E5.S1); C21/C24/C26 as a
+   Linux process-lifecycle group with diagnosis gates (E5.S2); the rest — C3, C9, C15, C16, C18's timing half, C27 and
+   C7's measurement — as event-wait and diagnosis stories (E5.S3–S9); C23 excluded, being E4's. No cornerstone found.
 
 ### Order, and what runs beside what
 
