@@ -23,7 +23,7 @@
  * the host's stop only records a cause alongside a caller token that fires. Those two words are pinned by the C# tests only.</p>
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -39,6 +39,13 @@ export const TRACKED = ['consultation', 'cli', 'cliVersion', 'effort', 'effortFr
 
 const CODEX_VERSION = 'codex-cli 0.131.0';
 
+/**
+ * The effort the isolated codex configuration names. Deliberately a word no real configuration holds: the line's `effort` can only
+ * equal this if it was read from THIS leg's `config.toml`, so a value that came from the machine's own home is a failure rather
+ * than a coincidence of two people both running `high`.
+ */
+export const SEAM_EFFORT = 'seam-isolated-effort';
+
 /** A round's own clock is whole minutes at the smallest; the reply waits for it, plus the time to kill the reviewer. */
 const CLOCK_WAIT_MS = 150_000;
 
@@ -52,6 +59,31 @@ function removeQuietly(path) {
   } catch {
     // Deliberately swallowed: the verdict (or the error that produced it) is what the caller reports.
   }
+}
+
+/**
+ * A home of its own for the server the leg starts, holding the only codex configuration it may read.
+ *
+ * <p>A codex row's effort is KEPT and never SENT (`RosterBuilder.EffortFor`), so the effort on a codex line is the CLI's own
+ * configuration, labelled `cli-config`: `$CODEX_HOME/config.toml`, else `~/.codex/config.toml`. Left to the process environment
+ * that file is the developer's, and the leg passed on a machine that had one and failed in CI, where none exists (#904). So the
+ * server gets a home that is this folder and a configuration that names an effort — the leg now depends on nothing outside it.</p>
+ */
+function isolatedHome() {
+  const home = mkdtempSync(join(tmpdir(), 'coai-seam-ledger-home-'));
+  mkdirSync(join(home, '.codex'));
+  writeFileSync(join(home, '.codex', 'config.toml'), `model_reasoning_effort = "${SEAM_EFFORT}"
+`, 'utf8');
+
+  return home;
+}
+
+/**
+ * The environment entries that make `home` the only home the server sees: `HOME` (read first by the server) and `USERPROFILE`
+ * (Windows), and `CODEX_HOME` pointing into it so an inherited `CODEX_HOME` cannot win over them.
+ */
+export function homeEnvironment(home) {
+  return { HOME: home, USERPROFILE: home, CODEX_HOME: join(home, '.codex') };
 }
 
 /** A checkout with a `feature` branch ahead of `main`, which is what a round reviews. */
@@ -73,7 +105,7 @@ function scratchRepo() {
 function writeSettings(dataDir, cli) {
   const rows = vendorsFrom([{
     id: 'codex', runtime: 'codex', model: 'gpt-5.6-luna', enabled: true, plan: true, code: true,
-    baseUrl: '', executablePath: cli, pricePerMillionIn: 0, pricePerMillionOut: 0, effort: 'high',
+    baseUrl: '', executablePath: cli, pricePerMillionIn: 0, pricePerMillionOut: 0,
   }]);
   writeFileSync(join(dataDir, 'settings.json'), serverSettingsJsonWith({ ...DEFAULTS, roundTimeoutMinutes: 1 }, rows, {
     writtenBy: '9.9.9', installedServerVersion: '', priceOf: () => undefined, features: Object.values(FEATURES),
@@ -107,8 +139,9 @@ export function keysWritten(lines) {
 }
 
 /** A consultation that answers: the id the server gave back, which the consult line must carry. */
-async function consultation(serverSession, repoPath) {
+async function consultation(serverSession, repoPath, home) {
   const session = serverSession({
+    ...homeEnvironment(home),
     FAKECLI_MODE: 'vendor',
     FAKECLI_STDOUT: `${JSON.stringify({ type: 'thread.started', thread_id: '0199-seam-ledger' })}\n`,
     FAKECLI_OUTFILE_TEXT: 'Print the token stream: your loop stops one short.',
@@ -125,13 +158,18 @@ async function consultation(serverSession, repoPath) {
 }
 
 /** A local round whose only reviewer sleeps past the round's one-minute clock: the clock is the one source that fires. */
-async function roundPastItsClock(serverSession, repoPath) {
-  const session = serverSession({ FAKECLI_MODE: 'vendor', FAKECLI_SLEEP_MS: '240000' });
+async function roundPastItsClock(serverSession, repoPath, home) {
+  const session = serverSession({ ...homeEnvironment(home), FAKECLI_MODE: 'vendor', FAKECLI_SLEEP_MS: '240000' });
   await session.ready;
   await session.call('open', { repoPath, branch: 'feature' });
   const planText = ['# Plan', '', 'Make Count() return 4.', ''].join('\n');
   await session.call('review_plan', { repoPath, branch: 'feature', planText });
   await session.close();
+}
+
+/** The lines whose effort is not the isolated configuration's: it came from somewhere outside the leg, which the leg exists to rule out. */
+export function strayEfforts(lines) {
+  return lines.filter(({ raw }) => raw.effort !== '' && raw.effort !== SEAM_EFFORT).map(({ raw }) => raw.effort);
 }
 
 /** What is wrong with the ledger the real writer left, or an empty string when it crossed whole. */
@@ -147,6 +185,9 @@ export function verdictOn(lines, consultationId) {
   if (!lines.some(({ parsed }) => parsed?.consultation === consultationId)) {
     return `no line read through parseUsageLine names the consultation ${consultationId} the server answered with`;
   }
+  if (strayEfforts(lines).length > 0) {
+    return `an effort on a line came from outside the isolated codex home: ${JSON.stringify(strayEfforts(lines))}, not ${SEAM_EFFORT}`;
+  }
   // The outcome of a local line is the failure's sentence, not the word `Cancelled` — the cause is what names the ending.
   const cut = lines.filter(({ parsed }) => parsed?.endCause === 'roundClock');
 
@@ -155,10 +196,11 @@ export function verdictOn(lines, consultationId) {
 
 async function run({ binary, fakeCli, dataDir, timeoutMs }) {
   const repoPath = scratchRepo();
+  const home = isolatedHome();
   try {
     writeSettings(dataDir, fakeCli);
-    const consultationId = await consultation(sessionsFor({ command: 'dotnet', args: [binary], dataDir, timeoutMs }), repoPath);
-    await roundPastItsClock(sessionsFor({ command: 'dotnet', args: [binary], dataDir, timeoutMs: CLOCK_WAIT_MS }), repoPath);
+    const consultationId = await consultation(sessionsFor({ command: 'dotnet', args: [binary], dataDir, timeoutMs }), repoPath, home);
+    await roundPastItsClock(sessionsFor({ command: 'dotnet', args: [binary], dataDir, timeoutMs: CLOCK_WAIT_MS }), repoPath, home);
     const lines = readLedger(dataDir);
     const verdict = verdictOn(lines, consultationId);
     if (verdict.length > 0) {
@@ -168,6 +210,7 @@ async function run({ binary, fakeCli, dataDir, timeoutMs }) {
     return { keys: keysWritten(lines), lines: lines.length };
   } finally {
     removeQuietly(repoPath);
+    removeQuietly(home);
   }
 }
 
