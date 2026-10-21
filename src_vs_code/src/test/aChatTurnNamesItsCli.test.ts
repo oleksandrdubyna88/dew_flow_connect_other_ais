@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { test } from 'node:test';
 
+import { parseCliVersion } from '../cliVersions';
 import { cachedCliVersion, rememberCliStatus } from '../cliVersionMemory';
 
 /**
@@ -22,9 +23,10 @@ test('AChatTurnWhoseCliWasNeverProbed_WritesAnEmptyVersion_AndSpawnsNothing — 
 });
 
 test('TheMemoryHoldsTheProbesLastAnswer_PerVendorRow', () => {
-  rememberCliStatus({ 'work-codex': { installed: 'codex-cli 0.131.0', latest: '' }, claude: { installed: '', latest: '2.0.0' } });
+  // The BARE number: the panel's probe stores what parseCliVersion made of the CLI's banner, not the banner (coai-mcp's own lines carry the banner).
+  rememberCliStatus({ 'work-codex': { installed: parseCliVersion('codex-cli 0.131.0'), latest: '' }, claude: { installed: '', latest: '2.0.0' } });
 
-  assert.equal(cachedCliVersion('work-codex'), 'codex-cli 0.131.0');
+  assert.equal(cachedCliVersion('work-codex'), '0.131.0');
   assert.equal(cachedCliVersion('claude'), '', 'a CLI the probe could not read has no version, whatever is published');
   rememberCliStatus({});
 });

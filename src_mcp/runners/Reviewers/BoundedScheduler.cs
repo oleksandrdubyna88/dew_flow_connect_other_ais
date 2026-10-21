@@ -70,7 +70,14 @@ public sealed record ReviewerProgress(
     string Status,
     ReviewerOutcome? Outcome = null,
     TimeSpan Elapsed = default,
-    string Note = "");
+    string Note = "")
+{
+    /// <summary>
+    /// The moment this report was made (a <see cref="System.Diagnostics.Stopwatch.GetTimestamp"/> value) — when an outcome LANDED, which is
+    /// what a cancelled turn's cause is read against: a cancellation source that fires after it did not end the turn (E3.S2).
+    /// </summary>
+    public long LandedAt { get; init; } = System.Diagnostics.Stopwatch.GetTimestamp();
+}
 
 /// <summary>
 /// The fan-out stays logically parallel; the queue is what keeps it survivable. Two providers ×

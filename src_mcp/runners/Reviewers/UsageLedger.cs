@@ -223,7 +223,7 @@ public sealed record UsageEntry(
     /// that groups by outcome is unchanged and one that asks "how many withdrawals against how many backstops" has a
     /// column to ask. Empty on a line older than the field and on every ending but a cancellation. <b>A LOCAL review line carries one too</b>
     /// (E3.S2 of todo/PLAN_the_round_counter_tail_E3.md): on the cancelled turn's LAST line only, decided by the round engine from which
-    /// token fired (<see cref="EndCauses.OfLocal"/>) — <c>hostStopped</c>, <c>withdrawn</c>, <c>roundClock</c> or <c>unknown</c>, the last two
+    /// token FIRED FIRST, recorded when it fired (<c>RoundCancellation</c>) — <c>hostStopped</c>, <c>withdrawn</c>, <c>roundClock</c> or <c>unknown</c>, the last two
     /// local-only words. Trailing and defaulted like the rest.
     /// </remarks>
     string EndCause = "",
@@ -368,7 +368,7 @@ public sealed class UsageLedger(string dataDir)
     /// (<see cref="ReviewerSummaryFactory.DescribeWhole"/>), never the summary's 160-character cut.</para>
     /// </remarks>
     /// <param name="endCause">
-    /// Why a CANCELLED last turn was cancelled (<see cref="EndCauses.OfLocal"/>), written on that turn's last line like
+    /// Why a CANCELLED last turn was cancelled (the first source to fire, <c>RoundCancellation.CauseAt</c>), written on that turn's last line like
     /// <see cref="UsageEntry.ResetsUtc"/>; the caller passes empty for every other ending (E3.S2 of todo/PLAN_the_round_counter_tail_E3.md).
     /// </param>
     public void Record(ReviewerInvocation invocation, ReviewerOutcome outcome, string model, string stage, TimeSpan elapsed, string endCause = "")

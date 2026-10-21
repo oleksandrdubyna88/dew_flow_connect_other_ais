@@ -300,12 +300,12 @@ const FINISHED = {
 };
 
 test('AChatLine_SaysWhichCliRanIt_AndItsVersion', () => {
-  const written = chatTurnRecord({ ...FINISHED, cli: 'codex', cliVersion: 'codex-cli 0.131.0' });
+  const written = chatTurnRecord({ ...FINISHED, cli: 'codex', cliVersion: '0.131.0' });
   const [back] = parseChatUsage(chatUsageLine(written));
 
   assert.equal(written.cli, 'codex', 'the line does not say which CLI ran it');
-  assert.equal(written.cliVersion, 'codex-cli 0.131.0', 'the line does not say the version that was already asked');
-  assert.deepEqual([back?.cli, back?.cliVersion], ['codex', 'codex-cli 0.131.0'], 'the reader dropped what the line says');
+  assert.equal(written.cliVersion, '0.131.0', 'the line does not say the version that was already asked');
+  assert.deepEqual([back?.cli, back?.cliVersion], ['codex', '0.131.0'], 'the reader dropped what the line says');
 });
 
 test('AnOldChatLine_ReadsNoCliAndNoVersion — never derived from vendor (D7)', () => {

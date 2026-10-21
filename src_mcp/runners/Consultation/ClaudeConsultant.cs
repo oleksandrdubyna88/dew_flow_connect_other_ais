@@ -98,6 +98,7 @@ public sealed class ClaudeConsultant(IReviewerRuntime inner, string vendor = "cl
     /// <summary>The stuck consultant, as it ships: the read-tool allowlist (and <c>--restricted</c> where the CLI has it), the live checkout, resumable.</summary>
     private ReviewerInvocation AsShipped(ConsultantLaunch launch)
     {
+        var options = Options(launch.Settings);
         var request = Request(launch,
             [
                 "-p",
@@ -109,13 +110,13 @@ public sealed class ClaudeConsultant(IReviewerRuntime inner, string vendor = "cl
                 NoMcpServers.ClaudeFlag,
                 "--add-dir", launch.RepoPath,
                 .. launch.Handle.Length > 0 ? (string[])["--resume", launch.Handle] : [],
-                .. Model(launch.Settings),
+                .. options.Arguments,
             ],
             launch.RepoPath);
 
         return new ReviewerInvocation(vendor, ConsultantRoles.Consult, request, string.Empty, inner, Model: launch.Settings.Model)
         {
-            Sent = Sent(launch.Settings),
+            Sent = options.Sent,
         };
     }
 
@@ -126,20 +127,21 @@ public sealed class ClaudeConsultant(IReviewerRuntime inner, string vendor = "cl
     /// </summary>
     private ReviewerInvocation Planned(ConsultantLaunch launch, Confinement.Planned plan)
     {
+        var options = Options(launch.Settings);
         var request = Request(launch,
             [
                 "-p",
                 "--output-format", "json",
                 .. plan.Flags,
                 NoMcpServers.ClaudeFlag,
-                .. Model(launch.Settings),
+                .. options.Arguments,
             ],
             ConsultantLaunches.Cwd(launch, plan));
 
         return new ReviewerInvocation(
             vendor, ConsultantRoles.Question, ConsultantLaunches.ForQuestion(request), string.Empty, inner, Model: launch.Settings.Model)
         {
-            Sent = Sent(launch.Settings),
+            Sent = options.Sent,
         };
     }
 
@@ -162,16 +164,23 @@ public sealed class ClaudeConsultant(IReviewerRuntime inner, string vendor = "cl
     }
 
     /// <summary>
-    /// The effort and the tier <see cref="Model"/> put on the argv, in the words the reviewer's own record of them uses
-    /// (<c>ClaudeRuntime.Build</c>) — a consultant sends both, so its line must not read "not sent" (E3.S1 of
-    /// todo/PLAN_the_round_counter_tail_E3.md, which found that <c>Sent</c> was never set here).
+    /// The model, then the row's effort and its fast mode, in the reviewer's own spellings (C2; research/PLAN_fast_mode.md) — AND the record of
+    /// what was sent, in the words the reviewer's own record uses (<c>ClaudeRuntime.Build</c>; E3.S1 of todo/PLAN_the_round_counter_tail_E3.md,
+    /// which found that <c>Sent</c> was never set here).
     /// </summary>
-    private static SentOptions Sent(ReviewerSettings settings) =>
-        new(ClaudeRuntime.EffortArguments(settings) is [_, var effort] ? effort : string.Empty, ClaudeFastMode.TierOf(ClaudeFastMode.Args(settings), settings.Fast));
+    /// <remarks>
+    /// Computed ONCE per build, for the argv and for the record: the two must agree, so they are one value — and the fast-mode arguments write
+    /// their one-key settings file, which one build has no reason to ask for twice.
+    /// </remarks>
+    private static (string[] Arguments, SentOptions Sent) Options(ReviewerSettings settings)
+    {
+        var effort = ClaudeRuntime.EffortArguments(settings);
+        var fast = ClaudeFastMode.Args(settings);
 
-    /// <summary>The model, then the row's effort and its fast mode, in the reviewer's own spellings (C2; research/PLAN_fast_mode.md).</summary>
-    private static IEnumerable<string> Model(ReviewerSettings settings) =>
-        [.. settings.Model.Length > 0 ? (string[])["--model", settings.Model] : [], .. ClaudeRuntime.EffortArguments(settings), .. ClaudeFastMode.Args(settings)];
+        return (
+            [.. settings.Model.Length > 0 ? (string[])["--model", settings.Model] : [], .. effort, .. fast],
+            new SentOptions(effort is [_, var level] ? level : string.Empty, ClaudeFastMode.TierOf(fast, settings.Fast)));
+    }
 
     /// <summary>
     /// <c>--restricted</c> for a CLI that declared it, nothing for one whose help came back without it — and a

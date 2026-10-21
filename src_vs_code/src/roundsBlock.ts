@@ -23,7 +23,7 @@ import type { Vendor } from './vendors';
  * database's history, tokens in / cached /
  * out / reasoning and the money over 7 d with `roundMoney`'s floors, and ~$ per round. Under each row its MODEL lines —
  * a model change inside a window is two lines — each with its own rounds, the median output, and
- * ~$ per round over the rounds that used it; and its consult line per consultation (older lines without an id counting one each, said in the label) and its
+ * ~$ per round over the rounds that used it; and its consult line per consultation (lines without an id counting one each, said in the label and named in the tooltip) and its
  * question / chat lines per recorded turn.</p>
  *
  * <p><b>The median's header follows its cells.</b> A median is per launch when every line of its model group is one launch
@@ -394,7 +394,7 @@ function kindLine(mine: readonly MoneyGroup[], kind: string, word: string): stri
 
 /**
  * A kind line's figure and the unit beside it. Consult money divides by the consultations ({@link consultationUnits}) and says
- * *per consultation*, or *per consultation (older lines per turn)* with a tooltip that counts the lines taken one each; every
+ * *per consultation*, or *per consultation (some lines per turn)* with a tooltip that counts the lines taken one each and names which kinds they are; every
  * other kind has no such id and stays per recorded turn.
  */
 function kindFigure(kind: string, groups: readonly MoneyGroup[], part: Rollup): { readonly figure: PerUnit; readonly label: string } {

@@ -53,6 +53,11 @@ export interface UsageEntry {
    * says nothing — an empty value is "not recorded", never a value.
    */
   readonly cli?: string;
+  /**
+   * On a line coai-mcp writes: the first line of the CLI's own `--version` (`codex-cli 0.131.0`). On a line the extension writes
+   * itself (chat, the Claude model probe): the bare number the panel's probe parsed (`0.131.0`), and for chat the panel's LAST probe of
+   * that CLI — not proof of the binary that ran the turn. A reader comparing versions takes the number out of either.
+   */
   readonly cliVersion?: string;
   readonly effort?: string;
   readonly effortFrom?: string;

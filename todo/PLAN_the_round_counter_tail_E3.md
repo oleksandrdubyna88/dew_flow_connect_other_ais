@@ -1,6 +1,13 @@
 # PLAN — Round counter tail, epic E3: the ledger's metadata and its presentation
 
-> Status: **plan only, nothing implemented yet (2026-10-20).** Stories of epic E3 of [PLAN_the_round_counter_tail.md](PLAN_the_round_counter_tail.md).
+> Status: **built on its branch, 2026-10-21 — not merged.** Stories of epic E3 of [PLAN_the_round_counter_tail.md](PLAN_the_round_counter_tail.md).
+> What shipped differently: the claude consultant's `Sent` was fixed too (the plan named only codex); the cause is the FIRST
+> token to fire, recorded by callbacks (`RoundCancellation`), not flags read afterwards; a client closing stdin cancels the host token
+> first (`InputEndSignallingTransport`); the S4 qualifier reads *per consultation (some lines per turn)* and its tooltip names older lines,
+> consultant checks and consultations refused before launch; a seam leg (`seam-ledger-fields.mjs`) crosses the real writer and parser.
+> **Found, not built:** no `review_*` tool takes the MCP request's cancellation token (only `ask_human` does), so a live server writes only
+> `roundClock` and `unknown`; `withdrawn` and `hostStopped` are reachable only once that is wired — a behaviour change (a client's cancel would
+> stop the round), left to its own decision.
 >
 > Scope: four stories. S1 labels on consult, check, question and probe lines; S2 a local `endCause` taken from the
 > cancellation's SOURCE; S3 `cli` and `cliVersion` on the lines the EXTENSION writes (chat, and its Claude model probe);

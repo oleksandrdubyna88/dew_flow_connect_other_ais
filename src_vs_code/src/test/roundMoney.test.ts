@@ -294,7 +294,7 @@ test('PerConsultationMoney_DividesByDistinctConsultations_AndAnOldLineIsItsOwnUn
 
   const units = consultationUnits(groups);
 
-  assert.deepEqual(units, { count: 4, withoutId: 2 }, '3 lines of A, 1 of B and 2 with no id are 4 consultations, not 6 turns');
+  assert.deepEqual(units, { count: 4, withoutId: 2, kinds: { older: 2, checks: 0, refused: 0 } }, '3 lines of A, 1 of B and 2 with no id are 4 consultations, not 6 turns');
   assert.deepEqual(unitDivisor('consult', units.count, 6), { per: 'consultation', count: 4 });
 });
 
@@ -304,15 +304,16 @@ test('TheSameConsultationInTwoModelGroups_IsCountedOnce', () => {
   ], WINDOW, rateOf);
 
   assert.equal(groups.length, 2);
-  assert.deepEqual(consultationUnits(groups), { count: 2, withoutId: 0 });
+  assert.deepEqual(consultationUnits(groups), { count: 2, withoutId: 0, kinds: { older: 0, checks: 0, refused: 0 } });
 });
 
-test('AWindowOfIdentifiedLines_SaysPerConsultation_AndAMixedOne_SaysOlderLinesPerTurn', () => {
+test('AWindowOfIdentifiedLines_SaysPerConsultation_AndAMixedOne_SaysSomeLinesPerTurn', () => {
   const identified = moneyGroups([consult({ consultation: 'A' }), consult({ consultation: 'B' })], WINDOW, rateOf);
   const mixed = moneyGroups([consult({ consultation: 'A' }), consult()], WINDOW, rateOf);
 
   assert.equal(consultationLabel(consultationUnits(identified)), 'per consultation');
-  assert.equal(consultationLabel(consultationUnits(mixed)), 'per consultation (older lines per turn)');
+  assert.equal(consultationLabel(consultationUnits(mixed)), 'per consultation (some lines per turn)',
+    'an id-less line may be a consultant check or a refused consultation, not only an older line — "older lines" would be false for them');
   assert.match(consultationNote(consultationUnits(mixed)), /1 line without a consultation id counted one each/u,
     'the tooltip must say how many lines were counted one each');
   assert.equal(consultationNote(consultationUnits(identified)), '', 'a window of identified lines has nothing to explain');
@@ -321,5 +322,27 @@ test('AWindowOfIdentifiedLines_SaysPerConsultation_AndAMixedOne_SaysOlderLinesPe
 test('AConsultLine_WithNoId_IsItsOwnUnit_EvenWhenOnlyOldLinesExist — the unit count equals the turn count', () => {
   const groups = moneyGroups([consult(), consult(), consult()], WINDOW, rateOf);
 
-  assert.deepEqual(consultationUnits(groups), { count: 3, withoutId: 3 });
+  assert.deepEqual(consultationUnits(groups), { count: 3, withoutId: 3, kinds: { older: 3, checks: 0, refused: 0 } });
+});
+
+test('TheTooltipNamesWhichKindsOfIdLessLineArePresent — older lines, consultant checks, consultations refused before launch', () => {
+  // What each writes (src_mcp ConsultantCheck / ConsultationFailedTurns, D8 of the plan): a check is role `consult-check` with no id; a
+  // consultation refused before its launch bills LaunchOptions.None (no `cli`) with a failing outcome and an emptied id; a line from before
+  // the field has no id and, when it succeeded, nothing else to tell it by.
+  const older = consult({ outcome: 'ok' });
+  const check = consult({ role: 'consult-check', cli: 'codex', outcome: 'ok' });
+  const refused = consult({ outcome: 'The adapter refused before anything was launched', cli: '' });
+  const identified = consult({ consultation: 'A' });
+  const kinds = (...lines: LedgerLine[]) => consultationUnits(moneyGroups(lines, WINDOW, rateOf)).kinds;
+
+  assert.deepEqual(kinds(older, check, refused, identified), { older: 1, checks: 1, refused: 1 });
+  assert.deepEqual(kinds(check, check), { older: 0, checks: 2, refused: 0 });
+  const note = consultationNote(consultationUnits(moneyGroups([check, refused, identified], WINDOW, rateOf)));
+  assert.match(note, /2 lines without a consultation id counted one each/u);
+  assert.match(note, /consultant checks/u);
+  assert.match(note, /refused before their launch/u);
+  assert.doesNotMatch(note, /written before the consultation field existed/u, 'no older line is present, so the tooltip must not claim one');
+  const olderOnly = consultationNote(consultationUnits(moneyGroups([older], WINDOW, rateOf)));
+  assert.match(olderOnly, /written before the consultation field existed/u);
+  assert.doesNotMatch(olderOnly, /consultant checks|refused/u);
 });
