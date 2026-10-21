@@ -203,8 +203,8 @@ the next round's write cures it. `--round-counts` and `--round-counts-merged` wr
 gains the merged mode, and `RoundCountsTests` asserts the plain read leaves no snapshot behind.
 
 **Residual, recorded:** five servers on one data directory (`RoundsDb.cs:28-30`) each write the snapshot after their own round.
-Two rounds that complete within milliseconds can leave the LAST-moved file missing the other's round (each read the database
-after its own commit; the moves may cross). Bounded by one round, cured at the next write, and `AtomicFile`'s GUID temps make it
+A writer that read the database and then paused can replace a snapshot written later, so EVERY round committed in between is
+missing until the next write (risk consultation 45e39f64: the bound is the rounds of that interval, not one round). Cured at the next write, and `AtomicFile`'s GUID temps make it
 a stale file never a torn one. Not held by a lock: a lock here would be a second write transaction for a courtesy file.
 
 ### 4.3 Growth, the cap, interruption
@@ -588,6 +588,26 @@ every plant (B1–B7 and the per-story guards) is recorded in `research/module_t
   share costs one bounded background check per refresh and never a blocked render. Test: `ADeadShare_NeverBlocksTheRender`
   (an `exists` seam that never returns → the store reads *not answering* and the page draws). The mode's own file read stays
   bounded by the spawn cap and the fallback.
+
+**Stores are not accounts** (risk consultation 45e39f64, piece 5). coai cannot tell whether two stores sign in to one vendor
+account, and must not read a sign-in to find out. So:
+- **Activity is summed, status is not.** A vendor row may total rounds, launches and money across stores, with per-store sub-rows
+  labelled as STORES, never as accounts. Every status the block and the card derive from a line (the stated reset *quota out —
+  resets in …* via `resetLine` (`statedReset.ts:32`, newest line by provider today), any gauge) is computed PER (provider, store) and
+  shown per store. One store's success never hides another's refusal.
+- **Keyed money follows the round.** A review line with a `round` key counts its tokens and money only from the store `keyStore`
+  names, so a copied store gives 1 round / 1 launch / $1 through the real renderer. Every retry inside the owning store still counts.
+  Keyless and non-review lines are counted per store as read; a copied keyless line is a stated limitation.
+- **Conflicting copies are said, not reconciled.** A key in two stores whose copies differ (reviewers, models, stage) is counted once
+  from the owning store, and the block says *N rounds appear in two stores with different contents — counted from <store>*. The
+  result does not depend on argument order beyond that named choice.
+
+| Test | Arrange → assert | RED today / without the rule |
+|---|---|---|
+| `OneStoresRefusal_IsNotHiddenByAnothersSuccess` | a WSL codex refusal with a future reset, then a Windows codex success → the WSL store's *quota out* line is shown | `resetLine` returns '' |
+| `ACopiedStore_IsOneRoundOneLaunchOneDollar` | two store ids, the same key and the same $1 launch in both ledgers → 1 / 1 / $1 in the rendered block | $2 |
+| `ConflictingCopies_AreSaid_InEitherOrder` | the first copy has fewer reviewers; then the snapshots reversed → the conflict sentence both times, the owning store named | the smaller copy silently counted |
+| `APausedWriter_CannotHideRoundsForever` | writer A reads, pauses; B and C finish and write; A replaces the file → B and C are missing and the snapshot's `writtenUtc` is older than their rounds; the next write restores them | — (documents the bound) |
 
 **Store identity is LOCATION identity** (cadence consultation c5759f9a): the D1 hash changes when a distro is renamed or the data
 directory moves, so a moved store is a new store, and its rounds inside the 7-day window can be counted under both ids until the
