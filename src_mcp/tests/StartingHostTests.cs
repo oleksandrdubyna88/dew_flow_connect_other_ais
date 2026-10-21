@@ -31,7 +31,8 @@ public sealed class StartingHostTests : IDisposable
         default,
         new Runners.Processes.ProcessLauncher(),
         Serilog.Core.Logger.None,
-        Noticing.None);
+        Noticing.None,
+        CancellationToken.None);
 
     [Fact]
     public async Task ACallDuringTheStart_WaitsForIt_AndIsServedByTheServiceItBuilt()

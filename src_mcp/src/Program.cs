@@ -2309,8 +2309,10 @@ internal static class Program
         // builds — the rebuild on a settings change included. A defaulted parameter anywhere on
         // that road is the trap the plan round named: production takes the quiet path while
         // every injected test passes. (gemini and codex, on story 2.3.2's plan round.)
+        // The host's stopping token rides the same road (E3.S2 of todo/PLAN_the_round_counter_tail_E3.md, D4): a local round that ends
+        // cancelled can then tell a host stop from a withdrawal.
         var host = new PanelServiceHost(
-            Environment.GetEnvironmentVariable, keys, vaultReadUtc, launcher, log, noticing);
+            Environment.GetEnvironmentVariable, keys, vaultReadUtc, launcher, log, noticing, stop);
         log.Debug("started: the first service is built and its startup sweeps are done");
 
         return host;

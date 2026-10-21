@@ -113,7 +113,10 @@ public sealed class ClaudeConsultant(IReviewerRuntime inner, string vendor = "cl
             ],
             launch.RepoPath);
 
-        return new ReviewerInvocation(vendor, ConsultantRoles.Consult, request, string.Empty, inner, Model: launch.Settings.Model);
+        return new ReviewerInvocation(vendor, ConsultantRoles.Consult, request, string.Empty, inner, Model: launch.Settings.Model)
+        {
+            Sent = Sent(launch.Settings),
+        };
     }
 
     /// <summary>
@@ -134,7 +137,10 @@ public sealed class ClaudeConsultant(IReviewerRuntime inner, string vendor = "cl
             ConsultantLaunches.Cwd(launch, plan));
 
         return new ReviewerInvocation(
-            vendor, ConsultantRoles.Question, ConsultantLaunches.ForQuestion(request), string.Empty, inner, Model: launch.Settings.Model);
+            vendor, ConsultantRoles.Question, ConsultantLaunches.ForQuestion(request), string.Empty, inner, Model: launch.Settings.Model)
+        {
+            Sent = Sent(launch.Settings),
+        };
     }
 
     private ProcessRequest Request(ConsultantLaunch launch, string[] arguments, string cwd)
@@ -154,6 +160,14 @@ public sealed class ClaudeConsultant(IReviewerRuntime inner, string vendor = "cl
 
         return request;
     }
+
+    /// <summary>
+    /// The effort and the tier <see cref="Model"/> put on the argv, in the words the reviewer's own record of them uses
+    /// (<c>ClaudeRuntime.Build</c>) — a consultant sends both, so its line must not read "not sent" (E3.S1 of
+    /// todo/PLAN_the_round_counter_tail_E3.md, which found that <c>Sent</c> was never set here).
+    /// </summary>
+    private static SentOptions Sent(ReviewerSettings settings) =>
+        new(ClaudeRuntime.EffortArguments(settings) is [_, var effort] ? effort : string.Empty, ClaudeFastMode.TierOf(ClaudeFastMode.Args(settings), settings.Fast));
 
     /// <summary>The model, then the row's effort and its fast mode, in the reviewer's own spellings (C2; research/PLAN_fast_mode.md).</summary>
     private static IEnumerable<string> Model(ReviewerSettings settings) =>

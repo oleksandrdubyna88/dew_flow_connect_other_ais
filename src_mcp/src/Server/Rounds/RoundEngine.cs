@@ -36,7 +36,8 @@ internal sealed class RoundEngine(
     RemoteProbe remote,
     RoundAuthorsStep authors,
     Func<Stage, IReadOnlyList<string>> excludedFrom,
-    Func<Stage, RoundWork, string> noReviewerRefusal)
+    Func<Stage, RoundWork, string> noReviewerRefusal,
+    CancellationToken hostStopping)
 {
     private readonly PanelSettings _settings = settings;
     private readonly Serilog.ILogger _log = log;
@@ -54,6 +55,7 @@ internal sealed class RoundEngine(
     private readonly RoundCommands _commands = commands;
     private readonly Func<Stage, IReadOnlyList<string>> _excludedFrom = excludedFrom;
     private readonly Func<Stage, RoundWork, string> _noReviewerRefusal = noReviewerRefusal;
+    private readonly CancellationToken _hostStopping = hostStopping;
     private readonly RoundSkips _skips = new(settings, log, store, projection, excludedFrom);
 
     /// <summary>The lenses a round spent: the prompt of every row that was asked.</summary>
@@ -424,7 +426,8 @@ internal sealed class RoundEngine(
                         finished,
                         ModelOf(progress.Provider),
                         session.State.Stage.ToString(),
-                        progress.Elapsed);
+                        progress.Elapsed,
+                        EndCauseOf(finished, ct, clock.Token));
                 }
             },
             // Issue #485: with the switch on, the local reviewer stands down once the cloud was quiet.
@@ -838,6 +841,15 @@ internal sealed class RoundEngine(
     /// <para>The WHOLE budget, not what was left of it after setup — "the round reached its 30
     /// minute limit" when the limit is forty is a sentence nobody can act on.</para>
     /// </remarks>
+    /// <summary>
+    /// WHY a cancelled reviewer's turn was cancelled — from which token fired, asked at the moment the outcome lands — or empty for any other ending
+    /// (E3.S2 of todo/PLAN_the_round_counter_tail_E3.md, <see cref="EndCauses.OfLocal"/>).
+    /// </summary>
+    private string EndCauseOf(ReviewerOutcome finished, CancellationToken caller, CancellationToken deadline) =>
+        finished is ReviewerOutcome.Cancelled
+            ? EndCauses.OfLocal(_hostStopping.IsCancellationRequested, caller.IsCancellationRequested, deadline.IsCancellationRequested)
+            : string.Empty;
+
     private static TimeSpan? WhatEndedIt(CancellationToken deadline, CancellationToken caller, TimeSpan budget) =>
         deadline.IsCancellationRequested && !caller.IsCancellationRequested ? budget : null;
 

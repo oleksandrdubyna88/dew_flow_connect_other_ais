@@ -150,6 +150,14 @@ public sealed record LaunchOptions(
         return new(cli, cliVersion, effortValue, effortFrom, tierValue, tierFrom, effort.NotSentAs, tier.NotSentAs);
     }
 
+    /// <summary>
+    /// This line's labels with <paramref name="asked"/> as the release — only when the row's own options carry none and a release was
+    /// ALREADY asked (E3.S1 of todo/PLAN_the_round_counter_tail_E3.md, decision D2): the one rule a review's line, a consultation's, a
+    /// check's and a question row's all apply, so a launch control's answer (Vibe asks <c>--version</c> before every launch) never
+    /// overwrites the tier probe's and never costs a spawn of its own.
+    /// </summary>
+    public LaunchOptions VersionedBy(string asked) => CliVersion.Length == 0 && asked.Length > 0 ? this with { CliVersion = asked } : this;
+
     /// <summary>The first line of a <c>--version</c> answer — what a ledger line keeps of it.</summary>
     public static string FirstLine(string printed) => printed.Trim().Split('\n')[0].Trim();
 }

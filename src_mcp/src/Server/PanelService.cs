@@ -47,6 +47,13 @@ public sealed class PanelService
     private readonly QuestionConsultService _questions;
     private readonly CadenceDesk _cadence;
 
+    /// <summary>
+    /// The host's stopping token — what a local round tells a stopping server's cancellation from a person's withdrawal by
+    /// (E3.S2 of todo/PLAN_the_round_counter_tail_E3.md, decision D4). <c>default</c> never fires: a service built directly, as every
+    /// test does, belongs to no host that stops.
+    /// </summary>
+    internal CancellationToken HostStopping { get; }
+
     public PanelService(
         PanelSettings settings,
         VaultKeys keys,
@@ -54,8 +61,10 @@ public sealed class PanelService
         IProcessLauncher launcher,
         Serilog.ILogger log,
         Noticing noticing,
-        Func<string, string?>? environment = null)
+        Func<string, string?>? environment = null,
+        CancellationToken hostStopping = default)
     {
+        HostStopping = hostStopping;
         _settings = settings;
         _keys = keys;
         _vaultReadUtc = vaultReadUtc;
@@ -134,7 +143,7 @@ public sealed class PanelService
         _commands = new RoundCommands(settings, prompts, log);
         _engine = new RoundEngine(
             settings, log, noticing, _store, _worktrees, scheduler, executor, _commands, _escalations, ledger,
-            _projection, callers, _remote, new RoundAuthorsStep(settings, log, _store, environment), ExcludedFrom, NoReviewerRefusal);
+            _projection, callers, _remote, new RoundAuthorsStep(settings, log, _store, environment), ExcludedFrom, NoReviewerRefusal, hostStopping);
         // The fourth gate, in a file of its own (S2.2b): its inputs, its refs and its pack, over the same
         // engine. The outliner is the in-process tree-sitter one the pack is measured with.
         _feature = new FeatureStage(settings, launcher, _engine, _roster, new Normalizer.TreeSitterOutliner(), log, noticing);
