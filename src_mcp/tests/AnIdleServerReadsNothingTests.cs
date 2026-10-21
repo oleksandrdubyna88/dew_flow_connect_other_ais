@@ -159,7 +159,7 @@ public sealed class AnIdleServerReadsNothingTests : IDisposable
         var store = new SessionStore(_data);
         var session = Saved(store, "b1", holding: "q1");
         var file = Directory.EnumerateFiles(Path.Combine(_data, "sessions"), "session-*.json").Single();
-        var clock = new MovableClock(DateTimeOffset.UtcNow);
+        var clock = new ManualClock(DateTimeOffset.UtcNow);
         var holds = new SessionHolds(Path.Combine(_data, "sessions"), store.TryReadForTests, clock);
         holds.Read().Ids.Should().BeEquivalentTo(["q1"]);
 

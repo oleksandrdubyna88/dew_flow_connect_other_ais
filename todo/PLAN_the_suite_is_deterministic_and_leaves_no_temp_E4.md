@@ -1,6 +1,6 @@
 # PLAN — E4 stories: deadlines on an injectable clock (cornerstone area: the clock contract)
 
-> Status: **plan only, nothing implemented yet, 2026-10-21 — stories and the cornerstone spec by Fable.** Epic E4 of
+> Status: **partially implemented, 2026-10-21 — E4.S1 (the cornerstone: `ManualClock`, `ClockHandshake`, the structural scan) is built on this branch, see §8 "S1 — status"; S2–S6 are not started. Stories and the cornerstone spec by Fable.** Epic E4 of
 > [PLAN_the_suite_is_deterministic_and_leaves_no_temp.md](PLAN_the_suite_is_deterministic_and_leaves_no_temp.md)
 > (its `### E4`). Branch `feat/suite-e4-clock`, from E3's head `aab069ca5` (which carries E2); every line number below
 > was read at that commit. Scope: `src_mcp` only — four product classes get an optional `TimeProvider` each
@@ -568,6 +568,31 @@ test, see the real symptom, restore, see green — both runs in the summary; `CA
 - **Roles.** Fable: this spec (§5) and the review of the clock against it. Sonnet: codes. Opus: reviews the diff against
   §5.4's eleven contract points, the scan's allow-list and the reuse table. `model: fable` on the story.
 
+### S1 — status: built 2026-10-21 (Sonnet; the spec above governed, deviations listed)
+
+**Built, no product class changed.** New: `src_mcp/tests/ManualClock.cs`, `ManualClockTests.cs` (18 tests: M1–M17 plus the split-out "DisposeAsync from inside the timer's own callback"), `ClockHandshake.cs`,
+`ClockHandshakeTests.cs` (3), `EveryBudgetInAClockedClassReadsItsClockTests.cs` (6). Changed: `MovableClock`'s nine sites (seven files: `AMoveOverAHeldFileIsRetriedTests`, `ASessionSaveMeetsABusyFileTests`,
+`AnIdleServerReadsNothingTests`, `AuthorPeersTests`, `RoundAuthorsStepTests` ×3, `TheRunsThemselvesTests` field, `TheSendsThemselvesTests` field) renamed to `ManualClock`, the class deleted from
+`TheRunsThemselvesTests.cs`; `FakeClock` in `CollectRunTests.cs` replaced by `FixedClock` and deleted. E3's `AtomicFile` window tests pass on `ManualClock` unchanged. The contract is written in
+`research/module_tests.md` ("The suite is deterministic — E4 S1"); the S2–S5 sections and the other two modules follow in the final docs pass (§9).
+
+**Deviations from the spec, each with its reason.**
+
+1. **18 + 3 + 6 tests, not +19.** M14 is two tests (the pick/dispose arm and `DisposeAsync` from inside the timer's own callback, which is point 7's "at once" and needed its own deterministic arm); `ClockHandshake`
+   has its three-test class (a new helper ships with tests); the scan has four self-tests of the scanner on synthetic source (the precedent's shape) beside the scan and its companion.
+2. **`ManualClock.AfterPick`** (an `internal Action`, default no-op) — not in §5.4. M14's "a timer disposed between its selection and its callback never runs it" has no deterministic way to be reached from
+   outside (the pick and the call are consecutive statements on the advancing thread); the hook is that window. Broken once (B21: the disposed-after-pick check removed → red).
+3. **B4's limit.** §5.4 says B4 turns "M1's not-cancelled-after-1999 ms arm" red; a timer due in 2 s is not due at creation, so B4 as worded cannot. B4 is the zero-due form (a timer fired on `CreateTimer` when due now) and is red in M16's timer arm and M5.
+4. **Two arms were already green on the stub**, said rather than hidden: M10 (the stub's timers ARE the system's, which refuses the range) and the zero-delay arm of M16 / the `Change`-after-`Dispose` arm of M8 (the framework
+   behaves so on its own). M10 was then proved by a break-it of its own (B20, the range check removed), as M6/M7/M14 are guards broken once (B1, B2/B17, B21).
+5. **The scan is also over `DateTimeOffset.UtcNow` and `.Now`**, not only `DateTime.UtcNow` (a superset; green on `BoundedScheduler`); a `WaitAsync` whose sole argument is a token (`ct`, `x.Token`) is not a budget.
+   Sanctioned sites are matched on the statement around the site (the joined-line source has no line numbers), so the five allow-list snippets are statements, not `:290`-style lines.
+6. **`ClockHandshake` is single-shot** as specified ("completes `Reached`, once"); S4's `ClockedLauncher` is reached on every launch, so it takes one handshake per launch (a factory of handshakes), not one reused. Said here so the S4 brief does not assume a re-armable one.
+7. **Build trap recorded** in `module_tests.md`: a break-it restore by `copyFileSync` keeps the old mtime and the next build ran the previous broken binary; restore by writing the file.
+
+**Reds and break-its** are in `module_tests.md` (the table per test); in short: M1's red is the spec's sentence verbatim; M6/M7/M14 were guards broken by B1, B2/B17, B21; B1–B5, B17–B21 each red then green; the scan was seen red with
+the allow-list emptied (5 offenders), with the ladder's entry removed (1 offender: the 616 `Stopwatch`), with a scanner that finds nothing, and the companion red with the ladder's `Stopwatch` moved onto `_clock` (restored).
+
 ### S2 — C5: `AcpClient`'s clock + S12
 
 - **Goal.** `AcpClient` reads its one `_clock` for the turn's deadline and the usage bound (§5.1 table 1); the C5 test
@@ -898,12 +923,12 @@ node .agents/conventions/tools/low-priority.mjs ./src_mcp/tests/bin/Debug/net10.
 
 ## 13. Definition of Done
 
-- [ ] `ManualClock` exists as §5.4 specifies (eleven points: callbacks synchronous on the advancing thread in due
+- [x] (S1, done 2026-10-21) `ManualClock` exists as §5.4 specifies (eleven points: callbacks synchronous on the advancing thread in due
       order; `Advance` never from a product thread and a nested or concurrent `Advance` refused; `Dispose()` immediate,
       `DisposeAsync()` the only wait); M1–M17 green with their reds seen; B1–B5, B17–B19 red then green;
       `ClockHandshake` is the one signal-and-wait helper every hook uses; `MovableClock` gone, its nine sites moved;
       E3's `AtomicFile` window tests unchanged and green on it (S1).
-- [ ] The structural scan `EveryBudgetInAClockedClassReadsItsClockTests` and its companion exist (S1), with
+- [ ] (S1 part done 2026-10-21; the per-story additions are S2–S4's) The structural scan `EveryBudgetInAClockedClassReadsItsClockTests` and its companion exist (S1), with
       `BoundedScheduler`'s five sites — the ladder's `Stopwatch` and `Task.Delay` among them, with Q4's reason — as
       named exceptions; each seam story added its class to the scanned set red first, then green.
 - [ ] Each of `AcpClient`, `ConsultantPlaces`, `TurnLoop`, `SourceResolver` reads its one `_clock` exactly as §5.1's

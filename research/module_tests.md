@@ -4853,7 +4853,7 @@ was lost. Windows throws that exception — never `IOException` — for a move o
 | Test | Seen red as | Green because |
 |---|---|---|
 | `AMoveOverAHeldFileIsRetriedTests.AMoveOverAFileAReaderHolds_IsRetriedWithinTheWindow_AndLands` (S24, Windows) | `Did not expect any exception because the reader lets go after one pause, well inside the window, but found System.UnauthorizedAccessException: Access to the path is denied.` at `MoveOver` | the retry covers `UnauthorizedAccessException` |
-| `…AHolderThatNeverLetsGo_FailsTheWriteWhenTheWindowEnds_AndTheOriginalSurvives_WithNoTemp` (S24 never-released arm, Windows; a hand-moved `MovableClock`, so no sleep) | `Expected pauses to be between 3 and 5 because the window is 200 ms of the MONOTONIC clock and each pause moves it 50 ms, but found 0.` | the window is read from `TimeProvider.GetTimestamp`/`GetElapsedTime`; the failure is thrown after it, the original bytes survive, no `*.tmp` |
+| `…AHolderThatNeverLetsGo_FailsTheWriteWhenTheWindowEnds_AndTheOriginalSurvives_WithNoTemp` (S24 never-released arm, Windows; a hand-moved clock — then `MovableClock`, since E4 S1 `ManualClock` — so no sleep) | `Expected pauses to be between 3 and 5 because the window is 200 ms of the MONOTONIC clock and each pause moves it 50 ms, but found 0.` | the window is read from `TimeProvider.GetTimestamp`/`GetElapsedTime`; the failure is thrown after it, the original bytes survive, no `*.tmp` |
 | `…AZeroWindow_TriesOnce_AndNeverPauses` (guard) | green before and after | — |
 | `AnOrphanTempFileIsRemovedByItsRecordsNextWriteTests.AnOldTempFileOfADeadWriter_IsGone_AfterTheRecordsNextWrite` (S27) | `Expected File.Exists(orphan) to be False because its writer is dead and it is two hours old …, but found True.` | `AtomicFile.RemoveOrphanedTemps` |
 | `…AnOldTempFileOfAProcessThatExited_IsGone_ByTheRealLivenessCheck` (a real exited process's pid through `ProcessLiveness.IsAlive`) | `Expected File.Exists(orphan) to be False because ProcessLiveness.IsAlive … says the exited process is gone, but found True.` | same |
@@ -4967,3 +4967,120 @@ Source: "The E3 code gate and judge" in `todo/PLAN_the_suite_is_deterministic_an
 | G0 | `PanelServiceTests` + `TheRoundsEmptyFoldersAreRemovedTests` over `CodeRoundHarness` | 24 tests before the split (20 + 4), 24 after, all green; no `partial` left | — |
 
 Docs-only findings: J1 (the extension reads sessions without the turn; `module_server.md`, `module_extension.md`) and J5 (`module_runners.md` count; `PLAN_a_turn_waits_by_the_clock.md`).
+
+## The suite is deterministic — E4 S1: the clock contract and the manual clock (CORNERSTONE, 2026-10-21)
+
+Source: `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp_E4.md` §5 (the spec, by Fable; the plan round `67791431` and the risk consult `d4afeda2` govern where they differ). Branch
+`feat/suite-e4-clock`. **No product class changed in S1** — the test support and the contract land first; S2–S4 move `AcpClient`, `ConsultantPlaces`, `TurnLoop` and `SourceResolver` onto it, each with its own red.
+Why a contract and not just a clock: the mistake is per class and invisible — a `Stopwatch` left beside an injected timer, or a `CancelAfter` on a linked source that still arms the system timer, is the same race
+again while the test on the manual clock goes green. So the rules are written once here and every later story is reviewed against them.
+
+### The contract every clocked class obeys
+
+1. **One `_clock` per class** (`TimeProvider? clock = null` last on the primary constructor, `_clock = clock ?? TimeProvider.System`; precedent `BoundedScheduler`). Every budget that decides the outcome reads it: elapsed
+   through `GetTimestamp()`/`GetElapsedTime()`, delays through `Task.Delay(delay, _clock, ct)`, cancellations through `new CancellationTokenSource(delay, _clock)`, waits through `WaitAsync(timeout, _clock)`,
+   wall stamps through `GetUtcNow()`. Never threaded through `PanelService` or `RoundEngine` (D3).
+2. **The linked-token rule.** `CreateLinkedTokenSource` + `CancelAfter` has no `TimeProvider` overload, so the timer becomes its own source and the linked source links the caller's token AND the timer's:
+   `using var timer = new CancellationTokenSource(delay, _clock); using var linked = CreateLinkedTokenSource(ct, timer.Token);` — the timer declared FIRST, the link SECOND, so the link is disposed first and a timer
+   that fires between the two disposals meets a disposed link. "Which one fired" keeps reading `ct.IsCancellationRequested`. **A zero budget** cancels the new source synchronously in its constructor where
+   `CancelAfter(0)` schedules a timer; no product path hands a zero (checked), so it is a test's value only and is pinned (M16, and the zero arms of S3/S4).
+3. **The teardown exception.** A grace that bounds REAL PIPE PROGRESS — the drain of a killed process's pipe, the agent's last output after its exit (`AcpSession.WatchExitAsync`'s 300 ms lets a buffered answer
+   through) — stays on the system clock, named in the tables as "system — teardown". On a manual clock nobody advances it would turn a bounded wait on a real pipe into a hang. `ReviewSnapshots`' `MaxElapsed`
+   (60 s, `ReviewSnapshots.cs:171`) is an UNSEAMED host safety ceiling, not a test-controllable budget, and stays on the system clock.
+4. **The default is `TimeProvider.System`, and the seam alone changes nothing:** each story lands its seam first, the whole `src_mcp` suite green on the default clock, and only then moves its test onto `ManualClock`.
+5. **The inventory** (§5.1 tables 1–4 of the plan, the reviewer's checklist): `AcpClient` — `:114/:119` turn deadline moves, `:195` `WaitAsync(usageBound)` moves, `:233` drain grace stays (teardown);
+   `ConsultantPlaces` — `:333-334` the one-shot budget and `:289` the folder stamp move; `TurnLoop` — the one `Stopwatch` (`:45`, read `:74/:81/:84`) moves and `BoundedScheduler.cs:462` hands the loop its `_clock`;
+   `SourceResolver` — `:199-200` the per-file read deadline moves. 7 timed sites in the four classes, 10 callees that arm a timer and none moves.
+6. **No product hook ever calls `Advance`** (the clock's point 6, below); a hook signals a `ClockHandshake` and the test advances.
+
+### `ManualClock` (`src_mcp/tests/ManualClock.cs`) — the suite's one manual clock
+
+Shaped on wsl_care's `ManualTimeProvider`, with its two flags removed and two additions. It subsumed and replaced `MovableClock` (same `DateTimeOffset start` constructor, same `Advance`; the nine sites in seven
+files were renamed, the class deleted); `FixedClock` (an instant that cannot move) and `SteppingClock` (one step per READ) stay — different jobs. `FakeClock` (`CollectRunTests`) was a duplicate of `FixedClock` and is gone.
+
+1. Two readings moved together by `Advance(by)`: the wall clock (`GetUtcNow`, from `start`) and the monotonic `GetTimestamp` (frequency `TicksPerSecond`, starting at one day). `LocalTimeZone` is UTC.
+2. `JumpWallClock(by)` moves the wall clock alone — what a two-clock rule is tested with (a host that slept).
+3. Timers are always manual and due on the monotonic reading; one fires only inside `Advance`, never on creation (a zero-due timer fires on `Advance(TimeSpan.Zero)`).
+4. Earliest due first, ties in arming order; a timer a callback arms with a due time already reached fires in the SAME advance, after the one that armed it; a periodic timer is due again a period later.
+5. A callback never runs under the clock's lock and always runs synchronously on the advancing thread — no thread-pool dispatch. A test therefore never calls `Advance` holding a lock and asserts after awaiting the product.
+6. **`Advance` is the test driver's call, never a product thread's.** An `Advance` entered while another runs (nested in a callback, or from a second thread) throws `InvalidOperationException` naming the thread that holds
+   the advance and moves nothing.
+7. `ITimer.Dispose()` retires the timer AT ONCE, even from inside its own callback (a `CancellationTokenSource` disposes its timer there; a `Dispose` that waited would wait for itself). Only `DisposeAsync()` waits,
+   for a callback already picked (at once from inside that callback); a timer disposed between its pick and its call never runs its callback. `Change` after disposal returns `false`; a due time or period below −1 ms or
+   above 0xFFFFFFFE ms is refused with `ArgumentOutOfRangeException`, as the system refuses it.
+8. `ActiveTimers` and `WhenTimersAsync(atLeast)` — the EVENT a test waits on before it advances ("the product armed its deadline"). A fired or disposed timer leaves the count, and because a `CancellationTokenSource`
+   disposes its timer before its registrations run, a test that means "the deadline struck" asserts the TOKEN after the advance, never the count inside a callback.
+9. No `RecordingWait` (a stand-in waits with `Task.Delay(delay, clock, ct)`). 10. Thread-safe: one lock over the readings and the timer list.
+11. `ClockHandshake` (`src_mcp/tests/ClockHandshake.cs`): the hook's side `Signal()` then `await WaitForReleaseAsync(ct)`; the test's `await handshake.Reached; clock.Advance(…); handshake.Release();`, with `Release()` also in
+    the test's `finally`. Both ends idempotent; one handshake serves one meeting (a hook reached repeatedly gets one per meeting).
+
+One addition beyond the plan: `internal Action AfterPick` — a hook between a timer's selection and its callback on the advancing thread, the one window M14 could not otherwise reach deterministically (default no-op).
+
+### Tests added, and what each showed (2026-10-21)
+
+Reds are seen against a stub shaped like the deleted `MovableClock` (a hand-moved clock with REAL timers; the new members stubbed so it compiles). M1's red is the spec's sentence verbatim.
+
+| Test (`ManualClockTests`) | Seen red as (on the stub) |
+|---|---|
+| M1 `ASourceWithADelayOnTheClock_IsCancelledByTheAdvanceThatReachesIt_AndNotBefore` | `Expected source.IsCancellationRequested to be True because the clock was advanced past the delay, but found False.` |
+| M2 `ATaskDelayOnTheClock_CompletesOnTheAdvanceThatReachesIt_AndNotBefore` | `Expected delay.IsCompleted to be True because the clock was advanced past the delay, but found False.` |
+| M3 `AWaitAsyncOnTheClock_ThrowsTimeoutOnTheAdvanceThatReachesIt_AndNotBefore` | `Expected waiting.IsCompleted to be True because the clock was advanced past the wait, but found False.` |
+| M4 `TwoTimersDueInOneAdvance_BothFire_EarliestDueFirst_…` (armed in reverse order, 20 runs) | `Expected fired to be equal to {1, 2} … but found empty collection.` |
+| M5 `ATimerArmedByACallbackWithADueTimeAlreadyReached_FiresInTheSameAdvance_…` | `Expected order to be equal to {"outer", "inner"} … but found empty collection.` |
+| M6 `ACallbackRunsOutsideTheClocksLock_OnTheAdvancingThread` | guard — green on the stub; broken once (B1) |
+| M7 `DisposeRetiresATimerAtOnceWhileItsCallbackRuns_AndOnlyDisposeAsyncWaits…` | guard — green on the stub; broken (B2, B17) |
+| M8 `AfterDispose_ChangeSchedulesNothingAndSaysFalse_AndAPeriodicTimerEndsItsWaitingTick` | `Expected tick.IsCompleted to be True because the clock reached the period, so the tick arrives, but found False.` (its `Change` arm is green on the stub: a disposed system timer also answers false) |
+| M9 `TheMonotonicReadingMovesWithAdvanceAndNotWithJumpWallClock_…` | `Expected default because a stepped wall clock is not elapsed monotonic time, but found 1h.` |
+| M10 `ADueTimeOrPeriodTheSystemRefuses_IsRefusedByTheManualClockToo` (both clocks) | green on the stub (its timers are the system's); broken (B20) |
+| M11 `WhenTimersAsync_IsPendingUntilTheTimersAreArmed_AndTheCountDropsWhenOneFiresOrIsDisposed` | `Expected first.IsCompleted to be True because the first timer was armed, but found False.` |
+| M12 `APeriodicTimer_FiresOncePerPeriodReachedInOneAdvance_AndStaysScheduled` | `Expected fired to be 3 because three periods were reached inside one advance, but found 0` |
+| M13 `ASourceOnTheClockLinkedToACallersToken_ReachesItsDeadline_AndAdvanceReturns` | `Expected linked.IsCancellationRequested to be True because the deadline reached the linked token, but found False.` |
+| M14 `ATimerDisposedBetweenItsSelectionAndItsCallback_NeverRunsIt_AndDisposeAsyncOnAnotherThreadWaitsForARunningOne` + `DisposeAsyncFromInsideTheTimersOwnCallback_CompletesAtOnce` | the second: `Expected completedInside to be True because a disposal from inside the callback has nothing else to wait for, but found False.`; the first is a guard, broken (B2, B19, B21) |
+| M15 `AnAdvanceInsideACallback_OrFromASecondThreadWhileOneRuns_IsRefusedNamingTheThreadThatAdvances` | `Expected a <System.InvalidOperationException> to be thrown because a second thread may not advance while one advance runs, but no exception was thrown.` |
+| M16 `AZeroDelay_IsAlreadyCancelledBeforeAnyAdvance_AndAZeroTimerFiresOnAdvanceZeroNotBefore` | `Expected fired to be 1 because Advance(0) fires a timer that is due now, but found 0` (its zero-delay arm is green on the stub: the framework cancels a zero delay in the constructor) |
+| M17 `OnTheTwoSourceShape_TheCallersCancellationAndTheDeadlineAreToldApart_AndADisposedTimerFiresNothing` | `Expected callerFirst.ActiveTimers to be 1 because the deadline's timer is still counted, but found 0` |
+
+`ClockHandshakeTests` (3): `Signal` completes `Reached` once; a parked hook waits for the release and a second release is harmless; the test's guard ends the hook's wait. Green on the first run (a three-line helper).
+
+**Break-its** (the clock was changed, `ManualClockTests` run, red seen, restored, green seen): B1 callbacks fired inside the lock → M6 `a callback blocked on a gate must not hold the clock's lock` (also M7, M14); B2 `Begin()` skipped on
+pick → M7 and M14 `Expected disposing.IsCompleted to be False because DisposeAsync … waits while the callback runs, but found True`; B3 order by arming → M4 `{2, 1} differs at index 0`; B4 a zero-due timer fired on
+creation → M16 `a timer never fires on creation` and M5 (`inner` twice); B5 `JumpWallClock` moves the monotonic reading → M9 `found 1h`; B17 `Dispose()` waits for a running callback → M13 `Advance never returned: …` (20 s guard)
+and M7 `Dispose retires the timer at once` (the unguarded `Task.Delay`/`WaitAsync` tests hang under B17, which is the same defect: they dispose their timer from the callback); B18 the advancing mark dropped → M15 `no exception was thrown`;
+B19 callbacks through `ThreadPool.QueueUserWorkItem` → 14 of 18 red (nothing has fired when the assertion reads); B20 the range check removed → M10 `ManualClock refuses a due time of 4294967295 ms, but no exception was thrown`;
+B21 the disposed-after-pick check removed → M14 `Expected ran to be False because a disposed timer's callback does not run`. **B4's limit, said:** the plan's "M1's 1999 ms arm red" cannot follow from B4 (a timer due in
+2 s is not due at creation); B4 is seen red on the zero-due arms instead.
+
+### The structural scan — `EveryBudgetInAClockedClassReadsItsClockTests`
+
+Over a NAMED SET of product files (`Clocked`: S1 starts with `BoundedScheduler.cs`; S2 adds `AcpClient.cs`, S3 `ConsultantPlaces.cs`, S4 `TurnLoop.cs` and `SourceResolver.cs` — each addition is that story's structural red) it flags every
+`Stopwatch`, `.CancelAfter(`, `DateTime.UtcNow` (and `DateTimeOffset`, `.Now`), `Task.Delay(` and `.WaitAsync(` with a timeout whose argument list names no clock (`_clock`, `clock`, `TimeProvider…`); a `WaitAsync(ct)` /
+`WaitAsync(x.Token)` is a token alone and not a site. It reads the comment- and string-free joined line of `ProductionSources.CodeOf`, so an argument list is read across lines to its closing parenthesis. **Sanctioned sites** are
+`(file, snippet, reason)` entries matched on the statement around the site; the companion fails when an entry no longer matches exactly one site, so a stale list is red. Day one, all in `BoundedScheduler.cs`:
+`Stopwatch queued` (two: the slot queue, the shared-resource queue — reports), `Stopwatch watch` of the conversation (the reported elapsed), and the two DEFERRED sites of plan Q4, the 429 ladder's `Stopwatch` (judged against
+its budget) and `Task.Delay(wait, ct)` — named, not moved, until a 429-ladder failure is kept (D5). Not scanned: `ReviewSnapshots.cs`, `ProcessLauncher.cs`, `ReviewerExecutor.cs`.
+
+| Test | Seen red as |
+|---|---|
+| `…_ReadsItsClock_ExceptTheSitesNamedWithTheirReason` | with the allow-list emptied: `found "…BoundedScheduler.cs: Stopwatch `Stopwatch` in `var queued = System.Diagnostics.Stopwatch.StartNew(); if (!await Took(global, ct)) …`; …` (all five); with the ladder's entry removed: the one `var watch = … Stopwatch.StartNew(); var attempts = 1;` |
+| `TheScan_StillFindsEveryNamedException_SoAStaleAllowListIsRedNotSilent` (companion) | with a scanner that finds nothing: `… matches 0 sites, not one` for each entry; with the ladder's `Stopwatch` moved onto `_clock` in `BoundedScheduler.cs` (temporary, restored): ``Stopwatch.StartNew(); var attempts = 1;` matches 0 sites, not one`` |
+| `TheScan_FindsTheFiveSitesOfBoundedScheduler_ThatTheAllowListNames` | scanner finds nothing: `Expected sites.Select(site => site.Kind) to be a collection with 5 item(s) … but found an empty collection.`; one site moved: `{"Stopwatch","Stopwatch","Stopwatch","Task.Delay"} contains 1 item(s) less` |
+| `AnUnclockedBudget_IsASite_InEveryShapeTheScanKnows_AcrossLines_…`, `AClockedBudget_AToken_AWordInACommentOrAString_AreNotSites`, `ASiteTheAllowListDoesNotName_IsAnOffender_…` | the scanner's own behaviour on synthetic source (the multi-line `WaitAsync(⏎ usageBound)`, clocked forms, prose): red with a scanner that finds nothing |
+
+**Build trap met on the way (a note for the next break-it):** restoring a source file with `fs.copyFileSync` keeps the OLD modification time, so the next `dotnet build` believed the test assembly up to date and ran the PREVIOUS
+broken variant's binary — one break-it reported a passing companion that failed when rebuilt. Restore by writing the file (a new mtime) or touch it.
+
+### Counts and the full run
+
+Listed tests (`--list-tests`): 13,075 before, 13,107 after (+32, none removed: `comm` of the sorted lists shows 0 removed). The 32 are 18 `ManualClockTests`, 3 `ClockHandshakeTests`, 6 scan tests (the scan, its companion,
+the five-sites pin and three self-tests of the scanner — six in all), and 5 `NoSourceFileCarriesAControlByteTests` rows for the five new source files. `MovableClock`'s seven files, run alone after the rename: `AMoveOverAHeldFileIsRetriedTests` 3,
+`ASessionSaveMeetsABusyFileTests` 6, `AnIdleServerReadsNothingTests` 9, `AuthorPeersTests` 18, `RoundAuthorsStepTests` 32, `TheRunsThemselvesTests` 8, `TheSendsThemselvesTests` 14, `CollectRunTests` 11 — all green (E3's `AtomicFile` window tests pass on
+`ManualClock` unchanged, which is the proof of the subsumption).
+
+Whole `CoaiMcp.Tests.exe` (Windows, Debug, 40 min on a loaded machine): 13,140 total, 13,017 passed, 120 skipped, **3 failed in the suite and passed alone** — listed, not called flakes, and every one is a case this epic exists to close:
+`AConversationPlaceTests.CopiesThatOutrunTheRowsBudget_…` (C17, S3), `AFeatureIsReviewedEndToEndTests.TheRoundsDeadline_IsScaledByTheFollowUps_…` (C6, S5), `AReviewerThatAsksForSourceIsAskedAgainTests.AConversationThatOutlivesItsCap_…` (C13, S4). Re-run
+class by class alone right after: 10/10, 31/31 and 16/16 passed. S1 changes no product line and none of the three touches `ManualClock`; the three are unmoved by it.
+
+### Limits (stated)
+
+The clock proves a class READS its clock, not that the product's other timers (the launcher's per-turn timer, `ReviewSnapshots`' ceiling) are sound; `ManualClock` forbids a nested/concurrent `Advance` of ITSELF but cannot stop a
+product hook from advancing a different clock; the scan is a source scan of five named shapes, not a data-flow proof (a `Stopwatch` hidden behind a helper in a file outside the named set is not seen — that is why the set grows by file).
