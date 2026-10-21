@@ -1430,7 +1430,7 @@ give-back are the server's half ([module_server.md](module_server.md)).
   layer cannot reference the server — moved, never copied). Never another record's, never a fresh one, never one without a pid in its name, never a live writer's
   (a writer suspended after its temp file keeps it, and its move still lands); best effort, a failure to remove is ignored and tried again on the next write.
   A reused pid keeps the file: a leak, never a deletion. `AtomicJson.WriteUnderTurn` (`Escalations.cs`) writes through it, so `AtomicFile`'s list of open-coded copies is four now
-  (`ConsultSchemaFile`, `RemoteRuntime`, `ArtifactStore`, `SessionStore` — the last one's turn comes in E3 S5). Tests: `AMoveOverAHeldFileIsRetriedTests`, `AnOrphanTempFileIsRemovedByItsRecordsNextWriteTests`.
+  (`ConsultSchemaFile`, `RemoteRuntime`, `ArtifactStore`); `SessionStore.Write` writes through it too since E3 S5 (its ten-attempt `MoveOverExisting` loop was removed, not extracted), and the seam gained `WriteText` (fail the temp write half way). Tests: `AMoveOverAHeldFileIsRetriedTests`, `AnOrphanTempFileIsRemovedByItsRecordsNextWriteTests`.
 - **`FilesystemInvariant.SnapshotAsync`** throws `OperationCanceledException` for a cancelled token. The
   launcher never throws on cancellation (it reports `TimedOut: true, Cancelled: true`), so a `git status` killed
   by the turn's deadline surfaced as a `ContextException` and the turn said "the answer could not be recorded";

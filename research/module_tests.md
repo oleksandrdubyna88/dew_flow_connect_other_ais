@@ -4878,3 +4878,19 @@ a 37-minute run on a loaded machine. The seven classes run together alone: 131 t
 
 **Boundaries.** An orphan is judged by the pid IN THE NAME and by `ProcessLiveness.IsAlive`, which moved from `CoaiMcp.Server` to `runners/Processes` (this layer cannot reference the server); a reused pid keeps the file, a leak and never a deletion.
 A temp whose name carries no pid (an older build's) is never removed by this rule. The extension shows `interrupted` for a question whose beats the disk refused for two minutes and recovers on the next written beat (`module_extension.md`).
+
+## The suite is deterministic — E3 S5 (C25, 2026-10-21)
+
+Source: `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md`, epic E3, story S5 (scenario S26; the E3 plan round `ac57ee60` and the risk consult `0060db13` govern: the session write becomes ATOMIC through `AtomicFile`, it is not a retried in-place write, and `MoveOverExisting`'s loop is removed). Evidence: `SessionStoreConcurrencyTests.EightWritersOnOneSession_DoNotDenyEachOther` failed once in E2's full run and once in another plan's baseline (`IOException … session-<id>.json … being used by another process`). Measured here, 20 runs of that class beside a loaded suite on the unfixed code: **15 of 20 failed** with that sentence; after the fix **0 of 20**.
+
+| Test (`ASessionSaveMeetsABusyFileTests`, collection `fakecli-env`) | Seen red as | Green because |
+|---|---|---|
+| `ASaveThatMeetsAHeldSessionFile_IsRetried_AndLands` (Windows; the session file held `Read`/`FileShare.Read`, released by the pause seam) | `SessionStoreException: the session for 'main' could not be written: The process cannot access the file '…session-….json' because it is being used by another process.` — the E2 sentence | `SessionStore.Write` goes through `AtomicFile.Write`, whose move is retried |
+| `AFailureWhileTheTempFileIsWritten_LeavesThePreviousSessionByteForByte` (every OS; the temp write fails half way) | `Expected a <SessionStoreException> to be thrown, but no exception was thrown.` (the in-place road never reached the seam) | the temp file takes the failure; the session is untouched, the temp removed, the next save lands and loads |
+| `AFailureAfterTheTempFileIsWritten_LeavesThePreviousSessionByteForByte` (every OS; a throw between temp and move) | same sentence | same |
+| `TheSessionsTurnIsHeldFromTheTempFileToTheMove` | `Expected seen to be equal to {False} … but found empty collection.` | the turn is held across temp and move; a second taker does not get it |
+| *guard* `ASessionFileHeldThroughEveryAttempt_FailsTheSaveNamingIt_AndKeepsTheOldSession` (Windows; a hand-moved clock, no sleep) | green before and after | — |
+
+The three reds other than the first were red because the unfixed store did not use the write seam at all; the first is the real symptom and the only one whose message is the CI sentence. **Break-it (restored):** `FileWriter(file, json)` replaced by `File.WriteAllText(file, json)` → the same four reds. `SessionStoreConcurrencyTests` is unchanged except that `SessionFor` is `internal` so the new class reuses it.
+
+**Counts.** Whole `CoaiMcp.Tests.exe`: 13,077 total, 12,956 passed, 120 skipped, 1 failed in the suite: `AConversationPlaceTests.CopiesThatOutrunTheRowsBudget_…` ("0 of 2 copied", a 1 s budget on a loaded machine) — it also failed in S4's run, and passes alone (3 of 3, 10 tests). Not called a flake; it measures a 1 s copy budget and is not touched by the session store. The new class has 5 tests; the total grew by 6 from S4's 13,071 (one more than the 5 added — not explained: no other test file changed).

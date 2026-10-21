@@ -1365,6 +1365,12 @@ Warning and skipped (`QuestionFanOut.BeatAsync`); S27 is in `AtomicFile`. Deviat
 - **The orphan rule runs on every `AtomicFile.Write`**, so every caller of `AtomicFile` and `AtomicJson` (including S5's session write) gets it; it enumerates `<record>.*.tmp` in the record's folder only.
 - **Not done here:** `SessionStore` is S5; the extension's "interrupted" after two minutes without a beat is unchanged and now named in `module_extension.md`.
 
+**S5 (C25) Outcome (2026-10-21, same branch; tests, reds and the 20-run numbers in `research/module_tests.md`, section "The suite is deterministic — E3 S5").**
+Built as the plan round and the risk consult say, not as the first brief: `SessionStore.Write` has ONE road, `SessionTurn.Take` then `FileWriter(file, json)`, whose default is `AtomicFile.Write(file, json, AtomicFile.SharingRetry)`; `MoveOverExisting` and `TryDelete` are removed (no second retry loop); the turn stays held through the move; `SessionTurn.Take` is untouched. Deviations:
+- **The seam is `SessionStore.FileWriter`** (`internal` init), not a `BusyPause` property: the pause lives in `AtomicSeams`, so the store needs only the write road. `AtomicSeams` gained `WriteText` so S26 can fail the temp write half way.
+- **S26 has four arms and a guard** (the temp write fails; the move fails; the busy file lands after release; the turn is held through the move; held-through fails and keeps the old bytes), not the brief's two.
+- **The §10 watch was run:** 15 of 20 runs of `SessionStoreConcurrencyTests` failed before, 0 of 20 after, each beside a loaded suite. The 20 Windows CI runs of the plan's watch are still to come.
+
 **Size.** Five stories: S1 C2 (the launcher helper, S8 both arms, S9, the EndToEnd assertion; the brief pins the
 tracker stand-in's two observations and that the Team server's reader marker is cleared by the launch's normal end) —
 first, beside E1; S2 C14 (`TryRead`, the host's catch, S10 and its companions, the homes fix) — parallel; S3 D4 and S7

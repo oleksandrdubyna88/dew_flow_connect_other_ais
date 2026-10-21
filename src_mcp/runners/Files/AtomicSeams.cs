@@ -21,6 +21,9 @@ internal sealed record AtomicSeams
     /// <summary>Is the process with this id running? A temp file whose writer is alive is never an orphan.</summary>
     public Func<int, bool> IsAlive { get; init; } = ProcessLiveness.IsAlive;
 
+    /// <summary>Writes the temp file: path, text. A seam so a test can fail the write half way (a full disk).</summary>
+    public Action<string, string> WriteText { get; init; } = File.WriteAllText;
+
     /// <summary>Called with the temp file's path after it is written and before the move — the place a test pauses a writer.</summary>
     public Action<string> AfterTemp { get; init; } = static _ => { };
 }
