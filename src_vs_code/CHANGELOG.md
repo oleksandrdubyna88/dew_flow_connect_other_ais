@@ -1,5 +1,9 @@
 # Changelog
 
+## Team server 0.14.1 — 2026-10-21
+
+**Fixed: a reviewer that exits before its start time is read is not "not started".** The Team server launches reviewers through the same launcher as coai-mcp. A launched process that exited so fast (seen on macOS) that its start time could not be read was reported as "not started"; it is now recorded as the launch it was.
+
 ## Extension 0.83.0 — 2026-10-21
 
 **Added: the round card says who wrote the code.** A plan or code round shows one "written with" line: the main agent's model, the subagents that wrote code (counted by model family), and the size of the change. A partial or unobserved result says why, and a write that no agent can be shown to own is marked "size not covered". A round from before this release shows no line until the backfill fills it in.
