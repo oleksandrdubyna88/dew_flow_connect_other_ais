@@ -40,7 +40,9 @@ const typeOf = (st) => (st.isSymbolicLink() ? 'symlink' : st.isDirectory() ? 'di
 const iso = (ms) => new Date(ms).toISOString();
 
 /** A slot's hex is a name of the person's account, not a fact about the host: any run of 8 or more hex digits becomes `<hex>`. */
-export const redactSlot = (name) => name.replaceAll(/[0-9a-f]{8,}/giu, '<hex>');
+// The slot's hex is redacted by the ONE helper the Kimi probes use (J8 of the E1 code gate).
+export { redactSlot } from './kimi.mjs';
+import { redactSlot } from './kimi.mjs';
 
 /** A read that could not tell, as data: the error's code (`EACCES`, `EIO`, …) or `unknown`. It is NOT "absent" — a file that cannot be read may well be there. */
 const unreadable = (error) => ({ state: 'unreadable', code: String(error?.code ?? 'unknown') });
