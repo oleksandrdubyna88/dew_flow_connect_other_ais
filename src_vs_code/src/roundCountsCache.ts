@@ -25,12 +25,35 @@ export function finishedRounds(sessions: readonly SessionFile[]): number {
  * falling window are fake-clock tests rather than claims.</p>
  */
 
+/**
+ * A ledger line as the load holds it: the line itself, and — in memory only, never written anywhere — the STORE it was read
+ * from (E6.S2). A store is a LOCATION, named by the id the merged answer gave it; a directory the answer did not name stands
+ * for itself. A line of this side's own ledger carries this side's store id when the merged answer named one, else none.
+ */
+export interface StoredLine extends UsageEntry {
+  readonly store?: string;
+}
+
+/**
+ * One other store's ledger tail: which store, the directory it was read from, and why it did not read (*did not answer in
+ * time*, a file-system error) — empty when it read. It is NEVER folded into {@link RoundsSnapshot.ledgerFailure}, which hides
+ * every money cell of this side.
+ */
+export interface OtherLedger {
+  readonly store: string;
+  readonly directory: string;
+  readonly failure: string;
+}
+
 /** One read: the counts, the last seven days of the ledger, and when it was taken. */
 export interface RoundsSnapshot {
   readonly read: RoundCountsRead;
-  readonly ledger: readonly UsageEntry[];
-  /** Why the ledger did not read — empty when it read or does not exist yet; then its tokens and money are unavailable. */
+  /** This side's lines and every other store's tail, one list — each line tagged with its store where stores are known. */
+  readonly ledger: readonly StoredLine[];
+  /** Why THIS SIDE's ledger did not read — empty when it read or does not exist yet; then its tokens and money are unavailable. */
   readonly ledgerFailure: string;
+  /** The other stores' tails, one entry per store that was read (E6.S2); absent from a load that read none. */
+  readonly otherLedgers?: readonly OtherLedger[];
   readonly atMs: number;
 }
 

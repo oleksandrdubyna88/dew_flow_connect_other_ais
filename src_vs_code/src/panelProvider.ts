@@ -581,7 +581,10 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   private roundCountsOf(dataDir: vscode.Uri): RoundCountsCache {
     return new RoundCountsCache(roundsLoader(
       () => serverPath(this.context.globalStorageUri)?.fsPath ?? '', join(dataDir.fsPath, 'usage.jsonl'), undefined,
-      [probeUsagePath(dataDir.fsPath)]));
+      [probeUsagePath(dataDir.fsPath)],
+      // The other installations this window was told about (E6): their snapshots go to the merged call and their ledger tails
+      // are read beside this side's — an append-only file, never their coai.db.
+      () => usableDirs(watchedDirs(dataDir.fsPath, alsoWatchDataDirectories(), process.platform)).slice(1)));
   }
 
   /** The consultant and model checks' host: the caller kinds' checks, and each catalog row's (PLAN_one_model_catalog.md E3.3). */
@@ -695,6 +698,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       snapshot,
       chat,
       rateOf: (provider, model) => priceOfLine(provider, model, vendors, (id) => prices[id]),
+      // A line from another store is never priced at this side's typed override: the list rate, with no vendor row (E6.S2).
+      listRateOf: (provider, model) => priceOfLine(provider, model, [], (id) => prices[id]),
       ranOn: ranOnOf(vendors),
       store: {
         side: sideLabel(vscode.env.remoteName, process.env['WSL_DISTRO_NAME']),

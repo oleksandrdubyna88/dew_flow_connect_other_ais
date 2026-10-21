@@ -651,6 +651,10 @@ internal sealed class RoundEngine(
                     audit.Stuck(stuck.Sentence);
                 }
             });
+            // The other side's counter reads a plain file instead of this database (E6.S1). AFTER the projection and outside it, with a
+            // catch of its own: written inside the lambda above, a failure here would be logged as the ROUND failing to project and would
+            // skip the stuck-findings count that follows RecordRound. A courtesy file never takes a round down.
+            Store.RoundCountsSnapshot.TryWrite(_settings.DataDir, DateTime.UtcNow, _log);
             if (notice is not null)
             {
                 _escalations.Notify(notice);

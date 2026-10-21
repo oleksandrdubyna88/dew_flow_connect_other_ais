@@ -55,8 +55,8 @@ test('a model change inside the window is two model lines, each with its own rou
 
   assert.deepEqual(luna.slice(1, 4), ['2', '5', '9']);
   assert.deepEqual(terra.slice(1, 4), ['0', '0', '5'], 'the model the row moved away from vanished, or took the other\'s rounds');
-  assert.match(luna[10]!, /~\$0\.2/u, '$2.016 over the 9 rounds that used luna');
-  assert.match(terra[10]!, /per recorded turn|—/u, 'terra has no price: a dash, never ~$0');
+  assert.match(luna[11]!, /~\$0\.2/u, '$2.016 over the 9 rounds that used luna');
+  assert.match(terra[11]!, /per recorded turn|—/u, 'terra has no price: a dash, never ~$0');
 });
 
 test('an unavailable read says count unavailable in every count cell and never draws a zero', () => {
@@ -66,7 +66,7 @@ test('an unavailable read says count unavailable in every count cell and never d
   assert.match(html, /Rounds: count unavailable — this coai-mcp is older than --round-counts/u);
   assert.deepEqual(cells.slice(1, 5), ['count unavailable', 'count unavailable', 'count unavailable', 'count unavailable']);
   assert.doesNotMatch(html, /<td>0<\/td>|plan 0|>0 rounds/u, 'an unavailable count was drawn as a zero');
-  assert.match(cells[8]!, /in 1\.0M/u, 'the ledger\'s tokens still show — they do not depend on the count');
+  assert.match(cells[9]!, /in 1\.0M/u, 'the ledger\'s tokens still show — they do not depend on the count');
 });
 
 test('AnUnreadableLedger_IsUnavailableSpend_NeverAZero — every spend cell says unavailable; the counts still show', () => {
@@ -76,9 +76,9 @@ test('AnUnreadableLedger_IsUnavailableSpend_NeverAZero — every spend cell says
 
   assert.match(html, /Tokens and money: unavailable — the usage ledger could not be read: EACCES: permission denied/u);
   assert.deepEqual(row.slice(1, 4), ['2', '5', '14'], 'the counts come from the database, not the ledger');
-  assert.deepEqual([row[5], row[8], row[9], row[10]], ['unavailable', 'unavailable', 'unavailable', 'unavailable'],
+  assert.deepEqual([row[5], row[9], row[10], row[11]], ['unavailable', 'unavailable', 'unavailable', 'unavailable'],
     'a ledger that would not read was drawn as nothing spent');
-  assert.deepEqual(model.slice(7, 11), ['unavailable', 'unavailable', 'unavailable', 'unavailable']);
+  assert.deepEqual(model.slice(8, 12), ['unavailable', 'unavailable', 'unavailable', 'unavailable']);
   assert.doesNotMatch(html, /in 0 ·|~\$0(?!\.)|\$0\.00/u, 'a zero stands in for a ledger that did not read');
 });
 
@@ -97,7 +97,7 @@ test('consultations, questions and chat sit beside the rounds as recorded turns;
   assert.equal(rowCells(html, '<b>codex</b>')[5], 'consult 2 · question 1 · chat 1 recorded turns');
   const consult = rowCells(html, '>consult · 2 recorded turns<');
   // E3.S4: two consult lines that carry no consultation id are two units — the older-line reading, said in the label.
-  assert.match(consult[10]!, /~\$1\.0\d*<\/span> <span class="hint">per consultation \(some lines per turn\)/u, '$2 over 2 consult turns');
+  assert.match(consult[11]!, /~\$1\.0\d*<\/span> <span class="hint">per consultation \(some lines per turn\)/u, '$2 over 2 consult turns');
 });
 
 test('AProbe_IsItsOwnKind_NeverARound — a --probe-api completion sits beside the rounds as a probe, on no model line', () => {
@@ -108,7 +108,7 @@ test('AProbe_IsItsOwnKind_NeverARound — a --probe-api completion sits beside t
 
   assert.equal(rowCells(html, '<b>codex</b>')[5], 'probe 1 recorded turns', 'the probe spent the row and was not said beside its rounds');
   const probe = rowCells(html, '>probe · 1 recorded turns<');
-  assert.match(probe[8]!, /in 1\.0M/u, 'the probe\'s tokens are on its own line');
+  assert.match(probe[9]!, /in 1\.0M/u, 'the probe\'s tokens are on its own line');
   assert.doesNotMatch(html, />gpt-6-astra</u, 'a probe of a model is not a round of it — no model line for it');
 });
 
@@ -118,7 +118,7 @@ test('AConsultationOnlyWindow_ShowsNoPerRoundFigure — consultations and no rou
   const cells = rowCells(html, '<b>codex</b>');
 
   assert.deepEqual(cells.slice(1, 4), ['0', '0', '0'], 'counted nought is a real 0');
-  assert.match(cells[10]!, /title="no rounds in this window">—/u);
+  assert.match(cells[11]!, /title="no rounds in this window">—/u);
 });
 
 /** A review line the way coai-mcp 0.48.0 and later writes it: one launch, with the attempt and the runtime it ran on. */
@@ -132,7 +132,7 @@ function medianHeader(html: string): string {
   return header[1]!;
 }
 
-const medianCellOf = (html: string, model: string): string => rowCells(html, model)[7]!;
+const medianCellOf = (html: string, model: string): string => rowCells(html, model)[8]!;
 
 test('TheMedianHeader_SaysPerLaunch_WhenEveryMedianIsPerLaunch_AndNoCellRepeatsIt', () => {
   const lines = [launchLine(), launchLine({ attempt: 'retry' }), launchLine({ model: 'gpt-6-astra', attempt: 'repair' })];
@@ -204,18 +204,18 @@ test('AModelWithUnknownRounds_AndAMixedWeek_IsDividedPerRecordedTurn — one old
   const lines = [launchLine({ model: 'gpt-6-astra' }), usageLine({ model: 'gpt-6-astra' })];
   const cells = rowCells(roundsBlock(input({ snapshot: snapshot(counted(), lines) })), '>gpt-6-astra<');
 
-  assert.match(cells[10]!, /over 2 recorded turns/u, 'the fallback divided by the wrong unit');
-  assert.match(cells[10]!, /<span class="hint">per recorded turn<\/span>/u);
-  assert.doesNotMatch(cells[10]!, /launch/u);
+  assert.match(cells[11]!, /over 2 recorded turns/u, 'the fallback divided by the wrong unit');
+  assert.match(cells[11]!, /<span class="hint">per recorded turn<\/span>/u);
+  assert.doesNotMatch(cells[11]!, /launch/u);
 });
 
 test('AModelWithUnknownRounds_AndOnlyLaunchLines_IsDividedPerLaunch — the tooltip says launches, never launchs', () => {
   const lines = [launchLine({ model: 'gpt-6-astra' }), launchLine({ model: 'gpt-6-astra', attempt: 'repair' })];
   const cells = rowCells(roundsBlock(input({ snapshot: snapshot(counted(), lines) })), '>gpt-6-astra<');
 
-  assert.match(cells[10]!, /over 2 launches/u);
-  assert.match(cells[10]!, /<span class="hint">per launch<\/span>/u);
-  assert.doesNotMatch(cells[10]!, /launchs|recorded turn/u);
+  assert.match(cells[11]!, /over 2 launches/u);
+  assert.match(cells[11]!, /<span class="hint">per launch<\/span>/u);
+  assert.doesNotMatch(cells[11]!, /launchs|recorded turn/u);
 });
 
 test('ATeamServerLine_StaysPerRecordedTurn_EvenWithItsRowDeleted — the line says it ran on a Team server, whatever the settings say now', () => {
@@ -223,9 +223,9 @@ test('ATeamServerLine_StaysPerRecordedTurn_EvenWithItsRowDeleted — the line sa
   const html = roundsBlock(input({ snapshot: snapshot(counted(), [remote(), remote(), launchLine()]), ranOn: ranOnOf([]) }));
   const cells = rowCells(html, '>gpt-6-astra<');
 
-  assert.match(cells[7]!, /<span class="hint">per recorded turn<\/span>/u, 'a Team-server job total was claimed as one launch');
-  assert.match(cells[10]!, /<span class="hint">per recorded turn<\/span>/u);
-  assert.doesNotMatch(cells[10]!, /launch/u);
+  assert.match(cells[8]!, /<span class="hint">per recorded turn<\/span>/u, 'a Team-server job total was claimed as one launch');
+  assert.match(cells[11]!, /<span class="hint">per recorded turn<\/span>/u);
+  assert.doesNotMatch(cells[11]!, /launch/u);
 });
 
 test('AnAntigravityFollowUp_KeepsItsModelPerRecordedTurn — a follow-up may be cumulative, so one in the group takes median and division back', () => {
@@ -233,18 +233,18 @@ test('AnAntigravityFollowUp_KeepsItsModelPerRecordedTurn — a follow-up may be 
   const html = roundsBlock(input({ snapshot: snapshot(counted(), [local(), local({ attempt: 'followUp' }), launchLine()]), ranOn: ranOnOf([]) }));
   const cells = rowCells(html, '>gpt-6-astra<');
 
-  assert.match(cells[7]!, /<span class="hint">per recorded turn<\/span>/u, 'a possibly cumulative follow-up was claimed as a launch in the median');
-  assert.match(cells[10]!, /over 2 recorded turns/u);
-  assert.match(cells[10]!, /<span class="hint">per recorded turn<\/span>/u);
-  assert.doesNotMatch(cells[10]!, /launch/u);
+  assert.match(cells[8]!, /<span class="hint">per recorded turn<\/span>/u, 'a possibly cumulative follow-up was claimed as a launch in the median');
+  assert.match(cells[11]!, /over 2 recorded turns/u);
+  assert.match(cells[11]!, /<span class="hint">per recorded turn<\/span>/u);
+  assert.doesNotMatch(cells[11]!, /launch/u);
 });
 
 test('ALocalRow_StaysPerLaunch_AfterItsRowIsDeleted — the decision is the lines own, no row is looked up', () => {
   const html = roundsBlock(input({ snapshot: snapshot(counted(), [launchLine({ model: 'gpt-6-astra' })]), ranOn: ranOnOf([]) }));
   const cells = rowCells(html, '>gpt-6-astra<');
 
-  assert.doesNotMatch(cells[7]!, /recorded turn/u);
-  assert.match(cells[10]!, /<span class="hint">per launch<\/span>/u);
+  assert.doesNotMatch(cells[8]!, /recorded turn/u);
+  assert.match(cells[11]!, /<span class="hint">per launch<\/span>/u);
 });
 
 test('TheFootnote_SaysAReviewLineIsOneLaunch — and does not claim it always is', () => {
@@ -351,10 +351,10 @@ test('TheConsultLine_SaysPerConsultation — identified consult lines divide by 
   const html = roundsBlock(input({ snapshot: snapshot(counted(), lines), chat }));
 
   const consult = rowCells(html, '>consult · 3 recorded turns<');
-  assert.match(consult[10]!, /~\$1\.5\d*<\/span> <span class="hint">per consultation<\/span>/u, '$3 over 2 consultations, not 3 turns');
-  assert.match(consult[10]!, /over 2 consultations/u, 'the tooltip names the divisor');
-  assert.match(rowCells(html, '>question · 1 recorded turns<')[10]!, /per recorded turn/u);
-  assert.match(rowCells(html, '>chat · 1 recorded turns<')[10]!, /per recorded turn/u);
+  assert.match(consult[11]!, /~\$1\.5\d*<\/span> <span class="hint">per consultation<\/span>/u, '$3 over 2 consultations, not 3 turns');
+  assert.match(consult[11]!, /over 2 consultations/u, 'the tooltip names the divisor');
+  assert.match(rowCells(html, '>question · 1 recorded turns<')[11]!, /per recorded turn/u);
+  assert.match(rowCells(html, '>chat · 1 recorded turns<')[11]!, /per recorded turn/u);
 });
 
 test('ACheckLineAndARefusedConsultation_AreNamedInTheTooltip_NotCalledOlderLines', () => {
@@ -365,11 +365,11 @@ test('ACheckLineAndARefusedConsultation_AreNamedInTheTooltip_NotCalledOlderLines
   ];
   const consult = rowCells(roundsBlock(input({ snapshot: snapshot(counted(), lines) })), '>consult · 3 recorded turns<');
 
-  assert.match(consult[10]!, /per consultation \(some lines per turn\)<\/span>/u);
-  assert.match(consult[10]!, /2 lines without a consultation id counted one each/u);
-  assert.match(consult[10]!, /consultant checks/u);
-  assert.match(consult[10]!, /refused before their launch/u);
-  assert.doesNotMatch(consult[10]!, /written before the consultation field existed/u, 'no older line is in the window');
+  assert.match(consult[11]!, /per consultation \(some lines per turn\)<\/span>/u);
+  assert.match(consult[11]!, /2 lines without a consultation id counted one each/u);
+  assert.match(consult[11]!, /consultant checks/u);
+  assert.match(consult[11]!, /refused before their launch/u);
+  assert.doesNotMatch(consult[11]!, /written before the consultation field existed/u, 'no older line is in the window');
 });
 
 test('AMixedConsultWindow_SaysSomeLinesPerTurn_AndTheTooltipSaysHowManyWereCountedOneEach', () => {
@@ -380,9 +380,9 @@ test('AMixedConsultWindow_SaysSomeLinesPerTurn_AndTheTooltipSaysHowManyWereCount
   ];
   const consult = rowCells(roundsBlock(input({ snapshot: snapshot(counted(), lines) })), '>consult · 3 recorded turns<');
 
-  assert.match(consult[10]!, /per consultation \(some lines per turn\)<\/span>/u);
-  assert.match(consult[10]!, /1 line without a consultation id counted one each/u);
-  assert.match(consult[10]!, /over 2 consultations/u, 'A is one consultation, the line with no id is another');
+  assert.match(consult[11]!, /per consultation \(some lines per turn\)<\/span>/u);
+  assert.match(consult[11]!, /1 line without a consultation id counted one each/u);
+  assert.match(consult[11]!, /over 2 consultations/u, 'A is one consultation, the line with no id is another');
 });
 
 test('TheFootnote_SaysConsultationsArePerConsultation', () => {
