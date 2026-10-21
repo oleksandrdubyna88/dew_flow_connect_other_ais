@@ -389,3 +389,31 @@ test('[Linux only: reads /proc — runs on the Linux CI job] the probe, run for 
   assert.equal(facts.k0.asked, false, 'no kimi was named, so none was asked');
   assert.equal(/SENTINEL|0123456789abcdef/u.test(r.stdout), false, 'no byte or slot of a sign-in reached the record');
 });
+
+// CodeRabbit (host-facts.mjs:135): the product's keyring-session reading looks at ITS OWN environment; the probe's runner gave it the minimal list, which holds neither
+// DBUS_SESSION_BUS_ADDRESS nor XDG_RUNTIME_DIR - so on every desktop host the product said "no bus address" and the script's own reading said "set", and the two
+// readings of DN10 disagreed because of the runner, not because of either reading.
+test('coai-mcp --host-facts runs with the session\'s bus names (and only those beyond the minimal list) so both DN10 readings look at the same environment', () => {
+  const fsx = fakeFs(world({ '/opt/coai-mcp': { content: 'bin', mode: 0o755 } }));
+  const run = fakeRunner((file, args) => (args[0] === '--version' ? okRun('coai-mcp 0.63.0\n') : okRun('{"server":"coai-mcp"}\n')));
+  const env = { PATH: '/usr/bin:/bin', HOME, DBUS_SESSION_BUS_ADDRESS: 'unix:path=/run/user/1000/bus', XDG_RUNTIME_DIR: '/run/user/1000', SECRET_TOKEN: 'SENTINEL-NOT-FOR-THE-CHILD' };
+  collectHostFacts(baseDeps(fsx, { run, env, coaiMcp: '/opt/coai-mcp', hash: () => 'h' }));
+  const call = run.calls.find((c) => c.args[0] === '--host-facts');
+  assert.equal(call.options.env?.DBUS_SESSION_BUS_ADDRESS, 'unix:path=/run/user/1000/bus', 'the child was not given the session bus address - its busAddressSet is always false');
+  assert.equal(call.options.env?.XDG_RUNTIME_DIR, '/run/user/1000', 'the child looks for the bus socket in /run/user/<uid> instead of $XDG_RUNTIME_DIR');
+  assert.equal(call.options.env?.PATH, '/usr/bin:/bin', 'the minimal list is still there');
+  assert.equal(JSON.stringify(call.options.env).includes('SENTINEL'), false, 'any other variable of the probe reached the child');
+  assert.deepEqual(hostFactsMode(fakeRunner(() => okRun('{"a":1}')), '/x', { A: '1' }), { status: 'read', line: { a: 1 } });
+});
+
+// CodeRabbit (host-facts.mjs:193): the product searches UV_TOOL_BIN_DIR (absolute only), XDG_BIN_HOME, $XDG_DATA_HOME/../bin, ~/.local/bin and then PATH
+// (VibeRuntime.UvToolFolders) - the record named a different vibe on a host that sets XDG_BIN_HOME.
+test('the vibe lookup follows the product\'s folders: an absolute UV_TOOL_BIN_DIR, XDG_BIN_HOME, $XDG_DATA_HOME/../bin, ~/.local/bin, then PATH - a relative UV_TOOL_BIN_DIR is skipped', () => {
+  const exe = { content: '', mode: 0o755 };
+  const tools = (tree, env) => collectHostFacts(baseDeps(fakeFs(world(tree)), { env: { PATH: '/usr/bin:/bin', HOME, ...env } })).h1.tools.vibe;
+  assert.equal(tools({ '/xdgbin/vibe': exe, [`${HOME}/.local/bin/vibe`]: exe }, { XDG_BIN_HOME: '/xdgbin' }).path, '/xdgbin/vibe', 'XDG_BIN_HOME comes before ~/.local/bin');
+  assert.equal(tools({ '/home/share/bin/vibe': exe, [`${HOME}/.local/bin/vibe`]: exe }, { XDG_DATA_HOME: '/home/share/data' }).path, '/home/share/bin/vibe', '$XDG_DATA_HOME/../bin comes before ~/.local/bin');
+  assert.equal(tools({ '/uv/vibe': exe, '/xdgbin/vibe': exe }, { UV_TOOL_BIN_DIR: '/uv/', XDG_BIN_HOME: '/xdgbin' }).path, '/uv/vibe', 'an absolute UV_TOOL_BIN_DIR comes first, its trailing slash dropped');
+  assert.equal(tools({ 'rel/vibe': exe, [`${HOME}/.local/bin/vibe`]: exe }, { UV_TOOL_BIN_DIR: 'rel' }).path, `${HOME}/.local/bin/vibe`, 'a relative UV_TOOL_BIN_DIR is cwd-relative: the product does not search it');
+  assert.equal(tools({ '/usr/bin/vibe': exe }, {}).path, '/usr/bin/vibe', 'then PATH');
+});

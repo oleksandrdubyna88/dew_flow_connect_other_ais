@@ -353,3 +353,15 @@ export function keyringSetup(arm, platform = process.platform, { scratch }) {
 
 /** `--arms a3,a3c` (the Vibe probe): an arm runs when no filter is given, or when its name up to the first colon (`a3: forced backend …` → `a3`) is listed. */
 export const armWanted = (arm, filter) => !filter || filter.length === 0 || filter.includes(arm.split(':')[0]);
+
+/**
+ * The `--arms` option of `argv`: `{ filter: [], error: '' }` when it is omitted (no filter = every arm), `{ filter: [names], error: '' }` when it names arms,
+ * and an ERROR when it is given without a name (`--arms ""`, `--arms ,`, or no value at all). An empty list must not fall through to `armWanted`'s "no
+ * filter", which would run every arm - the paid arm b included - for a caller who asked for a subset.
+ */
+export function armFilterOf(argv) {
+  const at = argv.indexOf('--arms');
+  if (at < 0) return { filter: [], error: '' };
+  const names = String(argv[at + 1] ?? '').split(',').map((n) => n.trim()).filter(Boolean);
+  return names.length > 0 ? { filter: names, error: '' } : { filter: [], error: '--arms was given without an arm name (a3,a3c ...): refusing to run every arm, the paid one included' };
+}

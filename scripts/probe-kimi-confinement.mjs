@@ -448,7 +448,7 @@ async function launch(runDir, tag, spec, load = '') {
   }
   writeFileSync(join(runDir, `stdout${tag}.json`), r.stdout ?? '');
   const seconds = Math.round((performance.now() - t0) / 100) / 10;
-  const refreshed = copiedCredentials ? watch.content().afterCopiedRun(spec.home, `${basename(runDir)}${tag}`) : watch.afterRealRun(`${basename(runDir)}${tag}`);
+  const refreshed = copiedCredentials ? watch.afterCopiedRun(spec.home, `${basename(runDir)}${tag}`) : watch.afterRealRun(`${basename(runDir)}${tag}`);
   const report = parseReport(kind, r.stdout ?? '');
   const session = sessionFacts(home, report.sessionId);
   const sessionLogPath = join(runDir, `session-log${tag}.txt`);

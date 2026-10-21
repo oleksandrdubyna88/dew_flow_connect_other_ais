@@ -39,6 +39,16 @@ test('a probe name or a probe argument outside its pattern is refused — they a
   assert.doesNotThrow(() => rendered({ args: ['--vibe', '/usr/local/bin/vibe', '--cells', 'M-V6,M-V1', '--user=u@h:1'] }));
 });
 
+test('CodeRabbit (native-run.mjs): a phase named like a file or folder the series owns is refused - run/abort.sh and run/remove-series.sh would be overwritten, and --scratch would be run/, logs/, tmp/, checkout/ or bin/', () => {
+  for (const phase of ['abort', 'remove-series', 'run', 'logs', 'tmp', 'checkout', 'bin']) {
+    refusal(() => rendered({ phase }), `renderRunScript wrote the phase '${phase}' - it names a file or folder the series owns`);
+    refusal(() => launcherArgv(SERIES, phase, { host: HOST }), `launcherArgv accepted the phase '${phase}'`);
+    refusal(() => abortArgv(SERIES, phase, { host: HOST }), `abortArgv accepted the phase '${phase}'`);
+  }
+  assert.doesNotThrow(() => rendered({ phase: 'abort-2' }), 'only the exact names are reserved');
+  assert.doesNotThrow(() => rendered({ phase: 'n-v2' }));
+});
+
 test('a probe argument that would override the series folder or switch on a host-forbidden arm is refused (J5): --scratch, --allow-agents-canary, --allow-live-survivor — bare or with a value', () => {
   // The run script appends its OWN `--scratch "$SERIES/$PHASE"`; a second one before it would move the probe out of the series, and the two
   // --allow flags switch on arms the owner permits on the Windows machine only (the person's real ~/.agents; a live survivor).

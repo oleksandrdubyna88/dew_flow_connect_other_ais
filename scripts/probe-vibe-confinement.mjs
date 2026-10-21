@@ -59,7 +59,7 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative } from 'node:path';
 import { resolved } from '../.github/scripts/lib/resolved.mjs';
 import {
-  builtEnv as builtEnvFor, dirLink, files, fwd, armWanted, homeListing, keyringArm, keyringSetup, linkSignIn, minimalEnv, personsVibeHome, pythonCommand, run, vibeArgs, vibePython,
+  builtEnv as builtEnvFor, dirLink, files, fwd, armFilterOf, armWanted, homeListing, keyringArm, keyringSetup, linkSignIn, minimalEnv, personsVibeHome, pythonCommand, run, vibeArgs, vibePython,
 } from './lib/vibe.mjs';
 
 const argv = process.argv.slice(2);
@@ -79,8 +79,12 @@ const CLIS = ['python', 'rust', 'inherit'];
 const cli = flag('--cli', 'python');
 const cells = flag('--cells', ALL_CELLS.join(',')).split(',').filter(Boolean);
 /** `--arms a3,a3c` runs only the arms whose name up to the first colon is listed (lib/vibe.mjs armWanted) — the free M-V7 keyring check, never the paid arm b. */
-const armFilter = flag('--arms', '').split(',').filter(Boolean);
+const { filter: armFilter, error: armsError } = armFilterOf(argv);
 const unknown = cells.filter((c) => !ALL_CELLS.includes(c));
+if (armsError) {
+  console.error(armsError);
+  process.exit(65);
+}
 if (unknown.length > 0 || !Number.isInteger(repeats) || repeats <= 0 || !CLIS.includes(cli)) {
   console.error(`usage: probe-vibe-confinement.mjs [--vibe <exe>] [--scratch <dir>] [--repeats N] [--cli ${CLIS.join('|')}] [--cells ${ALL_CELLS.join(',')}]`);
   process.exit(65);

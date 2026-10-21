@@ -276,6 +276,15 @@ test('the content guard is built lazily by content(), once, and a built guard al
   assert.equal(watch.rotates, true, 'with the guard built, a real-home refresh still teaches whether the token rotates');
 });
 
+test('CodeRabbit (kimi.mjs): a live pair written back from a copied home moves the watch\'s own baseline - the next real-home run is not blamed for it', () => {
+  const real = homeWith('watch-writeback', 'R1');
+  const watch = new CredentialWatch(real);
+  assert.equal(watch.afterCopiedRun(homeWith('watch-copy', 'R2-rotated-and-longer'), 'copied'), true);
+  assert.equal(refreshIn(real), 'R2-rotated-and-longer', 'the live pair went back to the real home');
+  assert.equal(watch.afterRealRun('next'), false, 'the next launch was blamed for a write the copied run made');
+  assert.deepEqual(watch.events.filter((e) => e.tag === 'next'), [], 'an event was recorded under the wrong launch');
+});
+
 test('a cell that would copy the person\'s sign-in is refused unless --allow-copied-credentials was passed', () => {
   assert.match(copiedCredentialsRefusal(false), /--allow-copied-credentials/u);
   assert.equal(copiedCredentialsRefusal(true), '');

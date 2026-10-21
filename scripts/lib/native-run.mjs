@@ -36,7 +36,9 @@ function seriesOf(series, root = '/tmp') {
   return new RegExp(`^${SERIES_SHAPE}$`, 'u').test(name) ? series : refuse('the series', series);
 }
 
-const phaseOf = (phase) => checked(PHASE, 'the phase', phase);
+/** Names that would land a phase on a file or folder the series itself owns: run/abort.sh and run/remove-series.sh (root runs those later), the five subfolders. */
+const RESERVED_PHASES = new Set(['abort', 'remove-series', 'checkout', 'tmp', 'run', 'logs', 'bin']);
+const phaseOf = (phase) => (RESERVED_PHASES.has(phase) ? refuse('a phase naming a file or folder the series owns', phase) : checked(PHASE, 'the phase', phase));
 const hostOf = (options) => checked(HOST, 'the host', options?.host);
 const quoted = (word) => `'${word}'`;
 

@@ -117,12 +117,17 @@ export const isKimi = (entry) => KIMI_NAMES.includes(String(entry?.name ?? '').t
 /**
  * Every live process as `{ pid, ppid, comm, name }` — a LISTING; nothing here ends a process. Linux: `/proc`. Windows: PowerShell by its FIXED path
  * under System32 and never a bare name, so no folder of the PATH (which a person's own tools can write to) decides what runs (S4036); the cmdlet and
- * the string are the same in 5.1 as in pwsh 7. There `name` is the image name and `comm` is empty.
+ * the string are the same in 5.1 as in pwsh 7. There `name` is the image name and `comm` is empty. A listing that did not COMPLETE (no PowerShell, a
+ * timeout, a non-zero exit) throws, as the Linux one does for a process it cannot identify: "cannot tell" must never read as "no kimi runs".
+ * `spawn` is injected so a test can fail it.
  */
-export function listProcesses(platform = process.platform) {
+export function listProcesses(platform = process.platform, spawn = spawnSync) {
   if (platform !== 'win32') return linuxProcesses();
-  const r = spawnSync(SYSTEM32(String.raw`WindowsPowerShell\v1.0\powershell.exe`), ['-NoProfile', '-NonInteractive', '-Command',
+  const r = spawn(SYSTEM32(String.raw`WindowsPowerShell\v1.0\powershell.exe`), ['-NoProfile', '-NonInteractive', '-Command',
     'Get-CimInstance Win32_Process | ForEach-Object { "$($_.ProcessId),$($_.ParentProcessId),$($_.Name)" }'], { encoding: 'utf8', timeout: 30_000 });
+  if (r.error || r.signal || r.status !== 0) {
+    throw new Error(`the Windows process listing failed (${r.error?.code ?? r.signal ?? `exit ${r.status}`}): whether another kimi runs cannot be told`);
+  }
   return String(r.stdout ?? '').split(/\r?\n/u).filter(Boolean).map((line) => {
     const [pid, ppid, ...name] = line.split(',');
     return { pid: Number(pid), ppid: Number(ppid), comm: '', name: name.join(',') };

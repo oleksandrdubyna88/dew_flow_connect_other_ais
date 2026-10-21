@@ -1,6 +1,6 @@
 # PLAN — Vibe and Kimi on a native Linux host: measure there first, then admit each one that passes
 
-> Status: **plan only, nothing implemented yet, 2026-10-21 — the plan gate passed (coai 942810c1, `good_enough`, its ten accepted
+> Status: **epic E1 coded 2026-10-21 (PR #914: the host scripts and `--host-facts`, the per-runtime admission set, Vibe's keyring arms, the Kimi probe fixes); E2 and E3 are plan only, nothing of them written, 2026-10-21 — the plan gate passed (coai 942810c1, `good_enough`, its ten accepted
 > findings folded below), the consult answered (634d4907, 3 of 3), the E1 plan round passed (b54f22f5, `proceed`, folded the same
 > day), the cadence consult for epics 1–3 answered (e9a9b20e, folded the same day: the keyring road is CLOSED, not guessed), and the
 > work is split into three epics (E1 → E2, E1 → E3, at the bottom; E1's stories are

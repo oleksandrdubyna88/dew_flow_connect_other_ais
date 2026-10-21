@@ -385,6 +385,16 @@ export class CredentialWatch {
     const contentMoved = this.#content?.afterRealRun(tag) ?? false;
     return moved || contentMoved;
   }
+
+  /**
+   * After a launch on a copied home: the content guard may write the live pair BACK into the real home, so the shape baseline is re-read afterwards -
+   * otherwise the next real-home run would be blamed for a write this launch made.
+   */
+  afterCopiedRun(home, tag) {
+    const refreshed = this.content().afterCopiedRun(home, tag);
+    this.#last = JSON.stringify(this.#shape(this.#real));
+    return refreshed;
+  }
 }
 
 /** The refusal of a cell that would COPY the person's sign-in (and so read it): not unless the person passed `--allow-copied-credentials`. */

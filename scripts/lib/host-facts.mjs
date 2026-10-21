@@ -11,7 +11,7 @@
 // the test's spy fails the build the day it is called for anything else. The two Python programs below ask for a backend's CLASS
 // NAME and a list of installed distributions; neither asks for a password.
 import { posix } from 'node:path';
-import { KEYRING_FAIL_BACKEND, builtEnv as vibeBuiltEnv, personsVibeHome, vibePython } from './vibe.mjs';
+import { KEYRING_FAIL_BACKEND, builtEnv as vibeBuiltEnv, minimalEnv, personsVibeHome, vibePython } from './vibe.mjs';
 import { builtEnv as kimiBuiltEnv } from './kimi-home.mjs';
 
 /**
@@ -129,10 +129,11 @@ const daemonsIn = (list) => list.flatMap((entry) => {
 
 /**
  * `coai-mcp --host-facts` as a record: the parsed line when it answers, "no such mode" for exit 64 (an old binary — never an empty
- * fact), and a status for every other outcome. `run(file, args, options)` is the injected runner.
+ * fact), and a status for every other outcome. `run(file, args, options)` is the injected runner; `env`, when given, is the child's environment (the
+ * product reads the session bus names from ITS OWN environment, so it must be given them).
  */
-export function hostFactsMode(run, binary) {
-  const r = run(binary, ['--host-facts'], {});
+export function hostFactsMode(run, binary, env) {
+  const r = run(binary, ['--host-facts'], env ? { env } : {});
   if (r.error) return { status: 'unavailable', code: r.error.code ?? r.error.message };
   if (r.status === 64) return { status: 'no such mode' };
   if (r.status !== 0) return { status: 'failed', exit: r.status };
@@ -184,13 +185,22 @@ const launcherPrograms = (fsx) => Object.fromEntries(['/bin/bash', '/usr/bin/noh
   return [path, { exists: st !== null, executable: st !== null && (st.mode & 0o111) !== 0 }];
 }));
 
+/** The folder with no trailing separator when the variable names an ABSOLUTE one, else '' (a relative one is cwd-relative, which the product does not search). */
+const absoluteDir = (dir) => (typeof dir === 'string' && dir.startsWith('/') ? dir.replace(/\/+$/u, '') : '');
+
+/** The folders uv installs executables into, most preferred first - VibeRuntime.UvToolFolders: an absolute UV_TOOL_BIN_DIR, XDG_BIN_HOME, $XDG_DATA_HOME/../bin, ~/.local/bin. */
+function uvToolFolders(env, home) {
+  const xdgData = absoluteDir(env.XDG_DATA_HOME);
+  return [absoluteDir(env.UV_TOOL_BIN_DIR), absoluteDir(env.XDG_BIN_HOME), xdgData.includes('/') ? `${xdgData.slice(0, xdgData.lastIndexOf('/'))}/bin` : '', posix.join(home, '.local', 'bin')].filter((dir) => dir !== '');
+}
+
 /** The tool lookups in the product's own order (DL5 of research/PLAN_kimi_and_vibe_on_linux.md); each answers `{ found, path, index }`. */
 function toolsOf(fsx, env, home, pathText) {
   const onPath = pathDirs(pathText);
   const kimiBin = posix.join(env.KIMI_INSTALL_DIR || posix.join(home, '.kimi-code'), 'bin');
   const localBin = posix.join(home, '.local', 'bin');
   return {
-    vibe: resolveTool(fsx, 'vibe', [...(env.UV_TOOL_BIN_DIR ? [env.UV_TOOL_BIN_DIR] : []), localBin, ...onPath]),
+    vibe: resolveTool(fsx, 'vibe', [...uvToolFolders(env, home), ...onPath]),
     kimi: resolveTool(fsx, 'kimi', [kimiBin, ...onPath]),
     rg: resolveTool(fsx, 'rg', [kimiBin, ...onPath, localBin]),
     fd: resolveTool(fsx, 'fd', [kimiBin, ...onPath, localBin]),
@@ -198,11 +208,15 @@ function toolsOf(fsx, env, home, pathText) {
   };
 }
 
+/** The minimal environment plus the two names the keyring-session reading looks at (`DBUS_SESSION_BUS_ADDRESS`, `XDG_RUNTIME_DIR`) when the session has them - nothing else of it. */
+const SESSION_BUS_NAMES = ['DBUS_SESSION_BUS_ADDRESS', 'XDG_RUNTIME_DIR'];
+const childEnvironment = (env) => ({ ...minimalEnv('linux', env), ...Object.fromEntries(SESSION_BUS_NAMES.filter((name) => env[name]).map((name) => [name, env[name]])) });
+
 function coaiMcpOf({ run, hash, ...deps }, binary) {
   if (!binary) return { asked: false };
   say(deps, 'asking coai-mcp --version and --host-facts...');
   const version = firstLine(run(binary, ['--version'], {}).stdout);
-  return { path: binary, version, sha256: attempt(() => hash(binary), ''), hostFacts: hostFactsMode(run, binary) };
+  return { path: binary, version, sha256: attempt(() => hash(binary), ''), hostFacts: hostFactsMode(run, binary, childEnvironment(deps.env)) };
 }
 
 function h1Of(deps, seriesPath) {

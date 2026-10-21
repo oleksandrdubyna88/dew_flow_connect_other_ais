@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, test } from 'node:test';
-import { FLOCK, isKimi, linuxProcesses, lockState, parseProcStat, parseStartTime, waitForNoOtherKimi } from './proc.mjs';
+import { FLOCK, isKimi, linuxProcesses, listProcesses, lockState, parseProcStat, parseStartTime, waitForNoOtherKimi } from './proc.mjs';
 
 const WINDOWS = process.platform === 'win32';
 const base = mkdtempSync(join(realpathSync.native(tmpdir()), 'testsToDelete-proc-test-'));
@@ -350,3 +350,23 @@ for (const v of VECTORS) {
     assert.equal(isKimi(entry), v.isKimi, `${v.id}: the probe's isKimi disagrees with shared/kimi-identity-vectors.json (name ${entry.name}, comm ${entry.comm})`);
   });
 }
+
+// CodeRabbit (proc.mjs): the Windows listing was the only source of waitForNoOtherKimi there, and a PowerShell that failed answered "no process" - a launch that
+// could refresh the sign-in then started beside a running Kimi. A listing that did not complete is an exception ("cannot tell"), like the Linux one.
+test('the Windows listing fails closed: a PowerShell that is missing, signalled or exits non-zero throws - it is never "no process"', () => {
+  const failing = [
+    { error: Object.assign(new Error('spawn ENOENT'), { code: 'ENOENT' }), status: null, stdout: '' },
+    { error: undefined, signal: 'SIGTERM', status: null, stdout: '' },
+    { error: undefined, signal: null, status: 1, stdout: '' },
+  ];
+  for (const answer of failing) {
+    assert.throws(() => listProcesses('win32', () => answer), /cannot be told/u, `a failed listing (${answer.error?.code ?? answer.signal ?? answer.status}) was read as an empty process list`);
+  }
+});
+
+test('the Windows listing parses a PowerShell that finished, and a guard fed a failing listing does not return "none runs"', async () => {
+  const ok = { error: undefined, signal: null, status: 0, stdout: '4,1,kimi.exe\r\n9,4,node.exe\r\n' };
+  assert.deepEqual(listProcesses('win32', () => ok), [{ pid: 4, ppid: 1, comm: '', name: 'kimi.exe' }, { pid: 9, ppid: 4, comm: '', name: 'node.exe' }]);
+  const down = () => listProcesses('win32', () => ({ error: undefined, signal: null, status: 1, stdout: '' }));
+  await assert.rejects(() => waitForNoOtherKimi('x', { list: down, sleep: async () => {}, log: () => {} }), /cannot be told/u);
+});

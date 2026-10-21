@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { after, test } from 'node:test';
 import {
   MINIMAL_UNIX, MINIMAL_WINDOWS, builtEnv, classOf, deepestChild, dirLink, files, homeListing, linkSignIn, minimalEnv, personsVibeHome,
-  KEYRING_FAIL_BACKEND, armWanted, keyringArm, keyringSetup, pythonCommand, removeDirLink, run, vibePython, writeProbeKeyring,
+  KEYRING_FAIL_BACKEND, armFilterOf, armWanted, keyringArm, keyringSetup, pythonCommand, removeDirLink, run, vibePython, writeProbeKeyring,
 } from './vibe.mjs';
 
 const WINDOWS = process.platform === 'win32';
@@ -356,4 +356,16 @@ test('S-N17: --arms picks M-V7 arms by the name before the colon, so the free li
 test('G18: armWanted treats a missing filter (null or undefined) as "every arm", not as a crash on .length', () => {
   assert.equal(armWanted('a3: forced backend', undefined), true);
   assert.equal(armWanted('a3: forced backend', null), true);
+});
+
+// CodeRabbit (probe-vibe-confinement.mjs): `--arms ""` / `--arms ,` parsed to [], which armWanted reads as "no filter" - every arm ran, the PAID arm b included.
+test('armFilterOf: an omitted --arms is "no filter"; a given one must name an arm - an empty value, a bare comma or a missing value is an error, never every arm', () => {
+  assert.deepEqual(armFilterOf(['--cells', 'M-V7']), { filter: [], error: '' });
+  assert.deepEqual(armFilterOf(['--arms', 'a3,a3c']), { filter: ['a3', 'a3c'], error: '' });
+  assert.deepEqual(armFilterOf(['--arms', ' a3 , ,a3c ']), { filter: ['a3', 'a3c'], error: '' });
+  for (const argv of [['--arms', ''], ['--arms', ','], ['--arms', ' , '], ['--arms'], ['--cells', 'M-V7', '--arms']]) {
+    const { filter, error } = armFilterOf(argv);
+    assert.match(error, /--arms/u, `${JSON.stringify(argv)} was accepted`);
+    assert.deepEqual(filter, [], 'an error carries no filter');
+  }
 });
