@@ -180,6 +180,111 @@ public sealed class RoundAuthorsCliScenarioTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// A cell key's cohort and period, and an exclusion's, are words this program writes — <c>first</c> or <c>corrective</c>, <c>all</c>,
+    /// <c>before</c> or <c>after</c>. A file that carries any other word (an escape sequence among them) is refused at <c>--add</c> with 65 and the
+    /// argument as typed, before any table is printed — defense in depth beside the table printing nothing but printable text.
+    /// </summary>
+    [Fact]
+    public void AnAddWithACohortOrPeriodWordThisProgramNeverWrites_Is65_NamingTheArgumentAsTyped()
+    {
+        var (a, b) = (Store("a"), Store("b"));
+        Sessions(a, true, "x1");
+        Sessions(b, true, "y1");
+        var report = Answer(Run(b, [.. Window()]).Out);
+        var crafted = new Dictionary<string, RoundAuthorsAnswer>
+        {
+            ["cell-cohort.json"] = report with { Cells = [.. report.Cells.Select(cell => cell with { Key = cell.Key with { Cohort = "first\u001b]8;;http://x\u0007" } })] },
+            ["cell-period.json"] = report with { Cells = [.. report.Cells.Select(cell => cell with { Key = cell.Key with { Period = "during" } })] },
+            ["exclusion-cohort.json"] = report with { Exclusions = [.. report.Exclusions.Select(count => count with { Cohort = "first\u001b[2J" })] },
+        };
+
+        foreach (var (name, answer) in crafted)
+        {
+            var path = _root.At(name);
+            File.WriteAllText(path, RoundAuthorsMerge.Serialize(answer));
+
+            var run = Run(a, [.. Window(), "--add", path, "--table"]);
+
+            run.Code.Should().Be(65, $"--add '{path}' carries a word this program never writes; stderr was: {run.Err}");
+            run.Out.Should().BeEmpty();
+            run.Err.Should().Contain($"--add '{path}'", "the argument as typed").And.NotContain("\u001b", "the refusal does not echo the word");
+        }
+    }
+
+    /// <summary>
+    /// A refusal's sentence quotes what it refuses — the selection words two reports disagree on, a member name the JSON has no place for — and that
+    /// text comes from an <c>--add</c> file. Whatever it holds — a line break of any kind (LF, FF, NEL, LS), a one-byte CSI, DEL, a bidi override,
+    /// a byte-order mark — stderr carries exactly ONE line with nothing the terminal would act on, so the file cannot forge a second line of the
+    /// binary's own voice; and the refusal is still 65 naming the argument as typed.
+    /// </summary>
+    [Fact]
+    public void ARefusalThatQuotesAnAddFile_WritesOneLineOfPrintableTextToStderr()
+    {
+        var (a, b) = (Store("a"), Store("b"));
+        Sessions(a, true, "x1");
+        Sessions(b, true, "y1");
+        var reportText = Run(b, [.. Window()]).Out;
+        var report = Answer(reportText);
+        var crafted = new List<(string Name, string Text, string Shown)>
+        {
+            ("stage", RoundAuthorsMerge.Serialize(report with { Selection = report.Selection with { Stage = HostileWord } }), HostileShown),
+            ("kinds", RoundAuthorsMerge.Serialize(report with { Selection = report.Selection with { Kinds = [HostileWord] } }), HostileShown),
+            ("member-escape", "{\"member\\u001b[2J\\u0007\": 1," + reportText.TrimStart()[1..], "member?[2J?"),
+            ("member-newline", "{\"member\\nforged\": 1," + reportText.TrimStart()[1..], "member?forged"),
+        };
+        foreach (var (word, shown) in new[]
+        {
+            (HostileWord, HostileShown), ("first\nforged", "first?forged"), ("first\u2028forged", "first?forged"), ("first\u0085forged", "first?forged"),
+            ("first\u000Cforged", "first?forged"), ("first\u009B2J", "first?2J"), ("\uFEFFfirst", "?first"), ("a\u007Fb", "a?b"), ("first\u202Eforged", "first?forged"), ("first\U000E0041x", "first?x"), ("first\U0001D173x", "first?x"),
+        })
+        {
+            crafted.Add(($"cohort-{crafted.Count}", RoundAuthorsMerge.Serialize(report with { Selection = report.Selection with { Cohort = word } }), shown));
+        }
+
+        foreach (var (name, text, shown) in crafted)
+        {
+            var path = _root.At(name + ".json");
+            File.WriteAllText(path, text);
+
+            var run = Run(a, [.. Window(), "--add", path, "--table"]);
+
+            var err = run.Err.Replace("\r\n", "\n", StringComparison.Ordinal);
+            run.Code.Should().Be(65, $"--add '{path}' is a bad request; stderr was: {run.Err}");
+            run.Out.Should().BeEmpty();
+            RoundAuthorsFacts.UnsafeIn(err).Should().BeEmpty($"stderr for {name} carries nothing the terminal would act on");
+            err.TrimEnd('\n').Split('\n').Should().HaveCount(1, $"stderr for {name} is one line: the file cannot forge another");
+            err.Should().Contain($"--add '{path}'", "the argument as typed");
+            err.Should().Contain(shown.Length == 0 ? "--add" : shown, $"the quoted word of {name} is shown with its unsafe characters made visible");
+        }
+    }
+
+    /// <summary>The JSON mode escapes every control and non-ASCII character itself: stdout is printable ASCII and line breaks — pinned, not assumed.</summary>
+    [Fact]
+    public void TheJsonAnswer_OfAnAddFileWithAHostileBranchName_IsPrintableAscii()
+    {
+        var (a, b) = (Store("a"), Store("b"));
+        Sessions(a, true, "x1");
+        Sessions(b, true, "y1");
+        var report = Answer(Run(b, [.. Window()]).Out);
+        var hostile = report with
+        {
+            Cells = [.. report.Cells.Select(cell => cell with { Branches = [.. cell.Branches.Select(branch => branch with { Name = branch.Name + "\u001b]8;;http://x\u0007\u202Eevil\u2028\u0085" })] })],
+        };
+        var path = _root.At("hostile-branch.json");
+        File.WriteAllText(path, RoundAuthorsMerge.Serialize(hostile));
+
+        var run = Run(a, [.. Window(), "--add", path]);
+
+        run.Code.Should().Be(0, run.Err);
+        run.Out.Should().Contain("evil", "the hostile branch name is in the answer, escaped");
+        run.Out.Replace("\r\n", "\n", StringComparison.Ordinal).Where(at => at != '\n' && (at < ' ' || at > '~')).Should().BeEmpty("stdout is printable ASCII and line breaks only");
+    }
+
+    private const string HostileWord = "x\u001b]8;;http://x\u0007\u001b[2J";
+
+    private const string HostileShown = "x?]8;;http://x??[2J";
+
     [Fact]
     public void AStoreThatWillNotRead_Is74()
     {
