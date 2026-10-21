@@ -107,7 +107,9 @@ The monthly row's reset was cut by the terminal's width. The line under it split
 
 ### Consequences
 
-- E5 (the Kimi gauge) is **cut**. Its stories stay unbuilt unless a later Kimi version answers `/usage` with the plan's windows
-  over ACP or in prompt mode. Re-check by repeating cells (a) and (b).
+- E5 (the Kimi gauge) is **cut, provisionally**. Cell (a), `/usage` over ACP, is fact C and was measured on **2.2.0**. On 2.3.0 only prompt
+  mode was measured, so 2.3.0's ACP answer is not established (the epics 4-6 cadence consultation, 2026-10-21). Cell (a) is re-run on 2.3.0
+  inside the next Kimi probe series, under its confinement and hold procedure. E5 stays unbuilt unless that cell, or a later version,
+  answers with the plan's windows.
 - No fixture is added under `src_mcp/tests/fixtures/kimi/`: with E5 cut there is no parser for it. The verbatim block above is the
   record.
