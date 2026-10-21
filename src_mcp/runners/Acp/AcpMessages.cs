@@ -98,6 +98,24 @@ internal static class AcpMessages
     public static string Text(JsonElement element, string name) =>
         Child(element, name) is { ValueKind: JsonValueKind.String } value ? value.GetString() ?? string.Empty : string.Empty;
 
+    /// <summary>The most of a JSON-RPC error's <c>data</c> member a reason keeps.</summary>
+    public const int ErrorDataCap = 2_000;
+
+    /// <summary>
+    /// A JSON-RPC error's words: its <c>message</c>, then its <c>data</c> member when there is one — a string as it is, anything else as compact JSON — as <c>(data: …)</c>,
+    /// redacted through the product's one redactor and capped (K5 of the code gate). A server may keep the detail its message leaves out in <c>data</c>: a bare
+    /// "Authentication required" carrying the 429 there was read as a lost sign-in.
+    /// </summary>
+    public static string ErrorText(JsonElement error) =>
+        DataText(error) is { Length: > 0 } data ? $"{Text(error, "message")} (data: {Core.Notices.Redaction.SafeText(data, ErrorDataCap)})" : Text(error, "message");
+
+    private static string DataText(JsonElement error) => Child(error, "data") switch
+    {
+        { ValueKind: JsonValueKind.Undefined or JsonValueKind.Null } => string.Empty,
+        { ValueKind: JsonValueKind.String } text => text.GetString() ?? string.Empty,
+        var other => other.GetRawText(),
+    };
+
     /// <summary>A number property, or zero — a string where a number was expected is zero too, never a throw in the pump.</summary>
     public static long Number(JsonElement element, string name) =>
         Child(element, name) is { ValueKind: JsonValueKind.Number } value && value.TryGetInt64(out var number) ? number : 0;
