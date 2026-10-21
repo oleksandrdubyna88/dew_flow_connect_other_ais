@@ -98,4 +98,67 @@ public sealed class TheHostIsToldTheClientLeftBeforeTheSdkIsTests
         await read.Should().ThrowAsync<IOException>().WithMessage("stdin broke");
         told.Should().BeTrue();
     }
+
+    [Fact]
+    public async Task ASlowReader_AppliesBackpressure_AndStillGetsEveryMessageInOrder()
+    {
+        const int total = 300;
+        var inner = new Stdin();
+        await using var transport = new InputEndSignallingTransport(inner, () => Task.CompletedTask);
+        var messages = Enumerable.Range(1, total).Select(i => (JsonRpcMessage)new JsonRpcNotification { Method = $"m{i}" }).ToList();
+        foreach (var message in messages)
+        {
+            await inner.Input.Writer.WriteAsync(message, TestContext.Current.CancellationToken);
+        }
+
+        // Nobody is reading yet. The pump fills its buffer and then waits for the reader instead of draining stdin into memory.
+        SpinWait.SpinUntil(() => inner.Input.Reader.Count <= total - InputEndSignallingTransport.Capacity, TimeSpan.FromSeconds(30))
+            .Should().BeTrue("the pump takes messages while its buffer has room");
+        await Task.Delay(300, TestContext.Current.CancellationToken);
+        inner.Input.Reader.Count.Should().BeGreaterThanOrEqualTo(total - InputEndSignallingTransport.Capacity - 2,
+            "an unread buffer that is full stops the pump: the rest of the input stays where it was");
+
+        inner.Input.Writer.TryComplete();
+        var seen = new List<JsonRpcMessage>();
+        await foreach (var message in transport.MessageReader.ReadAllAsync(TestContext.Current.CancellationToken))
+        {
+            seen.Add(message);
+            await Task.Yield();
+        }
+
+        seen.Should().Equal(messages);
+    }
+
+    [Fact]
+    public async Task AHostCallbackThatThrows_NeverFaultsThePump_TheReaderCompletes_AndDisposeIsQuiet()
+    {
+        var inner = new Stdin();
+        var transport = new InputEndSignallingTransport(inner, () => throw new InvalidOperationException("the host could not be told"));
+
+        inner.Input.Writer.TryComplete();
+        var read = async () =>
+        {
+            await foreach (var _ in transport.MessageReader.ReadAllAsync(TestContext.Current.CancellationToken)) { }
+        };
+
+        await read.Should().NotThrowAsync("the SDK must still see its input end, whatever the host's callback did");
+        var dispose = async () => await transport.DisposeAsync();
+        await dispose.Should().NotThrowAsync("a callback that failed was logged, not left to fault the pump DisposeAsync awaits");
+    }
+
+    [Fact]
+    public async Task DisposingWhileTheReaderIsGone_DoesNotHangOnAFullBuffer()
+    {
+        var inner = new Stdin();
+        var transport = new InputEndSignallingTransport(inner, () => Task.CompletedTask);
+        for (var i = 0; i < InputEndSignallingTransport.Capacity * 3; i++)
+        {
+            await inner.Input.Writer.WriteAsync(new JsonRpcNotification { Method = $"m{i}" }, TestContext.Current.CancellationToken);
+        }
+
+        await Task.Delay(100, TestContext.Current.CancellationToken);
+        var dispose = async () => await transport.DisposeAsync();
+
+        await dispose.Should().CompleteWithinAsync(TimeSpan.FromSeconds(30), "nobody reads: the pump is parked on a full buffer and the dispose must release it");
+    }
 }

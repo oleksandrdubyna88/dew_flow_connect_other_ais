@@ -135,35 +135,37 @@ public sealed class AFastModeReachesEveryClaudeLaunchTests : IDisposable
         File.GetLastWriteTimeUtc(path).Should().Be(written, "several processes start launches; an unchanged file is left alone");
     }
 
-    private int TemporaryFilesCreatedBy(Action build)
+    private ReviewerInvocation ReviewerBuilt(FastMode fast, string model) =>
+        new ClaudeRuntime().Build(RoleCatalog.ArchitectureRole, "review this", Repo, "D:/s.json", "D:/out", Settings(fast, model));
+
+    private ReviewerInvocation ConsultantBuilt(FastMode fast, string model) =>
+        new ClaudeConsultant(new ClaudeRuntime()).Build(new ConsultantLaunch(Repo, "help me", string.Empty, "D:/answers", Settings(fast, model)));
+
+    /// <summary>The ledger's tier word for the file the argv names: what that one-key file tells the CLI.</summary>
+    private static string TierOfTheFileNamed(IReadOnlyList<string> args) => SettingsSent(args) switch
     {
-        var created = 0;
-        using var watcher = new FileSystemWatcher(_data, "*.tmp") { IncludeSubdirectories = true, EnableRaisingEvents = false };
-        watcher.Created += (_, _) => Interlocked.Increment(ref created);
-        Directory.CreateDirectory(Path.Combine(_data, "fast-mode"));
-        watcher.EnableRaisingEvents = true;
-        build();
-        Thread.Sleep(500);
+        null => string.Empty,
+        "{\"fastMode\":true}" => "fast",
+        "{\"fastMode\":false}" => "default",
+        var other => throw new InvalidOperationException($"an unexpected fast-mode file: {other}"),
+    };
 
-        return created;
-    }
-
-    [Fact]
-    public void AConsultantBuild_WritesTheFastModeFileOncePerBuild_AndItsSentTierAgreesWithTheArgv()
+    [Theory]
+    [InlineData(FastMode.On, "opus", false)]
+    [InlineData(FastMode.Off, "opus", false)]
+    [InlineData(FastMode.Cli, "opus", false)]
+    [InlineData(FastMode.On, "sonnet", false)]
+    [InlineData(FastMode.On, "claude-opus-5-5", true)]
+    [InlineData(FastMode.Off, "claude-opus-5-5", true)]
+    [InlineData(FastMode.Cli, "claude-opus-5-5", true)]
+    [InlineData(FastMode.On, "sonnet", true)]
+    public void TheTierRecordedAsSent_IsTheTierOfTheFileTheArgvNames(FastMode fast, string model, bool consultant)
     {
-        // The argv and the record of what was sent are computed ONCE (as ClaudeRuntime.Build does), so a build that must write the file
-        // writes it once and the tier recorded is the tier of the file the argv names.
-        var consultant = new ClaudeConsultant(new ClaudeRuntime());
-        ReviewerInvocation? built = null;
+        // The argv and the record of what was sent come from ONE computation (as ClaudeRuntime.Build does). Read the file the argv
+        // names and compare what IT says with what the record claims: a second, independent computation of either side that
+        // picks a different file makes the record lie about the launch — and no timing is involved.
+        var built = consultant ? ConsultantBuilt(fast, model) : ReviewerBuilt(fast, model);
 
-        var firstBuild = TemporaryFilesCreatedBy(() => built = consultant.Build(
-            new ConsultantLaunch(Repo, "help me", string.Empty, "D:/answers", Settings(FastMode.On, "claude-opus-5-5"))));
-        var secondBuild = TemporaryFilesCreatedBy(() => consultant.Build(
-            new ConsultantLaunch(Repo, "help me", string.Empty, "D:/answers", Settings(FastMode.On, "claude-opus-5-5"))));
-
-        firstBuild.Should().Be(1, "the file was missing: written once for the argv AND the record, not once for each");
-        secondBuild.Should().Be(0, "the file says the same thing: left alone");
-        built!.Request.Arguments.Should().Contain("--settings");
-        built.Sent.Tier.Should().Be("fast");
+        built.Sent.Tier.Should().Be(TierOfTheFileNamed(built.Request.Arguments), $"{(consultant ? "consultant" : "reviewer")} {model} {fast}");
     }
 }

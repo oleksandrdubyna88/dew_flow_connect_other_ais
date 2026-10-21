@@ -436,17 +436,16 @@ internal sealed class RoundEngine(
             PlanIncomplete.Settler(stage.Stage, planText));
             // What ran, and — since 2026-09-07 — who was enabled for this stage and could not.
             //
-            // The deadline is reported only when IT is what ended the round: `roundClock` fired and
-            // the caller's own token did not. Inferring it from cancelled reviewers would have called
-            // it a deadline the moment a PERSON cancelled a round, which is a different sentence and
-            // a wrong one.
+            // The deadline is reported only when IT is what ended the round: the round's recorded FIRST cause is
+            // `roundClock` — the same word the ledger files, so the sentence and the line cannot disagree. Inferring it
+            // from cancelled reviewers would have called it a deadline the moment a PERSON cancelled a round, which is a
+            // different sentence and a wrong one.
             var summary = ReviewerSummaryFactory.From(results, excluded, roundWork.NotAsked) with
             {
-                // Read from the TIMER, and only when the caller did not also cancel. A person who
-                // cancels at the moment the deadline strikes is reported as a person: the round was
-                // going to end either way, and blaming the clock for their decision is the wrong
-                // half of an ambiguity to keep.
-                EndedByDeadline = WhatEndedIt(cancellation.Clock, ct, budget),
+                // Read from the recorded first cause: a person who cancels at the moment the deadline
+                // strikes is reported as whichever fired FIRST, and one who cancels after it does not
+                // turn the deadline into a withdrawal.
+                EndedByDeadline = WhatEndedIt(cancellation, budget),
             };
             var reviews = results.Select(r => r.Outcome).OfType<ReviewerOutcome.Ok>().Select(o => o.Review).ToList();
             // The ROLE is stamped here because this is the only place that holds both the invocation
@@ -834,16 +833,17 @@ internal sealed class RoundEngine(
     /// The round's own budget when the DEADLINE ended the round, and null for every other ending.
     /// </summary>
     /// <remarks>
-    /// <para>Read from the timer's own token rather than from the linked one, so the answer comes
-    /// from the thing that fired instead of a guess between two.</para>
-    /// <para>Where both fired it resolves toward the PERSON deliberately: they were going to end the
-    /// round either way, and blaming the clock for their decision is the wrong half of an ambiguity
-    /// to keep. Two reviewers raised the race; this is which side of it to land on.</para>
+    /// <para>Read from the round's RECORDED first cause (<see cref="RoundCancellation.CauseNow"/>), the same
+    /// value the ledger's <c>endCause</c> is filed from, so the sentence and the line agree. Flags would
+    /// say "the clock fired and the caller did not", which turns a deadline into silence the moment the
+    /// caller cancels afterwards.</para>
+    /// <para>Where both fired, the one that fired FIRST is the answer: a person who cancels after the clock
+    /// did not end the round, and a clock that strikes after a person did not either.</para>
     /// <para>The WHOLE budget, not what was left of it after setup — "the round reached its 30
     /// minute limit" when the limit is forty is a sentence nobody can act on.</para>
     /// </remarks>
-    private static TimeSpan? WhatEndedIt(CancellationToken deadline, CancellationToken caller, TimeSpan budget) =>
-        deadline.IsCancellationRequested && !caller.IsCancellationRequested ? budget : null;
+    private static TimeSpan? WhatEndedIt(RoundCancellation cancellation, TimeSpan budget) =>
+        cancellation.CauseNow() == EndCauses.RoundClock ? budget : null;
 
     /// <summary>
     /// WHY a cancelled reviewer's turn was cancelled — the FIRST of the round's three cancellation sources to fire, if it fired by the

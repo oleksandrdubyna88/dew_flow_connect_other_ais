@@ -2187,9 +2187,11 @@ internal static class Program
                 }
 
                 // The client closing stdin is the HOST ending: the host's stopping token (startStop) fires BEFORE the SDK sees its input
-                // end and cancels the in-flight requests' own tokens, so a local round killed that way is filed hostStopped and not
-                // withdrawn (E3.S2 of todo/PLAN_the_round_counter_tail_E3.md; InputEndSignallingTransport).
-                await using var transport = new InputEndSignallingTransport(new StdioServerTransport(ServerName), startStop.CancelAsync);
+                // end and cancels the in-flight requests' own tokens (E3.S2 of todo/PLAN_the_round_counter_tail_E3.md;
+                // InputEndSignallingTransport). That token is only OBSERVED by a round (RoundCancellation): it ends no round by itself and
+                // is filed as a cause (hostStopped) only when a caller's token is wired and fires while the host is stopping. No review
+                // tool passes the request's token today, so a stopping host's rounds simply run to their clock or the process's end.
+                await using var transport = new InputEndSignallingTransport(new StdioServerTransport(ServerName), startStop.CancelAsync, log);
                 // The token alone does not end a blocked stdin read — measured on Linux, RunAsync was still running
                 // three seconds after the signal and the deadline had to end the process, notices undrained. So the
                 // stop also closes the transport, which ends the read. (Found by the signal test's own stderr check.)

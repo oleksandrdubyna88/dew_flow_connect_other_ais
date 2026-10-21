@@ -20,7 +20,7 @@
  *
  * <p>The client's own cancellation (`withdrawn`) and the host's stop (`hostStopped`) cannot be driven live: no review tool takes
  * the request's token, so a client's `notifications/cancelled` never reaches the round (measured while writing this leg), and
- * nothing links the host's stop to a round either. Those two words are pinned by the C# tests only.</p>
+ * the host's stop only records a cause alongside a caller token that fires. Those two words are pinned by the C# tests only.</p>
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -41,6 +41,18 @@ const CODEX_VERSION = 'codex-cli 0.131.0';
 
 /** A round's own clock is whole minutes at the smallest; the reply waits for it, plus the time to kill the reviewer. */
 const CLOCK_WAIT_MS = 150_000;
+
+/**
+ * Removes a scratch folder with the same retries the data directory gets (a just-killed git or reviewer can still hold a handle on
+ * Windows), and never lets a failure to clean up replace the leg's verdict: a leftover temp folder is not the thing under test.
+ */
+function removeQuietly(path) {
+  try {
+    rmSync(path, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
+  } catch {
+    // Deliberately swallowed: the verdict (or the error that produced it) is what the caller reports.
+  }
+}
 
 /** A checkout with a `feature` branch ahead of `main`, which is what a round reviews. */
 function scratchRepo() {
@@ -155,7 +167,7 @@ async function run({ binary, fakeCli, dataDir, timeoutMs }) {
 
     return { keys: keysWritten(lines), lines: lines.length };
   } finally {
-    rmSync(repoPath, { recursive: true, force: true });
+    removeQuietly(repoPath);
   }
 }
 
@@ -171,7 +183,7 @@ export async function ledgerFieldsSeam({ binary, fakeCli, fail, timeoutMs }) {
   } catch (error) {
     outcome = error instanceof Error ? error.message : String(error);
   } finally {
-    rmSync(dataDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
+    removeQuietly(dataDir);
   }
   if (typeof outcome === 'string') {
     fail(`the ledger's new fields did not cross from coai-mcp to the extension: ${outcome}`);
