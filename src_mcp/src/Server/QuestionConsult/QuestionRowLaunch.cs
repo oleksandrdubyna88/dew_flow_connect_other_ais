@@ -460,7 +460,7 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
     private void Record(RowLaunchInput input, string ranOn, LaunchOptions ranWith, string outcome, Usage usage, TimeSpan elapsed, string resetsUtc) =>
         ledger.RecordJob(
             string.Empty, input.Row.Provider.Provider, ModelRan.Of(ranOn, input.Settings.Model), ConsultantRoles.Question,
-            outcome, elapsed, usage, UsageKinds.Question, "Question", ranWith, resetsUtc);
+            outcome, elapsed, usage, UsageKinds.Question, "Question", ranWith, resetsUtc: resetsUtc);
 
     private void Remove(string scratch) => RemoveScratch(scratch, log);
 

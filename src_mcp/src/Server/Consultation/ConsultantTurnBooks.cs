@@ -54,8 +54,8 @@ internal static class ConsultantTurnBooks
     /// </remarks>
     public static void Billed(
         UsageLedger ledger, ProviderSettings row, string model, string role, string outcome, TimeSpan elapsed, Usage usage,
-        LaunchOptions ranWith, string resetsUtc = "", string consultation = "") =>
-        ledger.RecordJob(string.Empty, row.Provider, model, role, outcome, elapsed, usage, UsageKinds.Consult, stage: "Consultation", ranWith, resetsUtc, consultation);
+        LaunchOptions ranWith, string consultation = "", string resetsUtc = "") =>
+        ledger.RecordJob(string.Empty, row.Provider, model, role, outcome, elapsed, usage, UsageKinds.Consult, stage: "Consultation", ranWith, consultation: consultation, resetsUtc: resetsUtc);
 
     /// <summary>The reset the turn's final launch STATED, now — empty for an answer, and for a refusal that named no time.</summary>
     public static string StatedResetOf(ReviewerLaunch final) => UsageLedger.StatedResetOf(final.Terminal, DateTimeOffset.UtcNow);

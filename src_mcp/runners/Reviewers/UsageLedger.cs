@@ -532,7 +532,7 @@ public sealed class UsageLedger(string dataDir)
     /// </param>
     public void RecordJob(
         string email, string provider, string model, string role, string outcome, TimeSpan elapsed, Usage usage, string kind, string stage,
-        LaunchOptions ranWith, string resetsUtc = "", string consultation = "") =>
+        LaunchOptions ranWith, string consultation = "", string resetsUtc = "") =>
         Append(JobEntry(email, provider, model, role, outcome, elapsed, usage, kind, stage, new JobPlace(ranWith)) with { ResetsUtc = resetsUtc, Consultation = consultation });
 
     /// <summary>One Team-server launch of a job: the overload above, with what the launch ran with and where.</summary>

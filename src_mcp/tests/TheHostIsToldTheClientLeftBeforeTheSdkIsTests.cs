@@ -161,4 +161,23 @@ public sealed class TheHostIsToldTheClientLeftBeforeTheSdkIsTests
 
         await dispose.Should().CompleteWithinAsync(TimeSpan.FromSeconds(30), "nobody reads: the pump is parked on a full buffer and the dispose must release it");
     }
+
+    [Fact]
+    public async Task ALocalDisposal_DoesNotTellTheHostTheClientLeft()
+    {
+        var inner = new Stdin();
+        var told = false;
+        var transport = new InputEndSignallingTransport(inner, () => { told = true; return Task.CompletedTask; });
+        // The input is still open and the pump is parked reading it: only THIS side ends it.
+        await Task.Delay(100, TestContext.Current.CancellationToken);
+
+        await transport.DisposeAsync();
+
+        told.Should().BeFalse("a local disposal is not the client leaving, and signalling would re-enter the host's shutdown");
+        var read = async () =>
+        {
+            await foreach (var _ in transport.MessageReader.ReadAllAsync(TestContext.Current.CancellationToken)) { }
+        };
+        await read.Should().NotThrowAsync("the reader still completes, whatever ended the pump");
+    }
 }

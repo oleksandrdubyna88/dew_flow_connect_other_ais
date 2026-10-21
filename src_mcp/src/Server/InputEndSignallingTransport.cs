@@ -13,7 +13,8 @@ namespace CoaiMcp.Server;
 /// ledger's cause is the FIRST source to fire (<c>RoundCancellation</c>), so the host's token has to fire first.</para>
 /// <para>The SDK only observes the input through <see cref="ITransport.MessageReader"/>, so this reader is the one it is given: messages are
 /// pumped through unchanged and in order, and when the real input ends — cleanly or with a failure — <c>onInputEnded</c> runs and ONLY THEN
-/// is this reader completed (with the same failure, if any). Nothing the SDK does in response to its input ending can precede the callback.</para>
+/// is this reader completed (with the same failure, if any). Nothing the SDK does in response to its input ending can precede the callback.
+/// A pump ended by this transport's own disposal does not run it: no client left, and the host is already shutting down.</para>
 /// <para>The hand-off is BOUNDED (<see cref="Capacity"/> messages): a reader that falls behind makes the pump wait, so the rest of the input stays
 /// in the pipe. The pump never faults: a callback that throws is logged, the reader is completed in a <c>finally</c> that always runs, and
 /// disposal releases a pump parked on a full buffer.</para>
@@ -68,7 +69,12 @@ internal sealed class InputEndSignallingTransport : ITransport
         try
         {
             failure = await CopyAsync();
-            await SignalAsync();
+            // Only the REAL input ending tells the host: a pump that ended because THIS transport was disposed saw no client leave, and
+            // signalling then would re-enter the host's shutdown, which is what is disposing us.
+            if (!_disposing.IsCancellationRequested)
+            {
+                await SignalAsync();
+            }
         }
         finally
         {
