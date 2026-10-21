@@ -2335,10 +2335,13 @@ existed, which is exactly how mirrored lists begin to drift.
 
 ## Settings apply to the next round, not the next restart
 
+
 `PanelServiceHost` stats the panel's settings file on every tool call and rebuilds `PanelService`
 when it has changed. Settings used to be read once at startup, which made every change in the
 sidebar silently ineffective until the MCP client was restarted — a gap invisible from both ends,
 because the panel saves instantly and says so. Environment variables still outrank the file.
+
+**The host's stopping token rides the rebuilds (E3.S2, 2026-10-20).** `PanelServiceHost` takes the server's own stopping token as a REQUIRED parameter (`Program.StartedAsync` passes its `stop`) and hands it to every `PanelService` it builds, the first and every rebuild; the service hands it to `RoundEngine`, which reads it (never links it) to write a cancelled local turn's `endCause` — `hostStopped` over `withdrawn` over `roundClock` over `unknown` (`EndCauses.OfLocal`, [module_runners.md](module_runners.md)). `PanelServiceHostTests.TheHost_HandsItsStopToEveryServiceItBuilds` pins the hand-over.
 
 ## Server notices — what this binary writes down (S8, from 2026-09-21)
 
@@ -3101,6 +3104,19 @@ marker back). `ABeatThatFinishesAfterTheClear_DoesNotBringTheMarkerBack` and
 `AClearThatLandsDuringTheReplace_StillLeavesNoMarker` hold them, each RED first.
 
 ## The spending ledger
+
+**Consult, check, question and probe lines say what they ran with, and a consult line names its consultation (E3, 2026-10-20,
+`todo/PLAN_the_round_counter_tail_E3.md` S1 and S4's `coai-mcp` half).** `ConsultantTurnBooks.Billed` — the one place all three consult
+writers end (`ConsultationService.Settle`, `ConsultationFailedTurns.Billed`, `ConsultantCheck.Billed`) — takes the turn's `LaunchOptions` and
+a `consultation` id. The consultation labels its launch right after `Build` (`RowLaunchOptions.Answering(…, ready.Launch.Settings)`, which
+carries the codex tier probe's release) onto `TurnConsultant.RanWith`, and adds the final launch's `CliVersion` when the turn returns; the
+check does the same on its private `Turn`; the question row labels its invocation (a ready continuation keeps its first launch's labels) and
+`Record` takes `RanWith.VersionedBy(last launch's CliVersion)`; `--probe-api` labels `api` + the variant's effort. Refused before any
+launch → `LaunchOptions.None`. **`consultation`** (`UsageEntry.Consultation`, trailing) is the record's id on an answered turn
+(`record.Id`) and a failed one (`failed.Next.Id`, so a NEW consultation refused before its launch — whose record was never written, id
+emptied — carries none); a consultant check carries none (decision D8) — no consultation is behind it, and an invented id would merge
+unrelated turns in the extension's division. A local review cancelled mid-round also carries its `endCause` — see *A local cancellation says
+which token fired* in [module_runners.md](module_runners.md). The Team server is unchanged.
 
 `UsageLedger` appends one JSON line per reviewer to `<dataDir>/usage.jsonl`: vendor, model, role,
 stage, seconds, tokens, cost and outcome. It is separate from the session files on purpose —

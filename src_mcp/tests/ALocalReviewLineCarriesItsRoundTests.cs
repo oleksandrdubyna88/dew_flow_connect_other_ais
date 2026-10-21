@@ -117,7 +117,7 @@ public sealed class ALocalReviewLineCarriesItsRoundTests : IDisposable
     {
         var ledger = new UsageLedger(_dir.At("job-" + kind));
 
-        ledger.RecordJob(string.Empty, "gemini", "m", RoleCatalog.ArchitectureRole, "ok", TimeSpan.FromSeconds(2), new Usage(10, 2, null), kind, stage);
+        ledger.RecordJob(string.Empty, "gemini", "m", RoleCatalog.ArchitectureRole, "ok", TimeSpan.FromSeconds(2), new Usage(10, 2, null), kind, stage, LaunchOptions.None);
 
         var line = Written(ledger).Should().ContainSingle().Subject;
         RoundOf(line).Should().BeEmpty("a consultation is not a round");

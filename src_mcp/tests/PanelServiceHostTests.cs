@@ -23,8 +23,8 @@ public sealed class PanelServiceHostTests : IDisposable
 
     private string? Env(string name) => name == "COAI_DATA_DIR" ? _dataDir : null;
 
-    private PanelServiceHost NewHost() =>
-        new(Env, VaultKeys.None("no vault in this test"), default, new ProcessLauncher(), _log, Noticing.None);
+    private PanelServiceHost NewHost(CancellationToken hostStopping = default) =>
+        new(Env, VaultKeys.None("no vault in this test"), default, new ProcessLauncher(), _log, Noticing.None, hostStopping);
 
     private void WriteVendors(string json) =>
         File.WriteAllText(SettingsPath, $$"""{"COAI_VENDORS": {{System.Text.Json.JsonSerializer.Serialize(json)}}}""");
@@ -76,12 +76,32 @@ public sealed class PanelServiceHostTests : IDisposable
                 "COAI_VENDORS" => """[{"id":"claude","runtime":"claude","model":"haiku","baseUrl":""}]""",
                 _ => null,
             },
-            VaultKeys.None("no vault in this test"), default, new ProcessLauncher(), _log, Noticing.None);
+            VaultKeys.None("no vault in this test"), default, new ProcessLauncher(), _log, Noticing.None, CancellationToken.None);
 
         Touch(() => WriteVendors("""[{"id":"gemini","runtime":"gemini","model":"","baseUrl":""}]"""));
 
         Providers(host).Should().BeEquivalentTo(
             ["claude"], "a variable in the client's config is more specific than a file any window may rewrite");
+    }
+
+    /// <summary>
+    /// The host's stopping token reaches EVERY service it builds (E3.S2 of todo/PLAN_the_round_counter_tail_E3.md, decision D4) — the first
+    /// and the one rebuilt when the settings change — so a round's cancellation can be told a host stop from a withdrawal.
+    /// </summary>
+    [Fact]
+    public void TheHost_HandsItsStopToEveryServiceItBuilds()
+    {
+        WriteVendors("""[{"id":"codex","runtime":"codex","model":"gpt-5.6-terra","baseUrl":""}]""");
+        using var stopping = new CancellationTokenSource();
+        var host = NewHost(stopping.Token);
+        var first = host.Current;
+
+        Touch(() => WriteVendors("""[{"id":"codex","runtime":"codex","model":"gpt-5.6-mini","baseUrl":""}]"""));
+        var rebuilt = host.Current;
+
+        rebuilt.Should().NotBeSameAs(first, "the settings changed, so a service was rebuilt");
+        first.HostStopping.Should().Be(stopping.Token);
+        rebuilt.HostStopping.Should().Be(stopping.Token, "a rebuild must not drop the host's token");
     }
 
     private static IEnumerable<string> Providers(PanelServiceHost host) =>

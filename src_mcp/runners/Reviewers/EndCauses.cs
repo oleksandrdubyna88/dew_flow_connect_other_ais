@@ -13,9 +13,10 @@ namespace CoaiMcp.Runners.Reviewers;
 /// sentence; a measurement over the ledger could not count withdrawals against backstops at all.</para>
 /// <para>Here, in the library both halves compile against, for <see cref="UsageKinds"/>' and
 /// <see cref="LaunchAttempts"/>' reason: one spelling of a ledger column, so a writer and a reader cannot disagree
-/// about it. Only the server writes one today; a local line's <c>endCause</c> is empty, because a local round's clock
-/// and the MCP client's own cancellation reach the executor as one token (<c>RoundEngine</c> links them) and nothing
-/// above it records which fired. Empty is "not said", never a cause.</para>
+/// about it. A LOCAL review line carries one too since E3.S2 of todo/PLAN_the_round_counter_tail_E3.md: a local round's clock
+/// and the MCP client's own cancellation still reach the executor as one token (<c>RoundEngine</c> links them), so the cause is decided
+/// ABOVE it, where the three tokens are held (<see cref="OfLocal"/>), and written on the cancelled turn's last line. Empty is "not said",
+/// never a cause — and on a local line it now means the turn was not cancelled.</para>
 /// </remarks>
 public static class EndCauses
 {
@@ -43,6 +44,40 @@ public static class EndCauses
     /// </summary>
     public const string HostStopped = "hostStopped";
 
+    /// <summary>
+    /// The local round's own deadline ended it — the engine's clock fired and neither the caller nor the host had. A LOCAL word: the
+    /// Team server never writes it (its backstop is <see cref="Backstop"/>).
+    /// </summary>
+    public const string RoundClock = "roundClock";
+
+    /// <summary>
+    /// A cancellation whose token nobody above the executor can name — a Team-server row whose server ended it, any token linked
+    /// elsewhere. A LOCAL word, and the answer for a cancelled turn when none of the three tokens fired: never empty, never guessed.
+    /// </summary>
+    public const string Unknown = "unknown";
+
     /// <summary>Every cause this build names, in the order a job meets them.</summary>
-    public static IReadOnlyList<string> Known { get; } = [Withdrawn, Abandoned, Backstop, QueueExpired, HostStopped];
+    public static IReadOnlyList<string> Known { get; } = [Withdrawn, Abandoned, Backstop, QueueExpired, HostStopped, RoundClock, Unknown];
+
+    /// <summary>The words only a LOCAL line carries — the shape of <c>UsageKinds.LocalOnly</c>. The server writes neither and is unchanged.</summary>
+    public static IReadOnlyList<string> LocalOnly { get; } = [RoundClock, Unknown];
+
+    /// <summary>
+    /// The cause of a LOCAL cancellation, from which token fired — never from a sentence (E3.S2 of todo/PLAN_the_round_counter_tail_E3.md,
+    /// decision D5): <c>hostStopped</c> over <c>withdrawn</c> over <c>roundClock</c> over <c>unknown</c>.
+    /// </summary>
+    /// <remarks>
+    /// A stopping host may cancel the request it was serving too, so the host's stop must not be filed as a person's withdrawal; a person
+    /// who cancels as the clock fires is a person — the rule the engine's <c>WhatEndedIt</c> already states for the deadline sentence.
+    /// </remarks>
+    /// <param name="hostStopped">The server's own stopping token had fired.</param>
+    /// <param name="callerCancelled">The MCP client's token for the call had fired.</param>
+    /// <param name="clockFired">The round's own deadline timer had fired.</param>
+    public static string OfLocal(bool hostStopped, bool callerCancelled, bool clockFired) => (hostStopped, callerCancelled, clockFired) switch
+    {
+        (true, _, _) => HostStopped,
+        (_, true, _) => Withdrawn,
+        (_, _, true) => RoundClock,
+        _ => Unknown,
+    };
 }

@@ -64,10 +64,12 @@ export interface UsageEntry {
   readonly effortNotSent?: string;
   readonly tierNotSent?: string;
   /**
-   * WHY a cancelled Team-server launch was cancelled (story 3.2 of research/PLAN_every_round_is_counted.md) — `withdrawn`,
-   * `abandoned`, `backstop`, `queueExpired`, `hostStopped` (`EndCauses` in `src_mcp/runners/Reviewers/EndCauses.cs`).
-   * Absent on a line older than the field, on every other ending, and on a local line, which does not know which
-   * token fired. The outcome stays `Cancelled`; this is the column that tells a withdrawal from the server's backstop.
+   * WHY a cancelled launch was cancelled (story 3.2 of research/PLAN_every_round_is_counted.md) — a Team server writes
+   * `withdrawn`, `abandoned`, `backstop`, `queueExpired` or `hostStopped`; since E3.S2 of the round-counter tail a LOCAL
+   * review line carries a cause too, on the turn's last line, read from which token fired: `hostStopped`, `withdrawn`,
+   * `roundClock` (the local round's own deadline — a local-only word) or `unknown` (nobody can name the token — local-only too).
+   * The words are `EndCauses` in `src_mcp/runners/Reviewers/EndCauses.cs`. Absent on a line older than the field and on every
+   * ending but a cancellation. The outcome stays `Cancelled`; this is the column that tells a withdrawal from a backstop or a deadline.
    */
   readonly endCause?: string;
   /**

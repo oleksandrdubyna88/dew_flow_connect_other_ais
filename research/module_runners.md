@@ -576,8 +576,9 @@ Twelve reviewers of twelve answered; thirty-five findings, and these are the one
   `TimedOut` (the consultation decides from the TOKENS what killed it, and hands that in), and the ledger writes it
   as one line saying `cancelled` with `usageNote: usage not captured`, a billed first launch kept beside it on its
   own line (`AfterTheRepair` folds a terminal second launch the same way for every failure). WHY the token fired is
-  not the executor's to know — see `EndCauses` and the Team server's `JobRecord.EndCause`
-  ([module_team_server.md](module_team_server.md)). The question row is the one caller whose word changes: a row
+  not the executor's to know — see `EndCauses`, the Team server's `JobRecord.EndCause`
+  ([module_team_server.md](module_team_server.md)), and, for a LOCAL round, the engine's own reading of its three tokens
+  (*A local cancellation says which token fired*, below). The question row is the one caller whose word changes: a row
   killed by the caller's cancellation now ends `failed` / `cancelled` rather than `timed_out` "ran past its budget",
   which was never true of it; a row past its OWN budget is still `timed_out`, because its launch's timeout fires
   before the row's token (`ConsultationDeadline.For` is the budget plus a grace).
@@ -1775,9 +1776,40 @@ flowchart LR
 - **Where it is labelled.** `RowLaunchOptions.Labelled` (`src_mcp/src/Server/Rounds/RowLaunchOptions.cs`), called by
   `RosterBuilder`'s turn builder (the launch and its repair) and `SecurityRoster.Build`; the ledger records the round's
   first invocation, so every launch line of one reviewer carries the same options.
-- **Not labelled yet**: a consultation, a question row, a probe and a chat turn write their lines through `RecordJob`
-  with these fields empty — "not recorded", never "none". Claude's own settings (`fastMode`, `effortLevel`) are not read
-  for a label; only codex's configuration is.
+- **Labelled since E3.S1 (2026-10-20, `todo/PLAN_the_round_counter_tail_E3.md`)**: a consultation turn (answered or failed),
+  a consultant check, a question row and an api probe line now say what they ran with. The local `UsageLedger.RecordJob`
+  overload takes a REQUIRED `LaunchOptions ranWith` (after `stage`; `resetsUtc` and `consultation` stay defaulted) — a caller with
+  nothing to say passes `LaunchOptions.None` on purpose (a check or a consultation refused before its launch). The labeller is the
+  review's own: `RowLaunchOptions.Of` takes a nullable `IReviewerRuntime`, and `RowLaunchOptions.Answering(built, row, launch)`
+  labels a consultant invocation from the reviewer adapter every consultant carries (`built.Adapter`). The release rule moved to
+  `LaunchOptions.VersionedBy(asked)` — the tier probe's `Printed`, else the final launch's `CliVersion` (Vibe's launch control),
+  else empty — and `UsageLedger.VersionedBy` calls it, so a review line is byte-identical. A claude consultation and an api probe
+  ask no version: nothing is spawned for a label. The probe's effort (`--probe-api` sends `variant.Effort`) is labelled `row`,
+  `cli: api`. **The code contradicted the brief on one point:** `ClaudeConsultant` does send an effort (`--effort`) and a fast-mode
+  file, and never set `Sent`, so its lines would have read `effortNotSent: ignored` for a value that WAS sent — it sets `Sent` now
+  (as `ClaudeRuntime.Build` does); `CodexConsultant.Build` sets the tier `Sent` as the codex reviewer's does. Claude's own settings
+  (`fastMode`, `effortLevel`) are not read for a label; only codex's configuration is. A chat turn is the extension's line and is
+  labelled there.
+
+## A local cancellation says which token fired (E3.S2, 2026-10-20)
+
+`todo/PLAN_the_round_counter_tail_E3.md` S2. A local review line that ends `Cancelled` now carries `endCause`, on the turn's **last**
+line only (like `resetsUtc`), decided by `RoundEngine` where the tokens are held — never inferred below the executor
+(`ProcessLauncher.ResultOf` and `ReviewerExecutor.KilledAsync` are unchanged) and never read from the outcome's sentence.
+
+- `EndCauses.OfLocal(hostStopped, callerCancelled, clockFired)`: **`hostStopped` > `withdrawn` > `roundClock` > `unknown`**. A stopping
+  host may cancel the request it was serving too, so it is not filed as a person's withdrawal; a person who cancels as the clock fires
+  is a person (the rule `WhatEndedIt` states for the deadline sentence). `unknown` is a `Cancelled` turn when none of the three fired
+  (a Team-server row whose server ended it, any token linked elsewhere) — never empty.
+- `EndCauses.RoundClock` and `Unknown` are **local-only words** (`EndCauses.LocalOnly`, the `UsageKinds.LocalOnly` shape);
+  `Known` names all seven. The Team server writes neither and is unchanged (`HowAJobEndedIsSaidTests` pins its four words, not `Known`).
+- `UsageLedger.Record(..., endCause = "")` writes it on the last line of the last turn; the engine passes it only when the finished
+  outcome `is ReviewerOutcome.Cancelled`. Consultation and question-row endings write no cause (a withdrawn consultation writes no
+  line; a cut question row is `Interrupted`).
+- **The host token:** `Program.StartedAsync` hands its `stop` to `PanelServiceHost` (a REQUIRED constructor parameter, so the production
+  road cannot forget it), which hands it to every `PanelService` it builds — the rebuilds on a settings change included — and
+  `PanelService(…, CancellationToken hostStopping = default)` hands it to `RoundEngine`. `default` never fires: a service built
+  directly (every test) belongs to no host that stops. The token is read, not linked: it does not cancel a round by itself.
 
 ## The local reviewer stands down after a quiet cloud (2026-09-24, issue #485)
 

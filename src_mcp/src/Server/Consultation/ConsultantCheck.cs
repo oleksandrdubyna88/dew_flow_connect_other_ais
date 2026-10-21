@@ -178,23 +178,27 @@ internal sealed class ConsultantCheckTurn(
         }
         catch (OperationCanceledException) when (caller.IsCancellationRequested)
         {
-            return Failed(checking, row, new ConsultFailure.Cancelled(), ConsultantTurn.UsageOf(runtime, launched), clock.Elapsed);
+            return Failed(checking, row, new ConsultFailure.Cancelled(), ConsultantTurn.UsageOf(runtime, launched), clock.Elapsed, LaunchOptions.None);
         }
         catch (Exception e) when (e is not OutOfMemoryException)
         {
             // A snapshot that threw, the deadline under a git command — the same reading a consultation gives a fault.
-            return Failed(checking, row, ConsultationFailing.FaultIs(killedAs(), e), ConsultantTurn.UsageOf(runtime, launched), clock.Elapsed);
+            return Failed(checking, row, ConsultationFailing.FaultIs(killedAs(), e), ConsultantTurn.UsageOf(runtime, launched), clock.Elapsed, LaunchOptions.None);
         }
     }
 
     /// <summary>A check that ended before any turn — cancelled or past its deadline while its scratch was made — classified and billed nothing.</summary>
     public ConsultCheckRecord Ended(ConsultCheckRecord checking, ProviderSettings row, ConsultFailure failure, TimeSpan elapsed) =>
-        Failed(checking, row, failure, Usage.None, elapsed);
+        Failed(checking, row, failure, Usage.None, elapsed, LaunchOptions.None);
 
     /// <summary>One turn's fixed inputs, so no step takes eight arguments.</summary>
     private sealed record Turn(
         ConsultCheckRecord Checking, ProviderSettings Row, IConsultantRuntime Runtime, CheckScratch Scratch, TimeSpan Budget,
-        List<ReviewerLaunch> Launched, Stopwatch Clock);
+        List<ReviewerLaunch> Launched, Stopwatch Clock)
+    {
+        /// <summary>What the check's launch ran with, once it is built (E3.S1 of todo/PLAN_the_round_counter_tail_E3.md) — none before, which is what a check refused before its launch bills.</summary>
+        public LaunchOptions RanWith { get; init; } = LaunchOptions.None;
+    }
 
     private async Task<ConsultCheckRecord> TurnAsync(Turn turn, Func<ConsultFailure> killedAs, CancellationToken ct)
     {
@@ -204,14 +208,14 @@ internal sealed class ConsultantCheckTurn(
 
         if (place.Refusal.Length > 0)
         {
-            return Failed(turn.Checking, turn.Row, new ConsultFailure.VendorRefused(place.Refusal, ConsultantPlaces.Cure), Usage.None, turn.Clock.Elapsed);
+            return Failed(turn.Checking, turn.Row, new ConsultFailure.VendorRefused(place.Refusal, ConsultantPlaces.Cure), Usage.None, turn.Clock.Elapsed, LaunchOptions.None);
         }
 
         // The consultant's home, short and under the homes root (D1 of research/PLAN_vibe_live_round_fixes.md), owned for this one turn.
         var homes = turn.Runtime.HomesFolder.Length > 0 ? VibeHomes.ReserveOneShot(settings.ConsultantHomesRoot, warn) : OneShotReservation.None.Instance;
         if (homes is OneShotReservation.Refused refused)
         {
-            return Failed(turn.Checking, turn.Row, new ConsultFailure.LaunchRefused(refused.Sentence), Usage.None, turn.Clock.Elapsed);
+            return Failed(turn.Checking, turn.Row, new ConsultFailure.LaunchRefused(refused.Sentence), Usage.None, turn.Clock.Elapsed, LaunchOptions.None);
         }
 
         try
@@ -242,20 +246,23 @@ internal sealed class ConsultantCheckTurn(
         {
             warn($"consultant check: {turn.Row.Provider} was not launched — {refused.Failure.What(turn.Row.Provider)}");
 
-            return Failed(turn.Checking, turn.Row, refused.Failure, Usage.None, turn.Clock.Elapsed);
+            return Failed(turn.Checking, turn.Row, refused.Failure, Usage.None, turn.Clock.Elapsed, LaunchOptions.None);
         }
 
         var ready = (ConsultantPreparation.Ready)prepared;
-        var launch = turn.Runtime.Build(ready.Launch);
+        var launch = RowLaunchOptions.Answering(turn.Runtime.Build(ready.Launch), turn.Row, ready.Launch.Settings);
         // The turn is billed under the model that ran: a row that names none runs on its adapter's default (decision 75). A check that ends before this
-        // point, or by an exception outside this turn, is billed on the row's own model — it never built a launch to learn another from.
-        turn = turn with { Row = turn.Row with { Model = ModelRan.Of(launch.Model, turn.Row.Model) } };
+        // point, or by an exception outside this turn, is billed on the row's own model — it never built a launch to learn another from — and says
+        // nothing of what it ran with (E3.S1 of todo/PLAN_the_round_counter_tail_E3.md).
+        turn = turn with { Row = turn.Row with { Model = ModelRan.Of(launch.Model, turn.Row.Model) }, RanWith = launch.RanWith };
         var turned = await ConsultantTurn.RunAsync(
             executor, turn.Runtime, launch, t => ChangesSinceAsync(before, turn.Scratch.Repo, t), turn.Launched.Add, ct);
         var changes = turned.Breached ? turned.ChangesBeforeFollowUp : await ChangesSinceAsync(before, turn.Scratch.Repo, ct);
         var broken = Broken(changes, canary == Fingerprint(turn.Scratch.CanaryPath) ? string.Empty : turn.Scratch.CanaryPath);
 
-        return Judged(turn with { Checking = turn.Checking with { Confinement = ready.Confinement } }, turned, broken, killedAs());
+        return Judged(
+            turn with { Checking = turn.Checking with { Confinement = ready.Confinement }, RanWith = turn.RanWith.VersionedBy(turned.Final.CliVersion) },
+            turned, broken, killedAs());
     }
 
     /// <summary>The folder, in the check's scratch, a consultant that keeps a home and reads a copy is given.</summary>
@@ -301,13 +308,13 @@ internal sealed class ConsultantCheckTurn(
     {
         if (broken.Length > 0)
         {
-            return Failed(turn.Checking, turn.Row, new ConsultFailure.TreeChanged(broken), turned.TurnUsage, turn.Clock.Elapsed);
+            return Failed(turn.Checking, turn.Row, new ConsultFailure.TreeChanged(broken), turned.TurnUsage, turn.Clock.Elapsed, turn.RanWith);
         }
 
         return ConsultantTurnBooks.Answered(turned.Final)
             ? Answered(turn, turned)
             : Failed(turn.Checking, turn.Row, Kept(turn.Row, turned.Final, ConsultFailures.Classify(turn.Runtime, turned.Final, RuntimeResolution.NameOf(turn.Row.Identity()), killedAs)), turned.TurnUsage, turn.Clock.Elapsed,
-                ConsultantTurnBooks.StatedResetOf(turned.Final));
+                turn.RanWith, ConsultantTurnBooks.StatedResetOf(turned.Final));
     }
 
     private ConsultCheckRecord Answered(Turn turn, ConsultantTurnResult turned)
@@ -315,7 +322,7 @@ internal sealed class ConsultantCheckTurn(
         var answer = turn.Runtime.ReadAdvice(turned.Final.Answer ?? string.Empty);
         IReadOnlyList<DeniedAction> denials = [.. turned.Launches.SelectMany(turn.Runtime.Denials).Distinct()];
         IReadOnlyList<string> said = [answer, .. turned.Launches.Select(launch => launch.Process?.StdOut ?? string.Empty)];
-        Billed(turn.Row, "ok", turn.Clock.Elapsed, turned.TurnUsage);
+        Billed(turn.Row, "ok", turn.Clock.Elapsed, turned.TurnUsage, turn.RanWith);
 
         return Spent(turn.Checking, turned.TurnUsage, turn.Clock.Elapsed) with
         {
@@ -328,10 +335,12 @@ internal sealed class ConsultantCheckTurn(
         };
     }
 
+    /// <param name="ranWith">What the check's launch ran with, for its ledger row — <see cref="LaunchOptions.None"/> when it ended before one was built.</param>
     /// <param name="resetsUtc">The reset a refused check STATED, for its ledger row — or empty (epic 5's code round).</param>
-    private ConsultCheckRecord Failed(ConsultCheckRecord sent, ProviderSettings row, ConsultFailure failure, Usage usage, TimeSpan elapsed, string resetsUtc = "")
+    private ConsultCheckRecord Failed(
+        ConsultCheckRecord sent, ProviderSettings row, ConsultFailure failure, Usage usage, TimeSpan elapsed, LaunchOptions ranWith, string resetsUtc = "")
     {
-        Billed(row, failure.Kind, elapsed, usage, resetsUtc);
+        Billed(row, failure.Kind, elapsed, usage, ranWith, resetsUtc);
 
         return Spent(sent, usage, elapsed) with
         {
@@ -355,8 +364,8 @@ internal sealed class ConsultantCheckTurn(
         row.Api.Stream && string.Equals(RuntimeResolution.NameOf(row.Identity()), "api", StringComparison.Ordinal);
 
     /// <summary>One ledger row per check, under its own role — a check is a paid turn nobody asked a consultation for.</summary>
-    private void Billed(ProviderSettings row, string outcome, TimeSpan elapsed, Usage usage, string resetsUtc = "") =>
-        ConsultantTurnBooks.Billed(ledger, row, row.Model, ConsultantRoles.Check, outcome, elapsed, usage, resetsUtc);
+    private void Billed(ProviderSettings row, string outcome, TimeSpan elapsed, Usage usage, LaunchOptions ranWith, string resetsUtc = "") =>
+        ConsultantTurnBooks.Billed(ledger, row, row.Model, ConsultantRoles.Check, outcome, elapsed, usage, ranWith, resetsUtc);
 
     /// <summary>The failure, with where its launch's transcript was kept — the consultation's own keeper and retention.</summary>
     private ConsultFailure Kept(ProviderSettings row, ReviewerLaunch final, ConsultFailure failure) =>
