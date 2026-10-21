@@ -23,6 +23,14 @@ internal static class FolderHolds
     public static IDisposable Undeletable(string folder) =>
         OperatingSystem.IsWindows() ? new WindowsHandle(folder) : new ReadOnlyParent(Path.GetDirectoryName(folder) ?? folder);
 
+    /// <summary>
+    /// Unix: the folder itself without write permission, so no FILE can be created in it — which is how a write that goes by a temp file and a move is made to fail
+    /// (a rename over a read-only FILE succeeds on Unix, so the read-only attribute no longer does it; E3 S5). Windows: nothing, the test's read-only file already refuses the move.
+    /// Skip the arm when <see cref="CanMakeOneUndeletable"/> is false: a privileged Unix process ignores the mode.
+    /// </summary>
+    public static IDisposable Unwritable(string folder) =>
+        OperatingSystem.IsWindows() ? new NoHold() : new ReadOnlyParent(folder);
+
     /// <summary>Whether <see cref="Undeletable"/> works here — a privileged Unix process removes what the mode forbids.</summary>
     public static bool CanMakeOneUndeletable => OperatingSystem.IsWindows() || !Environment.IsPrivilegedProcess;
 
@@ -89,6 +97,13 @@ internal static class FolderHolds
 
         [DllImport("kernel32.dll", EntryPoint = "CreateFileW", CharSet = CharSet.Unicode, SetLastError = true)]
         private static extern SafeFileHandle CreateFileW(string path, uint access, uint share, nint security, uint disposition, uint flags, nint template);
+    }
+
+    private sealed class NoHold : IDisposable
+    {
+        public void Dispose()
+        {
+        }
     }
 
     [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]

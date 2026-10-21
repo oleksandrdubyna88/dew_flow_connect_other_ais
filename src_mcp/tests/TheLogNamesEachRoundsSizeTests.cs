@@ -10,7 +10,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// <c>--log</c> carries each round's size (E2.S5 of <c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md</c>,
+/// <c>--log</c> carries each round's size (E2.S5 of <c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md</c>,
 /// contract C3): <c>LoggedRound.Size</c> is read in one grouped query per page from <c>round_changes</c> and the state columns
 /// of schema step 22, absent on a round that has none, and a database written before step 22 is read exactly as before —
 /// read-only, and left at the version it had.

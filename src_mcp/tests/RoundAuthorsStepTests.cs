@@ -11,7 +11,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// The authors step (E5.S4 of <c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md</c>) over E1's real fixtures in a temp home:
+/// The authors step (E5.S4 of <c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md</c>) over E1's real fixtures in a temp home:
 /// what it records for a settled round, what it refuses to record, what it hands E4 and under which budget. The identity is always the
 /// step's INJECTED environment — no test here sets a caller-identity variable on the process — and the home is always a temp folder.
 /// </summary>

@@ -114,6 +114,13 @@ public static class CallerTranscriptLocator
         return session.Id.Length > 0 ? Lookup(session, home) : Refused(CallerSessionId.None, CallerTranscriptLocation.NoSessionId);
     }
 
+    /// <summary>
+    /// The same for a round whose caller's VENDOR is known — E7's entry: a vendor with no reader here (<c>codex</c>, …) is
+    /// <c>unobserved: no reader for &lt;vendor&gt;</c> whatever its stored id is, exactly as <see cref="Locate"/> answers it live.
+    /// </summary>
+    public static CallerTranscriptLocation LocateStored(string vendor, string id, ClaudeHome home) =>
+        ReadsClaude(vendor) ? LocateStored(id, home) : Refused(CallerSessionId.None, CallerTranscriptLocation.NoReaderFor(VendorWord(vendor)));
+
     private static CallerTranscriptLocation.NotObservable Refused(CallerSessionId session, string reason) => new(session, reason);
 
     /// <summary>Claude, unknown and an empty vendor are read; any other vendor has no reader here.</summary>

@@ -74,14 +74,21 @@ internal sealed class CodeRoundHarness : IAsyncLifetime
             Environment.SetEnvironmentVariable(name, null);
         }
 
+        // Each in its own try: a folder that cannot be removed must not leave the other behind.
+        Remove(Repo);
+        Remove(Data);
+
+        return ValueTask.CompletedTask;
+    }
+
+    private static void Remove(string folder)
+    {
         try
         {
-            Directory.Delete(Repo, recursive: true);
-            Directory.Delete(Data, recursive: true);
+            Directory.Delete(folder, recursive: true);
         }
         catch (IOException) { }
         catch (UnauthorizedAccessException) { }
-        return ValueTask.CompletedTask;
     }
 
     public static void SetAnswer(string json)

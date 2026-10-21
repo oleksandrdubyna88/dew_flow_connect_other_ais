@@ -3,9 +3,10 @@ import { MODEL_CHECK } from './consultantCheckRun';
 import { checkStateOnThisDisk, type CheckRecord, type HealthFile } from './consultantHealth';
 import type { ConsultantHealthState } from './consultantHealthState';
 import { escapeHtml } from './escapeHtml';
+import { CONSULTING } from './featureAvailability.generated';
 import { markerLine } from './kimiMarker';
 import { remoteWarning } from './localEngines';
-import { CLI_RUNTIMES } from './models';
+import { CLI_RUNTIMES, type Runtime } from './models';
 import { help } from './panelControls';
 import { type CardContext, endpointButton, headButtons } from './panelView';
 import { availabilityOf } from './providers';
@@ -87,10 +88,32 @@ export function checkFactsOf(health: ConsultantHealthState | undefined, id: stri
     : fromFile(health.thisSide.files?.checks[key], health.nowMs);
 }
 
-/** ✓ Check — one paid turn of this row, asked first by the host (D10); held while one runs. */
-export function checkButton(id: string, check: CheckFacts): string {
+/** The ✓ Check is a consultant check: offered only on a runtime that can hold a consultation (shared/feature-availability.json). */
+export function offersCheck(runtime: Runtime): boolean {
+  return CONSULTING.includes(runtime);
+}
+
+/** Why a row's ✓ Check is not offered — the disabled button's title (D7). The one place the wording lives. */
+export function checkNotOffered(runtime: Runtime): string {
+  return `the consultant check is not offered for ${runtime} — this runtime cannot hold a consultation`;
+}
+
+/**
+ * ✓ Check — on a runtime that can hold a consultation: one paid turn of this row, asked first by the host (D10), held while
+ * one runs. On any other row: drawn disabled with the reason, and bound to nothing — no command, no row, so a press posts
+ * nothing and no paid-turn prompt can open (D7). The server's refusal by name stays the backstop for a stale page.
+ */
+export function checkButton(id: string, runtime: Runtime, check: CheckFacts): string {
+  return offersCheck(runtime) ? offeredCheck(id, check) : refusedCheck(runtime);
+}
+
+function offeredCheck(id: string, check: CheckFacts): string {
   return `<button type="button" class="link" data-command="checkModel" data-id="${id}"`
     + ` title="One real, paid turn of this model in a scratch folder — you are asked first"${check.checking ? ' disabled' : ''}>✓ Check</button>`;
+}
+
+function refusedCheck(runtime: Runtime): string {
+  return `<button type="button" class="link" disabled title="${escapeHtml(checkNotOffered(runtime))}">✓ Check</button>`;
 }
 
 export function healthBadge(check: CheckFacts): string {

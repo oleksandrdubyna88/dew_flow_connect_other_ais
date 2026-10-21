@@ -1,6 +1,8 @@
 # PLAN — E4 stories: attribution — windows, the association ladder, ambiguous totals, contributors
 
-> Status: **code built, code gate `good_enough`, 2026-10-19 — S1–S5 implemented on `feat/round-authors-e4` (pull request #862, not merged; the coai code gate ran one round, 13 of 16 reviewers, 4 findings accepted and fixed or recorded, §12); Fable reviewed the code on 2026-10-19 and ACCEPTED every deviation of §12, and its wording changes are applied in place below; §12 is the implementation record — its deviations and the two E7 confirmations. Plan 2026-10-14, revised 2026-10-16 and 2026-10-17.** Epic E4 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
+> Status: **IMPLEMENTED, 2026-10-20.** E4.S1–S5 merged as #862 (`2e47d990b`). Fable accepted every deviation of §12 on 2026-10-19; the coai code gate said `good_enough` (4 findings accepted). No story has an unbuilt half. **Partial by decision: one state is unreachable in production.** The rule that marks stored ownership `partial: peer running` exists in `core/Authors`, but production cannot reach it for a still-running peer round (E5 §12 deviation 8). The grown-peer-set rule carries the repair, and the live backfill has not run on a live store ([PLAN_round_authors_backfill_on_the_live_stores.md](../todo/PLAN_round_authors_backfill_on_the_live_stores.md), N7 and N8). This is named here, in *Promotion record* and in its *open tail*. Deviations are in §12 and in *Promotion record* below. Epic E4 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
+>
+> Status before promotion (kept as history): **code built, code gate `good_enough`, 2026-10-19 — S1–S5 implemented on `feat/round-authors-e4` (pull request #862, not merged; the coai code gate ran one round, 13 of 16 reviewers, 4 findings accepted and fixed or recorded, §12); Fable reviewed the code on 2026-10-19 and ACCEPTED every deviation of §12, and its wording changes are applied in place below; §12 is the implementation record — its deviations and the two E7 confirmations. Plan 2026-10-14, revised 2026-10-16 and 2026-10-17.** Epic E4 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
 >
 > **Revised 2026-10-16 against main** (`59463d73`: E1 #828, E2 #829 and the plan-gate fix #837/#841 shipped since the
 > first text; E3 is not built). Every `path:line` re-verified — the drift is §8.1, and the S2 text keeps the numbers Fable
@@ -33,8 +35,8 @@
 > state, live or backfilled (M6). The E5 side of the same review is in the E5 document (its §10 item 11, §11.4).
 >
 > Scope: `src_mcp/core/Authors/` (new, pure) and `src_mcp/tests/` (new test classes). No schema step, no
-> call site, no I/O — those are E5's. Related docs: [module_server.md](../research/module_server.md),
-> [PLAN_local_db.md](../research/PLAN_local_db.md).
+> call site, no I/O — those are E5's. Related docs: [module_server.md](module_server.md),
+> [PLAN_local_db.md](PLAN_local_db.md).
 
 ## 0. What this epic delivers, and what it does not
 
@@ -1733,3 +1735,27 @@ E3 never emits a default instant; equal sort keys are equal records; the perform
 - **Item 8 — `PeersKnown` on `AttributionInput` means "the lookup of the caller's other gate sessions completed".** True: `Peers` is the complete set (E4.S5's fixture loader sets it true). False: `Peers`
   is not read — `Assign` names no peer in `PeerGates`, claims nothing, marks every window `partial: prior windows unknown`, and `PeerStillRuns` is false — so an incomplete lookup proves no growth and E7 defers a
   `peer running` row. E5's `AuthorPeers.Find` sets it false when a peer's session file did not load or the deadline cut the walk.
+
+## Promotion record (2026-10-21)
+
+### Deviations from the plan
+
+§12 above holds the full record (items 1–16). The ones that change what the plan said:
+
+1. **The prior end counts only peer rounds that complete before this gate's first round** (§12 item 1). Otherwise the bound would be an ownership rule.
+2. **The case "a blind before-open, a counted round window" cannot arise** (item 2). Both windows of a first round depend on the same two instants.
+3. **Complexity 4 is a build error.** CA1502 is switched on in `.editorconfig` for `src_mcp/core/Authors/*.cs` and `AttributionMapping.cs` (item 9).
+4. **An unobserved launch with no instant counts once in a round** (item 10), not once per window.
+5. **`Assign` throws `ArgumentException` on a contract violation**, and the closed vocabularies stay `string` constants. Both were recorded and not changed (items 15 and 16).
+6. **The one `ObservedSession` → `AttributionInput` mapping is `AttributionMapping`**, built by E4.S5 and called by E5 and E7 (judge review B1).
+7. **`partial: peer running` is unreachable in production for a still-running peer round.** The rule exists in `core/Authors`. A running round has no caller on disk, so no caller can name it (E5 §12 deviation 8). The grown-peer-set rule carries the repair. **This is the partial-by-decision item of E4.**
+
+The check boxes in *Definition of Done* in this document are not the authority. This record and §12 are.
+
+### Open tail
+
+| Item | Where it lives |
+|---|---|
+| A stored row whose peer set grew after it was stored stays provisional until the live backfill recomputes it (the grown-peer-set rule) | [PLAN_round_authors_backfill_on_the_live_stores.md](../todo/PLAN_round_authors_backfill_on_the_live_stores.md), N7 and N8 |
+| **Partial by decision:** `peer running` cannot be written for a peer round that is still running, because that round has no caller on disk | Not planned. By decision (E5 §12 deviation 8). |
+| The attribution rules have been checked on E1's fixtures and in temp-store end-to-end tests only, not against real older rounds | the same plan, N9 |

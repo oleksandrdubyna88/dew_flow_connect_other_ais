@@ -320,7 +320,7 @@ public sealed class ConsultantPlaces(string homesRoot, string store, IProcessLau
     /// </summary>
     /// <remarks>
     /// <para>A source that is a Git work tree is copied as it is. A source that is NOT one — a parent folder of repositories —
-    /// is expanded into the repositories beneath it (D1–D7, D9 of <c>todo/PLAN_vibe_reads_a_folder_of_repositories.md</c>,
+    /// is expanded into the repositories beneath it (D1–D7, D9 of <c>research/PLAN_vibe_reads_a_folder_of_repositories.md</c>,
     /// <see cref="ParentExpansion"/>), each copied through the same method at <c>tree/&lt;grant index&gt;/&lt;relative path&gt;/snapshot-&lt;id&gt;</c>.</para>
     /// <para>The order is: every granted folder asked of git once and counted; every repository beneath every parent confirmed; the
     /// linked worktrees whose main checkout is copied left out; the bound judged over what is left — and only then the copies, made one

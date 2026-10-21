@@ -217,11 +217,15 @@ internal static class AskAcpMode
     /// <summary>The report printed, the exit made from the outcome.</summary>
     private static async Task<int> ReportedAsync(IAcpProfile profile, AcpOutcome outcome, Action<string> note, TextWriter output)
     {
-        var diagnosis = AcpDiagnosis.Of(outcome.Reason + "\n" + outcome.StdErr, profile.KnownFailures);
+        var diagnosis = Diagnose(profile, outcome);
         await output.WriteLineAsync(Report(outcome, diagnosis));
 
         return Exit(outcome, diagnosis, note);
     }
+
+    /// <summary>The known failure an outcome names, from the text of the turn: its reason and its stderr.</summary>
+    internal static AcpDiagnosis Diagnose(IAcpProfile profile, AcpOutcome outcome) =>
+        AcpDiagnosis.Of(outcome.Reason, outcome.StdErr, profile.KnownFailures);
 
     /// <summary>Why this shim will not even start the agent — or empty when it will. Every one of these is 65.</summary>
     internal static string Refusal(IAcpProfile profile, IReadOnlyDictionary<string, string> flags, string cwd, string model) =>
@@ -301,7 +305,7 @@ internal static class AskAcpMode
 
         if (Diagnosed(outcome.End, diagnosis))
         {
-            note($"{diagnosis.Name}: {outcome.Reason} — {diagnosis.Cure}");
+            note(DiagnosedNote(outcome, diagnosis));
 
             return DiagnosedExit(diagnosis.Kind);
         }
@@ -315,8 +319,17 @@ internal static class AskAcpMode
     private static bool Diagnosed(AcpEnd end, AcpDiagnosis diagnosis) =>
         diagnosis.Known && end is not (AcpEnd.Deadline or AcpEnd.Cancelled or AcpEnd.ModelNotOffered);
 
-    /// <summary>A known failure's exit: a spent allowance, or a refusal.</summary>
-    private static int DiagnosedExit(AcpFailureKind kind) => kind == AcpFailureKind.Spent ? Spent : Refused;
+    /// <summary>A known failure's sentence: its name, the agent's reason, and the cure — when there is one (a known shape with no cure ends at the reason).</summary>
+    private static string DiagnosedNote(AcpOutcome outcome, AcpDiagnosis diagnosis) =>
+        diagnosis.Note(outcome.Reason);
+
+    /// <summary>A known failure's exit: a spent allowance, the agent's own failure in a known shape, or a refusal.</summary>
+    private static int DiagnosedExit(AcpFailureKind kind) => kind switch
+    {
+        AcpFailureKind.Spent => Spent,
+        AcpFailureKind.Failed => Failed,
+        _ => Refused,
+    };
 
     /// <summary>An undiagnosed end's exit: the agent's own failure, a broken stream, or ended before an answer.</summary>
     private static int EndExit(AcpEnd end) => end switch

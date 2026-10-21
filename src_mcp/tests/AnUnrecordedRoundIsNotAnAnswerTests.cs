@@ -151,37 +151,13 @@ public sealed class AnUnrecordedRoundIsNotAnAnswerTests : IAsyncLifetime
         // The session is saved by a temp file and a move over it (E3 S5): a RENAME over a read-only file succeeds on Linux and macOS, where the
         // attribute is a mode bit that only denies opening it for writing. What denies the save there is a folder nobody may create a file in.
         var sessions = Path.Combine(_data, "sessions");
-        using var folder = new ReadOnlyFolder(sessions);
+        Assert.SkipUnless(FolderHolds.CanMakeOneUndeletable, "a privileged Unix process writes where the mode forbids");
+        using var folder = FolderHolds.Unwritable(sessions);
 
         var answer = Parse(await service.ReviewPlanAsync(_repo, "feature", "a plan worth reviewing"));
 
         answer.TryGetProperty("error", out var error).Should().BeTrue(
             "an answer whose findings cannot be resolved is a failure, not a verdict");
         error.GetString().Should().Contain("could not be recorded");
-    }
-
-    /// <summary>On Unix, a folder no file can be created in until the test is over; on Windows it changes nothing (the read-only file already denies the move).</summary>
-    private sealed class ReadOnlyFolder : IDisposable
-    {
-        private readonly string _path;
-        private readonly UnixFileMode _before;
-
-        public ReadOnlyFolder(string path)
-        {
-            _path = path;
-            _before = OperatingSystem.IsWindows() ? default : File.GetUnixFileMode(path);
-            if (!OperatingSystem.IsWindows())
-            {
-                File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserExecute);
-            }
-        }
-
-        public void Dispose()
-        {
-            if (!OperatingSystem.IsWindows())
-            {
-                File.SetUnixFileMode(_path, _before);
-            }
-        }
     }
 }

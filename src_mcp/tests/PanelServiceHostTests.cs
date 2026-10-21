@@ -168,6 +168,32 @@ public sealed class PanelServiceHostTests : IDisposable
     }
 
     /// <summary>
+    /// The busy path on EVERY OS, through the host's read seam (the arm above holds a real file and is Windows'): a read that fails with a sharing violation
+    /// (HResult 0x80070020) keeps the last good settings, says so ONCE for that stamp however many calls ask, and sees the new file as soon as the read recovers.
+    /// </summary>
+    [Fact]
+    public void ABusyRead_KeepsTheLastGoodSettings_SaysSoOncePerStamp_AndRecovers()
+    {
+        WriteVendors("""[{"id":"codex","runtime":"codex","model":"gpt-5.6-terra","baseUrl":""}]""");
+        var busy = false;
+        var events = new List<Serilog.Events.LogEvent>();
+        var host = new PanelServiceHost(
+            Env, VaultKeys.None("no vault in this test"), default, new ProcessLauncher(),
+            new Serilog.LoggerConfiguration().WriteTo.Sink(new CapturedEvents(events)).CreateLogger(), Noticing.None,
+            path => busy ? throw new IOException("The process cannot access the file because it is being used by another process.", unchecked((int)0x80070020)) : File.ReadAllText(path));
+        Touch(() => WriteVendors("""[{"id":"codex","runtime":"codex","model":"gpt-5.6-mini","baseUrl":""}]"""));
+        busy = true;
+
+        var whileBusy = new[] { CodexModel(host), CodexModel(host), CodexModel(host) };
+
+        whileBusy.Should().OnlyContain(model => model == "gpt-5.6-terra", "a file its writer holds is not a file with no settings in it");
+        events.Count(e => e.Level == Serilog.Events.LogEventLevel.Warning && e.RenderMessage().Contains("held open by its writer")).Should().Be(1,
+            "the retry is on every call, so the warning is one per stamp");
+        busy = false;
+        CodexModel(host).Should().Be("gpt-5.6-mini", "the stamp did not move, so the first call after the read recovers sees the new file");
+    }
+
+    /// <summary>
     /// E3 S2 (C14, decision 4 of the lead's decisions): a file locked down by mistake must never pin the last good settings
     /// for ever, so a permission denial is NOT busy — it keeps today's answer, the defaults. The denial comes through the
     /// host's internal read seam, not a real ACL (an ACL is Windows-only, needs cleanup that can fail, and tests the OS).
