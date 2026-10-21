@@ -382,7 +382,7 @@ linuxTest('make-series.sh with a clean PATH: a private tree, SERIES_PATH, ONLY t
 });
 
 for (const [name, entryOf, mention] of [
-  ['an empty entry', () => '', /PATH entry 0 '' is an empty entry (= the current directory)/u],
+  ['an empty entry', () => '', /PATH entry 0 '' is an empty entry \(= the current directory\)/u],
   ['the entry "."', () => '.', /PATH entry 0 \. is a relative entry/u],
   ['a relative entry', () => 'rel/bin', /PATH entry 0 rel\/bin is a relative entry/u],
   ['a mode-777 directory', (dirs) => dirs.wide, /world-writable \(mode 777\)/u],
@@ -513,7 +513,8 @@ linuxTest('TEETH (B3): an abort that takes no snapshot of descendants leaves the
 });
 
 linuxTest('TEETH (B5): a make-series.sh that does not judge a relative PATH entry accepts it — "a relative, empty or world-writable PATH entry before the node directory was accepted"', () => {
-  const blind = mutated(nativeText('make-series.sh'), 'elif [ "${ENTRY#/}" = "$ENTRY" ]; then\n    WHY="a relative entry"\n  ', '');
+  // the relative entry is then judged as nothing at all (removing the branch would let it fall to "missing", which refuses it for another reason)
+  const blind = mutated(nativeText('make-series.sh'), 'WHY="a relative entry"', 'WHY=""');
   const series = bareSeries();
   const home = fakeHome();
   const dirs = pathDirs();
