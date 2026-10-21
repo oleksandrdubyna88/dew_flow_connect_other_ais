@@ -960,18 +960,18 @@ fixed sleeps in the fakes as the thing that decides the outcome.
 **D4 — A round removes its own always-empty folders (PRODUCT — built in E3, judge J9).** `coai-repair-` and
 `coai-noworkspace-` are removed when the round ends, by the PATH the round recorded when it made them, never by a name
 glob; `coai-answers-` keeps the six-hour sweep. **The plumbing, named:** the frame paths never leave `RosterBuilder` —
-`RosterFrame` (`RosterAssembly.cs:13-24`) is built in `RosterBuilder.FrameFor` (`:274-285`: `repairDir` at `:282`, the
+`RosterFrame` (`RosterAssembly.cs:13-24`) is built in `RosterBuilder.FrameFor` (`:274-290`: `repairDir` at `:282`, the
 `coai-noworkspace-` launch folder through `RosterFrame.Directories` at `:283` → `RosterAssembly.cs:42`) and used only
 inside the builder — but the frame already carries the round's **`RoundScratch`** (`RosterFrame.Scratch`, `:24`),
 reserved once per `BuildWork` (`RosterBuilder.cs:107`), handed out in `RoundWork.Scratch`, and DISPOSED by the round at
-its real end: `using var scratchOfTheRound = roundWork.Scratch;` (`RoundEngine.cs:358`) — after every reviewer and
+its real end: `using var scratchOfTheRound = roundWork.Scratch;` (`RoundEngine.cs:360`) — after every reviewer and
 repair of the round, on success, failure and cancellation alike, because it is a `using`. `RoundScratch.Dispose`
-(`RoundScratch.cs:94-124`) already deletes its own folder with `GitScratch.DeleteEvenIfReadOnly`. So D4 is: the two
+(`RoundScratch.cs:113-170`) already deletes its own folder with `GitScratch.DeleteEvenIfReadOnly`. So D4 is: the two
 folders are REGISTERED with the scratch when they are made (`FrameFor` for both of the ordinary round's;
 `SecurityRoster.Append(RoundWork ordinary, …)` (`SecurityRoster.cs:30`) registers its own `:154` folder with
 `ordinary.Scratch`), and `Dispose` removes them **only when they are EMPTY** — a non-recursive `Directory.Delete`
 (cadence consult 589e4647, verified): the launcher lists and confirms descendants only for a request that ends its own
-child (`ProcessLauncher.cs:586-590`), so an ordinary reviewer's grandchild can outlive the round inside that folder, and
+child (`ProcessLauncher.cs:125`/`:668`), so an ordinary reviewer's grandchild can outlive the round inside that folder, and
 on Unix removing a live process's working folder succeeds silently. A folder that is not empty, or cannot be removed,
 is warned about and left to the six-hour sweep (which needs the folder old, so a live grandchild is not raced), and
 **a failed removal never fails the round.** The always-empty case is the measured one (8,844 of 8,844). **Policy,
@@ -982,7 +982,7 @@ relative write fails; on Windows the removal fails while the folder is in use, a
 grandchild arm pins exactly this: the grandchild enters the empty folder, closes its pipes, signals ready and waits; the
 round ends and disposes; the round's outcome is unchanged on both platforms, and the folder is gone (Linux) or left (Windows). A `BuildWork` called with no round around it
 (`SubmissionOrderTests.cs:116-118`, a hundred times) never disposes its scratch; under D2 that is the test's folder,
-and D4 does not claim more than rounds. *Loses:* leaving it to D2 (D2 helps only the tests; a person's machine makes
+and D4 does not claim more than rounds. *Built (E3 S3, 2026-10-21):* see E3's S3 Outcome — the line numbers above are re-pinned to the code as built. *Loses:* leaving it to D2 (D2 helps only the tests; a person's machine makes
 two of these per round for ever); a `finally` in `RoundEngine` (there is none today, and the scratch's `using` IS the
 round's end — a second end would be the reuse rule's defect).
 
@@ -1329,8 +1329,8 @@ while the child is alive, today's rule stays (kill, wait, rethrow); the `ARoundT
 reviewers answered" first. C14: a tri-state `SettingsFile.TryRead` used by `PanelServiceHost.Current` on the RELOAD path
 only — `Busy` keeps the last good settings and the old stamp; malformed and empty behave as today; `Layer`'s eight
 callers unchanged; `Current` never throws; the sweeper test passes its own homes. D4: the two empty folders register with
-the round's `RoundScratch` (`RosterBuilder.cs:107`, `SecurityRoster.cs:30`/`:154`) and are removed by its `Dispose` at
-`RoundEngine.cs:358` — **non-recursive, only when EMPTY** (§6 D4, cadence consult 589e4647): a folder that is not empty,
+the round's `RoundScratch` (`RosterBuilder.cs:107`, `SecurityRoster.cs:30`/`:155`) and are removed by its `Dispose` at
+`RoundEngine.cs:360` — **non-recursive, only when EMPTY** (§6 D4, cadence consult 589e4647): a folder that is not empty,
 or cannot be removed, is warned about and left to the six-hour sweep; best effort, never failing the round. C18's
 product angle (§4 C18): `AtomicFile.MoveOver` (`AtomicFile.cs:49-63`) also retries `UnauthorizedAccessException` inside
 its window; `AtomicJson.WriteUnderTurn` (`Escalations.cs:355-360`) writes through `AtomicFile.Write` with one shared
@@ -1352,6 +1352,20 @@ macOS runs, and `TheHeartbeatIsRewritten_…`'s exception form and `EightWriters
 Windows runs (watches, §10).
 
 **S1 (C2) status (2026-10-19): built on `feat/suite-c2`, awaiting the macOS CI leg and the 20-run watch** — see C2's Outcome.
+
+**S3 (D4, S7) status (2026-10-21): built on `feat/suite-e3-s3`, awaiting its code gate** — see S3's Outcome below.
+
+**S3 Outcome (2026-10-21, branch `feat/suite-e3-s3`; the tests, their reds and the break-its are in `research/module_tests.md`, section "The suite is deterministic — E3 S3 (D4)"; the round scratch is in `research/module_server.md`, "The two folders that are always empty").** Built as written in §6 D4:
+`RoundScratch.Owns(folder)` registers a folder on a registry that `With(...)` carries (one `ConcurrentQueue` through the constructor); `RoundScratch.None` takes nothing. `RosterBuilder.FrameFor` registers
+`repairDir` and, through `RosterFrame.OwnTheWorkspace`, the `coai-noworkspace-` folder (never the worktree path); `SecurityRoster.Append` carries `ordinary.Scratch` in its `Decided` record to `Build`, which
+registers the lane's folder. `Dispose` removes each by its recorded path with a NON-recursive `Directory.Delete`, after the scratch's own folder and its homes; `IOException` / `UnauthorizedAccessException`
+say one sentence ("… was not removed (…); the six-hour scratch sweep takes it") and leave the folder; a missing folder is nothing; nothing is thrown. `coai-answers-` and `PanelService.cs:1381` / `shared/temp-sweep.json` are unchanged.
+**Deviations.** (1) The brief's break-it "drop the `With` carry → the main test red" is not reachable at round level: a round's scratch goes through `With` only when a runtime asks for a snapshot (Vibe, Kimi), and the S7 round has none. That break-it turns
+red the unit test `TheRegistry_IsCarriedBy_With_…`; the round-level main test stays green. (2) The "cannot be removed" arm holds a Windows directory handle (`FolderHolds.Undeletable`; it needs a real access right — an attributes-only open takes no part in sharing,
+which a first attempt found: the removal succeeded) and is skipped on Unix at round level; its Unix twin is the scratch's own unit test, where the folder's PARENT is made read-only (skipped when the process is privileged). (3) The grandchild is a real `FakeCli cwd-hold` child
+(a new verb, handled before the vendor mode) started by the test's launcher hook in the repair folder: it says `ready <pid>` on its pipe (the event), closes all three pipes and waits; the test kills it by PID. Windows leaves the folder with one warning; the Unix assertion
+(folder gone) is written but was NOT run here — the Linux and macOS CI legs are its first run. (4) `PanelServiceTests` became `partial` so the S7 round arms share its service, git fixture and the C10 recorder (`SeenRepairs` gained a `BeforeARepair` hook; the C10 round is now `ARepairedCodeRoundAsync`, with the
+worktree-mode assertion kept in `RepairLaunchesOfACodeRoundAsync`, so the positive control still fails in `none` mode). (5) One extra test beside S7: `TheEmptyFoldersOfTheOrdinaryRoundAndOfTheLane_AreAllRemovedWithTheScratchTheRosterWasGiven` (`SecurityLaneRoundTests`) proves the lane's folder is registered.
 
 **Size.** Five stories: S1 C2 (the launcher helper, S8 both arms, S9, the EndToEnd assertion; the brief pins the
 tracker stand-in's two observations and that the Team server's reader marker is cleared by the launch's normal end) —

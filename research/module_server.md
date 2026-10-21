@@ -7554,6 +7554,18 @@ The server's half of the Vibe reviewer row ([module_runners.md](module_runners.m
   `MakeWork`): the snapshot is disposed (its bytes given back to the budget) and the whole folder deleted — the homes in
   it too. A crash leaves it to the six-hour scratch sweep, which runs on the round's build path and on the consultation
   beat. `RoundWork.Scratch` rides every `with` copy of the work; the two `new RoundWork` in `BuildWork` set it.
+- **The two folders that are always empty** (D4 of `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md`, E3 S3, 2026-10-20): the round makes a `coai-repair-` folder (the repair
+  launch's working folder, `RosterBuilder.FrameFor`) and — in the `none` workspace mode, on a code round — a `coai-noworkspace-` folder (the review launch's, `RosterFrame.Directories`;
+  the security lane makes one of its own in `SecurityRoster.Build`). Each is REGISTERED with the round's scratch when it is made (`RoundScratch.Owns(folder)`; `RosterFrame.OwnTheWorkspace`
+  skips the worktree path, which is the person's checkout; the lane reaches the scratch through `ordinary.Scratch`, carried in its `Decided` record) and removed by `RoundScratch.Dispose`
+  — the round's one end, the `using` in `RoundEngine` — after the scratch's own folder and its homes: by the PATH recorded, never a name pattern, **NON-recursive** (`Directory.Delete(folder)`,
+  not `GitScratch.DeleteEvenIfReadOnly`), so only an EMPTY folder goes. A folder that is not empty, is in use or is refused (`IOException`, `UnauthorizedAccessException`) is noted ONCE
+  through the scratch's note ("the round's folder … was not removed (…); the six-hour scratch sweep takes it") and left to the sweep; one already gone is nothing; nothing is ever thrown — a
+  removal failure never fails the round. The registry is one `ConcurrentQueue` passed through the constructor, so `With(...)` carries the SAME one; **`RoundScratch.None` takes no
+  registration** (it is one static object shared by every scratch-less `BuildWork`, and a list on it would grow for ever). **The policy for a surviving descendant:** an EMPTY folder can
+  still be a descendant's working folder; the round that has ended removes it anyway — on Unix that succeeds and the descendant's next relative write fails, on Windows the removal is refused
+  while the folder is some process's working folder and it is left (and said). `coai-answers-*` is unchanged: it keeps the six-hour sweep (`PanelService.PruneOldScratchDirs`,
+  `shared/temp-sweep.json`) — which still collects every folder a round could not remove or a crash left, so its prefixes stay as they were.
 - **A Kimi home in the scratch** (E4.4 of `todo/PLAN_vibe_and_kimi_runtimes_E4.md`, S4.15): `RoundScratch.Delete` first calls `KimiHome.DisposeAllUnder(Directory, note)` — every `kh-*`
   home (a Kimi reviewer's, `KimiRuntime`) has its `credentials` junction to the person's own folder removed by its own name, the person's names verified, under no live tree — and only
   then `GitScratch.DeleteEvenIfReadOnly`, which meets no link. A `Stopped` home is noted ("the round's scratch … is kept: …") and the whole scratch is KEPT for the six-hour sweep (which asks the same per-home hold before it deletes a due folder, E4.4 review B1), not

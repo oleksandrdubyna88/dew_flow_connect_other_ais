@@ -29,7 +29,7 @@ public sealed class FakeCliEnvCollection;
 /// line — the full loop, from a plain caller, with no vendor anywhere near CI.
 /// </summary>
 [Collection("fakecli-env")]
-public sealed class PanelServiceTests : IAsyncLifetime
+public sealed partial class PanelServiceTests : IAsyncLifetime
 {
     /// <summary>
     /// A scope, not a title. The code gate refuses a bare diff, so every code round in these tests
@@ -114,7 +114,8 @@ public sealed class PanelServiceTests : IAsyncLifetime
         int maxRounds = 3,
         bool deal = false,
         IProcessLauncher? through = null,
-        string workspace = "none") =>
+        string workspace = "none",
+        Serilog.ILogger? log = null) =>
         new(
             new PanelSettings
             {
@@ -134,7 +135,7 @@ public sealed class PanelServiceTests : IAsyncLifetime
             VaultKeys.None("no vault in tests"),
             default,
             through ?? _launcher,
-            Logger.None, Noticing.None);
+            log ?? Logger.None, Noticing.None);
 
     private static JsonElement Parse(string json) => JsonDocument.Parse(json).RootElement;
 
@@ -276,12 +277,27 @@ public sealed class PanelServiceTests : IAsyncLifetime
     /// </summary>
     private async Task<IReadOnlyList<RepairLaunch>> RepairLaunchesOfACodeRoundAsync(string workspace = "worktree")
     {
+        var round = await ARepairedCodeRoundAsync(workspace);
+        round.Reviews.Should().Contain(review => review.EntriesAtLaunch.Count > 0, "in worktree mode the review launched in the checkout, so the repair folder being empty is a choice and not an accident");
+
+        return round.Repairs;
+    }
+
+    /// <summary>What a repaired code round did: where each repair and each review launched, and the answer the round gave.</summary>
+    private sealed record RepairedRound(IReadOnlyList<RepairLaunch> Repairs, IReadOnlyList<RepairLaunch> Reviews, string Answer);
+
+    /// <summary>
+    /// A code round whose first answers are not the schema's JSON, so each reviewer is launched a second time with the repair prompt;
+    /// the answers to the repair are clean. <paramref name="beforeARepair"/> is told the repair's folder just before the launch starts.
+    /// </summary>
+    private async Task<RepairedRound> ARepairedCodeRoundAsync(string workspace, Action<string>? beforeARepair = null, Serilog.ILogger? log = null)
+    {
         const string Marker = "YOUR PREVIOUS ATTEMPT";
-        var seen = new SeenRepairs(_launcher, Marker);
+        var seen = new SeenRepairs(_launcher, Marker) { BeforeARepair = beforeARepair ?? (static _ => { }) };
         try
         {
             // The review launch runs IN the checkout, so a repair that carried the workspace would be seen as not empty.
-            var service = Service(through: seen, workspace: workspace);
+            var service = Service(through: seen, workspace: workspace, log: log);
             await service.OpenAsync(_repo, "feature");
             await service.ReviewPlanAsync(_repo, "feature", "the plan");
             await service.ResolveAsync(_repo, "feature", "[]");
@@ -292,11 +308,9 @@ public sealed class PanelServiceTests : IAsyncLifetime
             Environment.SetEnvironmentVariable("FAKECLI_TURN1_REPAIR_OUTFILE_TEXT", CleanReview);
 
             seen.StartRecording();
-            await service.ReviewCodeAsync(_repo, "feature", "main", Scope);
+            var answer = await service.ReviewCodeAsync(_repo, "feature", "main", Scope);
 
-            seen.Reviews.Should().Contain(review => review.EntriesAtLaunch.Count > 0, "in worktree mode the review launched in the checkout, so the repair folder being empty is a choice and not an accident");
-
-            return [.. seen.Repairs];
+            return new([.. seen.Repairs], [.. seen.Reviews], answer);
         }
         finally
         {
@@ -315,6 +329,9 @@ public sealed class PanelServiceTests : IAsyncLifetime
         private readonly System.Collections.Concurrent.ConcurrentQueue<RepairLaunch> _reviews = new();
 
         private volatile bool _recording;
+
+        /// <summary>Told the folder of each repair launch just before it starts — what a test does to that folder while the round is still running.</summary>
+        public Action<string> BeforeARepair { get; init; } = static _ => { };
 
         /// <summary>From here on launches are noted: the plan round before it is not the code round the test is about.</summary>
         public void StartRecording() => _recording = true;
@@ -342,6 +359,7 @@ public sealed class PanelServiceTests : IAsyncLifetime
             if (carriesTheRepair)
             {
                 _repairs.Enqueue(launch);
+                BeforeARepair(request.WorkingDirectory);
             }
             else if (IsAReview(request))
             {
