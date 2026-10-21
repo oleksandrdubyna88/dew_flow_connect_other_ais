@@ -3,6 +3,8 @@
 > Status: **plan only, nothing implemented yet, 2026-10-21.** Scope: the open tail of the promoted [round-authors plan](../research/PLAN_a_round_records_who_wrote_the_code_and_how_much.md) and its [E7 stories](../research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E7.md). The `--backfill-authors` mode itself is built and merged (#865). This plan holds what remains: two scripts, one missing test oracle, the owner-approved runs on the live stores, the hand-check, the `RESULTS_` file, and the small leftovers of epic E1. No new reader, no new attribution rule, no schema step.
 >
 > Related docs: [module_server.md](../research/module_server.md) (*`--backfill-authors`*, *`--round-authors`*), [module_tests.md](../research/module_tests.md), [RESULTS_caller_transcripts_on_both_sides.md](../research/RESULTS_caller_transcripts_on_both_sides.md), [PLAN_a_session_file_keeps_what_a_newer_server_wrote.md](../research/PLAN_a_session_file_keeps_what_a_newer_server_wrote.md).
+>
+> **How this plan is built.** Nothing in this plan is built in the promotion PR. Before any code of this plan is built, the plan is split into epics. Fable does the split, after it asks the question consultant. Each epic gets its own coai plan gate and its own code gate. Every live run needs the owner's written approval (§4 rule 1).
 
 ## 1. The goal, before any solution
 
@@ -57,11 +59,11 @@ These rules come from the owner (2026-10-15 and 2026-10-16). Each is a precondit
 1. **Owner approval for each live run.** Each of O2 (Windows) and O3 (WSL) starts only after the owner approves that run in writing, in the session that runs it. An approval for one run does not cover the next one. A session never starts a live run on its own.
 2. **A verified backup of BOTH stores before any write.** Each writing run backs up its own store first. The mode makes the copy by SQLite's online backup, copies every session file, and checks the copy (opens, `integrity_check`, `user_version`, every table's row count before and after, `PRAGMA data_version` unchanged, SHA-256 of every session file). A failed check writes nothing and exits 74. No run writes a store it did not back up in the same run.
 3. **A dry run first, and it only reads.** `--dry-run` opens the store `Mode=ReadOnly`, makes no backup folder and writes no store file. A writing run starts only after the dry run of the SAME binary over the SAME store exited 0 the same day.
-4. **Idempotent.** The second run of the mode writes nothing: every `written` count is 0, and the dump of the authors and size tables is byte-identical.
+4. **Idempotent.** The second run reports zero writes and zero heals. Any non-zero count fails the idempotence check. A heal on a second run is a separate named state; it does not pass. The dump of the authors and size tables is byte-identical.
 5. **A weaker result never replaces a stronger one.** The strength order is `observed` > `partial` > `unobserved` > empty. A result from an older reader never replaces a row of a newer reader. `CorrectedBelow` is the only exception, and only a RED-test fix story that proves a version wrong may set it.
 6. **A live size is never replaced.** A round that already has a `size_state` keeps it. The backfill never re-measures a size it wrote.
 7. **Nothing is deleted.** The mode deletes no backup, no session file and no row it did not write. In WSL no agent deletes anything: no `rm`, no `mv` over an existing file, no cleanup step.
-8. **No running server on an older release.** An older `coai-mcp` that saves a session file drops the `authors` member (E5 measured it: 13 221 bytes became 3 246 bytes after one `open`). Every running server of the side must be on the release before the first write. N1 checks this.
+8. **No running server on an older release.** An older `coai-mcp` that saves a session file drops the `authors` member (E5 measured it: 13 221 bytes became 3 246 bytes after one `open`). Every running server of the side must be on the release before the first write. N1 checks this on the RUNNING process, not on the file on disk. `<path> --version` reports the binary on disk. An old server that is still running after an upgrade replaced its executable would pass that check, and would strip `authors` on its next session-file save. So every running `coai-mcp` process must have a start time LATER than the last-write time of the installed binary. A process that started before the install is a failure, even when its path reports the new version. If a start time cannot be read, N1 fails closed (exit 1).
 9. **WSL runs from script files.** Every WSL command runs from a script file written on the Windows side and started as `wsl.exe -e bash <script>`. No value goes through `wsl.exe`'s command line. Every output goes to a new folder.
 10. **No process is killed by image name.** If a session holds a claim, the operator waits for it or asks for the window to close.
 
@@ -70,34 +72,56 @@ These rules come from the owner (2026-10-15 and 2026-10-16). Each is a precondit
 | Surface | Projected size | Who retires it | If interrupted |
 |---|---|---|---|
 | `<dataDir>/backfill-backups/<utc>/` (one `coai.db` copy and the session files per WRITING run, a refused run included) | Windows: 72 MB database + 28 MB session files per run (parent plan §14); two runs plus one per J1 fix: about 150–360 MB. WSL: the same arithmetic over the WSL store, measured by the dry run before the first write | The operator, by hand, after the `RESULTS_` file is committed. The mode never deletes | A crashed run leaves its folder. A folder without `check.json` is a run killed mid-copy. The next run makes its own folder |
-| Working outputs of N5–N8 (summaries, JSON, the judge sheet) | under 1 MB per side | The operator. Only the `RESULTS_` file and what it cites are committed | none |
+| Working outputs of N5–N8 (summaries, JSON, the judge sheet) | under 1 MB per side | The operator. Only the `RESULTS_` file is committed. It cites the other outputs by SHA-256 and by a named private location outside the repository (N10) | none |
 | `RESULTS_who_wrote_the_code_under_review.md` | about 30 KB | none, it is a record | none |
 
 ## 6. Stories and build order
 
-N1–N3 are code or script work. They need no approval and no live store. N4 is attended. N5–N9 touch live data.
+N1–N3 are code or script work. They need no approval and no live store. N4 is attended. N5–N9 touch live data. N9a decides whether a disagreement is a product defect.
 
 ```
 N1 ─┐
-N2 ─┼─► (release carrying E5, E6, E7) ─► N5 ─► N6 ─► N7 (Windows) ─► N8 (WSL) ─► N9 hand-check ─► N10 answer
-N3 ─┘          N4 (any time, attended)
+N2 ─┤
+N3 ─┼─► (release carrying E5, E6, E7) ─► N5 ─► N7 (Windows) ─► N8 (WSL) ─► N9 hand-check ─► N9a adjudication ─┬─► N10 answer
+N4 ─┘                                          ▲                                                              │  no confirmed defect
+                                               └──────────────── N6 fix story ◄───────────────────────────────┘
+                                                                       only on a confirmed product defect
 ```
+
+N6 is a loop-back. It starts only when N9a confirms a product defect. After the fix lands, the run goes back to N7 (then N8, N9 and N9a again). When N9a finds no confirmed defect, the run goes to N10. N4 is attended: it is done before N5, or the operator records each open N4 item as not done and the RESULTS file states it (N10).
 
 ### N1 — The servers pre-flight script
 
-- **Goal.** One read-only script says whether every running `coai-mcp` of a side is on the release. It never stops a process.
-- **Files.** `scripts/backfill-preflight-servers.ps1` (Windows) and `scripts/backfill-preflight-servers.sh` (WSL, run from a script file); a `node --test` file for the parts that parse the version output (`scripts/lib/`).
-- **Behaviour.** The script lists each `coai-mcp` process by executable path and asks each path `--version`. It exits 1 and names the path when any is not the expected version. It exits 0 when all are. It takes the expected version as an argument.
+- **Goal.** One read-only script says whether every RUNNING `coai-mcp` of a side is on the release. It checks the running process, not only the file on disk. It never stops a process that it did not start itself.
+- **Files.** `scripts/backfill-preflight-servers.ps1` (Windows) and `scripts/backfill-preflight-servers.sh` (WSL, run from a script file); a `node --test` file for the parts that parse the version output and compare times (`scripts/lib/`).
+- **Behaviour.**
+  1. The script lists each `coai-mcp` process by process id, executable path and start time. It takes the expected version as an argument.
+  2. It asks each distinct path `--version`. It exits 1 and names the path when any path is not the expected version.
+  3. **Start-time rule.** `--version` reports the binary on disk. A server that was started before an upgrade replaced its executable still runs the old code, whatever its path now reports. So the script also reads the last-write time of the installed binary. Every running `coai-mcp` process must have a start time LATER than that last-write time. A process that started before the install is a failure, even when its path reports the new version. On Linux, a process whose `/proc/<pid>/exe` link ends in ` (deleted)` is the same failure. Both times are compared in UTC.
+  4. **Fail closed.** If a start time or a last-write time cannot be read, the script exits 1 and names the process id. It never treats "unknown" as "fine".
+  5. **Bounded `--version`.** Every `--version` call has a per-process timeout of 5 seconds, in both scripts. On timeout the script kills ONLY the child it started, by that child's process id. It never kills by image name and never touches a server it did not start. A timeout is a verification failure: exit 1, with the path named.
+  6. Exit 0 only when every process passes steps 2 to 5. Exit 65 when the expected-version argument is missing.
+- **LF only for `.sh`.** The `.sh` scripts are LF-only. Build step (do not edit `.gitattributes` in the promotion PR): `.gitattributes` must carry `scripts/*.sh text eol=lf`. Checked on 2026-10-21: the file already has the wider line `*.sh text eol=lf` (line 3), which covers these scripts. The build step adds the narrower `scripts/*.sh text eol=lf` line too, so the rule survives if the wider line is ever narrowed. The first command in each `.sh` is a guard that refuses to run when the file contains a carriage return (for example `grep -q $'\r' "$0" && { echo "CR in script" >&2; exit 1; }`, written on ONE line). A CRLF copy then exits non-zero before any other command runs.
 - **Why not in the mode.** A cross-platform process walk is new scope. `ProcessLiveness` (`src_mcp/src/Server/ProcessLiveness.cs:17`) answers by process id only (E7 §6 O1).
-- **Tests.** The version-parsing helper runs under `node --test "scripts/**/*.test.mjs"` (the CI step *Probe script tests*). A fixture with three process lines (two current, one older) gives exit 1 and names the older path. A break-it makes the comparison `>=` instead of equality and goes red.
+- **Tests.** The version-parsing and time-comparing helpers run under `node --test "scripts/**/*.test.mjs"` (the CI step *Probe script tests*). The scripts themselves run against fake binaries (the `.ps1` test where `pwsh` exists, the `.sh` test on Linux).
+  - A fixture with three process lines (two current, one older) gives exit 1 and names the older path.
+  - A fixture with a process whose path reports the new version but whose start time is BEFORE the binary's last-write time gives exit 1.
+  - A fixture whose start time cannot be read gives exit 1 (fail closed).
+  - A hung binary (a fake that sleeps 30 seconds on `--version`) gives exit 1 in about 5 seconds, names the path, and leaves no child of the script running. A decoy process with the same image name, started by the test, is still alive afterwards.
+  - A CRLF copy of each `.sh` exits non-zero and runs nothing after the guard.
+  - Break-its: the comparison `>=` instead of equality goes red; the start-time rule removed goes red; the timeout removed goes red (the hung-binary test hangs and the test timeout fails it).
 
 ### N2 — The round dump for the judge
 
 - **Goal.** The judge reads one round's stored authors without writing a query during the run.
 - **Files.** `scripts/round-authors-dump.mjs`; its `node --test` file; one C# test in `src_mcp/tests` that dumps a round of the S4 scenario store and compares it with the rows the test seeded.
-- **Behaviour.** One round, chosen by `round_key` prefix, gives JSON: its `rounds.authors_*` columns, its `round_authors` rows, and the `Authors` member of the session file's round. It opens the database read-only. On Node 20 (WSL) there is no `node:sqlite`, so the script reads the database through the Python 3 `sqlite3` module that `scripts/export-code-rounds.py` already uses, or takes a JSON export of the rows. N2 picks one and says why.
-- **Reuse first.** Read `scripts/export-code-rounds.py` and `scripts/lib/caller-transcripts.mjs` before writing the reader. Do not write a second store opener.
-- **Tests.** The C# fixture test is RED first against a script that prints `{}`.
+- **Behaviour.** One round, chosen by `round_key` prefix, gives JSON: its `rounds.authors_*` columns, its `round_authors` rows, and the `Authors` member of the session file's round. N2 commits to ONE extraction mechanism: the Python 3 `sqlite3` module, as `scripts/export-code-rounds.py` already uses, on BOTH Windows and WSL. The connection is opened read-only with a `file:...?mode=ro` URI (`export-code-rounds.py:74-75` is the pattern). There is no "JSON export" branch. Reason: Node 20 in WSL has no `node:sqlite`, and a second path (an export step on one side, a direct read on the other) would give two code paths and two output shapes. One mechanism gives one code path and the same output shape on both sides. The `.mjs` script does only the session-file part and the output; it starts the Python reader as a child (`py -3` on Windows, `python3` in WSL).
+- **Invocation contract.**
+  - Arguments: `node scripts/round-authors-dump.mjs <dataDir> <round_key prefix> <name.json>`. The prefix must match exactly one round.
+  - Output file: `<name.json>` is a file name only. The file is written into the folder named by `COAI_EXPORT_DIR` (as `export-code-rounds.py` does), through a temp file and a rename. The script never writes into the data directory and never overwrites a store file. The JSON holds no path and no transcript text.
+  - Exit codes (the same as `export-code-rounds.py`): `0` the file was written; `65` a bad argument or a refusal (wrong argument count, a prefix that matches no round or more than one round, an output named like a store file, `COAI_EXPORT_DIR` not an existing folder); `74` a read failed (a SQLite error or an I/O error). One line goes to stderr.
+- **Reuse first.** Read `scripts/export-code-rounds.py` and `scripts/lib/caller-transcripts.mjs` before writing the reader. Do not write a second store opener. If the read-only opener and its refusals are private inside `export-code-rounds.py`, extract them into one shared module under `scripts/lib/` and let both scripts call it.
+- **Tests.** The C# fixture test is RED first against a script that prints `{}`. A `node --test` case runs the script against a seeded store and checks the three exit codes (0, 65, 74).
 
 ### N3 — The report oracle in the S4 scenario
 
@@ -107,7 +131,7 @@ N3 ─┘          N4 (any time, attended)
 
 ### N4 — The leftovers of epic E1
 
-These need an attended session or a longer sample. They do not block N5–N10. They change what the RESULTS file may claim.
+These need an attended session or a longer sample. They need no live write. N5 starts after N4 is done, or after the operator records each open item as not done. They change what the RESULTS file may claim.
 
 1. **The `/clear` probe.** It exists only in an interactive Claude Code session. Record: the registry `sessionId` after `/clear`; the variable seen by a new Bash child; the variable held by an already-running MCP child (in WSL, `/proc/<pid>/environ` of the child found by parent pid, never by image name); and which `.jsonl` the post-clear turns land in. **Checked so far:** the headless probes for `--resume` and `--no-session-persistence`, and the inheritance probe (E1 RESULTS Q4). **Not checked:** `/clear` itself. The owner answered "ok" about `/clear` on 2026-10-16 (E7 §10 item 4). That is an acceptance, not a measurement. A cleared session's rounds may carry a stale session id. A backfill cannot detect this.
 2. **The line-by-line hand read.** E1 did a weaker check: a second script recomputed the window counts for three rounds per side. Nobody read the lines. N9 covers this for the sampled rounds. State in the RESULTS file that E1's check was weaker.
@@ -118,8 +142,13 @@ These need an attended session or a longer sample. They do not block N5–N10. T
 Full text: E7 §6 O1. In short, record in a working folder, per side, before any writing run:
 
 1. **The release.** The first `mcp-v*` tag that contains `42eb3a95a` (`git merge-base --is-ancestor 42eb3a95a mcp-v<x>`), and `coai-mcp --version` per side. On WSL, install the released `linux-x64` asset. No build happens in WSL.
-2. **N1 exits 0** on each side.
-3. **The rehearsal on a copy.** A quiescent copy of `coai.db`, `-wal`, `-shm` and `sessions/` in a new scratch folder, `COAI_DATA_DIR` pointed at it. Run `coai-mcp --backfill-authors --since 2026-09-30T00:00:00Z` (a writing run) and run it again. The second run must show every `written` count 0. This is a rehearsal of the released binary's backup and write path. It does not replace the backup of O2 or O3.
+2. **N1 exits 0** on each side (it checks the running processes and their start times, not only `--version`).
+3. **The rehearsal on a copy.** A quiescent copy of `coai.db`, `-wal`, `-shm` and `sessions/` in a new scratch folder. The rehearsal is a rehearsal of the released binary's backup and write path. It does not replace the backup of O2 or O3. It has five parts, in this order. The writing run (part d) starts only after parts a, b and c passed.
+   - **a. Prove the data-directory redirection, by reading the code.** The released binary reads its data directory from the environment variable `COAI_DATA_DIR`. The read is `ResolveDataDir` in `src_mcp/src/Server/PanelSettings.cs:892`. Use that exact name. Three traps come from the same function. (1) An empty or whitespace `COAI_DATA_DIR` makes the binary fall back to `DefaultDataDir` (`PanelSettings.cs:894`, defined at `:693`), and that is the LIVE store. The rehearsal script refuses to start when the variable is empty. (2) `COAI_DATA_SIDE` (`PanelSettings.cs:898`, joined at `:930`) moves the store to `<root>/<side>`. The script unsets it, or puts the copy at `<root>/<side>`. (3) A named folder that does not exist is exit 74 for a writer mode (`Program.cs:330-334`), which is the safe answer.
+   - **b. Prove it by a read-only one-shot.** Run `coai-mcp --backfill-authors --dry-run --since 2026-09-30T00:00:00Z` with `COAI_DATA_DIR` set to the scratch copy. Assert that the summary reports the copy's known contents. The sentinel is the copy's round count, which the operator counts first, read-only, with the Python `sqlite3` reader of N2 over the copy. A summary that reports another count means the binary read another store: stop.
+   - **c. Prove the live store did not move.** Before part b and after part b, record the last-write time of each live store file (`coai.db`, `-wal`, `-shm`) and the SQLite `PRAGMA data_version` of the live `coai.db` (read through a read-only connection). Assert that all of them are equal. Any difference stops the rehearsal and is reported.
+   - **d. The writing rehearsal.** Run `coai-mcp --backfill-authors --since 2026-09-30T00:00:00Z` (a writing run) on the copy, and run it again. The second run reports zero writes and zero heals. Any non-zero count fails the idempotence check. A heal on a second run is a separate named state; it does not pass. Repeat the check of part c after the writing run.
+   - **e. The deferred path.** On a second, new scratch copy (never by restoring over the first one), hold one session's claim: for example start a `coai-mcp` server on the scratch directory with that session open. Run the mode. Assert that it reports that session as deferred, that it exits 75, that it writes nothing for that session (its file and its rows are byte-identical before and after), and that the database still passes `integrity_check`. Then release the claim and run the mode again. Assert that this run fills the session and that a third run reports zero writes and zero heals.
 4. **The shaper-regime check.** `git log --since=2026-09-30 -L` over `DiffExclusions.Default` (`src_mcp/runners/Context/ContextAssembler.cs:7-30`) and `DiffShaper.DefaultMaxBytes` (`src_mcp/core/Context/DiffShaper.cs:28`). If either changed inside the window, mark each earlier round with a `regime` mark in the RESULTS file and keep it out of any per-100-line figure that reads `shown` or `elided`.
 5. **The predictions**, written into the draft RESULTS file BEFORE any run: per side, the rounds selected; the share found `observed` or `partial`; the counts per unrecoverable reason (including `size: base not an ancestor`); the rounds that end `partial: read budget`; the share of corrective rounds whose delta ends `unavailable`, per reason; the run time. The E1 coverage counts are observations: 399 of 405 Windows code rounds and 516 of 516 in WSL had a transcript.
 6. **The sample rule**, written before the run, so the judge cannot get a convenient ten (E7 §6 O1).
@@ -128,25 +157,35 @@ Full text: E7 §6 O1. In short, record in a working folder, per side, before any
 
 ### N6 — A fix story for a defect that J1 finds (only if needed)
 
-If N9 finds any disagreement, stop and report no number. The round becomes a fixture. The test is RED first. The fix bumps E3's `ReaderVersion` or E4's `RoundAttribution.Version`. The story says whether the bump **corrects** or **refines**. A correcting bump sets `BackfillDecision.CorrectedBelow` to the defective version, so the next run replaces every row of that version whatever its strength. N7 and N8 run again, each with its own backup, and N9 checks all ten rounds of that side again.
+N6 starts only when N9a has confirmed that the PRODUCT is wrong. A disagreement that N9a resolves as a judge error does not start N6. When N6 starts, stop and report no number. The round becomes a fixture. The test is RED first. The fix bumps E3's `ReaderVersion` or E4's `RoundAttribution.Version`. The story says whether the bump **corrects** or **refines**. A correcting bump sets `BackfillDecision.CorrectedBelow` to the defective version, so the next run replaces every row of that version whatever its strength. The run then goes back to N7: N7 and N8 run again, each with its own backup, and N9 and N9a check all ten rounds of that side again.
 
 ### N7 — O2: back up and backfill Windows, twice (owner approval first)
 
-Precondition: §4 rules 1–3 and 8; N1 exit 0; the rehearsal passed; the dry run of this binary over this store exited 0 the same day; no round running on the side. Run `coai-mcp --backfill-authors --since 2026-09-30T00:00:00Z`. Record the summary, its `backupCheck` and the backup folder. Run `--round-authors` and keep the JSON. Run the mode again (it backs up first). Record the summary. Run `--round-authors` again and compare the two JSON documents by SHA-256. If `deferred` is above 0, run again. A session deferred on two consecutive runs is held by a live server (the claim is an OS lock). The operator waits or asks for the window to close. If it still holds, record the session ids and treat those rounds as an unfillable stratum for N9.
+Precondition: §4 rules 1–3 and 8; N1 exit 0 (running processes started after the install); the rehearsal passed; the dry run of this binary over this store exited 0 the same day; no round running on the side. Run `coai-mcp --backfill-authors --since 2026-09-30T00:00:00Z`. Record the summary, its `backupCheck` and the backup folder. Run `--round-authors` and keep the JSON. Run the mode again (it backs up first). Record the summary. Run `--round-authors` again and compare the two JSON documents by SHA-256. If `deferred` is above 0, run again. A session deferred on two consecutive runs is held by a live server (the claim is an OS lock). The operator waits or asks for the window to close. If it still holds, record the session ids and treat those rounds as an unfillable stratum for N9.
 
-**Pass.** Every writing run's `backupCheck` passed before it wrote. The second run reports every `written` count 0 and `healed` 0, or only heals it can name. The two `after` JSON documents are byte-identical. The `provisional` count after is the count before minus the first run's `recomputedProvisional`, and `kept.peerStillRunning` explains the rest. Each backup folder opens read-only with the counts its summary printed.
+**Pass.** Every writing run's `backupCheck` passed before it wrote. The second run reports zero writes and zero heals. Any non-zero count fails the idempotence check. A heal on a second run is a separate named state; it does not pass. The two `after` JSON documents are byte-identical. The `provisional` count after is the count before minus the first run's `recomputedProvisional`, and `kept.peerStillRunning` explains the rest. Each backup folder opens read-only with the counts its summary printed.
 
 ### N8 — O3: back up and backfill WSL, twice (owner approval first)
 
-N7's sequence. Every command is in a script file written on the Windows side. Each script writes to a new folder `~/coai-backfill/<utc>/`. The second run's `--round-authors` JSON, copied read-only to the Windows working folder with its SHA-256 recorded, is `wsl.json`. N10 uses that file. N10 generates no fresh one.
+N7's sequence. Every command is in a script file written on the Windows side. Each script writes to a new folder `~/coai-backfill/<utc>/`. The second run's `--round-authors` JSON, copied read-only to a private working folder outside the repository, with its SHA-256 recorded, is `wsl.json`. N10 uses that file. N10 generates no fresh one. The file is never committed (N10).
 
 ### N9 — J1: hand-check ten rounds per side
 
-A fresh Opus judge (`model: opus`) that wrote and reviewed none of the code of epics E3–E7, or the operator. The judge gets the sample, `--log` output, the N2 dump, read access to the transcripts and the repositories. The judge does not get the reader's source. The judge writes its own token-counting helper and imports no product code. Per round, check: the state and its reason; per agent the requested and observed model, effort, association and the write that earned it, window and launches; tokens once per `message.id`; the ambiguous totals; the size against `git diff --numstat -z <rounds.base_ref>..<head>` by hand (the recorded base, never a merge-base taken today); and that the findings and resolutions read the same as in the backup. **Pass: 10 of 10 per side agree on every field.** Record `round_key` prefixes and fields only. No transcript text, no path.
+The judge is a fresh Opus judge that wrote and reviewed none of the code of epics E3–E7, or the operator, only if the operator wrote and reviewed none of the code of E3–E7. The judge runs through the `claude` CLI (Claude Code), by the model alias `opus`. It never runs through agy or codex. The RESULTS file records the CLI and the model the judge ran on (the CLI name and version, the alias, and the model id that the judge's own transcript shows, because an alias can resolve to a fallback model). The judge gets the sample, `--log` output, the N2 dump, read access to the transcripts and the repositories. The judge does not get the reader's source. The judge writes its own token-counting helper and imports no product code. Per round, check: the state and its reason; per agent the requested and observed model, effort, association and the write that earned it, window and launches; tokens once per `message.id`; the ambiguous totals; the size against `git diff --numstat -z <rounds.base_ref>..<head>` by hand (the recorded base, never a merge-base taken today); and that the findings and resolutions read the same as in the backup. Every field where the judge and the product disagree goes to N9a. **Pass: after N9a, 10 of 10 rounds per side agree with the judge on every field, or each disagreement was resolved by N9a as a judge error and is recorded.** A disagreement that N9a confirms as a product defect is not a pass: it starts N6. Record `round_key` prefixes and fields only. No transcript text, no path.
+
+### N9a — Adjudication of every disagreement
+
+- **Goal.** A disagreement between the judge and the product is not yet a defect. One judge can be wrong. N9a decides who is wrong before any code changes.
+- **Behaviour.** Each field where the judge and the product disagree gets a second, independent determination. It is one of: a second fresh judge (the same rules as N9: `claude` CLI, alias `opus`, wrote and reviewed none of the code of E3–E7), which gets the same inputs but neither the first judge's answer nor the product's value for that field; or the operator, who walks the transcript line by line beside the judge's helper output.
+- **Outcomes.**
+  1. The second determination agrees with the product. The judge was wrong. Record the disagreement and its resolution in the RESULTS file. The run continues. There is no version bump and no `CorrectedBelow`.
+  2. The second determination agrees with the judge. The product is confirmed wrong. N6 starts.
+  3. The second determination agrees with neither. The field is unresolved. Stop, ask the question consultant, and do not go to N10 until the field is resolved.
+- **Record.** `round_key` prefix, field name, the three values, and which determination was used. No transcript text, no path.
 
 ### N10 — O4: the answer
 
-Inputs: the second-run `--round-authors` JSON of N7 and the `wsl.json` of N8, verbatim, with their SHA-256. Run `--round-authors --since 2026-09-30T00:00:00Z --split 2026-10-13T00:00:00Z --add <wsl.json> --table` for `--cohort first` and `--cohort corrective` (never pooled), with and without `--with-before-open`. Write `research/RESULTS_who_wrote_the_code_under_review.md` in this order: header (association only, conditions), the hand-check, predictions against observations (with `provisional` and `size coverage unknown` before and after, per cell and side), the tables, the naive date split of the parent plan §1 re-derived beside them, and what the file does not settle. The repository is public. Name rounds by `round_key` prefix. Anonymise repositories outside this family and their branches. Commit `wsl.json` only if it holds no branch name and no path. Print no backup path. Run the private-data scan before any push. Then promote this plan with `/promote-plan`, and add the run's own paragraph to `research/module_server.md`.
+Inputs: the second-run `--round-authors` JSON of N7 and the `wsl.json` of N8, verbatim, with their SHA-256. Run `--round-authors --since 2026-09-30T00:00:00Z --split 2026-10-13T00:00:00Z --add <wsl.json> --table` for `--cohort first` and `--cohort corrective` (never pooled), with and without `--with-before-open`. Write `research/RESULTS_who_wrote_the_code_under_review.md` in this order: header (association only, conditions), the hand-check, predictions against observations (with `provisional` and `size coverage unknown` before and after, per cell and side), the tables, the naive date split of the parent plan §1 re-derived beside them, and what the file does not settle. The repository is public. Name rounds by `round_key` prefix. Anonymise repositories outside this family and their branches. **`wsl.json`, and any raw `--round-authors` export (the Windows one included), is NEVER committed.** The RESULTS file cites each of them by its SHA-256 and by a named private location outside the repository (a label such as "the private evidence folder", not a path). Only the RESULTS file's own anonymised figures are committed. Print no backup path. Run the private-data scan before any push. Then promote this plan with `/promote-plan`, and add the run's own paragraph to `research/module_server.md`.
 
 ## 7. Not in this plan, by decision (kept so the promoted plans can point here)
 
@@ -164,12 +203,22 @@ Inputs: the second-run `--round-authors` JSON of N7 and the `wsl.json` of N8, ve
 | Test | Proves | Story |
 |---|---|---|
 | Version helper over three process lines | exit 1 names the older path; exit 0 when all match | N1 |
+| A process that reports the new version but started before the binary's last-write time | exit 1: a running old server is a failure whatever its path reports | N1 |
+| A process whose start time cannot be read | exit 1: the script fails closed | N1 |
+| A hung fake binary on `--version` (`.ps1` and `.sh`) | exit 1 in about 5 seconds; only the script's own child is killed, by process id; a same-name decoy survives | N1 |
+| A CRLF copy of each `.sh` | the first-line guard refuses; nothing after it runs | N1 |
+| Dump script exit codes 0, 65, 74 over a seeded store, through Python `sqlite3` opened `mode=ro` | one extraction path, one output shape, no write to the store | N2 |
 | Dump of a seeded S4 scenario round equals the seeded rows | the judge reads what the store holds | N2 |
 | `BackfillTwice…` with two `--round-authors` documents | a second run changes no report byte | N3 |
 | `ARowWhoseNamedPeerRoundsAreFinal…` with the `provisional` count | the report and the backfill agree on what a repair changes | N3 |
-| Rehearsal summaries on a copy | the released binary backs up, writes and re-runs to zero | N5 |
+| Rehearsal part b: the dry run on the scratch copy reports the copy's round count | `COAI_DATA_DIR` redirection works; the binary read the copy | N5 |
+| Rehearsal part c: live store file last-write times and `data_version`, before and after | the live store was not touched | N5 |
+| Rehearsal part d: summaries on a copy | the released binary backs up, writes and re-runs to zero writes and zero heals | N5 |
+| Rehearsal part e: one session held by a live server on a scratch copy | the mode reports it deferred (exit 75), writes nothing for it, leaves the database sound; after release the next run fills it | N5 |
 | Dry-run and writing-run counts per side | the predictions held, or each miss is explained | N5, N7, N8 |
-| Ten rounds per side, every field | the product's numbers equal the judge's | N9 |
+| Second run of the mode on each live side | zero writes and zero heals; any non-zero count fails | N7, N8 |
+| Ten rounds per side, every field | the product's numbers equal the judge's, run through the `claude` CLI on alias `opus` | N9 |
+| A second determination for each disagreeing field | a judge error is recorded and the run continues; a confirmed product defect starts N6 | N9a |
 
 Run C# tests from the executable, never `dotnet test`: `dotnet build dew_flow_connect_other_ais.slnx -c Debug -m:4`, then `node .agents/conventions/tools/low-priority.mjs ./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-class "*BackfillAuthorsCliScenario*"`. Run script tests with `node --test "scripts/**/*.test.mjs"`.
 
@@ -182,15 +231,18 @@ Run C# tests from the executable, never `dotnet test`: `dotnet build dew_flow_co
 
 ## Definition of Done
 
+- [ ] Before any code of this plan was built, the plan was split into epics (Fable, after the question consultant), and each epic had its own coai plan gate and code gate.
 - [ ] N1 and N2 are committed with their tests green; N3 is committed with its RED run reported.
+- [ ] N1 checks the running process: every running `coai-mcp` started after the installed binary's last-write time, and an unreadable start time exits 1. Every `--version` call has a 5-second timeout that kills only the script's own child by process id. The `.sh` scripts are LF-only (`scripts/*.sh text eol=lf` in `.gitattributes`, and a first-line CR guard), and a test covers the hung binary, the stale process and the CRLF copy.
+- [ ] N2 uses the Python 3 `sqlite3` module, read-only, on both sides, with the invocation contract (arguments, output file, exit codes 0, 65, 74) tested.
 - [ ] A release carrying E5, E6 and E7 exists. Its tag and `coai-mcp --version` per side are in the RESULTS file.
 - [ ] N1 exited 0 on each side before that side's first write.
-- [ ] The rehearsal on a copy passed on each side. The shaper-regime decision is written. The predictions and the sample rule were written before the first run.
+- [ ] The rehearsal on a copy passed on each side, in parts a to e: the redirection variable `COAI_DATA_DIR` was proved by code and by a read-only one-shot that reported the copy's round count; the live store's last-write times and `data_version` did not change; the writing rehearsal and its second run passed; the deferred-session path was exercised. The shaper-regime decision is written. The predictions and the sample rule were written before the first run.
 - [ ] Each live run had the owner's written approval, a dry run of the same binary over the same store the same day, and a verified backup made by the run itself before it wrote.
-- [ ] The second run on each side wrote nothing, and the two `after` report documents are byte-identical.
+- [ ] The second run on each side reported zero writes and zero heals. Any non-zero count fails the idempotence check. A heal on a second run is a separate named state; it does not pass. The two `after` report documents are byte-identical.
 - [ ] Nothing was deleted on either side. No backup was removed by a session.
-- [ ] Ten rounds per side were checked by a judge who wrote none of the code, and 10 of 10 agreed on every field, before any number was published.
-- [ ] `research/RESULTS_who_wrote_the_code_under_review.md` exists in the order of N10, with association only in its header. Every figure traces to a kept output.
+- [ ] Ten rounds per side were checked by a fresh Opus judge that wrote and reviewed none of the code of epics E3–E7 (or the operator, only if the operator wrote and reviewed none of the code of E3–E7), run through the `claude` CLI on alias `opus` and never through agy or codex. The RESULTS file records the CLI and the model. Every disagreement went through N9a; N6 started only on a confirmed product defect; 10 of 10 rounds agreed on every field after N9a, before any number was published.
+- [ ] `research/RESULTS_who_wrote_the_code_under_review.md` exists in the order of N10, with association only in its header. Every figure traces to a kept output. `wsl.json` and every raw `--round-authors` export were NOT committed. The RESULTS file cites them by SHA-256 and by a named private location outside the repository.
 - [ ] The N4 leftovers are done, or the RESULTS file states each as not done.
 - [ ] The private-data scan of the added lines is clean.
 - [ ] `node .agents/conventions/tools/plan-lifecycle.mjs` is clean, and this plan is promoted with its deviations and its open tail.
