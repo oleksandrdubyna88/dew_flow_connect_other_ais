@@ -16,6 +16,7 @@ public sealed class KimiIsDiagnosedInItsOwnWordsTests
     [InlineData("not_signed_in: Authentication required — run `kimi login` in a terminal and try again", DiagnosisKind.Refused, "kimi login")]
     [InlineData("subscription_model: 401 Your current subscription does not have access to kimi-for-coding-highspeed — the Kimi Code plan does not include this model", DiagnosisKind.Refused, "plan")]
     [InlineData("balance_spent: provider.api_error: 429 insufficient balance — the Kimi allowance is spent (D14)", DiagnosisKind.Refused, "allowance is spent")]
+    [InlineData("kimi_quota_spent: Authentication required: 429 You've reached your 5-hour usage limit. Your quota will reset …", DiagnosisKind.Refused, "quota is used up")]
     [InlineData("model_not_offered: the agent's session offers kimi-code/k3 for 'model'; 'x' is not one of them", DiagnosisKind.Refused, "does not offer this model")]
     public void TheShimsOwnWord_BecomesACure(string stderr, DiagnosisKind kind, string cureSays)
     {

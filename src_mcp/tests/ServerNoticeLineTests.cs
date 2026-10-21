@@ -147,6 +147,7 @@ public sealed class ServerNoticeLineTests
     [InlineData("Token abcdefgh", "Token [redacted]")]
     [InlineData("token=abcdefgh", "token=[redacted]")]
     [InlineData("x-auth-token: abcdefghijkl", "x-auth-token: [redacted]")]
+    [InlineData("Your account org-0a1b2c3d4e5f6a7b <ak-9z8y7x6w5v4u3t2s> is suspended", "Your account org-[redacted] <ak-[redacted]> is suspended")]
     public void EachShape_IsRedactedExactlyAsTheExtensionRedactsIt(string given, string expected)
     {
         // `Authorization: Bearer …` comes back with TWO [redacted]: the bearer pattern takes the
@@ -163,6 +164,10 @@ public sealed class ServerNoticeLineTests
     [InlineData("Set-Cookie: session=abc")]
     [InlineData("1https://u:p@h")]
     [InlineData("password     =x")]
+    [InlineData("the org-wide setting")]
+    [InlineData("org-settings-panel")]
+    [InlineData("Slovak-language")]
+    [InlineData("peak-hours")]
     public void AnOrdinaryString_IsLeftExactlyAlone(string given)
     {
         // Each of these is a place a looser port would have fired: the vendor pattern carries no
@@ -370,7 +375,7 @@ public sealed class ServerNoticeLineTests
     {
         var patterns = Redaction.Patterns;
 
-        patterns.Should().HaveCount(5, "one parameter pattern, three secret shapes, one labelled pattern");
+        patterns.Should().HaveCount(6, "one parameter pattern, four secret shapes (the Moonshot id is the fourth), one labelled pattern");
         foreach (var pattern in patterns)
         {
             var nonBacktracking = pattern.Regex.Options.HasFlag(RegexOptions.NonBacktracking);

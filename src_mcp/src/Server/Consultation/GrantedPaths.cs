@@ -6,7 +6,7 @@ namespace CoaiMcp.Server;
 
 /// <summary>
 /// The paths of the folders a one-shot place copies, and the link rule that guards them (D5 of
-/// <c>todo/PLAN_vibe_reads_a_folder_of_repositories.md</c>): a copy made through a link would be a copy of whatever the link points at.
+/// <c>research/PLAN_vibe_reads_a_folder_of_repositories.md</c>): a copy made through a link would be a copy of whatever the link points at.
 /// </summary>
 internal static class GrantedPaths
 {

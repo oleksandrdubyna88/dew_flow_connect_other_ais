@@ -172,7 +172,7 @@ public static class RuleFiles
     /// Why: the instruction files, this repository's own rules and the eight tier rules had grown to
     /// 79 944 of the 80 000 bytes, leaving 56 — no rule outside the tier could fit, so the new
     /// `common/test-leftovers.md` (4 706 bytes) could not reach any reviewer on any branch. At 90 000
-    /// the same base and tier leave 10 014 bytes (10 056 until 2026-10-18, when E5's `--kimi-clear-marker` entry in `.agents/PROJECT.md` added 23 characters to the base; 10 033 until 2026-10-19, when E6's `--round-authors` entry added 19) for the rotated tail, which takes one to three rules a
+    /// the same base and tier leave 9 992 bytes (10 056 until 2026-10-18, when E5's `--kimi-clear-marker` entry in `.agents/PROJECT.md` added 23 characters to the base; 10 033 until 2026-10-19, when E6's `--round-authors` entry added 19; 10 014 until 2026-10-20, when the merge with E6 brought E7's `--backfill-authors` entry (22) onto that base) for the rotated tail, which takes one to three rules a
     /// round (mean 1.78 over 3 000 branch names). Measured in
     /// `research/RESULTS_rules_selection_budget.md`; the canary that pins it is
     /// `StageRulesTests.AtNinetyKilobytes_TheRotatedTail_FitsAtMostThreeRules`.</para>

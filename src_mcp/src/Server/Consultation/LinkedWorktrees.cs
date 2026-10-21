@@ -7,7 +7,7 @@ internal sealed record ConfirmedRepository(FoundRepository Repository, Repositor
 internal sealed record WorktreeSelection(IReadOnlyList<ConfirmedRepository> Kept, IReadOnlyList<ConfirmedRepository> Left);
 
 /// <summary>
-/// D9 of <c>todo/PLAN_vibe_reads_a_folder_of_repositories.md</c>: a parent folder of a person's projects holds, beside each main
+/// D9 of <c>research/PLAN_vibe_reads_a_folder_of_repositories.md</c>: a parent folder of a person's projects holds, beside each main
 /// checkout, every linked worktree an agent made of it (392 of the 405 candidates under the owner's real root) — and each is a full copy
 /// of the same project. A LINKED worktree found beneath a granted parent is skipped when its main checkout is itself copied in the
 /// same row; it stays when no main is, and when git could not say. A worktree granted by name is never asked about here.

@@ -97,6 +97,15 @@ test('vendor key shapes are recognised on sight', () => {
   }
 });
 
+test('a Moonshot account id is redacted, and an ordinary word that starts alike is not', () => {
+  const given = 'Your account org-0a1b2c3d4e5f6a7b <ak-9z8y7x6w5v4u3t2s> is suspended';
+
+  assert.equal(safeText(given, DETAIL_LIMIT), 'Your account org-[redacted] <ak-[redacted]> is suspended');
+  for (const plain of ['the org-wide setting', 'org-settings-panel', 'Slovak-language', 'peak-hours']) {
+    assert.equal(safeText(plain, DETAIL_LIMIT), plain);
+  }
+});
+
 test('control characters never reach the line, because a torn line is unreadable to everyone', () => {
   const safe = safeText('before' + String.fromCharCode(0, 7) + 'after', TITLE_LIMIT);
 

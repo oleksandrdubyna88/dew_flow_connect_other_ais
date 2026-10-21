@@ -209,7 +209,7 @@ budget (4 706 bytes of the 10 056 left).
 `--filter-class "*.RuleFilesTests"` for the number itself).
 - `RuleFilesTests.TheDefaultBudget_IsTheOperatorsNinetyKilobytes` — the constant is 90 000.
 - `StageRulesTests.AtNinetyKilobytes_TheBaseAndTheTier_SpendExactlyTheirPinnedBytes` (named ...79944Bytes until 2026-10-18 and ...79967Bytes until 2026-10-19) — **the measuring test and the
-  drift guard**: base 17 925 + tier 62 061 = 79 986 (17 883 + 62 061 = 79 944 until 2026-10-18, 17 906 + 62 061 = 79 967 until 2026-10-19, see the last two measurements). Its failure message prints the three numbers it found,
+  drift guard**: base 17 947 + tier 62 061 = 80 008 (17 883 + 62 061 = 79 944 until 2026-10-18, 17 906 + 62 061 = 79 967 until 2026-10-19, 17 925 + 62 061 = 79 986 until 2026-10-20, see the last three measurements). Its failure message prints the three numbers it found,
   so a conventions bump or an edit to this repository's own instruction files that moves them turns it red and
   the figures in this file are re-measured from that message. The unit is the collector's own: characters of
   the line-ending-normalised text.
@@ -222,6 +222,13 @@ budget (4 706 bytes of the 10 056 left).
   `main` and `feat/a` do not.
 
 The old canary was named `TheRotatedTail_CurrentlyFitsAtMostOneRule`.
+
+**Re-measured 2026-10-19 (E7, `--backfill-authors`), on the tree that merges E5 and `main`.** `.agents/PROJECT.md` names the new one-shot
+mode, which `ARequestFaultIsNotAnOldBinaryTests` requires: +22 on E7's own branch (base 17 905, total 79 966 before the merge), and
+on top of E5's `--kimi-clear-marker` entry (+23, the 2026-10-18 section below) the merged base is **17 928** and base + tier **79 989**,
+leaving 10 011 of 90 000. The tail is unchanged — the three smallest tail rules (2 197, 3 065, 3 421 = 8 683) still fit and the fourth
+(3 460, 12 143 together) still does not — and `StageRulesTests` pins the merged numbers. The figures above stay as the 2026-10-16
+measurement. E6 re-baselines the same pin on its own branch (to 79 963); the branch that merges last re-measures once more.
 
 **What this supersedes.** The "80 000", "1 328 spare", "77 562 / 2 438" and "1 of 24" figures above are the
 dated measurements of 2026-09-15 and 2026-09-16 and stay as history. The "D18" of the feature plan named
@@ -273,6 +280,8 @@ test-leftovers test are unchanged because the measurement leaves them true. The 
 The three canaries (`AtNinetyKilobytes_TheRotatedTail_FitsAtMostThreeRules`, `…EveryBranchReachesAtLeastOneTailRule`, `…TheTestLeftoversRule_IsShownOnTheBranchesThatDrawIt`) were re-run and are green unchanged.
 The 3 000-branch distribution and the per-rule reach are not re-measured: a set of tail rules whose size falls between 10 014 and 10 033 would now be refused, so those figures above are the 2026-10-18 ones.
 The measuring test is renamed `…SpendExactlyTheirPinnedBytes` so the next re-baseline changes its pins, not its name. Re-pinned: base 17 925 + tier 62 061 = 79 986.
+
+**Re-measured once more, 2026-10-20, on the merge of E7 (`feat/round-authors-e7`) with `main` (which holds E6):** `.agents/PROJECT.md` names both `--round-authors` (+19) and `--backfill-authors` (+22), and the measuring test printed `base 17947 + tier 62061 = 80008` — 9 992 left of 90 000, still above the three smallest tail rules (8 683) and below the fourth added (12 143); the three canaries are green unchanged, and this supersedes both branch pins (E6 79 986, E7 79 989). Re-pinned: base 17 947 + tier 62 061 = 80 008.
 
 ## What this does not settle
 

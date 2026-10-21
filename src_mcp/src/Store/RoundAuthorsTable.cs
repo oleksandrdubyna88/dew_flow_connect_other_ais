@@ -42,7 +42,7 @@ public static class RoundAuthorsTable
     /// ids and contributors deduplicate on one (parent §11 step 4); E4 spells it <c>main</c> in the core. Nothing else turns a key into the
     /// column.
     /// </summary>
-    private static string AgentColumn(AgentKey agent) => agent.IsMain ? string.Empty : agent.Id;
+    internal static string AgentColumn(AgentKey agent) => agent.IsMain ? string.Empty : agent.Id;
 
     /// <summary>The one inverse, beside the mapping: the empty column is <c>main</c>. E6's read and E7's heal from the database call it.</summary>
     internal static AgentKey AgentKeyOf(string column) => column.Length == 0 ? AgentKey.Main : new AgentKey(column);

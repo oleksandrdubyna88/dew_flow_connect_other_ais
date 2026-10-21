@@ -169,6 +169,76 @@ public sealed class AskAcpModeTests
     }
 
     [Fact]
+    public async Task AQuotaBehindTheSignInPrefix_Exits75_NamedKimiQuotaSpent()
+    {
+        using var agent = new FakeAcpAgent([FakeAcpAgent.Chunk("x")],
+            ""","promptError":"Authentication required: 429 You've reached your 5-hour usage limit. Your quota will reset …" """);
+
+        var code = await RunAsync(agent, failures: new KimiAcpProfile().KnownFailures);
+
+        code.Should().Be(75, Stderr);
+        Report().GetProperty("failure").GetString().Should().Be("kimi_quota_spent");
+        Stderr.Should().Contain("quota is used up").And.NotContain("kimi login", "signing in again does not clear a spent quota");
+    }
+
+    [Fact]
+    public async Task ADetailKeptInTheErrorsData_IsPartOfTheReason_AndReadsAsAQuota()
+    {
+        // K5 of the code gate: only error.code and error.message were kept, so a bare "Authentication required" carrying the 429 in error.data read as S9's outcome
+        // (a lost sign-in) for a spent quota. Object data is kept as compact JSON, string data as it is; both redacted and capped.
+        using var agent = new FakeAcpAgent([FakeAcpAgent.Chunk("x")],
+            ""","promptError":"Authentication required","promptErrorData":{"status":429,"detail":"You've reached your 5-hour usage limit. Your quota will reset at 14:00 UTC. Account org-0a1b2c3d4e5f6a7b."} """);
+
+        var code = await RunAsync(agent, failures: new KimiAcpProfile().KnownFailures);
+
+        code.Should().Be(75, Stderr);
+        Report().GetProperty("failure").GetString().Should().Be("kimi_quota_spent");
+        Report().GetProperty("reason").GetString().Should().Contain("Your quota will reset at 14:00 UTC.").And.NotContain("0a1b2c3d4e5f6a7b", "the id is redacted before the data is kept");
+        Stderr.Should().NotContain("0a1b2c3d4e5f6a7b");
+    }
+
+    [Fact]
+    public async Task AStringInTheErrorsData_IsKeptAsItIs()
+    {
+        using var agent = new FakeAcpAgent([FakeAcpAgent.Chunk("x")], ""","promptError":"model exploded","promptErrorData":"the gateway said: out of widgets" """);
+        await RunAsync(agent);
+
+        var reason = Report().GetProperty("reason").GetString();
+
+        reason.Should().Contain("model exploded").And.Contain("the gateway said: out of widgets");
+        reason.Should().NotContain("\"the gateway", "a string is kept as it is, not as JSON");
+    }
+
+    [Fact]
+    public void TheReasonIsMatchedFirst_AndStderrOnlyWhenTheReasonMatchesNoRow()
+    {
+        // K4 of the code gate: reason and stderr used to be matched in ONE pass, so a bare sign-in reason plus any stderr line holding "Authentication required:"
+        // landed in provider_error — no cure — whatever the agent had said about the turn itself.
+        var kimi = new KimiAcpProfile();
+        AcpOutcome Outcome(string reason, string stderr) =>
+            new(AcpEnd.AgentFailed, string.Empty, reason, string.Empty, "s", AcpUsage.Unknown, [], [], [], stderr, 0);
+
+        AskAcpMode.Diagnose(kimi, Outcome("Authentication required", "Authentication required: 503 from the gateway")).Name.Should().Be("not_signed_in", "the reason names a row; stderr is not asked");
+        AskAcpMode.Diagnose(kimi, Outcome("the agent stopped", "Authentication required: 429 You've reached your 5-hour usage limit.")).Name
+            .Should().Be("kimi_quota_spent", "a reason that matches no row falls through to stderr, where a CLI writes its own diagnosis");
+        AskAcpMode.Diagnose(kimi, Outcome("the agent stopped", "nothing known")).Known.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task AProviderErrorBehindTheSignInPrefix_Exits70_InTheVendorsWords_WithNoCure()
+    {
+        using var agent = new FakeAcpAgent([FakeAcpAgent.Chunk("x")],
+            ""","promptError":"Authentication required: 503 Service Unavailable" """);
+
+        var code = await RunAsync(agent, failures: new KimiAcpProfile().KnownFailures);
+
+        code.Should().Be(70, Stderr);
+        Report().GetProperty("failure").GetString().Should().Be("provider_error");
+        Stderr.Should().Contain("provider_error: ").And.Contain("503 Service Unavailable").And.NotContain("kimi login");
+        Stderr.Should().NotContain(" — ", "no cure follows the name: a known shape with nothing to do about it");
+    }
+
+    [Fact]
     public async Task TheAgentsOwnError_Exits70_WithItsWords()
     {
         using var agent = new FakeAcpAgent([FakeAcpAgent.Chunk("x")], ""","promptError":"model exploded" """);
