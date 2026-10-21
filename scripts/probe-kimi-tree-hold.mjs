@@ -273,7 +273,7 @@ async function runOne(entry) {
     row.heldAfterStartMs = Math.round(heldAt - t0);
     while (now() < limit && child.exitCode === null) {
       sample();
-      const hit = [...seen.values()].find(target);
+      const hit = [...seen.values()].find((entry) => target(entry));
       if (hit && (arm.after === 'rg' || now() - heldAt > 4_000)) break;
       await sleep(50);
     }
