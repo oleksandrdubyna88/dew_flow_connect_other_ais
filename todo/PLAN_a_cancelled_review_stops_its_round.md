@@ -82,6 +82,11 @@ file (`RemoteRuntime.cs:290-297`), and nothing retries it later (`AbandonAsync` 
 - **G5** The reply follows the protocol: no response for the cancelled request — accepted only on the seam leg's observation (D5).
 - **G6** A round that already finished is untouched; a cancel racing the round's end has one deterministic answer (D2).
 - **G7** A second caller of the same session meets `Busy` until the withdrawal is written, then starts the next round normally.
+- **G8** The caller-versus-host attribution does not depend on callback timing (carried from #904's second code round, finding 3, which
+  was unreachable there because no tool passed the caller's token). Today `CallerCause(host)` reads the host token when the caller's callback
+  RUNS. If the caller fires first but its callback is delayed behind another registration, and the host fires in between, a person's
+  withdrawal is filed `hostStopped`. The host token's firing moment is recorded on its own registration, without cancelling the round, and
+  the caller's cause compares the two moments. RED first: a test that fires the caller, holds its callback, fires the host, then releases.
 
 ## 4. Decisions
 
