@@ -8,7 +8,7 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, rmdirSync, 
 import { homedir, tmpdir } from 'node:os';
 import { join, parse } from 'node:path';
 import { after, test } from 'node:test';
-import { CredentialGuard, canaryCommand, copyHome, homeBin, kimiExecutable, parseStreamJson, scratchRefusal, scrubHome, withoutTrailingSeparators } from './kimi.mjs';
+import { CredentialGuard, canaryCommand, copyHome, homeBin, isCredentialPath, kimiExecutable, manifest, manifestDiff, parseStreamJson, scratchRefusal, scrubHome, withoutTrailingSeparators } from './kimi.mjs';
 
 const WINDOWS = process.platform === 'win32';
 const base = mkdtempSync(join(realpathSync.native(tmpdir()), 'testsToDelete-kimi-scratch-test-'));
@@ -180,4 +180,62 @@ test('stream-json: the LAST non-blank assistant text, the LAST resume hint, the 
     answer: 'second', sessionId: 's-2', lines: 8, roles: { assistant: 4, meta: 3, '?': 1 },
   });
   assert.deepEqual(parseStreamJson(undefined), { answer: '', sessionId: '', lines: 0, roles: {} });
+});
+
+// ------------------------------------------------------------------------------------------------- the credential-safe manifest (S-N2)
+// DN5 item 2 of todo/PLAN_kimi_and_vibe_on_native_linux.md (gate finding 0): the confinement probe records the person's home around every launch,
+// and hashing a file READS its bytes — for credentials/*.json that is a refresh token. The folder is recorded by lstat only; the hash function is
+// injected so the test can prove it is never called for a path under it. Nothing here runs Kimi; the "secret" is a made-up word in a temp file.
+
+/** A fake ~/.kimi-code: a config, a session file, and credentials/ holding the named files. */
+function fakeKimiHome(name, credentialFiles) {
+  const home = mkdtempSync(join(base, `${name}-`));
+  mkdirSync(join(home, 'credentials'));
+  mkdirSync(join(home, 'sessions'));
+  writeFileSync(join(home, 'config.toml'), 'default_model = "k3"\n');
+  writeFileSync(join(home, 'sessions', 'index.jsonl'), '{}\n');
+  for (const f of credentialFiles) writeFileSync(join(home, 'credentials', f), '{"refresh_token":"SECRET-WORD"}');
+  return home;
+}
+
+test('S-N2: manifest never calls the hash function for a path under credentials/, and records the folder by lstat only', () => {
+  const home = fakeKimiHome('mf', ['kimi-code-env-x.json']);
+  const hashed = [];
+  const hash = (path) => { hashed.push(path.replaceAll('\\', '/')); return 'HASH'; };
+
+  const m = manifest(home, { hash });
+
+  assert.equal(hashed.some((p) => p.includes('/credentials/')), false, "manifest() hashed credentials/kimi-code-env-x.json — a credential file's bytes were read");
+  assert.deepEqual(hashed.map((p) => p.slice(p.lastIndexOf('/') + 1)).sort(), ['config.toml', 'index.jsonl'], 'the other files are still hashed — the teeth');
+  assert.equal(m['config.toml'], 'HASH');
+  assert.match(m['credentials/kimi-code-env-x.json'], /^lstat:\d+:\d+:\d+$/u);
+  assert.equal(JSON.stringify(m).includes('SECRET-WORD'), false);
+});
+
+test('S-N2: a credential slot\'s hex is redacted from the recorded name, and a refresh (a new mtime or size) still shows as a change', () => {
+  const home = fakeKimiHome('mf-hex', ['kimi-code-env-0123456789abcdef.json']);
+  const file = join(home, 'credentials', 'kimi-code-env-0123456789abcdef.json');
+  const before = manifest(home, { hash: () => 'H' });
+  assert.deepEqual(Object.keys(before).filter((k) => k.startsWith('credentials/')), ['credentials/kimi-code-env-<hex>.json']);
+
+  writeFileSync(file, '{"refresh_token":"SECRET-WORD-ROTATED-AND-LONGER"}');
+  const after = manifest(home, { hash: () => 'H' });
+
+  assert.deepEqual(manifestDiff(before, after), [{ path: 'credentials/kimi-code-env-<hex>.json', change: 'changed' }]);
+});
+
+test('S-N2: `skip` makes more paths lstat-only without ever un-protecting credentials/, and credentials/ itself (the owned home link) counts as one', () => {
+  const home = fakeKimiHome('mf-skip', ['kimi-code-env-y.json']);
+  const hashed = [];
+  const hash = (path) => { hashed.push(path.replaceAll('\\', '/')); return 'HASH'; };
+
+  const m = manifest(home, { skip: (rel) => rel.startsWith('sessions/'), hash });
+
+  assert.equal(hashed.some((p) => p.includes('/credentials/') || p.includes('/sessions/')), false);
+  assert.match(m['sessions/index.jsonl'], /^lstat:/u);
+  assert.match(m['credentials/kimi-code-env-y.json'], /^lstat:/u, 'a skip that does not name credentials/ un-protected it');
+  assert.equal(isCredentialPath('credentials'), true, 'the link itself');
+  assert.equal(isCredentialPath('credentials/kimi-code.json'), true);
+  assert.equal(isCredentialPath('credentials-old/x'), false);
+  assert.equal(isCredentialPath('config.toml'), false);
 });

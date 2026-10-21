@@ -313,6 +313,49 @@ checked against `killed-hard` and the pairs before N-K2 runs.
 **Roles.** Opus brief (two briefs if the coder prefers: the Vibe half, then the Kimi half — one pull request either way); Sonnet codes;
 Opus reviews, with the parity cases read side by side with the product's tests.
 
+**Status — CODED 2026-10-21 (Sonnet coder; branch `feat/native-linux-e1-s3`); Opus review and the code gate still to run; the lead's two live steps NOT run.**
+Every scenario of this story was watched RED against a stub that compiles, then GREEN, and every break-it was run both ways (node tests only; the
+numbers are in `research/module_tests.md`, section *E1.S3*). Nothing ran `kimi`, `vibe` or Python; no WSL, no remote host, no paid turn.
+
+| Scenario | Where | Red message observed | Break-it |
+|---|---|---|---|
+| S-N1 / S-N13 | `scripts/lib/proc.test.mjs` (the product's own cases by name) | *a running kimi acp (comm MainThread) was not seen as Kimi — the guard would let a second refresher start* | B10 red, restored |
+| S-N2 | `scripts/lib/kimi.test.mjs` | *manifest() hashed credentials/kimi-code-env-x.json — a credential file's bytes were read* | B11 red, restored |
+| S-N3 | `scripts/lib/kimi-home.test.mjs` | *the Linux built environment has no XDG_CACHE_HOME — a direct kimi launch fills os/ (DL11)* | B12 red, restored |
+| S-N4 | `scripts/lib/kimi-arms.test.mjs` (arms moved to `lib/kimi-arms.mjs`) | *M-K3 Write has no owned root — the shim refuses it (E4.3), and the control would run on the real home* | dropped `ownedSpec`: red, restored |
+| S-N17 | `scripts/lib/vibe.test.mjs` | *M-V7 arm a on Linux carries no PYTHON_KEYRING_BACKEND — it measures today's open keyring road, not the launch E2 ships (DN10)* | B15 red, restored |
+| S-N18 | `scripts/lib/kimi-schedule.test.mjs` | *the schedule ran killed-1, killed-2 and killed-3 before any normal launch — the next launch's reconcile was never observed right after a kill* | B13 and B14 red, restored |
+
+**Deviations (what shipped differently from the story's text).**
+
+1. `linuxProcesses(proc, reads, { uid })` gained a reads seam (an in-memory `/proc` in tests) and, with the product's name rule, the product's other listing rules: another account's process and a
+   zombie are skipped, and a same-account process identified by neither `exe` nor `cmdline` THROWS naming the pid (the product makes the listing unreadable there; a guard must not read "cannot tell" as
+   "no kimi"). The listing test over a real folder now writes `status` and `cmdline` files into its fake `/proc` (a process with no readable name is skipped, as in the product); the two
+   `parseProcStat` assertions changed only the field name `name` to `comm`.
+2. `listProcesses` (with its Windows PowerShell reader) and the 10-minute wait (`waitForNoOtherKimi`, clock/sleep/listing injected) moved from the tree-hold probe into `lib/proc.mjs`, so the
+   confinement probe shares them; a guard that gives up stops the confinement run (`StopProbe`) instead of launching around the other kimi.
+3. `manifest`: `credentials/` is ALWAYS lstat-only (not an opt-in the caller can forget); `skip(rel)` names further lstat-only paths; the call sites use the safe default. Recorded names are
+   `credentials/kimi-code-env-<hex>.json` with the hex redacted, values `lstat:<size>:<mode>:<mtime>`.
+4. `ownedRoot(root, { platform })` also makes the 0700 `cache/` folder on a non-Windows host (as `KimiHome.MakeCache` does) and returns `cache`; the tree-hold probe uses `ownedRoot` instead of
+   `mkdir os`. The existing Linux-built-environment assertion lists the third extra name (`XDG_CACHE_HOME`) — strengthened, not weakened.
+5. M-K3 and M-K6 moved out of `probe-kimi-confinement.mjs` into `lib/kimi-arms.mjs` (`ownedShimArms`) so a test can read the table; each arm (control or not) also carries `profile` = `<root>/os`.
+   The other legacy cells that go through the shim without an owned root (M-K2, M-K4, M-K7 …) have the same gap and are NOT touched — outside S-N4's text; named here for Opus.
+6. All killed arms signal with `process.kill(child.pid, KILL_ARMS[arm].signal)` (`killed` stays SIGTERM = the old `child.kill()`); the signal table lives in `lib/kimi-schedule.mjs`.
+   The orphan record is taken 300 ms after the signal, beside the lock watch (so the lock timings are not delayed).
+7. M-V7: on Linux arm b is unchanged (the story lists a and a2 only); a3/a3c do not run on Windows. Added, to make the free live check possible without the paid arm b: `--arms a3,a3c` on
+   `probe-vibe-confinement.mjs` (`armWanted` in `lib/vibe.mjs`, tested).
+8. **Open for Opus / the lead:** `watchAfterKill` waits until the orphaned `kimi` is gone before the `-next` launch starts, and the "no other kimi" guard also waits for it, so the `-next` launch will
+   never meet a LIVE survivor — it exercises the reconcile of an abandoned marker whose survivor is dead. The "Busy naming a survivor, then clears" outcome of N-K2 is therefore seen only if the
+   product's own wait is exercised with the guard bypassed for the killed arm's own orphan; the probe does not do that (the guard is a safety rule). Say if N-K2 needs that variant.
+
+**Left for the lead (not run by the coder, by instruction).**
+
+- *The S-N17 live check (free, WSL, Vibe installed):* `node scripts/probe-vibe-confinement.mjs --vibe "$(command -v vibe)" --cells M-V7 --arms a3,a3c --repeats 1` — expect a3c's `keyringMarker=yes`,
+  a3's `keyringMarker=no`, both ending *Missing MISTRAL_API_KEY*. The two lines go into this summary and are carried into `RESULTS_vibe_confinement.md` §32 by E2.
+- *The one paid WSL2 Kimi turn (after the `XDG_CACHE_HOME` fix; build the shim first):* `node scripts/probe-kimi-tree-hold.mjs --arms normal --repeats 1` — expect it answers, `os/` stays empty
+  (the row's `homeAfter` and the owned root's `os/`), both locks Free; record its spend.
+- *CI:* the new tests run on the Linux job (`node --test "scripts/**/*.test.mjs"`); no dotnet test was touched.
+
 ## 5. Build order
 
 1. E1.S1 (the facts script and `scripts/native/`) — nothing depends on it inside E1, and it is the first thing the Vibe series uses.

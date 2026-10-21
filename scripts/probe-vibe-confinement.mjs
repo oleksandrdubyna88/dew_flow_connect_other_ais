@@ -10,6 +10,7 @@
 //
 //   node scripts/probe-vibe-confinement.mjs [--vibe <exe>] [--scratch <dir>] [--repeats 3] [--cells M-V1,M-V2,...]
 //                                           [--cli python|rust|inherit]   (default python: VIBE_CLI=python in every child)
+//                                           [--arms a3,a3c]   only the arms whose name up to the first colon is listed (M-V7: the free keyring arms)
 //   node scripts/probe-vibe-confinement.mjs --reparse <scratch>      rebuild the tables from the saved run folders
 //
 // Every arm launches vibe with the SHIPPED flags unless its cell says otherwise:
@@ -32,7 +33,10 @@
 //          (d) the working folder trusted under an upper-cased spelling — each with a project hook canary
 //   M-V5   two turns, the second `--resume <session_id>`: per-turn or cumulative usage
 //   M-V6   read_file inside the working folder and on a sibling path outside it
-//   M-V7   (a) an EMPTY short VIBE_HOME, (a2) the same with Vibe's own VIBE_TEST_DISABLE_KEYRING=1, (b) VIBE_ACTIVE_MODEL=nope
+//   M-V7   (a) an EMPTY short VIBE_HOME, (a2) the same with Vibe's own VIBE_TEST_DISABLE_KEYRING=1, (b) VIBE_ACTIVE_MODEL=nope; on Linux
+//          a and a2 carry the forced PYTHON_KEYRING_BACKEND=keyring.backends.fail.Keyring of the launch E2 ships (DN10), plus (a3) that forced
+//          backend AND a fake HOME whose keyringrc.cfg names a probe-owned backend that IS available — the marker file it would write must
+//          stay absent — and (a3c) the same fake HOME WITHOUT the variable, whose marker must appear (a3's teeth). Linux only; free (no key exists)
 //   M-V8   a ~33 KB prompt on stdin, the word to answer placed at its END
 //   M-V9   user-level hooks.toml post_agent canary in a short copied VIBE_HOME, working folder untrusted
 //   M-V10  .vibe/agents/plan.toml (a `plan` agent with every tool), .vibe/tools/*.py (canary at import), project skills,
@@ -55,7 +59,7 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative } from 'node:path';
 import { resolved } from '../.github/scripts/lib/resolved.mjs';
 import {
-  builtEnv as builtEnvFor, dirLink, files, fwd, homeListing, linkSignIn, minimalEnv, personsVibeHome, pythonCommand, run, vibeArgs, vibePython,
+  builtEnv as builtEnvFor, dirLink, files, fwd, armWanted, homeListing, keyringArm, keyringSetup, linkSignIn, minimalEnv, personsVibeHome, pythonCommand, run, vibeArgs, vibePython,
 } from './lib/vibe.mjs';
 
 const argv = process.argv.slice(2);
@@ -74,6 +78,8 @@ const repeats = Number.parseInt(flag('--repeats', '3'), 10);
 const CLIS = ['python', 'rust', 'inherit'];
 const cli = flag('--cli', 'python');
 const cells = flag('--cells', ALL_CELLS.join(',')).split(',').filter(Boolean);
+/** `--arms a3,a3c` runs only the arms whose name up to the first colon is listed (lib/vibe.mjs armWanted) — the free M-V7 keyring check, never the paid arm b. */
+const armFilter = flag('--arms', '').split(',').filter(Boolean);
 const unknown = cells.filter((c) => !ALL_CELLS.includes(c));
 if (unknown.length > 0 || !Number.isInteger(repeats) || repeats <= 0 || !CLIS.includes(cli)) {
   console.error(`usage: probe-vibe-confinement.mjs [--vibe <exe>] [--scratch <dir>] [--repeats N] [--cli ${CLIS.join('|')}] [--cells ${ALL_CELLS.join(',')}]`);
@@ -306,11 +312,16 @@ const ARMS = {
     },
   }],
 
+  // The arms a, a2, a3 and a3c are built by lib/vibe.mjs keyringSetup (S-N17): on Linux a and a2 carry the forced PYTHON_KEYRING_BACKEND of the
+  // launch E2 ships (DN10), a3 carries it AND a fake HOME whose keyring IS available, a3c is a3 without the variable. The row's `keyringMarker`
+  // canary says whether the probe's own backend was reached after the run: a3 must NOT (the forced backend wins), a3c MUST (else a3 proved nothing).
   'M-V7': [
-    { arm: 'a: empty short VIBE_HOME', keyring: true },
-    { arm: 'a2: empty home + VIBE_TEST_DISABLE_KEYRING=1', keyring: false },
+    { arm: 'a: empty short VIBE_HOME', id: 'a' },
+    { arm: 'a2: empty home + VIBE_TEST_DISABLE_KEYRING=1', id: 'a2' },
+    { arm: 'a3: forced backend + a fake HOME with an AVAILABLE keyring (marker must stay absent)', id: 'a3' },
+    { arm: 'a3c: the same fake HOME, NO forced backend (marker must appear)', id: 'a3c' },
     { arm: 'b: VIBE_ACTIVE_MODEL=nope', model: 'nope' },
-  ].map((a) => ({
+  ].filter((a) => !a.id || keyringArm(a.id, process.platform, { scratch: '' }).applies).map((a) => ({
     arm: a.arm,
     setup(runDir) {
       const workdir = join(runDir, 'work');
@@ -318,7 +329,8 @@ const ARMS = {
       if (a.model) return { workdir, prompt: REPLY_OK, env: { VIBE_ACTIVE_MODEL: a.model } };
       // Not signed in on purpose: on Linux this arm IS L-V1 (a fresh home has no keyring and no .env).
       const home = shortHome({ copy: false, signIn: false });
-      return { workdir, home, prompt: REPLY_OK, env: a.keyring ? {} : { VIBE_TEST_DISABLE_KEYRING: '1' } };
+      const keyring = keyringSetup(a.id, process.platform, { scratch: runDir });
+      return { workdir, home, prompt: REPLY_OK, env: keyring.env, canaries: keyring.markerFile ? { keyringMarker: keyring.markerFile } : {} };
     },
   })),
 
@@ -680,7 +692,7 @@ for (const cell of cells) {
   if (cell === 'M-V5') {
     for (let n = 1; n <= repeats; n++) rows.push(runResume(n));
   } else {
-    for (const a of ARMS[cell]) {
+    for (const a of ARMS[cell].filter((arm) => armWanted(arm.arm, armFilter))) {
       const times = a.control ? 1 : repeats;
       for (let n = 1; n <= times; n++) rows.push(runArm(cell, a, n));
     }

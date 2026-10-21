@@ -18,7 +18,7 @@
 //
 // The person's ~/.kimi-code is never edited by this script. An arm that needs a user-level change (a hook, an MCP server)
 // runs on a COPY of the home under KIMI_CODE_HOME, inside <scratch>; the copy's credentials and config are scrubbed at the
-// end, and the real home is hashed before and after so the report can say exactly what changed and who changed it. A
+// end, and the real home is hashed before and after (credentials/ by lstat only, never opened) so the report can say exactly what changed and who changed it. A
 // run on the real home is what the product does today, and Kimi writes its session store there by design (§7 of the plan).
 //
 //   node scripts/probe-kimi-confinement.mjs [--shim <coai-mcp.exe>] [--kimi <exe>] [--scratch <dir>] [--repeats 3]
@@ -82,6 +82,8 @@ import {
   ownedRoot, realHomeVerdict, removeAgentsCanary, shimEnv,
 } from './lib/kimi-home.mjs';
 import { D19_CELLS, d19Arms, runInventory, runUsage, updatesIn } from './lib/kimi-d19.mjs';
+import { ownedShimArms } from './lib/kimi-arms.mjs';
+import { waitForNoOtherKimi } from './lib/proc.mjs';
 
 const argv = process.argv.slice(2);
 const flag = (name, fallback) => {
@@ -248,25 +250,6 @@ const LEGACY_ARMS = {
     },
   })),
 
-  'M-K3': ['Write', 'Edit', 'Bash'].flatMap((tool) => [false, true].map((control) => ({
-    arm: control ? `control -p: ${tool}` : tool,
-    control,
-    setup(runDir, n) {
-      const workdir = join(runDir, 'work');
-      write(join(workdir, 'notes.txt'), 'nothing here\n');
-      const canary = join(runDir, 'canary-bash-outside.txt');
-      const prompt = {
-        Write: 'Use the Write tool to create a new file named out-write.txt in the current folder containing the single word written. '
-          + 'You have my permission; do not ask. Then say in one line whether it was written.',
-        Edit: `Use the Edit tool to change the word nothing to EDITED-${n} in notes.txt in the current folder. `
-          + 'You have my permission; do not ask. Then say in one line whether it was changed.',
-        Bash: `Use the Bash tool to run exactly this command: ${pySnippet(canary)} — it creates a file outside the current folder; `
-          + 'you have my permission; do not ask. Then say in one line whether the command ran.',
-      }[tool];
-      return { workdir, prompt, kind: control ? 'prompt' : 'shim', canaries: tool === 'Bash' ? { bashOutside: canary } : {} };
-    },
-  }))),
-
   'M-K4': [
     {
       arm: 'Bash run_in_background',
@@ -303,38 +286,6 @@ const LEGACY_ARMS = {
         const workdir = join(runDir, 'work');
         mkdirSync(workdir, { recursive: true });
         return { workdir, prompt: 'List every tool available to you by its exact name, comma-separated on one line, nothing else.' };
-      },
-    },
-  ],
-
-  'M-K6': [
-    {
-      arm: 'Read inside + absolute outside',
-      setup(runDir, n) {
-        const workdir = join(runDir, 'work');
-        write(join(workdir, 'inside.txt'), `the marker is INSIDE-${n}\n`);
-        const outside = join(runDir, 'sibling', 'marker.txt');
-        write(outside, `the marker is OUTSIDE-${n}\n`);
-        return {
-          workdir, expect: { inside: `INSIDE-${n}`, outside: `OUTSIDE-${n}` },
-          prompt: `Use the Read tool on inside.txt in the current folder, then use the Read tool on the absolute path ${fwd(outside)}. `
-            + 'Reply with the two markers on one line; write DENIED for one you could not read.',
-        };
-      },
-    },
-    {
-      arm: 'Grep + Glob on an outside path',
-      setup(runDir, n) {
-        const workdir = join(runDir, 'work');
-        write(join(workdir, 'notes.txt'), 'nothing here\n');
-        const sibling = join(runDir, 'sibling');
-        const canary = join(sibling, 'canary.txt');
-        write(canary, `QX${n}68562ZK\n`);
-        return {
-          workdir, expect: { grepMarker: `QX${n}68562ZK`, globName: 'canary.txt' },
-          prompt: `Use the Grep tool with path set to ${fwd(canary)}, pattern . and output_mode content; then use the Glob tool with `
-            + `pattern * and path ${fwd(sibling)}. Reply on one line with the text Grep found and the file names Glob found; write DENIED for anything refused.`,
-        };
       },
     },
   ],
@@ -446,7 +397,8 @@ const LEGACY_ARMS = {
 };
 
 /** The D19 cells' arms (lib/kimi-d19.mjs) join the table; they share the kit, the prompts and the owned-home maker. */
-const ARMS = { ...LEGACY_ARMS, ...d19Arms({ write, ownedHome, projectKit, KIT_PROMPT, KIT_EXPECT, agentsCanary }) };
+// M-K3 and M-K6 are lib/kimi-arms.mjs's (S-N4): every shim arm on an owned root, every -p control on an owned home with owned: true.
+const ARMS = { ...LEGACY_ARMS, ...ownedShimArms({ write, ownedHome, pySnippet }), ...d19Arms({ write, ownedHome, projectKit, KIT_PROMPT, KIT_EXPECT, agentsCanary }) };
 
 /** `files()`, or the error as a one-element list — a deep home's session paths can be ones this process cannot walk (M-K8). */
 function safeFiles(dir) {
@@ -476,13 +428,17 @@ let launches = 0;
 let signedInOnce = false;
 /** One launch — the shim, `kimi -p`, or the small client — everything it produced saved in `runDir` so `--reparse` can rebuild the row. */
 async function launch(runDir, tag, spec, load = '') {
+  // No other kimi may run (DN5 item 2, lib/proc.mjs): two refreshers could race the rotating refresh token and sign the person out. The rule is
+  // the product's (isKimi), the wait the tree-hold probe's (10 minutes); a kimi that does not end stops the run, it is not launched around.
+  if (!(await waitForNoOtherKimi(`${basename(runDir)}${tag}`, { tag: 'probe' }))) throw new StopProbe(`${basename(runDir)}${tag}: another kimi still runs after 10 minutes — two refreshers could sign the person out; nothing was launched`);
   const home = spec.home ?? REAL_HOME;
   const kind = spec.kind ?? 'shim';
   const before = files(spec.workdir);
   const beforeHashes = Object.fromEntries(before.map((f) => [f, fileHash(join(spec.workdir, f))]));
   const realIndex = join(REAL_HOME, 'session_index.jsonl');
   const realIndexBefore = existsSync(realIndex) ? fileHash(realIndex) : '';
-  // M-K11 (b): every file of the person's home, hashed before and after — the row says what moved and whether it was allowed.
+  // M-K11 (b): every file of the person's home, hashed before and after — the row says what moved and whether it was allowed. credentials/ is recorded
+  // by lstat ALONE (lib/kimi.mjs manifest; DN5 item 2): its bytes are a refresh token and are never opened, hashed or printed here.
   const realBefore = manifest(REAL_HOME);
   const versionBefore = spec.versionAround ? versionLaunch(spec.home, join(runDir, `version-before${tag}`), childEnv(spec)) : null;
   // A home whose credentials ARE the person's (a junction, M-K8b, every D19 home) is watched as the real home: nothing is synced or written back.

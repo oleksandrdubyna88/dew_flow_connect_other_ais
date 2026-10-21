@@ -14,29 +14,38 @@
 //   killed      the shim killed by its own handle mid-turn, `kimi` left to itself: Held while `kimi` lives, Free within ~2 s of ITS exit —
 //               and is anything else of Kimi's (a helper, an updater) still alive and holding the files after `kimi` is gone?
 //   killed-rg   the same, killed while an `rg` child of `kimi` is running: does a child outlive `kimi` and keep the hold?
+//   killed-hard (E1.S3, N-K2) the same as `killed` with SIGKILL instead of SIGTERM: the shim handles TERM and ends the agent's tree itself, so only a KILL
+//               leaves a survivor marker (`<key>.survivors.json` in the lock folder) abandoned. It COUNTS only when a marker existed at the kill (the row
+//               says "not evidence" otherwise).
 //
-// Safety: before EVERY run the process list is read (never killed from): another `kimi` means two refreshers could race the rotating
-// refresh token and sign the person out, so the run waits up to 10 minutes for it to end, and is SKIPPED (and said) when it does not.
+// Every killed arm's repetition is a PAIR (lib/kimi-schedule.mjs): `<arm>-<n>`, then at once `<arm>-<n>-next`, a normal launch that records the marker
+// before it, the shim's report and the marker after it — where the next launch's reconcile of the abandoned marker is observed. Each killed row names every
+// survivor of the kill with its NEW parent (pid, comm, exe basename: pid 1 or a `systemd --user` reaper).
+//
+// Safety: before EVERY run the process list is read (never killed from): another `kimi` — by the PRODUCT's rule, lib/proc.mjs isKimi, which also sees
+// a running `kimi acp` whose comm is `MainThread` — means two refreshers could race the rotating refresh token and sign the person out, so the run waits
+// up to 10 minutes for it to end, and is SKIPPED (and said) when it does not.
 // Processes are ended only by a PID this script started (the shim) — never by image name. A `kimi` orphaned by the killed-shim arms is
 // waited for, not killed.
 //
-//   node scripts/probe-kimi-tree-hold.mjs [--shim <coai-mcp.exe>] [--scratch <dir>] [--repeats 3] [--arms normal,normal-tools,killed,killed-rg]
+//   node scripts/probe-kimi-tree-hold.mjs [--shim <coai-mcp.exe>] [--scratch <dir>] [--repeats 3] [--arms normal,normal-tools,killed,killed-hard,killed-rg]
 //
 // Linux (E1 of research/PLAN_kimi_and_vibe_on_linux.md, §5; the cells it serves are E4's L-K4/L-K6): the process list is read from
-// /proc (lib/proc.mjs — pid, parent, comm; read-only), a lock file's state is asked of flock(1) — .NET turns FileShare.None into
+// /proc (lib/proc.mjs — pid, parent, comm and the product's name; read-only), a lock file's state is asked of flock(1) — .NET turns FileShare.None into
 // an advisory flock there, which a plain open does not see — the shim is `coai-mcp` without `.exe`, the sign-in link is a
 // symlink (DL6), the shim's environment is MinimalUnix with HOME alone redirected (DL11), and the killed-rg arm searches /usr.
 // The rule about another `kimi` is the same and matters more: the refresh token rotates (D19).
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, win32 } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
-import { SYSTEM32, minimalWindowsEnv } from './lib/vibe.mjs';
+import { minimalWindowsEnv } from './lib/vibe.mjs';
 import { DEFAULT_MODEL, KIMI_EXE, REAL_HOME, scratchRefusal } from './lib/kimi.mjs';
-import { credentialNames, disposeOwnedHome, makeOwnedHome, shimEnv } from './lib/kimi-home.mjs';
-import { FLOCK, linuxProcesses, lockState } from './lib/proc.mjs';
+import { credentialNames, disposeOwnedHome, makeOwnedHome, ownedRoot, shimEnv } from './lib/kimi-home.mjs';
+import { KILL_ARMS, buildSchedule, killRecord, killSignal, nextRow, survivorMarkers } from './lib/kimi-schedule.mjs';
+import { FLOCK, isKimi, listProcesses, lockState, waitForNoOtherKimi } from './lib/proc.mjs';
 
 const WINDOWS = process.platform === 'win32';
 
@@ -51,12 +60,14 @@ const ARMS = {
     prompt: 'Use your Grep tool to find the line containing OSPREY in notes.txt and your Glob tool to list *.txt files in this folder. Then reply with exactly: DONE',
     killed: false,
   },
-  killed: { prompt: 'Reply with exactly: OK', killed: true, after: 'kimi' },
+  // The signal each killed arm sends, and what it waits for first, are lib/kimi-schedule.mjs's KILL_ARMS (tested there: killed-hard is SIGKILL).
+  killed: { prompt: 'Reply with exactly: OK', killed: true, ...KILL_ARMS.killed },
+  'killed-hard': { prompt: 'Reply with exactly: OK', killed: true, ...KILL_ARMS['killed-hard'] },
   // A pattern no file holds, over a big read-only tree, so `rg` runs for seconds — long enough to kill the shim while it is alive.
   'killed-rg': {
     prompt: `Use your Grep tool to search for the text zzqxjv-no-such-text-anywhere recursively in the folder ${WINDOWS ? String.raw`C:\Windows\System32` : '/usr'} (a case-insensitive plain search is fine). Report only how many matches there were.`,
     killed: true,
-    after: 'rg',
+    ...KILL_ARMS['killed-rg'],
   },
 };
 const here = dirname(fileURLToPath(import.meta.url));
@@ -87,20 +98,11 @@ const now = () => performance.now();
 
 // ------------------------------------------------------------------------------------------------------ processes (read-only)
 
-/**
- * Every live process as { pid, ppid, name } — a LISTING; nothing here ends a process. Windows PowerShell by its FIXED path under
- * System32 and never a bare name, so no folder of the PATH (which a person's own tools can write to) decides what runs (S4036);
- * the cmdlet and the string are the same in 5.1 as in pwsh 7.
- */
-function listProcesses() {
-  if (!WINDOWS) return linuxProcesses();
-  const r = spawnSync(SYSTEM32(String.raw`WindowsPowerShell\v1.0\powershell.exe`), ['-NoProfile', '-NonInteractive', '-Command',
-    'Get-CimInstance Win32_Process | ForEach-Object { "$($_.ProcessId),$($_.ParentProcessId),$($_.Name)" }'], { encoding: 'utf8', timeout: 30_000 });
-  return String(r.stdout ?? '').split(/\r?\n/u).filter(Boolean).map((line) => {
-    const [pid, ppid, ...name] = line.split(',');
-    return { pid: Number(pid), ppid: Number(ppid), name: name.join(',') };
-  });
-}
+// The listing — `{ pid, ppid, comm, name }`, a LISTING that ends nothing — and the Kimi test are lib/proc.mjs's: `name` is what the PRODUCT's listing reads
+// (the exe's basename, else argv[0]'s), `isKimi` the product's rule (ForeignKimiWatch.IsKimi). On Windows `name` is the image name (listProcesses).
+
+/** What a process is called in a row: the product's name, else its comm. */
+const displayName = (entry) => entry.name || entry.comm;
 
 const descendantsOf = (root, all) => {
   const found = [];
@@ -124,20 +126,8 @@ const alive = (pid) => {
   }
 };
 
-/** Waits (up to 10 minutes) for any other kimi process to end; false = it did not, and the run is skipped. */
-async function noOtherKimi(label) {
-  const until = now() + 10 * 60_000;
-  while (true) {
-    const others = listProcesses().filter((p) => /^kimi(\.exe)?$/iu.test(p.name));
-    if (others.length === 0) return true;
-    if (now() > until) {
-      console.error(`[mk15] ${label}: SKIPPED — another kimi still runs after 10 minutes (pids ${others.map((p) => p.pid).join(', ')}); two refreshers could sign the person out`);
-      return false;
-    }
-    console.error(`[mk15] ${label}: waiting — another kimi runs (pids ${others.map((p) => p.pid).join(', ')})`);
-    await sleep(10_000);
-  }
-}
+/** Waits (up to 10 minutes) for any other kimi process to end; false = it did not, and the run is skipped. The guard is lib/proc.mjs's, shared with the confinement probe. */
+const noOtherKimi = (label) => waitForNoOtherKimi(label, { tag: 'mk15' });
 
 // ------------------------------------------------------------------------------------------------------ the lock files
 
@@ -195,13 +185,18 @@ function shimEnvironment(root) {
   };
 }
 
-async function runOne(armName, n) {
+/**
+ * One scheduled run (lib/kimi-schedule.mjs buildSchedule): `entry` is `{ arm, n, label, kind, after? }`. A `next` entry is the normal launch right after a
+ * kill; it records the survivor marker the kill left, the shim's report and the marker once it is over.
+ */
+async function runOne(entry) {
+  const { arm: armName, n, label } = entry;
   const arm = ARMS[armName];
-  const label = `${armName}-${n}`;
-  if (!(await noOtherKimi(label))) return { arm: armName, n, skipped: 'another kimi process was running for 10 minutes' };
+  const markerBefore = entry.kind === 'next' ? survivorMarkers(locks) : [];
+  if (!(await noOtherKimi(label))) return { arm: armName, n, label, skipped: 'another kimi process was running for 10 minutes' };
   const root = join(scratch, `kh-${label}`);
   const work = join(scratch, `work-${label}`);
-  mkdirSync(join(root, 'os'), { recursive: true });
+  ownedRoot(root); // the product's layout: home/ beside an empty os/, and on Linux the cache/ folder XDG_CACHE_HOME names (DL11)
   mkdirSync(work, { recursive: true });
   writeFileSync(join(work, 'notes.txt'), 'a line\nOSPREY-1 is here\nanother line\n');
   const made = makeOwnedHome(join(root, 'home'), REAL_HOME, ['config-models'], { defaultModel: DEFAULT_MODEL });
@@ -222,33 +217,34 @@ async function runOne(armName, n) {
   const exited = new Promise((resolve) => child.on('exit', (code) => resolve({ code, at: now() })));
   child.stdin.end(arm.prompt);
 
-  const seen = new Map(); // pid -> name, every descendant of the shim ever listed
+  const seen = new Map(); // pid -> { comm, name }, every descendant of the shim ever listed
   const sample = () => {
-    for (const p of descendantsOf(child.pid, listProcesses())) seen.set(p.pid, p.name);
+    for (const p of descendantsOf(child.pid, listProcesses())) seen.set(p.pid, { comm: p.comm ?? '', name: p.name });
   };
-  const row = { arm: armName, n, label, killedAfterMs: 0, shim: { exit: null }, files: {}, descendants: [] };
+  const row = { arm: armName, n, label, ...(entry.kind === 'next' ? { pairedWith: entry.after } : {}), killedAfterMs: 0, shim: { exit: null }, files: {}, descendants: [] };
 
   if (arm.killed) {
     // The shim takes the tree hold immediately before it starts kimi, so the file going Held is "the agent is starting". Then sample until the
-    // process we wait for is a live descendant (kimi; or an rg), and kill the shim by its own handle — for the kimi arm no sooner than 4 s
-    // after the hold, so the turn is mid-prompt (a plain turn takes 8-11 s here), not mid-handshake.
-    const target = arm.after === 'rg' ? /^rg(.exe)?$/iu : /^kimi(.exe)?$/iu;
+    // process we wait for is a live descendant (kimi; or an rg), and end the shim by its own handle — for the kimi arms no sooner than 4 s
+    // after the hold, so the turn is mid-prompt (a plain turn takes 8-11 s here), not mid-handshake. The signal is the arm's (SIGKILL for killed-hard).
+    const target = arm.after === 'rg' ? (e) => /^rg(\.exe)?$/iu.test(displayName(e)) : isKimi;
     const limit = now() + 120_000;
     while (now() < limit && child.exitCode === null && !(treeFile() && probe(treeFile()) === 'Held')) await sleep(20);
     const heldAt = now();
     row.heldAfterStartMs = Math.round(heldAt - t0);
     while (now() < limit && child.exitCode === null) {
       sample();
-      const hit = [...seen.entries()].find(([, name]) => target.test(name));
+      const hit = [...seen.values()].find(target);
       if (hit && (arm.after === 'rg' || now() - heldAt > 4_000)) break;
       await sleep(50);
     }
-    row.firedOn = [...seen.values()].join(',');
+    row.firedOn = [...seen.values()].map(displayName).join(',');
     if (child.exitCode === null) {
+      const markers = survivorMarkers(locks); // read BEFORE the signal: a killed-hard row counts only if a marker existed at the kill
       const killedAt = now();
-      child.kill();
+      process.kill(child.pid, killSignal(armName));
       row.killedAfterMs = Math.round(killedAt - t0);
-      await watchAfterKill(row, killedAt, homeFile, seen);
+      await Promise.all([recordOrphans(row, armName, markers, seen), watchAfterKill(row, killedAt, homeFile, seen)]);
     } else {
       row.note = 'the shim ended before the trigger';
     }
@@ -262,8 +258,9 @@ async function runOne(armName, n) {
   const done = await exited;
   row.shim = { exit: done.code, seconds: Math.round((done.at - t0) / 100) / 10 };
   row.report = reportOf(stdout);
+  if (entry.kind === 'next') Object.assign(row, nextRow({ markerBefore, report: row.report, markerAfter: survivorMarkers(locks) }));
   row.stderrTail = stderr.slice(-300);
-  row.descendants = [...new Set(seen.values())];
+  row.descendants = [...new Set([...seen.values()].map(displayName))];
   row.credentials = { namesIntact: credentialsBefore.every((c) => credentialNames(REAL_HOME).includes(c)), rotated: JSON.stringify(shapeBefore) !== JSON.stringify(credentialShape()) };
   row.homeAfter = readdirSync(join(root, 'home')).filter((n) => n !== 'credentials').sort((a, b) => a.localeCompare(b));
   // D19's order, the product's: the junction first, by its own name, the person's folder verified — then the home, then the rest of the root.
@@ -287,10 +284,21 @@ async function watchAfterShim(row, exitedAt, homeFile, seen) {
   row.files = { freeAfterShimExitMs: free, leftover: leftover(seen) };
 }
 
+/**
+ * Who survived the kill, and under whom they live now: a moment after the signal (the kernel has re-parented the orphans), every descendant ever seen that is
+ * still alive is recorded with its NEW parent — pid, comm and exe basename (pid 1, or a `systemd --user` reaper) — beside the signal, the marker seen at the
+ * kill and whether the row counts (lib/kimi-schedule.mjs killRecord). It runs beside watchAfterKill, so the lock timings are not delayed.
+ */
+async function recordOrphans(row, armName, markers, seen) {
+  await sleep(300);
+  const survivors = [...seen.entries()].filter(([pid]) => alive(pid)).map(([pid, entry]) => ({ pid, ...entry }));
+  Object.assign(row, killRecord({ arm: armName, markers, survivors, listing: listProcesses() }));
+}
+
 /** The shim was killed: Held while `kimi` lives, and when each becomes Free — against `kimi`'s own exit and any other descendant's. */
 async function watchAfterKill(row, killedAt, homeFile, seen) {
   const tree = treeFile();
-  const kimiPid = [...seen.entries()].find(([, name]) => /^kimi(\.exe)?$/iu.test(name))?.[0] ?? 0;
+  const kimiPid = [...seen.entries()].find(([, entry]) => isKimi(entry))?.[0] ?? 0;
   const others = [...seen.entries()].filter(([pid]) => pid !== kimiPid);
   const t = { kimiGone: -1, treeFree: -1, homeFree: -1, allGone: -1 };
   let heldWhileKimiLived = true;
@@ -315,11 +323,11 @@ async function watchAfterKill(row, killedAt, homeFile, seen) {
     msAfterKill: t,
     heldWhileKimiLived: sawHeld && heldWhileKimiLived,
     freeAfterKimiExitMs: { tree: t.treeFree >= 0 && t.kimiGone >= 0 ? t.treeFree - t.kimiGone : null, home: t.homeFree >= 0 && t.kimiGone >= 0 ? t.homeFree - t.kimiGone : null },
-    otherDescendants: others.map(([pid, name]) => ({ name, aliveAfterKimiGone: t.kimiGone >= 0 && alive(pid), pidSeen: true })).map(({ name, aliveAfterKimiGone }) => ({ name, aliveAfterKimiGone })),
+    otherDescendants: others.map(([pid, entry]) => ({ name: displayName(entry), aliveAfterKimiGone: t.kimiGone >= 0 && alive(pid) })),
   };
 }
 
-const leftover = (seen) => [...seen.entries()].filter(([pid]) => alive(pid)).map(([, name]) => name);
+const leftover = (seen) => [...seen.entries()].filter(([pid]) => alive(pid)).map(([, entry]) => displayName(entry));
 
 function reportOf(text) {
   try {
@@ -338,13 +346,12 @@ function reportOf(text) {
 const rows = [];
 let failure = '';
 try {
-  for (const armName of armNames) {
-    for (let n = 1; n <= repeats; n++) {
-      const row = await runOne(armName, n);
-      rows.push(row);
-      writeFileSync(join(scratch, 'results.json'), JSON.stringify({ shim, scratch, started: new Date().toISOString(), rows }, null, 2));
-      console.error(`[mk15] ${row.label ?? `${armName}-${n}`}: ${JSON.stringify(row.files ?? row.skipped)}`);
-    }
+  // The schedule is lib/kimi-schedule.mjs's: repeat-outer, and each killed arm's repetition a PAIR — the kill, then at once its `-next` normal launch.
+  for (const entry of buildSchedule(armNames, repeats)) {
+    const row = await runOne(entry);
+    rows.push(row);
+    writeFileSync(join(scratch, 'results.json'), JSON.stringify({ shim, scratch, started: new Date().toISOString(), rows }, null, 2));
+    console.error(`[mk15] ${row.label}: ${JSON.stringify(row.files ?? row.skipped)}`);
   }
 } catch (e) {
   failure = e.stack ?? String(e);
