@@ -1,5 +1,24 @@
 # Changelog
 
+## Team server 0.14.1 — 2026-10-21
+
+**Fixed: a reviewer that exits before its start time is read is not "not started".** The Team server launches reviewers through the same launcher as coai-mcp. A launched process that exited so fast (seen on macOS) that its start time could not be read was reported as "not started"; it is now recorded as the launch it was.
+
+## Extension 0.83.0 — 2026-10-21
+
+**Added: the round card says who wrote the code.** A plan or code round shows one "written with" line: the main agent's model, the subagents that wrote code (counted by model family), and the size of the change. A partial or unobserved result says why, and a write that no agent can be shown to own is marked "size not covered". A round from before this release shows no line until the backfill fills it in.
+
+**Fixed: the Rounds block says *per launch* only where a line is one launch.** Since coai-mcp 0.48.0 a review run on
+this machine writes one ledger line per launch, but the block still called every median and every fallback division
+*per recorded turn*. A line now counts as one launch when its attempt is a first try, a retry or a repair and it ran on
+this machine. A line from before 0.48.0, a Team-server row's line (the job's total) and an antigravity follow-up in the
+same conversation (its usage may include the first launch's) still count as recorded turns. The column header names
+the unit its medians share — *per launch*, *per recorded turn*, or no unit on a mixed page — and a cell names its own
+unit when it differs. "Count unavailable" now says that Team servers count rounds from 0.12.0, and the help, in five
+languages, lists every reason a rounds-per-1 % figure can be unavailable.
+
+**Changed: Check is not offered on a reviewer-only row.** The Models card's ✓ Check button is disabled on a reviewer-only row (kimi, gemini, remote), with the title "the consultant check is not offered for <runtime> — this runtime cannot hold a consultation". It no longer offers a paid turn that the server would refuse.
+
 ## Server 0.63.0 — 2026-10-21
 
 **Added: a round records who wrote the code it reviewed, and how much.** A plan or code round now stores its authors: which agent (the main agent or a subagent) wrote each change, on which model, and how many tokens each one spent. coai-mcp reads this from the calling Claude Code session's own transcript on the same computer.
