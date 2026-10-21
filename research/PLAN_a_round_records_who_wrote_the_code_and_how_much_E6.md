@@ -1,11 +1,13 @@
 # PLAN — E6: the report, `coai-mcp --round-authors`, over live rounds (stories)
 
-> Status: **S1–S5 implemented on `feat/round-authors-e6`, 2026-10-19; judge-reviewed and code gate `proceed` the same day (pull request #864, not merged, stacked on #867, #862 and #863; §5 records the deviations, §5.1 the judge review and the gate, and what is open).** Plan 2026-10-14; revised 2026-10-16 against `main` at `2d98f2f8`, and 2026-10-18 against `main` at `9a0a5f2e` with the points E3/E4/E5 owe it (§3). Epic E6 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
+> Status: **IMPLEMENTED, 2026-10-20.** E6.S1–S5 merged as #864 (`20c35f026`); the judge fixed two defects and the coai code gate said `proceed` (5 findings accepted). A hardening follow-up merged as #896 (`9134099c0`, 2026-10-20). **Partial by decision, and the report has not read a real store.** (1) The report never ran against `%LOCALAPPDATA%\coai-mcp` or the WSL store, because the older rounds have no authors until the live backfill runs ([PLAN_round_authors_backfill_on_the_live_stores.md](../todo/PLAN_round_authors_backfill_on_the_live_stores.md), N7 and N8). (2) No per-window schema step was built: the owner said "not now" on 2026-10-18 (question 12), and the report states the roll-up limit in its header. Both are named here, in *Promotion record* and in its *open tail*. Deviations are in §5, §5.1 and *Promotion record* below. Epic E6 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
+>
+> Status before promotion (kept as history): **S1–S5 implemented on `feat/round-authors-e6`, 2026-10-19; judge-reviewed and code gate `proceed` the same day (pull request #864, not merged, stacked on #867, #862 and #863; §5 records the deviations, §5.1 the judge review and the gate, and what is open).** Plan 2026-10-14; revised 2026-10-16 against `main` at `2d98f2f8`, and 2026-10-18 against `main` at `9a0a5f2e` with the points E3/E4/E5 owe it (§3). Epic E6 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
 >
 > Scope: `src_mcp` only — a read-only one-shot mode beside `--round-counts`, its reader, a pure population unit, a pure
 > counting unit, the JSON of sums and `--add`, the table. Nothing is written to any store; nothing on the extension or the
-> Team server. Related docs: [module_server.md](../research/module_server.md) (*`--round-counts`*, the shape followed),
-> [module_tests.md](../research/module_tests.md).
+> Team server. Related docs: [module_server.md](module_server.md) (*`--round-counts`*, the shape followed),
+> [module_tests.md](module_tests.md).
 
 ## 0. What every story stands on
 
@@ -722,3 +724,27 @@ consultants before the person — were applied; no consultation was ordered and 
 **What is open.** The extension reads no part of this mode, so no TypeScript changed. The report is not yet run against a real store (E7's
 backfill must populate the older rounds first; a run against `%LOCALAPPDATA%\coai-mcp` or the WSL store is the owner's to start). `peer running` is unreachable for a still-running peer in production (E5 deviation 8), so `provisional` will read zero until E7's repair leans on the grown-peer-set rule.
 
+## Promotion record (2026-10-21)
+
+### Deviations from the plan
+
+§5 and §5.1 above hold the full record (deviations 1–13, the judge's two defects, the gate's findings). The ones that change what the plan said:
+
+1. **The JSON has its own strict `JsonSerializerContext`**, `RoundAuthorsJson`, so that an `--add` file with an unknown or missing member is refused, while the server's shared context stays lenient.
+2. **The branch map is keyed by an 8-hex repository id**, not by `repo_path`. The answer carries no absolute path.
+3. **`NumeratorSums` has a sixth member, `DeltaTotal`**, without which the per-100-delta figure cannot be computed from sums.
+4. **The reader opens through `RoundCounts.OpenReadOnly`** and one `Outcome<T>` shape replaces several tuples (gate findings).
+5. **Size coverage reads the union of the contributing rounds' uncovered writes**, not the round's own count (judge defect 1).
+6. **`--add ""` is exit 65, not a crash**, and a misshapen report is refused (judge defect 2). #896 went further: the table and the refusal sentences print no control character, and an `--add` cell or exclusion word that this report never writes is refused with 65.
+7. **Two `--add` stores that share a gate session are refused.** The owner confirmed it on 2026-10-19. One method, `RoundAuthorsMerge.Overlap`, holds the policy.
+8. **The rules-budget drift guard was re-baselined** because `.agents/PROJECT.md` now names `--round-authors` (deviation 13).
+
+The check boxes in *Definition of Done* in this document are not the authority. This record and §5 are.
+
+### Open tail
+
+| Item | Where it lives |
+|---|---|
+| The report has not read a real store. `provisional` reads zero and older cells are empty until the backfill runs. | [PLAN_round_authors_backfill_on_the_live_stores.md](../todo/PLAN_round_authors_backfill_on_the_live_stores.md), N7 to N10 |
+| A per-window schema step | Not built. The owner said "not now" on 2026-10-18 (question 12). |
+| The extension reads no part of this mode | Not planned. |

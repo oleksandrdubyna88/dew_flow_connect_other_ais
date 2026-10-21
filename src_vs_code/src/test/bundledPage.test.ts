@@ -1259,7 +1259,7 @@ test('opening a round with no recorded source draws no source element at all', (
 
 /* ------------------------------------------------------------------------------------------------
  * Who WROTE what a round reviewed, run rather than matched (E5.S6 of
- * todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md).
+ * research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md).
  *
  * The line is built by `writtenWithHtml`, embedded in the page by its source text, and `detail(row)` adds it to the `asked`
  * expression — so a deleted term there leaves every unit test green and the opened row without the line. Only the page as it

@@ -5,7 +5,7 @@ namespace CoaiMcp.Core.Authors;
 
 /// <summary>
 /// What a round records about who wrote the code it reviewed — the text-free snapshot kept on <c>RoundRecord.Authors</c> in the
-/// session file (E5.S1 of <c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md</c>). Ids, closed words, counts and
+/// session file (E5.S1 of <c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md</c>). Ids, closed words, counts and
 /// tokens; never a byte of what a transcript said.
 /// </summary>
 /// <remarks>
@@ -85,6 +85,18 @@ public sealed partial record AuthorsSnapshot(
     public string Render() => Reasons.Length == 0 ? State : State + ": " + string.Join(Joiner, Reasons);
 
     /// <summary>
+    /// The inverse of <see cref="Render"/>, beside it so the format has ONE reader (E7 code gate finding 20): the state kind and its reasons, split
+    /// on <c>": "</c> and then on <c>", "</c>. Exact for every state <see cref="IsWellFormed"/> accepts, because that rule refuses a reason that
+    /// contains either joiner; a string with no joiner is a kind with no reasons.
+    /// </summary>
+    public static (string State, ImmutableArray<string> Reasons) Split(string rendered)
+    {
+        var at = rendered.IndexOf(": ", StringComparison.Ordinal);
+
+        return at < 0 ? (rendered, []) : (rendered[..at], [.. rendered[(at + 2)..].Split(Joiner)]);
+    }
+
+    /// <summary>
     /// Whether a stored state is one E5 could have written — the WHOLE rule, written once: exactly <c>observed</c>, or <c>partial: </c> /
     /// <c>unobserved: </c> followed by one or more reasons joined by <c>", "</c>, pairwise distinct, each a lower-case phrase of letters,
     /// spaces and hyphens that starts and ends with a letter. A count (<c>×2</c>, any digit), a colon, a comma inside a reason, an empty
@@ -99,8 +111,7 @@ public sealed partial record AuthorsSnapshot(
             return false;
         }
 
-        var at = stored.IndexOf(": ", StringComparison.Ordinal);
-        var reasons = at < 0 ? [] : stored[(at + 2)..].Split(Joiner);
+        var reasons = Split(stored).Reasons;
 
         return reasons.Distinct(StringComparer.Ordinal).Count() == reasons.Length;
     }

@@ -310,10 +310,17 @@ internal static class Program
 
         /// <summary>
         /// Who wrote the code a round reviewed, and what the reviewers found, as additive sums over the rounds database
-        /// (E6 of <c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E6.md</c>) — read-only, one document of JSON or a table.
+        /// (E6 of <c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E6.md</c>) — read-only, one document of JSON or a table.
         /// </summary>
         /// <remarks>Its own <c>args[0]</c> for the reason <c>--round-counts</c> is. See <see cref="Server.RoundAuthorsMode"/>.</remarks>
         RoundAuthors,
+
+        /// <summary>
+        /// Gives every settled plan or code round the authors and the size the live path would have written, from what is on disk — one run per side, over
+        /// that side's own store, behind a verified backup and a dry run (E7). See <see cref="Server.BackfillAuthorsMode"/>.
+        /// </summary>
+        /// <remarks>Its own <c>args[0]</c> and a WRITER mode: a named data folder that is missing is refused before it runs.</remarks>
+        BackfillAuthors,
     }
 
     /// <summary>
@@ -329,7 +336,7 @@ internal static class Program
     internal static readonly IReadOnlySet<Startup> WriterModes = new HashSet<Startup>
     {
         Startup.CheckConsultant, Startup.CheckModel, Startup.Collect, Startup.PairsKeep, Startup.PairsDecide,
-        Startup.UploadPairs, Startup.RequeueRefused, Startup.ProbeApi, Startup.Consultants,
+        Startup.UploadPairs, Startup.RequeueRefused, Startup.ProbeApi, Startup.Consultants, Startup.BackfillAuthors,
     };
 
     /// <summary>Why <paramref name="startup"/> may not run here — empty when it may (not a writer, or its root is there).</summary>
@@ -359,6 +366,7 @@ internal static class Program
                 "--log" => Startup.Log,
                 "--round-counts" => Startup.RoundCounts,
                 "--round-authors" => Startup.RoundAuthors,
+                "--backfill-authors" => Startup.BackfillAuthors,
                 "--findings" => Startup.Findings,
                 "--findings-many" => Startup.FindingsMany,
                 "--bugs-json" => Startup.Bugs,
@@ -482,6 +490,11 @@ internal static class Program
                 // Read-only, like the counter: the data directory is resolved as `--round-counts` resolves it, and an `--add` file is read with
                 // File.ReadAllText, which honours a byte-order mark (a report redirected by Windows PowerShell 5.1 is UTF-16).
                 return Server.RoundAuthorsMode.Run(args, Environment.GetEnvironmentVariable, Console.Out, Note, TimeProvider.System, File.ReadAllText);
+
+            case Startup.BackfillAuthors:
+                // A one-shot WRITER: the summary on stdout and nothing else, a refusal's sentence on stderr. It makes its own verified backup before it opens
+                // the store for writing, and deletes nothing.
+                return await Server.BackfillAuthorsMode.RunAsync(args, Environment.GetEnvironmentVariable, Console.Out, Note, TimeProvider.System);
 
             case Startup.Findings:
                 return FindingsJson(args);
@@ -2511,6 +2524,14 @@ internal static class Program
         absolute path); `--table` prints the report, header first; `--add` adds the document an earlier run printed (two reports are one
         population only with the same selection and no shared gate session). An association, never a cause. A missing database is an empty
         answer and exit 0; a bad argument or an `--add` that cannot be read or added is 65; a database that will not read is 74 — never 64.
+        `--backfill-authors [--since <utc instant>] [--dry-run]` gives every settled plan or code round the authors
+        and the size the live path would have written, from this side's own store and transcripts. A writing run
+        first makes a VERIFIED backup (SQLite's online backup of coai.db and every session file) in a new folder
+        under <data dir>/backfill-backups/ and writes only after it verified; --dry-run reads through a read-only
+        connection, writes nothing and makes no backup. It deletes nothing. The summary is JSON on stdout. Exits 0
+        done (a missing store included), 65 a bad, repeated or unknown argument, 74 a store or session file that
+        will not read or write, a side that has not run the release, or a backup that did not verify, 75 the run
+        completed but something was deferred (run it again) — never 64.
         `--findings --session <id> --stage <stage> --number <n>` prints one round's findings; it
         exits 69 when the database has never heard of that round, which is not the same as finding
         nothing.

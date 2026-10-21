@@ -140,7 +140,7 @@ public sealed class StageRulesTests : IDisposable
     }
 
     /// <summary>
-    /// The base and the eight tier rules spend exactly 80 002 characters of the budget — the number every
+    /// The base and the eight tier rules spend exactly 80 024 characters of the budget — the number every
     /// other pin in this file stands on.
     /// </summary>
     /// <remarks>
@@ -151,13 +151,20 @@ public sealed class StageRulesTests : IDisposable
     /// since:</b> 2026-10-18, when <c>.agents/PROJECT.md</c> named E5's <c>--kimi-clear-marker</c> (+23, base
     /// 17 906, 79 967), and 2026-10-19 on the merged tree of E6, when it also named the one-shot mode
     /// <c>--round-authors</c> (+19, which that file must do — <c>ARequestFaultIsNotAnOldBinaryTests</c>): base
-    /// 17 925, the pair 79 986, 10 014 left; the three canary tests below were re-run unchanged. <b>And a third time, 2026-10-21</b>, when E1.S2 of the native-Linux plan named the one-shot
-    /// mode <c>--host-facts</c> in that file (+16, which it must — <c>ARequestFaultIsNotAnOldBinaryTests</c>): base 17 941, the pair 80 002, 9 998 left; the three canary tests below were re-run unchanged. To reproduce, run
+    /// 17 925, the pair 79 986, 10 014 left; the three canary tests below were re-run unchanged. To reproduce, run
     /// this test and read the two numbers in its failure message.</para>
     /// <para>It goes red when the conventions pin moves a tier rule, or when this repository's own
     /// instruction files or rules change by one character. That is the point, not a nuisance: the tail
     /// canaries below are measured against this number, so a change here means they have to be
     /// re-measured in the same change (<c>research/RESULTS_rules_selection_budget.md</c>, last section).</para>
+    /// <para><b>Re-baselined 2026-10-20 (E7 merged with `main`, which holds E6).</b> The base is 17 947: `.agents/PROJECT.md` must
+    /// name every one-shot mode (`ARequestFaultIsNotAnOldBinaryTests`) and now names both `--round-authors` (E6, +19, 17 925 above) and
+    /// `--backfill-authors` (E7, +22). The total is 80 008, leaving 9 992 of 90 000; the tail canaries below are unaffected (the three smallest
+    /// tail rules are 8 683, the fourth adds 3 460). Measured once on the merged tree from this test's own failure message.</para>
+    /// <para><b>Re-baselined again 2026-10-21 (E1.S2 of the native-Linux plan, merged with `main`).</b> `.agents/PROJECT.md` also names the one-shot mode
+    /// `--host-facts` (+16, which it must — `ARequestFaultIsNotAnOldBinaryTests`). The base is 17 963, the total 80 024, leaving 9 976 of 90 000; the tail
+    /// canaries below ran unchanged and green (the fourth smallest tail rule, 3 460, still does not fit). Measured on the merged tree: the pinned numbers above
+    /// are the ones this test reads back.</para>
     /// <para>The unit is the one the collector spends: characters of the line-ending-normalised text
     /// (<c>RuleFile.Text.Length</c>), which is what <c>RuleFiles.DefaultBudgetBytes</c> calls bytes. They
     /// differ for the non-ASCII characters in these files, and are equal on every platform.</para>
@@ -175,13 +182,13 @@ public sealed class StageRulesTests : IDisposable
             .Where(file => !file.Path.Equals(file.WithinMount, StringComparison.Ordinal) && RuleOrder.IsTier(file.WithinMount))
             .Sum(file => file.Text.Length);
 
-        var message = $"base {baseBytes} + tier {tierBytes} = {baseBytes + tierBytes} (pinned: 17 941 + 62 061 = 80 002 of 90 000; 17 925 + 62 061 = 79 986 until PROJECT.md named --host-facts; 17 906 + 62 061 = 79 967 until it named --round-authors). "
+        var message = $"base {baseBytes} + tier {tierBytes} = {baseBytes + tierBytes} (pinned: 17 963 + 62 061 = 80 024 of 90 000, since E1.S2's --host-facts met E7's --backfill-authors on 2026-10-21; 17 947 + 62 061 = 80 008 until then; 17 925 + 62 061 = 79 986 before E7). "
             + "WHEN THIS FAILS the headroom the tail canaries are measured against has moved: re-measure "
             + "research/RESULTS_rules_selection_budget.md, then re-baseline the canaries below in the same change.";
 
         tierBytes.Should().Be(62_061, message);
-        baseBytes.Should().Be(17_941, message);
-        (baseBytes + tierBytes).Should().Be(80_002, message);
+        baseBytes.Should().Be(17_963, message);
+        (baseBytes + tierBytes).Should().Be(80_024, message);
     }
 
     /// <summary>
@@ -190,15 +197,15 @@ public sealed class StageRulesTests : IDisposable
     /// </summary>
     /// <remarks>
     /// <para><b>A canary over the real mounted corpus, re-measured 2026-10-16 at the operator's 90 000-byte
-    /// budget (it was 80 000, and read zero).</b> Base plus tier came to 79 944 (79 986 since 2026-10-19)
-    /// (<see cref="AtNinetyKilobytes_TheBaseAndTheTier_SpendExactlyTheirPinnedBytes"/>), leaving 10 014 of 90 000 (it was 10 056);
+    /// budget (it was 80 000, and read zero).</b> Base plus tier came to 79 944 (80 008 since 2026-10-20)
+    /// (<see cref="AtNinetyKilobytes_TheBaseAndTheTier_SpendExactlyTheirPinnedBytes"/>), leaving 9 992 of 90 000 (it was 10 056);
     /// the smallest rule outside the tier is <c>common/durable-status.md</c> at 2 197. At 80 000 the leftover
     /// was 56 and NOTHING in the tail fitted on any branch, so <c>common/test-leftovers.md</c> (4 706) reached
     /// no reviewer. Now the walk takes whatever fits in the order the branch draws: over 3 000 branch names
     /// one rule on 30 %, two on 62 %, three on 8 % — never four, because the three smallest rules together
-    /// are 8 683 and the fourth smallest adds 3 421 against 10 014.</para>
+    /// are 8 683 and the fourth smallest adds 3 460 (12 143 together) against 9 992.</para>
     /// <para><b>Two assertions.</b> On the canary branch the tail is EXACTLY <c>common/gpu-lease.md</c>,
-    /// <c>csharp/nuget-packages.md</c> and <c>common/durable-status.md</c> in that order (88 708 characters
+    /// <c>csharp/nuget-packages.md</c> and <c>common/durable-status.md</c> in that order (88 730 characters
     /// in all) — the identities and the count, not a bound, because "at most three" is satisfied by a tail
     /// of the wrong three. And over one hundred fixed branch names no branch reaches more than three, the
     /// measured maximum, so a tail that grows — a bigger budget, a shrinking base or tier, a pin that moves a
@@ -226,7 +233,7 @@ public sealed class StageRulesTests : IDisposable
 
         widest.Tail.Should().HaveCountLessThanOrEqualTo(3,
             $"branch '{widest.Branch}' reached [{string.Join(", ", widest.Tail)}] and at most three rules can "
-            + "fit: the leftover is 9 998 (10 014 before 2026-10-21), and the smallest rules outside the tier are 2 197, 3 065, 3 421 "
+            + "fit: the leftover is 9 976 (9 992 before 2026-10-21), and the smallest rules outside the tier are 2 197, 3 065, 3 421 "
             + "and 3 460. That number is the same on every platform since the collector stopped spending the "
             + "budget on carriage returns.");
     }

@@ -116,9 +116,9 @@ sequenceDiagram
   rule name)*. Two rounds of one fix therefore show identical rules, which is the defect the plan was
   opened for, while different branches order the rest of the corpus differently. **That second half
   reaches one to three rules in this repository since the operator raised the budget to 90 000 bytes
-  (2026-10-16; `RuleFiles.DefaultBudgetBytes`)** — the base and the tier spend **79 986** bytes (79 944 until 2026-10-18, 79 967 until 2026-10-19), which
+  (2026-10-16; `RuleFiles.DefaultBudgetBytes`)** — the base and the tier spend **80 008** bytes (79 944 until 2026-10-18, 79 967 until 2026-10-19, 79 986 until 2026-10-20), which
   left **56** at the old 80 000 (the tail took nothing, so `common/test-leftovers.md` reached no
-  reviewer) and leave **9 998** now (10 056 until 2026-10-18, 10 033 until 2026-10-19 when PROJECT.md named `--round-authors`, 10 014 until 2026-10-21 when it named `--host-facts`); the smallest rule outside the tier is 2 197. Over 3 000 branch
+  reviewer) and leave **9 976** now (10 056 until 2026-10-18, 10 033 until 2026-10-19, when PROJECT.md named `--round-authors`, 10 014 until 2026-10-20, when it also named `--backfill-authors`, 9 992 until 2026-10-21, when it named `--host-facts`); the smallest rule outside the tier is 2 197. Over 3 000 branch
   names the tail takes one rule on 30 %, two on 62 %, three on 8 % (mean 1.78), and
   `common/test-leftovers.md` is drawn on 9.8 % — drawn, not owed: a rule that must reach every reviewer
   belongs in the tier. Numbers: `research/RESULTS_rules_selection_budget.md` (last section).
@@ -621,7 +621,8 @@ The list, and why each name is on it: `PATH` (the CLI is found through it and st
 through it); `LANG`, `LC_ALL`, `LC_CTYPE`, `TERM`, `TZ`, `NO_COLOR` (encoding and colour); `TMPDIR`,
 `TMP`, `TEMP`; the six proxy spellings, `SSL_CERT_FILE`, `SSL_CERT_DIR`, `NODE_EXTRA_CA_CERTS` (a box
 behind a corporate proxy reaches its vendor through them, and a reviewer that cannot reach its vendor
-is a review that never happens); `XDG_RUNTIME_DIR`. On Windows also `SystemRoot`, `SystemDrive`,
+is a review that never happens); `XDG_RUNTIME_DIR`. (`TMPDIR`, `TMP` and `TEMP` are also how a TEST run's per-run temp folder reaches every child: `CoaiMcp.Tests`' module initializer points all three at
+`testsToDelete-coai-run-<6>`, so the answers/repair/no-workspace folders and the loose prompt files a round makes land inside it — `research/module_tests.md`, "epic E2". Do not drop one of the three from either list without reading that section.) On Windows also `SystemRoot`, `SystemDrive`,
 `windir`, `ComSpec`, `PATHEXT` (every vendor CLI is an npm `.cmd` shim there), the profile and program
 directories, `NUMBER_OF_PROCESSORS` and `PROCESSOR_ARCHITECTURE`. Names are compared the way the
 platform compares them — case-insensitive on Windows, where `Path` and `PATH` are one variable, and
@@ -3425,9 +3426,23 @@ CLIENT, so the approvals are coai's. The client half is the unit `src_mcp/runner
 **The profile.** Executable `%USERPROFILE%\.kimi-code\bin\kimi.exe` when present, else bare `kimi` for
 `ExecutableResolver` (Windows only when this was written, so no path was guessed elsewhere — the `agy` rule; WSL2 and Linux paths have been found since E6, DL5 under *Kimi on WSL2*);
 arguments `["acp"]`; the model through config option `model`; the names declined at any depth: `AGENTS.md`,
-`agents.md`, `.kimi-code`, `.vibe`, `.agents/skills`, `.agents/agents` and `.mcp.json` (the last two joined with M-K9 (e), RESULTS §21 — a sub-agent root Kimi loads from disk and the MCP file it starts servers from when the folder is trusted; `.mcp.json` is a NAME, so refused at every depth, the stricter reading of "project-root"; `SnapshotExclusions.Default` carries the same eight, and `TheBoundaryRefusesExactlyWhatTheSnapshotLeavesOut` pins the pair), `.git`; the known sentences: the subscription `401`
-(`subscription_model`, listed BEFORE the `Authentication required` sentence it begins with → `not_signed_in`) and the
-D14 `insufficient balance` (`balance_spent`).
+`agents.md`, `.kimi-code`, `.vibe`, `.agents/skills`, `.agents/agents` and `.mcp.json` (the last two joined with M-K9 (e), RESULTS §21 — a sub-agent root Kimi loads from disk and the MCP file it starts servers from when the folder is trusted; `.mcp.json` is a NAME, so refused at every depth, the stricter reading of "project-root"; `SnapshotExclusions.Default` carries the same eight, and `TheBoundaryRefusesExactlyWhatTheSnapshotLeavesOut` pins the pair), `.git`; the known sentences — **six rows, first match wins** (`KimiAcpProfile.Failures`, public; `AcpDiagnosis.Of`). Kimi puts the same `Authentication required:` prefix on a 401, on a
+spent 5-hour quota (429) and on a spent balance, so the prefix says nothing: the words after it decide, and only a bare prefix is a lost sign-in
+(story 1 of `todo/PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md`):
+
+| # | Phrase (case-blind substring) | Name | Kind → shim exit | Cure |
+|---|---|---|---|---|
+| 1 | `Your current subscription does not have access to` | `subscription_model` | Refused → 77 | pick a model the plan has, or upgrade |
+| 2 | `reached your 5-hour usage limit` | `kimi_quota_spent` | Spent → 75 | `KimiQuotaWords.Fixed`: "the Kimi plan quota is used up — signing in again will not help" |
+| 3 | `insufficient balance` (D14) | `balance_spent` | Spent → 75 | "the Kimi allowance is spent (D14) — waiting does not clear it; top up or wait for the plan's reset" |
+| 4 | `Authentication required: 401` | `not_signed_in` | Refused → 77 | run `kimi login` in a terminal and try again |
+| 5 | `Authentication required:` (the colon is the discriminator) | `provider_error` | **Failed → 70** (`AcpFailureKind.Failed`) | none — the vendor's words stand: the shim writes `provider_error: <reason>` and nothing after it |
+| 6 | `Authentication required` (bare — the one form measured, RESULTS §2) | `not_signed_in` | Refused → 77 | run `kimi login` in a terminal and try again |
+
+Row 1 stands before 4–6 because the measured 401 subscription line contains them all; rows 2 and 3 stand before 4–6 so a quota or a balance wrapped in the sign-in prefix
+reaches its own row; 4 before 5 because its phrase contains 5's. Row 2's phrase names the window, so it is in neither codex's "hit your usage limit" nor the sales footer
+"rate limit reached; upgrade"; the monthly form is unmeasured and has no row. The marker is Kimi-specific (`kimi_quota_spent`, not `quota_spent`): `VendorDiagnosis`
+matches a marker in every vendor's stderr. The names of the Spent rows are DERIVED from the table (`KimiAcpProfile.SpentNames`, `SpentPhraseOf`), never a second list.
 
 **The three blocks the shim owns** (each measured in RESULTS §2 before it was written):
 
@@ -3747,6 +3762,10 @@ flowchart LR
   must not let a second refresher in. MEASURED by E4.3 (M-K15, RESULTS §27): both files are Held while `kimi` lives and Free in the poll it is gone in, 6 of 6 cut launches, three with an `rg` running — nothing of Kimi's outlived it, so the hold GATES.
   The per-home file is waited for 500 ms (`HomeWait`): a disposal's `HomeProbe` opens it exclusively for an instant. The residual: every turn ends in a tree kill, so a `kimi` between its refresh request and the write of the rotated pair loses the
   rotation, exactly as the person's own `kimi` would; `kimi login` cures it (M-K14 decides whether a grace is needed).
+  **M-K14 note, 2026-10-20 (`PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md` D6).** Every Kimi exit 77 recorded since 2026-10-16 is **unclassifiable**: coai kept only
+  the cure, never the vendor's text, and no `kimi-code.log` survives (the homes are removed after each round). On 2026-10-18/19 they coincided with a 100 %-used 5-hour quota,
+  and over ACP a quota answer may have been filed as `not_signed_in`. So a quota cause existed and cannot be excluded; the refresh-rotation suspicion is neither confirmed nor
+  cleared by these exits. From the first coai-mcp release after 0.62.0 that carries story 2 (`the vendor said:`), the vendor's sentence is kept, and a new exit 77 can be read.
 - **Disposal** (`KimiHome.Dispose`; refused through a link — a root or `home/` that is itself a link answers `Stopped` from `Dispose` and is skipped by `DisposeAllUnder`, left to the deleter that removes the link by its own name): (1) the per-HOME hold probed (`Held` or `Unknown` stop with nothing unlinked and nothing outside coai's tree
   opened), (2) `credentials` unlinked by its own name, (3) the person's folder's entry names verified (200 ms settle, `GitScratch.StillMissing`),
   (4) only then `GitScratch.DeleteEvenIfReadOnly`. A `Stopped` deletes nothing more and every caller LOGS it. `DisposeAllUnder` does steps
@@ -3898,7 +3917,7 @@ flowchart LR
   X --> R
   R -->|exit + one JSON report| C{KimiRuntime reads}
   C -->|end = answered| A[ReadAnswer / ReadUsage<br/>usage.tokensIn / tokensOut]
-  C -->|exit 75 AND failure = balance_spent| L[RateLimited — hopeless, usage kept]
+  C -->|exit 75 AND failure is a Spent row: balance_spent or kimi_quota_spent| L[RateLimited — hopeless, usage kept]
   C -->|anything else| N[NonZeroExit + WhyItFailed<br/>failure: reason + the cure]
   S[BoundedScheduler] -->|LaunchesOneAtATime: cap 1| X
   D[RoundScratch.Dispose] -->|KimiHome.DisposeAllUnder, junction first| G[GitScratch]
@@ -3926,11 +3945,17 @@ flowchart LR
   reads the root, so it is not reused). `ReadAnswer` is the report's answer when `end` is `answered`, else null; `ReadUsage` is the session's totals, `Usage.Unknown`
   when `usage.notCaptured` or the stdout is no report, and `Usage.None` for an `end` that never reached the model (`not_started`, `model_not_offered`) — a fact, not
   an unknown; never a cost (D9). `WhyItFailed` is the shim's word and reason, led by the cure when the word is one `VendorDiagnosis` knows
-  (`not_signed_in`, `subscription_model`, `balance_spent`, and the end word `model_not_offered`).
+  (`not_signed_in`, `subscription_model`, `balance_spent`, `kimi_quota_spent`, and the end word `model_not_offered`). For a quota the lead cure is `KimiQuotaWords.Said(text)`, produced by `VendorDiagnosis.CureOn` for the `kimi_quota_spent:` marker (K1 of the code gate, so EVERY reader of the diagnosis — this road, the round summary, the ledger, the log — leads with the clause):
+  the fixed sentence with Kimi's own reset clause QUOTED between its opening and its closing — "the Kimi plan quota is used up — "Your quota will reset at 14:00 UTC."; signing in
+  again will not help (the shim said: kimi_quota_spent: …)", or "the vendor named no reset" when it said none. The clause runs from `Your quota will reset` to the first period
+  followed by any whitespace — a space, a newline, a tab (a decimal point does not end it), through `Redaction.SafeText`, capped at 160; it is never parsed into a time. This lead cure is what `WhyItFailed` returns
+  (the executor's `saidElsewhere`, read only when stderr is silent). The `RateLimited` road below does NOT lead with a cure of its own: its reason is the vendor's words, and `Because` puts this same cure (clause included) in front.
 - **Classification is by the report's FIELDS, never by text** (the risk consultation `ba5f661a`). `IReviewerRuntime.RateLimited(invocation, result)` — a new
   default member whose body is exactly today's (`RateLimitVerdict.ByText`: `RateLimit.Hit` over the text, no usage) — is asked by `ReviewerExecutor.Classified` before
-  the exit is judged. Kimi's override is limited ONLY for exit **75** AND `failure: balance_spent` (the reason carries `insufficient balance`, so
-  `RateLimit.Hopeless` stops the ladder, D14) and carries the report's usage; `ReviewerOutcome.RateLimited` gained `Usage` for it (default `None`). Everything else —
+  the exit is judged. Kimi's override is limited ONLY for exit **75** AND a `failure` named by a Spent row of the table (`KimiAcpProfile.SpentNames`: `balance_spent` (D14) or
+  `kimi_quota_spent`); the reason is the shim's OWN words, `<name>: <reason>`, with NO cure in front (`SpentReason`, S7, 2026-10-20: the summary, the ledger and the log put the table's cure in front of the vendor's line themselves in `Because`, and a reason that already led with it said the cure twice on every line) — `RateLimit.Hopeless` stops the ladder because the vendor's words ride in it
+  (`RateLimit.Spent` holds `insufficient balance` and `reached your 5-hour usage limit`, each with its observed sample), and only when they would not does the matched row's own
+  phrase follow in brackets — and carries the report's usage; no ladder step is taken for a quota, whatever its clause says; `ReviewerOutcome.RateLimited` gained `Usage` for it (default `None`). Everything else —
   exit 77 with a trace that names `src/quota.cs` and a tool titled `check rate limit` included — is an ordinary `NonZeroExit`, one launch. Exit **69** is also "another
   Kimi holds the sign-in past the deadline" (report `not_started`, the sentence on stderr and in `reason`); exit **65** also covers `model_not_offered` and an
   unusable hold. The exit and end words are shared with the shim (`AcpWords.SpentExit`, `AnsweredWord`, `NotStartedWord`, `ModelNotOfferedWord`), declared in a profile-neutral unit both read, as
@@ -3948,8 +3973,17 @@ flowchart LR
   `low`/`high`/`max`, M-K7; nothing showed one taking effect), fast mode `none`; NOT a consultant, NOT in `runtime-capabilities.json` (S5 — a runtime may not enter it without its
   own `ConfinementPlanner` arm). The extension's `RUNTIMES` and the two manifest enums name it too (the seed's `runtimes` must equal them); its preset, models, colour, terminal, install and update are E4.5's and are
   described in [module_extension.md](module_extension.md).
-- **Diagnosis.** `VendorDiagnosis.Known` carries the four NAMES the shim writes (`not_signed_in:`, `subscription_model:`, `balance_spent:`, `model_not_offered`) — the shim files a
-  known failure as `<name>: <reason> — <cure>` on stderr — never a phrase of Kimi's trace. `InstallCure("kimi")` is Moonshot's own: `irm https://code.kimi.com/kimi-code/install.ps1 | iex`
+- **The vendor's words after the cure (story 2, 2026-10-20; D4).** `Diagnosis` carries the table's `Marker` that matched (empty for the unreachable-engine cure). `ReviewerSummaryFactory.Because` writes a diagnosed failure as `{cure} — the vendor said: {line}`: the FIRST stderr line that holds the marker, our `[coai-mcp] ` tag removed, redacted through `VendorReason.Written` FIRST and cut SECOND with a plain cut (not `Quote`, which never cuts a tagged line) — 160 characters in the summary `Describe`, `VendorReason.SafetyCap` (4,000) in `DescribeWhole`, which is what the ledger and the log write. The cure is always whole. Moonshot account ids (`org-…`, `ak-…`: 8–128 letters and digits with at least one digit) are taken out by the redactor's `moonshot-id` pattern. Tests: `TheVendorsWordsSurviveTheCureTests`.
+- **The cure once, the id never (story 3 follow-ups, 2026-10-20).** Two rules hold on EVERY road a vendor's line takes into the summary, the ledger and the log. (1) The cure is said once: the shim's note is `<name>: <reason> — <cure>` (`AcpDiagnosis.Note`, the one place that shape is written), and `Because` puts the table's own cure in front, so it quotes the note WITHOUT the shim's tail (`AcpDiagnosis.WithoutCure` over `KimiAcpProfile.Failures`; the vendor's reason stays whole). (2) Redact BEFORE any cut: `Quote` — the road of every undiagnosed line (the shim's tagged `provider_error`, a plain stderr line) — now runs `VendorReason.Written` first and `Cut` second, and a line we wrote (tagged) is redacted whole; before this a tagged line reached the summary whole and unredacted, and a cut line could show the head of an id (`org-0a1b`) that no pattern matches. Tests: `TheCureIsSaidOnceAndTheIdIsHiddenOnEveryRoadTests`. Not covered: the reasons of `NotStarted`, `StoodDown` and `Unparseable` outcomes, which are adapter-composed and not cut.
+- **Code gate and judge fixes (2026-10-20; K1–K7 of the plan's "Code gate and judge" record).** K1: the reset clause reaches the summary — `VendorDiagnosis.CureOn` returns `KimiQuotaWords.Said(text)` for the quota marker, so the cure (never cut) carries the whole clause and the 160-character cut of the vendor's line no longer decides it; `KimiRuntime.Cured` is gone. K2: the reviewers layer strips the shim's cure through the profile CATALOG (`AcpProfiles.WithoutCure`) and never names `KimiAcpProfile`; a second profile needs a row in the catalog and nothing in `BoundedScheduler`. K3: a shim-tagged note whose row has NO cure (`provider_error`) is the vendor's text — `AcpDiagnosis.CurelessReason` takes our tag and the failure-name prefix off, and it is redacted and cut at 160 in the summary like any vendor's line (the ledger and the log keep 4,000); our own tagged sentences (the cures) stay whole. K4: `AcpDiagnosis.Of(reason, stderr, known)` matches the agent's REASON first and its stderr only when the reason names no row (`AskAcpMode.Diagnose`). K5: a JSON-RPC error's `data` member is kept in the reason (`AcpMessages.ErrorText`: `message (data: …)`, a string as it is, other JSON compact, redacted, capped at 2,000), so a bare `Authentication required` that carries the 429 in `data` is a quota, not S9. K6: the `moonshot-id` shape also refuses a consultant context (`SecretCheck`, class `moonshot-id`) — pinned by a test. K7: a comment path. Tests: `ASpentKimiQuotaReadsAsAQuotaTests`, `TheCureIsSaidOnceAndTheIdIsHiddenOnEveryRoadTests`, `AskAcpModeTests`, `SecretCheckTests`, `KimiQuotaIsNotASignInTests`.
+- **One round proves it (story 3, 2026-10-20; S7, S5 inside it).** `ASpentKimiQuotaReadsAsAQuotaTests` drives ONE round with a Kimi reviewer whose agent answers `session/prompt` with a JSON-RPC error
+  carrying the 5-hour quota sentence behind the sign-in prefix, through the REAL shim (`AskAcpMode` with `KimiAcpProfile.KnownFailures`), `KimiRuntime`, `ReviewerExecutor`, `BoundedScheduler`, `UsageLedger.Record`
+  and `RoundAudit.Moved`; nothing the product writes is typed by hand. The summary line, the ledger line and the log line each say `the Kimi plan quota is used up` exactly once, carry `Your quota will reset`, and say neither
+  `kimi login` nor `exit 77`; the outcome is `RateLimited`, hopeless, one attempt, one shim launch; an `org-…`/`ak-…` id in the agent's sentence reaches none of the three lines. The summary's copy of the clause is the vendor's
+  line cut at 160 characters, so it survives only while the vendor's sentence is short; the ledger and the log hold it whole (4,000). **The plan's capture step** (the real ACP sentence is NOT yet measured — the envelope of the fixture
+  is constructed) is written in `todo/PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md` §5 and `RESULTS_kimi_confinement.md` §31: it is a procedure, not a run, and it is checked against the `moonshot-id` pattern before any fixture is replaced.
+- **Diagnosis.** `VendorDiagnosis.Known` carries the five NAMES the shim writes (`not_signed_in:`, `subscription_model:`, `balance_spent:`, `kimi_quota_spent:`, `model_not_offered`; `provider_error` has none, so the vendor's words stand downstream) — the shim files a
+  known failure as `<name>: <reason> — <cure>` on stderr (`<name>: <reason>` alone for a row with no cure) — never a phrase of Kimi's trace. `InstallCure("kimi")` is Moonshot's own: `irm https://code.kimi.com/kimi-code/install.ps1 | iex`
   (Git for Windows first, `winget install Git.Git`) on Windows, `curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash` on Linux and macOS (read 2026-10-14).
 
 Tests: `KimiRuntimeTests`, `KimiIsClassifiedFromItsReportTests`, `OneKimiLaunchAtATimeTests`, `KimiIsDiagnosedInItsOwnWordsTests`, `AKimiReviewerRunsThroughTheShimTests`,

@@ -1,6 +1,8 @@
 # PLAN — E2 stories: a code round records the size of its change, and each reviewer's effort
 
-> Status: **E2.S1–S5 implemented on feat/round-size-e2r, 2026-10-15 (code gate good_enough, findings applied); promoted with the parent (§9)** (the plan gate passed and its findings were applied; the §S1.9 item 14
+> Status: **IMPLEMENTED, 2026-10-15.** E2.S1–S5 merged as #829 (`4baba7b21`); the coai code gate said `good_enough` and its findings are applied. No story has an unbuilt half. One consequence waits for the live backfill: code rounds recorded before schema step 22 read "not recorded" until `--backfill-authors` runs on the live stores, and it has not ([PLAN_round_authors_backfill_on_the_live_stores.md](../todo/PLAN_round_authors_backfill_on_the_live_stores.md), N7 and N8). Deviations are below, in *Promotion record*. Epic E2 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
+>
+> Status before promotion (kept as history): **E2.S1–S5 implemented on feat/round-size-e2r, 2026-10-15 (code gate good_enough, findings applied); promoted with the parent (§9)** (the plan gate passed and its findings were applied; the §S1.9 item 14
 > amendment confirmed by Fable 2026-10-15, with row 0 (`unavailable: no merge base`) added — ContextAssembler.cs:457-462). Epic E2 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
 >
 > Scope: `src_mcp` only — `runners/Context` (counted numstats, the delta numstat), new pure units in `core/Context`,
@@ -1029,3 +1031,21 @@ code is in; S5 needs only S3; S4 is last. The epic lands as ONE commit on its ow
    `merge-base(main, sha)` today — a branch since merged into main gives `merge-base = sha` and a zero whole.
 10. E7's backfill must call `RoundChangesTable.Record` inside a transaction (gate finding, 2026-10-15): the method deletes the
     round's rows and inserts them again, and only `RoundsDb.RecordRound` wraps it in one today.
+
+## Promotion record (2026-10-21)
+
+### Deviations from the plan
+
+1. **Four state words beyond the founding text.** `unavailable: numstats disagree` (Fable's spec), `unavailable: base moved` and `unavailable: base unknown` (the plan gate), and `unavailable: no merge base` (Fable, 2026-10-15). The parent plan now names them (§7, D25, D26).
+2. **More columns than the parent's step 22.** `rounds.size_state`, `delta_state`, `delta_from`, `size_origin` and `size_gitlinks`; `RoundRecord.Gitlinks` beside `RoundRecord.Size`. Without the state columns an unavailable delta and an observed zero both read as "no rows".
+3. **The code gate changed the size assembly.** `RoundSizer` runs the whole scope, the delta (its two numstats together) and the gitlink count side by side, under one `SizeTotalTimeout` of 15 s. `RawDiff` refuses a cut or ill-formed record. `ChangePartition` indexes the numstat once per call. `ChangeKind`'s segment sets are frozen.
+4. **`--log` reads a page's sizes with constant SQL.** The ids ride one `json_each` parameter (Sonar S2077 on #829).
+5. **`--log` has no reviewer rows.** The `effort` column is proved by a database read, not by `--log` (§10 point 4). `reviewers.effort` is empty for codex, gemini and agy reviewers, because the roster gives an effort only to claude, remote and local launches.
+6. **`code` means `OutlineLanguages.Of`.** The kinds `.ps1`, `.sh`, `.razor`, `.html` and `.css` are `unknown`, and fall outside the default `code` + `test` denominator.
+
+### Open tail
+
+| Item | Where it lives |
+|---|---|
+| Code rounds before step 22 have no size. The backfill reconstructs it from the recorded `base_ref` and marks it `size_origin = backfill`. It has not run on a live store. | [PLAN_round_authors_backfill_on_the_live_stores.md](../todo/PLAN_round_authors_backfill_on_the_live_stores.md), N7 and N8 |
+| A reviewer's effort is empty for codex, gemini and agy | Not planned. It is the truth: those launches apply no effort. |

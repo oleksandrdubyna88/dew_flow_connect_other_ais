@@ -7,7 +7,7 @@ namespace CoaiMcp.Server;
 
 /// <summary>
 /// Who wrote the code a finished round reviewed, read and attributed on the answer path, under a budget (E5.S4 of
-/// <c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md</c>): the caller's transcript is located, read text-free, assigned to the
+/// <c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md</c>): the caller's transcript is located, read text-free, assigned to the
 /// round's windows by E4 and kept as an <see cref="AuthorsSnapshot"/> — within <see cref="AuthorsBudget"/>, never failing the round.
 /// </summary>
 /// <remarks>
@@ -133,9 +133,9 @@ internal sealed class RoundAuthorsStep
             return OutOfTime(subject, reader: 0);
         }
 
-        var gate = GateOf(subject, set);
+        var gate = GateOf(subject.Session, subject.Record, subject.Caller, set);
         var peers = KnownPeers(set);
-        var bound = RoundAttribution.ReadFrom(InputOf(subject, EmptyObservation(subject.Caller), gate, peers, set.PeersKnown));
+        var bound = RoundAttribution.ReadFrom(InputOf(subject.Record, EmptyObservation(subject.Caller), gate, peers, set.PeersKnown));
         var observed = _read(subject.Found, new ReadBudget(_budget.MaxBytes, Left(subject.Deadline), _clock), bound?.UtcDateTime);
         reached.Reader = ObservedSession.ReaderVersion;
         LogDiagnostics(observed);
@@ -161,7 +161,7 @@ internal sealed class RoundAuthorsStep
 
     private AuthorsSnapshot Assigned(Subject subject, ObservedSession observed, GateTimeline gate, ImmutableArray<GateTimeline> peers, bool peersKnown)
     {
-        var input = InputOf(subject, AttributionMapping.Observation(observed), gate, peers, peersKnown);
+        var input = InputOf(subject.Record, AttributionMapping.Observation(observed), gate, peers, peersKnown);
         WindowAssignment assignment;
         try
         {
@@ -182,25 +182,29 @@ internal sealed class RoundAuthorsStep
         return Past(subject.Deadline) ? WithBudgetStop(snapshot) : snapshot;
     }
 
-    /// <summary>The gate's own timeline: the round being attributed APPENDED (the save has not added it), each earlier round's caller by §3's order.</summary>
-    private static GateTimeline GateOf(Subject subject, AuthorPeerSet set) =>
+    /// <summary>
+    /// The gate's own timeline: the round being attributed APPENDED (the save has not added it), each earlier round's caller by §3's order.
+    /// Internal because E7's backfill asks the same question of a stored round (whether a peer round of THIS timeline still runs) and must not
+    /// build the timeline a second way.
+    /// </summary>
+    internal static GateTimeline GateOf(PersistedSession session, RoundRecord record, string caller, AuthorPeerSet set) =>
         AttributionMapping.Timeline(
-            subject.Session.State.SessionId,
-            subject.Session.State.RepoPath,
-            subject.Session.OpenedUtc,
-            [.. subject.Session.Rounds, subject.Record],
-            round => ReferenceEquals(round, subject.Record) ? subject.Caller : EarlierCaller(round, set));
+            session.State.SessionId,
+            session.State.RepoPath,
+            session.OpenedUtc,
+            [.. session.Rounds, record],
+            round => ReferenceEquals(round, record) ? caller : EarlierCaller(round, set));
 
     private static string EarlierCaller(RoundRecord round, AuthorPeerSet set) =>
         round.Authors is { Session.Length: > 0 } snapshot
             ? snapshot.Session
             : set.EarlierCallers.GetValueOrDefault((round.Stage, round.Number)) ?? string.Empty;
 
-    private static CallerObservation EmptyObservation(string caller) =>
+    internal static CallerObservation EmptyObservation(string caller) =>
         new(caller, new Core.Authors.ObservationState(ObservationKinds.Observed, []), [], [], [], []);
 
-    private static AttributionInput InputOf(Subject subject, CallerObservation observation, GateTimeline gate, ImmutableArray<GateTimeline> peers, bool peersKnown) =>
-        new(observation, gate, peers, AttributionMapping.Universe(gate, peers, observation), subject.Record.Stage, subject.Record.Number, peersKnown);
+    internal static AttributionInput InputOf(RoundRecord record, CallerObservation observation, GateTimeline gate, ImmutableArray<GateTimeline> peers, bool peersKnown) =>
+        new(observation, gate, peers, AttributionMapping.Universe(gate, peers, observation), record.Stage, record.Number, peersKnown);
 
     /// <summary>
     /// Writes into another checkout, as counts only (gate finding 0 — no root is stored): every call listed is uncovered, and the ones whose

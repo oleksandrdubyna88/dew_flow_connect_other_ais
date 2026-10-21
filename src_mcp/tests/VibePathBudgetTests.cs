@@ -15,10 +15,13 @@ public sealed class VibePathBudgetTests
 {
     private static readonly VibePathBudget Windows = VibePathBudget.Windows;
 
-    /// <summary>An absolute home of exactly <paramref name="length"/> UTF-16 units — a folder nobody makes, padded with segments of x.</summary>
+    /// <summary>
+    /// An absolute home of exactly <paramref name="length"/> UTF-16 units — a folder nobody makes, padded with segments of x. Rooted at the drive's root,
+    /// never at the temp folder: the run's own temp folder is 29 characters deeper and a long profile name made the base alone pass 102.
+    /// </summary>
     private static string HomeOfLength(int length, string tail = "")
     {
-        var home = Path.Combine(Path.GetTempPath(), "testsToDelete-vh-budget") + tail;
+        var home = Path.Combine(Path.GetPathRoot(Path.GetFullPath(AppContext.BaseDirectory)) ?? Path.DirectorySeparatorChar.ToString(), "testsToDelete-vh-budget") + tail;
         while (home.Length < length)
         {
             home += Path.DirectorySeparatorChar + new string('x', Math.Min(40, Math.Max(1, length - home.Length - 1)));

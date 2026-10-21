@@ -4,7 +4,7 @@ using Microsoft.Data.Sqlite;
 namespace CoaiMcp.Store;
 
 /// <summary>
-/// Reading a page of rounds' sizes for <c>--log</c> (E2.S5 of <c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md</c>,
+/// Reading a page of rounds' sizes for <c>--log</c> (E2.S5 of <c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md</c>,
 /// contract C3): two grouped queries for the whole page, never one per round.
 /// </summary>
 /// <remarks>
