@@ -213,4 +213,9 @@ internal sealed class MovableClock(DateTimeOffset start) : TimeProvider
     public override DateTimeOffset GetUtcNow() => _now;
 
     public void Advance(TimeSpan by) => _now = _now.Add(by);
+
+    // The monotonic reading moves with the hand-moved time (one tick per .NET tick), so a window measured with GetTimestamp/GetElapsedTime is movable too.
+    public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+
+    public override long GetTimestamp() => _now.UtcTicks;
 }

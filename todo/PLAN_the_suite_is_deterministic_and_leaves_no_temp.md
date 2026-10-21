@@ -1,8 +1,8 @@
 # PLAN — the suite is deterministic and leaves no temp
 
-> Status: **in progress, 2026-10-20.** E1 (no run sees another) and C2 (E3 S1) are **merged** in #893
-> (`e86fe17f8`, 2026-10-20); **E2 (one temp folder per run) is coded** on `feat/suite-e2-run-temp` (its Outcome is below; not merged yet); E3's rest, E4
-> and E5 are open; the §10 CI watch of E1 and C2 is running. Scope: the fake CLI's steering files
+> Status: **in progress, 2026-10-21.** E1 (no run sees another) and C2 (E3 S1) are **merged** in #893
+> (`e86fe17f8`, 2026-10-20); **E2 (one temp folder per run) is merged** in #897 (`215170c4b`, 2026-10-21); **E3 (product defects) is coded and reviewed** (gate and judge folded), in its pull request; E4
+> is coding (its stories document); E5 is open; the §10 CI watch of E1 and C2 is running. Scope: the fake CLI's steering files
 > (`src_mcp/tests_fakecli`), the fixed-name temp paths of the C# and extension tests, the flaky cases found in CI and
 > locally between 2026-09-26 and 2026-10-19 (product code where the cause is in the product), and the `coai-*` folders
 > the suites leave in `%TEMP%`. The owner put this "tail" at the very end of the queue; it was written so the causes
@@ -75,7 +75,7 @@ are work in progress and are not in this table unless §4 says otherwise.
 | `EndToEndTests.ARoundThatFoundNothing_SaysWhatItSent_…` | 2 (macOS) | 2 (2), `main` | 09-26 | C2 | product | this plan |
 | `AcpClientUsageTests.AUsagePromptThatOutlivesTheTurnsDeadline_…` | 1 (Windows, run 39269879269) | dependabot | 10-19 | C5 | timing | this plan |
 | `AConversationPlaceTests.CopiesThatOutrunTheRowsBudget_…` | 1 (Windows) | dependabot | 10-15 | C17 | timing | this plan |
-| `QuestionFanOutTests.TheHeartbeatIsRewritten_…` | **2** (Windows) | 2 dependabot (2) | 10-16 – 10-19 (run 39253800395, 2.9 s) | C18 | timing | this plan |
+| `QuestionFanOutTests.TheHeartbeatIsRewritten_…` | **3** (Windows) | 2 dependabot (2), and #893's branch (run 39325900821 attempt 1, `UnauthorizedAccessException` from the heartbeat's write) | 10-16 – 10-19 (run 39253800395, 2.9 s) | C18 | timing + product | this plan (E5; the product angle E3) |
 | `ConsultAntigravityDenialScenarioTests.AHungFollowUp_…` | 1 (Windows) | a branch that does not touch it | 10-16 | C15 | timing | this plan |
 | `AReaderIsEndedWithItsTreeTests.TheDescendantsOfALiveServer_…` | 1 (Windows) | `fix/flaky-size-deadline-test` | 10-16 | C4 | shared file, fixed by #849 | — |
 | `PidfdLayerTests.AZombie_IsGone_NotSignalled` | 1 (Linux, run 39276863927, PR #868) | a store PR | 10-19 | C21 | timing inside the test | this plan |
@@ -84,8 +84,9 @@ are work in progress and are not in this table unless §4 says otherwise.
 **Seen only in local whole-suite runs** (no CI failure in the 174 logs): the steering-file collision (C1), the three
 `AReviewerThatAsksForSourceIsAskedAgainTests` budgets (C13), `AFeatureIsReviewedEndToEndTests.TheRoundsDeadline_…` (C6),
 `AReaderIsEndedWithItsTreeTests.AServerThatNeverAnswers_…` (C4), `ConsultationSweeperTests` (C14),
-`SqliteMigratorTests` (C7) and the extension's `processLauncher.test.ts` "many lines" test (C9). **Found by reading, not by
-a failure:** C10, C11, C12.
+`SqliteMigratorTests` (C7), the extension's `processLauncher.test.ts` "many lines" test (C9) and
+`SessionStoreConcurrencyTests.EightWritersOnOneSession_DoNotDenyEachOther` (C25, 2026-10-20, in E2's full run and once in
+another plan's baseline run). **Found by reading, not by a failure:** C10, C11, C12.
 
 The macOS leg is not a required check, so auto-merge passes over its red — which is how C2 and C8 lived for three
 weeks: 54 of the 174 failed runs hold one of those two tests on that leg, and 60 hold one of them on any leg.
@@ -495,22 +496,22 @@ margin is 300 ms), medium-high and medium for the other two (no failure text kep
 
 ### C14 — `ConsultationSweeperTests`: a settings reload read while the file is half written (PRODUCT, low-medium)
 
-`TheLoop_LapsesAnIdleConsultation_AndKeepsDoingSoAfterASettingsReload` (`src_mcp/tests/ConsultLimitsScenarioTests.cs:156-170`)
+`TheLoop_LapsesAnIdleConsultation_AndKeepsDoingSoAfterASettingsReload` (`src_mcp/tests/ConsultLimitsScenarioTests.cs:155-170`)
 failed once in 488 ms in a full local run on 2026-10-03 and passed 15 of 15 alone (`PLAN_question_consultant_tails.md`
 §6); no CI failure, no message kept. 488 ms rules out the ten-second waits; it is an assertion on the test thread, most
 likely `:165` ("the reload happened"). The class has no collection, so its 50 ms beat runs beside the parallel suite.
 
 **Cause, a hypothesis with a mechanism the code shows.** The test writes `settings.json` with `File.WriteAllText`
 (`:164`) while the sweeper thread reads `host.Current` every 50 ms. `PanelServiceHost.Current`
-(`src_mcp/src/Server/PanelServiceHost.cs:64-85`) compares a stamp and rebuilds; its own comment says "a rebuild that
+(`src_mcp/src/Server/PanelServiceHost.cs:64-84`) compares a stamp and rebuilds; its own comment says "a rebuild that
 throws leaves the old stamp in place, so the next call tries again" (`:76-78`). But `SettingsFile.Read`
-(`src_mcp/src/Server/SettingsFile.cs:84-93`) turns an `IOException` — a sharing violation while the writer still holds the
+(`src_mcp/src/Server/SettingsFile.cs:60-94`) turns an `IOException` — a sharing violation while the writer still holds the
 file — into an EMPTY settings set, so the rebuild does NOT throw, and the host publishes DEFAULT settings under the new
 stamp until the file changes again. In production that is a server that silently runs on defaults after a reload that
 met a busy file. The same `catch` takes `JsonException` (`SettingsFile.cs:90-93`), which is what a HALF-written file
 reads as. **Fix (the lead's decision on gate C14 and judge J3):** a **tri-state read on the RELOAD path only.**
 `SettingsFile.Read` keeps today's signature and behaviour for its callers — `SettingsFile.Layer`'s eight call sites
-(`ProbeApiMode.cs:97`, `Program.cs:633`, `:712`, `:2097`, `CadenceReadMode.cs:32`, `ConsultantCheckMode.cs:47`,
+(`ProbeApiMode.cs:97`, `Program.cs:646`, `:725`, `:2110`, `CadenceReadMode.cs:32`, `ConsultantCheckMode.cs:47`,
 `ConsultantsReadMode.cs:221`, `PanelServiceHost.cs:101`) see no change. A new `SettingsFile.TryRead` answers one of
 three: `Read(values)`, `Missing`, or **`Busy`** — and `Busy` is ONLY a sharing violation (Windows HResult
 `0x80070020` / ERROR_SHARING_VIOLATION, or an `IOException` the open could not take because another process holds the file
@@ -520,18 +521,18 @@ stale settings for ever (cadence consult 589e4647, verified); a malformed file a
 values, exactly what they are today. S10 gains a denial arm that must NOT keep the last good settings. **One existing
 test changes by design:** `PanelServiceHostTests.AReloadThatFails_IsTriedAgainOnTheNextCall_RatherThanHiddenBehindTheNewStamp`
 (`:113`) asserts `Current` THROWS; under "Current never throws" it asserts the old settings come back and the next call
-still retries — the retry it pins is kept, only the throw goes. `PanelServiceHost.Current` (`:64-85`) uses it on the rebuild: on `Busy` it keeps `_current` AND the old
+still retries — the retry it pins is kept, only the throw goes. `PanelServiceHost.Current` (`:64-84`) uses it on the rebuild: on `Busy` it keeps `_current` AND the old
 stamp, warns once per stamp, and tries again on the next call; on everything else it behaves as today. **Why malformed
 and empty are not kept-last-good:** a person who writes a broken file did an explicit thing, and today's answer to it
 (defaults, a warning) is the answer they can see and fix; a torn write — the writer mid-file — already heals by itself,
-because the stamp is `(LastWriteTimeUtc, Length)` (`PanelServiceHost.cs:152-157`) and the finished file has another
+because the stamp is `(LastWriteTimeUtc, Length)` (`PanelServiceHost.cs:152-160`) and the finished file has another
 length, so the next call rebuilds. Only the busy case has no cure today, and only the busy case is cured. **`Current`
 never throws to its callers (gate C14):** `Build(first: false)` is inside a `try` whose catch logs the reason and
 returns `_current` under the OLD stamp — the comment at `:76-78` already promises the retry, and this makes the promise
 true for a throwing rebuild too. **Blast radius:** `PanelServiceHost.Current` (the 20 `.Current` readers in `src_mcp/src`
 go through it) on the reload path only; START (`Build(first: true)`, `:60`) is untouched — a busy file at start still
 yields defaults with a warning, as today, a server that refuses to start being worse. Nothing in `SettingsFile.Layer`,
-`--providers`, the cadence or consultant read modes changes. Also: the test's `Host()` (`:116-118`) passes no consultant-homes folder, so every beat
+`--providers`, the cadence or consultant read modes changes. Also: the test's `Host()` (`:114-125`) passes no consultant-homes folder, so every beat
 sweeps the machine's real per-user folders and walks the real temp folder — `ConsultScenarioBase` documents `homes` for
 exactly this; the test passes its own. **RED first (Windows, no timing):** hold `settings.json` open for write with
 `FileShare.None` and new content flushed; read `host.Current`; release; read again — today the first read (busy)
@@ -539,6 +540,20 @@ shows the defaults under the new stamp; after the fix it shows the last good set
 new file. Two companions that are GREEN today and stay green, pinning the decision: a malformed file on reload gives
 defaults, and an empty file on reload gives defaults (as today). **Confidence: low-medium** — the mechanism is real in
 the code; that it is THIS failure is not proven.
+
+**Outcome (2026-10-21, branch `feat/suite-e3-s2`, E3 S2).** Built as decided. `SettingsFile.TryRead` answers a closed union (`SettingsRead`: `Values`, `Missing`, `Busy`; `SettingsRead.cs`); `Busy`
+is ONLY Windows HResult `0x80070020`/`0x80070021` (one `private static` predicate); a denial, a malformed and an empty file are `Values` with nothing in them, as before. `SettingsFile.TryLayer` adopts first and reads the file ONCE, and
+`PanelServiceHost.Current` uses it on the reload path: `Busy` or a throwing rebuild keeps the last good service AND the old stamp, with one warning per stamp; `Current` never throws; START (`Start()`) is untouched. `Read`,
+`Layer`'s public signature and its eight callers are unchanged (no diff in those files). The denial arm uses an `internal` constructor of `PanelServiceHost` (and `Layer`/`Read` overloads) taking the read function. RED: the S10 busy
+test (`Expected whileHeld to be "gpt-5.6-terra" … but "" has a length of 0` — the defaults under the new stamp) and `CurrentNeverThrows_…` (`NullReferenceException` out of `Current`); green after; the denial, malformed and empty
+companions green throughout; four break-its seen red and restored (busy read as empty; a denial read as busy; no catch around the rebuild; `Kept` publishing the new stamp). The sweeper test's `Host()` passes its own
+`COAI_CONSULTANT_HOMES`; the class passed 20 of 20 beside a whole-suite run. Tests: 5 → 10 in `PanelServiceHostTests`; `CoaiMcp.Tests` 13 053 → 13 058. Docs: `module_server.md` (the reload row), `module_tests.md` (a section).
+**Deviations.** (1) `AReloadThatFails_…` (`:113`) asserts the old settings instead of a throw — by design (G3); its retry assertion is kept. (2) The text above says a denial keeps "empty settings with a warning
+(`SettingsFile.cs:90`)": there is NO warning in `Read` today (it returns `[]` silently), and none was added — the denial answer is exactly today's. (3) `HeldFile.Take` was not reused: it reads EVERY non-path `IOException` as a holder, which is
+right for a lock that is taken but would call a failing disk "somebody is writing" on a read; the HResult check is the narrower rule this plan decided. (4) The constructor's build is now `Start()` and the shared tail `Assemble(first, configuration)`
+(the old `Build(first)` is gone); `StartupNotices`'s doc `cref` followed. (5) The line references of this section were re-pinned to `adb299b5e`. **Not measured:** the sweeper loop on the OLD code (the original failure had no kept message; S10 is the proof). **Suite-only failure
+seen once in a whole-suite run on a machine running five suites at once:** `AConversationPlaceTests.CopiesThatOutrunTheRowsBudget_RefuseThePlace_SayingHowManyWereCopied_AndKeepNone` (the 1 s copy budget ran out before the copy: C17's
+mechanism); it passes alone (10 of 10) and is not touched by this story.
 
 ### C15 — `ConsultAntigravityDenialScenarioTests`: a whole-turn stopwatch for a launch-level claim (TIMING, medium-high)
 
@@ -600,7 +615,7 @@ instead of sleeping, so the fast copy runs with no clock pressure and the slow o
 **Confidence: medium-high** ("0 of 2" proves the fast copy outlived 1 s; its real cost was not logged — and the
 refusal's phase sentence now records it for the next time).
 
-### C18 — the question row's heartbeat counted by polling the file every 40 ms (TIMING, medium)
+### C18 — the question row's heartbeat counted by polling the file every 40 ms (TIMING, medium; and a PRODUCT angle, high — E3)
 
 `QuestionFanOutTests.TheHeartbeatIsRewritten_WhileARowRuns_OnTheConfiguredInterval`
 (`src_mcp/tests/QuestionFanOutTests.cs:686-710`) failed twice on Windows: run 38906020752 (2026-10-16): `Expected
@@ -615,6 +630,54 @@ scheduler granted inside a fixed delay. The row still settled `Answered` (`:707`
 beats were seen, under a 30 s guard that fails with its own sentence. The test then depends only on "the heartbeat is
 rewritten". **RED first:** with the heartbeat loop removed the redesigned test fails at the guard; today's version is the
 wall-clock one. **Confidence: medium** on the cause (no timeline in the log), high that the redesign removes the clock.
+
+**The product angle (added 2026-10-20; E3 S4).** A THIRD failure of the same test is not the count: run 39325900821
+attempt 1 (Windows, 2026-10-19 21:22 UTC, #893's branch `docs/flaky-tests-and-temp-leak`, which does not touch the fan-out),
+2 s 206 ms: `System.UnauthorizedAccessException : Access to the path is denied.` at `QuestionFanOut.Current.UpdateAsync` ←
+`HeartbeatAsync` (`QuestionFanOut.cs:309`) ← `LaunchAllAsync` (`:280`) ← `RunAsync` (`:97`) ← the test's `await run` (`:706`).
+(The two count failures, 38906020752 and 39253800395, fail at `:708` with `found 1`; their `RunAsync` returned, so no
+write threw there — they are the timing case above.) Every line below was read on `68bec6f5f`.
+**The write path.** `Current.UpdateAsync` (`QuestionFanOut.cs:476-488`) replaces the record under its gate and calls
+`store.Write` (`QuestionConsultStore.cs:51-56`) → `AtomicJson.Write` (`Escalations.cs:341-345`): it takes the file's
+`SessionTurn` and then `WriteUnderTurn` (`:355-360`) writes `<id>.json.tmp` and `File.Move(temp, path, overwrite: true)` —
+**no retry of any kind**, and a fixed temp name. **Who reads it at the same time.** The test's own poll,
+`store.Read` → `RecordFiles.Read` (`RecordFiles.cs:43-54`), which takes the same turn and opens the file through
+`SharedRead.Text` (`SharedRead.cs:32-39`, `ReadWrite | Delete`); in production also the extension's watcher, which reads
+on every change with `vscode.workspace.fs.readFile` (`src_vs_code/src/jsonDirectoryWatcher.ts:9`) and takes no turn at
+all. **Why the turn did not keep them apart.** `SessionTurn.Take` gives up after 40 tries of 2–8 ms
+(`SessionStore.cs:464-479`) and BOTH sides then go on without it: `AtomicJson.Write` ignores `turn.Held` (`:343-344`) and
+so does `RecordFiles.Read` (`:51-53`) — C19's count, met from the other side (*inferred*: under load one side waited past
+its 40 tries; the log does not say which). **Why Windows says "access denied".** Measured on this machine on 2026-10-20
+(Windows 11 26300, .NET 10.0.12): `File.Move(temp, path, overwrite: true)` over a file another handle holds open is
+refused with `UnauthorizedAccessException`, HResult `0x80070005`, **whatever the holder's share mode** — `ReadWrite |
+Delete`, `ReadWrite`, `Read`, `Delete` and `None` all gave the same — so `FILE_SHARE_DELETE` does not make the
+replace safe (the repository's own remark says the same: `Escalations.cs:317-324`, "hot readers still starved the
+writer"). **The precedent has the same hole.** `AtomicFile.Write(path, text, sharingRetry)`
+(`src_mcp/runners/Files/AtomicFile.cs:34-63`) exists for exactly this — "retrying the MOVE when the destination is held
+open by a reader" — but its loop catches only `IOException` (`:58`), so the refusal it names is never retried; its three
+callers with a 500 ms window (`ConsultHealth.cs:227`, `ConsultantsFile.cs:118`, `ConsultCheckState.cs:321`;
+`ConsultHealthPaths.SharingRetry`) have the same latent defect. **What a failed beat does today.** `HeartbeatAsync`
+catches only `OperationCanceledException` (`QuestionFanOut.cs:312`), so one refused beat faults the heartbeat task, and
+`LaunchAllAsync`'s `finally` rethrows it at `await heartbeat` (`:280`): a question whose rows all ANSWERED fails, and
+nothing writes its settled record (`store.Write(settled)`, `:100-101`, never runs). One missed beat is otherwise harmless — the sweep needs a
+heartbeat two minutes stale AND a dead pid (`QuestionConsultStore.cs:33-34`, `:180-182`).
+**Fix (reuse first, three small changes).** (1) `AtomicFile.MoveOver` retries `UnauthorizedAccessException`
+as well as `IOException` while inside its window — the measured refusal; a caller with no window still tries once, and a
+real permission denial is rethrown when the window ends. (2) `AtomicJson.WriteUnderTurn` stops open-coding the dance and
+calls `AtomicFile.Write(path, content, <the same 500 ms window as `ConsultHealthPaths.SharingRetry`, one constant, not a
+second literal>)` — `AtomicFile`'s own remark lists `Escalations` among the "older copies still open-coded"; the GUID temp
+also ends the fixed `.tmp` name two turn-less writers would share. (3) `HeartbeatAsync` treats a beat whose write still
+fails (`IOException` or `UnauthorizedAccessException`) as a MISSED beat: one warning naming the question and the reason,
+and the loop goes on; the settle write (`:297`) and the final write (`:101`) keep throwing, because a lost answer must
+surface. Not here: the turn's count of tries (C19's plan) and the extension's reader (it already shows a torn or busy file
+as nothing and reads again on the next change). **RED first** (S24, S25): (S24, Windows) the destination held open with
+`SharedRead.Text`'s exact open; `AtomicFile.Write` with a window and a pause seam that releases the holder on its first
+call — today `UnauthorizedAccessException: Access to the path is denied` on the first move and the pause never called;
+(S25, every OS) the store's `projected` callback throws `UnauthorizedAccessException("Access to the path is denied.")` on the
+first heartbeat-only write and opens the scripted row's gate — today `RunAsync` throws that exception from `HeartbeatAsync`,
+the CI sentence; a second arm opens the gate only on the NEXT beat — today no beat follows the failed one and the row's
+guard fails with its sentence. **Confidence: high** on the mechanism (the CI stack, the measured refusal type, the missing
+retry and the missing catch are all read or measured); medium on which side went without the turn in that run.
 
 ### C19 — `CadenceStoreTests.ManyClosesAtOnce_AllLand`: a turn counted in tries (PRODUCT, high) — owned by its own plan
 
@@ -714,6 +777,51 @@ stub that prints the host-started line and then exits 1 — is launched ONCE. **
 medium** on the cause (the unresponsive line and the empty host output are certain; "cold first start" is the only
 actor on the timeline, but no CPU or disk figure was kept); high that (1) makes the next failure legible, and
 measured — not assumed — that (3) removes it: the streak step's count over the next 20 runs of `main`.
+
+*(C23 is unused; C24 — `SupervisedTeardownLinuxTests`, E5 — is recorded only in the Review record until its log is read.)*
+
+### C25 — eight writers of one session: the in-place write meets a writer that went without the turn (PRODUCT, high on the mechanism)
+
+**Evidence.** `SessionStoreConcurrencyTests.EightWritersOnOneSession_DoNotDenyEachOther`
+(`src_mcp/tests/SessionStoreConcurrencyTests.cs:51-75`: eight threads, twelve `Save`s each, every exception collected)
+failed once in E2's 38-minute full run on a loaded Windows machine (2026-10-20, `research/module_tests.md:4785`):
+`IOException: The process cannot access the file …session-<id>.json because it is being used by another process`; alone it
+passed 3 of 3 in 4–7 s. It also failed once in the baseline of another plan's whole run
+(`todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md:1086`). No CI failure; the stack was not kept (D5).
+Every line below was read on `68bec6f5f`.
+
+**Cause.** `SessionStore.Write` (`src_mcp/src/Server/SessionStore.cs:566-607`) has two roads. With the turn
+(`SessionTurn.Take`, `:583`) it writes IN PLACE — `File.WriteAllText(file, json)` (`:592`), which opens the session file
+`FileMode.Create`, `FileShare.Read`, with **no retry**. Without the turn — after 40 tries of 2–8 ms (`:464-479`), which
+eight writers queued on one turn under load can use up (*inferred*) — it falls back to a per-write temp and
+`MoveOverExisting` (`:599-606`), which retries the MOVE ten times (`:619-639`). So two writers can be on the file at
+once: one in place, one moving over it. The only operation in the write path that opens `session-<id>.json` BY NAME is
+the in-place write (the move's refusal is `UnauthorizedAccessException`, measured under C18; the temp has its own name),
+so the message names the in-place write. **Measured** on this machine on 2026-10-20: one thread writing a file in place
+with `File.WriteAllText` beside one thread doing temp + `File.Move(…, overwrite: true)` on the same file, four seconds:
+the in-place writer was refused **273** times with `IOException` HResult `0x80070020` (ERROR_SHARING_VIOLATION — the
+E2 message) and the mover **337** times with `UnauthorizedAccessException` `0x80070005`. The mover's refusals are
+retried; the in-place writer's are not, so the first one reaches `Save` (`:551-564`), which throws
+`SessionStoreException` — and in production that aborts the round that was reporting its progress
+(`LiveRound.Persist`, the test's own remark at `:12-25`). A scanner or indexer that opens the file for a moment is the
+same refusal from outside coai, which no turn can prevent. **Not a test defect:** the test's eight writers in one
+process are what five servers sharing a data directory do (the remark at `:12-14`), and its assertion is the product's
+promise.
+
+**Fix (reuse first).** The in-place write is retried the way the move already is: `MoveOverExisting`'s loop (ten
+jittered attempts, the last one allowed to throw, `:619-639`) is extracted into ONE private helper that takes the step,
+and both the in-place write (`:592`) and the move (`:602`) call it — the same exceptions (`IOException` or
+`UnauthorizedAccessException`), the same bound, no new number. A failed `File.WriteAllText` open writes nothing
+(`FileMode.Create` truncates only after the open succeeds), so a retry cannot tear the file. Not here: the turn's count
+of tries — `PLAN_a_turn_waits_by_the_clock.md` (C19) makes the fallback road rarer; this fix is still needed after it,
+because a scanner's open is not a coai writer. **RED first (S26, Windows):** with a pause seam on the store (an
+`internal … { get; init; }` beside `Retired`, `:487`, whose default is today's sleep), the session file held open
+`FileAccess.Read, FileShare.Read` (the share a writer's or scanner's handle grants) while the turn is free, so `Save`
+takes the in-place road; the pause releases the holder on its first call — today `Save` throws `SessionStoreException`
+whose inner `IOException` says the file "is being used by another process", and the pause is never called. A guard arm,
+green before and after: a holder never released — `Save` throws `SessionStoreException` naming the branch, and `Load`
+still returns the OLD session whole. **Confidence: high** on the mechanism (the two roads are read, the refusal is
+measured with the E2 message's exact text); **medium** that it is the E2 failure (its stack was not kept).
 
 ## 5. The temp folder — what is in it, who made it, why it stays
 
@@ -866,18 +974,18 @@ fixed sleeps in the fakes as the thing that decides the outcome.
 **D4 — A round removes its own always-empty folders (PRODUCT — built in E3, judge J9).** `coai-repair-` and
 `coai-noworkspace-` are removed when the round ends, by the PATH the round recorded when it made them, never by a name
 glob; `coai-answers-` keeps the six-hour sweep. **The plumbing, named:** the frame paths never leave `RosterBuilder` —
-`RosterFrame` (`RosterAssembly.cs:13-24`) is built in `RosterBuilder.FrameFor` (`:274-285`: `repairDir` at `:282`, the
+`RosterFrame` (`RosterAssembly.cs:13-24`) is built in `RosterBuilder.FrameFor` (`:274-290`: `repairDir` at `:282`, the
 `coai-noworkspace-` launch folder through `RosterFrame.Directories` at `:283` → `RosterAssembly.cs:42`) and used only
 inside the builder — but the frame already carries the round's **`RoundScratch`** (`RosterFrame.Scratch`, `:24`),
 reserved once per `BuildWork` (`RosterBuilder.cs:107`), handed out in `RoundWork.Scratch`, and DISPOSED by the round at
-its real end: `using var scratchOfTheRound = roundWork.Scratch;` (`RoundEngine.cs:358`) — after every reviewer and
+its real end: `using var scratchOfTheRound = roundWork.Scratch;` (`RoundEngine.cs:360`) — after every reviewer and
 repair of the round, on success, failure and cancellation alike, because it is a `using`. `RoundScratch.Dispose`
-(`RoundScratch.cs:94-124`) already deletes its own folder with `GitScratch.DeleteEvenIfReadOnly`. So D4 is: the two
+(`RoundScratch.cs:113-170`) already deletes its own folder with `GitScratch.DeleteEvenIfReadOnly`. So D4 is: the two
 folders are REGISTERED with the scratch when they are made (`FrameFor` for both of the ordinary round's;
 `SecurityRoster.Append(RoundWork ordinary, …)` (`SecurityRoster.cs:30`) registers its own `:154` folder with
 `ordinary.Scratch`), and `Dispose` removes them **only when they are EMPTY** — a non-recursive `Directory.Delete`
 (cadence consult 589e4647, verified): the launcher lists and confirms descendants only for a request that ends its own
-child (`ProcessLauncher.cs:586-590`), so an ordinary reviewer's grandchild can outlive the round inside that folder, and
+child (`ProcessLauncher.cs:125`/`:668`), so an ordinary reviewer's grandchild can outlive the round inside that folder, and
 on Unix removing a live process's working folder succeeds silently. A folder that is not empty, or cannot be removed,
 is warned about and left to the six-hour sweep (which needs the folder old, so a live grandchild is not raced), and
 **a failed removal never fails the round.** The always-empty case is the measured one (8,844 of 8,844). **Policy,
@@ -888,7 +996,7 @@ relative write fails; on Windows the removal fails while the folder is in use, a
 grandchild arm pins exactly this: the grandchild enters the empty folder, closes its pipes, signals ready and waits; the
 round ends and disposes; the round's outcome is unchanged on both platforms, and the folder is gone (Linux) or left (Windows). A `BuildWork` called with no round around it
 (`SubmissionOrderTests.cs:116-118`, a hundred times) never disposes its scratch; under D2 that is the test's folder,
-and D4 does not claim more than rounds. *Loses:* leaving it to D2 (D2 helps only the tests; a person's machine makes
+and D4 does not claim more than rounds. *Built (E3 S3, 2026-10-21):* see E3's S3 Outcome — the line numbers above are re-pinned to the code as built. *Loses:* leaving it to D2 (D2 helps only the tests; a person's machine makes
 two of these per round for ever); a `finally` in `RoundEngine` (there is none today, and the scratch's `using` IS the
 round's end — a second end would be the reuse rule's defect).
 
@@ -914,6 +1022,7 @@ folder to `testsToDelete-coai-…` stays leftovers-E5's (§7).
 | `CadenceStoreTests.ManyClosesAtOnce_AllLand` — `SessionTurn.Take` counts tries | [PLAN_a_turn_waits_by_the_clock.md](PLAN_a_turn_waits_by_the_clock.md) | this plan orders it (§9) and adds the CI evidence (§3) |
 | C6, C13, C14 — the three deadline tests of `PLAN_question_consultant_tails.md` §6 | **this plan** — moved here on 2026-10-19 | tails §6 now points here; its DoD line goes with it |
 | D4 — a round removes its two empty folders | **this plan** (E3, product) | not E2: E2 is test infrastructure only (J9) |
+| C18's product angle and C25 — the roads that go WITHOUT the turn retry the refusal Windows actually gives (`AtomicFile`'s move, `AtomicJson`, the heartbeat; `SessionStore`'s save, which is now ONE atomic road through `AtomicFile`) | **this plan** (E3 S4, S5) | [PLAN_a_turn_waits_by_the_clock.md](PLAN_a_turn_waits_by_the_clock.md) keeps `SessionTurn.Take` (tries → a clock) and touches none of these four. **Open item for that plan's owner:** its boundary line "Disjoint: that plan builds nothing in `SessionStore`" became "…nothing in `SessionTurn`; S5 replaced `SessionStore.Write`'s two roads with one atomic road (C25)" (done, 2026-10-20) |
 
 Disjoint: nothing else in this plan is built by another plan, and nothing in those plans' other sections is built here.
 Order (J7): E1 (C1) first and alone — it is the case that already changed a result across runs; **C2 (E3 S1) and the
@@ -953,6 +1062,9 @@ deterministic red exists), then watched passing; both observations go in the PR 
 | S21 | the security lane's per-file timer fired BEFORE the collection timer on a manual clock (`SecuritySources`' clock is the sibling's, `SourceResolver`'s is C13's) | C8 | `not served: src/B.cs — timed out: git did not answer within 30 s` — built by its own plan |
 | S22 | `AZombie_IsGone_NotSignalled` with the kill after the parent reads `comm == sleep`; the red arm through `bash … sleep 2; exec sleep 600` | C21 | `the outer sleep never reaps, so the killed child should have stayed a zombie` (the CI sentence), every run |
 | S23 | `run-host.mjs` against a stub `vscodeExecutablePath` that exits 1 at once after a `[main …]` line and no host-started line: the sentence names "the editor exited before the extension host ran a scenario" and quotes the line; a `::warning::` line carries the same; the stub is launched twice before the sentence. Second arm: a stub that prints the host-started line, then exits 1 — launched once, no retry | C22 | `the extension host: Test run failed with code 1`, one launch, no `::warning::` |
+| S24 | `AMoveOverAFileAReaderHolds_IsRetriedWithinTheWindow_AndLands` (Windows) — the destination held with `SharedRead.Text`'s open (`ReadWrite \| Delete`), released by the pause seam's first call; and two guards, green before and after: a holder never released throws `UnauthorizedAccessException` when the window ends and leaves no `*.tmp`; a zero window tries once and never pauses | C18 (product, E3 S4) | `UnauthorizedAccessException: Access to the path is denied` on the first move; the pause was called 0 times |
+| S25 | `AHeartbeatThatCannotBeWritten_IsSaid_AndTheQuestionStillSettles` (every OS) — the store's `projected` throws `UnauthorizedAccessException` on the first heartbeat-only write and opens the row's gate: `RunAsync` returns the row `Answered`, one warning names the question; second arm `ABeatAfterAFailedOne_IsStillWritten` — the gate opens only on the NEXT beat | C18 (product, E3 S4) | (a) `System.UnauthorizedAccessException : Access to the path is denied.` thrown by `RunAsync` from `HeartbeatAsync` — the CI sentence of run 39325900821; (b) no beat after the failed one: the row's guard fails with its sentence |
+| S26 | `ASaveThatMeetsAHeldSessionFile_IsRetried_AndLands` (Windows) — the session file held `Read`/`FileShare.Read`, released by the pause seam; guard `ASessionFileHeldThroughEveryAttempt_FailsTheSaveNamingIt_AndKeepsTheOldSession`, green before and after; fault arms on every OS: a failure while the temp file is written and a failure at the move each leave the previous session byte for byte (temp removed, the next save lands); the turn is held from the temp file to the move | C25 (E3 S5) | `SessionStoreException` with inner `IOException` "…session-….json because it is being used by another process" (the E2 sentence); the pause was called 0 times |
 
 ## 9. Build order — the shared-state fixes first
 
@@ -964,9 +1076,12 @@ deterministic red exists), then watched passing; both observations go in the PR 
 2. **E2 — D2, then D6 (test infrastructure only, J9).** The per-run folder makes every later measurement clean (a
    run's leftovers are countable as one folder) and ends C12's exposure. D6's seven sites are one-line fixes. No
    product code in this epic.
-3. **E3 — C2 (already started), C14, then D4.** C2 removes the largest single source of macOS red after C8 (17 runs
-   plus C2's three siblings); C14 is a product defect with a deterministic red; D4 is the product change that moved here
-   from E2 — it waits for E1's C10 rewrite (the repair test must assert on the launch, or D4 turns it red).
+3. **E3 — C2 (already started), C14, then D4; C18's product angle and C25 beside them.** C2 removes the largest single
+   source of macOS red after C8 (17 runs plus C2's three siblings); C14 is a product defect with a deterministic red; D4 is
+   the product change that moved here from E2 — it waits for E1's C10 rewrite (the repair test must assert on the launch,
+   or D4 turns it red). C18's product angle (a refused heartbeat write ends a question whose rows answered) and C25 (an
+   in-place session write refused with no retry) were read on 2026-10-20; each touches its own files and has a
+   deterministic red, so neither waits for the others.
 4. **E4 — the manual clock, then C5, C17, C13 (each landing its own class's clock seam WITH its RED), C6 on C13's
    seam; C4 gated.** No all-at-once seam story (D3). The first story is the manual clock alone (no product change);
    each next one adds `TimeProvider? clock = null` to ONE class and moves that class's test. C4's story opens only when
@@ -1019,6 +1134,11 @@ cd src_vs_code && npm test
   is judged by liveness like any other, and a folder older than N days is removed whatever its claim says"); this plan
   adds nothing to the sweep.
 - **D4** removes growth: two folders per real round that today wait six hours.
+- **C18's product fix** moves `AtomicJson` onto `AtomicFile`'s GUID temp, which `AtomicFile` removes when the move fails.
+  **Interrupted:** a process killed between the temp write and the move leaves one `<record>.json.<guid>.tmp` per kill,
+  where today it leaves one `<record>.json.tmp` that the next write reuses. Neither name is read as a record (the stores
+  match `<32 hex>.json`, `RecordFiles.cs:21-28`; the extension skips names not ending `.json`, `jsonDirectory.ts:64-68`).
+  Nothing sweeps them today; the bound is the number of kills inside a millisecond window (open item for the lead, E3 S4).
 - **The steering files (D1)** — one file per test project output folder, deleted by the writer; a killed run's file is
   deleted by the next run's assembly start.
 - Nothing else here writes anything that persists.
@@ -1037,6 +1157,9 @@ cd src_vs_code && npm test
       a failed removal never fails the round; S7 RED then GREEN.
 - [ ] C2 (both exception arms), C14 (busy only; malformed and empty as today; `Current` never throws), C16 fixed with
       their deterministic REDs (S8, S10, S11) and S9 kept green.
+- [ ] C18's product angle (a move over a held file is retried on the refusal Windows gives; `AtomicJson` writes through
+      `AtomicFile`; a failed beat is said and skipped, never the end of a question) and C25 (the session save is ONE atomic
+      road through `AtomicFile`, so a busy file is retried and a failure leaves the previous session whole) fixed with their deterministic REDs (S24, S25, S26), their guards green throughout.
 - [ ] Each deadline a test must race is armed through that class's own optional `TimeProvider`, landed with its RED;
       nothing threaded through `PanelService`/`RoundEngine`; `ProcessLauncher` untouched until C4 has a kept failure;
       the product's default behaviour is unchanged; S12–S14, S16 RED then GREEN (S15 when its gate opens).
@@ -1210,8 +1333,8 @@ and an empty filter leave no run folder and no `.owner`. Deviations, each decide
 
 ### E3 — Product defects the tests found
 
-**Goal.** Two product defects that show up today as "flaky" tests are fixed with deterministic REDs, and a round stops
-leaving two empty folders per round (D4); no assertion changes.
+**Goal.** Four product defects that show up today as "flaky" tests are fixed with deterministic REDs — C2, C14, C18's
+product angle, C25 — and a round stops leaving two empty folders per round (D4); no assertion changes.
 
 **Scope.** C2: one helper reads `process.StartTime` (`ProcessLauncher.cs:311`) and catches `Win32Exception` AND
 `InvalidOperationException`; when the read throws AND the child has exited, nothing is recorded (`Record` not called;
@@ -1220,26 +1343,71 @@ while the child is alive, today's rule stays (kill, wait, rethrow); the `ARoundT
 reviewers answered" first. C14: a tri-state `SettingsFile.TryRead` used by `PanelServiceHost.Current` on the RELOAD path
 only — `Busy` keeps the last good settings and the old stamp; malformed and empty behave as today; `Layer`'s eight
 callers unchanged; `Current` never throws; the sweeper test passes its own homes. D4: the two empty folders register with
-the round's `RoundScratch` (`RosterBuilder.cs:107`, `SecurityRoster.cs:30`/`:154`) and are removed by its `Dispose` at
-`RoundEngine.cs:358` — **non-recursive, only when EMPTY** (§6 D4, cadence consult 589e4647): a folder that is not empty,
-or cannot be removed, is warned about and left to the six-hour sweep; best effort, never failing the round. Scenarios
-S7, S8, S9, S10.
+the round's `RoundScratch` (`RosterBuilder.cs:107`, `SecurityRoster.cs:30`/`:155`) and are removed by its `Dispose` at
+`RoundEngine.cs:360` — **non-recursive, only when EMPTY** (§6 D4, cadence consult 589e4647): a folder that is not empty,
+or cannot be removed, is warned about and left to the six-hour sweep; best effort, never failing the round. C18's
+product angle (§4 C18): `AtomicFile.MoveOver` (`AtomicFile.cs:49-63`) also retries `UnauthorizedAccessException` inside
+its window; `AtomicJson.WriteUnderTurn` (`Escalations.cs:355-360`) writes through `AtomicFile.Write` with one shared
+500 ms window; `QuestionFanOut.HeartbeatAsync` (`:302-317`) says a failed beat and goes on. C25 (§4 C25):
+`SessionStore.Write` stops writing in place and goes through `AtomicFile.Write` (one road, the turn held through the move);
+`MoveOverExisting`'s loop is removed, not extracted (the E3 plan round and risk consult). Scenarios S7, S8, S9, S10, S24, S25, S26.
 
 **Depends on.** C2 (S1) on nothing — it starts beside E1 (J7); C14 on E1 (the measurement rule); D4 on E1's C10 rewrite
-(the repair test asserts on the launch, or D4 turns it red).
+(the repair test asserts on the launch, or D4 turns it red); C18's product angle and C25 on nothing but E1 (each has its
+own files and a deterministic red). None of them waits for `PLAN_a_turn_waits_by_the_clock.md` (§7).
 
 **Done when.** S8 red on both arms then green on every OS; S9 green, watched red once by breaking the guard; S10 red
 (defaults under the new stamp on the busy read) then green on Windows, its two companions green throughout; S7 red
 (both folders still exist) then green, with the non-empty (kept, warned), the cannot-remove and the grandchild arms;
-the four C2 tests not seen in the next 20 macOS runs (a watch, §10).
+S24 red (`UnauthorizedAccessException` on the first move, no pause) then green on Windows, its two guards green
+throughout; S25 red on both arms (the CI sentence; no beat after the failed one) then green on every OS; S26 red (the
+E2 sentence, no pause) then green on Windows, its guard green throughout; the four C2 tests not seen in the next 20
+macOS runs, and `TheHeartbeatIsRewritten_…`'s exception form and `EightWritersOnOneSession_…` not seen in the next 20
+Windows runs (watches, §10).
 
-**S1 (C2) status (2026-10-19): built on `feat/suite-c2`, awaiting the macOS CI leg and the 20-run watch** — see C2's Outcome.
+**S1 (C2) status: MERGED in #893 (`e86fe17f8`, 2026-10-20); the 20-run macOS watch is running** — see C2's Outcome.
 
-**Size.** Three stories: S1 C2 (the launcher helper, S8 both arms, S9, the EndToEnd assertion; the brief pins the
+**S4 (C18's product side) Outcome (2026-10-20, branch `feat/suite-e3-product`; the tests, their reds and the break-its are in `research/module_tests.md`, section "The suite is deterministic — E3 S4").**
+Built as the lead's decisions, the E3 plan round and the risk consult (the last three sections of this plan) say. `AtomicFile.MoveOver` retries `IOException or UnauthorizedAccessException` inside
+`AtomicFile.SharingRetry` (500 ms, one constant; `ConsultHealthPaths.SharingRetry` points at it), measured on the monotonic clock; `AtomicJson.WriteUnderTurn` writes through `AtomicFile.Write`; the heartbeat's missed beat is said at
+Warning and skipped (`QuestionFanOut.BeatAsync`); S27 is in `AtomicFile`. Deviations, each decided on what the code showed:
+- **The seam is an `internal sealed record AtomicSeams`** (`Clock`, `Pause`, `IsAlive`, `AfterTemp`) on an `internal` `Write` overload, not a lone `Action<int> pause` parameter: the monotonic window, the orphan rule's age and liveness, and "a writer paused after its temp file" each needed a seam.
+- **S25 injects the failure at the store's write road** (`QuestionConsultStore.FileWriter`, an `internal` init seam) on every OS, plus one Windows arm with the real hold, because a share-mode hold is Windows' alone and the catch must be proved on every leg. Added arms: the sweep keeps a question whose beats are refused while its pid is alive; a refused FINAL write still throws.
+- **`ProcessLiveness` moved** from `CoaiMcp.Server` to `runners/Processes` (public); nothing was copied. `PanelService` already imported the namespace.
+- **`MovableClock`** (test helper) gained a hand-moved monotonic reading (`GetTimestamp`, `TimestampFrequency`) so a window is movable without a sleep.
+- **S27's name check is exact:** `<record>.<pid>.<guid:N>.tmp`; a name that merely starts with the record's, or has no pid, is never touched.
+- **The orphan rule runs on every `AtomicFile.Write`**, so every caller of `AtomicFile` and `AtomicJson` (including S5's session write) gets it; it enumerates `<record>.*.tmp` in the record's folder only.
+- **Not done here:** `SessionStore` is S5; the extension's "interrupted" after two minutes without a beat is unchanged and now named in `module_extension.md`.
+
+**S5 (C25) Outcome (2026-10-21, same branch; tests, reds and the 20-run numbers in `research/module_tests.md`, section "The suite is deterministic — E3 S5").**
+Built as the plan round and the risk consult say, not as the first brief: `SessionStore.Write` has ONE road, `SessionTurn.Take` then `FileWriter(file, json)`, whose default is `AtomicFile.Write(file, json, AtomicFile.SharingRetry)`; `MoveOverExisting` and `TryDelete` are removed (no second retry loop); the turn stays held through the move; `SessionTurn.Take` is untouched. Deviations:
+- **The seam is `SessionStore.FileWriter`** (`internal` init), not a `BusyPause` property: the pause lives in `AtomicSeams`, so the store needs only the write road. `AtomicSeams` gained `WriteText` so S26 can fail the temp write half way.
+- **S26 has four arms and a guard** (the temp write fails; the move fails; the busy file lands after release; the turn is held through the move; held-through fails and keeps the old bytes), not the brief's two.
+- **A consequence for #865's test (2026-10-21):** `BackfillAuthorsExitCodesTests.ASessionFileThatCannotBeWritten_Is74_AndTheStoreIsKept` (round-authors E7, merged to `main` after E3 branched) forced a write failure with a read-only session file; the atomic save replaces the file, so on Linux and macOS the write succeeded (`found 0`). Same fix as `AnUnrecordedRoundIsNotAnAnswerTests`: the arrangement also makes the sessions folder unwritable on Unix (`FolderHolds.Unwritable`, skipped when privileged), assertions unchanged; the backfill product code needed no change (a `SessionStoreException` is exit 74 whatever caused it). No other test in `main` did this.
+- **The §10 watch was run:** 15 of 20 runs of `SessionStoreConcurrencyTests` failed before, 0 of 20 after, each beside a loaded suite. The 20 Windows CI runs of the plan's watch are still to come.
+**S2 (C14) status (2026-10-21): built on `feat/suite-e3-s2` (CI green), merged into `feat/suite-e3-product` for the epic's one code gate** — see C14's Outcome.
+**S3 (D4, S7) status (2026-10-21): built on `feat/suite-e3-s3` (CI green), merged into `feat/suite-e3-product` for the epic's one code gate** — see S3's Outcome below.
+
+**S3 Outcome (2026-10-21, branch `feat/suite-e3-s3`; the tests, their reds and the break-its are in `research/module_tests.md`, section "The suite is deterministic — E3 S3 (D4)"; the round scratch is in `research/module_server.md`, "The two folders that are always empty").** Built as written in §6 D4:
+`RoundScratch.Owns(folder)` registers a folder on a registry that `With(...)` carries (one `ConcurrentQueue` through the constructor); `RoundScratch.None` takes nothing. `RosterBuilder.FrameFor` registers
+`repairDir` and, through `RosterFrame.OwnTheWorkspace`, the `coai-noworkspace-` folder (never the worktree path); `SecurityRoster.Append` carries `ordinary.Scratch` in its `Decided` record to `Build`, which
+registers the lane's folder. `Dispose` removes each by its recorded path with a NON-recursive `Directory.Delete`, after the scratch's own folder and its homes; `IOException` / `UnauthorizedAccessException`
+say one sentence ("… was not removed (…); the six-hour scratch sweep takes it") and leave the folder; a missing folder is nothing; nothing is thrown. `coai-answers-` and `PanelService.cs:1381` / `shared/temp-sweep.json` are unchanged.
+**Deviations.** (1) The brief's break-it "drop the `With` carry → the main test red" is not reachable at round level: a round's scratch goes through `With` only when a runtime asks for a snapshot (Vibe, Kimi), and the S7 round has none. That break-it turns
+red the unit test `TheRegistry_IsCarriedBy_With_…`; the round-level main test stays green. (2) The "cannot be removed" arm holds a Windows directory handle (`FolderHolds.Undeletable`; it needs a real access right — an attributes-only open takes no part in sharing,
+which a first attempt found: the removal succeeded) and is skipped on Unix at round level; its Unix twin is the scratch's own unit test, where the folder's PARENT is made read-only (skipped when the process is privileged). (3) The grandchild is a real `FakeCli cwd-hold` child
+(a new verb, handled before the vendor mode) started by the test's launcher hook in the repair folder: it says `ready <pid>` on its pipe (the event), closes all three pipes and waits; the test kills it by PID. Windows leaves the folder with one warning; the Unix assertion
+(folder gone) is written but was NOT run here — the Linux and macOS CI legs are its first run. (4) `PanelServiceTests` became `partial` so the S7 round arms share its service, git fixture and the C10 recorder (`SeenRepairs` gained a `BeforeARepair` hook; the C10 round is now `ARepairedCodeRoundAsync`, with the
+worktree-mode assertion kept in `RepairLaunchesOfACodeRoundAsync`, so the positive control still fails in `none` mode). (5) One extra test beside S7: `TheEmptyFoldersOfTheOrdinaryRoundAndOfTheLane_AreAllRemovedWithTheScratchTheRosterWasGiven` (`SecurityLaneRoundTests`) proves the lane's folder is registered.
+
+**Size.** Five stories: S1 C2 (the launcher helper, S8 both arms, S9, the EndToEnd assertion; the brief pins the
 tracker stand-in's two observations and that the Team server's reader marker is cleared by the launch's normal end) —
 first, beside E1; S2 C14 (`TryRead`, the host's catch, S10 and its companions, the homes fix) — parallel; S3 D4 and S7
-(after E1 S3; the brief names `RoundScratch` as the end). Product code: Opus brief, Sonnet code, Opus review. No
-cornerstone.
+(after E1 S3; the brief names `RoundScratch` as the end); S4 C18's product angle (`AtomicFile`'s retry and its pause seam,
+`AtomicJson` onto `AtomicFile`, the heartbeat's missed beat, S24, S25) — parallel; S5 C25 (the store's pause seam, the
+extracted retry, S26) — parallel. The five touch disjoint files (S4's `AtomicFile` has seven other callers, three of them with a
+retry window, which is why S4's brief lists them). Product code: Opus brief, Sonnet code, Opus review. No cornerstone. **Risk:** § *Review
+record*, "E3's risk".
 
 ### E4 — Deadlines on an injectable clock — cornerstone area: the clock contract
 
@@ -1380,7 +1548,8 @@ folded; where the code said otherwise, it is written here instead of in the plan
   failed once with an `IOException` (the session file in use) during a 38-minute full run on a loaded Windows machine, and
   passed 3 of 3 alone (4–7 s). The test asserts that concurrent writers of ONE session never deny each other, so a sharing
   violation under load is a candidate PRODUCT defect (the store's write path), not a test defect. Not touched by E2. Belongs to
-  E3 (product) once its cause is read: the store's open mode and retry, against the test's eight writers.
+  E3 (product) once its cause is read: the store's open mode and retry, against the test's eight writers. **Read on
+  2026-10-20:** §4 C25 (the in-place write has no retry; measured), built as E3 S5.
 - **Also seen once in E2's runs, passing alone, already in the census:** `AReviewerThatAsksForSourceIsAskedAgainTests` (C13, E5),
   `AStreamsUsageIsNeverZeroTests.A_stream_over_the_answer_cap_is_unknown` (exit 69 vs 70 under load — to be read with C13's
   family), `AReaderIsEndedWithItsTreeTests` (C4), `ConsultationSweeperTests` (C14), and the real-editor job (C22; a different
@@ -1443,3 +1612,137 @@ Each accepted finding that changes behaviour was red first and has its break-it 
 The decisions on 4–7, 10–12 and 16 are the lead's; only 9's reason came with it, and the reasons written for the others are the coder's wording of the decision, not the reviewers'.
 
 **Open tail added by the gate and judge:** E5's reader must pass `shared/owner-claim-vectors.json` and compare the host without regard to case; E5's sweeper removes orphan `.owner` files whose folder is gone (the janitor matches directories only); a start comparison needs its own precision rule and a ±2 s tolerance against any start not computed by the shared formula; the exclusive create narrows but does not close the two-call race (stated).
+
+### E3's risk (2026-10-20, written with stories S4 and S5) — what can go wrong, and what catches it
+
+Every E3 story changes PRODUCT code on a path that writes a person's data or decides what a server runs on. What a
+wrong change does, per story, and the test or rule that must catch it before merge:
+- **A wrong atomic-write change loses a record or a session write (S4, S5).** A retry that swallows the last failure,
+  or retries a step that already wrote part of the file, turns a refused write into a SILENT one: a question's settled
+  record, a spent proof, an escalation answer or a session's round trail is gone with no sentence. *Caught by:* each
+  retry is bounded and its LAST attempt throws (S24's and S26's never-released guards assert the exception and that the
+  old content is still whole); only the heartbeat may skip a beat, and it says so (S25) — the settle and final writes
+  keep throwing; `AtomicFile` still removes its temp on failure (S24's guard: no `*.tmp` left). S4 changes a helper with
+  seven other callers: the whole suite runs green with the retry widened BEFORE `AtomicJson` moves onto it.
+- **A busy-reload change pins stale settings (S2).** If `Busy` is read too widely — a permission denial, a malformed
+  or an empty file — the server keeps the last good settings for ever and a person's change never arrives. *Caught
+  by:* `Busy` is ONLY a sharing violation (C14); S10's denial arm must NOT keep the last good settings, its malformed
+  and empty companions stay green, and the next call after the release must show the new file.
+- **D4 deletes a live folder (S3).** A recursive delete, a delete by name glob, or a delete of a folder that is not
+  empty can take a surviving grandchild's working folder or another round's files. *Caught by:* removal by the PATH the
+  round recorded, non-recursive, only when EMPTY (§6 D4); S7's non-empty arm (kept, warned), cannot-remove arm and
+  grandchild arm; a failed removal never fails the round.
+- **Common to all five:** a retry or a catch that grows past complexity 4, or a `null` returned for "nothing", is
+  refused at the code gate; no assertion is weakened and no timeout lengthened (§10); each story's PR names its RED, its
+  break-it and the test count before and after.
+
+### The lead's decisions on the E3 draft (2026-10-20)
+
+The Opus draft of S4 and S5 asked five questions. Each is decided here, on a stated reason, so the coders do not stop:
+
+1. **The orphan `*.tmp` of a killed write (S4, §11): accepted, no sweep now.** `AtomicFile` names its temp file with a
+   GUID so two writers never share one; a process killed between the temp write and the move leaves one orphan. Growth
+   is one small file per killed write, not per write, and the record folder already holds one file per record. A sweep
+   is a separate deletion rule with its own risk (it must never take a live writer's temp); it waits until an orphan is
+   actually seen. §11 names the limit.
+2. **The boundary line of `PLAN_a_turn_waits_by_the_clock.md`: amended in this change** (its line 62): S5 changes the
+   in-place write of `SessionStore.Write`, not `SessionTurn.Take`; the two plans touch different methods of one file.
+3. **One "busy" predicate for S2 and S5: no, they stay separate.** S2's `Busy` decides whether a settings READ is kept
+   (a sharing or lock violation only — a permission denial must still surface, or a broken ACL would silently pin old
+   settings forever). S5's retry decides whether a WRITE is tried again inside a bounded window. Different questions;
+   one predicate would make one of them wrong.
+4. **S2's denial arm: an internal seam, not a real ACL.** A deny-read ACL is Windows-only, needs cleanup that can fail,
+   and tests the OS rather than the mapping. An `internal` read seam (the same shape as the repository's other internal
+   test seams, no public API change) feeds `TryRead` an `UnauthorizedAccessException`; the coder adds it without asking
+   again.
+5. **Stale line references in C14 and D4: re-pinned by the coder of each story** when that story opens the file; the
+   briefs carry the current numbers. C24 keeps only its review-record entry until E5 reads its log (it is E5's).
+
+### The E3 plan round (coai session `ac57ee60`, 2026-10-20, verdict proceed) — 2 findings, both accepted; they supersede parts of the text above
+
+Only one of three reviewers read the plan: the Gemini preset received it cut off (`PLAN_INCOMPLETE` — the plan is now
+~183 KB), and Kimi returned an empty answer. Codex read it whole. Its two findings are taken, and where this section and
+the text above disagree, **this section governs**:
+
+1. **C25 / S5 — a retried IN-PLACE write is not safe; the session write becomes atomic instead.** `File.WriteAllText`
+   opens with `FileMode.Create`, so the file is truncated the moment the open succeeds; an I/O error after that loses the
+   previous session, and a retry loop only repeats the risk. **S5 is changed:** the turn-held path stops writing in place
+   and writes the same way the turn-less path does — a temp file beside the session, then the one shared, bounded move
+   retry (`MoveOverExisting`'s loop, extracted once and used by both paths). A failure at any point before the move leaves
+   the previous session whole. **S26 gains a fault arm:** a write that fails AFTER the temp file is written (a seam that
+   throws at the move) leaves the old session byte-for-byte intact and removes its temp file. The C25 text and the E3
+   Scope line that say "the in-place write is retried" are superseded by this item.
+2. **The orphan temp files of a killed writer — an owner and a rule (supersedes decision 1 of the lead's decisions).** The
+   owner is the writer itself: before `AtomicFile.Write` (and the session store's write) writes its own temp file, it
+   removes temp files of THE SAME RECORD (`<record>.<guid>.tmp` beside it) whose last write is older than one hour —
+   never another record's, never a fresh one, best effort (a failure to remove is ignored and retried on the next write).
+   A live writer's temp lives for milliseconds, so one hour cannot take it. **Bound:** at most one orphan per record per
+   killed write, removed on that record's next write after an hour; a record that is never written again keeps at most
+   the orphans of the kills that hit it — at today's kill rate (an operator stopping a server mid-write) single digits per
+   month. **Scenario S27:** an orphan temp file of the record, two hours old, is gone after the next write; a fresh one
+   (one second old) and another record's old one are both kept.
+
+### The risk consult for epic 3 (`0060db13`, 2026-10-20) — 5 points, each verified against the code, binding on E3
+
+1. **The 500 ms retry window is a tolerance, not a guarantee** — verified: `AtomicFile.Write` arms its deadline with
+   `DateTime.UtcNow + sharingRetry` (`src_mcp/runners/Files/AtomicFile.cs:40`), wall time. **S4:** the window is measured
+   on a monotonic clock (`Stopwatch` / an injected `TimeProvider`), and S24 gains a never-released arm: the destination
+   held through the whole window → the caller gets the failure, the ORIGINAL bytes survive, the temp file is removed.
+   Retrying `UnauthorizedAccessException` does not bypass a real ACL: a persistent denial still throws, after the window.
+2. **S5 — atomic replacement confirmed; the turn stays held through the move.** Verified (for the SERVER's readers only — the extension reads without the turn, see the E3 judge J1): session readers go through
+   `ReadShared` (`SessionStore.cs:543`), which opens, reads to the end and disposes; nothing keeps a handle and re-reads by
+   offset. S26's arms: a failure while the temp file is written AND a failure at the move each leave the previous session
+   byte-for-byte; the next load after a successful write sees it. **And one helper, not two:** the session write uses
+   `AtomicFile.Write` with S4's retry (S5 builds on S4, same coder, after it) — `SessionStore.MoveOverExisting`'s loop is
+   REMOVED, not extracted, because after S4 it is a second copy of `AtomicFile.MoveOver` (the reuse rule).
+3. **S25 must fail the WRITE, not the projection.** Verified: `projected` runs AFTER the file is written
+   (`QuestionConsultStore.cs:51-56`), so throwing there tests only the catch. S25 injects the failure at the write (the
+   S24 hold seam, never released, on a heartbeat-only write); a guard arm proves the server's sweep keeps a question whose
+   heartbeat writes fail while its pid is alive (`Orphaned` needs a stale heartbeat AND a dead pid,
+   `QuestionConsultStore.cs:179-182`). The extension's "interrupted" after two minutes without a heartbeat
+   (`src_vs_code/src/questionConsults.ts:78`) is a display that recovers on the next published beat — accepted, named
+   in `module_extension.md`.
+4. **S27's one-hour rule could delete a live temp — corrected.** A writer suspended after closing its temp file but before
+   the move (a debugger, a suspended process) can hold a temp older than an hour; age is scope, not proof of death. **The
+   rule now needs proof:** the temp file's name carries its writer's pid (`<record>.<pid>.<guid>.tmp`), and a writer
+   removes a same-record temp only when it is older than one hour AND that pid is not alive on this machine — the
+   product's own `ProcessLiveness.IsAlive` (`src_mcp/src/Server/ProcessLiveness.cs:19`; if `AtomicFile`'s layer cannot
+   reference it, it MOVES down to `runners`, it is never copied). A reused pid keeps the file: a leak, never a deletion.
+   S27 gains the arm the consultant named: writer A paused after its temp is written, the temp aged past an hour, writer B
+   writes the same record → A's temp is kept (A's pid is alive), and A's move then lands.
+5. **S2 and RoundScratch are sound within their stated limits** (no change).
+
+### The E3 code gate and judge (coai code gate and Opus judge, 2026-10-21) — verdict `proceed` from both; the accepted findings are folded into the branch
+
+Findings, each with its decision and reason. Tests, reds and break-its are in `research/module_tests.md`, section "The suite is deterministic — E3 code gate and judge".
+
+| Finding | Decision | Reason / what changed |
+|---|---|---|
+| G0 — `PanelServiceTests` became `partial` (`PanelServiceTests.EmptyFolders.cs`) | **Accepted** | The repo rule forbids `partial` as a split. The S7 tests are their own class, `TheRoundsEmptyFoldersAreRemovedTests`; the service, the git fixture, the fake's answer and the repaired-round recorder are one named unit, `CodeRoundHarness`, which both classes own. 24 tests before, 24 after. |
+| G1/G2 (+ judge 3) — the orphan rule deletes when `IsAlive` is false, and `IsAlive` is false for "could not ask" | **Accepted** | `ProcessLiveness.Check` answers `Liveness.Alive` / `Gone` / `Unknown` (`ArgumentException`, `InvalidOperationException` = Gone; `Win32Exception`, `NotSupportedException`, a pid of 0 or less = Unknown); `AtomicFile` deletes on `Gone` only; `IsAlive` is built on `Check`, so the sweeps are unchanged. RED: an aged orphan with an `Unknown` writer was deleted. |
+| G3 — a failing heartbeat warns on every beat | **Accepted** | One warning per run of misses, reset by a beat that lands. RED: two failed beats gave two warnings. |
+| G8 — `catch (Exception e) when (IsRefusal(e))` | **Accepted** | `catch (IOException)` and `catch (UnauthorizedAccessException)` explicitly, same behaviour, `IsRefusal` removed. No new test: nothing observable changes; the S24 arms still cover it. |
+| G11 — `PanelServiceHost.Current` calls `Stamp()` outside any try | **Accepted, with a correction** | `Stamp()` already caught `IOException` (so a file that goes away between `Exists` and `Length`, a `FileNotFoundException`, was already safe) and `UnauthorizedAccessException`. What still threw was a path the platform cannot stamp (`ArgumentException`, `NotSupportedException`, `SecurityException`); RED: a data directory with a NUL in it made `Current` throw `ArgumentException: Null character in path`. The stamp now keeps the OLD one for those too: "cannot tell" is not "the file vanished", and the "no file" stamp would reload to the defaults. |
+| J1 — the extension reads `sessions/*.json` without the turn | **Accepted (docs only)** | A move over a held file is refused whatever the share mode, so one extension read held past 500 ms can fail a round's final save. Written in `module_server.md` (the "readers take the same turn" claim now says the SERVER's readers) and `module_extension.md`; point 2 of the risk consult above is corrected: true for the server's readers only. |
+| J2 — no S26 test pins the store's default write road | **Accepted** | `TheStoresDefaultWriteRoad_IsTheAtomicOne_SoItSweepsAnOrphanOfItsOwnSession`: `new SessionStore(dir)`, an aged dead-writer temp of its session, `Save`, the temp is gone. Break-it: the default back to `File.WriteAllText` goes red. |
+| J4 — `PanelServiceHost` logs the exception as text | **Accepted** | `_log.Warning(e, …)`; `Kept` takes the warning as an action so the exception travels first. RED: the logged event had no `Exception`. |
+| J5 — doc drift | **Accepted** | `module_runners.md` said "four now" and listed three; `PLAN_a_turn_waits_by_the_clock.md` rewritten (one atomic road, `MoveOverExisting` deleted, `Take` untouched) with the constraint that `Take`'s budget stays above `AtomicFile.SharingRetry`. |
+| An HResult split of `UnauthorizedAccessException` | **Rejected** | The exception is the same for a held file and a real ACL denial, and the window bounds both; telling them apart by HResult would couple the retry to one Windows code and change nothing for the caller. |
+| The Kept message wording | **Rejected** | Wording only; the message names the cause and the retry. |
+| Throttling the orphan scan | **Rejected** | The scan lists one record's `<record>.*.tmp` in one folder; the cost is negligible and a throttle adds state. |
+| An async `AtomicFile` | **Rejected** | Every caller is synchronous and holds a turn; async would spread through all of them for a window of 500 ms. |
+| Logging the best-effort orphan and missing-folder catches | **Rejected** | They are courtesies to a folder; a line per write would be noise, and the next write retries. |
+| A fast in-place session path | **Rejected** | The in-place write is the defect (it truncates before it succeeds); two roads is what S5 removed. |
+
+### Case C26 (added 2026-10-21, seen on PR #897's Linux Sonar job) — an inheritable lock descriptor caught by another test's fork
+
+`HeldFileInheritableOnLinuxTests.ATakeWhoseStreamCannotBeMade_ClosesItsDescriptor_AndLeavesTheFileFree` failed once on Linux
+(run 39473785590, the coverage job): `Expected HeldFile.Probe(LockFile) to be LockProbe.Free … because the descriptor leaked
+with its flock … but found LockProbe.Held`, after 7 ms. The product closes the handle on the failure path
+(`src_mcp/runners/Files/LinuxHeldFile.cs:52-69`), and the lock file is unique per test (`TempDir.For`), so neither the code
+nor the path explains it. **Cause (inferred, not yet shown by a kept trace):** the descriptor is opened INHERITABLE by design
+(the shim's tree hold, S-K5), and in the window between its open and its close another test in the same process forked a
+child; the child inherited the descriptor and with it the flock, so the probe saw `Held` until that child exited. Shared
+state across parallel tests — never a flake. **Belongs to E5** (with C21): the class must not run beside process-spawning
+classes (a serial collection), or the probe must wait for inheritors to end; a deterministic RED holds a fork open across the
+take's failure. Not caused by E2: it does not depend on where temp lives.

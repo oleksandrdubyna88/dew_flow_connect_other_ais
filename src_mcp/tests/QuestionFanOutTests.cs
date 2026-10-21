@@ -6,7 +6,9 @@ using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
 using CoaiMcp.Server;
 using FluentAssertions;
+using Serilog;
 using Serilog.Core;
+using Serilog.Events;
 using Xunit;
 
 namespace CoaiMcp.Tests;
@@ -72,10 +74,12 @@ public sealed class QuestionFanOutTests : IAsyncLifetime
         TimeSpan? heartbeatEvery = null,
         QuestionOutlineCache? outlines = null,
         Func<string, string, CancellationToken, Task<string>>? buildOutline = null,
-        Func<PanelSettings, PanelSettings>? panel = null) => new(
+        Func<PanelSettings, PanelSettings>? panel = null,
+        QuestionConsultStore? store = null,
+        Serilog.ILogger? log = null) => new(
         launcher,
         new ReviewerExecutor(launcher),
-        Store(),
+        store ?? Store(),
         new RolePrompts(_data),
         new UsageLedger(_data),
         new VaultKeys(new Dictionary<string, string> { ["grok-openrouter"] = "sk-test-0123456789abcdefghijklmnop" }, string.Empty),
@@ -83,7 +87,7 @@ public sealed class QuestionFanOutTests : IAsyncLifetime
         new TreeSitterOutliner(),
         ConsultSchemaFile.Ensure(Path.Combine(_data, "schemas"), QuestionAnswerSchema.Name, QuestionAnswerSchema.Json, "a test").Path,
         _ => null,
-        Logger.None,
+        log ?? Logger.None,
         heartbeatEvery,
         outlines ?? new QuestionOutlineCache(),
         buildOutline);
@@ -707,6 +711,256 @@ public sealed class QuestionFanOutTests : IAsyncLifetime
         settled.Rows.Single().Status.Should().Be(RowOutcomes.Answered, "the row answered after its wait; the beat was not the row");
         beats.Count.Should().BeGreaterThanOrEqualTo(3,
             "a row that ran a second and a half on a 200 ms beat was seen with at least three distinct heartbeats — the first write and two rewrites");
+    }
+
+    // ---------- E3 S25 (C18's product side): a heartbeat the disk refuses is said and skipped, never the end of the question ----------
+
+    /// <summary>
+    /// CI run 39325900821 (Windows): <c>UnauthorizedAccessException: Access to the path is denied</c> at the heartbeat's write ended a
+    /// question whose rows all answered, because the settled record was never written. The write is refused HERE, at the store's write
+    /// road (<see cref="RefusedBeats"/>), which works on every OS and is deterministic — not at <c>projected</c>, which runs after the
+    /// write. The row waits on a gate that the refusal opens, so no step is a fixed wait; a 30 s guard FAILS the test with its own sentence.
+    /// </summary>
+    private async Task<(QuestionConsultRecord Settled, SaidSink Said, QuestionConsultStore Store)> RunWithRefusedBeatsAsync(
+        Func<int, TaskCompletionSource, Exception> refuse, string guard)
+    {
+        var settings = Settings([Row("slow", "claude", "claude", "opus", "question-opinion")], budget: TimeSpan.FromSeconds(60));
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var launcher = new ScriptedLauncher(_real, async launch =>
+        {
+            if (launch.Request.Executable != "claude")
+            {
+                return null;
+            }
+
+            await gate.Task;
+
+            return ScriptedAnswer.Claude("A ladder.");
+        });
+        var said = new SaidSink(_ => { });
+        var beats = new RefusedBeats(n => Throw(refuse(n, gate)));
+        var store = new QuestionConsultStore(_data) { FileWriter = beats.Write };
+
+        var run = FanOut(launcher, settings, heartbeatEvery: TimeSpan.FromMilliseconds(200), store: store, log: new LoggerConfiguration().WriteTo.Sink(said).CreateLogger())
+            .RunAsync(Fresh(), Input(settings), TestContext.Current.CancellationToken);
+
+        return (await SettledOrFailAsync(run, gate, guard), said, store);
+    }
+
+    /// <summary>The settled record, or a test failure with the guard's own sentence after 30 s — never a bare timeout, and the row's gate is opened so nothing is left waiting.</summary>
+    private static async Task<QuestionConsultRecord> SettledOrFailAsync(Task<QuestionConsultRecord> run, TaskCompletionSource gate, string guard)
+    {
+        try
+        {
+            return await run.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        }
+        catch (TimeoutException)
+        {
+            gate.TrySetResult();
+            Assert.Fail(guard);
+            throw;
+        }
+    }
+
+    /// <summary>The refusal Windows gives for a move over a held file — a beat's write that throws it.</summary>
+    private static Exception Refused() => new UnauthorizedAccessException("Access to the path is denied.");
+
+    /// <summary>An exception to throw, or <see cref="NoRefusal"/> to let the beat through.</summary>
+    private static void Throw(Exception refusal)
+    {
+        if (refusal is not NoRefusal)
+        {
+            throw refusal;
+        }
+    }
+
+    private sealed class NoRefusal : Exception;
+
+    [Fact]
+    public async Task AHeartbeatThatCannotBeWritten_IsSaid_AndTheQuestionStillSettles()
+    {
+        var (settled, said, _) = await RunWithRefusedBeatsAsync(
+            (_, gate) =>
+            {
+                gate.TrySetResult();
+
+                return Refused();
+            },
+            "the question did not settle within 30 s of its first heartbeat being refused");
+
+        settled.Rows.Single().Status.Should().Be(RowOutcomes.Answered, "the row answered; one refused beat is not its end");
+        settled.Status.Should().Be(QuestionConsultStatuses.Answered);
+        said.Events.Should().ContainSingle(e => e.Level == LogEventLevel.Warning).Which.RenderMessage()
+            .Should().Contain(settled.Id).And.Contain("heartbeat could not be written", "the missed beat is said, with the question it belongs to");
+    }
+
+    [Fact]
+    public async Task ABeatAfterAFailedOne_IsStillWritten()
+    {
+        var (settled, said, store) = await RunWithRefusedBeatsAsync(
+            (n, gate) =>
+            {
+                if (n < 2)
+                {
+                    return Refused();
+                }
+
+                gate.TrySetResult();
+
+                return new NoRefusal();
+            },
+            "no heartbeat was written after the failed one within 30 s");
+
+        settled.Rows.Single().Status.Should().Be(RowOutcomes.Answered);
+        said.Events.Count(e => e.Level == LogEventLevel.Warning).Should().Be(1, "only the first beat was refused");
+        store.Read(settled.Id)!.Status.Should().Be(QuestionConsultStatuses.Answered);
+    }
+
+    [Fact]
+    public async Task ABeatThatKeepsFailing_IsSaidOnce_NotOnEveryBeat()
+    {
+        // Code gate G3: the loop beats every 30 s in production; a disk that refuses for ten minutes must not write twenty warnings.
+        var (settled, said, _) = await RunWithRefusedBeatsAsync(
+            (n, gate) =>
+            {
+                if (n < 3)
+                {
+                    return Refused();
+                }
+
+                gate.TrySetResult();
+
+                return new NoRefusal();
+            },
+            "the third heartbeat was never attempted within 30 s");
+
+        settled.Rows.Single().Status.Should().Be(RowOutcomes.Answered);
+        said.Events.Count(e => e.Level == LogEventLevel.Warning).Should().Be(1, "two beats in a row were refused: one run of misses is one warning");
+    }
+
+    [Fact]
+    public async Task ABeatThatFailsAgainAfterASuccess_IsSaidAgain()
+    {
+        var (settled, said, _) = await RunWithRefusedBeatsAsync(
+            (n, gate) =>
+            {
+                if (n is 1 or 3)
+                {
+                    return Refused();
+                }
+
+                if (n >= 4)
+                {
+                    gate.TrySetResult();
+                }
+
+                return new NoRefusal();
+            },
+            "the fourth heartbeat was never attempted within 30 s");
+
+        settled.Rows.Single().Status.Should().Be(RowOutcomes.Answered);
+        said.Events.Count(e => e.Level == LogEventLevel.Warning).Should().Be(2, "a beat that landed ended the first run of misses, so the next miss is news again");
+    }
+
+    [Fact]
+    public async Task TheSweepKeepsAQuestionWhoseBeatsAreRefused_WhileItsPidIsAlive()
+    {
+        // The beats are refused twice, so the file on disk keeps its FIRST (stale) heartbeat. A sweep asked ten minutes later, by a
+        // server whose pid is alive, leaves the question consulting: `Orphaned` needs a stale heartbeat AND a dead pid.
+        var swept = -1;
+        var status = string.Empty;
+        var (settled, _, store) = await RunWithRefusedBeatsAsync(
+            (n, gate) =>
+            {
+                if (n < 3)
+                {
+                    return Refused();
+                }
+
+                var reader = new QuestionConsultStore(_data);
+                swept = reader.Sweep(_ => true, DateTime.UtcNow.AddMinutes(10), TimeSpan.FromHours(1));
+                status = reader.All().Single().Status;
+                gate.TrySetResult();
+
+                return new NoRefusal();
+            },
+            "the third heartbeat was never attempted within 30 s");
+
+        swept.Should().Be(0, "a stale heartbeat alone ends nothing while the pid is alive");
+        status.Should().Be(QuestionConsultStatuses.Consulting);
+        settled.Status.Should().Be(QuestionConsultStatuses.Answered);
+        store.Read(settled.Id)!.Status.Should().Be(QuestionConsultStatuses.Answered);
+    }
+
+    [Fact]
+    public async Task AFinalWriteThatIsRefused_StillSurfaces()
+    {
+        // The settled record is the answer: a lost one must be seen by the caller, not logged and skipped.
+        var settings = Settings([Row("sonnet", "claude", "claude", "sonnet", "question-opinion")]);
+        var launcher = new ScriptedLauncher(_real, AnswersAtOnce);
+        var store = new QuestionConsultStore(_data)
+        {
+            FileWriter = (path, json) =>
+            {
+                if (!json.Contains("\"consulting\"", StringComparison.Ordinal))
+                {
+                    throw Refused();
+                }
+
+                AtomicJson.Write(path, json);
+            },
+        };
+
+        var run = () => FanOut(launcher, settings, store: store).RunAsync(Fresh(), Input(settings), TestContext.Current.CancellationToken);
+
+        await run.Should().ThrowAsync<UnauthorizedAccessException>("only a beat is skipped; the settled record is the answer");
+    }
+
+    [Fact]
+    public async Task ABeatRefusedByARealHold_IsSaid_AndTheQuestionStillSettles()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "the refusal of a move over a held file is Windows'; the arms above cover every OS");
+        var settings = Settings([Row("slow", "claude", "claude", "opus", "question-opinion")], budget: TimeSpan.FromSeconds(60));
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var store = Store();
+        var fresh = Fresh();
+        var holders = new List<FileStream>();
+        var launcher = new ScriptedLauncher(_real, async launch =>
+        {
+            if (launch.Request.Executable != "claude")
+            {
+                return null;
+            }
+
+            // The reader that never lets go until the refusal has been said: the same open SharedRead makes.
+            lock (holders)
+            {
+                holders.Add(new FileStream(store.PathFor(fresh.Id), FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete));
+            }
+
+            await gate.Task;
+
+            return ScriptedAnswer.Claude("A ladder.");
+        });
+        var said = new SaidSink(e =>
+        {
+            if (e.Level == LogEventLevel.Warning)
+            {
+                lock (holders)
+                {
+                    holders.ForEach(h => h.Dispose());
+                }
+
+                gate.TrySetResult();
+            }
+        });
+
+        var run = FanOut(launcher, settings, heartbeatEvery: TimeSpan.FromMilliseconds(200), store: store, log: new LoggerConfiguration().WriteTo.Sink(said).CreateLogger())
+            .RunAsync(fresh, Input(settings), TestContext.Current.CancellationToken);
+        var settled = await SettledOrFailAsync(run, gate, "the refused heartbeat was not said, and the question did not settle, within 30 s");
+
+        settled.Rows.Single().Status.Should().Be(RowOutcomes.Answered);
+        said.Events.Should().Contain(e => e.Level == LogEventLevel.Warning && e.RenderMessage().Contains("heartbeat could not be written"));
     }
 
     [Fact]

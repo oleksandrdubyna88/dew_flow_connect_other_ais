@@ -106,6 +106,20 @@ if (args is ["acp-agent", var acpScript])
     return CoaiMcp.FakeCli.AcpAgent.Run(acpScript);
 }
 
+// A descendant that outlives its round inside a folder (D4 / S7 of the temp plan): its working folder is wherever it was started. It says
+// `ready <pid>` — the EVENT its parent waits for, never a sleep — closes all three pipes and waits to be killed by that pid. BEFORE the vendor
+// mode, for the same reason as the ACP stand-in: a FAKECLI_MODE another test left in the process environment must not turn it into a reviewer.
+if (args is ["cwd-hold"])
+{
+    Console.Out.WriteLine($"ready {Environment.ProcessId}");
+    Console.Out.Flush();
+    Console.Out.Close();
+    Console.Error.Close();
+    Console.In.Close();
+    Thread.Sleep(120_000);
+    return 0;
+}
+
 // The script comes from the environment, else from beside the working folder (`<cwd>/../agent.json`): a launch that builds the
 // agent's environment from scratch (E4.3, the Kimi shim) carries no FAKECLI_* variable, and the fake agent's folder is the one place the
 // test and the agent both already know.

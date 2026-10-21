@@ -96,7 +96,7 @@ boundary both survey. The extension reads `consultants.json` only and never sees
 |---|---|
 | The background start, its failure (`ServerStartFailed`) and stop semantics | `Server/StartingHost.cs`, `Program.StartedAsync` |
 | The sweeper waits for the start through the source (`Ready`), then asks for the current service per beat | `ConsultationSweeper.RunAsync(IPanelServiceSource, …)` |
-| A settings reload publishes the new stamp only with a service that built | `PanelServiceHost.Current` |
+| A settings reload publishes the new stamp only with a service that built. **A reload that cannot be used keeps the last good service AND the old stamp** (E3 S2, C14), so the next call tries again, with one warning per stamp: the file is held open by its writer (`SettingsFile.TryLayer` answers `SettingsLayer.Busy` — ONLY a Windows sharing or lock violation, HResult `0x80070020`/`0x80070021`), or the rebuild threw. `Current` never throws: its stamp read keeps the OLD stamp for any failure to read it (`IOException`, `UnauthorizedAccessException`, and since the E3 code gate `ArgumentException`, `NotSupportedException`, `SecurityException` — a path the platform cannot stamp), because "cannot tell" is not "the file vanished" and the old stamp keeps the last good service serving; a skipped reload is logged with the exception itself, not as text in the message. A permission denial is NOT busy (empty settings, as before, so a file locked down by mistake never pins stale settings), and a malformed or empty file gives the defaults, as before. The values the read returned are the ones the rebuild uses (one read per reload); START (`Start()`) reads as it always did. `SettingsFile.Read` and `Layer`'s eight callers are unchanged. | `PanelServiceHost.Current`/`Reload`/`Kept`, `SettingsFile.TryRead`/`TryLayer`, `SettingsRead.cs` |
 | The held set, its cache and fail-closed answer | `Server/SessionHolds.cs`, `SessionStore.HeldQuestions` |
 | Judged first, held asked once per sweep | `Server/EscalationRetention.cs` |
 | The two settings | `Server/ServerPace.cs` (`PanelSettings.Pace`) |
@@ -1370,6 +1370,8 @@ admits but FLAGS — codex on every capability, agy's disk read — and the flag
 the card and the log. S3 had made it refuse such a row unless it carried `acknowledged: true`; the operator
 dropped the tick, because codex has no setting that limits what it reads, so a tick would confine nothing.
 
+**A heartbeat the disk refuses is said and skipped (E3 S4, C18's product side).** CI run 39325900821 (Windows) ended a question whose rows all answered with `UnauthorizedAccessException` from the beat's write: a faulted `HeartbeatAsync` was rethrown at `LaunchAllAsync`'s `finally` and the settled record was never written. `QuestionFanOut.BeatAsync` now catches `IOException or UnauthorizedAccessException` around ONE beat, logs `question {Id}: a heartbeat could not be written ({Reason}); the next beat tries again` at Warning — ONCE per run of misses (`HeartbeatAsync` announces only the first of consecutive failed beats and resets after a beat that lands) — and the loop goes on. Why it is safe: the sweep ends a question only on a stale heartbeat (two minutes, four beats) AND a dead pid (`QuestionConsultStore.Orphaned`), so a missed beat — or several — never ends a live server's question. A row's settle write and the final write are NOT guarded: a lost answer must reach the caller. `QuestionConsultStore.FileWriter` (`internal`, default `AtomicJson.Write`) is the seam the tests refuse a write through, on every OS.
+
 **The heartbeat, now proved to be WRITTEN.** S2 covered the sweep's reading of a stale beat; nothing ran a
 row past thirty seconds. `QuestionFanOut` takes the interval as a seam (`heartbeatEvery`, the store's thirty
 seconds by default), and `TheHeartbeatIsRewritten_WhileARowRuns_OnTheConfiguredInterval` sees three distinct
@@ -1398,7 +1400,7 @@ read since S2 and are acted on now). An older extension against this server show
 person answers it or the retention takes it; a newer extension against an older server sees no status and
 draws every card, as before.
 
-**Sizes (D12).** `PanelService.cs` 1781 → 1759 (`ProcessIsAlive` moved to `ProcessLiveness`, a static unit every
+**Sizes (D12).** `PanelService.cs` 1781 → 1759 (`ProcessIsAlive` moved to `ProcessLiveness` — since E3 S4 `CoaiMcp.Runners.Processes.ProcessLiveness`, `runners/Processes/ProcessLiveness.cs` — a static unit every
 sweep asks; the gate's wiring and the two forwarders paid for inside the file); `PanelSettings.cs` 1497 → 1497
 (the default's constant and its remark paid for by the surplus blank lines beside it).
 
@@ -1447,7 +1449,7 @@ against the code without its fix. What changed on this side, by item:
 | 9 | A live server whose fan-out never settled left `consulting` for ever | past twice the row budget the sweep ends it `interrupted`, naming the deadline | `QuestionConsultStore.Sweep(isAlive, now, deadline)` |
 | 11 | The ~6 s outline was built for every question with any `none` row, before ANY row launched | built only for an api `none` row (A9 names them), awaited by that row alone, cached per repository + HEAD for the last four, a failed build never kept | `QuestionOutlineCache`, `RowInput.AfterOutline` |
 | 13 | Four record directories each carried their own id guard, turn read, stamp, parse and delete-and-warn | one `RecordFiles`, used by `QuestionConsultStore`, `ConsultationStore`, `QuestionPhaseStore` and `EscalationRetention` | `RecordFiles` |
-| 14 | `AtomicJson.Write` takes the turn, so a caller holding it could not use it | `Write` (takes the turn) and `WriteUnderTurn` (temp + move); the phase store and the spend call the latter | `AtomicJson` |
+| 14 | `AtomicJson.Write` takes the turn, so a caller holding it could not use it | `Write` (takes the turn) and `WriteUnderTurn` (the write itself; the phase store and the spend call it). **E3 S4:** `WriteUnderTurn` writes through `AtomicFile.Write` with `AtomicFile.SharingRetry` — a pid-and-GUID temp name (`<id>.json.<pid>.<guid>.tmp`), the move retried for `UnauthorizedAccessException` too, no more fixed `path + ".tmp"` | `AtomicJson`, `AtomicFile` |
 | 15 | The question prompts kept a copy of the prompt-id expression without the Windows device names (`con` was a prompt) | `RoleComposition.IsPromptId`, the whole rule | `QuestionPromptSet` |
 
 Item 6 (the panel's 15-minute default), 10 and 12 (the extension's watchers) are the extension's; see
@@ -5691,6 +5693,10 @@ at the move; blocking a round on a lock file would be a worse failure than the o
 The lock file is deliberately NOT named `session-*.json`, so the orphan sweep's own enumeration
 cannot pick it up.
 
+**The session save is atomic on every road (E3 S5, C25, 2026-10-20).** With the turn held, `SessionStore.Write` used to write IN PLACE (`File.WriteAllText`, no retry): `FileMode.Create` truncates the session the moment the open succeeds, so a failure after it lost the previous session, and a writer meeting the file busy was refused with a sharing violation. Measured on Windows 11 26300 (one in-place writer and one mover on one file, 4 s): the in-place writer refused 273 times (HResult 0x80070020), the mover 337 times (`UnauthorizedAccessException`, 0x80070005); `EightWritersOnOneSession_DoNotDenyEachOther` failed 15 of 20 runs beside a loaded suite. Now ONE road, turn or no turn: `using var turn = SessionTurn.Take(file); FileWriter(file, json)` where the default writer is `AtomicFile.Write(file, json, AtomicFile.SharingRetry)` — a pid-and-GUID temp file beside the session, then the move over it, retried for the shared 500 ms window on the monotonic clock, the temp removed on any failure, the previous session byte for byte until the move lands. The turn is held from before the temp file to after the move (the SERVER's readers take the same turn and read through `SharedRead`, which opens, reads to the end and disposes).
+
+**The limit of that turn (E3 judge J1).** The extension is a reader too, and it does NOT take the turn: it lists `sessions/*.json` and reads each file with `vscode.workspace.fs.readFile` (`extension.ts` `readSessions`, `panelProvider.ts` `readSessions`), and Node opens share-all. A move over a file another handle holds is refused whatever the holder's share mode (measured, E3 S4), so one extension read that is held past `AtomicFile.SharingRetry` (500 ms) can fail a round's final save, which then reports "completed but could not be recorded". That could not happen while the save was in place under the turn (an open by name with share-all readers does not collide); it is a cost of the atomic save, accepted because a read of a few kilobytes does not last half a second, and the retry covers a reader that does. A reader that must never collide would have to take the turn. `MoveOverExisting`'s own ten-attempt loop and `TryDelete` are GONE: after S4 they were a second copy of `AtomicFile.MoveOver`. `SessionStore.FileWriter` (`internal`, init) is the seam tests hold, fail or pause the write through. `SessionTurn.Take` (forty tries, then an unheld turn) is untouched — it belongs to `todo/PLAN_a_turn_waits_by_the_clock.md`. The orphan temp rule of `AtomicFile` (`module_runners.md`) now covers a session's killed write as well.
+
 **The order to split is given ONCE, and it is keyed by the CALLER (2026-09-04).** Raised by the
 operator before it could happen: a plan is split into epics, each epic comes back for its own plan
 review — which is the right thing to do — and a gate with no memory tells each one to split into
@@ -7645,6 +7651,18 @@ The server's half of the Vibe reviewer row ([module_runners.md](module_runners.m
   `MakeWork`): the snapshot is disposed (its bytes given back to the budget) and the whole folder deleted — the homes in
   it too. A crash leaves it to the six-hour scratch sweep, which runs on the round's build path and on the consultation
   beat. `RoundWork.Scratch` rides every `with` copy of the work; the two `new RoundWork` in `BuildWork` set it.
+- **The two folders that are always empty** (D4 of `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md`, E3 S3, 2026-10-20): the round makes a `coai-repair-` folder (the repair
+  launch's working folder, `RosterBuilder.FrameFor`) and — in the `none` workspace mode, on a code round — a `coai-noworkspace-` folder (the review launch's, `RosterFrame.Directories`;
+  the security lane makes one of its own in `SecurityRoster.Build`). Each is REGISTERED with the round's scratch when it is made (`RoundScratch.Owns(folder)`; `RosterFrame.OwnTheWorkspace`
+  skips the worktree path, which is the person's checkout; the lane reaches the scratch through `ordinary.Scratch`, carried in its `Decided` record) and removed by `RoundScratch.Dispose`
+  — the round's one end, the `using` in `RoundEngine` — after the scratch's own folder and its homes: by the PATH recorded, never a name pattern, **NON-recursive** (`Directory.Delete(folder)`,
+  not `GitScratch.DeleteEvenIfReadOnly`), so only an EMPTY folder goes. A folder that is not empty, is in use or is refused (`IOException`, `UnauthorizedAccessException`) is noted ONCE
+  through the scratch's note ("the round's folder … was not removed (…); the six-hour scratch sweep takes it") and left to the sweep; one already gone is nothing; nothing is ever thrown — a
+  removal failure never fails the round. The registry is one `ConcurrentQueue` passed through the constructor, so `With(...)` carries the SAME one; **`RoundScratch.None` takes no
+  registration** (it is one static object shared by every scratch-less `BuildWork`, and a list on it would grow for ever). **The policy for a surviving descendant:** an EMPTY folder can
+  still be a descendant's working folder; the round that has ended removes it anyway — on Unix that succeeds and the descendant's next relative write fails, on Windows the removal is refused
+  while the folder is some process's working folder and it is left (and said). `coai-answers-*` is unchanged: it keeps the six-hour sweep (`PanelService.PruneOldScratchDirs`,
+  `shared/temp-sweep.json`) — which still collects every folder a round could not remove or a crash left, so its prefixes stay as they were.
 - **A Kimi home in the scratch** (E4.4 of `todo/PLAN_vibe_and_kimi_runtimes_E4.md`, S4.15): `RoundScratch.Delete` first calls `KimiHome.DisposeAllUnder(Directory, note)` — every `kh-*`
   home (a Kimi reviewer's, `KimiRuntime`) has its `credentials` junction to the person's own folder removed by its own name, the person's names verified, under no live tree — and only
   then `GitScratch.DeleteEvenIfReadOnly`, which meets no link. A `Stopped` home is noted ("the round's scratch … is kept: …") and the whole scratch is KEPT for the six-hour sweep (which asks the same per-home hold before it deletes a due folder, E4.4 review B1), not

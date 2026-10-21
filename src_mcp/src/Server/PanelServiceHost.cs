@@ -28,6 +28,7 @@ public sealed class PanelServiceHost : IPanelServiceSource
     private readonly DateTime _vaultReadUtc;
     private readonly IProcessLauncher _launcher;
     private readonly Serilog.ILogger _log;
+    private readonly Func<string, string> _readText;
 
     private readonly Noticing _noticing;
     private readonly Lock _gate = new();
@@ -35,11 +36,15 @@ public sealed class PanelServiceHost : IPanelServiceSource
     private PanelService _current;
     private (DateTime Written, long Length) _stamp;
 
+    // The stamp a reload last said it could not use, so a file held for a while is one warning, not one per call. It starts
+    // on a stamp no file can have (the missing file stamps as default).
+    private (DateTime Written, long Length) _warned = (DateTime.MaxValue, -1);
+
     /// <param name="noticing">
     /// Where this host's services write their notices. It is REQUIRED and has no default, because a
     /// defaulted one is the trap story 2.3.2's plan round named: production takes the quiet path
     /// while every injected unit test passes. It is held rather than passed once, so that
-    /// <see cref="Build"/> — which runs again whenever the settings file moves — hands the same
+    /// <see cref="Assemble"/> — which runs again whenever the settings file moves — hands the same
     /// instance to the rebuilt service instead of dropping it. (gemini, on the plan round.)
     /// </param>
     public PanelServiceHost(
@@ -49,7 +54,21 @@ public sealed class PanelServiceHost : IPanelServiceSource
         IProcessLauncher launcher,
         Serilog.ILogger log,
         Noticing noticing)
+        : this(env, keys, vaultReadUtc, launcher, log, noticing, File.ReadAllText)
     {
+    }
+
+    /// <summary>The same host with the settings file read through <paramref name="readText"/> — a test seam, never public API.</summary>
+    internal PanelServiceHost(
+        Func<string, string?> env,
+        VaultKeys keys,
+        DateTime vaultReadUtc,
+        IProcessLauncher launcher,
+        Serilog.ILogger log,
+        Noticing noticing,
+        Func<string, string> readText)
+    {
+        _readText = readText;
         _env = env;
         _keys = keys;
         _vaultReadUtc = vaultReadUtc;
@@ -57,10 +76,16 @@ public sealed class PanelServiceHost : IPanelServiceSource
         _log = log;
         _noticing = noticing;
         _stamp = Stamp();
-        _current = Build(first: true);
+        _current = Start();
     }
 
-    /// <summary>The service to serve this call with — rebuilt only when the file actually moved.</summary>
+    /// <summary>The service to serve this call with — rebuilt only when the file actually moved. It never throws.</summary>
+    /// <remarks>
+    /// A reload that cannot be used answers with the last good service under the OLD stamp, so the next call tries again:
+    /// the file was held by its writer (<see cref="SettingsLayer.Busy"/>), or the rebuild threw. Until E3 S2 (C14) a held
+    /// file read as EMPTY settings and the defaults were published under the new stamp, and a throwing rebuild reached
+    /// every caller of the twenty that read this.
+    /// </remarks>
     public PanelService Current
     {
         get
@@ -68,18 +93,8 @@ public sealed class PanelServiceHost : IPanelServiceSource
             lock (_gate)
             {
                 var stamp = Stamp();
-                if (stamp == _stamp)
-                {
-                    return _current;
-                }
 
-                // Built FIRST, published after: a rebuild that throws leaves the old stamp in place, so the next call
-                // tries again instead of serving the old settings under the new stamp (the cadence consultation,
-                // codex, 2026-10-07).
-                var rebuilt = Build(first: false);
-                (_stamp, _current) = (stamp, rebuilt);
-                _log.Information("settings reloaded — the panel's file changed on disk");
-                return _current;
+                return stamp == _stamp ? _current : Reload(stamp);
             }
         }
     }
@@ -90,22 +105,75 @@ public sealed class PanelServiceHost : IPanelServiceSource
     /// <summary>Built in the constructor, so always ready.</summary>
     public Task Ready => Task.CompletedTask;
 
+    /// <summary>The constructor's build — the settings file read as it always was, a busy or broken one giving defaults and a start.</summary>
+    private PanelService Start()
+    {
+        var dataDir = SettingsFile.DataDirFrom(_env).Path;
+
+        return Assemble(first: true, SettingsFile.Layer(dataDir, _env, Noted(dataDir), _readText));
+    }
+
+    /// <summary>
+    /// The reload: built FIRST, published after. A rebuild that throws, or a file its writer still holds, leaves the old
+    /// stamp and the old service in place, so the next call tries again instead of serving the old settings under the new
+    /// stamp (the cadence consultation, codex, 2026-10-07; E3 S2, gate G3).
+    /// </summary>
+    private PanelService Reload((DateTime Written, long Length) stamp)
+    {
+        try
+        {
+            return Rebuilt(stamp);
+        }
+        catch (Exception e)
+        {
+            return Kept(stamp, log => log.Warning(e, "settings reload skipped — the rebuild failed. The last good settings stay and the next call tries again"));
+        }
+    }
+
+    private PanelService Rebuilt((DateTime Written, long Length) stamp)
+    {
+        var dataDir = SettingsFile.DataDirFrom(_env).Path;
+
+        return SettingsFile.TryLayer(dataDir, _env, Noted(dataDir), _readText) switch
+        {
+            SettingsLayer.Layered layered => Published(stamp, Assemble(first: false, layered.Lookup)),
+            _ => Kept(stamp, log => log.Warning("settings reload skipped — the file is held open by its writer. The last good settings stay and the next call tries again")),
+        };
+    }
+
+    private PanelService Published((DateTime Written, long Length) stamp, PanelService rebuilt)
+    {
+        (_stamp, _current) = (stamp, rebuilt);
+        _log.Information("settings reloaded — the panel's file changed on disk");
+
+        return _current;
+    }
+
+    /// <summary>The last good service, under the old stamp — with one warning per stamp, because the retry is on every call.</summary>
+    private PanelService Kept((DateTime Written, long Length) stamp, Action<Serilog.ILogger> warn)
+    {
+        if (stamp != _warned)
+        {
+            _warned = stamp;
+            warn(_log);
+        }
+
+        return _current;
+    }
+
+    // This rebuild runs on a stamp change rather than at startup, so it is the one place an adoption could happen with
+    // nobody watching. It has a log and, since story 2.3.3, the page as well. No flag guards this one:
+    // `AdoptRootSettings` yields a sentence only when it actually MOVED something, so the build after an adoption says nothing.
+    private Action<string> Noted(string dataDir) =>
+        note => StartupNotices.Adopted(note, SettingsFile.PathFor(dataDir), _noticing, _log);
+
     /// <param name="first">
     /// Whether this is the constructor's build. A PARAMETER rather than a field somebody has to
     /// reason about across threads: the two callers each know which they are, and the answer then
     /// cannot be wrong for a later build because an earlier one threw. (gemini, second code round.)
     /// </param>
-    private PanelService Build(bool first)
+    private PanelService Assemble(bool first, Func<string, string?> configuration)
     {
-        var dataDir = SettingsFile.DataDirFrom(_env).Path;
-        var configuration = SettingsFile.Layer(
-            dataDir,
-            _env,
-            // This rebuild runs on a stamp change rather than at startup, so it is the one place an
-            // adoption could happen with nobody watching. It has a log and, since story 2.3.3, the
-            // page as well. No flag guards this one: `AdoptRootSettings` yields a sentence only
-            // when it actually MOVED something, so the build after an adoption says nothing.
-            note => StartupNotices.Adopted(note, SettingsFile.PathFor(dataDir), _noticing, _log));
         var settings = PanelSettings.FromEnvironment(configuration);
         Reloaded(settings, first);
 
@@ -156,12 +224,10 @@ public sealed class PanelServiceHost : IPanelServiceSource
             var file = new FileInfo(SettingsFile.PathFor(SettingsFile.DataDirFrom(_env).Path));
             return file.Exists ? (file.LastWriteTimeUtc, file.Length) : default;
         }
-        catch (IOException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException)
         {
-            return _stamp; // unreadable for a moment is not changed
-        }
-        catch (UnauthorizedAccessException)
-        {
+            // Not readable is NOT changed: it keeps the old stamp, so the last good service keeps serving and the next call tries again. The other
+            // answer — the "no file" stamp — would claim the file vanished and reload to the defaults for a failure that said nothing about the file.
             return _stamp;
         }
     }

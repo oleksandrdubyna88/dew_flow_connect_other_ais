@@ -5068,6 +5068,132 @@ Each scenario was watched RED against a stub that compiles and answers the wrong
 
 Not run here, by the story's own terms: the S-N17 live check (arms a3 and a3c, once each, in WSL, free), and the one paid WSL2 Kimi turn (`probe-kimi-tree-hold.mjs --arms normal --repeats 1`) — the lead's.
 
+## The suite is deterministic — E3 S4 (C18's product side, 2026-10-20)
+
+Source: `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md`, epic E3, story S4 (scenarios S24, S25, S27; the lead's decisions, the E3 plan round `ac57ee60` and
+the risk consult `0060db13` govern where they differ from the first brief). Branch `feat/suite-e3-product`. Product defect: CI run 39325900821 (Windows) failed
+`QuestionFanOutTests.TheHeartbeatIsRewritten_…` with `UnauthorizedAccessException: Access to the path is denied` from the heartbeat's write, and a question whose rows had all answered
+was lost. Windows throws that exception — never `IOException` — for a move over a file another handle holds open (measured 2026-10-20, every share mode of the holder), so
+`AtomicFile`'s `catch (IOException)` never retried the case its own remark documented.
+
+| Test | Seen red as | Green because |
+|---|---|---|
+| `AMoveOverAHeldFileIsRetriedTests.AMoveOverAFileAReaderHolds_IsRetriedWithinTheWindow_AndLands` (S24, Windows) | `Did not expect any exception because the reader lets go after one pause, well inside the window, but found System.UnauthorizedAccessException: Access to the path is denied.` at `MoveOver` | the retry covers `UnauthorizedAccessException` |
+| `…AHolderThatNeverLetsGo_FailsTheWriteWhenTheWindowEnds_AndTheOriginalSurvives_WithNoTemp` (S24 never-released arm, Windows; a hand-moved `MovableClock`, so no sleep) | `Expected pauses to be between 3 and 5 because the window is 200 ms of the MONOTONIC clock and each pause moves it 50 ms, but found 0.` | the window is read from `TimeProvider.GetTimestamp`/`GetElapsedTime`; the failure is thrown after it, the original bytes survive, no `*.tmp` |
+| `…AZeroWindow_TriesOnce_AndNeverPauses` (guard) | green before and after | — |
+| `AnOrphanTempFileIsRemovedByItsRecordsNextWriteTests.AnOldTempFileOfADeadWriter_IsGone_AfterTheRecordsNextWrite` (S27) | `Expected File.Exists(orphan) to be False because its writer is dead and it is two hours old …, but found True.` | `AtomicFile.RemoveOrphanedTemps` |
+| `…AnOldTempFileOfAProcessThatExited_IsGone_ByTheRealLivenessCheck` (a real exited process's pid through the real `ProcessLiveness.Check`, which answers `Gone`; the first S4 form asked `IsAlive`, and the message below is from then) | `Expected File.Exists(orphan) to be False because ProcessLiveness.IsAlive … says the exited process is gone, but found True.` | same |
+| `…AFreshTempFile_IsKept…`, `…AnotherRecordsOldTempFile_IsKept` (also a name that only starts with the record's), `…AnOldTempFileWithNoPidInItsName_IsKept`, `…ThePausedLiveWritersAgedTempFile_IsKept_AndThatWritersMoveThenLands` (writer A paused after its temp file, the temp aged two hours, writer B writes the same record: A's temp stays — A's pid is alive — and A's move then lands), `…AnOrphanThatCannotBeRemoved_DoesNotFailTheWrite` (Windows; the orphan is held `FileShare.None`) | guards: green before and after | — |
+| `QuestionFanOutTests.AHeartbeatThatCannotBeWritten_IsSaid_AndTheQuestionStillSettles` (S25, every OS) | `System.UnauthorizedAccessException : Access to the path is denied.` thrown by `RunAsync` — the CI sentence | `QuestionFanOut.BeatAsync` says the missed beat at Warning and skips it |
+| `…ABeatAfterAFailedOne_IsStillWritten` | `no heartbeat was written after the failed one within 30 s` (the guard's own sentence) | same |
+| `…TheSweepKeepsAQuestionWhoseBeatsAreRefused_WhileItsPidIsAlive` (the file keeps its first, stale heartbeat; a sweep ten minutes later by a live pid ends nothing) | `the third heartbeat was never attempted within 30 s` | same |
+| `…ABeatRefusedByARealHold_IsSaid_AndTheQuestionStillSettles` (Windows; the record file is held exactly as `SharedRead` opens it, released by the Warning) | `the refused heartbeat was not said, and the question did not settle, within 30 s` | same |
+| `…AFinalWriteThatIsRefused_StillSurfaces` (guard) | green before and after: only a beat is skipped, the settled record is the answer | — |
+
+**Where S25 fails the write.** The failure is injected at the store's write road, before a byte reaches the disk (`QuestionConsultStore.FileWriter`, an `internal` init seam; test helper `RefusedBeats`, which also tells a
+heartbeat-only write from the previous write itself) — not at `projected`, which runs AFTER the write. That makes the arms deterministic on every OS; the Windows arm refuses the write with a real hold.
+
+**Break-its (each restored).** (1) `IsRefusal` narrowed back to `IOException` → S24 arm 1 and the never-released arm red with the messages above. (2) The orphan rule's liveness test (S4's first form `!seams.IsAlive(pid)`; since the code gate `seams.LivenessOf(pid) is Liveness.Gone`) replaced by `true`
+("age is proof") → only `ThePausedLiveWritersAgedTempFile_IsKept_AndThatWritersMoveThenLands` red: `Expected File.Exists(temp) to be True because writer A's pid is alive: age is scope, not proof of death, but found False.` (3) `BeatAsync`'s
+catch made unable to match → all four heartbeat arms red with the S25 messages above.
+
+**Counts.** Whole `CoaiMcp.Tests.exe`: 13,071 total (13,056 before; the 15 new tests are 3 + 7 + 5), 12,943 passed, 120 skipped, **8 failed in the suite and passed alone** — listed, not called flakes:
+`AConversationPlaceTests.CopiesThatOutrunTheRowsBudget_…` (1 s budget, "0 of 2 copied"), `KimiCredentialsLockTests.AShimThatMeetsADisposalsProbe_…` and `…TheTreeHold_OutlivesItsOpener_…`, `AVibeDiskRowExpandsAParentFolderTests.TheBoundCountsConfirmedRepositories_…`,
+and four tests whose `git`/junction child timed out at ten minutes (`TheCodeGateFixesTests.ACredentialNameWithTrailingDots…`, `DeletingAnOwnedTreeNeverEntersALinkTests…`, `ASubmoduleInTheRangeIsNamedNotDeletedTests…`, `FeatureOutlineBuilderTests.TheSameRange_BuildsTheSameBytes`) —
+a 37-minute run on a loaded machine. The seven classes run together alone: 131 total, 127 passed, 4 skipped, 0 failed. None touches `AtomicFile`, the heartbeat or `ProcessLiveness`.
+
+**Boundaries.** An orphan is judged by the pid IN THE NAME and removed only when `ProcessLiveness.Check(pid)` answers `Liveness.Gone` (a process with no such id, or an exited one); `Alive` and `Unknown` (`Win32Exception`, a pid of 0 or less) keep the file. `ProcessLiveness` moved from `CoaiMcp.Server` to `runners/Processes` (this layer cannot reference the server), and `IsAlive` is `Check(pid) is Alive` for the sweeps. A reused pid keeps the file, a leak and never a deletion; a pid in another Linux pid namespace is invisible and answers `Gone` (the narrow limit, `module_runners.md`).
+A temp whose name carries no pid (an older build's) is never removed by this rule. The extension shows `interrupted` for a question whose beats the disk refused for two minutes and recovers on the next written beat (`module_extension.md`).
+
+## The suite is deterministic — E3 S5 (C25, 2026-10-21)
+
+Source: `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md`, epic E3, story S5 (scenario S26; the E3 plan round `ac57ee60` and the risk consult `0060db13` govern: the session write becomes ATOMIC through `AtomicFile`, it is not a retried in-place write, and `MoveOverExisting`'s loop is removed). Evidence: `SessionStoreConcurrencyTests.EightWritersOnOneSession_DoNotDenyEachOther` failed once in E2's full run and once in another plan's baseline (`IOException … session-<id>.json … being used by another process`). Measured here, 20 runs of that class beside a loaded suite on the unfixed code: **15 of 20 failed** with that sentence; after the fix **0 of 20**.
+
+| Test (`ASessionSaveMeetsABusyFileTests`, collection `fakecli-env`) | Seen red as | Green because |
+|---|---|---|
+| `ASaveThatMeetsAHeldSessionFile_IsRetried_AndLands` (Windows; the session file held `Read`/`FileShare.Read`, released by the pause seam) | `SessionStoreException: the session for 'main' could not be written: The process cannot access the file '…session-….json' because it is being used by another process.` — the E2 sentence | `SessionStore.Write` goes through `AtomicFile.Write`, whose move is retried |
+| `AFailureWhileTheTempFileIsWritten_LeavesThePreviousSessionByteForByte` (every OS; the temp write fails half way) | `Expected a <SessionStoreException> to be thrown, but no exception was thrown.` (the in-place road never reached the seam) | the temp file takes the failure; the session is untouched, the temp removed, the next save lands and loads |
+| `AFailureAfterTheTempFileIsWritten_LeavesThePreviousSessionByteForByte` (every OS; a throw between temp and move) | same sentence | same |
+| `TheSessionsTurnIsHeldFromTheTempFileToTheMove` | `Expected seen to be equal to {False} … but found empty collection.` | the turn is held across temp and move; a second taker does not get it |
+| *guard* `ASessionFileHeldThroughEveryAttempt_FailsTheSaveNamingIt_AndKeepsTheOldSession` (Windows; a hand-moved clock, no sleep) | green before and after | — |
+
+The three reds other than the first were red because the unfixed store did not use the write seam at all; the first is the real symptom and the only one whose message is the CI sentence. **Break-it (restored):** `FileWriter(file, json)` replaced by `File.WriteAllText(file, json)` → the same four reds. `SessionStoreConcurrencyTests` is unchanged except that `SessionFor` is `internal` so the new class reuses it.
+
+**Counts.** Whole `CoaiMcp.Tests.exe`: 13,077 total, 12,956 passed, 120 skipped, 1 failed in the suite: `AConversationPlaceTests.CopiesThatOutrunTheRowsBudget_…` ("0 of 2 copied", a 1 s budget on a loaded machine) — it also failed in S4's run, and passes alone (3 of 3, 10 tests). Not called a flake; it measures a 1 s copy budget and is not touched by the session store. The new class has 5 tests; the total grew by 6 from S4's 13,071 (one more than the 5 added — not explained: no other test file changed).
+
+**A consequence CI showed (run 39580935495, Linux and macOS).** `AnUnrecordedRoundIsNotAnAnswerTests.ARoundThatCouldNotBeRecorded_…` made the save fail with a READ-ONLY session file; a rename over a read-only file succeeds on Unix, so now the save landed and the assertion (`error` present, "could not be recorded") saw a success. The assertions are unchanged; the ARRANGEMENT adds a folder nobody may create a file in on Unix (`FolderHolds.Unwritable`, mode restored on dispose; the arm is skipped for a privileged Unix process, which ignores the mode). **The same consequence reached #865's `BackfillAuthorsExitCodesTests.ASessionFileThatCannotBeWritten_Is74_AndTheStoreIsKept`** (it arrived from `main` after E3 branched; PR #913's Linux, macOS and Sonar legs: `Expected run.Code to be 74, but found 0`) and is fixed the same way, assertions untouched. A search of `src_mcp/tests` for tests that make a session or record file read-only to force a write failure found only these two; the other read-only files are sweep and delete fixtures (Kimi/Vibe homes, `CHECK.md`, junction secrets) and a SQLite file, none written through `AtomicFile`. The product's `--backfill-authors` does not rely on a read-only file: a failed session save is a `SessionStoreException`, which `BackfillAuthorsMode.Guarded` maps to exit 74 whatever made it fail. Product meaning: on Unix a read-only session file no longer blocks a save, because the save replaces the file instead of opening it; the Windows leg still refuses the move over a read-only file.
+
+## The suite is deterministic — E3 S2 (C14): a settings reload that meets a busy file (2026-10-21)
+
+Source: `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md`, C14 and scenario S10. **Product defect**, found as one unexplained local failure of
+`ConsultationSweeperTests.TheLoop_LapsesAnIdleConsultation_AndKeepsDoingSoAfterASettingsReload` (488 ms, 2026-10-03; no message was kept, D5). The mechanism
+the code shows: `SettingsFile.Read` turned the sharing violation of a file its writer still held into EMPTY settings, so `PanelServiceHost.Current` published
+the defaults under the new stamp and kept them until the file changed again. Fixed on the reload path only: `SettingsFile.TryRead` answers a closed union
+(`Values`, `Missing`, `Busy`; `SettingsRead.cs`), `Busy` is ONLY Windows HResult `0x80070020`/`0x80070021`; `PanelServiceHost` keeps the last good service AND the old
+stamp on `Busy` or on a throwing rebuild (one warning per stamp) and `Current` never throws. A permission denial is not busy. `SettingsFile.Read`, `Layer` and its
+eight callers are unchanged. The denial arm goes through an `internal` read seam (`PanelServiceHost` internal constructor taking `Func<string, string> readText`,
+`SettingsFile.Layer`/`Read` overloads) — no public API change, no real ACL.
+
+| Test (`PanelServiceHostTests`) | Seen red as |
+|---|---|
+| `ASettingsFileHeldOpenByItsWriter_KeepsTheLastGoodSettings` (S10, Windows; skipped elsewhere: "the share-mode refusal is Windows'") | `Expected whileHeld to be "gpt-5.6-terra" with a length of 13 because a file its writer still holds is not a file with no settings in it, but "" has a length of 0` — the defaults, published under the new stamp; green after |
+| `CurrentNeverThrows_WhenTheRebuildThrows` (gate G3; a session the startup sweep cannot survive) | `Expected first to be <null> because a rebuild that throws is answered with the last good settings, but found System.NullReferenceException … at SessionStore.Normalised … at PanelServiceHost.get_Current()`; green after (two calls with the cause present, then the new file after it is removed) |
+| `AReloadThatFails_IsTriedAgainOnTheNextCall_…` — **changed by design (G3)**: it asserted `Current` THROWS (`:113`); it now asserts the old settings come back (`gpt-5.6-terra`), and its retry assertion (the new `gpt-5.6-mini` after the cause is removed) is kept | red on the old code as `NullReferenceException` out of `CodexModel(host)`; green after |
+| `ADeniedSettingsFile_IsNotKeptAsTheLastGood` (denial through the seam) | **green before and after** (pins that denial is not `Busy`); seen red by the break-it below |
+| `AMalformedFileOnReload_GivesDefaults`, `AnEmptyFileOnReload_GivesDefaults` | **green before and after** (companions that pin today's answer) |
+
+**Break-its, each seen red and restored (the three of the brief plus one):** (a) `IsSharingViolation` made `false` (busy read as empty settings again) → the S10 busy test red with the
+same message as the original red; (b) `UnauthorizedAccessException` also read as `Busy` → `Expected CodexModel(host) to be the same string because a denial is not a holder: the person sees the
+defaults, not stale settings for ever`; (c) the catch around the rebuild removed → `CurrentNeverThrows_…` and `AReloadThatFails_…` red (`NullReferenceException`); (d) `Kept` also publishing the new stamp →
+the busy test's second read, `AReloadThatFails_…` and `CurrentNeverThrows_…` red (`Expected CodexModel(host) to be … because the stamp did not move, so the next call after the release reads the new file`).
+
+`ConsultationSweeperTests.Host()` now sets `COAI_CONSULTANT_HOMES` to a folder under the test's own directory, so the 50 ms beat no longer walks the machine's real per-user folders; no assertion changed.
+The class passed 20 of 20 runs while a whole-suite run went on beside it. NOT measured: the same loop on the old code (C14's original failure had no kept message, and the mechanism needs the file held at the moment of
+the beat — S10 is the deterministic proof, not the loop). Test count: 5 `PanelServiceHostTests` before, 10 after (+5: `CurrentNeverThrows_WhenTheRebuildThrows`, `ASettingsFileHeldOpenByItsWriter_KeepsTheLastGoodSettings`,
+`ADeniedSettingsFile_IsNotKeptAsTheLastGood`, `AMalformedFileOnReload_GivesDefaults`, `AnEmptyFileOnReload_GivesDefaults`); whole `CoaiMcp.Tests`: 13 058 after (13 053 before).
+Limit: `Busy` is the Windows share-mode refusal; on Unix .NET reports a held file differently and the read keeps today's answer there.
+## The suite is deterministic — E3 S3 (D4): a round removes its own empty folders (2026-10-21)
+
+Source: `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md`, §6 D4, scenario S7, E3 story S3. Product change: `RoundScratch` owns the round's two always-empty folders
+(`coai-repair-`, `coai-noworkspace-`) and its `Dispose` removes each by its recorded path, **non-recursive, only when empty**; a folder that is not empty or cannot be removed is warned about once and left
+to the six-hour sweep; nothing is thrown. The product side is in [module_server.md](module_server.md) ("The two folders that are always empty").
+
+| Test | Seen red as | Green / break-it |
+|---|---|---|
+| `TheRoundsScratchRemovesItsEmptyFoldersTests` (7, `RoundScratch.At(...)` in the test's own `testsToDelete-` folder): `AnEmptyFolderTheScratchOwns_IsRemovedWhenTheScratchEnds`, `AnOwnedFolder_IsRemovedByItsRecordedPath_AndASiblingWithTheSamePrefixIsNotTouched`, `AFolderThatIsNotEmpty_IsKeptWithItsFile_AndWarnedAboutOnce_AndNothingIsThrown`, `AFolderThatIsAlreadyGone_IsNothing_AndNothingIsSaid`, `AFolderThatCannotBeRemoved_IsWarnedAboutOnce_AndNothingIsThrown`, `TheScratchThatIsNone_TakesNoRegistration_…`, `TheRegistry_IsCarriedBy_With_…` | against a registry that only recorded (no removal): `Expected Directory.Exists(repair) to be False because the round's empty repair folder went with the round, but found True.`; `Expected _notes to contain a single item, but the collection is empty.`; `…TheRegistry_IsCarriedBy_With…: Expected Directory.Exists(repair) to be False …, but found True.` (5 of 7 red; the gone-folder and `None` arms are guards, green from the start) | 7 green. Break-its: `Directory.Delete(folder, recursive: true)` → `Expected File.Exists(planted) to be True because the removal is NOT recursive …, but found False.`; `throw;` in the catch → `Did not expect any exception because a failed removal never fails the round, but found System.IO.IOException: The directory is not empty.` (and the held-handle twin: `…being used by another process`); `With` passing a new registry → the `With` test red (`…found True`); `Owns` without the `Directory.Length > 0` guard → `Expected RoundScratch.None.OwnedFolders to be empty because a list on the shared object would grow for ever …` |
+| `TheRoundsEmptyFoldersAreRemovedTests.ARoundRemovesItsEmptyRepairAndWorkspaceFolders` (S7; a real code round, `none` workspace, scripted repair; the two folders are the ones the launches were GIVEN — the C10 recorder, widened) | `Expected Directory.Exists(folders.Repair) to be False because the round made its repair folder empty and must remove it when it ends, but found True.` | green. Break-it: `FrameFor` no longer registers the workspace folder → `Expected Directory.Exists(folders.Workspace) to be False …, but found True.` |
+| `TheRoundsEmptyFoldersAreRemovedTests.AFolderThatIsNotEmpty_IsKeptAndWarnedAbout_AndTheRoundStillEnds` (the repair hook writes a file into the folder before the launch) | `Expected WarningsAbout(sink, folders.Repair) to contain a single item because one warning, naming the folder, but the collection is empty.` | green: the file and the folder are still there, ONE warning names the folder, the verdict is `proceed`, the workspace folder is gone. Break-its: recursive → `Expected planted to contain only items matching Exists(file) because the removal is not recursive …`; `throw;` → `Expected parsed.RootElement.TryGetProperty("error", out var error) to be False because the round ended with an answer, not an error: {"error": "the round failed: The directory is not empty. …"}` |
+| `TheRoundsEmptyFoldersAreRemovedTests.AFolderThatCannotBeRemoved_IsLeftToTheSweep_AndTheRoundStillEnds` (**Windows only**; a directory handle held with `FolderHolds.Undeletable` from the repair hook) | `Expected WarningsAbout(sink, folders.Repair) to contain a single item … but the collection is empty.` | green: folder left, one warning, verdict `proceed`. Break-it `throw;` → `the round failed: The process cannot access the file … because it is being used by another process.` *A first version opened the handle with FILE_READ_ATTRIBUTES only and the removal SUCCEEDED — an attributes-only open takes no part in sharing; `FILE_LIST_DIRECTORY` holds the folder.* |
+| `TheRoundsEmptyFoldersAreRemovedTests.ADescendantStillInTheEmptyFolder_DoesNotChangeTheRoundsOutcome_TheFolderIsGoneOnUnixAndLeftOnWindows` (grandchild arm: a real `FakeCli cwd-hold` child started in the repair folder by the hook; it says `ready <pid>` on its pipe, closes its pipes, waits; killed by PID in `finally`) | `Expected WarningsAbout(sink, repair) to contain a single item, but the collection is empty.` (Windows) | green on Windows (folder left, one warning, verdict `proceed`). **The Unix branch (folder gone, no warning) is written but has not been run** — the Linux and macOS CI legs are its first run |
+| `SecurityLaneRoundTests.TheEmptyFoldersOfTheOrdinaryRoundAndOfTheLane_AreAllRemovedWithTheScratchTheRosterWasGiven` (`BuildWork(..., scratch: RoundScratch.At(...))`, no round: the roster makes the folders, `Scratch.Dispose()` removes them) | `Expected made to contain only items matching Not(Exists(folder)) because every one of them was registered with the round's scratch, but {…coai-noworkspace-…, …coai-repair-…, …coai-noworkspace-…} do(es) not match.` | green. Break-it: the lane's `Owns` dropped → the same sentence naming exactly the lane's `coai-noworkspace-` folder |
+
+**Support.** `FolderHolds` (test helper: `Undeletable` — a Windows directory handle, or a read-only parent on Unix, skipped when privileged; `StartDescendantIn` — a real child whose working folder is the folder, killed by pid);
+`FakeCli cwd-hold` (a verb handled before the vendor mode, so a leftover `FAKECLI_MODE` cannot turn it into a reviewer); `PanelServiceTests` is `partial`, `Service(...)` takes an optional logger, the C10 round is
+`ARepairedCodeRoundAsync` (returns repairs, reviews and the answer; the worktree-mode assertion and the positive control stay in `RepairLaunchesOfACodeRoundAsync`).
+
+**Counts.** `--list-tests`: 13,019 before, 13,034 after = 12 new tests + 3 rows of `NoSourceFileCarriesAControlByteTests` (one per new source file).
+
+**Not covered.** The surviving-descendant policy on Unix (above). A round whose scratch passes through `With` (a Vibe or Kimi row asks for a snapshot) is covered at unit level only. `SubmissionOrderTests` builds work a hundred
+times with no round and never disposes a scratch; D4 claims nothing there. The sweep (`PanelService.cs:1381`, `shared/temp-sweep.json`) is unchanged and still collects every folder a round could not remove.
+
+## The suite is deterministic — E3 code gate and judge (2026-10-21)
+
+Source: "The E3 code gate and judge" in `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md` (every finding, its decision and its reason are there). Reds are the message seen BEFORE the fix.
+
+| Finding | Test | Seen red as | Break-it |
+|---|---|---|---|
+| G1/G2 | `AnOrphanTempFileIsRemovedByItsRecordsNextWriteTests.AnAgedOrphanWhoseWriterCannotBeAskedAbout_IsKept` (a seam answering `Unknown`) | `Expected File.Exists(unknown) to be True because only a PROVEN Gone removes a file; Unknown keeps it … but found False.` | the rule `is Liveness.Gone` changed to `is not Liveness.Alive`: the same test red |
+| G1/G2 | `…AnAgedOrphanWhoseWriterIsProvenGone_IsRemoved_ThroughTheLivenessSeam`, `…TheLivenessCheck_AnswersGoneForAnExitedProcess_AliveForThisOne_AndUnknownForNoPid` (also pins `IsAlive` for the sweeps) | guards, green before and after | — |
+| G3 | `QuestionFanOutTests.ABeatThatKeepsFailing_IsSaidOnce_NotOnEveryBeat` | `Expected … Warning count to be 1 because two beats in a row were refused … but found 2.` | `announce: !missing` changed to `announce: true`: red with the same message |
+| G3 | `…ABeatThatFailsAgainAfterASuccess_IsSaidAgain` | guard, green before and after (fail, succeed, fail = two warnings) | — |
+| G8 | none | a refactor with the same behaviour; the S24 arms (retry lands, never-released, zero window) cover both catches | — |
+| G11 | `PanelServiceHostTests.AStampThatCannotBeRead_KeepsTheLastGoodService_AndCurrentDoesNotThrow` | `Did not expect any exception … but found System.ArgumentException: Null character in path. (Parameter 'path')` | the catch narrowed back to `IOException or UnauthorizedAccessException`: red |
+| J4 | `PanelServiceHostTests.AReloadThatFails_IsLoggedWithTheExceptionItself` | `Expected events not to be <null> because the exception travels as the exception …` | the exception turned back into message text: red |
+| J2 | `ASessionSaveMeetsABusyFileTests.TheStoresDefaultWriteRoad_IsTheAtomicOne_SoItSweepsAnOrphanOfItsOwnSession` (no seam) | pins what already held, so it was proven by the break-it | the default `FileWriter` changed to `File.WriteAllText`: `Expected File.Exists(orphan) to be False because the default road is AtomicFile.Write … but found True.` |
+| G0 | `PanelServiceTests` + `TheRoundsEmptyFoldersAreRemovedTests` over `CodeRoundHarness` | 24 tests before the split (20 + 4), 24 after, all green; no `partial` left | — |
+
+Docs-only findings: J1 (the extension reads sessions without the turn; `module_server.md`, `module_extension.md`) and J5 (`module_runners.md` count; `PLAN_a_turn_waits_by_the_clock.md`).
+
 ## CodeRabbit fixes on PR #900 (2026-10-21)
 
 | Test | Seen red as | Break-it (went red) |
@@ -5076,3 +5202,5 @@ Not run here, by the story's own terms: the S-N17 live check (arms a3 and a3c, o
 | `theCheckButtonIsNotOfferedOnAReviewerOnlyRow.test.ts` (converted: every case renders the Models page with the real `catalogHtml`, RUNS it with `runPageHtml`, reads the button off it and presses it there; the checking case and the generated-list rule case no longer use a helper-built string) | with the old title still in `checkNotOffered`: the kimi, gemini and remote cases and the exact-text case went red on the new sentence "…this runtime cannot hold a consultation" | `disabled` dropped in the real render path (`refusedCheck`): *the button is not disabled* for kimi, gemini and remote, and *✓ Check on a … row is held wrongly* for the rule case |
 
 The title no longer says "this row reviews plans and code only" (a row can be configured for document review): it says "the consultant check is not offered for <runtime> — this runtime cannot hold a consultation".
+
+**PR #913 review threads (CodeRabbit, 2026-10-21).** `PanelServiceHostTests.ABusyRead_KeepsTheLastGoodSettings_SaysSoOncePerStamp_AndRecovers` proves the busy path on EVERY OS through the `readText` seam (an `IOException` with HResult 0x80070020): the last good settings stay while busy, three `Current` calls log exactly one warning for the stamp, and the first call after the read recovers sees the new file. Seen red with the once-per-stamp guard broken (`if (stamp != _warned)` made `if (true)`): `Expected … to be 1 because the retry is on every call, so the warning is one per stamp, but found 3.` `CodeRoundHarness` deletes its repository and data folders in separate try blocks. `ProcessLiveness.Check` (now `Asked`/`Running` helpers) and `SettingsFile.Parse` (`TextOf`) were split to complexity of 4 or less with no behaviour change; their existing tests are the guard.
