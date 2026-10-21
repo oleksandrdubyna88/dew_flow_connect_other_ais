@@ -261,6 +261,16 @@ sequenceDiagram
   It exists because Google retired Gemini Code Assist for individuals mid-2026-08-31: the Gemini
   CLI now fails in `_doSetupUser` with "migrate to the Antigravity suite", before any model is
   reached, which was mistaken in turn for a quota, a timeout and an untrusted folder.
+- **The default model is one agy offers.** A row with `runtime: antigravity` and no model of its own launches
+  `--model gemini-3.8-flash-low` (`AntigravityRuntime.DefaultModel`, since 2026-10-21; the extension's
+  `ANTIGRAVITY_DEFAULT_MODEL` and the `coai.vendors` manifest default are the same id, and
+  `antigravityDefaultModel.test.ts` reads the C# to prove it). It was `gemini-3.7-flash-high`, which agy 1.4.4 refuses
+  before any model call (`invalid model selection ... not recognized`). **The default assumes agy 1.4.4 or later**, where
+  `agy models` lists the 3.8 Flash ids; on an older agy a row must name its model. A saved row that names a 3.7 id is
+  not rewritten — agy refuses it with its own sentence. The new default has no typed price (prices are looked up in
+  OpenRouter / LiteLLM, never typed): until a list carries `gemini-3.8-flash` it prices as "no list price", like any
+  unknown model (`modelPrices.test.ts`). Live check 2026-10-21 on agy 1.4.4: `--model gemini-3.8-flash-low` was accepted,
+  exit 0, one output token. Design record: `research/PLAN_the_agy_default_is_a_model_agy_offers.md`.
 
 - **Codex reads from `-o`, Gemini from stdout, Claude from its JSON envelope's `result`** — each
   through its OWN adapter, because where an answer lands is vendor knowledge; exit-0-with-no-output
@@ -857,7 +867,7 @@ had been made. What changed on 2026-09-01:
 | `PanelSettings.Providers` | codex, gemini, deepseek(off) | codex, **antigravity**, deepseek(off) |
 | `COAI_PROVIDERS` fallback | `codex, gemini` | `codex, antigravity` |
 | `PanelSettings.Translator` | `gemini` / `gemini-flash-latest` | `antigravity`, model unset |
-| extension `DEFAULT_VENDORS` | codex, gemini | codex, **antigravity** (`gemini-3.7-flash-high`) |
+| extension `DEFAULT_VENDORS` | codex, gemini | codex, **antigravity** (`gemini-3.8-flash-low`; was `gemini-3.7-flash-high` until 2026-10-21) |
 | extension presets | no Antigravity entry at all | Antigravity first-class; Gemini kept, marked retired |
 | a SAVED `runtime: "gemini"` | run as-is | migrated to `antigravity` (id kept — it names the row, the usage history and the vault key) |
 | `providers` health | `--version` exits 0 ⇒ "own auth" | `VendorDiagnosis.ForRuntime` answers **before** the probe |

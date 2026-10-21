@@ -12,7 +12,7 @@ import { Vendor } from '../vendors';
  * in `chatCommand.ts` passed them EMPTY, so the command's idea of what a row can be pointed at was
  * "the model it is configured to" and nothing else. That was harmless while the panel offered the
  * same flat list of rows. It stopped being harmless the moment the panel offered a two-step picker
- * over its own discovered lists: the person picks `gemini-3.8-flash-low` in the sidebar, the command
+ * over its own discovered lists: the person picks `gemini-4-argon-low` in the sidebar, the command
  * builds a list that has never heard of it, and the conversation quietly opens on the row's own
  * model instead — a different model, billed, in a voice nobody chose.</p>
  *
@@ -42,7 +42,7 @@ function vendor(over: Partial<Vendor> = {}): Vendor {
 
 const DISCOVERED = {
   codex: [{ id: 'gpt-5.2', label: 'gpt-5.2' }, { id: 'gpt-5.2-mini', label: 'gpt-5.2-mini' }],
-  agy: [{ id: 'gemini-3.8-flash-low', label: 'Gemini 3.8 Flash (Low)' }],
+  agy: [{ id: 'gemini-4-argon-low', label: 'Gemini 4 Argon (Low)' }],
   catalogs: {
     srv1: {
       serverVersion: '0.5.6',
@@ -61,7 +61,7 @@ test('a discovered model the panel offered is one the command can still honour',
   const list = chatProvidersFrom(vendors, catalogUsing(discovery, []));
   const saved = legacyPick(list, vendors, 'agy');
 
-  assert.strictEqual(openingModel(list, saved, 'gemini-3.8-flash-low'), 'gemini-3.8-flash-low');
+  assert.strictEqual(openingModel(list, saved, 'gemini-4-argon-low'), 'gemini-4-argon-low');
 });
 
 test('with nothing discovered the command falls back, which is the defect this closes', () => {
@@ -69,7 +69,8 @@ test('with nothing discovered the command falls back, which is the defect this c
   const list = chatProvidersFrom(vendors, catalogUsing(EMPTY_DISCOVERY, []));
   const saved = legacyPick(list, vendors, 'agy');
 
-  assert.strictEqual(openingModel(list, saved, 'gemini-3.8-flash-low'), 'gemini-3.7-flash-high');
+  // The fallback is the saved row's OWN model (the fixture's arbitrary id), not a default of the code's.
+  assert.strictEqual(openingModel(list, saved, 'gemini-4-argon-low'), vendors[0]!.model);
 });
 
 test('a Team server’s allowlist crosses too, attached to the server it belongs to', () => {
