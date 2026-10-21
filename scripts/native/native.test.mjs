@@ -647,32 +647,63 @@ function bystander() {
   child.on('error', () => {});
   return track(child.pid);
 }
+/** The pid of a process that has ended (and was reaped), so no process answers to it. */
+async function deadPid() {
+  const child = spawn('/bin/true', [], { stdio: 'ignore' });
+  child.on('error', () => {});
+  await new Promise((resolve) => child.once('exit', resolve));
+  assert.equal(procStat(child.pid), null, 'the scenario needs a pid nothing answers to');
+  return child.pid;
+}
+/**
+ * Runs `forge` (it writes a handle that lies) and then `check`; the TRUE handle is written back in `finally`, because the suite's own clean-up
+ * (`endGroup`) reads the handle, and a forged one left behind would make it end the wrong group and leave the real run script alive — which keeps
+ * the whole test runner waiting.
+ */
+async function withForgedHandle(series, handle, forge, check) {
+  try {
+    forge();
+    await check();
+  } finally {
+    writeHandle(series, handle.pid, handle.pgid, handle.start);
+    endGroup(series, 'n-v2');
+  }
+}
 
 linuxTest('J3: a handle whose pid is NOT its process-group id signals nothing — a live leader plus another group\'s id would otherwise end that whole group', async () => {
   const series = provisioned();
   const { handle } = await running(series, 'n-v2', 'idle');
   const other = bystander();
-  writeHandle(series, handle.pid, other.pid, handle.start); // the leader is real and its start time matches; the group id is somebody else's
+  await withForgedHandle(series, handle, () => writeHandle(series, handle.pid, other.pid, handle.start), () => {
+    const r = abortOf(series); // the leader is real and its start time matches; the group id is somebody else's
+    assert.equal(r.status, 4, `a handle with pid != pgid was acted on — it signalled a group the run script never owned: ${r.stdout}${r.stderr}`);
+    assert.match(r.stdout + r.stderr, /nothing signalled/u);
+    assert.ok(alive(other), 'the bystander in the named group was ended');
+    assert.ok(alive({ pid: handle.pid, start: handle.start }), 'the run script was ended by a refused abort');
+  });
+});
+
+linuxTest('J3: a DEAD leader\'s handle that names another live group (pid != pgid, members that started after the recorded time) signals nothing', async () => {
+  const series = provisioned();
+  const gone = await deadPid();
+  const other = bystander();
+  writeHandle(series, gone, other.pid, Number(other.start) - 1);
   const r = abortOf(series);
-  assert.equal(r.status, 4, `a handle with pid != pgid was acted on — it signalled a group the run script never owned: ${r.stdout}${r.stderr}`);
-  assert.match(r.stdout + r.stderr, /nothing signalled/u);
+  assert.equal(r.status, 4, `a dead leader's handle naming a stranger's group was acted on: ${r.stdout}${r.stderr}`);
   assert.ok(alive(other), 'the bystander in the named group was ended');
-  assert.ok(alive({ pid: handle.pid, start: handle.start }), 'the run script was ended by a refused abort');
-  writeHandle(series, handle.pid, handle.pgid, handle.start); // the test ends it by its own, true handle
-  endGroup(series, 'n-v2');
 });
 
 linuxTest('J3: a process-group id of 1 or 0 — even with pid equal to it — is never ours: nothing is signalled', async () => {
   const series = provisioned();
   const { handle } = await running(series, 'n-v2', 'idle');
-  for (const id of [0, 1]) {
-    writeHandle(series, id, id, handle.start);
-    const r = abortOf(series);
-    assert.equal(r.status, 4, `a handle naming pgid ${id} was acted on: ${r.stdout}${r.stderr}`);
-  }
-  assert.ok(alive({ pid: handle.pid, start: handle.start }));
-  writeHandle(series, handle.pid, handle.pgid, handle.start);
-  endGroup(series, 'n-v2');
+  await withForgedHandle(series, handle, () => {}, () => {
+    for (const id of [0, 1]) {
+      writeHandle(series, id, id, handle.start);
+      const r = abortOf(series);
+      assert.equal(r.status, 4, `a handle naming pgid ${id} was acted on: ${r.stdout}${r.stderr}`);
+    }
+    assert.ok(alive({ pid: handle.pid, start: handle.start }));
+  });
 });
 
 linuxTest('J3: the leader alive with a matching start time but NOT leading the named group (its current pgrp differs) — nothing is signalled', () => {
@@ -716,17 +747,16 @@ linuxTest('G5: abort.sh survives an EMPTY owned set under `set -u` — the group
   const declarations = text.split('\n').filter((line) => /^(declare -A |OWNED=\(\)|keys_of\(\))/u.test(line)).join('\n');
   const r = spawnSync('/bin/bash', ['-c', `set -eu\n${declarations}\necho "owned set of \${#OWNED[@]} = $(keys_of OWNED | tr -d '\\n')"\nfor k in $(keys_of OWNED); do echo "never: $k"; done\necho done`], { encoding: 'utf8' });
   assert.equal(r.status, 0, `an empty owned set aborted under set -u: ${r.stderr}`);
-  assert.match(r.stdout, /owned set of 0 = \ndone|owned set of 0 =\s*\ndone/u);
+  assert.match(r.stdout, /owned set of 0 = \ndone/u);
 });
 
-linuxTest('TEETH (J3): an abort.sh that does not require pid == pgid kills the bystander group a forged handle names', async () => {
+linuxTest('TEETH (J3): an abort.sh that does not require pid == pgid kills the bystander group a dead leader\'s forged handle names', async () => {
+  // With a LIVE leader the "leads the named group" check refuses on its own, so the teeth are shown where only pid == pgid can: a dead leader.
   const lax = mutated(nativeText('abort.sh'), 'if [ "$PID" != "$PGID" ]; then', 'if false; then');
   const series = provisioned('n-v2', { abortText: lax });
-  const { handle } = await running(series, 'n-v2', 'idle');
+  const gone = await deadPid();
   const other = bystander();
-  writeHandle(series, handle.pid, other.pid, handle.start);
+  writeHandle(series, gone, other.pid, Number(other.start) - 1);
   const r = abortOf(series);
   assert.equal(alive(other), false, `the mutant left the bystander alone (exit ${r.status}), so the pid == pgid case above cannot go red: ${r.stdout}`);
-  writeHandle(series, handle.pid, handle.pgid, handle.start);
-  endGroup(series, 'n-v2');
 });
