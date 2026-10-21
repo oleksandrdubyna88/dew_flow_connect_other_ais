@@ -508,6 +508,11 @@ Kimi-probe half (the host-facts script, `scripts/native/*` and `HostFactsMode.cs
 - *The 2.2.0 window (one paid window):* `node scripts/probe-kimi-confinement.mjs --cells M-K3,M-K4,M-K6,M-K12 --allow-agents-canary`.
 - *CI:* the new tests run on the Linux job (`node --test "scripts/**/*.test.mjs"`); no dotnet test was touched.
 
+### Code gate and judge fixes (2026-10-21)
+
+- **G2 (`HostFactsMode` hand-rolls JSON) — already true at `d794dc602`:** the mode serialises through the source-generated `HostFactsJsonContext` (relaxed escaping, no hand-written escaper ever existed in its history); `HostFactsModeTests.AValueWithAQuoteABackslashANewlineAndNonAscii_RoundTripsThroughJsonDocument_OnOneLine` pins it (break-it: the default encoder and a renamed field both turn it red).
+
+
 ## 5. Build order
 
 1. E1.S1 (the facts script and `scripts/native/`) — nothing depends on it inside E1, and it is the first thing the Vibe series uses.
