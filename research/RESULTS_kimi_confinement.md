@@ -1013,7 +1013,7 @@ default model `kimi-code/k3-256k`. Run in a window with no other `kimi` process 
 both other sessions held their Kimi rounds). 12 + 52 + 41 launches. Every value below is copied from the probe scripts' own
 result tables of those three runs (kept outside the repository, as for §27).
 
-**Re-measured on 2.2.0 — same result as 2.1.1:**
+**Re-measured on 2.2.0 — the same final outcome as 2.1.1 in each cell; intermediate runs differ where the row says so (M-K11's Grep + Glob rung):**
 
 | Cell | Result on 2.2.0 |
 |---|---|
