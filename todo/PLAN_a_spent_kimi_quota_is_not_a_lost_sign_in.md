@@ -1,6 +1,6 @@
 # PLAN — a spent Kimi quota is not a lost sign-in
 
-> Status: **partly built, 2026-10-21: stories 1–4 merged in #900 (released in coai-mcp 0.63.0); story 5 (the MONTHLY quota, seen 2026-10-21) is planned below; the capture step (§5 step 1) has NOT run, so the real ACP sentence is
+> Status: **partly built, 2026-10-21: stories 1–4 merged in #900 (released in coai-mcp 0.63.0); story 5 (the MONTHLY quota, seen 2026-10-21) is CODED 2026-10-21 (D8–D10, S10–S13; see "Story 5 — built" below); the capture step (§5 step 1) has NOT run, so the real ACP sentence is
 > still unmeasured, and the plan is NOT promoted.** Deviations are in §8 (story 3). The 0.61.0 and 0.62.0 releases shipped (tags
 > `extension-v0.61.0`, `extension-v0.62.0`), so the owner's "release first, fix after" block is lifted. The plan gate ran once
 > (session def84902, `good_enough`, 11 findings, all accepted), an Opus judge read it (12 findings, all verified by the lead)
@@ -444,6 +444,14 @@ someone sees it". It is seen now. Today:
 **Build.** One story, Sonnet codes red-first, Opus reviews; the code gate over the diff. Docs: `research/module_runners.md` (the
 Kimi failure table), `research/module_tests.md`, `research/RESULTS_kimi_confinement.md` §31 (the capture record gains this CLI
 sighting as "seen in prompt mode; the ACP form still unmeasured").
+
+**Story 5 — built (2026-10-21).** D8: `KimiAcpProfile.Failures` gained `"reached your monthly usage limit"` → `kimi_quota_spent`, Spent, beside the 5-hour row (the table is seven rows).
+D9: the phrase joined `RateLimit.Spent`; the verbatim line is the `observed` row (it lives as `KimiMonthlyQuotaTests.MonthlyLine`, one constant used by S10–S13 and the
+`observed` dictionary). D10: `KimiQuotaWords.ResetOpening` became the ONE list `ResetOpenings`; `ClauseOf` takes the earliest. S10–S13 were each red first, green, and
+broken-and-restored (`research/module_tests.md`). Deviations: (1) the monthly row reuses the name `kimi_quota_spent` and the cure `KimiQuotaWords.Fixed`, so `SpentNames` still
+has two names and `SpentPhraseOf` answers with the first (5-hour) phrase — it is only used when the reason is not already hopeless, and both phrases are; (2) the const `ResetOpening`
+is gone (three older assertions read `ResetOpenings[0]`). Claim as released: "a monthly-quota answer that carries Kimi's measured sentence reads as a spent quota"; the ACP form is
+still unmeasured (RESULTS §31).
 
 **Done when.** S10–S13 red then green with break-its; the guards green; the whole suite green; released with the next mcp minor.
 

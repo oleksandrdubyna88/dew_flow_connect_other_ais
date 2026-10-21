@@ -4723,6 +4723,23 @@ Each behaviour fix was seen red first; the break-it column is a change to the fi
 The fix: `VendorDiagnosis.CureOn` takes the text and quotes the clause (K1; `KimiRuntime.Cured` removed); `AcpProfiles.WithoutCure`/`CurelessReason` over the catalog and `AcpDiagnosis.CurelessReason` (K2, K3; `BoundedScheduler.QuoteOurs`);
 `AcpDiagnosis.Of(reason, stderr, known)` (K4); `AcpMessages.ErrorText` (K5). `AKimiRound`'s `TheRound` and the fake agent's `promptErrorData` are test infrastructure.
 
+## A spent MONTHLY Kimi quota is a spent quota too (2026-10-21, story 5 of `todo/PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md`; D8–D10, S10–S13)
+
+`KimiMonthlyQuotaTests` (S10–S12, 13 cases) and `AMonthlyKimiQuotaReadsAsAQuotaTests` (S13, beside `ASpentKimiQuotaReadsAsAQuotaTests`; the same `AKimiRound` road), plus a new
+`observed` row in `GateReportingTests.EveryHopelessPhrase_HasAnObservedAnswerThatSurvivesTheLineFilter`. The line (`KimiMonthlyQuotaTests.MonthlyLine`) is the release session's capture on
+Kimi 2.3.0 in PROMPT mode, 2026-10-21, verbatim; the ACP envelope around it (`Authentication required: …`) is the plan's hypothesis. Every test was seen red on the unfixed code first.
+
+| Test | Seen red as | Break-it (went red) |
+|---|---|---|
+| S10 `TheMonthlyLine_BehindTheSignInPrefix_IsQuotaSpent` | *Expected diagnosis.Name to be the same string because the monthly sentence is a spent quota, not the neutral provider error, but they differ at index 0: "provider_error" / "kimi_quota_spent"* | the monthly row removed from `Failures` (also reds `TheMonthlyRow_StandsBesideTheFiveHourRow…`, S13 and the seven-row order test) |
+| S11 `TheMonthlyLine_IsHopeless_WithoutAnyAppendedPhrase` | *Expected RateLimit.Hopeless(MonthlyLine) to be True because the vendor's own words say the monthly allowance is spent, but found False.* | the phrase removed from `RateLimit.Spent` (also reds the `observed` test: *… a sample for a phrase nobody uses …*) |
+| S12 `TheMonthlyClause_IsTheRefreshedSentence_AndStopsBeforeTheSalesLine` | *Expected clause to be "Your quota will be refreshed in the next cycle." with a length of 47, but "" has a length of 0* (and the clause contains neither `purchase` nor `https://`) | `"Your quota will be refreshed"` removed from `KimiQuotaWords.ResetOpenings` (also reds `WhenBothOpeningsAppear_TheEarliestIsTheClause`, `TheSentence_Quotes…` and S13) |
+| S13 `AMonthlyQuota_ReadsAsAQuota_InTheSummary_TheLedger_AndTheLog_AfterOneLaunch` | the three lines read *exit 70: the agent answered with an error (-32000): Authentication required: provider.api_error: 429 You've reached your monthly usage limit …*; *Expected type to be ReviewerOutcome+RateLimited … but found ReviewerOutcome+NonZeroExit* | the table row removed (above) or the second opening removed (above) |
+| *guards* `TheGuards_StayWhereTheyWere` (6 cases: 429 Too Many Requests and 503 → `provider_error`; 401 and bare → `not_signed_in`; the 5-hour line; the balance line) | green before and after | — |
+
+Changed by design: `TheSixRowsStandInTheDecidedOrder…` became `TheSevenRowsStandInTheDecidedOrder…` (the new row beside the 5-hour one; `SpentNames` compared as distinct names); `KimiQuotaWords.ResetOpening`
+(one string) became `ResetOpenings` (the list), so three older assertions read `ResetOpenings[0]`.
+
 ## The suite is deterministic — epic E1, "No run sees another" (2026-10-19)
 
 Source: `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md`, epic E1 (cases C1, C10, C11; decisions D1, scenarios S1–S4). Goal: two
