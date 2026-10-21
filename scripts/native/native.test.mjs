@@ -94,6 +94,9 @@ const mode = (args.find((a) => a.startsWith('--mode=')) ?? '--mode=idle').slice(
 const scratch = args[args.indexOf('--scratch') + 1];
 if (mode.startsWith('exit')) process.exit(Number(mode.slice(4)));
 const info = { execPath: process.execPath, path: process.env.PATH, pid: process.pid };
+// node resets every signal disposition at start-up, so left alone it dies of the signal and the run script ends through wait —
+// the script's own traps would never be what the test sees. In idle mode the probe swallows the three, so only the script's traps can end the run.
+if (mode === 'idle') for (const signal of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.on(signal, () => {});
 if (mode === 'workloads') {
   // a child that ignores TERM (the disposition is inherited through exec), and a child that leaves the group
   info.term = spawn('/bin/sh', ['-c', "trap '' TERM; exec /bin/sleep 600"], { stdio: 'ignore' }).pid;
@@ -112,7 +115,7 @@ function bareSeries(kind = 'vibe') {
   return dir;
 }
 
-function provisioned(phase = 'n-v2') {
+function provisioned(phase = 'n-v2', { abortText = '' } = {}) {
   const series = bareSeries();
   for (const sub of ['checkout/scripts', 'tmp', 'run', 'logs', 'bin']) mkdirSync(join(series, sub), { recursive: true, mode: 0o700 });
   writeFileSync(join(series, 'SERIES_PATH'), `${series}\n`);
@@ -120,12 +123,13 @@ function provisioned(phase = 'n-v2') {
   writeFileSync(join(series, 'run', 'path.txt'), '/usr/bin:/bin\n');
   writeFileSync(join(series, 'checkout', 'scripts', 'dummy-probe.mjs'), DUMMY);
   for (const file of ['abort.sh', 'remove-series.sh']) copyFileSync(join(NATIVE, file), join(series, 'run', file));
+  if (abortText) writeFileSync(join(series, 'run', 'abort.sh'), abortText);
   seriesInUse.push({ series, phase });
   return series;
 }
 
-const render = (series, phase, mode) => {
-  const text = renderRunScript({ series, phase, probe: 'dummy-probe.mjs', args: [`--mode=${mode}`], root: ROOT });
+const render = (series, phase, mode, mutate = (text) => text) => {
+  const text = mutate(renderRunScript({ series, phase, probe: 'dummy-probe.mjs', args: [`--mode=${mode}`], root: ROOT }));
   writeFileSync(join(series, 'run', `${phase}.sh`), text, { mode: 0o700 });
   return text;
 };
@@ -158,8 +162,8 @@ const handleOf = (series, phase) => {
 const readyOf = (series, phase) => JSON.parse(readFileSync(join(series, phase, 'ready.json'), 'utf8'));
 const hasFile = (path) => () => existsSync(path);
 
-async function running(series, phase, mode, options) {
-  render(series, phase, mode);
+async function running(series, phase, mode, options = {}) {
+  render(series, phase, mode, options.mutate);
   launch(series, phase, options);
   await waitFor(`the dummy probe (${mode}) never reported ready — the run script did not reach it: ${tail(series, phase)}`, hasFile(join(series, phase, 'ready.json')));
   return { handle: handleOf(series, phase), ready: readyOf(series, phase) };
@@ -206,35 +210,47 @@ for (const [signal, code] of [['SIGTERM', 143], ['SIGINT', 130], ['SIGHUP', 129]
   });
 }
 
-linuxTest('started through nohup, SIGHUP is ignored on entry — bash cannot trap it — so the run goes on and a TERM still ends it with .done', async () => {
+linuxTest('started through nohup (SIGHUP ignored on entry) a HUP never ends the run WITHOUT .done — it is ignored or trapped to 129, and the outcome is printed — and a TERM still ends it with .done 143', async (t) => {
   const series = provisioned();
   const { handle } = await running(series, 'n-v2', 'idle', { nohup: true });
   process.kill(-handle.pgid, 'SIGHUP');
-  await sleep(1000);
-  assert.equal(existsSync(logs(series, 'n-v2', 'done')), false, 'nohup should have made the HUP a no-op');
-  assert.ok(alive({ pid: handle.pid, start: handle.start }), 'the run script is still running');
-  process.kill(-handle.pgid, 'SIGTERM');
-  await waitFor('a TERM did not end a run script started through nohup', hasFile(logs(series, 'n-v2', 'done')));
-  assert.equal(readFileSync(logs(series, 'n-v2', 'exit'), 'utf8').trim(), '143');
+  await sleep(1500);
+  const ended = !alive({ pid: handle.pid, start: handle.start });
+  t.diagnostic(ended ? 'nohup + bash: the HUP trap RAN (the run ended)' : 'nohup + bash: the HUP was IGNORED (the run went on)');
+  if (ended) {
+    assert.equal(existsSync(logs(series, 'n-v2', 'done')), true, 'a HUP ended a nohup-started run without .done — the poll would wait for ever');
+    assert.equal(readFileSync(logs(series, 'n-v2', 'exit'), 'utf8').trim(), '129');
+  } else {
+    process.kill(-handle.pgid, 'SIGTERM');
+    await waitFor('a TERM did not end a run script started through nohup', hasFile(logs(series, 'n-v2', 'done')));
+    assert.equal(readFileSync(logs(series, 'n-v2', 'exit'), 'utf8').trim(), '143');
+  }
+  endGroup(series, 'n-v2');
 });
 
+/** Replaces `from` by `to` in a script's text; a mutation that no longer applies is a failure of the TEETH test, never a silent no-op. */
+function mutated(text, from, to) {
+  assert.ok(text.includes(from), `the mutation no longer applies — the script has no line: ${from}`);
+  return text.split(from).join(to);
+}
+
 // One scenario, three claims: the abort over a TERM-resistant child, a setsid child and an unrelated sentinel.
-let abortScenario;
-function abortOverWorkloads() {
-  abortScenario ??= (async () => {
-    const series = provisioned();
-    const sentinel = spawn('/bin/sleep', ['600'], { detached: true, stdio: 'ignore' });
-    sentinel.on('error', () => {});
-    const sentinelId = track(sentinel.pid);
-    const { handle, ready } = await running(series, 'n-v2', 'workloads');
-    const term = track(ready.term);
-    const setsid = track(ready.setsid);
-    const leader = { pid: handle.pid, start: handle.start };
-    const before = { term: alive(term), setsid: alive(setsid), leader: alive(leader), sentinel: alive(sentinelId), sameGroup: procStat(ready.term)?.pgrp === handle.pgid, otherGroup: procStat(ready.setsid)?.pgrp !== handle.pgid };
-    const result = spawnSync('/bin/bash', ['--', join(series, 'run', 'abort.sh'), 'n-v2'], { env: scriptEnv(), encoding: 'utf8', timeout: 90_000 });
-    return { series, before, result, term, setsid, leader, sentinelId };
-  })();
-  return abortScenario;
+let realAbortScenario;
+const abortOverWorkloads = () => (realAbortScenario ??= workloadsThenAbort());
+
+/** The abort scenario: workloads started, a sentinel apart, then abort.sh (the real one, or a mutant's text) run over them. */
+async function workloadsThenAbort(abortText = '') {
+  const series = provisioned('n-v2', { abortText });
+  const sentinel = spawn('/bin/sleep', ['600'], { detached: true, stdio: 'ignore' });
+  sentinel.on('error', () => {});
+  const sentinelId = track(sentinel.pid);
+  const { handle, ready } = await running(series, 'n-v2', 'workloads');
+  const term = track(ready.term);
+  const setsid = track(ready.setsid);
+  const leader = { pid: handle.pid, start: handle.start };
+  const before = { term: alive(term), setsid: alive(setsid), leader: alive(leader), sentinel: alive(sentinelId), sameGroup: procStat(ready.term)?.pgrp === handle.pgid, otherGroup: procStat(ready.setsid)?.pgrp !== handle.pgid };
+  const result = spawnSync('/bin/bash', ['--', join(series, 'run', 'abort.sh'), 'n-v2'], { env: scriptEnv(), encoding: 'utf8', timeout: 90_000 });
+  return { series, before, result, term, setsid, leader, sentinelId };
 }
 
 linuxTest('the dummy workloads are what the abort scenario says: a TERM-resistant child IN the group, a setsid child OUT of it, a sentinel apart', async () => {
@@ -325,8 +341,8 @@ function fakeServer(home, pathValue) {
   return track(child.pid);
 }
 
-function makeSeries(series, home) {
-  copyFileSync(join(NATIVE, 'make-series.sh'), join(series, 'make-series.sh'));
+function makeSeries(series, home, text = readFileSync(join(NATIVE, 'make-series.sh'), 'utf8')) {
+  writeFileSync(join(series, 'make-series.sh'), text);
   return spawnSync('/bin/bash', ['--', join(series, 'make-series.sh')], { env: scriptEnv({ HOME: home }), encoding: 'utf8', timeout: 60_000 });
 }
 
@@ -451,4 +467,45 @@ linuxTest('remove-series.sh removes the folder AND its own file, still prints st
   assert.match(r.stdout, /step 5: the sign-in facts are identical/u);
   assert.equal(r.stdout.includes('0123456789abcdef'), false, "the credential slot's hex reached the output");
   assert.deepEqual(signIns(home), before);
+});
+
+// ---------------------------------------------------------------- TEETH — the break-its of E1.S1 (B1, B2, B3, B5), kept as tests
+// The plan asks for each guarantee to be seen red: change the PRODUCTION script, watch the case fail, restore. Here the change is made
+// to a COPY of the script's text, in the test, every run — so the red is never a claim in a commit message but a case that passes only
+// while the mutant is broken, and a refactor that moves the mutated line fails loudly ("the mutation no longer applies"). Each asserts
+// the very condition the matching case above would print as its failure.
+const nativeText = (file) => readFileSync(join(NATIVE, file), 'utf8');
+
+linuxTest('TEETH (B1): a run script without the TERM, INT and HUP traps leaves NO .done after a group TERM — "a run script killed mid-probe wrote no .done — the poll would wait for ever"', async () => {
+  const series = provisioned();
+  const dropTraps = (text) => mutated(text, "trap 'exit 143' TERM; trap 'exit 130' INT; trap 'exit 129' HUP", ':');
+  const { handle } = await running(series, 'n-v2', 'idle', { mutate: dropTraps });
+  process.kill(-handle.pgid, 'SIGTERM');
+  await waitFor('the run script did not end at all on a group TERM', () => !alive({ pid: handle.pid, start: handle.start }));
+  assert.equal(existsSync(logs(series, 'n-v2', 'done')), false, 'the mutant wrote .done anyway, so the signal cases above cannot go red');
+  endGroup(series, 'n-v2');
+});
+
+linuxTest('TEETH (B2): an abort that escalates while the LEADER exists, not the group, leaves the TERM-resistant child alive — "the abort left the TERM-resistant child alive — it escalated on the leader, not the group"', async () => {
+  const leaderOnly = mutated(nativeText('abort.sh'), 'pending() { scan; [ -n "$(group_members)" ] || [ -n "$(owned_alive)" ]; }', 'pending() { scan; [ -n "${START_OF[$PID]:-}" ]; }');
+  const { term, before } = await workloadsThenAbort(leaderOnly);
+  assert.equal(before.term, true);
+  assert.equal(alive(term), true, 'the mutant ended the TERM-resistant child anyway, so the group-escalation case above cannot go red');
+});
+
+linuxTest('TEETH (B3): an abort that takes no snapshot of descendants leaves the setsid child alive — "the abort left the setsid child alive — it left the group and nothing else found it"', async () => {
+  const noDescendants = mutated(nativeText('abort.sh'), 'while [ "$changed" = 1 ]; do', 'while [ "$changed" = 1 ] && false; do');
+  const { setsid, before } = await workloadsThenAbort(noDescendants);
+  assert.equal(before.setsid, true);
+  assert.equal(alive(setsid), true, 'the mutant ended the setsid child anyway, so the snapshot case above cannot go red');
+});
+
+linuxTest('TEETH (B5): a make-series.sh that does not judge a relative PATH entry accepts it — "a relative, empty or world-writable PATH entry before the node directory was accepted"', () => {
+  const blind = mutated(nativeText('make-series.sh'), 'elif [ "${ENTRY#/}" = "$ENTRY" ]; then\n    WHY="a relative entry"\n  ', '');
+  const series = bareSeries();
+  const home = fakeHome();
+  const dirs = pathDirs();
+  fakeServer(home, `rel/bin:${dirs.clean}:/usr/bin:/bin`);
+  const r = makeSeries(series, home, blind);
+  assert.equal(r.status, 0, `the mutant still refused (${r.status}), so the relative-entry cases above cannot go red: ${r.stderr}`);
 });
