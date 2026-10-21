@@ -2,7 +2,7 @@
 
 > Status: **in progress, 2026-10-20.** E1 (no run sees another) and C2 (E3 S1) are **merged** in #893
 > (`e86fe17f8`, 2026-10-20); **E2 (one temp folder per run) is coded** on `feat/suite-e2-run-temp` (its Outcome is below; not merged yet); E3's rest, E4
-> and E5 are open — E3 gained two product stories on 2026-10-20 (C18's product angle, C25); the §10 CI watch of E1 and C2 is running. Scope: the fake CLI's steering files
+> and E5 are open — E3 gained two product stories on 2026-10-20 (C18's product angle, C25); the §10 CI watch of E1 and C2 is running; **E4's stories document and its cornerstone spec were written on 2026-10-21** ([PLAN_the_suite_is_deterministic_and_leaves_no_temp_E4.md](PLAN_the_suite_is_deterministic_and_leaves_no_temp_E4.md), nothing coded). Scope: the fake CLI's steering files
 > (`src_mcp/tests_fakecli`), the fixed-name temp paths of the C# and extension tests, the flaky cases found in CI and
 > locally between 2026-09-26 and 2026-10-19 (product code where the cause is in the product), and the `coai-*` folders
 > the suites leave in `%TEMP%`. The owner put this "tail" at the very end of the queue; it was written so the causes
@@ -1189,7 +1189,7 @@ concrete stories `model: fable` when it writes each epic's stories document
 (`todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp_E<n>.md`, written when the epic starts), and that commit raises
 the count.
 
-Cornerstones: 0 of 2 — the per-run temp folder (E2), the clock contract (E4)
+Cornerstones: 2 of 2 named — the per-run temp folder (E2, built), the clock contract (E4.S1)
 
 **Why these two and not E1.** A cornerstone is where a mistake compounds and the next step does not catch it. D1 (E1) is
 one path constant, one helper, two readers and a deterministic RED on every OS — a wrong D1 fails S1 at once. D2 (E2) is
@@ -1409,6 +1409,19 @@ retry window, which is why S4's brief lists them). Product code: Opus brief, Son
 record*, "E3's risk".
 
 ### E4 — Deadlines on an injectable clock — cornerstone area: the clock contract
+
+> **Stories: [PLAN_the_suite_is_deterministic_and_leaves_no_temp_E4.md](PLAN_the_suite_is_deterministic_and_leaves_no_temp_E4.md)
+> (written 2026-10-21 by Fable; self-contained, so a gate reviewer reads it instead of this file). Status: stories and
+> the cornerstone spec written, nothing coded.** It carries the cornerstone — **E4.S1, the manual clock and the clock
+> contract** (`model: fable`) — with the per-class inventory of every clock read in the four classes and what each
+> reads afterwards, the manual clock's contract (shaped on `wsl_care`'s `ManualTimeProvider`; it subsumes the suite's
+> `MovableClock`), the launcher's three separations for the gated C4 story, and the stories with their REDs. Where it
+> re-read the code at `aab069ca5` it supersedes the lines below: C4's launcher lines are now `ProcessLauncher.cs:481-482`
+> / `:487`+`:518` / `:527`; C6's shared-state half (the seven `ForgetTheLastSweep` callers, S4's second rule) is already
+> closed by E1; and S13 is redesigned — the end-to-end test cannot run its `TurnLoop` on a manual clock without a seam
+> through `PanelService` (D3 forbids it), so the subject is pinned by a pure `RoundDeadline.For` test, a scheduler-level
+> test on the manual clock, and the end-to-end test without its sleep (its §11 and §12 list the rest and the open
+> questions).
 
 **Goal.** Every deadline a test must race is armed through a `TimeProvider`; the product's default behaviour is unchanged;
 the tests that race a deadline advance a manual clock when the thing they mean has happened, and no fixed sleep decides
