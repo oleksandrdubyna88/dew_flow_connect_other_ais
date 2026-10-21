@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.63.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.62.0...mcp-v0.63.0) (2026-10-21)
+
+
+### Features
+
+* **authors:** E3 — the caller's transcript is read, counted and never leaves as text ([#867](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/867)) ([66801bd](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/66801bddadb40d1e41b0b8cefe55574f0a1b6633))
+* **authors:** E4 — attribution: who owns each message and write ([#862](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/862)) ([2e47d99](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/2e47d990bd3a863c4c8b7f435f58db82e027c2f7))
+* **authors:** E5 — the round stores who wrote the code ([#863](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/863)) ([bc5b367](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/bc5b367df5c80144c0db094c00fab3faa7a12a23))
+* **authors:** E6 — the authors report ([#864](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/864)) ([20c35f0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/20c35f0264d5d866c92730ec12e12778b3a60289))
+* **authors:** E7 — the backfill, backup first ([#865](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/865)) ([42eb3a9](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/42eb3a95a670a7ad4cf1349ec9f4bbbde9e7e934))
+
+
+### Bug Fixes
+
+* **kimi:** a spent Kimi quota is not reported as a lost sign-in ([#900](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/900)) ([4dbfba4](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/4dbfba4d97ae68d022fac4cfd3ab5047fac71699))
+* **launcher:** a fast macOS child is not 'not started', and no test run sees another ([#893](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/893)) ([e86fe17](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/e86fe17f86bfad9e154237141e3c0d4a1819e78b))
+* **report:** --table prints no control character from an --add file ([#896](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/896)) ([9134099](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/9134099c02b20d855b8bee2183e8756aed9c4ba7))
+* **store:** a session file keeps what a newer server wrote ([#868](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/868)) ([fbf98e2](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/fbf98e2a822ec7c9e29b2e8176790901df412e3a))
+
 ## [0.62.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.61.0...mcp-v0.62.0) (2026-10-19)
 
 
