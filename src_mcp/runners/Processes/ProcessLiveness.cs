@@ -21,23 +21,27 @@ public static class ProcessLiveness
 
     /// <summary>
     /// The three-answer check, for a caller that DELETES on the answer (E3 code gate G1/G2): <see cref="Liveness.Gone"/> only when the process is
-    /// provably not there — no process has that id, or it has exited. A process that could not be asked about (<c>Win32Exception</c>: not ours to open, or another
-    /// pid namespace) or a pid nothing could own is <see cref="Liveness.Unknown"/>, which a deletion must treat as alive. Never throws.
+    /// provably not there — no process has that id (<see cref="ArgumentException"/>), or it has exited. <see cref="Liveness.Unknown"/> is a process
+    /// that could not be asked about (<c>Win32Exception</c>: not ours to open) and a pid nothing could own; a deletion must treat it as alive. Never throws.
     /// </summary>
-    public static Liveness Check(int pid)
-    {
-        // A pid nothing could ever own. Windows answers "access denied" for 0 rather than "no such process", so it is refused here
-        // rather than through an exception handler.
-        if (pid <= 0)
-        {
-            return new Liveness.Unknown("not a pid");
-        }
+    /// <remarks>
+    /// <b>The narrow limit, decided and not changed:</b> a pid in ANOTHER pid namespace is not Unknown. On Linux that process is simply not visible, so
+    /// <c>GetProcessById</c> throws <see cref="ArgumentException"/> and the answer is <c>Gone</c>. Two pid namespaces sharing one data folder (a container
+    /// and its host) can therefore see a live writer's aged temp file removed by the other; that writer's move then fails loudly and the record it was
+    /// replacing stays whole.
+    /// </remarks>
+    public static Liveness Check(int pid) =>
+        pid <= 0
+            // A pid nothing could ever own. Windows answers "access denied" for 0 rather than "no such process", so it is refused here
+            // rather than through an exception handler.
+            ? new Liveness.Unknown("not a pid")
+            : Asked(pid);
 
+    private static Liveness Asked(int pid)
+    {
         try
         {
-            using var process = System.Diagnostics.Process.GetProcessById(pid);
-
-            return process.HasExited ? new Liveness.Gone("exited") : new Liveness.Alive();
+            return Running(pid);
         }
         catch (Exception e) when (e is ArgumentException or InvalidOperationException)
         {
@@ -47,5 +51,12 @@ public static class ProcessLiveness
         {
             return new Liveness.Unknown(e.Message);
         }
+    }
+
+    private static Liveness Running(int pid)
+    {
+        using var process = System.Diagnostics.Process.GetProcessById(pid);
+
+        return process.HasExited ? new Liveness.Gone("exited") : new Liveness.Alive();
     }
 }

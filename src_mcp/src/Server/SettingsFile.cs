@@ -144,15 +144,7 @@ public static class SettingsFile
         var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var property in document.RootElement.EnumerateObject())
         {
-            // Everything reaches the server as a string, exactly as an environment variable
-            // would — one parser for both sources, so neither can drift from the other.
-            var value = property.Value.ValueKind switch
-            {
-                JsonValueKind.String => property.Value.GetString(),
-                JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False => property.Value.ToString(),
-                JsonValueKind.Array or JsonValueKind.Object => property.Value.GetRawText(),
-                _ => null,
-            };
+            var value = TextOf(property.Value);
             if (value is { Length: > 0 })
             {
                 values[property.Name] = value;
@@ -161,6 +153,18 @@ public static class SettingsFile
 
         return values;
     }
+
+    /// <summary>
+    /// Everything reaches the server as a string, exactly as an environment variable would — one parser for both sources, so neither can drift from the other.
+    /// A null is a value of a kind that has no text (<c>null</c>), which the caller drops.
+    /// </summary>
+    private static string? TextOf(JsonElement value) => value.ValueKind switch
+    {
+        JsonValueKind.String => value.GetString(),
+        JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False => value.ToString(),
+        JsonValueKind.Array or JsonValueKind.Object => value.GetRawText(),
+        _ => null,
+    };
 
     /// <summary>
     /// Where the data directory is — the same rule the rest of the product uses, ASKED rather than

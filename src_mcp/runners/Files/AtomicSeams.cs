@@ -18,7 +18,7 @@ internal sealed record AtomicSeams
     /// <summary>Waits between two tries of the move; the argument is the number of tries made so far.</summary>
     public Action<int> Pause { get; init; } = static _ => Thread.Sleep(Random.Shared.Next(10, 40));
 
-    /// <summary>The three-answer check an orphan is judged by: only <see cref="Liveness.Gone"/> is proof the writer left; a pid that could not be asked about (another pid namespace, no access) proves nothing.</summary>
+    /// <summary>The three-answer check an orphan is judged by: only <see cref="Liveness.Gone"/> is proof the writer left; a pid that could not be asked about (<c>Win32Exception</c>: not ours to open) proves nothing. A pid in another Linux pid namespace is invisible and answers Gone (see <see cref="ProcessLiveness.Check"/>).</summary>
     public Func<int, Liveness> LivenessOf { get; init; } = ProcessLiveness.Check;
 
     /// <summary>Writes the temp file: path, text. A seam so a test can fail the write half way (a full disk).</summary>

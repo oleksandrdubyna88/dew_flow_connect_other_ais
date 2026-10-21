@@ -1424,14 +1424,20 @@ give-back are the server's half ([module_server.md](module_server.md)).
   (`TimeProvider.GetTimestamp`/`GetElapsedTime`), not `DateTime.UtcNow`: a stepped wall clock cannot stretch or cut it. The window is a tolerance, not a guarantee —
   a holder that never lets go fails the write after it, the ORIGINAL bytes survive and the temp file is removed; a persistent ACL denial is thrown, not worked
   round. The three callers that pass a window (`ConsultantsFile`, `ConsultCheckState`, `ConsultHealth`) gain the retry; the callers with window zero still try once.
-  The seam is `internal sealed record AtomicSeams` (`Clock`, `Pause`, `IsAlive`, `AfterTemp`) on an `internal` `Write` overload.
+  The seam is `internal sealed record AtomicSeams` (`Clock`, `Pause`, `LivenessOf`, `WriteText`, `AfterTemp`) on an `internal` `Write` overload.
   **The temp name carries the writer's pid** — `<record>.<pid>.<guid>.tmp` — and **a write first removes the orphans of ITS OWN record**: temp files named exactly
-  so, older than one hour (`OrphanAge`, by the clock's UTC) AND whose pid is not alive (`ProcessLiveness.IsAlive`, moved here from `CoaiMcp.Server` because this
-  layer cannot reference the server — moved, never copied). Never another record's, never a fresh one, never one without a pid in its name, never a live writer's
-  (a writer suspended after its temp file keeps it, and its move still lands); best effort, a failure to remove is ignored and tried again on the next write.
-  A reused pid keeps the file: a leak, never a deletion. `AtomicJson.WriteUnderTurn` (`Escalations.cs`) writes through it, so `AtomicFile`'s list of open-coded copies is three now
+  so, older than one hour (`OrphanAge`, by the clock's UTC) AND whose writer is PROVEN gone: **a file is removed only when `ProcessLiveness.Check(pid) is Liveness.Gone`**
+  (`ProcessLiveness` moved here from `CoaiMcp.Server` because this layer cannot reference the server — moved, never copied). `Check` is a three-answer check:
+  `ArgumentException` (no process has that id) or an exited process = `Gone`; `Win32Exception` (not ours to open), `NotSupportedException` and a pid of 0 or less =
+  `Unknown`; a running process = `Alive`. `Alive` and `Unknown` keep the file. Never another record's, never a fresh one, never one without a pid in its name, never a live
+  writer's (a writer suspended after its temp file keeps it, and its move still lands); best effort, a failure to remove is ignored and tried again on the next write.
+  `ProcessLiveness.IsAlive` is `Check(pid) is Alive` — the sweeps' two-state answer is unchanged, one class, one place. **The narrow limit (decided, no behaviour change):**
+  a pid in ANOTHER pid namespace is not `Unknown` — on Linux that process is invisible, `GetProcessById` throws `ArgumentException` and the answer is `Gone` — so two pid
+  namespaces sharing one data folder (a container and its host) can see a live writer's aged temp file removed by the other; that writer's move then fails loudly and the
+  record it was replacing stays whole. A reused pid on the same machine keeps the file: a leak, never a deletion.
+  `AtomicJson.WriteUnderTurn` (`Escalations.cs`) writes through it, so `AtomicFile`'s list of open-coded copies is three now
   (`ConsultSchemaFile`, `RemoteRuntime`, `ArtifactStore`); `SessionStore.Write` writes through it too since E3 S5 (its ten-attempt `MoveOverExisting` loop was removed, not extracted), and the seam gained `WriteText` (fail the temp write half way).
-  **E3 code gate (2026-10-21):** an orphan is removed only when its writer is PROVEN gone — `ProcessLiveness.Check(pid)` is a three-answer check (`Liveness.Alive` / `Gone` / `Unknown`; `ArgumentException` or `InvalidOperationException` = Gone, `Win32Exception` or `NotSupportedException` = Unknown, a pid ≤ 0 = Unknown) and `AtomicFile` deletes on `Gone` only, so a process another pid namespace or account owns keeps its file (a leak, never a wrong deletion). `ProcessLiveness.IsAlive` is `Check(pid) is Alive` — the sweeps' two-state answer is unchanged, one class, one place; the seam is `AtomicSeams.LivenessOf` (the old `IsAlive` seam is gone). `MoveOver` catches `IOException` and `UnauthorizedAccessException` explicitly (a refactor, same behaviour). Tests: `AMoveOverAHeldFileIsRetriedTests`, `AnOrphanTempFileIsRemovedByItsRecordsNextWriteTests`.
+  `MoveOver` catches `IOException` and `UnauthorizedAccessException` explicitly. Tests: `AMoveOverAHeldFileIsRetriedTests`, `AnOrphanTempFileIsRemovedByItsRecordsNextWriteTests`.
 - **`FilesystemInvariant.SnapshotAsync`** throws `OperationCanceledException` for a cancelled token. The
   launcher never throws on cancellation (it reports `TimedOut: true, Cancelled: true`), so a `git status` killed
   by the turn's deadline surfaced as a `ContextException` and the turn said "the answer could not be recorded";

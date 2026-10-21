@@ -1022,7 +1022,7 @@ folder to `testsToDelete-coai-…` stays leftovers-E5's (§7).
 | `CadenceStoreTests.ManyClosesAtOnce_AllLand` — `SessionTurn.Take` counts tries | [PLAN_a_turn_waits_by_the_clock.md](PLAN_a_turn_waits_by_the_clock.md) | this plan orders it (§9) and adds the CI evidence (§3) |
 | C6, C13, C14 — the three deadline tests of `PLAN_question_consultant_tails.md` §6 | **this plan** — moved here on 2026-10-19 | tails §6 now points here; its DoD line goes with it |
 | D4 — a round removes its two empty folders | **this plan** (E3, product) | not E2: E2 is test infrastructure only (J9) |
-| C18's product angle and C25 — the roads that go WITHOUT the turn retry the refusal Windows actually gives (`AtomicFile`'s move, `AtomicJson`, the heartbeat, `SessionStore`'s in-place write) | **this plan** (E3 S4, S5) | [PLAN_a_turn_waits_by_the_clock.md](PLAN_a_turn_waits_by_the_clock.md) keeps `SessionTurn.Take` (tries → a clock) and touches none of these four. **Open item for that plan's owner:** its boundary line "Disjoint: that plan builds nothing in `SessionStore`" becomes "…nothing in `SessionTurn`; it changes `SessionStore.Write`'s in-place write (C25)" |
+| C18's product angle and C25 — the roads that go WITHOUT the turn retry the refusal Windows actually gives (`AtomicFile`'s move, `AtomicJson`, the heartbeat; `SessionStore`'s save, which is now ONE atomic road through `AtomicFile`) | **this plan** (E3 S4, S5) | [PLAN_a_turn_waits_by_the_clock.md](PLAN_a_turn_waits_by_the_clock.md) keeps `SessionTurn.Take` (tries → a clock) and touches none of these four. **Open item for that plan's owner:** its boundary line "Disjoint: that plan builds nothing in `SessionStore`" became "…nothing in `SessionTurn`; S5 replaced `SessionStore.Write`'s two roads with one atomic road (C25)" (done, 2026-10-20) |
 
 Disjoint: nothing else in this plan is built by another plan, and nothing in those plans' other sections is built here.
 Order (J7): E1 (C1) first and alone — it is the case that already changed a result across runs; **C2 (E3 S1) and the
@@ -1064,7 +1064,7 @@ deterministic red exists), then watched passing; both observations go in the PR 
 | S23 | `run-host.mjs` against a stub `vscodeExecutablePath` that exits 1 at once after a `[main …]` line and no host-started line: the sentence names "the editor exited before the extension host ran a scenario" and quotes the line; a `::warning::` line carries the same; the stub is launched twice before the sentence. Second arm: a stub that prints the host-started line, then exits 1 — launched once, no retry | C22 | `the extension host: Test run failed with code 1`, one launch, no `::warning::` |
 | S24 | `AMoveOverAFileAReaderHolds_IsRetriedWithinTheWindow_AndLands` (Windows) — the destination held with `SharedRead.Text`'s open (`ReadWrite \| Delete`), released by the pause seam's first call; and two guards, green before and after: a holder never released throws `UnauthorizedAccessException` when the window ends and leaves no `*.tmp`; a zero window tries once and never pauses | C18 (product, E3 S4) | `UnauthorizedAccessException: Access to the path is denied` on the first move; the pause was called 0 times |
 | S25 | `AHeartbeatThatCannotBeWritten_IsSaid_AndTheQuestionStillSettles` (every OS) — the store's `projected` throws `UnauthorizedAccessException` on the first heartbeat-only write and opens the row's gate: `RunAsync` returns the row `Answered`, one warning names the question; second arm `ABeatAfterAFailedOne_IsStillWritten` — the gate opens only on the NEXT beat | C18 (product, E3 S4) | (a) `System.UnauthorizedAccessException : Access to the path is denied.` thrown by `RunAsync` from `HeartbeatAsync` — the CI sentence of run 39325900821; (b) no beat after the failed one: the row's guard fails with its sentence |
-| S26 | `AnInPlaceSaveThatMeetsABusySessionFile_IsRetried_AndLands` (Windows) — the session file held `Read`/`FileShare.Read` with the turn free, released by the store's pause seam; guard `ASessionFileHeldThroughEveryAttempt_FailsTheSaveNamingIt_AndKeepsTheOldSession`, green before and after | C25 (E3 S5) | `SessionStoreException` with inner `IOException` "…session-….json because it is being used by another process" (the E2 sentence); the pause was called 0 times |
+| S26 | `ASaveThatMeetsAHeldSessionFile_IsRetried_AndLands` (Windows) — the session file held `Read`/`FileShare.Read`, released by the pause seam; guard `ASessionFileHeldThroughEveryAttempt_FailsTheSaveNamingIt_AndKeepsTheOldSession`, green before and after; fault arms on every OS: a failure while the temp file is written and a failure at the move each leave the previous session byte for byte (temp removed, the next save lands); the turn is held from the temp file to the move | C25 (E3 S5) | `SessionStoreException` with inner `IOException` "…session-….json because it is being used by another process" (the E2 sentence); the pause was called 0 times |
 
 ## 9. Build order — the shared-state fixes first
 
@@ -1158,8 +1158,8 @@ cd src_vs_code && npm test
 - [ ] C2 (both exception arms), C14 (busy only; malformed and empty as today; `Current` never throws), C16 fixed with
       their deterministic REDs (S8, S10, S11) and S9 kept green.
 - [ ] C18's product angle (a move over a held file is retried on the refusal Windows gives; `AtomicJson` writes through
-      `AtomicFile`; a failed beat is said and skipped, never the end of a question) and C25 (the in-place session write
-      retried like the move) fixed with their deterministic REDs (S24, S25, S26), their guards green throughout.
+      `AtomicFile`; a failed beat is said and skipped, never the end of a question) and C25 (the session save is ONE atomic
+      road through `AtomicFile`, so a busy file is retried and a failure leaves the previous session whole) fixed with their deterministic REDs (S24, S25, S26), their guards green throughout.
 - [ ] Each deadline a test must race is armed through that class's own optional `TimeProvider`, landed with its RED;
       nothing threaded through `PanelService`/`RoundEngine`; `ProcessLauncher` untouched until C4 has a kept failure;
       the product's default behaviour is unchanged; S12–S14, S16 RED then GREEN (S15 when its gate opens).
@@ -1349,8 +1349,8 @@ or cannot be removed, is warned about and left to the six-hour sweep; best effor
 product angle (§4 C18): `AtomicFile.MoveOver` (`AtomicFile.cs:49-63`) also retries `UnauthorizedAccessException` inside
 its window; `AtomicJson.WriteUnderTurn` (`Escalations.cs:355-360`) writes through `AtomicFile.Write` with one shared
 500 ms window; `QuestionFanOut.HeartbeatAsync` (`:302-317`) says a failed beat and goes on. C25 (§4 C25):
-`SessionStore.Write`'s in-place write (`SessionStore.cs:592`) is retried by the loop `MoveOverExisting` already has
-(`:619-639`), extracted once. Scenarios S7, S8, S9, S10, S24, S25, S26.
+`SessionStore.Write` stops writing in place and goes through `AtomicFile.Write` (one road, the turn held through the move);
+`MoveOverExisting`'s loop is removed, not extracted (the E3 plan round and risk consult). Scenarios S7, S8, S9, S10, S24, S25, S26.
 
 **Depends on.** C2 (S1) on nothing — it starts beside E1 (J7); C14 on E1 (the measurement rule); D4 on E1's C10 rewrite
 (the repair test asserts on the launch, or D4 turns it red); C18's product angle and C25 on nothing but E1 (each has its
