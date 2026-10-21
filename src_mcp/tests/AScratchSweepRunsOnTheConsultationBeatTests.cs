@@ -79,7 +79,7 @@ public sealed class AScratchSweepRunsOnTheConsultationBeatTests : IDisposable
     }
 
     /// <summary>
-    /// A question row's scratch as a killed server leaves it (D8 of <c>todo/PLAN_vibe_reads_a_folder_of_repositories.md</c>): a copy
+    /// A question row's scratch as a killed server leaves it (D8 of <c>research/PLAN_vibe_reads_a_folder_of_repositories.md</c>): a copy
     /// of a repository in a numbered sub-folder, the row's lock file with nobody holding it, and a folder time of <paramref name="age"/> ago.
     /// Made in the REAL temp root under the row's own prefix, which is what the product's sweep walks.
     /// </summary>

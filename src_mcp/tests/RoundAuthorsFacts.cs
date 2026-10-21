@@ -63,4 +63,18 @@ internal static class RoundAuthorsFacts
 
     public static RoundAuthorsSelection Sel(string stage = "CodeReview", string cohort = "all", string[]? kinds = null, string split = "", bool beforeOpen = false, bool withoutElided = false, bool withUncovered = false) =>
         new(stage, string.Empty, string.Empty, split, cohort, kinds ?? CodeAndTest, beforeOpen, withoutElided, withUncovered);
+
+    /// <summary>
+    /// The tests' own spelling of "a character a terminal would act on or a reader cannot see": a control, a format character (zero-width, bidi
+    /// override, BOM, soft hyphen, a TAG character, a musical format control), a line or paragraph separator, or an unassigned code point. Judged by
+    /// CODE POINT — a character above U+FFFF is two UTF-16 units, each of category Surrogate — and spelled here, apart from <c>Printable</c>, so a
+    /// test of that method is not graded by the method itself.
+    /// </summary>
+    public static bool IsTerminalUnsafe(System.Text.Rune rune) =>
+        System.Text.Rune.GetUnicodeCategory(rune) is System.Globalization.UnicodeCategory.Control or System.Globalization.UnicodeCategory.Format
+            or System.Globalization.UnicodeCategory.LineSeparator or System.Globalization.UnicodeCategory.ParagraphSeparator or System.Globalization.UnicodeCategory.OtherNotAssigned;
+
+    /// <summary>The code points of <paramref name="text"/> a terminal would act on, but for the line break the table or the channel adds.</summary>
+    public static List<string> UnsafeIn(string text) =>
+        [.. text.EnumerateRunes().Where(rune => rune.Value != 10 && IsTerminalUnsafe(rune)).Select(rune => "U+" + rune.Value.ToString("X4", System.Globalization.CultureInfo.InvariantCulture))];
 }

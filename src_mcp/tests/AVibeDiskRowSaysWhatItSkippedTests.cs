@@ -8,7 +8,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// What a Vibe disk row tells the person about the repositories it skipped (E1.3 of
-/// <c>todo/PLAN_vibe_reads_a_folder_of_repositories.md</c>, D4's last bullet): the place carries its skip notes, and the
+/// <c>research/PLAN_vibe_reads_a_folder_of_repositories.md</c>, D4's last bullet): the place carries its skip notes, and the
 /// row writes them into its <c>note</c> field — redacted, since a note names folders on the person's disk and is written down —
 /// on the answered arm and on the refused arm alike. The whole flow through the service, git for real, the vibe CLI played.
 /// </summary>

@@ -49,25 +49,57 @@ public sealed class KimiAcpProfile(ForeignKimiWatch watch) : IAcpProfile
     /// <summary>The name of the spent-allowance failure — the field of the shim's report that <c>KimiRuntime</c> classifies a rate limit from, never the text.</summary>
     public const string BalanceSpent = "balance_spent";
 
-    /// <summary>The sentences measured on 2026-10-12 (RESULTS §2), the specific one first.</summary>
-    private static readonly AcpKnownFailure[] Failures =
+    /// <summary>The name of the spent-plan-quota failure — Kimi's own: markers are matched against every vendor's stderr, so the name says whose it is.</summary>
+    public const string QuotaSpent = "kimi_quota_spent";
+
+    /// <summary>The name of a sign-in-prefixed provider error that is none of the others — quoted in the vendor's own words, no cure.</summary>
+    public const string ProviderError = "provider_error";
+
+    private const string NotSignedIn = "not_signed_in";
+
+    private const string SignInCure = "run `kimi login` in a terminal and try again";
+
+    /// <summary>
+    /// The sentences Kimi is known to write, in the order they are matched — FIRST match wins (<see cref="AcpDiagnosis.Of"/>), so every row stands before the
+    /// more general one it contains. Kimi puts the same <c>Authentication required:</c> prefix on a 401, on a spent 5-hour quota (429) and on a spent balance,
+    /// so the prefix says nothing about which it is: the words after it decide, and only a bare prefix is a lost sign-in.
+    /// </summary>
+    /// <remarks>
+    /// <para>1 the plan lacks the model (measured 2026-10-12, RESULTS §2 — it begins with the sign-in words, hence first). 2 the 5-hour plan quota is spent (the
+    /// owner's kimi 2.2.0, 2026-10-19) — before the sign-in rows it hides behind; its phrase is in neither codex's "hit your usage limit" nor the sales footer
+    /// "rate limit reached; upgrade", so it takes nothing of theirs. 3 a spent balance — before the sign-in rows, so the wrapped sample reaches it.</para>
+    /// <para>4 a 401 keeps the login cure, listed before 5 because its phrase contains 5's. 5 <b>the colon is the discriminator</b>: any
+    /// <c>Authentication required: &lt;status&gt; …</c> the rows above did not claim is the vendor's own failure — quoted in its words, no cure, the agent's own exit (70);
+    /// a 503 or a plain "Too Many Requests" is not a lost sign-in and not a spent allowance. 6 the bare form (RESULTS §2: no colon) is the one sign-in refusal measured.</para>
+    /// </remarks>
+    public static readonly IReadOnlyList<AcpKnownFailure> Failures =
     [
         new(
             "Your current subscription does not have access to",
             "subscription_model",
             "the Kimi Code plan does not include this model — pick one the plan has (kimi-code/k3-256k answered on this one) or upgrade the plan",
             AcpFailureKind.Refused),
-        new(
-            "Authentication required",
-            "not_signed_in",
-            "run `kimi login` in a terminal and try again",
-            AcpFailureKind.Refused),
+        new("reached your 5-hour usage limit", QuotaSpent, KimiQuotaWords.Fixed, AcpFailureKind.Spent),
         new(
             "insufficient balance",
             BalanceSpent,
             "the Kimi allowance is spent (D14) — waiting does not clear it; top up or wait for the plan's reset",
             AcpFailureKind.Spent),
+        new("Authentication required: 401", NotSignedIn, SignInCure, AcpFailureKind.Refused),
+        new("Authentication required:", ProviderError, string.Empty, AcpFailureKind.Failed),
+        new("Authentication required", NotSignedIn, SignInCure, AcpFailureKind.Refused),
     ];
+
+    /// <summary>
+    /// The names of the rows that say an allowance is spent — DERIVED from <see cref="Failures"/>, never a second hand-kept list. Declared after the table:
+    /// static initialisers run in textual order.
+    /// </summary>
+    public static readonly IReadOnlySet<string> SpentNames =
+        Failures.Where(failure => failure.Kind == AcpFailureKind.Spent).Select(failure => failure.Name).ToHashSet(StringComparer.Ordinal);
+
+    /// <summary>The phrase of the Spent row called <paramref name="name"/>, as the table writes it — empty for a name that is not a Spent row.</summary>
+    public static string SpentPhraseOf(string name) =>
+        Failures.Where(failure => failure.Kind == AcpFailureKind.Spent && failure.Name == name).Select(failure => failure.Phrase).FirstOrDefault() ?? string.Empty;
 
     /// <summary>
     /// The Kimi versions coai has measured. Every number in <c>research/RESULTS_kimi_confinement.md</c> — the write refusals, the
@@ -158,6 +190,23 @@ public static class AcpProfiles
 {
     /// <summary>The profiles, in the order a refusal lists them.</summary>
     public static readonly IReadOnlyList<IAcpProfile> All = [new KimiAcpProfile()];
+
+    /// <summary>
+    /// <paramref name="note"/> without the cure the shim appended (<see cref="AcpDiagnosis.Note"/>), looked up in the rows of every profile of <paramref name="profiles"/> — the one
+    /// way a reader outside this layer (the reviewers' summary) strips it, so a second profile needs a row here and nothing in the reader.
+    /// </summary>
+    public static string WithoutCure(string note, IReadOnlyList<IAcpProfile> profiles) =>
+        AcpDiagnosis.WithoutCure(note, [.. profiles.SelectMany(profile => profile.KnownFailures)]);
+
+    /// <summary>The vendor's own words out of a cure-less note of any of <paramref name="profiles"/> (<see cref="AcpDiagnosis.CurelessReason"/>), or empty.</summary>
+    public static string CurelessReason(string note, IReadOnlyList<IAcpProfile> profiles) =>
+        AcpDiagnosis.CurelessReason(note, [.. profiles.SelectMany(profile => profile.KnownFailures)]);
+
+    /// <summary><see cref="CurelessReason(string, IReadOnlyList{IAcpProfile})"/> over the profiles this build ships.</summary>
+    public static string CurelessReason(string note) => CurelessReason(note, All);
+
+    /// <summary><see cref="WithoutCure(string, IReadOnlyList{IAcpProfile})"/> over the profiles this build ships.</summary>
+    public static string WithoutCure(string note) => WithoutCure(note, All);
 
     /// <summary>The names, for a refusal that says what this build knows.</summary>
     public static IEnumerable<string> Names(IReadOnlyList<IAcpProfile> profiles) => profiles.Select(profile => profile.Name);

@@ -3717,7 +3717,7 @@ flowchart LR
 | `Store/RoundAuthorsPopulation.cs`, `RoundAuthorsCoders.cs`, `RoundLines.cs`, `RoundAuthorsSumsOf.cs`, `ModelFamily.cs` | WHO is in: cohorts over E4's *settled* rounds (D1), contributors (D2), the worst state of the union (D3) and the coverage of the union (D12: a contributing round's `uncovered_writes > 0` leaves the round `size not covered`, its `-1` leaves it `size coverage unknown`), coder mix with `unknown` a suffix and never a family (D4), effort and main model (D5), the reviewer set (D6, D7), lines (D10), one exclusion per round in D12's order |
 | `Store/RoundAuthorsCells.cs`, `RoundAuthorsExclusions.cs`, `RoundAuthorsHeader.cs` | HOW they are counted: one-round cells folded by `Add` — the same function `--add` uses — figures as ratios of sums (D16), marks (D14), every exclusion reason listed with its count, the header (D15) |
 | `Store/RoundAuthorsMerge.cs` | The JSON of sums, its own strict context, `Report`, `Parse`, `Add` |
-| `Store/RoundAuthorsText.cs`, `Server/RoundAuthorsMode.cs` | The table (every control character of a displayed value — a store row or an `--add` file — printed as `?`, so no terminal escape reaches the screen); the flags and the exit codes |
+| `Store/RoundAuthorsText.cs`, `Server/RoundAuthorsMode.cs` | The table (EVERY line — header, sources, tables — goes through `Printable` once, where the lines are joined, so a control, format (bidi override, zero-width, BOM, TAG character), line/paragraph-separator or unassigned CODE POINT (judged per rune, so a character above U+FFFF is not let through as two surrogates; a lone surrogate and U+FFFD show as `?`) of a store row or an `--add` file is printed as `?` and no terminal escape reaches the screen; `Misshapen` also refuses at `--add` (65) a cell or exclusion whose cohort or period is not a word this report writes); the flags and the exit codes — every refusal sentence is written to stderr through `RoundAuthorsMode.Printed` (the same `Printable`, on the whole sentence — a refusal is ONE line, so a line break in quoted input shows as `?` and cannot forge a second line), so a quoted selection word, member name or flag value never carries a terminal escape |
 
 **What the report will not say, and says.** The state it reads for a round is the roll-up over its two windows — per-window states live in the
 session file only and step 24 does not project them — so with `before-open` left out a round whose before-open window alone is partial or
@@ -3740,6 +3740,93 @@ shared context must stay lenient for old session files; the branch map is keyed 
 carries no absolute path; `NumeratorSums` carries `DeltaTotal` (the per-100-delta figure needs the findings of the rounds whose delta is recorded);
 reviewers, findings and size are read for the in-window rounds only; `ExclusionCount` carries `Because` (the per-word split of `size unavailable`);
 CA1502 (cyclomatic complexity 4) is switched on in `.editorconfig` for the report's files.
+
+### `--backfill-authors` — the authors and the size of the rounds that ran before the live path knew (2026-10-19, `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E7.md` S1–S4)
+
+**What it is.** `coai-mcp --backfill-authors [--since <ISO-8601 UTC instant>] [--dry-run]` gives every settled plan or code round the authors and
+(for a code round with no size) the size the live path would have written, from what is on disk — one run per side, over that side's OWN store and
+transcripts (`Server/Backfill/`). It reuses the live units and adds only the selection, the reconstruction of a stored round's history, the narrow write
+and the mode: E3's reader and `CallerTranscriptLocator.LocateStored(vendor, id, home)`, E4's `RoundAttribution` through THE live `RoundAuthorsStep` (so a
+backfilled snapshot is the live one by construction), E5's `AuthorPeers.Find(…, deadline: null, …)`, `RoundAuthorsTable` and E2's `RoundSizer`. It is a
+WRITER mode (`Program.WriterModes`: a named data folder that is missing is refused with 74 before it runs).
+
+```mermaid
+flowchart TD
+    cli["coai-mcp --backfill-authors"] --> parse{"arguments"}
+    parse -->|bad, repeated, unknown| e65["stderr usage · exit 65"]
+    parse --> presence{"coai.db"}
+    presence -->|absent| zero["empty summary · exit 0 · nothing created"]
+    presence --> ro[("read-only connection<br/>Mode=ReadOnly")]
+    ro -->|user_version below step 24| e74a["this side has not run the release · exit 74"]
+    ro --> dry{"--dry-run"}
+    dry -->|yes| run
+    dry -->|no| backup["BackfillBackup: online backup of coai.db<br/>+ every session file, a NEW folder<br/>integrity · counts before and after · data_version · SHA-256<br/>the folder's own verdict: check.json"]
+    backup -->|a check fails| e74b["nothing written · summary names the check · exit 74"]
+    backup -->|verified| rw[("RoundsDb.OpenExisting<br/>the first read-write open")]
+    rw --> run["BackfillRun: gates in round order<br/>facts → plan reads → RoundBackfill per round"]
+    run --> round["decide (S1) → compute | reproject | heal<br/>→ settle → size → BackfillWriter (S3)"]
+    round --> out["summary JSON · exit 0, or 75 when something was deferred"]
+```
+
+**S1 — `BackfillDecision` (pure).** First rule that matches: *selection* (a settled `PlanReview`/`CodeReview` round at or after `--since`; skipped,
+interrupted, running, feature and document rounds get no state); *deferral* (a session file that exists and does not load); *the transcript is gone* (the
+file holds a snapshot → re-project when the database is empty, older or disagrees, else keep; no snapshot and a filled database → **heal** the file, or
+`keep: no file`; an empty database → compute, which ends `unobserved: <the locator's reason>`); *the transcript is present* — a **provisional** row
+(`peer running` in its state, or `PeerIds ⊄ PeerGates` with a complete lookup and a snapshot that is not `healed`) is recomputed once no named peer round
+overlaps and still runs, held back as `keep: peer still running` while one does, and deferred as `peers unknown` while the lookup did not complete; a
+**snapshot lost** from a file that lists the round (an older server stripped it) over a filled database is recomputed; an equal-or-newer `observed`/`partial`
+row with its snapshot is kept — never an `unobserved` one; a current snapshot over an empty, older or disagreeing database is re-projected; the rest is
+computed. `Settle` then guards the result: **a weaker state never replaces a stronger one, and neither does one an OLDER reader or attribution produced**;
+an equal projection writes nothing (only the FILE, when it lacks its snapshot); `BackfillDecision.CorrectedBelow` (default `0`/`0`) is the one exception J1's
+correcting fix would set. The state's strength, `observed` 3 > `partial` 2 > `unobserved` 1 > empty 0, is read through `AuthorsSnapshot.IsWellFormed` and
+`AuthorsSnapshot.Split` — the one inverse of `Render`, in core beside it, which the heal reads the column back through too (code gate finding 20): a stored
+state the rule refuses counts as empty. **A deferral is the whole round's** (code gate finding 7): a round decided `deferred` is not measured and not written
+on either side — the size waits with the authors — so the two stores never disagree on a size the file could not take. `src_mcp/src/Server/Backfill/*.cs`
+is held to cyclomatic complexity 4 by `CA1502` (`.editorconfig`).
+
+**S2 — a stored round's history.** `StoredHistory` reads every plan/code round and each gate's session file (`Exists` before `Load`, which answers null for a
+torn file too: *gone*, *replaced* by another session, or *unreadable* — deferred, never recorded); the open time is the FILE's `OpenedUtc`, never
+`sessions.opened_utc`, which is the clock of the first projection. A gate whose file is gone is rebuilt from its rows. `StoredFacts` gathers, once per
+round, the transcript location, THE peer lookup and the file's snapshot presence. `BackfillAttribution` runs the live `RoundAuthorsStep` with the stored
+caller id as its injected `CLAUDE_CODE_SESSION_ID`, the peer set it was handed, a 64 MiB / **60 s** budget (never the live 2 s) and `CallerReads` as its
+reader: one read per caller at the lowest bound any of its rounds needs (a planning pass with a probe records the bounds first). The `authors_id_source` is the
+row's own — `stored` only where it had none. `StoredSizer` rebuilds a code round's size from the RECORDED `base_ref` and `head_sha` through `ContextAssembler`
+and `RoundSizer` (so the partition, the delta and the gitlink count are E2's own code), never re-based on a merge-base taken today; a `ComparedAgainst` that is not
+the recorded base is `size: base not an ancestor`, and `repository not found`, `commit not found: base|head` and `git failed` name the rest. The size carries
+`SizeOrigin.Backfill`; a live size is never replaced, and a backfill never re-measures its own.
+
+**S3 — the narrow write.** `BackfillWriter` never calls `RecordRound`: it writes through `RoundAuthorsTable.Record` and `RoundChangesTable.Record` inside ONE
+`BEGIN IMMEDIATE` transaction (`RoundsDb.Transaction()`), under the session's `SessionClaim`. The order: claim (busy → deferred) → begin (busy → deferred) →
+**re-read the round's `RoundFingerprint` inside the lock** — EVERY column of the round's row and every `round_authors` / `round_changes` row, whole
+(`SELECT *`, so a re-recorded `head_sha` under a size measured from the old commits, or a column a later schema step adds, is covered by construction — code
+gate findings 0, 6, 18) — and compare with what the round was selected with (a difference is a live server's write: deferred, nothing written) → load the file, replace ONLY the matching round's
+`Authors`/`Size`/`Gitlinks`, save, load again and verify → the two row writers FROM the verified copy → commit. The file is written first, so a run killed between the
+halves leaves a snapshot the next run re-projects without reading the transcript. A **heal** writes the file only (the snapshot built from the database inside the
+lock, `IdSource = "healed"`, everything the database never held `Unknown`); a gone or replaced file is a **database-only** write; an equal result writes nothing.
+`RoundBackfill` takes one round from facts to counts and gives the gate's in-memory journal what it wrote, so the next round reads its earlier callers and its delta's
+predecessor from it — which is also how a dry run keeps its counts equal to the writing run's.
+
+**S4 — the mode and its safety.** A writing run makes a **verified backup first** (`BackfillBackup`): SQLite's ONLINE backup of `coai.db` and every
+`sessions/session-*.json` copied byte for byte, into a NEW folder `<dataDir>/backfill-backups/<yyyy-MM-ddTHH-mm-ssZ>/` (a second in the same second is `-2`); the
+copy must open read-only, answer `ok` to `integrity_check`, carry the source's `user_version`, hold the source's row count in EVERY table counted before AND
+after (a table whose name is not a plain identifier is never put into SQL and never verifies — S2077), and the source's `PRAGMA data_version` — read twice on the mode's own read-only connection, each an autocommit statement — must be unchanged: SQLite
+changes it when ANY OTHER connection commits, which a count (an `UPDATE` keeps it) cannot show; every session file's SHA-256 equals its source's. Any failure →
+nothing is written, the summary names the check, exit **74**, the folder stays. **Every folder carries its own verdict**, `check.json` (`BackupVerdict`: the checks
+and whether every one held — code gate finding 22), so a refused backup, a run killed mid-copy (no file) and a verified one are told apart on disk a year later;
+a restore treats a folder without `verified: true` as unverified. `RoundsDb.OpenExisting` — which migrates — is the first read-write open and happens
+only after the backup verified. `--dry-run` reads through `Mode=ReadOnly` only, makes no backup, writes no store file (SQLite's `-wal`/`-shm` and the session store's
+`.turn` lock are the named coordination files it may create) and keeps the run's results in the in-memory journal so its counts are the writing run's. **Nothing is ever
+deleted**, on either side. Exit codes: **0** done (a missing store included, nothing created), **65** a bad, repeated or unknown argument, **74** a store or session file
+that will not read or write (or a side below step 24, or a backup that did not verify), **75** the run completed but something was deferred (`deferred.busy`,
+`unreadable`, `changedUnderUs`, `peersUnknown` — the summary says to run again; the exit code is read from the counts' total, and a deferral reason the four
+fields cannot name is refused loudly rather than printed as zeros — code gate finding 19); **never 64**. The summary is JSON on stdout — `readerVersion`,
+`attributionVersion`, `since`, `dryRun`, `backupDir`, `backupCheck`, `selected`, `written` (`computed`, `recomputedProvisional`, `recomputedSnapshotLost`,
+`reprojected`, `databaseOnly`, `corrected`), `healed`, `kept`, `deferred`, `unobserved` (per reason), `size` (`written`, `kept`, `unrecoverable`, `delta`),
+`elapsedMs`, `next` — counts and closed words, no text; `backupDir` is the one path printed.
+
+**A still-running peer round is invisible in production** (E5 §12 deviation 8): it has no row and no snapshot, so it carries no caller on disk and E4's `peer running`
+cannot name it until it is projected. `ANamedPeerRoundStillRuns` therefore holds for a round projected in the database (the tests' state) and the repair of such a row
+leans on the grown-peer-set rule instead; a `peer running` row without its transcript stays provisional for ever.
 
 ### The gate's history of a piece of work (`GateHistoryQuery`, 2026-09-26, feature review S2.3)
 
@@ -7640,7 +7727,7 @@ handed a PLACE — a coai-owned folder for its home and a sanitised copy to stan
   none row stands in an EMPTY `cwd` folder beside it, so a cwd never holds its own home. Everything goes in `finally`
   (`GitScratch.DeleteEvenIfReadOnly`) — on an answer, a refusal and a cancellation alike.
 - **`ask_consultants` — a killed server's row scratch is swept, and a live row's is locked (D8, 2026-10-18,
-  `todo/PLAN_vibe_reads_a_folder_of_repositories.md`).** `finally` never runs when the server is killed, and the product sweep
+  `research/PLAN_vibe_reads_a_folder_of_repositories.md`).** `finally` never runs when the server is killed, and the product sweep
   (`PanelService.ScratchPrefixes`) listed only `coai-answers-*`, `coai-repair-*` and `coai-noworkspace-*`, so a row's
   `coai-question-*` folder — and the repository copies in it — stayed for ever (`shared/temp-sweep.json` keeps it `neverSwept` for the
   TEST sweep, which says the product sweeps it "on its own clock": it did not). Now `ScratchPrefixes` has `coai-question-*`, and the
@@ -7722,6 +7809,10 @@ flowchart TD
 
 Not done here: one live `consult` and one live question row through the product with a real Vibe (paid turns) — the
 step after the release, recorded then in research/RESULTS_vibe_confinement.md and [module_tests.md](module_tests.md).
+**Update 2026-10-20:** one live question row with a real Vibe HAS run through the product (Windows, coai-mcp 0.62.0, root `d:\rsd`): the
+parent folder was expanded and copied (~30 s including git's confirmations, 411 linked worktrees skipped), and the row ended at the
+20-turn cap without an answer — [PLAN_vibe_reads_a_folder_of_repositories.md](PLAN_vibe_reads_a_folder_of_repositories.md). The live
+`consult` and the WSL row are still not run.
 
 ### The home sweep and the place, hardened before the S3 gate (2026-10-13 — the plan round and risk consultation ee1eecf4)
 

@@ -371,6 +371,8 @@ against the code or a run before it went in here — the question consultant had
     its own Kimi launches per credentials folder (below) and the person's own interactive `kimi` is a stated race; (iii) a
     disposal that walked the junction would delete the person's sign-in — closed below, with a red-first test; (iv) on
     Linux and macOS the junction is a symlink into a `0700` folder — D18 refuses those hosts until the probe runs there.
+    **M-K14 note, 2026-10-20:** the Kimi exit 77s recorded since 2026-10-16 cannot be classified and may be quota answers, so they neither confirm nor clear the
+    refresh-rotation suspicion — see `PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md` D6.
   - **Making the junction.** The probe used `mklink /J` (`scripts/lib/kimi.mjs:121-124`) — a mount-point reparse point. The
     product makes the same reparse point itself (`DeviceIoControl` with `FSCTL_SET_REPARSE_POINT`, a P/Invoke the AOT build
     takes; no shell, no quoting of the person's profile path, no privilege) — or, if that proves awkward, `cmd.exe` by its

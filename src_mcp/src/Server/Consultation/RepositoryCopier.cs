@@ -5,7 +5,7 @@ namespace CoaiMcp.Server;
 
 /// <summary>
 /// The ONE method every repository a one-shot place copies goes through — a work tree granted directly and a repository found beneath a
-/// granted parent alike (D1 of <c>todo/PLAN_vibe_reads_a_folder_of_repositories.md</c>): the link chain checked first, git's answer
+/// granted parent alike (D1 of <c>research/PLAN_vibe_reads_a_folder_of_repositories.md</c>): the link chain checked first, git's answer
 /// asked again (it closes the window between the walk and the copy), then the snapshot of the LIVE tree as git lists it.
 /// </summary>
 /// <remarks>

@@ -83,6 +83,19 @@ public static partial class Redaction
     private const string VendorPattern =
         NotAsciiWordBefore + @"(sk-|ghp_|gho_|ghu_|ghs_|github_pat_|xox[baprs]-)[A-Za-z0-9._-]{8,512}";
 
+    /// <summary>
+    /// A Moonshot account id as Kimi writes one into its own errors: <c>org-…</c> or <c>ak-…</c>, an alphanumeric body of 8–128 with AT LEAST ONE digit.
+    /// </summary>
+    /// <remarks>
+    /// Not part of <see cref="VendorPattern"/>: that list is "unmistakable on sight" and <c>org-</c> is not — a plain
+    /// <c>org-[A-Za-z0-9._-]{8,}</c> would also take <c>org-settings-panel</c> out of a file served to a reviewer
+    /// (<see cref="SafeSource"/>) and refuse a consultant question (<see cref="FirstSecretClass"/>). The digit is what an id has and a word
+    /// does not. The look-ahead is bounded (<c>{0,127}</c>) like every other quantifier here. The real shape is not measured;
+    /// story 3 of todo/PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md checks the first real line against this pattern.
+    /// </remarks>
+    private const string MoonshotIdPattern =
+        NotAsciiWordBefore + @"(org-|ak-)(?=[A-Za-z0-9]{0,127}[0-9])[A-Za-z0-9]{8,128}";
+
     private const string ParameterPattern =
         @"([?&#])([^" + JsSpace + @"=&#]{1,64})=([^" + JsSpace + @"&#]{1,4096})";
 
@@ -173,6 +186,11 @@ public static partial class Redaction
     [GeneratedRegex(VendorPattern, RegexOptions.CultureInvariant, BacktrackingCeilingMs)]
     private static partial Regex Vendor();
 
+    // A Moonshot account id (org-… / ak-…), so a vendor's own sentence can be written down without the account.
+    // NOT NonBacktracking because: the lookbehind, and the digit look-ahead besides — see BoundaryReason. Every quantifier is bounded.
+    [GeneratedRegex(MoonshotIdPattern, RegexOptions.CultureInvariant, BacktrackingCeilingMs)]
+    private static partial Regex MoonshotId();
+
     // A query or fragment parameter, so its NAME can be judged before its value is kept.
     // NonBacktracking: no boundary, and a `{1,4096}` value on its own builds in 28 ms (measured) —
     // it is the bearer pattern's alternation in front of its loop that breaks the ceiling, not the
@@ -202,6 +220,7 @@ public static partial class Redaction
         new("url-authority", UrlAuthority(), BoundaryReason),
         new("bearer", Bearer(), AutomatonReason),
         new("vendor-key", Vendor(), BoundaryReason),
+        new("moonshot-id", MoonshotId(), BoundaryReason),
         new("labelled", Labelled(), NoReason),
     ];
 
@@ -217,6 +236,7 @@ public static partial class Redaction
         (UrlAuthority(), "${1}" + Redacted + "@"),
         (Bearer(), "${1} " + Redacted),
         (Vendor(), "${1}" + Redacted),
+        (MoonshotId(), "${1}" + Redacted),
     ];
 
     /// <summary>
@@ -361,6 +381,7 @@ public static partial class Redaction
         (UrlAuthority(), "url-authority"),
         (Bearer(), "bearer"),
         (Vendor(), "vendor-key"),
+        (MoonshotId(), "moonshot-id"),
     ];
 
     /// <summary>The four passes, in the order the contract fixes, under one deadline — then the cut.</summary>

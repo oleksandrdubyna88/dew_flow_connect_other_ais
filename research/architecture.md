@@ -52,7 +52,7 @@ C4Container
   Rel(ext, codex, "spawn — a CHAT, in an empty directory of its own")
   Rel(ext, gem, "spawn — a CHAT, in an empty directory of its own")
   Rel(ext, mcp, "writes the Team server token file the shim reads")
-  Rel(ext, mcp, "one-shot spawns: --providers, --log, --round-counts, --findings, --findings-many, --pairs-json, --real-method, --file-at, --tree-at, --trees, --tree-remove, --close-consult, --cadence, --consultants and --check-consultant (served since epic 4, spawned by the Consultant tab from epic 5)")
+  Rel(ext, mcp, "one-shot spawns: --providers, --log, --round-counts, --backfill-authors (an operator's verified, one-time writer, never the extension), --findings, --findings-many, --pairs-json, --real-method, --file-at, --tree-at, --trees, --tree-remove, --close-consult, --cadence, --consultants and --check-consultant (served since epic 4, spawned by the Consultant tab from epic 5)")
   Rel(mcp, srv, "a review, when the reviewer is a Team server's")
   Rel(mcp, srv, "and first: which review roles do you run?")
   Rel(ext, srv, "the same question, for the panel's own picture")
@@ -1297,7 +1297,7 @@ hands the row its own snapshot comparison as the tree check `ConsultantTurn` ask
 conditions changes all three ([module_runners.md](module_runners.md), [module_server.md](module_server.md)). Nothing
 reaches the extension: the record, the reply and the ledger keep their shapes; a turn cut short is written `interrupted`.
 
-### A Vibe disk row reads a PARENT folder of repositories (2026-10-19, `todo/PLAN_vibe_reads_a_folder_of_repositories.md`)
+### A Vibe disk row reads a PARENT folder of repositories (2026-10-19, `research/PLAN_vibe_reads_a_folder_of_repositories.md`)
 
 Inside `coai-mcp`, across modules, not across a container: the Server's consultation flow — `QuestionRowLaunch` asks `ConsultantPlaces.OneShotAsync` for a
 row's place — now EXPANDS a granted root that git does not call a work tree into the repositories beneath it (`ParentExpansion`, with `RepositoryWalk`
