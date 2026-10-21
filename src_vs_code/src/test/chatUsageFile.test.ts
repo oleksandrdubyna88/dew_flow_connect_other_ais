@@ -85,13 +85,14 @@ test('turns queued together land in the order they were asked, not the order the
 test('a data directory that does not exist yet is created rather than refused', async () => {
   // On a machine where nobody has run a review round, the chat is the FIRST thing to write anything
   // under the coai data directory.
-  const dir = join(home(), 'not', 'there', 'yet');
+  const root = home();
+  const dir = join(root, 'not', 'there', 'yet');
   try {
     await recordChatTurn(dir, record());
 
     assert.strictEqual((await readChatUsage(dir)).length, 1);
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
   }
 });
 
