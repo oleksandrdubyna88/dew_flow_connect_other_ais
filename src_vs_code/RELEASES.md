@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.83.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.82.0...extension-v0.83.0) (2026-10-21)
+
+
+### Features
+
+* **authors:** E5 — the round stores who wrote the code ([#863](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/863)) ([bc5b367](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/bc5b367df5c80144c0db094c00fab3faa7a12a23))
+
+
+### Bug Fixes
+
+* **kimi:** a spent Kimi quota is not reported as a lost sign-in ([#900](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/900)) ([4dbfba4](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/4dbfba4d97ae68d022fac4cfd3ab5047fac71699))
+* **rounds:** the Rounds labels say what they count ([#891](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/891)) ([8c9c32d](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/8c9c32df722970b3ce386ec8300592c9b5c636c2))
+
 ## [0.82.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.81.0...extension-v0.82.0) (2026-10-19)
 
 
