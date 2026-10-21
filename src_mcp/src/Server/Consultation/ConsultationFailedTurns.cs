@@ -136,7 +136,7 @@ internal sealed class ConsultationFailedTurns(
 
     /// <summary>The turn's ledger row (<see cref="ConsultantTurnBooks.Billed"/>), role <c>consult</c>.</summary>
     public void Billed(TurnConsultant consultant, string outcome, TimeSpan elapsed, Usage usage, string consultation, string resetsUtc = "") =>
-        ConsultantTurnBooks.Billed(ledger, consultant.Row, consultant.Model, ConsultantRoles.Consult, outcome, elapsed, usage, consultant.RanWith, resetsUtc, consultation);
+        ConsultantTurnBooks.Billed(ledger, consultant.Row, consultant.Model, ConsultantRoles.Consult, outcome, elapsed, usage, consultant.RanWith, consultation: consultation, resetsUtc: resetsUtc);
 
     /// <summary>A best-effort write on a path that is already failing — it must not mask what failed.</summary>
     public void Quietly(Action write)

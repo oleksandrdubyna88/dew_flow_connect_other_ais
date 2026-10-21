@@ -141,6 +141,56 @@ public sealed class TheAskingLinesSayWhatTheyRanWithTests : ConsultScenarioBase
         SaysItIsCodex(line);
     }
 
+    /// <summary>
+    /// A check whose caller cancels AFTER its launch landed is billed for that launch, so its line says what the launch ran with — a refusal
+    /// before any launch is the only line that may be blank. The first launch answers nothing (so a follow-up is offered and the tree is
+    /// asked), and the caller's token fires the moment that launch returns; the cancellation reaches the check from the tree snapshot.
+    /// </summary>
+    [Fact]
+    public async Task ACheckCancelledAfterItsLaunch_StillRecordsWhatTheLaunchRanWith()
+    {
+        using var scratch = TempDir.For("coai-asking-check-cancelled-");
+        using var env = CodexHome(CodexConfig)
+            .Set("FAKECLI_VERSION_STDOUT", Release + "\n")
+            .Set("FAKECLI_STDOUT", """{"type":"thread.started","thread_id":"0198f2c1-check"}""" + "\n");
+        using var caller = new CancellationTokenSource();
+        var settings = new PanelSettings
+        {
+            Providers = [],
+            DataDir = _data,
+            ReviewerTimeout = TimeSpan.FromSeconds(60),
+            ConsultEnabled = true,
+            Consultants = new Dictionary<string, ConsultantChoice>
+            {
+                [CallerIdentity.Claude] = new("codex", Runtime: "codex", ExecutablePath: FakeCliExe),
+            },
+        };
+
+        var (code, stdout, _) = await ConsultantCheckMode.AnswerAsync(
+            settings, ["--check-consultant", "--caller", "claude"], new CancelsAfterTheLaunch(_launcher, caller), scratch.Path, _ => { }, Noticing.None, caller.Token);
+
+        code.Should().Be(0, stdout);
+        var line = OnlyLine(UsageKinds.Consult);
+        Text(line, "role").Should().Be(ConsultantRoles.Check);
+        Text(line, "outcome").Should().Be("cancelled", "the caller took the call back after the launch landed");
+        SaysItIsCodex(line);
+    }
+
+    /// <summary>The real launcher, firing the caller's token the moment the consultant's own child (not its <c>--version</c>) has returned.</summary>
+    private sealed class CancelsAfterTheLaunch(IProcessLauncher inner, CancellationTokenSource caller) : IProcessLauncher
+    {
+        public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
+        {
+            var result = await inner.RunAsync(request, ct);
+            if (string.Equals(request.Executable, FakeCliExe, StringComparison.OrdinalIgnoreCase) && request.Arguments is not ["--version"])
+            {
+                await caller.CancelAsync();
+            }
+
+            return result;
+        }
+    }
+
     [Fact]
     public async Task AQuestionRowLine_SaysWhatItRanWith()
     {

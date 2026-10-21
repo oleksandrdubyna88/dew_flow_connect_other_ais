@@ -13,9 +13,10 @@ namespace CoaiMcp.Runners.Reviewers;
 /// sentence; a measurement over the ledger could not count withdrawals against backstops at all.</para>
 /// <para>Here, in the library both halves compile against, for <see cref="UsageKinds"/>' and
 /// <see cref="LaunchAttempts"/>' reason: one spelling of a ledger column, so a writer and a reader cannot disagree
-/// about it. A LOCAL review line carries one too since E3.S2 of todo/PLAN_the_round_counter_tail_E3.md: a local round's clock
-/// and the MCP client's own cancellation still reach the executor as one token (<c>RoundEngine</c> links them), so the cause is decided
-/// ABOVE it, where the three tokens are held (the server's <c>RoundCancellation</c> records the FIRST to fire, when it fires), and written on the cancelled turn's last line. Empty is "not said",
+/// about it. A LOCAL review line carries one too since E3.S2 of todo/PLAN_the_round_counter_tail_E3.md: the executor sees only
+/// the round's one token, so the cause is decided ABOVE it, where the three tokens are held: the server's <c>RoundCancellation</c> owns the
+/// cancellation — callbacks on the caller's token and the round's clock record the FIRST cause to fire and only then cancel the round's own
+/// token — and the cause is written on the cancelled turn's last line. Empty is "not said",
 /// never a cause — and on a local line it now means the turn was not cancelled.</para>
 /// </remarks>
 public static class EndCauses

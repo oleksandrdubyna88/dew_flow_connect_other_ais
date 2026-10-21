@@ -172,20 +172,29 @@ internal sealed class ConsultantCheckTurn(
 
         var clock = Stopwatch.StartNew();
         List<ReviewerLaunch> launched = [];
+        List<LaunchOptions> built = [];
         try
         {
-            return await TurnAsync(new Turn(checking, row, runtime, scratch, budget, launched, clock), killedAs, turn);
+            return await TurnAsync(new Turn(checking, row, runtime, scratch, budget, launched, clock, built), killedAs, turn);
         }
         catch (OperationCanceledException) when (caller.IsCancellationRequested)
         {
-            return Failed(checking, row, new ConsultFailure.Cancelled(), ConsultantTurn.UsageOf(runtime, launched), clock.Elapsed, LaunchOptions.None);
+            return Failed(checking, row, new ConsultFailure.Cancelled(), ConsultantTurn.UsageOf(runtime, launched), clock.Elapsed, RanWithOf(built, launched));
         }
         catch (Exception e) when (e is not OutOfMemoryException)
         {
             // A snapshot that threw, the deadline under a git command — the same reading a consultation gives a fault.
-            return Failed(checking, row, ConsultationFailing.FaultIs(killedAs(), e), ConsultantTurn.UsageOf(runtime, launched), clock.Elapsed, LaunchOptions.None);
+            return Failed(checking, row, ConsultationFailing.FaultIs(killedAs(), e), ConsultantTurn.UsageOf(runtime, launched), clock.Elapsed, RanWithOf(built, launched));
         }
     }
+
+    /// <summary>
+    /// What a turn that ended by an exception ran with: the launch's labels, with the release its launches asked, once a launch has LANDED
+    /// (the turn is billed for it) — else <see cref="LaunchOptions.None"/>, which is all a turn that launched nothing may say (E3.S1 of
+    /// todo/PLAN_the_round_counter_tail_E3.md).
+    /// </summary>
+    private static LaunchOptions RanWithOf(IReadOnlyList<LaunchOptions> built, IReadOnlyList<ReviewerLaunch> launched) =>
+        built is [var options] && launched is [.., var last] ? options.VersionedBy(last.CliVersion) : LaunchOptions.None;
 
     /// <summary>A check that ended before any turn — cancelled or past its deadline while its scratch was made — classified and billed nothing.</summary>
     public ConsultCheckRecord Ended(ConsultCheckRecord checking, ProviderSettings row, ConsultFailure failure, TimeSpan elapsed) =>
@@ -194,7 +203,7 @@ internal sealed class ConsultantCheckTurn(
     /// <summary>One turn's fixed inputs, so no step takes eight arguments.</summary>
     private sealed record Turn(
         ConsultCheckRecord Checking, ProviderSettings Row, IConsultantRuntime Runtime, CheckScratch Scratch, TimeSpan Budget,
-        List<ReviewerLaunch> Launched, Stopwatch Clock)
+        List<ReviewerLaunch> Launched, Stopwatch Clock, List<LaunchOptions> Built)
     {
         /// <summary>What the check's launch ran with, once it is built (E3.S1 of todo/PLAN_the_round_counter_tail_E3.md) — none before, which is what a check refused before its launch bills.</summary>
         public LaunchOptions RanWith { get; init; } = LaunchOptions.None;
@@ -255,6 +264,8 @@ internal sealed class ConsultantCheckTurn(
         // point, or by an exception outside this turn, is billed on the row's own model — it never built a launch to learn another from — and says
         // nothing of what it ran with (E3.S1 of todo/PLAN_the_round_counter_tail_E3.md).
         turn = turn with { Row = turn.Row with { Model = ModelRan.Of(launch.Model, turn.Row.Model) }, RanWith = launch.RanWith };
+        // Said to RunAsync too, which holds the first copy of the turn: an exception after the launch landed is billed with these labels.
+        turn.Built.Add(launch.RanWith);
         var turned = await ConsultantTurn.RunAsync(
             executor, turn.Runtime, launch, t => ChangesSinceAsync(before, turn.Scratch.Repo, t), turn.Launched.Add, ct);
         var changes = turned.Breached ? turned.ChangesBeforeFollowUp : await ChangesSinceAsync(before, turn.Scratch.Repo, ct);
@@ -365,7 +376,7 @@ internal sealed class ConsultantCheckTurn(
 
     /// <summary>One ledger row per check, under its own role — a check is a paid turn nobody asked a consultation for.</summary>
     private void Billed(ProviderSettings row, string outcome, TimeSpan elapsed, Usage usage, LaunchOptions ranWith, string resetsUtc = "") =>
-        ConsultantTurnBooks.Billed(ledger, row, row.Model, ConsultantRoles.Check, outcome, elapsed, usage, ranWith, resetsUtc);
+        ConsultantTurnBooks.Billed(ledger, row, row.Model, ConsultantRoles.Check, outcome, elapsed, usage, ranWith, resetsUtc: resetsUtc);
 
     /// <summary>The failure, with where its launch's transcript was kept — the consultation's own keeper and retention.</summary>
     private ConsultFailure Kept(ProviderSettings row, ReviewerLaunch final, ConsultFailure failure) =>

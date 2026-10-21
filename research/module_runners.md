@@ -1778,8 +1778,11 @@ flowchart LR
   first invocation, so every launch line of one reviewer carries the same options.
 - **Labelled since E3.S1 (2026-10-20, `todo/PLAN_the_round_counter_tail_E3.md`)**: a consultation turn (answered or failed),
   a consultant check, a question row and an api probe line now say what they ran with. The local `UsageLedger.RecordJob`
-  overload takes a REQUIRED `LaunchOptions ranWith` (after `stage`; `resetsUtc` and `consultation` stay defaulted) — a caller with
-  nothing to say passes `LaunchOptions.None` on purpose (a check or a consultation refused before its launch). The labeller is the
+  overload takes a REQUIRED `LaunchOptions ranWith` (after `stage`; `consultation` then `resetsUtc` stay defaulted, in that order in `RecordJob`, `ConsultantTurnBooks.Billed` and
+  `ConsultationFailedTurns.Billed` alike, so two adjacent strings cannot be swapped silently) — a caller with
+  nothing to say passes `LaunchOptions.None` on purpose (a check or a consultation refused before its launch). A check that ends by an
+  exception AFTER a launch landed (cancelled by its caller, a snapshot that threw) is billed for that launch and carries its labels too:
+  `ConsultantCheckTurn` keeps the built launch's `RanWith` where `RunAsync` can read it, and versions it by the last landed launch. The labeller is the
   review's own: `RowLaunchOptions.Of` takes a nullable `IReviewerRuntime`, and `RowLaunchOptions.Answering(built, row, launch)`
   labels a consultant invocation from the reviewer adapter every consultant carries (`built.Adapter`). The release rule moved to
   `LaunchOptions.VersionedBy(asked)` — the tier probe's `Printed`, else the final launch's `CliVersion` (Vibe's launch control),
