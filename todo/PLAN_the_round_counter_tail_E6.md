@@ -597,7 +597,12 @@ account, and must not read a sign-in to find out. So:
   shown per store. One store's success never hides another's refusal.
 - **Keyed money follows the round.** A review line with a `round` key counts its tokens and money only from the store `keyStore`
   names, so a copied store gives 1 round / 1 launch / $1 through the real renderer. Every retry inside the owning store still counts.
-  Keyless and non-review lines are counted per store as read; a copied keyless line is a stated limitation.
+  Keyless and non-review lines are counted per store as read; a copied keyless line is a stated limitation. A keyed line whose key
+  has NO `keyStore` entry (its round started before the window, is still running, or a snapshot is stale) is counted from the store
+  it was read in: ownership never drops spend (round windows cut by start time, money by line time).
+- **A foreign line is never priced at this window's override.** A line from another store with no reported `costUsd` is estimated
+  at the published list rate (`rateOf` without the local row's override, `usage.ts:703`) and marked *list-price estimate*, or
+  *cost unknown* when no list carries the model.
 - **Conflicting copies are said, not reconciled.** A key in two stores whose copies differ (reviewers, models, stage) is counted once
   from the owning store, and the block says *N rounds appear in two stores with different contents — counted from <store>*. The
   result does not depend on argument order beyond that named choice.
@@ -607,6 +612,9 @@ account, and must not read a sign-in to find out. So:
 | `OneStoresRefusal_IsNotHiddenByAnothersSuccess` | a WSL codex refusal with a future reset, then a Windows codex success → the WSL store's *quota out* line is shown | `resetLine` returns '' |
 | `ACopiedStore_IsOneRoundOneLaunchOneDollar` | two store ids, the same key and the same $1 launch in both ledgers → 1 / 1 / $1 in the rendered block | $2 |
 | `ConflictingCopies_AreSaid_InEitherOrder` | the first copy has fewer reviewers; then the snapshots reversed → the conflict sentence both times, the owning store named | the smaller copy silently counted |
+| `ASpendWhoseRoundStartedBeforeTheWindow_IsKept` | round at now − 7 d − 1 min, its $1 launch at now − 7 d + 1 min → 0 rounds counted, $1 money | $0 (the line dropped for a missing `keyStore`) |
+| `TwoRetriesInTheOwningStore_BothCount` | two launches of one key in the owning store, $1 each → $2 | — (guard) |
+| `AForeignLine_IsNotPricedAtThisWindowsOverride` | local override $1/M, list $10/M, a foreign line of 1 M input with no `costUsd` → $10 marked *list-price estimate* | $1 |
 | `APausedWriter_CannotHideRoundsForever` | writer A reads, pauses; B and C finish and write; A replaces the file → B and C are missing and the snapshot's `writtenUtc` is older than their rounds; the next write restores them | — (documents the bound) |
 
 **Store identity is LOCATION identity** (cadence consultation c5759f9a): the D1 hash changes when a distro is renamed or the data
