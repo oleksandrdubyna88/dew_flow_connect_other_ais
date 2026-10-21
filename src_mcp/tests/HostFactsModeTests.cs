@@ -155,4 +155,22 @@ public sealed class HostFactsModeTests : IDisposable
     {
         HostFactsMode.Json(Report(HostKind.Linux, BannerReading.Unread, WslGeneration.None)).Should().Contain("WSL2 only for now — it is measured", "the em dash was escaped to \\u2014");
     }
+
+    /// <summary>G2 of the code gate (2026-10-21): the line is serialized by the source-generated context, so any value — a quote, a backslash, a newline, a non-ASCII character, an emoji — comes back from <c>JsonDocument.Parse</c> as the same string, and the line stays ONE line.</summary>
+    [Fact]
+    public void AValueWithAQuoteABackslashANewlineAndNonAscii_RoundTripsThroughJsonDocument_OnOneLine()
+    {
+        const string awkward = "say \"hi\" C:\temp\new\nsecond line\ttab — ключ ✓ \U0001F600";
+        var report = HostFactsReport.Of(awkward, HostKind.Linux, new BannerReading(true, awkward), WslGeneration.None, new KeyringSessionFacts(true, false, [awkward], awkward));
+
+        var json = HostFactsMode.Json(report);
+        var line = Parsed(json);
+
+        json.Should().NotContain("\n", "a newline inside a value must be escaped, or the mode prints more than ONE line");
+        line.GetProperty("server").GetString().Should().Be(awkward);
+        line.GetProperty("banner").GetProperty("text").GetString().Should().Be(awkward);
+        line.GetProperty("keyringSession").GetProperty("daemons")[0].GetString().Should().Be(awkward);
+        line.GetProperty("keyringSession").GetProperty("listing").GetString().Should().Be(awkward);
+        json.Should().Contain("ключ ✓", "non-ASCII is written as text, not as \\uXXXX");
+    }
 }
