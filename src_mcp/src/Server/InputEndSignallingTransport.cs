@@ -41,7 +41,9 @@ internal sealed class InputEndSignallingTransport : ITransport
         _inner = inner;
         _onInputEnded = onInputEnded;
         _log = log ?? Serilog.Core.Logger.None;
-        _pump = Task.Run(PumpAsync);
+        // Explicitly NOT the disposing token: a task cancelled before it starts never runs PumpAsync, so its `finally` would never complete the
+        // reader the SDK is waiting on, and DisposeAsync's `await _pump` would throw. The pump observes the token itself, where it waits.
+        _pump = Task.Run(PumpAsync, CancellationToken.None);
     }
 
     public string? SessionId => _inner.SessionId;

@@ -547,7 +547,7 @@ public sealed class PanelService
     /// own session, which is what every caller before plan 4 meant and still means.
     /// </param>
     public Task<string> StatusAsync(string repoPath, string branch, string document = "") =>
-        StatusAsync(repoPath, branch, document, string.Empty);
+        StatusAsync(repoPath, branch, document, string.Empty, ct: HostStopping);
 
     /// <param name="plan">A plan to report the consultation cadence of — or empty for the one this session holds,
     /// if any (<c>research/PLAN_consult_on_a_cadence.md</c>). Read from the plan's own record, so it answers the same
