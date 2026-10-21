@@ -1353,6 +1353,18 @@ Windows runs (watches, §10).
 
 **S1 (C2) status (2026-10-19): built on `feat/suite-c2`, awaiting the macOS CI leg and the 20-run watch** — see C2's Outcome.
 
+**S4 (C18's product side) Outcome (2026-10-20, branch `feat/suite-e3-product`; the tests, their reds and the break-its are in `research/module_tests.md`, section "The suite is deterministic — E3 S4").**
+Built as the lead's decisions, the E3 plan round and the risk consult (the last three sections of this plan) say. `AtomicFile.MoveOver` retries `IOException or UnauthorizedAccessException` inside
+`AtomicFile.SharingRetry` (500 ms, one constant; `ConsultHealthPaths.SharingRetry` points at it), measured on the monotonic clock; `AtomicJson.WriteUnderTurn` writes through `AtomicFile.Write`; the heartbeat's missed beat is said at
+Warning and skipped (`QuestionFanOut.BeatAsync`); S27 is in `AtomicFile`. Deviations, each decided on what the code showed:
+- **The seam is an `internal sealed record AtomicSeams`** (`Clock`, `Pause`, `IsAlive`, `AfterTemp`) on an `internal` `Write` overload, not a lone `Action<int> pause` parameter: the monotonic window, the orphan rule's age and liveness, and "a writer paused after its temp file" each needed a seam.
+- **S25 injects the failure at the store's write road** (`QuestionConsultStore.FileWriter`, an `internal` init seam) on every OS, plus one Windows arm with the real hold, because a share-mode hold is Windows' alone and the catch must be proved on every leg. Added arms: the sweep keeps a question whose beats are refused while its pid is alive; a refused FINAL write still throws.
+- **`ProcessLiveness` moved** from `CoaiMcp.Server` to `runners/Processes` (public); nothing was copied. `PanelService` already imported the namespace.
+- **`MovableClock`** (test helper) gained a hand-moved monotonic reading (`GetTimestamp`, `TimestampFrequency`) so a window is movable without a sleep.
+- **S27's name check is exact:** `<record>.<pid>.<guid:N>.tmp`; a name that merely starts with the record's, or has no pid, is never touched.
+- **The orphan rule runs on every `AtomicFile.Write`**, so every caller of `AtomicFile` and `AtomicJson` (including S5's session write) gets it; it enumerates `<record>.*.tmp` in the record's folder only.
+- **Not done here:** `SessionStore` is S5; the extension's "interrupted" after two minutes without a beat is unchanged and now named in `module_extension.md`.
+
 **Size.** Five stories: S1 C2 (the launcher helper, S8 both arms, S9, the EndToEnd assertion; the brief pins the
 tracker stand-in's two observations and that the Team server's reader marker is cleared by the launch's normal end) —
 first, beside E1; S2 C14 (`TryRead`, the host's catch, S10 and its companions, the homes fix) — parallel; S3 D4 and S7

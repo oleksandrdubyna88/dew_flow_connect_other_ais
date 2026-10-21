@@ -17,7 +17,7 @@ public static class ConsultHealthPaths
     /// How long a move over a file a reader holds is retried: Windows refuses a move over a file open without delete
     /// sharing, and the panel polls these files — a reader holds a small one for milliseconds.
     /// </summary>
-    public static readonly TimeSpan SharingRetry = TimeSpan.FromMilliseconds(500);
+    public static readonly TimeSpan SharingRetry = Runners.Files.AtomicFile.SharingRetry;
 
     /// <summary><c>&lt;dataDir&gt;/consultations/health</c> — the outcome files, the check state and lock, <c>consultants.json</c>.</summary>
     public static string HealthDirectory(string dataDir) => Path.Combine(dataDir, "consultations", "health");

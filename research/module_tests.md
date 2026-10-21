@@ -4841,3 +4841,40 @@ The race cannot be won on purpose, so the launcher's start-time read is a seam �
 `all 6 reviewers answered` (code round) before it counts what was kept, so a reviewer that was not started names its cause instead of
 reading as a missing file. No other assertion changed. NOT covered: the macOS race itself — the seam stands in for it; the watch is
 the next 20 macOS CI runs (§10 of the plan).
+
+## The suite is deterministic — E3 S4 (C18's product side, 2026-10-20)
+
+Source: `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md`, epic E3, story S4 (scenarios S24, S25, S27; the lead's decisions, the E3 plan round `ac57ee60` and
+the risk consult `0060db13` govern where they differ from the first brief). Branch `feat/suite-e3-product`. Product defect: CI run 39325900821 (Windows) failed
+`QuestionFanOutTests.TheHeartbeatIsRewritten_…` with `UnauthorizedAccessException: Access to the path is denied` from the heartbeat's write, and a question whose rows had all answered
+was lost. Windows throws that exception — never `IOException` — for a move over a file another handle holds open (measured 2026-10-20, every share mode of the holder), so
+`AtomicFile`'s `catch (IOException)` never retried the case its own remark documented.
+
+| Test | Seen red as | Green because |
+|---|---|---|
+| `AMoveOverAHeldFileIsRetriedTests.AMoveOverAFileAReaderHolds_IsRetriedWithinTheWindow_AndLands` (S24, Windows) | `Did not expect any exception because the reader lets go after one pause, well inside the window, but found System.UnauthorizedAccessException: Access to the path is denied.` at `MoveOver` | the retry covers `UnauthorizedAccessException` |
+| `…AHolderThatNeverLetsGo_FailsTheWriteWhenTheWindowEnds_AndTheOriginalSurvives_WithNoTemp` (S24 never-released arm, Windows; a hand-moved `MovableClock`, so no sleep) | `Expected pauses to be between 3 and 5 because the window is 200 ms of the MONOTONIC clock and each pause moves it 50 ms, but found 0.` | the window is read from `TimeProvider.GetTimestamp`/`GetElapsedTime`; the failure is thrown after it, the original bytes survive, no `*.tmp` |
+| `…AZeroWindow_TriesOnce_AndNeverPauses` (guard) | green before and after | — |
+| `AnOrphanTempFileIsRemovedByItsRecordsNextWriteTests.AnOldTempFileOfADeadWriter_IsGone_AfterTheRecordsNextWrite` (S27) | `Expected File.Exists(orphan) to be False because its writer is dead and it is two hours old …, but found True.` | `AtomicFile.RemoveOrphanedTemps` |
+| `…AnOldTempFileOfAProcessThatExited_IsGone_ByTheRealLivenessCheck` (a real exited process's pid through `ProcessLiveness.IsAlive`) | `Expected File.Exists(orphan) to be False because ProcessLiveness.IsAlive … says the exited process is gone, but found True.` | same |
+| `…AFreshTempFile_IsKept…`, `…AnotherRecordsOldTempFile_IsKept` (also a name that only starts with the record's), `…AnOldTempFileWithNoPidInItsName_IsKept`, `…ThePausedLiveWritersAgedTempFile_IsKept_AndThatWritersMoveThenLands` (writer A paused after its temp file, the temp aged two hours, writer B writes the same record: A's temp stays — A's pid is alive — and A's move then lands), `…AnOrphanThatCannotBeRemoved_DoesNotFailTheWrite` (Windows; the orphan is held `FileShare.None`) | guards: green before and after | — |
+| `QuestionFanOutTests.AHeartbeatThatCannotBeWritten_IsSaid_AndTheQuestionStillSettles` (S25, every OS) | `System.UnauthorizedAccessException : Access to the path is denied.` thrown by `RunAsync` — the CI sentence | `QuestionFanOut.BeatAsync` says the missed beat at Warning and skips it |
+| `…ABeatAfterAFailedOne_IsStillWritten` | `no heartbeat was written after the failed one within 30 s` (the guard's own sentence) | same |
+| `…TheSweepKeepsAQuestionWhoseBeatsAreRefused_WhileItsPidIsAlive` (the file keeps its first, stale heartbeat; a sweep ten minutes later by a live pid ends nothing) | `the third heartbeat was never attempted within 30 s` | same |
+| `…ABeatRefusedByARealHold_IsSaid_AndTheQuestionStillSettles` (Windows; the record file is held exactly as `SharedRead` opens it, released by the Warning) | `the refused heartbeat was not said, and the question did not settle, within 30 s` | same |
+| `…AFinalWriteThatIsRefused_StillSurfaces` (guard) | green before and after: only a beat is skipped, the settled record is the answer | — |
+
+**Where S25 fails the write.** The failure is injected at the store's write road, before a byte reaches the disk (`QuestionConsultStore.FileWriter`, an `internal` init seam; test helper `RefusedBeats`, which also tells a
+heartbeat-only write from the previous write itself) — not at `projected`, which runs AFTER the write. That makes the arms deterministic on every OS; the Windows arm refuses the write with a real hold.
+
+**Break-its (each restored).** (1) `IsRefusal` narrowed back to `IOException` → S24 arm 1 and the never-released arm red with the messages above. (2) The orphan rule's `!seams.IsAlive(pid)` replaced by `true`
+("age is proof") → only `ThePausedLiveWritersAgedTempFile_IsKept_AndThatWritersMoveThenLands` red: `Expected File.Exists(temp) to be True because writer A's pid is alive: age is scope, not proof of death, but found False.` (3) `BeatAsync`'s
+catch made unable to match → all four heartbeat arms red with the S25 messages above.
+
+**Counts.** Whole `CoaiMcp.Tests.exe`: 13,071 total (13,056 before; the 15 new tests are 3 + 7 + 5), 12,943 passed, 120 skipped, **8 failed in the suite and passed alone** — listed, not called flakes:
+`AConversationPlaceTests.CopiesThatOutrunTheRowsBudget_…` (1 s budget, "0 of 2 copied"), `KimiCredentialsLockTests.AShimThatMeetsADisposalsProbe_…` and `…TheTreeHold_OutlivesItsOpener_…`, `AVibeDiskRowExpandsAParentFolderTests.TheBoundCountsConfirmedRepositories_…`,
+and four tests whose `git`/junction child timed out at ten minutes (`TheCodeGateFixesTests.ACredentialNameWithTrailingDots…`, `DeletingAnOwnedTreeNeverEntersALinkTests…`, `ASubmoduleInTheRangeIsNamedNotDeletedTests…`, `FeatureOutlineBuilderTests.TheSameRange_BuildsTheSameBytes`) —
+a 37-minute run on a loaded machine. The seven classes run together alone: 131 total, 127 passed, 4 skipped, 0 failed. None touches `AtomicFile`, the heartbeat or `ProcessLiveness`.
+
+**Boundaries.** An orphan is judged by the pid IN THE NAME and by `ProcessLiveness.IsAlive`, which moved from `CoaiMcp.Server` to `runners/Processes` (this layer cannot reference the server); a reused pid keeps the file, a leak and never a deletion.
+A temp whose name carries no pid (an older build's) is never removed by this rule. The extension shows `interrupted` for a question whose beats the disk refused for two minutes and recovers on the next written beat (`module_extension.md`).

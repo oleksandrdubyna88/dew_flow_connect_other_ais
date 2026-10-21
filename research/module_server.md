@@ -1370,6 +1370,8 @@ admits but FLAGS — codex on every capability, agy's disk read — and the flag
 the card and the log. S3 had made it refuse such a row unless it carried `acknowledged: true`; the operator
 dropped the tick, because codex has no setting that limits what it reads, so a tick would confine nothing.
 
+**A heartbeat the disk refuses is said and skipped (E3 S4, C18's product side).** CI run 39325900821 (Windows) ended a question whose rows all answered with `UnauthorizedAccessException` from the beat's write: a faulted `HeartbeatAsync` was rethrown at `LaunchAllAsync`'s `finally` and the settled record was never written. `QuestionFanOut.BeatAsync` now catches `IOException or UnauthorizedAccessException` around ONE beat, logs `question {Id}: a heartbeat could not be written ({Reason}); the next beat tries again` at Warning and the loop goes on. Why it is safe: the sweep ends a question only on a stale heartbeat (two minutes, four beats) AND a dead pid (`QuestionConsultStore.Orphaned`), so a missed beat — or several — never ends a live server's question. A row's settle write and the final write are NOT guarded: a lost answer must reach the caller. `QuestionConsultStore.FileWriter` (`internal`, default `AtomicJson.Write`) is the seam the tests refuse a write through, on every OS.
+
 **The heartbeat, now proved to be WRITTEN.** S2 covered the sweep's reading of a stale beat; nothing ran a
 row past thirty seconds. `QuestionFanOut` takes the interval as a seam (`heartbeatEvery`, the store's thirty
 seconds by default), and `TheHeartbeatIsRewritten_WhileARowRuns_OnTheConfiguredInterval` sees three distinct
@@ -1398,7 +1400,7 @@ read since S2 and are acted on now). An older extension against this server show
 person answers it or the retention takes it; a newer extension against an older server sees no status and
 draws every card, as before.
 
-**Sizes (D12).** `PanelService.cs` 1781 → 1759 (`ProcessIsAlive` moved to `ProcessLiveness`, a static unit every
+**Sizes (D12).** `PanelService.cs` 1781 → 1759 (`ProcessIsAlive` moved to `ProcessLiveness` — since E3 S4 `CoaiMcp.Runners.Processes.ProcessLiveness`, `runners/Processes/ProcessLiveness.cs` — a static unit every
 sweep asks; the gate's wiring and the two forwarders paid for inside the file); `PanelSettings.cs` 1497 → 1497
 (the default's constant and its remark paid for by the surplus blank lines beside it).
 
@@ -1447,7 +1449,7 @@ against the code without its fix. What changed on this side, by item:
 | 9 | A live server whose fan-out never settled left `consulting` for ever | past twice the row budget the sweep ends it `interrupted`, naming the deadline | `QuestionConsultStore.Sweep(isAlive, now, deadline)` |
 | 11 | The ~6 s outline was built for every question with any `none` row, before ANY row launched | built only for an api `none` row (A9 names them), awaited by that row alone, cached per repository + HEAD for the last four, a failed build never kept | `QuestionOutlineCache`, `RowInput.AfterOutline` |
 | 13 | Four record directories each carried their own id guard, turn read, stamp, parse and delete-and-warn | one `RecordFiles`, used by `QuestionConsultStore`, `ConsultationStore`, `QuestionPhaseStore` and `EscalationRetention` | `RecordFiles` |
-| 14 | `AtomicJson.Write` takes the turn, so a caller holding it could not use it | `Write` (takes the turn) and `WriteUnderTurn` (temp + move); the phase store and the spend call the latter | `AtomicJson` |
+| 14 | `AtomicJson.Write` takes the turn, so a caller holding it could not use it | `Write` (takes the turn) and `WriteUnderTurn` (the write itself; the phase store and the spend call it). **E3 S4:** `WriteUnderTurn` writes through `AtomicFile.Write` with `AtomicFile.SharingRetry` — a pid-and-GUID temp name (`<id>.json.<pid>.<guid>.tmp`), the move retried for `UnauthorizedAccessException` too, no more fixed `path + ".tmp"` | `AtomicJson`, `AtomicFile` |
 | 15 | The question prompts kept a copy of the prompt-id expression without the Windows device names (`con` was a prompt) | `RoleComposition.IsPromptId`, the whole rule | `QuestionPromptSet` |
 
 Item 6 (the panel's 15-minute default), 10 and 12 (the extension's watchers) are the extension's; see

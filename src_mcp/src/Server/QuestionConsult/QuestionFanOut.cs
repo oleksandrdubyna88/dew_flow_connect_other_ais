@@ -299,19 +299,38 @@ public sealed class QuestionFanOut(
     }
 
     /// <summary>D14 (d): the heartbeat the sweep reads, rewritten every thirty seconds while anything runs.</summary>
-    private static async Task HeartbeatAsync(Current current, TimeSpan every, CancellationToken stop)
+    private async Task HeartbeatAsync(Current current, TimeSpan every, CancellationToken stop)
     {
         try
         {
             while (!stop.IsCancellationRequested)
             {
                 await Task.Delay(every, stop);
-                await current.UpdateAsync(record => record with { HeartbeatUtc = QuestionConsultStore.Stamp(DateTime.UtcNow) });
+                await BeatAsync(current);
             }
         }
         catch (OperationCanceledException)
         {
             // The rows settled, which is how the heartbeat ends.
+        }
+    }
+
+    /// <summary>
+    /// One beat. A write the disk refuses (<see cref="UnauthorizedAccessException"/> on Windows for a move over a file a reader holds, past
+    /// <c>AtomicFile</c>'s retry window; an <see cref="IOException"/>) is a MISSED beat: said at Warning and skipped, because the sweep ends a
+    /// question only on a stale heartbeat AND a dead pid (two minutes, four beats), so one missed beat is harmless and a faulted heartbeat task would
+    /// end a question whose rows all answered (CI run 39325900821). Only the beat is guarded — a row's settle write and the final write still throw:
+    /// a lost answer must reach the caller.
+    /// </summary>
+    private async Task BeatAsync(Current current)
+    {
+        try
+        {
+            await current.UpdateAsync(record => record with { HeartbeatUtc = QuestionConsultStore.Stamp(DateTime.UtcNow) });
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            log.Warning(e, "question {Id}: a heartbeat could not be written ({Reason}); the next beat tries again", current.Record.Id, e.Message);
         }
     }
 

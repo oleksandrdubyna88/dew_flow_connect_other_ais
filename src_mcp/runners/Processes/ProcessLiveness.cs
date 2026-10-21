@@ -1,8 +1,8 @@
-namespace CoaiMcp.Server;
+namespace CoaiMcp.Runners.Processes;
 
 /// <summary>Is the process that owned a running turn still there?</summary>
 /// <remarks>
-/// <para>Out of <see cref="PanelService"/> (S3 of the question consultant, D12: that file grows by zero net lines),
+/// <para>Moved DOWN from <c>CoaiMcp.Server</c> to the runners (E3 S4: <c>AtomicFile</c> asks it whether an orphan temp file's writer is alive and cannot reference the server layer — the move, never a copy). Out of <c>PanelService</c> (S3 of the question consultant, D12: that file grows by zero net lines),
 /// unchanged: it reads no state and every sweep asks it.</para>
 /// <para><b>Every failure to ask is NOT ALIVE, and none of them may throw.</b> This is called from the sweeps,
 /// which run on startup — so an exception here does not fail a sweep, it takes the whole binary down before it
@@ -14,7 +14,7 @@ namespace CoaiMcp.Server;
 /// this record". Answering "not alive" reclaims it, which is the safe direction: the alternative is a
 /// consultation stuck at <c>asking</c> for ever because nobody could ask.</para>
 /// </remarks>
-internal static class ProcessLiveness
+public static class ProcessLiveness
 {
     public static bool IsAlive(int pid)
     {

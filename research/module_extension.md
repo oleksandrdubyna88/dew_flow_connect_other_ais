@@ -11256,7 +11256,7 @@ eight keys and says so.
   life (heartbeat, last write, start) is older than two minutes — the server's `HeartbeatStale` — as
   `interrupted`, its consulting rows too, with the terminal chip and a stage of its own, *Interrupted — its server
   stopped answering*; nothing on disk changes (the server's sweep does that, when a server runs). The watcher asks
-  `nextStaleAt` and reads again at that moment, because no file event announces a server that died.
+  `nextStaleAt` and reads again at that moment, because no file event announces a server that died. **E3 S4:** a server that is alive but whose heartbeat writes the disk refused (a missed beat is now logged and skipped, `module_server.md`) can be shown `interrupted` after those two minutes; the display recovers on the next heartbeat that is written — accepted, and the server's sweep still keeps such a question while its pid is alive.
 - **The wait's default is the server's (item 6).** `DEFAULTS.escalationMinutes` and `package.json` say 15, the
   server's `PanelSettings.DefaultEscalationMinutes`; `settingsShape.test.ts` reads the constant out of the C# and
   checks a person's 30 still reaches the server.

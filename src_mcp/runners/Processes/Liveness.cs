@@ -28,7 +28,7 @@ public abstract record Liveness
     public sealed record Unknown(string Reason) : Liveness;
 }
 
-/// <summary>The one liveness question — NOT <c>CoaiMcp.Server.ProcessLiveness</c>, the two-state <c>bool IsAlive(int)</c> the sweeps ask, which is untouched.</summary>
+/// <summary>The one liveness question — NOT <c>CoaiMcp.Runners.Processes.ProcessLiveness</c>, the two-state <c>bool IsAlive(int)</c> the sweeps ask, which is untouched.</summary>
 public static class LivenessCheck
 {
     /// <summary>
