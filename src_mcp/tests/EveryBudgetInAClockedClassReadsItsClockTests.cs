@@ -26,9 +26,10 @@ namespace CoaiMcp.Tests;
 public sealed class EveryBudgetInAClockedClassReadsItsClockTests
 {
     private const string BoundedScheduler = "src_mcp/runners/Reviewers/BoundedScheduler.cs";
+    private const string AcpClientFile = "src_mcp/runners/Acp/AcpClient.cs";
 
     /// <summary>The product files judged. Each seam story adds its class here, red first, then green once the seam is in.</summary>
-    private static readonly string[] Clocked = [BoundedScheduler];
+    private static readonly string[] Clocked = [BoundedScheduler, AcpClientFile];
 
     /// <summary>A site that is allowed to stay, and why. <paramref name="Snippet"/> must occur in exactly one site's statement of <paramref name="File"/>.</summary>
     private sealed record Allowed(string File, string Snippet, string Reason);
@@ -40,6 +41,7 @@ public sealed class EveryBudgetInAClockedClassReadsItsClockTests
         new(BoundedScheduler, "Stopwatch.StartNew(); var loop = new TurnLoop(", "the conversation's elapsed as REPORTED; the loop's own cap reads the clock the scheduler hands it (S4)"),
         new(BoundedScheduler, "Stopwatch.StartNew(); var attempts = 1;", "DEFERRED (Q4): the 429 ladder's elapsed, judged against the ladder's budget — named, not moved, until a 429-ladder failure is kept (D5)"),
         new(BoundedScheduler, "await Task.Delay(wait, ct);", "DEFERRED (Q4): the 429 ladder's wait — named, not moved, until a 429-ladder failure is kept (D5)"),
+        new(AcpClientFile, "reading.WaitAsync(AcpTransport.DrainGrace)", "TEARDOWN (E4 plan §5.1, the lead's Q1): the drain grace after the agent's tree was killed bounds a real pipe a survivor may hold; on a manual clock nobody advances it would hang, and it decides nothing the test races"),
     ];
 
     /// <summary>One shape of unclocked budget: what it is called, how it is found, and whether it has an argument list to inspect.</summary>
