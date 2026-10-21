@@ -682,6 +682,54 @@ the allow-list emptied (5 offenders), with the ladder's entry removed (1 offende
   arm; +1 more if `StampedAt` is written).
 - **Roles.** Opus brief, Sonnet code, Opus review; Fable reads the diff against table 2.
 
+### S3 — status: built 2026-10-21 (Sonnet; the spec above governed, deviations listed)
+
+**Built.** `ConsultantPlaces` takes `TimeProvider? clock = null` last (default `TimeProvider.System`); `OneShotAsync` arms the row's budget as
+`using var budgetTimer = new CancellationTokenSource(budget, _clock); using var copying = CreateLinkedTokenSource(ct, budgetTimer.Token);` (timer first,
+link second — the link is disposed first); `Stamping` takes the clock and stamps `clock.GetUtcNow().UtcDateTime`. `ReviewSnapshots.BuildOnceAsync`'s
+60 s `Stopwatch` is untouched (the host safety ceiling). The scan's set gained `ConsultantPlaces.cs` (one line, plus its constant). Tests:
+`AConversationPlaceTests` 10 -> 12 (`AZeroBudget_IsOutBeforeAnythingIsCopied_OnAClockNobodyAdvances`, `AConversationFoldersStamp_IsTheClocksInstant`; the C17 test
+rewritten); the scan class stays 6 tests (its set grew, its companion still finds all five `BoundedScheduler` sites).
+
+**Order and evidence.**
+
+1. **The seam alone** (constructor parameter + field, nothing reads it): whole `CoaiMcp.Tests` suite, 13 140 tests, 4 failed, 13 016 passed, 120 skipped. The 4: C17 itself
+   (`...CopiesThatOutrunTheRowsBudget...`, what this story removes: `0 of 2 copied`, also red alone 1 run of 2), and three that are load failures of a 51-minute run with three
+   suites on the machine — `TheServerAnswersInitializeAtOnceTests.Initialize_IsAnswered_WhileTheVaultReadAndTheProbeAreStillRunning` (11 s stdio round-trip timeout),
+   `AChildThatExitedBeforeItsStartTimeWasReadTests...Win32Exception` and `RepairRunsInsideTheBudgetTests.ARepairGetsWhatIsLEFTOfTheDeadline_NotAWholeSecondOne` — each re-run alone
+   (3, 10, 5 tests): green. Nothing else changed, so the seam alone changes nothing.
+2. **The scan** with `ConsultantPlaces.cs` added, before the move: red, naming exactly the two sites — `.CancelAfter(budget)` in `copying.CancelAfter(budget); try {...` and `DateTime.UtcNow` in
+   `public void Begin() => ConversationFolder.Begin(folder, store, DateTime.UtcNow, ceiling)`; green after the move.
+3. **S16 RED** on the unmoved product (stand-in `SlowGit`: the real launcher with every `git` answer delayed 1.1 s, the 1 s budget): `Expected place.Refusal "copying the granted folders took longer than the row's budget
+   (1 s): the budget ran out while reading the granted folders, before anything was copied - ..." to contain "1 of 2" because the sentence says how far the copying got.` Then the product moved and the test
+   rewritten to the handshake (no stand-in, real git, no clock pressure): green, 5 of 5 runs and 20 of 20 runs of the class alone.
+4. **Break-its** (restore by WRITING the file, then rebuild — the S1 trap): **B9** `CancelAfter(budget)` back on the linked source: S16 red 3 of 3, `Expected place.Refusal "" to contain "1 of 2" because the sentence says
+   how far the copying got.` (the budget armed on the system timer; the advance cancels nothing; the slow copy completes); the zero-budget arm stays green under B9 (a scheduled zero timer fires within a millisecond: the guard, as
+   the spec said); the scan red on the `CancelAfter` site. **B10** `DateTime.UtcNow` back in `Stamping.Begin`: `AConversationFoldersStamp_IsTheClocksInstant` red — `Expected ... StartedUtc to be <2031-03-04 05:06:07>
+   because the stamp reads the places' clock, which no wall time has moved, but found <2026-10-21 17:00:28.685387>` — and the scan red on the `DateTime.UtcNow` site.
+
+**The final run, recorded.** After the move and the new tests, the whole suite: 13 142 tests, 4 failed, 13 018 passed, 120 skipped (1 h 06 m, three suites on the machine). The 4 — none uses `ConsultantPlaces`:
+`TheSizingIsConcurrentAndBoundedTests.ASizingThatOutlastsItsDeadline_ReturnsGitFailedScopes_WithinIt`, `AReviewerThatAsksForSourceIsAskedAgainTests.AResolverThatTimesOut_RefusesThatRequest_AndTheTurnGoesOnWithTheRest` and
+`...ATurnThatTimesOut_IsOneTerminalFailure_AndTheSlotIsReleased` (C13, S4's), `AFeatureIsReviewedEndToEndTests.TheRoundsDeadline_IsScaledByTheFollowUps_...` (C6, S5's: `codex/FeatureReview: timeout`). Each method re-run alone: green.
+A re-run of the whole C13 class also showed a fifth test red once (`AConversationCapOnTheWork_EndsTheConversation_BeforeTheDerivedOneWould`, `EarlierTurns.Count` 0), green alone. All are the cold-start/budget races that S4 and S5 remove.
+
+**Deviations from the spec, each with its reason.**
+
+1. **"0 of 2 copied" CAN occur** (§3 C17 and §6 S16 say it cannot since #887). The unmoved test failed on this machine with exactly `... 0 of 2 copied` (in the full suite and alone): the git phase was
+   over and `tally.Copying` was true, but the FAST copy itself had not finished inside 1 s. So the cause is wider than the git phase: any real work before the slow copy shares the 1 s. The S16 RED the stand-in shows is
+   the phase sentence the spec names, with one difference: git's FIRST answer is the one cut, so the sentence says "while reading the granted folders", not "while confirming 2 candidates with git" (`Candidates` is 0 when the first ask is cut).
+2. **The test's budget is 5 minutes, not 1 s.** With a 1 s budget B9 was not reliably red: the system timer (1 s of wall time) fires during the test and cuts the released copy, so the old shape passes by luck on a slow run
+   (seen: B9 green once of two). A budget the system timer cannot reach inside the test's 30 s guard makes the advance the ONLY thing that can cut the copy; the refusal sentence then reads "(300 s)". The arithmetic is unchanged.
+3. **The test waits on `Task.WhenAny(meeting.Reached, placing)`** and fails with its own sentence ("the place ended first, so something else times the budget") rather than a `TaskCanceledException` after the 30 s guard — the message
+   B9 produced on the first try, replaced because it named nothing.
+4. **The released-bytes arm is the S16 test's own last assertion** (`budget.Held == 0`, §15 point 5) plus the same assertion in the zero-budget arm — no separate test. S16 also asserts `clock.ActiveTimers == 0` after the refusal (the
+   budget's timer left the clock when it fired).
+5. **The stamp arm is written** (the "optional" `StampedAt` arm): it is what B10 breaks. `Places()` in the test gains `TimeProvider? clock = null`.
+
+**What the module docs must say (held for the final docs pass, §9).** `module_server.md`: `ConsultantPlaces` reads one injected clock — the one-shot budget (timer source on the clock, linked second) and the conversation folder's
+stamp; `ReviewSnapshots`' 60 s ceiling stays on the system clock by design (a host safety ceiling, no seam); a zero budget is out synchronously. `module_tests.md` ("E4 S3"): the handshake shape of the C17 test (hook signals and waits,
+the test advances), the 5-minute budget and why (deviation 2), the scan's set now holds `BoundedScheduler` and `ConsultantPlaces`, and the reds/break-its above.
+
 ### S4 — C13: `TurnLoop` + `SourceResolver` clocks + S14
 
 - **Goal.** `TurnLoop`'s cap and per-turn elapsed and `SourceResolver`'s read deadline read their own `_clock`
