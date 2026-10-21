@@ -28,9 +28,11 @@ public sealed class EveryBudgetInAClockedClassReadsItsClockTests
     private const string BoundedScheduler = "src_mcp/runners/Reviewers/BoundedScheduler.cs";
     private const string AcpClientFile = "src_mcp/runners/Acp/AcpClient.cs";
     private const string ConsultantPlaces = "src_mcp/src/Server/Consultation/ConsultantPlaces.cs";
+    private const string TurnLoop = "src_mcp/runners/Reviewers/TurnLoop.cs";
+    private const string SourceResolver = "src_mcp/runners/Feature/SourceResolver.cs";
 
     /// <summary>The product files judged. Each seam story adds its class here, red first, then green once the seam is in.</summary>
-    private static readonly string[] Clocked = [BoundedScheduler, AcpClientFile, ConsultantPlaces];
+    private static readonly string[] Clocked = [BoundedScheduler, AcpClientFile, ConsultantPlaces, TurnLoop, SourceResolver];
 
     /// <summary>A site that is allowed to stay, and why. <paramref name="Snippet"/> must occur in exactly one site's statement of <paramref name="File"/>.</summary>
     private sealed record Allowed(string File, string Snippet, string Reason);
