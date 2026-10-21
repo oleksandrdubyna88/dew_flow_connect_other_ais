@@ -2,7 +2,7 @@ namespace CoaiMcp.Server;
 
 /// <summary>
 /// What the authors step may spend on ONE round, as one named value (E5.S4 of
-/// <c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md</c>): the time of the WHOLE step and the bytes of the transcript
+/// <c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md</c>): the time of the WHOLE step and the bytes of the transcript
 /// SLICE the reader may take.
 /// </summary>
 /// <remarks>

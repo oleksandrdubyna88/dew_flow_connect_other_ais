@@ -7,7 +7,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// E3.S4 of <c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E3.md</c>, tests 1–18, 44, 45, 47 and 55: every message, token,
+/// E3.S4 of <c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E3.md</c>, tests 1–18, 44, 45, 47 and 55: every message, token,
 /// launch and write is counted exactly once, and what was requested is kept apart from what was observed.
 /// </summary>
 /// <remarks>

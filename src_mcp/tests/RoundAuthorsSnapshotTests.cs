@@ -11,7 +11,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// The authors snapshot on the round (E5.S1 of <c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md</c>): nullable, text-free,
+/// The authors snapshot on the round (E5.S1 of <c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md</c>): nullable, text-free,
 /// carrying every text-free member of E4's <see cref="RoundAuthors"/>, surviving the session file, stripped from the <c>open</c> and
 /// <c>status</c> answers, and with ONE rule for a stored state that the extension reads from the same vectors file.
 /// </summary>

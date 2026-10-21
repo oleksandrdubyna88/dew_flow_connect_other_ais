@@ -1,6 +1,8 @@
 # PLAN — E7 stories: backfill the authors, hand-check twenty rounds, then answer
 
-> Status: **S1–S4 implemented on `feat/round-authors-e7`, 2026-10-19; E5 final (`8172eb193`) and `main` merged in, judge-reviewed by Fable and through the code gate (`good_enough`, 9 of 26 findings taken, each RED first) the same day — pull request #865, not merged (§11 is the implementation record, §11.1–§11.3 the review, the gate and the open tail). O1–O5 and J1 are NOT performed: they need the released binary and the owner's separate approval; no live store was opened. Plan written 2026-10-14; revised 2026-10-16 against `main` at `2d98f2f8` (§9) and 2026-10-18 against `main` at `e53e35ba` (§9a — the corrected `BackfillDecision`, the safety rules, the consultants' answers).** Epic E7 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
+> Status: **IMPLEMENTED, 2026-10-21.** S1–S4 merged as #865 (`42eb3a95a`): the decider, the stored-history rebuild, the narrow writer, and `coai-mcp --backfill-authors` with its backup, dry run and scenario. Fable's security review and the coai code gate (`good_enough`, 9 of 26 findings taken, each RED first) are recorded in §11. A Sonar S2077 fix landed in the same pull request. **Partial by decision: the operation was NOT performed.** O1–O5 and J1 never ran. They need a released binary and the owner's separate approval, after a verified backup of both live stores. No live store was opened. Three things the operation needs were never built: `scripts/backfill-preflight-servers.ps1` and `.sh`, `scripts/round-authors-dump.mjs`, and the `--round-authors` JSON oracle in the S4 scenario. There is no `RESULTS_who_wrote_the_code_under_review.md`. All of this is named here, in *Promotion record* and in §12, and it moves to [PLAN_round_authors_backfill_on_the_live_stores.md](../todo/PLAN_round_authors_backfill_on_the_live_stores.md). Epic E7 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
+>
+> Status before promotion (kept as history): **S1–S4 implemented on `feat/round-authors-e7`, 2026-10-19; E5 final (`8172eb193`) and `main` merged in, judge-reviewed by Fable and through the code gate (`good_enough`, 9 of 26 findings taken, each RED first) the same day — pull request #865, not merged (§11 is the implementation record, §11.1–§11.3 the review, the gate and the open tail). O1–O5 and J1 are NOT performed: they need the released binary and the owner's separate approval; no live store was opened. Plan written 2026-10-14; revised 2026-10-16 against `main` at `2d98f2f8` (§9) and 2026-10-18 against `main` at `e53e35ba` (§9a — the corrected `BackfillDecision`, the safety rules, the consultants' answers).** Epic E7 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
 >
 > Scope: the parent's §9 (backfill) and §11 steps 6–7 — one new one-shot mode `coai-mcp --backfill-authors` in
 > `src_mcp`, run once per side over that side's own store and transcripts; the hand-check of ten rounds per side; the
@@ -630,6 +632,8 @@ finds sends the work back through a new RED-test story before O4 (J1's rule).
 
 ## 6. Operation and hand-check
 
+> **Moved, 2026-10-21.** This section is the design text for O1–O5 and J1. None of them ran. The work is now [PLAN_round_authors_backfill_on_the_live_stores.md](../todo/PLAN_round_authors_backfill_on_the_live_stores.md), stories N1–N10. O5's "closing `/promote-plan`" below was done by the promotion commit of 2026-10-21, before the run: see §12.
+
 The outputs of O1–O4 — summaries, `--log` and `--round-authors` JSON, the judge's sheet — are working files in a new
 folder per step (the scratchpad on Windows, a new folder under `~/coai-backfill/<utc>/` in WSL). Only the `RESULTS_`
 file and what it cites are committed.
@@ -1172,3 +1176,67 @@ re-run needed. `dotnet format --verify-no-changes` clean on `CoaiMcp`, `CoaiMcp.
 - **The rules-budget pin** meets E6's own re-baseline (79 963) at merge time; whichever branch merges last re-measures once more.
 - **O1–O5 and J1** need the released binary and the owner's separate approval. No run from a session touches the live stores: every run in this epic so far was a
   `testsToDelete-` temp folder with an explicit `COAI_DATA_DIR`.
+
+## 12. Promotion record and the boundary with the live-backfill plan (2026-10-21)
+
+### Deviations from the plan
+
+§11 to §11.3 above hold the full record (deviations 1–21). The ones that change what the plan said:
+
+1. **Release first, no WSL build.** D16 planned a build in WSL. With release first, the WSL side installs the released `linux-x64` asset (§6 O1).
+2. **S2 computes through the live `RoundAuthorsStep`** with injected seams, not through a second assembly of `Assign`'s input (deviation 2).
+3. **The decider is stricter than the plan.** Rule 4 needs a non-empty database state (3). A named peer round that still runs holds back both disjuncts of rule 3 (4). `WriteFileOnly` writes a file whose snapshot was lost (5). A result from an older reader or attribution never replaces a newer row (5).
+4. **E6 was not on the E7 branch**, so the totals oracle of S4 is a canonical dump of the authors and size tables (`StoreDump`), not the `--round-authors` JSON (6). That part of the scenario is unbuilt: see N3 of the new plan.
+5. **Exit 75 for any deferral**, not only a busy session (9).
+6. **The writer's wait is `Microsoft.Data.Sqlite`'s `DefaultTimeout`**, not `PRAGMA busy_timeout` (deviation 21). The backup's two PRAGMAs are whole constant statements, and a table name read from `sqlite_master` must pass a strict identifier check before it is put into SQL. Any other name makes the backup not verify, so nothing is written.
+7. **A deferral stops the whole round** (14); **the fingerprint hashes whole rows** (15); **each backup folder carries `check.json`** (16).
+8. **The promotion comes before O1–O4.** O5 planned it after the run. The code is finished and merged, so the plan moves now. The run, its scripts and its `RESULTS_` file are the new plan.
+
+### Definition of Done, as it stands
+
+The check boxes in *Definition of Done* above were not ticked as work landed. This table is the authority.
+
+| Item | State |
+|---|---|
+| S1–S4 merged with tests; every break-it seen red and restored | Met (§11). |
+| The backfill writes only the authors columns, the round's two row tables and the snapshot under the claim; never through `RecordRound` | Met (§11.1). |
+| Twice over a store holding one `observed` row of a newer reader: the second run changes no totals; the newer row and the resolutions survive | Met in the offline scenario. |
+| The two exceptions to "equal or newer → keep" are the only recomputes; a heal writes the file only; a changed round is deferred | Met (§11.1). |
+| A dry run, the pre-flight script, the rehearsal and the shaper-regime check ran on each side; the judge's dump script was committed and tested before O2 | **Not done.** The dry-run mode is built. Nothing ran on a side. Both scripts do not exist. |
+| O2's and O3's second runs are the only inputs of O4, with SHA-256 in RESULTS | **Not done.** |
+| Unrecoverable rounds counted per reason; ran on both sides, twice each, predictions first | **Not done.** The per-reason counts exist in the summary. |
+| Ten rounds per side hand-checked, 10 of 10 agreeing, before any number | **Not done.** |
+| The `RESULTS_who_wrote_the_code_under_review.md` file | **Not done.** |
+| The code was released before the operation; every running server on the release | **Not done.** No release contains `42eb3a95a`. The newest tag on 2026-10-21 is `mcp-v0.62.0`. |
+| Every writing run backed up its live store first | **Not done** (no writing run). Met offline: `TheFirstWriteComesAfterTheVerifiedBackup`. |
+| A backfilled size takes `Whole.From` from `rounds.base_ref`; the two row writers ran in one transaction | Met (§11). |
+| The RESULTS file reports the share of corrective rounds whose delta ended `unavailable` | **Not done.** |
+| `.agents/PROJECT.md`, `module_server.md`, `module_extension.md`, `module_tests.md` updated; the parent and its seven stories promoted; `plan-lifecycle.mjs` clean | Met by this promotion. |
+
+### Boundary with the live-backfill plan
+
+[PLAN_round_authors_backfill_on_the_live_stores.md](../todo/PLAN_round_authors_backfill_on_the_live_stores.md) carries the same table. Items 2–4 go first, because the live runs need them.
+
+| # | Item | Built by | The other plan's part |
+|---|---|---|---|
+| 1 | S1–S4: the decider, the stored-history rebuild, the narrow writer, the mode, its backup and dry run | **this plan (shipped, #865)** | The new plan runs the mode and changes none of its code. A defect J1 finds gets a RED-test story there (N6). |
+| 2 | `scripts/backfill-preflight-servers.ps1` and `.sh` | **the new plan, N1** | §6 O1 names the script and its exit codes. |
+| 3 | `scripts/round-authors-dump.mjs` and its tests | **the new plan, N2** | §6 J1 names the script. |
+| 4 | The `--round-authors` JSON identity in the S4 scenario | **the new plan, N3** | S4 lists the test. The shipped scenario uses `StoreDump` (§11 deviation 6). |
+| 5 | O1–O4 and J1: the release record, rehearsal, dry runs, two live runs, hand-check, the `RESULTS_` file | **the new plan, N5–N10** | §6 is the design text. The new plan is the work. |
+| 6 | O5: module docs, `.agents/PROJECT.md` entries, the promotion of the parent with its seven stories | **this promotion, 2026-10-21** | The new plan adds the run's own paragraph to `module_server.md`. |
+| 7 | E1 leftovers: the attended `/clear` probe, the line-by-line hand read, the torn-tail frequency | **the new plan, N4** | E1's *Open tail* names them. |
+
+The two plans share no code. Items 1–7 are the complete list.
+
+### Open tail
+
+| Item | Where it lives |
+|---|---|
+| `scripts/backfill-preflight-servers.ps1` and `.sh`; `scripts/round-authors-dump.mjs` with its tests | [PLAN_round_authors_backfill_on_the_live_stores.md](../todo/PLAN_round_authors_backfill_on_the_live_stores.md), N1 and N2 |
+| The `--round-authors` JSON identity and the `provisional`-one-lower assertion in the S4 scenario | the same plan, N3 |
+| A release that contains E5, E6 and E7; the rehearsal; the shaper-regime check; the predictions; the dry runs | the same plan, N5 |
+| The two live backfills (owner approval for each, verified backup first) | the same plan, N7 and N8 |
+| The hand-check of ten rounds per side | the same plan, N9 |
+| The `RESULTS_who_wrote_the_code_under_review.md` file | the same plan, N10 |
+| A connection-string builder for every store opener (§11.3, the owner has not answered) | the same plan, §7 and §9 |

@@ -1,6 +1,8 @@
 # PLAN — E3: the caller's own transcript, read text-free (`CallerTranscript` → `ObservedSession`)
 
-> Status: **E3.S1–S5 implemented on `feat/round-authors-e3`, 2026-10-18, rebased onto main `045cd9191` (after #851, #852, #856): S1–S3 at 5d1ff6f79/6698fb40a/6002f001f, the S1–S3 judge fixes c03556bee, S4 50c887f72, S5 97df6cb34; the owner-approved switch of the old copies to the shared helpers 37a9117e2; the S4/S5 judge fixes 308f6e34b; the code-gate fix afc9b0599; three security fixes on write paths 0cef98490, 72a8d7397, 14781fb64 and the gate's fail-closed drive fix 1d3938863. Code gate: round 1 `proceed` (12 of 16 reviewers; 16 rejected with reasons, 1 accepted and fixed), round 2 `proceed` (12 of 16; 8 rejected, 1 accepted and fixed), round 3 over the security fixes `good_enough` (13 of 16; 14 rejected, 3 accepted and fixed) after main b531b94f3 was merged in on 2026-10-19 — §5.1. Not merged; stays in `todo/` until the parent promotes with all its stories documents (planning-docs, *A plan split into epics and stories*).** Epic E3 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
+> Status: **IMPLEMENTED, 2026-10-19.** E3.S1–S5 merged as #867 (`66801bdda`). The coai code gate ran three rounds (`proceed`, `proceed`, `good_enough`), and three security fixes on write paths landed. No story has an unbuilt half. Three limits stay by decision: a custom autofs map on another root, a network file system inside a POSIX tree, and an existing junction under a local drive are not detected by the write-path guard; and the torn-tail rule still rests on "never seen" ([PLAN_round_authors_backfill_on_the_live_stores.md](../todo/PLAN_round_authors_backfill_on_the_live_stores.md), N4). Deviations are in §5.1 and in *Promotion record* below. Epic E3 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
+>
+> Status before promotion (kept as history): **E3.S1–S5 implemented on `feat/round-authors-e3`, 2026-10-18, rebased onto main `045cd9191` (after #851, #852, #856): S1–S3 at 5d1ff6f79/6698fb40a/6002f001f, the S1–S3 judge fixes c03556bee, S4 50c887f72, S5 97df6cb34; the owner-approved switch of the old copies to the shared helpers 37a9117e2; the S4/S5 judge fixes 308f6e34b; the code-gate fix afc9b0599; three security fixes on write paths 0cef98490, 72a8d7397, 14781fb64 and the gate's fail-closed drive fix 1d3938863. Code gate: round 1 `proceed` (12 of 16 reviewers; 16 rejected with reasons, 1 accepted and fixed), round 2 `proceed` (12 of 16; 8 rejected, 1 accepted and fixed), round 3 over the security fixes `good_enough` (13 of 16; 14 rejected, 3 accepted and fixed) after main b531b94f3 was merged in on 2026-10-19 — §5.1. Not merged; stays in `todo/` until the parent promotes with all its stories documents (planning-docs, *A plan split into epics and stories*).** Epic E3 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
 > Scope: `src_mcp/src/Store` — a new reader keyed by the caller's session id, the text-free read helpers lifted out of
 > `AgentLog.cs` (its behaviour kept), and one helper in `src_mcp/runners` widened. No schema step, no call site in
 > `RoundEngine.cs`/`PanelService.cs`, nothing persisted: E5 stores, E4 attributes. Five stories; ONE cornerstone,
@@ -1692,3 +1694,29 @@ Rejected in the gate round, with reasons recorded through `resolve`: a "20-byte 
 the second), a prerequisites section, `File.Exists` throwing (it never does), a check for the E1 fixtures' presence
 (they are on this branch, and E3.S5's companion test fails when they are not), and the 3 h guard as unsafe (a stated,
 measured assumption; the alternative is the whole-session read the bound exists to avoid).
+
+## Promotion record (2026-10-21)
+
+### Deviations from the plan
+
+§5.1 above holds the full record. The ones that change what the plan said:
+
+1. **A meta without `model` is `observed`.** It is counted in `Diagnostics.MetasWithoutModel`. The parent's done-when first said `partial` (S4-17).
+2. **The old copies of two helpers moved to the shared ones, with the owner's approval.** `AgentLog.Text` became `JsonText.StringProperty`; `ConsultantPlaces.HoldsGit` became `GitMarker.HasGit`. One difference, on malformed input only: a non-object block in a content array is skipped and no longer throws.
+3. **`AgentLog.Parse` and `Said` skip a line of the wrong shape.** A numeric `timestamp` or an array root used to throw `InvalidOperationException` out of `Slice`. This was an older defect, reported by the gate and fixed in the CodeRabbit round.
+4. **Three security fixes on write paths.** A write path comes from a transcript, which a prompt can steer. A UNC, device or extended-length path, or a path on a mapped network drive, is refused on its text before any disk probe. A POSIX path under `/net` or `/Network` is refused, also after normalisation. A drive of type `Unknown` or `NoRootDirectory` fails closed.
+5. **An agent key taken from a file name must pass the id shape.** A refused name is counted in `ValuesOffShape`.
+6. **`TornTailCountsAsPartial` is `static readonly`, not `const`.** A `const` condition is unreachable code under warnings-as-errors.
+7. **The reader skips before it decodes.** E1 refuted the read-time prediction. The skip uses the last-write time per file, then the exact stamp on raw bytes. The byte budget applies to the slice and the time limit to the whole read.
+8. **No `module_tests.md` row for E3.** It adds no tool, mode or call site; the reader had no caller until E5.
+
+The check boxes in *Definition of Done* in this document are not the authority. This record and §5.1 are.
+
+### Open tail
+
+| Item | Where it lives |
+|---|---|
+| A custom autofs map on another root is not detected. A network file system mounted into a POSIX tree is not detected. An existing junction or link under a local drive is followed. The code states each limit. The full fix reads the mount table and was out of scope. | Not planned. By decision. |
+| The torn-tail rule (`TornTailCountsAsPartial = false`) rests on E1's "never seen" in 9 379 samples | [PLAN_round_authors_backfill_on_the_live_stores.md](../todo/PLAN_round_authors_backfill_on_the_live_stores.md), N4 item 3 |
+| The first check of the reader against real older rounds is the hand-check | the same plan, N9 |
+| A shared-state failure in `AskHumanScenarioTests` (the fake CLI received another test's call) was reported while E3 ran. E3 did not fix it. Whether it is fixed now was NOT checked. | Not planned here. |

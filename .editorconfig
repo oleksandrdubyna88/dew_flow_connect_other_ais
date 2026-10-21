@@ -116,7 +116,7 @@ dotnet_diagnostic.CA1502.severity = error
 [src_mcp/src/Store/{RoundAuthorsTable,RoundAuthorsLog}.cs]
 dotnet_diagnostic.CA1502.severity = error
 
-# THE ROUND-AUTHORS REPORT STAYS WITHIN CYCLOMATIC COMPLEXITY 4 (todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E6.md, rules of the epic).
+# THE ROUND-AUTHORS REPORT STAYS WITHIN CYCLOMATIC COMPLEXITY 4 (research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E6.md, rules of the epic).
 # Switched on for the report's own files, as the security lane's are above; the threshold is src_mcp/CodeMetricsConfig.txt.
 [src_mcp/src/Store/{RoundAuthorsQuery,RoundAuthorsPopulation,RoundAuthorsSumsOf,RoundAuthorsCoders,RoundAuthorsCells,RoundAuthorsExclusions,RoundAuthorsHeader,RoundAuthorsMerge,RoundAuthorsText,RoundAuthorsCountModels,RoundAuthorsModels,RoundLines,ModelFamily,StoredAuthors}.cs]
 dotnet_diagnostic.CA1502.severity = error

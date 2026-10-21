@@ -1,6 +1,6 @@
 namespace CoaiMcp.Store;
 
-// The counting shapes of the round-authors report (E6.S2-S4 of todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E6.md). Records only.
+// The counting shapes of the round-authors report (E6.S2-S4 of research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E6.md). Records only.
 // What is stored and serialised is SUMS, COUNTS and SETS — integers and short ids, never a figure (D16): a ratio is computed at render time.
 
 /// <summary>One named integer — the shape every small map of the report takes, so a map serialises as a sorted list and merges by key.</summary>

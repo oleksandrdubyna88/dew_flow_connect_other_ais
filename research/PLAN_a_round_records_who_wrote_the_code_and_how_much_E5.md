@@ -1,6 +1,8 @@
 # PLAN — Round authors, epic E5: store and show
 
-> Status: **S1–S6 implemented on `feat/round-authors-e5`, 2026-10-19 (pull request #863, not merged — stacked on #867 E3 and #862 E4; E4 final and main merged in, judge-reviewed, code gate `good_enough` the same day, §12.1); §12 is the implementation record — its deviations, the two items owed from E7 and PR #868, and what is open. Plan 2026-10-14; revised 2026-10-16 against `main` at `59463d73` (§9), and again
+> Status: **IMPLEMENTED, 2026-10-20.** E5.S1–S6 merged as #863 (`bc5b367df`); the judge fixed two defects and the coai code gate said `good_enough` (2 findings accepted). **Partial by decision: one state is unreachable in production.** `partial: peer running` cannot be stored for a peer round that is still running, because such a round has no caller on disk (§12 deviation 8). The grown-peer-set rule carries the repair. This is named here, in *Promotion record* and in its *open tail*. A server released before #868 still drops `Authors` when it saves a session file; the database copy is the answer for those servers. Deviations are in §12, §12.1 and *Promotion record* below. Epic E5 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
+>
+> Status before promotion (kept as history): **S1–S6 implemented on `feat/round-authors-e5`, 2026-10-19 (pull request #863, not merged — stacked on #867 E3 and #862 E4; E4 final and main merged in, judge-reviewed, code gate `good_enough` the same day, §12.1); §12 is the implementation record — its deviations, the two items owed from E7 and PR #868, and what is open. Plan 2026-10-14; revised 2026-10-16 against `main` at `59463d73` (§9), and again
 > 2026-10-16 for the E4/E5 reconciliation Fable decided (§8, E4 at `244d953c`) and the points E6 (`3c50a78c`) and E7
 > (`740d1a4f`) raised for E5 (§10); and again 2026-10-17 for the independent review of `2af746b3` (eight points) and the
 > E5 consequences of E4's §S2.2b (G1–G12, E4 at `7c3bf469`) — §11 records both, against `origin/main` `ce9cd298`, whose
@@ -14,10 +16,10 @@
 > round card. Six stories, S1–S6. **No cornerstone**: the parent names no area for E5 (`## Epics`, "E1, E5, E6, E7 carry no
 > area"); the parent's ledger reads `Cornerstones: 3 of 3 — E2.S1, E3.S4, E4.S2` (parent §16 D21).
 >
-> Related: [module_server.md](../research/module_server.md) (schema steps 20–23 at `:3434-3481`, the `--log` size and
-> plan-source paragraphs after them), [module_extension.md](../research/module_extension.md) (the `asked by` and `reviewed from`
-> lines, `:6430`, `:6476-6489`), [PLAN_the_round_knows_which_ai_called_it.md](../research/PLAN_the_round_knows_which_ai_called_it.md)
-> (the `RoundRecord.Caller` twin), and [PLAN_the_plan_gate_reads_the_committed_plan_E2.md](PLAN_the_plan_gate_reads_the_committed_plan_E2.md)
+> Related: [module_server.md](module_server.md) (schema steps 20–23 at `:3434-3481`, the `--log` size and
+> plan-source paragraphs after them), [module_extension.md](module_extension.md) (the `asked by` and `reviewed from`
+> lines, `:6430`, `:6476-6489`), [PLAN_the_round_knows_which_ai_called_it.md](PLAN_the_round_knows_which_ai_called_it.md)
+> (the `RoundRecord.Caller` twin), and [PLAN_the_plan_gate_reads_the_committed_plan_E2.md](../todo/PLAN_the_plan_gate_reads_the_committed_plan_E2.md)
 > (the shipped step-23 stories whose shape S2, S3 and S6 copy).
 
 ## 1. What E5 delivers, and the decision it is built on
@@ -792,7 +794,7 @@ S6 may run beside S2–S5 once S1 has merged (E2 has). The epic ships as ONE com
     guard (`[JsonExtensionData]` on both, stripped from the `open`/`status` answer, with a round-trip test) would protect
     every field added AFTER the release that carries it; it cannot protect E5's own field from the binaries already out.
     It is a change to the two types every stage saves — the main session's to schedule, not this epic's.
-    *Update 2026-10-20:* that change is [PLAN_a_session_file_keeps_what_a_newer_server_wrote.md](../research/PLAN_a_session_file_keeps_what_a_newer_server_wrote.md),
+    *Update 2026-10-20:* that change is [PLAN_a_session_file_keeps_what_a_newer_server_wrote.md](PLAN_a_session_file_keeps_what_a_newer_server_wrote.md),
     merged as PR #868. Its boundary table with E5 is §13 of THIS document (it came as a §8; this document's own §8 is the E4 reconciliation, so the guard's
     section was renumbered when E5 merged `main`). E5 adds `Authors` as a KNOWN member and depends on no bag; the guard protects only servers released after it.
     E5 landed second, so both strips of the `open`/`status` answer sit in one place: `SessionAnswerFor` hands `WithoutUnknownMembers` the rounds with
@@ -1139,7 +1141,7 @@ the repository's usual 30 s timeout); its class passed alone three times out of 
 
 A field added to `RoundRecord` is dropped by any OLDER `coai-mcp` that re-saves the session file; E5's `Authors` is one
 such field. The general guard — a `[JsonExtensionData]` bag on the session's own records, so a re-save keeps what a newer
-server wrote — is [PLAN_a_session_file_keeps_what_a_newer_server_wrote.md](../research/PLAN_a_session_file_keeps_what_a_newer_server_wrote.md) (implemented 2026-10-19),
+server wrote — is [PLAN_a_session_file_keeps_what_a_newer_server_wrote.md](PLAN_a_session_file_keeps_what_a_newer_server_wrote.md) (implemented 2026-10-19),
 not E5. It helps only servers released after it; the binaries already out still strip `Authors`, so E5's database copy
 stays E5's answer for them.
 
@@ -1151,3 +1153,29 @@ stays E5's answer for them.
 | The snapshot, the schema step, the card line | **E5** | none |
 
 Either can land first. Nothing else is shared.
+
+## Promotion record (2026-10-21)
+
+### Deviations from the plan
+
+§12 and §12.1 above hold the full record (deviations 1–12, the judge's two defects, the gate's two findings). The ones that change what the plan said:
+
+1. **`writtenWith` lives in `src_vs_code/src/authorsLine.ts`**, not in `rounds.ts`, so that `rounds.ts` stays under the 800-line lint ceiling.
+2. **The card orders coder groups by size, then by family name.** The plan's example said "1 Sonnet + 1 Opus coders" and its rule said ties go by name. The rule is implemented: "1 Opus + 1 Sonnet coders" (deviation 3).
+3. **`AuthorPeers.Find` takes five arguments**: the plan's three plus a peer lookup and a clock. It sets `PeersKnown = false` when a peer's file does not load or the deadline cut the walk.
+4. **A still-running peer round has no caller on disk** (deviation 8). `partial: peer running` is unreachable for it in production. **This is the partial-by-decision item.**
+5. **A fresh data directory's first round is `partial: prior windows unknown`** (deviation 9). The live backfill repairs it.
+6. **`ActivityTotals.IsUnknown` has `[JsonIgnore]`**, and the throwing-reader test uses a poisoned folder name, because the step is internal.
+7. **Complexity 4 is a build error for E5's own files**, and `AuthorPeerSet.Why` reaches a Debug line as a type and a SQLite code, never as a message that may hold a path (§12.1).
+8. **E5 does not use `JsonExtensionData`.** The general guard is #868 ([PLAN_a_session_file_keeps_what_a_newer_server_wrote.md](PLAN_a_session_file_keeps_what_a_newer_server_wrote.md), §13 above). It helps only servers released after it.
+
+The check boxes in *Definition of Done* in this document are not the authority. This record and §12 are.
+
+### Open tail
+
+| Item | Where it lives |
+|---|---|
+| `partial: peer running` for a peer round that is still running | Not built. By decision (deviation 8). |
+| A first round on a fresh data directory is `partial: prior windows unknown` | [PLAN_round_authors_backfill_on_the_live_stores.md](../todo/PLAN_round_authors_backfill_on_the_live_stores.md), N7 and N8 (the backfill recomputes it) |
+| Servers released before #868 strip `Authors` on save | Nobody can fix a released binary. The database copy and E7's heal are the answer. N5 checks every running server first. |
+| Per-window states and totals are in the session-file snapshot only | Not built. The owner said "not now" on 2026-10-18 (question 12). |

@@ -2,7 +2,7 @@ using CoaiMcp.Core.Context;
 
 namespace CoaiMcp.Store;
 
-// The records of the round-authors report (E6 of todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E6.md). Records only: no
+// The records of the round-authors report (E6 of research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E6.md). Records only: no
 // behaviour, no string?, no nullable collection — an absent value is NotRecorded, false or []. This file holds S1's reading shapes; the
 // counting shapes of S2-S4 sit in RoundAuthorsCountModels.cs, so each file stays one job and under the family's ceiling.
 

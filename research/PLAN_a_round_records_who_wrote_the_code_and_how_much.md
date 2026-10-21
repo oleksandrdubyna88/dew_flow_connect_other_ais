@@ -1,6 +1,8 @@
 # PLAN — a round records who wrote the code under review, and how big the change was
 
-> Status: **plan only for epics E4–E7; epic E1 (the measurements and fixtures, #828) and epic E2 (the size, its schema
+> Status: **IMPLEMENTED, 2026-10-21.** The code of the seven epics is merged: E1 (#828) and E2 (#829) on 2026-10-15, E3 (#867) on 2026-10-19, E4 (#862), E5 (#863) and E6 (#864) on 2026-10-20, E7 (#865, merge `42eb3a95a`) on 2026-10-21. **Partial by decision: the owner's question is not answered yet.** Four parts of this plan are unbuilt. Each one is named here, in *Promotion record* and in its *open tail*: (1) the backfill never ran on the live Windows store or on the live WSL store, because E7 O1–O5 need a released binary and the owner's approval after a verified backup of both stores; (2) the hand-check of ten rounds per side (J1) was not made and there is no `RESULTS_who_wrote_the_code_under_review.md`; (3) the two scripts the run needs, `scripts/backfill-preflight-servers.*` and `scripts/round-authors-dump.mjs`, do not exist; (4) the attended `/clear` probe of E1 never ran. Four more items stay unbuilt by decision: authors for feature and merge-time rounds, readers for codex and gemini callers, a per-window schema step (the owner said "not now" on 2026-10-18, question 12), and a reachable `peer running` state for a peer round that is still running. The unbuilt work is the open tail. It moves to [PLAN_round_authors_backfill_on_the_live_stores.md](../todo/PLAN_round_authors_backfill_on_the_live_stores.md).
+>
+> Status before promotion (kept as history): **plan only for epics E4–E7; epic E1 (the measurements and fixtures, #828) and epic E2 (the size, its schema
 > step and `--log`, #829) are implemented and merged, 2026-10-15; epic E3 (the text-free caller-transcript reader) is
 > implemented on `feat/round-authors-e3`, 2026-10-18 (code gate `proceed`; its pull request is a draft, not merged — the
 > E3 stories document's §5.1).** Revised 2026-10-14 after the question
@@ -12,9 +14,9 @@
 > and two new one-shot modes (`--round-authors`, `--backfill-authors`); `src_vs_code` — one line on the round card.
 > Nothing on the Team server.
 >
-> Related docs: [module_server.md](../research/module_server.md), [module_extension.md](../research/module_extension.md),
-> [PLAN_the_round_knows_which_ai_called_it.md](../research/PLAN_the_round_knows_which_ai_called_it.md) (the
-> `caller_model` this extends), [PLAN_local_db.md](../research/PLAN_local_db.md) (where `agent_log` is recorded).
+> Related docs: [module_server.md](module_server.md), [module_extension.md](module_extension.md),
+> [PLAN_the_round_knows_which_ai_called_it.md](PLAN_the_round_knows_which_ai_called_it.md) (the
+> `caller_model` this extends), [PLAN_local_db.md](PLAN_local_db.md) (where `agent_log` is recorded).
 
 ## 1. The goal, and why today's store cannot answer it
 
@@ -110,7 +112,7 @@ model fields only):
 - **Codex and Gemini callers**: `unobserved: no reader for <vendor>` (10 + 0 rounds since 09-30). A reader per
   vendor is a later plan behind the same `ObservedSession` record.
 - **The Team server** runs reviewers, never callers. What a remote reviewer actually ran is
-  [PLAN_the_log_names_the_model.md](PLAN_the_log_names_the_model.md)'s; this plan records the requested model and
+  [PLAN_the_log_names_the_model.md](../todo/PLAN_the_log_names_the_model.md)'s; this plan records the requested model and
   says so (`SessionStore.cs:17-28`).
 - **`agent_log` keeps its behaviour.** Moving it onto the exact session is a separate change.
 - **Lines that survive.** A write is evidence of contribution, not of authorship of the reviewed lines; mapping
@@ -118,9 +120,9 @@ model fields only):
 
 | Item | Which plan builds it | The other's part |
 |---|---|---|
-| Rounds per vendor row and window; reviewers' tokens and money | [PLAN_every_round_is_counted.md](../research/PLAN_every_round_is_counted.md) | reads `rounds`/`reviewers`; this plan adds caller-side data it never reads, and one `reviewers.effort` column it may |
-| What a reviewer token column means per vendor | [PLAN_usage_that_compares.md](PLAN_usage_that_compares.md) | this plan stores the CALLER's Claude usage in Claude's own four terms and compares no vendors |
-| Which model a Team server actually ran | [PLAN_the_log_names_the_model.md](PLAN_the_log_names_the_model.md) | reviewer side; this is the caller side |
+| Rounds per vendor row and window; reviewers' tokens and money | [PLAN_every_round_is_counted.md](PLAN_every_round_is_counted.md) | reads `rounds`/`reviewers`; this plan adds caller-side data it never reads, and one `reviewers.effort` column it may |
+| What a reviewer token column means per vendor | [PLAN_usage_that_compares.md](../todo/PLAN_usage_that_compares.md) | this plan stores the CALLER's Claude usage in Claude's own four terms and compares no vendors |
+| Which model a Team server actually ran | [PLAN_the_log_names_the_model.md](../todo/PLAN_the_log_names_the_model.md) | reviewer side; this is the caller side |
 
 None of these is a slice taken from the others, so no reciprocal edit is owed; the table is complete.
 
@@ -601,10 +603,87 @@ hand-over — peers on EVERY round, from the peers' session files, `ReadFrom` be
       the attribution, the tables and the card line; the plan is promoted with its deviations.
 - [ ] All tests pass through the MTP executable and `npm test`; the family checks are green.
 
+## Promotion record (2026-10-21)
+
+### What merged
+
+| Epic | Pull request | Merge commit | Date |
+|---|---|---|---|
+| E1 — the measurements and fixtures | #828 (follow-up #851) | `509b9b007` (`e53e35ba4`) | 2026-10-15 (2026-10-18) |
+| E2 — the size of a code round, `reviewers.effort` | #829 | `4baba7b21` | 2026-10-15 |
+| E3 — the text-free caller-transcript reader | #867 | `66801bdda` | 2026-10-19 |
+| E4 — attribution | #862 | `2e47d990b` | 2026-10-20 |
+| E5 — the snapshot, schema step 24, `--log`, the card line | #863 | `bc5b367df` | 2026-10-20 |
+| E6 — `coai-mcp --round-authors` | #864 (hardening #896, `9134099c0`) | `20c35f026` | 2026-10-20 |
+| E7 — `coai-mcp --backfill-authors` (S1–S4 only) | #865 | `42eb3a95a` | 2026-10-21 |
+
+Side changes that shipped beside this work: #868 (a session file keeps the members a newer server wrote, [PLAN_a_session_file_keeps_what_a_newer_server_wrote.md](PLAN_a_session_file_keeps_what_a_newer_server_wrote.md)); #866 (a typed-field parse fix: one bad field in a reviewer row costs that row only); #861 (one named constant for Windows' path limits); #896 (`--round-authors --table` and its refusals print no terminal-unsafe character, filtered by Unicode rune).
+
+### Deviations from the plan
+
+Each epic records its own deviations: E1 and E2 in their *Promotion record*, E3 in §5.1, E4 in §12, E5 in §12 and §12.1, E6 in §5 and §5.1, E7 in §11 to §11.3. These changed what this plan says:
+
+1. **Seven stories documents, not one plan.** §16 records how their defects were settled.
+2. **The authors are schema step 24.** The plan gate's epic E2 took step 23 (#837, #841).
+3. **E1 refuted the read-time prediction by two orders of magnitude.** The largest session is 650 MB. E3's reader skips a line before it decodes it, and the byte budget applies to the slice (§5, §16 D7).
+4. **A meta without `model` is `observed`**, with a diagnostics count. The first text said `partial` (§5).
+5. **E7's code goes first and the run follows, as D16 planned, but the WSL build step is gone.** The WSL side installs the released `linux-x64` asset (E7 §6 O1). No release contains E7 yet.
+6. **The backfill is stricter than the plan.** A result from an older reader never replaces a newer row. A deferral stops the whole round. The fingerprint hashes whole rows. Each backup folder carries `check.json` (E7 §11 deviations 5, 14–16).
+7. **This plan is promoted before the live run, not after it.** E7 O5 planned the promotion for the end. The code is finished and merged, so the plan moves now and the run becomes a new plan.
+
+### Boundary with the live-backfill plan
+
+[PLAN_round_authors_backfill_on_the_live_stores.md](../todo/PLAN_round_authors_backfill_on_the_live_stores.md) carries the same table. Items 2–7 go first, because the live runs need them.
+
+| # | Item | Built by | The other plan's part |
+|---|---|---|---|
+| 1 | Reader, attribution, snapshot, schema step 24, `--log`, the card line, the report, the backfill mode (E1–E7 S1–S4) | **this plan (shipped)** | The new plan runs the mode and changes none of its code. |
+| 2 | `scripts/backfill-preflight-servers.ps1` and `.sh` | **the new plan, N1** | E7 §6 O1 names it. |
+| 3 | `scripts/round-authors-dump.mjs` and its tests | **the new plan, N2** | E7 §6 J1 names it. |
+| 4 | The `--round-authors` JSON identity in the S4 scenario | **the new plan, N3** | E7 S4 lists the test. |
+| 5 | The attended `/clear` probe and the other E1 leftovers | **the new plan, N4** | E1's *Open tail* names them. |
+| 6 | O1–O4 and J1: release record, rehearsal, dry runs, two live runs, hand-check, the `RESULTS_` file | **the new plan, N5–N10** | E7 §6 is the design text. |
+| 7 | O5: module docs, `.agents/PROJECT.md` entries, the promotion of this plan with its stories | **done by the promotion commit of 2026-10-21** | The new plan adds the run's own paragraph to `module_server.md`. |
+
+The two plans share no code. Items 1–7 are the complete list.
+
+### Definition of Done, as it stands
+
+The check boxes below were not ticked as work landed. This table is the authority.
+
+| Definition of Done item | State |
+|---|---|
+| Step 0's results file, prediction first, WSL measured, fixtures before step 24 | Met (E1). The `/clear` probe is the one part not done. |
+| Submodule and nested-checkout writes counted; gitlinks never sized as code | Met (E2, E3, E4, E5). |
+| The card line follows §8's coder-mix format | Met (E5.S6). The tie order is the rule, not the example (E5 §12 deviation 3). |
+| The backfill saves the snapshot first; exit codes 0 / 65 / 74 / 75, never 64 | Met in code and tests (E7). |
+| A code round records its size by scope, coverage and kind | Met (E2). |
+| `reviewers.effort` persisted | Met (E2). |
+| Every round records `authors_state`; no field is filled by a guess | Met for rounds recorded after E5. **Not met for older rounds** until the live backfill runs. |
+| Attribution passes every acceptance case | Met (E4.S5). |
+| No text stored or printed; sentinel test | Met (E3.S5, E5.S5, E7). |
+| No test reads the developer's `~/.claude`; `severe` and `gate_count` named apart | Met (E3, E6). |
+| `--round-authors` separates population from arithmetic; `--add` combines two sides | Met (E6). |
+| `--backfill-authors` ran on both sides; a second run changed nothing | **Not done.** The mode and its offline tests exist. No live store was opened. |
+| Ten rounds per side were hand-checked; the answer is in a `RESULTS_` file | **Not done.** |
+| `.agents/PROJECT.md` lists both modes; the module docs describe the work; the plan is promoted with its deviations | Met by this promotion. |
+| All tests pass through the MTP executable and `npm test`; family checks green | Reported green in each epic's record. Some load-bound tests passed only when re-run alone (E3 §5.1, E7 §11). |
+
+### Open tail
+
+| Item | Where it lives |
+|---|---|
+| The two scripts; the report oracle in the S4 scenario; the attended `/clear` probe | [PLAN_round_authors_backfill_on_the_live_stores.md](../todo/PLAN_round_authors_backfill_on_the_live_stores.md), N1–N4 |
+| The release, the rehearsal, the dry runs, the two live backfills, the hand-check, the `RESULTS_` file | the same plan, N5–N10 |
+| Authors for feature and merge-time rounds (§7) | Not planned. A later plan, if the owner asks. |
+| Readers for codex and gemini callers (§3) | Not planned. Those rounds read `unobserved: no reader for <vendor>`. |
+| A per-window schema step | Not built. The owner said "not now" on 2026-10-18 (question 12). The report states the roll-up limit in its header. |
+| `peer running` for a peer round that is still running | Not built. A running round has no caller on disk (E5 §12 deviation 8). The grown-peer-set rule carries the repair. |
+
 ## Epics
 
 Seven epics in §11's order, each on its own branch and ONE commit, the coai gate once per epic; cornerstone quota ⌈2·7/5⌉ = 3.
-Stories live in `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E<n>.md`, one document per epic, written by Opus
+Stories live in `research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E<n>.md`, one document per epic, written by Opus
 when the epic starts (`subagent-models.md`, pipeline step 3); all seven are written, each linked under its epic below, and §16
 records how the defects they found were settled. Fable named the cornerstone AREAS; Opus marks the stories within the quota and keeps the ledger. E1,
 E5, E6, E7 carry no area — data, wiring, an arithmetic §8 fixes as exact-cell tests, an upsert with a shipped twin: in doubt, Opus.
