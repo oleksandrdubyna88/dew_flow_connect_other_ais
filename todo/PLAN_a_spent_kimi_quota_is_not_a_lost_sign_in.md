@@ -1,6 +1,6 @@
 # PLAN — a spent Kimi quota is not a lost sign-in
 
-> Status: **partly built, 2026-10-20: stories 1, 2, 3 and 4 are coded on `docs/kimi-quota-is-not-a-sign-in`; the capture step (§5 step 1) has NOT run, so the real ACP sentence is
+> Status: **partly built, 2026-10-21: stories 1–4 merged in #900 (released in coai-mcp 0.63.0); story 5 (the MONTHLY quota, seen 2026-10-21) is planned below; the capture step (§5 step 1) has NOT run, so the real ACP sentence is
 > still unmeasured, and the plan is NOT promoted.** Deviations are in §8 (story 3). The 0.61.0 and 0.62.0 releases shipped (tags
 > `extension-v0.61.0`, `extension-v0.62.0`), so the owner's "release first, fix after" block is lifted. The plan gate ran once
 > (session def84902, `good_enough`, 11 findings, all accepted), an Opus judge read it (12 findings, all verified by the lead)
@@ -396,3 +396,53 @@ seen red first (the messages are in `research/module_tests.md`, "Code gate and j
 - Widening the id pattern: its real shape is not measured; the capture step (§5 step 1, RESULTS §31) is where that is decided, with a test in each half.
 - A literal instead of `KimiAcpProfile.QuotaSpent`: the constant is the one name shared by the table, the shim and the diagnosis row — a literal would be a second copy.
 - Performance of `FirstLineWith` and of `Classify`: both run once per failed reviewer over a short stderr tail; measured nothing, so nothing is changed.
+
+## Story 5 — the MONTHLY quota is a spent quota too (2026-10-21)
+
+**Symptom (measured 2026-10-21 by the release session on Kimi 2.3.0, three of three `kimi -p` launches; recorded in
+`research/RESULTS_the_round_counter_tail.md` §M2 on its branch).** The owner's monthly Kimi quota was 100% used, and every
+launch was refused with:
+
+> `provider.api_error: 429 You've reached your monthly usage limit for this billing cycle. Your quota will be refreshed in the next cycle. To continue now, purchase extra usage or upgrade your plan: https://www.kimi.com/membership/subscription?tab=quota`
+
+(then exit 127 and a libuv assertion `!(handle->flags & UV_HANDLE_CLOSING)` in prompt mode — prompt mode is not the product's road;
+the product talks ACP).
+
+**Why coai gets it wrong (read on `origin/main` `0426984a1`).** D1 wrote: "The monthly form is **not measured** and gets no row until
+someone sees it". It is seen now. Today:
+- `KimiAcpProfile.Failures` (`src_mcp/runners/Acp/KimiAcpProfile.cs:82`) knows only `"reached your 5-hour usage limit"`; over ACP the
+  monthly answer arrives inside `Authentication required: 429 …` (the §2 hypothesis), so it falls to the NEUTRAL row 5
+  (`provider_error`, exit 70, no cure) — honest, but not a spent quota: the round is not told it is hopeless, and the summary does
+  not say the quota is used up.
+- `RateLimit.Spent` (`src_mcp/runners/Reviewers/ReviewerExecutor.cs:356`) has no monthly phrase, so on any road that reaches the
+  rate-limit check the generic wording can be read as a transient limit and retried on the ladder.
+- `KimiQuotaWords.ResetOpening` (`src_mcp/runners/Kimi/KimiQuotaWords.cs:25`) is `"Your quota will reset"`; the monthly text says
+  `"Your quota will be refreshed in the next cycle"`, so `ClauseOf` finds no clause and the sentence says "the vendor named no reset"
+  although Kimi named one.
+
+**Decisions.**
+- **D8 — a monthly row, before the neutral row.** `KimiAcpProfile.Failures` gains `"reached your monthly usage limit"` →
+  `kimi_quota_spent`, Kind `Spent`, exit 75, placed beside the 5-hour row (rows 1–3 stay before the `Authentication required:` rows).
+  The narrow phrase, as D1 chose for the 5-hour one — never a bare "usage limit".
+- **D9 — the observed phrase joins `RateLimit.Spent`**, with the verbatim line above (the URL is Kimi's public membership page, no
+  account data; kept) in `GateReportingTests`' `observed` dictionary — the test that refuses a phrase with no vendor answer behind it.
+- **D10 — the reset clause has two openings.** `KimiQuotaWords` keeps ONE list of openings (`"Your quota will reset"`,
+  `"Your quota will be refreshed"`); `ClauseOf` takes the earliest found. The monthly clause is then quoted: *"Your quota will be
+  refreshed in the next cycle."* Never parsed into a time (D3 stands).
+- Not here: the `kimi -p` libuv crash (not the product's road), and buying extra usage (the owner's call).
+
+**Scenarios (each red is the message before the fix).**
+- **S10** `AcpDiagnosis.Of("the agent answered with an error (-32000): Authentication required: 429 You've reached your monthly usage
+  limit for this billing cycle. Your quota will be refreshed in the next cycle. …", KimiAcpProfile.Failures)` → `kimi_quota_spent`,
+  Spent. Red: `provider_error`. (The ACP envelope is the §2 hypothesis; the inner sentence is measured.)
+- **S11** `RateLimit.Hopeless(<the monthly line>)` is true, and the `observed` dictionary carries the line. Red: false / "a guess".
+- **S12** `KimiQuotaWords.ClauseOf(<the monthly line>)` is `"Your quota will be refreshed in the next cycle."`. Red: empty.
+- **S13** the S7-shaped product round (`AKimiRound`) with a shim answering the monthly envelope → the summary, ledger and log say the
+  quota is used up and quote the refreshed clause, never "kimi login", one launch, `RateLimited` hopeless. Red: `provider_error` lines.
+- Guards stay green: the 5-hour, balance, 401 and bare sign-in rows; the neutral row for a 503.
+
+**Build.** One story, Sonnet codes red-first, Opus reviews; the code gate over the diff. Docs: `research/module_runners.md` (the
+Kimi failure table), `research/module_tests.md`, `research/RESULTS_kimi_confinement.md` §31 (the capture record gains this CLI
+sighting as "seen in prompt mode; the ACP form still unmeasured").
+
+**Done when.** S10–S13 red then green with break-its; the guards green; the whole suite green; released with the next mcp minor.
