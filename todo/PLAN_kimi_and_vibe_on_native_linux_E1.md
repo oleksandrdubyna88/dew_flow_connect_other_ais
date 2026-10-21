@@ -272,6 +272,24 @@ in the summary; Opus review has no open finding.
 **Roles.** Opus brief (it fixes the sentence text, the field names and the order of checks — membership first); Sonnet codes; Opus
 reviews. C1's Fable spec (E2) reads this story's code as its first input and may amend it in E2.
 
+**Status, 2026-10-21 — built (branch `feat/native-linux-e1-s2`), awaiting the Opus review and the epic's code gate.** S-N7, S-N14, S-N16, the list test and the
+keyring-fact cases were each observed red on an assertion, then green; B6–B9 ran both ways; `research/module_runners.md` (the native-Linux paragraph under DL1 and the
+diagram) and `research/module_tests.md` (a section) carry the story. Deviations from the text above:
+
+- **One existing test edited, not an admission pin.** `VibeLaunchRulesTests.TheSharedBannerVectors_Loaded_AndCoverEveryGeneration` (`VibeRuntimeTests.cs`) compared the vectors' generations with
+  `Enum.GetValues<WslGeneration>()`, which the new `Unreadable` member made red; it now excludes `Unreadable` ("no banner text can answer it") — the claim it pins (none, WSL1, WSL2 each have a
+  vector) is unchanged. The story said `WslGenerations.Of(text)` unchanged keeps the vectors still; the enum member was the part it did not foresee.
+- **The rules-budget pin moved by 16.** Naming `--host-facts` in `.agents/PROJECT.md` (the list test demands it) lengthens the base: `StageRulesTests.AtNinetyKilobytes_TheBaseAndTheTier_SpendExactlyTheirPinnedBytes` was re-baselined (base 17 941, pair 80 002, 9 998 left of 90 000), as the two earlier mode entries did; the comments that quote the leftover follow. Whoever merges after this and also touches the base re-measures it.
+- **`EveryModeIsClassifiedForAMissingNamedRootTests` gained one row** (`Startup.HostFacts`, "never reaches the data directory"): the story did not name the table, and a new `Startup` value is red until classified.
+- **The report type lives in `runners/Platform/HostFactsReport.cs`**, not in `src/`: `ProcVersion` and `BannerReading` are internal to `CoaiMcp.Runners`, which shows its internals to the tests only. `src/HostFactsMode.cs`
+  holds the mode and its source-generated JSON context (the plan's file), and only serialises.
+- **`WslGenerations.ForHost(kind)`** is a new one-place rule (WSL and native Linux read the kernel) replacing three copies — `VibeHost`, `KimiHost` and `VibeRuntime`'s internal constructor (the story named the first two);
+  `FileStatus.IsSocket` (one line) serves the bus-socket test; non-Linux hosts report `"listing":"not linux"` for the keyring facts (the story's two values were `read` and `cannot tell`).
+- **Banner text** in the line is trimmed of its trailing newline; the JSON is written with relaxed escaping so the sentences read as text.
+- **Break-its (all red with the real symptom, then restored):** B6 (banner before membership) → *WithTheProductsSet_AnUnreadableBanner_GetsTodaysWsl2OnlySentence*; B7 (Vibe in the product's set) → `VibeLaunchRulesTests.ANativeLinuxHost_IsRefused_WithTheWsl2OnlySentence`
+  (`Expected … "" to contain "DL1"`) and the banner-vector theories, plus *TheProductsSet_AdmitsNeitherRuntime_…*; B8 (`Of("")` = Unreadable) → `KimiLaunchChecksTests.OnlyAWsl2Banner_StartsKimi(id: "empty-banner")` and
+  `VibeLaunchRulesTests.OnlyAWsl2Banner_StartsVibe(id: "empty-banner")`; B9 (line to a file) → *--host-facts printed nothing on stdout*.
+
 ### E1.S3 — Every probe arm measures the product's road (Vibe's keyring arms, then the Kimi fixes and N-K2's pairs)
 
 **Goal.** Vibe's M-V7 measures the closed keyring road E2 ships and proves it against a keyring that IS available; the Kimi probes

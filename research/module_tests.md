@@ -1201,7 +1201,7 @@ started after that edit. The paragraph became one clause (+247 bytes) and the ca
 the headroom itself is worth knowing about.
 
 *Update 2026-10-16:* the operator raised the budget to 90 000 bytes. The canary is now
-`StageRulesTests.AtNinetyKilobytes_TheRotatedTail_FitsAtMostThreeRules` (10 014 left since 2026-10-19; on the canary branch exactly
+`StageRulesTests.AtNinetyKilobytes_TheRotatedTail_FitsAtMostThreeRules` (9 998 left since 2026-10-21, 10 014 before; on the canary branch exactly
 `gpu-lease`, `nuget-packages`, `durable-status`; no branch of the first hundred reaches more than three), backed by
 `AtNinetyKilobytes_TheBaseAndTheTier_SpendExactlyTheirPinnedBytes` (base 17 925 + tier 62 061, the drift guard; 17 906 before PROJECT.md named `--round-authors`, 2026-10-19), joined by `AtNinetyKilobytes_EveryBranchReachesAtLeastOneTailRule` (at least one — the 80 000
 state was 56 bytes and zero) and `AtNinetyKilobytes_TheTestLeftoversRule_IsShownOnTheBranchesThatDrawIt` (a four-row theory:
@@ -4616,6 +4616,21 @@ a review turn shares the key by construction; the repair and conversation tests 
 *reviewers per round* from `coai.db` and states that it claims no per-launch figure (`roundsBlock.ts`, `roundMoney.ts`). So the
 "launches per round" figure story 2.1 promised for lines that carry a round is NOT built in the extension; carrying the round
 on local lines is the precondition, and the test pins that two local lines of one round are two runs and sum once.
+
+## Native Linux — E1.S2, the admission's shared plumbing and `coai-mcp --host-facts` (2026-10-21, `todo/PLAN_kimi_and_vibe_on_native_linux_E1.md`)
+
+Both runtimes stay refused: the product's per-runtime set is EMPTY, so no existing admission pin was edited (`KimiLaunchChecksTests`, `VibeLaunchRulesTests` `ANativeLinuxHost_IsRefused_…`, the banner-vector theories). Every row ran red first against a stub that compiled and answered the wrong value.
+
+| Test class | Runs | What it proves | Red message |
+|---|---|---|---|
+| `HostAdmissionOnNativeLinuxTests` (S-N16, S-N7, DN6) | everywhere | an injected set {Vibe} admits Vibe on a read native Linux banner and Kimi keeps the WSL2-only sentence; names compare case-insensitively; the product's set is empty and gives both runtimes today's sentence byte for byte; a runtime IN the set is refused on `WslGeneration.Unreadable` with the DN6 sentence, a runtime NOT in it gets today's sentence even then (membership first); `ProcVersion.ReadFrom` (empty, whitespace, `FileNotFound`, `UnauthorizedAccess` = unread), `WslGenerations.Of(onLinux, reading)` (Unreadable only on Linux), `Of(string)` never Unreadable, `ForHost` reads the kernel for WSL and native Linux only | *an injected measured set {Vibe} did not admit a native Linux host with a read banner — the set is not consulted* · *an unreadable /proc/version was admitted as native Linux — a WSL1 kernel would start Vibe* (set applied alone, before the banner rule) |
+| `KeyringSessionFactsTests` | everywhere | each fact alone; `XDG_RUNTIME_DIR` unset or empty asks `/run/user/<uid>/bus`; the daemons by name or truncated `comm`, a lookalike (`keepassxc-proxy`) is not one, once and sorted; an unreadable listing is `cannot tell` and leaves the other two facts standing | *a set DBUS_SESSION_BUS_ADDRESS was recorded as unset* (a stub answering all-false) |
+| `HostFactsModeTests` (S-N14) | everywhere (+ the native-Linux real line on the Linux CI legs, skipped by name elsewhere) | `Classify` knows `--host-facts`; it is not a writer mode; the printed line is ONE parseable line with every field in order, exit 0, nothing created under `COAI_DATA_DIR`; on a native Linux runner the REAL line says `linux`, banner read, both runtimes refused; an unreadable banner is stated as unread and stays refused; the keyring facts never change the admission; the sentences are not `\u`-escaped | *coai-mcp --host-facts is not a mode — N-V6 has no product reading to set beside the facts script's own (DN10: two readings)* (exit 64) · *--host-facts printed nothing on stdout* (B9) |
+| `ARequestFaultIsNotAnOldBinaryTests.TheSanctionedModesAreTheOnesTheDocumentNames` (the list) | everywhere | with the switch line added and `.agents/PROJECT.md` not yet edited it names `--host-facts` | *`--host-facts` is a one-shot mode this binary HAS, and a mode the document does not name is a mode whose exit-code contract nobody agreed to* |
+
+Three existing tests were touched, none an admission pin: `StageRulesTests.AtNinetyKilobytes_TheBaseAndTheTier_SpendExactlyTheirPinnedBytes` was re-baselined (base 17 925 → 17 941, pair 79 986 → 80 002, 9 998 left — `.agents/PROJECT.md` must name `--host-facts`, the pin's own instruction; the tail canaries ran unchanged and green); `EveryModeIsClassifiedForAMissingNamedRootTests` gained the `HostFacts` row of its classification table (a new `Startup` value is red until classified), and
+`VibeLaunchRulesTests.TheSharedBannerVectors_Loaded_AndCoverEveryGeneration` now excludes `WslGeneration.Unreadable` from "every generation has a vector" — no banner text can answer it (a deviation recorded in the stories doc).
+Break-its B6–B9 are recorded in the stories doc's E1.S2 status.
 
 ## The suite is deterministic — epic E1, "No run sees another" (2026-10-19)
 

@@ -118,7 +118,7 @@ sequenceDiagram
   reaches one to three rules in this repository since the operator raised the budget to 90 000 bytes
   (2026-10-16; `RuleFiles.DefaultBudgetBytes`)** — the base and the tier spend **79 986** bytes (79 944 until 2026-10-18, 79 967 until 2026-10-19), which
   left **56** at the old 80 000 (the tail took nothing, so `common/test-leftovers.md` reached no
-  reviewer) and leave **10 014** now (10 056 until 2026-10-18, 10 033 until 2026-10-19, when PROJECT.md named `--round-authors`); the smallest rule outside the tier is 2 197. Over 3 000 branch
+  reviewer) and leave **9 998** now (10 056 until 2026-10-18, 10 033 until 2026-10-19 when PROJECT.md named `--round-authors`, 10 014 until 2026-10-21 when it named `--host-facts`); the smallest rule outside the tier is 2 197. Over 3 000 branch
   names the tail takes one rule on 30 %, two on 62 %, three on 8 % (mean 1.78), and
   `common/test-leftovers.md` is drawn on 9.8 % — drawn, not owed: a rule that must reach every reviewer
   belongs in the tier. Numbers: `research/RESULTS_rules_selection_budget.md` (last section).
@@ -3965,7 +3965,11 @@ flowchart TD
   H -->|"Windows, a Windows kimi"| P
   H -->|"WSL, generation WSL2"| P
   H -->|"WSL1"| R1["refused: this is WSL1 - wsl --set-version distro 2, from Windows"]
-  H -->|"native Linux"| R2["refused: Kimi runs on WSL2 only for now"]
+  H -->|"native Linux"| S{"Kimi in HostAdmission.MeasuredOnNativeLinux? (the set is EMPTY: E3 adds Kimi)"}
+  S -->|"no - asked first, so every answer is today's"| R2["refused: Kimi runs on WSL2 only for now"]
+  S -->|"yes"| B{"kernel banner read? (WslGeneration)"}
+  B -->|"Unreadable"| R6["refused: the kernel banner /proc/version could not be read"]
+  B -->|"read, not WSL"| P
   H -->|"wsl.exe bridge on Windows, macOS, other"| R3["refused: D18"]
   P["places: ~/.kimi-code/bin/kimi; rg and fd in bin, then PATH, then ~/.local/bin"] --> E["built environment: HOME to os/, XDG_CACHE_HOME to cache/ beside it"]
   E --> M{"MountLocality.Judge of the sign-in's real path, on EVERY launch before any process starts"}
@@ -3981,6 +3985,19 @@ flowchart TD
   shared `shared/wsl-banner-vectors.json`). Refused: WSL1 (the WSL1 sentence and its cure, run from Windows), native Linux (*Kimi runs on WSL2 only for now — it is measured on WSL2 and not yet on a native Linux host*), a
   Windows host that would start `wsl.exe` or a `\\wsl$` path, macOS and every other host. `KimiHost` (kind + generation, with the `AsyncLocal` flow seam `KimiHost.Using` that `VibeHost` has) reaches
   `KimiLaunch.TakeAsync` and `KimiRuntime`; the bare-`HostKind` constructors are `internal` test doors. `KimiSeams.Using` is the same kind of seam for the person's places and the shim's binary.
+- **Native Linux, E1.S2 of `todo/PLAN_kimi_and_vibe_on_native_linux_E1.md` (2026-10-21) — the shared plumbing, with BOTH runtimes still refused.** The `HostKind.Linux` arm of `HostAdmission.Refusal` asks a per-runtime
+  set, `HostAdmission.MeasuredOnNativeLinux` (a public read-only set, **EMPTY**; names compared case-insensitively), and an `internal` overload takes the set so a test can inject one. **Membership is asked FIRST**: a runtime
+  not in the set gets the sentence above unchanged whatever the banner says, so with the empty set no answer of any host changed (the pins in `KimiLaunchChecksTests` and `VibeLaunchRulesTests` stand). A runtime IN
+  the set is admitted only on a banner that was READ; `WslGeneration.Unreadable` gets its own sentence, written once beside the others (*{runtime} is refused on this Linux host — the kernel banner /proc/version could not
+  be read, so coai cannot tell a native Linux host from WSL1 (DN6 of todo/PLAN_kimi_and_vibe_on_native_linux.md)*) — reachable today only through an injected set. `Unreadable` is produced ONLY by
+  `WslGenerations.Of(onLinux, BannerReading)` — Linux with a `/proc/version` that is absent, throws or is empty (`ProcVersion.ReadFrom` over a seam; `ProcVersion.Reading` is the one read, `Text` unchanged for
+  `VendorDiagnosis`); `WslGenerations.Of(string)` never answers it, so `shared/wsl-banner-vectors.json` and the extension's parity test do not move. `WslGenerations.ForHost(kind)` is now the ONE place `VibeHost`,
+  `KimiHost` and `VibeRuntime`'s test door decide whether to read the kernel: WSL **and native Linux** (it was WSL only, three copies). `KeyringSessionFacts.Of(environment, isSocket, listing, uid)` (`runners/Platform/`) reads
+  the three keyring-session facts of DN10 — `DBUS_SESSION_BUS_ADDRESS` set, a socket at `$XDG_RUNTIME_DIR/bus` (else `/run/user/<uid>/bus`), a `gnome-keyring-daemon` / `kwalletd*` / `keepassxc` in the listing — each its own
+  value, an unreadable listing `cannot tell`; **no admission reads them** (coai closes the keyring road itself in E2). **`coai-mcp --host-facts`** (`src/HostFactsMode.cs`, `Startup.HostFacts`, listed in `.agents/PROJECT.md`)
+  prints ONE line — `{"server","hostKind","banner":{"read","text","generation"},"admission":{"Vibe","Kimi"},"keyringSession":{"busAddressSet","busSocket","daemons","listing"},"decides"}` — and exits 0, never 64; it is
+  read-only (no home, lock, network or data folder), NOT a writer mode, and classified in `EveryModeIsClassifiedForAMissingNamedRootTests` as a mode that never reaches the data directory. It is the product's own
+  reading, set beside the facts script's raw one (two readings, on purpose). The report is `HostFactsReport` (`runners/Platform/HostFactsReport.cs`); the mode only serialises it (source-generated JSON, Native AOT).
 - **DL5 — the CLI and the tools are found where the installers put them.** `KimiAcpProfile.InstalledExecutableFor` and `KimiPlaces` find `<KIMI_INSTALL_DIR or ~/.kimi-code>/bin/kimi` on Linux and WSL
   (spelled with `/` by the HOST, never `Path.Combine`); macOS still guesses nothing. `KimiTools` searches the person's bin, then `PATH`, then `~/.local/bin` (a third place — where DL12's `fd` link goes), and the
   directory each of `rg` and `fd` was found in joins the built `PATH` through `ToolFolders`, so a `~/.local/bin/fd` is found though the editor's `PATH` lacks it. A candidate counts only when it is an executable file

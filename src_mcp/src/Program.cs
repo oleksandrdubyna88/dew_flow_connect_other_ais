@@ -154,6 +154,12 @@ internal static class Program
         KimiClearMarker,
 
         /// <summary>
+        /// The host's facts in one JSON line — host kind, kernel banner, each runtime's admission answer, the keyring-session facts as recorded facts — read-only, no home, no lock, no network, no data folder.
+        /// See <see cref="HostFactsMode"/> (E1.S2 of <c>todo/PLAN_kimi_and_vibe_on_native_linux_E1.md</c>).
+        /// </summary>
+        HostFacts,
+
+        /// <summary>
         /// The measurement behind a vendor dialect: the vault read the product's way, <c>GET /models</c>,
         /// and the S0.5 request matrix, printed as an allowlist of fields.
         /// </summary>
@@ -348,6 +354,7 @@ internal static class Program
                 "--ask-api" => Startup.AskApi,
                 "--ask-acp" => Startup.AskAcp,
                 "--kimi-clear-marker" => Startup.KimiClearMarker,
+                "--host-facts" => Startup.HostFacts,
                 "--probe-api" => Startup.ProbeApi,
                 "--log" => Startup.Log,
                 "--round-counts" => Startup.RoundCounts,
@@ -452,6 +459,10 @@ internal static class Program
 
             case Startup.KimiClearMarker:
                 return await Acp.KimiClearMarkerMode.RunAsync(args, Note, Console.Out);
+
+            case Startup.HostFacts:
+                // One line on stdout, read-only (no home, lock, network or data folder), exit 0 — never 64.
+                return HostFactsMode.Run(Console.Out);
 
             case Startup.ProbeApi:
                 // The vault is read the way `--providers` reads it: `creds config`, the one child this

@@ -140,7 +140,7 @@ public sealed class StageRulesTests : IDisposable
     }
 
     /// <summary>
-    /// The base and the eight tier rules spend exactly 79 986 characters of the budget — the number every
+    /// The base and the eight tier rules spend exactly 80 002 characters of the budget — the number every
     /// other pin in this file stands on.
     /// </summary>
     /// <remarks>
@@ -151,7 +151,8 @@ public sealed class StageRulesTests : IDisposable
     /// since:</b> 2026-10-18, when <c>.agents/PROJECT.md</c> named E5's <c>--kimi-clear-marker</c> (+23, base
     /// 17 906, 79 967), and 2026-10-19 on the merged tree of E6, when it also named the one-shot mode
     /// <c>--round-authors</c> (+19, which that file must do — <c>ARequestFaultIsNotAnOldBinaryTests</c>): base
-    /// 17 925, the pair 79 986, 10 014 left; the three canary tests below were re-run unchanged. To reproduce, run
+    /// 17 925, the pair 79 986, 10 014 left; the three canary tests below were re-run unchanged. <b>And a third time, 2026-10-21</b>, when E1.S2 of the native-Linux plan named the one-shot
+    /// mode <c>--host-facts</c> in that file (+16, which it must — <c>ARequestFaultIsNotAnOldBinaryTests</c>): base 17 941, the pair 80 002, 9 998 left; the three canary tests below were re-run unchanged. To reproduce, run
     /// this test and read the two numbers in its failure message.</para>
     /// <para>It goes red when the conventions pin moves a tier rule, or when this repository's own
     /// instruction files or rules change by one character. That is the point, not a nuisance: the tail
@@ -174,13 +175,13 @@ public sealed class StageRulesTests : IDisposable
             .Where(file => !file.Path.Equals(file.WithinMount, StringComparison.Ordinal) && RuleOrder.IsTier(file.WithinMount))
             .Sum(file => file.Text.Length);
 
-        var message = $"base {baseBytes} + tier {tierBytes} = {baseBytes + tierBytes} (pinned: 17 925 + 62 061 = 79 986 of 90 000; 17 906 + 62 061 = 79 967 until PROJECT.md named --round-authors). "
+        var message = $"base {baseBytes} + tier {tierBytes} = {baseBytes + tierBytes} (pinned: 17 941 + 62 061 = 80 002 of 90 000; 17 925 + 62 061 = 79 986 until PROJECT.md named --host-facts; 17 906 + 62 061 = 79 967 until it named --round-authors). "
             + "WHEN THIS FAILS the headroom the tail canaries are measured against has moved: re-measure "
             + "research/RESULTS_rules_selection_budget.md, then re-baseline the canaries below in the same change.";
 
         tierBytes.Should().Be(62_061, message);
-        baseBytes.Should().Be(17_925, message);
-        (baseBytes + tierBytes).Should().Be(79_986, message);
+        baseBytes.Should().Be(17_941, message);
+        (baseBytes + tierBytes).Should().Be(80_002, message);
     }
 
     /// <summary>
@@ -225,7 +226,7 @@ public sealed class StageRulesTests : IDisposable
 
         widest.Tail.Should().HaveCountLessThanOrEqualTo(3,
             $"branch '{widest.Branch}' reached [{string.Join(", ", widest.Tail)}] and at most three rules can "
-            + "fit: the leftover is 10 014, and the smallest rules outside the tier are 2 197, 3 065, 3 421 "
+            + "fit: the leftover is 9 998 (10 014 before 2026-10-21), and the smallest rules outside the tier are 2 197, 3 065, 3 421 "
             + "and 3 460. That number is the same on every platform since the collector stopped spending the "
             + "budget on carriage returns.");
     }
