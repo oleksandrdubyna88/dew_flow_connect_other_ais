@@ -423,7 +423,7 @@ public sealed class ABackfillLeavesEverythingElseWhereItWasTests
         world.RecordLive();
         world.StripAuthors();
         var file = File.ReadAllBytes(File0(world));
-        using var rig = new BackfillRig(world, busyWait: TimeSpan.FromMilliseconds(200));
+        using var rig = new BackfillRig(world, busyWait: TimeSpan.FromSeconds(1)); // the wait is whole seconds: Microsoft.Data.Sqlite's DefaultTimeout
         SqliteConnection.ClearAllPools();
         using var holder = new SqliteConnection($"Data Source={Path.Combine(world.DataDir, RoundsDb.FileName)};Pooling=False");
         holder.Open();
@@ -434,6 +434,36 @@ public sealed class ABackfillLeavesEverythingElseWhereItWasTests
         rig.Counts.Deferred[BackfillWhy.Busy].Should().Be(1);
         File.ReadAllBytes(File0(world)).Should().Equal(file, "busy at BEGIN: the file was never saved — a deferred transaction would have saved it and failed at the first UPDATE");
         BackfillWorld.Run(holder, "ROLLBACK");
+    }
+
+    /// <summary>
+    /// The busy wait is Microsoft.Data.Sqlite's (the connection's <c>DefaultTimeout</c>), with no <c>PRAGMA busy_timeout</c> beside it: a writer that finds the
+    /// store locked WAITS for it, and writes once the lock is released inside the wait. A wait that was not in force would defer the round as busy.
+    /// </summary>
+    [Fact]
+    public async Task ABusyWriterWaitsForTheLock_AndWritesOnceItIsReleasedInsideTheWait()
+    {
+        using var world = BackfillWorld.Of(Fixture);
+        world.RecordLive();
+        world.StripAuthors();
+        using var rig = new BackfillRig(world, busyWait: TimeSpan.FromSeconds(10));
+        SqliteConnection.ClearAllPools();
+        using var holder = new SqliteConnection($"Data Source={Path.Combine(world.DataDir, RoundsDb.FileName)};Pooling=False");
+        holder.Open();
+        BackfillWorld.Run(holder, "BEGIN IMMEDIATE");
+        var release = Task.Run(async () =>
+        {
+            await Task.Delay(1500);
+            BackfillWorld.Run(holder, "ROLLBACK");
+        });
+
+        var started = System.Diagnostics.Stopwatch.StartNew();
+        await rig.RunAsync();
+        await release;
+
+        started.Elapsed.Should().BeGreaterThan(TimeSpan.FromMilliseconds(1000), "the writer waited for the lock instead of deferring at once");
+        rig.Counts.Deferred.Total.Should().Be(0, "the lock was released inside the wait");
+        rig.Counts.Written.Total.Should().Be(1);
     }
 
     [Fact]

@@ -1134,6 +1134,7 @@ again"); 10 (the analyzer holds the bound, not review); 11 (re-done on the merge
 19. **`StoredGate.Before` invents no stage** (gate 21): the reconstruction says which members are real and leaves the rest at the type's default. No behaviour
     changes (the attribution reads no stage), so no test — stated here.
 20. **`.github/changelog-baseline.json`** gets `0.61.0` back (gate 25) — a merge artifact, not an E7 decision.
+21. **Sonar S2077 on PR #865 (three findings), fixed with no loosening.** `BackfillBackup`'s two PRAGMAs are whole constant statements; a table name read from `sqlite_master` is put into SQL only after a strict identifier check (ASCII letters, digits, `_`, no leading digit) — any other name is `NotCounted`, so `rowsMatch` is false, the backup does not verify and nothing is written (before: it was quoted, counted and verified; `ATableWhoseNameIsNotAPlainIdentifier…`) — and the one count statement carries a targeted `SuppressMessage` for S2077 with its justification. `BackfillWriter` no longer issues `PRAGMA busy_timeout` (deviation 8 is superseded): the wait is `Microsoft.Data.Sqlite`'s `DefaultTimeout`, whole seconds, so a sub-second test wait rounds up to 1 s (`ABusyWriterWaitsForTheLock…`); production's 5 s is unchanged.
 
 ### 11.2 The code gate (2026-10-19)
 

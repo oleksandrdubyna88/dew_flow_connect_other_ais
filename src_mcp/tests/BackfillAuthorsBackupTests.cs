@@ -139,6 +139,44 @@ public sealed class BackfillAuthorsBackupTests
         verdict.GetProperty("check").GetProperty("rowsMatch").GetBoolean().Should().BeFalse();
     }
 
+    /// <summary>
+    /// Sonar S2077: the per-table count is the one place a name read from <c>sqlite_master</c> is put into SQL, and an identifier cannot be a bound
+    /// parameter. Defence in depth: a name that is not a plain identifier is never put into SQL at all — the backup cannot count it, so it cannot
+    /// claim the copy holds it, so it does not verify, so nothing is written. (Before the check the name was quoted and counted, and the backup verified.)
+    /// </summary>
+    [Theory]
+    [InlineData("x\" ; DROP TABLE rounds; --")]
+    [InlineData("two words")]
+    [InlineData("1starts_with_a_digit")]
+    public async Task ATableWhoseNameIsNotAPlainIdentifier_FailsTheBackup_AndNothingIsWritten(string name)
+    {
+        using var world = Stripped();
+        Exec(world, $"CREATE TABLE \"{name.Replace("\"", "\"\"", StringComparison.Ordinal)}\" (a INTEGER)");
+        var before = Logical(world);
+
+        var run = await RunAsync(world, []);
+
+        run.Code.Should().Be(74, run.Out + run.Err);
+        run.Err.Should().Contain("rowsMatch");
+        JsonDocument.Parse(run.Out).RootElement.GetProperty("backupCheck").GetProperty("rowsMatch").GetBoolean().Should().BeFalse();
+        Logical(world).Should().Be(before, "the mode wrote nothing");
+        StoreDump.Rows(world.DataDir, "SELECT COUNT(*) FROM rounds").Trim().Should().NotBe("0", "the injected DROP did not run, and the rounds are still there");
+        var folder = Directory.GetDirectories(BackupsOf(world)).Should().ContainSingle("the refused backup's folder is kept").Subject;
+        JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(folder, BackfillBackup.VerdictFile))).RootElement.GetProperty("verified").GetBoolean().Should().BeFalse();
+    }
+
+    /// <summary>The control for the test above: a store whose tables are all plain identifiers still verifies (every real table is one).</summary>
+    [Fact]
+    public async Task ATableWithAPlainUnderscoredName_StillVerifies()
+    {
+        using var world = Stripped();
+        Exec(world, "CREATE TABLE a_plain_table_2 (a INTEGER)");
+
+        var run = await RunAsync(world, []);
+
+        run.Code.Should().Be(0, run.Err);
+    }
+
     [Fact]
     public async Task AConcurrentCommitDuringTheBackup_IsRefused()
     {

@@ -136,11 +136,12 @@ internal sealed class BackfillWriter(string dataDir, SessionStore store, RoundsD
             return;
         }
 
+        // The busy wait is Microsoft.Data.Sqlite's own: it retries a busy statement (BEGIN IMMEDIATE included) until the command's timeout, which a
+        // command takes from the connection's DefaultTimeout when it is created. No PRAGMA busy_timeout statement is needed — it would be a second
+        // wait under the first (and PRAGMA takes no bound parameter, so it could only be formatted into SQL).
         var wait = busyWait ?? DefaultWait;
         using var command = db.Command();
         command.Connection!.DefaultTimeout = (int)Math.Ceiling(wait.TotalSeconds);
-        command.CommandText = $"PRAGMA busy_timeout = {(int)wait.TotalMilliseconds}";
-        command.ExecuteNonQuery();
         _waitSet = true;
     }
 

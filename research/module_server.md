@@ -3809,7 +3809,7 @@ predecessor from it — which is also how a dry run keeps its counts equal to th
 **S4 — the mode and its safety.** A writing run makes a **verified backup first** (`BackfillBackup`): SQLite's ONLINE backup of `coai.db` and every
 `sessions/session-*.json` copied byte for byte, into a NEW folder `<dataDir>/backfill-backups/<yyyy-MM-ddTHH-mm-ssZ>/` (a second in the same second is `-2`); the
 copy must open read-only, answer `ok` to `integrity_check`, carry the source's `user_version`, hold the source's row count in EVERY table counted before AND
-after, and the source's `PRAGMA data_version` — read twice on the mode's own read-only connection, each an autocommit statement — must be unchanged: SQLite
+after (a table whose name is not a plain identifier is never put into SQL and never verifies — S2077), and the source's `PRAGMA data_version` — read twice on the mode's own read-only connection, each an autocommit statement — must be unchanged: SQLite
 changes it when ANY OTHER connection commits, which a count (an `UPDATE` keeps it) cannot show; every session file's SHA-256 equals its source's. Any failure →
 nothing is written, the summary names the check, exit **74**, the folder stays. **Every folder carries its own verdict**, `check.json` (`BackupVerdict`: the checks
 and whether every one held — code gate finding 22), so a refused backup, a run killed mid-copy (no file) and a verified one are told apart on disk a year later;

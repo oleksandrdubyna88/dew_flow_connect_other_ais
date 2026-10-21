@@ -74,7 +74,7 @@ internal static class BackfillBackup
     {
         var folder = NewFolder(dataDir, clock);
         var before = Take(source, versionFirst: true);
-        var userVersion = Pragma(source, "user_version");
+        var userVersion = Number(source, UserVersionSql);
         CopyDatabase(source, Path.Combine(folder, RoundsDbFile));
         var copied = CopySessions(dataDir, folder);
         seams.DuringBackup?.Invoke();
@@ -114,32 +114,56 @@ internal static class BackfillBackup
     /// </summary>
     private static Counts Take(SqliteConnection db, bool versionFirst)
     {
-        var first = versionFirst ? Pragma(db, "data_version") : 0;
+        var first = versionFirst ? Number(db, DataVersionSql) : 0;
         var rows = TableRows(db);
-        var last = versionFirst ? first : Pragma(db, "data_version");
+        var last = versionFirst ? first : Number(db, DataVersionSql);
 
         return new Counts(rows, last);
     }
 
-    private static long Pragma(SqliteConnection db, string name)
+    // PRAGMAs take no bound parameter, so each one is a whole constant statement — nothing is ever joined onto a statement's text.
+    private const string DataVersionSql = "PRAGMA data_version";
+    private const string UserVersionSql = "PRAGMA user_version";
+
+    private static long Number(SqliteConnection db, string sql)
     {
         using var read = db.CreateCommand();
-        read.CommandText = "PRAGMA " + name;
+        read.CommandText = sql;
 
         return Convert.ToInt64(read.ExecuteScalar(), CultureInfo.InvariantCulture);
     }
+
+    /// <summary>The count recorded for a table whose name was never put into SQL (see <see cref="IsPlainName"/>); no real count is negative, so it equals nothing.</summary>
+    private const long NotCounted = -1;
 
     private static SortedDictionary<string, long> TableRows(SqliteConnection db)
     {
         var counts = new SortedDictionary<string, long>(StringComparer.Ordinal);
         foreach (var table in Tables(db))
         {
-            using var count = db.CreateCommand();
-            count.CommandText = $"SELECT COUNT(*) FROM \"{table.Replace("\"", "\"\"", StringComparison.Ordinal)}\"";
-            counts[table] = Convert.ToInt64(count.ExecuteScalar(), CultureInfo.InvariantCulture);
+            counts[table] = IsPlainName(table) ? CountOf(db, table) : NotCounted;
         }
 
         return counts;
+    }
+
+    /// <summary>
+    /// A table name that is safe to put between double quotes without thinking: ASCII letters, digits and underscores, not starting with a digit. Every
+    /// table of the store is one. A name that is not — one an attacker or a bug put into <c>sqlite_master</c> — is never put into SQL.
+    /// </summary>
+    private static bool IsPlainName(string name) =>
+        name.Length > 0 && !char.IsAsciiDigit(name[0]) && name.All(letter => letter == '_' || char.IsAsciiLetterOrDigit(letter));
+
+    /// <summary>The one statement here that carries a name. Callers pass only a name <see cref="IsPlainName"/> accepted.</summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage(
+        "Security", "S2077:Formatting SQL queries is security-sensitive",
+        Justification = "The identifier comes from sqlite_master of the store being backed up, has passed the strict identifier check (ASCII letters, digits, underscore; no leading digit), and is quoted per SQLite rules; SQLite cannot bind an identifier as a parameter")]
+    private static long CountOf(SqliteConnection db, string plainTable)
+    {
+        using var count = db.CreateCommand();
+        count.CommandText = $"SELECT COUNT(*) FROM \"{plainTable}\"";
+
+        return Convert.ToInt64(count.ExecuteScalar(), CultureInfo.InvariantCulture);
     }
 
     private static List<string> Tables(SqliteConnection db)
@@ -209,9 +233,13 @@ internal static class BackfillBackup
 
         return new BackfillBackupCheck(
             opened, integrity, version, before.Rows.Count,
-            opened && copyRows.SequenceEqual(before.Rows) && before.Rows.SequenceEqual(after.Rows),
+            opened && RowsHold(copyRows, before.Rows, after.Rows),
             before.DataVersion == after.DataVersion, copied.Count, files);
     }
+
+    /// <summary>The copy's counts equal the source's before AND after — and every table was actually counted: a table that was not never verifies.</summary>
+    private static bool RowsHold(SortedDictionary<string, long> copy, SortedDictionary<string, long> before, SortedDictionary<string, long> after) =>
+        !before.ContainsValue(NotCounted) && copy.SequenceEqual(before) && before.SequenceEqual(after);
 
     private static (bool Opened, bool Integrity, bool UserVersion, SortedDictionary<string, long> Rows) Inspect(string copy, long userVersion)
     {
@@ -220,7 +248,7 @@ internal static class BackfillBackup
             using var db = new SqliteConnection($"Data Source={copy};Mode=ReadOnly;Pooling=False");
             db.Open();
 
-            return (true, Text(db, "PRAGMA integrity_check") == "ok", Pragma(db, "user_version") == userVersion, TableRows(db));
+            return (true, Text(db, "PRAGMA integrity_check") == "ok", Number(db, UserVersionSql) == userVersion, TableRows(db));
         }
         catch (SqliteException)
         {
