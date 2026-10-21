@@ -29,8 +29,14 @@ public static class RoundAuthorsText
 
         lines.AddRange(ExclusionsTable(answer.Exclusions));
 
-        return string.Join('\n', lines) + "\n";
+        return Joined(lines);
     }
+
+    /// <summary>
+    /// THE one place the lines of the table become text: every line goes through <see cref="Printable"/> here, so a header sentence, a source line or a
+    /// line a later edit adds cannot reach the terminal with a control character, whatever word of an <c>--add</c> file it carries. The line breaks are ours.
+    /// </summary>
+    private static string Joined(IEnumerable<string> lines) => string.Join('\n', lines.Select(Printable)) + "\n";
 
     private static string SourceLine(RoundAuthorsSource source) =>
         Printable($"source {source.SourceId[..8]} ({source.Platform}) read {source.ReadUtc}: {source.Sessions.Count} gate session(s)");
@@ -134,11 +140,22 @@ public static class RoundAuthorsText
     }
 
     /// <summary>
-    /// A value as the terminal may see it: every control character — an escape that would clear the screen or rewrite a figure, from a store row
-    /// or an <c>--add</c> file — is shown as <c>?</c>. The table's own line breaks are added after, never through here.
+    /// A value as the terminal may see it: every character it would act on, or a reader cannot see, is shown as <c>?</c> — a control (an escape that
+    /// would clear the screen or rewrite a figure), a format character (a bidi override that reorders a row, a zero-width character, a byte-order mark,
+    /// a soft hyphen, a TAG character), a line or paragraph separator, an unassigned code point. A value comes from a store row or an <c>--add</c>
+    /// file. Judged by CODE POINT, not by UTF-16 unit: a character above U+FFFF is a surrogate pair whose halves are each of category Surrogate, so a
+    /// per-unit test would let an invisible TAG character (U+E0000 and up) through, and an emoji is one safe code point shown whole. A lone surrogate
+    /// is not text; enumerating yields U+FFFD for it, and U+FFFD is shown as <c>?</c> too (the two cannot be told apart). A code point shows as ONE
+    /// <c>?</c>. The table's own line breaks are added after, never through here.
     /// </summary>
     internal static string Printable(string value) =>
-        value.Any(char.IsControl) ? string.Concat(value.Select(at => char.IsControl(at) ? '?' : at)) : value;
+        value.EnumerateRunes().Any(Unprintable) ? string.Concat(value.EnumerateRunes().Select(rune => Unprintable(rune) ? "?" : rune.ToString())) : value;
+
+    private static readonly UnicodeCategory[] HiddenCategories =
+        [UnicodeCategory.Control, UnicodeCategory.Format, UnicodeCategory.LineSeparator, UnicodeCategory.ParagraphSeparator, UnicodeCategory.OtherNotAssigned];
+
+    private static bool Unprintable(Rune rune) =>
+        rune == Rune.ReplacementChar || HiddenCategories.Contains(Rune.GetUnicodeCategory(rune));
 
     /// <summary>Columns padded to their widest cell, joined by an ASCII separator, the header underlined by dashes — plain text a terminal and a diff both read.</summary>
     private static IEnumerable<string> Aligned(List<string[]> rows)
