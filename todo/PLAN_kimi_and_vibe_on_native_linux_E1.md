@@ -498,6 +498,15 @@ Kimi-probe half (the host-facts script, `scripts/native/*` and `HostFactsMode.cs
 - **J8 (the slot-hex redaction only)** — one `redactSlot` exported from `lib/kimi.mjs` replaces the copies in `manifest` and `lib/kimi-schedule.mjs` (`host-facts.mjs` imports it, the other coder's change). Pinned by
   a test; break-it (`{9,}`): red, restored. The `FAIL_BACKEND` import and the keyring DAEMON rule are not mine.
 
+- **Re-check of the Opus judge (2026-10-21) — J1/J2/item 4 were only partly closed.**
+  - *J1 (major):* `copiedCredentials` was "has a home, not shared, not owned", so M-K7's empty-home and `credentials: false` arms built the content guard without the flag and every later launch re-read the sign-in. A launch is now a
+    copied-credentials one only when `copiedHome` filled its home with credentials (`filledHomes`, `launchesOnCopiedCredentials`). RED: *an M-K7 arm built the content guard - every later launch re-read the person's credentials* (the injected reader was called 5 times);
+    break-it (the old formula): 2 red, restored. `research/module_runners.md` no longer says M-K7's copied home is refused.
+  - *J2 (major):* the probe's own `kimi --version` inherited the real `HOME` and `~/.kimi-code`. It now runs after the no-other-kimi wait, after `homeBefore`, in `versionEnv` (the built environment of `<scratch>/version`). RED: *the version launch has no owned
+    KIMI_CODE_HOME - it reads the real ~/.kimi-code* (and no `XDG_CACHE_HOME`); break-it (`{ ...parent }`): red, restored.
+  - *`native-run.mjs` `RESERVED_FLAGS`* gains `--allow-copied-credentials` and `--allow-real-home` (bare or `=value`). RED: *renderRunScript wrote the argument --allow-copied-credentials into a root-run script*.
+  - *Item 4:* off Windows the default `--cells` is the owned set and a real-home cell needs `--allow-real-home` (`cellsPlan`). RED: the default held every cell and the refusal was empty; break-its (no refusal; default = all): red, restored.
+
 **Left for the lead (not run by the coder, by instruction).**
 
 - *The S-N17 live check (free, WSL, Vibe installed):* `node scripts/probe-vibe-confinement.mjs --vibe "$(command -v vibe)" --cells M-V7 --arms a3,a3c --repeats 1` — expect a3c's `keyringMarker=yes`,

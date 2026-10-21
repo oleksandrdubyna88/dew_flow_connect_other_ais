@@ -11,7 +11,7 @@ import { after, test } from 'node:test';
 import { MINIMAL_UNIX, MINIMAL_WINDOWS } from './vibe.mjs';
 import {
   CANDIDATES, agentsCanaryPlan, builtEnv, classifyHomeEntry, credentialNames, disposeOwnedHome, inventory, makeAgentsCanary, makeOwnedHome, minimalConfigToml,
-  modelAlias, outputTokens, parseUsageLine, ownedRoot, personsOauth, realHomeVerdict, removeAgentsCanary, shimEnv,
+  modelAlias, outputTokens, parseUsageLine, ownedRoot, personsOauth, realHomeVerdict, removeAgentsCanary, shimEnv, versionEnv,
 } from './kimi-home.mjs';
 
 const WINDOWS = process.platform === 'win32';
@@ -283,4 +283,16 @@ test('J4: makeAgentsCanary writes both files with an exclusive create - a skill 
   assert.throws(() => makeAgentsCanary(plan), /exists/u);
   assert.equal(readFileSync(plan.skillFile, 'utf8'), 'not ours');
   assert.equal(existsSync(plan.agentsMd), false);
+});
+
+// Re-check of J2: the probe's own `kimi --version` (before any cell) ran with NO env - the real HOME, the real ~/.kimi-code, no pin - so Kimi extracted into the
+// person's real cache. It now runs in the built environment of an owned root.
+test('re-check J2: the version launch runs in an owned root\'s built environment - KIMI_CODE_HOME, the cache folder and the pin named, HOME untouched', () => {
+  const env = versionEnv('/r/version', { platform: 'linux', parent: { PATH: '/usr/bin', HOME: '/home/op', SECRET: 'x' } });
+
+  assert.equal(env.KIMI_CODE_HOME, '/r/version/home', 'the version launch has no owned KIMI_CODE_HOME - it reads the real ~/.kimi-code');
+  assert.equal(env.XDG_CACHE_HOME, '/r/version/cache', 'the version launch has no owned XDG_CACHE_HOME - Kimi extracts into the real cache');
+  assert.equal(env.KIMI_CODE_NO_AUTO_UPDATE, '1');
+  assert.equal(env.HOME, '/home/op');
+  assert.equal('SECRET' in env, false, 'nothing is inherited but the minimal names');
 });

@@ -318,3 +318,12 @@ export const outputTokens = (logText) => [...String(logText ?? '').matchAll(/llm
 
 /** The LAST `modelAlias=` of a session log's `llm config` lines — the model the session actually ran on. */
 export const modelAlias = (logText) => [...String(logText ?? '').matchAll(/llm config.*?modelAlias=(\S+)/gu)].at(-1)?.[1] ?? '';
+
+/**
+ * The environment of the probe's own `kimi --version` (before any cell): the built environment of the owned root `root` - KIMI_CODE_HOME its `home/`, the pin, and
+ * `XDG_CACHE_HOME` its `cache/` on Linux - never the inherited one (re-check of J2: it ran with the real `HOME` and `~/.kimi-code`, extracting into the real cache).
+ */
+export function versionEnv(root, { platform = process.platform, parent = process.env } = {}) {
+  const p = platform === 'win32' ? join : posix.join;
+  return builtEnv({ home: p(root, OWNED_HOME), platform, parent });
+}

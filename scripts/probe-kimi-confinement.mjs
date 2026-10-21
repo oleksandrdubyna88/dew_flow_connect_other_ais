@@ -24,6 +24,8 @@
 //   node scripts/probe-kimi-confinement.mjs [--shim <coai-mcp.exe>] [--kimi <exe>] [--scratch <dir>] [--repeats 3]
 //                                           [--model kimi-code/k3-256k] [--cells M-K1,M-K2,...]
 //   node scripts/probe-kimi-confinement.mjs --reparse <scratch>      rebuild the tables from the saved run folders
+//   Off Windows the default cells are the OWNED ones (lib/kimi-d19.mjs OWNED_CELLS); a cell that launches on the real ~/.kimi-code needs --allow-real-home, one that copies the sign-in
+//   needs --allow-copied-credentials - a native-host series passes neither (lib/native-run.mjs RESERVED_FLAGS).
 //
 // A hook / MCP canary is `python -c "<snippet>" "<abs path>"` — shell-neutral, the path as argv (lib/kimi.mjs). Canaries
 // live in the run folder, OUTSIDE the working folder, so one is never mistaken for a file the model wrote. A write arm's
@@ -73,15 +75,15 @@ import { fileURLToPath } from 'node:url';
 import { resolved } from '../.github/scripts/lib/resolved.mjs';
 import { files, fwd, pythonCommand, run } from './lib/vibe.mjs';
 import {
-  CredentialWatch, DEFAULT_MODEL, KIMI_EXE, REAL_HOME, acpTurn, copiedCredentialsRefusal, copyHome, fileHash, hooksToml, inWire, junction, manifest, manifestDiff, mcpJson,
+  CredentialWatch, DEFAULT_MODEL, KIMI_EXE, REAL_HOME, acpTurn, copiedCredentialsRefusal, copyHome, fileHash, hooksToml, inWire, junction, launchesOnCopiedCredentials, manifest, manifestDiff, mcpJson,
   ownedRefusal, parseStreamJson, promptMode, rootOfHome, scratchRefusal, scrubHome, sessionFacts, sha256, shimArgs, shimRefusal, trustInHome,
 } from './lib/kimi.mjs';
 import { table } from './lib/kimi-report.mjs';
 import {
   CANDIDATES, agentsCanaryPlan, builtEnv, classifyHomeEntry, credentialNames, disposeOwnedHome, makeAgentsCanary, makeOwnedHome, modelAlias,
-  ownedRoot, realHomeVerdict, removeAgentsCanary, shimEnv,
+  ownedRoot, realHomeVerdict, removeAgentsCanary, shimEnv, versionEnv,
 } from './lib/kimi-home.mjs';
-import { D19_CELLS, d19Arms, runInventory, runUsage, updatesIn } from './lib/kimi-d19.mjs';
+import { D19_CELLS, cellsPlan, d19Arms, runInventory, runUsage, updatesIn } from './lib/kimi-d19.mjs';
 import { ownedShimArms } from './lib/kimi-arms.mjs';
 import { waitForNoOtherKimi } from './lib/proc.mjs';
 
@@ -94,6 +96,8 @@ const ALL_CELLS = ['M-K1', 'M-K2', 'M-K3', 'M-K4', 'M-K5', 'M-K6', 'M-K7', 'M-K8
 const allowAgentsCanary = argv.includes('--allow-agents-canary');
 // The legacy cells that COPY the person's sign-in into a scratch home (and read it to keep the refresh token alive) run only behind this flag; a native-host series never passes it (J1).
 const allowCopiedCredentials = argv.includes('--allow-copied-credentials');
+// Off Windows the cells that launch directly on the person's real ~/.kimi-code and ~/.cache are not the default and are refused without this flag; a series never passes it (re-check, item 4).
+const allowRealHome = argv.includes('--allow-real-home');
 const admitFlag = flag('--admit', '').split(',').filter(Boolean);
 /** `--arms a,b` runs only the arms whose name contains one of the substrings — a re-run of one arm, never a new cell. */
 const armFilter = flag('--arms', '').split(',').filter(Boolean);
@@ -104,10 +108,16 @@ const shim = flag('--shim', '') || join(here, '..', 'src_mcp', 'src', 'bin', 'De
 const kimi = flag('--kimi', '') || KIMI_EXE;
 const model = flag('--model', DEFAULT_MODEL);
 const repeats = Number.parseInt(flag('--repeats', '3'), 10);
-const cells = flag('--cells', ALL_CELLS.join(',')).split(',').filter(Boolean);
+const requestedCells = flag('--cells', '').split(',').filter(Boolean);
+const cellsRun = cellsPlan({ requested: requestedCells, all: ALL_CELLS, allowRealHome });
+const cells = cellsRun.cells;
 const unknown = cells.filter((c) => !ALL_CELLS.includes(c));
 if (unknown.length > 0 || !Number.isInteger(repeats) || repeats <= 0 || admitFlag.some((c) => !CANDIDATES.includes(c))) {
-  console.error(`usage: probe-kimi-confinement.mjs [--shim <exe>] [--kimi <exe>] [--scratch <dir>] [--repeats N] [--model <id>] [--cells ${ALL_CELLS.join(',')}] [--admit ${CANDIDATES.join(',')}] [--allow-agents-canary] [--allow-copied-credentials]`);
+  console.error(`usage: probe-kimi-confinement.mjs [--shim <exe>] [--kimi <exe>] [--scratch <dir>] [--repeats N] [--model <id>] [--cells ${ALL_CELLS.join(',')}] [--admit ${CANDIDATES.join(',')}] [--allow-agents-canary] [--allow-copied-credentials] [--allow-real-home]`);
+  process.exit(65);
+}
+if (!flag('--reparse', '') && cellsRun.refusal) {
+  console.error(cellsRun.refusal);
   process.exit(65);
 }
 // M-K12 writes a canary skill and an AGENTS.md line into the person's REAL ~/.agents (removed in the finally). Never by accident.
@@ -148,6 +158,7 @@ function write(path, text) {
 // Numbered past any home an earlier invocation left in this scratch, so a later `--cells` run never re-fills one.
 let homes = readdirSync(scratch).filter((d) => /^h\d+$/u.test(d)).length;
 const copiedHomes = [];
+const filledHomes = new Set();
 /**
  * A SHORT copied KIMI_CODE_HOME inside <scratch>, laid out as the product's owned root is: `<scratch>/h<n>/home` beside an empty
  * `<scratch>/h<n>/os`. `at` places the HOME elsewhere (the deep arm) — it must be `<root>/home`, and its `os` is made beside it.
@@ -159,6 +170,7 @@ function copiedHome(options = {}, at = '') {
   if (at) ownedRoot(rootOfHome(at));
   copyHome(REAL_HOME, home, options);
   copiedHomes.push(home);
+  if (options.credentials !== false) filledHomes.add(home); // the only homes that carry the person's credentials: the content guard is for these alone
   return home;
 }
 
@@ -411,7 +423,7 @@ async function launch(runDir, tag, spec, load = '') {
   const realBefore = manifest(REAL_HOME);
   const versionBefore = spec.versionAround ? versionLaunch(spec.home, join(runDir, `version-before${tag}`), childEnv(spec)) : null;
   // A home whose credentials ARE the person's (a junction, M-K8b, every D19 home) is watched as the real home: nothing is synced or written back.
-  const copiedCredentials = Boolean(spec.home) && !spec.sharedCredentials && !spec.owned;
+  const copiedCredentials = launchesOnCopiedCredentials(spec, filledHomes);
   if (copiedCredentials) watch.content().beforeCopiedRun(spec.home, `${basename(runDir)}${tag}`);
   const t0 = performance.now();
   launches++;
@@ -628,11 +640,18 @@ if (reparse) {
   process.exit(0);
 }
 
-const version = (run(kimi, ['--version'], { encoding: 'utf8', timeout: 30_000 }).stdout ?? '').trim();
+// The person's home is recorded BEFORE the first launch, the probe's own `kimi --version` included - and that launch is as any other: after the no-other-kimi wait, in the
+// built environment of an owned root (KIMI_CODE_HOME, the pin, XDG_CACHE_HOME), never with the real HOME and ~/.kimi-code inherited (re-check of J2).
+const homeBefore = manifest(REAL_HOME);
+if (!(await waitForNoOtherKimi('kimi --version', { tag: 'probe' }))) {
+  console.error('[probe] another kimi still runs after 10 minutes - two refreshers could sign the person out; nothing was launched');
+  process.exit(70);
+}
+const versionRoot = ownedRoot(join(scratch, 'version')).root;
+const version = (run(kimi, ['--version'], { cwd: versionRoot, env: versionEnv(versionRoot), encoding: 'utf8', timeout: 30_000 }).stdout ?? '').trim();
 const resultsPath = join(scratch, 'results.json');
 let results = existsSync(resultsPath) ? { ...JSON.parse(readFileSync(resultsPath, 'utf8')), started: new Date().toISOString() }
   : { kimi, version, shim, shimHash: fileHash(shim).slice(0, 12), model, platform: process.platform, scratch, started: new Date().toISOString(), byCell: {}, launches: 0 };
-const homeBefore = manifest(REAL_HOME);
 const agentsBefore = existsSync(agentsCanary.agents) ? files(agentsCanary.agents) : null;
 const runnerCtx = { scratch, ownedHome, launch, rowOf, write, versionLaunch, classify: classifyHomeEntry, mkdir: (d) => mkdirSync(d, { recursive: true }) };
 let stopped = '';

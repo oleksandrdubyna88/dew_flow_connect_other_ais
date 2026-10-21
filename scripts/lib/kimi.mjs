@@ -617,3 +617,10 @@ export function ownedRefusal(spec) {
   if (spec.owned === true && rootOfHome(spec.home ?? '') !== '') return '';
   return 'this arm has no owned root (<root>/home beside <root>/os) - it is refused, not run on the real KIMI_CODE_HOME (E4.3)';
 }
+
+/**
+ * Whether a launch is on a home the probe FILLED with the person's credentials (`filled`: the homes `copiedHome` put credentials into). Only those use the
+ * content-reading guard: an owned home, a junctioned one, an empty one and a copy made `credentials: false` carry none, so none of them may build it
+ * (re-check of J1: M-K7's empty-home and no-credentials arms used to, and every later launch then re-read the sign-in).
+ */
+export const launchesOnCopiedCredentials = (spec, filled) => Boolean(spec.home) && filled.has(spec.home);

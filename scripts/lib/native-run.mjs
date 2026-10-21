@@ -52,9 +52,10 @@ function probeCommand(probe, args) {
 
 /**
  * The flags the series itself owns or the host forbids: the run script appends its own `--scratch "$SERIES/$PHASE"` (a caller's would move the
- * probe out of the series folder), and the two `--allow-…` flags switch on arms the owner permits on the Windows machine only (J5).
+ * probe out of the series folder), and the `--allow-…` flags switch on arms the owner permits on the Windows machine only (J5), or let a probe read the sign-in
+ * (`--allow-copied-credentials`) or run on the real home (`--allow-real-home`) — a series on a native host never does either.
  */
-const RESERVED_FLAGS = ['--scratch', '--allow-agents-canary', '--allow-live-survivor'];
+const RESERVED_FLAGS = ['--scratch', '--allow-agents-canary', '--allow-live-survivor', '--allow-copied-credentials', '--allow-real-home'];
 const isReserved = (arg) => RESERVED_FLAGS.some((flag) => arg === flag || arg.startsWith(`${flag}=`));
 const unreserved = (arg) => (isReserved(arg) ? refuse('a probe argument naming a flag the series or the host owns', arg) : arg);
 

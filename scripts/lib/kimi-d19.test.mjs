@@ -94,3 +94,23 @@ test('G10: moving the arms onto the shared pattern keeps what they measure - shi
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+// Item 4 of the re-check: with no --cells, all twenty cells ran - the legacy ones too, which launch directly on the person's real ~/.kimi-code and ~/.cache.
+test('re-check item 4: on Linux the default cells are the OWNED ones; a real-home cell is refused unless --allow-real-home; Windows keeps every cell', () => {
+  const all = ['M-K1', 'M-K2', 'M-K3', 'M-K4', 'M-K5', 'M-K6', 'M-K7', 'M-K8', 'M-K8b', 'M-K9', 'M-K10', ...d19.D19_CELLS];
+  const plan = (extra) => d19.cellsPlan({ requested: [], all, platform: 'linux', allowRealHome: false, ...extra });
+
+  const byDefault = plan({});
+  assert.deepEqual(byDefault.cells, all.filter((c) => d19.OWNED_CELLS.includes(c)), 'the Linux default is the owned set, in the probe\'s order');
+  assert.equal(byDefault.refusal, '');
+  for (const real of ['M-K1', 'M-K2', 'M-K7', 'M-K8', 'M-K8b', 'M-K9', 'M-K10', 'M-K11b']) assert.equal(byDefault.cells.includes(real), false, `${real} runs on the real home`);
+
+  const asked = plan({ requested: ['M-K3', 'M-K7', 'M-K1'] });
+  assert.match(asked.refusal, /--allow-real-home/u);
+  assert.match(asked.refusal, /M-K7, M-K1/u, 'the refusal names the cells');
+  assert.equal(plan({ requested: ['M-K3', 'M-K7'], allowRealHome: true }).refusal, '');
+  assert.equal(plan({ requested: ['M-K3', 'M-K12'] }).refusal, '', 'owned cells need no flag');
+
+  assert.deepEqual(plan({ platform: 'win32' }).cells, all, 'Windows is unchanged');
+  assert.equal(plan({ platform: 'win32', requested: ['M-K1'] }).refusal, '');
+});

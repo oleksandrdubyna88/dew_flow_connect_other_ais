@@ -8,7 +8,7 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, rmdirSync, 
 import { homedir, tmpdir } from 'node:os';
 import { join, parse } from 'node:path';
 import { after, test } from 'node:test';
-import { CredentialGuard, CredentialWatch, canaryCommand, copiedCredentialsRefusal, copyHome, credentialFingerprint, credentialShape, redactSlot, homeBin, isCredentialPath, kimiExecutable, manifest, manifestDiff, parseStreamJson, scratchRefusal, scrubHome, withoutTrailingSeparators } from './kimi.mjs';
+import { CredentialGuard, CredentialWatch, launchesOnCopiedCredentials, canaryCommand, copiedCredentialsRefusal, copyHome, credentialFingerprint, credentialShape, redactSlot, homeBin, isCredentialPath, kimiExecutable, manifest, manifestDiff, parseStreamJson, scratchRefusal, scrubHome, withoutTrailingSeparators } from './kimi.mjs';
 
 const WINDOWS = process.platform === 'win32';
 const base = mkdtempSync(join(realpathSync.native(tmpdir()), 'testsToDelete-kimi-scratch-test-'));
@@ -296,4 +296,30 @@ test('J8: redactSlot turns a run of 8 or more hex digits into <hex> and leaves s
   assert.equal(redactSlot('0123ABCD.survivors.json'), '<hex>.survivors.json');
   assert.equal(redactSlot('kimi-code-env-x.json'), 'kimi-code-env-x.json');
   assert.equal(redactSlot('abc1234.json'), 'abc1234.json', 'seven digits is not a slot');
+});
+
+// Re-check of J1 (the Opus judge, 2026-10-21): `copiedCredentials` was "has a home, not shared, not owned", so M-K7's empty-home and no-credentials arms - homes
+// `copiedHome` never put a credential in - built the content-reading guard WITHOUT the flag, and every later owned launch re-read the sign-in. Only a home the probe
+// actually filled with credentials is a copied-credentials launch.
+test('re-check J1: M-K7 without --allow-copied-credentials never builds the content guard - the injected reader is not called for any launch of the cell', () => {
+  const real = fakeKimiHome('watch-mk7', ['kimi-code-env-x.json']);
+  const opened = [];
+  const watch = new CredentialWatch(real, { read: (home) => { opened.push(home); return {}; } });
+  const filled = new Set(); // copiedHome refused to fill any: the flag was not passed
+  const m7 = [{ home: join(base, 'h1', 'home') }, { home: join(base, 'h2', 'home') }, { home: join(base, 'h3', 'home'), owned: true }, {}]; // empty, no-credentials, owned, real home
+
+  for (const spec of m7) {
+    if (launchesOnCopiedCredentials(spec, filled)) watch.content();
+    watch.afterRealRun('m7');
+  }
+
+  assert.deepEqual(opened, [], 'an M-K7 arm built the content guard - every later launch re-read the person\'s credentials');
+});
+
+test('re-check J1: a home the probe filled with credentials is a copied-credentials launch, and only that one', () => {
+  const filled = new Set([join(base, 'filled', 'home')]);
+
+  assert.equal(launchesOnCopiedCredentials({ home: join(base, 'filled', 'home') }, filled), true);
+  assert.equal(launchesOnCopiedCredentials({ home: join(base, 'other', 'home') }, filled), false);
+  assert.equal(launchesOnCopiedCredentials({}, filled), false, 'no home: the real one, watched by shape');
 });

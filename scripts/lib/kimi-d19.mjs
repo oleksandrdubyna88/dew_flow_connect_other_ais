@@ -246,3 +246,18 @@ export const namesIn = (dir) => (existsSync(dir) ? readdirSync(dir).join(' ') : 
 
 /** Whether an owned home holds `updates/` and what — M-K13's column. */
 export const updatesIn = (home) => files(join(home, 'updates')).map((f) => fwd(f)).join(' ') || 'absent';
+
+/** The cells every arm of which runs on an OWNED home (`owned: true`, `requireOwned`): the rest launch directly on the person's real `~/.kimi-code` and `~/.cache`. */
+export const OWNED_CELLS = ['M-K3', 'M-K4', 'M-K5', 'M-K6', 'M-K11', 'M-K11c', 'M-K12', 'M-K13', 'M-K9e', 'M-K7b', 'M-K5b'];
+
+/**
+ * Which cells run: `requested` (from --cells), else every cell on Windows and the OWNED ones elsewhere. Off Windows a cell that is not owned is refused unless
+ * `allowRealHome` (--allow-real-home, a flag the series template can never pass). `{ cells, refusal }`.
+ */
+export function cellsPlan({ requested, all, platform = process.platform, allowRealHome = false }) {
+  const windows = platform === 'win32';
+  const cells = requested.length > 0 ? requested : all.filter((c) => windows || OWNED_CELLS.includes(c));
+  const real = cells.filter((c) => !OWNED_CELLS.includes(c));
+  const refused = !windows && !allowRealHome && real.length > 0;
+  return { cells, refusal: refused ? `refusing ${real.join(', ')} without --allow-real-home: these cells launch directly on your real ~/.kimi-code and ~/.cache` : '' };
+}

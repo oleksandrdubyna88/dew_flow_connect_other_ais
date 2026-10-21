@@ -48,6 +48,12 @@ test('a probe argument that would override the series folder or switch on a host
   assert.doesNotThrow(() => rendered({ args: ['--scratch-keep', '--allow-nothing'] }), 'only the three names are refused, not every flag that starts the same');
 });
 
+test('the flags that read or write the real home of the person are refused too (re-check of J1 and item 4): --allow-copied-credentials and --allow-real-home, bare or with a value', () => {
+  for (const arg of ['--allow-copied-credentials', '--allow-copied-credentials=1', '--allow-real-home', '--allow-real-home=yes']) {
+    refusal(() => rendered({ args: ['--cells', 'M-K1', arg] }), `renderRunScript wrote the argument ${arg} into a root-run script`);
+  }
+});
+
 test('a series root other than /tmp is accepted only when the caller names it, and only in a safe shape', () => {
   const root = '/tmp/testsToDelete-native-root-x1';
   const series = `${root}/testsToDelete-native-kimi-20261021-00ff00`;
