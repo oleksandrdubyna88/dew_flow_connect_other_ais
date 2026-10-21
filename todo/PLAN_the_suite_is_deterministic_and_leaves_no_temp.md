@@ -1,8 +1,8 @@
 # PLAN — the suite is deterministic and leaves no temp
 
-> Status: **in progress, 2026-10-20.** E1 (no run sees another) and C2 (E3 S1) are **merged** in #893
-> (`e86fe17f8`, 2026-10-20); **E2 (one temp folder per run) is coded** on `feat/suite-e2-run-temp` (its Outcome is below; not merged yet); E3's rest, E4
-> and E5 are open — E3 gained two product stories on 2026-10-20 (C18's product angle, C25); the §10 CI watch of E1 and C2 is running. Scope: the fake CLI's steering files
+> Status: **in progress, 2026-10-21.** E1 (no run sees another) and C2 (E3 S1) are **merged** in #893
+> (`e86fe17f8`, 2026-10-20); **E2 (one temp folder per run) is merged** in #897 (`215170c4b`, 2026-10-21); **E3 (product defects) is coded and reviewed** (gate and judge folded), in its pull request; E4
+> is coding (its stories document); E5 is open; the §10 CI watch of E1 and C2 is running. Scope: the fake CLI's steering files
 > (`src_mcp/tests_fakecli`), the fixed-name temp paths of the C# and extension tests, the flaky cases found in CI and
 > locally between 2026-09-26 and 2026-10-19 (product code where the cause is in the product), and the `coai-*` folders
 > the suites leave in `%TEMP%`. The owner put this "tail" at the very end of the queue; it was written so the causes
