@@ -408,10 +408,13 @@ public sealed class UsageLedger(string dataDir)
 
     /// <summary>
     /// One turn, as its lines: one per launch when they add up to the turn, else the turn as one line — its LAST line
-    /// carrying <paramref name="resetsUtc"/>, the reset the turn's ending stated, and <paramref name="endCause"/>, why a cancelled turn was.
+    /// carrying <paramref name="resetsUtc"/>, the reset the turn's ending stated, and <paramref name="lastLineEndCause"/>, why a cancelled turn was.
     /// </summary>
+    /// <param name="lastLineEndCause">
+    /// Written on the turn's LAST line ONLY — every earlier launch of the turn (a repair, a retry) ended on its own terms and carries none.
+    /// </param>
     private void AppendTurn(
-        LineOf line, IReadOnlyList<LaunchPart> launches, Usage usage, TimeSpan elapsed, string outcome, string resetsUtc = "", string endCause = "")
+        LineOf line, IReadOnlyList<LaunchPart> launches, Usage usage, TimeSpan elapsed, string outcome, string resetsUtc = "", string lastLineEndCause = "")
     {
         var turn = LaunchLines.NewTurn();
         var lines = LaunchLines.Of(launches, usage, elapsed, outcome);
@@ -419,7 +422,7 @@ public sealed class UsageLedger(string dataDir)
         {
             var entry = Entry(line.Invocation, line.Model, line.Stage, launch.Elapsed, launch.Usage, launch.Outcome);
             var last = at == lines.Count - 1;
-            Append(entry with { Turn = turn, Attempt = launch.Attempt, ResetsUtc = last ? resetsUtc : string.Empty, EndCause = last ? endCause : string.Empty });
+            Append(entry with { Turn = turn, Attempt = launch.Attempt, ResetsUtc = last ? resetsUtc : string.Empty, EndCause = last ? lastLineEndCause : string.Empty });
         }
     }
 

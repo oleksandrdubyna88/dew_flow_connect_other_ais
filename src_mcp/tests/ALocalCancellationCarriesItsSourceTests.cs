@@ -245,13 +245,39 @@ public sealed class ALocalCancellationCarriesItsSourceTests : IAsyncLifetime
     [Fact]
     public void ACancellationThatLandedBeforeAnyTokenFired_IsUnknown_EvenIfTheClockFiresAfterwards()
     {
-        using var round = new RoundCancellation(CancellationToken.None, CancellationToken.None, TimeSpan.FromMilliseconds(30));
+        // Taken BEFORE the round exists: a pause longer than the 30 ms clock between the two would otherwise land the outcome after it.
         var landed = Now();
+        using var round = new RoundCancellation(CancellationToken.None, CancellationToken.None, TimeSpan.FromMilliseconds(30));
         round.Token.WaitHandle.WaitOne(TimeSpan.FromSeconds(30)).Should().BeTrue("the 30 ms clock fires after the outcome landed");
 
         round.CauseAt(landed).Should().Be(EndCauses.Unknown,
             "the reviewer ended Cancelled for its own reason before any token fired; a clock that fires later did not end it");
         round.CauseAt(Now()).Should().Be(EndCauses.RoundClock, "an outcome that lands after the clock fired is the clock's");
+    }
+
+    [Fact]
+    public void TheHostStoppingAlone_EndsNoRound_SoItIsNotACause()
+    {
+        using var host = new CancellationTokenSource();
+        using var round = new RoundCancellation(host.Token, CancellationToken.None, TimeSpan.FromMinutes(5));
+
+        host.Cancel();
+
+        round.Token.IsCancellationRequested.Should().BeFalse("the host's stop cancels nothing of the round: the round keeps running");
+        round.CauseAt(Now()).Should().Be(EndCauses.Unknown, "a stop that ended nothing is not why anything ended");
+    }
+
+    [Fact]
+    public void WhenOnlyTheHostFired_AndTheClockThenEndsTheRound_TheCauseIsTheClock()
+    {
+        // The live shape: no review tool passes the request token, so a client closing stdin fires the host's token and nothing else. The
+        // round goes on; when its own clock then ends a reviewer, the clock is why — the host stop ended nothing.
+        using var host = new CancellationTokenSource();
+        using var round = new RoundCancellation(host.Token, CancellationToken.None, TimeSpan.FromMilliseconds(30));
+        host.Cancel();
+        round.Token.WaitHandle.WaitOne(TimeSpan.FromSeconds(30)).Should().BeTrue("the 30 ms clock ends the round");
+
+        round.CauseAt(Now()).Should().Be(EndCauses.RoundClock, "the clock ended the round; a host stop that merely preceded it did not");
     }
 
     [Fact]
@@ -346,6 +372,39 @@ public sealed class ALocalCancellationCarriesItsSourceTests : IAsyncLifetime
 
         CausesOfCancelledLines().Should().NotBeEmpty().And.OnlyContain(c => c == EndCauses.RoundClock,
             "the round's clock killed the reviewer; the person cancelling afterwards, before the line was written, did not");
+    }
+
+    [Fact]
+    public async Task TheClockFiringFirst_IsSaidInTheSentenceToo_EvenIfTheCallIsCancelledBeforeTheReviewerReports()
+    {
+        // The ledger said roundClock but the sentence read "the caller did not cancel": two answers to one question.
+        var reviewers = new Reviewers(_git, Play.BlockThenHoldTheAnswer);
+        using var call = new CancellationTokenSource();
+        var round = RoundAsync(Service(reviewers, roundTimeout: TimeSpan.FromSeconds(8)), call.Token);
+        await reviewers.Killed.Task.WaitAsync(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken);
+        await call.CancelAsync();
+        reviewers.Release.TrySetResult();
+        var reply = await round;
+
+        CausesOfCancelledLines().Should().NotBeEmpty().And.OnlyContain(c => c == EndCauses.RoundClock);
+        reply.Should().Contain("minute limit", "the clock fired first, so the deadline sentence and the ledger's cause agree");
+    }
+
+    [Fact]
+    public async Task TheCallCancelledFirst_IsNotSaidToBeTheDeadline_EvenIfTheClockFiresBeforeTheReviewerReports()
+    {
+        var reviewers = new Reviewers(_git, Play.BlockThenHoldTheAnswer);
+        using var call = new CancellationTokenSource();
+        var round = RoundAsync(Service(reviewers, roundTimeout: TimeSpan.FromSeconds(8)), call.Token);
+        await reviewers.Arrived.Task.WaitAsync(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken);
+        await call.CancelAsync();
+        await reviewers.Killed.Task.WaitAsync(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken);
+        await Task.Delay(TimeSpan.FromSeconds(9), TestContext.Current.CancellationToken);
+        reviewers.Release.TrySetResult();
+        var reply = await round;
+
+        CausesOfCancelledLines().Should().NotBeEmpty().And.OnlyContain(c => c == EndCauses.Withdrawn);
+        reply.Should().NotContain("minute limit", "a person ended the round first; the clock striking afterwards is not why");
     }
 
     [Fact]

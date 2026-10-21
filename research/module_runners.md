@@ -1797,16 +1797,20 @@ flowchart LR
 line only (like `resetsUtc`), decided by `RoundEngine` where the tokens are held — never inferred below the executor
 (`ProcessLauncher.ResultOf` and `ReviewerExecutor.KilledAsync` are unchanged) and never read from the outcome's sentence.
 
-- **The cause is the FIRST of the three sources to fire, recorded when it fires** (code round of 2026-10-21; `RoundCancellation` in
+- **The cause is the FIRST source to END the round, recorded when it fires** (code round of 2026-10-21, tightened by the review of 94deb725c; `RoundCancellation` in
   `src_mcp/src/Server/Rounds/`). The first version sampled `IsCancellationRequested` of the host, the call and the clock when the line was
   written, which says what had fired by then, not what ended the turn: a reviewer that ended `Cancelled` for its own reason could be filed
   `roundClock` because the clock fired before the line was classified, and a host that cancelled the request it was serving as well could
-  make the call look like the cause. Now a callback on each token sets the first source once (`Interlocked.CompareExchange`) with its
+  make the call look like the cause. Now a callback on each token that **cancels the round** sets the first cause once (`Interlocked.CompareExchange`) with its
   `Stopwatch` timestamp, and `CauseAt(landedAt)` names it only when it fired at or before the moment the outcome landed
   (`ReviewerProgress.LandedAt`) — an outcome that landed before anything fired is `unknown`, whatever fires afterwards. The round's own
   token is cancelled BY those callbacks, after the record, instead of being a linked source, so no reviewer can see the round cancelled
-  before the cause is written down. Tokens already fired when the round began have no order between them: registration is host, call,
-  clock, so that tie resolves **`hostStopped` > `withdrawn` > `roundClock`**; `unknown` is a `Cancelled` turn when none fired (a Team-server
+  before the cause is written down. **What each source does:** the call's token cancels the round and records `withdrawn`, or `hostStopped`
+  when the host's token is already cancelled (a stopping host takes its in-flight requests' tokens down with it); the round's clock cancels the
+  round and records `roundClock` always; the host's token is only OBSERVED, it cancels nothing and records nothing itself, so a host stop that
+  ends no round is never a cause (before the review it was registered too and could win "first" with the round still running, filing a later
+  clock kill as `hostStopped`). Tokens already fired when the round began: the call's callback runs at once and sees the host's token, so that
+  tie resolves **`hostStopped` over `withdrawn`**; `unknown` is a `Cancelled` turn when none fired (a Team-server
   row whose server ended it) — never empty. `EndCauses.OfLocal` is gone: the decision lives where the tokens are.
 - `EndCauses.RoundClock` and `Unknown` are **local-only words** (`EndCauses.LocalOnly`, the `UsageKinds.LocalOnly` shape);
   `Known` names all seven. The Team server writes neither and is unchanged (`HowAJobEndedIsSaidTests` pins its four words, not `Known`).
@@ -1817,6 +1821,13 @@ line only (like `resetsUtc`), decided by `RoundEngine` where the tokens are held
   road cannot forget it), which hands it to every `PanelService` it builds — the rebuilds on a settings change included — and
   `PanelService(…, CancellationToken hostStopping = default)` hands it to `RoundEngine`. `default` never fires: a service built
   directly (every test) belongs to no host that stops. The token is read, not linked: it does not cancel a round by itself.
+- **The deadline sentence is read from the same record.** `RoundEngine.WhatEndedIt` asks `RoundCancellation.CauseNow()` and says "the round
+  reached its N minute limit" only when the recorded first cause is `roundClock` (the word the ledger files), instead of the flags "the
+  clock fired and the caller did not", which went silent when a person cancelled AFTER the clock had struck while the ledger said `roundClock`.
+- `UsageLedger.AppendTurn`'s cause parameter is `lastLineEndCause`: written on the turn's last line only.
+- The fast-mode arguments and the record of what was sent are computed once per build (`ClaudeConsultant.Options`, `ClaudeRuntime.Build`);
+  `AFastModeReachesEveryClaudeLaunchTests.TheTierRecordedAsSent_IsTheTierOfTheFileTheArgvNames` reads the file the argv names and compares it with
+  `Sent.Tier`, with no timing.
 
 ## The local reviewer stands down after a quiet cloud (2026-09-24, issue #485)
 
