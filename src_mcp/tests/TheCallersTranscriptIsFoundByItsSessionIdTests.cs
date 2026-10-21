@@ -6,7 +6,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// E3.S2 of <c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E3.md</c>: "who is calling" becomes either a located
+/// E3.S2 of <c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E3.md</c>: "who is calling" becomes either a located
 /// transcript or a NAMED reason it cannot be observed. The id comes from the Claude session registry, then the session variable,
 /// then a stored id; the file is found as <c>&lt;projects&gt;/*/&lt;id&gt;.jsonl</c> with no slug computed and no recursion.
 /// </summary>

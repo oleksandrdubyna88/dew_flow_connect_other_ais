@@ -10,7 +10,7 @@ using static CoaiMcp.Tests.AuthorsSnapshotFixtures;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// <c>--log</c> carries the state of each round's authors (E5.S3 of <c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md</c>):
+/// <c>--log</c> carries the state of each round's authors (E5.S3 of <c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md</c>):
 /// <c>LoggedRound.AuthorsState</c> is read in one query per page from <c>rounds.authors_state</c> of schema step 24, ABSENT on a round that
 /// has none, and a database written before step 24 is read exactly as before — read-only, and left at the version it had.
 /// </summary>

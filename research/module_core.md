@@ -274,7 +274,7 @@ per window and rolled up) and `Contributors.Of / FixersOf`. Nothing is stored he
   WITHOUT E4 (no row, `-1` in every unmeasured member, `Reader`/`Attribution` `0` for the component that did not run). `Render()` and `IsWellFormed(string)` are the state as text and the one rule for a stored state
   (`shared/authors-state-vectors.json`, read by the extension too). `ActivityTotals.IsUnknown` is `[JsonIgnore]`, so a session file carries exactly the four members. The reflection fact fails when E4 adds a member the snapshot lacks.
 
-Design record: `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E4.md` (S2 is the cornerstone). Tests: `tests/Attribution*`, the `A…Tests` classes named in that plan, and the twenty recorded
+Design record: `research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E4.md` (S2 is the cornerstone). Tests: `tests/Attribution*`, the `A…Tests` classes named in that plan, and the twenty recorded
 sessions of `tests/fixtures/caller-transcripts` through `AttributionHoldsOnTheRecordedSessionsTests`.
 
 ## Every stage answers by name — `Stages` (2026-09-25)

@@ -7,7 +7,7 @@ namespace CoaiMcp.Server;
 
 /// <summary>
 /// Who wrote the code a finished round reviewed, read and attributed on the answer path, under a budget (E5.S4 of
-/// <c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md</c>): the caller's transcript is located, read text-free, assigned to the
+/// <c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md</c>): the caller's transcript is located, read text-free, assigned to the
 /// round's windows by E4 and kept as an <see cref="AuthorsSnapshot"/> — within <see cref="AuthorsBudget"/>, never failing the round.
 /// </summary>
 /// <remarks>

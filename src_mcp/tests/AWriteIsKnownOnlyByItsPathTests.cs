@@ -8,7 +8,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// E3.S3 of <c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E3.md</c>: from ONE <c>tool_use</c> block, is it a write, and
+/// E3.S3 of <c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E3.md</c>: from ONE <c>tool_use</c> block, is it a write, and
 /// which checkout received it? Nothing but the path is read; <c>Bash</c> and <c>PowerShell</c> are never a write.
 /// </summary>
 /// <remarks>
