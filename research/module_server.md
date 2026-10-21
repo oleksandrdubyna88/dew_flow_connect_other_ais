@@ -5042,8 +5042,8 @@ filled from `ReviewerInvocation.Effort`, which `LocalRuntime` sets to the `--rea
 on the argv. No hosted adapter passes a reasoning flag, so none records an effort: the rule is *an
 adapter records the effort it APPLIED*, not *local has one and hosted does not* — stated that way it
 stays true the day a hosted adapter gains the flag, because whoever adds it to an argv adds it to the
-same `Build`. Antigravity's effort is inside its model id (`gemini-3.7-flash-high`), which is why no
-line reads `gemini-3.7-flash-high (effort: high)`. `RoundAudit`'s opening descriptor carries both,
+same `Build`. Antigravity's effort is inside its model id (`gemini-3.8-flash-high`), which is why no
+line reads `gemini-3.8-flash-high (effort: high)`. `RoundAudit`'s opening descriptor carries both,
 each conditionally — `provider/Role[model, effort high, promptId, 900 bytes]` — because that line is
 what a person reads when the panel is closed, and an interpolated empty leaves `[, promptId, …]`.
 

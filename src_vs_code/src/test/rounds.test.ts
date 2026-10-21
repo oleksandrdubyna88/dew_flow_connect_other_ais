@@ -161,8 +161,8 @@ test('a reviewer with no status says nothing, rather than a dangling dash', () =
  * <p>Only a local engine applies one: `LocalRuntime` puts `--reasoning-effort` on its argv and
  * records what it passed. No hosted adapter passes a reasoning flag, so none records an effort —
  * claiming one would say something that did not happen — and antigravity's effort lives inside its
- * model id (`gemini-3.7-flash-high`) rather than beside it, which is why no line can read
- * `gemini-3.7-flash-high (effort: high)`.</p>
+ * model id (`gemini-3.8-flash-high`) rather than beside it, which is why no line can read
+ * `gemini-3.8-flash-high (effort: high)`.</p>
  */
 test('a reviewer line names the effort when the launch applied one', () => {
   const withEffort = round({

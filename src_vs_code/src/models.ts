@@ -256,12 +256,13 @@ export function modelsFor(
  * <p><b>A fallback, not the answer.</b> It is what the panel offers when the CLI cannot be asked,
  * and it goes stale in silence — the operator found Gemini 3.8 Flash missing from this list on
  * 2026-09-05 while `agy models` had listed it, along with 3.6 and a Pro (Low), for some time. The
- * discovered list comes first now.</p>
+ * discovered list comes first now. The 3.7 Flash ids were replaced by the 3.8 ones on 2026-10-21: agy 1.4.4 refuses
+ * 3.7 before any model call.</p>
  */
 export const ANTIGRAVITY_MODELS: readonly ModelChoice[] = [
-  { id: 'gemini-3.7-flash-high', label: 'Gemini 3.7 Flash (High)' },
-  { id: 'gemini-3.7-flash-medium', label: 'Gemini 3.7 Flash (Medium)' },
-  { id: 'gemini-3.7-flash-low', label: 'Gemini 3.7 Flash (Low)' },
+  { id: 'gemini-3.8-flash-high', label: 'Gemini 3.8 Flash (High)' },
+  { id: 'gemini-3.8-flash-medium', label: 'Gemini 3.8 Flash (Medium)' },
+  { id: 'gemini-3.8-flash-low', label: 'Gemini 3.8 Flash (Low)' },
   { id: 'gemini-3.1-pro-high', label: 'Gemini 3.1 Pro (High)' },
   { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 (Thinking)' },
   { id: 'claude-opus-4-6-thinking', label: 'Claude Opus 4.6 (Thinking)' },

@@ -170,8 +170,12 @@ export interface Vendor {
   readonly fast?: FastSetting | undefined;
 }
 
-/** The model an Antigravity row starts on: flash at high effort, the CLI's own active model. */
-export const ANTIGRAVITY_DEFAULT_MODEL = 'gemini-3.7-flash-high';
+/**
+ * The model an Antigravity row starts on: Gemini 3.8 Flash at low effort, a model `agy models` lists (agy 1.4.4 or later;
+ * an older agy refuses it). The server's own fallback is the same id (`AntigravityRuntime.DefaultModel`) and
+ * `antigravityDefaultModel.test.ts` reads it from the C#.
+ */
+export const ANTIGRAVITY_DEFAULT_MODEL = 'gemini-3.8-flash-low';
 
 /**
  * What a fresh install reviews with: the two vendors whose CLIs authenticate themselves.

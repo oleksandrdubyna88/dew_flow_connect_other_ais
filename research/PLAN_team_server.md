@@ -229,7 +229,7 @@ re-reads the panel's file:
 ```json
 [
   { "id": "codex",       "runtime": "codex",       "models": ["gpt-5.6-luna", "gpt-5.6-sol"], "slots": ["a", "b"], "slotConcurrency": 1 },
-  { "id": "antigravity", "runtime": "antigravity", "models": ["gemini-3.7-flash-high", "gemini-3.1-pro-high"], "slots": ["a"] },
+  { "id": "antigravity", "runtime": "antigravity", "models": ["gemini-3.8-flash-low", "gemini-3.1-pro-high"], "slots": ["a"] },
   { "id": "claude",      "runtime": "claude",      "models": ["sonnet", "opus"], "slots": ["a"] }
 ]
 ```

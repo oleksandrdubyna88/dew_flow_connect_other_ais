@@ -25,8 +25,8 @@ namespace CoaiMcp.Tests;
 /// <para><b>The effort.</b> An adapter records the effort it APPLIED, not one its vendor class might
 /// support. No hosted adapter here puts a reasoning flag on its argv, so recording one for them
 /// would claim something that did not happen; <c>LocalRuntime</c> does, and records it. Antigravity
-/// bakes its effort into the model id (<c>gemini-3.7-flash-high</c>), which is why it records none
-/// and why no line can read <c>gemini-3.7-flash-high (effort: high)</c>.</para>
+/// bakes its effort into the model id (<c>gemini-3.8-flash-high</c>), which is why it records none
+/// and why no line can read <c>gemini-3.8-flash-high (effort: high)</c>.</para>
 /// </remarks>
 public sealed class EveryAdapterRecordsWhatItLaunchedTests : IDisposable
 {
