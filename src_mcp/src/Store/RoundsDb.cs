@@ -181,6 +181,12 @@ public sealed class RoundsDb : IDisposable
     internal SqliteCommand Command() => _db.CreateCommand();
 
     /// <summary>
+    /// A write transaction taken NOW (<c>BEGIN IMMEDIATE</c>, the <c>SqliteMigrator</c> shape), for E7's backfill, which runs two row writers inside one transaction it
+    /// owns: the write lock is taken here, so a competing writer surfaces as busy here — never as a stale overwrite later. A seam, not a writer.
+    /// </summary>
+    internal SqliteTransaction Transaction() => _db.BeginTransaction(deferred: false);
+
+    /// <summary>
     /// One finished round, with its reviewers and the findings it produced.
     /// </summary>
     /// <remarks>
