@@ -1,5 +1,21 @@
 # Changelog
 
+## Server 0.63.0 — 2026-10-21
+
+**Added: a round records who wrote the code it reviewed, and how much.** A plan or code round now stores its authors: which agent (the main agent or a subagent) wrote each change, on which model, and how many tokens each one spent. coai-mcp reads this from the calling Claude Code session's own transcript on the same computer.
+
+- **The caller's transcript is read, counted and never sent anywhere as text.** The reader skips lines before it decodes them, works under a byte budget and a time limit, and refuses network shares, device paths and automounted network folders before it touches them.
+- **Each message and each file write is given an owner.** Tokens are grouped by the model that answered. A write that no agent can be shown to own is counted as uncovered, never guessed.
+- **The round stores the result.** A new schema step adds the authors table and its columns. `--log` names the state of each round's authors: observed, partial with its reasons, unobserved, or not recorded for rounds that ran before this release.
+- **New report: `coai-mcp --round-authors`.** It puts who wrote the code beside what the reviewers found, by cohort (first or corrective round) and by period. It writes JSON by default, or a table with `--table`. `--add` merges a report from a second store, for example the WSL one, and refuses reports that disagree on what they selected, or that share a session.
+- **New one-shot command: `coai-mcp --backfill-authors`.** It fills in the authors and the size of rounds that ran before this release. It first takes a backup of both stores (the database and the session files) and verifies it, and writes nothing unless the backup verifies. `--dry-run` only reads. A second run changes nothing. A weaker result never replaces a stronger one, a recorded size is never replaced, and nothing is deleted.
+- **A session file keeps what a newer server wrote.** When a server saves a session file that has members it does not know, it now keeps them. Before, an older server dropped them on its next save.
+- **The `--round-authors` output prints no terminal control character.** Text that comes from an `--add` file is filtered in the table and in every refusal sentence, including bidirectional and zero-width characters. A refusal is always one line.
+
+**Fixed: a spent Kimi quota is no longer reported as a lost sign-in.** Kimi prefixes its provider errors with "Authentication required:", so a 429 "5-hour usage limit" used to read as "exit 77: not signed in — run kimi login". Now a spent 5-hour quota (and a spent balance) is a hopeless rate limit for the round: the summary says "the Kimi plan quota is used up — signing in again will not help" and quotes Kimi's own reset clause. Any other "Authentication required: <status>" is shown with the vendor's own words and no cure. A 401 and the bare "Authentication required" still say to sign in. The vendor's sentence is kept after the cure (4,000 characters in the ledger and the log, 160 in the summary). It is redacted before any cut, with a new pattern for Moonshot account ids. The cure is said once on every path, the reason is matched before stderr, and ACP `error.data` is kept.
+
+**Fixed: a child that exits before its start time is read no longer fails a launch.** A launched process that exited so fast (seen on macOS) that coai could not read its start time was reported as "not started"; it is now recorded as the launch it was.
+
 ## Extension 0.82.0 · Server 0.62.0 — 2026-10-19
 
 **Added: a Vibe "Projects on this disk" row can read a folder of repositories.** Before, such a row was refused on a
