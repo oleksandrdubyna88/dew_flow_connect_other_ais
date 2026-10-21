@@ -169,7 +169,8 @@ test('a first save into a directory that does not exist yet succeeds, end to end
   // Owed to the gate: the layer below (`atomicFile.ts`) makes the directory and has a test saying so,
   // but the guarantee belongs at THIS layer too — the store is what the first chat on a fresh machine
   // actually calls, and it is empty before and ready after.
-  const dir = join(home(), 'chat-conversations');
+  const root = home();
+  const dir = join(root, 'chat-conversations');
   try {
     const store = new ChatStoreFile(dir);
     assert.deepEqual(await store.state(), { kind: 'empty' }, 'a store nobody has written to is not empty');
@@ -181,7 +182,7 @@ test('a first save into a directory that does not exist yet succeeds, end to end
     assert.deepEqual(await readRecord(store, 'a1'), { ...record(), rev: 1 });
     assert.deepEqual(locksIn(dir), [], 'the first save left its lock behind');
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
   }
 });
 
@@ -471,11 +472,16 @@ test('a directory that is not there reads as EMPTY, lists as nothing, and its re
   // Nobody has chatted yet. This is an ordinary state, not an error: the first save materialises the
   // directory, so a read of it beforehand must be quiet — and a cache told "nothing" here is right to
   // hold nothing.
-  const store = new ChatStoreFile(join(home(), 'chat-conversations-not-yet'));
+  const root = home();
+  try {
+    const store = new ChatStoreFile(join(root, 'chat-conversations-not-yet'));
 
-  assert.deepEqual(await store.state(), { kind: 'empty' });
-  assert.deepEqual(await store.listMeta(), { kind: 'listed', metas: [] }, 'a missing directory did not list as an ordinary nothing');
-  assert.deepEqual(await store.read('anything'), { kind: 'absent' });
+    assert.deepEqual(await store.state(), { kind: 'empty' });
+    assert.deepEqual(await store.listMeta(), { kind: 'listed', metas: [] }, 'a missing directory did not list as an ordinary nothing');
+    assert.deepEqual(await store.read('anything'), { kind: 'absent' });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('a store that cannot be READ is UNAVAILABLE with a reason, not empty', async () => {

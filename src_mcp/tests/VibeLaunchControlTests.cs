@@ -39,7 +39,7 @@ public sealed class VibeLaunchControlTests : IDisposable
     }
 
     private ReviewerInvocation Invocation(string model = "glm-5-3", HostKind host = HostKind.Windows) =>
-        new VibeRuntime("vibe", host).Build(RoleCatalog.ArchitectureRole, "review this", _work, "C:/s.json", _out,
+        new VibeRuntime("vibe", host, VibePathBudget.None).Build(RoleCatalog.ArchitectureRole, "review this", _work, "C:/s.json", _out,
             new ReviewerSettings("vibe") { Model = model, OwnedScratch = _scratch, Timeout = TimeSpan.FromMinutes(1) });
 
     private static string HomeOf(ReviewerInvocation invocation) => invocation.Request.Environment[VibeLaunch.HomeVariable]!;

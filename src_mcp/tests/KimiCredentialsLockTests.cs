@@ -234,7 +234,7 @@ public sealed class KimiCredentialsLockTests : IDisposable
         normalised.Should().EndWith("/coai-mcp/kimi-locks");
         ConsultantHomes.All.Should().OnlyContain(homes => !normalised.Contains("/" + homes + "/") && !normalised.EndsWith("/" + homes),
             "the D20 sweep walks every folder under a homes folder and would judge a locks folder a foreign conversation");
-        KimiCredentialsLock.Root.Should().NotStartWith(Path.GetTempPath().TrimEnd(Path.DirectorySeparatorChar), "no sweep ever takes it");
+        KimiCredentialsLock.Root.Should().NotStartWith(RunTemp.Real, "no sweep ever takes it");
 
         using var rooted = Rooted();
         Directory.CreateDirectory(Locks);

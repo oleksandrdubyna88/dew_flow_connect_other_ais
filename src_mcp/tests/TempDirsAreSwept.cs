@@ -25,7 +25,11 @@ namespace CoaiMcp.Tests;
 /// directory another test run is using right now nor a live round's is touched.</para>
 /// <para>In the serial <c>fakecli-env</c> collection: <c>TheProductSweeps_AtMostOncePerWindow</c> calls <c>PanelService.ForgetTheLastSweep</c>, which resets a static of
 /// the PROCESS, and the next <c>BuildWork</c> anywhere then walks the real temp folder inside its round's deadline (C6 of
-/// <c>todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md</c>). It is also the assembly fixture; the attribute changes nothing about that.</para>
+/// <c>todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md</c>). It is also an assembly fixture; the attribute changes nothing about that.</para>
+/// <para><b>It sweeps the MACHINE's temp folder, <see cref="RunTemp.Real"/> — not the run's.</b> Since E2 every run makes everything inside its own
+/// <c>testsToDelete-coai-run-&lt;6&gt;</c> folder, with the three temp variables pointed at it (<see cref="RunTemp"/>), so <c>Path.GetTempPath()</c> is the
+/// run's folder; the leftovers of EARLIER runs and of the product are in the real one. The run folder and its restore belong to
+/// <see cref="RunTempFixture"/>, which has no test methods — never to this class.</para>
 /// </remarks>
 [Collection("fakecli-env")]
 public sealed class TempDirsAreSwept
@@ -77,7 +81,7 @@ public sealed class TempDirsAreSwept
         }
 
         PanelService.PruneOldScratchDirs(
-            Path.GetTempPath(), DateTime.UtcNow - Rule.Keeps, [$"{Rule.Prefix}*"], Rule.NeverSwept);
+            RunTemp.Real, DateTime.UtcNow - Rule.Keeps, [$"{Rule.Prefix}*"], Rule.NeverSwept);
     }
 
     [Fact]

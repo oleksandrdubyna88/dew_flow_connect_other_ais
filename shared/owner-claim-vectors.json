@@ -1,0 +1,56 @@
+{
+  "why": [
+    "Golden vectors for the family's owner claim, <host>@<os>:<pid>[:<startUnixSeconds>], written beside every test run's temp folder",
+    "(<folder>.owner). TWO writers exist today — OwnerClaim.Format/ForThisProcess in src_mcp/tests (C#) and claimText in",
+    "src_vs_code/scripts/run-tests.mjs (Node) — and ONE reader will exist (the conventions' Node sweeper, leftovers-E5). This file is read by",
+    "a C# test AND a Node test, so a change to one side's format turns that side red alone. E5's reader must pass the same vectors.",
+    "",
+    "format: what the writers must produce for given parts (a host name cannot hold '@', ':' or whitespace: each becomes '-'; the start field",
+    "is present only when given). valid / invalid: what a STRICT reader accepts (no trimming: a trailing newline is not part of the claim).",
+    "linuxStart: how the Linux start field is computed from /proc/self/stat field 22 (ticks of 1/100 s since boot, counted after the LAST ')')",
+    "and the 'btime' line of /proc/stat — both writers use this formula; null means 'no start is better than a wrong one'."
+  ],
+  "format": [
+    { "host": "build-01", "os": "linux", "pid": 4242, "start": 1700000000, "text": "build-01@linux:4242:1700000000" },
+    { "host": "build-01", "os": "win32", "pid": 7, "text": "build-01@win32:7" },
+    { "host": "build-01", "os": "darwin", "pid": 7, "text": "build-01@darwin:7" },
+    { "host": "a b@c:d", "os": "darwin", "pid": 7, "text": "a-b-c-d@darwin:7" }
+  ],
+  "valid": [
+    "build-01@linux:4242:1700000000",
+    "build-01@win32:4242",
+    "Build.Example.com@darwin:1"
+  ],
+  "invalid": [
+    "",
+    "build-01@plan9:1",
+    "build-01@win32:4242\n",
+    "build-01@win32:4242\nsecond line",
+    "@win32:1",
+    "build-01@win32:",
+    "build-01@win32:1:2:3",
+    "build-01@win32:1:",
+    "build 01@win32:1",
+    "build-01@win32:-1",
+    "build-01@WIN32:1",
+    "not a claim at all"
+  ],
+  "linuxStart": [
+    {
+      "stat": "42 (a ) b) S 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 12345 0 0",
+      "procStat": "cpu 1 2 3\nbtime 1700000000\nprocs_running 1",
+      "startSeconds": 1700000123
+    },
+    {
+      "stat": "7 (sh) S 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 99 0 0",
+      "procStat": "btime 1000",
+      "startSeconds": 1000
+    },
+    { "stat": "garbage", "procStat": "btime 1", "startSeconds": null },
+    {
+      "stat": "42 (a) S 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 12345 0 0",
+      "procStat": "no boot time here",
+      "startSeconds": null
+    }
+  ]
+}
