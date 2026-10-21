@@ -67,9 +67,9 @@ export const MERGED_JSON = JSON.stringify({
   gauge: { ratios: [], unavailable: 'local-capture-deferred' },
   stores: [
     { id: THIS_STORE, live: true, platform: 'windows', host: 'windows', wslDistro: '', side: '', directory: 'C:\\Users\\me\\AppData\\Local\\coai-mcp',
-      paths: [], asOf: at(0), quiet: false, truncated: false, coaiMcpVersion: '0.63.0' },
+      paths: [], asOf: at(0), quiet: false, truncated: false, coaiMcpVersion: '0.63.0', conflicts: 0 },
     { id: WSL_STORE, live: false, platform: 'linux', host: 'wsl', wslDistro: 'Ubuntu', side: '', directory: '/home/me/.local/share/coai-mcp',
-      paths: [WSL_SNAPSHOT, WSL_SNAPSHOT_OLD_SPELLING], asOf: at(0.05), quiet: false, truncated: false, coaiMcpVersion: '0.63.0' },
+      paths: [WSL_SNAPSHOT, WSL_SNAPSHOT_OLD_SPELLING], asOf: at(0.05), quiet: false, truncated: false, coaiMcpVersion: '0.63.0', conflicts: 0 },
   ],
   storesNotIncluded: [
     { path: 'D:\\coai-nas\\round-counts-snapshot.json', reason: 'missing', detail: 'D:\\coai-nas\\round-counts-snapshot.json' },

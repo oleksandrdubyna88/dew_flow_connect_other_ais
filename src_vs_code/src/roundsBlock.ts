@@ -10,7 +10,9 @@ import {
 } from './roundMoney';
 import { launchesCell, remoteLaunchesCell } from './launchesCell';
 import { cardResetLine } from './statedReset';
+import { storeCells, titledCount } from './storeColumns';
 import { ownedLines, storesOfRead } from './storeLedger';
+import { roundsSentence, type StoreFacts, storeSentence } from './storeSentence';
 import { storeNameOf } from './storeWords';
 import { costText, type Estimate, shortNumber } from './usage';
 import type { Vendor } from './vendors';
@@ -38,17 +40,16 @@ import type { Vendor } from './vendors';
  *
  * <p><b>Unavailable is never 0.</b> Before the first read the block says it is counting; a read that failed says
  * *count unavailable* in every cell a count would fill, and why, once. A Team-server row is its own row, labelled
- * *ran on &lt;server&gt;*, never added to this machine's. The block names the store it counted and, when another
- * installation's store is known to exist, says that store's rounds are not included.</p>
+ * *ran on &lt;server&gt;*, never added to this machine's.</p>
+ *
+ * <p><b>Both stores, together (E6.S4).</b> The sentence under the heading names each store the merged answer counted with its
+ * age (`storeSentence.ts`); a store that could not be counted is *not included* with its reason and never a 0; a count cell's
+ * tooltip lists each store's part and a sub-row per store says where the rounds were held (`storeColumns.ts`) — labelled as
+ * STORES, because coai cannot tell whether two stores sign in to one vendor account. Tokens and money are both stores' ledgers
+ * (the footnote says whose), launches per round is over the rounds that carry a key.</p>
  */
 
-/** The store the counts came from, and the other installations' stores that are known to exist and are not counted. */
-export interface StoreFacts {
-  /** This side as a person names it — `WSL: Ubuntu`, or empty on the machine's own side. */
-  readonly side: string;
-  readonly directory: string;
-  readonly others: readonly string[];
-}
+export { type StoreFacts, storeSentence };
 
 export interface RoundsBlockInput {
   readonly snapshot: RoundsSnapshot | undefined;
@@ -95,12 +96,13 @@ const BESIDE: readonly (readonly [string, string])[] = [['consult', 'consult'], 
 
 /** The block, whole. */
 export function roundsBlock(input: RoundsBlockInput): string {
-  const head = `<section class="rounds-block"><h3 class="ledger">Rounds</h3><p class="hint">${escapeHtml(storeSentence(input.store))}</p>`;
+  const sentence = input.snapshot === undefined ? storeSentence(input.store) : roundsSentence(input.store, input.snapshot.read, windowEndMs(input.snapshot.read, input.snapshot.atMs));
+  const head = `<section class="rounds-block"><h3 class="ledger">Rounds</h3><p class="hint">${escapeHtml(sentence)}</p>`;
   if (input.snapshot === undefined) {
     return `${head}<p class="hint">Counting…</p></section>`;
   }
 
-  return `${head}${unavailableNote(input.snapshot.read)}${ledgerNote(input.snapshot.ledgerFailure)}${otherLedgersNote(input.snapshot)}${body(input, input.snapshot)}${FOOTNOTE}</section>`;
+  return `${head}${unavailableNote(input.snapshot.read)}${ledgerNote(input.snapshot.ledgerFailure)}${otherLedgersNote(input.snapshot)}${body(input, input.snapshot)}${footnote(input.snapshot)}</section>`;
 }
 
 /** What a cell drawn from the ledger says when the ledger did not read. */
@@ -137,20 +139,28 @@ function spent(facts: Facts, cell: () => string): string {
   return facts.ledgerFailure.length > 0 ? LEDGER_UNAVAILABLE : cell();
 }
 
-/** Which store was counted, and which known stores were not. */
-export function storeSentence(store: StoreFacts): string {
-  const side = store.side.length > 0 ? store.side : 'this machine';
-  const others = store.others.map((one) => ` ${one} holds another installation's store; its rounds are not included.`).join('');
-
-  return `Counted from this side's store only — ${side}, ${store.directory}.${others}`;
-}
-
 function unavailableNote(read: RoundCountsRead): string {
   return read.state === 'counted' ? '' : `<p class="warn">Rounds: ${COUNT_UNAVAILABLE} — ${escapeHtml(read.why)}.</p>`;
 }
 
-const FOOTNOTE = '<p class="hint">Tokens and money are the last 7 days, read from this side\'s usage ledger. '
-  + 'Consultations are counted per consultation — a ledger line is one turn and a consultation can take several, '
+/**
+ * Whose ledgers the tokens and money are (E6.S4): this side's, and each other store's tail that was read — and, said apart, the
+ * one that could not be, with why. With no other ledger read the sentence is the one the block always had.
+ */
+function ledgerSources(snapshot: RoundsSnapshot): string {
+  const stores = storesOfRead(snapshot.read);
+  const other = (snapshot.otherLedgers ?? []).map((one) => ({ name: `${storeNameOf(stores, one.store)}'s`, failure: one.failure }));
+  const read = other.filter((one) => one.failure.length === 0).map((one) => one.name);
+  const unread = other.filter((one) => one.failure.length > 0).map((one) => `; ${one.name} could not be read: ${one.failure}`);
+
+  return `this side's usage ledger${read.length === 0 ? '' : ` and ${read.join(', ')}`}${unread.join('')}`;
+}
+
+function footnote(snapshot: RoundsSnapshot): string {
+  return `<p class="hint">Tokens and money are the last 7 days, read from ${escapeHtml(ledgerSources(snapshot))}. ${FOOTNOTE_REST}`;
+}
+
+const FOOTNOTE_REST = 'Consultations are counted per consultation — a ledger line is one turn and a consultation can take several, '
   + 'so a line without a consultation id counts as one each. '
   + `Questions and chat are counted in ${PER_RECORDED_TURN}s. `
   + 'From coai-mcp 0.48.0 a review run on this machine writes one line per launch, so its median output is per launch. '
@@ -234,6 +244,7 @@ function rowBlock(facts: Facts, provider: string): string {
   const mine = facts.groups.filter((one) => one.provider === provider);
 
   return rowLine(facts, provider, mine)
+    + storeRowsOf(facts, provider)
     + modelsOf(facts, provider, mine).map((model) => modelLine(facts, provider, model, mine)).join('')
     + BESIDE.map(([kind, word]) => kindLine(mine, kind, word)).join('');
 }
@@ -244,7 +255,7 @@ function rowLine(facts: Facts, provider: string, mine: readonly MoneyGroup[]): s
   const all = rollUp(mine);
 
   return tr('row', [
-    name, ...WINDOW_NAMES.map((window) => roundsCell(facts.read, window, provider)), stagesCell(facts.read, provider),
+    name, ...WINDOW_NAMES.map((window) => countCell(facts, window, provider)), stagesCell(facts.read, provider),
     spent(facts, () => besideCell(mine)), reviewersCell(facts.read, provider), launchesCellOf(facts, provider), '', spent(facts, () => tokensCell(all)),
     spent(facts, () => moneyCell(all.money)), spent(facts, () => perRoundCell(all, rowRounds(facts.read, provider))),
   ]);
@@ -280,6 +291,25 @@ function tr(kind: string, cells: readonly string[]): string {
 
 function dataCell(cell: string): string {
   return `<td>${cell}</td>`;
+}
+
+/** The row's count in one window, with — over two stores or more — each store's part as its tooltip (E6.S4). */
+function countCell(facts: Facts, window: WindowName, provider: string): string {
+  const figure = roundsCell(facts.read, window, provider);
+
+  return facts.read.state === 'counted'
+    ? titledCount(facts.read.answer, window, provider, figure, windowEndMs(facts.read, facts.snapshot.atMs))
+    : figure;
+}
+
+/** A sub-row per store under a vendor row that was counted over two stores or more — labelled as STORES, never as accounts. */
+function storeRowsOf(facts: Facts, provider: string): string {
+  const read = facts.read;
+  if (read.state !== 'counted' || rowIn(read.answer, '7d', provider) === undefined) {
+    return '';
+  }
+
+  return storeCells(read.answer, provider).map((cells) => tr('store', cells)).join('');
 }
 
 /** A row's rounds in one window: a count (nought included, when counted) or *count unavailable*. */
