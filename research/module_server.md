@@ -3697,6 +3697,82 @@ declared submodule of the checkout's `.gitmodules`, parsed by `GitModules.In` �
 logged at Debug as numbers (`AgentFilesEmpty` included); none becomes a reason, a column or a member. `PanelSettings.TranscriptHome` is the one place the
 default transcripts folder is written (`ClaudeHome.Default.With(AgentLogDir)`); the window over the caller's own work (`RoundEngine.WhatTheCallerWasDoing`) reads it too. Every method of `RoundAuthorsStep`, `AuthorPeers`, `AuthorsBudget`, `RoundAuthorsTable` and `RoundAuthorsLog` stays within cyclomatic complexity 4: CA1502 is a build error for those files (`.editorconfig`, as for E4's core).
 
+### `--round-counts-merged` and the round-counts snapshot — two stores, one count (E6.S1 of `todo/PLAN_the_round_counter_tail_E6.md`)
+
+`--round-counts` reads ONE store, and a person who runs rounds on Windows and inside WSL has two. The other side's `coai.db` is never opened
+across the `\\wsl.localhost` / drvfs boundary (it is WAL; its locks are not coordinated across it). What crosses is a plain JSON file the OWNING side
+writes after every round — **`round-counts-snapshot.json`**, beside `coai.db` — and this mode counts this side's database and every snapshot it is
+handed as ONE population keyed by `round_key`.
+
+```mermaid
+flowchart LR
+    round["RoundEngine · a round recorded"] --> proj["Projection.Write · RecordRound · RecordConsultMissed"]
+    proj --> snap["RoundCountsSnapshot.TryWrite<br/>(after the projection, its own catch + log line)"]
+    snap -->|"RoundCounts.LaunchesIn · AtomicFile"| file[("round-counts-snapshot.json<br/>7 d · ≤ 5 000 rounds")]
+    ext["extension · spawns<br/>coai-mcp --round-counts-merged [--now] [abs paths…]"] --> mode["RoundCountsMergedMode.Run"]
+    mode -->|bad request| e65["sentence on stderr · exit 65"]
+    mode --> merge["RoundCountsMerged.Read"]
+    merge --> live[("this side · coai.db read-only")]
+    merge -->|"RoundCountsSnapshot.Read per path"| file
+    file -.->|missing · unreadable · newer-schema| ni["storesNotIncluded[] — never a 0, never an exit code"]
+    merge --> json["one RoundCounts.Cut at one now · exit 0"]
+    live -->|will not read| e74["sentence on stderr · exit 74"]
+```
+
+**The snapshot** (`Store/RoundCountsSnapshot.cs`, schema 1). One UTF-8 document without a byte-order mark, written through `AtomicFile`
+(`SharingRetry`), so a reader sees the old file or the new one, never a torn one: `schema`, `writtenUtc` (the reader's *as of*, never clamped),
+`coaiMcpVersion`, `store` (`id`, `platform`, `host`, `wslDistro`, `side`, `directory`), `fromUtc` (`writtenUtc − 7 d`), `truncated`, and `rounds[]`
+newest first — `id`, `key` (`round_key`, empty before step 21), `startedUtc`, `stage`, `reviewers[]` (`provider`, `model`). Nothing else: no plan text, no
+finding, no caller, no session id — it crosses the boundary in the clear. A round with no reviewer row is not in it (the counter counts a round for a provider
+through its reviewer rows, so such a round is in no count). Bounded by time (seven days, the counter's longest window) and by count
+(`RoundCountsSnapshot.MaxRounds` = 5 000, newest kept, `truncated: true` said). It is the SAME scan the counters make (`RoundCounts.LaunchesIn`), so the
+snapshot and `--round-counts` cannot disagree about which rounds are "the last seven days".
+
+- **The write point** is `RoundEngine`, AFTER `_projection.Write(...)` returns and outside its lambda (D2). `TryWrite` has its own `catch` and its own log sentence —
+  *the round-counts snapshot could not be written: {ExceptionType}* — and logs the exception's TYPE only, never its message (a filesystem message carries the
+  destination path, and with it the user's name). Best effort is the contract: a snapshot older than the latest round is a STALE store, visible through
+  `writtenUtc`, and the next round's write cures it. A store whose `coai.db` is not there writes nothing. `--round-counts` and `--round-counts-merged` write
+  nothing, ever.
+- **Residual, accepted (E6 §4.2):** five servers on one data directory each write the snapshot after their own round; a writer that read and then paused can
+  replace a snapshot written later, so every round committed in between is missing until the next write. The bound is the rounds of that interval, not one
+  round; `AtomicFile`'s GUID temps make it a stale file, never a torn one. Not held by a lock — a lock would be a second write transaction for a courtesy file.
+- **Store identity is LOCATION identity** (D1). `store.id` is `RoundAuthorsMerge.SourceIdOf(platform, wslDistro, dataDir)` — the SHA-256 of
+  `<platform>|<wslDistro>|<canonical dataDir>` — computed by the OWNER from its own spelling, because two WSL distributions share the default
+  `/home/<user>/.local/share/coai-mcp` and the directory alone would make two stores one. The hash changes when a distribution is renamed or the data directory
+  moves: a moved store is a new store, and its rounds inside the seven-day window can be counted under both ids until the old snapshot goes quiet. Accepted;
+  a durable id (a persisted UUID plus copy semantics) is not built. Two UNC spellings of one store (`\\wsl$\…`, `\\wsl.localhost\…`) read byte-equal ids.
+
+**The mode.** `coai-mcp --round-counts-merged [--now <ISO-8601 UTC instant>] [<absolute snapshot path>…]` (`Server/RoundCountsMergedMode.cs`, its own `args[0]`
+for the reason `--round-counts` is: a server too old for it exits **64** and the extension falls back). Exit **0** the answer (no path is a valid request: this
+side alone, `stores[]` of one); **65** a request fault (`--now` missing its value, repeated or unparseable; an unknown flag; a relative path; more than 32
+distinct paths — a path given twice is read once); **74** this side's database will not read; **never 64**, and **a snapshot problem never changes the code**.
+The answer is the plain answer (`nowUtc`, `windows[]`, `modelsKnownSince` — THIS side's instant, D11 — `gauge`) plus:
+
+- `rows[].roundKeys` (the distinct non-empty keys counted), `rows[].keyStore` (key → the id of the ONE store the round is counted in), `rows[].roundsWithoutKey`,
+  and `rows[].parts[]` (`store`, `rounds`, `reviewers` per store, in `stores[]` order; they sum to the row). `--round-counts` rows gain `roundKeys` and
+  `roundsWithoutKey` too, trailing (D6); a file without `round_key` (before step 21) is asked no such column and reads `roundKeys: []`, every round keyless.
+- `stores[]` — this side first (`live: true`, `asOf` now), then each snapshot store in the order its first path was given: `id`, `platform`, `host`, `wslDistro`,
+  `side`, `directory`, `paths[]` (every spelling that reached it), `asOf` (`writtenUtc`), `quiet` (written no later than `now − 7 d`: counted as 0 *as of* its last
+  write, never *not included*), `truncated`, `coaiMcpVersion`, and `conflicts`.
+- `storesNotIncluded[]` — one per path that yielded no store, in argument order: `{ path, reason, detail }` with `reason` `missing` (the path), `unreadable` (the
+  exception's message, or *not a round-counts snapshot*: not JSON, no integer `schema`, `schema < 1`, a missing required field, an id that is not 32 lower-case hex digits,
+  a key that is neither empty nor a key, a stamp that is not an ISO-8601 instant, more than 5 000 rounds, or a file over 16 MB) or `newer-schema` (*schema N — this
+  coai-mcp reads schema 1; update coai-mcp on this side*). `schema` is read FIRST and leniently so a newer document is named as newer; an unknown property is
+  ignored, which is how an added field keeps schema 1.
+
+**One identity rule** (`RoundCounts.Launch.Of`, D4): a round is its `round_key`; a round with no key is `<storeId>#<id>` — never the bare integer id, which every
+store counts from 1 (the pre-E6 `Distinct` counted `RoundId`, the collapse the parent plan names). A key in more than one store is ONE round, counted in the first
+store that holds it — this side, then the snapshots in argument order — and only that store's `parts[]` and `keyStore` carry it. When the copies differ (stage,
+reviewers or models) the result is still the owner's copy, and the OWNING store's `conflicts` counts the rounds concerned, so the block can say *N rounds appear in
+two stores with different contents — counted from <store>*; the answer depends on argument order only through that named choice. A snapshot whose id is this side's
+is this side reached through another spelling (its path joins `stores[0].paths[]`, its rounds are not read); two snapshots with one id are one store and the NEWER
+`writtenUtc` is the one counted (a tie keeps the first). Every store's rounds are concatenated and cut by the ONE `RoundCounts.Cut` at the one `now` — a snapshot
+round 4 h 59 m before `--now` is in `5h`, one exactly 5 h before is in `24h` and not `5h` — never at a snapshot's own write.
+
+Tests: `RoundCountsSnapshotTests`, `ARoundLeavesASnapshotBesideTheStoreTests`, `RoundCountsMergedTests`, `RoundCountsMergedCliScenarioTests`, `RoundCountsTests` (+3), and
+`AReaderModeNeverMakesTheDataDirectoryTests` (+1) — RED messages and plants in `module_tests.md` (*E6.S1*). `shared/data-inventory.json` lists the file as *move: false,
+mention: false* (written again by itself), and `.agents/PROJECT.md` lists the mode among the one-shot modes.
+
 ### `--round-authors` — who wrote the code, against what the reviewers found (2026-10-19, E6 of `research/PLAN_a_round_records_who_wrote_the_code_and_how_much.md`)
 
 The owner's question is *"is the code better or worse since the coders moved to Sonnet?"*. `--round-authors` can produce the report for it,

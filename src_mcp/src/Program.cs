@@ -303,6 +303,17 @@ internal static class Program
         RoundCounts,
 
         /// <summary>
+        /// The same counter over THIS side's rounds database and the snapshots the other side's coai-mcp wrote, as one population keyed by
+        /// <c>round_key</c> (E6.S1 of <c>todo/PLAN_the_round_counter_tail_E6.md</c>).
+        /// </summary>
+        /// <remarks>
+        /// Its own <c>args[0]</c> for the reason <c>--round-counts</c> is: a server too old for it must answer 64 so the extension falls back to
+        /// the single-store counter, and a flag on <c>--round-counts</c> would be accepted by that older binary and answered with ONE store's count.
+        /// See <see cref="Server.RoundCountsMergedMode"/>.
+        /// </remarks>
+        RoundCountsMerged,
+
+        /// <summary>
         /// Who wrote the code a round reviewed, and what the reviewers found, as additive sums over the rounds database
         /// (E6 of <c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E6.md</c>) — read-only, one document of JSON or a table.
         /// </summary>
@@ -358,6 +369,7 @@ internal static class Program
                 "--probe-api" => Startup.ProbeApi,
                 "--log" => Startup.Log,
                 "--round-counts" => Startup.RoundCounts,
+                "--round-counts-merged" => Startup.RoundCountsMerged,
                 "--round-authors" => Startup.RoundAuthors,
                 "--backfill-authors" => Startup.BackfillAuthors,
                 "--findings" => Startup.Findings,
@@ -474,6 +486,11 @@ internal static class Program
                 // The clock is the system's here and a `--now` in a test; the data directory is
                 // resolved exactly as `--log` resolves it, and the read is read-only.
                 return Server.RoundCountsMode.Run(args, Environment.GetEnvironmentVariable, Console.Out, Note, TimeProvider.System);
+
+            case Startup.RoundCountsMerged:
+                // Read-only, like the counter: this side's database is opened read-only, a snapshot is only read, and the data directory is
+                // resolved exactly as `--round-counts` resolves it.
+                return Server.RoundCountsMergedMode.Run(args, Environment.GetEnvironmentVariable, Console.Out, Note, TimeProvider.System);
 
             case Startup.RoundAuthors:
                 // Read-only, like the counter: the data directory is resolved as `--round-counts` resolves it, and an `--add` file is read with
@@ -2513,6 +2530,13 @@ internal static class Program
         rounds launched, and the rounds per reviewer model where the round recorded one — from the rounds
         database alone, read-only, as JSON; `--now` fixes the clock. A missing database is an empty
         answer and exit 0; a bad argument is 65; a database that will not read is 74 — never 64.
+        `--round-counts-merged [--now <utc instant>] [<absolute snapshot path>…]` prints the same counts over this side's
+        rounds database AND the round-counts snapshots (`round-counts-snapshot.json`, written beside coai.db by the
+        other side's coai-mcp after every round) as one population keyed by the round's key: a round with the same
+        integer id in two stores is two rounds, one key in two stores is one. It says which stores it counted (`stores`)
+        and which paths it could not read and why (`storesNotIncluded`: missing, unreadable, newer-schema); no path
+        answers this side alone. Read-only, as JSON; a bad argument or more than 32 paths is 65; this side's database
+        that will not read is 74; a snapshot problem is never an exit code — never 64.
         `--round-authors [--since <utc>] [--until <utc>] [--split <utc>] [--stage code|plan] [--cohort first|corrective|all]
         [--with-before-open] [--kinds <k,…>] [--without-elided] [--with-uncovered] [--add <file.json>]… [--table]` reports who wrote the code
         the reviewed rounds held — coder mix, effort, main model — against what the reviewers found, per cell and per 100 lines the

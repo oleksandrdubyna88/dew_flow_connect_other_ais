@@ -6,6 +6,10 @@
  * `research/module_server.md`): `{nowUtc, windows: [{name, fromUtc, toUtc, rows: [{provider, rounds: {plan, code,
  * document, feature}, reviewers, models: [{model, rounds}]}]}], modelsKnownSince}`, windows half-open `(from, to]`.</p>
  *
+ * <p>Since epic E6 it also reads `--round-counts-merged` (`src_mcp/src/Server/RoundCountsMergedMode.cs`), the same document plus
+ * `stores[]`, `storesNotIncluded[]` and, per row, `roundKeys`, `keyStore`, `roundsWithoutKey` and `parts[]`. The plain answer
+ * gains `roundKeys` and `roundsWithoutKey` too and nothing else; an answer without `stores[]` reads as it always did.</p>
+ *
  * <p><b>A count, or unavailable — never a zero standing in for "nobody knows".</b> Exit 0 with an answer that parses is
  * a count (a machine that never ran a round answers rows `[]`, which IS nought). Exit 64 is a `coai-mcp` older than the
  * mode; 65 a refused request; 74 a database that will not read; -1 a timeout or a spawn that failed; an exit-0 answer
@@ -37,6 +41,48 @@ export interface RoundsRow {
   readonly reviewers: number;
   /** Rounds per reviewer MODEL; only rounds written since `modelsKnownSince` have one. */
   readonly models: readonly { readonly model: string; readonly rounds: number }[];
+  /** The distinct non-empty round keys of the rounds counted for this row in this window (E6.S1) — empty from a binary older than the field. */
+  readonly roundKeys: readonly string[];
+  /** The rounds counted whose key is empty (written before step 21, or skipped) — 0 from a binary older than the field. */
+  readonly roundsWithoutKey: number;
+  /** Merged answer only: the store each key was attributed to (key to store id) — the owner of that round's ledger lines. */
+  readonly keyStore?: Readonly<Record<string, string>>;
+  /** Merged answer only: this row's count per store, in `stores[]` order. */
+  readonly parts?: readonly RoundPart[];
+}
+
+/** One store's share of a row inside a window. */
+export interface RoundPart {
+  readonly store: string;
+  readonly rounds: Readonly<Record<Stage, number>>;
+  readonly reviewers: number;
+}
+
+/** One store the merged answer counted (E6.S1): this side live, the others from the snapshot their coai-mcp wrote. */
+export interface RoundStore {
+  readonly id: string;
+  /** True for this side's own store, read live. */
+  readonly live: boolean;
+  readonly platform: string;
+  readonly host: string;
+  readonly wslDistro: string;
+  readonly side: string;
+  readonly directory: string;
+  /** The snapshot paths that reached this store — two spellings of one file name both; empty for the live store unless its own snapshot was handed in. */
+  readonly paths: readonly string[];
+  /** The instant the store's counts are as of: `nowUtc` for the live store, the snapshot's `writtenUtc` for another. */
+  readonly asOf: string;
+  /** True when the store has written nothing for a week: its parts are 0 as of {@link asOf}, never "not included". */
+  readonly quiet: boolean;
+  readonly truncated: boolean;
+  readonly coaiMcpVersion: string;
+}
+
+/** A snapshot path that yielded no store, and why. `reason` is `missing` / `unreadable` / `newer-schema` (kept as text, so a newer word survives) or `timeout` when the extension's own read did not answer. */
+export interface StoreNotIncluded {
+  readonly path: string;
+  readonly reason: string;
+  readonly detail: string;
 }
 
 export interface RoundsWindow {
@@ -57,6 +103,10 @@ export interface RoundCountsAnswer {
    * Absent from a `coai-mcp` older than the field, and then nothing is said about a gauge.
    */
   readonly gaugeUnavailable?: string;
+  /** Merged answer only (E6.S1): every store counted, this side first. Absent from the plain `--round-counts` answer — then one store, this side's. */
+  readonly stores?: readonly RoundStore[];
+  /** Merged answer only: the snapshot paths that yielded no store, each with its reason — never a zero. */
+  readonly storesNotIncluded?: readonly StoreNotIncluded[];
 }
 
 /** What a read came to: a count, or why there is none. */
@@ -108,7 +158,7 @@ function answerOf(value: Shaped): RoundCountsAnswer | undefined {
   const windows = value.windows.map(windowOf);
 
   return windows.includes(undefined) ? undefined
-    : { nowUtc: value.nowUtc, windows: windows as RoundsWindow[], modelsKnownSince: textOrNull(value['modelsKnownSince']), ...gaugeReasonOf(value['gauge']) };
+    : { nowUtc: value.nowUtc, windows: windows as RoundsWindow[], modelsKnownSince: textOrNull(value['modelsKnownSince']), ...gaugeReasonOf(value['gauge']), ...storesOf(value) };
 }
 
 /** The local answer's gauge reason (story 6.2), present only when the binary said one — an older one says nothing. */
@@ -179,7 +229,66 @@ function rowFrom(raw: ShapedRow): RoundsRow {
     rounds: { plan: count(rounds['plan']), code: count(rounds['code']), document: count(rounds['document']), feature: count(rounds['feature']) },
     reviewers: count(raw['reviewers']),
     models: Array.isArray(raw['models']) ? raw['models'].flatMap(modelOf) : [],
+    roundKeys: textsOf(raw['roundKeys']),
+    roundsWithoutKey: count(raw['roundsWithoutKey']),
+    ...keyStoreOf(raw['keyStore']),
+    ...partsOf(raw['parts']),
   };
+}
+
+/** The strings of an array, in order — anything else in it is not a key. */
+function textsOf(value: unknown): readonly string[] {
+  return Array.isArray(value) ? value.filter((one): one is string => typeof one === 'string') : [];
+}
+
+/** Merged answer only: key to store id; absent from the plain answer, where a key has no store to be attributed to. */
+function keyStoreOf(value: unknown): Pick<RoundsRow, 'keyStore'> {
+  return isRecord(value)
+    ? { keyStore: Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string')) }
+    : {};
+}
+
+function partsOf(value: unknown): Pick<RoundsRow, 'parts'> {
+  return Array.isArray(value) ? { parts: value.flatMap(partOf) } : {};
+}
+
+function partOf(raw: unknown): readonly RoundPart[] {
+  return isRecord(raw) && typeof raw['store'] === 'string' && isRecord(raw['rounds'])
+    ? [{ store: raw['store'], rounds: stagesOf(raw['rounds']), reviewers: count(raw['reviewers']) }]
+    : [];
+}
+
+function stagesOf(rounds: Record<string, unknown>): Readonly<Record<Stage, number>> {
+  return { plan: count(rounds['plan']), code: count(rounds['code']), document: count(rounds['document']), feature: count(rounds['feature']) };
+}
+
+/** The merged answer's `stores[]` and `storesNotIncluded[]` — each present only when the answer said it, so the plain answer reads as today. */
+function storesOf(value: Shaped): Pick<RoundCountsAnswer, 'stores' | 'storesNotIncluded'> {
+  const stores = value['stores'];
+  const missing = value['storesNotIncluded'];
+
+  return {
+    ...(Array.isArray(stores) ? { stores: stores.flatMap(storeOf) } : {}),
+    ...(Array.isArray(missing) ? { storesNotIncluded: missing.flatMap(notIncludedOf) } : {}),
+  };
+}
+
+function storeOf(raw: unknown): readonly RoundStore[] {
+  return isRecord(raw) && typeof raw['id'] === 'string' ? [storeFrom(raw['id'], raw)] : [];
+}
+
+function storeFrom(id: string, raw: Record<string, unknown>): RoundStore {
+  return {
+    id, live: raw['live'] === true, platform: text(raw['platform']), host: text(raw['host']), wslDistro: text(raw['wslDistro']),
+    side: text(raw['side']), directory: text(raw['directory']), paths: textsOf(raw['paths']), asOf: text(raw['asOf']),
+    quiet: raw['quiet'] === true, truncated: raw['truncated'] === true, coaiMcpVersion: text(raw['coaiMcpVersion']),
+  };
+}
+
+function notIncludedOf(raw: unknown): readonly StoreNotIncluded[] {
+  return isRecord(raw) && typeof raw['path'] === 'string'
+    ? [{ path: raw['path'], reason: text(raw['reason']), detail: text(raw['detail']) }]
+    : [];
 }
 
 function modelOf(raw: unknown): readonly { readonly model: string; readonly rounds: number }[] {
