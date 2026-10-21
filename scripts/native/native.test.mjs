@@ -476,18 +476,21 @@ linuxTest('remove-series.sh removes the folder AND its own file, still prints st
 // the very condition the matching case above would print as its failure.
 const nativeText = (file) => readFileSync(join(NATIVE, file), 'utf8');
 
-linuxTest('TEETH (B1): a run script without the TERM, INT and HUP traps leaves NO .done after a group TERM — "a run script killed mid-probe wrote no .done — the poll would wait for ever"', async () => {
+linuxTest('TEETH (B1): a run script without the TERM, INT and HUP traps records a TERMed run as exit 0, not 143 — bash still runs the EXIT trap on a fatal signal, but with the status of the last command', async (t) => {
   const series = provisioned();
   const dropTraps = (text) => mutated(text, "trap 'exit 143' TERM; trap 'exit 130' INT; trap 'exit 129' HUP", ':');
   const { handle } = await running(series, 'n-v2', 'idle', { mutate: dropTraps });
   process.kill(-handle.pgid, 'SIGTERM');
   await waitFor('the run script did not end at all on a group TERM', () => !alive({ pid: handle.pid, start: handle.start }));
-  assert.equal(existsSync(logs(series, 'n-v2', 'done')), false, 'the mutant wrote .done anyway, so the signal cases above cannot go red');
+  await sleep(500);
+  const recorded = existsSync(logs(series, 'n-v2', 'exit')) ? readFileSync(logs(series, 'n-v2', 'exit'), 'utf8').trim() : '(no .exit)';
+  t.diagnostic(`without the signal traps a group TERM left .exit = ${recorded}, .done = ${existsSync(logs(series, 'n-v2', 'done'))}`);
+  assert.notEqual(recorded, '143', 'the mutant recorded 143 anyway, so the signal cases above (which assert .exit 143 / 130 / 129) cannot go red');
   endGroup(series, 'n-v2');
 });
 
 linuxTest('TEETH (B2): an abort that escalates while the LEADER exists, not the group, leaves the TERM-resistant child alive — "the abort left the TERM-resistant child alive — it escalated on the leader, not the group"', async () => {
-  const leaderOnly = mutated(nativeText('abort.sh'), 'pending() { scan; [ -n "$(group_members)" ] || [ -n "$(owned_alive)" ]; }', 'pending() { scan; [ -n "${START_OF[$PID]:-}" ]; }');
+  const leaderOnly = mutated(nativeText('abort.sh'), 'pending() { scan; [ -n "$(group_members)" ] || [ -n "$(owned_alive)" ]; }', 'pending() { scan; [ -n "${START_OF[$PID]:-}" ] && [ "${STATE_OF[$PID]:-Z}" != Z ]; }');
   const { term, before } = await workloadsThenAbort(leaderOnly);
   assert.equal(before.term, true);
   assert.equal(alive(term), true, 'the mutant ended the TERM-resistant child anyway, so the group-escalation case above cannot go red');

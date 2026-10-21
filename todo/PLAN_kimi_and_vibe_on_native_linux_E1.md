@@ -158,6 +158,52 @@ the bash tests skip by name on Windows; B1–B5 run both ways and recorded; Opus
 **Roles.** Opus brief (the template and abort steps are fixed by parent §6 — the brief adds the test root seam and the dummy
 workloads); Sonnet codes; Opus reviews, reading every bash line for word splitting and an unquoted expansion.
 
+**Status — E1.S1 coded 2026-10-21 on `feat/native-linux-e1` (not merged; the Opus review and the epic's code gate are still open).**
+Built as written: `scripts/probe-native-linux-host.mjs` and its pure core `scripts/lib/host-facts.mjs`; `scripts/native/`
+(`make-series.sh`, `run-template.sh`, `abort.sh`, `remove-series.sh`); `scripts/lib/native-run.mjs`; the suites `native.test.mjs`,
+`native-run.test.mjs`, `host-facts.test.mjs` (what each pins: `research/module_tests.md`, *The native-Linux host scripts*). What the
+build found, and what it did differently:
+
+- **Bash 5 runs an `EXIT` trap when a fatal TERM/INT/HUP kills the shell** (seen on the Linux CI job, bash 5.2, and in bash 5.3), so
+  the premise of the E1 plan round's finding 2 — "bash does not run an `EXIT` trap when a signal with its default action kills it" —
+  is wrong, and B1's expected red (`wrote no .done`) cannot occur: a template with `trap finish EXIT` alone still writes `.done`. What
+  the signal traps buy is the exit CODE: the trap runs with the status of the last command, not 128+signal, so without
+  `trap 'exit 143' TERM …` a TERMed run would be recorded as `.exit` 0 — success. The cases assert `.exit` 143 / 130 / 129, and the
+  B1 TEETH case asserts the mutant does not record 143. The traps stay.
+- **`nohup` leaves SIGHUP ignored on entry and bash then cannot trap it** (the Linux job printed *the HUP was IGNORED*): the
+  launcher of §6 (`nohup setsid bash …`) never runs `trap 'exit 129' HUP`; an abort ends such a run by TERM, which does work. The
+  launcher keeps `nohup` — it is what keeps a phase alive when the SSH link drops — and the HUP case of S-N15 starts the script
+  WITHOUT it. A second case pins the guarantee under `nohup` (a HUP never ends the run without `.done`).
+- **Node resets every signal disposition at start-up**, so a dummy probe left alone dies of a group TERM/INT/HUP and the script ends
+  through `wait`; in idle mode the dummy now swallows the three, so only the script's own traps can write `.exit`.
+- **The break-its B1, B2, B3 and B5 are kept as tests** (TEETH): a mutation of a COPY of the script's text, in the test, asserting
+  the condition the matching case would print as its failure; a mutation that no longer applies fails loudly. This replaces
+  editing the production script and pushing a red commit (a deliberately weakened root-run script was not pushed).
+- **No `<phase>.pid` file.** The handle (pid, pgid, start time) replaced it in the cadence consult; nothing reads a bare pid.
+- **"Owned by root" is "owned by the user running the script"** (`id -u`) for the series folder, and the PATH audit trusts uid 0 *or*
+  that user. On the host the user is root, so the rule is the plan's; unprivileged (the CI runner, WSL) it is the only owner a test
+  can make. The foreign-owner arm of the audit is therefore not exercised by a test (a mode-777 folder, an empty entry, `.` and a
+  relative entry are).
+- **Two test seams, both environment variables read by the shipped scripts with the plan's values as defaults:**
+  `COAI_NATIVE_SERIES_ROOT` (default `/tmp`) and `COAI_NATIVE_ABORT_GRACE` (default `10` seconds). `renderRunScript` and the argv
+  builders take the same root as an option.
+- **The abort tests the group's existence from `/proc`, not from `kill -0 -- -<pgid>`, and does not count a zombie as alive.** The
+  decision is the same (the group, not the leader), but a zombie-only group answers `kill -0` for as long as nobody reaps it, which
+  would make every abort wait out its grace period (the test's own `spawnSync` is such a case: it blocks the reaper). It polls every
+  0.2 s and escalates at the grace deadline only if the group or the owned set still lives; it never signals a group member twice (a
+  second TERM can cut the run script's own `EXIT` trap short, and that trap writes `.done`).
+- **`path.txt` holds the PATH value alone** (the template says `PATH="$HOST_PATH"`), not the `PATH=` line.
+- **`make-series.sh` lives in the series folder's root** (copied there by `scp` before it runs, as §6 says); `abort.sh` and
+  `remove-series.sh` live in `run/` and find the series from their own place.
+- **The argv builders take the host as an option** (`{ host }`, a pattern-checked name the caller supplies); no host name or address
+  appears in any file here. `mkdirArgv`, `makeSeriesArgv` and `doneArgv` join `launcherArgv`, `abortArgv`, `removeArgv` — the other
+  three remote steps of §6, so none is composed by hand.
+- **The shape of a series folder is one literal** carried by `native-run.mjs` and the three scripts; a pure case fails if they differ.
+- **No shared bash helper** for the pattern check: each script is copied to the host alone and run by its path, and a sourced file
+  would be one more file a root-run step has to trust. The three copies are the same few lines and are pinned by that case.
+- **`probe-native-linux-host.mjs` reads `comm` or `name` from `lib/proc.mjs`'s listing** (`p.comm ?? p.name`), so it works before and
+  after E1.S3 renames the field; it does not touch `proc.mjs`.
+
 ### E1.S2 — The admission's shared plumbing and `coai-mcp --host-facts`, with both runtimes still refused
 
 **Goal.** `HostAdmission` asks a per-runtime set on native Linux (EMPTY), the kernel banner can answer "unreadable", the product states
