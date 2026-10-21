@@ -3679,8 +3679,10 @@ default transcripts folder is written (`ClaudeHome.Default.With(AgentLogDir)`); 
 
 ### `--round-authors` — who wrote the code, against what the reviewers found (2026-10-19, E6 of `research/PLAN_a_round_records_who_wrote_the_code_and_how_much.md`)
 
-The owner's question — *"is the code better or worse since the coders moved to Sonnet?"* — answered from data the rounds already
-record: the authors of a round (E3–E5) beside what the reviewers found. `coai-mcp --round-authors` reads `coai.db` read-only and
+The owner's question is *"is the code better or worse since the coders moved to Sonnet?"*. `--round-authors` can produce the report for it,
+from data the rounds already record: the authors of a round (E3–E5) beside what the reviewers found. **The owner's answer is not available yet.**
+It needs the live backfill, the hand-check and the `RESULTS_` file (see [PLAN_round_authors_backfill_on_the_live_stores.md](../todo/PLAN_round_authors_backfill_on_the_live_stores.md)).
+`coai-mcp --round-authors` reads `coai.db` read-only and
 prints **sums**; the figures, the marks and the header are made from them at render time. **An association, never a cause** — the
 first line of every report says so. The stories are `research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E6.md`; its decisions
 D1–D19 are the rules below by reference.
