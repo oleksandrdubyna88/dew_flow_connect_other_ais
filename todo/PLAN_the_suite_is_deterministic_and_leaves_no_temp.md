@@ -1710,3 +1710,16 @@ the text above disagree, **this section governs**:
    S27 gains the arm the consultant named: writer A paused after its temp is written, the temp aged past an hour, writer B
    writes the same record → A's temp is kept (A's pid is alive), and A's move then lands.
 5. **S2 and RoundScratch are sound within their stated limits** (no change).
+
+### Case C26 (added 2026-10-21, seen on PR #897's Linux Sonar job) — an inheritable lock descriptor caught by another test's fork
+
+`HeldFileInheritableOnLinuxTests.ATakeWhoseStreamCannotBeMade_ClosesItsDescriptor_AndLeavesTheFileFree` failed once on Linux
+(run 39473785590, the coverage job): `Expected HeldFile.Probe(LockFile) to be LockProbe.Free … because the descriptor leaked
+with its flock … but found LockProbe.Held`, after 7 ms. The product closes the handle on the failure path
+(`src_mcp/runners/Files/LinuxHeldFile.cs:52-69`), and the lock file is unique per test (`TempDir.For`), so neither the code
+nor the path explains it. **Cause (inferred, not yet shown by a kept trace):** the descriptor is opened INHERITABLE by design
+(the shim's tree hold, S-K5), and in the window between its open and its close another test in the same process forked a
+child; the child inherited the descriptor and with it the flock, so the probe saw `Held` until that child exited. Shared
+state across parallel tests — never a flake. **Belongs to E5** (with C21): the class must not run beside process-spawning
+classes (a serial collection), or the probe must wait for inheritors to end; a deterministic RED holds a fork open across the
+take's failure. Not caused by E2: it does not depend on where temp lives.
