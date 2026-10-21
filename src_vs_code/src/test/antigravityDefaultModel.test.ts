@@ -22,7 +22,7 @@ function serverDefaultModel(): string {
   // is a positive assertion that fails LOUDLY — the match below throws when the constant moves or changes shape, it
   // never derives an empty expectation and passes over nothing.
   const source = fs.readFileSync(path.join(root, 'src_mcp', 'runners', 'Reviewers', 'AntigravityRuntime.cs'), 'utf8');
-  const m = /const string DefaultModel = "([^"]+)"/.exec(source);
+  const m = /const\s+string\s+DefaultModel\s*=\s*"([^"]+)"/.exec(source);
 
   assert.ok(m, 'AntigravityRuntime.DefaultModel not found — the shape this test reads has changed');
   return m[1]!;
@@ -41,10 +41,16 @@ test('a fresh install’s Antigravity row, in the code and in the manifest, carr
   const row = DEFAULT_VENDORS.find((v) => v.runtime === 'antigravity');
   assert.equal(row?.model, ANTIGRAVITY_DEFAULT_MODEL);
 
-  const manifest = fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8');
-  assert.ok(
-    manifest.includes(`"runtime": "antigravity",\n              "model": "${ANTIGRAVITY_DEFAULT_MODEL}"`) ||
-      manifest.includes(`"runtime": "antigravity",\r\n              "model": "${ANTIGRAVITY_DEFAULT_MODEL}"`),
+  // Parsed, not matched as text: indentation or line endings in the manifest must not decide this.
+  const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8')) as {
+    contributes: { configuration: { properties: Record<string, { default?: unknown }> } };
+  };
+  const defaults = manifest.contributes.configuration.properties['coai.vendors']?.default as
+    | readonly { runtime: string; model: string }[]
+    | undefined;
+  assert.equal(
+    defaults?.find((v) => v.runtime === 'antigravity')?.model,
+    ANTIGRAVITY_DEFAULT_MODEL,
     'package.json coai.vendors default names the same model',
   );
 });

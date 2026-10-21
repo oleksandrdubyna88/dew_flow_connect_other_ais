@@ -69,7 +69,8 @@ test('with nothing discovered the command falls back, which is the defect this c
   const list = chatProvidersFrom(vendors, catalogUsing(EMPTY_DISCOVERY, []));
   const saved = legacyPick(list, vendors, 'agy');
 
-  assert.strictEqual(openingModel(list, saved, 'gemini-4-argon-low'), 'gemini-3.7-flash-high');
+  // The fallback is the saved row's OWN model (the fixture's arbitrary id), not a default of the code's.
+  assert.strictEqual(openingModel(list, saved, 'gemini-4-argon-low'), vendors[0]!.model);
 });
 
 test('a Team server’s allowlist crosses too, attached to the server it belongs to', () => {
