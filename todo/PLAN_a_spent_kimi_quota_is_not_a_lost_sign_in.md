@@ -66,12 +66,12 @@ the same answer looks when it comes over ACP is a hypothesis until step 1 of §5
 - **D1 — Every Spent row before the sign-in row; the sign-in row stops being greedy** (judge J1, gate 11). `KimiAcpProfile.Failures`
   is reordered and extended:
   1. "Your current subscription does not have access to" → `subscription_model` (unchanged, still first: the 401 form).
-  2. **new** "reached your 5-hour usage limit" → `quota_spent`, Kind `Spent`, exit 75. The phrase is taken from the owner's CLI
+  2. **new** "reached your 5-hour usage limit" → `kimi_quota_spent`, Kind `Spent`, exit 75. The phrase is taken from the owner's CLI
      line of §1 — narrower than a bare "usage limit" (which would also match the sales footer `RateLimit.Spent`'s remarks warn
      about, :346-352). The monthly form is **not measured** and gets no row until someone sees it; until then it lands in row 5.
   3. "insufficient balance" → `balance_spent` (unchanged text, moved above the sign-in rows).
   4. **new** "Authentication required: 401" → `not_signed_in` (the 401 form of a sign-in refusal keeps the login cure).
-  5. **new** "Authentication required:" (with the colon) → `provider_error`, Kind `Refused`, exit 70 (`AskAcpMode.Failed`,
+  5. **new** "Authentication required:" (with the colon) → `provider_error`, Kind `Failed`, exit 70 (`AskAcpMode.Failed`,
      `src_mcp/src/Acp/AskAcpMode.cs:50`) — the **neutral row**: it quotes the vendor's sentence and gives **no cure**. It has no
      `VendorDiagnosis` marker, so the vendor's own words stand (`AcpDiagnosis.None` / `Known == false`, `IAcpProfile.cs:83-86`).
   6. "Authentication required" → `not_signed_in` (the bare form, measured at `RESULTS_kimi_confinement.md:263` and `:413`).
@@ -92,7 +92,7 @@ the same answer looks when it comes over ACP is a hypothesis until step 1 of §5
 - **D3 — The sentence names the quota and the vendor's reset clause, and never says "kimi login"** (judge J4). `VendorDiagnosis`
   gains the Kimi-specific marker `kimi_quota_spent:` with the fixed sentence "the Kimi plan quota is used up — signing in again
   will not help". The vendor's reset clause cannot go into a fixed `VendorDiagnosis` row, so the **seam is `KimiRuntime.Said`**
-  (`KimiRuntime.cs:260-266`, today `"{cure} (the shim said: {text})"`): for the `quota_spent` failure it places the vendor's reset
+  (`KimiRuntime.cs:260-266`, today `"{cure} (the shim said: {text})"`): for the `kimi_quota_spent` failure it places the vendor's reset
   clause, **quoted verbatim** from the shim's reason (the sentence that begins "Your quota will reset", redacted), between the cure
   and the "(the shim said: …)" tail: "the Kimi plan quota is used up — "Your quota will reset …"; signing in again will not
   help". When the reason has no such sentence, Said writes "the vendor named no reset" and guesses nothing. The clause is a
@@ -135,7 +135,7 @@ the same answer looks when it comes over ACP is a hypothesis until step 1 of §5
   promises "One real, paid turn of this model in a scratch folder — you are asked first" whatever the runtime. **The one behaviour
   chosen:** for every runtime outside the consultant list (`shared/feature-availability.json:25` — today that is `kimi`, `gemini`
   and `remote` rows; the extension reads it through the generated `src/featureAvailability.generated.ts`), the Check button is
-  rendered **disabled** with the title "the consultant check is not offered for <runtime> — this row reviews plans and code only"; it never asks for a
+  rendered **disabled** with the title "the consultant check is not offered for <runtime> — this runtime cannot hold a consultation"; it never asks for a
   paid turn and never sends `checkModel`. A real reviewer-shaped check (one short review turn through `KimiRuntime`/`KimiLaunch`,
   so it takes the cross-process gate at `src_mcp/runners/Kimi/KimiLaunch.cs:134`, with a short deadline, asked first) is a
   **named follow-up**, not this plan.
@@ -143,7 +143,7 @@ the same answer looks when it comes over ACP is a hypothesis until step 1 of §5
 ## 4. Scenarios (each red is the message before the fix)
 
 - **S1** `AcpDiagnosis.Of("the agent answered with an error (-32000): Authentication required: 429 You've reached your 5-hour
-  usage limit. Your quota will reset …", KimiAcpProfile.Failures)` → `quota_spent`, Spent. Red: `not_signed_in`. **The envelope
+  usage limit. Your quota will reset …", KimiAcpProfile.Failures)` → `kimi_quota_spent`, Spent. Red: `not_signed_in`. **The envelope
   is constructed** (judge J12): the inner sentence is the owner's CLI line, the "Authentication required: " wrapper is the §2
   hypothesis. When step 1 of §5 records the real line, the fixture is replaced and this scenario re-run.
 - **S2 guards:** the bare `-32000 Authentication required` → `not_signed_in`; the 401 subscription sample
@@ -151,12 +151,12 @@ the same answer looks when it comes over ACP is a hypothesis until step 1 of §5
   `not_signed_in`; a constructed "Authentication required: 503 …" → `provider_error` with the vendor text and no cure; the
   balance sample wrapped the same way → `balance_spent`. Red: the 503 and the wrapped balance sample both read `not_signed_in`.
 - **S3** `VendorDiagnosis.For("kimi_quota_spent: …")` → the D3 sentence, no "kimi login". Red: no marker (`null`).
-- **S3b** `KimiRuntime.Said` on a `quota_spent` report whose reason carries "Your quota will reset at 14:00 UTC." → the cure, then
+- **S3b** `KimiRuntime.Said` on a `kimi_quota_spent` report whose reason carries "Your quota will reset at 14:00 UTC." → the cure, then
   the quoted clause, then "(the shim said: …)"; the same report without a reset sentence → "the vendor named no reset". Red: the
   cure alone, no clause.
-- **S4** A shim exit 75 with `failure: quota_spent` → `RateLimitVerdict.Limited`, hopeless. Red: `RateLimitVerdict.No` (only
+- **S4** A shim exit 75 with `failure: kimi_quota_spent` → `RateLimitVerdict.Limited`, hopeless. Red: `RateLimitVerdict.No` (only
   `balance_spent` accepted).
-- **S4b** `RateLimit.Hopeless("quota_spent: … You've reached your 5-hour usage limit …")` is true **without** any appended phrase,
+- **S4b** `RateLimit.Hopeless("kimi_quota_spent: … You've reached your 5-hour usage limit …")` is true **without** any appended phrase,
   and `GateReportingTests`' `observed` dictionary carries the owner's line for "reached your 5-hour usage limit". Red:
   `Hopeless` false on the bare text; the phrase-list test refuses the new phrase as "a guess".
 - **S5** The reviewer's summary line reads "rate limited … the Kimi plan quota is used up … "Your quota will reset …"" — not
@@ -170,7 +170,7 @@ the same answer looks when it comes over ACP is a hypothesis until step 1 of §5
   the log line each say "quota is used up", each quote the reset clause, none says "kimi login" or "exit 77", and the reviewer
   ends `RateLimited`, hopeless, after **one** launch. Red: today's three lines.
 - **S8** (D7, extension node tests) A rendered Kimi card and a rendered Gemini card each show `✓ Check` **disabled** with the title
-  "the consultant check is not offered for kimi — this row reviews plans and code only" (resp. gemini) and no `data-command="checkModel"`; a Codex card
+  "the consultant check is not offered for kimi — this runtime cannot hold a consultation" (resp. gemini) and no `data-command="checkModel"`; a Codex card
   is unchanged. Red: both cards render the enabled button with "One real, paid turn … you are asked first".
 - **S9 — the outcome where D1 never fires** (judge J10): if the real ACP answer to a spent quota is a **bare** "Authentication
   required" with no 429 text, S1 cannot be made green by any row; then `not_signed_in` is what the vendor said, D4's kept sentence
@@ -233,7 +233,7 @@ Stories 1 and 2 are independent of each other; 3 needs both; 4 needs none of the
       never "kimi login"; a 5xx behind the same prefix reads as the vendor's words with no cure.
 - [ ] `RateLimit.Spent` holds Kimi's phrase with its verbatim sample; no "(insufficient balance)" is appended to a quota.
 - [ ] Moonshot account ids are redacted wherever a vendor sentence is written.
-- [ ] Check on a Kimi or Gemini card is disabled with the "not offered — this row reviews plans and code only" title; no paid-turn prompt (S8).
+- [ ] Check on a Kimi or Gemini card is disabled with the "not offered — this runtime cannot hold a consultation" title; no paid-turn prompt (S8).
 - [ ] D5 is recorded as a follow-up with its three constraints; D6's annotation is in the M-K14 record.
 - [ ] Docs updated (`module_runners.md`'s Kimi failure table and rate-limit path, `module_extension.md`'s card, `module_tests.md`);
       this plan promoted when shipped.
@@ -315,12 +315,9 @@ every story; **Sonnet** codes.
 - **Red-first, expected reds:** S8 → the Kimi and Gemini cards render an enabled `✓ Check` with `data-command="checkModel"` and
   the title "One real, paid turn of this model in a scratch folder — you are asked first".
 - **Done when:** Kimi, Gemini and remote rows render the disabled button with "the consultant check is not offered for <runtime>
-  — this row reviews plans and code only"; Codex, Claude, antigravity, local, api and Vibe rows are unchanged; `module_extension.md` names the rule and
+  — this runtime cannot hold a consultation"; Codex, Claude, antigravity, local, api and Vibe rows are unchanged; `module_extension.md` names the rule and
   the reviewer-shaped check as a follow-up. No server change.
-- **Status and deviation (2026-10-20, coded on `feat/kimi-quota-s4`, merged into this branch):** the title says "— this row
-  reviews plans and code only" instead of the first draft's "— ▶ runs a review", because ▶ on a card opens the vendor's CLI in
-  a terminal; it does not run a review, so that title would have promised something false. The wording lives in one place
-  (`checkNotOffered`, `src_vs_code/src/modelCardWorld.ts:96-98`); the test pins it for kimi, gemini and remote rows.
+- **Status and deviation (2026-10-20, coded on `feat/kimi-quota-s4`, merged into this branch; title changed twice, 2026-10-21 the second time):** the plan's first draft said "— ▶ runs a review". That was false: ▶ on a card opens the vendor's CLI in a terminal, it does not run a review. The first fix said "— this runtime cannot hold a consultation". That was false too: a row can be configured for document review (`modelCard.ts`), so a Kimi or Gemini row does review documents. CodeRabbit on PR #900 found it. The title now says only what is true of the button: "the consultant check is not offered for <runtime> — this runtime cannot hold a consultation" (it is a fact about the runtime, read from the generated consultant list, and it claims nothing about what the row reviews). The wording lives in one place (`checkNotOffered`, `src_vs_code/src/modelCardWorld.ts`); the test pins it for kimi, gemini and remote rows, and every case of that test RUNS the page (`runPageHtml`) and presses the button there, instead of reading parsed or helper-built HTML.
 
 ## Review record (2026-10-20)
 

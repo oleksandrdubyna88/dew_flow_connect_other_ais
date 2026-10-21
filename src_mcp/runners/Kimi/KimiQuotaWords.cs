@@ -34,7 +34,7 @@ public static class KimiQuotaWords
     public static string Said(string reason) => $"{Opening} — {Middle(reason)}; {Closing}";
 
     /// <summary>
-    /// Kimi's reset clause out of <paramref name="reason"/> — from <see cref="ResetOpening"/> to the first period followed by a space (so "reset in 2.5 hours."
+    /// Kimi's reset clause out of <paramref name="reason"/> — from <see cref="ResetOpening"/> to the first period followed by whitespace — a space, a newline or a tab (so "reset in 2.5 hours."
     /// stays whole), or to the end of the text when it has no such period — redacted through the product's one redactor and capped. Empty when Kimi said none.
     /// </summary>
     public static string ClauseOf(string reason) =>
@@ -46,8 +46,22 @@ public static class KimiQuotaWords
 
     private static string Cut(string reason, int start)
     {
-        var stop = reason.IndexOf(". ", start, StringComparison.Ordinal);
+        var stop = SentenceEnd(reason, start);
 
         return (stop < 0 ? reason[start..] : reason[start..(stop + 1)]).Trim();
+    }
+
+    /// <summary>The index of the first period followed by whitespace of any kind — a space, a newline, a tab — from <paramref name="from"/>, or -1. A decimal point ("2.5") is not one.</summary>
+    private static int SentenceEnd(string text, int from)
+    {
+        for (var dot = text.IndexOf('.', from); dot >= 0; dot = text.IndexOf('.', dot + 1))
+        {
+            if (dot + 1 < text.Length && char.IsWhiteSpace(text[dot + 1]))
+            {
+                return dot;
+            }
+        }
+
+        return -1;
     }
 }

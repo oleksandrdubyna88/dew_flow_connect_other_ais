@@ -11796,7 +11796,7 @@ flowchart LR
   `CONSULTING` list (`shared/feature-availability.json` → `features.consultant`; today codex, claude, antigravity, local,
   api, vibe). For any other row — today **kimi, gemini and remote** — `checkButton(id, runtime, check)` draws the button
   `disabled`, WITHOUT `data-command` / `data-id` (nothing is bound, nothing is posted, no paid-turn prompt), with the title
-  `checkNotOffered(runtime)` = "the consultant check is not offered for <runtime> — this row reviews plans and code only".
+  `checkNotOffered(runtime)` = "the consultant check is not offered for <runtime> — this runtime cannot hold a consultation".
   The wording lives in that one function. The button stays on the card; a runtime added to `features.consultant` turns
   its Check on with no code change. Why: the press used to ask the person to pay for a turn the server then refused by
   name (`ConsultantCheckMode.CheckRowAsync`), seen on the Kimi card 2026-10-19; that server refusal stays as the backstop

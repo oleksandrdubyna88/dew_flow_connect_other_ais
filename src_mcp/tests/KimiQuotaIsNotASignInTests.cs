@@ -149,6 +149,17 @@ public sealed class KimiQuotaIsNotASignInTests
         KimiQuotaWords.ClauseOf(OwnersQuotaLine).Should().Be("Your quota will reset …", "no period: the clause runs to the end, the owner's ellipsis whole");
     }
 
+    [Theory]
+    [InlineData("Your quota will reset at 14:00 UTC.\nAnother sentence here.")]
+    [InlineData("Your quota will reset at 14:00 UTC.\r\nAnother sentence here.")]
+    [InlineData("Your quota will reset at 14:00 UTC.\tAnother sentence here.")]
+    public void TheClause_EndsAtAPeriodFollowedByAnyWhitespace_NotOnlyBySpace(string reason)
+    {
+        // CodeRabbit on PR #900: a multi-line reason whose reset sentence ends with ".\n" pulled the next sentence into the quote, up to 160 characters.
+        KimiQuotaWords.ClauseOf("the agent answered: 429 You've reached your 5-hour usage limit. " + reason)
+            .Should().Be("Your quota will reset at 14:00 UTC.", "the next sentence is not the vendor's reset clause");
+    }
+
     // ---------- S4 ----------
 
     [Fact]

@@ -3947,7 +3947,7 @@ flowchart LR
   (`not_signed_in`, `subscription_model`, `balance_spent`, `kimi_quota_spent`, and the end word `model_not_offered`). For a quota the lead cure is `KimiQuotaWords.Said(text)`, produced by `VendorDiagnosis.CureOn` for the `kimi_quota_spent:` marker (K1 of the code gate, so EVERY reader of the diagnosis — this road, the round summary, the ledger, the log — leads with the clause):
   the fixed sentence with Kimi's own reset clause QUOTED between its opening and its closing — "the Kimi plan quota is used up — "Your quota will reset at 14:00 UTC."; signing in
   again will not help (the shim said: kimi_quota_spent: …)", or "the vendor named no reset" when it said none. The clause runs from `Your quota will reset` to the first period
-  followed by a space (a decimal point does not end it), through `Redaction.SafeText`, capped at 160; it is never parsed into a time. This lead cure is what `WhyItFailed` returns
+  followed by any whitespace — a space, a newline, a tab (a decimal point does not end it), through `Redaction.SafeText`, capped at 160; it is never parsed into a time. This lead cure is what `WhyItFailed` returns
   (the executor's `saidElsewhere`, read only when stderr is silent). The `RateLimited` road below does NOT lead with a cure of its own: its reason is the vendor's words, and `Because` puts this same cure (clause included) in front.
 - **Classification is by the report's FIELDS, never by text** (the risk consultation `ba5f661a`). `IReviewerRuntime.RateLimited(invocation, result)` — a new
   default member whose body is exactly today's (`RateLimitVerdict.ByText`: `RateLimit.Hit` over the text, no usage) — is asked by `ReviewerExecutor.Classified` before

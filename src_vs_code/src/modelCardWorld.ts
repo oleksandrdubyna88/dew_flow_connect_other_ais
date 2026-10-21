@@ -95,7 +95,7 @@ export function offersCheck(runtime: Runtime): boolean {
 
 /** Why a row's ✓ Check is not offered — the disabled button's title (D7). The one place the wording lives. */
 export function checkNotOffered(runtime: Runtime): string {
-  return `the consultant check is not offered for ${runtime} — this row reviews plans and code only`;
+  return `the consultant check is not offered for ${runtime} — this runtime cannot hold a consultation`;
 }
 
 /**
