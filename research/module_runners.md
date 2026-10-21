@@ -270,7 +270,7 @@ sequenceDiagram
   not rewritten — agy refuses it with its own sentence. The new default has no typed price (prices are looked up in
   OpenRouter / LiteLLM, never typed): until a list carries `gemini-3.8-flash` it prices as "no list price", like any
   unknown model (`modelPrices.test.ts`). Live check 2026-10-21 on agy 1.4.4: `--model gemini-3.8-flash-low` was accepted,
-  exit 0, one output token. Design record: `todo/PLAN_the_agy_default_is_a_model_agy_offers.md`.
+  exit 0, one output token. Design record: `research/PLAN_the_agy_default_is_a_model_agy_offers.md`.
 
 - **Codex reads from `-o`, Gemini from stdout, Claude from its JSON envelope's `result`** — each
   through its OWN adapter, because where an answer lands is vendor knowledge; exit-0-with-no-output

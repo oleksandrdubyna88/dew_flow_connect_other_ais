@@ -1,6 +1,6 @@
 # PLAN — the Antigravity default is a model agy offers
 
-> Status: **in progress (2026-10-21): plan round passed; stories S1-S3 coded and tested; code round next.** Found by the E1 measurement of
+> Status: **IMPLEMENTED, 2026-10-21.** Plan and code rounds proceed. Deviations: the extension's own copy of the default (`ANTIGRAVITY_DEFAULT_MODEL`, the `coai.vendors` manifest default) was found while coding and is changed with it, tied to the C# constant by a test; two existing tests whose fixtures assumed the old catalogue were adjusted. Open tail: the other stale curated ids (Claude 4.6, 3.1 Pro) and saved 3.7 rows are left as they are. Found by the E1 measurement of
 > `PLAN_the_round_counter_tail.md` (in #904); the owner chose the new default on 2026-10-21.
 
 ## The symptom
