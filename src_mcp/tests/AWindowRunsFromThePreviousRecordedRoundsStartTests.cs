@@ -49,6 +49,15 @@ public sealed class AWindowRunsFromThePreviousRecordedRoundsStartTests
         journal.Assign("A", "CodeReview", 3).RoundWindow().Bounds().Should().Be(Span(60, 120));
     }
 
+    [Fact]
+    public void ACancelledRound_OpensNoWindow()
+    {
+        // A round the caller withdrew (or the host stopped) judged nothing: like an interrupted one, its stretch lands in the next recorded round.
+        var journal = Gate().Code(1, 60, 70).Round("CodeReview", 2, 90, 95, status: "cancelled").Code(3, 120, 130);
+
+        journal.Assign("A", "CodeReview", 3).RoundWindow().Bounds().Should().Be(Span(60, 120));
+    }
+
     [Theory]
     [InlineData("FeatureReview")]
     [InlineData("DocumentReview")]

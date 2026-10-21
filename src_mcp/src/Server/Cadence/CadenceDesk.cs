@@ -382,7 +382,7 @@ public sealed class CadenceDesk(
     /// </summary>
     private CadenceState Reconciled(PersistedSession session, string repoId, string plan, CadenceState state)
     {
-        var last = session.Rounds.LastOrDefault(r => r.Stage == nameof(Stage.CodeReview));
+        var last = LastJudgedCodeRound(session);
         if (!Missed(session, last, plan, state))
         {
             return state;
@@ -399,6 +399,13 @@ public sealed class CadenceDesk(
             return state.WithClosed(last.EpicNumber, last.Verdict, Stamp());
         }
     }
+
+    /// <summary>
+    /// The session's last code round that JUDGED — a round the caller withdrew (or the host stopped) closed no epic, so it is not the round
+    /// to reconcile the record against.
+    /// </summary>
+    internal static RoundRecord? LastJudgedCodeRound(PersistedSession session) =>
+        session.Rounds.LastOrDefault(r => r.Stage == nameof(Stage.CodeReview) && r.Status != RoundRecord.Cancelled);
 
     /// <summary>Whether the session's last code round closed an epic of this plan that the record does not hold.</summary>
     private static bool Missed(
@@ -420,7 +427,7 @@ public sealed class CadenceDesk(
             : [];
     }
 
-    private static bool FirstCodeRound(PersistedSession loaded, CadenceCall call)
+    internal static bool FirstCodeRound(PersistedSession loaded, CadenceCall call)
     {
         var key = EpicRef.PlanKey(call.Plan);
 

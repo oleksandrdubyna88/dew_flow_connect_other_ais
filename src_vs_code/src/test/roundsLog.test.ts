@@ -272,6 +272,21 @@ function dbLog(over: Partial<DbRound> = {}): DbLog {
   };
 }
 
+test('a cancelled round is its own status, never done or awaiting', () => {
+  // A round the caller withdrew (or the host stopped) judged nothing: the session file says `cancelled` and the verdict is the cause word.
+  const cancelled = round({ status: 'cancelled', verdict: 'withdrawn', gatingCount: 0, reviewers: '1 of 2 answered, 1 cut' });
+
+  const bare = rowsFrom([session([cancelled])], NOW)[0]!;
+  assert.equal(bare.status, 'cancelled', 'a withdrawn round fell through to done');
+  assert.equal(bare.seconds, 130, 'a cancelled round has a real completion time: its duration is shown, not a dash');
+  assert.equal(bare.foundState, 'loaded', 'opening it must not ask the database for findings that never existed');
+
+  // The database knows the round too (it is projected), with the gate never closed: accepted stays -1 and nothing was found. Not "awaiting".
+  const known = rowsFrom([session([cancelled])], NOW, undefined, undefined, dbLog({ findings: [], foundCount: 0 }))[0]!;
+  assert.equal(known.status, 'cancelled', 'the database row (accepted -1) made the withdrawn round look like an open gate');
+  assert.equal(known.foundState, 'loaded');
+});
+
 // ---------- how long the deciding took ----------
 
 test('a decided round carries the deciding time beside the time its reviewers ran', () => {

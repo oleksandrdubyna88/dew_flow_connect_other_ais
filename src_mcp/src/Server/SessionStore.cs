@@ -99,6 +99,12 @@ public sealed record RoundRecord(
     public const string Done = "done";
     public const string Interrupted = "interrupted";
 
+    /// <summary>
+    /// The caller withdrew the call, or the host stopped, while the round ran: nothing was judged. The verdict is the cause word
+    /// (<c>withdrawn</c> or <c>hostStopped</c>, the ledger's — <see cref="EndCauses"/>), never <c>cancelled</c>.
+    /// </summary>
+    public const string Cancelled = "cancelled";
+
     public string Status { get; init; } = Done;
 
     public DateTime StartedUtc { get; init; }
@@ -132,7 +138,7 @@ public sealed record RoundRecord(
     /// <summary>The verdict of a round that did not run because nobody could review it (D1).</summary>
     public const string Skipped = "skipped";
 
-    /// <summary>Why a SKIPPED round did not run — empty for every round that ran.</summary>
+    /// <summary>Why a SKIPPED round did not run, or the sentence of a CANCELLED one (who took the call back) — empty for every round that ran to a verdict.</summary>
     public string Note { get => field ?? string.Empty; init; } = string.Empty;
 
     /// <summary>

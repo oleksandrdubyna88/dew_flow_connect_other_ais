@@ -185,6 +185,63 @@ test('opening a skipped round shows WHY it was skipped, and asks for no findings
     'a round that never ran has no findings to fetch — opening it spawned a read anyway');
 });
 
+/* ------------------------------------------------------------------------------------------------
+ * A CANCELLED round, run rather than matched (S2 of todo/PLAN_a_cancelled_review_stops_its_round.md).
+ *
+ * The caller withdrew the call (or the host stopped) and the server recorded the round `cancelled` with the cause as its verdict. Drawn as
+ * `done` it read as a review that judged something; opened, it asked the database for findings that never existed.
+ * --------------------------------------------------------------------------------------------- */
+
+const CANCELLED_SESSION = {
+  state: { sessionId: 's3', repoPath: 'D:/repo', branch: 'feature', stage: 'PlanReview', awaitingResolve: false },
+  rounds: [{
+    stage: 'PlanReview', number: 1, verdict: 'withdrawn', gatingCount: 0,
+    reviewers: '1 of 2 answered, 1 cut', status: 'cancelled',
+    startedUtc: STARTED.toISOString(), completedUtc: COMPLETED.toISOString(),
+    subject: 'a plan',
+    reviewerStates: [
+      { provider: 'codex', role: 'Architecture', status: 'done', findings: 0, note: '', seconds: 46 },
+      { provider: 'gemini', role: 'Architecture', status: 'failed', findings: 0, note: 'cancelled', seconds: 12 },
+    ],
+    note: 'the caller withdrew the call while the round ran',
+  }],
+};
+
+const CANCELLED_LOG = {
+  ...LOG,
+  rounds: [{
+    repoPath: 'D:/repo', branch: 'feature', stage: 'PlanReview', number: 1,
+    startedUtc: STARTED.toISOString(), sessionId: 's3', accepted: -1, rejected: -1,
+    findings: [], cursor: `${STARTED.toISOString()}|1`, foundCount: 0,
+  }],
+};
+
+test('a cancelled round is drawn in a state of its own — "cancelled — not judged" — never done', () => {
+  const page = runningPage([CANCELLED_SESSION], CANCELLED_LOG);
+  const rows = page.seen['rows']?.innerHTML ?? '';
+
+  assert.match(rows, /<tr/, 'the page rendered no rows at all');
+  assert.match(rows, /class="badge cancelled"/, 'the cancelled round is not drawn in a state of its own');
+  assert.match(rows, /cancelled — not judged/, 'the badge does not say that nothing was judged');
+  assert.doesNotMatch(rows, /class="badge done"/, 'a round that judged nothing is drawn as one that did');
+});
+
+test('a cancelled row expands to its reviewers and the withdrawal note, and asks for no findings', () => {
+  const page = runningPage([CANCELLED_SESSION], CANCELLED_LOG);
+  const key = firstRenderedKey(page.seen['rows']?.innerHTML ?? '');
+
+  assert.doesNotThrow(() => page.click(clickInRow('tr[data-key]', 'data-key', key)), 'opening a cancelled row threw');
+
+  const rows = page.seen['rows']?.innerHTML ?? '';
+  assert.match(rows, /class="detail"/, 'the row did not open');
+  assert.match(rows, /codex/, 'the reviewer that answered is not on the page');
+  assert.match(rows, /gemini/, 'the reviewer the cancel cut is not on the page');
+  assert.match(rows, /the caller withdrew the call while the round ran/, 'the withdrawal note is not on the page');
+  assert.doesNotMatch(rows, /This round found nothing|Reading what this round found/, 'a round that judged nothing is drawn as one that found nothing');
+  assert.equal(page.sent.filter((message) => message['command'] === 'findings').length, 0,
+    'a round that judged nothing has no findings to fetch — opening it spawned a read anyway');
+});
+
 test('a function embedded by its source calls nothing the minifier can rename', () => {
   // The rule this file exists for, stated as a CHECK rather than left to a runtime error. A function
   // embedded by `.toString()` lands in a scope where only its own name was re-declared, so any other

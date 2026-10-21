@@ -2343,7 +2343,65 @@ because the panel saves instantly and says so. Environment variables still outra
 
 **The host's stopping token rides the rebuilds (E3.S2, 2026-10-20).** `PanelServiceHost` takes the server's own stopping token as a REQUIRED parameter (`Program.StartedAsync` passes its `stop`) and hands it to every `PanelService` it builds, the first and every rebuild; the service hands it to `RoundEngine`, which OBSERVES it (never links it, and records nothing itself: it does not cancel a round) beside the call's token and the round's clock, and writes the FIRST source to end the round as a cancelled local turn's `endCause` (the call's token files `hostStopped` instead of `withdrawn` when the host's token is already cancelled) (`RoundCancellation`, [module_runners.md](module_runners.md)). `PanelServiceHostTests.TheHost_HandsItsStopToEveryServiceItBuilds` pins the hand-over.
 
-**A client that closes stdin is the host ending (E3.S2 code round, 2026-10-21).** `Program.ServeAsync` wraps the stdio transport in `InputEndSignallingTransport`: it pumps the real reader's messages through unchanged and in order, and when the input ends — cleanly or with a failure — it cancels `startStop` (the host token `StartedAsync` hands down) and ONLY THEN completes the reader it gave the SDK, so nothing the SDK does as its input ends (cancelling in-flight request tokens) can precede the host's stop. Before it, `startStop` was cancelled only in the `finally` after `server.RunAsync` returned. The hand-off is a BOUNDED channel (`InputEndSignallingTransport.Capacity`, 64, `Wait`): a reader that falls behind makes the pump wait and the rest of the input stays in the pipe; a host callback that throws is logged (`Program` passes its `log`), never faults the pump, and the reader is completed in a `finally`; `DisposeAsync` cancels a pump parked on a full buffer before awaiting it, and a pump ended that way does NOT run the callback (a local disposal is not the client leaving, and signalling would re-enter the host's shutdown); the reader is still completed. **Measured limit, reported rather than fixed:** no review tool (`review_plan`, `review_code`, …) takes the SDK's request `CancellationToken` (only `ask_human` does), so a client's `notifications/cancelled` never reaches a local round — a live `review_plan` kept running and answered nothing for 15 s after the cancel — and the host's stop cancels no round (it is only observed). Today only `roundClock` and `unknown` can therefore be written by a live server (a client closing stdin fires the host's token alone and the round runs on to its clock); `withdrawn` and `hostStopped` are pinned by the C# tests, where the tokens are handed in, and wait for the review tools to pass the request's token (a behaviour change this task did not make).
+**A client that closes stdin is the host ending (E3.S2 code round, 2026-10-21).** `Program.ServeAsync` wraps the stdio transport in `InputEndSignallingTransport`: it pumps the real reader's messages through unchanged and in order, and when the input ends — cleanly or with a failure — it cancels `startStop` (the host token `StartedAsync` hands down) and ONLY THEN completes the reader it gave the SDK, so nothing the SDK does as its input ends (cancelling in-flight request tokens) can precede the host's stop. Before it, `startStop` was cancelled only in the `finally` after `server.RunAsync` returned. The hand-off is a BOUNDED channel (`InputEndSignallingTransport.Capacity`, 64, `Wait`): a reader that falls behind makes the pump wait and the rest of the input stays in the pipe; a host callback that throws is logged (`Program` passes its `log`), never faults the pump, and the reader is completed in a `finally`; `DisposeAsync` cancels a pump parked on a full buffer before awaiting it, and a pump ended that way does NOT run the callback (a local disposal is not the client leaving, and signalling would re-enter the host's shutdown); the reader is still completed. The four review tools (`review_plan`, `review_code`, `review_document`, `review_feature`) now take the SDK's per-request `CancellationToken` as `ask_human` does (S1 of [PLAN_a_cancelled_review_stops_its_round.md](../todo/PLAN_a_cancelled_review_stops_its_round.md); it is bound per request and absent from the schema), so a client's `notifications/cancelled` reaches `RoundCancellation` as the caller's token: a round the caller's token cut is recorded `cancelled`/`withdrawn` (see *A cancelled review stops its round* below), with `hostStopped` when the host was stopping.
+
+## A cancelled review stops its round (S1 + S2, 2026-10-21)
+
+Plan: [PLAN_a_cancelled_review_stops_its_round.md](../todo/PLAN_a_cancelled_review_stops_its_round.md), spec
+[PLAN_a_cancelled_review_stops_its_round_S2_spec.md](../todo/PLAN_a_cancelled_review_stops_its_round_S2_spec.md). PR A of three: the token reaches
+the round and a withdrawal leaves its record. The provisional write, the finalising races and D10's retry (S3) and the host-stop bound, the remote
+`DELETE` test and the live seam leg (S4) are NOT built; until PR B ships, a withdrawn round reads `running` from its last repaint until
+`Withdraw`'s save lands (milliseconds after the scheduler returns), and a withdrawal whose save the disk refuses is logged and still answered as a
+cancellation.
+
+```mermaid
+flowchart TD
+    C["client: notifications/cancelled"] --> T["SDK cancels the request token"]
+    T --> RC["RoundCancellation: records withdrawn / hostStopped, then cancels the round token"]
+    RC --> K["scheduler cuts each turn: kill, queue wait, ladder wait"]
+    K --> M["EndedByRoundToken set on each cut turn BEFORE it is reported"]
+    M --> R["RunAllStampedAsync returns the outcomes + its own return stamp"]
+    R --> D{"RoundEndings.Decide(cause at the stamp, any mark, no reviewer)"}
+    D -- "Withdrawn" --> W["LiveRound.Withdraw -> save loaded + record -> projection -> OperationCanceledException(ct)"]
+    D -- "Completed" --> N["CompleteRound as today"]
+```
+
+- **The SDK's behaviour (characterised, `WhatTheSdkSendsForACancelledRequestTests`).** ModelContextProtocol 2.2.0 sends NO message carrying
+  the id of a request whose token fired, whether its handler returns normally afterwards or throws `OperationCanceledException` (with a control:
+  an uncancelled request is answered). D5's transport fallback (drop an outbound response for a cancelled id) is therefore **not shipped**; the
+  live acceptance (no message within 5 s of the record) stays S4's seam leg.
+- **The mark** (`ReviewerOutcome.EndedByRoundToken`, set by `BoundedScheduler` through `RoundCut`) says the ROUND's token ended the turn: killed
+  while running (a `Cancelled` outcome, or a launch that threw), cut while queued for a slot, cut while waiting on the rate-limit ladder (the
+  refusal it last saw stays the outcome). An exception counts only when it carries the round's token or the round's token had fired by the moment
+  the executor FIRST saw the exception (`LaunchCancelledException.ObservedAt`, stamped before the up-to-ten-second abandon courtesy) — an
+  adapter's own cancellation thrown before the caller cancelled is not a cut. A `Cancelled` outcome nobody fired (a remote row the server ended)
+  and a paid `Ok` that merely returned after the fire stay unmarked.
+- **The decision** (`RoundEndings.Decide`, once, in `RoundEngine.RunStageAsync` right after `RunAllStampedAsync` returns): withdrawn iff the
+  recorded first cause — read at the scheduler's own return stamp (`SchedulerRun.ReturnedAt`), never a clock read after the await — is
+  `withdrawn`/`hostStopped` AND (some turn is marked OR the round had no reviewer, a lane-only round). Marks alone never withdraw (a round
+  clock that cut every reviewer is the deadline round as today); the cause alone never withdraws (every reviewer answered before the cancel: real,
+  paid answers, a verdict). The local `ending` (`Setup` → `Completed`/`Withdrawn`) is what the catch arms read.
+- **The record** (`LiveRound.Withdraw`, `RoundRecord.Cancelled = "cancelled"`): `Status = cancelled`, `Verdict` = the cause word,
+  `Reviewers = "<n> of <m> answered, <k> cut"`, usage folded exactly as `Finish` folds it (`UsageOf`), `Note` = "the caller withdrew the
+  call while the round ran" / "the host stopped while the round ran", `Sha`/`Size`/`Gitlinks`/`PlanSource`/`AdmittedBy` as for any round, no
+  `Authors`. `RoundEngine.Withdraw` saves **`loaded`** (the session as read under the claim, a person's answer already applied) plus this
+  record — the state machine never sees the round: no budget round, no hold, no notice, no feature base or ground, no findings, no spent lens, the
+  cadence untouched — projects it with no findings (`RecordRound` with the caller's stretch, so the next round's `agent_log` starts at its
+  completion), logs one line (`RoundAudit.Withdrawn`) and throws `OperationCanceledException(ct)`. The number is spent: the next round is `n+1`.
+- **The catch arms.** The new first arm is `catch (OperationCanceledException) when (ending is not Completed && round token cancelled)`: a
+  withdrawal rethrows; a cancel during setup (before `LiveRound`, `WarmRemoteRolesAsync` now inside the `try`) records nothing and logs "withdrawn
+  during setup". It tests the ROUND token, not the caller's: a setup step's own timeout is still "the round failed". A completion is never re-filed
+  as a withdrawal because something later threw.
+- **The ledger.** `EndCauseOf` writes the cause on a turn's last line for a MARKED turn as well as a `Cancelled` one: a ladder-cut
+  `RateLimited` and a queued-out `NotStarted` now say `withdrawn`/`hostStopped`, and a turn the round clock cut says `roundClock` where it
+  said nothing.
+- **Readers of `RoundRecord.Status`/`Verdict`** (D9). Skip `Cancelled`: `PanelService.LastCodeRound` (so an `again` after a withdrawn `again` is
+  not refused as "nothing since"), `FeatureSecondRound.FailedInRoundOne`, `FeatureStage.LastReviewed`, `CadenceDesk.LastJudgedCodeRound`
+  (the reconcile), `Windows.IsRecorded` (a cancelled round opens no window). Unchanged on purpose: `CadenceDesk.FirstCodeRound` (a withdrawn
+  first code round still counts, as an interrupted one does), `CurrentAnswer.IsNewerThanTheLastRound` (the person's answer the round applied
+  stays applied), `resolve` (a begin is refused while `AwaitingResolve`, so a cancelled record is never last at a resolve). `--log` has no
+  status/verdict column to render (the parent plan's "render test" does not apply); `coai.db` carries `status = cancelled`,
+  `verdict = withdrawn|hostStopped`.
 
 ## Server notices — what this binary writes down (S8, from 2026-09-21)
 

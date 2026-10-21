@@ -82,8 +82,12 @@ export interface LogRow {
    * <p>`skipped` is a round nobody could serve (D1 of `todo/PLAN_feature_review.md`): recorded with its
    * reason, and it does NOT block. A neutral state of its own rather than `done`, which would read as a
    * review that happened.</p>
+   *
+   * <p>`cancelled` is a round the caller withdrew, or the host stopped, while it ran (S2 of
+   * `todo/PLAN_a_cancelled_review_stops_its_round.md`): nothing was judged and nothing was found, and its verdict column
+   * is the cause — `withdrawn` or `hostStopped`. Also a state of its own, never `done`.</p>
    */
-  readonly status: 'running' | 'done' | 'interrupted' | 'awaiting' | 'skipped';
+  readonly status: 'running' | 'done' | 'interrupted' | 'awaiting' | 'skipped' | 'cancelled';
   /**
    * Why a SKIPPED round did not run, with `×N` when one row stands for N skips — empty for every round
    * that ran, and for every conversation (`noteOf`).
@@ -524,8 +528,9 @@ function rowFrom(
   const decided = decidedBy.get(key) ?? null;
   const status = statusOf(round, foundCount, decided);
   // A round nobody ran has nothing to find, so it is `loaded` with none from the start — opening it
-  // must not spawn a read for findings that were never going to exist.
-  const skipped = status === 'skipped';
+  // must not spawn a read for findings that were never going to exist. A round the caller withdrew (or the
+  // host stopped) judged nothing either: it merged no findings, so the database holds none.
+  const noFindings = status === 'skipped' || status === 'cancelled';
   const states = round.reviewerStates ?? [];
   const rows = reviewerRows(round);
 
@@ -563,7 +568,7 @@ function rowFrom(
     reviewerColours: rows.map((r) => colour(r.provider)),
     found,
     foundCount,
-    foundState: skipped ? 'loaded' : foundState(known, whole, inline, found),
+    foundState: noFindings ? 'loaded' : foundState(known, whole, inline, found),
     origin: known ? 'db' : 'session',
     dbKey: { sessionId: session.state.sessionId, stage: round.stage, number: round.number },
   };
@@ -620,6 +625,12 @@ function statusOf(
   }
   if (round.status === 'interrupted') {
     return 'interrupted';
+  }
+  // The caller withdrew the call, or the host stopped, while the round ran: nothing was judged. Its verdict column is the
+  // cause (`withdrawn` | `hostStopped`), so without this branch it fell through to `done` — or `awaiting`, the database row's
+  // `accepted` never leaving -1.
+  if (round.status === 'cancelled') {
+    return 'cancelled';
   }
   // The verdict, not the reviewer states: a skip has none, and neither does a round from an older
   // server — only the verdict tells "nobody could run" from "nobody recorded who ran".
@@ -1500,6 +1511,7 @@ ${TEXT_CONTROLS_CSS}
   .badge { display: inline-block; padding: 0 6px; border-radius: 8px; font-size: .88em; }
   .badge.running { background: var(--vscode-charts-blue); color: var(--vscode-editor-background); }
   .badge.interrupted { background: var(--vscode-charts-orange); color: var(--vscode-editor-background); }
+  .badge.cancelled { background: transparent; color: var(--vscode-charts-orange); border: 1px solid var(--vscode-charts-orange); }
   .badge.done { background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
   .badge.awaiting { background: var(--vscode-charts-purple); color: var(--vscode-editor-background); }
   .badge.skipped { background: transparent; color: var(--vscode-descriptionForeground); border: 1px dashed var(--vscode-descriptionForeground); }
@@ -1767,7 +1779,10 @@ ${teamSectionHtml(waitingFor())}
   function badge(status) {
     // A skip says in the badge itself that it did not block: "skipped" alone reads like a stage the
     // caller forgot, and the whole point of D1 is that it is recorded AND lets the release through.
-    var said = status === 'awaiting' ? 'awaiting decisions' : status === 'skipped' ? 'skipped — did not block' : status;
+    var said = status === 'awaiting' ? 'awaiting decisions'
+      : status === 'skipped' ? 'skipped — did not block'
+      : status === 'cancelled' ? 'cancelled — not judged'
+      : status;
     return '<span class="badge ' + esc(status) + '">' + esc(said) + '</span>';
   }
   function decided(row) {
@@ -1790,7 +1805,7 @@ ${teamSectionHtml(waitingFor())}
       return asked + '<div class="reviewer skipnote">Nobody reviewed this round, and it did not block: '
         + esc(row.note || 'the server recorded no reason') + '</div>';
     }
-    if (row.reviewers.length === 0) {
+    if (row.reviewers.length === 0 && row.status !== 'cancelled') {
       return asked + '<div class="reviewer">This round recorded no reviewer detail — it was written by an older server.</div>';
     }
     var lines = asked;
@@ -1800,6 +1815,12 @@ ${teamSectionHtml(waitingFor())}
       var who = slash < 0 ? line : line.slice(0, slash);
       var rest = slash < 0 ? '' : line.slice(slash);
       lines += '<div class="reviewer"><span class="who" style="color:' + esc(row.reviewerColours[i] || 'inherit') + '">' + esc(who) + '</span>' + esc(rest) + '</div>';
+    }
+    // A cancelled round judged nothing: the reviewers above are how far each got, the server's sentence is why it stopped, and there is no
+    // findings block — not "found nothing", which would say a review was done.
+    if (row.status === 'cancelled') {
+      return lines + '<div class="reviewer skipnote">Nothing was judged: '
+        + esc(row.note || 'the server recorded no reason') + '</div>';
     }
     return lines + foundHtml(row);
   }

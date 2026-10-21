@@ -81,8 +81,9 @@ export interface RoundRecord {
    */
   readonly caller?: CallerDeclaration;
   /**
-   * Why a SKIPPED round did not run — the server's reason, empty for every round that ran. Absent in
-   * files written before the feature stage (S2.1 of `todo/PLAN_feature_review.md`).
+   * Why a SKIPPED round did not run — the server's reason — or, on a `cancelled` round, the sentence saying the caller withdrew
+   * the call (or the host stopped); empty for every round that ran to a verdict. Absent in files written before the feature
+   * stage (S2.1 of `todo/PLAN_feature_review.md`).
    */
   readonly note?: string;
   /**

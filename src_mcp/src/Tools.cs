@@ -80,11 +80,14 @@ internal static class Tools
             // one the SDK publishes an argument as REQUIRED (research/PLAN_consult_on_a_cadence.md).
             // `planText`, `committedPlan` and `expectedCommit` are optional WITH C# defaults, for the same reason as the cadence's
             // four: without one the SDK publishes an argument as required. Exactly one of the first two is wanted — a refusal says so.
+            // The token is the SDK's, bound per request and never part of the schema (as for `ask_human`): a client that takes the call
+            // back with `notifications/cancelled` stops the round's reviewers (todo/PLAN_a_cancelled_review_stops_its_round.md, D1).
             async (string repoPath, string branch, string? planText = null, string? committedPlan = null, string? expectedCommit = null,
-                   string? plan = null, string? epic = null, string? riskItems = null, string? riskNote = null) =>
+                   string? plan = null, string? epic = null, string? riskItems = null, string? riskNote = null,
+                   CancellationToken cancellationToken = default) =>
                 await (await host.CurrentAsync()).ReviewPlanAsync(
                     repoPath, branch, new PlanInput(planText ?? string.Empty, committedPlan ?? string.Empty, expectedCommit ?? string.Empty),
-                    Cadence(plan, epic, riskItems, riskNote)),
+                    Cadence(plan, epic, riskItems, riskNote), cancellationToken),
             new McpServerToolCreateOptions
             {
                 Name = "review_plan",
@@ -114,6 +117,11 @@ internal static class Tools
                     declares where it is: `plan` (the plan file, repo-relative) and `epic` (`k/N` — the
                     epic's own number, the plan's last). The reply's orders then say which consultation
                     is owed; `riskItems` (a JSON array) and `riskNote` answer the risk question.
+
+                    Taking the call back (a client's `notifications/cancelled`) stops the round: every
+                    reviewer is killed, the round is recorded `cancelled` (verdict `withdrawn`, or
+                    `hostStopped` when the server was stopping), it judges nothing and spends no round, and
+                    the call is answered with a cancellation, not a verdict.
                     """,
                 ReadOnly = true,
                 Idempotent = false,
@@ -123,8 +131,10 @@ internal static class Tools
 
         yield return McpServerTool.Create(
             async (string repoPath, string branch, string baseRef, string planText, bool again = false,
-                   string? plan = null, string? epic = null, string? riskItems = null, string? riskNote = null) =>
-                await (await host.CurrentAsync()).ReviewCodeAsync(repoPath, branch, baseRef, planText, again, Cadence(plan, epic, riskItems, riskNote)),
+                   string? plan = null, string? epic = null, string? riskItems = null, string? riskNote = null,
+                   CancellationToken cancellationToken = default) =>
+                await (await host.CurrentAsync()).ReviewCodeAsync(
+                    repoPath, branch, baseRef, planText, again, Cadence(plan, epic, riskItems, riskNote), cancellationToken),
             new McpServerToolCreateOptions
             {
                 Name = "review_code",
@@ -167,6 +177,11 @@ internal static class Tools
                     (`k/N`) here too. In `require` the first code round of an epic whose group of epics
                     has no consultation closed with an outcome is refused, and the refusal carries the
                     exact `consult` call to make.
+
+                    Taking the call back (a client's `notifications/cancelled`) stops the round: every
+                    reviewer is killed, the round is recorded `cancelled` (verdict `withdrawn`, or
+                    `hostStopped` when the server was stopping), it judges nothing and spends no round, and
+                    the call is answered with a cancellation, not a verdict.
                     """,
                 ReadOnly = true,
                 Idempotent = false,
@@ -177,9 +192,9 @@ internal static class Tools
         yield return McpServerTool.Create(
             async (string repoPath, string branch, string purposeText,
                    string? documentPath = null, string? documentText = null, string? documentName = null,
-                   bool newReview = false) =>
+                   bool newReview = false, CancellationToken cancellationToken = default) =>
                 await (await host.CurrentAsync()).ReviewDocumentAsync(
-                    repoPath, branch, purposeText, documentPath, documentText, documentName, newReview),
+                    repoPath, branch, purposeText, documentPath, documentText, documentName, newReview, cancellationToken),
             new McpServerToolCreateOptions
             {
                 Name = "review_document",
@@ -222,6 +237,11 @@ internal static class Tools
                     Same reply shape and the same `resolve` duty as the other gates, plus `notes`:
                     each reviewer's prose about the whole document, unmerged and gating nothing. That
                     is where a summary comes back.
+
+                    Taking the call back (a client's `notifications/cancelled`) stops the round: every
+                    reviewer is killed, the round is recorded `cancelled` (verdict `withdrawn`, or
+                    `hostStopped` when the server was stopping), it judges nothing and spends no round, and
+                    the call is answered with a cancellation, not a verdict.
                     """,
                 ReadOnly = true,
                 Idempotent = false,
@@ -236,13 +256,14 @@ internal static class Tools
             // it can be refused: undeclared, the SDK dropped it without an error, and a caller naming another
             // commit got a clean review of whatever this checkout held (§9.30 of the feature-review plan).
             async (McpServer server, string repoPath, string planPath, string baseRef, string epics, string lessons,
-                   bool again = false, string? callerModel = null, string? head = null) =>
+                   bool again = false, string? callerModel = null, string? head = null, CancellationToken cancellationToken = default) =>
                 await (await host.CurrentAsync()).ReviewFeatureAsync(
                     repoPath, planPath, baseRef, epics, lessons, again,
                     callerModel ?? string.Empty,
                     server.ClientInfo?.Name ?? string.Empty,
                     server.ClientInfo?.Version ?? string.Empty,
-                    head ?? string.Empty),
+                    head ?? string.Empty,
+                    cancellationToken),
             new McpServerToolCreateOptions
             {
                 Name = "review_feature",
@@ -308,6 +329,11 @@ internal static class Tools
                     which does block; so is a round in which every reviewer failed twice. A third round is
                     never run. `again: true` is refused when nothing moved and when no ground admits a
                     round; against a NEW `baseRef` it starts a fresh review of the same plan.
+
+                    Taking the call back (a client's `notifications/cancelled`) stops the round: every
+                    reviewer is killed, the round is recorded `cancelled` (verdict `withdrawn`, or
+                    `hostStopped` when the server was stopping), it judges nothing and spends no round, and
+                    the call is answered with a cancellation, not a verdict.
                     """,
                 ReadOnly = true,
                 Idempotent = false,
