@@ -1,7 +1,8 @@
 # PLAN — a cancelled review stops its round
 
 > Status: **plan only, nothing implemented yet (2026-10-21).** Decided by the owner on 2026-10-21; depends on #904.
-> Plan gate session 0c31bf4f, round 1: 12 findings accepted; the ten relayed for this revision are folded the same day (§12).
+> Plan gate session 0c31bf4f, round 1: 12 findings accepted; the ten relayed for this revision are folded the same day (§12), and
+> the epic's cadence consultation (three findings) after them (§12, 11–13).
 > Scope: `src_mcp/src/Tools.cs`, `src_mcp/src/Server/Rounds/RoundEngine.cs`, `src_mcp/src/Server/LiveRound.cs`,
 > `src_mcp/src/Server/SessionStore.cs` (`RoundRecord`), `src_mcp/runners/Reviewers/BoundedScheduler.cs`, the journal readers of §4 D9,
 > `src_mcp/src/Program.cs` (the serve loop's end), `src_vs_code/src/roundsLog.ts`, their tests, the live seam leg, `research/module_*.md`.
@@ -113,7 +114,12 @@ file (`RemoteRuntime.cs:290-297`), and nothing retries it later (`AbandonAsync` 
 - **D6 — the host stopping, and the order of teardown.** When the caller's cause fires, the engine (awaiting `RunAllAsync` together with a
   `Fired` task the cancellation completes — never file IO inside a token callback) writes a PROVISIONAL `cancelled` record at once, with the
   usage so far, BEFORE any reviewer's teardown or remote `AbandonAsync` is awaited; the final `Withdraw` rewrites it with the full usage (or
-  `Finish` rewrites it, if D2 finds every reviewer landed first). The serve loop's end, which today waits `StartingHost.EndBudget` = **1 s**
+  `Finish` rewrites it, if D2 finds every reviewer landed first). **Progress must not undo it:** today every progress event goes
+  `LiveRound.Report` (`LiveRound.cs:196-207`) → `Persist()` (`:252-266`), which writes `Record("running", …)` unconditionally (`:256-257`) —
+  so a killed reviewer's terminal report, which lands AFTER the provisional write by construction (§2), would put `running` back, and a host
+  killed then leaves exactly the state this decision forbids. `LiveRound` gains a cancelled flag set by the provisional write UNDER the same
+  `_gate` lock `Report` takes; once set, `Persist` writes the cancelled record (with the usage so far) instead of `running`. `Withdraw` and
+  `Finish` still write the final record. The serve loop's end, which today waits `StartingHost.EndBudget` = **1 s**
   (`StartingHost.cs:41`; #904 `Program.cs:2214`), also awaits registered in-flight rounds under a bound DERIVED from
   `ReviewerExecutor.AbandonBudget` (10 s) + the tree-kill time S4 measures + one save — not a separate literal. **Exceeded anyway** (or the
   client kills the process sooner, which no bound prevents): the record already reads `cancelled`/`hostStopped`, so no sweep is needed;
@@ -144,8 +150,12 @@ file (`RemoteRuntime.cs:290-297`), and nothing retries it later (`AbandonAsync` 
 
 - **D10 — a `Withdraw` save that fails** (`SessionStore.Save` throws `SessionStoreException` on IO, `SessionStore.cs:551`): retry once; if that
   fails, log the IO error and keep the ending in an in-process map of unsaved endings that `status` and every later claim-holder of that
-  session apply before reading, retried by each of them and at the serve loop's end. After a restart the pid is dead, so the sweep files it
-  `interrupted` — never `running` either way.
+  session apply before reading, retried by each of them and at the serve loop's end. **The guarantee is NARROWED, deliberately:** in-process
+  callers see the ending; ANOTHER `coai-mcp` process reads the session from disk (`status`, `PanelService.cs:558`) and sees `running` until
+  the owner's next successful save, or until the owner has exited AND a server starts — only a start sweeps (`PanelService.cs:143-149`), and
+  only a dead owner (`IsOrphaned`, `SessionStore.cs:769-770`) — which then files it `interrupted`. A cross-process side file was rejected:
+  the failures that defeat this save (a full disk, a denied or locked data directory) defeat a second write into the same directory too, so
+  it would add a reader to every `Load` for a guarantee it cannot keep in the one case it exists for.
 
 ## 5. Interactions
 
@@ -169,8 +179,9 @@ file (`RemoteRuntime.cs:290-297`), and nothing retries it later (`AbandonAsync` 
    verdict over a partial panel. **Guard:** S1 does not merge without S2 (one pull request); S2's RED asserts no hold, no notice, no budget.
 2. **A cancel racing the round's own end.** It fires while the record is finalised and an exception leaves `running` for the server's life
    (no sweep reaches a live pid); or every reviewer answered and the cancel lands a moment later, throwing away a paid review; or a cut turn
-   is misclassified because its report time is not its cut time. **Guard:** D2's mark (not timestamps), D6's provisional write, D4's
-   `CancellationToken.None`, D10's fallback, and S3's interleavings with a gated fake reviewer.
+   is misclassified because its report time is not its cut time; or a late progress report rewrites the provisional `cancelled` as
+   `running`. **Guard:** D2's mark (not timestamps) shipped in the same change as the record, D6's provisional write and its `Persist`
+   guard, D4's `CancellationToken.None`, D10's fallback, and the interleavings with a gated fake reviewer.
 
 Lesser: the SDK may answer a cancelled request (D5's fallback); a host killed before the provisional write leaves `interrupted` after the
 next start (D6); a failed DELETE costs up to the server's expiry (D7).
@@ -178,7 +189,14 @@ next start (D6); a failed DELETE costs up to the server's expiry (D7).
 ## 7. Build order
 
 1. **#904 merges.** Nothing here starts before it; every reference above is re-read on the merged `main`.
-2. S1 + S2 in one pull request, RED first (risk 1). 3. S3. 4. S4. 5. Docs, then the releases (§10).
+2. **PR A — atomic: S1 + S2**, RED first (risk 1). It carries everything D2 needs to decide a round — the token, the scheduler's
+   `EndedByRoundToken` mark at all four cut sites (today a ladder cancellation is an ordinary `RateLimited`, `BoundedScheduler.cs:636-641`),
+   the record, the readers — and the race tests that pin the mark, "one answered, one cut on the ladder" included. **If S1's
+   characterization shows SDK 2.2.0 answers a cancelled request, D5's transport fallback ships in PR A too**: without it the change would
+   reply to requests the protocol says not to.
+3. **PR B — S3**: D6's provisional write together with its `Persist` guard (never one without the other), the finalising races, D10.
+4. **PR C — S4**: the host-stop bound, the remote DELETE tests, the live seam leg. It needs PR B (the host stop relies on the provisional write).
+5. Docs with each PR; the releases (§10) after PR C.
 
 ## 8. Test plan
 
@@ -219,7 +237,8 @@ change to what the extension shows ships one. No Team server release (D7). `POST
 Plan gate session 0c31bf4f, round 1 — every finding verified against the code before it was folded:
 1. **D2 no longer classifies by `CauseAt(lastLanded)`.** Verified: `LandedAt` is the report's construction time (#904 `BoundedScheduler.cs:79`),
    after the kill and abandon, and `RunAllAsync`'s results carry none. Also found: a cut turn is not always `Cancelled` — the throw path and the
-   queue end `NotStarted`, the ladder `RateLimited` (§2). Hence the scheduler's mark; S3 RED `SomeLanded_SomeCutByCancel_IsWithdrawn`.
+   queue end `NotStarted`, the ladder `RateLimited` (§2). Hence the scheduler's mark; RED `SomeLanded_SomeCutByCancel_IsWithdrawn`
+   (in S2 since item 13).
 2. **No reviewer landed / setup**: D2 now states both — the lane-only round and the cut-before-launch round are withdrawn; a setup cancel records nothing.
 3. **G2 vs §5**: one behaviour — the ladder-cut turn's line says `withdrawn`, its refusal kept as the outcome; the carve-out is gone.
 4. **G5**: an acceptance criterion on the seam leg and a named fallback in `InputEndSignallingTransport` (D5).
@@ -233,6 +252,15 @@ Plan gate session 0c31bf4f, round 1 — every finding verified against the code 
 9. **A failing `Withdraw` save**: D10.
 10. **Scope**: a client timeout without the notification is unchanged and out of scope (§1).
 
+The epic's cadence consultation, three findings, the first two verified in the code by the lead and again here:
+11. **Progress overwrote the provisional cancel.** Verified: `LiveRound.Report` (`LiveRound.cs:196-207`) → `Persist` (`:252-266`) writes
+    `running` on every event. D6 now guards `Persist` under the progress lock; S3 RED `ALateProgressReport_DoesNotRewriteRunning`.
+12. **D10's in-memory fallback is invisible to another process.** Verified: `status` loads from disk (`PanelService.cs:558`), the sweep runs
+    only at a start and skips a live owner (`SessionStore.cs:769-770`). D10's guarantee is narrowed, with the reason a side file was
+    rejected; the second-process case is added to its named test.
+13. **Merge boundary.** The mark moved from S3 into S2, so PR A (S1 + S2) is atomic for D2; D5's fallback moves into S1 when the SDK replies;
+    §7 restates the three pull requests.
+
 ## Epics
 
 One epic. Cornerstones: 1 of 1 — S2 (the record a withdrawal leaves; it decides what the gate, the database and every reader see).
@@ -242,23 +270,29 @@ The stories live here rather than in a `_E1` document: the epic is small enough 
 
 Done when §11 holds. Stories, test-first:
 
-**S1 — the token reaches the round.** D1, and a characterization of SDK 2.2.0: what it sends for a cancelled request whose handler returns
-normally, and whose handler throws `OperationCanceledException`. RED: `TheReviewTools_TakeTheRequestsToken` (reflective, over `Tools.All`) —
-no review lambda declares one; `ACancelledReviewPlan_CancelsItsRound` (in-memory transport) — the fake reviewer is never cancelled, the 5 s wait elapses.
+**S1 — the token reaches the round** (PR A). D1, and a characterization of SDK 2.2.0: what it sends for a cancelled request whose handler
+returns normally, and whose handler throws `OperationCanceledException`; if it answers, D5's transport fallback ships here (unit test: an
+outbound response for a cancelled id is dropped). RED: `TheReviewTools_TakeTheRequestsToken` (reflective, over `Tools.All`) — no review
+lambda declares one; `ACancelledReviewPlan_CancelsItsRound` (in-memory transport) — the fake reviewer is never cancelled, the 5 s wait elapses.
 
-**S2 — CORNERSTONE: the record a withdrawal leaves** (D2's rule, D3, D5, D9's C# and extension readers). RED with S1 alone:
-`AWithdrawnRound_IsRecordedCancelled_AndMovesNoGate` — the verdict is `call_human`, `HumanGate` true, `RoundsRunThisStage` 1;
+**S2 — CORNERSTONE: the record a withdrawal leaves** (PR A; D2's rule AND its mark, D3, D5, D9's C# and extension readers). RED with S1
+alone: `AWithdrawnRound_IsRecordedCancelled_AndMovesNoGate` — the verdict is `call_human`, `HumanGate` true, `RoundsRunThisStage` 1;
 `AWithdrawnRound_NotifiesNobody` — one notice; `AWithdrawnRound_SpendsItsNumber` — round `n`'s `coai.db` row says `done`;
-`AgainAfterAWithdrawnAgain_IsNotRefusedAsNothingSince` — refused today by the cancelled round's sha; `statusOf` on a cancelled fixture —
-`done`. Guards (green before and after): `ACancelDuringSetup_RecordsNothing`, `ResolveReadsTheCompletedRound_NotACancelledOne`.
+`SomeLanded_SomeCutByCancel_IsWithdrawn`, in two shapes — one reviewer answers, the other is killed; one answers, the other is cut on the
+rate-limit ladder — fails with a verdict over one answer (the ladder shape stays red until the mark exists: an ordinary `RateLimited`);
+`ALadderCutTurn_SaysWithdrawn` — its line has no `endCause`; `AgainAfterAWithdrawnAgain_IsNotRefusedAsNothingSince` — refused by the
+cancelled round's sha; `statusOf` on a cancelled fixture — `done`. Guards (green before and after): `EveryReviewerLandedBeforeTheCancel_TheRoundCompletes`
+(a gated fake: both answer, then the fire), `ACancelDuringSetup_RecordsNothing`, `ResolveReadsTheCompletedRound_NotACancelledOne`.
 
-**S3 — the races, the mark, and what is never cancelled** (D2, D4, D10). RED: `SomeLanded_SomeCutByCancel_IsWithdrawn`, in two shapes —
-one reviewer answers, the other is killed; one answers, the other is cut on the rate-limit ladder — fails with a verdict over one answer;
-`EveryReviewerLandedBeforeTheCancel_TheRoundCompletes` — a gated fake, both answer, then the fire; `ALadderCutTurn_SaysWithdrawn` — its line
-has no `endCause` today; `ACancelDuringFinalising_NeverLeavesRunning` and `AFailedWithdrawSave_IsNeverReadRunning` (a store seam that throws) —
-`running`; `ACancelledContextRead_IsACancellation_NotAFailure` — "the round failed …". Guard: `TheCadenceRecord_IsWrittenWhole_WhenCancelled`.
+**S3 — the provisional record, the finalising races, what is never cancelled** (PR B; D4, D6's provisional write and `Persist` guard, D10).
+RED: `ALateProgressReport_DoesNotRewriteRunning` — deterministic: provisional cancellation, then one terminal progress report, then the
+session read FROM DISK before the final `Withdraw` — `running` today (`LiveRound.cs:256-257`); `ACancelDuringFinalising_NeverLeavesRunning`
+— `running`; `AFailedWithdrawSave_IsNeverReadRunning` (a store seam that throws), two cases — in-process `status` sees `cancelled`
+(`running` today); a SECOND `PanelService` over the same data directory sees `running` while the owner lives (D10's narrowed guarantee,
+pinned) and `interrupted` once the owner's pid is dead and a server starts; `ACancelledContextRead_IsACancellation_NotAFailure` — "the
+round failed …". Guard: `TheCadenceRecord_IsWrittenWhole_WhenCancelled`.
 
-**S4 — the host's stop, the remote row, the reply, the live leg** (D5's fallback if needed, D6, D7). RED:
+**S4 — the host's stop, the remote row, the live leg** (PR C; D6's bound, D7). RED:
 `AStoppingHost_WritesHostStopped_BeforeTheProcessEnds` — `running`, because the loop's end waits 1 s for its own tasks only;
 `AWithdrawnRemoteRow_SendsItsDelete` (a fake Team server) — zero DELETEs; `AFailedDelete_KeepsTheJobFile_AndTheRoundIsStillWithdrawn` (the
 fake answers 503) — no DELETE is attempted today; the seam leg (§8) — no `withdrawn` line and no cancelled record.
