@@ -1688,7 +1688,7 @@ the text above disagree, **this section governs**:
    on a monotonic clock (`Stopwatch` / an injected `TimeProvider`), and S24 gains a never-released arm: the destination
    held through the whole window → the caller gets the failure, the ORIGINAL bytes survive, the temp file is removed.
    Retrying `UnauthorizedAccessException` does not bypass a real ACL: a persistent denial still throws, after the window.
-2. **S5 — atomic replacement confirmed; the turn stays held through the move.** Verified: session readers go through
+2. **S5 — atomic replacement confirmed; the turn stays held through the move.** Verified (for the SERVER's readers only — the extension reads without the turn, see the E3 judge J1): session readers go through
    `ReadShared` (`SessionStore.cs:543`), which opens, reads to the end and disposes; nothing keeps a handle and re-reads by
    offset. S26's arms: a failure while the temp file is written AND a failure at the move each leave the previous session
    byte-for-byte; the next load after a successful write sees it. **And one helper, not two:** the session write uses
@@ -1710,6 +1710,28 @@ the text above disagree, **this section governs**:
    S27 gains the arm the consultant named: writer A paused after its temp is written, the temp aged past an hour, writer B
    writes the same record → A's temp is kept (A's pid is alive), and A's move then lands.
 5. **S2 and RoundScratch are sound within their stated limits** (no change).
+
+### The E3 code gate and judge (coai code gate and Opus judge, 2026-10-21) — verdict `proceed` from both; the accepted findings are folded into the branch
+
+Findings, each with its decision and reason. Tests, reds and break-its are in `research/module_tests.md`, section "The suite is deterministic — E3 code gate and judge".
+
+| Finding | Decision | Reason / what changed |
+|---|---|---|
+| G0 — `PanelServiceTests` became `partial` (`PanelServiceTests.EmptyFolders.cs`) | **Accepted** | The repo rule forbids `partial` as a split. The S7 tests are their own class, `TheRoundsEmptyFoldersAreRemovedTests`; the service, the git fixture, the fake's answer and the repaired-round recorder are one named unit, `CodeRoundHarness`, which both classes own. 24 tests before, 24 after. |
+| G1/G2 (+ judge 3) — the orphan rule deletes when `IsAlive` is false, and `IsAlive` is false for "could not ask" | **Accepted** | `ProcessLiveness.Check` answers `Liveness.Alive` / `Gone` / `Unknown` (`ArgumentException`, `InvalidOperationException` = Gone; `Win32Exception`, `NotSupportedException`, a pid of 0 or less = Unknown); `AtomicFile` deletes on `Gone` only; `IsAlive` is built on `Check`, so the sweeps are unchanged. RED: an aged orphan with an `Unknown` writer was deleted. |
+| G3 — a failing heartbeat warns on every beat | **Accepted** | One warning per run of misses, reset by a beat that lands. RED: two failed beats gave two warnings. |
+| G8 — `catch (Exception e) when (IsRefusal(e))` | **Accepted** | `catch (IOException)` and `catch (UnauthorizedAccessException)` explicitly, same behaviour, `IsRefusal` removed. No new test: nothing observable changes; the S24 arms still cover it. |
+| G11 — `PanelServiceHost.Current` calls `Stamp()` outside any try | **Accepted, with a correction** | `Stamp()` already caught `IOException` (so a file that goes away between `Exists` and `Length`, a `FileNotFoundException`, was already safe) and `UnauthorizedAccessException`. What still threw was a path the platform cannot stamp (`ArgumentException`, `NotSupportedException`, `SecurityException`); RED: a data directory with a NUL in it made `Current` throw `ArgumentException: Null character in path`. The stamp now keeps the OLD one for those too: "cannot tell" is not "the file vanished", and the "no file" stamp would reload to the defaults. |
+| J1 — the extension reads `sessions/*.json` without the turn | **Accepted (docs only)** | A move over a held file is refused whatever the share mode, so one extension read held past 500 ms can fail a round's final save. Written in `module_server.md` (the "readers take the same turn" claim now says the SERVER's readers) and `module_extension.md`; point 2 of the risk consult above is corrected: true for the server's readers only. |
+| J2 — no S26 test pins the store's default write road | **Accepted** | `TheStoresDefaultWriteRoad_IsTheAtomicOne_SoItSweepsAnOrphanOfItsOwnSession`: `new SessionStore(dir)`, an aged dead-writer temp of its session, `Save`, the temp is gone. Break-it: the default back to `File.WriteAllText` goes red. |
+| J4 — `PanelServiceHost` logs the exception as text | **Accepted** | `_log.Warning(e, …)`; `Kept` takes the warning as an action so the exception travels first. RED: the logged event had no `Exception`. |
+| J5 — doc drift | **Accepted** | `module_runners.md` said "four now" and listed three; `PLAN_a_turn_waits_by_the_clock.md` rewritten (one atomic road, `MoveOverExisting` deleted, `Take` untouched) with the constraint that `Take`'s budget stays above `AtomicFile.SharingRetry`. |
+| An HResult split of `UnauthorizedAccessException` | **Rejected** | The exception is the same for a held file and a real ACL denial, and the window bounds both; telling them apart by HResult would couple the retry to one Windows code and change nothing for the caller. |
+| The Kept message wording | **Rejected** | Wording only; the message names the cause and the retry. |
+| Throttling the orphan scan | **Rejected** | The scan lists one record's `<record>.*.tmp` in one folder; the cost is negligible and a throttle adds state. |
+| An async `AtomicFile` | **Rejected** | Every caller is synchronous and holds a turn; async would spread through all of them for a window of 500 ms. |
+| Logging the best-effort orphan and missing-folder catches | **Rejected** | They are courtesies to a folder; a line per write would be noise, and the next write retries. |
+| A fast in-place session path | **Rejected** | The in-place write is the defect (it truncates before it succeeds); two roads is what S5 removed. |
 
 ### Case C26 (added 2026-10-21, seen on PR #897's Linux Sonar job) — an inheritable lock descriptor caught by another test's fork
 

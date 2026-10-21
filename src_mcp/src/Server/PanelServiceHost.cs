@@ -126,7 +126,7 @@ public sealed class PanelServiceHost : IPanelServiceSource
         }
         catch (Exception e)
         {
-            return Kept(stamp, $"the rebuild failed: {e}");
+            return Kept(stamp, log => log.Warning(e, "settings reload skipped — the rebuild failed. The last good settings stay and the next call tries again"));
         }
     }
 
@@ -137,7 +137,7 @@ public sealed class PanelServiceHost : IPanelServiceSource
         return SettingsFile.TryLayer(dataDir, _env, Noted(dataDir), _readText) switch
         {
             SettingsLayer.Layered layered => Published(stamp, Assemble(first: false, layered.Lookup)),
-            _ => Kept(stamp, "the file is held open by its writer"),
+            _ => Kept(stamp, log => log.Warning("settings reload skipped — the file is held open by its writer. The last good settings stay and the next call tries again")),
         };
     }
 
@@ -150,12 +150,12 @@ public sealed class PanelServiceHost : IPanelServiceSource
     }
 
     /// <summary>The last good service, under the old stamp — with one warning per stamp, because the retry is on every call.</summary>
-    private PanelService Kept((DateTime Written, long Length) stamp, string why)
+    private PanelService Kept((DateTime Written, long Length) stamp, Action<Serilog.ILogger> warn)
     {
         if (stamp != _warned)
         {
             _warned = stamp;
-            _log.Warning("settings reload skipped — {Why}. The last good settings stay and the next call tries again", why);
+            warn(_log);
         }
 
         return _current;
@@ -224,12 +224,10 @@ public sealed class PanelServiceHost : IPanelServiceSource
             var file = new FileInfo(SettingsFile.PathFor(SettingsFile.DataDirFrom(_env).Path));
             return file.Exists ? (file.LastWriteTimeUtc, file.Length) : default;
         }
-        catch (IOException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException)
         {
-            return _stamp; // unreadable for a moment is not changed
-        }
-        catch (UnauthorizedAccessException)
-        {
+            // Not readable is NOT changed: it keeps the old stamp, so the last good service keeps serving and the next call tries again. The other
+            // answer — the "no file" stamp — would claim the file vanished and reload to the defaults for a failure that said nothing about the file.
             return _stamp;
         }
     }

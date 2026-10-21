@@ -817,6 +817,52 @@ public sealed class QuestionFanOutTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ABeatThatKeepsFailing_IsSaidOnce_NotOnEveryBeat()
+    {
+        // Code gate G3: the loop beats every 30 s in production; a disk that refuses for ten minutes must not write twenty warnings.
+        var (settled, said, _) = await RunWithRefusedBeatsAsync(
+            (n, gate) =>
+            {
+                if (n < 3)
+                {
+                    return Refused();
+                }
+
+                gate.TrySetResult();
+
+                return new NoRefusal();
+            },
+            "the third heartbeat was never attempted within 30 s");
+
+        settled.Rows.Single().Status.Should().Be(RowOutcomes.Answered);
+        said.Events.Count(e => e.Level == LogEventLevel.Warning).Should().Be(1, "two beats in a row were refused: one run of misses is one warning");
+    }
+
+    [Fact]
+    public async Task ABeatThatFailsAgainAfterASuccess_IsSaidAgain()
+    {
+        var (settled, said, _) = await RunWithRefusedBeatsAsync(
+            (n, gate) =>
+            {
+                if (n is 1 or 3)
+                {
+                    return Refused();
+                }
+
+                if (n >= 4)
+                {
+                    gate.TrySetResult();
+                }
+
+                return new NoRefusal();
+            },
+            "the fourth heartbeat was never attempted within 30 s");
+
+        settled.Rows.Single().Status.Should().Be(RowOutcomes.Answered);
+        said.Events.Count(e => e.Level == LogEventLevel.Warning).Should().Be(2, "a beat that landed ended the first run of misses, so the next miss is news again");
+    }
+
+    [Fact]
     public async Task TheSweepKeepsAQuestionWhoseBeatsAreRefused_WhileItsPidIsAlive()
     {
         // The beats are refused twice, so the file on disk keeps its FIRST (stale) heartbeat. A sweep asked ten minutes later, by a

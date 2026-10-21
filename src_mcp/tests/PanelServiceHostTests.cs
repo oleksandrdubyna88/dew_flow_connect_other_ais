@@ -186,6 +186,52 @@ public sealed class PanelServiceHostTests : IDisposable
         CodexModel(host).Should().Be(DefaultCodexModel(), "a denial is not a holder: the person sees the defaults, not stale settings for ever");
     }
 
+    /// <summary>
+    /// Code gate G11: <c>Current</c> promises never to throw, and its stamp read runs OUTSIDE the reload's try. A file that goes away between the existence check and the
+    /// length (a <see cref="FileNotFoundException"/>) was already an <see cref="IOException"/> the stamp keeps the old stamp for; a path the platform cannot stamp at all
+    /// (here a data directory with a NUL in it, which throws <see cref="ArgumentException"/>) was not, and reached every caller of the twenty that read <c>Current</c>.
+    /// </summary>
+    [Fact]
+    public void AStampThatCannotBeRead_KeepsTheLastGoodService_AndCurrentDoesNotThrow()
+    {
+        WriteVendors("""[{"id":"codex","runtime":"codex","model":"gpt-5.6-terra","baseUrl":""}]""");
+        var broken = false;
+        var host = new PanelServiceHost(
+            name => name == "COAI_DATA_DIR" ? (broken ? _dataDir + "\u0000" : _dataDir) : null,
+            VaultKeys.None("no vault in this test"), default, new ProcessLauncher(), _log, Noticing.None);
+        var good = host.Current;
+        broken = true;
+
+        var act = () => host.Current;
+
+        act.Should().NotThrow("the stamp is a courtesy for change detection; a read that fails is \"not changed\"");
+        host.Current.Should().BeSameAs(good, "the last good service keeps serving under its old stamp");
+    }
+
+    /// <summary>Code judge J4 (the logging rule): a rebuild that failed is logged WITH the exception, as the exception, not as text inside the message.</summary>
+    [Fact]
+    public void AReloadThatFails_IsLoggedWithTheExceptionItself()
+    {
+        WriteVendors("""[{"id":"codex","runtime":"codex","model":"gpt-5.6-terra","baseUrl":""}]""");
+        var events = new List<Serilog.Events.LogEvent>();
+        var host = new PanelServiceHost(
+            Env, VaultKeys.None("no vault in this test"), default, new ProcessLauncher(),
+            new Serilog.LoggerConfiguration().WriteTo.Sink(new CapturedEvents(events)).CreateLogger(), Noticing.None);
+        var sessions = Directory.CreateDirectory(Path.Combine(_dataDir, "sessions")).FullName;
+        File.WriteAllText(Path.Combine(sessions, "session-bad.json"), """{"state":null,"rounds":[]}"""); // a session the startup sweep cannot survive
+
+        Touch(() => WriteVendors("""[{"id":"codex","runtime":"codex","model":"gpt-5.6-mini","baseUrl":""}]"""));
+        _ = host.Current;
+
+        events.Should().ContainSingle(e => e.Level == Serilog.Events.LogEventLevel.Warning && e.RenderMessage().Contains("settings reload skipped"))
+            .Which.Exception.Should().NotBeNull("the exception travels as the exception, so a sink can show its type and stack");
+    }
+
+    private sealed class CapturedEvents(List<Serilog.Events.LogEvent> into) : Serilog.Core.ILogEventSink
+    {
+        public void Emit(Serilog.Events.LogEvent logEvent) => into.Add(logEvent);
+    }
+
     [Fact]
     public void AMalformedFileOnReload_GivesDefaults()
     {

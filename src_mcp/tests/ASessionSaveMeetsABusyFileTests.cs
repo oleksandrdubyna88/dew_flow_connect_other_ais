@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using CoaiMcp.Runners.Files;
 using CoaiMcp.Server;
 using FluentAssertions;
@@ -152,5 +153,25 @@ public sealed class ASessionSaveMeetsABusyFileTests : IDisposable
         store.Save(SessionStoreConcurrencyTests.SessionFor(Repo, rounds: 1));
 
         seen.Should().Equal([false], "the writer holds the turn through the move, so a reader or a second writer waits for the whole file");
+    }
+
+    [Fact]
+    public void TheStoresDefaultWriteRoad_IsTheAtomicOne_SoItSweepsAnOrphanOfItsOwnSession()
+    {
+        // Code judge J2: every other arm here sets FileWriter. This one builds the store the way production does, with no seam, and proves the default
+        // road is AtomicFile.Write: only that road removes a dead writer's aged temp file of THIS session. A default of File.WriteAllText would leave it.
+        var store = new SessionStore(_dir.Path);
+        var file = store.FileFor(Repo, "main");
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        using var finished = Process.Start(new ProcessStartInfo("dotnet", "--version") { RedirectStandardOutput = true, UseShellExecute = false })!;
+        finished.WaitForExit();
+        var orphan = $"{file}.{finished.Id}.{Guid.NewGuid():N}.tmp";
+        File.WriteAllText(orphan, "an interrupted save");
+        File.SetLastWriteTimeUtc(orphan, DateTime.UtcNow - TimeSpan.FromHours(2));
+
+        store.Save(SessionStoreConcurrencyTests.SessionFor(Repo, rounds: 1));
+
+        File.Exists(orphan).Should().BeFalse("the default road is AtomicFile.Write, whose next write of the record removes a dead writer's aged temp file");
+        RoundsOf(store).Should().Be(1);
     }
 }

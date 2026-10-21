@@ -10,16 +10,23 @@ namespace CoaiMcp.Tests;
 /// only when EMPTY; a folder that is not empty, that cannot be removed or that a surviving descendant still has as its working folder is said once
 /// and left to the six-hour sweep, and the round's outcome is the same in every arm.
 /// </summary>
-public sealed partial class PanelServiceTests
+[Collection("fakecli-env")]
+public sealed class TheRoundsEmptyFoldersAreRemovedTests : IAsyncLifetime
 {
+    private readonly CodeRoundHarness _h = new();
+
+    public ValueTask InitializeAsync() => _h.InitializeAsync();
+
+    public ValueTask DisposeAsync() => _h.DisposeAsync();
+
     private const string SweepSentence = "six-hour";
 
     /// <summary>The folders the round's launches were GIVEN, read from the launches themselves — never from a name pattern over the shared temp.</summary>
     private sealed record RoundFolders(string Repair, string Workspace)
     {
-        public static RoundFolders Of(RepairedRound round) => new(OnlyOne(round.Repairs, "coai-repair-"), OnlyOne(round.Reviews, "coai-noworkspace-"));
+        public static RoundFolders Of(CodeRoundHarness.RepairedRound round) => new(OnlyOne(round.Repairs, "coai-repair-"), OnlyOne(round.Reviews, "coai-noworkspace-"));
 
-        private static string OnlyOne(IReadOnlyList<RepairLaunch> launches, string prefix)
+        private static string OnlyOne(IReadOnlyList<CodeRoundHarness.RepairLaunch> launches, string prefix)
         {
             var folders = launches.Select(launch => launch.WorkingDirectory).Distinct().ToList();
             folders.Should().ContainSingle("one round makes one such folder, and its launches share it").Which
@@ -47,7 +54,7 @@ public sealed partial class PanelServiceTests
     {
         var sink = new ListSink();
 
-        var round = await ARepairedCodeRoundAsync("none", log: LogInto(sink));
+        var round = await _h.RepairedCodeRoundAsync("none", log: LogInto(sink));
 
         var folders = RoundFolders.Of(round);
         Directory.Exists(folders.Repair).Should().BeFalse("the round made its repair folder empty and must remove it when it ends");
@@ -62,7 +69,7 @@ public sealed partial class PanelServiceTests
         var sink = new ListSink();
         var planted = new System.Collections.Concurrent.ConcurrentBag<string>();
 
-        var round = await ARepairedCodeRoundAsync("none", log: LogInto(sink), beforeARepair: folder =>
+        var round = await _h.RepairedCodeRoundAsync("none", log: LogInto(sink), beforeARepair: folder =>
         {
             var file = Path.Combine(folder, $"{Guid.NewGuid():N}.txt");
             File.WriteAllText(file, "a descendant wrote this");
@@ -89,7 +96,7 @@ public sealed partial class PanelServiceTests
 
         try
         {
-            var round = await ARepairedCodeRoundAsync("none", log: LogInto(sink), beforeARepair: folder =>
+            var round = await _h.RepairedCodeRoundAsync("none", log: LogInto(sink), beforeARepair: folder =>
             {
                 lock (once)
                 {
@@ -125,7 +132,7 @@ public sealed partial class PanelServiceTests
 
         try
         {
-            var round = await ARepairedCodeRoundAsync("none", log: LogInto(sink), beforeARepair: folder =>
+            var round = await _h.RepairedCodeRoundAsync("none", log: LogInto(sink), beforeARepair: folder =>
             {
                 lock (once)
                 {

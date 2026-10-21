@@ -16,25 +16,36 @@ namespace CoaiMcp.Runners.Processes;
 /// </remarks>
 public static class ProcessLiveness
 {
-    public static bool IsAlive(int pid)
+    /// <summary>The two-state answer the sweeps ask: true only for a process proven running. "Could not ask" is NOT alive here, by design (see above).</summary>
+    public static bool IsAlive(int pid) => Check(pid) is Liveness.Alive;
+
+    /// <summary>
+    /// The three-answer check, for a caller that DELETES on the answer (E3 code gate G1/G2): <see cref="Liveness.Gone"/> only when the process is
+    /// provably not there — no process has that id, or it has exited. A process that could not be asked about (<c>Win32Exception</c>: not ours to open, or another
+    /// pid namespace) or a pid nothing could own is <see cref="Liveness.Unknown"/>, which a deletion must treat as alive. Never throws.
+    /// </summary>
+    public static Liveness Check(int pid)
     {
-        // A pid nothing could ever own. Windows answers "access denied" for 0 rather than "no such
-        // process", so it is refused here rather than through an exception handler.
+        // A pid nothing could ever own. Windows answers "access denied" for 0 rather than "no such process", so it is refused here
+        // rather than through an exception handler.
         if (pid <= 0)
         {
-            return false;
+            return new Liveness.Unknown("not a pid");
         }
 
         try
         {
             using var process = System.Diagnostics.Process.GetProcessById(pid);
-            return !process.HasExited;
+
+            return process.HasExited ? new Liveness.Gone("exited") : new Liveness.Alive();
         }
-        catch (Exception e) when (e is ArgumentException or InvalidOperationException
-                                       or System.ComponentModel.Win32Exception or NotSupportedException)
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException)
         {
-            // Gone, never existed, or not ours to open. All three mean the same thing to a sweep.
-            return false;
+            return new Liveness.Gone("no such process");
+        }
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or NotSupportedException)
+        {
+            return new Liveness.Unknown(e.Message);
         }
     }
 }

@@ -301,12 +301,14 @@ public sealed class QuestionFanOut(
     /// <summary>D14 (d): the heartbeat the sweep reads, rewritten every thirty seconds while anything runs.</summary>
     private async Task HeartbeatAsync(Current current, TimeSpan every, CancellationToken stop)
     {
+        var missing = false;
         try
         {
             while (!stop.IsCancellationRequested)
             {
                 await Task.Delay(every, stop);
-                await BeatAsync(current);
+                // One warning per RUN of misses (code gate G3): a disk that refuses for ten minutes is one sentence, not twenty.
+                missing = !await BeatAsync(current, announce: !missing);
             }
         }
         catch (OperationCanceledException)
@@ -316,21 +318,28 @@ public sealed class QuestionFanOut(
     }
 
     /// <summary>
-    /// One beat. A write the disk refuses (<see cref="UnauthorizedAccessException"/> on Windows for a move over a file a reader holds, past
-    /// <c>AtomicFile</c>'s retry window; an <see cref="IOException"/>) is a MISSED beat: said at Warning and skipped, because the sweep ends a
+    /// One beat; answers whether it landed. A write the disk refuses (<see cref="UnauthorizedAccessException"/> on Windows for a move over a file a reader holds, past
+    /// <c>AtomicFile</c>'s retry window; an <see cref="IOException"/>) is a MISSED beat: said at Warning when <paramref name="announce"/> and skipped, because the sweep ends a
     /// question only on a stale heartbeat AND a dead pid (two minutes, four beats), so one missed beat is harmless and a faulted heartbeat task would
     /// end a question whose rows all answered (CI run 39325900821). Only the beat is guarded — a row's settle write and the final write still throw:
     /// a lost answer must reach the caller.
     /// </summary>
-    private async Task BeatAsync(Current current)
+    private async Task<bool> BeatAsync(Current current, bool announce)
     {
         try
         {
             await current.UpdateAsync(record => record with { HeartbeatUtc = QuestionConsultStore.Stamp(DateTime.UtcNow) });
+
+            return true;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            log.Warning(e, "question {Id}: a heartbeat could not be written ({Reason}); the next beat tries again", current.Record.Id, e.Message);
+            if (announce)
+            {
+                log.Warning(e, "question {Id}: a heartbeat could not be written ({Reason}); the next beat tries again", current.Record.Id, e.Message);
+            }
+
+            return false;
         }
     }
 

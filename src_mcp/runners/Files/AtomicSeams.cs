@@ -18,8 +18,8 @@ internal sealed record AtomicSeams
     /// <summary>Waits between two tries of the move; the argument is the number of tries made so far.</summary>
     public Action<int> Pause { get; init; } = static _ => Thread.Sleep(Random.Shared.Next(10, 40));
 
-    /// <summary>Is the process with this id running? A temp file whose writer is alive is never an orphan.</summary>
-    public Func<int, bool> IsAlive { get; init; } = ProcessLiveness.IsAlive;
+    /// <summary>The three-answer check an orphan is judged by: only <see cref="Liveness.Gone"/> is proof the writer left; a pid that could not be asked about (another pid namespace, no access) proves nothing.</summary>
+    public Func<int, Liveness> LivenessOf { get; init; } = ProcessLiveness.Check;
 
     /// <summary>Writes the temp file: path, text. A seam so a test can fail the write half way (a full disk).</summary>
     public Action<string, string> WriteText { get; init; } = File.WriteAllText;

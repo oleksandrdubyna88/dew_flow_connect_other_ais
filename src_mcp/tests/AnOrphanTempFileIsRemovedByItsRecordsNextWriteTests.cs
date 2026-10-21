@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using CoaiMcp.Runners.Files;
+using CoaiMcp.Runners.Processes;
 using FluentAssertions;
 using Xunit;
 
@@ -22,7 +23,10 @@ public sealed class AnOrphanTempFileIsRemovedByItsRecordsNextWriteTests : IDispo
 
     private string Record => _dir.At("record.json");
 
-    private static AtomicSeams DeadWriters() => new() { IsAlive = pid => pid == Environment.ProcessId };
+    /// <summary>This process is alive; every other pid is proven gone.</summary>
+    private static Liveness Of(int pid) => pid == Environment.ProcessId ? new Liveness.Alive() : new Liveness.Gone("a test says so");
+
+    private static AtomicSeams DeadWriters() => new() { LivenessOf = Of };
 
     private string TempOf(string record, int pid, TimeSpan age)
     {
@@ -84,7 +88,7 @@ public sealed class AnOrphanTempFileIsRemovedByItsRecordsNextWriteTests : IDispo
         string pausedTemp = string.Empty;
         var paused = new AtomicSeams
         {
-            IsAlive = pid => pid == Environment.ProcessId,
+            LivenessOf = Of,
             AfterTemp = temp =>
             {
                 // Writer A is suspended here — its temp file is written, its move not made — and the hour passes.
@@ -124,5 +128,40 @@ public sealed class AnOrphanTempFileIsRemovedByItsRecordsNextWriteTests : IDispo
 
         write.Should().NotThrow("the clean-up is best effort and is tried again on the next write");
         File.ReadAllText(Record).Should().Be("new");
+    }
+
+    [Fact]
+    public void AnAgedOrphanWhoseWriterCannotBeAskedAbout_IsKept()
+    {
+        // Code gate G1/G2: "could not ask" (another pid namespace, no access) is not proof of death, and a deletion needs proof.
+        var unknown = TempOf("record.json", DeadPid, TimeSpan.FromHours(2));
+
+        AtomicFile.Write(Record, "new", default, new AtomicSeams { LivenessOf = _ => new Liveness.Unknown("another pid namespace") });
+
+        File.Exists(unknown).Should().BeTrue("only a PROVEN Gone removes a file; Unknown keeps it (a leak, never a wrong deletion)");
+    }
+
+    [Fact]
+    public void AnAgedOrphanWhoseWriterIsProvenGone_IsRemoved_ThroughTheLivenessSeam()
+    {
+        var gone = TempOf("record.json", DeadPid, TimeSpan.FromHours(2));
+
+        AtomicFile.Write(Record, "new", default, new AtomicSeams { LivenessOf = _ => new Liveness.Gone("no such process") });
+
+        File.Exists(gone).Should().BeFalse();
+    }
+
+    [Fact]
+    public void TheLivenessCheck_AnswersGoneForAnExitedProcess_AliveForThisOne_AndUnknownForNoPid()
+    {
+        using var finished = Process.Start(new ProcessStartInfo("dotnet", "--version") { RedirectStandardOutput = true, UseShellExecute = false })!;
+        finished.WaitForExit();
+
+        ProcessLiveness.Check(finished.Id).Should().BeOfType<Liveness.Gone>();
+        ProcessLiveness.Check(Environment.ProcessId).Should().BeOfType<Liveness.Alive>();
+        ProcessLiveness.Check(0).Should().BeOfType<Liveness.Unknown>("pid 0 cannot be asked about; Windows answers access denied for it");
+        ProcessLiveness.Check(-5).Should().BeOfType<Liveness.Unknown>();
+        ProcessLiveness.IsAlive(Environment.ProcessId).Should().BeTrue();
+        ProcessLiveness.IsAlive(0).Should().BeFalse("the sweeps keep their two-state answer");
     }
 }

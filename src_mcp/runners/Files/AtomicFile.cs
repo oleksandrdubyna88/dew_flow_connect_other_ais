@@ -1,3 +1,5 @@
+using CoaiMcp.Runners.Processes;
+
 namespace CoaiMcp.Runners.Files;
 
 /// <summary>
@@ -62,6 +64,9 @@ public static class AtomicFile
 
     private static void MoveOver(string temp, string path, TimeSpan window, AtomicSeams seams)
     {
+        // Windows throws UnauthorizedAccessException (HResult 0x80070005) for a move over a file another handle holds open, for every share mode of
+        // the holder (measured 2026-10-20, Windows 11 26300, .NET 10.0.12); IOException is the sharing violation of a file opened by name. A
+        // persistent ACL denial is both, retried only for the window, then thrown.
         // The window runs on the MONOTONIC clock: a wall clock stepped by a sync or a sleep would stretch or cut it.
         var started = seams.Clock.GetTimestamp();
         var tries = 0;
@@ -72,27 +77,23 @@ public static class AtomicFile
                 File.Move(temp, path, overwrite: true);
                 return;
             }
-            catch (Exception e) when (IsRefusal(e) && seams.Clock.GetElapsedTime(started) < window)
+            catch (IOException) when (seams.Clock.GetElapsedTime(started) < window)
+            {
+                seams.Pause(++tries);
+            }
+            catch (UnauthorizedAccessException) when (seams.Clock.GetElapsedTime(started) < window)
             {
                 seams.Pause(++tries);
             }
         }
     }
 
-    /// <summary>
-    /// What Windows throws for a move over a file another handle holds open: <see cref="UnauthorizedAccessException"/>
-    /// (HResult 0x80070005), for every share mode of the holder — measured 2026-10-20 on Windows 11 26300, .NET 10.0.12.
-    /// <see cref="IOException"/> is the sharing violation of a file opened by name. A persistent ACL denial is both, and is
-    /// retried only for the window, then thrown.
-    /// </summary>
-    private static bool IsRefusal(Exception e) => e is IOException or UnauthorizedAccessException;
-
     /// <summary>How old a temp file must be before its writer being dead makes it an orphan. A live writer's temp file lives for milliseconds.</summary>
     internal static readonly TimeSpan OrphanAge = TimeSpan.FromHours(1);
 
     /// <summary>
     /// Before this writer's own temp file: removes the temp files of THIS record (<c>&lt;record&gt;.&lt;pid&gt;.&lt;guid&gt;.tmp</c> beside it)
-    /// older than <see cref="OrphanAge"/> whose writer is not alive. Best effort — a failure is ignored and tried on the next write.
+    /// older than <see cref="OrphanAge"/> whose writer is PROVEN gone (a pid that could not be asked about keeps its file: a deletion needs proof). Best effort — a failure is ignored and tried on the next write.
     /// </summary>
     private static void RemoveOrphanedTemps(string path, AtomicSeams seams)
     {
@@ -105,7 +106,7 @@ public static class AtomicFile
                 Discard(temp);
             }
         }
-        catch (Exception e) when (IsRefusal(e) || e is DirectoryNotFoundException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             // The scan is a courtesy to the folder; the write it precedes does not depend on it.
         }
@@ -114,7 +115,7 @@ public static class AtomicFile
     private static bool IsOrphan(string temp, string record, AtomicSeams seams) =>
         WriterOf(Path.GetFileName(temp), record) is var pid and > 0
         && seams.Clock.GetUtcNow() - File.GetLastWriteTimeUtc(temp) > OrphanAge
-        && !seams.IsAlive(pid);
+        && seams.LivenessOf(pid) is Liveness.Gone;
 
     /// <summary>The pid in <c>&lt;record&gt;.&lt;pid&gt;.&lt;guid:N&gt;.tmp</c>, or 0 when the name is not exactly that shape — another record's, or a build that named no writer.</summary>
     private static int WriterOf(string name, string record) =>
