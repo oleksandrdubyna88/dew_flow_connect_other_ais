@@ -304,7 +304,7 @@ internal static class Program
 
         /// <summary>
         /// Who wrote the code a round reviewed, and what the reviewers found, as additive sums over the rounds database
-        /// (E6 of <c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E6.md</c>) — read-only, one document of JSON or a table.
+        /// (E6 of <c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E6.md</c>) — read-only, one document of JSON or a table.
         /// </summary>
         /// <remarks>Its own <c>args[0]</c> for the reason <c>--round-counts</c> is. See <see cref="Server.RoundAuthorsMode"/>.</remarks>
         RoundAuthors,

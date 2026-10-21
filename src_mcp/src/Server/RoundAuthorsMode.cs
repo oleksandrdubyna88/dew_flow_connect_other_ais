@@ -8,7 +8,7 @@ namespace CoaiMcp.Server;
 /// <c>--round-authors [--since &lt;utc&gt;] [--until &lt;utc&gt;] [--split &lt;utc&gt;] [--stage code|plan] [--cohort first|corrective|all]
 /// [--with-before-open] [--kinds &lt;k,…&gt;] [--without-elided] [--with-uncovered] [--add &lt;file.json&gt;]… [--table]</c>: is the code better or
 /// worse since the coders moved to a cheaper model? — the answer from the rounds database, read-only (E6.S5 of
-/// <c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E6.md</c>).
+/// <c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E6.md</c>).
 /// </summary>
 /// <remarks>
 /// <para><b>The contract.</b> By default stdout is ONE JSON document of SUMS (<see cref="RoundAuthorsAnswer"/>, <c>format</c> 1: the selection, the

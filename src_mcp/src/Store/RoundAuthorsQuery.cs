@@ -5,7 +5,7 @@ using Microsoft.Data.Sqlite;
 namespace CoaiMcp.Store;
 
 /// <summary>
-/// The read behind <c>--round-authors</c> (E6.S1 of <c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E6.md</c>): every round of the
+/// The read behind <c>--round-authors</c> (E6.S1 of <c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E6.md</c>): every round of the
 /// gate sessions the window touches, as text-free facts, from ONE read-only open of <c>coai.db</c>.
 /// </summary>
 /// <remarks>

@@ -5,7 +5,7 @@ namespace CoaiMcp.Core.Authors;
 
 /// <summary>
 /// What a round records about who wrote the code it reviewed — the text-free snapshot kept on <c>RoundRecord.Authors</c> in the
-/// session file (E5.S1 of <c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md</c>). Ids, closed words, counts and
+/// session file (E5.S1 of <c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md</c>). Ids, closed words, counts and
 /// tokens; never a byte of what a transcript said.
 /// </summary>
 /// <remarks>

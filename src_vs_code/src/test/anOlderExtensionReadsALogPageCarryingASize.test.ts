@@ -6,7 +6,7 @@ import { RoundRecord, SessionFile } from '../rounds';
 
 /**
  * `--log` now carries a `size` on each code round (E2.S5 of
- * `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md`, contract C3), and no page of THIS extension reads it yet:
+ * `research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md`, contract C3), and no page of THIS extension reads it yet:
  * the card line is E5's, the report E6's. The two halves of the product update separately, so an extension without that
  * work reads a server that sends it — and the only thing owed is that the page is the page it was.
  *
@@ -18,7 +18,7 @@ import { RoundRecord, SessionFile } from '../rounds';
  * <p>The same holds for `planSource` (E2.S2 of `todo/PLAN_the_plan_gate_reads_the_committed_plan_E2.md`, contract C2): `--log`
  * now carries it on a plan round, and `parseLog` reads field by field, so the member is ignored.</p>
  *
- * <p>And for `authorsState` (E5.S3 of `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`): `--log` now carries the state
+ * <p>And for `authorsState` (E5.S3 of `research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`): `--log` now carries the state
  * of each round's authors, and the released parser ignores it as it ignores the other two.</p>
  */
 

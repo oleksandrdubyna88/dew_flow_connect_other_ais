@@ -39,7 +39,7 @@ internal sealed class TracedWrites(IBackfillWrites inner, BackfillSeams seams) :
 /// <summary>
 /// <c>--backfill-authors [--since &lt;ISO-8601 UTC instant&gt;] [--dry-run]</c>: gives every settled plan or code round the authors and the size the live path
 /// would have written, from what is on disk — over THIS side's own store and transcripts, once per side (E7.S4 of
-/// <c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E7.md</c>).
+/// <c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E7.md</c>).
 /// </summary>
 /// <remarks>
 /// <para><b>The order is the safety.</b> The store is opened READ-ONLY for the selection, the counts and the whole of <c>--dry-run</c>. A writing run makes a

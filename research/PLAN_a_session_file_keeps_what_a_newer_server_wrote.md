@@ -39,7 +39,7 @@
 > schema step, no extension change, no wire change. All references are to `main` at `2b302c65`.
 >
 > Related docs: [module_server.md](module_server.md) (§ *Persistence*, `:2014-2020`), the round-authors
-> epic E5 [PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md](../todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md)
+> epic E5 [PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md](PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md)
 > (§3 *An older server strips the snapshot*, §7 item 18 and §10 item 1 — on branch `feat/round-authors-e5` at
 > `c1216b42`; see §5 below for the boundary). The owner approved this work on 2026-10-18.
 

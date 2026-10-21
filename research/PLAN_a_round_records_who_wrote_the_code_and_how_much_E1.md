@@ -1,6 +1,8 @@
 # PLAN — E1 stories: the spike measures both sides and cuts the fixtures
 
-> Status: **in progress, 2026-10-15: S1-S3 and S5 done; S4 open on one item, `/clear` (needs an attended session).** Epic E1 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
+> Status: **IMPLEMENTED, 2026-10-15.** Merged as #828 (`509b9b007`). A follow-up that keeps the result of every kept write call merged as #851 (`e53e35ba4`, 2026-10-18). **Partial by decision: story E1.S4 has an unbuilt half.** The attended `/clear` probe never ran. The headless probes for inheritance, `--resume` and `--no-session-persistence` did run. The check of three rounds per side was weaker than planned: a second script recomputed counts, and nobody read the lines. The torn-tail frequency under heavy writing stayed "never seen" (0 of 9 379 samples). These three items are named below in *Deviations* and in *Open tail*. They move to [PLAN_round_authors_backfill_on_the_live_stores.md](../todo/PLAN_round_authors_backfill_on_the_live_stores.md) (N4). Epic E1 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
+>
+> Status before promotion (kept as history): **in progress, 2026-10-15: S1-S3 and S5 done; S4 open on one item, `/clear` (needs an attended session).** Epic E1 of [PLAN_a_round_records_who_wrote_the_code_and_how_much.md](PLAN_a_round_records_who_wrote_the_code_and_how_much.md).
 >
 > Scope: no product code and no schema step. A results file under `research/`, two measuring scripts under `scripts/`
 > with their `node --test` tests, sanitised fixtures under `src_mcp/tests/fixtures/caller-transcripts/`, one C# guard
@@ -224,7 +226,7 @@ written — the prediction precedes every observation, including an exploratory 
     (`claude-opus-5-5[1m]` …), an exact list like the rest; only `claude-opus-5-5[1m]` occurs in the eight sources, the others mirror
     the `alias` vocabulary's `[1m]` forms. Guard: `EveryKeptWriteCallHasItsResult` (a write call with no id is reported, never
     skipped), `EveryCheckoutIsAFixtureRootOrUnderOne`, and `TheCuttersWriteToolsAreTheGuardsTests` (the cutter's `WRITE_TOOLS`
-    equals the guard's list). The record: [PLAN_e1_fixtures_keep_the_write_results.md](../research/PLAN_e1_fixtures_keep_the_write_results.md).
+    equals the guard's list). The record: [PLAN_e1_fixtures_keep_the_write_results.md](PLAN_e1_fixtures_keep_the_write_results.md).
 - **Test scenarios** (`node --test`, synthetic inputs in temp dirs):
   - `everyStringOffTheAllowlistBecomesTheSentinel` — markers in prompt, `thinking`, `signature`, `toolUseResult`,
     `Bash.command`, `description`, `gitBranch` → none survive; the line count and the key order are unchanged.
@@ -426,3 +428,26 @@ written — the prediction precedes every observation, including an exploratory 
 9. **Line 401.** Fixtures "under `src_mcp/tests/`" — the existing convention is `src_mcp/tests/fixtures/`
    (`CoaiMcp.Tests.csproj:36`), and with `core.autocrlf=true` a `.jsonl` fixture checks out CRLF unless
    `.gitattributes` pins it; the plan says neither.
+
+## Promotion record (2026-10-21)
+
+### Deviations from the plan
+
+1. **Twenty fixture cases, in folders `c01`–`c20`.** The folder names are short, because a tracked path over 160 characters fails in a git worktree past Windows' 260. `manifest.json` maps each case name to its folder. The required list had nineteen cases. `message-last-line-below-max` is the twentieth.
+2. **Every `side` in the manifest is `windows`.** Each WSL caller session wrote into repositories outside this family's public ones. None may be published. The case where a message's last line is below its maximum (16 ids on WSL) is derived from Windows data.
+3. **Q6's prediction was refuted by two orders of magnitude.** The prediction was 300 ms p50 over 14 MB. The largest Windows session is 650 MB (273 files). A full parse took 30.5 s p50 and a day-gated parse took 19.9 s, in Node. E3 therefore skips a line before it decodes it, and E5 measured the C# reader again.
+4. **Q5's Windows figure was an observation made before the prediction was written** (plan defect 4). Only the WSL figure was a real prediction.
+5. **The check of three rounds per side was weaker than planned.** A second script, not the harness, recomputed the window counts for rounds at the 10th, 50th and 90th percentile. Nobody read the lines. The E1 RESULTS file says so.
+6. **The follow-up #851 changed published fixtures.** It re-cut c12, c17 and c19 so that every kept write call has its `tool_result`; added per-case `checkouts` to `manifest.json`; widened the model-ref vocabulary with seven `[1m]` ids and re-cut eight cases; and updated `ApprovedAllowlistSha256`. Its record is [PLAN_e1_fixtures_keep_the_write_results.md](PLAN_e1_fixtures_keep_the_write_results.md).
+7. **The torn-tail frequency under heavy writing was not measured to a conclusion.** E1 sampled 0 torn last lines in 9 379 reads (4 107 on Windows, 5 272 on WSL). That is "never seen", not "cannot happen". `TornTailCountsAsPartial` stays `false`.
+
+The check boxes in *Definition of Done* above were not ticked as work landed. Where they differ from this record, this record is right: the `/clear` probe and the hand check of three rounds do not hold.
+
+### Open tail
+
+| Item | Where it lives |
+|---|---|
+| The attended `/clear` probe never ran. The owner answered "ok" on 2026-10-16 (E7 §10 item 4). That is an acceptance, not a measurement. | [PLAN_round_authors_backfill_on_the_live_stores.md](../todo/PLAN_round_authors_backfill_on_the_live_stores.md), N4 item 1 |
+| The line-by-line hand read of a window | the same plan, N4 item 2 and N9 |
+| The torn-tail frequency under heavy writing. The constant `TornTailCountsAsPartial` stays `false`. | the same plan, N4 item 3 |
+| No fixture was cut from WSL data | Not planned. The privacy reason stands. J1 checks WSL rounds by hand (N9). |

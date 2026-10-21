@@ -13,8 +13,8 @@
 > **Open tail:** the E3 plan's §8 (on the E3 branch, not on main) still reads "in progress" for this branch, and E3.S4
 > tests 7 and 13 and test 43's totals are to be run against these fixtures once merged.
 >
-> Parent: [PLAN_a_round_records_who_wrote_the_code_and_how_much_E1.md](../todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E1.md)
-> (epic E1). Asked by [PLAN_a_round_records_who_wrote_the_code_and_how_much_E3.md](../todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E3.md)
+> Parent: [PLAN_a_round_records_who_wrote_the_code_and_how_much_E1.md](PLAN_a_round_records_who_wrote_the_code_and_how_much_E1.md)
+> (epic E1). Asked by [PLAN_a_round_records_who_wrote_the_code_and_how_much_E3.md](PLAN_a_round_records_who_wrote_the_code_and_how_much_E3.md)
 > §8, items 1 and 2, which says this lands as E1's own pull request, merged before E3.S4 is coded.
 
 ## 1. The symptom

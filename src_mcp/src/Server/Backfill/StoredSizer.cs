@@ -28,7 +28,7 @@ internal abstract record SizeOutcome
 
 /// <summary>
 /// A stored code round's size, reconstructed the way the live round measured it and never re-based (E7.S2 of
-/// <c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E7.md</c>): the diff the round would have built from its RECORDED base and head, shaped
+/// <c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E7.md</c>): the diff the round would have built from its RECORDED base and head, shaped
 /// with today's budget, and measured by <see cref="RoundSizer"/> — the live assembly, so the partition, the delta numstat, <c>numstats disagree</c> and
 /// the gitlink count are E2's own code, not a second copy.
 /// </summary>

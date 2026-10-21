@@ -1776,7 +1776,7 @@ empty directory and take no switch. Measured on one commit, Fast found MORE from
 models at a fraction of the tokens —
 [RESULTS_findings_that_are_worth_something.md](RESULTS_findings_that_are_worth_something.md).
 
-**The size step — every code round measures itself (E2.S4, `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md`).**
+**The size step — every code round measures itself (E2.S4, `research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md`).**
 In the code stage's `MakeWork` lambda (`PanelService.ReviewCodeAsync`), right after `CollectAsync` and `DiffShaper.Shape`,
 `RoundSizer.MeasureAsync(_context, repoPath, sha, collected, shaped, session.Rounds, _log, roundToken)` builds the round's
 `RoundSize` from the diff it actually built: the whole scope is `ChangePartition.Of` over `collected.Counted`, the unfiltered
@@ -3559,7 +3559,7 @@ Reached through both preview-fork shapes as step 20 is (`TheRoundKeyIsStepTwenty
 step-20 file reads and leaves it at twenty — no reader asks for the column.
 
 **Schema step 22 — the round's size and `reviewers.effort`** (`Schema.TheRoundsSize`, appended after step 21; story
-E2.S3 of `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md`, contract C2). `round_changes` holds one row
+E2.S3 of `research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E2.md`, contract C2). `round_changes` holds one row
 per (scope `whole`/`delta`, coverage, kind) cell of the round's `RoundRecord.Size` — counts and lines only, no path — and
 `rounds` gains `size_state`, `delta_state`, `delta_from`, `size_origin` and `size_gitlinks`, because a delta that is
 `unavailable` and one that is an observed zero both have no rows and the state is what tells them apart.
@@ -3587,7 +3587,7 @@ twenty-two (`ThePlanSourceIsStepTwentyThreeTests`). `ThePairsThemselvesTests`' s
 rest.
 
 **Schema step 24 — who wrote the code a round reviewed** (`Schema.TheRoundsAuthors`, appended after step 23; story E5.S2 of
-`todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`). `round_authors` holds one row per row of the round's
+`research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`). `round_authors` holds one row per row of the round's
 `AuthorsSnapshot` — `who` (`main` | `subagent`), `agent` (the opaque id, **empty for main**), `requested`, `model`, `effort`,
 `agent_type`, `association`, `window` (`before-open` | `round`), `launches`, `turns`, the four token terms and `write_calls`, keyed
 `(round_id, ordinal)`; the round's own stage and number are its `round_id`'s. Fourteen columns join `rounds`: `authors_state` (the
@@ -3639,7 +3639,7 @@ all read as an absent member; a malformed row never fails the page (`TheLogNames
 ignores the member (`anOlderExtensionReadsALogPageCarryingASize.test.ts`), and its rounds-log line reads the session file, not this
 (`module_extension.md`).
 
-**`--log` names the state of each round's authors** (story E5.S3 of `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`).
+**`--log` names the state of each round's authors** (story E5.S3 of `research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`).
 `LoggedRound` gains a third init property, `AuthorsState` (`string?`, JSON `authorsState`), absent when null. `RoundsQuery.Rounds` chains
 `RoundAuthorsLog.Attach` (its own file, the `RoundPlanSources` shape) after `RoundPlanSources.Attach` — one call, no fourth rung on the SQL
 ladder. It runs ONE query per page, `SELECT id, authors_state FROM rounds WHERE authors_state <> '' AND id IN (SELECT value FROM
@@ -3650,7 +3650,7 @@ word:** an empty column and a value `AuthorsSnapshot.IsWellFormed` refuses read 
 (a catch around the query would swallow *no such column* and hide what the `HasColumn` guard prevents).
 
 **The authors step — who wrote what a round reviewed, on the answer path** (story E5.S4 of
-`todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`). `RoundAuthorsStep.For(session, record)` (`src/Server/Rounds/`) runs in
+`research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`). `RoundAuthorsStep.For(session, record)` (`src/Server/Rounds/`) runs in
 `RoundEngine` as ONE statement after the record's `with` block — `record = record with { Authors = _authors.For(session, record) }` — before the
 save and before the projection opens the database. It answers null (not recorded) for any round that E4 does not call *settled* (a plan or
 code round, `done`, not `skipped`): a skipped, interrupted or running round and every feature or document round; `Assign` is never
@@ -3679,12 +3679,14 @@ declared submodule of the checkout's `.gitmodules`, parsed by `GitModules.In` �
 logged at Debug as numbers (`AgentFilesEmpty` included); none becomes a reason, a column or a member. `PanelSettings.TranscriptHome` is the one place the
 default transcripts folder is written (`ClaudeHome.Default.With(AgentLogDir)`); the window over the caller's own work (`RoundEngine.WhatTheCallerWasDoing`) reads it too. Every method of `RoundAuthorsStep`, `AuthorPeers`, `AuthorsBudget`, `RoundAuthorsTable` and `RoundAuthorsLog` stays within cyclomatic complexity 4: CA1502 is a build error for those files (`.editorconfig`, as for E4's core).
 
-### `--round-authors` — who wrote the code, against what the reviewers found (2026-10-19, E6 of `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much.md`)
+### `--round-authors` — who wrote the code, against what the reviewers found (2026-10-19, E6 of `research/PLAN_a_round_records_who_wrote_the_code_and_how_much.md`)
 
-The owner's question — *"is the code better or worse since the coders moved to Sonnet?"* — answered from data the rounds already
-record: the authors of a round (E3–E5) beside what the reviewers found. `coai-mcp --round-authors` reads `coai.db` read-only and
+The owner's question is *"is the code better or worse since the coders moved to Sonnet?"*. `--round-authors` can produce the report for it,
+from data the rounds already record: the authors of a round (E3–E5) beside what the reviewers found. **The owner's answer is not available yet.**
+It needs the live backfill, the hand-check and the `RESULTS_` file (see [PLAN_round_authors_backfill_on_the_live_stores.md](../todo/PLAN_round_authors_backfill_on_the_live_stores.md)).
+`coai-mcp --round-authors` reads `coai.db` read-only and
 prints **sums**; the figures, the marks and the header are made from them at render time. **An association, never a cause** — the
-first line of every report says so. The stories are `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E6.md`; its decisions
+first line of every report says so. The stories are `research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E6.md`; its decisions
 D1–D19 are the rules below by reference.
 
 **The contract.** `--round-authors [--since <utc>] [--until <utc>] [--split <utc>] [--stage code|plan] [--cohort first|corrective|all]
@@ -3743,7 +3745,7 @@ carries no absolute path; `NumeratorSums` carries `DeltaTotal` (the per-100-delt
 reviewers, findings and size are read for the in-window rounds only; `ExclusionCount` carries `Because` (the per-word split of `size unavailable`);
 CA1502 (cyclomatic complexity 4) is switched on in `.editorconfig` for the report's files.
 
-### `--backfill-authors` — the authors and the size of the rounds that ran before the live path knew (2026-10-19, `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E7.md` S1–S4)
+### `--backfill-authors` — the authors and the size of the rounds that ran before the live path knew (2026-10-19, `research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E7.md` S1–S4)
 
 **What it is.** `coai-mcp --backfill-authors [--since <ISO-8601 UTC instant>] [--dry-run]` gives every settled plan or code round the authors and
 (for a code round with no size) the size the live path would have written, from what is on disk — one run per side, over that side's OWN store and
@@ -3829,6 +3831,8 @@ fields cannot name is refused loudly rather than printed as zeros — code gate 
 **A still-running peer round is invisible in production** (E5 §12 deviation 8): it has no row and no snapshot, so it carries no caller on disk and E4's `peer running`
 cannot name it until it is projected. `ANamedPeerRoundStillRuns` therefore holds for a round projected in the database (the tests' state) and the repair of such a row
 leans on the grown-peer-set rule instead; a `peer running` row without its transcript stays provisional for ever.
+
+**Where it stands (2026-10-21).** The mode is built, merged (#865) and tested offline only: every test store is a `testsToDelete-` temporary folder. It has **never run on a live store**, on Windows or in WSL. No `mcp-v*` tag contains it yet (the newest, `mcp-v0.62.0`, is older than E5). The pre-flight script `scripts/backfill-preflight-servers.*`, the judge's dump `scripts/round-authors-dump.mjs` and the `--round-authors` JSON oracle in the S4 scenario are not written. The live runs, the hand-check and the `RESULTS_` file are the open plan [PLAN_round_authors_backfill_on_the_live_stores.md](../todo/PLAN_round_authors_backfill_on_the_live_stores.md). Until they run, rounds recorded before the live path knew show their authors as not recorded, and `--round-authors` reports their cells as empty or provisional.
 
 ### The gate's history of a piece of work (`GateHistoryQuery`, 2026-09-26, feature review S2.3)
 

@@ -6487,7 +6487,7 @@ Tests: `rounds.test.ts` (the function), `roundsLog.test.ts` (the row, the line, 
 `bundledPage.test.ts` (the page as it ships, opened with and without a source); `LogRow` gained a required field, so the five
 fixtures that build one carry `reviewedFrom: ''`.
 
-**The "written with" line — who wrote what a round reviewed** (E5.S6 of `todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`).
+**The "written with" line — who wrote what a round reviewed** (E5.S6 of `research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md`).
 An opened round shows one more dimmed line under *asked by* and *reviewed from*: *written with Opus 5.5 (main) · 3 Sonnet coders · +412 −88 in 9
 files*, *… · partial — peer running*, *authors not observed — transcript not found*, and nothing for a round without a snapshot.
 `RoundRecord` gains `authors?: unknown` and `size?: unknown` (E2 added no TypeScript). `writtenWith(authors, size)` lives in `src/authorsLine.ts` — its own

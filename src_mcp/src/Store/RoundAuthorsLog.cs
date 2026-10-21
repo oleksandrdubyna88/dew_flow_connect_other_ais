@@ -4,7 +4,7 @@ using Microsoft.Data.Sqlite;
 namespace CoaiMcp.Store;
 
 /// <summary>
-/// Reading a page of rounds' authors states for <c>--log</c> (E5.S3 of <c>todo/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md</c>):
+/// Reading a page of rounds' authors states for <c>--log</c> (E5.S3 of <c>research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E5.md</c>):
 /// one query for the whole page, never one per round.
 /// </summary>
 /// <remarks>
