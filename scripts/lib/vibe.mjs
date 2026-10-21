@@ -8,7 +8,7 @@
 // Linux (E1 of research/PLAN_kimi_and_vibe_on_linux.md, §5): every platform fact below takes the platform as an argument —
 // defaulting to this process's — so both arms are tested on both operating systems, and an arm is never chosen by guessing.
 import { spawnSync } from 'node:child_process';
-import { existsSync, lstatSync, readdirSync, rmdirSync, symlinkSync, unlinkSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readdirSync, rmdirSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, posix, relative, win32 } from 'node:path';
 
@@ -261,3 +261,95 @@ export function vibeArgs({ workdir, exportDir, trust = false, timeLimit = 120, r
   return ['-p', '--output', 'json', '--agent', 'plan', '--enabled-tools', 'read_file', '--workdir', workdir,
     '--time-limit', String(timeLimit), '--output-dir', exportDir, ...(trust ? ['--trust'] : []), ...(resume ? ['--resume', resume] : [])];
 }
+
+
+// ------------------------------------------------------------------------------------------------------ M-V7's keyring arms (S-N17)
+
+/**
+ * The backend coai's native-Linux Vibe launch forces (DN10 of todo/PLAN_kimi_and_vibe_on_native_linux.md): `keyring` 25.7.0 takes
+ * `PYTHON_KEYRING_BACKEND` from the environment BEFORE its config file (core.py:96-115) and `fail.Keyring` raises on every call, which Vibe
+ * catches (vibe/utils/keyring.py:165-170) — so no keyring is reachable and the sign-in can only come through the linked `.env`.
+ */
+export const KEYRING_FAIL_BACKEND = 'keyring.backends.fail.Keyring';
+
+const KEYRING_ARMS = ['a', 'a2', 'a3', 'a3c', 'b'];
+
+/**
+ * M-V7's arm `arm` (a, a2, a3, a3c, b) as the environment it adds to the child and the files it needs — PURE, no file is made. On Linux (the
+ * launch E2 ships): arms a and a2 carry the forced backend; a3 carries it AND a `HOME` whose keyringrc.cfg names a keyring that IS available
+ * (`<scratch>/fake-home`, written by `writeProbeKeyring`) — the forced backend must beat it, so the marker never appears; a3c is the same fake
+ * HOME WITHOUT the variable — its teeth: the marker must appear, else a3 proved nothing. On win32 every arm is today's (the Credential Manager
+ * road, RESULTS §12) and a3/a3c do not apply. `applies: false` = the probe does not run that arm on this platform.
+ */
+export function keyringArm(arm, platform = process.platform, { scratch }) {
+  if (!KEYRING_ARMS.includes(arm)) throw new Error(`keyringArm: no M-V7 arm "${arm}" (${KEYRING_ARMS.join(', ')})`);
+  const none = { arm, applies: true, env: {}, fakeHome: '', markerFile: '' };
+  if (isWindows(platform)) return { ...none, applies: !['a3', 'a3c'].includes(arm), env: arm === 'a2' ? { VIBE_TEST_DISABLE_KEYRING: '1' } : {} };
+  const p = pathOf(platform);
+  const fakeHome = p.join(scratch, 'fake-home');
+  const forced = { PYTHON_KEYRING_BACKEND: KEYRING_FAIL_BACKEND };
+  return {
+    a: { ...none, env: forced },
+    a2: { ...none, env: { VIBE_TEST_DISABLE_KEYRING: '1', ...forced } },
+    a3: { ...none, env: { ...forced, HOME: fakeHome }, fakeHome, markerFile: p.join(scratch, 'keyring-marker.txt') },
+    a3c: { ...none, env: { HOME: fakeHome }, fakeHome, markerFile: p.join(scratch, 'keyring-marker.txt') },
+    b: none,
+  }[arm];
+}
+
+/** The probe's own keyring backend: AVAILABLE (so `keyring` would pick it) and empty (so no key exists anywhere); it notes only the SERVICE it was asked about. */
+function probeBackendSource(markerFile) {
+  return [
+    '# The probe\'s keyring backend (scripts/lib/vibe.mjs writeProbeKeyring). It is available and holds nothing: every call appends the',
+    '# service name it was asked about to the marker file and answers None, so the marker proves the backend was reached and no secret exists.',
+    'from keyring.backend import KeyringBackend',
+    '',
+    `MARKER = ${JSON.stringify(fwd(markerFile))}`,
+    '',
+    '',
+    'def _note(service):',
+    '    with open(MARKER, \'a\', encoding=\'utf-8\') as marker:',
+    '        marker.write(service + \'\\n\')',
+    '',
+    '',
+    'class MarkerKeyring(KeyringBackend):',
+    '    priority = 1',
+    '',
+    '    def get_password(self, service, username):',
+    '        _note(service)',
+    '        return None',
+    '',
+    '    def set_password(self, service, username, password):',
+    '        _note(service)',
+    '        return None',
+    '',
+    '    def delete_password(self, service, username):',
+    '        _note(service)',
+    '        return None',
+    '',
+  ].join('\n');
+}
+
+/**
+ * Writes the fake home's keyring config and backend — ONLY under `fakeHome`; the marker file is named in the backend and made by it, never here.
+ * Returns the written paths, relative to `fakeHome` with `/`. Python's `keyring` reads `<HOME>/.config/python_keyring/keyringrc.cfg`.
+ */
+export function writeProbeKeyring(fakeHome, markerFile) {
+  const config = ['[backend]', 'default-keyring = probe_marker.MarkerKeyring', `keyring-path = ${fwd(join(fakeHome, 'keyring-backend'))}`, ''].join('\n');
+  const parts = [['.config/python_keyring/keyringrc.cfg', config], ['keyring-backend/probe_marker.py', probeBackendSource(markerFile)]];
+  for (const [rel, text] of parts) {
+    mkdirSync(join(fakeHome, rel, '..'), { recursive: true });
+    writeFileSync(join(fakeHome, rel), text);
+  }
+  return parts.map(([rel]) => rel);
+}
+
+/** `keyringArm`, and — for the two arms that need it — the fake home made. The one call the probe's M-V7 setup makes. */
+export function keyringSetup(arm, platform = process.platform, { scratch }) {
+  const spec = keyringArm(arm, platform, { scratch });
+  if (spec.fakeHome) writeProbeKeyring(spec.fakeHome, spec.markerFile);
+  return spec;
+}
+
+/** `--arms a3,a3c` (the Vibe probe): an arm runs when no filter is given, or when its name up to the first colon (`a3: forced backend …` → `a3`) is listed. */
+export const armWanted = (arm, filter) => filter.length === 0 || filter.includes(arm.split(':')[0]);

@@ -377,6 +377,75 @@ checked against `killed-hard` and the pairs before N-K2 runs.
 **Roles.** Opus brief (two briefs if the coder prefers: the Vibe half, then the Kimi half — one pull request either way); Sonnet codes;
 Opus reviews, with the parity cases read side by side with the product's tests.
 
+**Status — CODED 2026-10-21 (Sonnet coder; branch `feat/native-linux-e1-s3`); Opus review and the code gate still to run; the lead's two live steps NOT run.**
+Every scenario of this story was watched RED against a stub that compiles, then GREEN, and every break-it was run both ways (node tests only; the
+numbers are in `research/module_tests.md`, section *E1.S3*). Nothing ran `kimi`, `vibe` or Python; no WSL, no remote host, no paid turn.
+
+| Scenario | Where | Red message observed | Break-it |
+|---|---|---|---|
+| S-N1 / S-N13 | `scripts/lib/proc.test.mjs` (the product's own cases by name) | *a running kimi acp (comm MainThread) was not seen as Kimi — the guard would let a second refresher start* | B10 red, restored |
+| S-N2 | `scripts/lib/kimi.test.mjs` | *manifest() hashed credentials/kimi-code-env-x.json — a credential file's bytes were read* | B11 red, restored |
+| S-N3 | `scripts/lib/kimi-home.test.mjs` | *the Linux built environment has no XDG_CACHE_HOME — a direct kimi launch fills os/ (DL11)* | B12 red, restored |
+| S-N4 | `scripts/lib/kimi-arms.test.mjs` (arms moved to `lib/kimi-arms.mjs`) | *M-K3 Write has no owned root — the shim refuses it (E4.3), and the control would run on the real home* | dropped `ownedSpec`: red, restored |
+| S-N17 | `scripts/lib/vibe.test.mjs` | *M-V7 arm a on Linux carries no PYTHON_KEYRING_BACKEND — it measures today's open keyring road, not the launch E2 ships (DN10)* | B15 red, restored |
+| S-N18 | `scripts/lib/kimi-schedule.test.mjs` | *the schedule ran killed-1, killed-2 and killed-3 before any normal launch — the next launch's reconcile was never observed right after a kill* | B13 and B14 red, restored |
+
+**Deviations (what shipped differently from the story's text).**
+
+1. `linuxProcesses(proc, reads, { uid })` gained a reads seam (an in-memory `/proc` in tests) and, with the product's name rule, the product's other listing rules: another account's process and a
+   zombie are skipped, and a same-account process identified by neither `exe` nor `cmdline` THROWS naming the pid (the product makes the listing unreadable there; a guard must not read "cannot tell" as
+   "no kimi"). The listing test over a real folder now writes `status` and `cmdline` files into its fake `/proc` (a process with no readable name is skipped, as in the product); the two
+   `parseProcStat` assertions changed only the field name `name` to `comm`.
+2. `listProcesses` (with its Windows PowerShell reader) and the 10-minute wait (`waitForNoOtherKimi`, clock/sleep/listing injected) moved from the tree-hold probe into `lib/proc.mjs`, so the
+   confinement probe shares them; a guard that gives up stops the confinement run (`StopProbe`) instead of launching around the other kimi.
+3. `manifest`: `credentials/` is ALWAYS lstat-only (not an opt-in the caller can forget); `skip(rel)` names further lstat-only paths; the call sites use the safe default. Recorded names are
+   `credentials/kimi-code-env-<hex>.json` with the hex redacted, values `lstat:<size>:<mode>:<mtime>`.
+4. `ownedRoot(root, { platform })` also makes the 0700 `cache/` folder on a non-Windows host (as `KimiHome.MakeCache` does) and returns `cache`; the tree-hold probe uses `ownedRoot` instead of
+   `mkdir os`. The existing Linux-built-environment assertion lists the third extra name (`XDG_CACHE_HOME`) — strengthened, not weakened.
+5. M-K3 and M-K6 moved out of `probe-kimi-confinement.mjs` into `lib/kimi-arms.mjs` (`ownedShimArms`) so a test can read the table; each arm (control or not) also carries `profile` = `<root>/os`.
+   The other legacy cells that go through the shim without an owned root (M-K2, M-K4, M-K7 …) have the same gap and are NOT touched — outside S-N4's text; named here for Opus.
+6. All killed arms signal with `process.kill(child.pid, KILL_ARMS[arm].signal)` (`killed` stays SIGTERM = the old `child.kill()`); the signal table lives in `lib/kimi-schedule.mjs`.
+   The orphan record is taken 300 ms after the signal, beside the lock watch (so the lock timings are not delayed).
+7. M-V7: on Linux arm b is unchanged (the story lists a and a2 only); a3/a3c do not run on Windows. Added, to make the free live check possible without the paid arm b: `--arms a3,a3c` on
+   `probe-vibe-confinement.mjs` (`armWanted` in `lib/vibe.mjs`, tested).
+8. `watchAfterKill` waits until the orphaned `kimi` is gone before the `-next` launch of `killed-hard`, and the "no other kimi" guard also waits for it, so a plain `-next` launch never meets a LIVE
+   survivor — it exercises the reconcile of an abandoned marker whose survivor is dead. The live variant was asked for and is built as the follow-up below (`killed-hard-live`).
+
+**Follow-up 1 (the lead's request, same day) — N-K2's LIVE-survivor arm `killed-hard-live`.** The cornerstone C2 is that a survivor keeps the next launch blocked and only its
+confirmed disappearance clears the marker (`KimiSurvivorGate`). The arm is a TRIPLE (`lib/kimi-schedule.mjs`): `killed-hard-live-<n>` (SIGKILL; it does NOT wait for the orphan to end), then
+`-next` — a normal launch started while the killed arm's OWN `kimi` (the "survivor") still runs — then `-after`, a third launch once the survivor has ended (watched by pid and start time),
+which must reconcile and clear. The probe's "no other kimi" wait is bypassed for exactly that survivor: `waitForNoOtherKimi({ except: [{ pid, startTime }] })` compares pid AND the start time
+(field 22 of `/proc/<pid>/stat`) at the moment of the check — a reused pid is a stranger, an unreadable start time excepts nothing, and the bypass is never by name; every other kimi still blocks. Recorded
+in the `-next` row: the marker before and after, the refusal text (the shim's `failure`/`reason`, hex redacted), the survivor and its NEW parent, whether it lived before and after, and a verdict
+(`liveVerdict`: *as expected: refused Busy naming the survivor, nothing started, the marker stands, the survivor untouched*, or `UNEXPECTED: …` saying which part differed, or *not evidence* when the survivor had
+already ended). The killed run's owned home is disposed only after the survivor has ended (by `-after`). RED: *the schedule has no live-survivor pair — the next launch never starts while the killed
+arm's own orphan lives* (`kimi-schedule.test.mjs`); break-it, the bypass by name instead of pid and start time: *a kimi that is not the orphan was let through — two refreshers could race*
+(`proc.test.mjs`), both restored.
+**This arm runs ONLY on a host where the owner allowed the window**: if the product's gate failed, two refreshers of one rotating token would sign the person out. It is therefore not in the default
+arm list and is refused unless `--allow-live-survivor` is passed (and off Linux). Note for the live run, from reading `KimiSurvivorGate`: when the shim that wrote the marker is gone, the gate's
+reconcile calls `ReconcileSeams.Terminate` (an end by identity through a pidfd) before it confirms — so the product may END the survivor and clear, rather than refuse. The probe does not assume
+either; the verdict says `UNEXPECTED: the survivor no longer ran…` and the numbers are recorded, which is the answer N-K2 needs.
+
+**Follow-up 2 (the lead's request, same day) — the Kimi 2.2.0 window's arms all run on owned roots.** M-K4 and M-K12 moved into `lib/kimi-arms.mjs` beside M-K3 and M-K6 (M-K12 out of `lib/kimi-d19.mjs`).
+Every arm of the four cells carries `requireOwned`, an owned `<root>/home` and `owned: true`; the launch refuses one that lost it (`ownedRefusal`, before the "no other kimi" wait and before anything
+starts) with *this arm has no owned root … it is refused, not run on the real KIMI_CODE_HOME*. RED per cell (`kimi-arms.test.mjs`): *M-K4 Bash run_in_background has no owned root — the shim refuses it
+(E4.3), and the control would run on the real home*, then the same for M-K12 and *M-K3 Write (run 1) was not refused without an owned root*; break-it (`ownedRefusal` always empty): red, restored.
+M-K12's arms changed shape because the shim always redirects the OS home (so an arm that leaves it real was refused by name, `shimRefusal`): (a) the real OS home now runs through the small client
+(`kind: 'acp'`) on the owned home; (b) the redirected OS home runs through the shim, whose `<root>/os` is the empty folder; the control is `-p` on an owned home with the real OS home (it used to run on
+the person's own KIMI_CODE_HOME). The canary stays in the person's REAL `~/.agents`, written and removed by exact paths only (`makeAgentsCanary` / `removeAgentsCanary`: `rmSync` on named files,
+`rmdirSync` — never recursive — on named folders, a pre-existing `AGENTS.md` refused); a new test proves a stranger's file inside the canary folder survives and the removal fails loudly (break-it: a
+recursive delete: red, restored). Arms (a) and the control leave the OS home real on purpose, so Kimi's native-file extraction lands in the person's real `~/.cache` there (it is what the arm measures).
+
+**Left for the lead (not run by the coder, by instruction).**
+
+- *The S-N17 live check (free, WSL, Vibe installed):* `node scripts/probe-vibe-confinement.mjs --vibe "$(command -v vibe)" --cells M-V7 --arms a3,a3c --repeats 1` — expect a3c's `keyringMarker=yes`,
+  a3's `keyringMarker=no`, both ending *Missing MISTRAL_API_KEY*. The two lines go into this summary and are carried into `RESULTS_vibe_confinement.md` §32 by E2.
+- *The one paid WSL2 Kimi turn (after the `XDG_CACHE_HOME` fix; build the shim first):* `node scripts/probe-kimi-tree-hold.mjs --arms normal --repeats 1` — expect it answers, `os/` stays empty
+  (the row's `homeAfter` and the owned root's `os/`), both locks Free; record its spend.
+- *The live-survivor arm (only where the owner allowed the window; one sign-in, two possible refreshers if the gate failed):* `node scripts/probe-kimi-tree-hold.mjs --arms killed-hard-live --repeats 1 --allow-live-survivor`.
+- *The 2.2.0 window (one paid window):* `node scripts/probe-kimi-confinement.mjs --cells M-K3,M-K4,M-K6,M-K12 --allow-agents-canary`.
+- *CI:* the new tests run on the Linux job (`node --test "scripts/**/*.test.mjs"`); no dotnet test was touched.
+
 ## 5. Build order
 
 1. E1.S1 (the facts script and `scripts/native/`) — nothing depends on it inside E1, and it is the first thing the Vibe series uses.

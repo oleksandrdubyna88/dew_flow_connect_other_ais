@@ -4037,3 +4037,31 @@ flowchart TD
 **Not built here, by the plan's own scope:** a Kimi consultant and a Kimi question row (`RuntimeCapabilities.Runtimes` and `ConsultantResolution` do not list Kimi; that is `feat/kimi-consultant`'s), so the harness
 has a plan round and a code round and no consult or question flow for Kimi. Tests: `KimiLaunchChecksTests` (S-K20), `KimiToolsOnLinuxTests`, `KimiPlacesOnLinuxTests`, `KimiEnvironmentOnLinuxTests`, `MountLocalityNetworkTests`,
 `KimiNetworkSignInSettingTests`, `KimiSurvivorMarkerReportTests`, `AKimiRowRunsThroughTheServiceOnWsl2Tests` — listed in [module_tests.md](module_tests.md).
+
+## The probe instruments measure the product's road — E1.S3 of the native-Linux plan (2026-10-21, `todo/PLAN_kimi_and_vibe_on_native_linux_E1.md`; DN4, DN5)
+
+Scripts only (`scripts/`); no product code changed and no answer of any runner changed. What the probes now do that they did not, and where it lives:
+
+- **Vibe's M-V7 measures the closed keyring road** (`scripts/lib/vibe.mjs` `keyringArm` / `keyringSetup` / `writeProbeKeyring`, wired in `scripts/probe-vibe-confinement.mjs`). On Linux arms a and a2 carry
+  `PYTHON_KEYRING_BACKEND=keyring.backends.fail.Keyring` — the environment the launch E2 ships; arm a3 carries it AND a `HOME` whose `.config/python_keyring/keyringrc.cfg` names the probe's own AVAILABLE backend
+  (`keyring-backend/probe_marker.py`, `MarkerKeyring`: appends the SERVICE name to a marker file, returns `None`, so no key exists); a3c is the same fake HOME without the variable. The row's `keyringMarker`
+  flag says whether the backend was reached: a3 must NOT (the forced backend wins), a3c MUST (else a3 proved nothing). Everything is written inside the arm's scratch. On Windows nothing changes and a3/a3c do not run.
+  `--arms a3,a3c` (`armWanted`) runs just those two, so the free live check never reaches the paid arm b. The precedence claim stays "to be proven" until a3/a3c are run (the lead's WSL check, then N-V1).
+- **One Kimi rule for every probe** (`scripts/lib/proc.mjs`). `linuxProcesses` returns `{ pid, ppid, comm, name }` with `name` read as `LinuxProcessListing` reads it, and `isKimi` is a port of
+  `ForeignKimiWatch.IsKimi`, so a running `kimi acp` (comm `MainThread`) is seen. The "no other kimi" wait is `waitForNoOtherKimi`, shared: `probe-kimi-tree-hold.mjs` runs it before every run and
+  `probe-kimi-confinement.mjs` now runs it before every launch (a kimi that does not end in 10 minutes stops the run). Parity with the product is pinned by `proc.test.mjs`, whose cases are the product's own.
+- **The confinement probe never reads a credential** (`scripts/lib/kimi.mjs` `manifest`). Its record of the person's `~/.kimi-code` around each launch hashes every file except `credentials/`, which is recorded by
+  `lstat` only (names with the slot's hex redacted, size, mode, mtime); the hash function is injected so a test proves it is never called for those paths. M-K3's and M-K6's arms moved to `scripts/lib/kimi-arms.mjs`
+  and now run on an owned root (shim arms) / an owned home with `owned: true` (the `-p` controls); `lib/kimi-home.mjs` `unixBuiltEnv` names `XDG_CACHE_HOME` beside `os/` as `KimiEnvironment` does (DL11), and
+  `ownedRoot` makes the 0700 `cache/` folder on a Linux host.
+- **N-K2 sees an abrupt death and the next launch** (`scripts/lib/kimi-schedule.mjs`, `scripts/probe-kimi-tree-hold.mjs`). A new arm `killed-hard` ends the shim with SIGKILL (the shim handles SIGTERM and ends the agent's
+  tree itself, so TERM proves nothing about an abandoned survivor marker); it counts only when a `*.survivors.json` existed in the lock folder at the kill. Every killed arm's repetition is a PAIR — `<arm>-<n>`, then at
+  once `<arm>-<n>-next`, a normal launch recording the marker before it, the shim's report and the marker after it — repeat-outer; each survivor of a kill is recorded with its NEW parent (pid, comm, exe basename).
+- **The live-survivor arm** (`killed-hard-live`, `scripts/probe-kimi-tree-hold.mjs`; N-K2 / cornerstone C2): SIGKILL, then a `-next` launch started WHILE the killed arm's own kimi runs — the probe's "no other kimi"
+  wait is bypassed for exactly that process, by pid and start time (`waitForNoOtherKimi({ except })`), every other kimi still blocking — then an `-after` launch once it has ended. It records the marker before and after,
+  the refusal text, the survivor's new parent and a verdict against `KimiSurvivorGate`'s promise (Busy naming the survivor, nothing started, the marker stands). Runs only with `--allow-live-survivor`, on a host
+  where the owner allowed the window: a failure of the gate would put two refreshers on one sign-in. (The gate's reconcile may also END an orphan by identity when the writing shim is gone; the verdict reports that as `UNEXPECTED`.)
+- **The 2.2.0 window's cells run on owned roots** (`scripts/lib/kimi-arms.mjs`: M-K3, M-K4, M-K6, M-K12). Every arm carries `requireOwned` and the launch refuses one with no `<root>/home` beside `<root>/os`
+  (`ownedRefusal`). M-K12's `~/.agents` canary still lives in the person's real `~/.agents`, written and removed by exact paths only.
+
+Tests: `proc.test.mjs`, `kimi.test.mjs`, `kimi-home.test.mjs`, `kimi-arms.test.mjs`, `vibe.test.mjs`, `kimi-schedule.test.mjs` — listed in [module_tests.md](module_tests.md) (section *E1.S3*). No paid or live run was made.

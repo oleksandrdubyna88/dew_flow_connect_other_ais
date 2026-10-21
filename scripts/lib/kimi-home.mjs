@@ -196,7 +196,9 @@ function unixBuiltEnv({ home, pin, profile, personsBin, parent }) {
     KIMI_CODE_HOME: home,
     ...(pin && { KIMI_CODE_NO_AUTO_UPDATE: '1' }),
     ...(personsBin && { PATH: [personsBin, minimal.PATH ?? ''].filter(Boolean).join(':') }),
-    ...(profile && { HOME: profile }),
+    // DL11: Kimi extracts ~2 MB of native files per launch into $XDG_CACHE_HOME, else $HOME/.cache — inside os/, which must stay empty. So the
+    // cache folder BESIDE os/ is named, as KimiEnvironment.cs:34/:94 does (KimiPlaces.Cache = <root>/cache). No redirect, no os/ to protect.
+    ...(profile && { HOME: profile, XDG_CACHE_HOME: posix.join(posix.dirname(profile), OWNED_CACHE) }),
   };
 }
 
@@ -223,11 +225,19 @@ export function shimEnv({ root, personsBin, pin = true, platform = process.platf
   return builtEnv({ home: p(root, OWNED_HOME), profile: p(root, OWNED_OS), personsBin, pin, platform, parent });
 }
 
-/** The product's layout (E4.2): `<root>/home` (KIMI_CODE_HOME, 0700) beside an empty `<root>/os`. Returns the three paths. */
-export function ownedRoot(root) {
+/** The cache folder beside `os/` that XDG_CACHE_HOME names (KimiPlaces.Cache). */
+const OWNED_CACHE = 'cache';
+
+/**
+ * The product's layout (E4.2): `<root>/home` (KIMI_CODE_HOME, 0700) beside an empty `<root>/os` — and, on a host that has XDG_CACHE_HOME (not Windows),
+ * `<root>/cache` (0700, as KimiHome.MakeCache makes it) so Kimi's native-file extraction never lands in `os/`. Returns the paths; `cache` is '' on Windows.
+ */
+export function ownedRoot(root, { platform = process.platform } = {}) {
   mkdirSync(join(root, OWNED_OS), { recursive: true });
   mkdirSync(join(root, OWNED_HOME), { recursive: true, mode: 0o700 });
-  return { root, home: join(root, OWNED_HOME), os: join(root, OWNED_OS) };
+  const cache = platform === 'win32' ? '' : join(root, OWNED_CACHE);
+  if (cache) mkdirSync(cache, { recursive: true, mode: 0o700 });
+  return { root, home: join(root, OWNED_HOME), os: join(root, OWNED_OS), cache };
 }
 
 // ----------------------------------------------------------------------------------------------- the ~/.agents canary

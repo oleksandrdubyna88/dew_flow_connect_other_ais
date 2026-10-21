@@ -4,14 +4,14 @@
 // canary takes out exactly what it put in, and Kimi's config and reports parse. Runs nothing of Kimi's; makes folders and
 // links only under this user's own temp folder, and removes them.
 import assert from 'node:assert/strict';
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
 import { MINIMAL_UNIX, MINIMAL_WINDOWS } from './vibe.mjs';
 import {
   CANDIDATES, agentsCanaryPlan, builtEnv, classifyHomeEntry, credentialNames, disposeOwnedHome, inventory, makeAgentsCanary, makeOwnedHome, minimalConfigToml,
-  modelAlias, outputTokens, parseUsageLine, personsOauth, realHomeVerdict, removeAgentsCanary, shimEnv,
+  modelAlias, outputTokens, parseUsageLine, ownedRoot, personsOauth, realHomeVerdict, removeAgentsCanary, shimEnv,
 } from './kimi-home.mjs';
 
 const WINDOWS = process.platform === 'win32';
@@ -88,9 +88,9 @@ test('on Linux the owned home\'s credentials is a SYMLINK to the person\'s folde
   disposeOwnedHome(home, real, credentialNames(real));
 });
 
-test('the Linux built environment is MinimalUnix + the two variables, PATH joined with ":", and the OS home is HOME alone (DL11)', () => {
+test('the Linux built environment is MinimalUnix + the two variables + the cache folder, PATH joined with ":", and the OS home is HOME alone (DL11)', () => {
   const env = builtEnv({ home: '/r/home', profile: '/r/os', personsBin: '/p/bin', platform: 'linux', parent: { PATH: '/usr/bin', HOME: '/home/u', USER: 'u', APPDATA: 'x' } });
-  assert.deepEqual(Object.keys(env).filter((k) => !MINIMAL_UNIX.includes(k)).sort(), ['KIMI_CODE_HOME', 'KIMI_CODE_NO_AUTO_UPDATE']);
+  assert.deepEqual(Object.keys(env).filter((k) => !MINIMAL_UNIX.includes(k)).sort(), ['KIMI_CODE_HOME', 'KIMI_CODE_NO_AUTO_UPDATE', 'XDG_CACHE_HOME']);
   assert.equal(env.HOME, '/r/os');
   assert.equal(env.PATH, '/p/bin:/usr/bin');
   for (const name of ['USERPROFILE', 'HOMEDRIVE', 'HOMEPATH', 'NoDefaultCurrentDirectoryInExePath', 'APPDATA']) assert.equal(name in env, false, name);
@@ -199,4 +199,47 @@ test('Kimi\'s reports parse: the /usage line, every outputTokens of a session lo
   assert.equal(modelAlias(log), 'kimi-code/k3');
   assert.equal(modelAlias(''), '');
   assert.equal(statSync(base).isDirectory(), true);
+});
+
+// ------------------------------------------------------------------------------------------------------ the cache folder beside os/ (S-N3)
+// DL11: Kimi extracts about 2 MB of native files on every launch into $XDG_CACHE_HOME, else $HOME/.cache — inside os/, which must stay EMPTY.
+// The product names its own cache/ folder (KimiEnvironment.cs:34, :94; KimiPlaces.Cache = <root>/cache); the probe's Linux built environment must,
+// or a direct `kimi -p` control or `kimi --version` fills os/ — an artefact that would read as a product failure.
+
+test('S-N3: the Linux built environment names XDG_CACHE_HOME as the cache folder beside os/ — for the shim and for a direct launch', () => {
+  const direct = builtEnv({ home: '/r/home', profile: '/r/os', platform: 'linux', parent: { PATH: '/usr/bin' } });
+  const shim = shimEnv({ root: '/r', personsBin: '/p/bin', platform: 'linux', parent: { PATH: '/usr/bin' } });
+
+  assert.equal(direct.XDG_CACHE_HOME, '/r/cache', 'the Linux built environment has no XDG_CACHE_HOME — a direct kimi launch fills os/ (DL11)');
+  assert.equal(shim.XDG_CACHE_HOME, '/r/cache');
+});
+
+test('S-N3: with no OS-home redirect there is no os/ to protect and no cache variable; Windows never has one', () => {
+  assert.equal('XDG_CACHE_HOME' in builtEnv({ home: '/r/home', platform: 'linux', parent: { PATH: '/usr/bin' } }), false);
+  assert.equal('XDG_CACHE_HOME' in builtEnv({ home: 'C:/r/home', profile: 'C:/r/os', platform: 'win32', parent: {} }), false);
+});
+
+test('S-N3: an owned root of a Linux host also holds the cache folder beside os/ (owner-only), as KimiHome.MakeCache makes it; a Windows root does not', () => {
+  const made = ownedRoot(join(base, 'kh-cache'), { platform: 'linux' });
+
+  assert.equal(made.cache, join(made.root, 'cache'));
+  assert.equal(existsSync(made.cache), true, 'the Linux owned root has no cache folder beside os/');
+  assert.deepEqual(readdirSync(made.os), [], 'os/ must stay empty');
+  assert.equal(existsSync(ownedRoot(join(base, 'kh-nocache'), { platform: 'win32' }).cache ?? ''), false, 'Windows has no such variable and no such folder');
+});
+
+test('the ~/.agents canary is removed by its own exact paths only: a stranger\'s file inside the canary folder survives, and the removal says so instead of deleting it', () => {
+  const osHome = join(base, 'os-home-stranger');
+  mkdirSync(osHome);
+  const plan = agentsCanaryPlan(osHome, { skillName: 'coai-probe-canary-ee11', word: 'GANNET-7' });
+  makeAgentsCanary(plan);
+  const stranger = join(plan.skillDir, 'not-ours.txt');
+  writeFileSync(stranger, 'somebody else\'s');
+
+  assert.throws(() => removeAgentsCanary(plan), /still there|not empty|ENOTEMPTY/u, 'a removal that cannot be exact must fail loudly');
+  assert.equal(readFileSync(stranger, 'utf8'), 'somebody else\'s', 'the removal deleted a file it did not make (a recursive delete)');
+  assert.equal(existsSync(plan.skillFile), false, 'the canary\'s own file is removed');
+  rmSync(stranger);
+  removeAgentsCanary(plan);
+  assert.equal(existsSync(plan.agents), false);
 });

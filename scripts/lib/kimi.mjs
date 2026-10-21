@@ -67,8 +67,33 @@ export const sha256 = (data) => createHash('sha256').update(data).digest('hex');
 export const fileHash = (path) => sha256(readFileSync(path));
 
 /** Every file under `dir` with its SHA-256 — what a before/after comparison of a home is made of. */
-export function manifest(dir) {
-  return Object.fromEntries(files(dir).map((f) => [f, fileHash(join(dir, f))]));
+export const isCredentialPath = (rel) => rel === 'credentials' || rel.startsWith('credentials/');
+
+/** A credential slot's name carries its hex (`kimi-code-env-<16 hex>.json`); the record keeps the shape and drops the slot (DN9: redacted). */
+const redactSlot = (rel) => rel.replaceAll(/[0-9a-f]{8,}/giu, '<hex>');
+
+/** `lstat:<size>:<mode>:<mtime ms>` — a file recorded WITHOUT opening it; a rotated refresh token moves the size or the time. */
+function lstatShape(path) {
+  const s = lstatSync(path);
+  return `lstat:${s.size}:${s.mode & 0o7777}:${Math.round(s.mtimeMs)}`;
+}
+
+/** `name`, or `name#2`, `name#3`… when two redacted names would collide — the record never loses an entry. */
+const uniqueName = (taken, name) => (name in taken ? uniqueName(taken, `${name.replace(/#\d+$/u, '')}#${Number(/#(\d+)$/u.exec(name)?.[1] ?? 1) + 1}`) : name);
+
+/**
+ * Every file under `dir` with its SHA-256 — what a before/after comparison of a home is made of. Nothing under `credentials/` is EVER opened
+ * (DN5 item 2, gate finding 0: a hash reads the bytes, and those bytes are a refresh token): those paths — and any path `skip(rel)` names —
+ * are recorded by `lstat` alone, credential names with the slot's hex redacted. `hash` is injected so a test proves it is never called for them.
+ */
+export function manifest(dir, { skip = () => false, hash = fileHash } = {}) {
+  const record = {}; // built locally in one pass: a home can hold thousands of files, and a spread per file would be quadratic
+  for (const rel of files(dir)) {
+    const credential = isCredentialPath(rel);
+    if (!credential && !skip(rel)) record[rel] = hash(join(dir, rel));
+    else record[uniqueName(record, credential ? redactSlot(rel) : rel)] = lstatShape(join(dir, rel));
+  }
+  return record;
 }
 
 /** Whether each marker occurs in the session's main wire — the system prompt and tool results — whatever the answer did with it. */
@@ -522,4 +547,14 @@ export function acpTurn({ exe, cwd, env, deadlineMs, model = '', prompt = '', lo
       }
     })().catch((e) => finish(`client: ${String(e?.message ?? e)}`));
   });
+}
+
+/**
+ * The sentence that refuses an arm which asked for an owned root (`requireOwned`, set by lib/kimi-arms.mjs for the cells of the 2.2.0 window) and has none —
+ * no `<root>/home` beside `<root>/os`, or not marked `owned` — or '' (an arm that never asked is not judged). Checked before anything launches.
+ */
+export function ownedRefusal(spec) {
+  if (!spec.requireOwned) return '';
+  if (spec.owned === true && rootOfHome(spec.home ?? '') !== '') return '';
+  return 'this arm has no owned root (<root>/home beside <root>/os) - it is refused, not run on the real KIMI_CODE_HOME (E4.3)';
 }
