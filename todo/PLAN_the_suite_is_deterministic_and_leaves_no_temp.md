@@ -1515,7 +1515,7 @@ record*, "E3's risk".
 
 > **Stories: [PLAN_the_suite_is_deterministic_and_leaves_no_temp_E4.md](PLAN_the_suite_is_deterministic_and_leaves_no_temp_E4.md)
 > (written 2026-10-21 by Fable; self-contained, so a gate reviewer reads it instead of this file). Status: stories and
-> the cornerstone spec written, nothing coded.** It carries the cornerstone — **E4.S1, the manual clock and the clock
+> the cornerstone spec written; S1–S5 built on `feat/suite-e4-clock` and its docs pass done (2026-10-21), S6 (C4) gated on a kept failure (D5), the code gate pending — see the Outcome below.** It carries the cornerstone — **E4.S1, the manual clock and the clock
 > contract** (`model: fable`) — with the per-class inventory of every clock read in the four classes and what each
 > reads afterwards, the manual clock's contract (shaped on `wsl_care`'s `ManualTimeProvider`; it subsumes the suite's
 > `MovableClock`), the launcher's three separations for the gated C4 story, and the stories with their REDs. Where it
@@ -1561,6 +1561,14 @@ watch, §10); no timeout lengthened; `ProcessLauncher` unchanged unless C4's gat
 (`AcpClient`'s clock + S12), S3 C17 (`ConsultantPlaces`' clock + S16), S4 C13 (`TurnLoop` + `SourceResolver` clocks + S14)
 — parallel after S1, different classes and test files; S5 C6 (after S4, on `TurnLoop`'s seam, + S13). C4 is a sixth
 story only when its gate opens. C8's own plan's step 3 starts after S4 merges.
+
+**Outcome (2026-10-21, branch `feat/suite-e4-clock`, E4 S1–S5; the code gate is pending).** Built as written, with the deviations the E4 document's status sections list (§8) and `module_tests.md` records (*The suite is deterministic — E4 S1…S5*). S1: `ManualClock`
+(`src_mcp/tests/ManualClock.cs`), `ClockHandshake`, `MovableClock` and `FakeClock` gone, and `EveryBudgetInAClockedClassReadsItsClockTests` over `BoundedScheduler`, `AcpClient`, `ConsultantPlaces`, `TurnLoop` and `SourceResolver` (six allowed sites: `BoundedScheduler`'s five and
+`AcpClient`'s `DrainGrace`). S2: `AcpClient` reads its `_clock` for the turn deadline and the `/usage` bound (C5; C23 moved here from E5). S3: `ConsultantPlaces` for the one-shot budget and the folder stamp (C17). S4: `TurnLoop` and `SourceResolver`, with `BoundedScheduler`
+handing the loop its `_clock` (C13). S5: tests only — the pure `RoundDeadline.For` test, the scheduler-level test and the wiring arm (C6). The seam of each story landed alone first with the suite green on the default clock; no product timeout was lengthened (the C17 test passes a 5-minute budget as its INPUT, see below) and no product hook calls `Advance`.
+**Not done, and why:** S6 (C4, `ProcessLauncher`) is gated on a kept failure (D5) — the C4 test stays in the suite as a known intermittent, its next failure's message to be appended to the E4 document's §3 C4; the BoundedScheduler 429 ladder's `Stopwatch` and `Task.Delay` are named in the scan and deferred
+(Q4); the 20-run CI watches of §10 per leg have not run; the §10 loops are recorded per story (S2's "before" is the every-run RED, not a loop). **What differed from this section:** the C17 test's budget is 5 minutes (not 1 s) and `0 of 2 copied` can still occur when real work before the slow copy shares the budget; B11 turns only the work-cap test red;
+B16 also turns the end-to-end smoke test red on a real machine. The docs pass is done (`module_tests.md`, `module_runners.md`, `module_server.md`, the tails note); promotion of the E4 document waits for the code gate and the CI watch.
 
 ### E5 — Tests that wait for an event
 
