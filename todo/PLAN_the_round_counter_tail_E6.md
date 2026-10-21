@@ -450,7 +450,8 @@ subsection beside `--round-counts` `:3474`, the snapshot's schema, the engine's 
 | Test | Asserts | RED today because |
 |---|---|---|
 | `TheOtherStoresLedgerTail_IsReadBesideThisSides_WithItsStore` | `roundsLoader` over two directories, each with a `usage.jsonl` → the snapshot's `ledger` holds both tails, each record carrying `store: <directory>` (an in-memory field of the load, never written to disk) | `roundsLoader` (`roundCountsRead.ts:39-54`) reads `usagePath` and `besidePaths` only |
-| `ATailThatWillNotRead_IsNotIncluded_LikeTheSnapshot` | the other directory's ledger is a directory in the file's place → `ledgerFailure` names it with the store; this side's lines still read | the other tail is not read at all |
+| `ATailThatWillNotRead_IsNotIncluded_LikeTheSnapshot` | the other directory's ledger is a directory in the file's place → `otherLedgers` names it with the store (NEVER the global `ledgerFailure`, which hides every money cell, `roundsBlock.ts:107`); this side's lines still read and its money stays visible with a partial-coverage note | the other tail is not read at all |
+| `AForeignLedgerError_KeepsThisSidesMoney_AndSaysItIsPartial` | one readable local $1 launch, the other store's `usage.jsonl` is a directory → the block shows $1 and *money from <store> not included: <reason>* (cadence consultation c5759f9a, turn 2) | money cells read *unavailable* |
 | `TwoSpellingsOfOneStore_AreReadOnce_AndTheMoneyIsCountedOnce` | the merged answer names one store with two `paths[]`, both directories open the same `usage.jsonl` with one $1 launch → 1 round, 1 launch, $1 | $2 beside one round (both tails concatenated) |
 | `AForeignTailThatNeverAnswers_DoesNotHoldThisSidesCounts` | the merged call times out, the plain fallback answers, one foreign tail never resolves → this side's counts and money are shown within the deadline; the store is *did not answer in time*; a second refresh starts no second read | the block waits on the tail |
 | `AnOtherStoreWithNoLedger_IsNoLines_NotAFailure` | the directory exists, no `usage.jsonl` → no failure (the `missingRatherThanBroken` rule of `ledgerTail.ts`) | — (guard) |
@@ -581,9 +582,12 @@ every plant (B1–B7 and the per-story guards) is recorded in `research/module_t
 - **A stale, hung or half-read other store turning into a number or a frozen panel.** Held by: `AtomicFile` (never a torn
   read); `writtenUtc` as the freshness every sentence carries (*as of*, *ahead of this clock*, quiet = 0 as of); a problem per
   store is a `storesNotIncluded` row and never an exit code; a merged timeout falls back to this side with the stores named as
-  not answering (D7). Residual, stated: the pre-existing `existsSync` in `otherStores` (`:60-62`) and the mode's file read both
-  block on a dead SMB share for the OS's own timeout — bounded by the 8 s spawn cap and the fallback, not removed (open
-  question 2).
+  not answering (D7). The RENDER path is fixed in S4, not merely bounded (cadence consultation c5759f9a, turn 2): today
+  `panelProvider.ts:702` calls `otherStores(others, existsSync)` while drawing, a synchronous probe the 8 s spawn cap cannot bound.
+  S4 replaces it with a CACHED result of the panel's off-loop `reachable` probe, itself raced against a deadline, so a dead
+  share costs one bounded background check per refresh and never a blocked render. Test: `ADeadShare_NeverBlocksTheRender`
+  (an `exists` seam that never returns → the store reads *not answering* and the page draws). The mode's own file read stays
+  bounded by the spawn cap and the fallback.
 
 **Store identity is LOCATION identity** (cadence consultation c5759f9a): the D1 hash changes when a distro is renamed or the data
 directory moves, so a moved store is a new store, and its rounds inside the 7-day window can be counted under both ids until the
