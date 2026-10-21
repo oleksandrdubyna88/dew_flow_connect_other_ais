@@ -46,52 +46,125 @@ public static class SettingsFile
     /// host speaks JSON-RPC — passes a sink that writes to stderr or to the log, never to stdout
     /// (<c>logging-serilog.md</c>).</para>
     /// </remarks>
-    public static Func<string, string?> Layer(string dataDir, Func<string, string?> environment, Action<string> said)
+    public static Func<string, string?> Layer(string dataDir, Func<string, string?> environment, Action<string> said) =>
+        Layer(dataDir, environment, said, File.ReadAllText);
+
+    /// <summary>The same layer with the file read through <paramref name="readText"/> — the seam a test feeds a denial through.</summary>
+    internal static Func<string, string?> Layer(string dataDir, Func<string, string?> environment, Action<string> said, Func<string, string> readText)
+    {
+        Adopt(environment, said);
+
+        return Over(environment, Read(Path.Combine(dataDir, Name), readText));
+    }
+
+    /// <summary>
+    /// The layer of a settings RELOAD: <see cref="Layer(string, Func{string, string?}, Action{string})"/>, except that a file its
+    /// writer still holds is answered <see cref="SettingsLayer.Busy"/> instead of as empty settings.
+    /// </summary>
+    /// <remarks>
+    /// The adoption still comes first and the file is read ONCE, so the values the caller builds on are the values this read
+    /// returned — the file cannot turn busy between a probe and a second read.
+    /// </remarks>
+    internal static SettingsLayer TryLayer(string dataDir, Func<string, string?> environment, Action<string> said, Func<string, string> readText)
+    {
+        Adopt(environment, said);
+
+        return TryRead(Path.Combine(dataDir, Name), readText) switch
+        {
+            SettingsRead.Busy => new SettingsLayer.Busy(),
+            var read => new SettingsLayer.Layered(Over(environment, ValuesOf(read))),
+        };
+    }
+
+    private static void Adopt(Func<string, string?> environment, Action<string> said)
     {
         foreach (var sentence in AdoptRootSettings(environment))
         {
             said(sentence);
         }
-
-        var fromFile = Read(Path.Combine(dataDir, Name));
-        return name => environment(name) is { Length: > 0 } fromEnv ? fromEnv : fromFile.GetValueOrDefault(name);
     }
 
-    internal static Dictionary<string, string> Read(string path)
+    private static Func<string, string?> Over(Func<string, string?> environment, Dictionary<string, string> fromFile) =>
+        name => environment(name) is { Length: > 0 } fromEnv ? fromEnv : fromFile.GetValueOrDefault(name);
+
+    private static Dictionary<string, string> ValuesOf(SettingsRead read) =>
+        read is SettingsRead.Values values ? values.Settings : [];
+
+    internal static Dictionary<string, string> Read(string path) => Read(path, File.ReadAllText);
+
+    internal static Dictionary<string, string> Read(string path, Func<string, string> readText) =>
+        ValuesOf(TryRead(path, readText));
+
+    /// <summary>
+    /// One read of the file, told apart: its values, nothing there, or somebody holding it right now.
+    /// </summary>
+    /// <remarks>
+    /// <para><see cref="SettingsRead.Busy"/> is the sharing or lock violation ONLY — Windows HResult <c>0x80070020</c>
+    /// (ERROR_SHARING_VIOLATION) or <c>0x80070021</c> (ERROR_LOCK_VIOLATION). <c>HeldFile.Take</c> reads every other
+    /// <see cref="IOException"/> as a holder too, which is right for a lock that is TAKEN; for a READ that rule would also
+    /// call a failing disk "somebody is writing", so this one is the narrower statement the plan decided (C14).
+    /// A permission denial is NEVER busy.</para>
+    /// <para>Malformed, empty and denied files answer <see cref="SettingsRead.Values"/> with nothing in it, as
+    /// <see cref="Read(string)"/> always did. A torn write heals by itself: the host stamp includes the length.</para>
+    /// </remarks>
+    internal static SettingsRead TryRead(string path, Func<string, string> readText)
     {
         try
         {
-            using var document = JsonDocument.Parse(File.ReadAllText(path));
-            if (document.RootElement.ValueKind != JsonValueKind.Object)
-            {
-                return [];
-            }
-
-            var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var property in document.RootElement.EnumerateObject())
-            {
-                // Everything reaches the server as a string, exactly as an environment variable
-                // would — one parser for both sources, so neither can drift from the other.
-                var value = property.Value.ValueKind switch
-                {
-                    JsonValueKind.String => property.Value.GetString(),
-                    JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False => property.Value.ToString(),
-                    JsonValueKind.Array or JsonValueKind.Object => property.Value.GetRawText(),
-                    _ => null,
-                };
-                if (value is { Length: > 0 })
-                {
-                    values[property.Name] = value;
-                }
-            }
-
-            return values;
+            return new SettingsRead.Values(Parse(readText(path)));
         }
-        catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
+        catch (Exception e) when (IsMissing(e))
+        {
+            return new SettingsRead.Missing();
+        }
+        catch (IOException e) when (IsSharingViolation(e))
+        {
+            return new SettingsRead.Busy();
+        }
+        catch (Exception e) when (IsUnusable(e))
+        {
+            return new SettingsRead.Values([]);
+        }
+    }
+
+    private static bool IsMissing(Exception e) => e is FileNotFoundException or DirectoryNotFoundException;
+
+    private static bool IsSharingViolation(IOException e) => e.HResult is unchecked((int)0x80070020) or unchecked((int)0x80070021);
+
+    private static bool IsUnusable(Exception e) => e is IOException or JsonException or UnauthorizedAccessException;
+
+    private static Dictionary<string, string> Parse(string text)
+    {
+        using var document = JsonDocument.Parse(text);
+        if (document.RootElement.ValueKind != JsonValueKind.Object)
         {
             return [];
         }
+
+        var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var property in document.RootElement.EnumerateObject())
+        {
+            var value = TextOf(property.Value);
+            if (value is { Length: > 0 })
+            {
+                values[property.Name] = value;
+            }
+        }
+
+        return values;
     }
+
+    /// <summary>
+    /// Everything reaches the server as a string, exactly as an environment variable would — one parser for both sources, so neither can drift from the other.
+    /// A null is a value of a kind that has no text (<c>null</c>), which the caller drops.
+    /// </summary>
+    private static string? TextOf(JsonElement value) => value.ValueKind switch
+    {
+        JsonValueKind.String => value.GetString(),
+        JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False => value.ToString(),
+        JsonValueKind.Array or JsonValueKind.Object => value.GetRawText(),
+        _ => null,
+    };
 
     /// <summary>
     /// Where the data directory is — the same rule the rest of the product uses, ASKED rather than

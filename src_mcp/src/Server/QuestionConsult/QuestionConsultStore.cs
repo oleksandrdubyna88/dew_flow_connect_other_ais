@@ -36,6 +36,9 @@ public sealed class QuestionConsultStore(
     /// <summary>The most records the directory holds (§5): ~200 KB each at the worst, 100 MB in all.</summary>
     public const int MaxFiles = 500;
 
+    /// <summary>The write road — <see cref="AtomicJson.Write"/> (path, whole text). A seam so a test can refuse a write on every OS; the file is never touched when it throws.</summary>
+    internal Action<string, string> FileWriter { get; init; } = AtomicJson.Write;
+
     public string Directory => Path.Combine(dataDir, "question-consults");
 
     /// <summary>Where a row's launch may write its answer and prompt files — swept on the record's clock.</summary>
@@ -51,7 +54,7 @@ public sealed class QuestionConsultStore(
     public void Write(QuestionConsultRecord record)
     {
         System.IO.Directory.CreateDirectory(Directory);
-        AtomicJson.Write(PathFor(record.Id), JsonSerializer.Serialize(record, QuestionConsultJsonContext.Default.QuestionConsultRecord));
+        FileWriter(PathFor(record.Id), JsonSerializer.Serialize(record, QuestionConsultJsonContext.Default.QuestionConsultRecord));
         projected?.Invoke(record);
     }
 

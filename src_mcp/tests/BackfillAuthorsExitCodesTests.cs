@@ -140,8 +140,12 @@ public sealed class BackfillAuthorsExitCodesTests
         using var world = Stripped();
         var file = Directory.GetFiles(Path.Combine(world.DataDir, "sessions"), "session-*.json").Single();
         File.SetAttributes(file, FileAttributes.ReadOnly);
+        // The session is saved by a temp file and a move over it (E3 S5): a rename over a read-only file succeeds on Unix, so there the folder is made
+        // unwritable as well (a no-op on Windows, where the read-only file already refuses the move).
+        Assert.SkipUnless(FolderHolds.CanMakeOneUndeletable, "a privileged Unix process writes where the mode forbids");
         try
         {
+            using var folder = FolderHolds.Unwritable(Path.Combine(world.DataDir, "sessions"));
             var run = BackfillAuthorsCliScenarioTests.Run(world);
 
             run.Code.Should().Be(74, run.Err);

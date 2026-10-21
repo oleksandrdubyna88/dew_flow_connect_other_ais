@@ -11256,7 +11256,7 @@ eight keys and says so.
   life (heartbeat, last write, start) is older than two minutes — the server's `HeartbeatStale` — as
   `interrupted`, its consulting rows too, with the terminal chip and a stage of its own, *Interrupted — its server
   stopped answering*; nothing on disk changes (the server's sweep does that, when a server runs). The watcher asks
-  `nextStaleAt` and reads again at that moment, because no file event announces a server that died.
+  `nextStaleAt` and reads again at that moment, because no file event announces a server that died. **E3 S4:** a server that is alive but whose heartbeat writes the disk refused (a missed beat is now logged and skipped, `module_server.md`) can be shown `interrupted` after those two minutes; the display recovers on the next heartbeat that is written — accepted, and the server's sweep still keeps such a question while its pid is alive. **E3 judge J1:** this extension reads `sessions/*.json` without the server's turn (`extension.ts` and `panelProvider.ts` `readSessions`, `vscode.workspace.fs.readFile`; Node opens share-all), and the server's session save is a move over the file, which Windows refuses whatever the holder's share mode: one extension read held longer than the 500 ms retry window can fail a round's final save ("completed but could not be recorded"). Impossible before the save became atomic; a read of a few kilobytes does not last that long, and the limit is written down in `module_server.md`.
 - **The wait's default is the server's (item 6).** `DEFAULTS.escalationMinutes` and `package.json` say 15, the
   server's `PanelSettings.DefaultEscalationMinutes`; `settingsShape.test.ts` reads the constant out of the C# and
   checks a person's 30 still reaches the server.

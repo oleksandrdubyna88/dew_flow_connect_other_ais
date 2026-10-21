@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using CoaiMcp.Runners.Files;
 using CoaiMcp.Runners.Kimi;
 using CoaiMcp.Runners.Snapshots;
@@ -22,18 +23,20 @@ namespace CoaiMcp.Server;
 internal sealed class RoundScratch : IDisposable
 {
     private readonly Action<string> _note;
+    private readonly ConcurrentQueue<string> _owned;
     private int _disposed;
 
-    private RoundScratch(string directory, RoundTree tree, Action<string> note, OneShotReservation homes)
+    private RoundScratch(string directory, RoundTree tree, Action<string> note, OneShotReservation homes, ConcurrentQueue<string> owned)
     {
         Directory = directory;
         Tree = tree;
         _note = note;
         Homes = homes;
+        _owned = owned;
     }
 
     /// <summary>No scratch at all: every launch keeps today's directories, and a runtime that needs a snapshot is left out.</summary>
-    public static RoundScratch None { get; } = new(string.Empty, new RoundTree.NotMade(), static _ => { }, OneShotReservation.None.Instance);
+    public static RoundScratch None { get; } = new(string.Empty, new RoundTree.NotMade(), static _ => { }, OneShotReservation.None.Instance, new());
 
     /// <summary>
     /// The round's reservation under <c>&lt;homes root&gt;/coai-vh</c> (D1): its folder holds the reviewers' Vibe homes and their
@@ -77,10 +80,10 @@ internal sealed class RoundScratch : IDisposable
     /// </summary>
     public static RoundScratch Reserve(Action<string> note, string homesRoot = "", bool keepsAHome = false) =>
         new(Path.Combine(Path.GetTempPath(), $"coai-answers-{Guid.NewGuid().ToString("N")[..12]}"), new RoundTree.NotMade(), note,
-            keepsAHome ? VibeHomes.ReserveOneShot(homesRoot, note) : OneShotReservation.None.Instance);
+            keepsAHome ? VibeHomes.ReserveOneShot(homesRoot, note) : OneShotReservation.None.Instance, new());
 
     /// <summary>A scratch at a path somebody chose (a test's own folder, never the system temp), not made yet — the same object <see cref="Reserve"/> makes.</summary>
-    internal static RoundScratch At(string directory, Action<string> note) => new(directory, new RoundTree.NotMade(), note, OneShotReservation.None.Instance);
+    internal static RoundScratch At(string directory, Action<string> note) => new(directory, new RoundTree.NotMade(), note, OneShotReservation.None.Instance, new());
 
     /// <summary>This scratch with the round's snapshot outcome.</summary>
     public RoundScratch With(SnapshotOutcome outcome) => new(Directory, outcome switch
@@ -88,7 +91,23 @@ internal sealed class RoundScratch : IDisposable
         SnapshotOutcome.Made made => new RoundTree.Made(made.Snapshot),
         SnapshotOutcome.Refused refused => new RoundTree.Refused(refused.Reason),
         _ => throw new InvalidOperationException("the union is closed"),
-    }, _note, Homes);
+    }, _note, Homes, _owned);
+
+    /// <summary>
+    /// A folder this round made that is ALWAYS empty (<c>coai-repair-</c>, <c>coai-noworkspace-</c>; D4 of
+    /// <c>todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md</c>): <see cref="Dispose"/> removes it by this path, NON-recursive, only when it is
+    /// empty. <see cref="None"/> takes nothing — it is one static object shared by every scratch-less build, so a list on it would grow for ever.
+    /// </summary>
+    public void Owns(string folder)
+    {
+        if (Directory.Length > 0)
+        {
+            _owned.Enqueue(folder);
+        }
+    }
+
+    /// <summary>The folders <see cref="Owns"/> has been given, in order — shared by every scratch <see cref="With"/> makes from this one.</summary>
+    internal IReadOnlyCollection<string> OwnedFolders => _owned;
 
     /// <summary>The snapshot disposed (its bytes given back), then the whole folder deleted — best effort, said when it fails.</summary>
     public void Dispose()
@@ -112,6 +131,41 @@ internal sealed class RoundScratch : IDisposable
         if (Homes is OneShotReservation.Reserved reserved)
         {
             reserved.Home.Dispose();
+        }
+
+        RemoveTheEmptyFolders();
+    }
+
+    /// <summary>
+    /// D4: each folder <see cref="Owns"/> was given, by the PATH it was recorded under — after the scratch's own folder and its homes, which are the existing work. Every
+    /// removal is its own best effort: a folder that stays does not stop the next one.
+    /// </summary>
+    private void RemoveTheEmptyFolders()
+    {
+        foreach (var folder in _owned)
+        {
+            RemoveIfEmpty(folder, _note);
+        }
+    }
+
+    /// <summary>
+    /// A NON-recursive removal: it succeeds only for an EMPTY folder, so what a surviving descendant or another process wrote there is never the round's to delete.
+    /// A folder that is not empty (<see cref="IOException"/>) or is in use or refused (<see cref="IOException"/> / <see cref="UnauthorizedAccessException"/>) is SAID, once, and left
+    /// to the six-hour scratch sweep (<c>PanelService.PruneOldScratchDirs</c>); one that is already gone is nothing. Never throws — the round has ended and its outcome stands.
+    /// </summary>
+    private static void RemoveIfEmpty(string folder, Action<string> note)
+    {
+        try
+        {
+            System.IO.Directory.Delete(folder, recursive: false);
+        }
+        catch (DirectoryNotFoundException)
+        {
+            // Already gone: nothing to remove, nothing to say.
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            note($"the round's folder {folder} was not removed ({e.Message}); the six-hour scratch sweep takes it");
         }
     }
 
