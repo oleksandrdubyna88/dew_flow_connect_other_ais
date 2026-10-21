@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using CoaiMcp.Core.Rounds;
 using CoaiMcp.Runners.Processes;
@@ -17,8 +18,10 @@ namespace CoaiMcp.Tests;
 /// <remarks>
 /// <para>Driven through the real <see cref="PanelService"/> and the real git; only the reviewer's process is played by the test
 /// (<see cref="Reviewers"/>), so "blocks until its token fires" costs no child process and no sleep.</para>
-/// <para>Decision D5: <c>hostStopped</c> over <c>withdrawn</c> over <c>roundClock</c> over <c>unknown</c>. A stopping host may cancel the
-/// in-flight request too, so the call's token firing as well must not make the host's stop a person's withdrawal.</para>
+/// <para>The cause is the FIRST source to fire (code round of 2026-10-21; <see cref="RoundCancellation"/>): a stopping host may cancel the
+/// in-flight request too, and whichever token fired first is the one that ended the turn — the later one, even before the line was written, did
+/// not. Only tokens already fired when the round began have no order, and those follow D5: <c>hostStopped</c> over <c>withdrawn</c> over
+/// <c>roundClock</c>. <c>unknown</c> is a cancelled turn when none fired.</para>
 /// </remarks>
 [Collection("fakecli-env")]
 public sealed class ALocalCancellationCarriesItsSourceTests : IAsyncLifetime
@@ -76,6 +79,12 @@ public sealed class ALocalCancellationCarriesItsSourceTests : IAsyncLifetime
         /// <summary>Holds until the token it was handed fires, then reports the kill as a caller's cancellation.</summary>
         BlockUntilCancelled,
 
+        /// <summary>
+        /// Holds until its token fires, then keeps the answer back until the test lets go — so a second token can fire while the
+        /// reviewer is already dead, which is the order the cause has to be read in.
+        /// </summary>
+        BlockThenHoldTheAnswer,
+
         /// <summary>Reports a cancellation at once, with no token having fired — a remote row's server ended it.</summary>
         CancelledWithNoTokenFired,
 
@@ -97,6 +106,12 @@ public sealed class ALocalCancellationCarriesItsSourceTests : IAsyncLifetime
     {
         /// <summary>Completed when the first reviewer launch is under way — the moment a test may cancel.</summary>
         public TaskCompletionSource Arrived { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        /// <summary>Completed when a held reviewer has seen its token fire (<see cref="Play.BlockThenHoldTheAnswer"/>).</summary>
+        public TaskCompletionSource Killed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        /// <summary>The test completes this to let a held reviewer report.</summary>
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
         {
@@ -121,8 +136,18 @@ public sealed class ALocalCancellationCarriesItsSourceTests : IAsyncLifetime
                 Play.RateLimited => new ProcessResult(1, string.Empty, "You've hit your usage limit.", TimedOut: false),
                 Play.CancelledWithNoTokenFired => new ProcessResult(-1, string.Empty, string.Empty, TimedOut: true, Cancelled: true),
                 Play.MalformedThenBlock when !isRepair => await inner.RunAsync(request, ct),
+                Play.BlockThenHoldTheAnswer => await HeldAsync(ct),
                 _ => await BlockedAsync(ct),
             };
+        }
+
+        private async Task<ProcessResult> HeldAsync(CancellationToken ct)
+        {
+            var result = await BlockedAsync(ct);
+            Killed.TrySetResult();
+            await Release.Task;
+
+            return result;
         }
 
         private static async Task<ProcessResult> BlockedAsync(CancellationToken ct)
@@ -175,19 +200,71 @@ public sealed class ALocalCancellationCarriesItsSourceTests : IAsyncLifetime
     private List<string> CausesOfCancelledLines() =>
         [.. Lines().Where(l => Text(l, "outcome") != "ok" && Text(l, "kind") != "chat").Select(l => Text(l, "endCause"))];
 
-    [Theory]
-    [InlineData(true, true, true, EndCauses.HostStopped)]
-    [InlineData(true, true, false, EndCauses.HostStopped)]
-    [InlineData(true, false, true, EndCauses.HostStopped)]
-    [InlineData(true, false, false, EndCauses.HostStopped)]
-    [InlineData(false, true, true, EndCauses.Withdrawn)]
-    [InlineData(false, true, false, EndCauses.Withdrawn)]
-    [InlineData(false, false, true, EndCauses.RoundClock)]
-    [InlineData(false, false, false, EndCauses.Unknown)]
-    public void TheCause_IsReadFromWhichTokenFired(bool host, bool caller, bool clock, string cause)
+    private static long Now() => Stopwatch.GetTimestamp();
+
+    [Fact]
+    public void NothingFired_IsUnknown_AndTheFirstToFireIsTheCause()
     {
-        EndCauses.OfLocal(host, caller, clock).Should().Be(cause);
-        EndCauses.Known.Should().Contain(cause);
+        using var host = new CancellationTokenSource();
+        using var call = new CancellationTokenSource();
+        using var round = new RoundCancellation(host.Token, call.Token, TimeSpan.FromMinutes(5));
+        round.CauseAt(Now()).Should().Be(EndCauses.Unknown, "no token fired");
+
+        call.Cancel();
+        host.Cancel();
+
+        round.Token.IsCancellationRequested.Should().BeTrue("the caller's token ends the round");
+        round.CauseAt(Now()).Should().Be(EndCauses.Withdrawn, "the call's token fired FIRST: the host's stop that came after it did not make it a host stop");
+    }
+
+    [Fact]
+    public void TheHostFirst_IsHostStopped_EvenWhenTheCallIsCancelledWithIt()
+    {
+        using var host = new CancellationTokenSource();
+        using var call = new CancellationTokenSource();
+        using var round = new RoundCancellation(host.Token, call.Token, TimeSpan.FromMinutes(5));
+
+        host.Cancel();
+        call.Cancel();
+
+        round.CauseAt(Now()).Should().Be(EndCauses.HostStopped);
+    }
+
+    [Fact]
+    public void WhenTheClockFiresBeforeTheCaller_TheCauseIsTheClock()
+    {
+        using var call = new CancellationTokenSource();
+        using var round = new RoundCancellation(CancellationToken.None, call.Token, TimeSpan.FromMilliseconds(30));
+        round.Token.WaitHandle.WaitOne(TimeSpan.FromSeconds(30)).Should().BeTrue("the 30 ms clock fires");
+
+        call.Cancel();
+
+        round.CauseAt(Now()).Should().Be(EndCauses.RoundClock, "the clock fired first; the person came after it");
+    }
+
+    [Fact]
+    public void ACancellationThatLandedBeforeAnyTokenFired_IsUnknown_EvenIfTheClockFiresAfterwards()
+    {
+        using var round = new RoundCancellation(CancellationToken.None, CancellationToken.None, TimeSpan.FromMilliseconds(30));
+        var landed = Now();
+        round.Token.WaitHandle.WaitOne(TimeSpan.FromSeconds(30)).Should().BeTrue("the 30 ms clock fires after the outcome landed");
+
+        round.CauseAt(landed).Should().Be(EndCauses.Unknown,
+            "the reviewer ended Cancelled for its own reason before any token fired; a clock that fires later did not end it");
+        round.CauseAt(Now()).Should().Be(EndCauses.RoundClock, "an outcome that lands after the clock fired is the clock's");
+    }
+
+    [Fact]
+    public void TokensThatHadAlreadyFiredWhenTheRoundBegan_FollowThePrecedence()
+    {
+        using var host = new CancellationTokenSource();
+        using var call = new CancellationTokenSource();
+        host.Cancel();
+        call.Cancel();
+        using var round = new RoundCancellation(host.Token, call.Token, TimeSpan.FromMinutes(5));
+
+        round.CauseAt(Now()).Should().Be(EndCauses.HostStopped,
+            "tokens already fired when the round began have no order between them: the host's stop wins, then a withdrawal");
     }
 
     [Fact]
@@ -236,6 +313,39 @@ public sealed class ALocalCancellationCarriesItsSourceTests : IAsyncLifetime
         await round;
 
         CausesOfCancelledLines().Should().NotBeEmpty().And.OnlyContain(c => c == EndCauses.HostStopped);
+    }
+
+    [Fact]
+    public async Task TheCallCancelledFirst_IsWithdrawn_EvenIfTheHostStopsBeforeTheReviewerReports()
+    {
+        var reviewers = new Reviewers(_git, Play.BlockThenHoldTheAnswer);
+        using var host = new CancellationTokenSource();
+        using var call = new CancellationTokenSource();
+        var round = RoundAsync(Service(reviewers, hostStopping: host.Token), call.Token);
+        await reviewers.Arrived.Task.WaitAsync(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken);
+        await call.CancelAsync();
+        await reviewers.Killed.Task.WaitAsync(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken);
+        await host.CancelAsync();
+        reviewers.Release.TrySetResult();
+        await round;
+
+        CausesOfCancelledLines().Should().NotBeEmpty().And.OnlyContain(c => c == EndCauses.Withdrawn,
+            "the call's token killed the reviewer; the host stopping afterwards, before the line was written, did not");
+    }
+
+    [Fact]
+    public async Task TheClockFiringFirst_IsTheRoundClock_EvenIfTheCallIsCancelledBeforeTheReviewerReports()
+    {
+        var reviewers = new Reviewers(_git, Play.BlockThenHoldTheAnswer);
+        using var call = new CancellationTokenSource();
+        var round = RoundAsync(Service(reviewers, roundTimeout: TimeSpan.FromSeconds(8)), call.Token);
+        await reviewers.Killed.Task.WaitAsync(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken);
+        await call.CancelAsync();
+        reviewers.Release.TrySetResult();
+        await round;
+
+        CausesOfCancelledLines().Should().NotBeEmpty().And.OnlyContain(c => c == EndCauses.RoundClock,
+            "the round's clock killed the reviewer; the person cancelling afterwards, before the line was written, did not");
     }
 
     [Fact]

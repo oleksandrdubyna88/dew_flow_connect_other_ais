@@ -287,8 +287,9 @@ internal sealed class RoundEngine(
         // handed — not `roles × turns` as the reviewer count, which buys nothing when the turns fit in one
         // wave (plan §4.9). Every other stage's follow-ups are zero, so nothing changes for it by a second.
         var budget = RoundDeadline.For(_settings, stage.Stage, stage.RolesPerVendor, stage.FollowUps, _log);
-        using var clock = new CancellationTokenSource(budget);
-        using var roundClock = CancellationTokenSource.CreateLinkedTokenSource(ct, clock.Token);
+        // The round's cancellation RECORDS which source fires first (the call's token, the round's own clock, the host's stop) — a
+        // linked source would only say that something fired, and the ledger's endCause is read from what fired FIRST.
+        using var cancellation = new RoundCancellation(_hostStopping, ct, budget);
 
         // ASKED BEFORE THE ROUND IS ASSEMBLED, because assembling it is synchronous and cannot.
         //
@@ -299,7 +300,7 @@ internal sealed class RoundEngine(
         // processes, two caches, and nothing guarantees this one has ever asked. So it asks here,
         // once, where there is still a Task to await on. (gemini and codex, story 4's plan round,
         // both Blocking.)
-        await WarmRemoteRolesAsync(roundClock.Token);
+        await WarmRemoteRolesAsync(cancellation.Token);
 
         try
         {
@@ -356,7 +357,7 @@ internal sealed class RoundEngine(
             using var scratch = stage.NeedsWorktree ? null : new ScratchDirectory();
             var workingDir = lease?.Path ?? scratch!.Path;
             // Every launch the stage built — the round's reviewers, their repairs, the security lane — in this round.
-            var roundWork = (await stage.MakeWork(session, workingDir, sha, roundClock.Token)).InRound(key);
+            var roundWork = (await stage.MakeWork(session, workingDir, sha, cancellation.Token)).InRound(key);
             // The round's own scratch — its sanitised snapshot and its Vibe homes — goes with the round, however it ends
             // (D6 and D17 of todo/PLAN_vibe_and_kimi_runtimes.md); a crash leaves it to the six-hour scratch sweep.
             using var scratchOfTheRound = roundWork.Scratch;
@@ -412,7 +413,7 @@ internal sealed class RoundEngine(
             //
             // What a plan reviewer's answer is READ AS is settled once, where the reviewer finishes — before the ledger, the
             // live view, the audit and the stand-down below are told (D8 of research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md).
-            var results = await _scheduler.RunAllAsync(work, _executor, roundClock.Token, progress =>
+            var results = await _scheduler.RunAllAsync(work, _executor, cancellation.Token, progress =>
             {
                 live.Report(progress);
                 audit.Moved(progress);
@@ -427,7 +428,7 @@ internal sealed class RoundEngine(
                         ModelOf(progress.Provider),
                         session.State.Stage.ToString(),
                         progress.Elapsed,
-                        EndCauseOf(finished, ct, clock.Token));
+                        EndCauseOf(finished, cancellation, progress.LandedAt));
                 }
             },
             // Issue #485: with the switch on, the local reviewer stands down once the cloud was quiet.
@@ -445,7 +446,7 @@ internal sealed class RoundEngine(
                 // cancels at the moment the deadline strikes is reported as a person: the round was
                 // going to end either way, and blaming the clock for their decision is the wrong
                 // half of an ambiguity to keep.
-                EndedByDeadline = WhatEndedIt(clock.Token, ct, budget),
+                EndedByDeadline = WhatEndedIt(cancellation.Clock, ct, budget),
             };
             var reviews = results.Select(r => r.Outcome).OfType<ReviewerOutcome.Ok>().Select(o => o.Review).ToList();
             // The ROLE is stamped here because this is the only place that holds both the invocation
@@ -841,17 +842,16 @@ internal sealed class RoundEngine(
     /// <para>The WHOLE budget, not what was left of it after setup — "the round reached its 30
     /// minute limit" when the limit is forty is a sentence nobody can act on.</para>
     /// </remarks>
-    /// <summary>
-    /// WHY a cancelled reviewer's turn was cancelled — from which token fired, asked at the moment the outcome lands — or empty for any other ending
-    /// (E3.S2 of todo/PLAN_the_round_counter_tail_E3.md, <see cref="EndCauses.OfLocal"/>).
-    /// </summary>
-    private string EndCauseOf(ReviewerOutcome finished, CancellationToken caller, CancellationToken deadline) =>
-        finished is ReviewerOutcome.Cancelled
-            ? EndCauses.OfLocal(_hostStopping.IsCancellationRequested, caller.IsCancellationRequested, deadline.IsCancellationRequested)
-            : string.Empty;
-
     private static TimeSpan? WhatEndedIt(CancellationToken deadline, CancellationToken caller, TimeSpan budget) =>
         deadline.IsCancellationRequested && !caller.IsCancellationRequested ? budget : null;
+
+    /// <summary>
+    /// WHY a cancelled reviewer's turn was cancelled — the FIRST of the round's three cancellation sources to fire, if it fired by the
+    /// moment the outcome landed, else <c>unknown</c> — or empty for any other ending (E3.S2 of todo/PLAN_the_round_counter_tail_E3.md,
+    /// <see cref="RoundCancellation"/>).
+    /// </summary>
+    private static string EndCauseOf(ReviewerOutcome finished, RoundCancellation cancellation, long landedAt) =>
+        finished is ReviewerOutcome.Cancelled ? cancellation.CauseAt(landedAt) : string.Empty;
 
     /// <summary>How many reviewers this stage is CONFIGURED to run, before any work is built.</summary>
     /// <remarks>

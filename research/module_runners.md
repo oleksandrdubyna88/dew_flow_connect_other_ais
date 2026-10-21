@@ -1797,10 +1797,17 @@ flowchart LR
 line only (like `resetsUtc`), decided by `RoundEngine` where the tokens are held — never inferred below the executor
 (`ProcessLauncher.ResultOf` and `ReviewerExecutor.KilledAsync` are unchanged) and never read from the outcome's sentence.
 
-- `EndCauses.OfLocal(hostStopped, callerCancelled, clockFired)`: **`hostStopped` > `withdrawn` > `roundClock` > `unknown`**. A stopping
-  host may cancel the request it was serving too, so it is not filed as a person's withdrawal; a person who cancels as the clock fires
-  is a person (the rule `WhatEndedIt` states for the deadline sentence). `unknown` is a `Cancelled` turn when none of the three fired
-  (a Team-server row whose server ended it, any token linked elsewhere) — never empty.
+- **The cause is the FIRST of the three sources to fire, recorded when it fires** (code round of 2026-10-21; `RoundCancellation` in
+  `src_mcp/src/Server/Rounds/`). The first version sampled `IsCancellationRequested` of the host, the call and the clock when the line was
+  written, which says what had fired by then, not what ended the turn: a reviewer that ended `Cancelled` for its own reason could be filed
+  `roundClock` because the clock fired before the line was classified, and a host that cancelled the request it was serving as well could
+  make the call look like the cause. Now a callback on each token sets the first source once (`Interlocked.CompareExchange`) with its
+  `Stopwatch` timestamp, and `CauseAt(landedAt)` names it only when it fired at or before the moment the outcome landed
+  (`ReviewerProgress.LandedAt`) — an outcome that landed before anything fired is `unknown`, whatever fires afterwards. The round's own
+  token is cancelled BY those callbacks, after the record, instead of being a linked source, so no reviewer can see the round cancelled
+  before the cause is written down. Tokens already fired when the round began have no order between them: registration is host, call,
+  clock, so that tie resolves **`hostStopped` > `withdrawn` > `roundClock`**; `unknown` is a `Cancelled` turn when none fired (a Team-server
+  row whose server ended it) — never empty. `EndCauses.OfLocal` is gone: the decision lives where the tokens are.
 - `EndCauses.RoundClock` and `Unknown` are **local-only words** (`EndCauses.LocalOnly`, the `UsageKinds.LocalOnly` shape);
   `Known` names all seven. The Team server writes neither and is unchanged (`HowAJobEndedIsSaidTests` pins its four words, not `Known`).
 - `UsageLedger.Record(..., endCause = "")` writes it on the last line of the last turn; the engine passes it only when the finished

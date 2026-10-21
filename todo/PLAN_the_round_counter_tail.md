@@ -365,6 +365,9 @@ starts. **Cornerstones: 0 of 3 — E2.S1, E5.S2, E6.S1** (the quota ⌈2·7/5⌉
 - **S4 — per-consultation money per consultation.** The local consult line gains `consultation` (the `consultationId` of
   `ConsultationService.cs:118`; coai-mcp); the block groups consult lines by it before dividing; an older line without one is its own
   unit; the label changes from *per recorded turn* to *per consultation (older lines per turn)*, help in five languages (extension).
+- **Built 2026-10-21 on `feat/tail-e3-ledger-metadata`** (see [the E3 stories](PLAN_the_round_counter_tail_E3.md) for what shipped differently).
+  Found there and NOT built: the `review_*` tools take no MCP request cancellation token, so `withdrawn`/`hostStopped` cannot be written by a
+  live server until they do — wiring it makes a client's cancel stop the round, a behaviour change for its own decision.
 - **Depends on:** nothing but E1 having started (its fixture names the fields). **Done when:** test rows 9–12 are green from red;
   one coai-mcp release, one extension release.
 

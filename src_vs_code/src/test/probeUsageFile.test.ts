@@ -86,10 +86,10 @@ test('the Rounds block reads the probe ledger beside usage.jsonl', async () => {
 });
 
 test('AProbeLine_NamesClaudeAndTheVersionItAsked — E3.S3: cli claude, and the version claudeProbe.ts already read', () => {
-  const written = line(probeLine('haiku', { code: 0, output: ANSWERED }, NOW - 3_400, NOW, 'Claude Code 2.1.5'));
+  const written = line(probeLine('haiku', { code: 0, output: ANSWERED }, NOW - 3_400, NOW, '2.1.5'));
 
   assert.equal(written['cli'], 'claude', 'the probe line does not say which CLI it ran');
-  assert.equal(written['cliVersion'], 'Claude Code 2.1.5', 'the probe line does not carry the version the probe already asked');
+  assert.equal(written['cliVersion'], '2.1.5', 'the probe line does not carry the version the probe already asked');
 });
 
 test('AProbeLine_WhoseVersionWasNeverAsked_HasNoVersion — absent, never an empty string standing for one', () => {
@@ -101,12 +101,12 @@ test('AProbeLine_WhoseVersionWasNeverAsked_HasNoVersion — absent, never an emp
 
 test('TheRecordingRun_WritesTheVersionItWasGiven_AndParsesBackThroughTheUsageReader', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-probe-ledger-'));
-  const run = recordingRun(async () => ({ code: 0, output: ANSWERED }), probeUsagePath(dir), () => NOW, 'Claude Code 2.1.5');
+  const run = recordingRun(async () => ({ code: 0, output: ANSWERED }), probeUsagePath(dir), () => NOW, '2.1.5');
 
   await run(['--model', 'haiku', '-p', 'hi', '--output-format', 'json']);
   await flushLedgers();
 
   const [written] = parseUsage(fs.readFileSync(path.join(dir, PROBE_USAGE_FILE), 'utf8'));
-  assert.deepEqual([written?.cli, written?.cliVersion], ['claude', 'Claude Code 2.1.5']);
+  assert.deepEqual([written?.cli, written?.cliVersion], ['claude', '2.1.5']);
   fs.rmSync(dir, { recursive: true, force: true });
 });

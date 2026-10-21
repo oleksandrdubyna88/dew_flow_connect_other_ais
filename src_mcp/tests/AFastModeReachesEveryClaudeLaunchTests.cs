@@ -134,4 +134,36 @@ public sealed class AFastModeReachesEveryClaudeLaunchTests : IDisposable
 
         File.GetLastWriteTimeUtc(path).Should().Be(written, "several processes start launches; an unchanged file is left alone");
     }
+
+    private int TemporaryFilesCreatedBy(Action build)
+    {
+        var created = 0;
+        using var watcher = new FileSystemWatcher(_data, "*.tmp") { IncludeSubdirectories = true, EnableRaisingEvents = false };
+        watcher.Created += (_, _) => Interlocked.Increment(ref created);
+        Directory.CreateDirectory(Path.Combine(_data, "fast-mode"));
+        watcher.EnableRaisingEvents = true;
+        build();
+        Thread.Sleep(500);
+
+        return created;
+    }
+
+    [Fact]
+    public void AConsultantBuild_WritesTheFastModeFileOncePerBuild_AndItsSentTierAgreesWithTheArgv()
+    {
+        // The argv and the record of what was sent are computed ONCE (as ClaudeRuntime.Build does), so a build that must write the file
+        // writes it once and the tier recorded is the tier of the file the argv names.
+        var consultant = new ClaudeConsultant(new ClaudeRuntime());
+        ReviewerInvocation? built = null;
+
+        var firstBuild = TemporaryFilesCreatedBy(() => built = consultant.Build(
+            new ConsultantLaunch(Repo, "help me", string.Empty, "D:/answers", Settings(FastMode.On, "claude-opus-5-5"))));
+        var secondBuild = TemporaryFilesCreatedBy(() => consultant.Build(
+            new ConsultantLaunch(Repo, "help me", string.Empty, "D:/answers", Settings(FastMode.On, "claude-opus-5-5"))));
+
+        firstBuild.Should().Be(1, "the file was missing: written once for the argv AND the record, not once for each");
+        secondBuild.Should().Be(0, "the file says the same thing: left alone");
+        built!.Request.Arguments.Should().Contain("--settings");
+        built.Sent.Tier.Should().Be("fast");
+    }
 }

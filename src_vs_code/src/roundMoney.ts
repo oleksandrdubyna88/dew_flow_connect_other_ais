@@ -39,7 +39,7 @@ import { costText, Estimate, LineRate, lineCost, shortNumber, totalCost, uncaptu
 
 /** One ledger line as this module reads it — a parsed `usage.jsonl` line, or a chat turn read into the same shape. */
 export type LedgerLine = Pick<UsageEntry, 'utc' | 'provider' | 'model' | 'tokensIn' | 'tokensOut' | 'costUsd' | 'outcome'
-  | 'usageNote' | 'tokensCached' | 'tokensReasoning' | 'kind' | 'attempt' | 'cli' | 'consultation'>;
+  | 'usageNote' | 'tokensCached' | 'tokensReasoning' | 'kind' | 'attempt' | 'cli' | 'consultation'> & Partial<Pick<UsageEntry, 'role'>>;
 
 /**
  * The attempts coai-mcp writes for ONE local launch (`LaunchAttempts`, `src_mcp/runners/Reviewers/LaunchParts.cs:22–37`): the
@@ -112,17 +112,32 @@ export interface Rollup {
   readonly linesAreLaunches: boolean;
 }
 
+/**
+ * WHY a consult line carries no `consultation` (E3.S4, D8): three writers leave the field empty, and a line says which only as far as its
+ * own fields go. `checks` is read from the role (`consult-check`); `refused` is a line with no `cli` and a failing outcome — the
+ * line a consultation refused before its launch bills (nothing was labelled, the id was emptied), which an older FAILED line also is,
+ * for nothing tells them apart; `older` is the rest, so a successful line with no id is certainly from before the field.
+ */
+export interface IdLessKinds {
+  readonly older: number;
+  readonly checks: number;
+  readonly refused: number;
+}
+
 /** The consultations behind a consult group's lines: each distinct id once, and the lines that carry none. */
 export interface ConsultationIds {
   readonly ids: readonly string[];
-  /** Lines with no `consultation` — a line older than the field, or a consultant check — each its own unit. */
+  /** Lines with no `consultation` — a line older than the field, a consultant check, a refused consultation — each its own unit. */
   readonly withoutId: number;
+  /** Which of those they are; sums to {@link withoutId}. */
+  readonly kinds: IdLessKinds;
 }
 
 /** What a consult figure is divided by: the distinct consultations plus the lines without an id, one each. */
 export interface ConsultationUnits {
   readonly count: number;
   readonly withoutId: number;
+  readonly kinds: IdLessKinds;
 }
 
 /** One vendor row × model × kind inside the window. */
@@ -246,13 +261,32 @@ function group(members: readonly LedgerLine[], rateOf: RateOf): MoneyGroup {
   };
 }
 
-const NO_CONSULTATIONS: ConsultationIds = { ids: [], withoutId: 0 };
+const NO_ID_LESS: IdLessKinds = { older: 0, checks: 0, refused: 0 };
+const NO_CONSULTATIONS: ConsultationIds = { ids: [], withoutId: 0, kinds: NO_ID_LESS };
+
+/** The role a consultant check bills under (`ConsultantRoles.Check`, `src_mcp/runners/Consultation/IConsultantRuntime.cs`). */
+const CONSULT_CHECK_ROLE = 'consult-check';
 
 function consultationsOf(members: readonly LedgerLine[]): ConsultationIds {
+  const idLess = members.filter((one) => !says(one.consultation));
+
   return {
     ids: [...new Set(members.map((one) => one.consultation ?? '').filter(says))],
-    withoutId: members.filter((one) => !says(one.consultation)).length,
+    withoutId: idLess.length,
+    kinds: {
+      checks: idLess.filter(isCheck).length,
+      refused: idLess.filter((one) => !isCheck(one) && isRefused(one)).length,
+      older: idLess.filter((one) => !isCheck(one) && !isRefused(one)).length,
+    },
   };
+}
+
+function isCheck(line: LedgerLine): boolean {
+  return line.role === CONSULT_CHECK_ROLE;
+}
+
+function isRefused(line: LedgerLine): boolean {
+  return !says(line.cli) && line.outcome !== 'ok';
 }
 
 function byRowModelKind(a: MoneyGroup, b: MoneyGroup): number {
@@ -338,22 +372,37 @@ function unitOfLines(linesAreLaunches: boolean): string {
  */
 export function consultationUnits(groups: readonly Pick<MoneyGroup, 'consultations'>[]): ConsultationUnits {
   const withoutId = sum(groups.map((one) => one.consultations.withoutId));
+  const kinds = (pick: (one: IdLessKinds) => number): number => sum(groups.map((one) => pick(one.consultations.kinds)));
 
-  return { count: new Set(groups.flatMap((one) => one.consultations.ids)).size + withoutId, withoutId };
+  return {
+    count: new Set(groups.flatMap((one) => one.consultations.ids)).size + withoutId,
+    withoutId,
+    kinds: { older: kinds((one) => one.older), checks: kinds((one) => one.checks), refused: kinds((one) => one.refused) },
+  };
 }
 
-/** The unit beside a consult figure: *per consultation*, or the qualified one when any line of the window carries no id (D9). */
+/**
+ * The unit beside a consult figure: *per consultation*, or *per consultation (some lines per turn)* when any line of the window
+ * carries no id (D9). "Older lines" would be false: a consultant check and a consultation refused before its launch carry none either.
+ */
 export function consultationLabel(units: Pick<ConsultationUnits, 'withoutId'>): string {
-  return units.withoutId > 0 ? 'per consultation (older lines per turn)' : 'per consultation';
+  return units.withoutId > 0 ? 'per consultation (some lines per turn)' : 'per consultation';
 }
 
-/** The tooltip's extra sentence: how many lines were counted one each and why — empty when every line carried an id. */
-export function consultationNote(units: Pick<ConsultationUnits, 'withoutId'>): string {
+/** The tooltip's extra sentence: how many lines were counted one each and which kinds of line they are — empty when every line carried an id. */
+export function consultationNote(units: Pick<ConsultationUnits, 'withoutId' | 'kinds'>): string {
   const lines = units.withoutId === 1 ? '1 line' : `${units.withoutId} lines`;
 
-  return units.withoutId === 0
-    ? ''
-    : `${lines} without a consultation id counted one each — a line written before the field, or a consultant check`;
+  return units.withoutId === 0 ? '' : `${lines} without a consultation id counted one each — ${idLessReasons(units.kinds)}`;
+}
+
+/** Only the kinds that are PRESENT in the window, so the tooltip never claims a reason it did not see. */
+function idLessReasons(kinds: IdLessKinds): string {
+  return [
+    kinds.older > 0 ? 'lines written before the consultation field existed' : '',
+    kinds.checks > 0 ? 'consultant checks' : '',
+    kinds.refused > 0 ? 'consultations refused before their launch (or failed lines written before the field)' : '',
+  ].filter(says).join(', ');
 }
 
 /**

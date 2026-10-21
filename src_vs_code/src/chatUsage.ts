@@ -80,6 +80,11 @@ export interface ChatTurnRecord {
   /**
    * The version that CLI said when the catalog probe last asked it — read from that answer's memory, never from a spawn on the
    * turn's road. Absent when nobody had asked, and on a line older than the field.
+   *
+   * <p>The BARE number the panel's probe parsed (`parseCliVersion`: `0.131.0`), where coai-mcp writes the first line of the CLI's own
+   * `--version` (`codex-cli 0.131.0`) on its lines — two spellings of one fact, and a reader comparing versions across the two sources
+   * must take the number out of the longer one. It is also the panel's LAST probe of that CLI (at most half an hour old, and not
+   * refreshed by a turn): it says what the panel last saw installed, not proof of the binary that ran this turn.</p>
    */
   readonly cliVersion?: string;
 }

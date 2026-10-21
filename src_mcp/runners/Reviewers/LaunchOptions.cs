@@ -124,7 +124,9 @@ public sealed record OptionChoice(string Sent, string SentFrom, string NotSentAs
 /// a model id alone cannot (one model can run on two).</param>
 /// <param name="CliVersion">The first line of the CLI's own <c>--version</c>, where one was ALREADY asked — never a spawn per
 /// launch: locally the codex tier probe's answer (an Off codex row on codex's own service), on a Team server the catalog's
-/// cached health probe. Empty where no version was asked, which is every other launch.</param>
+/// cached health probe. Empty where no version was asked, which is every other launch. That is the spelling on lines coai-mcp
+/// writes (<c>codex-cli 0.131.0</c>); the extension's own lines carry the bare number the panel's probe parsed (<c>0.131.0</c>), and a
+/// chat line's is the panel's last probe of that CLI, not proof of the binary that ran.</param>
 /// <param name="EffortNotSent"><see cref="OptionSources.Ignored"/> or <see cref="OptionSources.Dropped"/> when the row (or the
 /// request) asked for an effort that did not reach the CLI — apart from <paramref name="Effort"/>, which says what ran.</param>
 /// <param name="TierNotSent">The same, for the tier.</param>

@@ -97,7 +97,7 @@ test('consultations, questions and chat sit beside the rounds as recorded turns;
   assert.equal(rowCells(html, '<b>codex</b>')[5], 'consult 2 · question 1 · chat 1 recorded turns');
   const consult = rowCells(html, '>consult · 2 recorded turns<');
   // E3.S4: two consult lines that carry no consultation id are two units — the older-line reading, said in the label.
-  assert.match(consult[10]!, /~\$1\.0\d*<\/span> <span class="hint">per consultation \(older lines per turn\)/u, '$2 over 2 consult turns');
+  assert.match(consult[10]!, /~\$1\.0\d*<\/span> <span class="hint">per consultation \(some lines per turn\)/u, '$2 over 2 consult turns');
 });
 
 test('AProbe_IsItsOwnKind_NeverARound — a --probe-api completion sits beside the rounds as a probe, on no model line', () => {
@@ -357,7 +357,22 @@ test('TheConsultLine_SaysPerConsultation — identified consult lines divide by 
   assert.match(rowCells(html, '>chat · 1 recorded turns<')[10]!, /per recorded turn/u);
 });
 
-test('AMixedConsultWindow_SaysOlderLinesPerTurn_AndTheTooltipSaysHowManyWereCountedOneEach', () => {
+test('ACheckLineAndARefusedConsultation_AreNamedInTheTooltip_NotCalledOlderLines', () => {
+  const lines = [
+    usageLine({ model: 'gpt-6-astra', kind: 'consult', consultation: 'A' }),
+    usageLine({ model: 'gpt-6-astra', kind: 'consult', role: 'consult-check' }),
+    usageLine({ model: 'gpt-6-astra', kind: 'consult', outcome: 'refused before the launch' }),
+  ];
+  const consult = rowCells(roundsBlock(input({ snapshot: snapshot(counted(), lines) })), '>consult · 3 recorded turns<');
+
+  assert.match(consult[10]!, /per consultation \(some lines per turn\)<\/span>/u);
+  assert.match(consult[10]!, /2 lines without a consultation id counted one each/u);
+  assert.match(consult[10]!, /consultant checks/u);
+  assert.match(consult[10]!, /refused before their launch/u);
+  assert.doesNotMatch(consult[10]!, /written before the consultation field existed/u, 'no older line is in the window');
+});
+
+test('AMixedConsultWindow_SaysSomeLinesPerTurn_AndTheTooltipSaysHowManyWereCountedOneEach', () => {
   const lines = [
     usageLine({ model: 'gpt-6-astra', kind: 'consult', consultation: 'A' }),
     usageLine({ model: 'gpt-6-astra', kind: 'consult', consultation: 'A' }),
@@ -365,7 +380,7 @@ test('AMixedConsultWindow_SaysOlderLinesPerTurn_AndTheTooltipSaysHowManyWereCoun
   ];
   const consult = rowCells(roundsBlock(input({ snapshot: snapshot(counted(), lines) })), '>consult · 3 recorded turns<');
 
-  assert.match(consult[10]!, /per consultation \(older lines per turn\)<\/span>/u);
+  assert.match(consult[10]!, /per consultation \(some lines per turn\)<\/span>/u);
   assert.match(consult[10]!, /1 line without a consultation id counted one each/u);
   assert.match(consult[10]!, /over 2 consultations/u, 'A is one consultation, the line with no id is another');
 });
