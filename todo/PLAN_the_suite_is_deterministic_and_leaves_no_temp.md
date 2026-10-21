@@ -1365,7 +1365,7 @@ E2 sentence, no pause) then green on Windows, its guard green throughout; the fo
 macOS runs, and `TheHeartbeatIsRewritten_…`'s exception form and `EightWritersOnOneSession_…` not seen in the next 20
 Windows runs (watches, §10).
 
-**S1 (C2) status (2026-10-19): built on `feat/suite-c2`, awaiting the macOS CI leg and the 20-run watch** — see C2's Outcome.
+**S1 (C2) status: MERGED in #893 (`e86fe17f8`, 2026-10-20); the 20-run macOS watch is running** — see C2's Outcome.
 
 **S4 (C18's product side) Outcome (2026-10-20, branch `feat/suite-e3-product`; the tests, their reds and the break-its are in `research/module_tests.md`, section "The suite is deterministic — E3 S4").**
 Built as the lead's decisions, the E3 plan round and the risk consult (the last three sections of this plan) say. `AtomicFile.MoveOver` retries `IOException or UnauthorizedAccessException` inside
@@ -1384,8 +1384,8 @@ Built as the plan round and the risk consult say, not as the first brief: `Sessi
 - **The seam is `SessionStore.FileWriter`** (`internal` init), not a `BusyPause` property: the pause lives in `AtomicSeams`, so the store needs only the write road. `AtomicSeams` gained `WriteText` so S26 can fail the temp write half way.
 - **S26 has four arms and a guard** (the temp write fails; the move fails; the busy file lands after release; the turn is held through the move; held-through fails and keeps the old bytes), not the brief's two.
 - **The §10 watch was run:** 15 of 20 runs of `SessionStoreConcurrencyTests` failed before, 0 of 20 after, each beside a loaded suite. The 20 Windows CI runs of the plan's watch are still to come.
-**S2 (C14) status (2026-10-21): built on `feat/suite-e3-s2`, awaiting CI and the merge** — see C14's Outcome.
-**S3 (D4, S7) status (2026-10-21): built on `feat/suite-e3-s3`, awaiting its code gate** — see S3's Outcome below.
+**S2 (C14) status (2026-10-21): built on `feat/suite-e3-s2` (CI green), merged into `feat/suite-e3-product` for the epic's one code gate** — see C14's Outcome.
+**S3 (D4, S7) status (2026-10-21): built on `feat/suite-e3-s3` (CI green), merged into `feat/suite-e3-product` for the epic's one code gate** — see S3's Outcome below.
 
 **S3 Outcome (2026-10-21, branch `feat/suite-e3-s3`; the tests, their reds and the break-its are in `research/module_tests.md`, section "The suite is deterministic — E3 S3 (D4)"; the round scratch is in `research/module_server.md`, "The two folders that are always empty").** Built as written in §6 D4:
 `RoundScratch.Owns(folder)` registers a folder on a registry that `With(...)` carries (one `ConcurrentQueue` through the constructor); `RoundScratch.None` takes nothing. `RosterBuilder.FrameFor` registers
