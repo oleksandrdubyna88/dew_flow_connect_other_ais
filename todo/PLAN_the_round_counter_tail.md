@@ -1,7 +1,8 @@
 # PLAN — the round counter's open tail is closed: the accounting, a second gauge, both stores, the live count
 
-> Status: **plan only, nothing implemented yet (2026-10-20; revised the same day after the coai plan gate, an Opus review and
-> the epics 1–3 cadence consultation).** Scope: `src_mcp/runners/Reviewers` (the follow-up parts and the local ledger line),
+> Status: **E1 measured 2026-10-21 (verdict: inconclusive — the follow-up path is not reached on agy 1.4.4; cumulative not measured);
+> E2 DEFERRED by the owner's decision of 2026-10-21 until the path fires again; E3–E7 not started; no product code written (plan of
+> 2026-10-20, revised the same day after the coai plan gate, an Opus review and the epics 1–3 cadence consultation).** Scope: `src_mcp/runners/Reviewers` (the follow-up parts and the local ledger line),
 > `src_mcp/core/Consultation` (the one subtraction, reused), `src_server/src/Jobs/ReviewLauncher.cs` (the server's own follow-up
 > path, the same rule), `src_mcp/runners/Kimi` + `src_mcp/runners/Acp` (a Kimi gauge read under the sign-in's lock),
 > `src_mcp/src/Store/RoundCounts.cs` + `src_mcp/src/Server/RoundCountsMode.cs` (a snapshot per store, read by the other side
@@ -201,7 +202,7 @@ raw blocks redacted (no email, no token).
 
 | Measurement | Epic | Prediction written first | Budget (the owner's subscription) and the stop rules |
 |---|---|---|---|
-| **M1 — step 1, ONE capture under the CURRENT build configuration** (`Runtime.Build`, the `coai-reader` agent, the `view_file`-only hook): a reviewer prompt that needs a shell command (the consultation probe's elicitation, RESULTS_agy_consult_follow_up §3: a question unanswerable without a command, cited for the METHOD only) — kept as the fixture only if it shows all three continuation conditions at once: a denial (`denied_actions`), a conversation id, and an EMPTY answer (what `ConcludedAsync` and the server's `FollowUpOf` require before any follow-up). **Step 2a (elicited):** three launches in ONE conversation, 3 runs, by script on the real CLI — turn 1 the denied launch, turn 2 the follow-up as `FollowUp` sends it, turn 3 the words *reply OK*. **Step 2b (not elicited within the cap):** cumulative reporting measured SEPARATELY from denial recovery — turn 1 any short answered prompt, turn 2 an explicit same-conversation continuation (the one continuation `FollowUp` uses, `AntigravityRuntime.cs:103`), turn 3 *reply OK*; denial recovery stays unmeasured and is said so. All `usage` blocks kept. **Compared: OUTPUT and reasoning tokens**, never input | E1 | per-launch: turn 3's output is a few tokens, below turn 2's; cumulative: turn 3's output ≥ turn 2's ≥ turn 1's. Written down: *cumulative* | counted per ATTEMPT: ≤ 12 launches in all; step 1 ≤ 4 first launches (an answered, undenied, or denied-but-answered launch is recorded and the attempt discarded) — then step 2b; stop when 3 runs are complete; ≤ 400 k Google tokens by the reports' own input sums, ~60 k input per launch; no agy gauge is readable (`GaugeCapture.cs:149-152`), so no "window above 80 %" rule. **INCONCLUSIVE is an allowed outcome** (3 runs disagree, or the window ran out): recorded as such, never rounded to a verdict |
+| **M1 — step 1, ONE capture under the CURRENT build configuration** (`Runtime.Build`, the `coai-reader` agent, the `view_file`-only hook): a reviewer prompt that needs a shell command (the consultation probe's elicitation, RESULTS_agy_consult_follow_up §3: a question unanswerable without a command, cited for the METHOD only) — kept as the fixture only if it shows all three continuation conditions at once: a denial (`denied_actions`), a conversation id, and an EMPTY answer (what `ConcludedAsync` and the server's `FollowUpOf` require before any follow-up). **Step 2a (elicited):** three launches in ONE conversation, 3 runs, by script on the real CLI — turn 1 the denied launch, turn 2 the follow-up as `FollowUp` sends it, turn 3 the words *reply OK*. **Step 2b (not elicited within the cap):** cumulative reporting measured SEPARATELY from denial recovery — turn 1 any short answered prompt, turn 2 an explicit same-conversation continuation (the one continuation `FollowUp` uses, `AntigravityRuntime.cs:103`), turn 3 *reply OK*; denial recovery stays unmeasured and is said so. All `usage` blocks kept. **Compared: OUTPUT and reasoning tokens**, never input | E1 | per-launch: turn 3's output is a few tokens, below turn 2's; cumulative: turn 3's output ≥ turn 2's ≥ turn 1's. Written down: *cumulative* | counted per ATTEMPT: ≤ 12 launches in all; step 1 ≤ 4 first launches (an answered, undenied, or denied-but-answered launch is recorded and the attempt discarded) — then step 2b; stop when 3 runs are complete; ≤ 400 k Google tokens by the reports' own input sums (measured 2026-10-21: ONE launch costs 90 k–360 k input, not ~60 k — 400 k holds about two launches, so the 12-launch cap and the 400 k cap do not fit together; re-run M1 only with a cap sized to that); no agy gauge is readable (`GaugeCapture.cs:149-152`), so no "window above 80 %" rule. **INCONCLUSIVE is an allowed outcome** (3 runs disagree, or the window ran out): recorded as such, never rounded to a verdict |
 | **M2 — where Kimi's plan usage can be read:** (b) `/usage` as the ONLY prompt on a fresh session (no model call, 3 runs); (c) Kimi's session log for a quota field; (d) the TUI's `/usage` wording, for the parser. Cell (a) — the shim's `/usage` after an answered turn — is ANSWERED by fact C (session totals only on 2.2.0) and not re-run | E4 | after fact C: (b) prints the same session line and no plan line; (c) carries no quota; (d) the TUI alone has it — then E5 is cut | (b), (c), (d) are free; the whole of M2 inside ONE 5-hour window, no other `kimi` running; **stop at the first exit 77 / 401** (a lost sign-in is M-K14's, not this plan's — no re-sign-in inside the window); a 403 is read by its wording: the subscription-model 403 (M-K7b) is not the spent-window one |
 | **M3 — one plan round through the company Team server, `/api/usage?windows=5h,24h,week&scope=me` before and after, and the server's ledger lines for the round key; the zero-spend probe against the production URL** | E7 | each vendor's `rounds` +1, `runsWithoutRound` unchanged, the round key on every vendor's lines; the probe answers the kind refusal | one plan round on a ~2 KB plan: ≤ 3 launches, one per vendor, ~60 k input each (the reviewer's prompt dominates, not the plan — agy's measured size); the probe spends nothing |
 
@@ -209,8 +210,8 @@ raw blocks redacted (no email, no token).
 
 | # | Epic | Ships |
 |---|---|---|
-| 1 | **E1** — M1, recorded in the follow-up plan; the boundary row written into it | nothing (a `research/RESULTS_*` record and two plan edits) |
-| 2 | **E2** — the accounting: S1 (cornerstone) the cumulative follow-up billed once in all three branches, parts still adding up, `usageBasis` on the line; S2 the parsed denial, streams apart; S3 the Team server's follow-up path under the same rule; S4 the extension's discriminator (`isLaunchLine`) | coai-mcp · Team server (+ deploy) · **extension** |
+| 1 | **E1** — DONE 2026-10-21, inconclusive: M1 recorded in [RESULTS_the_round_counter_tail.md](../research/RESULTS_the_round_counter_tail.md) and in the follow-up plan; the boundary row written into it | nothing (a `research/RESULTS_*` record and two plan edits) |
+| 2 | **E2** — DEFERRED 2026-10-21 (owner), see its section — the accounting: S1 (cornerstone) the cumulative follow-up billed once in all three branches, parts still adding up, `usageBasis` on the line; S2 the parsed denial, streams apart; S3 the Team server's follow-up path under the same rule; S4 the extension's discriminator (`isLaunchLine`) | coai-mcp · Team server (+ deploy) · **extension** |
 | 3 | **E3** — the ledger's metadata and its presentation: S1 labels on consult/question/probe lines; S2 a local `endCause` from the cancellation's source; S3 the chat line's `cli`/`cliVersion`; S4 per-consultation money per CONSULTATION | coai-mcp (S1, S2, S4's field) · **extension** (S2's help, S3, S4's division and label) |
 | 4 | **E4** — M2, in a Kimi window of its own, after the spent-quota trigger is answered | nothing (a record and a fixture) |
 | 5 | **E5** — the Kimi gauge: S1 the parser (days included); S2 (cornerstone) the read inside the turn's hold; S3 stored, answered by `--round-counts`, shown, the ratio hidden with the consumer named | coai-mcp (S1, S2, S3's store and answer) · **extension** (S3's card and block) |
@@ -270,9 +271,10 @@ Each RED message and its plant go into `research/module_tests.md` with the story
 
 ## Definition of Done
 
-- [ ] M1 recorded in `PLAN_the_reviewer_follow_up_is_billed_once.md`: the step-1 capture (or why none could be elicited), every
-      `usage` block per run, the verdict — *cumulative*, *per launch* or *inconclusive*; its boundary table names E2.
-- [ ] A cumulative reviewer follow-up is billed once — locally in every branch and on the Team server — its two lines add up to
+- [x] M1 recorded in `PLAN_the_reviewer_follow_up_is_billed_once.md`: the step-1 capture (or why none could be elicited), every
+      `usage` block per run, the verdict — *cumulative*, *per launch* or *inconclusive*; its boundary table names E2. *(2026-10-21:
+      inconclusive, no capture could be elicited, the two undenied launches' `usage` blocks are in `RESULTS_the_round_counter_tail.md`.)*
+- [ ] *(E2 DEFERRED 2026-10-21 until the path fires again)* A cumulative reviewer follow-up is billed once — locally in every branch and on the Team server — its two lines add up to
       the turn, the follow-up line carries `usageBasis` and no `usageNote`, repairs and non-cumulative runtimes unchanged; the
       reviewer's denial is read parsed from the two streams; today's extension reads the new line's money whole.
 - [ ] Consultation, question-row, probe and chat lines say what they ran with; a consult line carries its consultation; a local
@@ -299,6 +301,19 @@ starts. **Cornerstones: 0 of 3 — E2.S1, E5.S2, E6.S1** (the quota ⌈2·7/5⌉
 
 ### E1 — measure the agy reviewer follow-up (no product code)
 
+- **Outcome (2026-10-21): DONE, verdict *inconclusive — the follow-up path is not reached on agy 1.4.4; cumulative not
+  measured*.** Recorded in [RESULTS_the_round_counter_tail.md](../research/RESULTS_the_round_counter_tail.md) §M1 and in step 1 of
+  [the follow-up plan](PLAN_the_reviewer_follow_up_is_billed_once.md), whose boundary table now carries the row owed to it (E2.S1
+  and E2.S3 build its step 2). Probe: `scripts/probe-agy-review-follow-up.mjs`. A first attempt (7 launches) was refused before
+  any model call — `AntigravityRuntime.DefaultModel` `gemini-3.7-flash-high` is not a model agy 1.4.4 offers (0 tokens; the
+  default is corrected in its own pull request). The second, on `gemini-3.8-flash-low` under the current `coai-reader` agent and
+  the `view_file`-only hook, ran two launches (input 94 883 and 357 039) before the 400 k cap: both SUCCESS, not denied, a
+  non-empty answer — the model says `run_command` is unavailable and answers in prose. So there is no denial, no empty answer and
+  no follow-up; step 2a never started and step 2b was not run, by the owner's decision (option A). The 2026-10-02 denials came from
+  agy 1.2.15 with another agent configuration. Stories S1 (no fixture could be captured: the three conditions never held) and S3
+  (the verdict and the boundary row) are done; S2 is not run. The "Done when" below (an inconclusive M1 lets E2.S1 ship the
+  mechanism with the flag `false`) is superseded by the owner's deferral of E2.
+
 - **Goal:** settle item 2's question with numbers before anything is built — by output tokens, which input growth cannot settle.
 - **Stories:** S1 M1 step 1 — ONE capture under the current build configuration (agent, hook, `Runtime.Build`) that shows a
   denial, a conversation id and an empty answer together, kept as the fixture `src_mcp/tests/fixtures/antigravity/review-denied.*`;
@@ -312,6 +327,14 @@ starts. **Cornerstones: 0 of 3 — E2.S1, E5.S2, E6.S1** (the quota ⌈2·7/5⌉
   settles it, and the follow-up plan stays open on that one line. E2.S2–S4 and E3 proceed whatever M1 says.
 
 ### E2 — the accounting is right on both follow-up paths
+
+- **DEFERRED (owner's decision, 2026-10-21).** E1 found that the reviewer follow-up path is not reached on agy 1.4.4 with the
+  current read-only agent, so what S1 and S3 would correct does not happen today and there is nothing to measure it against.
+  **What re-opens E2:** an agy version or a reviewer configuration under which a denial with an empty answer happens again (the
+  three preconditions of `ConcludedAsync` and the server's `FollowUpOf`: a denial, a conversation id, an empty answer). Then
+  re-run M1 (with a launch cap sized to 90 k–360 k input per launch) and build S1–S4 as written below. Until then S1–S4 are not
+  started; S2 (the parsed denial) and S4 were written to proceed whatever M1 says, but ship with the rest of E2 unless the owner
+  asks for them separately.
 
 - **Goal:** the ledger's lines and totals say what was spent when agy is asked again in one conversation, locally and on the Team
   server, and the extension reads the new line as what it is.
