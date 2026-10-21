@@ -279,6 +279,7 @@ when it comes from that store's ledger tail.
           "reviewers": 7,
           "models": [ { "model": "gpt-6-luna", "rounds": 3 } ],
           "roundKeys": [ "9b1f6e2d4c8a7b5e3f1d0c9a8b7e6d5c", "0c7a1e5d9b3f2a8c6e4d1b0f9a8c7e6d" ],
+          "keyStore": { "9b1f6e2d4c8a7b5e3f1d0c9a8b7e6d5c": "a1b2c3d4e5f60718293a4b5c6d7e8f90", "0c7a1e5d9b3f2a8c6e4d1b0f9a8c7e6d": "3f9c2b7e1a4d5c6f8e9a0b1c2d3e4f50" },
           "roundsWithoutKey": 1,
           "parts": [
             { "store": "a1b2c3d4e5f60718293a4b5c6d7e8f90", "rounds": { "plan": 1, "code": 1, "document": 0, "feature": 0 }, "reviewers": 4 },
@@ -450,11 +451,13 @@ subsection beside `--round-counts` `:3474`, the snapshot's schema, the engine's 
 |---|---|---|
 | `TheOtherStoresLedgerTail_IsReadBesideThisSides_WithItsStore` | `roundsLoader` over two directories, each with a `usage.jsonl` → the snapshot's `ledger` holds both tails, each record carrying `store: <directory>` (an in-memory field of the load, never written to disk) | `roundsLoader` (`roundCountsRead.ts:39-54`) reads `usagePath` and `besidePaths` only |
 | `ATailThatWillNotRead_IsNotIncluded_LikeTheSnapshot` | the other directory's ledger is a directory in the file's place → `ledgerFailure` names it with the store; this side's lines still read | the other tail is not read at all |
+| `TwoSpellingsOfOneStore_AreReadOnce_AndTheMoneyIsCountedOnce` | the merged answer names one store with two `paths[]`, both directories open the same `usage.jsonl` with one $1 launch → 1 round, 1 launch, $1 | $2 beside one round (both tails concatenated) |
+| `AForeignTailThatNeverAnswers_DoesNotHoldThisSidesCounts` | the merged call times out, the plain fallback answers, one foreign tail never resolves → this side's counts and money are shown within the deadline; the store is *did not answer in time*; a second refresh starts no second read | the block waits on the tail |
 | `AnOtherStoreWithNoLedger_IsNoLines_NotAFailure` | the directory exists, no `usage.jsonl` → no failure (the `missingRatherThanBroken` rule of `ledgerTail.ts`) | — (guard) |
 
 **The brief.** `roundsLoader(executable, usagePath, run, besidePaths, otherStoreDirs)` — one `readTailSince` per other store's
 `usage.jsonl` (`ledgerTail.ts:37-42`, reading from the end — a plain append-only file, which is what makes the boundary safe),
-the records tagged with the directory they came from; `RoundsSnapshot.ledger` stays one list (the block's `moneyGroups` needs no
+the records tagged with the STORE ID they came from (cadence consultation c5759f9a): the extension maps each directory to its store through the merged answer's `stores[].paths[]`, and a store two spellings reach is read ONCE, so one round with one $1 launch stays 1 / 1 / $1, never $2. Every foreign tail read is BOUNDED by the D7 deadline: a read past it is `otherLedgers` failure *did not answer in time*; this side's counts and money are published without waiting for it; at most one read per store is in flight (a refresh while one is pending reuses it rather than starting another). `keyStore` (key → store id) is in the §4.4 answer, its JSON example, the `roundCounts.ts` parser, and S5's assertions; `RoundsSnapshot.ledger` stays one list (the block's `moneyGroups` needs no
 change), and `RoundsSnapshot` gains `otherLedgers: readonly { directory; failure }[]` so S4 can say which store's money is in and
 which is not. The extension's probe ledger (`besidePaths`) is this side's only.
 
@@ -581,6 +584,11 @@ every plant (B1–B7 and the per-story guards) is recorded in `research/module_t
   not answering (D7). Residual, stated: the pre-existing `existsSync` in `otherStores` (`:60-62`) and the mode's file read both
   block on a dead SMB share for the OS's own timeout — bounded by the 8 s spawn cap and the fallback, not removed (open
   question 2).
+
+**Store identity is LOCATION identity** (cadence consultation c5759f9a): the D1 hash changes when a distro is renamed or the data
+directory moves, so a moved store is a new store, and its rounds inside the 7-day window can be counted under both ids until the
+old snapshot goes quiet. That is accepted and said in `module_server.md`; a durable id (a persisted UUID plus copy semantics) is
+not built.
 
 ## 10. Open questions (the plan and the code cannot decide)
 
