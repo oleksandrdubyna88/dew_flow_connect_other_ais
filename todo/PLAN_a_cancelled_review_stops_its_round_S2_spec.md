@@ -522,3 +522,13 @@ Extension tests:
 - [ ] §7 untouched: nothing of S3/S4 landed in PR A.
 - [ ] The three module docs updated as §7's last bullet says; the parent plan's `Epics` section marks S2's cornerstone as specified
       (this file), not built, until PR A merges.
+
+## 10. What the plan round changed (2026-10-21, session 1831c0a3)
+
+These override the sections above where they differ.
+
+1. **The setup and withdraw catch arms test the ROUND token, not the caller's.** The filter is `ending is not Completed && cancellation.Token.IsCancellationRequested`. `RoundCancellation` records the cause and only then cancels that token, so a cancelled round is never seen with its token clear. An `OperationCanceledException` a setup step raises for its OWN reason (its timeout, its own token) while the round token is clear falls to today's failure arm. That is correct: no person withdrew it. Test: `ASetupStepsOwnTimeout_IsAFailure_NotAWithdrawal`.
+2. **A turn is marked cut only when the ROUND token ended it** (finding 3). In the OCE catch and at the other cut sites, the mark is `e.CancellationToken == roundToken || (roundToken.IsCancellationRequested && cancellation.FiredAt <= observedAt)`, where `observedAt` is the `Stopwatch` timestamp taken as the catch is entered and `FiredAt` is the first source's recorded moment (`RoundCancellation` gains a read of it). An adapter that threw for its own reason before the caller cancelled is NOT marked. Test: `AnAdaptersOwnCancellation_BeforeTheCallerCancels_IsNotACut`: the adapter throws, a gate holds the catch, the caller cancels, the gate is released → no mark, and the round completes as today.
+3. **`returnedAt` is taken INSIDE the scheduler** (finding 4). `RunAllAsync` stamps `Stopwatch.GetTimestamp()` as its last act and returns it with the results. The engine never reads the clock after the await. Test: `ACancelAfterTheSchedulerReturned_CompletesTheRound`: a lane-only round, a cancel fired between the scheduler's return and the engine's continuation (a seam) → `Completed`.
+4. **A cancelled row opens cleanly in the rounds log** (finding 2). Expanding a `cancelled` row renders its reviewer states and the withdrawal note and asks the database for nothing. Test: `ACancelledRow_ExpandsToItsReviewersAndNote` in `bundledPage.test.ts` (no thrown error, no findings request, both texts present).
+5. **Rejected: `SaveWithdrawn` swallowing a failed save** (finding 1). It is decided: D10 is story S3 (PR B), which makes a failed withdraw save never read `running` (provisional write, in-process map, startup sweep). The gap is closed by RELEASE ORDER: **PR A and PR B ship in the same coai-mcp release, and no release is cut between their merges.** PR A's description says so, and so does the release checklist.
