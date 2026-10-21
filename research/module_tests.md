@@ -5084,3 +5084,21 @@ class by class alone right after: 10/10, 31/31 and 16/16 passed. S1 changes no p
 
 The clock proves a class READS its clock, not that the product's other timers (the launcher's per-turn timer, `ReviewSnapshots`' ceiling) are sound; `ManualClock` forbids a nested/concurrent `Advance` of ITSELF but cannot stop a
 product hook from advancing a different clock; the scan is a source scan of five named shapes, not a data-flow proof (a `Stopwatch` hidden behind a helper in a file outside the named set is not seen — that is why the set grows by file).
+
+## The suite is deterministic — E4 S5: the round deadline pinned without wall time (C6, 2026-10-21)
+
+Source: `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp_E4.md` §8 S5 (its status section lists the deviations). Branch `feat/suite-e4-clock`. **Tests only — no product line changed.**
+The old end-to-end test slept 700 ms per fake turn so four turns would overrun a round bounded by ONE turn's 2 s: a claim about arithmetic paid for in wall time, lost on a loaded machine (C6). The claim is now three tests.
+
+| Test | What it pins | Seen red as |
+|---|---|---|
+| `RoundDeadlineTests.ThreeFollowUps_EarnARoundFourTurnsLong_AndNoFollowUpsEarnOne` (pure) | `RoundDeadline.For` with one vendor, one role, `ReviewerTimeout = 2 s`, `Stage.FeatureReview`: `followUps: 3` → exactly 8 s, `followUps: 0` → exactly 2 s, ratio 4 | B15 (`ReviewerTimeout * 1`): `Expected 8s because a 2 s reviewer asked again three times may take 2 s x (1 + 3), but found 2s.` |
+| `AReviewerThatAsksForSourceIsAskedAgainTests.AConversationIsCutAtTimeoutTimesItsTurns_NotAtOneTurnsTimeout` (manual clock, S4's `ClockedLauncher`) | 700 ms turns: arm one `Ok`, `Turns == 4`, 4 launches, clock moved 2800 ms; arm two with `ConversationCap = 2 s`: `TimedOut`, 2 earlier turns, 3 launches (timeouts 2 s, 1.3 s, 600 ms), clock moved exactly 2 s | `TurnLoop` cap `Timeout * 1`: `Expected type to be ...ReviewerOutcome+Ok because an 8 s cap (a 2 s timeout with three follow-ups) holds four 700 ms turns, but found ...TimedOut.` |
+| `AFeatureIsReviewedEndToEndTests.TheRoundsDeadline_IsScaledByTheFollowUps_TheEngineHandsThemToTheDerivation` (wiring arm) | the engine hands `stage.FollowUps` to the derivation: `RoundTimeout = 1 min`, `ReviewerTimeout = 20 min`, three follow-ups; the suite's `ListSink` captures `RoundDeadline.For`'s warning, which must say `own 80` (20 × (1 + 3)) | B16 (`RoundEngine.cs:287` `stage.FollowUps` → `0`): `Expected warnings {"… shorter than one reviewer's own 20; …"} to have an item matching w.Contains("own 80")` |
+
+`Endless` (the stand-in continuation) gained `stopsAtTheFollowUps`, so a conversation can end by its own follow-up count (as the feature stage's does) rather than by the cap; the default keeps S4's cap tests unchanged.
+`Service(...)` of the end-to-end file gained optional `roundTimeout` and `log`.
+
+**What the end-to-end test still pays, said in its remark:** it is a real-process smoke test of the wiring (proceed, four prompts, all reviewers answered) that keeps the 2 s reviewer timeout and the REAL round timer, armed in `RoundEngine` before the roles are warmed, the sha resolved and the worktree, diff and outline built — so setup plus four cold `FakeCli` launches must fit the derived 8 s. A kept failure of it ("the round reached its limit") reopens C6 against the setup cost of that machine, never against the arithmetic, which the two deterministic tests hold. No timeout was lengthened.
+
+Loop: before (`FAKECLI_SLEEP_MS=1900`) the end-to-end test failed 20 of 20; after, the smoke test plus the wiring arm 0 of 20, the scheduler-level test 0 of 20, the pure test 0 of 20. `EveryBudgetInAClockedClassReadsItsClockTests` untouched (S5 moves no clocked class).

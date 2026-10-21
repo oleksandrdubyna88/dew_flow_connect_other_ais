@@ -528,6 +528,47 @@ public sealed class AReviewerThatAsksForSourceIsAskedAgainTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// The conversation's cap is <c>timeout × (1 + follow-ups)</c>, not one turn's timeout (E4 S5, C6 — the scheduler's half of the old
+    /// end-to-end test): four 700 ms turns fit the 8 s a 2 s timeout earns with three follow-ups, and are cut by a 2 s cap set on the work.
+    /// </summary>
+    /// <remarks>
+    /// Two conversations, each on its own manual clock, so no real time passes in either. Arm one: the stand-in's turns are 700 ms and the
+    /// continuation stops after its follow-ups, so the conversation is four answered turns (2.8 s of the 8 s) — a cap of ONE turn's 2 s would
+    /// have cut it at the third. Arm two: the work's own 2 s cap (<see cref="ReviewerWork.ConversationCap"/>) leaves 600 ms for a third launch,
+    /// which <c>TurnLoop</c> makes anyway (a turn is launched whenever anything is left), the stand-in ends it timed out: two earlier turns,
+    /// three launches, the clock moved exactly the 2 s. The deadline the ROUND derives from the same numbers is <c>RoundDeadlineTests</c>'s.
+    /// </remarks>
+    [Fact]
+    public async Task AConversationIsCutAtTimeoutTimesItsTurns_NotAtOneTurnsTimeout()
+    {
+        var turn = new ReviewerWork(FakeCliInvocations.Invoke("gemini", [], timeout: TimeSpan.FromSeconds(2)));
+
+        var wholeClock = new ManualClock(Epoch);
+        var whole = new ClockedLauncher(TimeSpan.FromMilliseconds(700), SevenIn);
+        var answered = await ConversationAsync(
+            turn with { Continue = new Endless(turn, followUps: 3, stopsAtTheFollowUps: true) }, wholeClock, whole, [], TestContext.Current.CancellationToken);
+
+        answered.Should().BeOfType<ReviewerOutcome.Ok>("an 8 s cap (a 2 s timeout with three follow-ups) holds four 700 ms turns")
+            .Which.Turns.Should().Be(4, "the first turn and its three follow-ups");
+        whole.Count.Should().Be(4);
+        (wholeClock.GetUtcNow() - Epoch).Should().Be(TimeSpan.FromMilliseconds(2800), "four turns of exactly 700 ms");
+
+        var cutClock = new ManualClock(Epoch);
+        var cut = new ClockedLauncher(TimeSpan.FromMilliseconds(700), SevenIn);
+        var capped = await ConversationAsync(
+            turn with { Continue = new Endless(turn, followUps: 3, stopsAtTheFollowUps: true), ConversationCap = TimeSpan.FromSeconds(2) },
+            cutClock, cut, [], TestContext.Current.CancellationToken);
+
+        capped.Should().BeOfType<ReviewerOutcome.TimedOut>("a 2 s cap holds two 700 ms turns and cuts the third");
+        capped.EarlierTurns.Should().HaveCount(2, "two turns answered before the cap");
+        cut.Count.Should().Be(3, "the third launch is made with the 600 ms left and ended as timed out");
+        cut.Timeouts.Should().Equal(
+            [TimeSpan.FromSeconds(2), TimeSpan.FromMilliseconds(1300), TimeSpan.FromMilliseconds(600)],
+            "each launch is bounded by what is left of the 2 s");
+        (cutClock.GetUtcNow() - Epoch).Should().Be(TimeSpan.FromSeconds(2), "700 + 700 + the 600 ms the third was allowed");
+    }
+
+    /// <summary>
     /// Runs one conversation on the manual clock through the stand-in: the scheduler (and so its loop) reads <paramref name="clock"/>, and
     /// the DRIVER — this test's thread, never the launcher's — moves it once per launch.
     /// </summary>
@@ -644,13 +685,18 @@ public sealed class AReviewerThatAsksForSourceIsAskedAgainTests : IAsyncLifetime
         }
     }
 
-    /// <summary>A continuation that always asks for another turn — the same launch again.</summary>
-    private sealed class Endless(ReviewerWork again, int followUps) : IReviewerContinuation
+    /// <summary>
+    /// A continuation that always asks for another turn — the same launch again — unless <paramref name="stopsAtTheFollowUps"/>, which makes it
+    /// stop when its follow-ups are spent, as the feature stage's does: then the conversation ends by ITS count, not by the cap.
+    /// </summary>
+    private sealed class Endless(ReviewerWork again, int followUps, bool stopsAtTheFollowUps = false) : IReviewerContinuation
     {
         public int FollowUps => followUps;
 
         public Task<TurnDecision> AfterAsync(int turn, ReviewerOutcome.Ok answered, CancellationToken ct) =>
-            Task.FromResult<TurnDecision>(new TurnDecision.Next(again with { Continue = this }, $"turn {turn + 1}: again"));
+            Task.FromResult<TurnDecision>(stopsAtTheFollowUps && turn > followUps
+                ? new TurnDecision.Stop("the follow-ups are spent")
+                : new TurnDecision.Next(again with { Continue = this }, $"turn {turn + 1}: again"));
     }
 
     [Fact]

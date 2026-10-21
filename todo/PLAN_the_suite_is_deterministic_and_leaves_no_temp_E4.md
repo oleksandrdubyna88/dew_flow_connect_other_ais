@@ -892,6 +892,34 @@ the test advances), the 5-minute budget and why (deviation 2), the scan's set no
   named (the pure test, the scheduler-level test, the wiring arm).
 - **Roles.** Opus brief, Sonnet code, Opus review.
 
+### S5 — status: built 2026-10-21 (Sonnet; the spec above governed, deviations listed)
+
+**Built.** Tests only; no product line changed (each break-it was restored and the diff of `src_mcp/runners`, `src_mcp/src` re-checked empty). `RoundDeadlineTests` (new, 1 test): `RoundDeadline.For` with one enabled vendor, one role, `ReviewerTimeout = 2 s`, `Stage.FeatureReview` — `followUps: 3` is exactly `8 s`, `followUps: 0` exactly `2 s`, the ratio `4`. `AReviewerThatAsksForSourceIsAskedAgainTests.AConversationIsCutAtTimeoutTimesItsTurns_NotAtOneTurnsTimeout` (new): two conversations on two manual clocks through S4's `ClockedLauncher`, 700 ms turns, `Endless` — arm one `Ok`, `Turns == 4`, 4 launches, the clock moved exactly 2800 ms; arm two with `ConversationCap = 2 s`: `TimedOut`, `EarlierTurns.Count == 2`, 3 launches with timeouts `2 s, 1.3 s, 600 ms`, the clock moved exactly 2 s. `AFeatureIsReviewedEndToEndTests`: `FAKECLI_SLEEP_MS=700` removed, the remark rewritten (it is now a "real-process SMOKE TEST of the wiring", says what it pins and what it still pays: the 2 s reviewer timeout and the real round timer, armed before setup, so setup plus four cold launches must fit the derived 8 s), and the wiring arm `TheRoundsDeadline_IsScaledByTheFollowUps_TheEngineHandsThemToTheDerivation` (`RoundTimeout = 1 min`, `ReviewerTimeout = 20 min`, three follow-ups, the suite's existing `ListSink` in place of `Logger.None` — no second sink written). `Service(...)` gained two optional parameters, `roundTimeout` and `log`. No timeout was lengthened.
+
+**RED (S13), seen on today's code.**
+
+1. *The pure test:* red by absence (the class did not exist; nothing to run). Its real symptom is B15 below.
+2. *The scheduler-level test* with `TurnLoop.cs:48` (the cap, `Timeout * (1 + FollowUps)`) dropped to `Timeout * 1`: `Expected type to be CoaiMcp.Runners.Reviewers.ReviewerOutcome+Ok because an 8 s cap (a 2 s timeout with three follow-ups) holds four 700 ms turns, but found CoaiMcp.Runners.Reviewers.ReviewerOutcome+TimedOut.`
+3. *Today's end-to-end test with `FAKECLI_SLEEP_MS=1900`:* red in 20 of 20 runs. Two messages alternate, both from `Expected answer.GetProperty("verdict").GetString() to be "proceed" … "verdict": "revise"`: `"reviewers": "0 of 1 reviewers answered; failed: codex/FeatureReview: timeout"` (8.8 s) and `"… failed: codex/FeatureReview: cancelled; the round reached its 0 minute limit and the reviewers still running were cancelled"` (9.6 s).
+4. *The wiring arm:* red by absence (no sink, no `RoundTimeout` parameter), then green; its real symptom is B16.
+
+**Break-its (each red, product restored, rebuilt, green).**
+
+- B15 (`RoundDeadline.cs:11` `ReviewerTimeout * 1`): the pure test red — `Expected 8s because a 2 s reviewer asked again three times may take 2 s x (1 + 3), but found 2s.`; the wiring arm red too (`own 20`).
+- B16 (`RoundEngine.cs:287` `stage.FollowUps` → `0`): the wiring arm red — `Expected warnings {"the round limit of 1 minute(s) is shorter than one reviewer's own 20; reviewers may be cancelled"} to have an item matching w.Contains("own 80") because the 20-minute reviewer asked three more times is allowed 20 x (1 + 3) = 80 minutes, which the 1-minute round is shorter than.` The pure test stays green (it cannot see the engine), as the spec said.
+
+**Full suite.** `CoaiMcp.Tests.exe`, Windows Debug, 25 min 41 s on a loaded machine: 13152 total, 13032 passed, 120 skipped, 0 failed (S4 reported 13140: +12 are the other merged stories' tests and S5's +3 among them).
+
+**Loop (§10).** The end-to-end smoke test plus the wiring arm (`--filter-method "*TheRoundsDeadline_IsScaledByTheFollowUps*"`), 20 runs in a row: before (sleep 1900) 20 of 20 failed; after, 0 of 20 failed. The scheduler-level test alone 20 runs, 0 failed; the pure test alone 20 runs, 0 failed. The scan (`EveryBudgetInAClockedClassReadsItsClockTests`) 6 of 6 green: S5 touches no clocked class.
+
+**Deviations.**
+
+1. **`Stage.Feature` is `Stage.FeatureReview`** in the code; the spec's name is shorthand.
+2. **`Endless` gained `bool stopsAtTheFollowUps = false`.** The spec's `Endless(followUps: 3)` never stops on its own, so "`Ok` with `Turns == 4`" needed a continuation that stops when its follow-ups are spent (as the feature stage's does); the default keeps S4's two tests unchanged.
+3. **Arm two's timeouts are `2 s, 1.3 s, 600 ms`**, not `2 s, 2 s, 600 ms`: each launch is bounded by what is left of the cap (`TurnLoop.Bounded`), so the second is bounded to the 1.3 s left. The third launch's 600 ms and the three launches are as the spec says.
+4. **B16 also turns the SMOKE test red on a real machine**, not only the wiring arm. The spec predicted "the end-to-end test without sleep still passes (four 0 ms turns fit 2 s)"; seen: with `stage.FollowUps` → `0` the derived whole is 2 s, and the setup (worktree, diff, outline) plus the cold launches did not fit it on this machine (`"verdict": "revise"`). The wiring arm is still the deterministic observer; the smoke test is simply also sensitive to the whole being 2 s instead of 8 s — wall-time exposure of the kind its remark states.
+5. **Test count +3**, as written (one pure test, one scheduler-level test with two arms, one wiring arm).
+
 ### S6 — C4: the launcher's clock + S15 (GATED on a kept failure, D5)
 
 Opens only when a failure of `AServerThatNeverAnswers_…` has been kept with its full message. **The gate names its

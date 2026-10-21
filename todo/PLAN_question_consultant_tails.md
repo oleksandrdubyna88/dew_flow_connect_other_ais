@@ -67,6 +67,8 @@ in the table, or cap it by count, using the store's existing pruning seam if one
 > **Moved 2026-10-19** to [PLAN_the_suite_is_deterministic_and_leaves_no_temp.md](PLAN_the_suite_is_deterministic_and_leaves_no_temp.md), which builds all three tests of this section (its C6, C13 and C14,
 > each with its cause); the text below is kept as the record of what was seen. Boundary table: that plan, §7.
 
+> **Closed 2026-10-21** (E4 S5 and S4): C6 (this section's test — the round deadline) is pinned without wall time by `RoundDeadlineTests`, the scheduler-level test and the wiring arm; C13 (the conversation-cap tests) runs on the manual clock. See `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp_E4.md` S4/S5 status.
+
 `AFeatureIsReviewedEndToEndTests.TheRoundsDeadline_IsScaledByTheFollowUps_SoAConversationIsNotCutByAOneTurnBudget`
 (`src_mcp/tests/AFeatureIsReviewedEndToEndTests.cs:424`) fails about 1 run in 3 on a clean `origin/main` as well. It runs
 for 12–20 s and reports "not started … the round reached its limit" before the reviewer launches. It is
