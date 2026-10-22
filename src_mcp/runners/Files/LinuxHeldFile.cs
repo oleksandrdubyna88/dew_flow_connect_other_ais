@@ -9,7 +9,7 @@ namespace CoaiMcp.Runners.Files;
 /// <see cref="Hold"/> union (DL8 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>, A2 §3.4; the order is C26 of <c>todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp_E5.md</c>, §3.5).
 /// </summary>
 /// <remarks>
-/// <para><b>The order, and why (C26).</b> <c>open(O_CLOEXEC)</c> → <c>flock</c> → build the stream → <c>fcntl(F_SETFD, 0)</c> (CHECKED) on success; <c>flock(LOCK_UN)</c> → close on the ABORTED path; NO unlock when a taken
+/// <para><b>The order, and why (C26).</b> <c>open(O_CLOEXEC)</c> → <c>flock</c> → build the stream → <c>fcntl(F_SETFD, 0)</c> (CHECKED) on success; <c>flock(LOCK_UN)</c> (its result checked: <c>EINTR</c> retried, any other errno surfaced) → close on the ABORTED path; NO unlock when a taken
 /// hold is later disposed. The descriptor is inheritable only from the moment the take has succeeded, so a child another thread forks AND execs while the take is still open (or fails) closes its copy at exec. A child
 /// that was forked but has not exec'd yet still holds a copy of the open file description — and the flock belongs to the DESCRIPTION, not the descriptor — so the aborted path unlocks explicitly before it closes.
 /// A successful hold is never unlocked here: the lock is what the inheriting child (Kimi) keeps. The production taker is the <c>--ask-acp</c> shim alone, which starts one child right after the take, so
@@ -91,13 +91,32 @@ internal static partial class LinuxHeldFile
             : Aborted(descriptor, made, new Hold.Unusable(new IOException($"the lock file {path} cannot be made inheritable: fcntl(F_SETFD) failed with errno {errno}")), unlock);
     }
 
-    /// <summary>Unlock the open file description, then close the descriptor (the owner disposes): the file is free the moment this returns, whoever else holds a copy of the descriptor.</summary>
-    private static Hold Aborted(int descriptor, IDisposable owner, Hold failure, Func<int, int> unlock)
+    /// <summary>
+    /// Unlock the open file description, then close the descriptor (the owner disposes): the file is free the moment this returns, whoever else holds a copy of the descriptor.
+    /// The unlock's RESULT is read (E5 checkpoint 1, F1 + F4): an unlock the kernel interrupted (<c>EINTR</c>) is asked again, a few times at most; any other failure is surfaced — the
+    /// <see cref="Hold.Unusable"/> names the unlock's errno beside the failure that aborted the take, because a copy of the descriptor in a forked child may now be holding a lock nobody released — and the
+    /// descriptor is closed either way.
+    /// </summary>
+    private static Hold Aborted(int descriptor, IDisposable owner, Hold.Unusable failure, Func<int, int> unlock)
     {
-        _ = unlock(descriptor);
+        var errno = Unlocked(descriptor, unlock);
         owner.Dispose();
 
-        return failure;
+        return errno == 0
+            ? failure
+            : new Hold.Unusable(new IOException($"{failure.Cause.Message}; the lock could not be released either: flock(LOCK_UN) failed with errno {errno}", failure.Cause));
+    }
+
+    /// <summary>The unlock's errno after its last attempt: 0 once it worked, the first errno that is not <c>EINTR</c>, or <c>EINTR</c> itself when every one of <see cref="UnlockAttempts"/> was interrupted.</summary>
+    private static int Unlocked(int descriptor, Func<int, int> unlock)
+    {
+        var errno = unlock(descriptor);
+        for (var attempt = 1; errno == EINTR && attempt < UnlockAttempts; attempt++)
+        {
+            errno = unlock(descriptor);
+        }
+
+        return errno;
     }
 
     /// <summary><c>fcntl(descriptor, F_SETFD, 0)</c>: the errno when it failed, 0 when it worked — read at once, before anything else can change it.</summary>

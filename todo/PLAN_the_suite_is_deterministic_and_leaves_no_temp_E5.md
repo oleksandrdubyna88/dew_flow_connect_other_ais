@@ -1438,3 +1438,26 @@ groups with checkpoint code rounds in §5, not as new epics (E5 is the fixed pla
 5. **The test list** (1.5 of 2 s → exactly 500 ms; an already-shorter repair stays shorter; an exhausted budget starts no
    repair; the duration records reflect the same advances; a timed-out repair keeps earlier usage and releases the slot;
    the default-clock seam-only run and the real-process timeout tests still pass) — §3.14 "The tests, listed".
+
+## 12. The checkpoint rounds
+
+### Checkpoint 1 — the code round (coai 51b4e0fd, 2026-10-22, proceed; 8 of 12 reviewers — Gemini's quota ran out): 10 findings, 6 accepted, 4 rejected
+
+Over the merged diff of S2, S3 and S8 (`fc4141bef`). Each accepted finding was checked against the code first; behaviour changes went RED first.
+
+**Accepted (6)**
+
+| Finding | Where | What changed | Evidence |
+|---|---|---|---|
+| F0 (blocking) | `EveryPidFileTheFakeWritesIsWrittenWholeTests.cs` | The scan matched each source LINE, so a `File.WriteAllText(` / `File.Exists(` call split over lines escaped it — against the convention "if the pattern spans lines, match across lines". Each file is now matched WHOLE (`\s` for whitespace, `[^;]*?` for "the rest of the statement"); comment lines are emptied, not removed, so line numbers stay true; the exemptions are asked of the collapsed statement. The known-instance companion (`TheScan_SeesWhatItForbids`) stays. | RED: 3 of 3 new split-call tests failed on the per-line scan (the guard test, that an innocent split call is NOT found, passed). Break-it on the REAL sources: a split `File.WriteAllText(\n pidFile,\n …)` planted in `Serving.cs` → `Sites: Serving.cs:28: File.WriteAllText( pidFile, id.ToString());`; restored by writing the file back, rebuilt, 7 of 7 green. |
+| F1 + F4 (major, product, C26) | `LinuxHeldFile.cs` | The aborted path ignored `flock(LOCK_UN)`'s result. Now: `EINTR` is asked again (at most `UnlockAttempts` = 5 times — bounded, so a stand-in that always answers it cannot loop); any other errno is surfaced — the `Hold.Unusable` names the unlock's errno beside the failure that aborted the take; the descriptor is closed either way. NO unlock was added to a successful hold's disposal. A third seam (`Func<int, int> unlock`, as S2 added for the clear) and `LinuxHeldFile.Unlock` (the real one) carry the tests. | RED on the Linux job (CI run 39815410042, job `build · test · family checks`, head `b25c0b413`, RED-only): the four new `HeldFileInheritableOnLinuxTests` failed with the real symptoms — `Expected calls to be 2 because the first unlock answered EINTR and was asked again, but found 1`; `Expected string "the stream could not be made" to contain "flock(LOCK_UN)"`; `… to contain "errno 22"` (the fcntl-then-unlock arm); `Expected hold "the stream could not be made" to contain "errno 4"`. The retry test uses a `dup` of the descriptor to stand for the pre-exec child: closing the take's own descriptor frees nothing, only a SUCCESSFUL explicit unlock does. |
+| F3 (major) | `ClockedLauncher.cs` | The `(TimeSpan turn, string stdout)` constructor repeated the last answer for every launch without saying so. Replaced by the named factory `ClockedLauncher.RepeatingOneAnswer(turn, stdout)`; the four callers in `AReviewerThatAsksForSourceIsAskedAgainTests` updated; the `ClockedStep` script stays the way to give distinct answers. | No behaviour change: the touched classes stay green (18 + 6). |
+| F5 (major) | `ReviewerExecutor.AbandonAsync` | The cleanup's catch swallowed every exception silently. Still best-effort — the outcome is unchanged — but the failure is recorded through the executor's one note channel (`note`, the channel an unkept answer already uses): one sentence naming the reviewer and either the failure or the exhausted bound. | RED: `ACleanupThatFailsAfterAKillIsRecordedAndChangesNothingTests` — a throwing adapter and an over-budget one both gave `Expected notes to contain a single item, but the collection is empty`; the outcome stayed `TimedOut` (a guard test) before and after. |
+| F6 (minor) | `ZombieMaker.cs` | `Process.Start(...)!` → a null check throwing `InvalidOperationException` that names the shell. | Pure rename-class change: no observable behaviour to assert. |
+
+**Rejected (4)**
+
+1. *Two clocks in `ReviewerExecutor`.* Rejected: the structural scan already enforces the rule (the one allow-listed system-clock read is `AbandonBudget`), and moving `AbandonBudget` onto a manual clock would hang cleanup — `TheCleanupAfterAKillStaysOnTheSystemClockTests` is that proof.
+2. *`ApiEndpointStub`'s blocking `Dispose`.* Rejected: test-only; its bound is reached only by a handler that ignores the token and the aborted response; teardown was measured unchanged.
+3. *O(n²) admission.* Rejected: n is a few per test.
+4. *Removing the abort loop.* Rejected: it IS the C16 fix; B-E5-10 turns it red.
