@@ -165,6 +165,8 @@ public sealed class StageRulesTests : IDisposable
     /// `--host-facts` (+16, which it must — `ARequestFaultIsNotAnOldBinaryTests`). The base is 17 963, the total 80 024, leaving 9 976 of 90 000; the tail
     /// canaries below ran unchanged and green (the fourth smallest tail rule, 3 460, still does not fit). Measured on the merged tree: the pinned numbers above
     /// are the ones this test reads back.</para>
+    /// <para><b>Re-baselined 2026-10-22 (E6.S1 merged after E1.S2, `todo/PLAN_the_round_counter_tail_E6.md`).</b> `.agents/PROJECT.md` also names
+    /// `--round-counts-merged` (+25): the base is 17 988, the total 80 049, leaving 9 951 of 90 000; the tail canaries were re-run unchanged.</para>
     /// <para>The unit is the one the collector spends: characters of the line-ending-normalised text
     /// (<c>RuleFile.Text.Length</c>), which is what <c>RuleFiles.DefaultBudgetBytes</c> calls bytes. They
     /// differ for the non-ASCII characters in these files, and are equal on every platform.</para>
@@ -182,13 +184,13 @@ public sealed class StageRulesTests : IDisposable
             .Where(file => !file.Path.Equals(file.WithinMount, StringComparison.Ordinal) && RuleOrder.IsTier(file.WithinMount))
             .Sum(file => file.Text.Length);
 
-        var message = $"base {baseBytes} + tier {tierBytes} = {baseBytes + tierBytes} (pinned: 17 963 + 62 061 = 80 024 of 90 000, since E1.S2's --host-facts met E7's --backfill-authors on 2026-10-21; 17 947 + 62 061 = 80 008 until then; 17 925 + 62 061 = 79 986 before E7). "
+        var message = $"base {baseBytes} + tier {tierBytes} = {baseBytes + tierBytes} (pinned: 17 988 + 62 061 = 80 049 of 90 000, since E6.S1's --round-counts-merged on 2026-10-22; 17 963 + 62 061 = 80 024 since E1.S2's --host-facts met E7's --backfill-authors on 2026-10-21; 17 947 + 62 061 = 80 008 until then; 17 925 + 62 061 = 79 986 before E7). "
             + "WHEN THIS FAILS the headroom the tail canaries are measured against has moved: re-measure "
             + "research/RESULTS_rules_selection_budget.md, then re-baseline the canaries below in the same change.";
 
         tierBytes.Should().Be(62_061, message);
-        baseBytes.Should().Be(17_963, message);
-        (baseBytes + tierBytes).Should().Be(80_024, message);
+        baseBytes.Should().Be(17_988, message);
+        (baseBytes + tierBytes).Should().Be(80_049, message);
     }
 
     /// <summary>
