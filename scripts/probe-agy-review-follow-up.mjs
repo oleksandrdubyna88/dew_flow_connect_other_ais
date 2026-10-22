@@ -37,6 +37,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 import { resolved } from '../.github/scripts/lib/resolved.mjs';
+import { capRefusal } from './lib/spendCap.mjs';
 
 const GIT = resolved('git');
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -171,6 +172,9 @@ const QUOTA_OR_AUTH = /unauthori[sz]ed|unauthenticated|not (signed|logged) in|si
 
 function launch(label, text, conversation) {
   if (launches >= MAX_LAUNCHES) throw new Stop(`launch cap ${MAX_LAUNCHES} reached`);
+  // Checked BEFORE the launch (scripts/lib/spendCap.mjs says why).
+  const refusal = capRefusal(inputSum, log.map((one) => one.usage?.input_tokens ?? 0), MAX_INPUT_TOKENS);
+  if (refusal) throw new Stop(refusal);
   launches++;
   const started = Date.now();
   const r = spawnSync(exe, argv(conversation), { cwd: home, input: userMessage(text), encoding: 'utf8',
