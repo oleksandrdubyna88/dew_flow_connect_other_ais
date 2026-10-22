@@ -28,35 +28,43 @@
 //   and carries a conversation id as its turn 1 (recorded as such).
 //
 // HARD CAPS, counted per ATTEMPT (a launch that fails or times out counts): <= 12 launches in all; stop as soon as 3 runs
-// are complete; stop once the reports' own input-token sum passes 400 000; stop at the FIRST auth/quota error and say so.
-// Compared: OUTPUT and reasoning tokens, never input. Every `usage` block is kept in <scratch>/results.json, raw
-// streams beside it. Nothing here prints or stores a credential: the environment is passed on as it is and never logged.
-import { spawnSync, execFileSync } from 'node:child_process';
+// are complete; stop once the reports' own input-token sum passes 400 000 (checked BEFORE a launch and again after it;
+// lib/spendCap.mjs); stop at the FIRST auth/quota error and say so; stop on a launch whose report carries no usable
+// input-token count (the spend is unknown, so the probe does not go on). Every external process has a timeout, and a launch
+// that times out ends its whole process tree (lib/launch-tree.mjs). Compared: OUTPUT and reasoning tokens, never input. Every
+// `usage` block is kept in <scratch>/results.json, raw streams beside it. Nothing here prints or stores a credential: the
+// environment is passed on as it is and never logged, and a Stop message never carries launch output.
+import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 import { resolved } from '../.github/scripts/lib/resolved.mjs';
-import { capRefusal } from './lib/spendCap.mjs';
+import { authQuotaStop, classifyLaunch, launchDoneLine, launchStartLine, parseArgs, readStream, redactPaths } from './lib/agy-probe.mjs';
+import { runTree } from './lib/launch-tree.mjs';
+import { capPassed, capRefusal, inputTokensOf } from './lib/spendCap.mjs';
 
 const GIT = resolved('git');
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-let MAX_LAUNCHES = 12; // lowered by the optional 4th argument, never raised above 12
 const MAX_FIRST_LAUNCHES = 4;
 const MAX_INPUT_TOKENS = 400_000;
 const RUNS_WANTED = 3;
 const LAUNCH_TIMEOUT_MS = 420_000;
+const SHORT_TIMEOUT_MS = 30_000; // `agy --version` and every git call
 const FIXTURE = join(REPO_ROOT, 'src_mcp', 'tests', 'fixtures', 'antigravity', 'review-denied.json');
 const DEFAULT_AGY = join(process.env.LOCALAPPDATA ?? join(os.homedir(), 'AppData', 'Local'), 'agy', 'bin', 'agy.exe');
 // AntigravityRuntime.DefaultModel is gemini-3.7-flash-high, which agy 1.4.4 REFUSES (`agy models` lists 3.8 and 4, no 3.7): the
 // first run of this probe spent 7 attempts and 0 tokens on that refusal. The nearest valid sibling is the default here.
 const DEFAULT_MODEL = 'gemini-3.8-flash-high';
 
-const [exeArg, scratchArg, modelArg, capArg] = process.argv.slice(2);
-MAX_LAUNCHES = Math.min(12, Number.parseInt(capArg ?? '12', 10));
-const exe = exeArg ?? DEFAULT_AGY;
-const model = modelArg ?? DEFAULT_MODEL;
-const scratch = scratchArg ?? mkdtempSync(join(os.tmpdir(), 'testsToDelete-agy-m1-'));
+// Validated before anything is created or launched: a bad argument ends the run with one sentence.
+const args = parseArgs(process.argv.slice(2), { defaultExe: DEFAULT_AGY, defaultModel: DEFAULT_MODEL });
+if (args.error) {
+  process.stderr.write(`${args.error}\n`);
+  process.exit(2);
+}
+const { exe, model, maxLaunches: MAX_LAUNCHES } = args;
+const scratch = args.scratch || mkdtempSync(join(os.tmpdir(), 'testsToDelete-agy-m1-'));
 mkdirSync(scratch, { recursive: true });
 
 // ---- read the build's own texts out of the C# sources ---------------------------------------------------------------
@@ -110,8 +118,8 @@ function prepareHome() {
 function plantedCheckout() {
   const repo = join(scratch, 'checkout');
   mkdirSync(repo, { recursive: true });
-  const git = (...args) => execFileSync(GIT, ['-c', 'user.name=probe', '-c', 'user.email=probe@example.invalid',
-    '-c', 'commit.gpgsign=false', ...args], { cwd: repo });
+  const git = (...gitArgs) => execFileSync(GIT, ['-c', 'user.name=probe', '-c', 'user.email=probe@example.invalid',
+    '-c', 'commit.gpgsign=false', ...gitArgs], { cwd: repo, timeout: SHORT_TIMEOUT_MS, windowsHide: true });
   git('init', '-q');
   writeFileSync(join(repo, 'notes.txt'), 'nothing here\n');
   writeFileSync(join(repo, 'guard.txt'), 'the guard marker is QUOKKA-7731\n');
@@ -124,7 +132,12 @@ const home = prepareHome();
 const checkout = plantedCheckout();
 const schemaFile = join(scratch, 'finding-schema.json');
 writeFileSync(schemaFile, findingSchemaJson());
-const agyVersion = execFileSync(exe, ['--version'], { encoding: 'utf8' }).trim();
+const versionRun = await runTree(exe, ['--version'], { cwd: home, timeoutMs: SHORT_TIMEOUT_MS, maxBuffer: 1024 * 1024 });
+if (versionRun.status !== 0) {
+  process.stderr.write(`agy --version failed (exit ${versionRun.status ?? 'none'}${versionRun.timedOut ? ', timed out' : ''}${versionRun.error ? `, ${versionRun.error}` : ''}); nothing was launched\n`);
+  process.exit(2);
+}
+const agyVersion = versionRun.stdout.trim();
 
 // ---- prompts --------------------------------------------------------------------------------------------------------
 const CHECKOUT_NOTE = `\n\nThe checkout under review is at ${checkout}; open its files by that absolute path.`;
@@ -155,58 +168,46 @@ const argv = (conversation) => ['--print=', '--input-format', 'stream-json', '--
   '--agent', 'coai-reader', '--json-schema', schemaFile, '--model', model, '--add-dir', checkout,
   ...(conversation ? ['--conversation', conversation] : [])];
 
-function readStream(stdout) {
-  const out = { conversation: '', result: null, events: 0 };
-  for (const line of stdout.split('\n').map((l) => l.trim()).filter((l) => l.startsWith('{'))) {
-    try {
-      const event = JSON.parse(line);
-      out.events++;
-      if (event.event === 'init' && typeof event.conversation_id === 'string') out.conversation = event.conversation_id;
-      if (event.event === 'result') out.result = event.result;
-    } catch { /* a half-written line */ }
+/** The Stop a finished launch calls for, or '' — in the order: a refused model, an auth/quota failure, unknown spend, the cap. */
+function stopAfter(record, result, stderr, stdout) {
+  if (/invalid model selection/.test(result?.error ?? '')) {
+    return `the model '${model}' is refused by this agy (no tokens spent; see "agy models")`;
   }
-  return out;
+  const authStop = record.hasResult || record.exit === 0 ? '' : authQuotaStop(record.n, stderr + stdout.slice(-2000));
+  if (authStop) return authStop;
+  if (record.inputTokens === null) return `launch ${record.n}: ${inputTokensOf(record.usage).refusal}${record.timedOut ? ' (it timed out)' : ''}; the spend is unknown, so the probe stops`;
+  return capPassed(inputSum, MAX_INPUT_TOKENS) ? `input-token cap passed: ${inputSum} > ${MAX_INPUT_TOKENS}` : '';
 }
 
-const QUOTA_OR_AUTH = /unauthori[sz]ed|unauthenticated|not (signed|logged) in|sign[- ]?in|log ?in|login|credential|auth(entication|orization)? (error|failed|required)|quota|rate.?limit|resource.?exhausted|too many requests|\b(401|403|429)\b|exceeded|billing/i;
-
-function launch(label, text, conversation) {
+async function launch(label, text, conversation, { prompt = '' } = {}) {
   if (launches >= MAX_LAUNCHES) throw new Stop(`launch cap ${MAX_LAUNCHES} reached`);
   // Checked BEFORE the launch (scripts/lib/spendCap.mjs says why).
-  const refusal = capRefusal(inputSum, log.map((one) => one.usage?.input_tokens ?? 0), MAX_INPUT_TOKENS);
+  const refusal = capRefusal(inputSum, log.map((one) => one.inputTokens), MAX_INPUT_TOKENS);
   if (refusal) throw new Stop(refusal);
   launches++;
+  process.stderr.write(`${launchStartLine(launches, MAX_LAUNCHES, label)}\n`);
   const started = Date.now();
-  const r = spawnSync(exe, argv(conversation), { cwd: home, input: userMessage(text), encoding: 'utf8',
-    timeout: LAUNCH_TIMEOUT_MS, maxBuffer: 64 * 1024 * 1024 });
-  const stdout = r.stdout ?? '';
-  const stderr = r.stderr ?? '';
+  const r = await runTree(exe, argv(conversation), { cwd: home, input: userMessage(text), timeoutMs: LAUNCH_TIMEOUT_MS, maxBuffer: 64 * 1024 * 1024 });
+  const { stdout, stderr } = r;
   const stream = readStream(stdout);
   const result = stream.result;
-  const denied = Array.isArray(result?.denied_actions) ? result.denied_actions : [];
+  const spend = inputTokensOf(result?.usage);
   const record = {
-    n: launches, label, conversationArg: Boolean(conversation), exit: r.status, timedOut: r.error?.code === 'ETIMEDOUT',
-    seconds: (Date.now() - started) / 1000, conversation: stream.conversation,
+    n: launches, label, prompt, conversationArg: Boolean(conversation), exit: r.status, timedOut: r.timedOut, launchError: r.error,
+    seconds: (Date.now() - started) / 1000, conversation: stream.conversation, ignoredLines: stream.ignoredLines,
     status: result?.status ?? null, response: result?.response ?? null,
-    deniedActions: denied, deniedBySentence: /auto-denied/.test(stderr),
-    usage: result?.usage ?? null, hasResult: result !== null, stderrHead: stderr.slice(0, 300), stdout, stderr,
+    ...classifyLaunch(result, stderr, stream.conversation),
+    usage: result?.usage ?? null, inputTokens: spend.refusal ? null : spend.tokens, hasResult: result !== null,
+    stderrHead: stderr.slice(0, 300), stdout, stderr,
   };
-  record.denied = denied.length > 0 || record.deniedBySentence;
-  record.hasConversationId = /^[A-Za-z0-9_-]{1,128}$/.test(record.conversation);
-  record.emptyAnswer = (record.response ?? '').trim() === '';
-  record.allThree = record.denied && record.hasConversationId && record.emptyAnswer;
-  inputSum += record.usage?.input_tokens ?? 0;
+  inputSum += record.inputTokens ?? 0;
   log.push(record);
   writeFileSync(join(scratch, `launch-${String(launches).padStart(2, '0')}.stdout.ndjson`), stdout);
   writeFileSync(join(scratch, `launch-${String(launches).padStart(2, '0')}.stderr.txt`), stderr);
   save();
-  if (/invalid model selection/.test(result?.error ?? '')) {
-    throw new Stop(`the model '${model}' is refused by this agy (no tokens spent; see "agy models")`);
-  }
-  if (!record.hasResult && r.status !== 0 && QUOTA_OR_AUTH.test(stderr + stdout.slice(-2000))) {
-    throw new Stop(`auth/quota error on launch ${launches}: ${stderr.slice(0, 200).replace(/\s+/g, ' ')}`);
-  }
-  if (inputSum > MAX_INPUT_TOKENS) throw new Stop(`input-token cap passed: ${inputSum} > ${MAX_INPUT_TOKENS}`);
+  process.stderr.write(`${launchDoneLine(record)}\n`);
+  const stop = stopAfter(record, result, stderr, stdout);
+  if (stop) throw new Stop(stop);
   return record;
 }
 
@@ -225,16 +226,15 @@ let captureIndex = -1;
 const usable = (turn) => turn.hasResult && turn.usage !== null;
 const complete = () => runs.filter((run) => run.turns.length === 3 && run.turns.every(usable)).length;
 
-function turnsTwoAndThree(run, firstTurn) {
+async function turnsTwoAndThree(run, firstTurn) {
   const id = firstTurn.conversation;
-  run.turns.push(launch(`run${run.id}.turn2`, NO_COMMANDS, id));
-  run.turns.push(launch(`run${run.id}.turn3`, REPLY_OK, id));
+  run.turns.push(await launch(`run${run.id}.turn2`, NO_COMMANDS, id));
+  run.turns.push(await launch(`run${run.id}.turn3`, REPLY_OK, id));
 }
 
-function step1() {
+async function step1() {
   for (let i = 0; i < MAX_FIRST_LAUNCHES; i++) {
-    const record = launch(`step1.${i + 1}`, STEP1_PROMPTS[i] + CHECKOUT_NOTE, null);
-    record.prompt = STEP1_PROMPTS[i];
+    const record = await launch(`step1.${i + 1}`, STEP1_PROMPTS[i] + CHECKOUT_NOTE, null, { prompt: STEP1_PROMPTS[i] });
     if (record.allThree) {
       captureIndex = i;
       return record;
@@ -243,19 +243,19 @@ function step1() {
   return null;
 }
 
-function runStep2a(capture) {
+async function runStep2a(capture) {
   const prompt = capture.prompt + CHECKOUT_NOTE;
   runs.push({ id: 1, mode: '2a', reusedStep1: true, turns: [capture] });
-  turnsTwoAndThree(runs[0], capture);
+  await turnsTwoAndThree(runs[0], capture);
   while (complete() < RUNS_WANTED && launches < MAX_LAUNCHES) {
-    const first = launch(`run${runs.length + 1}.turn1`, prompt, null);
+    const first = await launch(`run${runs.length + 1}.turn1`, prompt, null);
     if (!first.allThree) {
       runs.push({ id: runs.length + 1, mode: '2a', discarded: 'turn 1 not denied+conversation+empty', turns: [first] });
       continue;
     }
     const run = { id: runs.length + 1, mode: '2a', turns: [first] };
     runs.push(run);
-    turnsTwoAndThree(run, first);
+    await turnsTwoAndThree(run, first);
   }
 }
 
@@ -263,32 +263,30 @@ function reusableStep1Launch() {
   return log.filter((l) => l.hasConversationId && !l.emptyAnswer && l.usage).at(-1) ?? null;
 }
 
-function runStep2b() {
+async function runStep2b() {
   const wanted = RUNS_WANTED - complete();
   for (let i = 0; i < wanted && launches < MAX_LAUNCHES; i++) {
     const reuse = i === 0 && MAX_LAUNCHES - launches < 9 ? reusableStep1Launch() : null;
-    const first = reuse ?? launch(`run${runs.length + 1}.turn1`, STEP_2B_FIRST, null);
+    const first = reuse ?? await launch(`run${runs.length + 1}.turn1`, STEP_2B_FIRST, null);
     if (!first.hasConversationId) {
       runs.push({ id: runs.length + 1, mode: '2b', discarded: 'no conversation id', turns: [first] });
       continue;
     }
     const run = { id: runs.length + 1, mode: '2b', reusedStep1: Boolean(reuse), turns: [first] };
     runs.push(run);
-    turnsTwoAndThree(run, first);
+    await turnsTwoAndThree(run, first);
   }
 }
 
 function writeFixture(capture) {
   const user = os.userInfo().username;
-  const sub = (text) => {
-    const variants = (s) => [s, s.replaceAll('\\', '\\\\'), s.replaceAll('\\', '/'), s.replaceAll('\\', '\\\\').replaceAll('/', '\\/')];
-    let out = text;
-    const pairs = [[checkout, '<checkout>'], [home, '<agy-home>'], [scratch, '<scratch>'], [os.tmpdir(), '<tmp>'],
-      [os.homedir(), '<home>'], [user, '<user>']];
-    for (const [value, placeholder] of pairs) for (const v of variants(value)) out = out.replaceAll(v, placeholder);
-    return out.replaceAll(capture.conversation, '00000000-0000-4000-8000-000000000001')
-      .replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, '<email>');
-  };
+  // Most specific first. Windows paths differ in drive-letter and folder casing between the places they were read from, so
+  // there the match ignores case (lib/agy-probe.mjs `redactPaths`).
+  const pairs = [[checkout, '<checkout>'], [home, '<agy-home>'], [scratch, '<scratch>'], [os.tmpdir(), '<tmp>'],
+    [os.homedir(), '<home>'], [user, '<user>']];
+  const sub = (text) => redactPaths(text, pairs, os.platform() === 'win32')
+    .replaceAll(capture.conversation, '00000000-0000-4000-8000-000000000001')
+    .replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, '<email>');
   const fixture = {
     captured: new Date().toISOString().slice(0, 10), agy: agyVersion, model,
     note: 'M1 step 1 capture under the current reviewer build (coai-reader agent + view_file-only hook). Denied command, conversation id, EMPTY answer. Paths, user name and the conversation id are redacted; usage is as reported.',
@@ -296,7 +294,7 @@ function writeFixture(capture) {
     stdout: sub(capture.stdout), stderr: sub(capture.stderr),
   };
   const text = JSON.stringify(fixture, null, 2);
-  if (new RegExp(user, 'i').test(text) || /@/.test(text.replace(/<email>/g, ''))) throw new Error('redaction left a user name or an @ in the fixture; not saved');
+  if (text.toLowerCase().includes(user.toLowerCase()) || /@/.test(text.replace(/<email>/g, ''))) throw new Error('redaction left a user name or an @ in the fixture; not saved');
   mkdirSync(dirname(FIXTURE), { recursive: true });
   writeFileSync(FIXTURE, text + '\n');
   return FIXTURE;
@@ -304,13 +302,13 @@ function writeFixture(capture) {
 
 // ---- go -------------------------------------------------------------------------------------------------------------
 try {
-  const capture = step1();
+  const capture = await step1();
   if (capture) {
     step = '2a';
-    runStep2a(capture);
+    await runStep2a(capture);
   } else {
     step = '2b';
-    runStep2b();
+    await runStep2b();
   }
 } catch (e) {
   if (!(e instanceof Stop)) throw e;

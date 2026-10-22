@@ -34,6 +34,12 @@ Two launches, then the probe's own cap (400 000 input tokens by the reports' own
 checks BEFORE each launch, refusing one that would pass the cap if it were as large as the largest so far
 (`scripts/lib/spendCap.mjs`, with its test). One launch can still exceed the largest seen so far.
 
+The harness was then hardened after review (before any further paid run): a launch is an async child whose timeout ends its
+whole process tree (`scripts/lib/launch-tree.mjs`, reusing `killTree`), every other external process has a timeout, and the
+spend fails closed — a launch with no finite non-negative `input_tokens` stops the probe instead of counting as 0, and invalid
+cap values refuse instead of slipping past a `NaN` comparison. The command line is validated up front (launch cap 1 to 12), a
+Stop message never carries launch output, progress prints to stderr, and the stream reader counts the lines it cannot parse.
+
 | Launch | Wall time | Outcome | Denied | Answer | Input | Output | Reasoning | Cached | `view_file` calls |
 |---|---|---|---|---|---|---|---|---|---|
 | 1 | 65 s | SUCCESS | no | non-empty | 94 883 | 4 399 | 3 417 | 0 | 6 |
