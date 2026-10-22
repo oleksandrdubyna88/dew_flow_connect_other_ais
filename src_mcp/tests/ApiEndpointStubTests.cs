@@ -28,7 +28,10 @@ public sealed class ApiEndpointStubTests
     /// <summary>Names a hang only — no assertion depends on it elapsing or not elapsing.</summary>
     private static readonly TimeSpan Guard = TimeSpan.FromSeconds(30);
 
-    private static readonly ApiEndpointStub.Answer Ok = new(200, ApiEndpointStub.Completion("{\"findings\":[]}"));
+    /// <summary>What the handlers answer; the marker is what a test looks for on the client's side, because a status is not evidence (see <see cref="PostAsync"/>).</summary>
+    private const string LateAnswer = "LATE-ANSWER-MARKER";
+
+    private static readonly ApiEndpointStub.Answer Ok = new(200, ApiEndpointStub.Completion(LateAnswer));
 
     /// <summary>
     /// A handler released by its gate and then busy for 300 ms before it returns — a REAL sleep inside the handler, the only one in
@@ -62,7 +65,8 @@ public sealed class ApiEndpointStubTests
         finished.Value.Should().BeTrue("Dispose waits for the handler it still tracks, so the listener is not stopped under a writer");
         thrown.Should().BeNull("a stub disposed under a running handler is an ordinary teardown, not a crash in the test's Dispose");
         listeningAtTheEnd.Value.Should().BeTrue("the listener is stopped only AFTER the handler finished — never while a header is being written");
-        (await post).Should().NotBe("200", "the response was aborted before the handler could return into it");
+        stub.Journal().Should().MatchRegex(@"POST /v1/chat/completions -> \w*Exception", "the handler returned into a response Dispose had aborted, and its write failed in the open");
+        (await post).Should().NotContain(LateAnswer, "the response was aborted before the handler could return into it, so none of its answer reaches the client");
     }
 
     /// <summary>
@@ -95,7 +99,7 @@ public sealed class ApiEndpointStubTests
         await stub.HandlersFinished();
         stub.Journal().Should().NotContain("POST /v1/chat/completions -> 200", "a late answer reaches an aborted response and fails there");
         stub.Journal().Should().MatchRegex(@"POST /v1/chat/completions -> \w*Exception", "and the failure is written down, not swallowed");
-        (await post).Should().NotBe("200", "nothing of the late answer reaches the client");
+        (await post).Should().NotContain(LateAnswer, "nothing of the late answer reaches the client");
     }
 
     /// <summary>
@@ -124,7 +128,8 @@ public sealed class ApiEndpointStubTests
         released.Value.Should().BeTrue("Dispose cancels the Disposing token synchronously, before any wait, so a handler blocked on it is freed at once");
         stub.Journal().Should().NotContain("outlived", "a handler that honoured its token never reaches the bound");
         thrown.Should().BeNull();
-        (await post).Should().NotBe("200");
+        stub.Journal().Should().MatchRegex(@"POST /v1/chat/completions -> \w*Exception", "the released handler returned into an aborted response and its write failed in the open");
+        (await post).Should().NotContain(LateAnswer, "none of the answer of a handler released by Dispose reaches the client");
     }
 
     /// <summary>The fifty callers dispose a stub that served nothing, or once too often; neither is an error.</summary>
@@ -141,7 +146,12 @@ public sealed class ApiEndpointStubTests
         stub.Disposing.IsCancellationRequested.Should().BeTrue("a disposed stub says so on its token");
     }
 
-    /// <summary>One POST to the stub; its status as text, or the exception that cut it off.</summary>
+    /// <summary>
+    /// One POST to the stub; what the client RECEIVED — its status and body as text, or the exception that cut it off.
+    /// </summary>
+    /// <remarks>
+    /// The status alone proves nothing about an aborted response. Windows (http.sys) resets the connection on an Abort, so the client sees an exception. Linux's managed listener, asked to Abort a response whose head is not sent yet, answers the client first — observed on the CI runner (scratch run 39822665330): status 200, chunked, an empty body — and then drops the connection. So a client can legitimately see a 200 after an abort, and what a teardown must guarantee on both is that the answer the late handler tried to write never arrives. The tests therefore look for the answer's marker in the body (and, for what Dispose did to the handler, in the stub's journal) and never at the status alone.
+    /// </remarks>
     private static Task<string> PostAsync(ApiEndpointStub stub, CancellationToken ct) => Task.Run(
         async () =>
         {
@@ -150,9 +160,9 @@ public sealed class ApiEndpointStubTests
                 using var client = new HttpClient();
                 using var response = await client.PostAsync(stub.Endpoint + "/chat/completions", new StringContent("{}"), ct);
 
-                return ((int)response.StatusCode).ToString();
+                return ((int)response.StatusCode).ToString() + ": " + await response.Content.ReadAsStringAsync(ct);
             }
-            catch (Exception e) when (e is HttpRequestException or TaskCanceledException or OperationCanceledException)
+            catch (Exception e) when (e is HttpRequestException or TaskCanceledException or OperationCanceledException or IOException)
             {
                 return e.GetType().Name;
             }
