@@ -41,6 +41,10 @@ internal static partial class LinuxHeldFile
     private const int EWOULDBLOCK = 11;
     private const int EISDIR = 21;
     private const int ENAMETOOLONG = 36;
+    private const int EINTR = 4;
+
+    /// <summary>How many times the unlock of an aborted take is asked when the kernel keeps interrupting it (<c>EINTR</c>) — bounded, so a stand-in that always answers it cannot loop for ever.</summary>
+    internal const int UnlockAttempts = 5;
 
     /// <summary><c>open(path, O_RDWR|O_CREAT|O_NOCTTY|O_CLOEXEC, 0600)</c> and <c>flock(LOCK_EX|LOCK_NB)</c>: taken over a stream on the descriptor and made inheritable, <c>Busy</c> on <c>EWOULDBLOCK</c>, otherwise <c>Unusable</c> naming the errno.</summary>
     public static Hold TakeInheritable(string path) => TakeInheritable(path, handle => new FileStream(handle, FileAccess.ReadWrite, bufferSize: 0));
@@ -49,7 +53,10 @@ internal static partial class LinuxHeldFile
     internal static Hold TakeInheritable(string path, Func<SafeFileHandle, FileStream> stream) => TakeInheritable(path, stream, ClearCloseOnExec);
 
     /// <summary>The same, with the clearing of <c>FD_CLOEXEC</c> behind a second seam: the errno it answers (0 when it worked) — a test makes it fail.</summary>
-    internal static Hold TakeInheritable(string path, Func<SafeFileHandle, FileStream> stream, Func<int, int> clearCloseOnExec)
+    internal static Hold TakeInheritable(string path, Func<SafeFileHandle, FileStream> stream, Func<int, int> clearCloseOnExec) => TakeInheritable(path, stream, clearCloseOnExec, Unlock);
+
+    /// <summary>The same, with the explicit unlock of the ABORTED path behind a third seam: the errno it answers (0 when it worked) — a test makes it fail, or fail once with <c>EINTR</c>.</summary>
+    internal static Hold TakeInheritable(string path, Func<SafeFileHandle, FileStream> stream, Func<int, int> clearCloseOnExec, Func<int, int> unlock)
     {
         var descriptor = Open(path, O_RDWR | O_CREAT | O_NOCTTY | O_CLOEXEC, S_IRUSR | S_IWUSR);
         if (descriptor < 0)
@@ -57,14 +64,14 @@ internal static partial class LinuxHeldFile
             return new Hold.Unusable(Failure(path, Marshal.GetLastPInvokeError()));
         }
 
-        return Flock(descriptor, LOCK_EX | LOCK_NB) == 0 ? Held(descriptor, path, stream, clearCloseOnExec) : Refused(descriptor, path, Marshal.GetLastPInvokeError());
+        return Flock(descriptor, LOCK_EX | LOCK_NB) == 0 ? Held(descriptor, path, stream, clearCloseOnExec, unlock) : Refused(descriptor, path, Marshal.GetLastPInvokeError());
     }
 
     /// <summary>
     /// The stream over the descriptor, then the descriptor made inheritable. When either cannot be done the take is ABORTED: the lock is released explicitly (<c>LOCK_UN</c> acts on the open file description, so a copy of
     /// the descriptor in a child that has forked but not yet exec'd no longer holds it), THEN the descriptor is closed — exactly once, by the handle that owns it. A successful hold is never unlocked.
     /// </summary>
-    private static Hold Held(int descriptor, string path, Func<SafeFileHandle, FileStream> stream, Func<int, int> clearCloseOnExec)
+    private static Hold Held(int descriptor, string path, Func<SafeFileHandle, FileStream> stream, Func<int, int> clearCloseOnExec, Func<int, int> unlock)
     {
         var handle = new SafeFileHandle(descriptor, ownsHandle: true);
         FileStream made;
@@ -74,20 +81,20 @@ internal static partial class LinuxHeldFile
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
         {
-            return Aborted(descriptor, handle, new Hold.Unusable(e));
+            return Aborted(descriptor, handle, new Hold.Unusable(e), unlock);
         }
 
         var errno = clearCloseOnExec(descriptor);
 
         return errno == 0
             ? new Hold.Taken(made)
-            : Aborted(descriptor, made, new Hold.Unusable(new IOException($"the lock file {path} cannot be made inheritable: fcntl(F_SETFD) failed with errno {errno}")));
+            : Aborted(descriptor, made, new Hold.Unusable(new IOException($"the lock file {path} cannot be made inheritable: fcntl(F_SETFD) failed with errno {errno}")), unlock);
     }
 
     /// <summary>Unlock the open file description, then close the descriptor (the owner disposes): the file is free the moment this returns, whoever else holds a copy of the descriptor.</summary>
-    private static Hold Aborted(int descriptor, IDisposable owner, Hold failure)
+    private static Hold Aborted(int descriptor, IDisposable owner, Hold failure, Func<int, int> unlock)
     {
-        _ = Flock(descriptor, LOCK_UN);
+        _ = unlock(descriptor);
         owner.Dispose();
 
         return failure;
@@ -95,6 +102,9 @@ internal static partial class LinuxHeldFile
 
     /// <summary><c>fcntl(descriptor, F_SETFD, 0)</c>: the errno when it failed, 0 when it worked — read at once, before anything else can change it.</summary>
     private static int ClearCloseOnExec(int descriptor) => Fcntl(descriptor, F_SETFD, 0) == 0 ? 0 : Marshal.GetLastPInvokeError();
+
+    /// <summary><c>flock(descriptor, LOCK_UN)</c>: the errno when it failed, 0 when it worked — read at once, before anything else can change it.</summary>
+    internal static int Unlock(int descriptor) => Flock(descriptor, LOCK_UN) == 0 ? 0 : Marshal.GetLastPInvokeError();
 
     private static Hold Refused(int descriptor, string path, int errno)
     {

@@ -200,6 +200,131 @@ public sealed class HeldFileInheritableOnLinuxTests : IDisposable
         HeldFile.Probe(LockFile).Should().Be(LockProbe.Free, "a take whose descriptor could not be made inheritable leaves no lock behind");
     }
 
+    [System.Runtime.InteropServices.DllImport("libc", EntryPoint = "dup")]
+    private static extern int Dup(int descriptor);
+
+    [System.Runtime.InteropServices.DllImport("libc", EntryPoint = "close")]
+    private static extern int Close(int descriptor);
+
+    private const int Eintr = 4;
+    private const int Einval = 22;
+
+    /// <summary>
+    /// C26, the unlock's result (E5 checkpoint 1, F1 + F4). A <c>dup</c> of the descriptor stands for the child that forked but has not exec'd: it keeps the open file description alive, so CLOSING the take's own descriptor frees
+    /// nothing — only an explicit, SUCCESSFUL <c>flock(LOCK_UN)</c> does. An unlock the kernel interrupted (<c>EINTR</c>) is therefore retried: ignoring it would leave the lock held by that copy.
+    /// </summary>
+    [Fact]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public void AnUnlockThatIsInterrupted_IsRetried_AndTheFileIsFreeWhileACopyOfTheDescriptorLives()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "the native take is Linux's");
+        var calls = 0;
+        var copy = -1;
+
+        try
+        {
+            var hold = LinuxHeldFile.TakeInheritable(
+                LockFile,
+                handle =>
+                {
+                    copy = Dup((int)handle.DangerousGetHandle());
+                    throw new IOException("the stream could not be made");
+                },
+                _ => 0,
+                descriptor => ++calls == 1 ? Eintr : LinuxHeldFile.Unlock(descriptor));
+
+            hold.Should().BeOfType<Hold.Unusable>().Which.Cause.Message.Should().Contain("the stream could not be made");
+            calls.Should().Be(2, "the first unlock answered EINTR and was asked again");
+            HeldFile.Probe(LockFile).Should().Be(LockProbe.Free, "the retried unlock released the open file description, which the copy of the descriptor would otherwise have kept locked");
+        }
+        finally
+        {
+            if (copy >= 0)
+            {
+                _ = Close(copy);
+            }
+        }
+    }
+
+    /// <summary>An unlock that fails for any other reason is SURFACED — the Unusable names the unlock's errno beside the original failure — and the descriptor is still closed.</summary>
+    [Fact]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public void AnUnlockThatFails_IsNamedByItsErrno_BesideTheOriginalFailure_AndTheDescriptorIsStillClosed()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "the native take is Linux's");
+        Microsoft.Win32.SafeHandles.SafeFileHandle? taken = null;
+        var calls = 0;
+
+        var hold = LinuxHeldFile.TakeInheritable(
+            LockFile,
+            handle =>
+            {
+                taken = handle;
+                throw new IOException("the stream could not be made");
+            },
+            _ => 0,
+            _ =>
+            {
+                calls++;
+
+                return Einval;
+            });
+
+        var message = hold.Should().BeOfType<Hold.Unusable>().Subject.Cause.Message;
+        message.Should().Contain("the stream could not be made", "the original failure is not lost").And.Contain("flock(LOCK_UN)").And.Contain($"errno {Einval}", "the unlock's own errno is named");
+        calls.Should().Be(1, "only EINTR is retried: another errno is final");
+        taken.Should().NotBeNull();
+        taken!.IsClosed.Should().BeTrue("a failed unlock still closes the descriptor, exactly once, by its owner");
+    }
+
+    /// <summary>The same when the take aborted on the failed <c>fcntl</c> instead: both errnos are named, the stream's descriptor is closed.</summary>
+    [Fact]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public void AnUnlockThatFailsAfterAFailedFcntl_NamesBothErrnos_AndClosesTheDescriptor()
+    {
+        const int Ebadf = 9;
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "the native take is Linux's");
+        Microsoft.Win32.SafeHandles.SafeFileHandle? taken = null;
+
+        var hold = LinuxHeldFile.TakeInheritable(
+            LockFile,
+            handle =>
+            {
+                taken = handle;
+
+                return new FileStream(handle, FileAccess.ReadWrite, bufferSize: 0);
+            },
+            _ => Ebadf,
+            _ => Einval);
+
+        var message = hold.Should().BeOfType<Hold.Unusable>().Subject.Cause.Message;
+        message.Should().Contain($"errno {Ebadf}").And.Contain($"errno {Einval}");
+        taken!.IsClosed.Should().BeTrue();
+    }
+
+    /// <summary>An unlock that is interrupted every time cannot loop for ever: it is asked <see cref="LinuxHeldFile.UnlockAttempts"/> times, then reported as the failure it is.</summary>
+    [Fact]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public void AnUnlockInterruptedEveryTime_IsAskedAFewTimes_ThenReported()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "the native take is Linux's");
+        var calls = 0;
+
+        var hold = LinuxHeldFile.TakeInheritable(
+            LockFile,
+            _ => throw new IOException("the stream could not be made"),
+            _ => 0,
+            _ =>
+            {
+                calls++;
+
+                return Eintr;
+            });
+
+        hold.Should().BeOfType<Hold.Unusable>().Which.Cause.Message.Should().Contain($"errno {Eintr}");
+        calls.Should().Be(LinuxHeldFile.UnlockAttempts);
+    }
+
     private static async Task<string> ReadErrorIfEndedAsync(Process process) =>
         process.HasExited ? await process.StandardError.ReadToEndAsync() : "(still running)";
 
