@@ -50,6 +50,32 @@ test('a notice offers the three decisions only, even with no findings attached',
   assert.deepEqual(answerChoices({ branch: 'feat/x', openFindings: [], kind: 'notice' }), decisionChoices('feat/x'));
 });
 
+/**
+ * The notice's own `decisions` list is the single source of truth when it is PRESENT: it decides every button, not only
+ * Proceed. A list that omits Discuss must not show Discuss — the card would offer a press the server never said it reads.
+ */
+function noticeOffering(decisions: unknown): readonly string[] {
+  return answerChoices({ branch: 'feat/x', openFindings: [], kind: 'notice', decisions }).map((c) => c.decision);
+}
+
+test('a notice whose list omits discuss does not offer Discuss', () => {
+  assert.deepEqual(noticeOffering(['continue', 'fix', 'proceed']), ['continue', 'fix', 'proceed']);
+});
+
+test('a notice offers exactly the decisions it names, in the canonical order, whatever order the list is in', () => {
+  assert.deepEqual(noticeOffering(['proceed', 'fix']), ['fix', 'proceed']);
+  assert.deepEqual(noticeOffering(['discuss']), ['discuss']);
+});
+
+test('a list naming nothing this build knows is judged as an absent list, never as a card with no button', () => {
+  assert.deepEqual(noticeOffering([]), ['continue', 'fix', 'discuss']);
+  assert.deepEqual(noticeOffering(['a decision from the future']), ['continue', 'fix', 'discuss']);
+});
+
+test('a notice with no list (an older server) keeps the three it always offered', () => {
+  assert.deepEqual(noticeOffering(undefined), ['continue', 'fix', 'discuss']);
+});
+
 test('a question card on a feature review offers the box first and the feature-review decisions after it', () => {
   const choices = answerChoices({ branch: FEATURE_BRANCH, openFindings: [], kind: 'question' });
 

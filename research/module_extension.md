@@ -11217,7 +11217,11 @@ map, so a server outcome without a label is a red build rather than a raw word i
 **Since 2026-10-22 a fourth decision exists, on the notice only** (`todo/PLAN_only_a_person_releases_the_gate.md`, S4). Every
 card the server writes lists the decisions it offers (`Escalation.decisions`: the notice `continue, fix, discuss, proceed`; an
 `ask_human` card `continue, fix, discuss`), and `answerChoices` appends **Proceed despite the findings**
-(`proceedChoice(branch)`, `decision: 'proceed'`) LAST, and only for `kind: 'notice'` whose list names it. Its detail says what it
+(`proceedChoice(branch)`, `decision: 'proceed'`) LAST, and only for `kind: 'notice'` whose list names it. **The notice's list is the
+single source of truth when it is present**: `answerChoices` offers exactly the decisions it names (Continue, Fix, Discuss, Proceed
+in that canonical order, whatever order the file lists them), so a list that omits `discuss` shows no Discuss; only an ABSENT list
+(an older server), a list that is not an array, or one naming nothing this build knows (a card with no button is a dead end) keeps
+the three-choice fallback. Its detail says what it
 causes — *the stage advances on <branch / this feature review> with the findings open*, every finding the AI did not decide
 recorded as proceeded over by you, **for this one stage change only** (the same finding, raised again in a later round, counts in
 full — plan §13.1; the detail says so under the button). The rounds log page draws such a finding as *proceeded over* (the server's
@@ -11237,7 +11241,9 @@ process running as the user (`todo/PLAN_a_signed_answer_releases_the_gate.md`). 
 `npm run test:seam`) runs the real binary to a held gate over the stand-in CLI with `HOME`/`USERPROFILE`/`CODEX_HOME` isolated,
 feeds the notice it wrote to `parseEscalation`, asserts `answerChoices` offers exactly the listed decisions, that the argument is
 refused over the wire, and that the extension's own `answerJson` for a Proceed is what releases the hold — a renamed field fails it
-on either side.
+on either side. The leg's scratch repository runs every `git` call through `cliHarness.mjs`'s `runCli` with a 30 s bound, so a
+hung git (or a hook it started) is killed as a whole process TREE (`killTree`) instead of hanging the run on an unbounded
+`execFileSync`.
 
 **The watchers (A5)** — `debounced(refresh, 175)` with an injectable timer: one refresh 175 ms after the FIRST
 event of a burst, however many follow (a record rewritten per row, a temp renamed over its target), and the next

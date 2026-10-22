@@ -29,10 +29,14 @@
  * <p><b>Its own module</b>, as every leg after the sixth is: `run-seam.mjs` is past the repository's 800-line ceiling. What it needs
  * from the runner — the session factory, the reply reader, the binary and the stand-in CLI — is handed in.</p>
  */
-import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
+import { runCli } from './cliHarness.mjs';
+
+/** The longest one git call of the scratch repository may take before its whole process tree is killed. */
+const GIT_TIMEOUT_MS = 30_000;
 
 // The EXTENSION's own writer, parser and answer window — every one of them imported, none re-derived.
 const { serverSettingsJson } = await import('../out/serverSettingsFile.js');
@@ -72,7 +76,7 @@ export async function heldGateSeam({ serverSession, answerOf, fakeCli, fail }) {
   };
 
   try {
-    scratchRepo(repo);
+    await scratchRepo(repo);
   } catch (e) {
     forget();
     fail(`the scratch repository for the held-gate leg could not be made: ${e.message}`);
@@ -209,16 +213,27 @@ async function thePersonsProceedReleases(session, repo, root, card, answerOf) {
     };
 }
 
-/** A throwaway repository with one commit on `main`: `open` needs a real checkout to resolve a branch in. */
-function scratchRepo(dir) {
-  const git = (...args) => execFileSync('git', args, { cwd: dir, stdio: ['ignore', 'ignore', 'pipe'] });
-  git('init', '--initial-branch=main');
-  git('config', 'user.email', 'seam@example.invalid');
-  git('config', 'user.name', 'seam');
+/**
+ * A throwaway repository with one commit on `main`: `open` needs a real checkout to resolve a branch in.
+ *
+ * <p>Every git call is bounded by {@link GIT_TIMEOUT_MS} and runs through the harness's `runCli`, which on a timeout kills the
+ * whole process TREE (a hook or a credential helper git started dies with it) — `execFileSync`'s own timeout would reap
+ * only git itself and leave a hung child holding the scratch folder the run is about to remove.</p>
+ */
+async function scratchRepo(dir) {
+  const git = async (...args) => {
+    const run = await runCli({ executable: 'git', args, cwd: dir }, { useShell: false, stdin: '', timeoutMs: GIT_TIMEOUT_MS, maxBytes: 1_000_000 });
+    if (run.ending !== 'closed' || run.code !== 0) {
+      throw new Error(`git ${args[0]} ${run.ending === 'closed' ? `exited ${run.code}` : `ended as ${run.ending} (${run.failure})`}: ${run.stderr.trim().slice(0, 300)}`);
+    }
+  };
+  await git('init', '--initial-branch=main');
+  await git('config', 'user.email', 'seam@example.invalid');
+  await git('config', 'user.name', 'seam');
   mkdirSync(join(dir, 'src'), { recursive: true });
   writeFileSync(join(dir, 'src', 'Poll.cs'), 'class Poll { }\n', 'utf8');
-  git('add', '-A');
-  git('commit', '-m', 'the committed state');
+  await git('add', '-A');
+  await git('commit', '-m', 'the committed state');
 }
 
 /** Remove the leg's directories, and never let that removal be what the run reports (the sixth leg's rule). */

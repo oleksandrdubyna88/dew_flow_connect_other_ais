@@ -140,8 +140,9 @@ export const TYPE_AN_ANSWER_FOR_THE_GATE: DecisionChoice = {
  *
  * <p><b>Proceed is on the NOTICE only, and only when the card lists it</b> (G4, G5): the card that shows the findings being
  * overridden is the card that can override them; an AI-worded question card never carries it, and the server reads
- * a Proceed from anywhere else as prose. A list that is absent (an older server), is not a list, or does not name it offers the
- * three it always did.</p>
+ * a Proceed from anywhere else as prose. <b>The notice's list decides every button</b>, not only Proceed: when it is present
+ * the card offers exactly the decisions it names. A list that is absent (an older server), is not a list, or names nothing
+ * this build knows offers the three it always did.</p>
  *
  * <p>A card with no kind — an older server — or with a kind this build does not know — a newer one — is judged as cards
  * always were: no findings gating meant a question. Taking the box away from a kind nobody here knows would bring back
@@ -165,12 +166,21 @@ export function answerChoices(escalation: {
   }
 }
 
-/** The notice's decisions, and Proceed last — only when the card itself lists it. */
+/**
+ * The notice's buttons: exactly the decisions the card lists, in the canonical order (Continue, Fix, Discuss, Proceed).
+ *
+ * <p>The list is the single source of truth when it is PRESENT — the server wrote it, so it is the server that says which
+ * decisions it reads. A list that is absent (an older server), is not an array, or names nothing this build knows is
+ * judged as absent and offers the three it always did: a card with no button is the dead end this module exists to avoid.</p>
+ */
 function withProceedWhenListed(
   decisions: readonly DecisionChoice[],
   escalation: { readonly branch: string; readonly decisions?: unknown },
 ): readonly DecisionChoice[] {
-  return offers(escalation.decisions, 'proceed') ? [...decisions, proceedChoice(escalation.branch)] : decisions;
+  const all = [...decisions, proceedChoice(escalation.branch)];
+  const named = all.filter((choice) => offers(escalation.decisions, choice.decision));
+
+  return named.length === 0 ? decisions : named;
 }
 
 /** Whether the card's own list names a decision — a list that is not an array of words names nothing. */

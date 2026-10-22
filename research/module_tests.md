@@ -2886,7 +2886,11 @@ the wording scan over both doors (864 decisions), the secret case asserting "non
 
 **Epic 2 (the extension).** `answerChoices.test.ts`: a `question` card offers the box first — with findings gating, and on a feature review with
 that stage's decisions — and its box says words decide nothing for the review (RED before the kind was read: `'continue' !== ''`, the gate's buttons first);
-a `notice` offers the three decisions only, even with no findings; an empty kind and an UNKNOWN kind (a newer server) fall back to the
+a `notice` with no list offers the three decisions only, even with no findings; a notice WITH a list offers exactly what the list names, in
+the canonical order — RED before the list decided every button: `actual: [ 'continue', 'fix', 'discuss', 'proceed' ]` against
+`expected: [ 'continue', 'fix', 'proceed' ]` for a list that omits `discuss`; plant (always add the three, Proceed when listed) → the same
+two tests red again; a list naming nothing known (`[]`, an unknown word) keeps the three, never an empty card; `seam-held-gate.mjs`
+bounds its scratch-repository `git` calls (30 s, tree-kill through `runCli`) and its leg stays green; an empty kind and an UNKNOWN kind (a newer server) fall back to the
 findings rule, never to the decisions alone. `TheLogNamesEveryQuestionOutcomeTests` (C#) enumerates `QuestionOutcomes` by reflection
 against `qconsultLog.ts`'s `OUTCOMES` keys (comments stripped, quoted or digit-bearing keys read) — RED with the two new outcomes
 unlabelled — with a companion asserting the scan still finds `person_asked`.
