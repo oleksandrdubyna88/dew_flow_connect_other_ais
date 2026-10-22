@@ -965,6 +965,55 @@ The diagnosis tool for a kept CI run of C26 is `strace -ff -tt -yy -e trace=proc
   synchronous cancel-and-abort means a handler blocked on its token or response never costs the 2 s bound — measured once
   in the PR).
 
+### S3 — status: built 2026-10-22 (Sonnet; the spec above governed, deviations listed)
+
+**Built.** `src_mcp/tests/ApiEndpointStub.cs` only (plus the new `ApiEndpointStubTests.cs`); the fifty callers and
+`AUsageTheVendorNeverReportedIsUnknownTests.cs` are untouched. `Dispose` is now close admission -> abort every in-flight response -> cancel the
+handlers' `Disposing` token (both synchronous, before any wait) -> drain the tracked handlers with `DrainBound` (2 s) -> `Stop()`/`Close()`; it is
+idempotent. The serving loop admits each context under a lock (`Admitted`; after `Dispose` closed admission a taken context is aborted and never
+handled) and tracks it (`Tracked`: context, method, path, a completion source). `HandledAsync` marks the handler done on every path and journals a
+failure that happens before the answer's own catch (a body read on an aborted connection), so nothing is swallowed. The handler contract is
+cancellation-aware through a new `CancellableAnswers` setter (`Func<Seen, CancellationToken, Answer>`; it assigns `Answers`, so one of the two is
+in force) and `Disposing`; a late callback finds its response aborted, its write throws into the handler's own catch and is journaled. New
+observers for the tests: `IsListening`, `HandlersFinished()` (an event the test awaits after releasing a handler Dispose gave up on, instead of
+polling the journal). A handler still running at the bound is named: `dispose: a handler outlived the 2 s bound and was aborted: <Method> <Path>`.
+Tests: `ApiEndpointStubTests` (new, 4).
+
+**RED, then green (Windows, Debug).** Written against the surface alone (new members present, `Dispose` unchanged), all four red for the real symptom:
+`AStubDisposedWhileItsHandlerWrites_WaitsForTheHandler_AndDoesNotThrow` -> `Expected finished.Value to be True because Dispose waits for the handler it still
+tracks, so the listener is not stopped under a writer, but found False.`; `AHandlerStillActivePastTheBound_IsAbortedBeforeTheListenerStops_AndDisposeDoesNotThrow`
+-> `Expected stub.Journal() "The stub saw no request." to contain "outlived" because the bound names the handler it gave up on.`;
+`AHandlerThatWaitsOnTheDisposingToken_IsReleasedByDispose_WithoutCostingTheBound` -> `Expected released.Value to be True because Dispose cancels the Disposing token
+synchronously, before any wait, so a handler blocked on it is freed at once, but found False.`; `ADisposedStub_IsQuietWhenNothingIsRunning_AndWhenDisposedAgain`
+-> `Expected stub.Disposing.IsCancellationRequested to be True because a disposed stub says so on its token, but found False.` (only its token line was red; the
+idempotence half was already true and is pinned, not claimed). After: 4 of 4 green; the bound arm takes 2 s 033 ms (the bound, once), the others 3-340 ms.
+
+**Break-its (each red, restored by rewriting the file, rebuilt, green).** B-E5-10 (the abort loop and the cancel removed): arms (a) `Expected (post) not
+to be "200" because the response was aborted before the handler could return into it.` and the token arm `Expected released.Value to be True ...` red, the
+`Disposing` pin red; **arm (b) stayed green on Windows** — the listener's `Stop()` closes the connection, so the late write fails anyway — the plan expected it
+red and that holds only where a late write into a stopped listener succeeds (Linux CI will show). B-E5-11 (`Stopped()` before `Drained()`): arm (a)
+`Expected listeningAtTheEnd.Value to be True because the listener is stopped only AFTER the handler finished - never while a header is being written, but found False.`
+(the red needed `IsListening`, an addition to the plan's two arms; the drain itself still waits, so without it B-E5-11 would not have gone red).
+B-E5-12 (the sentence dropped): arm (b) `Expected stub.Journal() "The stub saw no request." to contain "outlived" because the bound names the handler it gave up on.`
+
+**The race and the loop.** The `NullReferenceException` is the managed (Linux) listener's; it cannot occur on Windows. Loop of
+`AUsageTheVendorNeverReportedIsUnknownTests`, 20 runs, Windows, load = two to three other sessions' `CoaiMcp.Tests.exe` alive on the machine (not the single named
+whole-run window of §6 — it could not be arranged without stopping them): **before 0 of 20, after 0 of 20**. The Windows loop therefore proves nothing about the
+race; the Linux CI leg of the PR is the proof, and the 20-run watch decides. No arm reproduces the race itself (plan §3.6): the order that makes it impossible
+is what the arms pin.
+
+**Teardown time (measured once, instrumented `Dispose`, 183 tests of the 16 stub-using classes, 170 disposals, 3 runs each):** before 125 / 207 / 249 ms total; after
+138 / 139 / 250 ms total — the same, and far from the 2 s bound (which would add >= 2000 ms per stuck handler). The wall time of the 183 tests moved with the machine's
+load (14.7 s, 16.7 s and 50.9 s on three runs of identical code) and says nothing about the stub.
+
+**Deviations.** (1) A fourth test (`ADisposedStub_IsQuietWhenNothingIsRunning_AndWhenDisposedAgain`) and a third arm (the cancellation-aware handler, `CancellableAnswers`)
+beyond the plan's two — the token contract and the idempotence needed a test each. (2) `IsListening` and `HandlersFinished()` added to the stub as observers (see above).
+(3) "A context taken but not yet handled is aborted" (`Admitted` returning nothing) has no test: the listener offers no event for "a request reached the backlog",
+so no deterministic arm exists; it is in the code and was read, not run. (4) The plan's "arm (b) red under B-E5-10" holds on Linux only (see the break-its).
+(5) The §6 load window could not be held as written (see the loop).
+
+**Whole suite (Windows, Debug, low-priority.mjs, 1 h 23 min with five `CoaiMcp.Tests.exe` alive on the machine):** 13,564 total, 13,441 passed, 121 skipped, 2 failed — `QuestionOutlineTimingTests.TheOutlineOfThisCheckout_IsBuiltAtHead_InBoundedTime_AndTheTimeIsRecorded` (1 m 30 s: `Expected started.Elapsed to be less than 1m because an outline that takes a minute would eat a row's five-minute budget, but found 1m, 30s, 160ms and 511.7us.`) and `ABackfilledSizeIsTheLiveSizeTests.ABackfilledSize_IsStillTheLiveSize_AfterTheBranchShipped` (1 m 29 s: `Expected Parse(service.ReviewCodeAsync(Repo, "feature", "main", Scope)).TryGetProperty("error", out _) to be False, but found True.`). Neither uses the stub or a file this story touched; both red only in the suite, both green alone straight after (12.6 s, and the whole class of six in 6-8 s each). They are suite-only failures of a heavily loaded run and are filed here, not edited; the first is a wall bound on a git outline and is a candidate for the same treatment as the other load-only cases.
+
 ### S4 — C3, the Kimi shim's probe (group A)
 
 - **Goal.** §3.7: the probe released by the shim's first busy answer through `WhenTheHomeFileIsBusy` on the call site;

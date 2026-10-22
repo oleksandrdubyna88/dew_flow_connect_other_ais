@@ -5544,3 +5544,27 @@ Source: `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp_E5.md` §3.2–
 | C26 | `LinuxHeldFile`'s descriptor was inheritable (no `O_CLOEXEC`) during the whole take, so a sibling test's fork carried the flock away | the contract in `module_runners.md`; `HeldFileInheritableOnLinuxTests`: `AForkDuringTheTakesFailure_…` (a), `AFailureWithAPreExecChild_…` (b — the `hold-file fork-fail` verb forks a child that stays before any exec), `AnFcntlThatFails_…` (c), `TheDescriptor_IsCloseOnExec_UntilTheTakeHasSucceeded` (the flag itself), with `L_N1a_*` / `L_N1b_*` as the inheritance guards. |
 
 Limits (stated): `O_CLOEXEC` is not independently visible through the lock state once the abort path unlocks (arm (a) is green without it), which is why the flag is read directly; the pre-exec child is a `fork()` from managed code that only waits in `pause()`; whether C26's kept 7 ms failure was a pre-exec child is PLAUSIBLE, not established.
+
+## The suite is deterministic — E5 S3: the HTTP stub's teardown (C16, 2026-10-22)
+
+`ApiEndpointStub` (`src_mcp/tests/ApiEndpointStub.cs`), the stand-in OpenAI-compatible endpoint 16 test classes share, used to stop its `HttpListener` while a
+handler was still writing the response's headers: on Linux CI the managed listener's `Stop()` enumerated the header collection the handler was filling
+(`NullReferenceException` out of the test's `Dispose`; runs 37134428327, 37138270645, 38063638766, 39278975228). The stub tracked nothing, so it could neither wait
+for the handler nor keep the listener away from it.
+
+`Dispose` is now, in this order: **close admission** (the serving loop admits each accepted context under a lock; after the close it aborts one and handles none)
+-> **abort** every in-flight response -> **cancel `Disposing`** (both synchronous, before any wait) -> **drain** the tracked handlers for `DrainBound` (2 s; reached
+only by a handler that ignores both its token and its aborted response, which is then named in the journal as `dispose: a handler outlived the 2 s bound and was
+aborted: <Method> <Path>`) -> **`Stop()`/`Close()`**. Never a wait before the cancel, never a stop while a handler may be writing. Idempotent. A late callback
+(returning from `Answers` after `Dispose`) finds its response aborted; its write throws into `AnsweredAsync`'s catch and is journaled. `HandledAsync` journals a
+failure before the answer's own catch (a body read on an aborted connection). The handler contract: `Answers` as before (the fifty callers unchanged), or
+`CancellableAnswers = (seen, token) => ...` for a handler that blocks and should be freed by the dispose; `IsListening` and `HandlersFinished()` are the observers the
+tests await instead of polling.
+
+Tests: `ApiEndpointStubTests` (4): `AStubDisposedWhileItsHandlerWrites_WaitsForTheHandler_AndDoesNotThrow` (a 300 ms real sleep inside the handler — the subject, the one
+sleep E5 keeps; the listener is still listening when the handler ends), `AHandlerStillActivePastTheBound_IsAbortedBeforeTheListenerStops_AndDisposeDoesNotThrow` (the
+`outlived` sentence, then the late write fails and is journaled), `AHandlerThatWaitsOnTheDisposingToken_IsReleasedByDispose_WithoutCostingTheBound` (carried by events, not a
+stopwatch), `ADisposedStub_IsQuietWhenNothingIsRunning_AndWhenDisposedAgain`. Break-its B-E5-10 (abort and cancel dropped), -11 (stop before drain), -12 (sentence dropped)
+each red. The race itself is Linux-only and has no arm; the order that excludes it is what is pinned, and the Linux CI leg plus the plan's 20-run watch decide.
+Teardown cost over the 183 tests of the stub-using classes: 125-249 ms before, 138-250 ms after (170 disposals). Plan:
+[PLAN_the_suite_is_deterministic_and_leaves_no_temp_E5.md](../todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp_E5.md) §3.6 / S3.

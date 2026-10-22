@@ -54,6 +54,52 @@ internal sealed class ApiEndpointStub : IDisposable
     /// </summary>
     public string Origin { get; }
 
+    /// <summary>
+    /// How long <see cref="Dispose"/> waits for a handler that ignored both its <see cref="Disposing"/> token and its aborted
+    /// response. Reached only by such a handler: one that honours either is freed by the synchronous cancel-and-abort before this
+    /// wait begins, so a teardown never pays it for a well-behaved handler. Two seconds is longer than any handler here legitimately
+    /// needs after being told to stop, and short enough that a stuck one cannot make the suite look hung.
+    /// </summary>
+    internal static readonly TimeSpan DrainBound = TimeSpan.FromSeconds(2);
+
+    private readonly CancellationTokenSource _disposing = new();
+    private readonly object _gate = new();
+    private readonly List<Tracked> _tracked = [];
+    private bool _closed;
+
+    /// <summary>One request the serving loop took: where it came from, what it was, and when its handler is done.</summary>
+    private sealed record Tracked(HttpListenerContext Context, string Method, string Path, TaskCompletionSource Done);
+
+    /// <summary>
+    /// Cancelled — synchronously, before any wait — the moment <see cref="Dispose"/> begins. A handler that blocks should block on
+    /// this (see <see cref="CancellableAnswers"/>) so that disposing the stub frees it instead of costing the drain bound.
+    /// </summary>
+    public CancellationToken Disposing => _disposing.Token;
+
+    /// <summary>
+    /// <see cref="Answers"/> for a handler that waits on something: it receives <see cref="Disposing"/>. Assigning either property
+    /// replaces the other; the fifty callers of <see cref="Answers"/> are unchanged.
+    /// </summary>
+    public Func<Seen, CancellationToken, Answer> CancellableAnswers
+    {
+        set => Answers = seen => value(seen, Disposing);
+    }
+
+    /// <summary>Whether the listener is still accepting — false once <see cref="Dispose"/> has stopped it, and never before every tracked handler finished.</summary>
+    public bool IsListening => _server.IsListening;
+
+    /// <summary>
+    /// Completes when every request taken so far has been fully handled — answered, or failed and journaled. The event a test
+    /// awaits after releasing a handler Dispose gave up on, instead of polling the journal.
+    /// </summary>
+    public Task HandlersFinished()
+    {
+        lock (_gate)
+        {
+            return Task.WhenAll(_tracked.Select(t => t.Done.Task));
+        }
+    }
+
     private ApiEndpointStub(HttpListener server, string prefix)
     {
         _server = server;
@@ -120,7 +166,67 @@ internal sealed class ApiEndpointStub : IDisposable
                 continue;
             }
 
-            await AnsweredAsync(context);
+            if (Admitted(context) is { } tracked)
+            {
+                await HandledAsync(tracked);
+            }
+            else
+            {
+                Aborted(context);
+            }
+        }
+    }
+
+    /// <summary>The request, now tracked — or nothing when <see cref="Dispose"/> already closed admission.</summary>
+    private Tracked? Admitted(HttpListenerContext context)
+    {
+        lock (_gate)
+        {
+            if (_closed)
+            {
+                return null;
+            }
+
+            _tracked.RemoveAll(t => t.Done.Task.IsCompleted);
+            var tracked = new Tracked(
+                context, context.Request.HttpMethod, context.Request.Url!.AbsolutePath, new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously));
+            _tracked.Add(tracked);
+
+            return tracked;
+        }
+    }
+
+    /// <summary>
+    /// The answer, with whatever stopped it before the answer's own catch written down — a body read on a connection
+    /// <see cref="Dispose"/> aborted is such a failure — and the handler marked done on every path.
+    /// </summary>
+    private async Task HandledAsync(Tracked tracked)
+    {
+        try
+        {
+            await AnsweredAsync(tracked.Context);
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            Noted($"{tracked.Method} {tracked.Path} -> {e.GetType().Name}");
+            Aborted(tracked.Context);
+        }
+        finally
+        {
+            tracked.Done.TrySetResult();
+        }
+    }
+
+    /// <summary>Abort the response — idempotent; a response that cannot even be aborted is journaled, not swallowed.</summary>
+    private void Aborted(HttpListenerContext context)
+    {
+        try
+        {
+            context.Response.Abort();
+        }
+        catch (Exception torn) when (torn is not OutOfMemoryException)
+        {
+            Noted($"abort failed: {torn.GetType().Name}");
         }
     }
 
@@ -216,7 +322,51 @@ internal sealed class ApiEndpointStub : IDisposable
         }
     }
 
+    /// <summary>
+    /// Close admission, then abort every in-flight response and cancel <see cref="Disposing"/> — both synchronously, before any
+    /// wait — then drain the tracked handlers for at most <see cref="DrainBound"/>, and only then stop the listener. Never a wait
+    /// before the cancel, and never a stop while a handler may still be writing a header: that order is what the
+    /// <c>NullReferenceException</c> out of <c>HttpListener.Stop</c> on Linux CI (C16) was missing.
+    /// </summary>
     public void Dispose()
+    {
+        Tracked[] live;
+        lock (_gate)
+        {
+            if (_closed)
+            {
+                return;
+            }
+
+            _closed = true;
+            live = [.. _tracked.Where(t => !t.Done.Task.IsCompleted)];
+        }
+
+        foreach (var tracked in live)
+        {
+            Aborted(tracked.Context);
+        }
+
+        _disposing.Cancel();
+        Drained(live);
+        Stopped();
+    }
+
+    /// <summary>Wait for the handlers Dispose found running; name the ones that outlived the bound.</summary>
+    private void Drained(Tracked[] live)
+    {
+        if (Task.WhenAll(live.Select(t => t.Done.Task)).Wait(DrainBound))
+        {
+            return;
+        }
+
+        foreach (var tracked in live.Where(t => !t.Done.Task.IsCompleted))
+        {
+            Noted($"dispose: a handler outlived the {DrainBound.TotalSeconds:0} s bound and was aborted: {tracked.Method} {tracked.Path}");
+        }
+    }
+
+    private void Stopped()
     {
         try
         {
@@ -225,6 +375,7 @@ internal sealed class ApiEndpointStub : IDisposable
         }
         catch (Exception e) when (e is ObjectDisposedException or HttpListenerException)
         {
+            Noted($"dispose: the listener was already gone ({e.GetType().Name})");
         }
     }
 }
