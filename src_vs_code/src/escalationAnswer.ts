@@ -160,27 +160,28 @@ export function answerChoices(escalation: {
     case 'question':
       return [TYPE_AN_ANSWER_FOR_THE_GATE, ...decisions.map(forTheHeldGate)];
     case 'notice':
-      return withProceedWhenListed(decisions, escalation);
+      return offeredByTheNotice(escalation);
     default:
       return escalation.openFindings.length === 0 ? [TYPE_AN_ANSWER, ...decisions] : decisions;
   }
 }
 
+/** Every decision a card can offer, in the one order a card shows them — the single place that order is written down. */
+const CANONICAL_DECISIONS: readonly Exclude<DecisionChoice['decision'], ''>[] = ['continue', 'fix', 'discuss', 'proceed'];
+
 /**
- * The notice's buttons: exactly the decisions the card lists, in the canonical order (Continue, Fix, Discuss, Proceed).
+ * The notice's buttons: exactly the decisions the card lists, in the canonical order ({@link CANONICAL_DECISIONS}).
  *
  * <p>The list is the single source of truth when it is PRESENT — the server wrote it, so it is the server that says which
  * decisions it reads. A list that is absent (an older server), is not an array, or names nothing this build knows is
  * judged as absent and offers the three it always did: a card with no button is the dead end this module exists to avoid.</p>
  */
-function withProceedWhenListed(
-  decisions: readonly DecisionChoice[],
-  escalation: { readonly branch: string; readonly decisions?: unknown },
-): readonly DecisionChoice[] {
-  const all = [...decisions, proceedChoice(escalation.branch)];
-  const named = all.filter((choice) => offers(escalation.decisions, choice.decision));
+function offeredByTheNotice(escalation: { readonly branch: string; readonly decisions?: unknown }): readonly DecisionChoice[] {
+  const always = decisionChoices(escalation.branch);
+  const known = new Map([...always, proceedChoice(escalation.branch)].map((choice) => [choice.decision, choice] as const));
+  const named = CANONICAL_DECISIONS.filter((decision) => offers(escalation.decisions, decision)).flatMap((decision) => known.get(decision) ?? []);
 
-  return named.length === 0 ? decisions : named;
+  return named.length === 0 ? always : named;
 }
 
 /** Whether the card's own list names a decision — a list that is not an array of words names nothing. */
