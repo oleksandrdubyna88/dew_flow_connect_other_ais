@@ -31,13 +31,13 @@ public sealed class TheStderrLineIsQuotedSafelyTests : IDisposable
 
     public void Dispose() => _dir.Dispose();
 
-    private static AcpOutcome Outcome(string stderr) =>
-        new(AcpEnd.AgentFailed, string.Empty, NamesNoRow, string.Empty, "s", AcpUsage.Unknown, [], [], [], stderr, 0);
+    private static AcpOutcome Outcome(string stderr, bool truncated = false) =>
+        new(AcpEnd.AgentFailed, string.Empty, NamesNoRow, string.Empty, "s", AcpUsage.Unknown, [], [], [], stderr, 0) { StdErrTruncated = truncated };
 
     /// <summary>Every place the quoted line is written: the diagnosis line, the shim's report, and the round's three lines — after one real round on that report.</summary>
-    private async Task<(AcpDiagnosis Diagnosis, string Report, TheRound Round)> ThroughTheProduct(string stderr)
+    private async Task<(AcpDiagnosis Diagnosis, string Report, TheRound Round)> ThroughTheProduct(string stderr, bool truncated = false)
     {
-        var outcome = Outcome(stderr);
+        var outcome = Outcome(stderr, truncated);
         var diagnosis = AskAcpMode.Diagnose(new KimiAcpProfile(), outcome);
         var report = AskAcpMode.Report(outcome, diagnosis);
         var round = await new AKimiRound(_dir).RunAsync(new ProcessResult(AcpWords.SpentExit, report, string.Empty, TimedOut: false));
@@ -80,10 +80,10 @@ public sealed class TheStderrLineIsQuotedSafelyTests : IDisposable
         RateLimit.Hopeless(((ReviewerOutcome.RateLimited)seen.Round.Outcome).Reason).Should().BeTrue("with no line to quote the table's phrases stand for the name");
     }
 
-    // ---------- R2: the capture boundary ----------
+    // ---------- R2: the capture boundary — truncation is STATE carried from the capture, never parsed out of its rendered text ----------
 
-    /// <summary>The stderr as <see cref="AcpTransport"/> keeps it: a <see cref="BoundedText"/> of the real cap fed in the transport's 8192-character reads.</summary>
-    private static string Captured(string stream)
+    /// <summary>The stderr as <see cref="AcpTransport"/> keeps it: a <see cref="BoundedText"/> of the real cap fed in the transport's 8192-character reads — its kept text and its own truncated flag.</summary>
+    private static (string Text, bool Truncated) Captured(string stream)
     {
         var kept = new BoundedText(AcpTransport.StdErrChars);
         foreach (var chunk in stream.Chunk(8192))
@@ -93,50 +93,109 @@ public sealed class TheStderrLineIsQuotedSafelyTests : IDisposable
 
         kept.Truncated.Should().BeTrue("the case needs a stream longer than the capture");
 
-        return kept.ToString();
+        return (kept.Kept, kept.Truncated);
     }
 
     [Fact]
-    public async Task ATokenCutByTheCaptureBoundary_LeavesNoFragmentInAnyRecordedText()
+    public async Task ATokenCutByTheCaptureBoundary_LeavesNoFragmentInAnyRecordedText_AndTheCompleteLineBeforeItIsStillQuoted()
     {
         // The capture keeps the HEAD and ends mid-line: 5 characters of the token sit before the cut, and Bearer wants 8, so the fragment is not a credential to the redactor.
         const int before = 5;
         var token = Opaque(59);
-        var head = FromThePhrase + " Bearer ";
-        var stderr = Captured(new string('p', AcpTransport.StdErrChars - head.Length - before - 1) + "\n" + head + token + "\nmore output after the cut\n");
-        stderr.Should().Contain(head + token[..before] + "\n[coai: output truncated", "the arithmetic that gives this test its teeth: the capture ends 5 characters into the token");
+        const string head = "note Bearer ";
+        var complete = KimiMonthlyQuotaTests.MonthlyLine + "\n";
+        var (stderr, truncated) = Captured(complete + new string('p', AcpTransport.StdErrChars - complete.Length - head.Length - before - 1) + "\n" + head + token + "\nmore output after the cut\n");
+        stderr.Should().EndWith(head + token[..before], "the arithmetic that gives this test its teeth: the capture ends 5 characters into the token");
 
-        var seen = await ThroughTheProduct(stderr);
+        var seen = await ThroughTheProduct(stderr, truncated);
 
-        seen.Diagnosis.Name.Should().Be(KimiAcpProfile.QuotaSpent, "the row is read from what was captured, the cut line included");
+        seen.Diagnosis.Name.Should().Be(KimiAcpProfile.QuotaSpent);
+        seen.Diagnosis.Line.Should().Be(KimiMonthlyQuotaTests.MonthlyLine, "the complete line before the cut is the one quoted");
         NothingOf(token, before, seen);
-        seen.Diagnosis.Line.Should().BeEmpty("the last, incomplete line of a truncated capture is never quoted");
         ReadsAsASpentQuota(seen.Round);
     }
 
     [Fact]
-    public void ACompleteLineBeforeTheCut_IsQuoted_AndTheTruncationSentenceIsNeverVendorText()
+    public void APhraseOnlyOnTheCutLine_NamesNoRow_BecauseTheRowAndTheLineAreReadFromTheSameCompleteLines()
     {
-        var stderr = Captured(KimiMonthlyQuotaTests.MonthlyLine + "\n" + new string('p', AcpTransport.StdErrChars) + "\n");
+        var token = Opaque(59);
+        var (stderr, truncated) = Captured(new string('p', AcpTransport.StdErrChars - FromThePhrase.Length - 20) + "\n" + FromThePhrase + " Bearer " + token + "\nmore\n");
 
-        var diagnosis = AcpDiagnosis.Of(NamesNoRow, stderr, KimiAcpProfile.Failures);
+        var diagnosis = AcpDiagnosis.Of(NamesNoRow, stderr, KimiAcpProfile.Failures, truncated);
 
-        diagnosis.Line.Should().Be(KimiMonthlyQuotaTests.MonthlyLine);
-        diagnosis.Line.Should().NotContain("[coai:");
+        diagnosis.Known.Should().BeFalse("the line the boundary broke is never read, for the row or for the quote");
+        diagnosis.Line.Should().BeEmpty();
     }
 
     [Fact]
-    public void ATruncationSentence_HoldingAPhraseOfItsOwn_IsNotSearched()
+    public void ARealTruncationWhoseCutLineEndsInACrLf_QuotesNothingOfTheCutLine()
     {
-        // What BoundedText appends is ours, not the vendor's: even a phrase inside it (it never holds one today) names no row.
-        var stderr = "noise\n" + BoundedText.TruncationOpening + " at 1 characters; reached your monthly usage limit more were dropped]\n";
+        // Truncation is the capture's flag, not a property of the text: whatever the text ends in, a truncated capture's last line is incomplete.
+        var stderr = "noise\r\nx " + FromThePhrase + " Bearer Lp5gU";
 
-        AcpDiagnosis.Of(NamesNoRow, stderr, KimiAcpProfile.Failures).Known.Should().BeFalse();
+        var diagnosis = AcpDiagnosis.Of(NamesNoRow, stderr, KimiAcpProfile.Failures, stderrTruncated: true);
+
+        diagnosis.Line.Should().NotContain("Lp5gU");
+        diagnosis.Known.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ATruncatedCaptureWithNoLineBreakAtAll_IsNeverQuoted_ByDesign()
+    {
+        // One unbroken truncated line has no complete line in it: nothing of it is read.
+        var diagnosis = AcpDiagnosis.Of(NamesNoRow, FromThePhrase, KimiAcpProfile.Failures, stderrTruncated: true);
+
+        diagnosis.Known.Should().BeFalse();
+        diagnosis.Line.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void AVendorLastLineThatLooksLikeOurTruncationSentence_IsStillVendorText()
+    {
+        // No truncation happened: a vendor line that merely begins like BoundedText's sentence, and carries the monthly phrase, must still name its row.
+        var stderr = "noise\n[coai: output truncated " + FromThePhrase + "\n";
+
+        var diagnosis = AcpDiagnosis.Of(NamesNoRow, stderr, KimiAcpProfile.Failures, stderrTruncated: false);
+
+        diagnosis.Name.Should().Be(KimiAcpProfile.QuotaSpent);
+        diagnosis.Line.Should().Contain(Phrase);
     }
 
     [Fact]
     public void AnUntruncatedStderr_KeepsItsLastLine_EvenWithoutATrailingNewline() =>
         AcpDiagnosis.Of(NamesNoRow, "noise\n" + KimiMonthlyQuotaTests.MonthlyLine, KimiAcpProfile.Failures).Line.Should().Be(KimiMonthlyQuotaTests.MonthlyLine);
+
+    [Fact]
+    public void TheCapturesKeptText_NeverHoldsTheSentenceThatDisplayAdds()
+    {
+        var kept = new BoundedText(10);
+        kept.Append("0123456789abc".ToCharArray(), 13);
+
+        kept.Truncated.Should().BeTrue();
+        kept.Kept.Should().Be("0123456789");
+        kept.ToString().Should().Contain("output truncated", "the display text carries the sentence; the kept text does not");
+    }
+
+    // ---------- the redactor is not asked about a text that cannot hold the phrase ----------
+
+    [Fact]
+    public void ATextWithoutThePhrase_NeverReachesTheRedactor_AndATextWithItReachesItOnce()
+    {
+        // RedactionNeverTouchesAnyPhraseOfTheTable: redaction neither creates nor destroys a table phrase on its own, so a text without it is not worth a pass.
+        var calls = 0;
+        string Counting(string text)
+        {
+            calls++;
+
+            return text;
+        }
+
+        AcpDiagnosis.LineWith("only noise here", Phrase, Counting).Should().BeEmpty();
+        calls.Should().Be(0);
+
+        AcpDiagnosis.LineWith("noise\n" + FromThePhrase, Phrase, Counting).Should().Contain(Phrase);
+        calls.Should().Be(1);
+    }
 
     // ---------- R3: a redacted line stays hopeless ----------
 

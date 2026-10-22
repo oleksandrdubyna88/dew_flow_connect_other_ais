@@ -4827,13 +4827,25 @@ The fail-closed case is tested through the seam, not by finding an input that re
 | Test | Seen red as | Break-it (went red, restored by writing the file, rebuilt) |
 |---|---|---|
 | R1 `ALineInsideAPrivateKeyBlock_IsRedactedWithItsBlock_NotQuotedWithTheKeyBodyBesideIt` (a body line holding the phrase inside a `PRIVATE KEY` block; the test first proves `Redaction.SafeSource` over the whole text removes the body) | *Did not expect seen.Diagnosis.Line "MIIEvQIBADANBgkqhkiG9w0BAQEFAASC reached your monthly usage limit …" to contain "MIIEvQIBADAN" because the diagnosis line.* | redaction applied to the isolated line again (also reds the fail-closed case) |
-| R2 `ATokenCutByTheCaptureBoundary_LeavesNoFragmentInAnyRecordedText` (a `BoundedText` of the real `AcpTransport.StdErrChars` fed in 8192-character reads; the capture ends 5 characters into the token after ` Bearer `, asserted) | *Did not expect seen.Diagnosis.Line "reached your monthly usage limit … quota Bearer Lp5gU" to contain "Lp5gU" because the diagnosis line.* | the last line of a cut capture quoted again; separately the truncation sentence no longer split off (also reds the next case) |
-| R2 `ATruncationSentence_HoldingAPhraseOfItsOwn_IsNotSearched` | *Expected … Known to be False, but found True.* | the sentence searched as vendor text |
-| R2 guards `ACompleteLineBeforeTheCut_IsQuoted_AndTheTruncationSentenceIsNeverVendorText`, `AnUntruncatedStderr_KeepsItsLastLine_EvenWithoutATrailingNewline` | green before and after | not applicable |
+| R2 (superseded by the code gate below: the cases were rewritten around the structured flag) `ATokenCutByTheCaptureBoundary_LeavesNoFragmentInAnyRecordedText…` | *Did not expect seen.Diagnosis.Line "reached your monthly usage limit … quota Bearer Lp5gU" to contain "Lp5gU" because the diagnosis line.* | see the code gate table |
 | R3 `AQuotedLine_ThatIsNotHopelessItself_GetsTheTablesPhrasesAppended` (theory: `something odd`, `[redacted]`) | *Expected reason "kimi_quota_spent: Internal error (Kimi said: [redacted])" to contain "monthly".* | `SpentReason` back to the line-wins-without-asking order |
 | R3 `ARedactedFailureLine_StillStopsTheLadder_AfterOneLaunch` (exit 75, `kimi_quota_spent`, reason `Internal error`, `failureLine` `[redacted]`, through `AKimiRound`) | *System.InvalidOperationException : Sequence contains more than one element* — the round's log held several FAILED lines because the ladder climbed (`BoundedScheduler.cs:624` loops while `!RateLimit.Hopeless(limited.Reason)`); green: one launch, `Attempts` 1, reason hopeless | same |
 
 R1 as the consult stated it (`{"api_key":` NEWLINE `"CANARY…"`, label on the previous line, value on the next) was checked with `Redaction.SafeSource` over the WHOLE text first: even the whole-text pass leaves the canary, because the labelled rule stops at each line's end by design. So that shape is not caught by the whole-text order either; the PEM block is the multi-line shape the redactor does mask, and it is the one pinned.
+
+**Code gate (cf1948aa, 2026-10-22, proceed) — truncation is state, not a parse of the rendered sentence.** `TheStderrLineIsQuotedSafelyTests` grew to 12 cases; the capture is built the way `AcpTransport` builds it (a `BoundedText` of `AcpTransport.StdErrChars` fed in 8192-character reads, `Kept` + `Truncated`).
+
+| Test | Seen red as | Break-it (went red, restored by writing the file, rebuilt) |
+|---|---|---|
+| T1a `AVendorLastLineThatLooksLikeOurTruncationSentence_IsStillVendorText` (last stderr line `[coai: output truncated reached your monthly usage limit …`, no real truncation) | *Expected diagnosis.Name to be "kimi_quota_spent" … but "" has a length of 0* (the old parse stripped the vendor line as if it were ours) | `AcpDiagnosis` infers truncation from the rendered sentence again (also reds the three cases below) |
+| T1b `ARealTruncationWhoseCutLineEndsInACrLf_QuotesNothingOfTheCutLine` (`stderrTruncated: true`, text ends in a CRLF-style line, no sentence at all) | *Did not expect diagnosis.Line "x reached your monthly usage limit … Bearer Lp5gU" to contain "Lp5gU".* | same |
+| T2 `APhraseOnlyOnTheCutLine_NamesNoRow_BecauseTheRowAndTheLineAreReadFromTheSameCompleteLines` (real `BoundedText` cut inside the phrase line) | *Expected diagnosis.Known to be False because the line the boundary broke is never read, for the row or for the quote, but found True.* | same |
+| T3 `ATruncatedCaptureWithNoLineBreakAtAll_IsNeverQuoted_ByDesign` | *Expected diagnosis.Known to be False, but found True.* | the no-break branch of `CompleteLines` returning the text whole |
+| T4 `ATextWithoutThePhrase_NeverReachesTheRedactor_AndATextWithItReachesItOnce` (counting thunk on the internal `LineWith(text, phrase, redact)` seam) | *Expected calls to be 0, but found 1 (difference of 1).* | the `Contains` guard before the redactor removed |
+| R2 `ATokenCutByTheCaptureBoundary_LeavesNoFragmentInAnyRecordedText_AndTheCompleteLineBeforeItIsStillQuoted` (phrase on a complete line, then a cut line ending 5 characters into a token; asserted) | green before and after (the complete line was already the first match) | not applicable (guard) |
+| guards `AnUntruncatedStderr_KeepsItsLastLine_EvenWithoutATrailingNewline`, `TheCapturesKeptText_NeverHoldsTheSentenceThatDisplayAdds` | green | not applicable |
+
+Consequence recorded by T2: a quota sentence that sits ONLY on the line the capture boundary broke is no longer classified (it used to name its row with an empty line). A 64 Ki head holding the sentence in its last, cut line is the price of reading the row and the line from one text.
 
 ## The suite is deterministic — epic E1, "No run sees another" (2026-10-19)
 

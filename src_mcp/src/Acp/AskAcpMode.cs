@@ -225,7 +225,7 @@ internal static class AskAcpMode
 
     /// <summary>The known failure an outcome names, from the text of the turn: its reason and its stderr.</summary>
     internal static AcpDiagnosis Diagnose(IAcpProfile profile, AcpOutcome outcome) =>
-        AcpDiagnosis.Of(outcome.Reason, outcome.StdErr, profile.KnownFailures);
+        AcpDiagnosis.Of(outcome.Reason, outcome.StdErr, profile.KnownFailures, outcome.StdErrTruncated);
 
     /// <summary>Why this shim will not even start the agent — or empty when it will. Every one of these is 65.</summary>
     internal static string Refusal(IAcpProfile profile, IReadOnlyDictionary<string, string> flags, string cwd, string model) =>

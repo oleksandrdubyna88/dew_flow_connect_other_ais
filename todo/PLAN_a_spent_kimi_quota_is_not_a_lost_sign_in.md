@@ -546,3 +546,14 @@ Tests and the REDs/break-its are in `research/module_tests.md` (feature gate rou
 - **R3 — a redacted line loses hopelessness: verified.** The ladder climbs while `!RateLimit.Hopeless(limited.Reason)` (`BoundedScheduler.cs:624`, `:673`), decided by the reason's words, not by the exit. With `failureLine` `[redacted]` the reason carried no spent word and the round launched the shim again
   (RED: the product round saw several FAILED log lines instead of one launch). Fixed: `KimiRuntime.SpentReason` quotes the line, then appends the table's phrases whenever the result is not yet hopeless.
 Every case asserts no fragment of the secret in the diagnosis line, the shim's report JSON and the round's summary, ledger and log lines (`TheStderrLineIsQuotedSafelyTests`).
+
+**Code gate (cf1948aa, 2026-10-22, proceed) — 14 findings: 11 accepted, 3 rejected.** Accepted, each RED first (see `research/module_tests.md`):
+- **T1 (findings 4, 6, 9, 11, 12, 13):** truncation is STATE, never a parse of the rendered sentence. `BoundedText.Kept` + `Truncated` (its own `_dropped`/`_cutShort`), carried by `AcpTransport.StdErr`/`StdErrTruncated` into `AcpOutcome.StdErr`/`StdErrTruncated`
+  and on to `AcpDiagnosis.Of(…, stderrTruncated)` through `AskAcpMode.Diagnose`; `BoundedText.Captured(string)` (the parse) is gone and the sentence is display only. REDs: a vendor last line beginning `[coai: output truncated` with the monthly phrase
+  and no real truncation named no row (now `kimi_quota_spent`); a truncated capture whose text ends in a CRLF-style line, with no sentence at all, had its cut line quoted (now not).
+- **T2 (finding 0):** the row and the line are read from ONE text (`CompleteLines`). Consequence: a phrase only on the line the boundary broke names no row; before, it named its row with an empty line.
+- **T3 (findings 3, 7):** `CompleteLines` states the no-line-break case: a truncated capture with none yields empty, a single unbroken truncated line is never quoted by design; tested.
+- **T4 (finding 8):** `LineWith` checks the phrase is in the text before the whole-text redaction (`RedactionNeverTouchesAnyPhraseOfTheTable`); tested with a counting redactor.
+- **T5 (finding 2):** `AcpDiagnosis.WindowLeadIn` is `internal` again (`InternalsVisibleTo` serves the tests).
+- Rejected: **`StdErrChars` internal** — assembly-scoped, and a test-side copy of the cap would drift; **the internal redactor seam** (`LineWith(text, phrase, redact)`) — the narrowest way to test the fail-closed branch and the call count;
+  **the 64 Ki slice allocation** in `CompleteLines` — noise on a failure path.

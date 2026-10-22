@@ -104,38 +104,47 @@ public sealed record AcpDiagnosis(string Name, string Cure, AcpFailureKind Kind,
     /// The known failure the agent's REASON names, or — only when the reason names none — the one its stderr does (K4 of the code gate). The two used to be matched in
     /// one pass, so a bare sign-in reason plus any stderr line holding a longer row's phrase took that row's name, whatever the agent had said about the turn itself.
     /// </summary>
-    public static AcpDiagnosis Of(string reason, string stderr, IReadOnlyList<AcpKnownFailure> known) =>
-        Of(reason, known) is { Known: true } named ? named : FromStderr(stderr, known);
+    public static AcpDiagnosis Of(string reason, string stderr, IReadOnlyList<AcpKnownFailure> known, bool stderrTruncated = false) =>
+        Of(reason, known) is { Known: true } named ? named : FromStderr(CompleteLines(stderr, stderrTruncated), known);
 
     /// <summary>
-    /// The row stderr names, carrying the line it matched in (<see cref="Line"/>) — or <see cref="None"/>. The row is read from what the capture HELD (the truncation sentence
-    /// <see cref="BoundedText"/> appends is ours, never searched); the LINE is quoted only from complete lines: when the capture was cut, its last line is the one the boundary broke
-    /// and may end inside a credential too short for the redactor to recognise, so it is never quoted (the row keeps its name and the line is empty).
+    /// The row stderr names, carrying the line it matched in (<see cref="Line"/>) — or <see cref="None"/>. <paramref name="lines"/> is the ONE text both are read from: the row and the line
+    /// come from the same complete lines (<see cref="CompleteLines"/>), so a phrase on a line the capture boundary broke names no row and is quoted nowhere.
     /// </summary>
-    private static AcpDiagnosis FromStderr(string stderr, IReadOnlyList<AcpKnownFailure> known)
+    private static AcpDiagnosis FromStderr(string lines, IReadOnlyList<AcpKnownFailure> known) =>
+        Hit(lines, known) is { } hit ? new AcpDiagnosis(hit.Name, hit.Cure, hit.Kind, LineWith(lines, hit.Phrase)) : None;
+
+    /// <summary>
+    /// The lines of <paramref name="stderr"/> that are COMPLETE. Whether the capture was cut is STATE the capture carries (<c>BoundedText.Truncated</c>, <c>AcpOutcome.StdErrTruncated</c>), never inferred from the text:
+    /// a cut capture ends in a line the boundary broke — possibly inside a credential shorter than the redactor's minimum — so everything after its last line break is dropped. A truncated capture with NO line
+    /// break holds no complete line at all and yields empty: a single unbroken truncated line is never quoted, by design. An untruncated stream ended, so its last line is complete, newline or not.
+    /// </summary>
+    private static string CompleteLines(string stderr, bool truncated)
     {
-        var (captured, truncated) = BoundedText.Captured(stderr);
+        if (!truncated)
+        {
+            return stderr;
+        }
 
-        return Hit(captured, known) is { } hit ? new AcpDiagnosis(hit.Name, hit.Cure, hit.Kind, LineWith(CompleteLines(captured, truncated), hit.Phrase)) : None;
+        var lastBreak = stderr.LastIndexOfAny(LineBreaks);
+
+        return lastBreak < 0 ? string.Empty : stderr[..(lastBreak + 1)];
     }
-
-    /// <summary><paramref name="captured"/> up to and including its last line break when the capture was <paramref name="truncated"/>; all of it otherwise (a stream that ended is complete, newline or not).</summary>
-    private static string CompleteLines(string captured, bool truncated) =>
-        truncated ? captured[..(captured.LastIndexOfAny(LineBreaks) + 1)] : captured;
 
     /// <summary>
     /// The line of <paramref name="text"/> that holds the first <paramref name="phrase"/> (case-blind). The ORDER is the contract (feature gate F1, risk consult R1): the WHOLE text is
     /// redacted FIRST (<see cref="Redaction.SafeSource"/>: the layout kept, nothing cut — a private-key block spans lines, and a line cut from its block is key material the redactor can no longer
     /// name), THEN the phrase is found in the redacted text, its line isolated at the nearest <c>\r</c> or <c>\n</c> on each side (a CR-only progress line and a CRLF never join lines or leak a
     /// control character) and trimmed, THEN a window is cut around the phrase in the REDACTED line. Cut first, a window can start exactly at a credential's value and take its label away. The text
-    /// is the agent's stderr, bounded by the capture to 64 Ki characters, so this is one redaction pass over at most that on a failure path. A redaction that fails closed answers the marker, which holds
+    /// is the agent's stderr, bounded by the capture to 64 Ki characters, so this is one redaction pass over at most that on a failure path — and none when the text cannot hold the phrase:
+    /// redaction neither creates nor destroys a table phrase (<c>RedactionNeverTouchesAnyPhraseOfTheTable</c>), so the check before it is exact. A redaction that fails closed answers the marker, which holds
     /// no phrase: the line is then empty and nothing of the raw text is quoted. Empty also when the text holds no phrase.
     /// </summary>
     private static string LineWith(string text, string phrase) => LineWith(text, phrase, Redaction.SafeSource);
 
-    /// <summary><see cref="LineWith(string, string)"/> with the redactor passed in, so a test can make it fail closed.</summary>
+    /// <summary><see cref="LineWith(string, string)"/> with the redactor passed in, so a test can make it fail closed and count its calls.</summary>
     internal static string LineWith(string text, string phrase, Func<string, string> redact) =>
-        redact(text) is var redacted && redacted.IndexOf(phrase, StringComparison.OrdinalIgnoreCase) is var at and >= 0
+        text.Contains(phrase, StringComparison.OrdinalIgnoreCase) && redact(text) is var redacted && redacted.IndexOf(phrase, StringComparison.OrdinalIgnoreCase) is var at and >= 0
             ? Window(Around(redacted, at).Trim(), phrase)
             : string.Empty;
 
@@ -165,7 +174,7 @@ public sealed record AcpDiagnosis(string Name, string Cure, AcpFailureKind Kind,
     }
 
     /// <summary>How many characters before the phrase a window starts.</summary>
-    public const int WindowLeadIn = 60;
+    internal const int WindowLeadIn = 60;
 
     /// <summary>A start that does not land in the middle of a surrogate pair.</summary>
     private static int WholeStart(string text, int start) => start < text.Length && char.IsLowSurrogate(text[start]) ? start + 1 : start;

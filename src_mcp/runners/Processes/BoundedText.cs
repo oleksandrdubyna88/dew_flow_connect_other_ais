@@ -19,6 +19,9 @@ internal sealed class BoundedText(int maxChars)
     /// <summary>True when what this holds is a HEAD rather than the whole stream.</summary>
     public bool Truncated => _dropped > 0 || _cutShort;
 
+    /// <summary>The text kept, WITHOUT the sentence <see cref="ToString"/> appends when the stream was cut. Display adds the sentence; a reader that must treat vendor text as vendor text reads this and <see cref="Truncated"/>, never the rendered text.</summary>
+    public string Kept => _text.ToString();
+
     /// <summary>True when the stream was still open at the drain grace — its OWN fact, distinct from the size ceiling: something outlived the child and holds the pipe.</summary>
     public bool HeldOpen => _cutShort;
 
@@ -64,20 +67,7 @@ internal sealed class BoundedText(int maxChars)
         ? _text.ToString() + Sentence()
         : _text.ToString();
 
-    /// <summary>How the sentence this class appends to a cut stream begins — and what <see cref="Captured"/> looks for.</summary>
-    internal const string TruncationOpening = "\n[coai: output truncated";
-
     private string Sentence() => _dropped > 0
-        ? $"{TruncationOpening} at {maxChars} characters; {_dropped} more were dropped]\n"
-        : $"{TruncationOpening} — the stream was still open when the drain grace ran out]\n";
-
-    /// <summary>
-    /// What the stream held, apart from the sentence <see cref="ToString"/> appended when it was cut: the sentence is OURS, never vendor text, and a cut stream ends in a line the
-    /// capture boundary broke, which a reader that quotes lines must know about. <c>Truncated</c> is true only for a text that ENDS in exactly that sentence (a vendor line that
-    /// merely starts alike is not one: the sentence is a single line at the very end).
-    /// </summary>
-    internal static (string Text, bool Truncated) Captured(string text) =>
-        text.LastIndexOf(TruncationOpening, StringComparison.Ordinal) is var at and >= 0 && text.IndexOf('\n', at + 1) == text.Length - 1
-            ? (text[..at], true)
-            : (text, false);
+        ? $"\n[coai: output truncated at {maxChars} characters; {_dropped} more were dropped]\n"
+        : "\n[coai: output truncated — the stream was still open when the drain grace ran out]\n";
 }

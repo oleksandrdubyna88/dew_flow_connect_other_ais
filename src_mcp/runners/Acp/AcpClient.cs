@@ -136,6 +136,7 @@ public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary, Ti
         {
             Tokens = ended.Tokens,
             Survivors = transport.Survivors,
+            StdErrTruncated = transport.StdErrTruncated,
         };
     }
 
