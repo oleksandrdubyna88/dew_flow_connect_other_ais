@@ -232,8 +232,11 @@ one. So the parent's reading stands and sharpens: the fake does wait for the pid
 
 **Fix for the new message (deterministic, lands now).** (1) `SupervisionVerbs.WritePid` writes whole or not at all through
 `Serving.WritePidFile` (`tests_fakecli/Serving.cs:114-131`, the sibling-temp-then-move writer #849 added for C4's sharing
-violation — reuse, not a second writer). (2) `Listed`'s wait becomes "the file holds a pid" (exists AND parses), one fake-side
-helper `PidWritten(file)` used at `:204` and at `:180`, `:184`, `:187` for the other modes. (3) `StatesOf` never throws on
+violation — reuse, not a second writer; `late-spawn`'s own write at `:84` goes through it too, so the file is never seen
+half-written). (2) `Listed`'s wait becomes "the file holds a pid" (exists AND parses), one fake-side helper `PidWritten(file)`
+used at `:204` and at `:180`, `:184`, `:187` for the other modes — and (plan round finding 4) it TOLERATES a transiently
+empty or unparseable file: a read that finds `''` or junk is "not yet", retried on the next 20 ms poll until `Patience`'s
+bound, never a throw; only the bound's expiry is a failure, and it says what the file held last. (3) `StatesOf` never throws on
 a pid file: an unparseable one reads as `unreadable: '<content>'` in the report, so a torn file is a named state rather
 than exit 97. (4) The test's `PidIn` (`:101`) fails with a sentence after its patience instead of a blind `int.Parse`:
 `late.pid never held a pid within 30 s (content: '')`. (5) **D5 made concrete for the `R` arm:** every `StateOf(...)` and
@@ -853,7 +856,8 @@ any) after S3; S8's loop before S8's move.
 **Why no cornerstone.** A cornerstone is where a mistake compounds and the next step does not catch it. The two places that
 come closest both have a net: S8's `ReviewerExecutor` seam is the E4 contract applied to one more class, and the E4 scan
 (with its M1 seam-shape rules and its G2 companion) turns red on a `Stopwatch` left beside the clock or an unclassified
-constructor; S2's `LinuxHeldFile` flag order is three lines whose wrong order fails L_N1b on the next Linux run. Everything
+constructor; S2's `LinuxHeldFile` descriptor contract (open `O_CLOEXEC` → flock → stream → checked clear; `LOCK_UN` on the
+aborted path only) is a handful of lines whose wrong order fails L_N1b or arm (b) on the next Linux run. Everything
 else is one test file with its own RED. So: none named; the two places above get an Opus brief with a required table
 (S8: the per-class inventory; S2: the descriptor's flag state at each line of the take, success and failure paths).
 
@@ -1111,9 +1115,13 @@ node .agents/conventions/tools/plan-lifecycle.mjs
 
 ## 7. Risks
 
-- **C26's three lines are in a product primitive.** A wrong order (clear `FD_CLOEXEC` before the flock, or never) silently
-  breaks or over-broadens the tree hold. Caught by: the flag-state table in the brief, L_N1b and the new RED in the same
-  class, `L_N1a_ProcLocks_NamesTheKindOfFlockTheInheritableHoldTook` (the kernel's own table). Residual: none known; §8 Q1.
+- **C26's fix is in a product primitive.** A wrong order (clear `FD_CLOEXEC` before the flock, or never; an unlock on the
+  SUCCESSFUL disposal, which would release Kimi's inherited lock; a missing `LOCK_UN` on the aborted path, which leaves a
+  pre-exec child holding it) silently breaks or over-broadens the tree hold. Caught by: the descriptor-state table in the
+  brief, the four arms of §3.5 (L_N1b for the successful inheritance, arm (b) for the pre-exec child, arm (c) for a failed
+  `fcntl`), `L_N1a_ProcLocks_NamesTheKindOfFlockTheInheritableHoldTook` (the kernel's own table). Residual: the production
+  take is made only by the `--ask-acp` shim, so the "every concurrent fork inherits" half has one fork to meet — the
+  agent's; §8 Q1.
 - **S8 seams a class E4 did not inventory.** A missed read stays on the system clock while the moved tests go green — the
   E4 risk, on a fifth class. Caught by: the M1 scan rules and the G2 companion (both already on the branch), the required
   inventory table, and B-E5-21/22.
@@ -1132,10 +1140,11 @@ node .agents/conventions/tools/plan-lifecycle.mjs
 
 ## 8. Questions for the lead — each with the assumption the story proceeds on
 
-- **Q1 — C26's fix in `LinuxHeldFile` (open `O_CLOEXEC`, flock, stream, then clear `FD_CLOEXEC`) instead of the parent's
+- **Q1 — C26's fix in `LinuxHeldFile` (open `O_CLOEXEC`, flock, stream, checked clear of `FD_CLOEXEC` on success;
+  `LOCK_UN` before close on the aborted path; never an unlock on successful disposal — §3.5, §11) instead of the parent's
   two options.** A serial collection cannot stop another collection's fork under `maxParallelThreads: 8`, and "the probe
-  waits for inheritors" is a timer. *Assumed: yes — three lines in the primitive, with the flag-state table and L_N1b as
-  the guards.*
+  waits for inheritors" is a timer. *Assumed: yes — the plan round accepted it with the risk consult's mechanism; the
+  descriptor-state table, L_N1b and the pre-exec arm are the guards.*
 - **Q2 — a fifth clock seam, `ReviewerExecutor` (C35), in E5 under D3.** One class, with its RED, scan entry red first,
   inventory table in the brief. *Assumed: yes.* The alternative — keep two real 1.5 s launches and only drop the 3.5 s
   bound — leaves "the repair gets what is LEFT" observable only by a real clock, i.e. the race.
