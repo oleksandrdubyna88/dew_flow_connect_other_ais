@@ -1,6 +1,6 @@
 # PLAN — E4 stories: deadlines on an injectable clock (cornerstone area: the clock contract)
 
-> Status: **partially implemented, 2026-10-21 — E4.S1 (the cornerstone: `ManualClock`, `ClockHandshake`, the structural scan) is built on this branch, see §8 "S1 — status"; S2–S6 are not started. Stories and the cornerstone spec by Fable.** Epic E4 of
+> Status: **S1–S5 built, the one docs pass done, the code gate pending (2026-10-22 update of the 2026-10-21 build); S6 (C4) gated on a kept failure (D5); not promoted. E4.S1 (the cornerstone: `ManualClock`, `ClockHandshake`, the structural scan) and S2–S5 are built on this branch, see the "status" sections of §8; the `research/` docs (`module_tests.md`, `module_runners.md`, `module_server.md`) were written in the §9 pass. Stories and the cornerstone spec by Fable.** Epic E4 of
 > [PLAN_the_suite_is_deterministic_and_leaves_no_temp.md](PLAN_the_suite_is_deterministic_and_leaves_no_temp.md)
 > (its `### E4`). Branch `feat/suite-e4-clock`, from E3's head `aab069ca5` (which carries E2); every line number below
 > was read at that commit. Scope: `src_mcp` only — four product classes get an optional `TimeProvider` each
@@ -1058,35 +1058,37 @@ node .agents/conventions/tools/low-priority.mjs ./src_mcp/tests/bin/Debug/net10.
       `DisposeAsync()` the only wait); M1–M17 green with their reds seen; B1–B5, B17–B19 red then green;
       `ClockHandshake` is the one signal-and-wait helper every hook uses; `MovableClock` gone, its nine sites moved;
       E3's `AtomicFile` window tests unchanged and green on it (S1).
-- [ ] (S1 part done 2026-10-21; the per-story additions are S2–S4's) The structural scan `EveryBudgetInAClockedClassReadsItsClockTests` and its companion exist (S1), with
+- [x] (done 2026-10-21: S1 landed it, S2–S4 added their classes red first) The structural scan `EveryBudgetInAClockedClassReadsItsClockTests` and its companion exist (S1), with
       `BoundedScheduler`'s five sites — the ladder's `Stopwatch` and `Task.Delay` among them, with Q4's reason — as
       named exceptions; each seam story added its class to the scanned set red first, then green.
-- [ ] Each of `AcpClient`, `ConsultantPlaces`, `TurnLoop`, `SourceResolver` reads its one `_clock` exactly as §5.1's
+- [x] Each of `AcpClient`, `ConsultantPlaces`, `TurnLoop`, `SourceResolver` reads its one `_clock` exactly as §5.1's
       "after" column says — the timer source declared first and the link second (§5.2), every "stays" site with its
       remark and `ReviewSnapshots`' `MaxElapsed` named as the unseamed host safety ceiling; nothing threaded through
       `PanelService`/`RoundEngine`; `ProcessLauncher` untouched unless C4's gate opened; `SecuritySources` untouched.
-- [ ] Each seam landed alone first with the whole suite green on the default clock (§5.3), recorded per story.
-- [ ] S12, C23's RED, S16, S14 (a–c), S13 (1–4) RED with their §6/§8 messages, then GREEN; every break-it B6–B16 red
+- [x] Each seam landed alone first with the whole suite green on the default clock (§5.3), recorded per story.
+- [x] S12, C23's RED, S16, S14 (a–c), S13 (1–4) RED with their §6/§8 messages, then GREEN; every break-it B6–B16 red
       then green (B16 through the wiring arm); the zero-budget arms of S3 and S4 and the caller-first /
       dispose-before-deadline arms of S2 green and said as guards; the resolver arm's proof is the two-timers-then-token
       one, never a count read inside a callback.
-- [ ] S4's and S5's turn counts rechecked against `TurnLoop.cs:74-80` (a turn is launched whenever anything is left):
+- [x] S4's and S5's turn counts rechecked against `TurnLoop.cs:74-80` (a turn is launched whenever anything is left):
       the cap test asserts three earlier turns AND four launches; the work-cap test three and three; the S13
       scheduler-level test two earlier turns and three launches.
-- [ ] No timeout lengthened; no assertion weakened (the moved wall-time bounds are replaced by clock-side proofs, said
+- [x] No timeout lengthened; no assertion weakened (the moved wall-time bounds are replaced by clock-side proofs, said
       per test); no test removed or skipped; counts named per story; the end-to-end test's remaining wall-clock
       exposure (the real round timer at `RoundEngine.cs:288` and four real launches) stated in its remark; no product
       hook ever calls `Advance`.
-- [ ] After the last manual advance of every S2 arm, the teardown is reached on the system clock with the received
+      **Qualifier (C17):** the test passes the row budget as `OneShotAsync`'s INPUT, and it is now 5 minutes where it was 1 s (S3 deviation 2). No product timeout, guard or bound was lengthened, and the test never waits for that budget — the manual clock's advance is the only thing that cuts the copy and the 30 s guard is unchanged; it was raised because at 1 s the system timer could cut the released copy on a slow run and B9 passed by luck. It is a changed test constant that makes the deadline wholly the clock's, not a longer wait masking a race; the plan's wording "no timeout lengthened" is met for every product timeout and stretched for this one input, and said so here.
+- [x] After the last manual advance of every S2 arm, the teardown is reached on the system clock with the received
       answer kept and the agent gone; a caller's cancellation never reads as `Deadline`; a cancelled copy's bytes are
       given back (`budget.Held == 0`).
 - [ ] The §10 loops recorded for C5, C23, C13, C17, C6 (before and after); the 20-run CI watch started per leg; the
       C4 test kept in the suite as a known intermittent, its next failure's full message appended to §3 C4 by the lead
-      who sees it.
-- [ ] The `research/` docs written in ONE final docs pass on the epic branch in §9's order: `module_tests.md` (the
+      who sees it. **Open:** the loops are recorded per story in §8 (S2's "before" is the every-run RED, S3's has no "before" loop), but the 20-run CI watch has not started and C4/S6 stays gated on a kept failure.
+- [x] (docs pass, 2026-10-22) The `research/` docs written in ONE final docs pass on the epic branch in §9's order: `module_tests.md` (the
       contract, then one section per story), `module_runners.md` and `module_server.md` (the clocks), the diagrams,
-      the parent's E4 section and `todo/README.md`, the tails note; the sibling plan told when S4 merges.
-- [ ] `node .agents/conventions/tools/plan-lifecycle.mjs` clean; promotion of this document with the parent's.
+      the parent's E4 section and `todo/README.md`, the tails note.
+- [ ] The sibling plan (`PLAN_two_equal_deadlines_race_on_macos.md`) told that S4 merged — not yet: S4 is on the epic branch only, it reaches `main` with the epic's PR.
+- [ ] `node .agents/conventions/tools/plan-lifecycle.mjs` clean — **run 2026-10-22: `plan-lifecycle: clean.` (exit 0); the box stays open for the promotion half** — and promotion of this document with the parent's (waits for the code gate and the CI watch).
 
 ## 14. The E4 plan round (coai session `67791431`, 2026-10-21, verdict proceed) — 8 findings: 7 accepted, 1 rejected
 
