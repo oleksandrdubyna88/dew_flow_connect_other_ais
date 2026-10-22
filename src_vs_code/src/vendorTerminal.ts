@@ -2,8 +2,12 @@ import { CliStatus, updateAvailable } from './cliVersions';
 import { type HostKind, Platform, hostExecutableSide, hostKindOfPlatform } from './hostSide';
 import { KIMI_LINUX_LINE, KIMI_NATIVE_LINUX, KIMI_ON_WSL1, KIMI_OWN_OPEN, KIMI_RUNS_ON_WSL, KIMI_TOOLS_NOTE } from './kimiLinuxLine';
 import { executableOf, type ExecutableSide } from './pathFamily';
-import { VIBE_ON_LINUX_SINCE } from './runtimeSince';
+import { VIBE_NATIVE_LINUX, VIBE_ON_LINUX_SINCE } from './runtimeSince';
 import { Vendor } from './vendors';
+
+// The one English sentence about Vibe on a native Linux host is defined beside the release it names (an import cycle otherwise:
+// `vendors.ts` says it in the hint); the install note below and the tests reach it from here.
+export { VIBE_NATIVE_LINUX };
 
 /**
  * Opening a vendor's own CLI in a terminal — for checking an account, signing in, or reading what
@@ -415,7 +419,8 @@ function antigravityInstall(platform: Platform): VendorInstall {
  * `vibeRuntime.test.ts`; `vibeWindowsInstall.test.ts` holds the Windows line to PowerShell's own parser.</p>
  */
 function vibeInstall(platform: Platform, host?: HostKind): VendorInstall {
-  // A caller that names no host gets the platform's own: a Linux platform alone is a native host, which only ever refuses.
+  // A caller that names no host gets the platform's own: a Linux platform alone is `linux` (never `linux-unread`). The product's one
+  // caller (panelProvider.ts) passes the kind it read from the banner, so this fallback is for tests and for callers with no banner.
   const note = vibeNoteFor(host ?? hostKindOfPlatform(platform));
 
   return platform === 'win32'
@@ -508,9 +513,19 @@ const VIBE_SCRIPT_NOTE =
 const VIBE_NOTE_WSL =
   VIBE_SCRIPT_NOTE + VIBE_ENV_FILE + ` Vibe runs on this side, WSL2, from coai-mcp ${VIBE_ON_LINUX_SINCE}.`;
 
-const VIBE_NOTE_LINUX =
-  VIBE_SCRIPT_NOTE + VIBE_ENV_FILE + ' On a native Linux host coai-mcp refuses Vibe for now — it is measured on WSL2 only — '
-  + 'so a Vibe row is refused on this side.';
+/**
+ * A native Linux host (E2 of research/PLAN_kimi_and_vibe_on_native_linux_E2.md): from coai-mcp 0.64.0 the row RUNS, with Vibe's keyring
+ * turned off. `VIBE_ENV_FILE`'s "a sign-in kept in a keyring is invisible to coai" stays true — and is now also unreachable.
+ */
+const VIBE_NOTE_LINUX = VIBE_SCRIPT_NOTE + VIBE_ENV_FILE + ' ' + VIBE_NATIVE_LINUX;
+
+/**
+ * A Linux host whose kernel banner could not be read (`linux-unread`, `hostSide.ts`): the server cannot tell it from WSL1 and refuses a
+ * Vibe row on it, so the note says so — and where the cause is written — instead of promising a run.
+ */
+const VIBE_NOTE_LINUX_UNREAD =
+  VIBE_SCRIPT_NOTE + VIBE_ENV_FILE + ' coai-mcp could not read this host\'s kernel banner, so it cannot tell a native Linux host from '
+  + 'WSL1 and refuses a Vibe row on this side; the extension-host log names the cause.';
 
 const VIBE_NOTE_MACOS =
   VIBE_SCRIPT_NOTE + ' coai-mcp does not run Vibe on macOS — nothing is measured there — so a reviewer on this side '
@@ -527,12 +542,14 @@ const VIBE_NOTES: Readonly<Record<HostKind, string>> = {
   wsl2: VIBE_NOTE_WSL,
   wsl1: VIBE_NOTE_WSL1,
   linux: VIBE_NOTE_LINUX,
+  'linux-unread': VIBE_NOTE_LINUX_UNREAD,
   darwin: VIBE_NOTE_MACOS,
 };
 
 /**
  * Which note ⤓ and ⟳ show for Vibe on this host (DL1 of research/PLAN_kimi_and_vibe_on_linux.md) — pure, and the host is a
- * REQUIRED argument: WSL2 runs Vibe, WSL1 and a native Linux host are refused, macOS is not measured, Windows is as it was.
+ * REQUIRED argument: WSL2 runs Vibe, and so does a native Linux host from coai-mcp 0.64.0 (with Vibe's keyring off); WSL1 and a Linux host
+ * whose kernel banner could not be read are refused, macOS is not measured, Windows is as it was.
  */
 export function vibeNoteFor(host: HostKind): string {
   return VIBE_NOTES[host];
@@ -637,12 +654,14 @@ const KIMI_NOTES: Readonly<Record<HostKind, string>> = {
   wsl2: KIMI_NOTE_WSL,
   wsl1: KIMI_NOTE_WSL1,
   linux: KIMI_NOTE_LINUX,
+  'linux-unread': KIMI_NOTE_LINUX,
   darwin: KIMI_NOTE_MACOS,
 };
 
 /**
  * Which note ⤓ and ⟳ show for Kimi on this host (DL1 of research/PLAN_kimi_and_vibe_on_linux.md) — the same host-kind union Vibe's note
- * is chosen by (`hostSide.ts`): WSL2 runs the row, WSL1 and a native Linux host are refused, macOS is not measured, Windows is as it was.
+ * is chosen by (`hostSide.ts`): WSL2 runs the row, WSL1 and a native Linux host (and a host whose kernel banner could not be read, which
+ * is told the native sentence — Kimi is refused on native Linux until E3) are refused, macOS is not measured, Windows is as it was.
  */
 export function kimiNoteFor(host: HostKind): string {
   return KIMI_NOTES[host];

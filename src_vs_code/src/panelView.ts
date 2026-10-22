@@ -193,10 +193,12 @@ export interface PanelState {
    */
   readonly hostFamily?: PathFamily | undefined;
   /**
-   * What this window runs on — Windows, WSL2, WSL1, a native Linux host or a Mac — read from the kernel once by the host
-   * (`hostKind`). It decides what a Vibe card says about the host (DL1 of research/PLAN_kimi_and_vibe_on_linux.md): "update
-   * coai-mcp" on WSL2 only, a refusal on WSL1 and a native host. REQUIRED, with no fallback: the one fallback there could be
-   * — this platform's own — maps every Linux platform to a native host, which would draw the refusal on a WSL2 window.
+   * What this window runs on — Windows, WSL2, WSL1, a native Linux host, a Linux host whose banner could not be read
+   * (`linux-unread`) or a Mac — read from the kernel once by the host (`hostKind`). It decides what a Vibe card says about the host
+   * (DL1 of research/PLAN_kimi_and_vibe_on_linux.md; E2.S3 of research/PLAN_kimi_and_vibe_on_native_linux_E2.md): "update coai-mcp"
+   * on WSL2 and on a native host older than 0.64.0, a refusal on WSL1 and on an unread banner. REQUIRED, with no fallback: the one
+   * fallback there could be — this platform's own — maps every Linux platform to a native host, which would draw that host's card
+   * on a WSL2 window. It travels only inside this state: nothing persists it (`hostKindConsumers.test.ts`).
    * Whoever builds a state says what the window runs on (a test names it, so a page is the same on any machine).
    */
   readonly hostKind: HostKind;
@@ -1147,6 +1149,15 @@ function updateLabel(id: string, cli: CliStatus): string {
 }
 
 /**
+ * A Linux SIDE — one with a mount table to judge — whatever its kernel banner said. `linux-unread` is a Linux side too: the Kimi
+ * network sign-in box is a setting of the side's home, not a promise that coai-mcp runs the row there (E2.S3 audit,
+ * research/PLAN_kimi_and_vibe_on_native_linux_E2.md).
+ */
+function onLinuxSide(host: HostKind): boolean {
+  return host === 'wsl2' || host === 'linux' || host === 'linux-unread';
+}
+
+/**
  * What each Models card needs beyond its row (PLAN_one_model_catalog.md E3.2).
  */
 export function cardContextFor(state: PanelState): (vendor: Vendor) => CardContext {
@@ -1185,7 +1196,7 @@ export function cardContextFor(state: PanelState): (vendor: Vendor) => CardConte
     featureNote: featureNote(v, serverVersion),
     // An api card's per-model settings name the installed server when it is too old for them (S3.8).
     serverVersion,
-    kimiAllowNetworkSignIn: host === 'wsl2' || host === 'linux' ? state.settings.kimiAllowNetworkSignIn : undefined,
+    kimiAllowNetworkSignIn: onLinuxSide(host) ? state.settings.kimiAllowNetworkSignIn : undefined,
     otherSideCli: otherSides.includes(v.id) ? family : undefined,
     family,
     // The mark by THIS side's STORED value — what the box draws and the watch keys its finding on (paths per side,

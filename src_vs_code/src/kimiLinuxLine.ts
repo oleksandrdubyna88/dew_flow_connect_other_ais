@@ -130,7 +130,10 @@ export const KIMI_OWN_OPEN =
 /** What runs where, for a WSL2 side (the plan's DL1) — the release is the one `ON_LINUX_SINCE` names. */
 export const KIMI_RUNS_ON_WSL = `Kimi runs on this side, WSL2, from coai-mcp ${KIMI_ON_LINUX_SINCE}.`;
 
-/** What a native Linux side is told — Vibe's sentence for the same host (`VIBE_NOTE_LINUX`), with Kimi's name: refused for now, measured on WSL2 only (DL1). */
+/**
+ * What a native Linux side is told about Kimi: refused for now, measured on WSL2 only (DL1). Vibe's sentence for the same host used to be
+ * its twin; since E2 Vibe RUNS there (`VIBE_NATIVE_LINUX`) and Kimi stays refused until E3 measures it, so this one does not move.
+ */
 export const KIMI_NATIVE_LINUX = 'On a native Linux host coai-mcp refuses Kimi for now — it is measured on WSL2 only — so a Kimi row is refused on this side.';
 
 /** What a WSL1 side is told — Vibe's sentence for the same host (`VIBE_NOTE_WSL1`): WSL2 only (the plan's F0 / S-K20), and what helps is moving the distro. */
