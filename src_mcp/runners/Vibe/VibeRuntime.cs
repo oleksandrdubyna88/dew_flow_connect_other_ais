@@ -25,7 +25,9 @@ namespace CoaiMcp.Runners.Vibe;
 /// reviewer of a round, inside the round's own scratch folder (<see cref="ReviewerSettings.OwnedScratch"/>) — and the child
 /// is given <see cref="ProcessEnvironment.Minimal"/> plus exactly <c>VIBE_HOME</c>, <c>VIBE_CLI=python</c> (§3: the
 /// Python CLI, the measured one), <c>VIBE_ACTIVE_MODEL</c> (§17: it takes effect under the minimal environment) and
-/// <c>PYTHONUTF8=1</c> (§26: without it a character outside the console's code page killed the run with exit 2).
+/// <c>PYTHONUTF8=1</c> (§26: without it a character outside the console's code page killed the run with exit 2) — and, on a NATIVE Linux host only,
+/// <c>PYTHON_KEYRING_BACKEND=keyring.backends.fail.Keyring</c> (DN10, E2 of <c>todo/PLAN_kimi_and_vibe_on_native_linux.md</c>: no keyring on the host is reachable, the sign-in comes only through the linked <c>.env</c>; measured
+/// closed on Vibe 2.26.1 with keyring 25.7.0, research/RESULTS_vibe_confinement.md §32). The host is this adapter's own (<see cref="Built"/> forwards its kind), so no caller spells it twice.
 /// Nothing is inherited: an MCP server supplied only through a <c>VIBE_*</c> variable starts under an empty home (§22 A).
 /// Before every launch <see cref="TakeTurnAsync"/> checks all of it (<see cref="VibeLaunch"/>).</para>
 /// <para><b>The prompt on stdin, the answer from <c>--output json</c>, usage from <c>--output-dir</c></b> (D7): a 33 KB

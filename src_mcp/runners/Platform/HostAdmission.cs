@@ -6,8 +6,9 @@ namespace CoaiMcp.Runners.Platform;
 /// </summary>
 /// <remarks>
 /// Admitted: a Windows host starting a Windows CLI, and a WSL2 host. Refused, each with its own sentence: a WSL1 kernel (which reads as <see cref="HostKind.Wsl"/>, and is a syscall translation layer),
-/// a native Linux host (unless the runtime is in <see cref="MeasuredOnNativeLinux"/> — that set is EMPTY until a runtime's native cells pass, DN1 of <c>todo/PLAN_kimi_and_vibe_on_native_linux.md</c>, so today
-/// every native Linux answer is the WSL2-only sentence; a runtime in the set is still refused when the kernel banner could not be read, DN6), a Windows host that would start the Linux side by <c>wsl.exe</c> or a <c>\\wsl$</c> path (D18: a Windows process cannot take a Linux lock or end a
+/// a native Linux host (unless the runtime is in <see cref="MeasuredOnNativeLinux"/>, DN1 of <c>todo/PLAN_kimi_and_vibe_on_native_linux.md</c>: <b>Vibe is</b> — measured on a native Linux host, research/RESULTS_vibe_confinement.md §32
+/// (Vibe 2.26.1, ubuntu-claude, 2026-10-22), and its launch there closes the keyring road, <c>PYTHON_KEYRING_BACKEND=keyring.backends.fail.Keyring</c> (DN10, <c>VibeLaunch.Built</c>) — the keyring road was measured closed on Vibe 2.26.1
+/// (keyring 25.7.0); <b>Kimi is not</b> (E3's), so its native Linux answer is still the WSL2-only sentence; a runtime in the set is still refused when the kernel banner could not be read, DN6), a Windows host that would start the Linux side by <c>wsl.exe</c> or a <c>\\wsl$</c> path (D18: a Windows process cannot take a Linux lock or end a
 /// Linux process tree), and every other host.
 /// </remarks>
 public static class HostAdmission
@@ -19,7 +20,10 @@ public static class HostAdmission
     private const string NativePlan = "DN6 of todo/PLAN_kimi_and_vibe_on_native_linux.md";
 
     /// <summary>
-    /// The runtimes (<c>Vibe</c>, <c>Kimi</c>) measured on a native Linux host — EMPTY in E1, so membership asked FIRST changes no answer. E2 adds Vibe, E3 Kimi: one entry plus its texts each, never a second admission.
+    /// The runtimes (<c>Vibe</c>, <c>Kimi</c>) measured on a native Linux host. <c>Vibe</c> is in it, on the evidence of research/RESULTS_vibe_confinement.md §32 (Vibe 2.26.1, ubuntu-claude, 2026-10-22: N-V1–N-V6 all passed with the
+    /// keyring road closed in every launch); <c>Kimi</c> is not (E3 adds it: one entry plus its texts, never a second admission). Membership is asked FIRST, so a runtime outside the set gets the WSL2-only sentence whatever the banner says.
+    /// The ABSENCE of a fact is a refusal: no entry, no admission; no read banner, no admission (DN6). There is no default member, no settings switch and no environment switch — a runtime enters by an edit to THIS line that names the
+    /// RESULTS section its cells are in; and a keyring-session fact (<c>KeyringSessionFacts</c>) is recorded by <c>--host-facts</c> and decides nothing here (DN10): a fact added to this arm is a REFUSAL condition on a member, never a road into the set.
     /// Compared case-insensitively, as <see cref="Refusal(string, HostKind, string, WslGeneration)"/> receives the names.
     /// </summary>
     public static IReadOnlySet<string> MeasuredOnNativeLinux { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Vibe" };
