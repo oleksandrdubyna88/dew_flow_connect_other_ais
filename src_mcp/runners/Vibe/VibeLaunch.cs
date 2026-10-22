@@ -136,7 +136,7 @@ public static class VibeLaunch
         };
         if (ClosesTheKeyringRoad(host))
         {
-            built[KeyringBackendVariable] = System.Environment.GetEnvironmentVariable(KeyringBackendVariable) ?? KeyringBackendClosed;
+            built[KeyringBackendVariable] = KeyringBackendClosed;
         }
 
         return built;
