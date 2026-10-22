@@ -262,7 +262,7 @@ public sealed class KimiRuntime(string id, KimiHost host, KimiSeams seams, Seril
 
     private static string Said(KimiReport report)
     {
-        var text = Words(report);
+        var text = Quoted(Words(report), report);
 
         // The cure FIRST: the summary cuts a line at 160 characters, and the shim's reason (a list of offered models) can be longer than that.
         return VendorDiagnosis.For(text) is { } cure ? $"{cure} (the shim said: {text})" : text;
@@ -308,12 +308,17 @@ public sealed class KimiRuntime(string id, KimiHost host, KimiSeams seams, Seril
     /// <summary>
     /// The reason a spent allowance carries: the shim's own words, with NO cure in front. The round's summary, the ledger and the log diagnose a reason by its marker and put the
     /// table's cure before the vendor's line themselves (<c>BoundedScheduler.Because</c>); a reason that already led with the cure was said twice on every line (S7,
-    /// <c>ASpentKimiQuotaReadsAsAQuotaTests</c>). When the vendor's words alone would not stop the ladder, the matched row's own phrase from the table is added.
+    /// <c>ASpentKimiQuotaReadsAsAQuotaTests</c>). When the vendor's words alone would not stop the ladder (the sentence reached the shim on stderr only), the report's MATCHED LINE
+    /// — the vendor's own line, quoted — is added; only a report with no line falls back to the table's phrases for the name.
     /// </summary>
     private static string SpentReason(KimiReport report)
     {
         var said = Words(report);
 
-        return RateLimit.Hopeless(said) ? said : $"{said} ({KimiAcpProfile.SpentPhraseOf(report.Failure)})";
+        return RateLimit.Hopeless(said) ? said : report.FailureLine.Length > 0 ? Quoted(said, report) : $"{said} ({KimiAcpProfile.SpentPhrasesOf(report.Failure)})";
     }
+
+    /// <summary><paramref name="said"/> followed by the line of the agent's stderr the shim matched, quoted, when the reason itself did not hold the sentence; unchanged otherwise.</summary>
+    private static string Quoted(string said, KimiReport report) =>
+        report.FailureLine.Length > 0 ? $"{said} (Kimi said: {report.FailureLine})" : said;
 }
