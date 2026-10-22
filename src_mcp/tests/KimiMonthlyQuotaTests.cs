@@ -274,6 +274,22 @@ public sealed class KimiMonthlyQuotaTests
         touched.Should().BeEmpty("a phrase the redactor rewrites could never be found in the redacted line: " + string.Join(", ", touched));
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(500)]
+    public void AnInteriorTab_NeverReachesTheQuotedLine_ItIsOneLineOfPrintableText(int padding)
+    {
+        // SafeSource keeps tab, LF and CR (the layout of a SOURCE, so the whole-text pass sees a block whole); the quoted line is ONE line of a notice, and it must end the way
+        // SafeText makes a notice: no control character at all. LF and CR are taken by the isolation; a tab inside the line is not (CodeRabbit on PR #917). 0 = the line whole, 500 = windowed.
+        var line = new string('p', padding) + " worker\tfailed:\t" + MonthlyLine;
+
+        var kept = AcpDiagnosis.Of(NamesNoRow, line, KimiAcpProfile.Failures).Line;
+
+        kept.Should().Contain(Phrase);
+        kept.Where(char.IsControl).Should().BeEmpty("the quoted line is one line of printable text: " + kept);
+        kept.Length.Should().BeLessThanOrEqualTo(AcpDiagnosis.LineCap);
+    }
+
     [Fact]
     public void WhenRedactionFailsClosed_NothingIsQuoted_NeverTheRawLine()
     {

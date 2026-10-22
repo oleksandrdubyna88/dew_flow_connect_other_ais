@@ -542,6 +542,35 @@ public sealed class AcpClientTests
         Gone(outcome.AgentPid).Should().BeTrue();
     }
 
+    /// <summary>
+    /// Code gate cf1948aa T1 (CodeRabbit on PR #917): the capture's cut reaches the outcome as STATE. A stderr past <see cref="AcpTransport.StdErrChars"/> is kept as its head — with no
+    /// truncation sentence of ours in it — and <see cref="AcpOutcome.StdErrTruncated"/> says it was cut, so <c>AcpDiagnosis</c> never quotes the line the boundary broke.
+    /// </summary>
+    [Fact]
+    public async Task AStderrPastTheCaptureCeiling_IsKeptAsItsHead_AndTheOutcomeSaysItWasCut()
+    {
+        using var agent = new FakeAcpAgent([FakeAcpAgent.StdErr(AcpTransport.StdErrChars + 1), FakeAcpAgent.Chunk("x")]);
+
+        var outcome = await RunAsync(agent);
+
+        outcome.End.Should().Be(AcpEnd.Answered, outcome.Reason);
+        outcome.StdErrTruncated.Should().BeTrue("one character past the ceiling was dropped, and the client must carry that fact from the capture");
+        outcome.StdErr.Should().Be(new string('e', AcpTransport.StdErrChars), "the kept head, whole, with no sentence of ours appended");
+    }
+
+    /// <summary>The other side of the flag: a stderr within the ceiling is all of it, and the outcome says so.</summary>
+    [Fact]
+    public async Task AStderrWithinTheCaptureCeiling_IsWhole_AndNotMarkedCut()
+    {
+        using var agent = new FakeAcpAgent([FakeAcpAgent.StdErr(10), FakeAcpAgent.Chunk("x")]);
+
+        var outcome = await RunAsync(agent);
+
+        outcome.End.Should().Be(AcpEnd.Answered, outcome.Reason);
+        outcome.StdErrTruncated.Should().BeFalse();
+        outcome.StdErr.Should().Be(new string('e', 10));
+    }
+
     /// <summary>Finding 5: the trace lists are bounded; what is dropped is counted, not silently lost.</summary>
     [Fact]
     public async Task TheTraceIsCapped_AndTheRestIsCounted()

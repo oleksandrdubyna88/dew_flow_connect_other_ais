@@ -523,7 +523,7 @@ feature gate runs its second (last) round with `again: true` over the new head.
 
 **Plan-round amendment (coai cf1948aa, accepted): no pre-cut at all.** The 8 KB bound proposed under F1 is dropped. `Redaction.SafeText` runs over the FULL isolated line (between the nearest
 `\r` or `\n` on each side of the phrase), with `limit = int.MaxValue` so its own cut never fires, and only THEN is the 400-character window cut around the phrase in the redacted text.
-What bounds the line is the agent's stderr capture: `AcpTransport.StdErrChars` = 64 Ki characters (`AcpTransport.cs:45`, a `BoundedText` at `:52`, appended at `:252`; it keeps the HEAD and drops the rest),
+What bounds the line is the agent's stderr capture: `AcpTransport.StdErrChars` = 64 Ki characters (`AcpTransport.cs:45`, a `BoundedText` at `:52`, appended at `:255`; it keeps the HEAD and drops the rest),
 so a single line is at most about 64 Ki characters. A redaction that cannot finish fails closed (`Redaction.WhenRedactionTimesOut`) and returns the marker `[redacted]`; the phrase is not in it, so the quoted line IS that marker, never raw text.
 
 **Built 2026-10-22** on top of the plan record `5697c3026` (branch `fix/kimi-failureline-redact-first`, one commit: `fix(mcp): the matched stderr line is redacted whole before it is windowed, and quoted before the hopeless check (spent-quota feature gate)`).
@@ -543,7 +543,7 @@ Tests and the REDs/break-its are in `research/module_tests.md` (feature gate rou
 - **R2 — the capture cut: verified.** `BoundedText` keeps the HEAD (`AcpTransport.StdErrChars`, 64 Ki), so the last line of a cut capture can end inside a credential shorter than the 8 the Bearer rule needs
   (RED: `Did not expect seen.Diagnosis.Line "… quota Bearer Lp5gU" to contain "Lp5gU"`). Fixed: `BoundedText.Captured` splits off the truncation sentence (ours, never searched) and reports the cut; the row is read from everything captured,
   the line only from complete lines (a phrase only on the cut line keeps its row, empty line, the table's phrases stand for the name). The comment at `AcpTransport.cs:44` ("lives in the last lines") was wrong and is corrected.
-- **R3 — a redacted line loses hopelessness: verified.** The ladder climbs while `!RateLimit.Hopeless(limited.Reason)` (`BoundedScheduler.cs:624`, `:673`), decided by the reason's words, not by the exit. With `failureLine` `[redacted]` the reason carried no spent word and the round launched the shim again
+- **R3 — a redacted line loses hopelessness: verified.** The ladder climbs while its `Hopeless` is false (the loop at `BoundedScheduler.cs:624`; `Hopeless` at `:673-675` is `RateLimit.Hopeless(limited.Reason)` or a stated reset that outlasts the budget), decided by the reason's words, not by the exit. With `failureLine` `[redacted]` the reason carried no spent word and the round launched the shim again
   (RED: the product round saw several FAILED log lines instead of one launch). Fixed: `KimiRuntime.SpentReason` quotes the line, then appends the table's phrases whenever the result is not yet hopeless.
 Every case asserts no fragment of the secret in the diagnosis line, the shim's report JSON and the round's summary, ledger and log lines (`TheStderrLineIsQuotedSafelyTests`).
 
@@ -558,3 +558,9 @@ Every case asserts no fragment of the secret in the diagnosis line, the shim's r
 - **T5 (finding 2):** `AcpDiagnosis.WindowLeadIn` is `internal` again (`InternalsVisibleTo` serves the tests).
 - Rejected: **`StdErrChars` internal** — assembly-scoped, and a test-side copy of the cap would drift; **the internal redactor seam** (`LineWith(text, phrase, redact)`) — the narrowest way to test the fail-closed branch and the call count;
   **the 64 Ki slice allocation** in `CompleteLines` — noise on a failure path.
+
+**CodeRabbit round on PR #917 (2026-10-22) — 3 threads, all accepted** (REDs and break-its in `research/module_tests.md`):
+- **A tab reached the quoted line.** `SafeSource` keeps tab, LF and CR (a source's layout); the isolation takes LF and CR, but an interior tab survived into `failureLine`, which is one line of a notice. Fixed: the window
+  is passed LAST through `Redaction.SafeText(window, LineCap)` — this supersedes "no second `SafeText`" in the build note above. The second pass reads at most `LineCap` characters of already-redacted text and can only take more out.
+- **`AcpClient` copying `StdErrTruncated` had no test.** Added through the real client and the fake agent. The finding proposed `FakeAcpAgent.Spew`, but `spew` writes on STDOUT (the protocol stream), so the fake agent gained a `stderr` step.
+- **`research/module_tests.md` said `WindowLeadIn` and `LineCap` were "both public now".** At HEAD, `WindowLeadIn` is `internal const` (T5) and `LineCap` is `public const`; corrected.

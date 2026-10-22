@@ -4808,7 +4808,7 @@ Kimi 2.3.0 in PROMPT mode, 2026-10-21, verbatim; the ACP envelope around it (`Au
 Changed by design: `TheSixRowsStandInTheDecidedOrder…` became `TheSevenRowsStandInTheDecidedOrder…` (the new row beside the 5-hour one; `SpentNames` compared as distinct names); `KimiQuotaWords.ResetOpening`
 (one string) became `ResetOpenings` (the list), so three older assertions read `ResetOpenings[0]`.
 
-**Feature gate round 1 (F1, F2, 2026-10-22; branch `fix/kimi-failureline-redact-first`).** All in `KimiMonthlyQuotaTests`; the window arithmetic is computed from `AcpDiagnosis.WindowLeadIn` / `LineCap` (both public now), and each F1 test ASSERTS where the old window would have started or ended, so it keeps its teeth if either constant changes.
+**Feature gate round 1 (F1, F2, 2026-10-22; branch `fix/kimi-failureline-redact-first`).** All in `KimiMonthlyQuotaTests`; the window arithmetic is computed from `AcpDiagnosis.WindowLeadIn` (`internal const`; made public for these tests, internal again since the code gate's T5 below, `InternalsVisibleTo` serves the tests) and `AcpDiagnosis.LineCap` (`public const`), and each F1 test ASSERTS where the old window would have started or ended, so it keeps its teeth if either constant changes.
 
 | Test | Seen red as | Break-it (went red, restored by writing the file, rebuilt, green) |
 |---|---|---|
@@ -4829,7 +4829,7 @@ The fail-closed case is tested through the seam, not by finding an input that re
 | R1 `ALineInsideAPrivateKeyBlock_IsRedactedWithItsBlock_NotQuotedWithTheKeyBodyBesideIt` (a body line holding the phrase inside a `PRIVATE KEY` block; the test first proves `Redaction.SafeSource` over the whole text removes the body) | *Did not expect seen.Diagnosis.Line "MIIEvQIBADANBgkqhkiG9w0BAQEFAASC reached your monthly usage limit …" to contain "MIIEvQIBADAN" because the diagnosis line.* | redaction applied to the isolated line again (also reds the fail-closed case) |
 | R2 (superseded by the code gate below: the cases were rewritten around the structured flag) `ATokenCutByTheCaptureBoundary_LeavesNoFragmentInAnyRecordedText…` | *Did not expect seen.Diagnosis.Line "reached your monthly usage limit … quota Bearer Lp5gU" to contain "Lp5gU" because the diagnosis line.* | see the code gate table |
 | R3 `AQuotedLine_ThatIsNotHopelessItself_GetsTheTablesPhrasesAppended` (theory: `something odd`, `[redacted]`) | *Expected reason "kimi_quota_spent: Internal error (Kimi said: [redacted])" to contain "monthly".* | `SpentReason` back to the line-wins-without-asking order |
-| R3 `ARedactedFailureLine_StillStopsTheLadder_AfterOneLaunch` (exit 75, `kimi_quota_spent`, reason `Internal error`, `failureLine` `[redacted]`, through `AKimiRound`) | *System.InvalidOperationException : Sequence contains more than one element* — the round's log held several FAILED lines because the ladder climbed (`BoundedScheduler.cs:624` loops while `!RateLimit.Hopeless(limited.Reason)`); green: one launch, `Attempts` 1, reason hopeless | same |
+| R3 `ARedactedFailureLine_StillStopsTheLadder_AfterOneLaunch` (exit 75, `kimi_quota_spent`, reason `Internal error`, `failureLine` `[redacted]`, through `AKimiRound`) | *System.InvalidOperationException : Sequence contains more than one element* — the round's log held several FAILED lines because the ladder climbed (`BoundedScheduler.cs:624` loops while its `Hopeless` — `:673-675`, `RateLimit.Hopeless(limited.Reason)` or a stated reset that outlasts the budget — is false); green: one launch, `Attempts` 1, reason hopeless | same |
 
 R1 as the consult stated it (`{"api_key":` NEWLINE `"CANARY…"`, label on the previous line, value on the next) was checked with `Redaction.SafeSource` over the WHOLE text first: even the whole-text pass leaves the canary, because the labelled rule stops at each line's end by design. So that shape is not caught by the whole-text order either; the PEM block is the multi-line shape the redactor does mask, and it is the one pinned.
 
@@ -4846,6 +4846,16 @@ R1 as the consult stated it (`{"api_key":` NEWLINE `"CANARY…"`, label on the p
 | guards `AnUntruncatedStderr_KeepsItsLastLine_EvenWithoutATrailingNewline`, `TheCapturesKeptText_NeverHoldsTheSentenceThatDisplayAdds` | green | not applicable |
 
 Ruling on T2 (lead): reading the row from the complete lines too would leave a quota sentence on the cut last line unclassified, hence not hopeless, hence retried by the 429 ladder. Since T1 the truncation sentence is no longer in the text (it is a flag), and a phrase is intact whenever it matches, so the ROW is read from the whole kept head; only the QUOTE is withheld from the cut line.
+
+**CodeRabbit round on PR #917 (2026-10-22).** Two code findings accepted, each seen red before it was closed.
+
+| Test | Seen red as | Break-it (went red, restored by writing the file, rebuilt, green) |
+|---|---|---|
+| `KimiMonthlyQuotaTests.AnInteriorTab_NeverReachesTheQuotedLine_ItIsOneLineOfPrintableText` (theory: 0 padding = the line whole, 500 = windowed; ` worker\tfailed:\t` before the measured sentence) | *Expected kept.Where(char.IsControl) to be empty because the quoted line is one line of printable text: worker&lt;TAB&gt;failed:&lt;TAB&gt;provider.api_error: 429 …, but found at least one item {&lt;TAB&gt;}* (a literal tab shown as &lt;TAB&gt;; both cases: `SafeSource` keeps a tab, and nothing after it removed one) | `LineWith` returning the window without the final `Redaction.SafeText(window, LineCap)` |
+| `AcpClientTests.AStderrPastTheCaptureCeiling_IsKeptAsItsHead_AndTheOutcomeSaysItWasCut` (the fake agent's new `stderr` step writes `AcpTransport.StdErrChars + 1` characters on stderr; asserts `StdErrTruncated` and the kept head of exactly `StdErrChars` characters, no sentence) | a coverage gap rather than a defect: green on the PR head, so its teeth were proved by the break-it — *Expected outcome.StdErrTruncated to be True … but found False.* | the `StdErrTruncated = transport.StdErrTruncated` initializer removed from `AcpClient` |
+| guard `AcpClientTests.AStderrWithinTheCaptureCeiling_IsWhole_AndNotMarkedCut` | green | not applicable |
+
+The finding proposed `FakeAcpAgent.Spew` for the stderr case; `spew` writes on the agent's STDOUT (the protocol stream), so it cannot reach the stderr capture. The fake agent gained a `stderr` step (`{"kind":"stderr","chars":N}`, `FakeAcpAgent.StdErr(n)`) instead.
 
 ## The suite is deterministic — epic E1, "No run sees another" (2026-10-19)
 

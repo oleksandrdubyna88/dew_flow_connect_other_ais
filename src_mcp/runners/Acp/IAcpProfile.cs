@@ -136,8 +136,10 @@ public sealed record AcpDiagnosis(string Name, string Cure, AcpFailureKind Kind,
     /// The line of <paramref name="text"/> that holds the first <paramref name="phrase"/> (case-blind). The ORDER is the contract (feature gate F1, risk consult R1): the WHOLE text is
     /// redacted FIRST (<see cref="Redaction.SafeSource"/>: the layout kept, nothing cut — a private-key block spans lines, and a line cut from its block is key material the redactor can no longer
     /// name), THEN the phrase is found in the redacted text, its line isolated at the nearest <c>\r</c> or <c>\n</c> on each side (a CR-only progress line and a CRLF never join lines or leak a
-    /// control character) and trimmed, THEN a window is cut around the phrase in the REDACTED line. Cut first, a window can start exactly at a credential's value and take its label away. The text
-    /// is the agent's stderr, bounded by the capture to 64 Ki characters, so this is one redaction pass over at most that on a failure path — and none when the text cannot hold the phrase:
+    /// control character) and trimmed, THEN a window is cut around the phrase in the REDACTED line. Cut first, a window can start exactly at a credential's value and take its label away. LAST, the
+    /// window is made one line of a notice by <see cref="Redaction.SafeText"/>: <c>SafeSource</c> keeps a tab (a source's layout), and the quoted line holds no control character at all (CodeRabbit on
+    /// PR #917) — a second pass over at most <see cref="LineCap"/> characters of already-redacted text, which can only take more out. The text
+    /// is the agent's stderr, bounded by the capture to 64 Ki characters, so this is one whole-text redaction pass over at most that on a failure path — and none when the text cannot hold the phrase:
     /// redaction neither creates nor destroys a table phrase (<c>RedactionNeverTouchesAnyPhraseOfTheTable</c>), so the check before it is exact. A redaction that fails closed answers the marker, which holds
     /// no phrase: the line is then empty and nothing of the raw text is quoted. Empty also when the text holds no phrase.
     /// </summary>
@@ -146,7 +148,7 @@ public sealed record AcpDiagnosis(string Name, string Cure, AcpFailureKind Kind,
     /// <summary><see cref="LineWith(string, string)"/> with the redactor passed in, so a test can make it fail closed and count its calls.</summary>
     internal static string LineWith(string text, string phrase, Func<string, string> redact) =>
         text.Contains(phrase, StringComparison.OrdinalIgnoreCase) && redact(text) is var redacted && redacted.IndexOf(phrase, StringComparison.OrdinalIgnoreCase) is var at and >= 0
-            ? Window(Around(redacted, at).Trim(), phrase)
+            ? Redaction.SafeText(Window(Around(redacted, at).Trim(), phrase), LineCap)
             : string.Empty;
 
     /// <summary>The line of <paramref name="text"/> that contains index <paramref name="at"/>: from after the previous <c>\r</c> or <c>\n</c> to the next one.</summary>
