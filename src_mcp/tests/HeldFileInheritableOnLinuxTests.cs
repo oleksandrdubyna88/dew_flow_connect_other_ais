@@ -142,6 +142,33 @@ public sealed class HeldFileInheritableOnLinuxTests : IDisposable
         HeldFile.Probe(LockFile).Should().Be(LockProbe.Free, "a descriptor opened inheritable and then closed must not survive in a child the host forked meanwhile");
     }
 
+    [System.Runtime.InteropServices.DllImport("libc", EntryPoint = "fcntl")]
+    private static extern int Fcntl(int descriptor, int command);
+
+    private const int FGetFd = 1;
+    private const int FdCloexec = 1;
+
+    /// <summary>
+    /// C26, the flag itself: while the take is still open — the stream is being made — the descriptor is close-on-exec, so a child that is forked AND exec'd in that window closes its copy. With the failure path's explicit
+    /// unlock (arm b) the lock state alone cannot tell whether the flag was ever set, so the flag is read directly: deterministic, and no inheritable descriptor outlives the call.
+    /// </summary>
+    [Fact]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public void TheDescriptor_IsCloseOnExec_UntilTheTakeHasSucceeded()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "the native take is Linux's");
+        var flags = -1;
+
+        _ = LinuxHeldFile.TakeInheritable(LockFile, handle =>
+        {
+            flags = Fcntl((int)handle.DangerousGetHandle(), FGetFd);
+            throw new IOException("the stream could not be made");
+        });
+
+        flags.Should().BeGreaterThanOrEqualTo(0, "the flags were read");
+        (flags & FdCloexec).Should().Be(FdCloexec, "the descriptor was inheritable while the take was still open: a child exec'd by another thread in that window would keep a copy of it (O_CLOEXEC)");
+    }
+
     /// <summary>C26 arm (b): a child forked after the flock and kept BEFORE its exec holds the open file description; the failed take must release the lock itself, not leave it to that child's exit.</summary>
     [Fact]
     public async Task AFailureWithAPreExecChild_StillLeavesTheFileFree()
