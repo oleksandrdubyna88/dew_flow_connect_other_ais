@@ -1000,6 +1000,18 @@ message. Fable: none (no cornerstone).
   released in a `finally`; the §6 loop recorded; the PR says the 10 s was the measurement and the gate's order replaced it
   (no guard lengthened: the suite's 60 s names a hang).
 
+### S10 — status: built 2026-10-22 (Sonnet; the spec above governed, deviations listed)
+
+**Built, no product line changed.** `tests_fakecli/Program.cs`: `FAKECLI_ANSWER_GATE` (a vendor-mode launch writes `<gate>.held` with its pid, waits for the gate file, writes `<gate>.answering`, then answers), the `FAKECLI_RECORD_GATE` wait moved into one static `Gate` both gates use, and the `--version` pid file
+now written through `Serving.WritePidFile` (S2's note: it was a plain `File.WriteAllText`). `TheServerAnswersInitializeAtOnceTests.Initialize_IsAnswered_WhileTheVaultReadAndTheProbeAreStillRunning` rewritten on the gate: reply awaited with a 60 s named guard while the gate is closed, the parked fake asserted still alive, gate opened (and again in a `finally`), `providers` reports the
+vault's outcome (`:63` and the 10 s bound gone; `FAKECLI_SLEEP_MS` gone from this test). New `TheFakeCliAnswerGateTests` (2 tests) pins the gate's placement on the fake. `StdioServer.cs` untouched (the guard sentence is built in the test). **Counts:** the class 3 tests before and 3 after, plus the new class's 2 (+2).
+
+**Break-its** (each red, restored by writing the file, rebuilt, green): B-E5-26 — the server awaits the start: red at 31.8 s on `Expected Running(…) to be True because the vault read had already ended when initialize was answered: the server waited for it, but found False.`; B-E5-26b — the server never answers: red at 60.7 s on
+`the server never answered initialize within 60 s (the answer gate was still closed: the server waited for the vault read)`; B-E5-27 — the gate after the answer: red in `TheFakeCliAnswerGateTests` (`Expected File.Exists(Gate + ".answering") to be False because the gate comes BEFORE the answer …, but found True.`), the server test stays green. **Loops:** 20 of 20 green before and 20 of 20 after, alone on a shared machine.
+
+**Deviations.** (1) B-E5-26's red is not the guard's sentence: the product's own vault read times out at 30 s (`KeyVault.ReadTimeout`), so a server that waits for it answers after about 31 s, inside the 60 s guard; the red is the new "the parked fake is still alive at the reply" assertion, and the guard sentence is proved by the added B-E5-26b. (2) B-E5-27 is pinned by the fake-side unit
+(the spec's "fake-side unit of the gate's placement"), not by a marker in the server test — that test may reply before the fake has started. (3) Residual: a reply later than 30 s after the read started would meet the product's own read timeout and fail the `config entry` assertion; not a bound the test adds. (4) The class's second test has the same shape (15 s exit vs a 20 s sleep); seen, not changed.
+
 ### S11 — C36, the outline measurement (group A)
 
 - **Goal.** §3.18: the caps asserted by count on this checkout and on a fixed fixture; the measurement kept and split by
