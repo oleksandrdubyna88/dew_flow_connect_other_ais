@@ -1,6 +1,6 @@
 # PLAN — a spent Kimi quota is not a lost sign-in
 
-> Status: **partly built, 2026-10-20: stories 1, 2, 3 and 4 are coded on `docs/kimi-quota-is-not-a-sign-in`; the capture step (§5 step 1) has NOT run, so the real ACP sentence is
+> Status: **partly built, 2026-10-21: stories 1–4 merged in #900 (released in coai-mcp 0.63.0); story 5 (the MONTHLY quota, seen 2026-10-21) is CODED 2026-10-21 (D8–D10, S10–S13; see "Story 5 — built" below); the capture step (§5 step 1) has NOT run, so the real ACP sentence is
 > still unmeasured, and the plan is NOT promoted.** Deviations are in §8 (story 3). The 0.61.0 and 0.62.0 releases shipped (tags
 > `extension-v0.61.0`, `extension-v0.62.0`), so the owner's "release first, fix after" block is lifted. The plan gate ran once
 > (session def84902, `good_enough`, 11 findings, all accepted), an Opus judge read it (12 findings, all verified by the lead)
@@ -396,3 +396,171 @@ seen red first (the messages are in `research/module_tests.md`, "Code gate and j
 - Widening the id pattern: its real shape is not measured; the capture step (§5 step 1, RESULTS §31) is where that is decided, with a test in each half.
 - A literal instead of `KimiAcpProfile.QuotaSpent`: the constant is the one name shared by the table, the shim and the diagnosis row — a literal would be a second copy.
 - Performance of `FirstLineWith` and of `Classify`: both run once per failed reviewer over a short stderr tail; measured nothing, so nothing is changed.
+
+## Story 5 — the MONTHLY quota is a spent quota too (2026-10-21)
+
+**Symptom (measured 2026-10-21 by the release session on Kimi 2.3.0, three of three `kimi -p` launches; recorded in
+`research/RESULTS_the_round_counter_tail.md` §M2 on its branch).** The owner's monthly Kimi quota was 100% used, and every
+launch was refused with:
+
+> `provider.api_error: 429 You've reached your monthly usage limit for this billing cycle. Your quota will be refreshed in the next cycle. To continue now, purchase extra usage or upgrade your plan: https://www.kimi.com/membership/subscription?tab=quota`
+
+(then exit 127 and a libuv assertion `!(handle->flags & UV_HANDLE_CLOSING)` in prompt mode — prompt mode is not the product's road;
+the product talks ACP).
+
+**Why coai gets it wrong (read on `origin/main` `0426984a1`).** D1 wrote: "The monthly form is **not measured** and gets no row until
+someone sees it". It is seen now. Today:
+- `KimiAcpProfile.Failures` (`src_mcp/runners/Acp/KimiAcpProfile.cs:82`) knows only `"reached your 5-hour usage limit"`; over ACP the
+  monthly answer arrives inside `Authentication required: 429 …` (the §2 hypothesis), so it falls to the NEUTRAL row 5
+  (`provider_error`, exit 70, no cure) — honest, but not a spent quota: the round is not told it is hopeless, and the summary does
+  not say the quota is used up.
+- `RateLimit.Spent` (`src_mcp/runners/Reviewers/ReviewerExecutor.cs:356`) has no monthly phrase, so on any road that reaches the
+  rate-limit check the generic wording can be read as a transient limit and retried on the ladder.
+- `KimiQuotaWords.ResetOpening` (`src_mcp/runners/Kimi/KimiQuotaWords.cs:25`) is `"Your quota will reset"`; the monthly text says
+  `"Your quota will be refreshed in the next cycle"`, so `ClauseOf` finds no clause and the sentence says "the vendor named no reset"
+  although Kimi named one.
+
+**Decisions.**
+- **D8 — a monthly row, before the neutral row.** `KimiAcpProfile.Failures` gains `"reached your monthly usage limit"` →
+  `kimi_quota_spent`, Kind `Spent`, exit 75, placed beside the 5-hour row (rows 1–3 stay before the `Authentication required:` rows).
+  The narrow phrase, as D1 chose for the 5-hour one — never a bare "usage limit".
+- **D9 — the observed phrase joins `RateLimit.Spent`**, with the verbatim line above (the URL is Kimi's public membership page, no
+  account data; kept) in `GateReportingTests`' `observed` dictionary — the test that refuses a phrase with no vendor answer behind it.
+- **D10 — the reset clause has two openings.** `KimiQuotaWords` keeps ONE list of openings (`"Your quota will reset"`,
+  `"Your quota will be refreshed"`); `ClauseOf` takes the earliest found. The monthly clause is then quoted: *"Your quota will be
+  refreshed in the next cycle."* Never parsed into a time (D3 stands).
+- Not here: the `kimi -p` libuv crash (not the product's road), and buying extra usage (the owner's call).
+
+**Scenarios (each red is the message before the fix).**
+- **S10** `AcpDiagnosis.Of("the agent answered with an error (-32000): Authentication required: 429 You've reached your monthly usage
+  limit for this billing cycle. Your quota will be refreshed in the next cycle. …", KimiAcpProfile.Failures)` → `kimi_quota_spent`,
+  Spent. Red: `provider_error`. (The ACP envelope is the §2 hypothesis; the inner sentence is measured.)
+- **S11** `RateLimit.Hopeless(<the monthly line>)` is true, and the `observed` dictionary carries the line. Red: false / "a guess".
+- **S12** `KimiQuotaWords.ClauseOf(<the monthly line>)` is `"Your quota will be refreshed in the next cycle."`. Red: empty.
+- **S13** the S7-shaped product round (`AKimiRound`) with a shim answering the monthly envelope → the summary, ledger and log say the
+  quota is used up and quote the refreshed clause, never "kimi login", one launch, `RateLimited` hopeless. Red: `provider_error` lines.
+- Guards stay green: the 5-hour, balance, 401 and bare sign-in rows; the neutral row for a 503.
+
+**Build.** One story, Sonnet codes red-first, Opus reviews; the code gate over the diff. Docs: `research/module_runners.md` (the
+Kimi failure table), `research/module_tests.md`, `research/RESULTS_kimi_confinement.md` §31 (the capture record gains this CLI
+sighting as "seen in prompt mode; the ACP form still unmeasured").
+
+**Story 5 — built (2026-10-21).** D8: `KimiAcpProfile.Failures` gained `"reached your monthly usage limit"` → `kimi_quota_spent`, Spent, beside the 5-hour row (the table is seven rows).
+D9: the phrase joined `RateLimit.Spent`; the verbatim line is the `observed` row (it lives as `KimiMonthlyQuotaTests.MonthlyLine`, one constant used by S10–S13 and the
+`observed` dictionary). D10: `KimiQuotaWords.ResetOpening` became the ONE list `ResetOpenings`; `ClauseOf` takes the earliest. S10–S13 were each red first, green, and
+broken-and-restored (`research/module_tests.md`). Deviations: (1) the monthly row reuses the name `kimi_quota_spent` and the cure `KimiQuotaWords.Fixed`, so `SpentNames` still
+has two names. `SpentPhraseOf(name)` first answered with the FIRST (5-hour) phrase, which the code-review round (F1) showed was wrong for a monthly sentence seen on stderr only; what
+shipped after that round: the shim's report carries the MATCHED LINE (`failureLine`, see the review record) and `SpentReason` quotes it, `SpentPhraseOf` became `SpentPhrasesOf` (all the
+Spent phrases of the name, joined by " or ") and is only the fallback for a report with no line; (2) the const `ResetOpening` is gone (three older assertions read `ResetOpenings[0]`).
+Claim as released: "a monthly-quota answer that carries Kimi's measured sentence — in its reason, or in stderr when its reason names no other row — reads as a spent quota"; the ACP form is
+still unmeasured (RESULTS §31).
+
+**Done when.** S10–S13 red then green with break-its; the guards green; the whole suite green; released with the next mcp minor.
+
+**Story 5's plan round (coai session `c7c16214`, 2026-10-21, verdict proceed) — 3 findings: 2 accepted, 1 rejected.**
+- *Accepted — the ACP shape is unmeasured, so the claim is narrowed.* `AcpDiagnosis.Of` matches a row as a case-blind SUBSTRING of the
+  error text plus stderr, so the monthly row fires wherever the measured sentence appears in the REASON, whatever envelope wraps it, and in stderr when the reason names no row (K4: a reason that
+  names a row wins — see the review round, F2); what stays
+  unverified is that ACP delivers the sentence at all (and not, say, a bare `Authentication required` — S9's outcome). The release note
+  and the DoD say exactly that: "a monthly-quota answer that carries Kimi's measured sentence reads as a spent quota"; the ACP form is
+  recorded by the capture step (§5 step 1) at its first sighting, and S10's constructed envelope is replaced then.
+- *Accepted — the clause's end.* `ClauseOf` already ends a clause at the first period followed by whitespace (the #900 CodeRabbit
+  fix), so the monthly clause stops at "cycle." and the sales sentence and the URL after it stay out. S12 gains that assertion: the
+  clause does NOT contain "purchase" or "https://".
+- *Rejected — case sensitivity:* `ClauseOf` already searches with `OrdinalIgnoreCase` (`KimiQuotaWords.cs:41`), and
+  `AcpDiagnosis.Of` matches rows case-blind; the new opening joins the same search.
+
+
+**Code-review round (Opus judge + cadence consult 8d2f51e1, 2026-10-21) — 3 findings, all accepted.**
+- *F1 (medium) — accepted; fix shape: carry the matched evidence.* When the monthly sentence reached the shim only on STDERR (the reason names no row, e.g. `-32603 Internal error`),
+  `AcpDiagnosis.Of(reason, stderr, …)` picked the monthly row, but the report's reason was still the bare one, so `SpentReason` appended the FIRST row's phrase for the shared name
+  (`reached your 5-hour usage limit`) and the clause stayed in stderr: the ledger said 5-hour for a monthly quota and "the vendor named no reset". Before story 5 that input was an honest
+  `provider_error`. Now `AcpDiagnosis.Line` holds the one stderr line that held the row's phrase (trimmed, a window of at most 400 characters that still holds the phrase, never
+  splitting a surrogate pair; empty when the reason itself matched); the shim writes it as `failureLine`; `KimiReport.FailureLine` reads it (absent = empty, so an older shim's report works);
+  `SpentReason` and `Said` quote it as `(Kimi said: <line>)`, so `ClauseOf` finds "Your quota will be refreshed in the next cycle." A report with no line falls back to
+  `SpentPhrasesOf(name)`, which names every window of the name and never passes one off as the vendor's. No other reader of the report JSON needed a change (the confinement probe script
+  reads fields by name; the extension does not read this report).
+- *F2 (claim) — accepted as a narrowed claim and a guard; K4 kept.* A reason that names a row wins over stderr: `("Authentication required", monthly sentence in stderr)` is `not_signed_in`,
+  and `("Authentication required: 429 Too Many Requests", …)` is `provider_error`. Pinned by `AReasonThatNamesARow_WinsOverAMonthlySentenceInStderr`. The claim above says so.
+- *F3 (doc nits) — accepted:* the `VendorDiagnosis` marker comment names both windows, the README row says what is merged, the `SpentReason` doc comment and `module_runners.md` say "the matched
+  line", and the test's local `names` (which held phrases) is `phrases`.
+
+**Code gate (coai session c7c16214, 2026-10-22, proceed) — 16 findings: 8 accepted, 8 rejected.**
+- *G1 (security) — accepted:* the matched stderr line was quoted into reasons and logs unredacted. The final window now passes `Redaction.SafeText(window, LineCap)` (as `ClauseOf` does); the phrase survives.
+- *G2 (performance ×3, CodeRabbit ×2) — accepted:* `LineWith` no longer splits the whole stderr. It finds the phrase with one `IndexOf` and isolates the line at the nearest `\r` or `\n` on each side, so a CR-only progress line
+  and a CRLF never join lines or leak a control character; then trim, window, redact.
+- *G3 (coverage) — accepted:* a test derived from `KimiAcpProfile.Failures` — every Spent row's phrase is `RateLimit.Hopeless`.
+- *G4 (nit) — accepted:* the `LineCap` comment.
+- Rejected, one line each: **distinct names per window** — behaviour is identical, the quoted line carries the window; **one source for three lists** — `RateLimit` is vendor-neutral, the coverage test (G3) answers it instead;
+  **`Line` as a structured value** — it is a display aid only; **`Hit`'s seven scans** — pre-existing and negligible; **`EarliestOpening` scope** — the openings are sentence starts and S12 pins it;
+  **`Window` slice out of range** — unreachable (the line is longer than 400 and start ≤ end); **LINQ on two elements** — noise.
+
+## The feature gate (round 1, 2026-10-22, verdict revise) — 2 findings, both accepted; fixed in a new PR
+
+The feature gate read the whole plan (stories 1–5, #900 + #915) over a local review view (#915's squash cherry-picked onto #900's,
+base `9134099c0`). One reviewer answered; both findings were verified against the code at `25db741c5` and accepted.
+
+- **F1 — BLOCKING, security: the matched line is windowed BEFORE it is redacted.** `AcpDiagnosis.LineWith`
+  (`src_mcp/runners/Acp/IAcpProfile.cs:118-121`) calls `Redaction.SafeText(Window(Around(text, at).Trim(), phrase), LineCap)`. On a
+  line longer than `LineCap` the window can start exactly at a credential's value and cut away its label (`Authorization: Bearer `),
+  so the redactor no longer recognises it and `failureLine` carries the bare token into the summary, the ledger and the log.
+  `SafeText` itself redacts the WHOLE value first and cuts after (`Redaction.cs:388-394`), so the fix is the same order here:
+  **redact the whole isolated line, then cut the window around the phrase in the REDACTED text.** If the isolated line is unbounded
+  (check what bounds the agent's stderr in `AcpTransport`), bound it first to a margin far wider than the window on each side of the
+  phrase (e.g. 8 KB): a cut that far away can never fall inside the 400-character window, so it cannot split a label from a value the
+  window will quote. RED: a line of 500 padding characters, ` Authorization: Bearer ` + a 59-character opaque token placed so the old
+  window starts exactly at the token, then the monthly sentence → `diagnosis.Line` must not contain the token and must contain the
+  phrase. Break-it: restore window-then-redact → red.
+- **F2 — minor: an unrelated hopeless word discards the matched line.** `KimiRuntime.SpentReason` (`:316-319`) returns `said` as soon as
+  `RateLimit.Hopeless(said)` is true, so a reason like `Internal error: daily worker failed` (`daily` is a hopeless word) with the
+  monthly sentence only in stderr drops `failureLine`: the summary loses the monthly sentence and says the vendor named no reset.
+  **Fix: quote a non-empty `failureLine` FIRST, whatever the reason says; fall back to the table's phrases only when there is no line
+  and the reason is not already hopeless.** RED: that reason + a monthly `failureLine` → the verdict's reason contains the matched
+  line and "Your quota will be refreshed in the next cycle". Break-it: the old order → red.
+
+Docs: `research/module_runners.md` (the order: isolate, redact, window), `research/module_tests.md`. After the fix PR merges, the
+feature gate runs its second (last) round with `again: true` over the new head.
+
+**Plan-round amendment (coai cf1948aa, accepted): no pre-cut at all.** The 8 KB bound proposed under F1 is dropped. `Redaction.SafeText` runs over the FULL isolated line (between the nearest
+`\r` or `\n` on each side of the phrase), with `limit = int.MaxValue` so its own cut never fires, and only THEN is the 400-character window cut around the phrase in the redacted text.
+What bounds the line is the agent's stderr capture: `AcpTransport.StdErrChars` = 64 Ki characters (`AcpTransport.cs:45`, a `BoundedText` at `:52`, appended at `:255`; it keeps the HEAD and drops the rest),
+so a single line is at most about 64 Ki characters. A redaction that cannot finish fails closed (`Redaction.WhenRedactionTimesOut`) and returns the marker `[redacted]`; the phrase is not in it, so the quoted line IS that marker, never raw text.
+
+**Built 2026-10-22** on top of the plan record `5697c3026` (branch `fix/kimi-failureline-redact-first`, one commit: `fix(mcp): the matched stderr line is redacted whole before it is windowed, and quoted before the hopeless check (spent-quota feature gate)`).
+F1: `AcpDiagnosis.LineWith` is now isolate, trim, `SafeText(line, int.MaxValue)`, then `Window` over the redacted text (`Window` already re-finds the phrase and keeps surrogate pairs whole through `WholeStart`/`WholeEnd`, so no
+second `SafeText` and no second cap). F2: `KimiRuntime.SpentReason` quotes a non-empty `failureLine` first and only then asks `RateLimit.Hopeless`; `KimiRuntime.Said` (the non-spent path) already quoted the line unconditionally, so it had no ordering defect.
+Deviations: (1) `WindowLeadIn` became `public const` and `LineWith(text, phrase, redact)` an `internal` overload, so the tests compute their padding from the constants and can drive the fail-closed branch
+without finding an input that really times out. (2) The end-of-window case uses a bare ` Bearer ` label, not ` Authorization: Bearer `: with the longer label the labelled pass grows the text (`Bearer` becomes `[redacted]`) and the OLD
+order's own 400-character cap trimmed the fragment away, so the case would not have had teeth. (3) The window can now end inside the `[redacted]` marker (`Bearer [reda`); that is a cosmetic cut of a marker, not of a secret.
+Tests and the REDs/break-its are in `research/module_tests.md` (feature gate round 1); the full suite ran once at lowered priority, 13 511 tests, 5 failed while other sessions' suites ran on the machine (AConversationPlaceTests copy budget, AcpClientUsageTests deadline, KimiCredentialsLockTests disposal probe, AChildThatExitedBeforeItsStartTimeWasReadTests x2 — wall-clock and process-lifetime tests, none touching Kimi quota), all green when their classes were rerun alone.
+
+**Risk consult (722eeb66, gpt-6-astra, 2026-10-22)** — three predictions, each checked with a RED before any fix; built on top of `2d55df731`.
+- **R1 — a line isolated before redaction is cut from its block: verified for the PEM shape, NOT for the shape as stated.** Whole-text `Redaction.SafeSource` on `{"api_key":` NEWLINE `"CANARY1234567890ABCDEF", …` leaves the canary
+  (the labelled rule stops at each line's end by design), so no whole-text order can mask that shape and it stays an open limit of the redactor, shared with the extension. A `PRIVATE KEY` block is the multi-line shape the redactor does mask:
+  a body line holding the phrase was quoted with the key body beside it (RED: `Did not expect seen.Diagnosis.Line "MIIEvQIBADANBgkqhkiG9w0BAQEFAASC reached your monthly usage limit …" to contain "MIIEvQIBADAN"`).
+  Fixed: `AcpDiagnosis.LineWith` redacts the WHOLE captured stderr first (`Redaction.SafeSource`, layout kept), then finds the phrase, isolates the line and windows it. One pass over at most 64 Ki characters, on a failure path;
+  a fail-closed redaction answers the marker for the whole text, so nothing is quoted (the line is empty, not `[redacted]`).
+- **R2 — the capture cut: verified.** `BoundedText` keeps the HEAD (`AcpTransport.StdErrChars`, 64 Ki), so the last line of a cut capture can end inside a credential shorter than the 8 the Bearer rule needs
+  (RED: `Did not expect seen.Diagnosis.Line "… quota Bearer Lp5gU" to contain "Lp5gU"`). Fixed: `BoundedText.Captured` splits off the truncation sentence (ours, never searched) and reports the cut; the row is read from everything captured,
+  the line only from complete lines (a phrase only on the cut line keeps its row, empty line, the table's phrases stand for the name). The comment at `AcpTransport.cs:44` ("lives in the last lines") was wrong and is corrected.
+- **R3 — a redacted line loses hopelessness: verified.** The ladder climbs while its `Hopeless` is false (the loop at `BoundedScheduler.cs:624`; `Hopeless` at `:673-675` is `RateLimit.Hopeless(limited.Reason)` or a stated reset that outlasts the budget), decided by the reason's words, not by the exit. With `failureLine` `[redacted]` the reason carried no spent word and the round launched the shim again
+  (RED: the product round saw several FAILED log lines instead of one launch). Fixed: `KimiRuntime.SpentReason` quotes the line, then appends the table's phrases whenever the result is not yet hopeless.
+Every case asserts no fragment of the secret in the diagnosis line, the shim's report JSON and the round's summary, ledger and log lines (`TheStderrLineIsQuotedSafelyTests`).
+
+**Code gate (cf1948aa, 2026-10-22, proceed) — 14 findings: 11 accepted, 3 rejected.** Accepted, each RED first (see `research/module_tests.md`):
+- **T1 (findings 4, 6, 9, 11, 12, 13):** truncation is STATE, never a parse of the rendered sentence. `BoundedText.Kept` + `Truncated` (its own `_dropped`/`_cutShort`), carried by `AcpTransport.StdErr`/`StdErrTruncated` into `AcpOutcome.StdErr`/`StdErrTruncated`
+  and on to `AcpDiagnosis.Of(…, stderrTruncated)` through `AskAcpMode.Diagnose`; `BoundedText.Captured(string)` (the parse) is gone and the sentence is display only. REDs: a vendor last line beginning `[coai: output truncated` with the monthly phrase
+  and no real truncation named no row (now `kimi_quota_spent`); a truncated capture whose text ends in a CRLF-style line, with no sentence at all, had its cut line quoted (now not).
+- **T2 (finding 0), revised by the lead's ruling:** the sentence can no longer be searched as vendor text (it is a flag, not in the text), so the ROW is read from the whole kept head and only the QUOTE from the complete lines (`CompleteLines`).
+  A phrase only on the cut last line therefore still names its row with an empty line and the reason falls back to the table's phrases (hopeless): an unclassified spent quota would be retried by the ladder. Product check: that report makes one launch, `RateLimited`, hopeless.
+- **T3 (findings 3, 7):** `CompleteLines` states the no-line-break case: a truncated capture with none yields empty, a single unbroken truncated line is never quoted by design; tested.
+- **T4 (finding 8):** `LineWith` checks the phrase is in the text before the whole-text redaction (`RedactionNeverTouchesAnyPhraseOfTheTable`); tested with a counting redactor.
+- **T5 (finding 2):** `AcpDiagnosis.WindowLeadIn` is `internal` again (`InternalsVisibleTo` serves the tests).
+- Rejected: **`StdErrChars` internal** — assembly-scoped, and a test-side copy of the cap would drift; **the internal redactor seam** (`LineWith(text, phrase, redact)`) — the narrowest way to test the fail-closed branch and the call count;
+  **the 64 Ki slice allocation** in `CompleteLines` — noise on a failure path.
+
+**CodeRabbit round on PR #917 (2026-10-22) — 3 threads, all accepted** (REDs and break-its in `research/module_tests.md`):
+- **A tab reached the quoted line.** `SafeSource` keeps tab, LF and CR (a source's layout); the isolation takes LF and CR, but an interior tab survived into `failureLine`, which is one line of a notice. Fixed: the window
+  is passed LAST through `Redaction.SafeText(window, LineCap)` — this supersedes "no second `SafeText`" in the build note above. The second pass reads at most `LineCap` characters of already-redacted text and can only take more out.
+- **`AcpClient` copying `StdErrTruncated` had no test.** Added through the real client and the fake agent. The finding proposed `FakeAcpAgent.Spew`, but `spew` writes on STDOUT (the protocol stream), so the fake agent gained a `stderr` step.
+- **`research/module_tests.md` said `WindowLeadIn` and `LineCap` were "both public now".** At HEAD, `WindowLeadIn` is `internal const` (T5) and `LineCap` is `public const`; corrected.

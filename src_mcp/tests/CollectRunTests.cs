@@ -29,7 +29,7 @@ public sealed class CollectRunTests : IAsyncLifetime
 
     /// <summary>A clock a test controls, per `.agents/conventions/common/utc-timestamps.md`.</summary>
     private static readonly TimeProvider Clock =
-        new FakeClock(new DateTimeOffset(2026, 9, 15, 12, 0, 0, TimeSpan.Zero));
+        new FixedClock(new DateTimeOffset(2026, 9, 15, 12, 0, 0, TimeSpan.Zero));
     private readonly string _data = Path.Combine(Path.GetTempPath(), "coai-run-" + Guid.NewGuid().ToString("N")[..8]);
     private string _repo = string.Empty;
 
@@ -403,12 +403,6 @@ public sealed class CollectRunTests : IAsyncLifetime
         var result = await _launcher.RunAsync(new ProcessRequest("git", args, _repo));
         result.ExitCode.Should().Be(0, $"git {string.Join(' ', args)}: {result.StdErr}");
     }
-}
-
-/// <summary>A TimeProvider that does not move — the smallest thing the UTC rule asks for.</summary>
-internal sealed class FakeClock(DateTimeOffset now) : TimeProvider
-{
-    public override DateTimeOffset GetUtcNow() => now;
 }
 
 /// <summary>A collector that throws — for the paths that only exist when the work goes wrong.</summary>

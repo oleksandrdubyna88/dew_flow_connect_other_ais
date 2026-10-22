@@ -702,3 +702,30 @@ test('EveryLanguagesUsageArticle_SaysTheMedianIsPerLaunch (the rounds labels pla
     }
   }
 });
+
+/** The three reasons a consult line carries no id, in each language's own words (E3.S4): the field's arrival, the check, the refusal. */
+const ID_LESS_REASONS: Record<string, readonly string[]> = {
+  en: ['written before the consultation field existed', 'consultant **Check**', 'refused before its launch'],
+  de: ['bevor es das Beratungsfeld gab', '**Check** des Beraters', 'vor ihrem Start abgelehnt'],
+  es: ['antes de que existiera el campo de consulta', '**Check** del consultor', 'rechazada antes de su lanzamiento'],
+  ru: ['до появления поля консультации', '**Check** консультанта', 'отклонённая до запуска'],
+  uk: ['до появи поля консультації', '**Check** консультанта', 'відхилена до запуску'],
+};
+
+test('every language says consultation money is per consultation, and what the label says for older lines', () => {
+  // E3.S4 of todo/PLAN_the_round_counter_tail_E3.md: the Rounds block divides a consult line's money by CONSULTATIONS
+  // (the new `consultation` field), and a window holding a line without one says *per consultation (some lines per turn)*.
+  // The label's words are English in every language, as every control name here is.
+  const article = HELP_ARTICLES.find((one) => one.id === 'what-each-ai-has-used');
+  assert.ok(article !== undefined, 'the spending article has been renamed, and this test is now asserting nothing');
+  for (const language of HELP_LANGUAGES) {
+    const said = Object.values(bodyFor(article, language).body).join(' ');
+    for (const named of ['*per consultation*', '*per consultation (some lines per turn)*']) {
+      assert.ok(said.includes(named), `the ${language} spending article never says “${named}” — stale rather than missing`);
+    }
+    assert.ok(!said.includes('older lines per turn'), `the ${language} spending article still says the label is “older lines per turn” — it is false for a check and a refused consultation`);
+    for (const reason of ID_LESS_REASONS[language] ?? []) {
+      assert.ok(said.includes(reason), `the ${language} spending article never names the reason “${reason}” a consult line carries no id`);
+    }
+  }
+});

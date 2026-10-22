@@ -322,7 +322,11 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
         var consultant = input.Row.Runtime;
         // The row's system prompt is redacted from what the child says, as a reviewer's is (research/PLAN_one_model_catalog.md, C2)
         // — on the follow-up too: an adapter continues `first with { … }`, which keeps it.
-        var invocation = ready ?? (consultant.Build(launch) with { Redact = ConsultantTurnInputs.Redacted(input.Row.Provider.SystemPrompt) });
+        // And labelled with what it runs with, from the settings the launch was built with — a codex row's tier probe is in them (E3.S1 of
+        // todo/PLAN_the_round_counter_tail_E3.md); a ready continuation keeps its first launch's labels the same way it keeps the redaction.
+        var invocation = ready ?? (RowLaunchOptions.Answering(consultant.Build(launch), input.Row.Provider, launch.Settings)
+            with
+        { Redact = ConsultantTurnInputs.Redacted(input.Row.Provider.SystemPrompt) });
         var clock = Stopwatch.StartNew();
         var landed = new List<ReviewerLaunch>();
         var ended = false;
@@ -340,7 +344,8 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
             {
                 // A turn that THREW has only the launches that landed before it, and the last of those may have exited
                 // cleanly — its own outcome would read "ok" for a turn that never answered (code round, codex).
-                Record(input, invocation.Model, ended ? Outcome(landed[^1]) : Interrupted, Share(consultant, ConsultantTurn.UsageOf(consultant, landed), billed), clock.Elapsed,
+                Record(input, invocation.Model, invocation.RanWith.VersionedBy(landed[^1].CliVersion), ended ? Outcome(landed[^1]) : Interrupted,
+                    Share(consultant, ConsultantTurn.UsageOf(consultant, landed), billed), clock.Elapsed,
                     ended ? ConsultantTurnBooks.StatedResetOf(landed[^1]) : string.Empty);
             }
         }
@@ -452,10 +457,10 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
     /// <remarks>The whole <see cref="Usage"/>, not its three scalars: the cached count and the not-captured / no-price
     /// markers belong on the line too (PR #692, CodeRabbit). And the reset a refused turn STATED (epic 5's code round of
     /// research/PLAN_every_round_is_counted.md) — empty for an answer, an interrupted turn, and a refusal that named no time.</remarks>
-    private void Record(RowLaunchInput input, string ranOn, string outcome, Usage usage, TimeSpan elapsed, string resetsUtc) =>
+    private void Record(RowLaunchInput input, string ranOn, LaunchOptions ranWith, string outcome, Usage usage, TimeSpan elapsed, string resetsUtc) =>
         ledger.RecordJob(
             string.Empty, input.Row.Provider.Provider, ModelRan.Of(ranOn, input.Settings.Model), ConsultantRoles.Question,
-            outcome, elapsed, usage, UsageKinds.Question, "Question", resetsUtc);
+            outcome, elapsed, usage, UsageKinds.Question, "Question", ranWith, resetsUtc: resetsUtc);
 
     private void Remove(string scratch) => RemoveScratch(scratch, log);
 

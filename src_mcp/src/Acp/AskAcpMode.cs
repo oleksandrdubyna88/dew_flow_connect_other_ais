@@ -36,7 +36,7 @@ namespace CoaiMcp.Acp;
 /// the sign-in past the deadline is exit 69 with the reason in a sentence, a hold that cannot be taken exit 65. There is no warning-only fallback.</para>
 /// <para><b>The stdout shape</b> (<see cref="Report"/>) is printed on EVERY exit, so a failed turn's trace and usage
 /// cross the process boundary as an answered one's do: <c>answer</c>, <c>end</c>, <c>stopReason</c>, <c>reason</c>,
-/// <c>sessionId</c>, <c>failure</c> (a known failure's name, when one matched), <c>usage</c> in the api shim's
+/// <c>sessionId</c>, <c>failure</c> (a known failure's name, when one matched), <c>failureLine</c> (the stderr line that held its phrase, only when the reason did not), <c>usage</c> in the api shim's
 /// field names — <c>tokensIn</c>/<c>tokensOut</c> are the session's totals from <c>/usage</c>, asked after an answered turn (D15, M-K2), or 0 with
 /// <c>notCaptured: true</c> when it could not be had — never a guessed number; <c>contextUsed</c>/<c>contextSize</c> carry the last <c>usage_update</c> when one
 /// came — and the trace: <c>refusals</c> (tool, kind, option), <c>toolCalls</c> (id, title, kind, status) and
@@ -225,7 +225,7 @@ internal static class AskAcpMode
 
     /// <summary>The known failure an outcome names, from the text of the turn: its reason and its stderr.</summary>
     internal static AcpDiagnosis Diagnose(IAcpProfile profile, AcpOutcome outcome) =>
-        AcpDiagnosis.Of(outcome.Reason, outcome.StdErr, profile.KnownFailures);
+        AcpDiagnosis.Of(outcome.Reason, outcome.StdErr, profile.KnownFailures, outcome.StdErrTruncated);
 
     /// <summary>Why this shim will not even start the agent — or empty when it will. Every one of these is 65.</summary>
     internal static string Refusal(IAcpProfile profile, IReadOnlyDictionary<string, string> flags, string cwd, string model) =>
@@ -363,6 +363,12 @@ internal static class AskAcpMode
         if (diagnosis.Known)
         {
             report["failure"] = diagnosis.Name;
+        }
+
+        if (diagnosis.Line.Length > 0)
+        {
+            // The line of the agent's stderr that held the row's phrase — only when the reason itself did not (F1 of story 5's review).
+            report["failureLine"] = diagnosis.Line;
         }
 
         return report.ToJsonString();

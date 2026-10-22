@@ -128,7 +128,8 @@ public sealed class ConsultationSweeperTests : IDisposable
             default,
             new Runners.Processes.ProcessLauncher(),
             Logger.None,
-            Noticing.None);
+            Noticing.None,
+            CancellationToken.None);
     }
 
     /// <summary>An open consultation whose last activity was <paramref name="minutesAgo"/> minutes ago.</summary>

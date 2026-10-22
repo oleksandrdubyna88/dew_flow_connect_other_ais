@@ -48,7 +48,7 @@ sequenceDiagram
 | `WorktreeFailure` | `Worktrees/WorktreeFailure.cs` | what a failed round-tree `worktree add` says: reads git's own `error: unable to create file <rel>: <reason>` / `fatal: cannot create directory at '<rel>': <reason>` line and names the path, its length in UTF-16 units and git's reason, instead of only the closing `fatal: Could not reset index file` (which names the index); for `Filename too long` it adds the Windows limit of the KIND of path git could not make (`WindowsPathLimits.FileUnits` = 259 for a file, `WindowsPathLimits.FolderUnits` = 247 for a folder, read from the one shared type, Windows only) and `COAI_ROUND_WORKTREES`; a failure with no such line reads exactly as `FatalLine` always did. Round trees only — a review tree keeps its wire word `git_failed` |
 | `GitModules`, `SubmoduleMount` | `Git/GitModules.cs` | `.gitmodules` as (name, path); a file inside the repository under review, so absolute/traversing paths and names that could spell another config key drop the mount |
 | `DiffExclusions`, `ContextAssembler`, `CollectedDiff`, `DiffBase` | `Context/ContextAssembler.cs` | numstat → per-file diffs with `:(exclude,glob)` pathspecs; binary sizes via `cat-file -s`; every one of the three taken against the MERGE BASE, which the result names. `DiffExclusions.Excludes(path)` / `WhichExcludes` answer the same glob table for ONE path — the source resolver's question, since it has no git call to hand the pathspecs to. Each glob's matcher carries a 1000 ms match ceiling (SonarCloud S6444), and a match that hits it FAILS CLOSED — the path counts as excluded and is never served, the refusal naming that glob (`WhenMatchTimesOut`, reached by a test through the `FirstExcluding` seam) |
-| `SourceResolver` | `Feature/SourceResolver.cs` | source on demand for a feature reviewer (plan §4.9, S3.1): git objects at the round's pinned head and nothing else, one read per file per round, every name check before any process, every byte through `Redaction.SafeSource`, every cap from `SourceBudget` — the section below |
+| `SourceResolver` | `Feature/SourceResolver.cs` | source on demand for a feature reviewer (plan §4.9, S3.1): git objects at the round's pinned head and nothing else, one read per file per round, every name check before any process, every byte through `Redaction.SafeSource`, every cap from `SourceBudget` — the section below; the per-file read deadline is a timer source on its injectable `TimeProvider` (E4 S4) |
 | `CommittedFile.ReadAtAsync` | `Collecting/CommittedFile.cs` | the read without the commit check, for a caller that pinned the commit itself; `ReadAsync` is this after checking |
 | `IReviewerRuntime`: `CodexRuntime`, `DeepseekRuntime`, `GeminiRuntime`, `ClaudeRuntime`, `AntigravityRuntime`, `CustomCodexRuntime` | `Reviewers/ReviewerRuntime.cs`, `ClaudeRuntime.cs`, `CustomRuntime.cs` | THE vendor adapter: `Build` (argv, pure) + `ReadAnswer` + `ReadUsage`, the last two with working defaults. Flags verified against codex 0.147.0 / gemini 0.55.1 / claude 2.1.197 / agy 1.1.22; keys ride env, never argv; DeepSeek = Codex config-shifted. **An adapter records on the invocation what it LAUNCHED** — `Model:` always, `Effort:` where it actually passed a reasoning flag (only `LocalRuntime` does) — which four of six adapters silently did not until 2026-09-12, issue #129; `EveryAdapterRecordsWhatItLaunchedTests` drives every adapter's own `Build` rather than a hand-made invocation, because the test it replaces built the value it asserted. `ReviewerSettings.Confined` ("handed everything in its prompt, may reach nothing else") makes `ClaudeRuntime` extend `--disallowedTools` to every tool that reaches past the prompt — flag re-read on claude 2.1.258; codex and antigravity take no new flag, their sandboxes are already the strongest each offers |
 | `ReviewerRuntimeSelector` | same | unknown provider refuses naming the catalog |
@@ -56,7 +56,7 @@ sequenceDiagram
 | `Usage`, `UsageParser` | `core/Findings/UsageParser.cs` | schema-less scan over any vendor envelope; MAX per key name then sum per category, so a streamed cumulative total is never summed with itself; money only when the vendor priced the run |
 | `BoundedScheduler`, `ReviewerWork`, `ReviewerSummaryFactory` | `Reviewers/BoundedScheduler.cs` | global + per-provider semaphores; a rate limit climbs the ladder below; a launch is the reviewer's whole CONVERSATION (`ReviewerWork.Continue`, S3.2 — the section at the end), one terminal outcome either way |
 | `IReviewerContinuation`, `TurnDecision`, `ReviewerContinuation.None`, `TurnUsage` | `Reviewers/ReviewerContinuation.cs` | the seam a stage plugs a conversation into: after each answered turn, the next turn's whole work (launch AND repair) or a stop; `None` is every stage but one |
-| `TurnLoop` | `Reviewers/TurnLoop.cs` | the loop inside the held slot: the ladder per turn, each turn under its own deadline and the whole under `timeout × (1 + follow-ups)` — or under `ReviewerWork.ConversationCap` when the stage set a shorter one (the feature stage's whole-review limit for an api reviewer, `COAI_FEATURE_API_REVIEW_MINUTES`, twenty minutes by default, 2026-09-27) — every answered turn's usage on the outcome's base |
+| `TurnLoop` | `Reviewers/TurnLoop.cs` | the loop inside the held slot: the ladder per turn, each turn under its own deadline and the whole under `timeout × (1 + follow-ups)` — or under `ReviewerWork.ConversationCap` when the stage set a shorter one (the feature stage's whole-review limit for an api reviewer, `COAI_FEATURE_API_REVIEW_MINUTES`, twenty minutes by default, 2026-09-27) — every answered turn's usage on the outcome's base; its cap and its turns' elapsed read ONE injectable `TimeProvider` — the scheduler's, handed at construction (E4 S4, the section *The deadline classes read one injectable clock*) |
 | `SourceTurns`, `SourceConversation` | `Feature/SourceConversation.cs` | the feature stage's continuation: serves the requests through the round's one resolver, renders the tail, stops on no request, the cap or the spent budget; immutable across turns |
 | `RepairInstruction` | `Reviewers/RepairInstruction.cs` | the repair launch's closing paragraph — one text, appended to whichever prompt the launch it repairs was given |
 | `VendorIdentity`, `RuntimeResolution` | `Reviewers/RuntimeResolution.cs` | the ONE answer to "what is this vendor": which runtime it drives, the adapter for it, and how it authenticates — asked by both binaries, after two incidents where a second copy of it was the one that was wrong |
@@ -576,8 +576,9 @@ Twelve reviewers of twelve answered; thirty-five findings, and these are the one
   `TimedOut` (the consultation decides from the TOKENS what killed it, and hands that in), and the ledger writes it
   as one line saying `cancelled` with `usageNote: usage not captured`, a billed first launch kept beside it on its
   own line (`AfterTheRepair` folds a terminal second launch the same way for every failure). WHY the token fired is
-  not the executor's to know — see `EndCauses` and the Team server's `JobRecord.EndCause`
-  ([module_team_server.md](module_team_server.md)). The question row is the one caller whose word changes: a row
+  not the executor's to know — see `EndCauses`, the Team server's `JobRecord.EndCause`
+  ([module_team_server.md](module_team_server.md)), and, for a LOCAL round, the engine's own reading of its three tokens
+  (*A local cancellation says which token fired*, below). The question row is the one caller whose word changes: a row
   killed by the caller's cancellation now ends `failed` / `cancelled` rather than `timed_out` "ran past its budget",
   which was never true of it; a row past its OWN budget is still `timed_out`, because its launch's timeout fires
   before the row's token (`ConsultationDeadline.For` is the budget plus a grace).
@@ -1775,9 +1776,61 @@ flowchart LR
 - **Where it is labelled.** `RowLaunchOptions.Labelled` (`src_mcp/src/Server/Rounds/RowLaunchOptions.cs`), called by
   `RosterBuilder`'s turn builder (the launch and its repair) and `SecurityRoster.Build`; the ledger records the round's
   first invocation, so every launch line of one reviewer carries the same options.
-- **Not labelled yet**: a consultation, a question row, a probe and a chat turn write their lines through `RecordJob`
-  with these fields empty — "not recorded", never "none". Claude's own settings (`fastMode`, `effortLevel`) are not read
-  for a label; only codex's configuration is.
+- **Labelled since E3.S1 (2026-10-20, `todo/PLAN_the_round_counter_tail_E3.md`)**: a consultation turn (answered or failed),
+  a consultant check, a question row and an api probe line now say what they ran with. The local `UsageLedger.RecordJob`
+  overload takes a REQUIRED `LaunchOptions ranWith` (after `stage`; `consultation` then `resetsUtc` stay defaulted, in that order in `RecordJob`, `ConsultantTurnBooks.Billed` and
+  `ConsultationFailedTurns.Billed` alike, so two adjacent strings cannot be swapped silently) — a caller with
+  nothing to say passes `LaunchOptions.None` on purpose (a check or a consultation refused before its launch). A check that ends by an
+  exception AFTER a launch landed (cancelled by its caller, a snapshot that threw) is billed for that launch and carries its labels too:
+  `ConsultantCheckTurn` keeps the built launch's `RanWith` where `RunAsync` can read it, and versions it by the last landed launch. The labeller is the
+  review's own: `RowLaunchOptions.Of` takes a nullable `IReviewerRuntime`, and `RowLaunchOptions.Answering(built, row, launch)`
+  labels a consultant invocation from the reviewer adapter every consultant carries (`built.Adapter`). The release rule moved to
+  `LaunchOptions.VersionedBy(asked)` — the tier probe's `Printed`, else the final launch's `CliVersion` (Vibe's launch control),
+  else empty — and `UsageLedger.VersionedBy` calls it, so a review line is byte-identical. A claude consultation and an api probe
+  ask no version: nothing is spawned for a label. The probe's effort (`--probe-api` sends `variant.Effort`) is labelled `row`,
+  `cli: api`. **The code contradicted the brief on one point:** `ClaudeConsultant` does send an effort (`--effort`) and a fast-mode
+  file, and never set `Sent`, so its lines would have read `effortNotSent: ignored` for a value that WAS sent — it sets `Sent` now
+  (as `ClaudeRuntime.Build` does); `CodexConsultant.Build` sets the tier `Sent` as the codex reviewer's does. Claude's own settings
+  (`fastMode`, `effortLevel`) are not read for a label; only codex's configuration is. A chat turn is the extension's line and is
+  labelled there.
+
+## A local cancellation says which token fired (E3.S2, 2026-10-20)
+
+`todo/PLAN_the_round_counter_tail_E3.md` S2. A local review line that ends `Cancelled` now carries `endCause`, on the turn's **last**
+line only (like `resetsUtc`), decided by `RoundEngine` where the tokens are held — never inferred below the executor
+(`ProcessLauncher.ResultOf` and `ReviewerExecutor.KilledAsync` are unchanged) and never read from the outcome's sentence.
+
+- **The cause is the FIRST source to END the round, recorded when it fires** (code round of 2026-10-21, tightened by the review of 94deb725c; `RoundCancellation` in
+  `src_mcp/src/Server/Rounds/`). The first version sampled `IsCancellationRequested` of the host, the call and the clock when the line was
+  written, which says what had fired by then, not what ended the turn: a reviewer that ended `Cancelled` for its own reason could be filed
+  `roundClock` because the clock fired before the line was classified, and a host that cancelled the request it was serving as well could
+  make the call look like the cause. Now a callback on each token that **cancels the round** sets the first cause once (`Interlocked.CompareExchange`) with its
+  `Stopwatch` timestamp, and `CauseAt(landedAt)` names it only when it fired at or before the moment the outcome landed
+  (`ReviewerProgress.LandedAt`) — an outcome that landed before anything fired is `unknown`, whatever fires afterwards. The round's own
+  token is cancelled BY those callbacks, after the record, instead of being a linked source, so no reviewer can see the round cancelled
+  before the cause is written down. **What each source does:** the call's token cancels the round and records `withdrawn`, or `hostStopped`
+  when the host's token is already cancelled (a stopping host takes its in-flight requests' tokens down with it); the round's clock cancels the
+  round and records `roundClock` always; the host's token is only OBSERVED, it cancels nothing and records nothing itself, so a host stop that
+  ends no round is never a cause (before the review it was registered too and could win "first" with the round still running, filing a later
+  clock kill as `hostStopped`). Tokens already fired when the round began: the call's callback runs at once and sees the host's token, so that
+  tie resolves **`hostStopped` over `withdrawn`**; `unknown` is a `Cancelled` turn when none fired (a Team-server
+  row whose server ended it) — never empty. `EndCauses.OfLocal` is gone: the decision lives where the tokens are.
+- `EndCauses.RoundClock` and `Unknown` are **local-only words** (`EndCauses.LocalOnly`, the `UsageKinds.LocalOnly` shape);
+  `Known` names all seven. The Team server writes neither and is unchanged (`HowAJobEndedIsSaidTests` pins its four words, not `Known`).
+- `UsageLedger.Record(..., endCause = "")` writes it on the last line of the last turn; the engine passes it only when the finished
+  outcome `is ReviewerOutcome.Cancelled`. Consultation and question-row endings write no cause (a withdrawn consultation writes no
+  line; a cut question row is `Interrupted`).
+- **The host token:** `Program.StartedAsync` hands its `stop` to `PanelServiceHost` (a REQUIRED constructor parameter, so the production
+  road cannot forget it), which hands it to every `PanelService` it builds — the rebuilds on a settings change included — and
+  `PanelService(…, CancellationToken hostStopping = default)` hands it to `RoundEngine`. `default` never fires: a service built
+  directly (every test) belongs to no host that stops. The token is read, not linked: it does not cancel a round by itself.
+- **The deadline sentence is read from the same record.** `RoundEngine.WhatEndedIt` asks `RoundCancellation.CauseNow()` and says "the round
+  reached its N minute limit" only when the recorded first cause is `roundClock` (the word the ledger files), instead of the flags "the
+  clock fired and the caller did not", which went silent when a person cancelled AFTER the clock had struck while the ledger said `roundClock`.
+- `UsageLedger.AppendTurn`'s cause parameter is `lastLineEndCause`: written on the turn's last line only.
+- The fast-mode arguments and the record of what was sent are computed once per build (`ClaudeConsultant.Options`, `ClaudeRuntime.Build`);
+  `AFastModeReachesEveryClaudeLaunchTests.TheTierRecordedAsSent_IsTheTierOfTheFileTheArgvNames` reads the file the argv names and compares it with
+  `Sent.Tier`, with no timing.
 
 ## The local reviewer stands down after a quiet cloud (2026-09-24, issue #485)
 
@@ -2345,7 +2398,7 @@ sequenceDiagram
   participant E as ReviewerExecutor (ladder per turn)
   participant C as IReviewerContinuation
   participant R as SourceResolver (one per round)
-  B->>L: RunAsync(work) — cap = timeout × (1 + FollowUps)
+  B->>L: RunAsync(work) — cap = timeout × (1 + FollowUps), read on the scheduler's _clock
   loop turn k
     L->>E: RunWithLadderAsync(work bounded by min(own timeout, cap left))
     E-->>L: Ok | TimedOut | NonZeroExit | …
@@ -2420,6 +2473,57 @@ sequenceDiagram
   `cacheReadInputTokens` as the cached subset beside counting it as billed input, `UsageParser` reads
   codex's `cached_input_tokens`; `RoundAudit`'s answered line says `over N turns`, `(N cached)` and
   `source: …`. That number, per turn, is what decides whether C3 gets its own plan (D25).
+
+## The deadline classes read one injectable clock — the ACP client, the turn loop, the source resolver (2026-10-21, E4 of `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp_E4.md`)
+
+Three classes in this module decide an outcome by a deadline, and tests that raced those deadlines against wall time lost on a loaded machine (C5, C23, C13 — the cold start of a process was paid out of the budget under test). Each now owns ONE optional
+`TimeProvider` (`TimeProvider? clock = null`, `_clock = clock ?? TimeProvider.System`) that every budget deciding the outcome reads; the product runs on the system clock and a test hands a `ManualClock`. The contract, the inventory with line numbers, the
+structural scan that guards it and the REDs per story are in [module_tests.md](module_tests.md) (*The suite is deterministic — E4 S1…S5*); the class-side facts are here. **Nothing is threaded through `PanelService` or `RoundEngine`** (plan D3).
+
+```mermaid
+flowchart TD
+  subgraph acp["AcpClient (runners/Acp) — one _clock"]
+    turn["TurnAsync: turnTimer = CancellationTokenSource(ask.Deadline, _clock)<br/>deadline = linked(ct, turnTimer.Token)"]
+    usage["UsageAsync: session/prompt WaitAsync(usageBound, _clock)"]
+    graces["SettledAsync DrainGrace · AcpTransport.EndAsync · AcpSession graces<br/>SYSTEM clock — teardown, bound a real pipe"]
+  end
+  subgraph sched["BoundedScheduler (runners/Reviewers) — _clock"]
+    loop["TurnLoop(runTurn, onProgress, _clock)<br/>cap = timeout x (1 + follow-ups) · each turn's elapsed"]
+    stopwatches["queue and conversation Stopwatches (reports)<br/>429 ladder Stopwatch + Task.Delay<br/>SYSTEM clock — named in the scan's allow-list"]
+  end
+  subgraph resolver["SourceResolver (runners/Feature) — one _clock"]
+    read["ReadWithinDeadlineAsync: readTimer = CancellationTokenSource(_readDeadline, _clock)<br/>deadline = linked(ct, readTimer.Token)"]
+  end
+  turn -->|"ends Deadline; a caller's cancellation still reads Cancelled"| out1["AcpOutcome"]
+  usage -->|"never changes the first prompt's end"| out1
+  loop -->|"left = cap - elapsed; launch while anything is left"| out2["ReviewerOutcome.Ok / TimedOut"]
+  read -->|"deadline struck: not served - timed out"| out3["Reading refused, transient"]
+```
+
+**The ACP client (S2).** `AcpClient` (`runners/Acp/AcpClient.cs`; the clock is the last constructor parameter, `:31`, field `:34`). The turn's deadline is its own timer source on the clock, declared BEFORE the linked source (`:126-127`) so the link is disposed first and a timer
+firing between the two disposals meets a disposed link; the old `CreateLinkedTokenSource(ct)` + `CancelAfter(ask.Deadline)` is gone. `ct.IsCancellationRequested` still separates a caller's cancellation (`Failed(e, true, …)`, end `Cancelled`) from the deadline (`Deadline`). The timer
+now starts a few microseconds before the session exists (before `new AcpSession`); a preemption between the two can observe it, so nothing claims otherwise — the tests assert only that the TIMER decides the turn's end. The `/usage` bound is `.WaitAsync(usageBound, _clock)` (`:223`) and still
+never changes the first prompt's end, answer or exit. A deadline of zero or less (or past the one-day `MaxDeadline`) is refused before any start, so no zero reaches the new source. **On the SYSTEM clock, on purpose** — the teardown: `SettledAsync`'s `DrainGrace` (`:267`), `AcpTransport.EndAsync`'s `_draining.CancelAfter(DrainGrace)`
+(`AcpTransport.cs:234`), `AcpSession.NotifyAsync`'s `GraceWait` source (`:175`), `WaitUntilQuietAsync` (`:186-197`) and `WatchExitAsync`'s `Task.Delay(ExitGrace, ct)` (`:265`) each bound how long a REAL pipe may still deliver bytes after the end — `WatchExitAsync`'s 300 ms lets a buffered
+answer through before the pending requests are broken, so it is a grace on real pipe progress, not "after the outcome is decided". On a manual clock nobody advances they would turn a bounded wait on a real pipe into a hang; the structural scan allows `SettledAsync`'s site by name and a remark there says why.
+A test therefore does not advance anything for the teardown: after the last advance the assertions run in real time, bounded by `GraceWait` + `DrainGrace` (3.5 s), and still find the received answer kept and the agent gone.
+
+**`TurnLoop` (S4)** (`runners/Reviewers/TurnLoop.cs`; clock last constructor parameter, `:29-32`, `_clock` `:34`). The conversation's elapsed and each turn's elapsed are `_clock.GetTimestamp()` / `GetElapsedTime(…)` (`:50`, `:79`, `:86`, `:89`) — the old single `Stopwatch` and its five reads. The
+per-turn TIMER is not here: it is the launcher's (or the test's stand-in), so the loop's arithmetic is the only thing the clock moves. **A turn is launched whenever ANYTHING is left** (`left <= TimeSpan.Zero` is the only no-launch case, which answers `TimedOut` with `Usage.None`), bounded to what is left
+(`Within`/`Bounded`) — so `timeout × (1 + follow-ups)` made of exact turns gives a final launch bounded to the remainder unless the remainder is exactly zero. That is what makes the counts exact on a manual clock: 400 ms turns under a 700 ms timeout and one follow-up (cap 1.4 s) are four launches
+(timeouts 700, 700, 600, 200 ms) and three earlier turns; 300 ms turns under a 900 ms `ConversationCap` are three launches and three earlier turns. The same arithmetic is what S5 pins for the round (`RoundDeadline.For`, `src/Server/Rounds/RoundDeadline.cs`).
+
+**`BoundedScheduler`'s one-clock rule (S4).** The scheduler already owned `_clock` (`BoundedScheduler.cs:103`, the reading a stated rate-limit reset is judged against — *Only the ladder's decision changes* above). It now also hands that clock to the loop it builds: `new TurnLoop((turn, token) => RunWithLadderAsync(…), onProgress, _clock)`
+(`:463`). The rule is "a loop inside a scheduler on clock X is on clock X": one clock per scheduler, not a new parameter anywhere above it (`PanelService` still constructs the scheduler with the default). **What it does not claim:** the scheduler's own five `Stopwatch`/`Task.Delay` sites stay on the system clock and are
+named in the scan's allow-list — the two queue `Stopwatch`es (`:291`, `:366`) and the conversation's reported `Stopwatch watch` (`:462`) only REPORT; the 429 ladder's `Stopwatch` (`:617`, judged against the ladder's budget beside a `_clock.GetUtcNow()` reset reading at `:675`) and its `Task.Delay(wait, ct)` (`:686`) decide
+and are DEFERRED — named, not moved, until a 429-ladder failure is kept (decision D5; plan Q4). The ladder therefore still mixes a `Stopwatch` elapsed with an injectable reset clock; the plan records that as the pattern it names and defers, not as sound.
+
+**`SourceResolver` (S4)** (`runners/Feature/SourceResolver.cs`; `clock` after `readDeadline`, `:45`, `_clock` `:48`). One file's read deadline is its own timer source on the clock, declared before the link (`:203-204`); `deadline.IsCancellationRequested && !ct.IsCancellationRequested` still names OUR deadline, so a read the deadline ends is
+`not served: path — timed out: git did not answer within 30 s; ask again next turn`, transient, and the turn goes on with what was served. A zero `readDeadline` (a test's value only: the three product construction sites pass none and get `SourceBudget.ReadDeadline`, 30 s) is out synchronously and refuses the read the same way. The launcher's own per-process timer
+(`GitHistory.RunAsync`, `Timeout = Budget`) is a callee and is not seamed here (it is the gated story S6, C4).
+
+**Not seamed on purpose.** `ReviewSnapshots`' `MaxElapsed` (60 s) is a host safety ceiling that protects a person's machine from one copy that never ends; a seam without a RED is refused (D3) and a ceiling on a manual clock nobody advances would turn a runaway copy into a hang — it stays on the system clock ([module_server.md](module_server.md), *the conversation's place*).
+`ProcessLauncher`'s timers and `ReviewerExecutor`'s `Stopwatch spent` are callees none of the E4 REDs races; `ProcessLauncher` is the subject of the gated S6 (`AReaderIsEndedWithItsTreeTests`, C4 — opens only when a failure of it is kept).
 
 ## A codex row on an endpoint with no model is refused (2026-10-03, PLAN_refuse_an_endpoint_row_without_a_model)
 
@@ -3448,7 +3552,7 @@ CLIENT, so the approvals are coai's. The client half is the unit `src_mcp/runner
 **The profile.** Executable `%USERPROFILE%\.kimi-code\bin\kimi.exe` when present, else bare `kimi` for
 `ExecutableResolver` (Windows only when this was written, so no path was guessed elsewhere — the `agy` rule; WSL2 and Linux paths have been found since E6, DL5 under *Kimi on WSL2*);
 arguments `["acp"]`; the model through config option `model`; the names declined at any depth: `AGENTS.md`,
-`agents.md`, `.kimi-code`, `.vibe`, `.agents/skills`, `.agents/agents` and `.mcp.json` (the last two joined with M-K9 (e), RESULTS §21 — a sub-agent root Kimi loads from disk and the MCP file it starts servers from when the folder is trusted; `.mcp.json` is a NAME, so refused at every depth, the stricter reading of "project-root"; `SnapshotExclusions.Default` carries the same eight, and `TheBoundaryRefusesExactlyWhatTheSnapshotLeavesOut` pins the pair), `.git`; the known sentences — **six rows, first match wins** (`KimiAcpProfile.Failures`, public; `AcpDiagnosis.Of`). Kimi puts the same `Authentication required:` prefix on a 401, on a
+`agents.md`, `.kimi-code`, `.vibe`, `.agents/skills`, `.agents/agents` and `.mcp.json` (the last two joined with M-K9 (e), RESULTS §21 — a sub-agent root Kimi loads from disk and the MCP file it starts servers from when the folder is trusted; `.mcp.json` is a NAME, so refused at every depth, the stricter reading of "project-root"; `SnapshotExclusions.Default` carries the same eight, and `TheBoundaryRefusesExactlyWhatTheSnapshotLeavesOut` pins the pair), `.git`; the known sentences — **seven rows, first match wins** (`KimiAcpProfile.Failures`, public; `AcpDiagnosis.Of`). Kimi puts the same `Authentication required:` prefix on a 401, on a
 spent 5-hour quota (429) and on a spent balance, so the prefix says nothing: the words after it decide, and only a bare prefix is a lost sign-in
 (story 1 of `todo/PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md`):
 
@@ -3456,6 +3560,7 @@ spent 5-hour quota (429) and on a spent balance, so the prefix says nothing: the
 |---|---|---|---|---|
 | 1 | `Your current subscription does not have access to` | `subscription_model` | Refused → 77 | pick a model the plan has, or upgrade |
 | 2 | `reached your 5-hour usage limit` | `kimi_quota_spent` | Spent → 75 | `KimiQuotaWords.Fixed`: "the Kimi plan quota is used up — signing in again will not help" |
+| 2b | `reached your monthly usage limit` (story 5, D8 — Kimi 2.3.0, 2026-10-21; seen in prompt mode, the ACP form is unmeasured) | `kimi_quota_spent` | Spent → 75 | the same `KimiQuotaWords.Fixed` |
 | 3 | `insufficient balance` (D14) | `balance_spent` | Spent → 75 | "the Kimi allowance is spent (D14) — waiting does not clear it; top up or wait for the plan's reset" |
 | 4 | `Authentication required: 401` | `not_signed_in` | Refused → 77 | run `kimi login` in a terminal and try again |
 | 5 | `Authentication required:` (the colon is the discriminator) | `provider_error` | **Failed → 70** (`AcpFailureKind.Failed`) | none — the vendor's words stand: the shim writes `provider_error: <reason>` and nothing after it |
@@ -3463,8 +3568,8 @@ spent 5-hour quota (429) and on a spent balance, so the prefix says nothing: the
 
 Row 1 stands before 4–6 because the measured 401 subscription line contains them all; rows 2 and 3 stand before 4–6 so a quota or a balance wrapped in the sign-in prefix
 reaches its own row; 4 before 5 because its phrase contains 5's. Row 2's phrase names the window, so it is in neither codex's "hit your usage limit" nor the sales footer
-"rate limit reached; upgrade"; the monthly form is unmeasured and has no row. The marker is Kimi-specific (`kimi_quota_spent`, not `quota_spent`): `VendorDiagnosis`
-matches a marker in every vendor's stderr. The names of the Spent rows are DERIVED from the table (`KimiAcpProfile.SpentNames`, `SpentPhraseOf`), never a second list.
+"rate limit reached; upgrade". Row 2b is its MONTHLY twin (the line: "provider.api_error: 429 You've reached your monthly usage limit for this billing cycle. Your quota will be refreshed in the next cycle. To continue now, purchase extra usage or upgrade your plan: …"): the row fires when the sentence is in the agent's REASON, or in its stderr when the reason names no other row (K4: a reason that names a row wins — `Authentication required` plus the monthly sentence in stderr stays `not_signed_in`), so a monthly answer that carries Kimi's measured sentence reads as a spent quota; that ACP delivers the sentence at all is still unmeasured (RESULTS §31). The profile's table is thus seven rows (two share the name `kimi_quota_spent`; `SpentNames` stays two names). The marker is Kimi-specific (`kimi_quota_spent`, not `quota_spent`): `VendorDiagnosis`
+matches a marker in every vendor's stderr. The names of the Spent rows are DERIVED from the table (`KimiAcpProfile.SpentNames`, `SpentPhrasesOf`), never a second list.
 
 **The three blocks the shim owns** (each measured in RESULTS §2 before it was written):
 
@@ -3568,7 +3673,7 @@ sequenceDiagram
   Note over S: asked model not among them: model_not_offered (65), nothing set or spent
   S->>A: set_config_option, prompt
   A-->>S: end_turn
-  S->>A: /usage (own bound)
+  S->>A: /usage (own bound, on the client's clock)
   A-->>S: Session total: N input, M output
   Note over S,A: tree kill by pid, then the hold disposed, then the report
 ```
@@ -3969,15 +4074,16 @@ flowchart LR
   an unknown; never a cost (D9). `WhyItFailed` is the shim's word and reason, led by the cure when the word is one `VendorDiagnosis` knows
   (`not_signed_in`, `subscription_model`, `balance_spent`, `kimi_quota_spent`, and the end word `model_not_offered`). For a quota the lead cure is `KimiQuotaWords.Said(text)`, produced by `VendorDiagnosis.CureOn` for the `kimi_quota_spent:` marker (K1 of the code gate, so EVERY reader of the diagnosis — this road, the round summary, the ledger, the log — leads with the clause):
   the fixed sentence with Kimi's own reset clause QUOTED between its opening and its closing — "the Kimi plan quota is used up — "Your quota will reset at 14:00 UTC."; signing in
-  again will not help (the shim said: kimi_quota_spent: …)", or "the vendor named no reset" when it said none. The clause runs from `Your quota will reset` to the first period
+  again will not help (the shim said: kimi_quota_spent: …)", or "the vendor named no reset" when it said none. The clause runs from the earliest of `KimiQuotaWords.ResetOpenings` (`Your quota will reset`, `Your quota will be refreshed` — the monthly form, "Your quota will be refreshed in the next cycle.", D10: ONE list, `ClauseOf` takes the earliest) to the first period
   followed by any whitespace — a space, a newline, a tab (a decimal point does not end it), through `Redaction.SafeText`, capped at 160; it is never parsed into a time. This lead cure is what `WhyItFailed` returns
   (the executor's `saidElsewhere`, read only when stderr is silent). The `RateLimited` road below does NOT lead with a cure of its own: its reason is the vendor's words, and `Because` puts this same cure (clause included) in front.
 - **Classification is by the report's FIELDS, never by text** (the risk consultation `ba5f661a`). `IReviewerRuntime.RateLimited(invocation, result)` — a new
   default member whose body is exactly today's (`RateLimitVerdict.ByText`: `RateLimit.Hit` over the text, no usage) — is asked by `ReviewerExecutor.Classified` before
   the exit is judged. Kimi's override is limited ONLY for exit **75** AND a `failure` named by a Spent row of the table (`KimiAcpProfile.SpentNames`: `balance_spent` (D14) or
   `kimi_quota_spent`); the reason is the shim's OWN words, `<name>: <reason>`, with NO cure in front (`SpentReason`, S7, 2026-10-20: the summary, the ledger and the log put the table's cure in front of the vendor's line themselves in `Because`, and a reason that already led with it said the cure twice on every line) — `RateLimit.Hopeless` stops the ladder because the vendor's words ride in it
-  (`RateLimit.Spent` holds `insufficient balance` and `reached your 5-hour usage limit`, each with its observed sample), and only when they would not does the matched row's own
-  phrase follow in brackets — and carries the report's usage; no ladder step is taken for a quota, whatever its clause says; `ReviewerOutcome.RateLimited` gained `Usage` for it (default `None`). Everything else —
+  (`RateLimit.Spent` holds `insufficient balance`, `reached your 5-hour usage limit` and `reached your monthly usage limit` (D9), each with its observed sample), and whenever the report carries a MATCHED LINE (the sentence reached the shim on stderr only) it is quoted FIRST, as `(Kimi said: …)`, BEFORE the reason is asked whether it is hopeless (feature gate F2, 2026-10-22: a reason such as `Internal error: daily worker failed` holds the hopeless word `daily`, and the old order returned it bare and dropped the monthly sentence the shim had matched; the non-spent path `KimiRuntime.Said` already quoted the line unconditionally, so it never had the defect) —
+  the shim's report carries it as `failureLine` (`AcpDiagnosis.Line`: the one stderr line that held the row's phrase — found with one `IndexOf` and isolated at the nearest `\r` or `\n` so CR-only and CRLF lines never join or leak a control character; the ORDER is the contract (feature gate F1 and the risk consult 722eeb66, 2026-10-22): **redact the WHOLE captured stderr (`Redaction.SafeSource`: layout kept, nothing cut), THEN find the phrase in the redacted text, isolate its line, trim, and cut a window of at most 400 characters (`LineCap`) that starts `WindowLeadIn` (60) characters before the phrase** — a window cut first can start exactly at a credential's value and take its label (`Authorization: Bearer `) away, so the bare token survives; and a line isolated first is cut from its block: a PEM private-key block spans lines, the one redaction shape that does, and its body line quoted beside the phrase had no `BEGIN` above it (a label on the PREVIOUS line of a value on the next one is NOT masked even by a whole-text pass, because `SafeSource`'s labelled rule stops at each line's end by design; that is the redactor's contract, shared with the extension, and unchanged here). LAST, the window is made one line of a notice by `Redaction.SafeText(window, LineCap)` (CodeRabbit on PR #917): `SafeSource` keeps a tab, the layout of a source, and the quoted line holds no control character at all — a second pass over at most `LineCap` characters of already-redacted text, which can only take more out. One whole-text redaction pass over at most 64 Ki characters, on a failure path. A redaction that fails closed (`Redaction.WhenRedactionTimesOut`: a 2 s per-pattern and about 4 s whole-call ceiling) answers the marker `[redacted]` for the whole text, which holds no phrase: the line is empty and nothing of the raw text is quoted. The window keeps surrogate pairs whole (`WholeStart`/`WholeEnd`). **What bounds the text:** the agent's stderr capture, `AcpTransport.StdErrChars` = 64 Ki characters (`AcpTransport.cs:45`; a `BoundedText` at `:52`, appended at `:255`), which keeps the HEAD and drops the rest — so a CUT capture ends in a line the boundary broke, possibly inside a credential shorter than the redactor's minimum (`Bearer ` + 5 characters; the rule wants 8), and its DISPLAY (`BoundedText.ToString()`, never `Kept`) then adds a sentence (`\n[coai: output truncated at N characters; M more were dropped]\n`, or `… — the stream was still open when the drain grace ran out]\n` when the pipe was held open). **Truncation is STATE carried from the capture, never parsed out of its rendered text** (code gate cf1948aa): `BoundedText.Kept` is the text without the sentence and `BoundedText.Truncated` its own flag (dropped output, or the pipe held open); `AcpTransport.StdErr` / `StdErrTruncated` carry both, `AcpClient` copies them to `AcpOutcome.StdErr` (the kept head, no sentence of ours in it) and `AcpOutcome.StdErrTruncated`, and `AskAcpMode.Diagnose` hands both to `AcpDiagnosis.Of(reason, stderr, known, stderrTruncated)`. The sentence exists for display (`BoundedText.ToString()`) only: a vendor line that merely begins `[coai: output truncated` is vendor text and names its row. The ROW is read from the whole kept head (the phrase is intact whenever it matches, and the sentence is not in the text at all) and only the QUOTE from complete lines: `CompleteLines(stderr, truncated)` is everything up to the last line break when the capture was cut and all of it otherwise, so the last (incomplete) line of a cut capture is never quoted. A phrase only on that line still names its row, the line is empty, and the reason falls back to the table's phrases, which are hopeless (an unclassified spent quota would be retried by the 429 ladder). A truncated capture with no line break at all quotes nothing: a single unbroken truncated line is never quoted, by design. A text without the phrase never reaches the redactor (`RedactionNeverTouchesAnyPhraseOfTheTable`: redaction neither creates nor destroys a table phrase). An untruncated stderr keeps its last line, newline or not. Absent when the reason itself matched; `KimiReport.FailureLine`, absent = empty for an older shim) —
+  and whatever was quoted, the reason must STOP THE LADDER: the scheduler climbs while its `Hopeless` is false (the loop at `BoundedScheduler.cs:624`; `Hopeless` at `:673-675` is `RateLimit.Hopeless(limited.Reason)` or a stated reset that outlasts the budget), so a quoted line the redactor reduced to its marker, or one that holds no spent word, gets the table's phrases appended (risk consult R3) — the reason with no line at all, whose words are not already hopeless, falls back to the same phrases for the name (`KimiAcpProfile.SpentPhrasesOf`, every window of the name joined by " or ") — and carries the report's usage; no ladder step is taken for a quota, whatever its clause says; `ReviewerOutcome.RateLimited` gained `Usage` for it (default `None`). Everything else —
   exit 77 with a trace that names `src/quota.cs` and a tool titled `check rate limit` included — is an ordinary `NonZeroExit`, one launch. Exit **69** is also "another
   Kimi holds the sign-in past the deadline" (report `not_started`, the sentence on stderr and in `reason`); exit **65** also covers `model_not_offered` and an
   unusable hold. The exit and end words are shared with the shim (`AcpWords.SpentExit`, `AnsweredWord`, `NotStartedWord`, `ModelNotOfferedWord`), declared in a profile-neutral unit both read, as

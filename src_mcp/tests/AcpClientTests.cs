@@ -23,7 +23,7 @@ public sealed class AcpClientTests
         new AcpClient(agent.Profile(), new FolderReadBoundary(agent.Cwd, KimiAcpProfile.Exclusions)).AskAsync(ask ?? agent.Ask(), ct);
 
     /// <summary>Whether the pid names no live process — polled briefly, since a terminated process can still be listed for a moment.</summary>
-    private static bool Gone(int pid)
+    internal static bool Gone(int pid)
     {
         var until = DateTime.UtcNow.AddSeconds(5);
         while (ProcessTracking.StartedAt(pid) is not null && DateTime.UtcNow < until)
@@ -542,6 +542,35 @@ public sealed class AcpClientTests
         Gone(outcome.AgentPid).Should().BeTrue();
     }
 
+    /// <summary>
+    /// Code gate cf1948aa T1 (CodeRabbit on PR #917): the capture's cut reaches the outcome as STATE. A stderr past <see cref="AcpTransport.StdErrChars"/> is kept as its head — with no
+    /// truncation sentence of ours in it — and <see cref="AcpOutcome.StdErrTruncated"/> says it was cut, so <c>AcpDiagnosis</c> never quotes the line the boundary broke.
+    /// </summary>
+    [Fact]
+    public async Task AStderrPastTheCaptureCeiling_IsKeptAsItsHead_AndTheOutcomeSaysItWasCut()
+    {
+        using var agent = new FakeAcpAgent([FakeAcpAgent.StdErr(AcpTransport.StdErrChars + 1), FakeAcpAgent.Chunk("x")]);
+
+        var outcome = await RunAsync(agent);
+
+        outcome.End.Should().Be(AcpEnd.Answered, outcome.Reason);
+        outcome.StdErrTruncated.Should().BeTrue("one character past the ceiling was dropped, and the client must carry that fact from the capture");
+        outcome.StdErr.Should().Be(new string('e', AcpTransport.StdErrChars), "the kept head, whole, with no sentence of ours appended");
+    }
+
+    /// <summary>The other side of the flag: a stderr within the ceiling is all of it, and the outcome says so.</summary>
+    [Fact]
+    public async Task AStderrWithinTheCaptureCeiling_IsWhole_AndNotMarkedCut()
+    {
+        using var agent = new FakeAcpAgent([FakeAcpAgent.StdErr(10), FakeAcpAgent.Chunk("x")]);
+
+        var outcome = await RunAsync(agent);
+
+        outcome.End.Should().Be(AcpEnd.Answered, outcome.Reason);
+        outcome.StdErrTruncated.Should().BeFalse();
+        outcome.StdErr.Should().Be(new string('e', 10));
+    }
+
     /// <summary>Finding 5: the trace lists are bounded; what is dropped is counted, not silently lost.</summary>
     [Fact]
     public async Task TheTraceIsCapped_AndTheRestIsCounted()
@@ -655,19 +684,34 @@ public sealed class AcpClientTests
         return previous;
     }
 
-    /// <summary>The graceful step is real: an agent still reading its stdin sees `session/cancel` before the kill.</summary>
+    /// <summary>
+    /// The graceful step is real: an agent still reading its stdin sees `session/cancel` before the kill.
+    /// </summary>
+    /// <remarks>
+    /// C23. The 5 s deadline used to count the agent's own start too, and a loaded machine spent it before the prompt was even sent (2026-10-12,
+    /// run 39325900821) — the cancel then had no session to reach. The deadline is the clock's now: the agent here starts SLOWER than the whole
+    /// deadline (5.5 s against 5 s) and it does not matter, because the test advances only once the agent HAS the prompt (an event: the agent's
+    /// log) and the turn's timer is armed. The agent answers nothing until the cancel, so the end is the deadline, and the cancel is sent once.
+    /// </remarks>
     [Fact]
     public async Task TheCancelReachesAnAgentThatIsStillListening()
     {
-        using var agent = new FakeAcpAgent([FakeAcpAgent.AwaitCancel, FakeAcpAgent.Chunk("late")]);
+        using var agent = new FakeAcpAgent([FakeAcpAgent.AwaitCancel, FakeAcpAgent.Chunk("late")], FakeAcpAgent.StartDelay(5500));
+        var clock = new ManualClock(ClockedAcpTurn.Start);
+        var deadline = TimeSpan.FromSeconds(5);
+        var client = new AcpClient(agent.Profile(), new FolderReadBoundary(agent.Cwd, KimiAcpProfile.Exclusions), AcpClient.DefaultUsageBound, UnsupervisedTree.Instance, clock);
 
-        // Five seconds, not one: the deadline counts the agent's own start too, and a loaded machine spent one second
-        // before the prompt was even sent (2026-10-12) — the cancel then had no session to reach.
-        var outcome = await RunAsync(agent, agent.Ask(deadline: TimeSpan.FromSeconds(5)));
+        var outcome = await ClockedAcpTurn.DrivenAsync(client, agent.Ask(deadline: deadline), async _ =>
+        {
+            await clock.WhenTimersAsync(1);
+            await agent.WhenReceivedAsync("session/prompt", TestContext.Current.CancellationToken);
+            clock.Advance(deadline);
+        }, clock, expectedTimers: 1);
 
         outcome.End.Should().Be(AcpEnd.Deadline, outcome.Reason);
         agent.Received("session/cancel").Should().ContainSingle();
         Gone(outcome.AgentPid).Should().BeTrue();
+        (clock.GetUtcNow() - ClockedAcpTurn.Start).Should().Be(deadline, "the turn ended when the clock had moved exactly the deadline");
     }
 
     /// <summary>Cancels <paramref name="caller"/> once <paramref name="ready"/> holds — an event, not a clock.</summary>

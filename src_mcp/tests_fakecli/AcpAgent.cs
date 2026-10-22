@@ -27,6 +27,7 @@ namespace CoaiMcp.FakeCli;
 ///                                 absent: that prompt is answered end_turn at once, with no chunk and none of the steps — as a real agent answers it itself
 ///   "promptErrorOnUsage": "…",    answer the "/usage" prompt with this JSON-RPC error
 ///   "usageHang": false,           true: the "/usage" prompt is never answered (the bound's arm)
+///   "startDelayMs": 0,            on start, before ANYTHING is read (the environment record included): sleeps this long — a cold start, which a test then races a deadline against
 ///   "envFile": "&lt;path&gt;",         on start, before reading anything: this process's whole environment, NAME=value lines sorted, and then
 ///   "probes": ["&lt;path&gt;",…]       one "PROBE &lt;path&gt; Held|Free|Unknown" line per lock file named — what a tree hold looks like from INSIDE the agent
 ///   "steps": [                    run in order while session/prompt is open
@@ -39,6 +40,7 @@ namespace CoaiMcp.FakeCli;
 ///     {"kind":"request","method":"fs/write_text_file","params":{…}}   any other client request; the reply is logged
 ///     {"kind":"stray","text":"not json"}               a line that is not JSON-RPC
 ///     {"kind":"spew","chars":N}                        one line of N characters
+///     {"kind":"stderr","chars":N}                      N characters on STDERR, no newline — what drives the client's stderr capture and its truncation flag
 ///     {"kind":"awaitCancel"}                           reads stdin until session/cancel arrives, then goes on (the prompt ends cancelled)
 ///     {"kind":"sleep","ms":100}
 ///     {"kind":"hang"}                                  never returns: the kill path
@@ -67,6 +69,7 @@ internal static class AcpAgent
         var script = JsonDocument.Parse(File.ReadAllText(scriptPath)).RootElement.Clone();
         _log = Text(script, "log");
         _sessionId = Text(script, "sessionId") is { Length: > 0 } named ? named : "fake-session";
+        StartSlowly(script);
         WriteEnvironment(script);
 
         while (Console.In.ReadLine() is { } line)
@@ -82,6 +85,15 @@ internal static class AcpAgent
 
         // EOF on stdin: the client closed its end, and a well-behaved agent leaves.
         return 0;
+    }
+
+    /// <summary><c>startDelayMs</c>: a start that takes this long before the first line is read — the cold start of a loaded machine, made exact.</summary>
+    private static void StartSlowly(JsonElement script)
+    {
+        if (Number(script, "startDelayMs") is > 0 and var ms)
+        {
+            Thread.Sleep((int)ms);
+        }
     }
 
     /// <summary>
@@ -324,6 +336,11 @@ internal static class AcpAgent
             case "spew":
                 // One line of N characters and no newline among them: the shape a line reader must bound.
                 Write(new string('x', (int)Number(step, "chars")));
+                break;
+            case "stderr":
+                // Stderr only: the protocol stream stays clean, so the turn still answers.
+                Console.Error.Write(new string('e', (int)Number(step, "chars")));
+                Console.Error.Flush();
                 break;
             case "awaitCancel":
                 AwaitCancel();

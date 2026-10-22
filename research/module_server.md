@@ -2335,10 +2335,15 @@ existed, which is exactly how mirrored lists begin to drift.
 
 ## Settings apply to the next round, not the next restart
 
+
 `PanelServiceHost` stats the panel's settings file on every tool call and rebuilds `PanelService`
 when it has changed. Settings used to be read once at startup, which made every change in the
 sidebar silently ineffective until the MCP client was restarted — a gap invisible from both ends,
 because the panel saves instantly and says so. Environment variables still outrank the file.
+
+**The host's stopping token rides the rebuilds (E3.S2, 2026-10-20).** `PanelServiceHost` takes the server's own stopping token as a REQUIRED parameter (`Program.StartedAsync` passes its `stop`) and hands it to every `PanelService` it builds, the first and every rebuild; the service hands it to `RoundEngine`, which OBSERVES it (never links it, and records nothing itself: it does not cancel a round) beside the call's token and the round's clock, and writes the FIRST source to end the round as a cancelled local turn's `endCause` (the call's token files `hostStopped` instead of `withdrawn` when the host's token is already cancelled) (`RoundCancellation`, [module_runners.md](module_runners.md)). `PanelServiceHostTests.TheHost_HandsItsStopToEveryServiceItBuilds` pins the hand-over.
+
+**A client that closes stdin is the host ending (E3.S2 code round, 2026-10-21).** `Program.ServeAsync` wraps the stdio transport in `InputEndSignallingTransport`: it pumps the real reader's messages through unchanged and in order, and when the input ends — cleanly or with a failure — it cancels `startStop` (the host token `StartedAsync` hands down) and ONLY THEN completes the reader it gave the SDK, so nothing the SDK does as its input ends (cancelling in-flight request tokens) can precede the host's stop. Before it, `startStop` was cancelled only in the `finally` after `server.RunAsync` returned. The hand-off is a BOUNDED channel (`InputEndSignallingTransport.Capacity`, 64, `Wait`): a reader that falls behind makes the pump wait and the rest of the input stays in the pipe; a host callback that throws is logged (`Program` passes its `log`), never faults the pump, and the reader is completed in a `finally`; `DisposeAsync` cancels a pump parked on a full buffer before awaiting it, and a pump ended that way does NOT run the callback (a local disposal is not the client leaving, and signalling would re-enter the host's shutdown); the reader is still completed. **Measured limit, reported rather than fixed:** no review tool (`review_plan`, `review_code`, …) takes the SDK's request `CancellationToken` (only `ask_human` does), so a client's `notifications/cancelled` never reaches a local round — a live `review_plan` kept running and answered nothing for 15 s after the cancel — and the host's stop cancels no round (it is only observed). Today only `roundClock` and `unknown` can therefore be written by a live server (a client closing stdin fires the host's token alone and the round runs on to its clock); `withdrawn` and `hostStopped` are pinned by the C# tests, where the tokens are handed in, and wait for the review tools to pass the request's token (a behaviour change this task did not make).
 
 ## Server notices — what this binary writes down (S8, from 2026-09-21)
 
@@ -3101,6 +3106,19 @@ marker back). `ABeatThatFinishesAfterTheClear_DoesNotBringTheMarkerBack` and
 `AClearThatLandsDuringTheReplace_StillLeavesNoMarker` hold them, each RED first.
 
 ## The spending ledger
+
+**Consult, check, question and probe lines say what they ran with, and a consult line names its consultation (E3, 2026-10-20,
+`todo/PLAN_the_round_counter_tail_E3.md` S1 and S4's `coai-mcp` half).** `ConsultantTurnBooks.Billed` — the one place all three consult
+writers end (`ConsultationService.Settle`, `ConsultationFailedTurns.Billed`, `ConsultantCheck.Billed`) — takes the turn's `LaunchOptions` and
+a `consultation` id. The consultation labels its launch right after `Build` (`RowLaunchOptions.Answering(…, ready.Launch.Settings)`, which
+carries the codex tier probe's release) onto `TurnConsultant.RanWith`, and adds the final launch's `CliVersion` when the turn returns; the
+check does the same on its private `Turn`; the question row labels its invocation (a ready continuation keeps its first launch's labels) and
+`Record` takes `RanWith.VersionedBy(last launch's CliVersion)`; `--probe-api` labels `api` + the variant's effort. Refused before any
+launch → `LaunchOptions.None`. **`consultation`** (`UsageEntry.Consultation`, trailing) is the record's id on an answered turn
+(`record.Id`) and a failed one (`failed.Next.Id`, so a NEW consultation refused before its launch — whose record was never written, id
+emptied — carries none); a consultant check carries none (decision D8) — no consultation is behind it, and an invented id would merge
+unrelated turns in the extension's division. A local review cancelled mid-round also carries its `endCause` — see *A local cancellation says
+which token fired* in [module_runners.md](module_runners.md). The Team server is unchanged.
 
 `UsageLedger` appends one JSON line per reviewer to `<dataDir>/usage.jsonl`: vendor, model, role,
 stage, seconds, tokens, cost and outcome. It is separate from the session files on purpose —
@@ -7804,7 +7822,7 @@ flowchart TD
   held -->|no| makeat["MakeAtAsync(Live(repo), folder/tree) — replaces a tree a previous server left"]
   refresh --> launch["launch: Workdir = tree · OwnedScratch = folder · prompt names tree"]
   makeat --> launch
-  row["question row, plan Cwd = Snapshot"] --> copies["OneShotAsync(row folder, granted roots) — a copy per root; a parent folder expanded into its repositories; none found: refused"]
+  row["question row, plan Cwd = Snapshot"] --> copies["OneShotAsync(row folder, granted roots) — a copy per root; a parent folder expanded into its repositories; none found: refused; the whole bounded by the row budget, a timer on the places clock"]
   copies --> rowlaunch["launch in tree · prompt names the copies · finally: the row folder deleted"]
   rowlaunch -. "holds .coai-question.lock for the row's life" .-> qlock["row scratch lock"]
   beat --> qsweep["PruneOldAnswerDirs — coai-question-* older than six hours"]
@@ -7818,7 +7836,7 @@ flowchart TD
 
 | What | Where |
 |---|---|
-| The place, the one-shot copies | `Server/Consultation/ConsultantPlaces.cs` |
+| The place, the one-shot copies | `Server/Consultation/ConsultantPlaces.cs` (its budget and folder stamp read the injectable `_clock`, `:118`) |
 | The parent-folder expansion (D1–D9): the walk and its listing seam, git's facts, the worktree selection, the tally, the link rule, the one copy method | `Server/Consultation/ParentExpansion.cs`, `RepositoryWalk.cs`, `FolderListing.cs`, `RepositoryFacts.cs`, `LinkedWorktrees.cs`, `OneShotTally.cs`, `GrantedPaths.cs`, `RepositoryCopier.cs` |
 | The row's `note` carrying what the place skipped | `QuestionRowLaunch.PlaceNotes` |
 | The conversation's snapshot registry | `Server/Consultation/ConversationSnapshots.cs` |
@@ -7904,6 +7922,14 @@ parent folder was expanded and copied (~30 s including git's confirmations, 411 
   turn budget. Past it the place is refused — *"copying the granted folders took longer than the row's budget (N s): k of
   m copied"* — and every copy made, one finished past the budget included, is disposed. The row ends `refused`; Vibe never
   starts. Each root still has its own `snapshot-<id>` under `tree` (the finding that they share one path was rejected).
+- **The places read ONE injectable clock (E4 S3, 2026-10-21).** `ConsultantPlaces` takes `TimeProvider? clock = null` last (`ConsultantPlaces.cs:116`, `_clock` `:118`; the system clock by default, a `ManualClock` in a test).
+  The one-shot budget is its own timer source on that clock, `budgetTimer = new CancellationTokenSource(budget, _clock)`, declared BEFORE the linked source `copying` (`:339-340`) so the link is disposed first;
+  `catch (OperationCanceledException) when (!ct.IsCancellationRequested)` still reads the budget's cancellation as the budget's, and the caller's own cancellation still leaves as one. The conversation folder's
+  wall stamp — what the home sweep reads to age a folder — is `clock.GetUtcNow().UtcDateTime` (`Stamping`, `:290-292`), no longer `DateTime.UtcNow`. A zero budget is out synchronously, before anything is asked of git
+  (the constructor cancels; no product path hands a zero: the row budget comes through `PanelSettings.IntVar`, `> 0`). **Not on the clock, on purpose:** `ReviewSnapshots.BuildOnceAsync`'s 60 s `Stopwatch` (`MaxElapsed`,
+  `runners/Snapshots/ReviewSnapshots.cs:171,214`) is a host safety ceiling per copy — it protects a person's machine from a copy that never ends, a seam on it would have no RED (plan D3), and on a manual clock nobody
+  advances it would turn a runaway copy into a hang; and `TakingTheLock`'s `HeldFile.TakeWithin(…, LockWait)` (10 s, `:121-125`) is a `DateTime.UtcNow` loop already behind its own test seam (E5's C3). The tests cut the slow copy by a
+  handshake — the hook signals, the TEST advances (module_tests.md, *E4 S3*) — and `EveryBudgetInAClockedClassReadsItsClockTests` keeps the file clean of an unclocked `CancelAfter`/`DateTime.UtcNow`.
 
 ## Where the Vibe homes are made, owned and swept (2026-10-15, `research/PLAN_vibe_live_round_fixes.md`)
 
