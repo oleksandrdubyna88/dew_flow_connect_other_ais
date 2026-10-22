@@ -5141,7 +5141,7 @@ was lost. Windows throws that exception — never `IOException` — for a move o
 | Test | Seen red as | Green because |
 |---|---|---|
 | `AMoveOverAHeldFileIsRetriedTests.AMoveOverAFileAReaderHolds_IsRetriedWithinTheWindow_AndLands` (S24, Windows) | `Did not expect any exception because the reader lets go after one pause, well inside the window, but found System.UnauthorizedAccessException: Access to the path is denied.` at `MoveOver` | the retry covers `UnauthorizedAccessException` |
-| `…AHolderThatNeverLetsGo_FailsTheWriteWhenTheWindowEnds_AndTheOriginalSurvives_WithNoTemp` (S24 never-released arm, Windows; a hand-moved `MovableClock`, so no sleep) | `Expected pauses to be between 3 and 5 because the window is 200 ms of the MONOTONIC clock and each pause moves it 50 ms, but found 0.` | the window is read from `TimeProvider.GetTimestamp`/`GetElapsedTime`; the failure is thrown after it, the original bytes survive, no `*.tmp` |
+| `…AHolderThatNeverLetsGo_FailsTheWriteWhenTheWindowEnds_AndTheOriginalSurvives_WithNoTemp` (S24 never-released arm, Windows; a hand-moved clock — `MovableClock` then, `ManualClock` since E4 S1 — so no sleep) | `Expected pauses to be between 3 and 5 because the window is 200 ms of the MONOTONIC clock and each pause moves it 50 ms, but found 0.` | the window is read from `TimeProvider.GetTimestamp`/`GetElapsedTime`; the failure is thrown after it, the original bytes survive, no `*.tmp` |
 | `…AZeroWindow_TriesOnce_AndNeverPauses` (guard) | green before and after | — |
 | `AnOrphanTempFileIsRemovedByItsRecordsNextWriteTests.AnOldTempFileOfADeadWriter_IsGone_AfterTheRecordsNextWrite` (S27) | `Expected File.Exists(orphan) to be False because its writer is dead and it is two hours old …, but found True.` | `AtomicFile.RemoveOrphanedTemps` |
 | `…AnOldTempFileOfAProcessThatExited_IsGone_ByTheRealLivenessCheck` (a real exited process's pid through the real `ProcessLiveness.Check`, which answers `Gone`; the first S4 form asked `IsAlive`, and the message below is from then) | `Expected File.Exists(orphan) to be False because ProcessLiveness.IsAlive … says the exited process is gone, but found True.` | same |
@@ -5266,3 +5266,308 @@ Docs-only findings: J1 (the extension reads sessions without the turn; `module_s
 The title no longer says "this row reviews plans and code only" (a row can be configured for document review): it says "the consultant check is not offered for <runtime> — this runtime cannot hold a consultation".
 
 **PR #913 review threads (CodeRabbit, 2026-10-21).** `PanelServiceHostTests.ABusyRead_KeepsTheLastGoodSettings_SaysSoOncePerStamp_AndRecovers` proves the busy path on EVERY OS through the `readText` seam (an `IOException` with HResult 0x80070020): the last good settings stay while busy, three `Current` calls log exactly one warning for the stamp, and the first call after the read recovers sees the new file. Seen red with the once-per-stamp guard broken (`if (stamp != _warned)` made `if (true)`): `Expected … to be 1 because the retry is on every call, so the warning is one per stamp, but found 3.` `CodeRoundHarness` deletes its repository and data folders in separate try blocks. `ProcessLiveness.Check` (now `Asked`/`Running` helpers) and `SettingsFile.Parse` (`TextOf`) were split to complexity of 4 or less with no behaviour change; their existing tests are the guard.
+
+## The suite is deterministic — E4 S1: the clock contract and the manual clock (CORNERSTONE, 2026-10-21)
+
+Source: `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp_E4.md` §5 (the spec, by Fable; the plan round `67791431` and the risk consult `d4afeda2` govern where they differ). Branch
+`feat/suite-e4-clock`. **No product class changed in S1** — the test support and the contract land first; S2–S4 move `AcpClient`, `ConsultantPlaces`, `TurnLoop` and `SourceResolver` onto it, each with its own red.
+Why a contract and not just a clock: the mistake is per class and invisible — a `Stopwatch` left beside an injected timer, or a `CancelAfter` on a linked source that still arms the system timer, is the same race
+again while the test on the manual clock goes green. So the rules are written once here and every later story is reviewed against them.
+
+### The contract every clocked class obeys
+
+1. **One `_clock` per class** (`TimeProvider? clock = null` last on the primary constructor, `_clock = clock ?? TimeProvider.System`; precedent `BoundedScheduler`). Every budget that decides the outcome reads it: elapsed
+   through `GetTimestamp()`/`GetElapsedTime()`, delays through `Task.Delay(delay, _clock, ct)`, cancellations through `new CancellationTokenSource(delay, _clock)`, waits through `WaitAsync(timeout, _clock)`,
+   wall stamps through `GetUtcNow()`. Never threaded through `PanelService` or `RoundEngine` (D3).
+2. **The linked-token rule.** `CreateLinkedTokenSource` + `CancelAfter` has no `TimeProvider` overload, so the timer becomes its own source and the linked source links the caller's token AND the timer's:
+   `using var timer = new CancellationTokenSource(delay, _clock); using var linked = CreateLinkedTokenSource(ct, timer.Token);` — the timer declared FIRST, the link SECOND, so the link is disposed first and a timer
+   that fires between the two disposals meets a disposed link. "Which one fired" keeps reading `ct.IsCancellationRequested`. **A zero budget** cancels the new source synchronously in its constructor where
+   `CancelAfter(0)` schedules a timer; no product path hands a zero (checked), so it is a test's value only and is pinned (M16, and the zero arms of S3/S4).
+3. **The teardown exception.** A grace that bounds REAL PIPE PROGRESS — the drain of a killed process's pipe, the agent's last output after its exit (`AcpSession.WatchExitAsync`'s 300 ms lets a buffered answer
+   through) — stays on the system clock, named in the tables as "system — teardown". On a manual clock nobody advances it would turn a bounded wait on a real pipe into a hang. `ReviewSnapshots`' `MaxElapsed`
+   (60 s, `ReviewSnapshots.cs:171`) is an UNSEAMED host safety ceiling, not a test-controllable budget, and stays on the system clock.
+4. **The default is `TimeProvider.System`, and the seam alone changes nothing:** each story lands its seam first, the whole `src_mcp` suite green on the default clock, and only then moves its test onto `ManualClock`.
+5. **The inventory** is the four tables below (the reviewer's checklist; line numbers are those of HEAD, the plan's were read at `aab069ca5` and have moved): 7 timed sites in the four classes, 10 callees that arm a timer and none moves.
+6. **No product hook ever calls `Advance`** (the clock's point 6, below); a hook signals a `ClockHandshake` and the test advances.
+
+### The inventory — every clock read in the four classes, and which clock each reads (plan §5.1)
+
+The checklist a seam story is reviewed against: the "now" column is the code at HEAD, the "before" is what the story replaced. A site that bounds REAL PIPE PROGRESS is "system — teardown".
+
+| Class (file) | Site (HEAD) | Decides | Clock |
+|---|---|---|---|
+| `AcpClient` (`runners/Acp/AcpClient.cs`; ctor `:31`, `_clock` `:34`) | `:126-127` `turnTimer = new CancellationTokenSource(ask.Deadline, _clock)`, the link second (before: `CreateLinkedTokenSource(ct)` + `CancelAfter`) | the turn's deadline (`AcpEnd.Deadline`) | `_clock` |
+| | `:223` `….WaitAsync(usageBound, _clock)` | the `/usage` bound | `_clock` |
+| | `:267` `reading.WaitAsync(AcpTransport.DrainGrace)` in `SettledAsync` | the drain after the tree was killed | **system — teardown** (remark at `:257-263`) |
+| `ConsultantPlaces` (`src/Server/Consultation/ConsultantPlaces.cs`; ctor `:116`, `_clock` `:118`) | `:339-340` `budgetTimer = new CancellationTokenSource(budget, _clock)`, `copying` linked second | the one-shot budget (`OutOfBudget`) | `_clock` |
+| | `:290-292` `Stamping(…, clock).Begin()` → `clock.GetUtcNow().UtcDateTime` | the conversation folder's wall stamp | `_clock` |
+| `TurnLoop` (`runners/Reviewers/TurnLoop.cs`; ctor `:29-32`, `_clock` `:34`) | `:50` `started = _clock.GetTimestamp()`; `:79` `cap - _clock.GetElapsedTime(started)`; `:86`/`:89` a turn's start and elapsed | the conversation's cap, each turn's ledger elapsed (before: one `Stopwatch`, five reads) | `_clock` — the scheduler's, handed at `BoundedScheduler.cs:463` |
+| `SourceResolver` (`runners/Feature/SourceResolver.cs`; ctor `:45`, `_clock` `:48`) | `:203-204` `readTimer = new CancellationTokenSource(_readDeadline, _clock)`, `deadline` linked second | one file's read deadline (`TimedOutReason`) | `_clock` |
+
+Callees that arm a timer and are NOT moved (all teardown or token-only): `AcpSession.CallAsync` (`:165`) and `AcpTransport.WriteLineAsync` (`:197-201`) `WaitAsync(ct)` (token only); `AcpSession.NotifyAsync` (`:175`, `GraceWait` source), `WaitUntilQuietAsync` (`:186-197`, a
+`DateTime.UtcNow` loop and `Task.Delay(50)`), `WatchExitAsync` (`:265`, `Task.Delay(ExitGrace, ct)` — 300 ms that lets a buffered answer through before the pending requests are broken, so a grace on REAL pipe progress, not "after the outcome"),
+`AcpTransport.EndAsync` (`:234`, `_draining.CancelAfter(DrainGrace)`) — all system, teardown; `HeldFile.TakeWithin` (`ConsultantPlaces.cs:125`, a 10 s `DateTime.UtcNow` loop, already a test seam; the subject of C3/E5);
+`ReviewSnapshots` (`runners/Snapshots/ReviewSnapshots.cs:171` `Stopwatch`, judged against `MaxElapsed` 60 s at `:214` — an UNSEAMED host safety ceiling: a seam without a RED is forbidden (D3), and a runaway copy on a
+manual clock nobody advances would hang); `GitHistory.RunAsync`'s `Budget` (30 s, `runners/Collecting/GitHistory.cs:49,320`) → the launcher's own timer (gated, S6). Named in `BoundedScheduler` and not moved: see the scan's allow-list below.
+
+### The linked-token rule (plan §5.2)
+
+`CreateLinkedTokenSource` + `CancelAfter` has no `TimeProvider` overload, so on every moved site the timer is its own source and the linked source links the caller's token and the timer's. The ORDER is part of the rule: the
+timer is declared first and the link second, so the `using`s dispose the link first and a timer firing between the two disposals meets a disposed link, not a live link holding a disposed timer (the risk consult `d4afeda2`,
+point 2; a reviewer checks the order, not only the shape — the three sites above are written so). "Which one fired" is unchanged: `ct.IsCancellationRequested` tells the caller's cancellation from the deadline's
+(`AcpClient`'s `Failed(e, ct.IsCancellationRequested, …)`, `ConsultantPlaces`' `catch (OperationCanceledException) when (!ct.IsCancellationRequested)`, `SourceResolver`'s `deadline.IsCancellationRequested && !ct.IsCancellationRequested`).
+**A zero budget — a stated difference, pinned:** `new CancellationTokenSource(TimeSpan.Zero, clock)` cancels synchronously in its constructor where `CancelAfter(TimeSpan.Zero)` schedules a timer that fires a moment later. Checked: no product path
+hands a zero to any of the four classes (`AcpClient` refuses a deadline of zero or less before any start; the row budget and reviewer timeout come through `PanelSettings.IntVar`, which admits `> 0`; the resolver's three product
+sites pass no `readDeadline`), so it is a test's value only, and each of S2, S3 and S4 pins what it does on a clock nobody advances.
+
+### The default, and the proof that the seam alone changes nothing (plan §5.3)
+
+The default is `TimeProvider.System`; `new CancellationTokenSource(delay, TimeProvider.System)` and `CancelAfter(delay)` arm the same system timer and `GetTimestamp()`/`GetElapsedTime()` are what `Stopwatch` reads. So each story has an inner step
+before its test moves: the seam lands first, alone, and the whole suite is run on it — S2, S3 and S4 each recorded that run below — and only then does the test move onto the manual clock and its RED show.
+
+Who reads which clock (the test holds the only hand on the manual clock; the product never advances it):
+
+```mermaid
+flowchart LR
+  test["test driver<br/>ManualClock.Advance"] -->|"clock ctor argument"| acp["AcpClient._clock<br/>turn timer · usage bound"]
+  test -->|"clock ctor argument"| places["ConsultantPlaces._clock<br/>one-shot budget · folder stamp"]
+  test -->|"clock ctor argument"| sched["BoundedScheduler._clock"]
+  test -->|"clock ctor argument"| resolver["SourceResolver._clock<br/>per-file read deadline"]
+  sched -->|"hands its clock"| loop["TurnLoop._clock<br/>cap · per-turn elapsed"]
+  hook["product hook"] -.->|"ClockHandshake.Signal then wait"| test
+  acp -.->|"system clock, teardown"| pipe["real pipe graces<br/>DrainGrace · GraceWait · ExitGrace"]
+  sched -.->|"system clock, named in the allow-list"| ladder["429 ladder Stopwatch + Task.Delay<br/>queue and elapsed reports"]
+  scan["EveryBudgetInAClockedClassReadsItsClockTests"] -.->|"scans the five files"| acp
+  scan -.-> places
+  scan -.-> sched
+  scan -.-> resolver
+  scan -.-> loop
+```
+
+### `ManualClock` (`src_mcp/tests/ManualClock.cs`) — the suite's one manual clock
+
+Shaped on wsl_care's `ManualTimeProvider`, with its two flags removed and two additions. It subsumed and replaced `MovableClock` (same `DateTimeOffset start` constructor, same `Advance`; the nine sites in seven
+files were renamed, the class deleted); `FixedClock` (an instant that cannot move) and `SteppingClock` (one step per READ) stay — different jobs. `FakeClock` (`CollectRunTests`) was a duplicate of `FixedClock` and is gone.
+
+1. Two readings moved together by `Advance(by)`: the wall clock (`GetUtcNow`, from `start`) and the monotonic `GetTimestamp` (frequency `TicksPerSecond`, starting at one day). `LocalTimeZone` is UTC.
+2. `JumpWallClock(by)` moves the wall clock alone — what a two-clock rule is tested with (a host that slept).
+3. Timers are always manual and due on the monotonic reading; one fires only inside `Advance`, never on creation (a zero-due timer fires on `Advance(TimeSpan.Zero)`).
+4. Earliest due first, ties in arming order; a timer a callback arms with a due time already reached fires in the SAME advance, after the one that armed it; a periodic timer is due again a period later.
+5. A callback never runs under the clock's lock and always runs synchronously on the advancing thread — no thread-pool dispatch. A test therefore never calls `Advance` holding a lock and asserts after awaiting the product.
+6. **`Advance` is the test driver's call, never a product thread's.** An `Advance` entered while another runs (nested in a callback, or from a second thread) throws `InvalidOperationException` naming the thread that holds
+   the advance and moves nothing.
+7. `ITimer.Dispose()` retires the timer AT ONCE, even from inside its own callback (a `CancellationTokenSource` disposes its timer there; a `Dispose` that waited would wait for itself). Only `DisposeAsync()` waits,
+   for a callback already picked (at once from inside that callback); a timer disposed between its pick and its call never runs its callback. `Change` after disposal returns `false`; a due time or period below −1 ms or
+   above 0xFFFFFFFE ms is refused with `ArgumentOutOfRangeException`, as the system refuses it.
+8. `ActiveTimers` and `WhenTimersAsync(atLeast, within = null)` (bounded at 30 s by default, faulting with the counts — code gate G3) — the EVENT a test waits on before it advances ("the product armed its deadline"). A fired or disposed timer leaves the count, and because a `CancellationTokenSource`
+   disposes its timer before its registrations run, a test that means "the deadline struck" asserts the TOKEN after the advance, never the count inside a callback.
+9. No `RecordingWait` (a stand-in waits with `Task.Delay(delay, clock, ct)`). 10. Thread-safe: one lock over the readings and the timer list.
+11. `ClockHandshake` (`src_mcp/tests/ClockHandshake.cs`): the hook's side `Signal()` then `await WaitForReleaseAsync(ct)`; the test's `await handshake.Reached; clock.Advance(…); handshake.Release();`, with `Release()` also in
+    the test's `finally`. Both ends idempotent; one handshake serves one meeting (a hook reached repeatedly gets one per meeting).
+
+One addition beyond the plan: `internal Action AfterPick` — a hook between a timer's selection and its callback on the advancing thread, the one window M14 could not otherwise reach deterministically (default no-op).
+
+### Tests added, and what each showed (2026-10-21)
+
+Reds are seen against a stub shaped like the deleted `MovableClock` (a hand-moved clock with REAL timers; the new members stubbed so it compiles). M1's red is the spec's sentence verbatim.
+
+| Test (`ManualClockTests`) | Seen red as (on the stub) |
+|---|---|
+| M1 `ASourceWithADelayOnTheClock_IsCancelledByTheAdvanceThatReachesIt_AndNotBefore` | `Expected source.IsCancellationRequested to be True because the clock was advanced past the delay, but found False.` |
+| M2 `ATaskDelayOnTheClock_CompletesOnTheAdvanceThatReachesIt_AndNotBefore` | `Expected delay.IsCompleted to be True because the clock was advanced past the delay, but found False.` |
+| M3 `AWaitAsyncOnTheClock_ThrowsTimeoutOnTheAdvanceThatReachesIt_AndNotBefore` | `Expected waiting.IsCompleted to be True because the clock was advanced past the wait, but found False.` |
+| M4 `TwoTimersDueInOneAdvance_BothFire_EarliestDueFirst_…` (armed in reverse order, 20 runs) | `Expected fired to be equal to {1, 2} … but found empty collection.` |
+| M5 `ATimerArmedByACallbackWithADueTimeAlreadyReached_FiresInTheSameAdvance_…` | `Expected order to be equal to {"outer", "inner"} … but found empty collection.` |
+| M6 `ACallbackRunsOutsideTheClocksLock_OnTheAdvancingThread` | guard — green on the stub; broken once (B1) |
+| M7 `DisposeRetiresATimerAtOnceWhileItsCallbackRuns_AndOnlyDisposeAsyncWaits…` | guard — green on the stub; broken (B2, B17) |
+| M8 `AfterDispose_ChangeSchedulesNothingAndSaysFalse_AndAPeriodicTimerEndsItsWaitingTick` | `Expected tick.IsCompleted to be True because the clock reached the period, so the tick arrives, but found False.` (its `Change` arm is green on the stub: a disposed system timer also answers false) |
+| M9 `TheMonotonicReadingMovesWithAdvanceAndNotWithJumpWallClock_…` | `Expected default because a stepped wall clock is not elapsed monotonic time, but found 1h.` |
+| M10 `ADueTimeOrPeriodTheSystemRefuses_IsRefusedByTheManualClockToo` (both clocks) | green on the stub (its timers are the system's); broken (B20) |
+| M11 `WhenTimersAsync_IsPendingUntilTheTimersAreArmed_AndTheCountDropsWhenOneFiresOrIsDisposed` | `Expected first.IsCompleted to be True because the first timer was armed, but found False.` |
+| M12 `APeriodicTimer_FiresOncePerPeriodReachedInOneAdvance_AndStaysScheduled` | `Expected fired to be 3 because three periods were reached inside one advance, but found 0` |
+| M13 `ASourceOnTheClockLinkedToACallersToken_ReachesItsDeadline_AndAdvanceReturns` | `Expected linked.IsCancellationRequested to be True because the deadline reached the linked token, but found False.` |
+| M14 `ATimerDisposedBetweenItsSelectionAndItsCallback_NeverRunsIt_AndDisposeAsyncOnAnotherThreadWaitsForARunningOne` + `DisposeAsyncFromInsideTheTimersOwnCallback_CompletesAtOnce` | the second: `Expected completedInside to be True because a disposal from inside the callback has nothing else to wait for, but found False.`; the first is a guard, broken (B2, B19, B21) |
+| M15 `AnAdvanceInsideACallback_OrFromASecondThreadWhileOneRuns_IsRefusedNamingTheThreadThatAdvances` | `Expected a <System.InvalidOperationException> to be thrown because a second thread may not advance while one advance runs, but no exception was thrown.` |
+| M16 `AZeroDelay_IsAlreadyCancelledBeforeAnyAdvance_AndAZeroTimerFiresOnAdvanceZeroNotBefore` | `Expected fired to be 1 because Advance(0) fires a timer that is due now, but found 0` (its zero-delay arm is green on the stub: the framework cancels a zero delay in the constructor) |
+| M17 `OnTheTwoSourceShape_TheCallersCancellationAndTheDeadlineAreToldApart_AndADisposedTimerFiresNothing` | `Expected callerFirst.ActiveTimers to be 1 because the deadline's timer is still counted, but found 0` |
+
+`ClockHandshakeTests` (3): `Signal` completes `Reached` once; a parked hook waits for the release and a second release is harmless; the test's guard ends the hook's wait. Green on the first run (a three-line helper).
+
+**Break-its** (the clock was changed, `ManualClockTests` run, red seen, restored, green seen): B1 callbacks fired inside the lock → M6 `a callback blocked on a gate must not hold the clock's lock` (also M7, M14); B2 `Begin()` skipped on
+pick → M7 and M14 `Expected disposing.IsCompleted to be False because DisposeAsync … waits while the callback runs, but found True`; B3 order by arming → M4 `{2, 1} differs at index 0`; B4 a zero-due timer fired on
+creation → M16 `a timer never fires on creation` and M5 (`inner` twice); B5 `JumpWallClock` moves the monotonic reading → M9 `found 1h`; B17 `Dispose()` waits for a running callback → M13 `Advance never returned: …` (20 s guard)
+and M7 `Dispose retires the timer at once` (the unguarded `Task.Delay`/`WaitAsync` tests hang under B17, which is the same defect: they dispose their timer from the callback); B18 the advancing mark dropped → M15 `no exception was thrown`;
+B19 callbacks through `ThreadPool.QueueUserWorkItem` → 14 of 18 red (nothing has fired when the assertion reads); B20 the range check removed → M10 `ManualClock refuses a due time of 4294967295 ms, but no exception was thrown`;
+B21 the disposed-after-pick check removed → M14 `Expected ran to be False because a disposed timer's callback does not run`. **B4's limit, said:** the plan's "M1's 1999 ms arm red" cannot follow from B4 (a timer due in
+2 s is not due at creation); B4 is seen red on the zero-due arms instead.
+
+### The structural scan — `EveryBudgetInAClockedClassReadsItsClockTests`
+
+Over a NAMED SET of product files — `Clocked` at HEAD (`EveryBudgetInAClockedClassReadsItsClockTests.cs:35`) is `BoundedScheduler.cs`, `AcpClient.cs`, `ConsultantPlaces.cs`, `TurnLoop.cs`, `SourceResolver.cs`: S1 started with `BoundedScheduler.cs`; S2 added `AcpClient.cs`, S3 `ConsultantPlaces.cs`, S4 `TurnLoop.cs` and `SourceResolver.cs`, each addition being that story's structural red — it flags every
+`Stopwatch`, `.CancelAfter(`, `DateTime.UtcNow` (and `DateTimeOffset`, `.Now`), `Task.Delay(` and `.WaitAsync(` with a timeout whose argument list names no clock (`_clock`, `clock`, `TimeProvider…`); a `WaitAsync(ct)` /
+`WaitAsync(x.Token)` is a token alone and not a site. It reads the comment- and string-free joined line of `ProductionSources.CodeOf`, so an argument list is read across lines to its closing parenthesis. **Sanctioned sites** are
+`(file, snippet, reason)` entries matched on the statement around the site; the companion fails when an entry no longer matches exactly one site, so a stale list is red. **The allow-list as it stands now has six entries** (`Sanctioned`, `:60`).
+Five are in `BoundedScheduler.cs` and were there from day one: `Stopwatch queued` (two: the slot queue, the shared-resource queue — reports), `Stopwatch watch` of the conversation (the reported elapsed; the loop's own cap reads the clock the
+scheduler hands it, S4), and the two DEFERRED sites of plan Q4, the 429 ladder's `Stopwatch` (judged against its budget) and `Task.Delay(wait, ct)` — named, not moved, until a 429-ladder failure is kept (D5). The sixth, added by S2, is
+`AcpClient.cs`'s `reading.WaitAsync(AcpTransport.DrainGrace)` (teardown). Nothing in `ConsultantPlaces.cs`, `TurnLoop.cs` or `SourceResolver.cs` is allowed: they are clean. Not scanned: `ReviewSnapshots.cs`, `ProcessLauncher.cs`, `ReviewerExecutor.cs`
+(their sites are "callees, none moves" above; a later story that seams one adds it to the set with its own red). Since the judge round (2026-10-22) it also flags `new CancellationTokenSource(<args>)` (the no-argument form arms nothing and is exempt), `new PeriodicTimer(`, `new Timer(` / `new System.Threading.Timer(` and `Thread.Sleep(`, and `TimeProvider.System` among a budget's arguments counts as UNCLOCKED (it is the system timer; the clock match runs after it is removed). Over the five files nothing tripped: their three `new CancellationTokenSource(` sites all name `_clock`, and the `TimeProvider.System` in each is the default of `clock ?? TimeProvider.System`. Each new rule has a row in the synthetic self-test and a negative row (the exempt and clocked forms). The scan is a source scan of nine named shapes, not a data-flow proof.
+
+| Test | Seen red as |
+|---|---|
+| `…_ReadsItsClock_ExceptTheSitesNamedWithTheirReason` | with the allow-list emptied: `found "…BoundedScheduler.cs: Stopwatch `Stopwatch` in `var queued = System.Diagnostics.Stopwatch.StartNew(); if (!await Took(global, ct)) …`; …` (all five); with the ladder's entry removed: the one `var watch = … Stopwatch.StartNew(); var attempts = 1;` |
+| `TheScan_StillFindsEveryNamedException_SoAStaleAllowListIsRedNotSilent` (companion) | with a scanner that finds nothing: `… matches 0 sites, not one` for each entry; with the ladder's `Stopwatch` moved onto `_clock` in `BoundedScheduler.cs` (temporary, restored): ``Stopwatch.StartNew(); var attempts = 1;` matches 0 sites, not one`` |
+| `TheScan_FindsTheFiveSitesOfBoundedScheduler_ThatTheAllowListNames` | scanner finds nothing: `Expected sites.Select(site => site.Kind) to be a collection with 5 item(s) … but found an empty collection.`; one site moved: `{"Stopwatch","Stopwatch","Stopwatch","Task.Delay"} contains 1 item(s) less` |
+| `AnUnclockedBudget_IsASite_InEveryShapeTheScanKnows_AcrossLines_…`, `AClockedBudget_AToken_AWordInACommentOrAString_AreNotSites`, `ASiteTheAllowListDoesNotName_IsAnOffender_…` | the scanner's own behaviour on synthetic source (the multi-line `WaitAsync(⏎ usageBound)`, clocked forms, prose): red with a scanner that finds nothing |
+
+**Build trap met on the way (a note for the next break-it):** restoring a source file with `fs.copyFileSync` keeps the OLD modification time, so the next `dotnet build` believed the test assembly up to date and ran the PREVIOUS
+broken variant's binary — one break-it reported a passing companion that failed when rebuilt. Restore by writing the file (a new mtime) or touch it.
+
+### Counts and the full run
+
+Listed tests (`--list-tests`): 13,075 before, 13,107 after (+32, none removed: `comm` of the sorted lists shows 0 removed). The 32 are 18 `ManualClockTests`, 3 `ClockHandshakeTests`, 6 scan tests (the scan, its companion,
+the five-sites pin and three self-tests of the scanner — six in all), and 5 `NoSourceFileCarriesAControlByteTests` rows for the five new source files. `MovableClock`'s seven files, run alone after the rename: `AMoveOverAHeldFileIsRetriedTests` 3,
+`ASessionSaveMeetsABusyFileTests` 6, `AnIdleServerReadsNothingTests` 9, `AuthorPeersTests` 18, `RoundAuthorsStepTests` 32, `TheRunsThemselvesTests` 8, `TheSendsThemselvesTests` 14, `CollectRunTests` 11 — all green (E3's `AtomicFile` window tests pass on
+`ManualClock` unchanged, which is the proof of the subsumption).
+
+Whole `CoaiMcp.Tests.exe` (Windows, Debug, 40 min on a loaded machine): 13,140 total, 13,017 passed, 120 skipped, **3 failed in the suite and passed alone** — listed, not called flakes, and every one is a case this epic exists to close:
+`AConversationPlaceTests.CopiesThatOutrunTheRowsBudget_…` (C17, S3), `AFeatureIsReviewedEndToEndTests.TheRoundsDeadline_IsScaledByTheFollowUps_…` (C6, S5), `AReviewerThatAsksForSourceIsAskedAgainTests.AConversationThatOutlivesItsCap_…` (C13, S4). Re-run
+class by class alone right after: 10/10, 31/31 and 16/16 passed. S1 changes no product line and none of the three touches `ManualClock`; the three are unmoved by it.
+
+### Limits (stated)
+
+The clock proves a class READS its clock, not that the product's other timers (the launcher's per-turn timer, `ReviewSnapshots`' ceiling) are sound; `ManualClock` forbids a nested/concurrent `Advance` of ITSELF but cannot stop a
+product hook from advancing a different clock; the scan is a source scan of nine named shapes (`Stopwatch`, `.CancelAfter(`, `DateTime(Offset).UtcNow/Now`, `Task.Delay(`, `.WaitAsync(`, `new CancellationTokenSource(<args>)`, `new PeriodicTimer(`, `new Timer(`, `Thread.Sleep(`), not a data-flow proof (a `Stopwatch` hidden behind a helper in a file outside the named set is not seen — that is why the set grows by file). **What still escapes it:** a timer made by another route (`Task.Delay` through a wrapper, `timeProvider.CreateTimer` called with a system provider, `ITimer` fields), `TimeProvider.System` reached through a local or a field rather than written in the argument list, an argument list that names a clock in an unrelated way (`clock` in a comment-free but non-budget position), `Environment.TickCount64`, `SpinWait`/`Thread.Join(timeout)`, and anything in a file outside the named set. The structural net catches the seam's own shape; the manual-clock tests catch the rest by hanging on a guard.
+
+### E4 judge round (Opus, 2026-10-22) — what changed
+
+Source: `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp_E4.md` §17. **The scan:** four rules and the `TimeProvider.System` exclusion above, each with a synthetic row (red first: `Expected … to be a collection with 13 item(s) … contains 7 item(s) less`); nothing tripped on the five real files, and the break-it (`SourceResolver`'s `new CancellationTokenSource(_readDeadline, _clock)` without the clock) turned the scan red. **`AcpClient.TurnAsync`:** the deadline's two sources are armed inside a `try` whose `finally` ends the agent until `ConverseUntilAsync` has the turn; `AcpClientClockTests.AClockThatCannotArmTheDeadline_StillEndsTheAgentItStarted_AndTheFailureSurfaces` (a `TimeProvider` whose `CreateTimer` throws, a recording supervisor) was red with `Expected tree.Ended to be 1 … but found 0`. **`ManualClock.Move`:** both new readings are computed before the advancing mark is set; `ManualClockTests.AnAdvanceTheClockCannotHold_IsRefusedAndMovesNothing_SoALaterValidAdvanceStillWorks` was red with `Advance was entered while thread … is advancing this clock`. **Renamed:** the end-to-end smoke test is `AReviewerThatAsksOnEveryTurn_IsReviewedEndToEnd_ARealProcessSmokeTestOfTheWiring`. **Records:** S2's extra break-its are B22–B25; the parent's census gained C28–C38 (E5's intake).
+
+### E4 code gate (67791431, 2026-10-22, proceed) — what changed
+
+Source: `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp_E4.md` §18 (5 accepted, 4 rejected). **The companion** in
+`EveryBudgetInAClockedClassReadsItsClockTests`: every product file (all `src_*`, tests excluded, read through `ProductionSources`) whose primary constructor, positional
+record or explicit constructor takes a `TimeProvider` must be in `Clocked` or in `Unscanned` with a reason; a stale or reason-less `Unscanned` entry, or a `Clocked` file that no longer takes a
+clock, is red; a synthetic test pins the detector (primary, record, explicit: yes; static method, comment, string: no). It was red first with eight unclassified files; the break-it
+(`SourceResolver` out of `Clocked`) was red naming it. **`Unscanned`, with the reasons:** `BackfillAttribution.cs` (forwards the clock to the peer lookup as a deadline instant), `BackfillRun.cs` (defaults and
+forwards it; arms nothing), `RoundAuthorsStep.cs` (instants: a deadline, an elapsed from `GetTimestamp`), `SessionHolds.cs` (a wall stamp: a cached entry's age against its recheck), `ObservedSession.cs`
+(`ReadBudget`'s clock for `MaxTime` as an instant comparison), `RoundsDb.cs` (wall stamps for columns; its one `DateTime.UtcNow` is a row's `opened_utc`), `CollectRun.cs` (a stamp: the run id),
+`src_bugs/src/RateLimiter.cs` (a rate window compared as instants). None has a scan shape today; a timer added to one moves it to `Clocked`, red first. `IsClocked` is three small helpers
+(`EmptyAndFine`, `NamesAClockIn`, `TokenAloneAndFine`), complexity ≤ 4 each. **`ManualClock.WhenTimersAsync(atLeast, within = null)`** is bounded: default `DefaultTimerWait` (30 s, the suite's
+guard, on the system clock), then it faults with `expected at least {n} timer(s) armed within {s}s; {k} are armed` (RED against the unbounded API: the outer wait's "The operation has timed out."; break-it red).
+**`ClockedAcpTurn`:** `DrivenAsync(…, clock, expectedTimers)`; its guard sentence ends "(timers the test expected: n; armed: k)"; its outer net is 5 s longer than the clock's own bound so the named sentence wins.
+
+## The suite is deterministic — E4 S2: the ACP client's clock (C5, C23, 2026-10-21)
+
+Source: `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp_E4.md` §8 S2 (§5.1 table 1 and §15 govern; its status section lists the deviations). Branch `feat/suite-e4-clock`. **Product change:** `AcpClient` takes `TimeProvider? clock = null` last
+(`AcpClient.cs:31`, `_clock` `:34`); `TurnAsync` arms the turn's deadline as `turnTimer = new CancellationTokenSource(ask.Deadline, _clock)` FIRST and links `deadline` second (`:126-127`), the old `CancelAfter` is gone; the `/usage` bound is
+`.WaitAsync(usageBound, _clock)` (`:223`); `SettledAsync` stays on the system clock with a remark naming the teardown rule (`:257-263`; the other graces — `AcpTransport.EndAsync`, `AcpSession` — stay too, see the inventory above). Evidence (C5): the usage test failed in CI because
+the 2 s deadline also paid the agent's cold start (the turn ended `Deadline` where `Answered` was owed); C23 (`TheCancelReachesAnAgentThatIsStillListening`) is the same mechanism with a 5 s deadline. Test support: the fake CLI's `AcpAgent` script field `startDelayMs`
+(`tests_fakecli/AcpAgent.cs:30,92`), `FakeAcpAgent.StartDelay(ms)` and `WhenReceivedAsync(method, ct)` (`FakeAcpAgent.cs:70,125`), and `ClockedAcpTurn` — the test-side driver (starts the turn, waits for the event it means — timers armed, a method received —
+advances or cancels the caller, awaits the end; every wait under a 30 s guard a correct run never reaches; the caller is cancelled in a `finally`).
+
+**Order, as the contract demands.** (1) The seam alone, no site moved, whole suite on the default clock: 13,140 tests, 13,018 passed, 120 skipped, 2 failed — `AConversationPlaceTests.CopiesThatOutrunTheRowsBudget_…` (C17, S3's open case) and
+`QuestionOutlineTimingTests` (61–68 s against a 60 s bound on that machine; it times the outline of this checkout and fails alone too); neither touches `AcpClient`, and both failed the same way before the seam. (2) The scan gained `AcpClient.cs`: red
+on exactly the two sites before the move (`AcpClient.cs: CancelAfter .CancelAfter(ask.Deadline) …; AcpClient.cs: WaitAsync .WaitAsync(usageBound) …`), green after. (3) The tests moved onto `ManualClock`.
+
+| Test | Seen red as (on today's code, with `startDelayMs`) | Green because |
+|---|---|---|
+| `AcpClientUsageTests.AUsagePromptThatOutlivesTheTurnsDeadline_ReturnsTheAnswerAtTheDeadline_NotAfterTheBound` (S12; `startDelayMs` 2500, deadline 2 s) | `Expected outcome.End to be AcpEnd.Answered {value: 0} because the deadline struck while /usage was asked, and /usage never changes the end: the agent did not answer within the 2s this turn was given, but found AcpEnd.Deadline {value: 3}.` | the deadline is the clock's: the test waits for both timers, advances exactly the deadline; `End == Answered`, `Answer == "OK"`, `clock.GetUtcNow() - start == 2 s`, the agent gone |
+| `…AUsagePromptThatNeverAnswers_IsGivenUpOnAtItsBound_AndTheAnswerStands` (the usage bound alone, 1 s) | moved the same way; its wall-time bound is replaced by `clock.GetUtcNow() - start == bound` | `.WaitAsync(usageBound, _clock)` |
+| `AcpClientTests.TheCancelReachesAnAgentThatIsStillListening` (C23; `startDelayMs` 5500, deadline 5 s) | `Expected agent.Received("session/cancel") to contain a single item, but the collection is empty.` | the test waits for the turn timer AND for the fake to have received `session/prompt`, then advances 5 s: `End == Deadline`, `session/cancel` once, agent gone |
+| `AcpClientClockTests.ACallerWhoCancelsFirst_EndsTheTurnAsCancelled_NeverAsTheDeadline_AndTheAgentIsStillEnded` (new) | guard | a caller's cancellation reads `Cancelled`, the clock unmoved, `session/cancel` once, `ActiveTimers == 0` |
+| `…ATurnThatEndsByItsOwnAnswer_LeavesNothingArmedOnTheClock` (new) | guard | `ActiveTimers == 0` after the turn and after a one-hour advance: both sources are disposed by the `using`s |
+| `…ADeadlineOfZero_IsRefusedBeforeAnythingStarts_AndArmsNoTimer` (new; §5.2's zero point) | guard | `NotStarted`, no log, no timer |
+
+After the last advance every arm reaches the teardown on the SYSTEM clock: the received answer is kept and the agent is gone (`Gone(outcome.AgentPid)`) — the assertions run in real time, bounded by `GraceWait` + `DrainGrace` (3.5 s).
+
+**Break-its (product changed, test run, restored by WRITING the file, rebuilt).** B6 (`UsageAsync` stops swallowing `OperationCanceledException`): S12 red with the sentence above. B7 (`CancelAfter` back on the linked source, no clock timer): S12 ends by the guard —
+`the product never reached what the test waits for within 30s on the manual clock — a deadline or bound that is not on the clock never arms its timer there`. B8 (`.WaitAsync(usageBound)` without the clock): the usage-bound test ends by the same guard sentence. Extra: B22 (the timer source not `using`):
+`Expected clock.ActiveTimers to be 0 because the turn's deadline timer is disposed with the turn, but found 1`; B23 (`Failed(e, false, …)`): `Expected outcome.End to be AcpEnd.Cancelled … but found AcpEnd.Deadline`; B24 (the zero-deadline refusal removed):
+`Expected outcome.End to be AcpEnd.NotStarted, but found AcpEnd.Protocol`; B25 (the drain grace moved onto the clock; S2's extras were B9–B12 until the judge round renumbered them, which had collided with S3's and S4's): the scan's companion red — `reading.WaitAsync(AcpTransport.DrainGrace)` matches 0 sites, not one.
+
+**Counts.** +3 tests (`AcpClientClockTests`, 3 — the plan counted two, the zero arm is the third), three rewritten (S12, the usage-bound test, C23), 2 more rows of `NoSourceFileCarriesAControlByteTests` for the two new source files (`AcpClientClockTests.cs`, `ClockedAcpTurn.cs`). Whole suite after the move:
+13,145 tests, 13,023 passed, 120 skipped, 2 failed, both only in the full run — `QuestionConsultScenarioTests.AQuestionIsAnsweredByARealChild_FencedAndRecorded` (a real fake-CLI child, status `failed`; not in S2's area, reported to the lead) and
+`AReviewerThatAsksForSourceIsAskedAgainTests.AConversationThatOutlivesItsCap…` (C13, S4's case); both pass when their class runs alone (6 of 6, 16 of 16) — listed, not called flakes. Loop: `AcpClientUsageTests` (12) plus C23, 20 runs in a row, 0 of 20 failed; the "before" is not a loop —
+the red runs fail on every run, which is stronger than a rate.
+
+**Deviations.** (1) +3 tests, not +2 (above). (2) `FakeAcpAgent.Entries()` reads the log shared (`FileShare.ReadWrite | Delete`): `WhenReceivedAsync` polls it while the agent appends, `File.ReadAllLines` shares read only, so the agent's next append failed, the agent died and the caller-first
+test ended by its guard — a bug of the new helper, found by the test, no product line. (3) The `startDelayMs` of S12 stays in the script on purpose (it no longer matters, which is the point); the usage-bound test has none. (4) No `Stopwatch` is left in these tests.
+
+## The suite is deterministic — E4 S3: the consultant places' clock (C17, 2026-10-21)
+
+Source: `…_E4.md` §8 S3 (§5.1 table 2). Branch `feat/suite-e4-clock`. **Product change:** `ConsultantPlaces` takes `TimeProvider? clock = null` last (`ConsultantPlaces.cs:116`, `_clock` `:118`); `OneShotAsync` arms the row's budget as
+`budgetTimer = new CancellationTokenSource(budget, _clock)` with `copying` linked second (`:339-340`, a remark names the order); `Stamping` takes the clock and stamps `clock.GetUtcNow().UtcDateTime` (`:290-292`). `ReviewSnapshots.BuildOnceAsync`'s 60 s `Stopwatch` is untouched
+(the host safety ceiling). The scan's set gained `ConsultantPlaces.cs`. Evidence (C17): `CopiesThatOutrunTheRowsBudget_…` budgets 1 s that must also cover git starting and the fast copy, and failed in CI and locally.
+
+**Order.** (1) The seam alone (constructor parameter + field, nothing reads it): whole suite 13,140 tests, 13,016 passed, 120 skipped, 4 failed — C17 itself (`0 of 2 copied`) and three load failures of a 51-minute run with three suites on the machine
+(`TheServerAnswersInitializeAtOnceTests.Initialize_IsAnswered_WhileTheVaultReadAndTheProbeAreStillRunning`, `AChildThatExitedBeforeItsStartTimeWasReadTests…`, `RepairRunsInsideTheBudgetTests.ARepairGetsWhatIsLEFTOfTheDeadline_NotAWholeSecondOne`), each green re-run alone. (2) The scan with
+`ConsultantPlaces.cs` added, before the move: red on exactly `.CancelAfter(budget)` in `copying.CancelAfter(budget); try {...` and `DateTime.UtcNow` in `public void Begin() => ConversationFolder.Begin(folder, store, DateTime.UtcNow, ceiling)`; green after.
+
+| Test (`AConversationPlaceTests`) | Seen red as | Green because |
+|---|---|---|
+| `CopiesThatOutrunTheRowsBudget_RefuseThePlace_SayingHowManyWereCopied_AndKeepNone` (S16) | on the unmoved product with a stand-in `SlowGit` (the real launcher, every `git` answer delayed 1.1 s, 1 s budget): `Expected place.Refusal "copying the granted folders took longer than the row's budget (1 s): the budget ran out while reading the granted folders, before anything was copied - ..." to contain "1 of 2" because the sentence says how far the copying got.` | the **handshake**: the slow root's `BeforeCopyOf` hook, on the product's thread, signals a `ClockHandshake` and waits; the test awaits `Reached`, advances `budget + 1 ms` on ITS OWN thread (the budget timer fires there, outside the clock's lock) and releases; the released copy meets its cancelled token; `1 of 2 copied`, an empty `tree`, `budget.Held == 0`, `clock.ActiveTimers == 0` |
+| `AZeroBudget_IsOutBeforeAnythingIsCopied_OnAClockNobodyAdvances` (new, guard) | green before (a scheduled zero timer fires within a millisecond — by luck) and after (the constructor's synchronous cancellation — by contract) | the refusal is the phase sentence "before anything was copied"; nothing under `tree`; `budget.Held == 0` |
+| `AConversationFoldersStamp_IsTheClocksInstant` (new) | B10 below | the folder's stamp equals the clock's instant |
+
+**Break-its (restore by writing the file, then rebuild).** B9 (`CancelAfter(budget)` back on the linked source): S16 red 3 of 3 — `Expected place.Refusal "" to contain "1 of 2" because the sentence says how far the copying got.` (the budget on the system timer, the advance cancels nothing, the slow copy completes); the zero arm stays green under B9, as the spec
+said of a guard; the scan red on the `CancelAfter` site. B10 (`DateTime.UtcNow` back in `Stamping.Begin`): the stamp arm red — `Expected … StartedUtc to be <2031-03-04 05:06:07> because the stamp reads the places' clock, which no wall time has moved, but found <2026-10-21 17:00:28.685387>` — and the scan red on the `DateTime.UtcNow` site.
+
+**Counts.** `AConversationPlaceTests` 10 → 12 (+2: the zero arm and the stamp arm; the C17 test rewritten); the scan class stays 6. Final whole-suite run: 13,142 tests, 13,018 passed, 120 skipped, 4 failed — none uses `ConsultantPlaces`: `TheSizingIsConcurrentAndBoundedTests.ASizingThatOutlastsItsDeadline_ReturnsGitFailedScopes_WithinIt`,
+`AReviewerThatAsksForSourceIsAskedAgainTests.AResolverThatTimesOut_…` (C13, S4's) and `…ATurnThatTimesOut_IsOneTerminalFailure_AndTheSlotIsReleased` (**C30**, not S4's: E4 never touched it — it races a real 2 s turn deadline against a cold `FakeCli` start, C13's mechanism, and `ATurnWhoseRepairTimesOut_…` has the same shape; filed by the judge round), `AFeatureIsReviewedEndToEndTests.TheRoundsDeadline_IsScaledByTheFollowUps_…` (C6, S5's); each re-run alone green (a fifth, `AConversationCapOnTheWork_…`, was red once in a class re-run and green alone).
+Loop: the class alone 5 of 5 and 20 of 20 green.
+
+**Deviations.** (1) **`0 of 2 copied` CAN occur** — the plan (§3 C17, S16) says it cannot since #887; the unmoved test failed with exactly that sentence, so the cause is wider than the git phase: any real work before the slow copy shares the budget; the stand-in's RED is the phase sentence ("while reading the granted folders", not
+"while confirming 2 candidates with git" — git's FIRST answer is the one cut). (2) **The test's budget is 5 minutes, not 1 s**: with 1 s B9 was not reliably red (the system timer fires during the test and cuts the released copy, so the old shape passes by luck on a slow run, seen once of two); a budget the system timer cannot reach inside the
+30 s guard makes the advance the ONLY thing that can cut the copy, and the refusal then reads "(300 s)". (3) The test awaits `Task.WhenAny(meeting.Reached, placing)` and fails with its own sentence ("the place ended first, so something else times the budget") rather than a `TaskCanceledException` after the guard. (4) The released-bytes arm is the S16 test's own last assertion
+(`budget.Held == 0`, §15 point 5), plus the same in the zero arm — no separate test. (5) The optional stamp arm was written (it is what B10 breaks).
+
+## The suite is deterministic — E4 S4: the turn loop's and the source resolver's clocks (C13, 2026-10-21)
+
+Source: `…_E4.md` §8 S4 (§5.1 tables 3 and 4; §15 points 3 and 4 govern). Branch `feat/suite-e4-clock`. **Product change:** `TurnLoop` takes `TimeProvider? clock = null` last (`TurnLoop.cs:29-32`, `_clock` `:34`) — the conversation's one `Stopwatch` and its five reads are `_clock.GetTimestamp()` (`:50`, `:86`) and
+`GetElapsedTime(…)` (`:79`, `:89`), `using System.Diagnostics` removed; `BoundedScheduler.cs:463` passes its own `_clock` (`new TurnLoop(…, onProgress, _clock)`); `SourceResolver` takes `clock` after `readDeadline` (`SourceResolver.cs:45`, `_clock` `:48`) and arms `readTimer = new CancellationTokenSource(_readDeadline, _clock)` first,
+`deadline` linked second (`:203-204`). Nothing is threaded through `PanelService` or `RoundEngine`; the three product construction sites of the resolver and `PanelService`'s scheduler are untouched. The scan's set gained `TurnLoop.cs` and `SourceResolver.cs`.
+Evidence (C13): three turn budgets of `AReviewerThatAsksForSourceIsAskedAgainTests` that also paid a process start.
+
+**Order.** (1) The seams alone, whole suite on the default clock: 13,140 tests, 13,016 passed, 120 skipped, 4 failed — all timing cases the suite-load makes lose (three other coders ran whole suites on the machine): C17 (S3's), `ConsultAntigravityDenialScenarioTests.AHungFollowUp…` (a wall bound of 11 s, found 12.3 s), C6 (S5's) and C13 (this story's own
+red); the last three passed alone by method. (2) The scan with the two files added and no seam: red on exactly three sites — `TurnLoop.cs` `var clock = Stopwatch.StartNew()`, `TurnLoop.cs` the `Stopwatch clock` parameter, `SourceResolver.cs` `.CancelAfter(_readDeadline)` — green (6 of 6) with the seams. (3) The REDs, on today's code:
+
+| Test (`AReviewerThatAsksForSourceIsAskedAgainTests`) | Seen red as | Green because |
+|---|---|---|
+| (a) `AConversationThatOutlivesItsCap_IsOneTerminalTimeout_WithEveryTurnsUsageKept` | `Expected outcome.EarlierTurns not to be empty because the turns that answered before the cap are kept.` (old test with `FAKECLI_SLEEP_MS` 800) | the in-process `ClockedLauncher`: 400 ms turns, a 700 ms timeout, one follow-up (cap 1.4 s) — **four launches** with timeouts `700, 700, 600, 200 ms`, `EarlierTurns.Count == 3` each 400 ms, `TimedOut` with `Usage.Unknown` (the fourth launch's), the clock moved exactly 1,400 ms |
+| (b) `AConversationCapOnTheWork_EndsTheConversation_BeforeTheDerivedOneWould` | `Expected outcome.EarlierTurns.Count to be between 1 and 3 because ... but found 0.` (old test, sleep 950) | 300 ms turns under a 900 ms `ConversationCap`: three turns use exactly 900 ms, `left == 0`, no fourth launch — **three launches**, `EarlierTurns.Count == 3`, `TimedOut` with `Usage.None`, clock 900 ms; the parent's `BeInRange(1, 3)` became `Be(3)` |
+| (c) `AResolverThatTimesOut_RefusesThatRequest_AndTheTurnGoesOnWithTheRest` | `Expected tail … to contain "### src/Cart.cs lines 28-35" because the turn goes on with what was served.` (both reads "timed out: git did not answer within 0.3 s") | `SlowShow` waits with `Task.Delay(delay, clock, ct)`; the test awaits `clock.WhenTimersAsync(2)` (the 300 ms read deadline AND `SlowShow`'s 5 s delay armed), advances 301 ms, asserts `await slow.TokenCancelled` is `true` (the slow read's token was cancelled, and by the advance — `clock.GetUtcNow() - Epoch == 301 ms`) BEFORE awaiting the turn; `Cart.cs` served |
+| `AZeroReadDeadline_RefusesTheRead_AsTimedOut_AndTheTurnGoesOn` (new, guard) | green before by luck, after by contract (§5.2) | `readDeadline: TimeSpan.Zero` on a clock nobody advances: `Big.cs` "not served … timed out", the turn goes on |
+
+**What the counts rest on.** A turn is launched whenever ANYTHING is left (`left <= TimeSpan.Zero` is the only no-launch case, `TurnLoop.cs:79-84`), bounded to what is left (`Within`/`Bounded`): `timeout × (1 + follow-ups)` of exact turns gives a final launch bounded to the remainder unless the remainder is exactly zero.
+The stand-in never advances the clock itself (the clock's point 6): each launch makes its own `ClockHandshake` (single-shot, S1 deviation 6) and posts it to a channel; the test's driver loop waits for the launch, advances `min(turn, request.Timeout)` and releases it; a launch whose turn exceeds its timeout is answered `TimedOut`;
+after 20 launches it answers a non-zero exit naming the count, so a loop with no cap ends red and never hangs; `ReleaseAll()` in the test's `finally` frees every parked launch.
+
+**Break-its (each red, restored, rebuilt, the diff re-checked identical to the seams).** B11 (`left <= TimeSpan.Zero` made unreachable): the work-cap test red — `Expected launcher.Count to be 3 because nothing was left of the 900 ms for a fourth launch, but found 4.` B12 (`:50` and the `left` read back on `Stopwatch`): both turn tests red on the ceiling —
+`launcher.Count … found 21` and `Expected type to be …TimedOut … but found …NonZeroExit`. B13 (resolver back on `CancelAfter`): the resolver test red — `TimeoutException: gave up after 30 s waiting for the read deadline AND the slow read's delay to be armed on the clock`. B14 (`BoundedScheduler.cs:463` without `_clock`): both turn tests red the same way as B12.
+
+**Counts and loop.** +1 test (the zero arm); the scan's self-tests stay 6. Loop: the class 20 times in a row — before the fix (seam present, old tests moved back by the REDs' form) it failed in 13 of 20 runs (C13's cap test 12 times, plus the work-cap, the resolver and one unrelated repair-timeout test under the load of three parallel suites); after, 0 of 20.
+
+**Deviations.** (1) **B11 does not turn the cap test red** — the plan expected both: with the check removed, the cap test's fourth launch is bounded to 200 ms and the stand-in ends it `TimedOut` anyway, so the outcome is the same; the work-cap test (exactly 900 ms spent, `left == 0`) is the arm that sees the check, through the launch count.
+(2) The driver reads arrivals from a channel, one handshake per launch, not one reused handshake. (3) A bounded `WaitingForAsync` helper names the thing a guard waited for, so B13 reads as a sentence and not a bare timeout.
+
+## The suite is deterministic — E4 S5: the round deadline pinned without wall time (C6, 2026-10-21)
+
+Source: `…_E4.md` §8 S5 (its status section lists the deviations). Branch `feat/suite-e4-clock`. **Tests only — no product line changed** (each break-it was restored and the diff of `src_mcp/runners`, `src_mcp/src` re-checked empty).
+The old end-to-end test slept 700 ms per fake turn so four turns would overrun a round bounded by ONE turn's 2 s: a claim about arithmetic paid for in wall time, lost on a loaded machine (C6). The claim is now three tests.
+
+| Test | What it pins | Seen red as |
+|---|---|---|
+| `RoundDeadlineTests.ThreeFollowUps_EarnARoundFourTurnsLong_AndNoFollowUpsEarnOne` (pure; `RoundDeadline.For`, `src/Server/Rounds/RoundDeadline.cs`) | one vendor, one role, `ReviewerTimeout = 2 s`, `Stage.FeatureReview` (the plan's `Stage.Feature` is shorthand): `followUps: 3` → exactly 8 s, `followUps: 0` → exactly 2 s, ratio 4 | red by absence; its real symptom is B15 (`RoundDeadline.cs:11` `ReviewerTimeout * 1`): `Expected 8s because a 2 s reviewer asked again three times may take 2 s x (1 + 3), but found 2s.` (the wiring arm goes red too: `own 20`) |
+| `AReviewerThatAsksForSourceIsAskedAgainTests.AConversationIsCutAtTimeoutTimesItsTurns_NotAtOneTurnsTimeout` (manual clock, S4's `ClockedLauncher`) | 700 ms turns: arm one `Ok`, `Turns == 4`, 4 launches, clock moved exactly 2,800 ms; arm two with `ConversationCap = 2 s`: `TimedOut`, 2 earlier turns, 3 launches (timeouts `2 s, 1.3 s, 600 ms` — each is bounded to what is left), clock moved exactly 2 s | `TurnLoop`'s cap (`TurnLoop.cs:48`) dropped to `Timeout * 1`: `Expected type to be CoaiMcp.Runners.Reviewers.ReviewerOutcome+Ok because an 8 s cap (a 2 s timeout with three follow-ups) holds four 700 ms turns, but found CoaiMcp.Runners.Reviewers.ReviewerOutcome+TimedOut.` |
+| `AFeatureIsReviewedEndToEndTests.TheRoundsDeadline_IsScaledByTheFollowUps_TheEngineHandsThemToTheDerivation` (wiring arm) | the engine hands `stage.FollowUps` to the derivation (`RoundEngine.cs:287`): `RoundTimeout = 1 min`, `ReviewerTimeout = 20 min`, three follow-ups; the suite's existing `ListSink` in place of `Logger.None` captures `RoundDeadline.For`'s warning, which must say `own 80` (20 × (1 + 3)) | red by absence (no sink, no `RoundTimeout` parameter); B16 (`RoundEngine.cs:287` `stage.FollowUps` → `0`): `Expected warnings {"the round limit of 1 minute(s) is shorter than one reviewer's own 20; reviewers may be cancelled"} to have an item matching w.Contains("own 80") because the 20-minute reviewer asked three more times is allowed 20 x (1 + 3) = 80 minutes, which the 1-minute round is shorter than.` |
+
+`Endless` (the stand-in continuation) gained `bool stopsAtTheFollowUps = false`, so a conversation can end by its own follow-up count (as the feature stage's does) rather than by the cap; the default keeps S4's cap tests unchanged. `Service(...)` of the end-to-end file gained optional `roundTimeout` and `log`.
+`FAKECLI_SLEEP_MS=700` is removed from the end-to-end test and its remark rewritten.
+
+**What the end-to-end test still pays, said in its remark:** it is a real-process SMOKE TEST of the wiring (proceed, four prompts, all reviewers answered) that keeps the 2 s reviewer timeout and the REAL round timer, armed in `RoundEngine` (`:288`, `new CancellationTokenSource(budget)`) before the roles are warmed, the sha resolved and the worktree, diff and outline built — so setup plus four cold `FakeCli` launches must fit the derived 8 s.
+A kept failure of it ("the round reached its limit") reopens C6 against the setup cost of that machine, never against the arithmetic, which the two deterministic tests hold. No timeout was lengthened. **B16 also turns the smoke test red on a real machine** (the plan predicted it would still pass): with `stage.FollowUps` → `0` the derived whole is 2 s and setup plus the cold launches did not fit it
+(`"verdict": "revise"`) — the smoke test is also sensitive to the whole being 2 s instead of 8 s; the wiring arm remains the deterministic observer.
+
+**Evidence and counts.** Today's end-to-end test with `FAKECLI_SLEEP_MS=1900` failed 20 of 20 runs, two messages alternating — `"reviewers": "0 of 1 reviewers answered; failed: codex/FeatureReview: timeout"` (8.8 s) and `"… failed: codex/FeatureReview: cancelled; the round reached its 0 minute limit and the reviewers still running were cancelled"` (9.6 s), both under
+`Expected answer.GetProperty("verdict").GetString() to be "proceed" … "verdict": "revise"`. After: the smoke test plus the wiring arm 0 of 20, the scheduler-level test 0 of 20, the pure test 0 of 20. Test count +3, as written. `EveryBudgetInAClockedClassReadsItsClockTests` 6 of 6 green (S5 touches no clocked class).
+Whole `CoaiMcp.Tests.exe` at the time (Windows, Debug, 25 min 41 s on a loaded machine): 13,152 total, 13,032 passed, 120 skipped, 0 failed. The 20 Windows CI runs of the plan's watch are still to come.
