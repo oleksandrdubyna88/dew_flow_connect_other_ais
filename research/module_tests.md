@@ -5532,3 +5532,18 @@ A kept failure of it ("the round reached its limit") reopens C6 against the setu
 **Evidence and counts.** Today's end-to-end test with `FAKECLI_SLEEP_MS=1900` failed 20 of 20 runs, two messages alternating — `"reviewers": "0 of 1 reviewers answered; failed: codex/FeatureReview: timeout"` (8.8 s) and `"… failed: codex/FeatureReview: cancelled; the round reached its 0 minute limit and the reviewers still running were cancelled"` (9.6 s), both under
 `Expected answer.GetProperty("verdict").GetString() to be "proceed" … "verdict": "revise"`. After: the smoke test plus the wiring arm 0 of 20, the scheduler-level test 0 of 20, the pure test 0 of 20. Test count +3, as written. `EveryBudgetInAClockedClassReadsItsClockTests` 6 of 6 green (S5 touches no clocked class).
 Whole `CoaiMcp.Tests.exe` at the time (Windows, Debug, 25 min 41 s on a loaded machine): 13,152 total, 13,032 passed, 120 skipped, 0 failed. The 20 Windows CI runs of the plan's watch are still to come.
+
+## The PowerShell a test starts gets one profile-free environment (2026-10-22, S12 of `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp_E5.md`, C28)
+
+`src_vs_code/src/test/powerShellEnv.ts` is the ONE environment every test that starts a PowerShell passes (`env: powerShellEnv(...)`, with `cwd: tmpdir()`):
+a minimal set (`PATH`, `SystemRoot`, `PATHEXT`, `LOCALAPPDATA`, `ProgramFiles`, `ProgramData`, `ALLUSERSPROFILE`, `TEMP`/`TMP` = the run's temp) plus
+`PSModuleAnalysisCachePath` inside that temp, which Windows PowerShell 5.1 and pwsh 7 both honour. It replaces two `minimalEnv()` copies (the kimi and vibe
+Runs tests) and the three-variable environments of the two parse tests. Nine spawns use it; `powerShellEnv.test.ts` holds them there with a scan over
+`src/test/**/*.ts` (a `spawnSync`/`spawn`/`execFile` naming a PowerShell without `env: powerShellEnv(` and `cwd: tmpdir()` fails, naming `file:line`),
+plus three tests of the helper itself (the cache path is inside the temp it was given; a caller's entries win; no profile variable is carried).
+
+**What it proves / does not.** It makes the TESTS independent of the caller's profile and working folder. It does not prove the cause of the six stray
+`src_vs_code/Microsoft/Windows/PowerShell/ModuleAnalysisCache` files (all Windows PowerShell 5.1, listed in §S12 of the plan): the mechanism the plan first
+named (no `LOCALAPPDATA`) was measured false, no road reproduced a leak (`npm run compile`, the PowerShell tests, a whole `npm test`), and the suspect — a
+PowerShell started by an agent harness in `src_vs_code` — is outside the tests. There is no cache-landing test on purpose: the write is deferred about 10 s and
+conditional on a dirty cache, so such a test stays green wherever the profile resolves. `npm run compile` starts no PowerShell.
