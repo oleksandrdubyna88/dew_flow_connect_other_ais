@@ -344,7 +344,8 @@ internal static class Tools
                     is refused while a gate is held and no such answer is on file, and ignored when one
                     is. When the person has pressed Proceed, `status` and every refused review say
                     so; call resolve — with your decisions, or none — and the stage advances, the
-                    findings you left undecided recorded as proceeded over.
+                    findings you left undecided recorded as proceeded over (not as rejections: raised
+                    again in a later round they still gate).
 
                     A DOCUMENT round is resolved with its `document`; a FEATURE round with its `feature` —
                     the same `planPath` you gave `review_feature` (the branch is then not read).

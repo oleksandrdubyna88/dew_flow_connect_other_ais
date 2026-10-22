@@ -58,6 +58,14 @@ test('a notice that lists proceed offers it as the fourth choice, last, and says
   assert.match(proceed.detail, /epic-1/, 'it names the branch it advances');
 });
 
+test('the fourth choice says it covers this one stage change only, not the same finding raised later', () => {
+  // A Proceed authorises one transition; it is not a standing waiver (plan §13) — so the person is told, under the button.
+  const proceed = answerChoices(card())[3]!;
+
+  assert.match(proceed.detail, /this one stage change only/i, 'the scope of the press');
+  assert.match(proceed.detail, /raised again in a later round[\s\S]*counts/i, 'what a later round does with the same finding');
+});
+
 test('on a feature review the fourth choice names the review, not a branch no git ref can spell', () => {
   const proceed = answerChoices(card({ branch: FEATURE_BRANCH }))[3];
 

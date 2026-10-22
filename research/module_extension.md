@@ -11219,7 +11219,12 @@ card the server writes lists the decisions it offers (`Escalation.decisions`: th
 `ask_human` card `continue, fix, discuss`), and `answerChoices` appends **Proceed despite the findings**
 (`proceedChoice(branch)`, `decision: 'proceed'`) LAST, and only for `kind: 'notice'` whose list names it. Its detail says what it
 causes — *the stage advances on <branch / this feature review> with the findings open*, every finding the AI did not decide
-recorded as proceeded over by you. A card with no list (an older server), a list that does not name it, or one that is not a
+recorded as proceeded over by you, **for this one stage change only** (the same finding, raised again in a later round, counts in
+full — plan §13.1; the detail says so under the button). The rounds log page draws such a finding as *proceeded over* (the server's
+`findings.resolution = 'proceeded'`, with its own mark `.finding.proceeded`, its reason line suppressed because the label says it) and
+the CSV export's `decision` column writes `proceeded over` (`decisionWord`) — it would otherwise have read `open`. A question card asked
+while the gate is held lists the findings the hold was raised for even after the AI resolved them (plan §13.2; server-side, the card
+file's `openFindings`). A card with no list (an older server), a list that does not name it, or one that is not a
 list offers the three it always did — a newer extension against an older server never offers a button the server would read as
 prose. A `question` card never offers it whatever its file lists, and an unknown or absent `kind` never does either; the box
 and the three decisions are as before, except that on a question card Continue and Fix now end with *a decision for the held

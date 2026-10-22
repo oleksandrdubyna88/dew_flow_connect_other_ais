@@ -412,6 +412,15 @@ test('the decision column says the word the PAGE says', () => {
   assert.equal(cells(undefined), 'open');
 });
 
+test('a finding a person proceeded over is exported as its own word, never as open', () => {
+  // The server stores `proceeded` for a finding a person's Proceed carried the stage over: it was neither taken nor
+  // declined, and it is decided — a file that said `open` would read as a finding nobody has dealt with.
+  const cells = findingCells(finding({ resolution: 'proceeded', reason: 'proceeded over by a person' }));
+
+  assert.equal(cell(cells[FINDING_COLUMNS.indexOf('decision')]), 'proceeded over');
+  assert.equal(cell(cells[FINDING_COLUMNS.indexOf('reason')]), 'proceeded over by a person');
+});
+
 test('a rejection carries its reason, and every finding column is written', () => {
   const cells = findingCells(finding());
 

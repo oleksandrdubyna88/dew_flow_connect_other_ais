@@ -89,7 +89,8 @@ export function proceedChoice(branch = ''): DecisionChoice {
     label: 'Proceed despite the findings',
     detail:
       `The stage advances on ${where} with the findings open — nothing is fixed first. ` +
-      'Every finding the AI did not decide is recorded as proceeded over by you. Use it when the reviewers are plainly wrong, or no one is left to ask.',
+      'Every finding the AI did not decide is recorded as proceeded over by you. This covers this one stage change only: ' +
+      'the same finding, raised again in a later round, counts in full. Use it when the reviewers are plainly wrong, or no one is left to ask.',
   };
 }
 

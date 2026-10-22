@@ -48,6 +48,40 @@ public sealed class OnlyAPersonReleasesTheGateMachineTests : IDisposable
     // ---------- the machine ----------
 
     [Fact]
+    public void AFindingAProceedCarriedTheStageOver_IsNotAStandingRejection_AndTheGateDoesNotDiscountIt()
+    {
+        var held = CalledAPerson();
+        var finding = F("the poll has no timeout");
+
+        var moved = (Transition.Moved)RoundMachine.Resolve(held, [new Decision.ProceededOver(finding)], HumanDecision.Proceed);
+
+        moved.State.Stage.Should().Be(Stage.CodeReview, "the person's Proceed advances this one transition");
+        moved.State.Rejections.Should().BeEmpty("proceeding over a finding is not arguing with it");
+        GateRule.Evaluate([finding], moved.State.Rejections, threshold: 0).GatingCount
+            .Should().Be(1, "the same defect raised in a later round gates in full");
+    }
+
+    [Fact]
+    public void ARejectionStillStands_BesideAProceededOverFinding()
+    {
+        var held = CalledAPerson();
+
+        var moved = (Transition.Moved)RoundMachine.Resolve(
+            held, [new Decision.Rejected(F("argued"), "the caller owns it"), new Decision.ProceededOver(F("left open"))], HumanDecision.Proceed);
+
+        moved.State.Rejections.Should().ContainSingle().Which.Finding.Title.Should().Be("argued");
+    }
+
+    [Fact]
+    public void AProceededOverRecord_WithNoPersonsProceed_IsRefused()
+    {
+        // Only the server builds this record, and only while consuming a person's Proceed: the machine refuses it anywhere else.
+        var refused = RoundMachine.Resolve(CalledAPerson(), [new Decision.ProceededOver(F())]);
+
+        refused.Should().BeOfType<Transition.Refused>().Which.Sentence.Should().Be(RoundMachine.ProceededOverNeedsAProceed);
+    }
+
+    [Fact]
     public void AProceed_ReleasesTheHoldsQuestionsWithTheHold()
     {
         var moved = (Transition.Moved)RoundMachine.Resolve(CalledAPerson() with { HoldQuestions = ["n1", "q2"] }, [], HumanDecision.Proceed);

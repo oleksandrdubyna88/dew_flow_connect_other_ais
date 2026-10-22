@@ -11,6 +11,14 @@ public abstract record Decision
 
     public sealed record Rejected(Finding Finding, string Reason) : Decision;
 
+    /// <summary>
+    /// A finding a person's Proceed carried the stage over without anyone deciding it. Its own disposition, and NOT a
+    /// rejection: it is recorded and reported, but it is never added to the session's standing rejections and the gate's
+    /// discount never reads it — a Proceed authorises THIS stage transition only, so the same defect raised in a later
+    /// round gates in full. Only the server builds it, and only while consuming a person's Proceed.
+    /// </summary>
+    public sealed record ProceededOver(Finding Finding) : Decision;
+
     private Decision() { }
 }
 
@@ -106,6 +114,10 @@ public static class RoundMachine
 
     /// <summary>The reason a finding is recorded with when a person proceeded over it without a decision of the AI's.</summary>
     public const string ProceededOver = "proceeded over by a person";
+
+    /// <summary>Why a <see cref="Decision.ProceededOver"/> record is refused when no person's Proceed is being consumed.</summary>
+    public const string ProceededOverNeedsAProceed =
+        "a proceeded-over record exists only under a person's Proceed on a held gate — it cannot be recorded any other way";
 
     public static Transition BeginPlanRound(SessionState s) => s switch
     {
@@ -718,10 +730,16 @@ public static class RoundMachine
                 $"a rejection without a reason is not a decision — {unreasoned.Count} rejection(s) carry none");
         }
 
+        var proceeds = ProceedsOnAHeldGate(s, personsDecision);
+        if (!proceeds && decisions.OfType<Decision.ProceededOver>().Any())
+        {
+            return new Transition.Refused(ProceededOverNeedsAProceed);
+        }
+
+        // Only a REJECTION stands: a proceeded-over finding is recorded by the caller of this method and read by nobody here.
         var rejections = s.Rejections.AddRange(
             decisions.OfType<Decision.Rejected>().Select(d => new PriorRejection(d.Finding, d.Reason)));
 
-        var proceeds = ProceedsOnAHeldGate(s, personsDecision);
         // The gate is NOT cleared by recording decisions. It used to be, unconditionally, which
         // meant the AI reopened the gate it had just been stopped by simply by doing the next
         // thing the protocol asks of it. Only a person clears it: their Proceed here, or a

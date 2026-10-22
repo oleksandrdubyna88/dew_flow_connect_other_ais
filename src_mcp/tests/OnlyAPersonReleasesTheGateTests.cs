@@ -50,9 +50,11 @@ public sealed class OnlyAPersonReleasesTheGateTests : FakeCliRoundTests
             Rounds = PanelConfig.Uniform(1, 0, StagePolicy.Human),
             CadenceMode = Core.Cadence.CadenceMode.Off,
             SplitPlan = false,
+            // A question asked on the held gate waits this long for a person, then returns with its card still on disk.
+            EscalationBudget = TimeSpan.FromMilliseconds(300),
         });
 
-    /// <summary>The gate, held: <c>call_human</c>, the notice on disk, the finding pending.</summary>
+    /// <summary>The gate, held:<c>call_human</c>, the notice on disk, the finding pending.</summary>
     private async Task<PanelService> HeldAsync()
     {
         var service = HoldingService();
@@ -198,10 +200,73 @@ public sealed class OnlyAPersonReleasesTheGateTests : FakeCliRoundTests
         Parse(await ResolveAsync(service, "[]")).TryGetProperty("error", out _).Should().BeFalse();
 
         var after = Session();
-        after.State.Rejections.Should().ContainSingle().Which.Reason.Should().Be("proceeded over by a person");
+        after.State.Rejections.Should().BeEmpty("a person's Proceed authorises THIS stage transition only — it is not a standing rejection");
         var round = RoundsQuery.Read(_data).Rounds.Should().ContainSingle().Subject;
         var recorded = RoundsQuery.FindingsOf(_data, sessionId, round.Stage, round.Number).Findings.Should().ContainSingle().Subject;
+        recorded.Resolution.Should().Be("proceeded", "its own audited disposition, neither accepted nor rejected");
         recorded.Reason.Should().Be("proceeded over by a person", "a decision record, not a silent drop");
+        round.Rejected.Should().Be(0, "a proceeded-over finding is not a rejection");
+        round.Accepted.Should().Be(0);
+    }
+
+    /// <summary>The verdict, or the whole reply when there is none — so a set-up error reads as itself, not as a missing key.</summary>
+    private static string VerdictOf(JsonElement reply) =>
+        reply.TryGetProperty("verdict", out var verdict) ? verdict.GetString()! : reply.ToString();
+
+    /// <summary><c>review_code</c> reviews COMMITTED changes over the base only: one more commit on the branch.</summary>
+    private async Task CommitAChange(string message)
+    {
+        await File.AppendAllTextAsync(Path.Combine(_repo, "app.cs"), message + "\n", TestContext.Current.CancellationToken);
+        await Git("add", ".");
+        await Git("commit", "-m", message);
+    }
+
+    private const string CodeScope = """
+        # SCOPE
+
+        Make the poll loop give up on a hung peer instead of waiting for it forever.
+        When it is done: the loop returns after a timeout, and the caller sees which peer hung.
+        Constraint: no new dependency.
+        """;
+
+    [Fact]
+    public async Task AFindingAPersonProceededOver_IsStillGatingWhenAReviewerRaisesItAgainInALaterRound()
+    {
+        // A Proceed authorises one stage transition. It is not a standing waiver: the same defect, raised again in the
+        // code round, gates at threshold zero exactly as it would had nobody proceeded.
+        var service = await HeldAsync();
+        ThePersonAnswers(NoticeId(), "proceed");
+        Parse(await ResolveAsync(service, "[]")).TryGetProperty("error", out _).Should().BeFalse();
+        Session().State.Stage.Should().Be(Stage.CodeReview);
+        await CommitAChange("the loop gives up");
+
+        Script(OneBlockingFinding);
+        var verdict = Parse(await service.ReviewCodeAsync(_repo, Branch, "main", CodeScope, false, TestContext.Current.CancellationToken));
+
+        VerdictOf(verdict).Should().Be("call_human",
+            $"the proceeded-over finding is raised again and must still count: {verdict}");
+    }
+
+    [Fact]
+    public async Task AFindingAPersonProceededOver_IsStillGatingInAReopenedCodeStage()
+    {
+        // The same, through `again: true`, which keeps the session's standing rejections (BeginCodeRoundAgain).
+        var service = await HeldAsync();
+        ThePersonAnswers(NoticeId(), "proceed");
+        Parse(await ResolveAsync(service, "[]")).TryGetProperty("error", out _).Should().BeFalse();
+        await CommitAChange("the loop gives up");
+        Script(Clean);
+        VerdictOf(Parse(await service.ReviewCodeAsync(_repo, Branch, "main", CodeScope, false, TestContext.Current.CancellationToken)))
+            .Should().Be("proceed");
+        Parse(await ResolveAsync(service, "[]")).TryGetProperty("error", out _).Should().BeFalse();
+        Session().State.Stage.Should().Be(Stage.Done);
+        await CommitAChange("the follow-up");
+
+        Script(OneBlockingFinding);
+        var verdict = Parse(await service.ReviewCodeAsync(_repo, Branch, "main", CodeScope, true, TestContext.Current.CancellationToken));
+
+        VerdictOf(verdict).Should().Be("call_human",
+            $"a Proceed over the plan's finding must not discount it in a reopened code stage: {verdict}");
     }
 
     [Fact]
@@ -285,6 +350,35 @@ public sealed class OnlyAPersonReleasesTheGateTests : FakeCliRoundTests
         notice["decisions"]!.AsArray().Select(d => d!.GetValue<string>())
             .Should().Equal("continue", "fix", "discuss", "proceed");
         notice["kind"]!.GetValue<string>().Should().Be("notice");
+    }
+
+    /// <summary>The card an <c>ask_human</c> question wrote — the one that is not the hold's notice.</summary>
+    private JsonNode TheQuestionCard() =>
+        Directory.GetFiles(Path.Combine(_data, "escalations"), "*.json")
+            .Where(f => !f.EndsWith(".answer.json", StringComparison.Ordinal))
+            .Select(f => JsonNode.Parse(File.ReadAllText(f))!)
+            .Single(card => card["kind"]!.GetValue<string>() == "question");
+
+    [Fact]
+    public async Task AQuestionCardAskedDuringTheHold_ShowsTheFindingsTheHoldWasRaisedFor_AfterTheAiResolvedThem()
+    {
+        // The AI resolved the round's findings (no Proceed): Pending is empty and the hold stays. A question asked now is
+        // still the gate's — its Continue / Fix release the hold (D5) — so the person must see what the hold is FOR.
+        var service = await HeldAsync();
+        Parse(await ResolveAsync(service, RejectIt)).TryGetProperty("error", out _).Should().BeFalse();
+        Session().Pending.Should().BeEmpty("the round's decisions were recorded");
+        Session().State.HumanGate.Should().BeTrue("recording decisions is not a person deciding");
+
+        var reply = Parse(await service.AskHumanAsync(_repo, Branch, "Which log format would you rather have?", ct: TestContext.Current.CancellationToken));
+
+        reply.GetProperty("status").GetString().Should().Be("no_answer_yet", reply.ToString());
+        var card = TheQuestionCard();
+        var findings = card["openFindings"]!.AsArray();
+        findings.Should().ContainSingle("the card of a held gate lists the findings the hold was raised for");
+        findings[0]!["title"]!.GetValue<string>().Should().Be("the poll has no timeout");
+        card["decisions"]!.AsArray().Select(d => d!.GetValue<string>())
+            .Should().Equal("continue", "fix", "discuss");
+        Session().State.HoldQuestions.Should().HaveCount(2, "the card joined the hold");
     }
 
     [Fact]

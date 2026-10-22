@@ -1,6 +1,6 @@
 # PLAN — only a person releases the gate
 
-> Status: **coded, 2026-10-22 — S1–S4 and the plan round's §11 built test-first on one branch; not merged and not released, so not yet promoted. §12 records what shipped differently.** Found by the security lane's judge on 2026-10-22; pre-existing in every
+> Status: **coded, 2026-10-22 — S1–S4 and the plan round's §11 built test-first on one branch; not merged and not released, so not yet promoted. §12 records what shipped differently; §13 records the two defects the cadence consultation found afterwards and their fixes.** Found by the security lane's judge on 2026-10-22; pre-existing in every
 > released `coai-mcp`. Scope: `src_mcp/core/Rounds` (`RoundMachine`, `HumanDecision`), `src_mcp/src/Server`
 > (`PanelService.resolve`, `CurrentAnswer`, `Escalations`, `RoundEngine`'s hold notice), `src_mcp/src/Tools.cs`
 > and `Program.cs` (what the tools promise), `src_vs_code` (`escalationAnswer.ts`, `escalations.ts`, help in five
@@ -188,7 +188,7 @@ into the data directory (§8 R1 — named, not solved).
 | D2 | **`RoundMachine.Resolve(SessionState, decisions, HumanDecision personsDecision = None, bool callerClaimsProceed = false)`.** The bool `humanSaysProceed` is REPLACED by the person's decision; the caller's claim rides beside it so the one pure place that judged the flag (`:644-655`) still judges it (G2), testably. `personsDecision == Proceed` with `!HumanGate` is treated as `None` (cannot arise when the server reads correctly; pinned so a future reader cannot make it arise). Continue/Fix in `Resolve` do what `WithHumanDecision` does today (reset the count) — the server passes the decision instead of pre-mutating the session, so `PanelService` loses lines rather than gaining them (it is at 1,969 against the 800 cap, with its own open plan) | one judge, one signature, no second flag |
 | D3 | **Refuse the claim rather than silently ignore it, except when redundant.** Silent ignore sends the AI into `Decisions recorded → review_* → GateHeld → ask the person → resolve again…` with no sentence saying the road moved. The refusal names the new road: *a person's decision is read from their card, never from this argument — the gate is still held. Ask them to press "Proceed despite the findings" on the ConnectOtherAIs notice (ask_human puts the question to them if no card is open), or resolve without humanDecision to record your decisions.* Redundant claims are ignored for the reason `:184-195` already gives: refusing would throw away a legitimate round's decisions | a refusal with no door is a stall; a silent ignore is a maze |
 | D4 | **The claim is judged in the core, the decision is read in the server.** `CurrentAnswer.DecisionFor` gains the notice check (G4): the hold's answer is Proceed only when `escalations.Read(id)` says the question's `Kind == Notice`; a missing question file makes it `None` (logged). `CurrentAnswer` is 109 lines — it is THE place (its own remarks: *ONE place, on purpose*). No new file for the reader | reuse-first: the rule already exists, it gains one word |
-| D5 | **A Continue/Fix pressed on an `ask_human` question card asked during the hold keeps releasing the hold — out of scope as a defect.** It is G1/G4 of the ask_human plan, shipped 2026-10-03: the card is labelled the gate's, shows the hold's gating findings, and each decision's `detail` says it acts on the review. The residual the judge names — the AI words a question so that the person presses *Keep going* for an unrelated reason — needs a person to press a button whose consequence is written under it, on a card that shows the findings. What this plan DOES take from the remark: the new, strongest decision is never on that card (G4), and a `question` card's detail text for Continue/Fix says *…for the held gate* in so many words (S5). Recorded as a residual in module_server | the strongest button is kept off the card an AI can word |
+| D5 | **A Continue/Fix pressed on an `ask_human` question card asked during the hold keeps releasing the hold — out of scope as a defect.** It is G1/G4 of the ask_human plan, shipped 2026-10-03: the card is labelled the gate's, shows the hold's findings, and each decision's `detail` says it acts on the review. *(Revised, §13.2: the card used to show the hold's findings only while the round's `Pending` list was non-empty, so after an ordinary `resolve` — which clears `Pending` and leaves the hold standing — it showed NONE for a gate it can still release. That premise of this justification was false in the most common order of events; the card now carries the findings of the hold's own notice, and D5 holds only with that.)* The residual the judge names — the AI words a question so that the person presses *Keep going* for an unrelated reason — needs a person to press a button whose consequence is written under it, on a card that shows the findings. What this plan DOES take from the remark: the new, strongest decision is never on that card (G4), and a `question` card's detail text for Continue/Fix says *…for the held gate* in so many words (S5). Recorded as a residual in module_server | the strongest button is kept off the card an AI can word |
 | D6 | **The withdrawal hold of the cancel plan is covered by construction and needs one sentence and one test.** On `feat/cancel-stops-the-round`, `WithdrawnSession` raises the SAME hold — `HumanGate = true, AwaitingResolve = true, HoldQuestions = [notice.Id]`, the landed findings as `Pending`, a `HoldNotice` — and its S2 spec says it does so *"so `resolve` can record decisions and take a person's `humanDecision: "proceed"`"*. That makes the bypass a two-step there: cancel past an adverse panel → hold → release it yourself — the exact move the revised G4 (2026-10-22) exists to prevent. Because the hold is the same `HumanGate`, this plan closes it without touching the cancel branch; whichever lands second (a) reword that spec sentence to *take a person's Proceed from the notice*, (b) add `AWithdrawalHold_IsNotReleasedByTheArgument` (S1 writes it against a withdrawal-shaped state today — `HumanGate`, `AwaitingResolve`, `Pending` non-empty, last round not `call_human`). **Ship order:** this plan's server stories release no later than the cancel plan's PR A+B release | the cancel plan widens the hold's reach; the hold must be person-only first |
 | D7 | **No rewrite of standing notices on upgrade.** A notice written before this plan offers three decisions on the new extension (G5). Extending `WithTheHoldReissued` to re-issue every pre-upgrade notice would write a second card for every held session on the first call after upgrade, and the person would see two. A held session's person still has Keep going / Stop and act; the help and the release note say a Proceed needs a card from the new server | one card per hold is the guarantee worth more |
 | D8 | **`status` reports `proceed` but applies nothing.** `status` is read-only (`ReadOnly = true`, `Tools.cs:376`); the word tells a resumed conversation what the person chose, and `resolve` is where it takes effect (G6) | the invariant: the stage moves in `Resolve` only |
@@ -327,6 +327,14 @@ touched.
    `coai-mcp` — **before or with** the cancel plan's PR A+B release (D6).
 2. **S4 + S5(extension half)** — its own pull request after 1 merges; its tests do not depend on a running server.
    Releases as the extension.
+3. **The shared gate rule — a conventions step, BEFORE the release (§13.3).** `.agents/conventions/common/coai-review-gate.md`
+   is a pinned submodule that generates the extension's `gateRule.ts` and the snippets, and it still tells the AI to pass
+   `humanDecision: "proceed"`. It is NOT edited from this repository. A follow-up pull request in BOTH conventions
+   repositories (the family has two — a change to one alone leaves the other's snippets telling the AI the old road) must
+   replace that sentence with *a person answers on the notice card*, and the pin must be bumped here (regenerating
+   `gateRule.ts` and the snippets) before the server and extension release. Until then the server answers the old instruction
+   with the refusal sentence naming the card, so nothing breaks — but every AI that follows the shared rule is sent to a road
+   that refuses it first.
 
 **Mixed versions during the window between 1 and 2.** New server + old extension: the card offers three; a Proceed
 has no road until the extension updates — the `resolve` refusal and the release note say so; Keep going / Stop and
@@ -370,7 +378,13 @@ dead button. Either order is safe; 1 before 2 is the only order that closes the 
       that lists it, last, with its consequence written under it; an older server's card offers three.
 - [ ] `status.humanDecision` reports `proceed`; nothing but `resolve` moves the stage.
 - [ ] No surface — instructions, tool descriptions, `GateHeld`, remarks, module comments, help in five languages —
-      tells the AI to pass `humanDecision` for the person.
+      tells the AI to pass `humanDecision` for the person. **Open until §7 step 3 lands:** the shared rule
+      `.agents/conventions/common/coai-review-gate.md` still does, in both conventions repositories and the pin here.
+- [ ] A person's Proceed is not a standing waiver: a finding it carried the stage over is recorded as `proceeded over`
+      (its own disposition), never as a rejection, and gates in full when raised again — in a later round and through
+      `again: true` (§13.1).
+- [ ] A question card asked while a gate is held lists the findings the hold was raised for, also after the AI resolved
+      them (§13.2).
 - [ ] A withdrawal-shaped hold is not released by the argument; the cancel plan's spec sentence is reworded on
       whichever branch lands second (D6).
 - [ ] `module_server.md`, `module_core.md`, `module_extension.md`, `architecture.md` describe the person-only road,
@@ -424,10 +438,9 @@ its reason:
    refreshes a notice only when its `kind` is `notice`; a card with no kind cannot be told from an `ask_human` card and is left, so a
    Proceed on it needs a notice from this server. This supersedes G7/D7 ("no rewrite of standing notices"). `status` is annotated
    read-only for MCP clients and now, once per old notice, rewrites that card file — idempotent, and the only write it makes.
-5. **§11.5 is a rejection with the reason `proceeded over by a person`**, not a new decision type: it reads as *declined* on the log
-   page, counts under *rejected*, and — a consequence worth a decision — it enters the session's standing rejections, so a later round
-   discounts a re-raise of the same finding unless the reviewer brings a new argument. If that is not wanted, a `Decision.ProceededOver`
-   variant that the gate's discount rule ignores is the follow-up.
+5. **§11.5 was first built as a rejection with the reason `proceeded over by a person`** — **superseded by §13.1**: a rejection entered
+   the session's standing rejections and made a later round discount a re-raise of the same finding, i.e. a standing waiver nobody
+   granted. It is now its own disposition, `Decision.ProceededOver`.
 6. **`humanNote` is a new, additive member of `status`** (§11.6 named the sentence, not the field). It is empty unless a Proceed is on
    file; nothing in the extension reads `status`.
 7. **§11.7's test over all four tools is four tests in four harnesses** (the plan/code pair in `OnlyAPersonReleasesTheGateTests`, the
@@ -441,3 +454,44 @@ its reason:
     card, so nothing breaks; the text needs the conventions repository changed and the pin moved (`module_server.md` records it).
 11. **Two existing extension tests were rewritten** (`answerChoices.test.ts`): they pinned a question card's decisions as *identical* to
     the plain ones, which D5's *for the held gate* sentence deliberately changes.
+
+## 13. What the cadence consultation changed (2026-10-22, consultation 1da4d9f4)
+
+A consultation on a cadence, held after §12, found two defects in what was built. Both were fixed test-first; these override §11.5,
+§12.5 and D5's justification.
+
+1. **A person's Proceed is not a standing waiver.** §11.5 recorded each still-pending finding as a REJECTION with the reason
+   `proceeded over by a person`. A rejection joins the session's standing rejections, and `GateRule` discounts a finding that matches one
+   (`IsStandingRejection`) in every later round — `BeginCodeRoundAgain` keeps them too. So one press on the plan notice silently waived
+   the same defect in the code stage and in every `again: true` round: the press authorised far more than the stage transition it was for.
+   - **Built.** `Decision.ProceededOver(Finding)` is its own disposition in the core (`RoundMachine.cs`). `RoundMachine.Resolve` adds
+     only `Decision.Rejected` to the standing rejections, so `GateRule` never sees it, and it refuses a `ProceededOver` record when no
+     person's Proceed is being consumed (`RoundMachine.ProceededOverNeedsAProceed`) — only the server builds one
+     (`ProceededOver.Recorded`, through `DecisionAt.ProceedOver`). The projection stores `findings.resolution = 'proceeded'` with the reason
+     `proceeded over by a person` (`DecisionAt.Resolution` / `.Reason`), so it is persisted in `coai.db` and reported in the round's decisions
+     and by `resolve`.
+   - **Readers.** `RoundsDb.DecidedEarlier` (the re-raise marker) and the round's `accepted` / `rejected` counts read only `accept` /
+     `reject`, so a proceeded-over finding is in neither; the log page's *What it keeps missing* now counts judgements only
+     (`resolution IN ('accept','reject')`); the gate history lists only real rejections; the log page draws the finding as *proceeded over*
+     with a mark of its own and the CSV writes `proceeded over` (it would have read `open`); `CarriedDecision` spells it `proceeded`;
+     `status` lists no decisions. One consequence worth knowing: because `DecidedEarlier` ignores it, a later round does not flag the same
+     finding *raised again* — the gate counting it in full is the guarantee, the marker is not.
+   - **Tests.** `AProceedOverUndecidedFindings_RecordsThemAsProceededOver` (extended),
+     `AFindingAPersonProceededOver_IsStillGatingWhenAReviewerRaisesItAgainInALaterRound`,
+     `AFindingAPersonProceededOver_IsStillGatingInAReopenedCodeStage` (`again: true`), the core pair and the refusal in
+     `OnlyAPersonReleasesTheGateMachineTests`, `RoundsDbTests.AFindingAPersonProceededOver_IsStoredAsItsOwnDisposition_…`, and the
+     extension's `roundsCsv` / `roundsDb` / `humanDecision` tests. The Proceed button's detail now says *this one stage change only*.
+2. **A question card asked during a hold shows the hold's findings.** After an ordinary `resolve`, `PanelService` clears `Pending` and the
+   hold stays; `AskHumanService.Card` copied findings only from `Pending`, so a question card asked then listed NONE although its
+   Continue / Fix still release the hold (D5). That undermined D5's justification (above).
+   - **Built.** `AskHumanService.OpenFindingsOf`: the pending gating findings when there are any, else — while `HumanGate` is true — the
+     `OpenFindings` of the hold's own notice (the first of `HoldQuestions` whose card is not a question card). A hold whose notice is gone
+     lists none rather than guessing. Continue / Fix wording is unchanged: still *for the held gate*; Proceed is still never on the card.
+   - **Test.** `AQuestionCardAskedDuringTheHold_ShowsTheFindingsTheHoldWasRaisedFor_AfterTheAiResolvedThem`.
+3. **The shared rule is a delivery step, not a footnote** — §7 step 3: `.agents/conventions/common/coai-review-gate.md` (pinned submodule;
+   generates `gateRule.ts` and the snippets) still tells the AI to pass `humanDecision: "proceed"`. A follow-up pull request in BOTH
+   conventions repositories plus the pin bump here must replace that with *a person answers on the notice card* before the release.
+   Not edited from this repository.
+
+The *questions-waiting* help article carries both facts in all five languages; the extension's Proceed detail is English only, like the
+rest of the card.

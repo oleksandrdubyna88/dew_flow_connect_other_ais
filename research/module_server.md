@@ -2334,7 +2334,7 @@ sequenceDiagram
     S-->>AI: a person pressed Proceed on the held gate - call resolve to advance (status says it too)
     AI->>S: resolve(decisions or none)
     S->>F: read: Proceed, and the question is a NOTICE of this hold
-    S->>M: Resolve(state, decisions + undecided as "proceeded over by a person", Proceed)
+    S->>M: Resolve(state, decisions + undecided as Decision.ProceededOver, Proceed)
     M-->>AI: Moved: HumanGate false, HoldQuestions empty, stage advanced, PlanProceeded
 ```
 
@@ -2359,8 +2359,15 @@ sequenceDiagram
   applies the person's Proceed; without one the no-round refusal stands. The stage still advances in ONE place, `Resolve`;
   `ApplyHumanDecision` leaves a Proceed alone and `status` applies nothing.
 - **Findings nobody decided are recorded, not dropped** (`ProceededOver.Recorded`): under a consumed Proceed every still-pending
-  finding becomes a rejection with the reason `proceeded over by a person` (the session's standing rejections, the projection,
-  the log page — it reads as *declined*, with the person as the reason); the AI's own decisions are kept as given.
+  finding becomes a `Decision.ProceededOver` — its OWN disposition, never a rejection (plan §13.1, consultation 1da4d9f4). A Proceed
+  authorises THIS stage transition only: the record is not added to the session's standing rejections and `GateRule`'s discount never
+  reads it, so the same defect raised in a later round — `again: true` included — gates in full (`RoundMachine.Resolve` also refuses
+  a `ProceededOver` record when no Proceed is being consumed). It is persisted as `findings.resolution = 'proceeded'` with the
+  reason `proceeded over by a person` (`DecisionAt.Resolution` / `Reason`), reported by the `resolve` reply
+  (`ProceededOver.Instruction`), counted in neither the round's `accepted` nor `rejected`, and ignored by `DecidedEarlier` (so a later
+  round does not flag a re-raise of it) and by *What it keeps missing*. The log page draws it as *proceeded over*, the CSV writes
+  `proceeded over`, `CarriedDecision` spells it `proceeded`; `status` lists no decisions; the gate history lists only real rejections.
+  The AI's own decisions are kept as given.
 - **The agent is told** while a Proceed is on file and not yet consumed: `status` carries `humanDecision: "proceed"` and
   `humanNote: "a person pressed Proceed on the held gate — call resolve to advance"`, every refused review entry answers the same
   sentence (`RoundMachine.ReviewAfterProceed`), and the `resolve` reply names the decision as the person's
@@ -2382,16 +2389,22 @@ sequenceDiagram
   (the argument); it does not make the answer unforgeable against a local process. The follow-up is
   [PLAN_a_signed_answer_releases_the_gate.md](../todo/PLAN_a_signed_answer_releases_the_gate.md).
 - **D5 — Continue/Fix pressed on an `ask_human` question card asked during a hold still releases the hold.** That is G1/G4 of
-  the ask-human plan, shipped 2026-10-03: the card is the gate's, shows the hold's gating findings, and each decision's detail says
+  the ask-human plan, shipped 2026-10-03: the card is the gate's, shows the hold's findings, and each decision's detail says
   it acts on the review. What this change takes from the objection: Proceed is never on that card, and a question card's Continue
-  and Fix now say *for the held gate* in so many words.
+  and Fix now say *for the held gate* in so many words. **The card shows the hold's findings even after the AI resolved them**
+  (plan §13.2): `AskHumanService.OpenFindingsOf` copies the pending gating findings when there are any and otherwise — while
+  `HumanGate` holds — the `OpenFindings` of the hold's own notice (the first of `HoldQuestions` that is not a question card). Before
+  that a plain `resolve` cleared `Pending` and the card listed none for a gate it could still release, which was the premise D5 rested
+  on; a hold whose notice is gone lists none rather than guessing.
 - **The withdrawal hold of the cancel plan** (on `feat/cancel-stops-the-round`) raises the same `HumanGate` and is covered by
   construction (`AWithdrawalHold_IsNotReleasedByTheArgument`); that plan's spec sentence *"take a person's `humanDecision: proceed`"*
   should read *"take a person's Proceed from the notice"* on whichever branch lands second.
 - **The shared gate rule still says to pass `humanDecision`.** `.agents/conventions/common/coai-review-gate.md` (the conventions
   submodule, generated into the extension's `gateRule.ts` snippet) tells the AI the person "says so and you pass `humanDecision:
   "proceed"`". The server now answers that with the refusal sentence that names the card, so nothing breaks, but the text is
-  stale until the conventions repository is changed and the pin moved.
+  stale until the conventions repository is changed and the pin moved. This is a **delivery step before the release**
+  (plan §7 step 3): a follow-up pull request in BOTH conventions repositories replaces that sentence with *a person answers on the
+  notice card*, and the pin is bumped here, regenerating `gateRule.ts` and the snippets.
 - **Mixed versions.** New server + old extension: the card offers three (a Proceed has no button until the extension updates; Keep
   going / Stop and act work). Old server + new extension: the old server writes no list, the extension offers three.
 

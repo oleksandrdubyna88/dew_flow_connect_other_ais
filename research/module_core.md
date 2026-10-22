@@ -71,7 +71,7 @@ flowchart LR
 | `StuckFindings`, `EarlierDecision`, `Survivors` | `Gate/StuckFindings.cs` | how many of this round's findings the caller had already ACCEPTED — phase 2's instrument, calling nothing |
 | `SessionState`, `PanelConfig`, `SessionKey` | `Rounds/SessionState.cs` | immutable session; key = normalised repo path + branch (+ a document, + a feature's plan) |
 | `Stage`, `StageDescriptor`, `Stages` | `Rounds/SessionState.cs`, `Rounds/Stages.cs` | the four stages, and the ONE table of what each answers by name — bucket, phrase, kind, commands, next stage, sentences, whether it records a commit |
-| `RoundMachine`, `RoundVerdict`, `Decision`, `Transition` | `Rounds/RoundMachine.cs` | ordering by refusal; the escalation ladder; resolve feeds rejections forward; `Resolve(state, decisions, HumanDecision personsDecision, bool callerClaimsProceed)` takes the PERSON's decision and judges the caller's claim beside it (`ClaimRefusal`) — a tool argument never releases a held gate |
+| `RoundMachine`, `RoundVerdict`, `Decision`, `Transition` | `Rounds/RoundMachine.cs` | ordering by refusal; the escalation ladder; resolve feeds rejections forward (REJECTIONS only: `Decision` is `Accepted`, `Rejected` and `ProceededOver`, and the last — a finding a person's Proceed carried the stage over — is never added to the standing rejections nor read by `GateRule`); `Resolve(state, decisions, HumanDecision personsDecision, bool callerClaimsProceed)` takes the PERSON's decision and judges the caller's claim beside it (`ClaimRefusal`) — a tool argument never releases a held gate |
 | `HumanDecision` | `Rounds/HumanDecision.cs` | what a person chose on a hold's notice: `None` (prose), `Continue`, `Fix`, `Discuss` — all of which keep the findings alive — and `Proceed`, which ships with them open; `Proceed` is applied by `RoundMachine.Resolve` only (`ApplyHumanDecision` leaves it alone) |
 | `FeatureBases` | `Rounds/FeatureBases.cs` | the base a feature review was opened against, held to on every later call of the same plan — a different base is refused naming BOTH SHAs, and `again` is the door |
 | `SecondRoundGround` | `Rounds/SecondRoundGround.cs` | why a feature review's second round may run (D23): a reviewer failure, a blocking finding, the person's request — `None` until round 1 gave one; on `SessionState.SecondRound`, read by `BeginFeatureRound` alone |
@@ -220,7 +220,11 @@ flowchart LR
   hold's notice, never as the AI's `humanDecision` argument, which `Resolve` receives as a claim
   (`ClaimRefusal`: refused when it would change the outcome, ignored when redundant). A Proceed on a gate
   that is not held is `None`; on a held gate whose round the AI already resolved it is admitted without
-  decisions (G6) and releases the hold with its `HoldQuestions`.
+  decisions (G6) and releases the hold with its `HoldQuestions`. It authorises THIS transition only:
+  the findings it carried the stage over arrive as `Decision.ProceededOver` records (only the server builds
+  them, and `Resolve` refuses one when no Proceed is being consumed, `ProceededOverNeedsAProceed`), which
+  are not standing rejections — the same defect raised in a later round, `again: true` included, gates in
+  full (plan §13.1).
 - **The ladder** (`ReviewerEffortUp → ReviewerModelUp → ArbiterModelUp`) fires one step per
   exhausted stage and resets the round counter; exhausted ladder falls through to `CallHuman`.
 - **A rejection without a reason refuses the whole resolve** — the reason is what the discount rule

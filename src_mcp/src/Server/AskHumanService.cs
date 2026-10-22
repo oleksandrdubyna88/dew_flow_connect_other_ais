@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using CoaiMcp.Core.Findings;
 using CoaiMcp.Core.QuestionConsult;
 using CoaiMcp.Core.Rounds;
 
@@ -268,7 +269,7 @@ public sealed class AskHumanService
     /// buttons replaced the prose it existed for — with the gate's three facts on it, so the sidebar can fold the
     /// consultants' answers under it and say why the person was asked at once.
     /// </summary>
-    private static EscalationQuestion Card(PersistedSession? session, string repoPath, string branch, string text, string id, AskFacts facts) =>
+    private EscalationQuestion Card(PersistedSession? session, string repoPath, string branch, string text, string id, AskFacts facts) =>
         new(
             id,
             SessionIdOf(session),
@@ -278,7 +279,7 @@ public sealed class AskHumanService
             text,
             "en",
             string.Empty,
-            session?.Pending.Where(f => f.IsGating).ToList() ?? [],
+            OpenFindingsOf(session),
             DateTime.UtcNow.ToString("O"))
         {
             ConsultId = facts.Input.Proof is ConsultProof.Verified verified ? verified.ConsultId : string.Empty,
@@ -289,6 +290,33 @@ public sealed class AskHumanService
             // todo/PLAN_only_a_person_releases_the_gate.md) — and the server would read one written there as prose.
             Decisions = EscalationDecisions.Question,
         };
+
+    /// <summary>
+    /// The findings a question card lists: the round's still-pending gating findings — or, once the AI resolved the round and the
+    /// gate is STILL held, the findings the hold was raised for.
+    /// </summary>
+    /// <remarks>
+    /// A plain <c>resolve</c> clears <c>Pending</c> and leaves the hold standing (only a person's answer releases it), yet this card's
+    /// Continue and Fix still release that hold (D5 of <c>todo/PLAN_only_a_person_releases_the_gate.md</c>). Reading <c>Pending</c> alone made
+    /// the card show NO findings for a gate it can release. The hold's own notice already carries them, so they are read from there
+    /// — never from a question card (those copy what they were given), and a hold whose notice is gone lists none rather than guessing.
+    /// </remarks>
+    private IReadOnlyList<Finding> OpenFindingsOf(PersistedSession? session) =>
+        session is null
+            ? []
+            : session.Pending.Where(f => f.IsGating).ToList() is { Count: > 0 } pending
+                ? pending
+                : TheHoldsFindings(session.State);
+
+    private IReadOnlyList<Finding> TheHoldsFindings(SessionState state) =>
+        !state.HumanGate
+            ? []
+            : [.. state.HoldQuestions
+                .Select(_escalations.Read)
+                .OfType<EscalationQuestion>()
+                .Where(card => card.Kind != EscalationKinds.Question)
+                .Take(1)
+                .SelectMany(card => card.OpenFindings)];
 
     /// <summary>
     /// The family's <c>remote-ask</c> fallback, verbatim in shape: nobody answered in the budget, so ASK IN THE CHAT
