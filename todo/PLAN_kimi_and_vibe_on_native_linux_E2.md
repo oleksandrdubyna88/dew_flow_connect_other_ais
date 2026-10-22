@@ -689,6 +689,17 @@ folder is gone (`remove-series.sh` exit 0, the `.env` `stat` identical); the par
 
 **Roles.** The lead, from Windows; the owner answers Q1/Q2 if a stop reaches them (`ask_user`). No coder.
 
+### S1 — status: measured 2026-10-22, every cell PASSED
+
+The series `/tmp/testsToDelete-native-vibe-20261022-374500` ran on `ubuntu-claude` from the archive of `c7857f21d`: `facts`, N-V1–N-V6, all
+PASS; 22 paid turns of 30; no stop rule fired (banner read; the forced-backend class `fail.Keyring`; `keyringRoad: closed` in every paid row,
+`open` in a3c's alone, a3c's marker 3 of 3, a3's 0 of 3; `~/.vibe` 74 → 74 in every phase); the folder removed by `remove-series.sh` (exit
+0, the sign-in facts identical). The record is RESULTS_vibe §32 with four deviations: the S-N17 WSL check and the AOT build in WSL were not
+possible (this session has no WSL access — the same teeth ran on the host; N-V6 used a self-contained JIT build of the same commit), `vibe`
+resolved at `~/.local/bin/vibe`, and the host HAS a session bus (`/run/user/0/bus`, the VS Code server's environment names it) with no
+keyring daemon — the closed road is therefore not academic on this host. Nothing in `src_mcp`, `src_vs_code` or `shared/` changed. **S2–S5
+may proceed** (the full-pass branch of §5).
+
 ### E2.S2 — The C1 flip in the server: Vibe enters the set, the launch closes the road (only on a full pass)
 
 **Goal.** `HostAdmission.MeasuredOnNativeLinux` = {Vibe}; a native Linux Vibe launch carries the forced backend and the control admits

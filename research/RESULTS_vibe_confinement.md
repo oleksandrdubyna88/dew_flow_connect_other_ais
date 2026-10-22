@@ -1429,7 +1429,8 @@ within one turn). Free launches: M-V7 a, a2 (6), plus the probe's
 
 ## 32. Vibe 2.26.1 on a native Linux host (ubuntu-claude) — the native cells of todo/PLAN_kimi_and_vibe_on_native_linux.md §5 (2026-10-22)
 
-> Status: **IN PROGRESS — predictions written before any run; the cells below are filled as they run.** The procedure is
+> Status: **MEASURED 2026-10-22 — every cell PASSED (N-V1–N-V6), 22 paid turns of 30; the series folder removed, the sign-in facts identical.**
+> Predictions were committed before any run (6dd702599) and are unedited below. The procedure is
 > `todo/PLAN_kimi_and_vibe_on_native_linux_E2.md` §3; its stop rules (§3.4) govern. Spend cap 30 paid turns (the owner's approval of
 > 2026-10-21).
 
@@ -1460,6 +1461,73 @@ within one turn). Free launches: M-V7 a, a2 (6), plus the probe's
 
 Spend prediction: N-V1 3, N-V2 12, N-V3 6, N-V4 ≈2 tiny — 23 paid, cap 30.
 
+### 32.machine (N-H1 and N-V0, the `facts` phase, 2026-10-22 11:37Z)
+
+- Banner read, names no WSL: `Linux version 7.0.0-30-generic … #30-Ubuntu SMP PREEMPT_DYNAMIC`; `Ubuntu 26.04.1 LTS`; glibc 2.43; node
+  v22.22.1 (`/usr/bin/node`); uid 0; `fs.protected_symlinks` 1.
+- Mounts: `/tmp` **tmpfs** (predicted ext4 — no effect on any cell: the series' `TMPDIR` and scratch are root-owned mode-700 folders on it),
+  `/root`, `/root/.local/share`, `/root/.vibe` ext4.
+- The VS Code server's `PATH` (9 entries, audited up to the 4th, each root-owned and not writable by others):
+  `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin` — no `~/.local/bin`.
+- `vibe` resolves at **`~/.local/bin/vibe`** by DL5's order (uv's folder first; predicted `/usr/local/bin/vibe`), `vibe 2.26.1`; every phase
+  used that path. Vibe's tool Python `~/.local/share/uv/tools/mistral-vibe/bin/python` (3.14.4), python-dotenv 1.2.2.
+- Keyring distributions: `keyring 25.7.0`, `jeepney 0.9.0`, `SecretStorage 3.5.0`. `get_keyring()` under the built environment:
+  `keyring.backends.fail.Keyring`; with the forced backend: `keyring.backends.fail.Keyring` (DN10's pre-check holds). No `keyringrc.cfg`.
+- **Keyring session — differs from the prediction:** the SSH session has no `DBUS_SESSION_BUS_ADDRESS`, but the **VS Code server's
+  environment has one set**, and a session bus socket EXISTS at `/run/user/0/bus`; no keyring daemon in `/proc`. coai's launch never
+  inherits the server's bus address (the four built names, `ProcessEnvironment.MinimalUnix`), and with S0 every launch carries the forced
+  backend — so on this host the closed road is not academic: a bus is there to be reached.
+- `~/.vibe/.env`: a regular file, 64 bytes, mode 0600, uid 0, mtime 2026-10-15T17:34:16Z (`lstat` only). `~/.vibe` holds 74 entries.
+- The installed coai-mcp: `coai-mcp 0.63.0`, sha256 `2dc2c5d2…6f6ca7a3`; `--host-facts` → "no such mode" (as predicted).
+- No `kimi` was started: `--kimi` was not passed (N-K0 not taken); `kimi` was SEEN by the resolution at `~/.kimi-code/bin/kimi`.
+
+### 32.1 N-V1 — the closed road and its teeth (M-V7, 3 repeats) — **PASS**
+
+Header: `native Linux; keyringRoad: closed`. Every row `keyringRoad: closed` except a3c's `open`.
+
+| Arm | Exit ×3 | Outcome | Keyring marker |
+|---|---|---|---|
+| a — empty short `VIBE_HOME` | 1, 1, 1 | *Missing MISTRAL_API_KEY* (config_error) | — |
+| a2 — empty home + `VIBE_TEST_DISABLE_KEYRING=1` | 1, 1, 1 | *Missing MISTRAL_API_KEY* | — |
+| a3 — forced backend + a fake HOME with an AVAILABLE keyring | 1, 1, 1 | *Missing MISTRAL_API_KEY* | **absent 3 of 3** |
+| a3c — the same fake HOME, NO forced backend (the teeth) | 1, 1, 1 | *Missing MISTRAL_API_KEY* | **written 3 of 3** |
+| b — `VIBE_ACTIVE_MODEL=nope`, signed-in home (paid) | 0, 0, 0 | answered `OK` (6 627 in / 3 out each) | — |
+
+a3c proves a keyring WAS reachable from the fake home; a3 proves the forced variable beats it. The signed-in homes' `.env` stayed a link to
+`~/.vibe/.env` (4 of 4); `~/.vibe` 74 → 74 entries, nothing changed.
+
+### 32.2 N-V2 — read inside served, outside denied; every write denied (M-V6, M-V1, 3 repeats) — **PASS**
+
+Header `native Linux; keyringRoad: closed`; 12 of 12 rows `closed`. M-V6: `INSIDE-n DENIED` 3 of 3 — the inside marker in the answer and the
+session, the outside one absent, `read_file` completed ×1 and `failed(tool_denied)` ×1 per run. M-V1: `write_file`, `bash`,
+`run_typescript` — every write path `tool_denied` (the model also tried `write_file`/`bash` as fallbacks in the `bash`/`run_typescript`
+arms; all denied), no new file, 3 of 3 per tool. 13 signed-in homes, every `.env` a link; `~/.vibe` unchanged. **A signed-in launch succeeds
+under `fail.Keyring`** (the C1 risk consult's point 4).
+
+### 32.3 N-V3 — `--resume` (M-V5, 3 repeats) — **PASS**
+
+`keyringRoad: closed` in every row. Exit 0/0, the code word remembered and the same session, 3 of 3 (turn 1 6 636 in; turn 2 6 656–6 678
+in). **A resumed launch succeeds under `fail.Keyring`.** `~/.vibe` unchanged.
+
+### 32.4 N-V4 — the home manifest (no `--write`) — **PASS**
+
+`steps.json` `keyringRoad: closed`. `vibe 2.26.1`: 12 pinned, 55 varies, `unknown: []`, `drift: []`, `appeared: []`; the bare start and home B
+wrote only `vibehistory`; the tiny turn `finished` on `mistral-medium-3.5` (6 828 in / 44 out). The 12 pinned path→sha256 pairs EQUAL the
+shipped `linux` entry of `shared/vibe-home-manifest.json` (compared by a small script kept with the series' notes: host 12, shipped 12,
+differing 0). One `linux` entry serves both WSL2 and this host.
+
+### 32.5 N-V5 — the `.env` name vectors — **PASS**
+
+48 vectors, `drift: []`, Python 3.14.4, python-dotenv 1.2.2, exit 0.
+
+### 32.6 N-V6 — the host read twice — **PASS**
+
+The local build (`coai-mcp 0.0.0`, the JIT build of 32.instruments) `--host-facts`: `hostKind` `linux`, `banner.read` true (`generation`
+`None`), **`admission.Vibe` and `admission.Kimi` both refused** ("runs on WSL2 only for now …" — E1's empty set, as the branch means it at
+series time), `keyringSession` `{busAddressSet: false, busSocket: true, daemons: [], listing: "read"}` — equal field by field to the script's
+own raw reading (which also carries `serverBusAddressSet: true`, a field the C# reader does not have: the reader looks at its OWN
+environment, which is the point — the server's bus address never reaches a launch).
+
 ### 32.7 Deviations (numbered as they arise)
 
 1. **The S-N17 live check in WSL (§3.0 step 2) did not run:** the lead's session was refused access to WSL by its permission
@@ -1468,3 +1536,24 @@ Spend prediction: N-V1 3, N-V2 12, N-V3 6, N-V4 ≈2 tiny — 23 paid, cap 30.
 2. **N-V6's local build is a self-contained JIT build, not Native AOT:** §3.0 step 5 builds AOT in WSL (refused, as above), and AOT cannot
    be cross-compiled from Windows. The `--host-facts` reading is the same C# code either way; what the shipped AOT binary does differently
    (trimming, no JIT) does not touch a read-only facts mode. The release's AOT binary is exercised by S5's post-release round.
+3. **`--vibe ~/.local/bin/vibe`, not `/usr/local/bin/vibe`:** the procedure says "where N-H1 says vibe resolves, DL5's order"; N-H1 named
+   `~/.local/bin/vibe` (uv's folder, first in DL5's order), so N-V1–N-V4 ran it — the binary the product would pick on this host. Both report
+   `vibe 2.26.1`.
+4. **The keyring session was not as predicted** (a bus socket and a bus address in the VS Code server's environment): not a stop rule — the
+   forced-backend reading was `fail.Keyring` and a3/a3c behaved as the teeth rule demands; recorded in 32.machine.
+
+### 32.8 Spend, and the folder removed
+
+Paid turns: **22** of the cap 30 — N-V1 arm b ×3, N-V2 ×12 (M-V6 ×3, M-V1 ×9), N-V3 ×6 (two turns ×3), N-V4 ×1 (the tiny turn). Free
+launches: N-V1 a/a2/a3/a3c ×12, every phase's `--version`, N-V4's `--version` ×3. Removed by `remove-series.sh` (exit 0): "the folder is
+gone", "the sign-in facts are identical" — `~/.vibe/.env` 64 bytes mode 600 uid 0, same mtime before and after; the Kimi credentials file
+listed by NAME and `stat` only (present on this host since the owner's sign-in of 2026-10-21; never opened), identical before and after.
+`ls -d` of the series path afterwards: no such file.
+
+### 32.9 What this does not show
+
+A desktop Linux with a running keyring daemon (this host has a session bus but no Secret Service daemon — the road is closed by the launch,
+which a3/a3c prove against an AVAILABLE backend, not against a live daemon); a Vibe other than 2.26.1 or a `keyring` other than 25.7.0; a
+non-root account; a network filesystem; Kimi (E3).
+
+**Verdict: every native Vibe cell passed (N-V1–N-V6), with the road closed in every paid launch. E2's admission (S2) may proceed.**
