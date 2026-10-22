@@ -1296,6 +1296,29 @@ The "before" columns reproduced nothing, so neither is a RED; the C35 case's RED
 - **Done when.** Both tests green on today's product, red under B-E5-24 with the named sentence, green again; no wall bound
   left in the file; the §6 loop recorded.
 
+### S9 — status: built 2026-10-22 (Sonnet; §3.15 and the story above governed, deviations listed)
+
+**Built.** Tests only; no product line changed (`RoundSizer.cs` was touched by B-E5-24 only and restored by writing the file, `git diff -- src_mcp/src` re-checked empty). `TheSizingIsConcurrentAndBoundedTests.cs`: the `Stamping` stand-in marks every start, every end and the sizing's RETURN on its one stopwatch — `MarkReturned()` (the return's reading, the calls that had ended, and those that had run their hold to the end) — and each `Call` carries `Cancelled` (the token was seen cancelled inside the call) and `HeldToTheEnd`. A call is now recorded in a `finally`, so a cancelled call is a record too; `AllCallsEndedAsync()` completes when every call that began has ended and is bounded by the suite's own token (`Ct`), with a hang's sentence. The honouring arm asserts: no call had run its hold to the end when the sizing returned, every call `Cancelled` (and at least one), `Whole`/`Delta` `GitFailed` with their `From`, `Gitlinks` null. The deaf arm asserts: no call had ended at all when the sizing returned (the wait was bounded, not only the calls), `Whole` `GitFailed`. Both wall bounds (`watch.Elapsed < 3 s`) and their two `Stopwatch` locals are gone; the 300 ms product deadline and the 4 s holds are the test's inputs, untouched.
+
+**Diagnosis (the lead's "diagnosis first" step; no kept message existed).** The failure was never reproduced naturally: the class 20 of 20 green beside 8 sibling `CoaiMcp.Tests.exe` processes (alone-style loop on the shared machine), then 36 more runs as 6 parallel loops of 6 beside 7 sibling suites — 0 of 56 failed. The CAUSE was reproduced on purpose instead: a scratch copy of the OLD test with the thread pool starved for 3.5 s (400 blocking `Task.Run`s) at the start — the product answers at its 300 ms deadline, the continuation that reads the watch cannot run — went red with `Expected watch.Elapsed to be less than 3s because the sizing answers at its deadline, not when its slowest call is done, but found 3s, 514ms and 731.1µs.` The SAME starvation on a scratch copy of the NEW test: green (the marks shift together; the order holds). Both scratch files were deleted, never committed.
+
+**Break-its (each red, restored by writing the file, rebuilt, green).**
+
+- B-E5-24 (`RoundSizer.cs:48` `budget.CancelAfter(...)` commented out): both tests red. Honouring arm — `Expected returned.HeldToTheEnd to be empty because the sizing answers at its deadline, not when its slowest call is done, but found at least one item { … Cancelled = False, End = 4s, 96ms …, HeldToTheEnd = True … }`. Deaf arm — `Expected returned.Ended to be empty because the wait is bounded, not only the calls: the sizing returned while every deaf call was still holding, but found at least one item { … Cancelled = False, End = 4s, 62ms … }`.
+- B-E5-25 (the stand-in's token replaced by `CancellationToken.None` in the honouring arm): `Expected slow.Calls to contain only items matching c.Cancelled because the deadline reached every call: none ran its hold to the end, but { … Cancelled = False … HeldToTheEnd = True }` (three calls listed).
+
+**Loop (§6).** `--filter-class "*TheSizingIsConcurrentAndBoundedTests"`: before 20 of 20 green, 0 failed, beside 8 sibling suites (+ 36 runs 6-parallel beside 7 sibling suites, 0 failed); after 20 of 20 green beside 5 sibling suites (+ 36 runs 6-parallel, 0 failed). Naming: the load was whatever the sibling sessions ran, not the single named load window (the machine was shared; the window could not be taken).
+
+**Full suite.** `node .agents/conventions/tools/low-priority.mjs ./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe`, Windows Debug, 46 min 19 s on a shared machine: 13559 total, 13438 passed, 121 skipped, 0 failed.
+
+**Deviations.**
+
+1. **The order is "no call had run its hold to the end when the sizing returned", not `returnedAt < Calls.Min(c => c.End)`.** With a token-honouring launcher the calls end at the deadline too (the same cancellation that releases the sizing's wait), so a cancelled call's `End` against `returnedAt` is a race between two callbacks of one token — it would be a new flake. The order claim is therefore over the calls that ran their hold to the end (`HeldToTheEnd`), snapshotted in the same lock as the return's reading; the cancelled calls are asserted by the flag. The break-it's sentence is the FluentAssertions "empty" form above, not the plan's "less than 4.0s" form.
+2. **The deaf launcher ignores its token altogether, the real git included** (`inner.RunAsync(request, CancellationToken.None)`): the old stand-in passed the token to the real git, which a loaded machine could cancel before the hold, making a "deaf" call cancelled.
+3. **`TheCallsOfOneSizing_RunSideBySide` is untouched.** Its `watch.Elapsed < SumOfDurations` compares two measured numbers of one run (no fixed bound), so "no wall bound left" holds for the two C31 tests; the line stays and is named here.
+4. **The residual exposure is stated:** a continuation delayed by more than the 4 s hold (not the old 2.7 s) while the deadline chain is not, which the FIFO of one starved pool does not produce.
+5. **Test count unchanged** (5 in the class: the redesign is in place).
+
 ### S10 — C33, the initialize round trip (group A)
 
 - **Goal.** §3.16: the vault read's end marker orders the proof; the reply wait is the suite's guard with a hang's sentence.

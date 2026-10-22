@@ -116,12 +116,15 @@ public sealed class TheSizingIsConcurrentAndBoundedTests : IAsyncLifetime
     public async Task ASizingThatOutlastsItsDeadline_ReturnsGitFailedScopes_WithinIt()
     {
         var slow = new Stamping(_git, TimeSpan.FromSeconds(4));
-        var watch = Stopwatch.StartNew();
 
         var measured = await Measure(slow, Ct, total: TimeSpan.FromMilliseconds(300));
-        watch.Stop();
+        var returned = slow.MarkReturned();
+        await slow.AllCallsEndedAsync();
 
-        watch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(3), "the sizing answers at its deadline, not when its slowest call is done");
+        // The claim is an ORDER of two events on the stand-in's own stopwatch — the return, and the end of the slowest call's hold —
+        // never a distance from a fixed number: a loaded machine delays both marks together and leaves the order alone.
+        returned.HeldToTheEnd.Should().BeEmpty("the sizing answers at its deadline, not when its slowest call is done");
+        slow.Calls.Should().NotBeEmpty().And.OnlyContain(c => c.Cancelled, "the deadline reached every call: none ran its hold to the end");
         measured.Size!.Whole.State.Should().Be(ScopeState.GitFailed);
         measured.Size.Whole.From.Should().Be(_collected.ComparedAgainst, "the base was chosen before the failure");
         measured.Size.Delta.State.Should().Be(ScopeState.GitFailed);
@@ -133,12 +136,11 @@ public sealed class TheSizingIsConcurrentAndBoundedTests : IAsyncLifetime
     public async Task ALauncherThatIgnoresItsToken_CannotHoldTheSizingPastItsDeadline()
     {
         var deaf = new Stamping(_git, TimeSpan.FromSeconds(4), honourTheToken: false);
-        var watch = Stopwatch.StartNew();
 
         var measured = await Measure(deaf, Ct, total: TimeSpan.FromMilliseconds(300));
-        watch.Stop();
+        var returned = deaf.MarkReturned();
 
-        watch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(3), "the wait is bounded, not only the calls");
+        returned.Ended.Should().BeEmpty("the wait is bounded, not only the calls: the sizing returned while every deaf call was still holding");
         measured.Size!.Whole.State.Should().Be(ScopeState.GitFailed);
     }
 
@@ -165,12 +167,18 @@ public sealed class TheSizingIsConcurrentAndBoundedTests : IAsyncLifetime
         measured.Size!.Whole.State.Should().Be(ScopeState.GitFailed, "an OCE that is neither the round's nor the deadline's is one call failing");
     }
 
-    /// <summary>Runs the real git, then holds the call for <paramref name="hold"/> (honouring the token), and stamps when it ran.</summary>
+    /// <summary>
+    /// Runs the real git, then holds the call for <paramref name="hold"/>, and stamps when it ran. One stopwatch marks every start, every
+    /// end and the sizing's return (<see cref="MarkReturned"/>), so a claim about the sizing's time is an order of marks, not a distance.
+    /// A launcher that does not <paramref name="honourTheToken"/> ignores it altogether, the real git included.
+    /// </summary>
     private sealed class Stamping(IProcessLauncher inner, TimeSpan hold, bool honourTheToken = true) : IProcessLauncher
     {
         private readonly Stopwatch _clock = Stopwatch.StartNew();
         private readonly object _gate = new();
         private readonly List<Call> _calls = [];
+        private readonly TaskCompletionSource _allEnded = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _open;
 
         public IReadOnlyList<Call> Calls
         {
@@ -187,21 +195,81 @@ public sealed class TheSizingIsConcurrentAndBoundedTests : IAsyncLifetime
 
         public Call Single(Func<string, bool> pick) => Calls.Single(c => pick(c.Arguments));
 
+        /// <summary>The sizing has just returned: what the stopwatch read, and which calls had ended by then — the ones that ran their hold to the end apart.</summary>
+        public Returned MarkReturned()
+        {
+            lock (_gate)
+            {
+                return new Returned(_clock.Elapsed, [.. _calls], [.. _calls.Where(c => c.HeldToTheEnd)]);
+            }
+        }
+
+        /// <summary>Completes when every call that began has ended (an honoured token ends a hold at once); the suite's guard names a call that never saw its token.</summary>
+        public async Task AllCallsEndedAsync()
+        {
+            try
+            {
+                await _allEnded.Task.WaitAsync(Ct);
+            }
+            catch (OperationCanceledException) when (Ct.IsCancellationRequested)
+            {
+                throw new InvalidOperationException("a call of the sizing never ended: the deadline's cancellation did not reach it.");
+            }
+        }
+
         public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
         {
             var start = _clock.Elapsed;
-            var result = await inner.RunAsync(request, ct);
-            await Task.Delay(hold, honourTheToken ? ct : CancellationToken.None);
+            var token = honourTheToken ? ct : CancellationToken.None;
+            Begin();
+            var cancelled = false;
+            var held = false;
+            try
+            {
+                var result = await inner.RunAsync(request, token);
+                await Task.Delay(hold, token);
+                held = true;
+
+                return result;
+            }
+            catch (OperationCanceledException)
+            {
+                cancelled = true;
+
+                throw;
+            }
+            finally
+            {
+                End(new Call(string.Join(' ', request.Arguments), start, _clock.Elapsed, cancelled, held));
+            }
+        }
+
+        private void Begin()
+        {
             lock (_gate)
             {
-                _calls.Add(new Call(string.Join(' ', request.Arguments), start, _clock.Elapsed));
+                _open++;
             }
+        }
 
-            return result;
+        private void End(Call call)
+        {
+            lock (_gate)
+            {
+                _calls.Add(call);
+                if (--_open == 0)
+                {
+                    _allEnded.TrySetResult();
+                }
+            }
         }
     }
 
-    private sealed record Call(string Arguments, TimeSpan Start, TimeSpan End)
+    /// <summary>The sizing's return on the stand-in's stopwatch: when, which calls had ended, and which of them had run their hold to its end.</summary>
+    private sealed record Returned(TimeSpan At, IReadOnlyList<Call> Ended, IReadOnlyList<Call> HeldToTheEnd);
+
+    /// <summary><paramref name="Cancelled"/>: the call's token was seen cancelled. <paramref name="HeldToTheEnd"/>: the call ran its whole hold.</summary>
+    private sealed record Call(string Arguments, TimeSpan Start, TimeSpan End, bool Cancelled, bool HeldToTheEnd)
     {
         public bool Overlaps(Call other) => Start < other.End && other.Start < End;
     }
