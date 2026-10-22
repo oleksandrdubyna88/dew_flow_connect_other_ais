@@ -43,8 +43,18 @@ function input(read: RoundCountsRead, ledger: readonly StoredLine[], over: Parti
   return { snapshot: { ...snapshot(read, ledger), ...over }, chat: [], rateOf: () => OVERRIDE, ranOn: () => '', store: STORE, ...block };
 }
 
-/** A count cell's figure — over two stores it is wrapped in a span whose tooltip lists each store's part. */
-const plain = (cell: string | undefined): string => (cell ?? '').replace(/<[^>]*>/gu, '');
+/**
+ * A count cell's figure — over two stores it is wrapped in a span whose tooltip lists each store's part. Tags are removed until none
+ * is left (one pass can leave a tag that two nested ones formed), so the figure read is the text alone.
+ */
+function plain(cell: string | undefined): string {
+  let text = cell ?? '';
+  for (let previous = ''; previous !== text; ) {
+    previous = text;
+    text = text.replace(/<[^>]*>/gu, '');
+  }
+  return text;
+}
 
 test('ACopiedStore_IsOneRoundOneLaunchOneDollar — the same key and the same $1 launch in both ledgers is $1, not $2', () => {
   const read = mergedRead(keyedRow([KEY_A], { [KEY_A]: THIS_STORE }));
