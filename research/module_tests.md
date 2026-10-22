@@ -5121,7 +5121,7 @@ Only the row's tests are listed here — the rows for S-N5, S-N6, S-N12, S-N21, 
 | `ConsultantLimitationsTests.TheVibeWslRow_IsByteIdenticalToWhatE1Shipped_AndTheOtherRowsAreAsTheyWere` | the `wsl` row's text equals a literal in the test; `windows` stays `Confined`, `macos` and Kimi's `linux` stay `Unmeasured` | green before and after (a guard: E2 changes the native row only) |
 | `vibeOnLinux.test.ts` — *the Vibe linux row is confined on a native Linux host, with the keyring off, and rests on §32* (S-N8, extension) | the same facts read from the same file by node:test: `confined`, `measured` and no `source`, the three phrases, the version-bound clause, no *measured on WSL2 only* / *refuses it*, date, version, cells start `Section 32`, document | `AssertionError: the admission starts Vibe there; the row must not still say unmeasured — actual 'unmeasured', expected 'confined'`; B13 as above |
 
-The existing structural tests (one row per runtime per platform, evidence on every row, no row both `measured` and `source`, every cited document exists, the embedded copy equals the repository's file) stayed green without an edit. `ConsultantLimitationsTests` 15 → 17 (all pass); `vibeOnLinux.test.ts` and `kimiOnLinux.test.ts` 42 pass.
+The existing structural tests (one row per runtime per platform, evidence on every row, no row both `measured` and `source`, every cited document exists, the embedded copy equals the repository's file) stayed green without an edit. `ConsultantLimitationsTests` 15 → 17 (all pass); `vibeOnLinux.test.ts` (40 after S3's tests joined) and `kimiOnLinux.test.ts` (11) pass.
 
 ## The suite is deterministic — E3 S4 (C18's product side, 2026-10-20)
 
