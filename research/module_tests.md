@@ -5295,6 +5295,16 @@ tested directly, not through a failing store, because `PanelService` builds its 
 The kept findings of a withdrawn round are not re-read by a later round's `DecidedEarlier`/rejection machinery: they are in the database like any
 round's, and a held round is resolved through `resolve` like a `call_human` round.
 
+### A cancelled review stops its round — round 6 of the review (2026-10-22)
+
+S2 spec §13 "round 6". `FindingIdentity` became a static class (behaviour unchanged; `AWithdrawnRoundKeepsWhatLandedTests` is the regression net).
+
+| Test | Seen red as | Plant (RED again) |
+|---|---|---|
+| `FindingIdentityTests.TwoFindingsWhoseProvidersHoldANullElement_CompareWithoutThrowing_AndAreTheSameWhenTheListsMatch` (+ three more null / default-array cases) | **green on first run**: the review's claim that `SequenceEqual(.., StringComparer.Ordinal)` throws `ArgumentNullException` on a null element is false (`Ordinal.Equals` is null-safe; no hash code is asked). The tests pin the guarantee | the comparison dereferences the element (`p.First.Equals(p.Second, Ordinal)`): `System.NullReferenceException` |
+| `FindingIdentityCoversEveryFieldTests.EveryPublicPropertyOfFinding_HasADecisionHere` (reflection over `Finding`'s public instance properties against a list of decisions) | a guard, green before | `CapReason` removed from the list: `Expected undecided to be empty because Finding gained CapReason: decide whether FindingIdentity compares it …` |
+| `…EveryComparedProperty_IsSeenByTheIdentity_WhenItChanges` (one mutation per compared property) | a guard, green before | `CapReason` dropped from `SameScalars`: `Expected FindingIdentity.Same(baseline, mutate(baseline)) to be False because a finding that differs only in CapReason is another finding …, but found True.` |
+
 **What the live leg could not drive, and why it matters.** *(Superseded in part, 2026-10-21: the four review tools now take the SDK's request token —
 *A cancelled review stops its round* in `module_server.md` — so a live server CAN write `withdrawn` and `hostStopped`. The seam leg has not been
 extended to drive them yet; that is story S4 / PR C of `todo/PLAN_a_cancelled_review_stops_its_round.md`, and until it lands the leg below still takes

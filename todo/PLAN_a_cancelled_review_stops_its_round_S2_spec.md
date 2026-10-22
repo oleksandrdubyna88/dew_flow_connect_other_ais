@@ -666,5 +666,16 @@ merge rule, not identity. (2) `escalationAnswering.test.ts` built its fixture wi
 and no `kind`; `cardFromTheStore`: the same with `from`), both returning a real `Escalation`. (3) `ANSWER_FILES` in `escalationWatcher.ts` mixed VS Code's
 `workspace.fs.stat` with Node's write and rename; exists, write and rename are all Node's `fs.promises` now (behaviour kept: a stat that throws is "no answer").
 
+**Round 6 (code review of round 5, 2026-10-22).** Three accepted findings, applied with the behaviour unchanged. (1) `FindingIdentity` is a `static class` with one
+`Same(Finding, Finding)`: it holds no state, so the `IEqualityComparer<Finding>` implementation, `Instance`, `Equals` and the incomplete `GetHashCode` are gone;
+`KeptFindings.OrdinalsOf` already called `Same`. (2) The finding said `SequenceEqual(.., StringComparer.Ordinal)` throws `ArgumentNullException` on a null
+element. **It does not**: the RED test (two findings whose `Providers` hold a null) passed on the unchanged code — `StringComparer.Ordinal.Equals` is null-safe
+and `SequenceEqual` never asks the comparer for a hash code (only the removed `GetHashCode` path could have). `AlsoSeenBy` (records) goes through
+`EqualityComparer<T>.Default`, also null-safe. No code change was needed; four tests now pin the guarantee (a null element equals another null and no string;
+a null sighting; a default array reads as empty), and a plant that dereferences the element turns them red. (3) A drift guard,
+`FindingIdentityCoversEveryFieldTests`: it lists `Finding`'s public instance properties by reflection and requires each to have a recorded decision
+(compared how, or derived); a second test changes each compared property in turn and requires `Same` to see it. A new `Finding` property fails with
+"Finding gained <name>: decide whether FindingIdentity compares it".
+
 **The two PR B asks** (the judge's, recorded in the plan's S3 section): persist landed findings progressively on the running record, and a startup
 reconcile that holds the gate for a cancelled or interrupted round whose landed findings gate.

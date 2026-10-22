@@ -2445,6 +2445,10 @@ flowchart TD
   `Core.Findings.FindingIdentity` (every field equal, collection members by sequence; two findings that differ only in their vendors are two findings). It is
   IDENTITY, not `FindingDedup.SameDefect` (the fuzzy "same defect from two reviewers" merge rule), which no caller may use to say "this is the finding I
   hold". One-to-one matching for duplicates and the loud mismatch are unchanged.
+- **Round 6 of the review (2026-10-22; S2 spec §13, "round 6").** `Core.Findings.FindingIdentity` is a `static class` with one `Same(Finding, Finding)` (no
+  state, so no comparer interface, no `Instance`, no `GetHashCode`). Null elements in `Providers` / `AlsoSeenBy` are values, not a throw (this was already so:
+  `StringComparer.Ordinal.Equals` and `EqualityComparer<T>.Default` are null-safe; tests pin it). `FindingIdentityCoversEveryFieldTests` is the drift guard: a
+  property added to `Finding` fails until it has a recorded decision, and every compared property is shown to change the answer.
 - **Smaller guarantees of the same change.** The status word is one string in core (`Core.Rounds.RoundStatus.Cancelled`; `RoundRecord.Cancelled`
   and `Windows.IsRecorded` both use it). `BoundedScheduler.RunAllAsync` (the wrapper that discards the return stamp) is `internal` and the
   runners assembly grants its internals to the tests only, so the engine can only call `RunAllStampedAsync`

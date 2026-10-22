@@ -12,18 +12,15 @@ namespace CoaiMcp.Core.Findings;
 /// <para>This is IDENTITY, not <c>FindingDedup.SameDefect</c>: that one is the fuzzy "two reviewers raised the same defect" rule that merges
 /// findings; this one answers "is this the very finding I hold", so nothing is similar-enough, and two findings that differ only in their vendors
 /// are two findings.</para>
+/// <para>Every public property of <see cref="Finding"/> is compared (or is derived from one that is); <c>FindingIdentityCoversEveryFieldTests</c>
+/// fails when a property is added to <see cref="Finding"/> without a decision here.</para>
+/// <para>A <c>null</c> element in a collection (malformed reviewer JSON can produce one) is a value like any other: it equals another <c>null</c>
+/// and no string, and never throws.</para>
 /// </remarks>
-public sealed class FindingIdentity : IEqualityComparer<Finding>
+public static class FindingIdentity
 {
-    public static FindingIdentity Instance { get; } = new();
-
-    public static bool Same(Finding a, Finding b) => Instance.Equals(a, b);
-
-    public bool Equals(Finding? a, Finding? b) =>
-        ReferenceEquals(a, b) || (a is not null && b is not null && SameScalars(a, b) && SameCollections(a, b));
-
-    public int GetHashCode(Finding finding) =>
-        HashCode.Combine(finding.Severity, finding.Category, finding.File, finding.Line, finding.Title, finding.Role, Items(finding.Providers).Length);
+    public static bool Same(Finding a, Finding b) =>
+        ReferenceEquals(a, b) || (SameScalars(a, b) && SameCollections(a, b));
 
     private static bool SameScalars(Finding a, Finding b) =>
         (a.Severity, a.Category, a.File, a.Line, a.Title, a.Why, a.Fix, a.Role, a.CapReason)
@@ -31,6 +28,9 @@ public sealed class FindingIdentity : IEqualityComparer<Finding>
         && a.Reproduction == b.Reproduction
         && a.AttackEvidence == b.AttackEvidence;
 
+    // Both element types are reference types that malformed JSON can leave null. Neither comparison throws on one: `StringComparer.Ordinal.Equals`
+    // is `string.Equals(x, y, Ordinal)` (null equals null only) and `SequenceEqual` without a comparer uses `EqualityComparer<T>.Default` (a record's
+    // null-safe `==`). `SequenceEqual` never asks the comparer for a hash code. FindingIdentityTests pins this, so a rewrite that dereferences an element fails.
     private static bool SameCollections(Finding a, Finding b) =>
         Items(a.Providers).SequenceEqual(Items(b.Providers), StringComparer.Ordinal)
         && Items(a.AlsoSeenBy).SequenceEqual(Items(b.AlsoSeenBy));
