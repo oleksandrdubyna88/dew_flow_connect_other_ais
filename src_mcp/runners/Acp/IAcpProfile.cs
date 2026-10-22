@@ -80,10 +80,21 @@ public enum AcpFailureKind
 public sealed record AcpKnownFailure(string Phrase, string Name, string Cure, AcpFailureKind Kind);
 
 /// <summary>A known failure found in what the agent said — or <see cref="None"/>.</summary>
-public sealed record AcpDiagnosis(string Name, string Cure, AcpFailureKind Kind)
+/// <param name="Name">The failure's name.</param>
+/// <param name="Cure">What a person does about it.</param>
+/// <param name="Kind">Which exit the shim answers with.</param>
+/// <param name="Line">
+/// The MATCHED EVIDENCE: the one line of the agent's stderr that held the row's phrase, when the match came from stderr (the reason named no row) — capped at <see cref="LineCap"/>.
+/// Empty when the reason itself held the phrase (it already carries the sentence) and when nothing matched. A reader that must say WHICH sentence the vendor wrote
+/// (a shared name such as <c>kimi_quota_spent</c> covers a 5-hour and a monthly row) quotes this, never the table's first phrase for the name.
+/// </param>
+public sealed record AcpDiagnosis(string Name, string Cure, AcpFailureKind Kind, string Line = "")
 {
     /// <summary>Nothing recognised: the agent's own words stand.</summary>
     public static readonly AcpDiagnosis None = new(string.Empty, string.Empty, AcpFailureKind.Refused);
+
+    /// <summary>The longest matched line the report carries, in characters.</summary>
+    public const int LineCap = 400;
 
     /// <summary>True when a phrase matched.</summary>
     public bool Known => Name.Length > 0;
@@ -93,7 +104,39 @@ public sealed record AcpDiagnosis(string Name, string Cure, AcpFailureKind Kind)
     /// one pass, so a bare sign-in reason plus any stderr line holding a longer row's phrase took that row's name, whatever the agent had said about the turn itself.
     /// </summary>
     public static AcpDiagnosis Of(string reason, string stderr, IReadOnlyList<AcpKnownFailure> known) =>
-        Of(reason, known) is { Known: true } named ? named : Of(stderr, known);
+        Of(reason, known) is { Known: true } named ? named : FromStderr(stderr, known);
+
+    /// <summary>The row stderr names, carrying the line it matched in (<see cref="Line"/>) — or <see cref="None"/>.</summary>
+    private static AcpDiagnosis FromStderr(string stderr, IReadOnlyList<AcpKnownFailure> known) =>
+        Hit(stderr, known) is { } hit ? new AcpDiagnosis(hit.Name, hit.Cure, hit.Kind, LineWith(stderr, hit.Phrase)) : None;
+
+    /// <summary>The first line of <paramref name="text"/> holding <paramref name="phrase"/> (case-blind), trimmed and capped; empty when no line does.</summary>
+    private static string LineWith(string text, string phrase) =>
+        text.Split('\n').FirstOrDefault(line => line.Contains(phrase, StringComparison.OrdinalIgnoreCase)) is { } found
+            ? Window(found.Trim(), phrase)
+            : string.Empty;
+
+    /// <summary>A line of at most <see cref="LineCap"/> characters that still holds the phrase: the line whole when it fits, else a window that starts shortly before the phrase.</summary>
+    private static string Window(string line, string phrase)
+    {
+        if (line.Length <= LineCap)
+        {
+            return line;
+        }
+
+        var start = Math.Max(0, line.IndexOf(phrase, StringComparison.OrdinalIgnoreCase) - WindowLeadIn);
+        var end = Math.Min(line.Length, start + LineCap);
+
+        return line[WholeStart(line, start)..WholeEnd(line, end)];
+    }
+
+    private const int WindowLeadIn = 60;
+
+    /// <summary>A start that does not land in the middle of a surrogate pair.</summary>
+    private static int WholeStart(string text, int start) => start < text.Length && char.IsLowSurrogate(text[start]) ? start + 1 : start;
+
+    /// <summary>An end that does not cut a surrogate pair in two.</summary>
+    private static int WholeEnd(string text, int end) => end < text.Length && char.IsHighSurrogate(text[end - 1]) ? end - 1 : end;
 
     /// <summary>What stands between the agent's reason and the cure in the shim's note.</summary>
     public const string CureSeparator = " — ";
@@ -131,7 +174,8 @@ public sealed record AcpDiagnosis(string Name, string Cure, AcpFailureKind Kind)
     /// with the words of the sign-in one).
     /// </summary>
     public static AcpDiagnosis Of(string text, IReadOnlyList<AcpKnownFailure> known) =>
-        known.FirstOrDefault(failure => text.Contains(failure.Phrase, StringComparison.OrdinalIgnoreCase)) is { } hit
-            ? new AcpDiagnosis(hit.Name, hit.Cure, hit.Kind)
-            : None;
+        Hit(text, known) is { } hit ? new AcpDiagnosis(hit.Name, hit.Cure, hit.Kind) : None;
+
+    private static AcpKnownFailure? Hit(string text, IReadOnlyList<AcpKnownFailure> known) =>
+        known.FirstOrDefault(failure => text.Contains(failure.Phrase, StringComparison.OrdinalIgnoreCase));
 }

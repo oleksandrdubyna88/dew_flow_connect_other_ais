@@ -1,5 +1,11 @@
+using System.Text.Json;
+using CoaiMcp.Acp;
+using CoaiMcp.Core.Findings;
+using CoaiMcp.Core.Rounds;
 using CoaiMcp.Runners.Acp;
 using CoaiMcp.Runners.Kimi;
+using CoaiMcp.Runners.Platform;
+using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
 using FluentAssertions;
 using Xunit;
@@ -45,10 +51,10 @@ public sealed class KimiMonthlyQuotaTests
     [Fact]
     public void TheMonthlyRow_StandsBesideTheFiveHourRow_AndBeforeEverySignInRow()
     {
-        var names = KimiAcpProfile.Failures.Select(failure => failure.Phrase).ToList();
+        var phrases = KimiAcpProfile.Failures.Select(failure => failure.Phrase).ToList();
 
-        names.IndexOf("reached your monthly usage limit").Should().Be(names.IndexOf("reached your 5-hour usage limit") + 1);
-        names.IndexOf("reached your monthly usage limit").Should().BeLessThan(names.IndexOf("Authentication required: 401"));
+        phrases.IndexOf("reached your monthly usage limit").Should().Be(phrases.IndexOf("reached your 5-hour usage limit") + 1);
+        phrases.IndexOf("reached your monthly usage limit").Should().BeLessThan(phrases.IndexOf("Authentication required: 401"));
         KimiAcpProfile.SpentNames.Should().BeEquivalentTo(["kimi_quota_spent", "balance_spent"]);
     }
 
@@ -78,4 +84,85 @@ public sealed class KimiMonthlyQuotaTests
     [Fact]
     public void TheSentence_QuotesTheRefreshedClause_AndNeverSaysNoReset() =>
         KimiQuotaWords.Said("kimi_quota_spent: " + MonthlyLine).Should().Contain("\"Your quota will be refreshed in the next cycle.\"").And.NotContain(KimiQuotaWords.NoReset);
+
+    // ---------- F1: the matched line, when the sentence reaches the shim on stderr only ----------
+
+    private static KimiRuntime Kimi() => new("kimi", HostKind.Windows, new KimiSeams(
+        root => new KimiPlaces(root, "persons", "persons-bin", [], string.Empty, "kimi.exe"), () => ("coai-mcp.exe", [])));
+
+    private static ReviewerInvocation Built() =>
+        new("kimi", RoleCatalog.ArchitectureRole, new ProcessRequest("coai-mcp.exe", ["--ask-acp"], Path.GetTempPath()) { Timeout = TimeSpan.FromSeconds(30) }, string.Empty, Kimi(), Model: "kimi-code/k3");
+
+    private const string NamesNoRow = "the agent answered with an error (-32603): Internal error";
+
+    private static AcpOutcome Outcome(string reason, string stderr) =>
+        new(AcpEnd.AgentFailed, string.Empty, reason, string.Empty, "s", AcpUsage.Unknown, [], [], [], stderr, 0);
+
+    [Fact]
+    public void AMonthlyQuotaSeenOnlyOnStderr_IsQuotedFromTheMatchedLine_NeverNamedAsTheFiveHourWindow()
+    {
+        var ended = KimiShimScripts.Ended(AcpWords.SpentExit, AcpEnd.AgentFailed, NamesNoRow, failure: KimiAcpProfile.QuotaSpent, failureLine: MonthlyLine);
+
+        var verdict = Kimi().RateLimited(Built(), ended);
+
+        verdict.Limited.Should().BeTrue();
+        verdict.Reason.Should().NotContain("5-hour", "the vendor said monthly; the 5-hour row's phrase must never stand for it");
+        verdict.Reason.Should().Contain("Your quota will be refreshed in the next cycle");
+        RateLimit.Hopeless(verdict.Reason).Should().BeTrue(verdict.Reason);
+        Kimi().WhyItFailed(Built(), ended).Should().Contain("\"Your quota will be refreshed in the next cycle.\"").And.NotContain(KimiQuotaWords.NoReset);
+    }
+
+    [Fact]
+    public void AShimReportWithNoFailureLine_StillStopsTheLadder_WithoutNamingOneWindow()
+    {
+        var verdict = Kimi().RateLimited(Built(), KimiShimScripts.Ended(AcpWords.SpentExit, AcpEnd.AgentFailed, NamesNoRow, failure: KimiAcpProfile.QuotaSpent));
+
+        RateLimit.Hopeless(verdict.Reason).Should().BeTrue("an older shim's report still stops the ladder: " + verdict.Reason);
+        verdict.Reason.Should().Contain("5-hour").And.Contain("monthly", "the table's phrases for the name, neither passed off as the one the vendor said");
+    }
+
+    [Fact]
+    public void TheShim_ReportsTheStderrLineItMatched_AndTheParentReadsItBack()
+    {
+        var outcome = Outcome(NamesNoRow, "some noise\n" + MonthlyLine + "\nmore noise");
+        var diagnosis = AskAcpMode.Diagnose(new KimiAcpProfile(), outcome);
+
+        diagnosis.Name.Should().Be(KimiAcpProfile.QuotaSpent);
+        var json = AskAcpMode.Report(outcome, diagnosis);
+        JsonDocument.Parse(json).RootElement.GetProperty("failureLine").GetString().Should().Be(MonthlyLine);
+        KimiReport.Parse(json).FailureLine.Should().Be(MonthlyLine);
+    }
+
+    [Fact]
+    public void AMatchInTheReasonItself_WritesNoFailureLine_AndAnOlderReportReadsAsEmpty()
+    {
+        var outcome = Outcome("Authentication required: " + MonthlyLine, "noise");
+        var json = AskAcpMode.Report(outcome, AskAcpMode.Diagnose(new KimiAcpProfile(), outcome));
+
+        JsonDocument.Parse(json).RootElement.TryGetProperty("failureLine", out _).Should().BeFalse("the reason already carries the sentence");
+        KimiReport.Parse("""{"end":"agent_failed","failure":"kimi_quota_spent","reason":"x"}""").FailureLine.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ALongMatchedLine_IsCappedAtAWindowThatStillHoldsThePhrase()
+    {
+        var long_ = new string('x', 3000) + " " + MonthlyLine + " " + new string('y', 3000);
+        var diagnosis = AcpDiagnosis.Of(NamesNoRow, long_, KimiAcpProfile.Failures);
+
+        diagnosis.Line.Length.Should().BeLessThanOrEqualTo(AcpDiagnosis.LineCap);
+        diagnosis.Line.Should().Contain("reached your monthly usage limit");
+    }
+
+    // ---------- F2: K4 precedence, pinned ----------
+
+    [Theory]
+    [InlineData("Authentication required", "not_signed_in")]
+    [InlineData("Authentication required: 429 Too Many Requests", "provider_error")]
+    public void AReasonThatNamesARow_WinsOverAMonthlySentenceInStderr(string reason, string name)
+    {
+        var diagnosis = AcpDiagnosis.Of(reason, MonthlyLine, KimiAcpProfile.Failures);
+
+        diagnosis.Name.Should().Be(name, "K4: the agent's reason names a row, so stderr is not asked");
+        diagnosis.Line.Should().BeEmpty();
+    }
 }

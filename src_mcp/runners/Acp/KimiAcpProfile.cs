@@ -99,9 +99,13 @@ public sealed class KimiAcpProfile(ForeignKimiWatch watch) : IAcpProfile
     public static readonly IReadOnlySet<string> SpentNames =
         Failures.Where(failure => failure.Kind == AcpFailureKind.Spent).Select(failure => failure.Name).ToHashSet(StringComparer.Ordinal);
 
-    /// <summary>The phrase of the Spent row called <paramref name="name"/>, as the table writes it — empty for a name that is not a Spent row.</summary>
-    public static string SpentPhraseOf(string name) =>
-        Failures.Where(failure => failure.Kind == AcpFailureKind.Spent && failure.Name == name).Select(failure => failure.Phrase).FirstOrDefault() ?? string.Empty;
+    /// <summary>
+    /// The phrases of the Spent rows called <paramref name="name"/>, as the table writes them, joined by " or " — empty for a name that is not a Spent row. A name can cover
+    /// several rows (<c>kimi_quota_spent</c>: the 5-hour and the monthly window), so this never stands for the ONE the vendor wrote: only the report's matched line does that.
+    /// It is the fallback for a report that carries no line.
+    /// </summary>
+    public static string SpentPhrasesOf(string name) =>
+        string.Join(" or ", Failures.Where(failure => failure.Kind == AcpFailureKind.Spent && failure.Name == name).Select(failure => failure.Phrase));
 
     /// <summary>
     /// The Kimi versions coai has measured. Every number in <c>research/RESULTS_kimi_confinement.md</c> — the write refusals, the

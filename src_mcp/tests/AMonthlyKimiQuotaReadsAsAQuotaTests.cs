@@ -24,6 +24,7 @@ public sealed class AMonthlyKimiQuotaReadsAsAQuotaTests : IDisposable
         line.Should().Contain(KimiQuotaWords.Opening, $"the {where} says the quota is used up");
         line.Should().Contain("\"Your quota will be refreshed in the next cycle.\"", $"the {where} quotes the refreshed clause Kimi gave");
         line.Should().NotContain("kimi login", $"the {where} never sends a person to sign in again");
+        line.Should().NotContain("5-hour", $"the {where} — the quota is monthly");
         line.Should().NotContain("exit 77", $"the {where} is not a sign-in refusal");
         line.Should().NotContain(KimiQuotaWords.NoReset, $"the {where} — Kimi did name when the quota comes back");
         line.Should().Contain(KimiQuotaWords.Opening, Exactly.Once(), $"the {where} says the cure once");

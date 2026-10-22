@@ -449,15 +449,18 @@ sighting as "seen in prompt mode; the ACP form still unmeasured").
 D9: the phrase joined `RateLimit.Spent`; the verbatim line is the `observed` row (it lives as `KimiMonthlyQuotaTests.MonthlyLine`, one constant used by S10–S13 and the
 `observed` dictionary). D10: `KimiQuotaWords.ResetOpening` became the ONE list `ResetOpenings`; `ClauseOf` takes the earliest. S10–S13 were each red first, green, and
 broken-and-restored (`research/module_tests.md`). Deviations: (1) the monthly row reuses the name `kimi_quota_spent` and the cure `KimiQuotaWords.Fixed`, so `SpentNames` still
-has two names and `SpentPhraseOf` answers with the first (5-hour) phrase — it is only used when the reason is not already hopeless, and both phrases are; (2) the const `ResetOpening`
-is gone (three older assertions read `ResetOpenings[0]`). Claim as released: "a monthly-quota answer that carries Kimi's measured sentence reads as a spent quota"; the ACP form is
+has two names. `SpentPhraseOf(name)` first answered with the FIRST (5-hour) phrase, which the code-review round (F1) showed was wrong for a monthly sentence seen on stderr only; what
+shipped after that round: the shim's report carries the MATCHED LINE (`failureLine`, see the review record) and `SpentReason` quotes it, `SpentPhraseOf` became `SpentPhrasesOf` (all the
+Spent phrases of the name, joined by " or ") and is only the fallback for a report with no line; (2) the const `ResetOpening` is gone (three older assertions read `ResetOpenings[0]`).
+Claim as released: "a monthly-quota answer that carries Kimi's measured sentence — in its reason, or in stderr when its reason names no other row — reads as a spent quota"; the ACP form is
 still unmeasured (RESULTS §31).
 
 **Done when.** S10–S13 red then green with break-its; the guards green; the whole suite green; released with the next mcp minor.
 
 **Story 5's plan round (coai session `c7c16214`, 2026-10-21, verdict proceed) — 3 findings: 2 accepted, 1 rejected.**
 - *Accepted — the ACP shape is unmeasured, so the claim is narrowed.* `AcpDiagnosis.Of` matches a row as a case-blind SUBSTRING of the
-  error text plus stderr, so the monthly row fires wherever the measured sentence appears, whatever envelope wraps it; what stays
+  error text plus stderr, so the monthly row fires wherever the measured sentence appears in the REASON, whatever envelope wraps it, and in stderr when the reason names no row (K4: a reason that
+  names a row wins — see the review round, F2); what stays
   unverified is that ACP delivers the sentence at all (and not, say, a bare `Authentication required` — S9's outcome). The release note
   and the DoD say exactly that: "a monthly-quota answer that carries Kimi's measured sentence reads as a spent quota"; the ACP form is
   recorded by the capture step (§5 step 1) at its first sighting, and S10's constructed envelope is replaced then.
@@ -466,3 +469,18 @@ still unmeasured (RESULTS §31).
   clause does NOT contain "purchase" or "https://".
 - *Rejected — case sensitivity:* `ClauseOf` already searches with `OrdinalIgnoreCase` (`KimiQuotaWords.cs:41`), and
   `AcpDiagnosis.Of` matches rows case-blind; the new opening joins the same search.
+
+
+**Code-review round (Opus judge + cadence consult 8d2f51e1, 2026-10-21) — 3 findings, all accepted.**
+- *F1 (medium) — accepted; fix shape: carry the matched evidence.* When the monthly sentence reached the shim only on STDERR (the reason names no row, e.g. `-32603 Internal error`),
+  `AcpDiagnosis.Of(reason, stderr, …)` picked the monthly row, but the report's reason was still the bare one, so `SpentReason` appended the FIRST row's phrase for the shared name
+  (`reached your 5-hour usage limit`) and the clause stayed in stderr: the ledger said 5-hour for a monthly quota and "the vendor named no reset". Before story 5 that input was an honest
+  `provider_error`. Now `AcpDiagnosis.Line` holds the one stderr line that held the row's phrase (trimmed, a window of at most 400 characters that still holds the phrase, never
+  splitting a surrogate pair; empty when the reason itself matched); the shim writes it as `failureLine`; `KimiReport.FailureLine` reads it (absent = empty, so an older shim's report works);
+  `SpentReason` and `Said` quote it as `(Kimi said: <line>)`, so `ClauseOf` finds "Your quota will be refreshed in the next cycle." A report with no line falls back to
+  `SpentPhrasesOf(name)`, which names every window of the name and never passes one off as the vendor's. No other reader of the report JSON needed a change (the confinement probe script
+  reads fields by name; the extension does not read this report).
+- *F2 (claim) — accepted as a narrowed claim and a guard; K4 kept.* A reason that names a row wins over stderr: `("Authentication required", monthly sentence in stderr)` is `not_signed_in`,
+  and `("Authentication required: 429 Too Many Requests", …)` is `provider_error`. Pinned by `AReasonThatNamesARow_WinsOverAMonthlySentenceInStderr`. The claim above says so.
+- *F3 (doc nits) — accepted:* the `VendorDiagnosis` marker comment names both windows, the README row says what is merged, the `SpentReason` doc comment and `module_runners.md` say "the matched
+  line", and the test's local `names` (which held phrases) is `phrases`.
