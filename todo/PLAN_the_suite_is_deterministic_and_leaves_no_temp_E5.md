@@ -10,7 +10,12 @@
 > and three product files, each named in its story: `runners/Files/LinuxHeldFile.cs` (C26), `runners/Kimi/KimiCredentialsLock.cs`
 > (C3, a test seam), `runners/Reviewers/ReviewerExecutor.cs` (C35, a clock seam under D3). **No cornerstone** (§4, "Why no
 > cornerstone"); the parent's ledger line stays `Cornerstones: 2 of 2 named — the per-run temp folder (E2, built), the clock
-> contract (E4.S1)`. Stories by Fable.
+> contract (E4.S1)`. Stories by Fable. **Folded 2026-10-22, each item verified against the code at `78d91db55`:** the E5
+> plan round (coai session `51b4e0fd`, verdict proceed, 6 findings, all accepted) — §10; the risk consults for S2
+> (`fdd9146f`, `LinuxHeldFile`) and S8 (`c463d7c3`, the executor's clock) — §11. Where §10–§11 and the sections above
+> disagree, §10–§11 govern; the sections were edited in place to match. The gate's operator command "split into 4-5
+> epics" is a size heuristic; E5 is epic 5 of a FIXED five-epic plan, so no epic is added — the thirteen stories are
+> grouped into four BUILD GROUPS, each closed by a checkpoint code round (§5).
 >
 > Related docs: [PLAN_the_suite_is_deterministic_and_leaves_no_temp_E4.md](PLAN_the_suite_is_deterministic_and_leaves_no_temp_E4.md)
 > (the clock contract §5, `ManualClock`, `ClockHandshake`, the structural scan — reused by S8), [module_tests.md](../research/module_tests.md),
@@ -276,26 +281,58 @@ description; the child's copy keeps it alive after the parent closes). The probe
 
 **Why the parent's two options are not the fix.** "The class moves into a serial collection" cannot help: a collection
 serialises its OWN members; the other seven threads keep running other collections' tests, and it is THEIR forks that
-inherit. "The probe waits for inheritors to end" is a timer deciding an outcome — the thing this plan removes. **The fix
-is in the primitive, three lines:** open WITH `O_CLOEXEC`, take the flock, build the stream — and only when the take has
-SUCCEEDED clear `FD_CLOEXEC` with `fcntl(fd, F_SETFD, 0)` (one more `LibraryImport` beside `:83-90`). The descriptor becomes
-inheritable at the end of the successful path, before the shim starts its agent (which is after `HoldTree` returns,
-`KimiCredentialsLock.cs:172`), and never exists inheritable on a failure path. The product's behaviour for every caller is
-unchanged — a taken hold is inherited exactly as before (L_N1b, `:192-206`, is the guard) — and the window is gone, not
-narrowed. (§8 Q1: this deviates from the parent's two options, with the reason above.)
+inherit. "The probe waits for inheritors to end" is a timer deciding an outcome — the thing this plan removes.
 
-**RED.** `AForkDuringTheTakesFailure_DoesNotCarryTheLockAway` (Linux): the stream factory seam (`:121`) starts a child
-(`FakeCli sleep 30000`, a fork of the test host while the descriptor is open), records it for the test's `Dispose` to kill,
-and then throws; the probe must read `Free`. Today: `Expected HeldFile.Probe(LockFile) to be LockProbe.Free because a
-descriptor opened inheritable and then closed must not survive in a child the host forked meanwhile, but found
-LockProbe.Held.` — the CI sentence, on every run. After the fix: `Free`. A second arm, the guard, green before and after:
-`L_N1b_TheHold_SurvivesItsOpenersSigkill_WhileTheGrandchildLives` (`:192`) — the successful take is still inherited.
+**What `O_CLOEXEC` does and does not do (plan round findings 1+3, risk consult `fdd9146f` — §10, §11).** Close-on-exec
+closes at EXEC, not at fork: a child another thread forks while the descriptor is open holds a copy of it — and with it
+the flock, which belongs to the shared open file description — until that child execs. So `O_CLOEXEC` alone narrows the
+window to fork→exec; it does not close it. And clearing `FD_CLOEXEC` after a successful take makes the descriptor
+inheritable by EVERY concurrent fork from then on — which is the product's intent for the one child the shim starts next,
+and harmless for the others only because of process isolation (below). **The fix, with both halves:** (1) open WITH
+`O_CLOEXEC` (`:42`), take the flock (`:48`), build the stream (`:57`); (2) on success clear `FD_CLOEXEC` with
+`fcntl(fd, F_SETFD, 0)` WITH CHECKED error handling — an `fcntl` failure is `Hold.Unusable` naming the errno, after the
+descriptor is unlocked and closed; (3) on the ABORTED-acquisition path (the stream cannot be made, `:59-63`) explicitly
+`flock(fd, LOCK_UN)` BEFORE the close — the unlock acts on the open file description, so a pre-exec child that inherited a
+copy no longer holds the lock; (4) NEVER unlock on the normal successful disposal (`Hold.Taken`'s stream dispose): that
+would release the lock Kimi inherited, which is the whole point of the primitive. Two more `LibraryImport`s beside `:83-90`
+(`fcntl`, and `flock` is already there). The product's behaviour for every caller is unchanged — a taken hold is inherited
+exactly as before (L_N1b, `:192-206`, is the guard) — and the failure path no longer leaves a lock anywhere.
+
+**Why production is not exposed to the "every concurrent fork" half — verified.** The inheritable take is made by the
+SEPARATE `--ask-acp` shim process, not by the server: `AskAcpMode.cs:163` takes the hold (`profile.Hold(ask, ask.Deadline)`
+→ `KimiCredentialsLock.HoldTree`, `KimiCredentialsLock.cs:172`), keeps it in a `using` (`:189`) and starts the agent through
+`AcpClient.AskAsync` at `:191` with "nothing awaited between" (`:35`, `:152`); the class's own remark says what for
+(`KimiCredentialsLock.cs:46-51`: "the SHIM's: taken inheritable immediately before the agent starts, so `kimi` inherits it
+and the sign-in stays held while EITHER the shim or the agent lives"). The server never owns these descriptors, so its
+sibling reviewers and git children cannot inherit them. The test host is the one process that holds the primitive beside
+seven forking threads — which is why only a test ever saw C26.
+
+**Is the 7 ms failure a pre-exec child?** PLAUSIBLE, NOT ESTABLISHED. The stream-factory RED below covers a different
+window: `.NET`'s `Process.Start` on Unix waits for the child's exec before it returns, so a child started INSIDE the seam has
+exec'd — and closed a CLOEXEC copy — before the probe runs; it reproduces the no-CLOEXEC leak (today's code), not the
+pre-exec hold. The pre-exec window is reproduced by an isolated helper (below). If a reproducing CI run is ever kept, the
+diagnosis tool is `strace -ff -tt -yy -e trace=process,openat,flock,fcntl,close` on the test host: it names the holder.
+
+**REDs (four arms, Linux).** (a) `AForkDuringTheTakesFailure_DoesNotCarryTheLockAway` — the stream factory seam (`:121`)
+starts a child (`FakeCli sleep 30000`, kept for the test's `Dispose` to kill) and then throws; the probe must read `Free`.
+Today (no `O_CLOEXEC`): `Expected HeldFile.Probe(LockFile) to be LockProbe.Free because a descriptor opened inheritable and
+then closed must not survive in a child the host forked meanwhile, but found LockProbe.Held.` — every run. After: `Free`
+("failure after a completed exec releases"). (b) `AFailureWithAPreExecChild_StillLeavesTheFileFree` — an isolated helper
+(a small native shim or the fake CLI's `hold-file` family extended with a `fork-and-wait` verb under a pipe barrier)
+forks AFTER the flock and holds the child BEFORE exec on the barrier, then the stream factory throws: with `LOCK_UN` on the
+abort path the probe reads `Free`; without it `Held`. Today: `Held`. (c) `AnFcntlThatFails_IsUnusable_AndLeavesNoLock` — the
+`fcntl` seam made to fail: `Hold.Unusable` naming the errno, the file `Free` after. Today: the member does not exist (red
+by compilation). (d) the guard, green before and after: `L_N1b_TheHold_SurvivesItsOpenersSigkill_WhileTheGrandchildLives`
+(`:192`) plus `L_N1a_ASecondInheritableTake_IsBusy_TheLockIsExclusive` (`:181`) — successful inheritance still excludes a
+second taker after the opener dies, and the file is released only after the last inheritor exits (`:205`).
 
 **Break-its.** B-E5-8: `FD_CLOEXEC` never cleared → L_N1b red (`the hold did not survive its opener's SIGKILL while the
 grandchild lived — the descriptor was not inherited (O_CLOEXEC) (S-K5)`). B-E5-9: `O_CLOEXEC` dropped from the open again →
-the new RED red.
+arm (a) red. B-E5-9a: `LOCK_UN` dropped from the abort path → arm (b) red. B-E5-9b: `LOCK_UN` added to the SUCCESSFUL
+disposal → L_N1b red (the lock is gone the moment the opener's stream is disposed).
 
-**Confidence.** High on the mechanism (the RED shows it), medium that it is the CI failure (no trace of which sibling forked).
+**Confidence.** High on both mechanisms (arms (a) and (b) show them); medium that either is the CI failure (no trace of
+which sibling forked, nor whether it had exec'd).
 
 ### 3.6 C16 — an HTTP stub stopped while its handler still writes headers (SHARED STATE inside the stub) — S3
 
@@ -313,11 +350,14 @@ at a time (`:123`, `await AnsweredAsync` inline) and `Answers(seen)` is called S
 cadence consult's point 2, which is why "wait for the handler AND return at the bound AND the gate opens after" could not
 all hold.
 
-**Fix (the consult's rewrite, verbatim in shape).** `Dispose` (1) CLOSES ADMISSION — the accept loop stops taking contexts,
-and a context taken but not yet handled is aborted; (2) ABORTS every in-flight response it tracks (`HttpListenerResponse.Abort()`,
-the call `:183` already makes); (3) DRAINS the tracked handler task with a bound (2 s, a constant with its reason) and, when
-the bound expires, journals `dispose: a handler outlived the 2 s bound and was aborted: <Method> <Path>`; (4) only then
-`Stop()`/`Close()`. The handler contract becomes cancellation-aware: `Answers` receives the stub's `Disposing` token (an
+**Fix (the consult's rewrite, verbatim in shape; plan round finding 5 on the order).** `Dispose` (1) CLOSES ADMISSION —
+the accept loop stops taking contexts, and a context taken but not yet handled is aborted; (2) ABORTS every in-flight
+response it tracks (`HttpListenerResponse.Abort()`, the call `:183` already makes) AND cancels the handlers' `Disposing`
+token — both SYNCHRONOUSLY, before any wait, so a handler blocked on the token or on its response is released at once and a
+stuck one does not cost the whole bound on every teardown; (3) only then DRAINS the tracked handler task with a bound (2 s, a
+constant with its reason — reached only by a handler that ignores both its token and its aborted response) and, when the
+bound expires, journals `dispose: a handler outlived the 2 s bound and was aborted: <Method> <Path>`; (4) only then
+`Stop()`/`Close()`. The order is cancel-and-abort → drain → stop; never a wait before the cancel. The handler contract becomes cancellation-aware: `Answers` receives the stub's `Disposing` token (an
 overload beside today's `Func<Seen, Answer>` so the fifty callers compile unchanged; a reader of `IsDisposed` is the
 simpler form), and a late callback — one that returns from `Answers` after `Dispose` returned — can no longer touch the
 response: its context is untracked and aborted, its write throws into the handler's own catch (`:178-188`), which `Abort()`s
@@ -487,9 +527,17 @@ plus 40,000 pipe writes under `node --test` with up to eight files at once (`scr
 cost: the quadratic `held = [...held, value]` cost 64 s at 130,000 values, the append 0.01 s (`src/processLauncher.ts:203-209`,
 the push at `:219`); at 40,000 values the quadratic version costs about 6 s of CPU.
 
-**Fix.** `replayingFan` (`:194`, module-private today) is exported for tests; a direct test emits 40,000 values with no
-subscriber and asserts `process.cpuUsage()`'s delta (user + system) under 1,000 ms — six times under the regression's ≈6 s,
-a hundred times over the append, and a CPU figure, which load moves far less than wall time. The real-child test stays as a
+**Fix.** `replayingFan` (`:194`, module-private today) is exported for tests; a direct test emits N values with no
+subscriber and asserts `process.cpuUsage()`'s delta (user + system) under a threshold. **The sizing, numerically (plan
+round finding 6).** The file's own measurement is 64.09 s for 130,000 quadratic emits and 0.01 s for the append (`:203-205`).
+Scaled: at N = 40,000 the quadratic fan costs (40/130)² × 64.09 ≈ **6.1 s** of CPU and the append (40/130) × 0.01 ≈
+**3 ms**; at N = 60,000, 13.7 s against 5 ms. The threshold is **1,000 ms at N = 40,000**: six times UNDER the quadratic
+figure and three hundred times OVER the linear one — an order of magnitude of margin on both sides, so neither a slow
+machine (CPU time, not wall time, is what is measured) nor a fast one can cross it. **Isolation:** `node --test` runs each
+test file in its own process, so the delta is the file's; inside the file the test first emits 1,000 values and yields
+(`await setImmediate`) so the setup's allocation and any pending GC are outside the measured window, then reads
+`cpuUsage()` before and after the 40,000; nothing else runs in the file concurrently (its tests are sequential). The
+real-child test stays as a
 smoke test of the pipes — exit 0 and every character arrived (`:267`) — WITHOUT a wall-clock assertion and WITHOUT the
 `ended` helper's 10 s timer (J5): it waits on `onExit`/`onError` alone and leaves the hang budget to the runner's own
 per-file timeout, which names the file.
@@ -560,19 +608,59 @@ The Opus brief for S8 writes the inventory table for this class in E4 §5.1's fo
 the `:539` remark's `CancelAfter(request.Timeout)` is the LAUNCHER's, which stays). The seam lands alone first with the
 suite green on the default clock (E4 §5.3), then the test moves.
 
+**Three rules from the risk consult `c463d7c3` (§11), each verified.** (1) **One clock instance, passed explicitly to all
+three.** The executor keeps its own optional `TimeProvider? clock` (standalone callers construct it alone); a test passes
+the SAME `ManualClock` to the scheduler, the executor and the driver. Today's `ConversationAsync`
+(`AReviewerThatAsksForSourceIsAskedAgainTests.cs:580-596`) gives the scheduler a clock (`new BoundedScheduler(clock: clock)`,
+`:585`) but constructs `new ReviewerExecutor(launcher)` (`:586`) — after the seam that still COMPILES and silently defaults
+the executor to system time. A RED must catch exactly that: with the executor on the default clock and the stand-in
+spending no real time, the 2 s / 1.5 s arithmetic hands the repair the whole budget — the `found 2s` sentence below — so
+the helper takes the clock once and hands it to all three, and the test that would compile with a missing clock is the one
+that goes red. (2) **The remainder and BOTH launch-duration records move together.** `:627` (the remainder), `:640`
+(`started`) and `:652` (the second part's elapsed) all read `spent`; they all become `_clock.GetElapsedTime(stamp)` reads
+of ONE stamp — a record that still read a `Stopwatch` would report a duration of zero on the manual clock while the
+remainder moved. (3) **`AbandonBudget` STAYS on the system clock as teardown.** `AbandonAsync` (`:818-835`) arms
+`new CancellationTokenSource(AbandonBudget)` (`:827`, 10 s at `:838`) around the adapter's courtesy cleanup — for the
+remote runtime a real HTTP cancel (`RemoteRuntime.AbandonAsync`, `runners/Reviewers/RemoteRuntime.cs:252-260`, on a client
+whose own timeout is 10 s, `:242`). That is real cleanup I/O after the outcome is decided: a manual clock nobody advances
+would park the cleanup for ever. E4's teardown exception (contract (1), the lead's Q1: "a grace that bounds a real pipe
+after the outcome is decided") is EXTENDED in wording to "real cleanup I/O", and the scan's `Sanctioned` allow-list
+(`EveryBudgetInAClockedClassReadsItsClockTests.cs:60`, the `Allowed(File, Snippet, Reason)` shape) gains ONE narrowly
+justified entry — `ReviewerExecutor.cs`, snippet `new CancellationTokenSource(AbandonBudget)`, reason "TEARDOWN — real
+cleanup I/O (the adapter's courtesy cancel after a kill); a manual clock would park it" — the only unclocked site left in
+the class. Its test: with the manual clock FROZEN, an adapter stand-in whose `AbandonAsync` awaits its token is still
+cancelled by the system-time bound (shortened through a test-only `internal` seam on the budget, or asserted through the
+stand-in observing `ct.IsCancellationRequested` within the suite's guard), and the ORIGINAL timeout/cancellation outcome of
+the launch survives the cleanup (`TimedOut` stays `TimedOut`).
+
+**What the stand-in proves, said plainly.** The scripted `ClockedLauncher` proves budget ALLOCATION — what the executor
+hands each launch — not the production launcher's timer ENFORCEMENT. The real `ProcessLauncher` deadline tests
+(`tests/ProcessLauncherTests.cs:119-136` and its siblings) stay as the enforcement proof and are named so in the PR.
+
 **Fix for the test.** `ARepairGetsWhatIsLEFT…` runs on `ManualClock` + `ClockedLauncher`: launch 1 is scripted to 1.5 s
 (the stand-in advances the clock by it), the repair's recorded `request.Timeout` must be 500 ms and the repair "runs" 1.5 s
 against it → `TimedOut`. The wall bound (`:57`) goes; the assertion that replaces it is the exact number
 (`Timeouts[1] == 500 ms`), stronger than "under 3.5 s". `AFastFirstLaunch_LeavesTheRepairPlentyOfTime` (`:61-70`) moves the
 same way (`Timeouts[1]` near 10 s, the repair `Ok`); the zero-left arm (`NoRepairToRun`, `:582`) is already pure.
 
-**RED.** On the unseamed executor with the stand-in: `Expected launcher.Timeouts[1] to be 500ms because the repair gets what
-is LEFT of a 2s budget after a 1.5s first launch, but found 2s.` — every run (the Stopwatch saw no time pass). Green with the
-seam. The scan's RED: `ReviewerExecutor.cs: Stopwatch.StartNew( …` named as an unclocked site.
+**RED.** On the unseamed executor with the stand-in — and, after the seam, on an executor constructed WITHOUT the clock
+(rule 1): `Expected launcher.Timeouts[1] to be 500ms because the repair gets what is LEFT of a 2s budget after a 1.5s first
+launch, but found 2s.` — every run (the Stopwatch saw no time pass). Green with the seam and the shared clock. The scan's RED:
+`ReviewerExecutor.cs: Stopwatch.StartNew( …` named as an unclocked site; after the seam, `new CancellationTokenSource(AbandonBudget)`
+named until the allow-list entry is in (red first, then allowed with its reason).
+
+**The tests, listed (consult c463d7c3):** 1.5 s of a 2 s budget → the repair's request is EXACTLY 500 ms; a repair whose
+own timeout is already shorter than the remainder stays shorter (`RetryLadder.Lesser`); an exhausted budget starts no
+repair (`NoRepairToRun`, `:582`); the launch-duration records reflect the same advances (the first part's and the second
+part's elapsed equal what the driver advanced); a timed-out repair keeps the earlier launch's usage and releases the slot
+(C30's shape, on this class's seam); the default-clock seam-only run green; the real-process `ProcessLauncher` timeout
+tests still green; the frozen-clock abandon test (rule 3) green.
 
 **Break-its.** B-E5-21: the `Stopwatch` left beside `_clock` for the remainder → the scan red AND the test red with `found
 2s`. B-E5-22: the stamp at `:523` left on `DateTime.UtcNow` → the scan red (named site). B-E5-23: the stand-in advancing the
-clock from its own thread → `ManualClock`'s nested-advance refusal (E4 M15) names it.
+clock from its own thread → `ManualClock`'s nested-advance refusal (E4 M15) names it. B-E5-23a: `AbandonBudget` moved onto
+`_clock` → the frozen-clock abandon test hangs under its guard with the guard's sentence. B-E5-23b: one duration record left
+on a `Stopwatch` → the "same advances" test red (`found 0ms`).
 
 ### 3.15 C31 — a wall bound of 3 s around a 300 ms sizing deadline over a 4 s stand-in — S9
 
@@ -611,20 +699,26 @@ the stdio round trip timed out at `RoundTrip(…, timeoutSeconds: 10)` (`:58-62`
 20 s (`:23`, `:53`); the claim "initialize is not held by the vault read" is measured as 10 s against 20 s (`:62-63`) — a wall
 bound on a cold process start.
 
-**Fix.** The claim becomes an ORDER: the fake, in vendor mode, writes an END marker when its sleep ends
-(`FAKECLI_SLEEP_END_FILE`, one line in `tests_fakecli/Program.cs`'s vendor mode beside `FAKECLI_SLEEP_MS`, `:54` — the
-`busy` verb's `.end` idea, `:9`, reused in shape); the test waits for the reply line with the suite's guard (named as a
-guard: `the server never answered initialize within 60 s` — a hang's sentence, not the measurement) and asserts the marker
-did NOT exist when the reply arrived (the vault read was still running) and DOES exist after `providers` answered (`:69-72`,
-which already proves the read finished). `:63` goes; no bound is lengthened — the 10 s was the measurement and the
-measurement is now the marker's order.
+**Fix (plan round finding 2: a GATE, not a sleep).** A fixed 20 s sleep with an end marker would fail falsely the day a
+slow `initialize` reply takes longer than 20 s — the marker would exist by then. So the vault read blocks on a
+TEST-CONTROLLED GATE: the fake, in vendor mode, answers only once a file the test names exists (`FAKECLI_ANSWER_GATE`, the
+shape `FAKECLI_RECORD_GATE` already has — `tests_fakecli/Program.cs:57`, `:174`, `:678`: "wait until this file exists"
+— reused for the answer; it replaces `FAKECLI_SLEEP_MS` in this test, so there is no 20 s anywhere). The test: (1) waits for
+the reply line to `initialize` with the suite's guard (named as a guard: `the server never answered initialize within 60 s`
+— a hang's sentence, not the measurement) while the gate is CLOSED — the vault read cannot have finished, by construction;
+(2) asserts the reply arrived (the ORDER is now a fact, not a race); (3) RELEASES the gate; (4) verifies the read completes
+— `providers` answers (`:69-72`, `timeoutSeconds: 90` stays as the guard it is) and reports the vault's outcome. `:63` goes;
+no bound is lengthened — the 10 s was the measurement and the measurement is now the gate's order. The gate is released in
+the test's `finally` too, so a failing test never parks the fake.
 
 **RED.** The product is right today; the break-it: the server made to await the vault read before answering `initialize`
-(the restart-storm defect, D2 of `PLAN_an_idle_server_is_idle_and_starts_at_once.md`) → `Expected File.Exists(endMarker) to
-be False because the reply to initialize must arrive while the vault read is still running, but found True.`
+(the restart-storm defect, D2 of `PLAN_an_idle_server_is_idle_and_starts_at_once.md`) → the reply never arrives while the
+gate is closed: `the server never answered initialize within 60 s (the answer gate was still closed: the server waited for
+the vault read)` — the guard's sentence, which the test extends with the gate's state so the hang names its cause.
 
-**Break-its.** B-E5-26: the above. B-E5-27: the marker written at the sleep's START → the "exists after providers" arm still
-green but the "absent at the reply" arm red — pinned by a fake-side unit of the marker's placement.
+**Break-its.** B-E5-26: the above. B-E5-27: the gate honoured AFTER the fake's answer instead of before (the fake answers,
+then waits) → step (1) passes but step (4)'s "the read had not completed before the release" guard arm (a fake-side marker
+written when the gate opens, asserted absent at the reply) red — pinned by a fake-side unit of the gate's placement.
 
 ### 3.17 C34 — `AChildThatExitedBeforeItsStartTimeWasReadTests` under Windows load: a `Win32Exception` (C2's family) — S13
 
@@ -792,13 +886,15 @@ message. Fable: none (no cornerstone).
   `:183-186`), new `src_mcp/tests/EveryPidFileTheFakeWritesIsWrittenWholeTests.cs`; `src_mcp/runners/Files/LinuxHeldFile.cs`
   (`:22`, `:23-34`, `:40-49`, `:52-65`, `:83-90`), `src_mcp/tests/HeldFileInheritableOnLinuxTests.cs` (a new Fact beside
   `:117`). `tests_fakecli/Serving.cs` is CALLED, not changed.
-- **REDs.** S22 and C29's (§3.2, §3.3 — the bash arm, two sentences); C24's scan and unit (§3.4); C26's fork RED (§3.5).
-- **Break-its.** B-E5-4..9.
-- **Done when.** The four reds seen then green on the Linux leg (the coder runs them in CI on the story branch — these
-  classes skip elsewhere); the two shells and the second parser gone; `NoTestHoldsAnInheritableHandleTests` still green (no
-  inheritable descriptor ever exists on a failure path now, which is more than it asked); C24's `R` arm recorded as GATED
-  with (5) in place and S13's loop result attached; the PR states the `LinuxHeldFile` flag order as a table (open with
-  `O_CLOEXEC` → flock → stream → clear `FD_CLOEXEC`; which lines a failure can leave and the descriptor's state at each).
+- **REDs.** S22 and C29's (§3.2, §3.3 — the bash arm, two sentences); C24's scan and unit (§3.4); C26's four arms (§3.5:
+  the post-exec fork, the PRE-exec child on a pipe barrier, the failing `fcntl`, the inheritance guards).
+- **Break-its.** B-E5-4..9, B-E5-9a, B-E5-9b.
+- **Done when.** The reds seen then green on the Linux leg (the coder runs them in CI on the story branch — these classes
+  skip elsewhere); the two shells and the second parser gone; `NoTestHoldsAnInheritableHandleTests` still green; C24's `R`
+  arm recorded as GATED with (5) in place and S13's loop result attached; the PR states the `LinuxHeldFile` descriptor
+  contract as a table — open `O_CLOEXEC` → flock → stream → clear `FD_CLOEXEC` (checked) on success; `LOCK_UN` → close on
+  the aborted path; NO unlock on successful disposal — with the descriptor's and the lock's state at each line, success and
+  failure paths, and names `strace -ff -tt -yy -e trace=process,openat,flock,fcntl,close` as the tool for a kept CI run.
 - **Roles.** Opus brief with the flag-state table required; Sonnet; Opus review. One coder, in that order (all three read
   `/proc` through `ProcStat` and the fake's supervision verbs).
 
@@ -811,7 +907,9 @@ message. Fable: none (no cornerstone).
 - **REDs.** S11 (a) and (b) (§3.6). **Break-its.** B-E5-10..12.
 - **Done when.** Both arms red then green; the §6 loop of `AUsageTheVendorNeverReportedIsUnknownTests` recorded before and
   after; every stub-using class green on all three OSes; the PR states the exposure (single-threaded stub) and the handler
-  contract in two sentences.
+  contract in two sentences; a whole-suite run's teardown time for the stub-using classes is not longer than before (the
+  synchronous cancel-and-abort means a handler blocked on its token or response never costs the 2 s bound — measured once
+  in the PR).
 
 ### S4 — C3, the Kimi shim's probe (group A)
 
@@ -852,8 +950,9 @@ message. Fable: none (no cornerstone).
   (`:22-34`, `:250-269`).
 - **RED.** S20 (§3.12). **Break-its.** B-E5-19, B-E5-20.
 - **Done when.** S20 red (`held = [...held, value]`) then green; the smoke test keeps exit 0 and every character and has no
-  timer; `npm test` green; the PR says why the CPU bound is at least as strong as the wall bound (it sits 6× under the
-  regression on any machine where the wall bound sat under it by a margin load could erase).
+  timer; `npm test` green; the PR states the margin numerically (N = 40,000: quadratic ≈ 6.1 s, linear ≈ 3 ms, threshold
+  1,000 ms — ×6 below, ×300 above) with the measured CPU figures for both shapes on the coder's machine, and the isolation
+  (own process per test file; a warm-up and a yield before the window).
 
 ### S8 — the budget tests on the in-process launcher: C30, C35 (+ the `ReviewerExecutor` clock), C37's loop (group A)
 
@@ -869,10 +968,13 @@ message. Fable: none (no cornerstone).
   seen on the unseamed executor first (the coder reverts the seam once to watch it — lesson 5); (6) C30's tests moved.
 - **REDs.** §3.13's by absence and S4's break-its; §3.14's `found 2s` and the scan's named site. **Break-its.** B-E5-21..23.
 - **Done when.** The inventory table for `ReviewerExecutor` in the PR (E4 §5.1 form: every clock read, what each reads
-  after; the launcher's `CancelAfter` named as "stays, the launcher's"); the scan and its companion green with the file in
-  `Clocked`; no `Stopwatch`, `DateTime.UtcNow`, bare `Task.Delay` or `WaitAsync(timeout)` left in the class; the 2 s and
-  the 1.5 s/2 s budgets are INPUTS on the manual clock, nothing lengthened; the real-process exposure sentence
-  (`ProcessLauncherTests.cs:119-136`) in the PR; C37's kept message filed in §3.20 by the lead.
+  after; the launcher's `CancelAfter` named as "stays, the launcher's"; `AbandonBudget` named as "stays — TEARDOWN, real
+  cleanup I/O", with its one allow-list entry and its frozen-clock test); the scan and its companion green with the file in
+  `Clocked`; no `Stopwatch`, `DateTime.UtcNow`, bare `Task.Delay` or `WaitAsync(timeout)` left in the class outside that
+  entry; the one clock instance passed explicitly to scheduler, executor and driver, and the missing-clock RED seen; the
+  2 s and the 1.5 s/2 s budgets are INPUTS on the manual clock, nothing lengthened; the PR says the stand-in proves
+  ALLOCATION and names `ProcessLauncherTests.cs:119-136` as the enforcement proof; C37's kept message filed in §3.20 by the
+  lead.
 - **Roles.** Opus brief with the inventory table required; Sonnet; Opus review.
 
 ### S9 — C31, the sizing deadline (group A)
@@ -887,11 +989,12 @@ message. Fable: none (no cornerstone).
 
 - **Goal.** §3.16: the vault read's end marker orders the proof; the reply wait is the suite's guard with a hang's sentence.
 - **Files.** `src_mcp/tests/TheServerAnswersInitializeAtOnceTests.cs` (`:44-77`), `src_mcp/tests_fakecli/Program.cs` (vendor
-  mode: `FAKECLI_SLEEP_END_FILE`, one line beside `:54`'s documentation and the sleep site), `src_mcp/tests/StdioServer.cs`
+  mode: `FAKECLI_ANSWER_GATE`, the `FAKECLI_RECORD_GATE` wait reused — `:57`, `:174`, `:678`), `src_mcp/tests/StdioServer.cs`
   (`:47-55` — only if a guard overload is needed; the default 30 s at `:47` is not touched).
 - **RED.** By break-it (§3.16). **Break-its.** B-E5-26, B-E5-27.
-- **Done when.** Green today, red under B-E5-26 with its sentence, green again; `:63` gone; the §6 loop recorded; the PR
-  says the 10 s was the measurement and the marker's order replaced it (no guard lengthened: the suite's 60 s names a hang).
+- **Done when.** Green today, red under B-E5-26 with its sentence, green again; `:63` and the 20 s sleep gone; the gate
+  released in a `finally`; the §6 loop recorded; the PR says the 10 s was the measurement and the gate's order replaced it
+  (no guard lengthened: the suite's 60 s names a hang).
 
 ### S11 — C36, the outline measurement (group A)
 
@@ -934,12 +1037,25 @@ message. Fable: none (no cornerstone).
 
 1. **The loops first where a story needs a kept message before it moves:** S8's loop (C30, C37) and S13's loops run in the
    load window (§6) as the first thing on the epic branch; S13 continues through the epic. Everything else starts at once.
-2. **Group A** (S2, S3, S4, S5, S6, S8, S9, S10, S11) and **group B** (S1, S7, S12) in parallel — no shared file anywhere
+2. **The parallel groups stand** — group A (S2, S3, S4, S5, S6, S8, S9, S10, S11) and group B (S1, S7, S12) share no file
    (§4 lists each story's complete set; the one near-miss, `tests_fakecli/Program.cs`, is S10's alone — S2 edits
    `SupervisionVerbs.cs`, S4 `TreeHoldVerb.cs`). Each story is its own branch off `feat/suite-e5` (itself off
-   `feat/suite-e4-clock`, E4's PR #916 — rebased onto `main` when #916 merges) and merges into it for the epic's one code gate
-   (E3's and E4's shape).
-3. **S13's follow-ups** open as stories of their own when a stop rule says so (C27's after S3 merges; the others as named).
+   `feat/suite-e4-clock`, E4's PR #916 — rebased onto `main` when #916 merges) and merges into it.
+   **BUT the merges land in four BUILD GROUPS, each closed by a checkpoint code round (`review_code` with `again: true`)
+   before the next group's merges begin.** This is the answer to the gate's operator command "split into 4-5 epics": E5 is
+   epic 5 of a FIXED five-epic plan, so no epic is added; the size heuristic is met by reviewing the branch at four
+   checkpoints instead of once at the end. The groups, in order:
+   - **BG1 — the product-touching C# stories: S2 (`LinuxHeldFile`), S8 (the executor's clock, `ClockedLauncher`), S3 (the
+     stub every API test shares).** Highest risk, so first and reviewed first; S8's loop (C30/C37) runs at the start of BG1.
+     Checkpoint round 1 over their merged diff.
+   - **BG2 — the test-only C# stories: S4, S5, S6, S9, S10, S11.** Coded in parallel with BG1 (different files), merged
+     after checkpoint 1 is `proceed`. Checkpoint round 2.
+   - **BG3 — the extension: S1, S7, S12.** Coded in parallel with BG1/BG2 (a different tree), merged after checkpoint 2
+     (or beside it — the harness story S1 is accepted on its own PR per the parent, and that stands). Checkpoint round 3.
+   - **BG4 — the diagnosis follow-ups: S13's results file and whatever stories its stop rules opened** (C27's after S3 is
+     in BG1; C7, C34, C32, C38 as decided). Checkpoint round 4 is the epic's final code gate, followed by the five-epic
+     feature gate (§9).
+3. **S13's loops** run from the start (the load window, §6) and through BG1–BG3; its follow-ups are BG4.
 4. **The docs pass** — one commit after the last story, in E4 §9's order: `module_tests.md` (one section per story in
    story order, the E5 lessons, the diagnosis results linked), `module_runners.md` (the executor's clock; `LinuxHeldFile`'s
    flag order; the Kimi call-site seam), the diagrams where a clock or a descriptor appears, the parent's E5 section and
@@ -1067,9 +1183,78 @@ node .agents/conventions/tools/plan-lifecycle.mjs
       `research/`; the load window honoured (no loop ran beside an unknown load).
 - [ ] **The docs pass** done in one commit after the last story (§5 item 4): `module_tests.md`, `module_runners.md`, the
       diagrams, the parent's E5 section, `todo/README.md`, the tails note.
-- [ ] **The epic's code gate `proceed`** and its findings folded here (a §10 like E4's §18), then **the feature gate of the
-      whole five-epic plan** run and folded (§8 Q8), then **the 20-run CI watch per leg started** — a failure inside it
-      reopens its case with its kept log.
+- [ ] **Four checkpoint code rounds `proceed`** (`review_code again: true` after BG1, BG2, BG3 and BG4 — §5), each one's
+      findings folded here (a section like E4's §18), the fourth being the epic's final code gate; then **the feature gate
+      of the whole five-epic plan** run and folded (§8 Q8), then **the 20-run CI watch per leg started** — a failure inside
+      it reopens its case with its kept log.
+- [ ] **The plan round's six findings and the two risk consults honoured as built (§10, §11):** `LinuxHeldFile` with checked
+      `fcntl`, `LOCK_UN` on the aborted path only, the pre-exec-child arm; `PidWritten` tolerant of a transient empty file;
+      the stub's synchronous cancel-and-abort before the drain; C9's margin stated numerically with isolation; the
+      executor's one explicit clock across scheduler/executor/driver with the missing-clock RED, both duration records on
+      it, `AbandonBudget` on the system clock with its allow-list entry and frozen-clock test; C33 on a gate, no sleep.
 - [ ] `node .agents/conventions/tools/plan-lifecycle.mjs` clean; promotion of the parent, the E4 document and this one
       together per `.agents/conventions/common/planning-docs.md`, the parent's "OPEN shared-state investigation" note closed
       with a link, and the `Cornerstones: 2 of 2 named` line unchanged.
+
+## 10. The E5 plan round (coai session `51b4e0fd`, 2026-10-22, verdict proceed) — 6 findings, all accepted
+
+Every finding was re-read against the code at `78d91db55` before it was folded; the sections above were edited in place
+and this table says where. Numbers are the round's.
+
+| # | Finding | Decision | Folded as / what the code showed |
+|---|---|---|---|
+| 1, 3 | C26/S2: `O_CLOEXEC` closes at EXEC, not at fork — a child another thread forked holds the descriptor (and the flock on the shared open file description) until it execs; and clearing `FD_CLOEXEC` after a successful take makes the descriptor inheritable by every concurrent fork | **Accepted** (with §11's risk consult `fdd9146f`, which supplies the mechanism) | §3.5 rewritten: open `O_CLOEXEC` → flock → stream → clear `FD_CLOEXEC` with CHECKED `fcntl` on success; `flock(LOCK_UN)` before close on the aborted-acquisition path; NEVER an unlock on successful disposal; production isolation verified (the shim at `AskAcpMode.cs:163`/`:189-191` is the only taker, `KimiCredentialsLock.cs:46-51`); the 7 ms failure marked PLAUSIBLY pre-exec, not established; four RED arms, two new break-its; S2's done-when carries the descriptor-state table and the `strace` tool |
+| 2 | §3.16 (C33): a fixed 20 s sleep before the fake vault's end marker can expire before a slow `initialize` reply → a false failure. Use a test-controlled GATE | **Accepted** | §3.16 rewritten: the vault read blocks on `FAKECLI_ANSWER_GATE` (the `FAKECLI_RECORD_GATE` wait shape, `Program.cs:57`/`:174`/`:678`, reused); assert the reply while the gate is closed; release in a `finally`; verify the read completes through `providers`. No 20 s anywhere; the break-it's sentence names the closed gate |
+| 4 | §3.4 (C24): `PidWritten` must tolerate a transiently empty or unparseable `late.pid` (retry until its bound, never throw) AND `late-spawn` writes atomically through `Serving.WritePidFile` | **Accepted** | §3.4 fix items (1) and (2): `:84` goes through the atomic writer; `PidWritten` treats `''`/junk as "not yet" on its 20 ms poll until `Patience`, failing only at the bound with what it last read |
+| 5 | S3 (`ApiEndpointStub.Dispose`): abort admission and active connections and cancel the handlers' token SYNCHRONOUSLY before waiting on the drain, so a stuck handler does not cost the 2 s bound per teardown | **Accepted** | §3.6 fix step (2) now cancels the `Disposing` token and aborts before any wait; (3) drains only after; S3's done-when measures the stub-using classes' teardown time once in the PR |
+| 6 | S7 (`process.cpuUsage() < 1000 ms`): size N and the threshold with an order-of-magnitude margin between the linear and the quadratic shape, isolate from unrelated CPU (a warm-up / GC first), state the margin numerically | **Accepted** | §3.12: from the file's own 64.09 s / 0.01 s at 130,000 (`processLauncher.ts:203-205`) — at N = 40,000 the quadratic fan ≈ 6.1 s, the append ≈ 3 ms; threshold 1,000 ms = ×6 below and ×300 above; own process per test file, 1,000-value warm-up and a yield before the window; S7's done-when asks for both measured figures |
+
+**The operator command on the round ("split into 4-5 epics"):** read as the size heuristic it is; applied as the four build
+groups with checkpoint code rounds in §5, not as new epics (E5 is the fixed plan's fifth and last).
+
+## 11. The risk consults (`fdd9146f` for S2 — `LinuxHeldFile`; `c463d7c3` for S8 — the executor's clock), 2026-10-22 — verified, binding
+
+### `fdd9146f` — S2, the inheritable take
+
+1. **Production inheritance exists for ONE child and in ONE process.** Verified: the `--ask-acp` shim takes the two
+   inheritable locks (`AskAcpMode.cs:163`, `profile.Hold(ask, ask.Deadline)` → `KimiCredentialsLock.HoldTree`, `:172`) and
+   starts Kimi with nothing awaited between (`:35`, `:152`, `AcpClient.AskAsync` at `:191` inside `using (held.Hold)`,
+   `:189`), so Kimi keeps the locks if the shim dies (`KimiCredentialsLock.cs:46-51`). The SERVER never owns these
+   descriptors; its sibling reviewers and git children cannot inherit them — process isolation, not luck. Folded in §3.5.
+2. **The mechanism, in order.** Open `O_CLOEXEC`; take the flock; build the stream; on success clear `FD_CLOEXEC` with
+   CHECKED error handling (`fcntl` failure → `Hold.Unusable` naming the errno, after unlock and close); on the ABORTED
+   acquisition path `flock(LOCK_UN)` explicitly BEFORE close — the unlock acts on the shared open file description, so a
+   pre-exec child that inherited a copy no longer holds the lock; NEVER unlock on normal successful disposal (that would
+   release Kimi's inherited lock). Folded in §3.5 as the fix and in S2's descriptor-state table.
+3. **The 7 ms C26 failure is PLAUSIBLY a pre-exec child — not established.** The stream-factory RED covers a different
+   window (`.NET`'s `Process.Start` waits for the child's exec before returning, so a child started inside the seam has
+   exec'd before the probe). Folded: §3.5 arm (b) — an isolated helper forks after the flock and holds the child before
+   exec on a pipe barrier, then the stream fails; with `LOCK_UN` the probe reads `Free`, without it `Held`.
+4. **Tests before shipping** (all in §3.5 / S2): failure after a completed exec releases (arm a); failure with a pre-exec
+   child meets the contract (arm b); an injected `fcntl` failure → `Unusable` and cleanup (arm c); successful inheritance
+   still excludes a second taker after the opener dies and releases only after the last inheritor exits (arm d — the
+   existing `L_N1a_ASecondInheritableTake_IsBusy…` and `L_N1b…`).
+5. **The diagnosis tool for a kept CI run:** `strace -ff -tt -yy -e trace=process,openat,flock,fcntl,close` on the test
+   host names the holder. Recorded in §3.5 and S2.
+
+### `c463d7c3` — S8, the executor's clock
+
+1. **One clock instance, explicitly to all three.** Verified: `ConversationAsync` (`AReviewerThatAsksForSourceIsAskedAgainTests.cs:580-596`)
+   passes `clock` to the scheduler (`:585`) and nothing to `new ReviewerExecutor(launcher)` (`:586`); after the seam that
+   compiles and silently defaults to system time. Folded: the executor keeps its own optional `TimeProvider? clock` for
+   standalone callers; tests pass the SAME instance to scheduler, executor and driver; the RED that catches the omission is
+   the 500 ms repair request (`found 2s` on a default-clock executor with a time-free stand-in) — §3.14.
+2. **The remainder and BOTH launch-duration records move together.** Verified: `:627`, `:640`, `:652` all read `spent`.
+   Folded: one stamp, three `GetElapsedTime` reads; break-it B-E5-23b.
+3. **`AbandonBudget` STAYS on the system clock as teardown.** Verified: `AbandonAsync` (`ReviewerExecutor.cs:818-835`) arms
+   `new CancellationTokenSource(AbandonBudget)` (`:827`; 10 s at `:838`) around the adapter's courtesy cleanup — for the
+   remote runtime a real HTTP cancel (`RemoteRuntime.cs:252-260`, client timeout 10 s at `:242`). Folded: E4's teardown
+   exception wording extended to "real cleanup I/O"; ONE narrowly justified `Sanctioned` allow-list entry
+   (`EveryBudgetInAClockedClassReadsItsClockTests.cs:60`, the `Allowed(File, Snippet, Reason)` shape) for that snippet; the
+   frozen-clock test — an adapter awaiting its cleanup token is still cancelled by the system-time bound and the launch's
+   original timeout/cancellation outcome survives; break-it B-E5-23a.
+4. **The scripted `ClockedLauncher` proves budget ALLOCATION, not production timer enforcement.** Folded: the real
+   `ProcessLauncher` deadline tests (`ProcessLauncherTests.cs:119-136`) stay and the PR says so — §3.13, §3.14, S8.
+5. **The test list** (1.5 of 2 s → exactly 500 ms; an already-shorter repair stays shorter; an exhausted budget starts no
+   repair; the duration records reflect the same advances; a timed-out repair keeps earlier usage and releases the slot;
+   the default-clock seam-only run and the real-process timeout tests still pass) — §3.14 "The tests, listed".
