@@ -13068,8 +13068,8 @@ The extension's half of lifting D18 for WSL2 (DL1, DL2, DL14); the server's half
   runs there (a VS Code window attached to WSL).
 - **`shared/consultant-limitations.json`**: the Vibe `wsl` row is `confined`, *measured* 2026-10-16 on vibe 2.26.1 — L-V9 of
   `RESULTS_vibe_confinement.md` §31, WSL2, 3 of 3 on every cell (L-V1, the L-V2 read, L-V3 with `write_file`, `bash` and
-  `run_typescript`, L-V4), worded like the Windows row (a copy coai makes of the live tree); the `linux` row stays
-  `unmeasured` and says *measured on WSL2 only*; `windows` and `macos` are as before.
+  `run_typescript`, L-V4), worded like the Windows row (a copy coai makes of the live tree); the `linux` row stayed
+  `unmeasured` and said *measured on WSL2 only* until E2.S4 (the section *Vibe on a native Linux host — the limitation row* below); `windows` and `macos` are as before.
 - **Tests**: `vibeOnLinux.test.ts` (32) — the table, `namesWsl2` over eight banners, the host kind, the card note per host kind
   against 0.58.0 / 0.59.0 / unknown servers, the note per host kind, the hint, the five languages, the JSON rows;
   `vibeStageBoxes.test.ts` (2) — a host note does not grey the boxes, a server that does not know Vibe does.
@@ -13082,6 +13082,18 @@ The extension's half of lifting D18 for WSL2 (DL1, DL2, DL14); the server's half
   (`runningUnderWsl` still answers "not WSL"); `hostKind` logs ONE line through `console.warn` (the extension has no output channel;
   its host-side diagnostics carry the `ConnectOtherAIs:` prefix into the extension-host log) naming the cause and that the host is treated as
   native Linux (`hostKindLogsAnUnreadableBanner.test.ts`) — **since E2.S3 as a Linux host whose banner could not be read (`linux-unread`)**.
+
+### Vibe on a native Linux host — the limitation row and what the panel may say (E2.S4 of `todo/PLAN_kimi_and_vibe_on_native_linux_E2.md`, 2026-10-22)
+
+E2 admits Vibe on a native Linux host (server half: `module_runners.md`, *Native Linux, E2.S2* and *E2.S4*). This subsection is the *limitation-row* part only — the sentences the panel shows and the card notes
+are S3's story (`ON_NATIVE_LINUX_SINCE`, the `linux-unread` host kind, `VIBE_NATIVE_LINUX`, the six install notes), described in *Vibe on a native Linux host, on the panel's side* below; where this text and the code disagree the code is right.
+
+- **The limitation row** (`shared/consultant-limitations.json`, `vibe`/`linux`; S-N8): `confined`, measured 2026-10-22 on vibe 2.26.1 — RESULTS §32, native Ubuntu, 3 of 3 on every cell (the closed keyring road with its teeth, a read inside served and outside
+  denied, `write_file`/`bash`/`run_typescript` denied, `--resume`, the 12 pinned plugin hashes equal to the `linux` entry). The text says *measured on vibe 2.26.1 on a native Linux host* and *the keyring road was measured closed on vibe 2.26.1
+  (keyring 25.7.0)* — the version bound is in the row, not only in the plan. `vibeOnLinux.test.ts` holds it (`standing`, `measured` and no `source`, the three phrases, the date, the cells starting `Section 32`, the document); the previous test —
+  *the Vibe linux row says measured on WSL2 only, and claims nothing about native Linux* — was the one the E1 row satisfied and is replaced, not kept beside it. The row is read at one place by the extension (the Consultant tab prints what
+  `--consultants` hands it from the server's embedded copy), so there is nothing to regenerate in `src_vs_code`.
+- **Not a promise.** The row describes the launch the server makes; an older coai-mcp (the one that still refuses a native Linux row) answers its own, older row — the card's update note for that case is S3's (`nativeLinuxNote` in `runtimeSince.ts`).
 
 ## Kimi on Linux and WSL, on the panel's side (2026-10-17, E6 of `research/PLAN_kimi_and_vibe_on_linux.md`)
 
@@ -13233,5 +13245,5 @@ flowchart TD
 - **Tests**: `vibeOnLinux.test.ts` (40), `hostKindLogsAnUnreadableBanner.test.ts` (5), `kimiOnLinux.test.ts` (11, one new: Kimi's native note
   unchanged and the unread twin), `kimiNetworkSignInSetting.test.ts` (13, one new), `hostKindConsumers.test.ts` (2, new),
   `runtimeSinceIsAhead.test.ts` (8, one new), `wslBannerVectors.test.ts` (11, the empty-banner expectation).
-- **Not here / open**: the limitation row (`shared/consultant-limitations.json`, `vibe`/`linux`) and the server's own sentences are S4's and S2's;
+- **Not here / open**: the limitation row (`shared/consultant-limitations.json`, `vibe`/`linux`) is S4's, in *Vibe on a native Linux host — the limitation row and what the panel may say* above; the server's own sentences are S2's (`module_runners.md`);
   the unmeasured-Vibe-version warning on a native host is the server's (S-N22).

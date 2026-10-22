@@ -5111,6 +5111,18 @@ The fake CLI learned one thing for this: `FAKECLI_VERSION_RECORD_ENV` — a bare
 
 Not shown by these tests: a real Vibe, a real keyring or D-Bus (the closed road was measured on the host, RESULTS §32), a desktop Linux with a running Secret Service daemon.
 
+## E2.S4 — the `vibe`/`linux` limitation row (2026-10-22, `todo/PLAN_kimi_and_vibe_on_native_linux_E2.md` story S4; scenario S-N8)
+
+Only the row's tests are listed here — the rows for S-N5, S-N6, S-N12, S-N21, S-N22 and S-N23 are in E2.S2 above (S3's extension scenarios, S-N9–S-N11, are the extension tests' own). Run red first against the E1 row (`unmeasured`, *coai refuses it on a native Linux host*), then green, then broken on purpose and restored.
+
+| Test (file) | What it pins | RED (observed) and break-it |
+|---|---|---|
+| `ConsultantLimitationsTests.TheVibeLinuxRow_SaysWhatTheAdmissionDoes_NativeLinuxWithTheKeyringOff_MeasuredInSection32` (S-N8, C#) | the repository's `vibe`/`linux` row is `Confined`; its text holds `native Linux host`, `keyring off`, `~/.vibe/.env` and *the keyring road was measured closed on vibe 2.26.1 (keyring 25.7.0)* and no longer *refuses it on a native Linux host*; evidence is `Measured` 2026-10-22, `vibe 2.26.1`, the RESULTS file, cells starting `Section 32` | *Expected row.Standing to be LimitationStanding.Confined … the vibe/linux row still says unmeasured - the admission says one thing and the row another, but found LimitationStanding.Unmeasured*; B13 (standing back to `unmeasured`): the same message, and the extension half red too; B14 (`keyring off` → `keyring disabled`): *Expected row.Text … to contain "keyring off" because the admission never reads as native Linux without the keyring sentence (S-N8)* |
+| `ConsultantLimitationsTests.TheVibeWslRow_IsByteIdenticalToWhatE1Shipped_AndTheOtherRowsAreAsTheyWere` | the `wsl` row's text equals a literal in the test; `windows` stays `Confined`, `macos` and Kimi's `linux` stay `Unmeasured` | green before and after (a guard: E2 changes the native row only) |
+| `vibeOnLinux.test.ts` — *the Vibe linux row is confined on a native Linux host, with the keyring off, and rests on §32* (S-N8, extension) | the same facts read from the same file by node:test: `confined`, `measured` and no `source`, the three phrases, the version-bound clause, no *measured on WSL2 only* / *refuses it*, date, version, cells start `Section 32`, document | `AssertionError: the admission starts Vibe there; the row must not still say unmeasured — actual 'unmeasured', expected 'confined'`; B13 as above |
+
+The existing structural tests (one row per runtime per platform, evidence on every row, no row both `measured` and `source`, every cited document exists, the embedded copy equals the repository's file) stayed green without an edit. `ConsultantLimitationsTests` 15 → 17 (all pass); `vibeOnLinux.test.ts` and `kimiOnLinux.test.ts` 42 pass.
+
 ## The suite is deterministic — E3 S4 (C18's product side, 2026-10-20)
 
 Source: `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md`, epic E3, story S4 (scenarios S24, S25, S27; the lead's decisions, the E3 plan round `ac57ee60` and

@@ -249,6 +249,46 @@ public sealed class ConsultantLimitationsTests
         rows[HostKind.Windows].Text.Should().Contain("only exact command lines");
     }
 
+    // ---------- Vibe on a native Linux host (E2.S4, S-N8) ----------
+
+    /// <summary>
+    /// S-N8. The admission (E2.S2) starts Vibe on a native Linux host with its keyring off; the row the card and
+    /// <c>--consultants</c> show must say the same thing, or the product says one thing and its own record another.
+    /// </summary>
+    [Fact]
+    public void TheVibeLinuxRow_SaysWhatTheAdmissionDoes_NativeLinuxWithTheKeyringOff_MeasuredInSection32()
+    {
+        var row = Repository().Single(r => r.Runtime == "vibe" && r.Platform == HostKind.Linux);
+
+        row.Standing.Should().Be(LimitationStanding.Confined,
+            "the vibe/linux row still says unmeasured — the admission says one thing and the row another");
+        row.Text.Should().Contain("native Linux host")
+            .And.Contain("keyring off", "the admission never reads as native Linux without the keyring sentence (S-N8)")
+            .And.Contain("~/.vibe/.env")
+            .And.Contain("the keyring road was measured closed on vibe 2.26.1 (keyring 25.7.0)")
+            .And.NotContain("refuses it on a native Linux host", "the refusal this row used to carry");
+        var measured = row.Evidence.Should().BeOfType<LimitationEvidence.Measured>().Subject;
+        measured.Date.Should().Be("2026-10-22");
+        measured.CliVersion.Should().Be("vibe 2.26.1");
+        measured.Document.Should().Be("research/RESULTS_vibe_confinement.md");
+        measured.Cells.Should().StartWith("Section 32");
+    }
+
+    [Fact]
+    public void TheVibeWslRow_IsByteIdenticalToWhatE1Shipped_AndTheOtherRowsAreAsTheyWere()
+    {
+        const string wsl =
+            "Reads only a copy coai makes of the live tree, without its .git, .vibe/, skills and AGENTS.md: read_file is its one tool, " +
+            "a read outside that copy was refused, and every write and shell call was denied - measured on vibe 2.26.1 on WSL2. " +
+            "Its sign-in is ~/.vibe/.env, linked into coai's own home and never copied.";
+
+        ConsultantLimitations.Lookup(HostKind.Wsl, "vibe").Text.Should().Be(wsl, "E2 changes the native Linux row only");
+        ConsultantLimitations.Lookup(HostKind.Windows, "vibe").Standing.Should().Be(LimitationStanding.Confined);
+        ConsultantLimitations.Lookup(HostKind.MacOs, "vibe").Standing.Should().Be(LimitationStanding.Unmeasured);
+        ConsultantLimitations.Lookup(HostKind.Linux, "kimi").Standing.Should().Be(LimitationStanding.Unmeasured,
+            "Kimi is still refused on a native Linux host (E3)");
+    }
+
     // ---------- the evidence is real ----------
 
     [Fact]
