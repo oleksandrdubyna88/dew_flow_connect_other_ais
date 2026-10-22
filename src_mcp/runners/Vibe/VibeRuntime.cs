@@ -176,7 +176,7 @@ public sealed class VibeRuntime(string id, VibeHost host, VibePathBudget? budget
         try
         {
             return await launcher.RunAsync(
-                VibeLaunch.Built(new ProcessRequest(executable, ["--version"], home) { Timeout = timeout }, home, VibeModels.Default, HostKind.Windows), ct);
+                Built(new ProcessRequest(executable, ["--version"], home) { Timeout = timeout }, home, VibeModels.Default), ct);
         }
         finally
         {

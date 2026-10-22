@@ -26,7 +26,7 @@ public static class HostAdmission
     /// RESULTS section its cells are in; and a keyring-session fact (<c>KeyringSessionFacts</c>) is recorded by <c>--host-facts</c> and decides nothing here (DN10): a fact added to this arm is a REFUSAL condition on a member, never a road into the set.
     /// Compared case-insensitively, as <see cref="Refusal(string, HostKind, string, WslGeneration)"/> receives the names.
     /// </summary>
-    public static IReadOnlySet<string> MeasuredOnNativeLinux { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Vibe" };
+    public static IReadOnlySet<string> MeasuredOnNativeLinux { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Empty when <paramref name="runtime"/> (<c>Vibe</c>, <c>Kimi</c>) may start on this host, else the sentence. <paramref name="executable"/> is the CLI the launch would start; <paramref name="wsl"/> is

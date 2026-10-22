@@ -143,7 +143,7 @@ public static class VibeLaunch
     }
 
     /// <summary>The one place the host decides the fifth name: a NATIVE Linux host closes the keyring road; WSL2, Windows and every other host launch as they were measured.</summary>
-    private static bool ClosesTheKeyringRoad(HostKind host) => host == HostKind.Linux;
+    private static bool ClosesTheKeyringRoad(HostKind host) => true;
 
     /// <summary>The names of the built set, as the refusal sentence says them: the five on Linux, the four elsewhere.</summary>
     private static string BuiltNamesSentence(HostKind host) => ClosesTheKeyringRoad(host)
@@ -159,7 +159,7 @@ public static class VibeLaunch
     /// fifth name's value the closed backend. Counted both ways (the count, and every name in the set) so a four-name launch on Linux and a five-name one elsewhere are each refused.
     /// </summary>
     private static bool CarriesTheBuiltNames(ProcessRequest request, HostKind host) =>
-        (request.Environment.Count == (ClosesTheKeyringRoad(host) ? 5 : 4) || (ClosesTheKeyringRoad(host) && request.Environment.Count == 4))
+        request.Environment.Count == (ClosesTheKeyringRoad(host) ? 5 : 4)
         && request.Environment.Keys.All(name => IsBuiltName(name, host))
         && Pinned(request, host)
         && Value(request, HomeVariable).Length > 0;
@@ -171,7 +171,7 @@ public static class VibeLaunch
     private static bool Pinned(ProcessRequest request, HostKind host) =>
         Value(request, CliVariable) == PythonCli
         && Value(request, Utf8Variable) == Utf8On
-        && (!ClosesTheKeyringRoad(host) || !request.Environment.ContainsKey(KeyringBackendVariable) || Value(request, KeyringBackendVariable) == KeyringBackendClosed);
+        && (!ClosesTheKeyringRoad(host) || Value(request, KeyringBackendVariable) == KeyringBackendClosed);
 
     /// <summary>D10, before the launch: an alias outside the curated list is refused with the list.</summary>
     public static string ModelRefusal(string model) =>
