@@ -5532,3 +5532,31 @@ A kept failure of it ("the round reached its limit") reopens C6 against the setu
 **Evidence and counts.** Today's end-to-end test with `FAKECLI_SLEEP_MS=1900` failed 20 of 20 runs, two messages alternating — `"reviewers": "0 of 1 reviewers answered; failed: codex/FeatureReview: timeout"` (8.8 s) and `"… failed: codex/FeatureReview: cancelled; the round reached its 0 minute limit and the reviewers still running were cancelled"` (9.6 s), both under
 `Expected answer.GetProperty("verdict").GetString() to be "proceed" … "verdict": "revise"`. After: the smoke test plus the wiring arm 0 of 20, the scheduler-level test 0 of 20, the pure test 0 of 20. Test count +3, as written. `EveryBudgetInAClockedClassReadsItsClockTests` 6 of 6 green (S5 touches no clocked class).
 Whole `CoaiMcp.Tests.exe` at the time (Windows, Debug, 25 min 41 s on a loaded machine): 13,152 total, 13,032 passed, 120 skipped, 0 failed. The 20 Windows CI runs of the plan's watch are still to come.
+
+## The suite is deterministic — E5 S7: the fan's cost is asked in CPU, not in a stopwatch (C9, 2026-10-22)
+
+Source: `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp_E5.md` §3.12 and S7 (the status section lists the deviations). Branch
+`feat/suite-e5-s7`. **The extension, not the server** — `src_vs_code/src/test/processLauncher.test.ts`; one product line changed
+(`replayingFan` exported, `src/processLauncher.ts:194`).
+
+The old test spawned a real `node` writing 40,000 lines and asserted `took < 4_000` ms behind a 10 s timer: a claim about an algorithm
+(the fan appends to what nobody has read yet, it does not rebuild it) paid for in wall time, lost on a loaded machine. Now:
+
+| Test | What it pins | Seen red as |
+|---|---|---|
+| `a fan nobody listens to holds 40 000 values in far less than a second of CPU` | `replayingFan` emits 1,000 warm-up values, the event loop is yielded, then `process.cpuUsage()` is read around 40,000 more; user + system under 1,000 ms. Quadratic ≈ 8–9 s here, linear 0–31 ms | `held = [...held, value]` back: `the fan spent 8015 ms of CPU on 40000 values; an append costs under 1000 ms` |
+| `the CPU measure does not move when the thread merely waits` | the measure itself: a 1.5 s `Atomics.wait` costs under 1 s of CPU while the wall really passed (B-E5-19) | the measure on `Date.now()`: `a wait of 1500 ms registered as 1509 ms of CPU` |
+| `a child that writes many lines nobody reads still arrives in full and exits cleanly` | the pipes only: exit 0, every character arrived; no assertion on elapsed time, no timer (`finished`, which waits on `onExit` / `onError` alone) | green with the quadratic fan too (9.6 s wall, all characters) — by design |
+| `the pipe smoke test above reads no clock and starts no timer` | the smoke test's source holds none of `setTimeout(`, `ended(`, `Date.now(`, `performance.now(`, `hrtime` (B-E5-20) | smoke test back on `ended(…)`: `the smoke test uses ended( — it must carry no clock` |
+
+**Why CPU time, and why this size.** Wall time stretches with load (eight test files at once — `TEST_CONCURRENCY` — and other sessions);
+the CPU a piece of work needs does not. N = 40,000 and a 1,000 ms threshold sit between the two shapes with an order of magnitude on each side
+(the file's own 64.09 s vs 0.01 s at 130,000, scaled; measured: 8–9 s vs ≤ 31 ms — Windows reads process CPU in 15.6 ms ticks, so a
+few milliseconds cannot be seen). `node --test` runs each file in its own process, so the delta is this file's; the warm-up and the
+yield keep the setup's allocation and its GC outside the window.
+
+**What a hang now looks like.** The smoke test has no timer; a child that never exits is the runner's per-file failure, which names the file
+(`ended`, with its 10 s timer, stays for the file's other tests).
+
+**Build note.** `npm run compile` needs `.agents/conventions` installed (`npm ci --ignore-scripts` there) for `prepare-gate`'s rules check;
+it rewrites `src/securityLane.generated.ts` and is a clean build, so a break-it restored by writing the file is picked up.

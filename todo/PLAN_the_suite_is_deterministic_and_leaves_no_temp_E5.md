@@ -958,6 +958,51 @@ message. Fable: none (no cornerstone).
   1,000 ms — ×6 below, ×300 above) with the measured CPU figures for both shapes on the coder's machine, and the isolation
   (own process per test file; a warm-up and a yield before the window).
 
+### S7 — status: built 2026-10-22 (Sonnet; §3.12 governed, deviations listed)
+
+**Built, one product line changed: `replayingFan` is `export`ed** (`src_vs_code/src/processLauncher.ts:194`, with a doc sentence saying the
+export is for the test). `src_vs_code/src/test/processLauncher.test.ts`: the wall-clock test (`took < 4_000`, the `ended` helper's 10 s
+timer) is replaced by four tests — the CPU bound on the fan, the self-test of the CPU measure (B-E5-19), the pipe smoke test without a
+clock, and the scan that pins the smoke test's lack of one (B-E5-20). +3 tests net (24 → 25 in the file). `ended` stays for the file's
+other tests; the smoke test uses a new timer-free `finished(child)`.
+
+**RED (S20), on the coder's machine (Windows, node 24 under `node --test out/test/processLauncher.test.js`).** `held = [...held, value]` put
+back for two runs: `the fan spent 8015 ms of CPU on 40000 values; an append costs under 1000 ms` and, on the second run, `… spent 9250 ms …`
+(the plan's 6103 ms was the extrapolation; this machine is slower). The smoke test stayed green in both — 9.6 s wall, every character
+arrived, exit 0 — which is the point of splitting them. Restored: the CPU test passes in 9.7 ms of wall time; the file is 25 of 25.
+
+**Measured CPU for both shapes at N = 40,000 (after a 1,000-value warm-up and a `setImmediate` yield; `process.cpuUsage()` user + system):**
+quadratic **8,015 and 9,250 ms**; append **0 or 31 ms** (three runs of a scratch script, 0 / 31 / 0 — Windows reports process CPU
+in 15.6 ms ticks, so a 3 ms cost reads as 0 or one tick; with the test's own string building the three runs read 31, 31, 31). The threshold, 1,000 ms, is
+**×8–9 below the quadratic figure and ×32 above the worst linear reading** (×300 above the plan's 3 ms estimate, which the clock's tick
+cannot resolve). Isolation as specified: `node --test` runs the file in its own process; the warm-up and the yield come before the window; the
+file's tests run one after another.
+
+**Break-its, each red then restored (the fixed test file kept in a private copy and written back, not `copyFileSync`-restored over a stale mtime — `npm run compile` is a clean build).**
+B-E5-19: `cpuMillisecondsOf` reading `Date.now()` instead of `process.cpuUsage()` → `the CPU measure does not move when the thread merely waits`
+red with `a wait of 1500 ms registered as 1509 ms of CPU`; the real CPU form stays green through the same 1.5 s `Atomics.wait`. B-E5-20: the
+smoke test calling `ended(child, …)` again → `the pipe smoke test above reads no clock and starts no timer` red with `the smoke test uses
+ended( — it must carry no clock`.
+
+**Deviations from the spec, each with its reason.**
+
+1. **The smoke test is renamed** — `… still finishes promptly` became `… still arrives in full and exits cleanly`, because the word
+   "promptly" no longer has an assertion behind it. The count of tests with the old name is therefore zero; the new name is the one the
+   census will see.
+2. **B-E5-20's scan is a test of the file's own source** (`readFileSync` of `src/test/processLauncher.test.ts` from `out/test/`, found by
+   `__dirname`) and forbids five spellings inside the smoke test's body — `setTimeout(`, `ended(`, `Date.now(`, `performance.now(`, `hrtime` —
+   not only `setTimeout(` inside `ended`, since `ended` stays for other tests and the thing to pin is the smoke test's lack of a clock.
+3. **The self-test of the measure sleeps 1.5 s of wall time** (`Atomics.wait`) and asserts a LOWER bound on the wall (`≥ 1,450 ms`, so the wait
+   really happened) and an upper bound on CPU — no upper bound on wall time, so it cannot be the kind of test C9 is.
+4. **The linear figure is not 3 ms** on this machine; the clock cannot show it (see above). The margin is stated against what was read.
+5. **The sibling seen 10-21** (`processLauncher.test` "a child that writes many lines nobody reads…" hitting a limit under load) **is this
+   same test**, not a second case: §3.12 covers it (the wall assertion `:268` and the helper's timer `:22-34`). The "5 s" in that
+   report matches neither number the file had (4 s bound, 10 s timer) — the runner has no per-test timeout of its own, so a 5 s limit was
+   not read from the source.
+
+**Run.** `npm run typecheck` clean; `eslint` on the two files prints nothing; `npm test` (compile + `run-tests.mjs`): exit 0, the compiled
+batch 6,489 tests, 6,466 passed, 23 skipped, 0 failed, every source batch 0 failed.
+
 ### S8 — the budget tests on the in-process launcher: C30, C35 (+ the `ReviewerExecutor` clock), C37's loop (group A)
 
 - **Goal.** §3.13, §3.14: `ClockedLauncher` extracted and widened; the two turn-timeout tests and the repair-budget tests
