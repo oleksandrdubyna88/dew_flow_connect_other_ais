@@ -2349,7 +2349,8 @@ because the panel saves instantly and says so. Environment variables still outra
 
 Plan: [PLAN_a_cancelled_review_stops_its_round.md](../todo/PLAN_a_cancelled_review_stops_its_round.md), spec
 [PLAN_a_cancelled_review_stops_its_round_S2_spec.md](../todo/PLAN_a_cancelled_review_stops_its_round_S2_spec.md). PR A of three: the token reaches
-the round and a withdrawal leaves its record. The provisional write, the finalising races and D10's retry (S3) and the host-stop bound, the remote
+the round and a withdrawal leaves its record (revised the same day: a withdrawal discards no landed finding and holds the gate when one gates — see
+*A withdrawal discards nothing* below). The provisional write, the finalising races and D10's retry (S3) and the host-stop bound, the remote
 `DELETE` test and the live seam leg (S4) are NOT built; until PR B ships, a withdrawn round reads `running` from its last repaint until
 `Withdraw`'s save lands (milliseconds after the scheduler returns), and a withdrawal whose save the disk refuses is logged and still answered as a
 cancellation.
@@ -2362,7 +2363,10 @@ flowchart TD
     K --> M["EndedByRoundToken set on each cut turn BEFORE it is reported"]
     M --> R["RunAllStampedAsync returns the outcomes + its own return stamp"]
     R --> D{"RoundEndings.Decide(cause at the stamp, any mark, no reviewer)"}
-    D -- "Withdrawn" --> W["LiveRound.Withdraw -> save loaded + record -> projection -> OperationCanceledException(ct)"]
+    D -- "Withdrawn" --> K2["KeptFindings: every landed finding kept, does any gate?"]
+    K2 -- "none gates" --> W["LiveRound.Withdraw -> save loaded + record + findings -> projection -> OperationCanceledException(ct)"]
+    K2 -- "one gates" --> H["same, but the gate is HELD: HumanGate + notice, saved before the claim is released"]
+    H --> W2["projection -> OperationCanceledException(ct)"]
     D -- "Completed" --> N["CompleteRound as today"]
 ```
 
@@ -2384,10 +2388,32 @@ flowchart TD
 - **The record** (`LiveRound.Withdraw`, `RoundRecord.Cancelled = "cancelled"`): `Status = cancelled`, `Verdict` = the cause word,
   `Reviewers = "<n> of <m> answered, <k> cut"`, usage folded exactly as `Finish` folds it (`UsageOf`), `Note` = "the caller withdrew the
   call while the round ran" / "the host stopped while the round ran", `Sha`/`Size`/`Gitlinks`/`PlanSource`/`AdmittedBy` as for any round, no
-  `Authors`. `RoundEngine.Withdraw` saves **`loaded`** (the session as read under the claim, a person's answer already applied) plus this
-  record — the state machine never sees the round: no budget round, no hold, no notice, no feature base or ground, no findings, no spent lens, the
-  cadence untouched — projects it with no findings (`RecordRound` with the caller's stretch, so the next round's `agent_log` starts at its
-  completion), logs one line (`RoundAudit.Withdrawn`) and throws `OperationCanceledException(ct)`. The number is spent: the next round is `n+1`.
+  `Authors`, and `Findings` = every landed reviewer's findings (below). `RoundEngine.Withdraw` saves **`loaded`** (the session as read under the
+  claim, a person's answer already applied) plus this record when nothing gates — the state machine never sees the round: no budget round, no hold,
+  no notice, no feature base or ground, no spent lens, the cadence untouched — projects it WITH the landed findings (`RecordRound` with the
+  caller's stretch, so the next round's `agent_log` starts at its completion), logs one line (`RoundAudit.Withdrawn`) and throws
+  `OperationCanceledException(ct)`. The number is spent: the next round is `n+1`.
+- **A withdrawal discards nothing (G4 revised 2026-10-22; S2 spec §12).** A withdrawal still stops every reviewer and never computes a verdict
+  from a partial panel, but a cancel must not be a way past an adverse reviewer — otherwise the gated agent could cancel and retry for a clean
+  panel. `KeptFindings.From(results, work, rejections)` merges the findings of EVERY reviewer that landed exactly as the completed path does
+  (`SecurityRound.Merge`); they ride on the record (`RoundRecord.Findings`, in the session file) and are projected into `coai.db` (`findings`
+  rows; `rounds.gating` = how many count). When ANY of them gates — counted by the completed path's own `GateRule.Evaluate` (blocking or major,
+  a standing rejection discounted; the per-role threshold is deliberately not consulted: no panel is being judged, one counted finding is enough
+  to ask a person) — the withdrawal HOLDS the gate for a person, persisted BEFORE the session claim is released: the saved session is the state
+  the round BEGAN from (as `call_human` saves it, so a person's "keep going" or "proceed" works as it does there) with `HumanGate` and
+  `AwaitingResolve` set, `HoldQuestions = [the notice id]`, `Pending` = the landed findings, `PlanText` kept; `RoundsRunThisStage` is not
+  moved; the record's `Note` says *withdrawn with a gating finding from <vendors> — held for a person* (*the host stopped with …* for
+  `hostStopped`); the hold notice a `call_human` mints (`HoldNotice`) is written to the person. A following `review_*` is refused
+  (`Unresolved`, then `GateHeld` once the findings are `resolve`d) until a person answers that notice. With no gating finding the withdrawal
+  stays free: `loaded` + record, no hold, no notice. A withdrawal whose save the disk refuses (`RoundEngine.Recorded`: `SessionStoreException`,
+  `IOException`, `UnauthorizedAccessException`) is logged and still answered as a cancellation; **until PR B (S3's retry and in-process map of
+  unsaved endings) ships, such a failure also loses the hold** — one more reason the two PRs ship in one release.
+- **Smaller guarantees of the same change.** The status word is one string in core (`Core.Rounds.RoundStatus.Cancelled`; `RoundRecord.Cancelled`
+  and `Windows.IsRecorded` both use it). `BoundedScheduler.RunAllAsync` (the wrapper that discards the return stamp) is `internal` and the
+  runners assembly grants its internals to the tests only, so the engine can only call `RunAllStampedAsync`
+  (`TheEngineCannotCallTheUnstampedSchedulerTests`). A withdrawn code round removes its worktree like a completed one (the throw leaves the
+  lease's `await using` scope; `AWithdrawnCodeRoundLeavesNoWorktreeTests`). The four review tools' descriptions say what a cancelled round
+  costs: it spends its round NUMBER (the next is `n+1`), judges nothing, keeps what had landed and holds the gate when that gates.
 - **The catch arms.** The new first arm is `catch (OperationCanceledException) when (RoundEndings.IsAWithdrawal(ending, cancellation))`: a
   withdrawal rethrows; a cancel during setup (before `LiveRound`, `WarmRemoteRolesAsync` now inside the `try`) records nothing and logs "withdrawn
   during setup". During setup it requires the round's RECORDED first cause to be `withdrawn`/`hostStopped` as well as the round token to be
@@ -2401,7 +2427,7 @@ flowchart TD
   not refused as "nothing since"), `FeatureSecondRound.FailedInRoundOne`, `FeatureStage.LastReviewed`, `CadenceDesk.LastJudgedCodeRound`
   (the reconcile), `Windows.IsRecorded` (a cancelled round opens no window). Unchanged on purpose: `CadenceDesk.FirstCodeRound` (a withdrawn
   first code round still counts, as an interrupted one does), `CurrentAnswer.IsNewerThanTheLastRound` (the person's answer the round applied
-  stays applied), `resolve` (a begin is refused while `AwaitingResolve`, so a cancelled record is never last at a resolve). `--log` has no
+  stays applied), `resolve` (a begin is refused while `AwaitingResolve`, so a FREE cancelled record is never last at a resolve; a HELD one is — `AwaitingResolve` is set — and its `resolve` works as a `call_human` round's does, a person's `humanDecision: "proceed"` included; if that closes a code stage under the cadence, `CadenceDesk.Close` records the epic's closing verdict as the record's `withdrawn`, informational only). `--log` has no
   status/verdict column to render (the parent plan's "render test" does not apply); `coai.db` carries `status = cancelled`,
   `verdict = withdrawn|hostStopped`.
 

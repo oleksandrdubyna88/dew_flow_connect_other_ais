@@ -103,7 +103,7 @@ public sealed record RoundRecord(
     /// The caller withdrew the call, or the host stopped, while the round ran: nothing was judged. The verdict is the cause word
     /// (<c>withdrawn</c> or <c>hostStopped</c>, the ledger's — <see cref="EndCauses"/>), never <c>cancelled</c>.
     /// </summary>
-    public const string Cancelled = "cancelled";
+    public const string Cancelled = Core.Rounds.RoundStatus.Cancelled;
 
     public string Status { get; init; } = Done;
 
@@ -179,6 +179,18 @@ public sealed record RoundRecord(
 
     /// <summary>The note as the log shows it: the reason, and <c>×N</c> when this row stands for N skips.</summary>
     public string LoggedNote => Repeats > 1 ? $"{Note} ×{Repeats}" : Note;
+
+    /// <summary>
+    /// The findings of the reviewers that LANDED before a withdrawal — kept on the cancelled record so the call that was taken back
+    /// cannot discard what the panel found (G4 of todo/PLAN_a_cancelled_review_stops_its_round.md, revised 2026-10-22). Empty for
+    /// every round that ran to a verdict (its findings are the session's <see cref="PersistedSession.Pending"/> and the database's).
+    /// </summary>
+    /// <remarks>Normalised on the way in, for the reason spelled out on <see cref="PersistedSession.UsedPrompts"/>.</remarks>
+    public List<Finding> Findings
+    {
+        get => field ??= [];
+        init => field = value ?? [];
+    }
 
     /// <summary>Per-reviewer progress — the live part of a running round.</summary>
     /// <remarks>Normalised on the way in, for the reason spelled out on PersistedSession.UsedPrompts.</remarks>

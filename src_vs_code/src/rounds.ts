@@ -105,6 +105,12 @@ export interface RoundRecord {
   readonly authors?: unknown;
   /** What a code round changed, by scope — the server's `RoundSize`. Absent when none was recorded. `unknown`, read by `writtenWith`. */
   readonly size?: unknown;
+  /**
+   * The findings of the reviewers that landed before the call was withdrawn, on a `cancelled` round (G4 of
+   * `todo/PLAN_a_cancelled_review_stops_its_round.md`) — kept so a cancel discards nothing. Absent or empty for every round that ran to
+   * a verdict. `unknown` because it is reviewer text off the disk: `keptFindings` reads it member by member.
+   */
+  readonly findings?: unknown;
 }
 
 /**

@@ -541,3 +541,51 @@ These override the sections above where they differ.
 4. **SDK 2.2.0 characterised:** it sends no message for a cancelled request's id, whether its handler returns or throws. D5's transport fallback is therefore NOT shipped; the live *no message within 5 s* check stays S4's seam leg.
 5. **Untested move:** `WarmRemoteRolesAsync` moved inside the `try` only adds a log line on a path that needs a signed-in Team server; no test reaches it (stated in `module_tests.md`).
 6. Fixtures are shared (`WithdrawalRig`, `InMemoryMcpServer`) instead of copied; G8 is not in PR A.
+
+## 12. The security revision of PR A (2026-10-22)
+
+These override §3.3–§3.5, T1/T5 and the parent plan's G4/D3 where they differ. Decided by the owner after the PR A review: a gated agent could
+otherwise cancel past an adverse panel and retry for a clean one.
+
+1. **The rule.** A withdrawal still stops every reviewer and never computes a verdict from a partial panel. It no longer discards what landed:
+   - EVERY landed reviewer's findings are KEPT on the cancelled record — `RoundRecord.Findings` (session file; a new member, listed in
+     `ASessionFileKeepsWhatANewerServerWroteTests`) — and projected to `coai.db` (`findings` rows; `rounds.gating` is the count), so they show in the
+     rounds log and are part of the history later rounds see.
+   - If ANY landed finding gates, the withdrawal HOLDS the gate for a person: the durable hold the completed path uses for `call_human`, persisted
+     BEFORE the session claim is released (the save and the notice precede the throw). "Gates" is the completed path's own count, reused:
+     `KeptFindings.From(results, work, rejections)` merges as `SecurityRound.Merge` does and counts with `GateRule.Evaluate` — blocking or major, a
+     standing rejection discounted. The per-role THRESHOLD is not consulted: it decides whether a panel passes, and a withdrawal judges no panel.
+   - With no gating finding the withdrawal stays free, as §3 specified: `loaded` + record, gate unmoved, no notice. The kept findings are still on
+     the record and in the database.
+2. **The held session** is not `loaded` but the state the round BEGAN from (`session`), as `call_human` saves it: `HumanGate = true`,
+   `AwaitingResolve = true` (so `resolve` can record decisions and take a person's `humanDecision: "proceed"`), `HoldQuestions = [the notice id]`,
+   `Pending` = the landed findings (what the person's card and `resolve` point at), `PlanText = planText` (the code stage needs the scope if the
+   person proceeds), `Carried = []`. `RoundsRunThisStage` is not moved; the begun state is used (not `loaded`) so a held `again` round does not
+   leave a `Done` stage with a held gate, which `resolve` could not advance. `UsedPrompts` is not touched. The hold notice is `HoldNotice(...)`, the
+   shape a `call_human` mints, written with `_escalations.Notify` after the save.
+3. **The record** of a held withdrawal: `GatingCount` = the counted gating findings; `Note` = *withdrawn with a gating finding from <vendors> —
+   held for a person* (*the host stopped with a gating finding from <vendors> — held for a person* for `hostStopped`; the hold applies to both
+   causes). A free withdrawal keeps §3.2's sentences.
+4. **What a following call meets.** `review_*` is refused `Unresolved` until the findings are `resolve`d, then `GateHeld` until a person answers
+   the hold's notice (Continue/Fix gives a fresh set of rounds; the override is `resolve` with `humanDecision: "proceed"`) — exactly the
+   `call_human` road. A retry with clean answers does not reach `proceed`.
+5. **The extension.** A cancelled round that kept findings is not `noFindings`: the database's copy is read when the row opens, and the session
+   file's own copy (`findings`, read member by member) is shown when the database does not hold the round. The badge stays `cancelled — not judged`.
+6. **Tests (RED first, each with a plant):** `AWithdrawalAfterAGatingFinding_HoldsTheGateForAPerson`, `AHostStopAfterAGatingFinding_HoldsTheGateToo`,
+   `AWithdrawalWithOnlyNonGatingFindings_StaysFree_AndKeepsThem`, `AWithdrawnRoundsFindings_AreInTheDatabase`,
+   `AStandingRejection_IsNotAGatingFinding_ForTheHold` (`AWithdrawnRoundKeepsWhatLandedTests`); extension: `a cancelled round that kept findings reads
+   them…` (`roundsLog.test.ts`), `a cancelled row that kept findings shows them when opened…` and `…asks for them when opened` (`bundledPage.test.ts`).
+7. **Also in this round (review follow-ups, no behaviour of the rule above):** (a) the status word is one constant in core
+   (`Core.Rounds.RoundStatus.Cancelled`; `RoundRecord.Cancelled` and `Windows.IsRecorded` use it, `Windows.Cancelled` is gone); (b)
+   `BoundedScheduler.RunAllAsync` is `internal` and the runners assembly grants its internals to the tests only, so the engine cannot call it
+   instead of `RunAllStampedAsync` (`TheEngineCannotCallTheUnstampedSchedulerTests`); (c) `RoundEngine.Recorded` logs a withdrawal save that fails
+   with `SessionStoreException`, `IOException` or `UnauthorizedAccessException` and the call is still answered as a cancellation
+   (`AWithdrawalsSaveFailureIsStillACancellationTests`; the store already wraps its own IO failures, so a raw one only arrives from a seam —
+   the filter names all three so none depends on that wrapping); (d) a withdrawn code round leaves no worktree
+   (`AWithdrawnCodeRoundLeavesNoWorktreeTests`: green on first run — the throw leaves the lease's `await using` scope — pinned by a plant);
+   (e) the four review tools no longer say a cancelled round "spends no round": it spends its round NUMBER, judges nothing, keeps what landed and
+   holds the gate when that gates.
+8. **Open tail.** A withdrawal whose save fails also loses the HOLD (logged, answered as a cancellation) until PR B's retry and in-process map of
+   unsaved endings; that map must hold the held session, not only the record. PR A and PR B therefore ship in one release (§10.5) — now with a
+   security reason, not only a status one. A person's override of a HELD withdrawn code round closes the epic in the cadence with the record's verdict word `withdrawn` (`PanelService.Finish` passes `Rounds[^1].Verdict`; the word is informational). `status` returns the kept findings on the cancelled round itself (`rounds[].findings`, the way it returns every
+   round member but `authors`) and, on a held round, as `pending`.

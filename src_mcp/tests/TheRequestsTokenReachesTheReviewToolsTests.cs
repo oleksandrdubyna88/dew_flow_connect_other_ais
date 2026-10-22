@@ -67,6 +67,22 @@ public sealed class TheRequestsTokenReachesTheReviewToolsTests : IAsyncLifetime
     }
 
     [Fact]
+    public void TheReviewToolDescriptions_TellTheTruthAboutACancelledRound()
+    {
+        // A cancelled round does NOT "spend no round": it spends its round NUMBER (the next is n+1), and since 2026-10-22 it keeps what had landed and
+        // holds the gate for a person when a landed finding gates. A description that says otherwise teaches a caller that cancelling is free.
+        var tools = Tools.All(new Source(null!)).ToDictionary(t => t.ProtocolTool.Name);
+
+        foreach (var name in ReviewTools)
+        {
+            var description = string.Join(" ", (tools[name].ProtocolTool.Description ?? string.Empty).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+            description.Should().NotContain("spends no round", $"{name}: it spends its round number");
+            description.Should().Contain("spends its round NUMBER", $"{name} says what a cancelled round costs");
+            description.Should().Contain("held for a person", $"{name} says a landed gating finding is not discarded by a cancel");
+        }
+    }
+
+    [Fact]
     public async Task ACancelledReviewPlan_CancelsItsRound()
     {
         var reviewers = _rig.PlayAll(Play.BlockThenHoldTheAnswer);

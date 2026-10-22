@@ -221,7 +221,13 @@ public sealed class BoundedScheduler(
     /// nothing of stages; applying it here, rather than on the results afterwards, is what makes the ledger, the live view, the
     /// audit, the stand-down and the results one outcome. Pure and quick: it runs on the fan-out's threads.
     /// </param>
-    public async Task<IReadOnlyList<(ReviewerInvocation Invocation, ReviewerOutcome Outcome)>> RunAllAsync(
+    /// <remarks>
+    /// <b>Tests only — the round engine must call <see cref="RunAllStampedAsync"/>.</b> This wrapper discards the moment the scheduler returned, and
+    /// a caller that reads the clock after the await instead would read a cancel that fired after the return as having ended a turn. It is
+    /// <c>internal</c> for that reason: the runners assembly grants its internals to the test project alone, so production code cannot reach it
+    /// (pinned by <c>TheEngineCannotCallTheUnstampedSchedulerTests</c>).
+    /// </remarks>
+    internal async Task<IReadOnlyList<(ReviewerInvocation Invocation, ReviewerOutcome Outcome)>> RunAllAsync(
         IReadOnlyList<ReviewerWork> work,
         ReviewerExecutor executor,
         CancellationToken ct = default,

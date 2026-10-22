@@ -242,6 +242,53 @@ test('a cancelled row expands to its reviewers and the withdrawal note, and asks
     'a round that judged nothing has no findings to fetch — opening it spawned a read anyway');
 });
 
+/* A cancelled round that KEPT findings (a landed reviewer found something before the call was taken back): they are shown when the row opens. */
+
+const KEPT = {
+  severity: 'blocking', category: 'completeness', file: '', line: 0, title: 'The rollback is missing',
+  why: 'nothing undoes the migration if step two fails', fix: 'add the down step', providers: ['codex'], role: 'Architecture',
+};
+
+const HELD_SESSION = {
+  ...CANCELLED_SESSION,
+  rounds: [{
+    ...CANCELLED_SESSION.rounds[0]!, gatingCount: 1, findings: [KEPT],
+    note: 'withdrawn with a gating finding from codex — held for a person',
+  }],
+};
+
+test('a cancelled row that kept findings shows them when opened, beside the withdrawal note', () => {
+  // The database does not hold the round: the row opens to the file's own copy, and asks for nothing.
+  const page = runningPage([HELD_SESSION], { ...LOG, rounds: [] });
+  const key = firstRenderedKey(page.seen['rows']?.innerHTML ?? '');
+
+  assert.doesNotThrow(() => page.click(clickInRow('tr[data-key]', 'data-key', key)), 'opening a cancelled row that kept findings threw');
+
+  const rows = page.seen['rows']?.innerHTML ?? '';
+  assert.match(rows, /class="badge cancelled"/, 'a held withdrawal is still drawn as cancelled');
+  assert.match(rows, /held for a person/, 'the note that says why the gate is held is not on the page');
+  assert.match(rows, /The rollback is missing/, 'the finding the cancel kept is not shown');
+  assert.doesNotMatch(rows, /This round found nothing/, 'a round that kept a finding is drawn as one that found nothing');
+});
+
+test('a cancelled row the database holds findings for asks for them when opened', () => {
+  const log = {
+    ...LOG,
+    rounds: [{
+      repoPath: 'D:/repo', branch: 'feature', stage: 'PlanReview', number: 1,
+      startedUtc: STARTED.toISOString(), sessionId: 's3', accepted: -1, rejected: -1,
+      findings: [], cursor: `${STARTED.toISOString()}|1`, foundCount: 1,
+    }],
+  };
+  const page = runningPage([HELD_SESSION], log);
+  const key = firstRenderedKey(page.seen['rows']?.innerHTML ?? '');
+
+  page.click(clickInRow('tr[data-key]', 'data-key', key));
+
+  assert.equal(page.sent.filter((message) => message['command'] === 'findings').length, 1,
+    'a cancelled round with findings in the database must read them when opened');
+});
+
 test('a function embedded by its source calls nothing the minifier can rename', () => {
   // The rule this file exists for, stated as a CHECK rather than left to a runtime error. A function
   // embedded by `.toString()` lands in a scope where only its own name was re-declared, so any other

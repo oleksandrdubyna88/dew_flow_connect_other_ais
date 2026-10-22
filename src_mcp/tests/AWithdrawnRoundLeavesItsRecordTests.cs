@@ -351,6 +351,7 @@ public sealed class AWithdrawnRoundLeavesItsRecordTests : IAsyncLifetime
     public void TheLedgerWordsAndTheRecordWords_AreTheSame(string cause, string note)
     {
         RoundRecord.Cancelled.Should().Be("cancelled");
+        RoundRecord.Cancelled.Should().Be(RoundStatus.Cancelled, "one spelling, in core, for the server's record and the authors windows alike");
         var directory = Directory.CreateTempSubdirectory("coai-withdraw-live-");
         try
         {
@@ -358,7 +359,7 @@ public sealed class AWithdrawnRoundLeavesItsRecordTests : IAsyncLifetime
             var work = new ReviewerWork(new ReviewerInvocation("codex", "Architecture", new CoaiMcp.Runners.Processes.ProcessRequest("cli", [], ".")));
             var live = new LiveRound(new SessionStore(directory.FullName), session, 1, [work], "", Noticing.None);
 
-            var record = live.Withdraw(cause, 1, []);
+            var record = live.Withdraw(cause, 1, [], KeptFindings.None);
 
             record.Status.Should().Be(RoundRecord.Cancelled);
             record.Verdict.Should().Be(cause, "the verdict column is the ledger's word, never 'cancelled'");

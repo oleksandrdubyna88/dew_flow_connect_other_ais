@@ -119,9 +119,12 @@ internal static class Tools
                     is owed; `riskItems` (a JSON array) and `riskNote` answer the risk question.
 
                     Taking the call back (a client's `notifications/cancelled`) stops the round: every
-                    reviewer is killed, the round is recorded `cancelled` (verdict `withdrawn`, or
-                    `hostStopped` when the server was stopping), it judges nothing and spends no round, and
-                    the call is answered with a cancellation, not a verdict.
+                    reviewer is killed and the round is recorded `cancelled` (verdict `withdrawn`, or
+                    `hostStopped` when the server was stopping). It judges nothing, but it spends its round
+                    NUMBER (the next round is n+1) and it keeps every finding that had landed: when one of
+                    them gates, the gate is held for a person exactly as a `call_human` holds it, so a cancel
+                    is no way past an adverse reviewer; with nothing gating the gate is unmoved. The call is
+                    answered with a cancellation, not a verdict.
                     """,
                 ReadOnly = true,
                 Idempotent = false,
@@ -179,9 +182,12 @@ internal static class Tools
                     exact `consult` call to make.
 
                     Taking the call back (a client's `notifications/cancelled`) stops the round: every
-                    reviewer is killed, the round is recorded `cancelled` (verdict `withdrawn`, or
-                    `hostStopped` when the server was stopping), it judges nothing and spends no round, and
-                    the call is answered with a cancellation, not a verdict.
+                    reviewer is killed and the round is recorded `cancelled` (verdict `withdrawn`, or
+                    `hostStopped` when the server was stopping). It judges nothing, but it spends its round
+                    NUMBER (the next round is n+1) and it keeps every finding that had landed: when one of
+                    them gates, the gate is held for a person exactly as a `call_human` holds it, so a cancel
+                    is no way past an adverse reviewer; with nothing gating the gate is unmoved. The call is
+                    answered with a cancellation, not a verdict.
                     """,
                 ReadOnly = true,
                 Idempotent = false,
@@ -239,9 +245,12 @@ internal static class Tools
                     is where a summary comes back.
 
                     Taking the call back (a client's `notifications/cancelled`) stops the round: every
-                    reviewer is killed, the round is recorded `cancelled` (verdict `withdrawn`, or
-                    `hostStopped` when the server was stopping), it judges nothing and spends no round, and
-                    the call is answered with a cancellation, not a verdict.
+                    reviewer is killed and the round is recorded `cancelled` (verdict `withdrawn`, or
+                    `hostStopped` when the server was stopping). It judges nothing, but it spends its round
+                    NUMBER (the next round is n+1) and it keeps every finding that had landed: when one of
+                    them gates, the gate is held for a person exactly as a `call_human` holds it, so a cancel
+                    is no way past an adverse reviewer; with nothing gating the gate is unmoved. The call is
+                    answered with a cancellation, not a verdict.
                     """,
                 ReadOnly = true,
                 Idempotent = false,
@@ -331,9 +340,12 @@ internal static class Tools
                     round; against a NEW `baseRef` it starts a fresh review of the same plan.
 
                     Taking the call back (a client's `notifications/cancelled`) stops the round: every
-                    reviewer is killed, the round is recorded `cancelled` (verdict `withdrawn`, or
-                    `hostStopped` when the server was stopping), it judges nothing and spends no round, and
-                    the call is answered with a cancellation, not a verdict.
+                    reviewer is killed and the round is recorded `cancelled` (verdict `withdrawn`, or
+                    `hostStopped` when the server was stopping). It judges nothing, but it spends its round
+                    NUMBER (the next round is n+1) and it keeps every finding that had landed: when one of
+                    them gates, the gate is held for a person exactly as a `call_human` holds it, so a cancel
+                    is no way past an adverse reviewer; with nothing gating the gate is unmoved. The call is
+                    answered with a cancellation, not a verdict.
                     """,
                 ReadOnly = true,
                 Idempotent = false,

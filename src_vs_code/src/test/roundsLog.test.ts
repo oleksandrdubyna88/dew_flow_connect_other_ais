@@ -287,6 +287,28 @@ test('a cancelled round is its own status, never done or awaiting', () => {
   assert.equal(known.foundState, 'loaded');
 });
 
+test('a cancelled round that kept findings reads them — from the database when it knows the round, from the file when it does not', () => {
+  // The reviewers that landed before the withdrawal found something: the server keeps it on the round (a cancel discards nothing) and projects it.
+  const kept = {
+    severity: 'blocking', category: 'completeness', file: '', line: 0, title: 'The rollback is missing',
+    why: 'nothing undoes the migration if step two fails', fix: 'add the down step', providers: ['codex'], role: 'Architecture',
+  };
+  const cancelled = round({ status: 'cancelled', verdict: 'withdrawn', gatingCount: 1, reviewers: '1 of 2 answered, 1 cut', findings: [kept] });
+
+  // The database has never heard of it (an older database, a projection that failed): the file's own copy is what the row opens to.
+  const fromTheFile = rowsFrom([session([cancelled])], NOW)[0]!;
+  assert.equal(fromTheFile.status, 'cancelled');
+  assert.equal(fromTheFile.foundState, 'loaded', 'the kept findings are in the file: there is nothing to ask for');
+  assert.equal(fromTheFile.foundCount, 1);
+  assert.equal(fromTheFile.found[0]?.title, 'The rollback is missing', 'a cancelled round hid the findings it kept');
+  assert.equal(fromTheFile.found[0]?.isGating, true);
+
+  // The database holds the round and its count: opening the row asks it, as it does for any round with findings.
+  const known = rowsFrom([session([cancelled])], NOW, undefined, undefined, dbLog({ findings: [], foundCount: 1 }))[0]!;
+  assert.equal(known.status, 'cancelled', 'a held withdrawal is still a cancelled round');
+  assert.equal(known.foundState, 'unasked', 'a cancelled round with findings must read them from the database when opened');
+});
+
 // ---------- how long the deciding took ----------
 
 test('a decided round carries the deciding time beside the time its reviewers ran', () => {

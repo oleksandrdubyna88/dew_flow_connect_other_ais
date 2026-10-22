@@ -903,7 +903,49 @@ each compares its side against its own idea of the names, so a key spelled diffe
 built on it reads empty: the leg `scripts/seam-ledger-fields.mjs` (`npm run test:seam`) runs the real `coai-mcp` over stdio against
 `FakeCli` (a consultation that answers and a local round whose reviewer outlives the round's one-minute clock), reads the lines it wrote
 through the extension's own parser, and fails both when a key does not come back equal and when no line wrote it at all. `withdrawn` and
-`hostStopped` cannot be driven live (no review tool takes the request's token) and are pinned by the C# tests only. No diagram labels these fields.
+`hostStopped` are written live since the review tools took the request's token (next section); the seam leg does not drive them yet (S4), so
+they are pinned by the C# tests. No diagram labels these fields.
+
+### A cancelled review reaches its round, and a withdrawal leaves a record (2026-10-22, PR A of `todo/PLAN_a_cancelled_review_stops_its_round.md`)
+
+Until this change a client's `notifications/cancelled` for a `review_*` call never reached the round: the tool lambdas took no token, so the
+reviewers ran on to the round's clock, on the person's subscriptions, for an answer nobody read. Now the four review tools take the SDK's
+per-request `CancellationToken` (bound per request and absent from the schema, as `ask_human`'s always was), and it travels the whole way down.
+All of it is inside `coai-mcp`; the extension sees only the record the round leaves (the `cancelled` status, its kept findings and the hold
+notice), and the Team server only a best-effort `DELETE` for each remote job it had accepted.
+
+```mermaid
+sequenceDiagram
+    participant C as MCP client
+    participant T as The four review tools
+    participant E as RoundEngine
+    participant RC as RoundCancellation
+    participant S as BoundedScheduler
+    participant R as Reviewer CLIs and Team server jobs
+    participant F as Session file, coai.db, hold notice
+    C->>T: review_plan or review_code
+    T->>E: RunStageAsync with the request token
+    E->>RC: RoundCancellation of host token, request token, round clock
+    E->>S: RunAllStampedAsync with the round token
+    C-->>T: notifications/cancelled
+    T->>RC: request token fires, the first cause is recorded
+    RC->>S: round token cancelled
+    S->>R: process trees killed, remote jobs abandoned
+    S-->>E: outcomes, cut turns marked EndedByRoundToken, return stamp
+    E->>E: RoundEndings.Decide once
+    E->>F: cancelled record with every landed finding
+    E->>F: when a landed finding gates, the gate is held and the person is asked
+    E-->>T: OperationCanceledException, so no response is sent
+```
+
+The round decides ONCE, from the recorded first cause read at the moment the scheduler returned and the marks the scheduler set on the turns the
+round token ended: a person's or the host's cancel that cut at least one turn is a **withdrawal**; the round clock never is (that is the deadline
+round, as before), and a cancel that lands after every reviewer answered leaves a completed round. A withdrawal never computes a verdict from a
+partial panel and moves no budget, but it **discards no finding**: every landed reviewer's findings are kept on the cancelled record and in
+`coai.db`, and when any of them gates — by the completed path's own count — the withdrawal holds the gate for a person (the same durable
+`HumanGate` hold and notice a `call_human` raises, persisted before the session claim is released), so a cancel is never a way past an adverse
+reviewer. With nothing gating it is free: the gate is exactly where the round found it, and the round number is spent (the next round is `n+1`).
+Details and the readers that skip a cancelled round: *A cancelled review stops its round* in [module_server.md](module_server.md).
 
 ### A setting whose ABSENCE must mean something (2026-09-08)
 

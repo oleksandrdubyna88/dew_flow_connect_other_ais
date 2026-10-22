@@ -78,7 +78,15 @@ file (`RemoteRuntime.cs:290-297`), and nothing retries it later (`AbandonAsync` 
   `Cancelled`, `NotStarted`, or a ladder `RateLimited` whose refusal stays the line's outcome. A turn that ended for its own reason keeps no cause.
 - **G3** The round is recorded `cancelled` in the session file and `coai.db`, and never reads `running` once the cause fired — including when
   the write fails (D10) or the host is killed (D6).
-- **G4** The gate is unmoved and NEVER judges a partial panel: no verdict, no budget round, no `call_human`, no notice, no feature ground.
+- **G4** *(revised 2026-10-22, §12 item 18.)* A withdrawal NEVER judges a partial panel — no verdict, no budget round, no feature ground, no
+  `call_human` verdict — and NEVER discards a finding. EVERY landed reviewer's findings are kept on the cancelled record (the session file) and
+  projected to `coai.db`, so they show in the rounds log and are part of the history later rounds see. When ANY landed finding is gating — counted
+  by the completed path's own rule (`GateRule.Evaluate`: blocking or major, a standing rejection discounted; the per-role threshold is not
+  consulted, since no panel is judged) — the withdrawal HOLDS the gate for a person: the same durable human hold the completed path uses for
+  `call_human` (`HumanGate`, the hold notice, `review_*` refused until a person answers), persisted BEFORE the session claim is released, the
+  record saying why (*withdrawn with a gating finding from <vendor> — held for a person*). With no gating finding landed the withdrawal stays
+  free: the gate unmoved, nobody notified. (The first draft said "unmoved, no notice" unconditionally; that let the gated agent cancel past an
+  adverse panel and retry for a clean one.)
 - **G5** The reply follows the protocol: no response for the cancelled request — accepted only on the seam leg's observation (D5).
 - **G6** A round that already finished is untouched; a cancel racing the round's end has one deterministic answer (D2).
 - **G7** A second caller of the same session meets `Busy` until the withdrawal is written, then starts the next round normally.
@@ -105,7 +113,7 @@ file (`RemoteRuntime.cs:290-297`), and nothing retries it later (`AbandonAsync` 
   `CompletedUtc`; usage summed as `Finish` sums it (`LiveRound.cs:229-231`); a `Note`. Written by a new `LiveRound.Withdraw`. The session
   saved is `loaded` (`RoundEngine.cs:249`, the session as read under the claim, with any person's answer already applied at `:239`) plus this
   record: the state machine never sees the round; the journal keeps its number (`RoundNumber.Next`, `RoundNumber.cs:26`), so the next round is
-  `n+1` and the `(session, stage, number)` upsert never overwrites it. Projected through `_projection.Write` (`RoundEngine.cs:618`), no findings.
+  `n+1` and the `(session, stage, number)` upsert never overwrites it. Projected through `_projection.Write` (`RoundEngine.cs:618`) **with the landed findings** (G4 revised: the record also carries them, and the state machine's "never sees the round" has one exception — the hold G4 raises when a landed finding gates).
 - **D4 — what is never cancelled with the call:** the tree-kill wait (`EndItAsync`, `CancellationToken.None`), `AbandonAsync` (own budget),
   `UsageLedger.Record` (`UsageLedger.cs:356`), `LiveRound.Withdraw`, `SessionStore.Save` (`SessionStore.cs:551`), the projection, the worktree
   lease's disposal, and the cadence record (`CadenceStore.Update`, `Cadence/CadenceStore.cs:62`, reached from `CadenceDesk.cs:126`). Pinned by test.
@@ -279,6 +287,12 @@ the success save is `RoundEngine.cs:597`, outside `_gate`; the scheduler reports
     keep the decision — S2 RED `ExactlyOneTerminalBranch_PerInterleaving`, S3 RED `TheObserverIsFinished_BeforeTerminalPersistence`.
 17. D6 overstated its ordering: the promise is now "persisted before the engine awaits teardown completion", the kill is not held back for
     the write (the reason is in D6), and the millisecond crash window is acknowledged.
+
+**The security review of PR A (2026-10-22, by the owner's order):**
+18. A cancel must not discard a gating finding — otherwise the gated agent could cancel past an adverse panel and retry. G4 is revised (above):
+    every landed finding is kept (record and database) and a gating one holds the gate for a person, durably, before the claim is released; the
+    free withdrawal is the case with nothing gating. Specified as §12 of the S2 spec; the failed-save case (the hold is lost with the save until
+    PR B's in-process map) is why PR A and PR B ship in one release (spec §10.5), and PR B's map must hold the HELD session too.
 
 ## Epics
 

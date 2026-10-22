@@ -258,10 +258,15 @@ public sealed class LiveRound
     /// </summary>
     /// <param name="cause"><see cref="EndCauses.Withdrawn"/> or <see cref="EndCauses.HostStopped"/> — the round's recorded first cause.</param>
     /// <param name="cut">How many turns carry the scheduler's mark.</param>
+    /// <param name="kept">
+    /// What the reviewers that landed found (<see cref="KeptFindings"/>): all of it is kept on the record, and its gating count is the record's, so a
+    /// withdrawal cannot discard an adverse finding.
+    /// </param>
     public RoundRecord Withdraw(
         string cause,
         int cut,
-        IReadOnlyList<(ReviewerInvocation Invocation, ReviewerOutcome Outcome)> results)
+        IReadOnlyList<(ReviewerInvocation Invocation, ReviewerOutcome Outcome)> results,
+        KeptFindings kept)
     {
         var usage = UsageOf(results);
 
@@ -269,7 +274,7 @@ public sealed class LiveRound
         {
             var answered = _states.Values.Count(s => s.Status is ReviewerState.Done);
 
-            return Record(cause, 0, $"{answered} of {_states.Count} answered, {cut} cut", RoundRecord.Cancelled) with
+            return Record(cause, kept.Gating, $"{answered} of {_states.Count} answered, {cut} cut", RoundRecord.Cancelled) with
             {
                 CompletedUtc = DateTime.UtcNow,
                 TokensIn = usage.TokensIn,
@@ -277,9 +282,8 @@ public sealed class LiveRound
                 CostUsd = usage.CostUsd,
                 CostNote = usage.NoPriceSet ? Core.Findings.CostText.NoPriceSet : string.Empty,
                 UsageNote = usage.NotCaptured ? Core.Findings.CostText.UsageNotCaptured : string.Empty,
-                Note = cause == EndCauses.HostStopped
-                    ? "the host stopped while the round ran"
-                    : "the caller withdrew the call while the round ran",
+                Note = kept.NoteFor(cause),
+                Findings = [.. kept.Findings],
             };
         }
     }

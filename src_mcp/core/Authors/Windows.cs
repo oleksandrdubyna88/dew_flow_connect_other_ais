@@ -14,15 +14,12 @@ public static class Windows
     public const string Skipped = "skipped";
     public const string Interrupted = "interrupted";
 
-    /// <summary>A round the caller withdrew or the host stopped: nothing was judged, so it opens no window (core cannot name <c>RoundRecord</c>).</summary>
-    public const string Cancelled = "cancelled";
-
     /// <summary>
     /// A round that will carry an authors snapshot: a plan or a code round that ran (not a skip) and was not interrupted. Every other
     /// round of the journal opens no window — its stretch lands in the next recorded round.
     /// </summary>
     public static bool IsRecorded(GateRound round) =>
-        round.Stage is nameof(Stage.PlanReview) or nameof(Stage.CodeReview) && round.Verdict != Skipped && round.Status is not (Interrupted or Cancelled);
+        round.Stage is nameof(Stage.PlanReview) or nameof(Stage.CodeReview) && round.Verdict != Skipped && round.Status is not (Interrupted or Rounds.RoundStatus.Cancelled);
 
     /// <summary>
     /// Recorded and <c>done</c>: the CLAIM condition. A recorded round that is not settled is <c>running</c>; it tiles its own gate but

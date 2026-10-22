@@ -445,7 +445,7 @@ internal sealed class RoundEngine(
             ending = RoundEndings.Decide(cancellation, run, work.Count == 0);
             if (ending is RoundEnding.Withdrawn)
             {
-                return Withdraw(loaded, live, audit, stage, roundWork, results, cancellation.CauseAt(run.ReturnedAt), sha, planText, ct);
+                return Withdraw(loaded, session, live, audit, stage, roundWork, results, cancellation.CauseAt(run.ReturnedAt), sha, planText, ct);
             }
 
             // What ran, and — since 2026-09-07 — who was enabled for this stage and could not.
@@ -714,20 +714,25 @@ internal sealed class RoundEngine(
 
     /// <summary>
     /// The round the caller withdrew (or the host stopped): ONE terminal record, then the cancellation — never a verdict (D2, D3, D5 of
-    /// todo/PLAN_a_cancelled_review_stops_its_round.md, §3 of its S2 spec).
+    /// todo/PLAN_a_cancelled_review_stops_its_round.md, §3 and §12 of its S2 spec).
     /// </summary>
     /// <remarks>
-    /// <para>The session saved is <paramref name="loaded"/> — the session as read under the claim, with any person's answer already applied —
-    /// plus the record: the state machine never sees the round, so no budget round is spent, no hold is raised, no feature base or ground
-    /// moves, no findings are merged and no lens is spent. The journal keeps the round's number, so the next round is `n+1`.</para>
+    /// <para>A withdrawal judges nothing, but it DISCARDS nothing: every finding of a reviewer that landed is kept on the record and in the
+    /// database (<see cref="KeptFindings"/>), and when any of them gates the withdrawal HOLDS the gate for a person — the completed
+    /// path's own hold (<c>HumanGate</c>, the notice that releases it, the findings awaiting <c>resolve</c>), persisted before the session
+    /// claim is released — so a cancel is never a way past an adverse reviewer (G4, revised 2026-10-22).</para>
+    /// <para>With nothing that gates, the session saved is <paramref name="loaded"/> — the session as read under the claim, with any person's
+    /// answer already applied — plus the record: the state machine never sees the round, so no budget round is spent, no hold is raised, no
+    /// feature base or ground moves and no lens is spent. The journal keeps the round's number, so the next round is `n+1`.</para>
     /// <para>Never cancelled with the call (the token is not passed to anything here): the save, the projection. A save the disk refuses is
     /// logged and the reply is still a cancellation — retrying it, and keeping an unsaved ending in this process, is the provisional-record
     /// story (D10), not this one.</para>
-    /// <para>Returns `string` only so the caller can `return await` it: it always throws.</para>
+    /// <para>Returns `string` only so the caller can `return` it: it always throws.</para>
     /// </remarks>
     /// <exception cref="OperationCanceledException">Always — with the caller's token, so the SDK sees the request it cancelled end cancelled.</exception>
     private string Withdraw(
         PersistedSession loaded,
+        PersistedSession session,
         LiveRound live,
         RoundAudit audit,
         StageRun stage,
@@ -738,38 +743,80 @@ internal sealed class RoundEngine(
         string planText,
         CancellationToken ct)
     {
-        var record = live.Withdraw(cause, results.Count(r => r.Outcome.EndedByRoundToken), results) with
+        var kept = KeptFindings.From(results, roundWork.Reviewers, session.State.Rejections);
+        var record = live.Withdraw(cause, results.Count(r => r.Outcome.EndedByRoundToken), results, kept) with
         {
             Sha = Stages.Of(stage.Stage).RecordsSha ? sha : string.Empty,
             Size = roundWork.Size,
             Gitlinks = roundWork.Gitlinks,
             CadenceNote = stage.Cadence.Call.Note,
-            // The ground it was ADMITTED on, read from the state it began from: `loaded` is what is saved.
+            // The ground it was ADMITTED on, read from the state it began from: `loaded` is what is saved when nothing is held.
             AdmittedBy = FeatureSecondRound.AdmittedBy(loaded.State),
             PlanSource = PlanSources.Stamp(stage, planText, sha),
             // Authors stays unset: a cancelled round is not settled (Windows.IsSettled) and is never asked for authors.
         };
-        SaveWithdrawn(loaded with { Rounds = [.. loaded.Rounds, record] }, record);
+        var notice = kept.HoldsTheGate ? HoldNotice(session, record.Note, [.. kept.Findings.Where(f => f.IsGating)]) : null;
+        var saved = WithdrawnSession(loaded, session, record, kept, notice, planText);
+        SaveWithdrawn(saved, record);
         var caller = RoundCommands.CallerFor(loaded);
         _projection.Write(db => db.RecordRound(
-            loaded.State,
+            saved.State,
             record,
-            [],
+            kept.Findings,
             new Store.RoundContext(planText, sha, caller, [], WhatTheCallerWasDoing(loaded, record)) { BaseRef = roundWork.BaseRef }));
         audit.Withdrawn(cause, record);
+        audit.Findings(kept.Findings);
+        if (notice is not null)
+        {
+            _escalations.Notify(notice);
+            _log.Information("a person was asked to decide: {Reason}", record.Note);
+        }
 
         throw new OperationCanceledException(ct);
     }
 
-    private void SaveWithdrawn(PersistedSession saved, RoundRecord record)
+    /// <summary>
+    /// The session a withdrawal leaves. Free: `loaded` and the record, nothing else moved. Held: the state the round BEGAN from — as the
+    /// completed path's `call_human` saves it, so a person's "proceed" or "keep going" works exactly as it does there — with the gate held on
+    /// the notice that releases it, the landed findings awaiting a decision, and the plan text the code stage will need if the person proceeds.
+    /// </summary>
+    private static PersistedSession WithdrawnSession(
+        PersistedSession loaded, PersistedSession begun, RoundRecord record, KeptFindings kept, EscalationQuestion? notice, string planText) =>
+        notice is null
+            ? loaded with { Rounds = [.. loaded.Rounds, record] }
+            : begun with
+            {
+                State = begun.State with { HumanGate = true, AwaitingResolve = true, HoldQuestions = [notice.Id] },
+                Rounds = [.. begun.Rounds, record],
+                Pending = [.. kept.Findings],
+                PlanText = planText,
+                Carried = [],
+            };
+
+    private void SaveWithdrawn(PersistedSession saved, RoundRecord record) =>
+        Recorded(() => _store.Save(saved), _log, record.Number);
+
+    /// <summary>
+    /// Runs the withdrawal's save and answers whether it landed: a save the disk refused is LOGGED, never allowed to turn the cancellation
+    /// the caller is owed into "the round failed" (D11 — a withdrawal stays a withdrawal whatever is thrown after the decision).
+    /// </summary>
+    /// <remarks>
+    /// <see cref="SessionStoreException"/> is what the store throws for a disk it could not write; the two raw IO exceptions are named too, so a
+    /// store whose failure arrives unwrapped (a seam, a future writer) is answered the same way. Anything else is a defect and propagates.
+    /// </remarks>
+    internal static bool Recorded(Action save, Serilog.ILogger log, int number)
     {
         try
         {
-            _store.Save(saved);
+            save();
+
+            return true;
         }
-        catch (SessionStoreException e)
+        catch (Exception e) when (e is SessionStoreException or IOException or UnauthorizedAccessException)
         {
-            _log.Error(e, "the withdrawal of round {Number} could not be recorded", record.Number);
+            log.Error(e, "the withdrawal of round {Number} could not be recorded", number);
+
+            return false;
         }
     }
 

@@ -1832,8 +1832,8 @@ line only (like `resetsUtc`), decided by `RoundEngine` where the tokens are held
   the ladder's own endings (`wait is null`, `Hopeless`) stay unmarked. `StandDown.Record` and the summary ignore it: a cut cloud reviewer is a
   failure, never "quiet".
 - `RunAllStampedAsync` returns `SchedulerRun(Results, ReturnedAt)`: the stamp is the scheduler's last act, so the engine compares the round's
-  recorded first cause with the moment the scheduler returned and never reads a clock after the await (`RunAllAsync` is unchanged: it returns
-  `.Results`). Consultation and question-row endings write no cause (a withdrawn consultation writes no
+  recorded first cause with the moment the scheduler returned and never reads a clock after the await (`RunAllAsync` stays as an `internal` wrapper that
+  returns `.Results` — tests only; the runners assembly grants its internals to the test project alone, so the engine cannot call it). Consultation and question-row endings write no cause (a withdrawn consultation writes no
   line; a cut question row is `Interrupted`).
 - **The host token:** `Program.StartedAsync` hands its `stop` to `PanelServiceHost` (a REQUIRED constructor parameter, so the production
   road cannot forget it), which hands it to every `PanelService` it builds — the rebuilds on a settings change included — and

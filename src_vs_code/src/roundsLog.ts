@@ -522,15 +522,20 @@ function rowFrom(
     session.state.sessionId, session.state.repoPath, session.state.branch, round.stage, round.number);
   // A paged server sends no findings with the list, so `found` is empty until a row is opened; an
   // older one sends them all and the row is `loaded` from the start. `counts` is what both have.
-  const found = byRound.get(key) ?? [];
+  const inDatabase = byRound.get(key) ?? [];
   const known = counts.has(key);
-  const foundCount = counts.get(key) ?? found.length;
   const decided = decidedBy.get(key) ?? null;
-  const status = statusOf(round, foundCount, decided);
+  const status = statusOf(round, counts.get(key) ?? inDatabase.length, decided);
+  // A round the caller withdrew (or the host stopped) judged nothing, but it KEEPS what the reviewers that had landed found (G4 of
+  // `todo/PLAN_a_cancelled_review_stops_its_round.md`): the database holds them when it holds the round, and the session file always does.
+  // When the database has never heard of the round, the file's own copy is what the row opens to.
+  const kept = status === 'cancelled' ? keptFindings(round.findings) : [];
+  const fromTheFile = kept.length > 0 && !known && inDatabase.length === 0;
+  const found = fromTheFile ? kept : inDatabase;
+  const foundCount = fromTheFile ? kept.length : counts.get(key) ?? found.length;
   // A round nobody ran has nothing to find, so it is `loaded` with none from the start — opening it
-  // must not spawn a read for findings that were never going to exist. A round the caller withdrew (or the
-  // host stopped) judged nothing either: it merged no findings, so the database holds none.
-  const noFindings = status === 'skipped' || status === 'cancelled';
+  // must not spawn a read for findings that were never going to exist. A cancelled round that kept none is the same.
+  const noFindings = status === 'skipped' || (status === 'cancelled' && foundCount === 0);
   const states = round.reviewerStates ?? [];
   const rows = reviewerRows(round);
 
@@ -568,10 +573,53 @@ function rowFrom(
     reviewerColours: rows.map((r) => colour(r.provider)),
     found,
     foundCount,
-    foundState: noFindings ? 'loaded' : foundState(known, whole, inline, found),
+    foundState: noFindings || fromTheFile ? 'loaded' : foundState(known, whole, inline, found),
     origin: known ? 'db' : 'session',
     dbKey: { sessionId: session.state.sessionId, stage: round.stage, number: round.number },
   };
+}
+
+/**
+ * The findings a cancelled round kept, as the session file spells them — reviewer text off the disk, so read member by member and never
+ * trusted for a shape. Severity is capitalised the way the database writes it, so a row reads the same from either source.
+ */
+function keptFindings(raw: unknown): DbFinding[] {
+  return Array.isArray(raw) ? raw.flatMap((item, ordinal) => keptFinding(item, ordinal)) : [];
+}
+
+function keptFinding(item: unknown, ordinal: number): DbFinding[] {
+  return typeof item === 'object' && item !== null ? [keptFindingOf(item as Record<string, unknown>, ordinal)] : [];
+}
+
+function keptFindingOf(member: Record<string, unknown>, ordinal: number): DbFinding {
+  const severity = textOf(member, 'severity');
+
+  return {
+    ordinal,
+    severity: severity.charAt(0).toUpperCase() + severity.slice(1),
+    category: textOf(member, 'category'),
+    file: textOf(member, 'file'),
+    line: typeof member['line'] === 'number' ? member['line'] : 0,
+    title: textOf(member, 'title'),
+    why: textOf(member, 'why'),
+    fix: textOf(member, 'fix'),
+    role: textOf(member, 'role'),
+    isGating: ['blocking', 'major'].includes(severity.toLowerCase()),
+    providers: stringsOf(member['providers']).join(','),
+    resolution: '',
+    reason: '',
+    reRaised: false,
+  };
+}
+
+function textOf(member: Record<string, unknown>, name: string): string {
+  const value = member[name];
+
+  return typeof value === 'string' ? value : '';
+}
+
+function stringsOf(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
 }
 
 /**
@@ -1816,11 +1864,12 @@ ${teamSectionHtml(waitingFor())}
       var rest = slash < 0 ? '' : line.slice(slash);
       lines += '<div class="reviewer"><span class="who" style="color:' + esc(row.reviewerColours[i] || 'inherit') + '">' + esc(who) + '</span>' + esc(rest) + '</div>';
     }
-    // A cancelled round judged nothing: the reviewers above are how far each got, the server's sentence is why it stopped, and there is no
-    // findings block — not "found nothing", which would say a review was done.
+    // A cancelled round judged nothing: the reviewers above are how far each got and the server's sentence is why it stopped. It has no
+    // "found nothing" line — that would say a review was done — but it shows what the reviewers that had landed DID find, when it kept any.
     if (row.status === 'cancelled') {
       return lines + '<div class="reviewer skipnote">Nothing was judged: '
-        + esc(row.note || 'the server recorded no reason') + '</div>';
+        + esc(row.note || 'the server recorded no reason') + '</div>'
+        + (row.foundCount > 0 ? foundOnly(row) : '');
     }
     return lines + foundHtml(row);
   }

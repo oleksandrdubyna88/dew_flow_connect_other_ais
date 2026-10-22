@@ -5198,6 +5198,33 @@ log line on a path that needs a signed-in Team server to reach; plant P7 stays g
 only where the spec names a test (T13, T14, T15). `ALocalCancellationCarriesItsSourceTests` had four tests that `await`ed a withdrawn call and now
 assert the cancellation instead (`Record.ExceptionAsync`); the one that asserted the reply did not say "minute limit" asserts there is no reply.
 
+### A cancelled review stops its round — the security revision of PR A (2026-10-22)
+
+A cancel must not discard a gating finding (S2 spec §12): every landed finding is kept, and a gating one holds the gate for a person. Each test was
+watched RED for the stated reason against the unrevised code (a stub `KeptFindings` and the unchanged `Withdraw`), GREEN, and RED again with the
+code planted out.
+
+| Test | Seen red as | Plant (RED again) |
+|---|---|---|
+| `AWithdrawnRoundKeepsWhatLandedTests.AWithdrawalAfterAGatingFinding_HoldsTheGateForAPerson` (codex answers a Blocking finding, gemini waits for the cancel; the record, the hold, the notice, the refused retry with clean answers, `resolve` still held, then the person's answer lets the round run) | `Expected round.Findings to contain a single item, but the collection is empty.` (the first assertion; the discarded finding is the symptom) | no notice/hold raised; findings not kept on the record |
+| `…AHostStopAfterAGatingFinding_HoldsTheGateToo` | `Expected session.Rounds[^1].Note to be the same string, but they differ at index 18: (actual) ".host stopped while the." (expected) ".host stopped with a."` | no hold |
+| `…AWithdrawalWithOnlyNonGatingFindings_StaysFree_AndKeepsThem` (a Minor finding: kept, no hold, no notice, `Pending` empty, the retry reaches `proceed`) | `Expected round.Findings to contain a single item, but the collection is empty.` | findings not kept |
+| `…AWithdrawnRoundsFindings_AreInTheDatabase` (the `rounds` ⨝ `findings` row) | `Expected _rig.Db("SELECT r.status, … FROM rounds r JOIN findings f …") to contain a single item, but the collection is empty.` | projection called with no findings |
+| `…AStandingRejection_IsNotAGatingFinding_ForTheHold` (the pure rule, `KeptFindings.From`) | `Expected counted.Gating to be 1, but found 0 (difference of -1).` (against the stub) | rejections ignored: `Expected rejected.Gating to be 0 because the completed path discounts a standing rejection; so does the hold, but found 1` |
+| `AWithdrawalsSaveFailureIsStillACancellationTests` (`SessionStoreException`, raw `IOException`, raw `UnauthorizedAccessException` logged and answered; a defect is not swallowed) | `System.IO.IOException : the disk is full` and `UnauthorizedAccessException` escaping `RoundEngine.Recorded` (it caught the store's exception only) | the filter widened to every exception: `ADefect_IsNotSwallowedAsAFullDisk` red |
+| `TheEngineCannotCallTheUnstampedSchedulerTests` (`RunAllAsync` is not public; the runners assembly does not grant its internals to the server) | `Expected unstamped.IsPublic to be False because the wrapper discards the return stamp: only the tests, which read outcomes alone, may call it, but found True.` | `RunAllAsync` public again |
+| `AWithdrawnCodeRoundLeavesNoWorktreeTests` (`git worktree list` before the cancel: 2; after: 1; no directory under the worktree root) | green on the first run — the withdraw throw leaves the lease's `await using` scope, so the cleanup was already right | `await using var lease` → `var lease`: `Expected (WorktreesAsync()) to be 1 because the withdrawn round's worktree is removed as the completed round's is, but found 2.` |
+| `TheRequestsTokenReachesTheReviewToolsTests.TheReviewToolDescriptions_TellTheTruthAboutACancelledRound` | red on the old sentence ("spends no round"); the test's first run was red for a whitespace-normalisation defect of its own, fixed, and the old sentence replanted | "spends no round" back in a description |
+| the one status word: `TheLedgerWordsAndTheRecordWords_AreTheSame` gained `RoundRecord.Cancelled == RoundStatus.Cancelled` | compile error — `RoundStatus` did not exist | — (a refactor: `AWindowRunsFromThePreviousRecordedRoundsStartTests.ACancelledRound_OpensNoWindow` is the behavioural guard that stayed green) |
+| `ASessionFileKeepsWhatANewerServerWroteTests.EveryBaggedTypesMembers_AreTheListedOnesOrRetired` | n/a — the committed member list of `RoundRecord` gained `findings` with the member | — |
+| Extension `roundsLog.test.ts` `a cancelled round that kept findings reads them — from the database when it knows the round, from the file when it does not` | `0 !== 1` (`foundCount`: the kept finding was invisible) | `fromTheFile` forced false; `noFindings` back to `status === 'cancelled'` |
+| Extension `bundledPage.test.ts` `a cancelled row that kept findings shows them when opened…` and `…the database holds findings for asks for them when opened` | two failures: the finding text absent from the opened row; no `findings` command sent | `detail()` without `foundOnly` for a cancelled row; `noFindings` always true for `cancelled` |
+
+**Not covered, said plainly.** The failed-save case loses the hold until PR B (no test can pin a guarantee that does not exist yet; `Recorded` is
+tested directly, not through a failing store, because `PanelService` builds its own `SessionStore` and the store wraps its IO failures itself).
+The kept findings of a withdrawn round are not re-read by a later round's `DecidedEarlier`/rejection machinery: they are in the database like any
+round's, and a held round is resolved through `resolve` like a `call_human` round.
+
 **What the live leg could not drive, and why it matters.** *(Superseded in part, 2026-10-21: the four review tools now take the SDK's request token —
 *A cancelled review stops its round* in `module_server.md` — so a live server CAN write `withdrawn` and `hostStopped`. The seam leg has not been
 extended to drive them yet; that is story S4 / PR C of `todo/PLAN_a_cancelled_review_stops_its_round.md`, and until it lands the leg below still takes
