@@ -2439,6 +2439,12 @@ flowchart TD
   (2) *The hold notice lists what the gate counted.* `RoundEngine.HeldWithdrawalNotice` builds the card from `KeptFindings.CountedFindings` (the findings at
   `GatingOrdinals`) rather than every finding that is blocking or major by severity, so a standing rejection — kept, but discounted — is not presented as
   holding the gate. (A hold caused only by the withdrawal count lists no findings.) The completed path's `NoticeIfAPersonMustDecide` is unchanged.
+- **Round 5 of the review (2026-10-22; S2 spec §13, "round 5").** *The ordinals' match is structural, not the record's generated equality.* `Finding` has
+  collection-valued members (`Providers`, `AlsoSeenBy`: `ImmutableArray`, which compares its backing array by reference), so a value-equal copy with a newly
+  allocated list did not match and the count check threw — a valid withdrawal could not be recorded. `OrdinalsOf` now compares with
+  `Core.Findings.FindingIdentity` (every field equal, collection members by sequence; two findings that differ only in their vendors are two findings). It is
+  IDENTITY, not `FindingDedup.SameDefect` (the fuzzy "same defect from two reviewers" merge rule), which no caller may use to say "this is the finding I
+  hold". One-to-one matching for duplicates and the loud mismatch are unchanged.
 - **Smaller guarantees of the same change.** The status word is one string in core (`Core.Rounds.RoundStatus.Cancelled`; `RoundRecord.Cancelled`
   and `Windows.IsRecorded` both use it). `BoundedScheduler.RunAllAsync` (the wrapper that discards the return stamp) is `internal` and the
   runners assembly grants its internals to the tests only, so the engine can only call `RunAllStampedAsync`

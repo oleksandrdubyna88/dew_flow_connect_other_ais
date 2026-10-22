@@ -62,8 +62,9 @@ public sealed record KeptFindings(ImmutableArray<Finding> Findings, int Gating, 
     }
 
     /// <summary>
-    /// The positions in <paramref name="merged"/> of the findings the gate counted. Matched by VALUE (<see cref="Finding"/> is a record), one
-    /// merged finding per counted one, so a gate that hands back copies still names the right positions. The number found must equal the
+    /// The positions in <paramref name="merged"/> of the findings the gate counted. Matched by VALUE (<see cref="FindingIdentity"/>: every field
+    /// equal, the collection-valued ones — vendors, sightings — by their contents, which the record's own equality does not do), one merged
+    /// finding per counted one, so a gate that hands back copies, even with newly allocated lists, still names the right positions. The number found must equal the
     /// gate's own count: a disagreement is a defect and throws — an empty list is read downstream as "none of these gate", and writing one for a
     /// round that does gate would let the record say the opposite of the hold.
     /// </summary>
@@ -73,7 +74,7 @@ public sealed record KeptFindings(ImmutableArray<Finding> Findings, int Gating, 
         var ordinals = new List<int>();
         for (var i = 0; i < merged.Length; i++)
         {
-            var at = unmatched.IndexOf(merged[i]);
+            var at = unmatched.FindIndex(counted => FindingIdentity.Same(counted, merged[i]));
             if (at < 0)
             {
                 continue;

@@ -658,5 +658,13 @@ and pushes `keptFindingOf` over the complexity baseline. (4) The info card's dis
 disk and clock injected). Convention, now written down: an info card's dismissal answer is `decision: ""` with `text: "dismissed"`, one `<id>.answer.json` beside
 the card; the server never reads it.
 
+**Round 5 (code review of round 4, 2026-10-22).** Three accepted findings, test-first where behaviour changed. (1) `KeptFindings.OrdinalsOf` matched with the
+record's generated equality, which compares `Finding.Providers` / `AlsoSeenBy` (`ImmutableArray`) by REFERENCE: a value-equal copy with a newly allocated list
+did not match and the count check threw, so a valid withdrawal could not be recorded. It now uses `FindingIdentity` (`src_mcp/core/Findings`): scalar fields by
+value, collection fields by sequence; one-to-one matching and the loud mismatch kept. No existing comparer fit: `FindingDedup.SameDefect` is the fuzzy
+merge rule, not identity. (2) `escalationAnswering.test.ts` built its fixture with an `as` cast; it now uses typed factories (`card`: an own card with no `from`
+and no `kind`; `cardFromTheStore`: the same with `from`), both returning a real `Escalation`. (3) `ANSWER_FILES` in `escalationWatcher.ts` mixed VS Code's
+`workspace.fs.stat` with Node's write and rename; exists, write and rename are all Node's `fs.promises` now (behaviour kept: a stat that throws is "no answer").
+
 **The two PR B asks** (the judge's, recorded in the plan's S3 section): persist landed findings progressively on the running record, and a startup
 reconcile that holds the gate for a cancelled or interrupted round whose landed findings gate.

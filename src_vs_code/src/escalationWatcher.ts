@@ -1,4 +1,4 @@
-import { writeFile } from 'node:fs/promises';
+import { stat, writeFile } from 'node:fs/promises';
 import * as vscode from 'vscode';
 import { renameWithRetry } from './atomicFile';
 import { sortedJoin } from './codeUnitOrder';
@@ -20,15 +20,16 @@ import { notify, notifyAndAsk } from './notify';
 import { askPerson } from './personWait';
 
 /**
- * The disk an answer is written to. Node's write and rename, never VS Code's: those make missing parent folders, so an answer typed after the
- * question's folder went away (a share unmounted) made the folder again — a data directory recreated by a reply
- * (research/PLAN_paths_per_side.md E5.7, D3). Node's fail with ENOENT, which `answerEscalation` returns as a failure. The existence check is
- * VS Code's stat, as it always was; a stat that throws is "no answer", not a crash.
+ * The disk an answer is written to: ONE API family for the answer file's exists, write and rename — Node's `fs.promises`, never VS Code's.
+ * VS Code's write and rename make missing parent folders, so an answer typed after the question's folder went away (a share unmounted) made
+ * the folder again — a data directory recreated by a reply (research/PLAN_paths_per_side.md E5.7, D3). Node's fail with ENOENT, which
+ * `answerEscalation` returns as a failure. The existence check is Node's `stat` too (it was VS Code's, mixing the two); a stat that throws is
+ * "no answer", not a crash.
  */
 const ANSWER_FILES: AnswerFiles = {
   exists: async (path) => {
     try {
-      await vscode.workspace.fs.stat(vscode.Uri.file(path));
+      await stat(path);
 
       return true;
     } catch {

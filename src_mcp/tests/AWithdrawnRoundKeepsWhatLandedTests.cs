@@ -241,6 +241,45 @@ public sealed class AWithdrawnRoundKeepsWhatLandedTests : IAsyncLifetime
             "the copy is the same finding: an empty list would be read downstream as 'none of these gate' for a round that does");
     }
 
+    // ---------- round 5 (code review, 2026-10-22): the match is structural — collection members compare by their contents ----------
+
+    [Fact]
+    public void TheOrdinals_FollowACopyWhoseProvidersAreANewListWithTheSameContents()
+    {
+        var minor = Raised(Severity.Minor, "The heading is vague", "a reader cannot tell what the section decides", "gemini");
+        var blocking = Raised(Severity.Blocking, "The rollback is missing", "nothing undoes the migration if step two fails", "codex");
+        ImmutableArray<Finding> merged = [minor, blocking];
+
+        // `Providers` is an ImmutableArray: the record's own equality compares the array by REFERENCE, so a copy with a newly allocated list is not "equal".
+        var counted = new GateResult(1, false, [blocking with { Providers = ["codex"] }], []);
+
+        KeptFindings.OrdinalsOf(merged, counted).Should().Equal(
+            [1],
+            "the same finding with the same vendors in a new list is still the finding the gate counted: a throw here would lose a valid withdrawal's record");
+    }
+
+    [Fact]
+    public void TheOrdinals_StayOneToOne_ForTwoFindingsThatAreAlikeInEveryWay()
+    {
+        var twin = Raised(Severity.Blocking, "The rollback is missing", "nothing undoes the migration if step two fails", "codex");
+        ImmutableArray<Finding> merged = [twin, twin with { Providers = ["codex"] }];
+
+        // The gate counted ONE of the two: the first merged twin is named, the second is not.
+        KeptFindings.OrdinalsOf(merged, new GateResult(1, false, [twin with { Providers = ["codex"] }], []))
+            .Should().Equal([0], "one counted finding names one position, even when two merged findings read alike");
+    }
+
+    [Fact]
+    public void TheOrdinals_DoNotConfuseTwoFindingsThatDifferOnlyInTheirVendors()
+    {
+        var byCodex = Raised(Severity.Blocking, "The rollback is missing", "nothing undoes the migration if step two fails", "codex");
+        var byGemini = byCodex with { Providers = ["gemini"] };
+        ImmutableArray<Finding> merged = [byCodex, byGemini];
+
+        KeptFindings.OrdinalsOf(merged, new GateResult(1, false, [byGemini with { Providers = ["gemini"] }], []))
+            .Should().Equal([1], "the vendors are part of what a finding is: the copy names gemini, so it is the second one");
+    }
+
     [Fact]
     public void OrdinalsThatDisagreeWithTheCount_FailLoudly_NeverAnEmptyListForAGatingRound()
     {

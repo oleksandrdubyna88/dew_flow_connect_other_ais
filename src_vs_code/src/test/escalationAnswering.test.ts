@@ -21,14 +21,17 @@ const OWN = 'C:/coai';
 const FROM = 'D:/wsl-store';
 const NOW = '2026-10-22T10:00:00.000Z';
 
-/** A card; `without` names the optional members the card does not carry at all (an own card has no `from`, an older one no `kind`). */
-function card(overrides: Partial<Escalation> = {}, without: readonly ('from' | 'kind')[] = []): Escalation {
-  const whole: Escalation = {
+/** A card of THIS window's own store: it carries neither `from` (an own card has none) nor `kind` (an older server wrote none); `overrides` adds either. */
+function card(overrides: Partial<Escalation> = {}): Escalation {
+  return {
     id: 'info-1', sessionId: 's', repoPath: 'D:/repo', branch: 'feat/x', question: 'Nothing is held yet.', openFindings: [], askedUtc: NOW,
-    from: FROM, ...overrides,
+    ...overrides,
   };
+}
 
-  return Object.fromEntries(Object.entries(whole).filter(([name]) => !(without as readonly string[]).includes(name))) as unknown as Escalation;
+/** A card read from another installation's store (`FROM`), so its answer goes back beside it. */
+function cardFromTheStore(overrides: Partial<Escalation> = {}): Escalation {
+  return card({ from: FROM, ...overrides });
 }
 
 /** An in-memory disk: a map of path to text, with the same rename the real one has. `rename` moves the temp onto the target. */
@@ -65,7 +68,7 @@ function deps(disk: AnswerFiles, ask: AnswerDeps['ask']): AnswerDeps {
 test('dismissing an informational card writes exactly one answer file beside the card and shows no dialog', async () => {
   const disk = new MemoryDisk();
 
-  const outcome = await answerEscalation(card({ kind: 'info' }), deps(disk, noDialog));
+  const outcome = await answerEscalation(cardFromTheStore({ kind: 'info' }), deps(disk, noDialog));
 
   assert.deepEqual(outcome, { kind: 'written', target: `${FROM}/escalations/info-1.answer.json` });
   assert.deepEqual([...disk.files.keys()], [`${FROM}/escalations/info-1.answer.json`], 'exactly one file, beside the card, and no temp left behind');
@@ -79,7 +82,7 @@ test('dismissing an informational card writes exactly one answer file beside the
 test('a dismissal of an own card (no `from`) is written into this window\'s own directory', async () => {
   const disk = new MemoryDisk();
 
-  await answerEscalation(card({ kind: 'info' }, ['from']), deps(disk, noDialog));
+  await answerEscalation(card({ kind: 'info' }), deps(disk, noDialog));
 
   assert.deepEqual([...disk.files.keys()], [`${OWN}/escalations/info-1.answer.json`]);
 });
@@ -88,7 +91,7 @@ test('a card that asks for a decision shows the dialog and writes what was chose
   const disk = new MemoryDisk();
   const asked: string[] = [];
 
-  const outcome = await answerEscalation(card({ id: 'ask-1', kind: 'notice' }), deps(disk, async (c) => {
+  const outcome = await answerEscalation(cardFromTheStore({ id: 'ask-1', kind: 'notice' }), deps(disk, async (c) => {
     asked.push(c.id);
 
     return { decision: 'continue', text: 'Keep going — more rounds' };
@@ -104,7 +107,7 @@ test('a card that asks for a decision shows the dialog and writes what was chose
 test('closing the dialog is not answering: nothing is written and the question stays open', async () => {
   const disk = new MemoryDisk();
 
-  const outcome = await answerEscalation(card({ kind: 'notice' }), deps(disk, async () => undefined));
+  const outcome = await answerEscalation(cardFromTheStore({ kind: 'notice' }), deps(disk, async () => undefined));
 
   assert.deepEqual(outcome, { kind: 'closed' });
   assert.equal(disk.files.size, 0);
@@ -114,7 +117,7 @@ test('a card with no kind (an older server) is a question: the dialog is shown',
   const disk = new MemoryDisk();
   let shown = 0;
 
-  await answerEscalation(card({}, ['kind']), deps(disk, async () => {
+  await answerEscalation(cardFromTheStore(), deps(disk, async () => {
     shown += 1;
 
     return undefined;
@@ -127,7 +130,7 @@ test('an answer already sitting there is never overwritten — first writer wins
   const disk = new MemoryDisk();
   disk.files.set(`${FROM}/escalations/info-1.answer.json`, 'the other window answered first');
 
-  const outcome = await answerEscalation(card({ kind: 'info' }), deps(disk, noDialog));
+  const outcome = await answerEscalation(cardFromTheStore({ kind: 'info' }), deps(disk, noDialog));
 
   assert.deepEqual(outcome, { kind: 'already-answered' });
   assert.deepEqual(disk.writes, [], 'the second window wrote nothing');
@@ -137,7 +140,7 @@ test('an answer already sitting there is never overwritten — first writer wins
 test('an id that is not a name is refused before any path is made of it', async () => {
   const disk = new MemoryDisk();
 
-  const outcome = await answerEscalation(card({ id: '../../.ssh/authorized_keys', kind: 'info' }), deps(disk, noDialog));
+  const outcome = await answerEscalation(cardFromTheStore({ id: '../../.ssh/authorized_keys', kind: 'info' }), deps(disk, noDialog));
 
   assert.deepEqual(outcome, { kind: 'refused-id' });
   assert.equal(disk.files.size, 0);
@@ -152,7 +155,7 @@ test('a write the disk refuses is returned with the folder it tried, never swall
     rename: async () => undefined,
   };
 
-  const outcome = await answerEscalation(card({ kind: 'info' }), deps(refusing, noDialog));
+  const outcome = await answerEscalation(cardFromTheStore({ kind: 'info' }), deps(refusing, noDialog));
 
   assert.equal(outcome.kind, 'failed');
   assert.equal(outcome.kind === 'failed' && outcome.dir, `${FROM}/escalations`);

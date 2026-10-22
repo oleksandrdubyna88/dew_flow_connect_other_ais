@@ -5271,6 +5271,21 @@ S2 spec §13 "round 4". Behaviour tests were watched RED against the code withou
 | Extension `escalationAnswering.test.ts`: an `info` card dismissed writes exactly one `<id>.answer.json` beside the card with `{ id, answer: "dismissed", decision: "", answeredUtc }`, no temp left, and the dialog (a spy that fails the test) is never called; an own card (no `from`) is answered in this window's directory; a card that asks shows the dialog and writes the pick; a closed dialog writes nothing; a card with no kind is a question; an existing answer is never overwritten; an id that is not a name is refused; a refused write is returned with its folder | a refactor of existing behaviour — the unit did not exist, so the first run was green; the plants are the evidence | `chooseAnswer` always asks: `a dialog was shown for a card that asks for nothing` (5 tests red); `DISMISSED.decision` changed to `continue`: `+ decision: 'continue' - decision: ''` |
 | Extension `roundsLog.test.ts`: a kept finding with no severity (absent, or a number) renders, with severity `""` and not gating | green on first run — `textOf` already returns `""` for a non-text member; the test pins that, it was not red before | — |
 
+### A cancelled review stops its round — round 5 of the review (2026-10-22)
+
+S2 spec §13 "round 5". Counts for the round are in the report that closed it; the behaviour tests were watched RED against the code without the change, GREEN,
+and RED again with a plant.
+
+| Test | Seen red as | Plant (RED again) |
+|---|---|---|
+| `AWithdrawnRoundKeepsWhatLandedTests.TheOrdinals_FollowACopyWhoseProvidersAreANewListWithTheSameContents` (the counted finding is `blocking with { Providers = ["codex"] }`: value-equal, a new list) | `System.InvalidOperationException : the gate counted 1 gating finding(s) but 0 could be found in the merged list of 2` | `OrdinalsOf` back to the record's `IndexOf`: the same message (the red run itself) |
+| `…TheOrdinals_DoNotConfuseTwoFindingsThatDifferOnlyInTheirVendors` | the same `InvalidOperationException` (a new `["gemini"]` list) | vendors ignored: `Expected … to be equal to {1} because the vendors are part of what a finding is: …, but {0} differs at index 0.` |
+| `…TheOrdinals_StayOneToOne_ForTwoFindingsThatAreAlikeInEveryWay` (two alike merged findings, one counted: only the first position is named) | the same `InvalidOperationException` | not planted separately: it pins the one-to-one rule that round 4 already had; it was red only for the same new-list reason |
+| Extension `escalationAnswering.test.ts`: typed factories `card` / `cardFromTheStore` replace the `as unknown as Escalation` cast | a refactor of a fixture — green on first run, as the nine tests are unchanged in what they assert | — |
+
+`ANSWER_FILES` (the one API family for the answer file) wraps `vscode`, so it has no unit test; `answerEscalation` is tested with the disk injected, and the swap is
+three lines (`stat` for `vscode.workspace.fs.stat`).
+
 **Not covered, said plainly.** The engine's wiring of `NoticeFor` (that `Announce` passes the real save result) has no engine-level test: `PanelService` builds its
 own `SessionStore` (`FileWriter` is an `init` seam), so a failing save cannot be injected through the service. The decision and the refusal are tested; the
 call between them is three lines.

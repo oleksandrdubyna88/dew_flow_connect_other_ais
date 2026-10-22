@@ -4853,7 +4853,7 @@ flowchart LR
 | `consultPrompt.ts` | pure: where the prompt override lives, and what an emptied box means (remove, never an empty prompt) |
 | `consultations.ts` | pure: one consultation record, and the card the sidebar draws while it runs |
 | `consultationWatcher.ts` | `consultations/*.json` as a `JsonDirectoryWatcher` shape (since S4b of the question consultant): debounced events, the poll only for a UNC folder, silent unless something a person would SEE changed |
-| `escalationWatcher.ts` | `escalations/*.json` over a `JsonDirectoryWatcher` (since S4b: debounced events, the poll only for a UNC folder, an unreachable directory showing no cards), the modal, the status-bar item, the atomic answer write |
+| `escalationWatcher.ts` | `escalations/*.json` over a `JsonDirectoryWatcher` (since S4b: debounced events, the poll only for a UNC folder, an unreachable directory showing no cards), the modal, the status-bar item, the atomic answer write (`ANSWER_FILES`: exists, write and rename are ALL Node's `fs.promises` — `stat`, `writeFile`, `renameWithRetry` — none of VS Code's `workspace.fs`, which makes missing folders; since S2 round 5 the existence check is Node's `stat` too; the deciding logic is `escalationAnswering.ts`, with the disk injected) |
 | `jsonDirectory.ts` · `jsonDirectoryWatcher.ts` | the one record-directory watcher (S4b): the pure snapshot (last good snapshot, the generation guard) and the editor around it |
 | `extension.ts` | activation, the four commands, the update offer |
 
