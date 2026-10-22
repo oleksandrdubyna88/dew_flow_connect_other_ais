@@ -1,10 +1,10 @@
 # PLAN — only a person releases the gate
 
-> Status: **plan only, 2026-10-22.** Found by the security lane's judge on 2026-10-22; pre-existing in every
+> Status: **coded, 2026-10-22 — S1–S4 and the plan round's §11 built test-first on one branch; not merged and not released, so not yet promoted. §12 records what shipped differently.** Found by the security lane's judge on 2026-10-22; pre-existing in every
 > released `coai-mcp`. Scope: `src_mcp/core/Rounds` (`RoundMachine`, `HumanDecision`), `src_mcp/src/Server`
 > (`PanelService.resolve`, `CurrentAnswer`, `Escalations`, `RoundEngine`'s hold notice), `src_mcp/src/Tools.cs`
 > and `Program.cs` (what the tools promise), `src_vs_code` (`escalationAnswer.ts`, `escalations.ts`, help in five
-> languages), the knowledge base. No product code in this document.
+> languages), the knowledge base.
 >
 > Related docs: [module_server.md](../research/module_server.md) (*`call_human` stops the review*, *Reaching a
 > person*), [module_core.md](../research/module_core.md) (*verdict at completion, stage advance at resolve*),
@@ -403,3 +403,41 @@ These override the sections above where they differ.
 5. **Pending findings under a person's Proceed (finding 4).** `resolve` with no decisions, consuming a recorded Proceed, records every still-Pending finding with the disposition `proceeded over by a person` (a decision record, not a silent drop). Earlier recorded decisions are kept. The stage then advances. Test: `AProceedOverUndecidedFindings_RecordsThemAsProceededOver`.
 6. **The agent learns of the Proceed (finding 5).** While a Proceed is on file and not yet consumed, `status` and every refused `review_*` say: *a person pressed Proceed on the held gate — call resolve to advance*. The `resolve` reply then names the decision as the person's.
 7. **One refusal for every review entry (finding 6).** `review_plan`, `review_code`, `review_document` and `review_feature` share one hold check in the engine. They answer `GateHeld` while no person has answered, and the item-6 sentence once a Proceed is on file. Test over all four tools.
+
+## 12. What was built, and what shipped differently (2026-10-22, one branch, not merged)
+
+Every story of §6 and the seven items of §11 are built test-first; the knowledge base (`module_server.md`, `module_core.md`,
+`module_extension.md`, `module_tests.md`, `architecture.md`) describes them. The plan stays in `todo/` until the server and the
+extension have released, because §9's last boxes (the release order, this document's promotion) are not done. Deviations, each with
+its reason:
+
+1. **The attack test carries decisions.** §6 S1 specifies `ResolveAsync(…, "[]", humanSaysProceed: true)`. With a finding pending, `[]`
+   is answered *"1 finding(s) await a decision"* before the flag is ever read, so that call was never the dangerous one; the AI's
+   real attack records its decisions and passes the flag. `AnAgentPassingHumanDecisionProceed_WithNoPersonsAnswer_…` therefore
+   passes a rejection and was RED first on `"stage": "CodeReview"`; the `[]` form is a second test (RED on the wrong sentence), and
+   the service now judges the claim BEFORE it counts findings, so the refusal names the card in both.
+2. **`RoundMachine.ClaimRefusal` is public** and is asked by the service as well as by `Resolve` (the one judge, called early) —
+   the plan had it inside `Resolve` only.
+3. **`PanelService.cs` is net +5 lines, not negative** (D2/R5). The judging moved into the core and the new record logic into
+   `ProceededOver`; the remaining growth is wiring and the comments the touched methods needed.
+4. **§11.3 reaches `status` and `resolve` as well as the review entries** (the plan said only "when a held session is read"), and
+   refreshes a notice only when its `kind` is `notice`; a card with no kind cannot be told from an `ask_human` card and is left, so a
+   Proceed on it needs a notice from this server. This supersedes G7/D7 ("no rewrite of standing notices"). `status` is annotated
+   read-only for MCP clients and now, once per old notice, rewrites that card file — idempotent, and the only write it makes.
+5. **§11.5 is a rejection with the reason `proceeded over by a person`**, not a new decision type: it reads as *declined* on the log
+   page, counts under *rejected*, and — a consequence worth a decision — it enters the session's standing rejections, so a later round
+   discounts a re-raise of the same finding unless the reviewer brings a new argument. If that is not wanted, a `Decision.ProceededOver`
+   variant that the gate's discount rule ignores is the follow-up.
+6. **`humanNote` is a new, additive member of `status`** (§11.6 named the sentence, not the field). It is empty unless a Proceed is on
+   file; nothing in the extension reads `status`.
+7. **§11.7's test over all four tools is four tests in four harnesses** (the plan/code pair in `OnlyAPersonReleasesTheGateTests`, the
+   document and feature ones in their own end-to-end suites), because a held document or feature review can only be reached with
+   those suites' fixtures.
+8. **The scenario tests of §11.4 run over the shared fake-CLI round harness in process**, with the stdio contract test and the seam
+   leg covering the wire.
+9. **`HumanDecision.cs` was rewritten whole**: the committed file had a blank line between every line.
+10. **Not changed: `.agents/conventions/common/coai-review-gate.md`** — the shared gate rule (a pinned submodule, generated into
+    `gateRule.ts`) still tells the AI to pass `humanDecision: "proceed"`. The server answers that with the refusal sentence naming the
+    card, so nothing breaks; the text needs the conventions repository changed and the pin moved (`module_server.md` records it).
+11. **Two existing extension tests were rewritten** (`answerChoices.test.ts`): they pinned a question card's decisions as *identical* to
+    the plain ones, which D5's *for the held gate* sentence deliberately changes.

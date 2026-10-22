@@ -30,6 +30,15 @@ test('a question file parses; anything else is skipped rather than guessed at', 
   assert.equal(parseEscalation('{"id":"x","question":""}'), undefined, 'an empty question asks nothing');
 });
 
+test('the decisions a card offers are kept, and a card without the list parses as before', () => {
+  // G5 of todo/PLAN_only_a_person_releases_the_gate.md: the answer window offers a decision only when the card lists it.
+  const notice = parseEscalation(JSON.stringify(escalation({ kind: 'notice', decisions: ['continue', 'fix', 'discuss', 'proceed'] })));
+  assert.deepEqual(notice?.decisions, ['continue', 'fix', 'discuss', 'proceed']);
+
+  const older = parseEscalation(JSON.stringify(escalation({ kind: 'notice' })));
+  assert.equal(older?.decisions, undefined, 'an older server wrote none, and none is not an empty offer');
+});
+
 test('a question with no findings still parses, with an empty list', () => {
   const parsed = parseEscalation('{"id":"x","question":"ship?"}');
   assert.deepEqual(parsed?.openFindings, []);

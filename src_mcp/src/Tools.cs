@@ -302,7 +302,7 @@ internal static class Tools
                     failure (a retry asks only the reviewers that failed, over the same HEAD, and carries
                     the answered reviewers' decided findings under `carried`), a `blocking` finding came
                     back (fix it, then call again with `again: true` over the new HEAD), or the person asks
-                    for one — through `ask_human` with `feature`, answered on their panel or phone with
+                    for one — through `ask_human` with `feature`, answered on their panel with
                     "Keep going — more rounds"; no argument of yours can grant it, `again: true` included.
                     A second round that still carries a `blocking` finding, or fails again, is `call_human`,
                     which does block; so is a round in which every reviewer failed twice. A third round is
@@ -320,7 +320,8 @@ internal static class Tools
             // argument, and then the ordinary resolve — decisions, no override, every single round
             // — fails as "An error occurred invoking 'resolve'". Found by a live run in WSL; the
             // Windows run before it had always passed the override, which is the one call that
-            // does not need to work.
+            // does not need to work. It stays in the schema for every client that sends it; it is a CLAIM
+            // the service judges, never a decision (todo/PLAN_only_a_person_releases_the_gate.md).
             async (string repoPath, string branch, string decisions, string? humanDecision = null,
                    string? document = null, string? feature = null) =>
                 await (await host.CurrentAsync()).ResolveAsync(repoPath, branch, decisions,
@@ -337,11 +338,13 @@ internal static class Tools
                     reason refuses the whole call; a reasoned rejection is discounted in later
                     rounds unless a reviewer re-raises it with a genuinely new argument.
 
-                    After a call_human verdict ONLY: when the PERSON has explicitly decided to
-                    proceed despite the open findings, pass humanDecision: "proceed" — it advances
-                    the stage and is recorded as their override. Never pass it on your own
-                    judgement; it applies only after that verdict and is refused at any other
-                    time, because until then the gate decides.
+                    After a call_human verdict a held gate is released only by an
+                    answer on the notice card — the person's "Proceed despite the findings" button there. `humanDecision`
+                    is not a decision: the server never reads the release from this argument, it
+                    is refused while a gate is held and no such answer is on file, and ignored when one
+                    is. When the person has pressed Proceed, `status` and every refused review say
+                    so; call resolve — with your decisions, or none — and the stage advances, the
+                    findings you left undecided recorded as proceeded over.
 
                     A DOCUMENT round is resolved with its `document`; a FEATURE round with its `feature` —
                     the same `planPath` you gave `review_feature` (the branch is then not read).

@@ -233,6 +233,24 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// G4/G5 of <c>todo/PLAN_only_a_person_releases_the_gate.md</c>: the card the AI's question writes lists the three decisions
+    /// and never Proceed — the strongest button is kept off the card whose words the AI chose.
+    /// </summary>
+    [Fact]
+    public async Task AGateQuestionCard_ListsTheThreeDecisions_AndNeverProceed()
+    {
+        var h = Build();
+        Held(h);
+
+        await Ask(h, "The rounds are spent — keep going, act on the findings, or talk?", string.Empty, false, string.Empty);
+
+        var file = Directory.GetFiles(h.Escalations.Directory, "*.json").Single(f => !f.EndsWith(".answer.json", StringComparison.Ordinal));
+        var listed = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(file))!["decisions"];
+        listed.Should().NotBeNull("the card says which decisions it offers (G5)");
+        listed!.AsArray().Select(d => d!.GetValue<string>()).Should().Equal("continue", "fix", "discuss");
+    }
+
+    /// <summary>
     /// G4: a typed answer to a hold's question goes back to the AI that asked and releases NOTHING — only a decision
     /// opens a held gate (<see cref="CurrentAnswer"/>).
     /// </summary>

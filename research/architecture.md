@@ -1260,6 +1260,20 @@ row's answer to the card as it settles (`consultantAnswers`), beside `consultId`
 `riskReason`. The extension's watcher reads one predicate (`isOpenEscalation`: absent and empty are open,
 which is every file written before S3) and draws nothing more yet; the card that folds the answers is S4's.
 
+### Only an answer on the notice card releases a held gate (2026-10-22)
+
+The same two files carry the person's decision, and the contract between the halves gained one field each way
+([module_server.md](module_server.md), *Only an answer on the notice card releases the gate*; [module_extension.md](module_extension.md),
+*Active questions*). **`coai-mcp` → extension:** every card lists the decisions it offers, `decisions` — the `call_human` notice
+`["continue","fix","discuss","proceed"]`, an `ask_human` card the first three — and the extension offers a decision only when the
+card names it, so a card written by an older server (no list) offers the three it always did. **Extension → `coai-mcp`:**
+`answer.json` may now carry `decision: "proceed"` ("Proceed despite the findings"), which the server honours ONLY when the answered
+question is the hold's own notice (`kind: notice`) and applies in `resolve` — the one place the stage advances. The calling AI's
+`humanDecision` argument no longer decides anything: it is a claim the server refuses, with a sentence naming the card, when it
+would have changed the outcome. The claim this makes is the PROTOCOL road: the answer file is writable by any process running as
+the user and nothing verifies who wrote it (follow-up: `todo/PLAN_a_signed_answer_releases_the_gate.md`). `npm run test:seam`
+holds the two halves to each other with a real binary (`scripts/seam-held-gate.mjs`).
+
 Both directions of the clock are stated rather than hoped: an older extension draws an expired card until it
 is answered or swept; a newer extension against an older server sees no status and draws every card, as
 before. And the sixth file neither half owns gained one row rather than a sixth file: `qphase/`, the phase

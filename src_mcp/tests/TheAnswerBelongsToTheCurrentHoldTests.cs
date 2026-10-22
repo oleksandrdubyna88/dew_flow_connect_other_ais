@@ -158,8 +158,8 @@ public sealed class TheAnswerBelongsToTheCurrentHoldTests : IDisposable
 
         RoundMachine.ApplyHumanDecision(held, HumanDecision.Continue).HoldQuestions.Should().BeEmpty("the hold is over; its questions are spent");
         RoundMachine.ApplyHumanDecision(held, HumanDecision.Discuss).HoldQuestions.Should().Equal(["n2", "q3"], "discuss keeps the hold, and its questions with it");
-        ((Transition.Moved)RoundMachine.Resolve(held with { AwaitingResolve = true }, [], humanSaysProceed: true)).State.HoldQuestions
-            .Should().BeEmpty("the person's override releases the hold the same way");
+        ((Transition.Moved)RoundMachine.Resolve(held with { AwaitingResolve = true }, [], HumanDecision.Proceed)).State.HoldQuestions
+            .Should().BeEmpty("the person's Proceed releases the hold the same way");
     }
 
     [Fact]

@@ -8,6 +8,15 @@ import { FEATURE_BRANCH, answerChoices, decisionChoices } from '../escalationAns
  * so the box for them comes FIRST — and a gate that ran out of rounds is still a choice, as it always was.
  */
 
+/**
+ * The decisions after a QUESTION card's box: the same decisions, labels and promises as the plain ones, with the sentence
+ * that says they act on the held gate added to what they cause (todo/PLAN_only_a_person_releases_the_gate.md, D5).
+ */
+function assertSameDecisions(actual: readonly { decision: string; label: string; detail: string }[], plain: readonly { decision: string; label: string; detail: string }[], why: string): void {
+  assert.deepEqual(actual.map((c) => [c.decision, c.label]), plain.map((c) => [c.decision, c.label]), why);
+  actual.forEach((choice, i) => assert.ok(choice.detail.startsWith(plain[i]!.detail), `${choice.label} keeps its promise: ${why}`));
+}
+
 test('a question an AI asked — no findings gating — offers a box for your own words first', () => {
   const choices = answerChoices({ branch: 'feat/x', openFindings: [] });
 
@@ -33,7 +42,7 @@ test('a question card offers your own words first even when findings are gating'
   const choices = answerChoices({ branch: 'feat/x', openFindings: [finding], kind: 'question' });
 
   assert.equal(choices[0]?.decision, '', 'the first thing offered is the free-text answer');
-  assert.deepEqual(choices.slice(1), decisionChoices('feat/x'), 'and the decisions after it, which still release the hold');
+  assertSameDecisions(choices.slice(1), decisionChoices('feat/x'), 'and the decisions after it, which still release the hold');
   assert.match(choices[0]!.detail, /decide nothing/, 'the box says words decide nothing for the review — the card would otherwise leave with nothing changed');
 });
 
@@ -45,7 +54,7 @@ test('a question card on a feature review offers the box first and the feature-r
   const choices = answerChoices({ branch: FEATURE_BRANCH, openFindings: [], kind: 'question' });
 
   assert.equal(choices[0]?.decision, '');
-  assert.deepEqual(choices.slice(1), decisionChoices(FEATURE_BRANCH), 'the second-round wording, not the code stage wording');
+  assertSameDecisions(choices.slice(1), decisionChoices(FEATURE_BRANCH), 'the second-round wording, not the code stage wording');
 });
 
 test('an empty kind is an older card, judged by its findings as before', () => {

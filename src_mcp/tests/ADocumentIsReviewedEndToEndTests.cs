@@ -582,6 +582,37 @@ public sealed class ADocumentIsReviewedEndToEndTests : IAsyncLifetime
             .Should().Be(notices, "the branch's question wrote no card beside the document's own call_human notice");
     }
 
+    /// <summary>
+    /// <c>todo/PLAN_only_a_person_releases_the_gate.md</c> on a DOCUMENT review: the argument releases nothing, and once the person
+    /// pressed Proceed on the notice every review entry says to call <c>resolve</c> (§11.7), which then closes the review.
+    /// </summary>
+    [Fact]
+    public async Task AHeldDocumentReview_IsReleasedByThePersonsProceedOnItsNotice_AndByNothingTheAiPasses()
+    {
+        var service = Service(escalationBudget: TimeSpan.FromMilliseconds(200), threshold: 0);
+        await service.OpenAsync(_repo, "main");
+        Script(WithNotes);
+        Parse(await service.ReviewDocumentAsync(_repo, "main", Purpose, documentPath: WriteDocument()))
+            .GetProperty("verdict").GetString().Should().Be("call_human", "the fixture must hold the document's gate");
+
+        var claimed = Parse(await service.ResolveAsync(_repo, "main", "[]", true, document: "docs/spec.md"));
+        claimed.TryGetProperty("error", out _).Should().BeTrue($"the argument is no decision: {claimed}");
+        claimed.GetProperty("error").GetString().Should().Contain("Proceed despite the findings");
+
+        var notice = await TheCardAsking("The document review gate");
+        var id = notice.GetProperty("id").GetString()!;
+        await File.WriteAllTextAsync(
+            Path.Combine(_data, "escalations", $"{id}.answer.json"),
+            $$"""{"id":"{{id}}","answer":"Proceed despite the findings","decision":"proceed","answeredUtc":"{{DateTime.UtcNow:O}}"}""");
+
+        var review = Parse(await service.ReviewDocumentAsync(_repo, "main", Purpose, documentPath: WriteDocument()));
+        review.GetProperty("error").GetString().Should().Contain("a person pressed Proceed on the held gate — call resolve to advance");
+
+        var resolved = Parse(await service.ResolveAsync(_repo, "main", "[]", document: "docs/spec.md"));
+        resolved.TryGetProperty("error", out var error).Should().BeFalse($"the person's Proceed closes the review: {error}");
+        resolved.GetProperty("stage").GetString().Should().Be("Done");
+    }
+
     /// <summary>The card a question asked, found by its text — a held gate also carries its own call_human notice.</summary>
     private async Task<JsonElement> TheCardAsking(string beginning)
     {

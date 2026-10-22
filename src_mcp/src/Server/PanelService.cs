@@ -561,6 +561,7 @@ public sealed class PanelService
             return Error(NoSession(document, feature));
         }
 
+        _escalations.OfferHeldNotices(session);
         var cadence = _settings.CadenceMode == Core.Cadence.CadenceMode.Off || document.Length > 0 || feature.Length > 0
             ? null
             : await _cadence.AnswerAsync(session, plan, await _worktrees.ShaOrNoneAsync(repoPath, branch), ct);
@@ -1609,8 +1610,9 @@ public sealed class PanelService
     /// Which plan's feature review is being resolved: the same <c>planPath</c> passed to
     /// <c>review_feature</c>. The branch is then not read.
     /// </param>
+    /// <param name="callerClaimsProceed">The AI's <c>humanDecision</c>: a claim <see cref="RoundMachine.ClaimRefusal"/> judges, never a decision.</param>
     public Task<string> ResolveAsync(
-        string repoPath, string branch, string decisionsJson, bool humanSaysProceed = false, string document = "", string feature = "")
+        string repoPath, string branch, string decisionsJson, bool callerClaimsProceed = false, string document = "", string feature = "")
     {
         if (Both(document, feature) is { Length: > 0 } both)
         {
@@ -1623,17 +1625,20 @@ public sealed class PanelService
         using var claim = SessionClaim.TryTake(_settings.DataDir, repoPath, at.Branch, at.Document, at.Feature);
         return claim is null
             ? Task.FromResult(Error(SessionClaim.Busy(branch)))
-            : ResolveUnderClaim(repoPath, at, decisionsJson, humanSaysProceed, NoSession(document, feature));
+            : ResolveUnderClaim(repoPath, at, decisionsJson, callerClaimsProceed, NoSession(document, feature));
     }
 
     private Task<string> ResolveUnderClaim(
-        string repoPath, SessionAddress at, string decisionsJson, bool humanSaysProceed, string noSession)
+        string repoPath, SessionAddress at, string decisionsJson, bool callerClaimsProceed, string noSession)
     {
         var session = _store.Load(repoPath, at.Branch, at.Document, at.Feature);
         if (session is null)
         {
             return Task.FromResult(Error(noSession));
         }
+
+        _escalations.OfferHeldNotices(session);
+        var persons = PersonsDecision(session);
 
         List<DecisionDto>? dtos;
         try
@@ -1647,9 +1652,11 @@ public sealed class PanelService
 
         if (dtos is null or [])
         {
-            return Task.FromResult(session.Pending.Count == 0
-                ? Finish(WithHumanDecision(session), [], humanSaysProceed)
-                : Error($"{session.Pending.Count} finding(s) await a decision — pass one per finding index"));
+            return Task.FromResult(session.Pending.Count == 0 || persons == HumanDecision.Proceed
+                ? Finish(session, [], persons, callerClaimsProceed)
+                : Error(RoundMachine.ClaimRefusal(session.State, persons, callerClaimsProceed) is { Length: > 0 } claimed
+                    ? claimed
+                    : $"{session.Pending.Count} finding(s) await a decision — pass one per finding index"));
         }
 
         // Each decision keeps the NUMBER the caller made it by. The projection used to take that
@@ -1703,7 +1710,7 @@ public sealed class PanelService
             decisions.Add(made);
         }
 
-        return Task.FromResult(Finish(WithHumanDecision(session), decisions, humanSaysProceed));
+        return Task.FromResult(Finish(session, decisions, persons, callerClaimsProceed));
     }
 
     /// <summary>
@@ -1716,16 +1723,15 @@ public sealed class PanelService
     private void Project(Action<Store.RoundsDb> write) => _projection.Write(write);
 
     /// <summary>
-    /// Applies what the PERSON pressed on a <c>call_human</c> notice, if they pressed anything.
+    /// What the PERSON pressed on a <c>call_human</c> notice, if they pressed anything — the machine applies it
+    /// (<see cref="RoundMachine.Resolve"/> takes the decision, not a flag).
     /// </summary>
     /// <remarks>
-    /// <para>Two of the three buttons mean "the stage is not finished, carry on": another set of
-    /// rounds either way, differing only in whether the AI changes something first. So both reset
-    /// the stage's round count — which is the whole unblocking, and it is the person's doing, not
-    /// the AI's.</para>
-    /// <para>None of the three advances a stage over open findings. A human override that means
-    /// "ignore all this" would be an off switch on the gate, and it is deliberately not offered.
-    /// <c>Discuss</c> leaves the session exactly where it is: the AI is meant to stop and talk.</para>
+    /// <para>Continue and Fix mean "the stage is not finished, carry on": another set of rounds either way, differing only in
+    /// whether the AI changes something first. So both reset the stage's round count — which is the whole unblocking, and it is the
+    /// person's doing, not the AI's. Proceed advances the stage over the open findings, and it is the person's alone: read from
+    /// the answer file of the hold's own notice, never from an argument of the caller's. <c>Discuss</c> leaves the session exactly
+    /// where it is: the AI is meant to stop and talk.</para>
     /// <para><b>Only while the gate is HELD, and only an answer to THIS hold</b> — the guards the engine's
     /// own reader has, through the one rule (<see cref="CurrentAnswer"/>). Without the first, the newest
     /// answered notice of the session was applied on EVERY later resolve, so one "keep going" reset the
@@ -1733,29 +1739,25 @@ public sealed class PanelService
     /// zero, and D23's cap let a third round run. Without the second, an answer to an earlier hold was
     /// spent on a later one's count (both found by S3.4's scenarios, 2026-09-26).</para>
     /// </remarks>
-    private PersistedSession WithHumanDecision(PersistedSession session)
+    private HumanDecision PersonsDecision(PersistedSession session)
     {
-        if (!session.State.HumanGate)
+        var decision = session.State.HumanGate ? CurrentAnswer.DecisionFor(session, _escalations, _log) : HumanDecision.None;
+        if (decision != HumanDecision.None)
         {
-            return session;
+            _log.Information("the person chose {Decision} on the held {Stage} gate", decision, session.State.Stage);
         }
 
-        var decision = CurrentAnswer.DecisionFor(session, _escalations);
-        if (decision is not (HumanDecision.Continue or HumanDecision.Fix))
-        {
-            return session;
-        }
-
-        _log.Information("the person chose {Decision}; the stage gets a fresh set of rounds", decision);
-        return session with { State = session.State with { RoundsRunThisStage = 0 } };
+        return decision;
     }
 
-    private string Finish(PersistedSession session, List<DecisionAt> decisions, bool humanSaysProceed = false)
+    private string Finish(PersistedSession session, List<DecisionAt> given, HumanDecision persons, bool callerClaimsProceed)
     {
+        // Under a person's Proceed, the findings nobody decided are recorded as proceeded over, never dropped (§11.5).
+        var decisions = ProceededOver.Recorded(session.Pending, given, persons, session.State.HumanGate);
         // The state machine judges DECISIONS and has no use for the numbers they were made by; the
         // projection needs both. One projection here rather than two lists carried side by side.
         var judged = decisions.Select(d => d.Decision).ToList();
-        switch (RoundMachine.Resolve(session.State, judged, humanSaysProceed))
+        switch (RoundMachine.Resolve(session.State, judged, persons, callerClaimsProceed))
         {
             case Transition.Refused refused:
                 return Error(refused.Sentence);
@@ -1788,7 +1790,7 @@ public sealed class PanelService
                 // owns the sentence. It read `Done => "The code stage is complete"`, which told a
                 // document review a code round had finished (§9.2 of the feature-review plan).
                 var instruction = moved.State.Stage != session.State.Stage
-                    ? Stages.Of(session.State.Stage).CompletedSentence
+                    ? ProceededOver.Instruction(session.State, persons)
                     : "Decisions recorded. Apply the accepted findings, then run the review again.";
                 return Json(new ResolveAnswer(moved.State.Stage.ToString(), moved.State.AwaitingResolve, decisions.Count, instruction),
                     ServerJsonContext.Default.ResolveAnswer);
@@ -1914,9 +1916,10 @@ public sealed class PanelService
 
     // ---------- plumbing ----------
 
-    private SessionAnswer SessionAnswerFor(PersistedSession session) => SessionAnswerFor(session, CurrentAnswer.TheGatesAnswer(session, _escalations));
+    private SessionAnswer SessionAnswerFor(PersistedSession session) => SessionAnswerFor(
+        session, CurrentAnswer.TheGatesAnswer(session, _escalations), CurrentAnswer.TheGatesDecision(session, _escalations));
 
-    private SessionAnswer SessionAnswerFor(PersistedSession session, EscalationAnswer? gatesAnswer) => new(
+    private SessionAnswer SessionAnswerFor(PersistedSession session, EscalationAnswer? gatesAnswer, HumanDecision gatesDecision) => new(
         session.State.SessionId,
         session.State.Stage.ToString(),
         session.State.RoundsRunThisStage,
@@ -1928,7 +1931,9 @@ public sealed class PanelService
         // the session file and the rounds page keep it) and without the members a newer server wrote (the session-file guard, #868).
         WithoutUnknownMembers(session.Rounds.Select(round => round with { Authors = null })))
     {
-        HumanDecision = CurrentAnswer.WordFor(Escalations.DecisionOf(gatesAnswer)),
+        HumanDecision = CurrentAnswer.WordFor(gatesDecision),
+        // Told, not left to be inferred: a Proceed on file is waiting for the AI's `resolve`, and nothing else moves the stage (D8, §11.6).
+        HumanNote = gatesDecision == HumanDecision.Proceed && session.State.HumanGate ? RoundMachine.ProceedPressed : string.Empty,
         HumanAnswer = gatesAnswer?.Answer ?? string.Empty,
         Consultations = _consultations.OpenIn(session.State.RepoPath),
         Pending = session.State.AwaitingResolve ? session.Pending : [],

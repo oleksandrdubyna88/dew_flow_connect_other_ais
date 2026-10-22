@@ -69,6 +69,8 @@ const { cliPathOtherSideSeam } = await import('./seam-cli-path-other-side.mjs');
 const { pathMissingSeam } = await import('./seam-path-missing.mjs');
 // A missing NAMED data folder: the extension's own decision against the real binary's writer mode and served tools.
 const { missingNamedRootSeam } = await import('./seam-missing-named-root.mjs');
+// A HELD gate: the notice the real binary writes at call_human, parsed by the extension's parser, offering the decisions it lists.
+const { heldGateSeam } = await import('./seam-held-gate.mjs');
 
 /**
  * The consultant settings as the PANEL reads them, from a stored map — never built by hand here.
@@ -854,6 +856,16 @@ const namedRoot = await missingNamedRootSeam({
   fail: (why) => { rmSync(repoPath, { recursive: true, force: true }); fail(why); },
 });
 console.log('  ok  a missing named data folder is refused by the extension and by the server alike, and nothing makes it; a side folder and the default are still made');
+
+// A held gate (todo/PLAN_only_a_person_releases_the_gate.md §11.2): a real plan round to call_human over the stand-in CLI, with
+// HOME, USERPROFILE and CODEX_HOME isolated. The notice it wrote is read by the extension's own parser, the answer window offers
+// exactly the decisions the notice lists (Proceed included), the caller's argument is refused over the wire, and the extension's
+// own Proceed answer is what releases the hold.
+const held = await heldGateSeam({
+  serverSession, answerOf, fakeCli: cli,
+  fail: (why) => { rmSync(repoPath, { recursive: true, force: true }); fail(why); },
+});
+console.log(`  ok  a held gate's notice lists ${held.decisions.join(', ')}; the answer window offers exactly those, the caller's argument is refused, and the extension's own Proceed advances the stage to ${held.stage}`);
 
 rmSync(repoPath, { recursive: true, force: true });
 rmSync(dataDir, { recursive: true, force: true });
