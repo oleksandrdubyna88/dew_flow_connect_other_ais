@@ -43,13 +43,16 @@ function input(read: RoundCountsRead, ledger: readonly StoredLine[], over: Parti
   return { snapshot: { ...snapshot(read, ledger), ...over }, chat: [], rateOf: () => OVERRIDE, ranOn: () => '', store: STORE, ...block };
 }
 
+/** A count cell's figure — over two stores it is wrapped in a span whose tooltip lists each store's part. */
+const plain = (cell: string | undefined): string => (cell ?? '').replace(/<[^>]*>/gu, '');
+
 test('ACopiedStore_IsOneRoundOneLaunchOneDollar — the same key and the same $1 launch in both ledgers is $1, not $2', () => {
   const read = mergedRead(keyedRow([KEY_A], { [KEY_A]: THIS_STORE }));
   const copies = [launchIn(THIS_STORE, { round: KEY_A }), launchIn(WSL_STORE, { round: KEY_A })];
 
   const cells = cellsOf(roundsBlock(input(read, copies)), '<b>codex</b>');
 
-  assert.equal(cells['7 d'], '1');
+  assert.equal(plain(cells['7 d']), '1');
   assert.equal(cells['Money (7 d)'], '$1.00', 'the copied store\'s line was counted again: keyed money must follow the round to its owning store');
   assert.match(cells['Launches per round'] ?? '', /7 d: 1\.0 \(1 launch over 1 round\)/u, 'the copy\'s launch doubled the figure');
 });
@@ -67,7 +70,7 @@ test('ASpendWhoseRoundStartedBeforeTheWindow_IsKept — a key with no keyStore e
 
   const cells = cellsOf(roundsBlock(input(read, [early])), '<b>codex</b>');
 
-  assert.equal(cells['7 d'], '0', 'the round started before the window: it is not counted');
+  assert.equal(plain(cells['7 d']), '0', 'the round started before the window: it is not counted');
   assert.equal(cells['Money (7 d)'], '$1.00', 'the spend whose round began before the window was dropped for want of an owner');
 });
 
@@ -146,5 +149,5 @@ test('a foreign ledger that read says nothing is missing', () => {
   const read = mergedRead(keyedRow([], {}));
   const otherLedgers = [{ store: WSL_STORE, directory: '/x', failure: '' }];
 
-  assert.doesNotMatch(roundsBlock(input(read, [launchIn(THIS_STORE)], { otherLedgers })), /not included: /u);
+  assert.doesNotMatch(roundsBlock(input(read, [launchIn(THIS_STORE)], { otherLedgers })), /Money from .* not included/u);
 });

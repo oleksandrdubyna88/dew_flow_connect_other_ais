@@ -7843,8 +7843,8 @@ says only that some of it was not. The round counts come from `coai-mcp --round-
 - `roundCountsRead.ts` — `readRoundCounts(executable, snapshotPaths, run)` (since E6 it asks `--round-counts-merged` FIRST, with the other
   stores' snapshot paths — see *Both stores* below) through `serverRun` from `roundsDbRead.ts`, the one door
   that hands the child this window's data directory (a child inheriting the window's environment would count the
-  DEFAULT directory's rounds); `roundsLoader` spawns it and reads the ledger's tail in parallel; `otherStores` asks only
-  whether another installation's `coai.db` EXISTS. Its own file because `roundsDbRead.ts` is at 796 of its 800 lines,
+  DEFAULT directory's rounds); `roundsLoader` spawns it and reads the ledger's tail in parallel; whether another installation's
+  `coai.db` EXISTS is `storeReach.ts`'s question (E6.S4, off the render path). Its own file because `roundsDbRead.ts` is at 796 of its 800 lines,
   and because the page module imports the types — a spawn beside them would drag `node:child_process` into the bundle.
 - `ledgerTail.ts` — `readTailSince(path, sinceMs, parse)` reads `usage.jsonl` from its END in 64 KiB chunks and stops at
   the first chunk whose oldest whole line is older than the instant asked for (the code round's rule: a year of history
@@ -7875,8 +7875,9 @@ unit differs from the header's names it beside its number, the recorded-turn one
 `roundMoney` (its floors, its `perUnit` rules — a window with consultations and no rounds is a dash saying *no rounds in
 this window*); under each row a line per model (a model change inside the window is two lines; rounds per model exist
 only from `modelsKnownSince`, else *not recorded*) and a line per kind beside. A `remote` row is *ran on <server>*
-(`ranOnOf`). The block names the store it counted (`storeSentence`: *Counted from this side's store only — WSL: Ubuntu,
-<dir>.*) and every other installation's existing store as *not included* — the other side's WAL `coai.db` is never
+(`ranOnOf`). The block names the stores it counted (`storeSentence.ts`; since E6.S4 *Counted from two stores — Windows (this machine)
+and WSL (Ubuntu, as of 3 min ago)* for a merged answer, see *Both stores* below, and today's *Counted from this side's store only — WSL:
+Ubuntu, <dir>.* for an answer that names none) — the other side's WAL `coai.db` is never
 opened across the `\\wsl.localhost` / drvfs boundary. Before the first read the block says *Counting…*; an unavailable
 read says *count unavailable* in every count cell, once with the reason, and the ledger's tokens still show. A ledger
 that did not read is the mirror case: *Tokens and money: unavailable — the usage ledger could not be read: <why>*, once,
@@ -7906,7 +7907,10 @@ The wording of the block, the card and the help is S4's and is NOT changed here;
   END by `readTailSince` — an append-only text file, which is what makes the boundary safe; the other side's `coai.db` is still never opened.
   A directory is mapped to its store through the merged answer's `stores[].paths[]` (`join(dir, 'round-counts-snapshot.json')`); a store two
   directories reach is **read once** (the first), a directory the answer puts under the LIVE store is this side's own store through another
-  spelling and is **not read at all**, and a directory no answer named stands for its own store (its path is its id). Lines are tagged with the
+  spelling and is **not read at all**, and — since S4 — **a directory no store of the answer names is not read either**: an old binary (the merged
+  call exited 64, the plain answer names no store), a merged call that timed out, and a snapshot that was not counted (missing / unreadable /
+  newer schema) leave no id to tell two spellings of one directory apart, so reading both would double the money, and a store that is *not
+  included* contributes neither its rounds nor its spend (an old binary's read is today's single-store one). Lines are tagged with the
   store id in memory only (`StoredLine.store`; this side's lines carry the live id once the answer named one). **Every foreign read races the D7
   deadline** (`CAP_MS`, 8 s): a read that loses is `otherLedgers[]` failure *did not answer in time*, this side's counts and money are published
   without it, and the pending read is KEPT — at most one in flight per store, the next refresh awaits the same promise and takes its lines if it
@@ -7929,8 +7933,38 @@ The wording of the block, the card and the help is S4's and is NOT changed here;
   and 24 h with their counts and the fact in its tooltip; a Team-server row is a dash *launches run on <server>, not recorded here*; a ledger that
   did not read is *unavailable*, an unavailable count *count unavailable*. `LAUNCHES_PER_ROUND` sits beside `PER_LAUNCH` in `roundMoney.ts`.
 
-NOT done here (S4, S5): the store sentence and the footnote, the cell tooltips naming each store's part, the render-path reachability cache, the
-help in five languages, the live seam leg; a key present in two stores whose copies differ is not yet said (*conflicting copies*).
+- *The block and the card over two stores (S4).* `storeSentence.ts` (pure; `StoreFacts` and `storeSentence` live here and are re-exported by
+  `roundsBlock.ts`): `roundsSentence(facts, read, nowMs)` is today's sentence for an answer that names no store (and for a merged answer of this
+  side alone), and for two stores or more *Counted from two stores — Windows (this machine) and WSL (Ubuntu, as of 3 min ago)* — a quiet store
+  *WSL (Ubuntu, 0 rounds as of 9 d ago)*, never *not included*; every `storesNotIncluded` entry keeps today's sentence with its reason
+  (`storeWords.notIncludedWords`: *no snapshot yet — update coai-mcp on that side; the snapshot is written after the next round there*, *its
+  snapshot could not be read (…)*, *written by a newer coai-mcp (…)*, *it did not answer in time*, an unknown word kept as text); the C# answer's
+  trailing integer `conflicts` on each `stores[]` entry (parsed as `RoundStore.conflicts`, 0 from an older binary) becomes *N rounds appear in two
+  stores with different contents — counted from <owning store>* — the owner is the store carrying the count, so the sentence is the same whichever
+  snapshot came first. `storeWords.ts` is extended, not duplicated: `storeLabel` (the sentence's names), `asOfWords` (*as of 3 min ago*, *just now*,
+  *as of 40 min ahead of this clock* — never clamped), `notIncludedWords`, `conflictWords`. `storeColumns.ts` (pure): over two stores or more a
+  count cell is `<span title="Windows (this machine): 2 · WSL (Ubuntu): 1">3</span>` — a store whose last write is older than the window's start
+  says `(as of 6 h ago)` there — and a vendor row is followed by one `<tr class="store">` per store (*store · WSL (Ubuntu)*: the three windows, the
+  7 d stages, the reviewers per round; no money — activity is summed in the vendor row; a STORE, never an account). `cardRoundsLine` already sums
+  the merged rows (`rowRounds` over `totalRounds`) and keeps the plain `roundsCell`. The footnote's first sentence says whose ledgers the tokens
+  and money are (*…read from this side's usage ledger and WSL: Ubuntu's*, or *…; WSL: Ubuntu's could not be read: <why>*). Help in all five
+  languages says the stores are *counted together* from `round-counts-snapshot.json`, *not included* with the reason, quiet = 0 *as of*, and
+  *launches per round* (`helpCoverage.test.ts`).
+- *The render path (S4).* `panelProvider.roundsBlockHtml` no longer asks `existsSync` while drawing (a synchronous probe of a share that is not
+  answering blocks the extension host for the SMB timeout, which the 8 s spawn cap cannot bound). `storeReach.ts` holds a CACHED answer per other
+  directory — `here` / `absent` / `not-answering` — read synchronously by the render (`current`); `refresh` (run beside the counts' refresh,
+  held 60 s) asks the panel's own off-loop `reachable(<dir>/coai.db)` and races it against `STORE_REACH_DEADLINE_MS` (2 s). A probe still
+  pending at the deadline is KEPT (one in flight per directory; a refresh takes its answer if the share came back), and `StoreFacts.notAnswering`
+  says *<dir> is not answering; its rounds are not included* — a dead share costs one bounded background check per refresh and never a blocked draw.
+  The merged call still reads the snapshot paths of those directories (the 8 s spawn cap and the D7 fallback bound it; gating the snapshot
+  paths on the probe, open question 2 of the plan, is the recorded tail).
+- *The live contract leg (S5).* `scripts/seam-round-counts-merged.mjs` (registered in `run-seam.mjs` beside the usage-counts and ledger-fields legs,
+  self-test `src/test/roundCountsMergedSeam.test.mjs`): a REAL plan round through the stand-in CLI leaves `round-counts-snapshot.json`; a hand-written
+  schema-1 snapshot of another store (the real round's integer id, another key) and a missing path go to the BUILT binary's `--round-counts-merged`,
+  and `--round-counts` is asked too; both stdouts go through the extension's real `parseRoundCounts` and are asserted BY VALUE (two stores, the missing
+  path not included, two rounds from one integer id, the keys, the plain answer equal to the live store's part), under the two-sided rule of
+  `seam-ledger-fields.mjs` (every wire key comes back from the parser; every tracked key was written by some row). `HOME`, `USERPROFILE` and
+  `CODEX_HOME` point into a scratch folder (`homeEnvironment`, imported).
 
 **Story 5.3b (2026-10-11): a stated reset is shown.** `coai-mcp` writes `resetsUtc` — the instant the vendor STATED, read
 by the one `CooldownParser` both halves use — on the last ledger line of a turn that ended rate-limited, and `usage.ts`

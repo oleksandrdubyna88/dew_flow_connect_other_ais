@@ -76,6 +76,12 @@ export interface RoundStore {
   readonly quiet: boolean;
   readonly truncated: boolean;
   readonly coaiMcpVersion: string;
+  /**
+   * The rounds this store is counted for whose copy in another store has different contents (a different stage, reviewers or
+   * models) — the C# answer's trailing `conflicts`; 0 from a binary older than the field. The block says them, it does not
+   * reconcile them: the owning store's copy is the one counted.
+   */
+  readonly conflicts: number;
 }
 
 /** A snapshot path that yielded no store, and why. `reason` is `missing` / `unreadable` / `newer-schema` (kept as text, so a newer word survives) or `timeout` when the extension's own read did not answer. */
@@ -281,7 +287,7 @@ function storeFrom(id: string, raw: Record<string, unknown>): RoundStore {
   return {
     id, live: raw['live'] === true, platform: text(raw['platform']), host: text(raw['host']), wslDistro: text(raw['wslDistro']),
     side: text(raw['side']), directory: text(raw['directory']), paths: textsOf(raw['paths']), asOf: text(raw['asOf']),
-    quiet: raw['quiet'] === true, truncated: raw['truncated'] === true, coaiMcpVersion: text(raw['coaiMcpVersion']),
+    quiet: raw['quiet'] === true, truncated: raw['truncated'] === true, coaiMcpVersion: text(raw['coaiMcpVersion']), conflicts: count(raw['conflicts']),
   };
 }
 

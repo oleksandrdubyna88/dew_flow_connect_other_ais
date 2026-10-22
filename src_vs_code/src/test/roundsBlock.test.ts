@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { before, test } from 'node:test';
 
 import { modelsTabHtml } from '../modelsTab';
-import { otherStores } from '../roundCountsRead';
+import { StoreReach } from '../storeReach';
 import { ranOnOf, roundsBlock, RoundsBlockInput, storeSentence } from '../roundsBlock';
 import { LineRate } from '../usage';
 import { DEFAULT_VENDORS } from '../vendors';
@@ -263,13 +263,16 @@ test('a Team-server row is its own row, labelled ran on its server', () => {
   assert.deepEqual(cells.slice(1, 4), ['0', '2', '2']);
 });
 
-test('TheOtherSidesStore_IsNamedNotOpened — the other store is found by existence alone and named as not included', () => {
+test('TheOtherSidesStore_IsNamedNotOpened — the other store is found by existence alone and named as not included', async () => {
   const asked: string[] = [];
-  const others = otherStores(['D:\\coai-win', '\\\\wsl.localhost\\Ubuntu\\home\\me\\.local\\share\\coai-mcp'], (file) => {
+  const directories = ['D:\\coai-win', '\\\\wsl.localhost\\Ubuntu\\home\\me\\.local\\share\\coai-mcp'];
+  const reach = new StoreReach(async (file) => {
     asked.push(file);
 
     return file.includes('wsl.localhost');
   });
+  await reach.refresh(directories);
+  const others = reach.current(directories).filter((one) => one.reach === 'here').map((one) => one.directory);
   const sentence = storeSentence({ ...STORE, side: '', directory: 'C:\\Users\\me\\AppData\\Local\\coai-mcp', others });
 
   assert.deepEqual(asked.map((one) => one.endsWith('coai.db')), [true, true], 'something other than the store file\'s existence was asked');
