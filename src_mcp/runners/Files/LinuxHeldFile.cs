@@ -5,10 +5,15 @@ using Microsoft.Win32.SafeHandles;
 namespace CoaiMcp.Runners.Files;
 
 /// <summary>
-/// The INHERITABLE take of a lock file on Linux, native: <c>open</c> without <c>O_CLOEXEC</c>, then <c>flock(LOCK_EX | LOCK_NB)</c> — behind the unchanged <see cref="Hold"/> union (DL8 of
-/// <c>research/PLAN_kimi_and_vibe_on_linux.md</c>, A2 §3.4).
+/// The INHERITABLE take of a lock file on Linux, native: <c>open</c> (with <c>O_CLOEXEC</c>, cleared only once the take has SUCCEEDED), then <c>flock(LOCK_EX | LOCK_NB)</c> — behind the unchanged
+/// <see cref="Hold"/> union (DL8 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>, A2 §3.4; the order is C26 of <c>todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp_E5.md</c>, §3.5).
 /// </summary>
 /// <remarks>
+/// <para><b>The order, and why (C26).</b> <c>open(O_CLOEXEC)</c> → <c>flock</c> → build the stream → <c>fcntl(F_SETFD, 0)</c> (CHECKED) on success; <c>flock(LOCK_UN)</c> → close on the ABORTED path; NO unlock when a taken
+/// hold is later disposed. The descriptor is inheritable only from the moment the take has succeeded, so a child another thread forks AND execs while the take is still open (or fails) closes its copy at exec. A child
+/// that was forked but has not exec'd yet still holds a copy of the open file description — and the flock belongs to the DESCRIPTION, not the descriptor — so the aborted path unlocks explicitly before it closes.
+/// A successful hold is never unlocked here: the lock is what the inheriting child (Kimi) keeps. The production taker is the <c>--ask-acp</c> shim alone, which starts one child right after the take, so
+/// the window in which an unrelated fork can inherit a SUCCESSFUL hold does not exist there.</para>
 /// <para><b>Why not .NET's.</b> On Unix .NET turns a share mode into an advisory <c>flock</c> and chooses <c>LOCK_EX</c> only when the share mode is exactly <see cref="FileShare.None"/>;
 /// <c>FileShare.None | FileShare.Inheritable</c> is a SHARED lock there. L-N1 measured it on the ubuntu job (CI run 38923199105, <c>HeldFileInheritableOnLinuxTests</c>: a second inheritable take
 /// answered "taken", not "busy") — two refreshers of a rotating token would both have been let in. So the inheritable take is asked of the kernel directly, and the descriptor is left to be inherited
@@ -19,10 +24,14 @@ namespace CoaiMcp.Runners.Files;
 [SupportedOSPlatform("linux")]
 internal static partial class LinuxHeldFile
 {
-    // The libc names, so a reader checks them against <fcntl.h>, <sys/stat.h>, <sys/file.h> and <errno.h> and not against a comment. No O_CLOEXEC: the child must inherit the descriptor.
+    // The libc names, so a reader checks them against <fcntl.h>, <sys/stat.h>, <sys/file.h> and <errno.h> and not against a comment. O_CLOEXEC is set at the open and cleared (F_SETFD, 0) once the take has succeeded:
+    // the child must inherit a TAKEN hold, and nothing else. (The values are Linux's generic ones: x86-64 and arm64.)
     private const int O_RDWR = 0x0002;
     private const int O_CREAT = 0x0040;
     private const int O_NOCTTY = 0x0100;
+    private const int O_CLOEXEC = 0x80000;
+    private const int F_SETFD = 2;
+    private const int LOCK_UN = 8;
     private const int S_IRUSR = 0x0100;
     private const int S_IWUSR = 0x0080;
     private const int LOCK_EX = 2;
@@ -33,36 +42,59 @@ internal static partial class LinuxHeldFile
     private const int EISDIR = 21;
     private const int ENAMETOOLONG = 36;
 
-    /// <summary><c>open(path, O_RDWR|O_CREAT|O_NOCTTY, 0600)</c> and <c>flock(LOCK_EX|LOCK_NB)</c>: taken over a stream on the descriptor, <c>Busy</c> on <c>EWOULDBLOCK</c>, otherwise <c>Unusable</c> naming the errno.</summary>
+    /// <summary><c>open(path, O_RDWR|O_CREAT|O_NOCTTY|O_CLOEXEC, 0600)</c> and <c>flock(LOCK_EX|LOCK_NB)</c>: taken over a stream on the descriptor and made inheritable, <c>Busy</c> on <c>EWOULDBLOCK</c>, otherwise <c>Unusable</c> naming the errno.</summary>
     public static Hold TakeInheritable(string path) => TakeInheritable(path, handle => new FileStream(handle, FileAccess.ReadWrite, bufferSize: 0));
 
     /// <summary>The same, with the stream over the descriptor behind a seam — a test makes its construction fail.</summary>
-    internal static Hold TakeInheritable(string path, Func<SafeFileHandle, FileStream> stream)
+    internal static Hold TakeInheritable(string path, Func<SafeFileHandle, FileStream> stream) => TakeInheritable(path, stream, ClearCloseOnExec);
+
+    /// <summary>The same, with the clearing of <c>FD_CLOEXEC</c> behind a second seam: the errno it answers (0 when it worked) — a test makes it fail.</summary>
+    internal static Hold TakeInheritable(string path, Func<SafeFileHandle, FileStream> stream, Func<int, int> clearCloseOnExec)
     {
-        var descriptor = Open(path, O_RDWR | O_CREAT | O_NOCTTY, S_IRUSR | S_IWUSR);
+        var descriptor = Open(path, O_RDWR | O_CREAT | O_NOCTTY | O_CLOEXEC, S_IRUSR | S_IWUSR);
         if (descriptor < 0)
         {
             return new Hold.Unusable(Failure(path, Marshal.GetLastPInvokeError()));
         }
 
-        return Flock(descriptor, LOCK_EX | LOCK_NB) == 0 ? Held(descriptor, stream) : Refused(descriptor, path, Marshal.GetLastPInvokeError());
+        return Flock(descriptor, LOCK_EX | LOCK_NB) == 0 ? Held(descriptor, path, stream, clearCloseOnExec) : Refused(descriptor, path, Marshal.GetLastPInvokeError());
     }
 
-    /// <summary>The stream over the descriptor; when the stream cannot be made, the handle that owns the descriptor is disposed — the descriptor is closed exactly once, and the flock goes with it and the failure is the take's.</summary>
-    private static Hold Held(int descriptor, Func<SafeFileHandle, FileStream> stream)
+    /// <summary>
+    /// The stream over the descriptor, then the descriptor made inheritable. When either cannot be done the take is ABORTED: the lock is released explicitly (<c>LOCK_UN</c> acts on the open file description, so a copy of
+    /// the descriptor in a child that has forked but not yet exec'd no longer holds it), THEN the descriptor is closed — exactly once, by the handle that owns it. A successful hold is never unlocked.
+    /// </summary>
+    private static Hold Held(int descriptor, string path, Func<SafeFileHandle, FileStream> stream, Func<int, int> clearCloseOnExec)
     {
         var handle = new SafeFileHandle(descriptor, ownsHandle: true);
+        FileStream made;
         try
         {
-            return new Hold.Taken(stream(handle));
+            made = stream(handle);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
         {
-            handle.Dispose();
-
-            return new Hold.Unusable(e);
+            return Aborted(descriptor, handle, new Hold.Unusable(e));
         }
+
+        var errno = clearCloseOnExec(descriptor);
+
+        return errno == 0
+            ? new Hold.Taken(made)
+            : Aborted(descriptor, made, new Hold.Unusable(new IOException($"the lock file {path} cannot be made inheritable: fcntl(F_SETFD) failed with errno {errno}")));
     }
+
+    /// <summary>Unlock the open file description, then close the descriptor (the owner disposes): the file is free the moment this returns, whoever else holds a copy of the descriptor.</summary>
+    private static Hold Aborted(int descriptor, IDisposable owner, Hold failure)
+    {
+        _ = Flock(descriptor, LOCK_UN);
+        owner.Dispose();
+
+        return failure;
+    }
+
+    /// <summary><c>fcntl(descriptor, F_SETFD, 0)</c>: the errno when it failed, 0 when it worked — read at once, before anything else can change it.</summary>
+    private static int ClearCloseOnExec(int descriptor) => Fcntl(descriptor, F_SETFD, 0) == 0 ? 0 : Marshal.GetLastPInvokeError();
 
     private static Hold Refused(int descriptor, string path, int errno)
     {
@@ -85,6 +117,9 @@ internal static partial class LinuxHeldFile
 
     [LibraryImport("libc", EntryPoint = "flock", SetLastError = true)]
     private static partial int Flock(int descriptor, int operation);
+
+    [LibraryImport("libc", EntryPoint = "fcntl", SetLastError = true)]
+    private static partial int Fcntl(int descriptor, int command, int argument);
 
     [LibraryImport("libc", EntryPoint = "close", SetLastError = true)]
     private static partial int Close(int descriptor);

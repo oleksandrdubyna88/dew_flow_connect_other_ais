@@ -159,6 +159,20 @@ public sealed class HeldFileInheritableOnLinuxTests : IDisposable
         HeldFile.Probe(LockFile).Should().Be(LockProbe.Free, "a pre-exec child the failed take's process forked still holds the flock after the failure: the abort path must flock(LOCK_UN) before it closes");
     }
 
+    /// <summary>C26 arm (c): clearing FD_CLOEXEC is CHECKED — a failure is an Unusable that names the errno, and the lock is released, not leaked with the descriptor.</summary>
+    [Fact]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public void AnFcntlThatFails_IsUnusable_AndLeavesNoLock()
+    {
+        const int Ebadf = 9;
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "the native take is Linux's");
+
+        var hold = LinuxHeldFile.TakeInheritable(LockFile, handle => new FileStream(handle, FileAccess.ReadWrite, bufferSize: 0), _ => Ebadf);
+
+        hold.Should().BeOfType<Hold.Unusable>().Which.Cause.Message.Should().Contain($"errno {Ebadf}", "the failed fcntl is named by its errno");
+        HeldFile.Probe(LockFile).Should().Be(LockProbe.Free, "a take whose descriptor could not be made inheritable leaves no lock behind");
+    }
+
     private static async Task<string> ReadErrorIfEndedAsync(Process process) =>
         process.HasExited ? await process.StandardError.ReadToEndAsync() : "(still running)";
 
