@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { after, test } from 'node:test';
 
 import { vendorInstall, vendorUpdate } from '../vendorTerminal';
+import { powerShellEnv } from './powerShellEnv';
 import type { Vendor } from '../vendors';
 
 /**
@@ -32,6 +33,13 @@ const VIBE: Vendor = {
 
 const SYSTEM_ROOT = process.env['SystemRoot'] ?? 'C:\\Windows';
 const WINDOWS_POWERSHELL = join(SYSTEM_ROOT, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+
+/**
+ * What the line's PowerShell starts with beyond `powerShellEnv()`'s defaults: a PATH of `System32` alone, and the system folder named the
+ * way this file names it. The module cache and `TEMP` are the run's folder (`powerShellEnv`, C28) — `root` — so nothing a PowerShell
+ * writes outlives the file's `after`.
+ */
+const CLEARED = { SystemRoot: SYSTEM_ROOT, PATH: join(SYSTEM_ROOT, 'System32') };
 
 const FAKE_UV = `using System; using System.IO;
 public static class FakeUv {
@@ -84,7 +92,7 @@ function fakeUv(): string {
   const exe = join(dir, 'uv.exe');
   const built = spawnSync(WINDOWS_POWERSHELL, ['-NoProfile', '-NonInteractive', '-Command',
     `Add-Type -TypeDefinition (Get-Content -Raw -LiteralPath '${join(dir, 'fake.cs')}') -OutputAssembly '${exe}' -OutputType ConsoleApplication`],
-  { encoding: 'utf8', timeout: 120_000 });
+  { env: powerShellEnv({}, root), cwd: tmpdir(), encoding: 'utf8', timeout: 120_000 });
   assert.equal(built.status, 0, `the fake uv did not compile: ${built.stderr}`);
 
   return exe;
@@ -97,19 +105,7 @@ function shells(): readonly string[] {
   // Asked by STARTING it, never by `existsSync`: pwsh from the Store is an app execution alias, which a stat does not
   // see — the first draft's existsSync dropped it silently and ran every scenario under 5.1 alone.
   return candidates.filter((exe) =>
-    spawnSync(exe, ['-NoProfile', '-NonInteractive', '-Command', 'exit 0'], { env: minimalEnv(), timeout: 60_000 }).status === 0);
-}
-
-function minimalEnv(): Record<string, string> {
-  return {
-    SystemRoot: SYSTEM_ROOT,
-    PATH: join(SYSTEM_ROOT, 'System32'),
-    // Every real terminal has it, and without it neither Get-Command nor & finds a program by its extension.
-    PATHEXT: process.env['PATHEXT'] ?? '.COM;.EXE;.BAT;.CMD',
-    LOCALAPPDATA: process.env['LOCALAPPDATA'] ?? '',
-    TEMP: root,
-    TMP: root,
-  };
+    spawnSync(exe, ['-NoProfile', '-NonInteractive', '-Command', 'exit 0'], { env: powerShellEnv(CLEARED, root), cwd: tmpdir(), timeout: 60_000 }).status === 0);
 }
 
 const UV = WINDOWS ? fakeUv() : '';
@@ -133,8 +129,8 @@ function run(shell: string, line: string, scenario: Record<string, string> = {},
   const home = join(place, 'my home');
   mkdirSync(home, { recursive: true });
   const logs = { installer: join(place, 'installer log.txt'), uv: join(place, 'uv log.txt') };
-  const env = {
-    ...minimalEnv(),
+  const vars = {
+    ...CLEARED,
     PATH: uvOnPath ? `${join(root, 'fake uv')};${join(SYSTEM_ROOT, 'System32')}` : join(SYSTEM_ROOT, 'System32'),
     USERPROFILE: home,
     FAKE_UV: UV,
@@ -144,7 +140,7 @@ function run(shell: string, line: string, scenario: Record<string, string> = {},
     COAI_LINE: line,
     ...scenario,
   };
-  const ran = spawnSync(shell, ['-NoProfile', '-NonInteractive', '-Command', HARNESS], { env, encoding: 'utf8', timeout: 120_000 });
+  const ran = spawnSync(shell, ['-NoProfile', '-NonInteractive', '-Command', HARNESS], { env: powerShellEnv(vars, root), cwd: tmpdir(), encoding: 'utf8', timeout: 120_000 });
   assert.match(ran.stdout, /PATH-BEFORE: /u, `${shell} did not run the harness: ${ran.stdout}${ran.stderr}`);
   assert.doesNotMatch(ran.stdout, /GUARD:/u, 'the installer step would have reached the real installer');
 

@@ -786,7 +786,7 @@ today on the counts; its wall bound's removal is the deviation, said.
 **Break-its.** B-E5-28: the cap ignored (above). B-E5-29: the section budget ignored → the bytes assertion red on the
 fixture.
 
-### 3.19 C28 — PowerShell's `ModuleAnalysisCache` leaking into `src_vs_code` from a child started without `LOCALAPPDATA` — S12
+### 3.19 C28 — PowerShell's `ModuleAnalysisCache` leaking into `src_vs_code` from a PowerShell whose profile does not resolve — S12 (cause NOT PROVEN)
 
 **Evidence.** The lead's report (E4 judge round): a `ModuleAnalysisCache` file appears inside `src_vs_code` after local
 runs; no CI failure, no test message — the symptom is a stray file.
@@ -794,9 +794,8 @@ runs; no CI failure, no test message — the symptom is a stray file.
 **The test that does it — FOUND, VERIFIED by reading.** Two parse tests spawn a real PowerShell with a THREE-variable
 environment and no `cwd`: `src_vs_code/src/test/kimiWindowsInstall.test.ts:55-56` (`env = { PATH, SystemRoot, COAI_PS_TEXT
 }`, `spawnSync(SHELL, [...], { env, … })`) and `src_vs_code/src/test/vibeWindowsInstall.test.ts:52-53` (the same shape). With
-no `cwd` the child's working folder is the `node --test` worker's — `src_vs_code`, where `npm test` runs — and with no
-`LOCALAPPDATA` PowerShell's module-analysis cache has no home and lands in the working folder (the lead's mechanism; the
-RED below is also the diagnosis of it). Their siblings do carry it: `kimiWindowsInstallRuns.test.ts:69-80` (`minimalEnv()`,
+no `cwd` the child's working folder is the `node --test` worker's — `src_vs_code`, where `npm test` runs. The lead's mechanism —
+with no `LOCALAPPDATA` the cache has no home and lands there — was MEASURED by S12 and does not hold (see CORRECTION below). Their siblings do carry it: `kimiWindowsInstallRuns.test.ts:69-80` (`minimalEnv()`,
 `LOCALAPPDATA` at `:75`) and `vibeWindowsInstallRuns.test.ts:103-112` (`:109`) — two copies of one helper (lesson 6). The
 SHELL probes (`kimiWindowsInstall.test.ts:43-45`, `vibeWindowsInstall.test.ts:40-42`) inherit the full environment and are
 not the leak. Class: SHARED STATE (a file written outside the run's temp folder — C10–C12's family).
@@ -807,17 +806,38 @@ under D2) PLUS `PSModuleAnalysisCachePath` pointed INTO the run's temp folder (P
 cache never lands anywhere a run does not remove even if `LOCALAPPDATA` is empty; the four files take it (the two
 `minimalEnv()` copies deleted). Every PowerShell spawn in the test tree also passes `cwd: tmpdir()`.
 
-**RED (Windows).** `aPowerShellStartedByATest_leavesNoModuleAnalysisCacheInItsWorkingFolder` (`src/test/powerShellEnv.test.ts`):
-spawn `powershell.exe -NoProfile -NonInteractive -Command "Get-Command Get-ChildItem | Out-Null"` with today's three-variable
-environment and `cwd` = a fresh temp folder; assert no `ModuleAnalysisCache` under it. Today: `a ModuleAnalysisCache landed
-in <cwd>` — if it does on the coder's machine, the mechanism is VERIFIED; if it stays green, the mechanism is something else
-and the story STOPS (stop rule) and reports what the stray file's timestamps say. After: green with `powerShellEnv()`. A
-scan test, `everyPowerShellSpawnInTheTests_usesThePowerShellEnv`, over `src/test/**/*.ts`: a `spawnSync`/`spawn` whose
-first argument names `powershell`/`pwsh` without `env: powerShellEnv(` → today names the two parse tests and the two
-`minimalEnv` sites; green after.
+**CORRECTION (S12, 2026-10-22) — the mechanism above is NOT PROVEN, and the first RED it asked for cannot be written.** Measured
+on the coder's machine (Windows PowerShell 5.1 and pwsh 7.6, the three-variable environment, a fresh temp `cwd`):
 
-**Break-its.** B-E5-30: `PSModuleAnalysisCachePath` dropped from the helper → the RED red again (where the mechanism holds).
-B-E5-31: one spawn given a hand-built `env` → the scan red.
+1. **`LOCALAPPDATA` does not decide where the cache goes.** Unset, empty, a missing drive, a file: neither shell put a cache in
+   its working folder. Windows PowerShell 5.1 ignores the variable (the known-folder lookup answers); with `USERPROFILE`,
+   `APPDATA` and `LOCALAPPDATA` all empty pwsh resolved `\AppData\Local` (a drive-root path, not `cwd`-relative) and 5.1
+   refused to start.
+2. **The cache write is deferred and conditional.** It happened only when the process lived about 10 s after dirtying the
+   cache. The command this section first named, `Get-Command Get-ChildItem | Out-Null`, exits in well under a second and can never
+   write it — a RED built on it could not be red.
+3. **`PSModuleAnalysisCachePath` IS honoured** by both shells (a 14 s process wrote the cache exactly at the named path and
+   nowhere else). The helper's lever is right.
+4. **No road reproduced a leak here:** `npm run compile` (also with `LOCALAPPDATA` unset), the four PowerShell test files, and a
+   full `npm test` all left `src_vs_code` clean. `npm run compile` was wrongly blamed: its chain (`prepare-gate.mjs`, which runs
+   `node rules.mjs check` and `git`; `generate-security-lane.mjs`; `tsc`) starts no PowerShell.
+5. **Six leaked files exist** (table in S12's status). All are Windows PowerShell 5.1 caches of 86 323 bytes with the same stripped
+   module path (no pwsh 7, no per-user module) — a 5.1 full module scan in a minimal environment whose cache path resolved RELATIVE
+   to its working folder (`Microsoft\Windows\PowerShell\ModuleAnalysisCache`), i.e. a context where the known-folder lookup failed.
+
+**The cause stays NOT PROVEN.** The suspect is a PowerShell started by an agent harness with `cwd` = `src_vs_code`, or a sandboxed
+test run — contexts this machine's runs do not reproduce. The fix below makes the TESTS independent of the caller's profile and of
+their working folder; it cannot stop a harness.
+
+**RED (deterministic).** There is no cache-landing RED (it stays green on a machine whose profile resolves, and proves nothing). The
+RED is the scan `everyPowerShellSpawnInTheTests_usesThePowerShellEnv` (`src/test/powerShellEnv.test.ts`) over `src/test/**/*.ts`: a
+`spawnSync`/`spawn`/`execFile` whose first argument names `powershell`/`pwsh` (or the `SHELL`/`shell`/`exe` the tests hold one in) without
+`env: powerShellEnv(` AND `cwd: tmpdir()` → today it names NINE sites (the two parse tests, the four probes, the Runs tests' two runs, the
+fake-uv build); green after. Beside it: the helper's own tests (the cache path is inside the temp it was given; callers' entries win; no
+profile variable is carried).
+
+**Break-its.** B-E5-30: `PSModuleAnalysisCachePath` dropped from the helper → the helper test red (`actual: undefined`). B-E5-31: one
+spawn given a hand-built `env` → the scan red, naming that site.
 
 ### 3.20 C32, C37, C38 — three cases with no kept message: diagnosis only — S13 (C37 inside S8's loop)
 
@@ -1431,6 +1451,60 @@ vault's outcome (`:63` and the 10 s bound gone; `FAKECLI_SLEEP_MS` gone from thi
 - **Done when.** The RED red then green on a Windows machine; the scan green; a full `npm test` leaves no
   `ModuleAnalysisCache` under `src_vs_code` (checked by `git status --ignored` before and after — the file is not even in
   `.gitignore`, so today it shows as untracked); the two `minimalEnv` copies gone.
+
+### S12 — status: built 2026-10-22 (Sonnet; §3.19 governed, its first RED and its mechanism corrected, deviations listed)
+
+**Built.** `src_vs_code/src/test/powerShellEnv.ts` (ONE helper: `powerShellEnv(extra, temp = tmpdir())` — `PATH`, `SystemRoot`, `PATHEXT`, `LOCALAPPDATA`,
+`ProgramFiles`, `ProgramData`, `ALLUSERSPROFILE` copied when the machine has them, `TEMP`/`TMP` = `temp`, `PSModuleAnalysisCachePath` = a file inside `temp`;
+`extra` wins); `powerShellEnv.test.ts` (5 tests: the scan, a scan-is-not-vacuous guard of at least 9 sites, three helper tests); all NINE
+PowerShell spawns now pass `env: powerShellEnv(...)` and `cwd: tmpdir()`: `kimiWindowsInstall.test.ts` :44 (probe), :56 (parse),
+`vibeWindowsInstall.test.ts` :41, :53, `kimiWindowsInstallRuns.test.ts` :94, :139, `vibeWindowsInstallRuns.test.ts` :85 (the fake-uv `Add-Type`
+build, which had no env at all), :100, :147 (positions before the edit). Both `minimalEnv()` copies are gone; each Runs file holds a one-line
+`CLEARED` (`SystemRoot`, a `System32`-only `PATH`) and passes its own `root` as the temp. No product line changed.
+
+**The mechanism was not reproduced; the stop rule fired and the lead decided (2026-10-22).** S12 stopped at the first RED, reported §3.19's
+CORRECTION, and the lead ruled: build the preventive fix, add NO long-lived cache-landing RED (it stays green here and proves nothing), state the
+cause as not proven, and say that `npm run compile` was wrongly blamed.
+
+**RED, seen on the unfixed tests.** `everyPowerShellSpawnInTheTests_usesThePowerShellEnv`: `kimiWindowsInstall.test.ts:44 (exe)`,
+`kimiWindowsInstall.test.ts:56 (SHELL)`, `kimiWindowsInstallRuns.test.ts:94 (exe)`, `kimiWindowsInstallRuns.test.ts:139 (shell)`,
+`vibeWindowsInstall.test.ts:41 (exe)`, `vibeWindowsInstall.test.ts:53 (SHELL)`, `vibeWindowsInstallRuns.test.ts:85 (WINDOWS_POWERSHELL)`,
+`:100 (exe)`, `:147 (shell)` — nine of nine. Green after the four files took the helper.
+
+**Break-its (each red, restored, green).** B-E5-31: the parse spawn in `kimiWindowsInstall.test.ts` given `env: { PATH, COAI_PS_TEXT }` → the scan
+red, naming `kimiWindowsInstall.test.ts:57 (SHELL)` alone. B-E5-30: the cache key renamed in the helper → two helper tests red
+(`actual: undefined`, `expected: '…\a run temp\testsToDelete-powershell-module-analysis-cache'`). (Deleting the line outright did not
+compile: `noUnusedLocals` named the now unused `join` import — itself a guard.)
+
+**Tests.** The five files together: 41 of 41 (36 before + 5), both Windows PowerShell 5.1 and the Store pwsh 7 running the Runs tests. `npm run typecheck`
+clean, `eslint` clean on the six files. Whole extension suite (`npm test`, Windows): 6491 tests in the first batch (+5), 6468 passed, 0 failed, 23 skipped,
+exit 0; no `Microsoft/` folder and nothing untracked appeared under `src_vs_code` (`git status --ignored` before and after), which on this machine
+it did not before either (baseline run: 6486 / 6463 / 0 / 23).
+
+**The six leaked caches found on this machine (left in place; the owner removes the worktrees after three days).** Each is
+`src_vs_code/Microsoft/Windows/PowerShell/ModuleAnalysisCache`, 86 323 bytes, untracked:
+
+| Worktree | Written | Compiled `out/` that day |
+|---|---|---|
+| `coai-wsl-vibe-extension` | 2026-10-16 15:56 | 2026-10-17 13:43 |
+| `coai-plan-promptcap` | 2026-10-17 15:53 | 2026-10-17 15:48 |
+| `coai-wsl-kimi` | 2026-10-18 19:15 | 2026-10-18 21:21 |
+| `coai-tail-e3` | 2026-10-21 21:12 | 2026-10-22 16:15 |
+| `coai-cancel-impl` | 2026-10-22 12:32 | 2026-10-22 17:23 |
+| `coai-native-e2-s4` | 2026-10-22 14:08 | 2026-10-22 13:56 |
+
+The write times do not line up with a compile (four of six precede the last one by hours), which is the evidence against the compile road.
+
+**Deviations.**
+
+1. **The cache-landing RED (§3.19's first) was not written** — it cannot be red here (CORRECTION, points 1–2). The scan carries the RED; the lead agreed.
+2. **§3.19's mechanism and heading are corrected** (cause NOT PROVEN; `LOCALAPPDATA` does not decide the location; the write is deferred about 10 s).
+3. **The scan also demands `cwd: tmpdir()`**, not only the env, and covers `execFile`/`execFileSync`; the probes (which inherited the full environment) now take the
+   helper too, so the scan has no exception to carry.
+4. **The helper takes `extra` and `temp`.** The spec's fixed list has no PATH override; the Runs tests need `System32` alone, and their own run folder as the
+   temp. `LOCALAPPDATA` and the other machine variables are copied only when the machine has them (the old copies wrote `''`).
+5. **`npm run compile` was wrongly blamed** (the lead's 2026-10-22 evidence): no compile step starts a PowerShell.
+6. **What the fix does not do:** it cannot stop a PowerShell a harness starts with `cwd` = `src_vs_code`, which is the standing suspect.
 
 ### S13 — the diagnosis loops (a scout; group-independent; owns the load window while a loop runs)
 

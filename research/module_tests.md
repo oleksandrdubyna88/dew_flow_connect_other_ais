@@ -5739,3 +5739,18 @@ yield keep the setup's allocation and its GC outside the window.
 
 **Build note.** `npm run compile` needs `.agents/conventions` installed (`npm ci --ignore-scripts` there) for `prepare-gate`'s rules check;
 it rewrites `src/securityLane.generated.ts` and is a clean build, so a break-it restored by writing the file is picked up.
+
+## The PowerShell a test starts gets one profile-free environment (2026-10-22, S12 of `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp_E5.md`, C28)
+
+`src_vs_code/src/test/powerShellEnv.ts` is the ONE environment every test that starts a PowerShell passes (`env: powerShellEnv(...)`, with `cwd: tmpdir()`):
+a minimal set (`PATH`, `SystemRoot`, `PATHEXT`, `LOCALAPPDATA`, `ProgramFiles`, `ProgramData`, `ALLUSERSPROFILE`, `TEMP`/`TMP` = the run's temp) plus
+`PSModuleAnalysisCachePath` inside that temp, which Windows PowerShell 5.1 and pwsh 7 both honour. It replaces two `minimalEnv()` copies (the kimi and vibe
+Runs tests) and the three-variable environments of the two parse tests. Nine spawns use it; `powerShellEnv.test.ts` holds them there with a scan over
+`src/test/**/*.ts` (a `spawnSync`/`spawn`/`execFile` naming a PowerShell without `env: powerShellEnv(` and `cwd: tmpdir()` fails, naming `file:line`),
+plus three tests of the helper itself (the cache path is inside the temp it was given; a caller's entries win; no profile variable is carried).
+
+**What it proves / does not.** It makes the TESTS independent of the caller's profile and working folder. It does not prove the cause of the six stray
+`src_vs_code/Microsoft/Windows/PowerShell/ModuleAnalysisCache` files (all Windows PowerShell 5.1, listed in §S12 of the plan): the mechanism the plan first
+named (no `LOCALAPPDATA`) was measured false, no road reproduced a leak (`npm run compile`, the PowerShell tests, a whole `npm test`), and the suspect — a
+PowerShell started by an agent harness in `src_vs_code` — is outside the tests. There is no cache-landing test on purpose: the write is deferred about 10 s and
+conditional on a dirty cache, so such a test stays green wherever the profile resolves. `npm run compile` starts no PowerShell.
