@@ -64,7 +64,7 @@ public sealed class AMoveOverAHeldFileIsRetriedTests : IDisposable
         OnWindows();
         var path = Seeded("old");
         using var holder = Hold(path);
-        var clock = new MovableClock(DateTimeOffset.UnixEpoch);
+        var clock = new ManualClock(DateTimeOffset.UnixEpoch);
         var pauses = 0;
         var seams = new AtomicSeams
         {

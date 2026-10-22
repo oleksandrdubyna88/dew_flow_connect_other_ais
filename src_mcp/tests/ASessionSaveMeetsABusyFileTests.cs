@@ -75,7 +75,7 @@ public sealed class ASessionSaveMeetsABusyFileTests : IDisposable
         var file = plain.FileFor(Repo, "main");
         var before = File.ReadAllBytes(file);
         var holder = Hold(file);
-        var clock = new MovableClock(DateTimeOffset.UnixEpoch);
+        var clock = new ManualClock(DateTimeOffset.UnixEpoch);
         var store = Store(Through(new AtomicSeams { Clock = clock, Pause = _ => clock.Advance(TimeSpan.FromMilliseconds(100)) }));
 
         var save = () => store.Save(SessionStoreConcurrencyTests.SessionFor(Repo, rounds: 2));

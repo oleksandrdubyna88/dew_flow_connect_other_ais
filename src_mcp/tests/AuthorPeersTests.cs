@@ -181,7 +181,7 @@ public sealed class AuthorPeersTests : IDisposable
             World.Add(id, T0, [Round(1)]);
         }
 
-        var clock = new MovableClock(new DateTimeOffset(T0));
+        var clock = new ManualClock(new DateTimeOffset(T0));
         var loaded = 0;
         var cut = Find(
             load: (repo, branch) =>
