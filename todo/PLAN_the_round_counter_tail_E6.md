@@ -1,6 +1,6 @@
 # PLAN — Round counter tail, epic E6: both stores are counted, and launches per round
 
-> Status: **plan only, 2026-10-21 — the stories of epic E6, and the S1 cornerstone spec, by Fable.** Stories of epic E6 of
+> Status: **built, in review as PR #918 (not merged), 2026-10-22 — the stories of epic E6, and the S1 cornerstone spec, by Fable (written 2026-10-21).** Stories of epic E6 of
 > [PLAN_the_round_counter_tail.md](PLAN_the_round_counter_tail.md) (its "### E6"), written the way
 > [the E3 stories](PLAN_the_round_counter_tail_E3.md) were.
 >
@@ -187,8 +187,9 @@ in the clear.
 ### 4.2 The write point and its failure
 
 `RoundEngine` — after `_projection.Write(...)` returns (`RoundEngine.cs:653`) and before the escalation notice (`:654`):
-`Store.RoundCountsSnapshot.TryWrite(_settings.DataDir, _time.GetUtcNow().UtcDateTime, _log)` (the engine's clock is whatever
-`RoundRecord.CompletedUtc` was stamped from; the test fixes it). `TryWrite`:
+`Store.RoundCountsSnapshot.TryWrite(_settings.DataDir, DateTime.UtcNow, _log)`, and only for a round the database holds (`recorded`).
+*Deviation as built: this section first said `_time.GetUtcNow().UtcDateTime`, "the engine's clock"; the engine takes the wall clock
+directly (`DateTime.UtcNow`), so a test fixes the stamp through `TryWrite`'s own `nowUtc` argument, not through the engine.* `TryWrite`:
 
 1. Opens `coai.db` read-only (`RoundCounts.OpenReadOnly`, `:96-111`) — the same open as the mode, no migration; if the file is
    not there (the projection could not open it) it returns without writing.
@@ -244,8 +245,12 @@ ones, and a relative path is relative to a working directory the extension does 
    | Condition | `reason` | `detail` |
    |---|---|---|
    | the path does not exist | `missing` | the path |
-   | read threw (`IOException`, `UnauthorizedAccessException`), or the text is not JSON, or has no integer `schema`, or `schema < 1`, or the document is not the §4.1 shape | `unreadable` | the exception's message, or *not a round-counts snapshot* |
+   | read threw (`IOException`, `UnauthorizedAccessException`), or the text is not JSON, or has no integer `schema`, or `schema < 1`, or the document is not the §4.1 shape | `unreadable` | *the file could not be read (`<ExceptionType>`)*, or *not a round-counts snapshot* |
    | `schema > 1` | `newer-schema` | *schema 2 — this coai-mcp reads schema 1; update coai-mcp on this side* (`coaiMcpVersion` quoted when the field reads) |
+
+   *Deviation as built: the `unreadable` detail for a read that threw is NOT the exception's message — a filesystem message names the
+   file, and the file's path names the person. The code says `the file could not be read (<ExceptionType>)`: the type only, in a sentence of
+   ours (`RoundCountsSnapshot.ReadText`).*
 
    `schema` is read FIRST, leniently (a `JsonDocument` property), so a newer document is named as newer rather than as unreadable.
 3. *Identity* — a snapshot whose `store.id` equals this side's id is this side's own store named through another spelling: its

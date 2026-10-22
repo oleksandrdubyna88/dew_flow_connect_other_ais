@@ -81,7 +81,7 @@ import { RoundsLogCache } from './roundsLogCache';
 import { finishedRounds, RoundCountsCache } from './roundCountsCache';
 import { PLAN_PRICES_SETTING, type PlanPriceRefusal, planPricesFrom, savePlanPrice } from './planPrice';
 import { roundsLoader } from './roundCountsRead';
-import { StoreReach } from './storeReach';
+import { refreshCountsAndReach, StoreReach } from './storeReach';
 import { PROBE_USAGE_FILE, probeUsagePath } from './probeUsageFile';
 import { ranOnOf, roundsBlock } from './roundsBlock';
 import { chatLedgerLines } from './roundMoney';
@@ -684,8 +684,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   /** Read the round counts if due — never per render, see `roundCountsCache.ts` — and repaint when a read landed. */
   private async refreshRoundCounts(): Promise<void> {
     // The reach probe runs beside the counts, off the render: a dead share costs one bounded check and a repaint, never a stall.
-    const [counted, reached] = await Promise.all([this.roundCounts.refresh(), this.storeReach.refresh(otherDirectories(this.dataDir.fsPath))]);
-    if (counted || reached) {
+    if (await refreshCountsAndReach(this.roundCounts, this.storeReach, otherDirectories(this.dataDir.fsPath))) {
       void this.render();
     }
   }
@@ -899,8 +898,9 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   async usageTab(): Promise<string> {
     const vendors = this.vendorsHere();
     const usage = this.remembered(await this.readUsage());
-    // The page's own tick: a read when due (at most once a minute, sooner after an ending), never per tick.
-    await this.roundCounts.refresh();
+    // The page's own tick: a read when due (at most once a minute, sooner after an ending), never per tick. The reach of the other
+    // stores is refreshed beside the counts: `refreshRoundCounts` runs only while Settings is open, and this page must not draw an empty cache.
+    await refreshCountsAndReach(this.roundCounts, this.storeReach, otherDirectories(this.dataDir.fsPath));
     const rounds = await this.roundsBlockHtml(vendors);
 
     return usageTabHtml(

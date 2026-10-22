@@ -7954,8 +7954,9 @@ The wording of the block, the card and the help is S4's and is NOT changed here;
   *launches per round* (`helpCoverage.test.ts`).
 - *The render path (S4).* `panelProvider.roundsBlockHtml` no longer asks `existsSync` while drawing (a synchronous probe of a share that is not
   answering blocks the extension host for the SMB timeout, which the 8 s spawn cap cannot bound). `storeReach.ts` holds a CACHED answer per other
-  directory — `here` / `absent` / `not-answering` — read synchronously by the render (`current`); `refresh` (run beside the counts' refresh,
-  held 60 s) asks the panel's own off-loop `reachable(<dir>/coai.db)` and races it against `STORE_REACH_DEADLINE_MS` (2 s). A probe still
+  directory — `here` / `absent` / `not-answering` — read synchronously by the render (`current`); `refresh` (run beside the counts' refresh through
+  `refreshCountsAndReach` — by `refreshRoundCounts` while Settings is open AND by the Rounds page's own `usageTab()` tick, so the page never draws an
+  empty cache; held 60 s) asks the panel's own off-loop `reachable(<dir>/coai.db)` and races it against `STORE_REACH_DEADLINE_MS` (2 s). A probe still
   pending at the deadline is KEPT (one in flight per directory; a refresh takes its answer if the share came back), and `StoreFacts.notAnswering`
   says *<dir> is not answering; its rounds are not included* — a dead share costs one bounded background check per refresh and never a blocked draw.
   The merged call still reads the snapshot paths of those directories (the 8 s spawn cap and the D7 fallback bound it; gating the snapshot

@@ -42,6 +42,21 @@ interface Known {
   readonly atMs: number;
 }
 
+/**
+ * What the Rounds block is drawn from, refreshed TOGETHER: the round counts and the reach of the other stores. Every surface that
+ * draws the block asks through here, so none of them can refresh the counts and leave the reach cache empty — the block would then
+ * miss another installation's store and a store that is not answering. True when either changed, so the panel should repaint.
+ */
+export async function refreshCountsAndReach(
+  counts: { refresh(): Promise<boolean> },
+  reach: StoreReach,
+  directories: readonly string[],
+): Promise<boolean> {
+  const [counted, reached] = await Promise.all([counts.refresh(), reach.refresh(directories)]);
+
+  return counted || reached;
+}
+
 export class StoreReach {
   private readonly known = new Map<string, Known>();
 

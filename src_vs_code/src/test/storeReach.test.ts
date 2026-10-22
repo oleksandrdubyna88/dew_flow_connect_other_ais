@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
-import { STORE_REACH_DEADLINE_MS, StoreReach } from '../storeReach';
+import { refreshCountsAndReach, STORE_REACH_DEADLINE_MS, StoreReach } from '../storeReach';
 import { roundsBlock } from '../roundsBlock';
 import { counted, snapshot } from './roundCountsFixtures';
 
@@ -94,6 +94,37 @@ test('an answer is held for its age — a second refresh inside it asks nothing,
   await reach.refresh([WSL]);
   assert.equal(asked, 2, 'a stale answer was kept for ever');
   assert.deepEqual(reach.current([]), [], 'a directory the setting no longer lists was still named');
+});
+
+test('refreshCountsAndReach refreshes the counts AND the reach, and says to repaint when either changed', async () => {
+  const asked: string[] = [];
+  const reach = new StoreReach(async (path) => { asked.push(path); return true; });
+  const counts = (changed: boolean): { refresh(): Promise<boolean>; asked: number } => {
+    const one = { asked: 0, refresh: async () => { one.asked += 1; return changed; } };
+
+    return one;
+  };
+  const still = counts(false);
+
+  assert.equal(await refreshCountsAndReach(still, reach, [WSL]), true, 'a store found for the first time changed what the page knows');
+  assert.deepEqual(reach.current([WSL]), [{ directory: WSL, reach: 'here' }], 'the reach cache stayed empty');
+  assert.equal(still.asked, 1);
+  assert.equal(await refreshCountsAndReach(still, reach, [WSL]), false, 'nothing changed, so there is nothing to repaint');
+  assert.equal(await refreshCountsAndReach(counts(true), reach, [WSL]), true, 'a read that landed changed what the page knows');
+  assert.equal(asked.length, 1, 'a held answer was probed again');
+});
+
+test('OpeningTheRoundsPage_WithSettingsNeverOpened_RefreshesTheReach — the page\'s own tick asks the stores, not only the counts (wiring)', () => {
+  // The Rounds page is `usageTab()`. The reach cache used to be refreshed only beside the counts in `refreshRoundCounts`, which a render
+  // starts only while the Settings page is open — so with Settings never opened the page read an EMPTY cache: another installation's store
+  // and a store that is not answering were both missing from the sentence that names the stores.
+  const text = readFileSync(join(__dirname, '..', '..', 'src', 'panelProvider.ts'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//gu, ' ')
+    .replace(/(^|[^:])\/\/.*$/gmu, '$1');
+  const page = /async usageTab\(\)[\s\S]*?\r?\n {2}\}\r?\n/u.exec(text)?.[0] ?? '';
+
+  assert.ok(page.length > 0, 'usageTab was renamed, and this guard is asserting nothing');
+  assert.match(page, /\b(refreshCountsAndReach|storeReach\.refresh)\(/u, 'the Rounds page refreshes the counts but never the reach of the other stores: with Settings closed it draws an empty cache');
 });
 
 test('the panel no longer probes existence while it draws — the Rounds block reads the cached reach (wiring)', () => {

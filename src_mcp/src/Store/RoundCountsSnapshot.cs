@@ -193,9 +193,25 @@ public static class RoundCountsSnapshot
     /// A snapshot read from <paramref name="path"/>: the document (with every stamp spelt the column's way), or the reason it is not a store —
     /// <see cref="Missing"/>, <see cref="Unreadable"/> or <see cref="NewerSchema"/>. Never throws for a file problem.
     /// </summary>
-    public static SnapshotReading Read(string path) => Read(path, File.ReadAllText);
+    public static SnapshotReading Read(string path) => Read(path, ReadShared);
 
-    /// <param name="readText">The read itself — <see cref="File.ReadAllText(string)"/> in production; a seam so a test can fail it.</param>
+    /// <summary>
+    /// The file opened the way every read of it is: for reading, sharing read, write and delete, so a reader never forbids a writer to open it.
+    /// <see cref="File.ReadAllText(string)"/> opens with <see cref="FileShare.Read"/>, which does forbid that for as long as the reader holds
+    /// the file. (A move-over, the owner's <see cref="AtomicFile"/> replace, is refused by Windows whatever the holder shared; that one is
+    /// covered by <see cref="AtomicFile.SharingRetry"/> and by a read being milliseconds.) Internal so a test can hold the file exactly as a reader does.
+    /// </summary>
+    internal static FileStream OpenForRead(string path) => SharedRead.Open(path);
+
+    private static string ReadShared(string path)
+    {
+        using var stream = OpenForRead(path);
+        using var reader = new StreamReader(stream, System.Text.Encoding.UTF8);
+
+        return reader.ReadToEnd();
+    }
+
+    /// <param name="readText">The read itself — <see cref="ReadShared"/> in production; a seam so a test can fail it.</param>
     internal static SnapshotReading Read(string path, Func<string, string> readText) =>
         File.Exists(path) ? ReadText(path, readText) : SnapshotReading.Refuse(Missing, path);
 

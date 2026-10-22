@@ -231,6 +231,50 @@ public sealed class RoundCountsSnapshotTests : IDisposable
     }
 
     /// <summary>
+    /// The OTHER side's reader holds the snapshot while this side writes it. <see cref="File.ReadAllText(string)"/> opens with
+    /// <see cref="FileShare.Read"/>, which forbids every writer to open the file for as long as the reader holds it; the reader therefore
+    /// opens it sharing write and delete (<see cref="RoundCountsSnapshot.OpenForRead"/>, the open <c>Read</c> makes), and this test holds the
+    /// file exactly so.
+    /// </summary>
+    /// <remarks>
+    /// What sharing does NOT buy, measured 2026-10-22 (Windows 11 26300, .NET 10): a <c>File.Move</c> over a file another handle holds is refused
+    /// whatever share mode the holder used — all four combinations of <c>Read</c>, <c>Write</c> and <c>Delete</c> throw. The owner's replace is
+    /// covered by <see cref="AtomicFile.SharingRetry"/> (the next test), not by the reader's share mode.
+    /// </remarks>
+    [Fact]
+    public void AReaderHoldingTheSnapshot_DoesNotForbidAWriterToOpenIt()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "the share modes are Windows'; .NET's Unix locks are advisory");
+        Live(Key('a'), Now.AddHours(-1));
+        RoundCountsSnapshot.TryWrite(_store.Path, Now, _log);
+        using var reader = RoundCountsSnapshot.OpenForRead(SnapshotFile);
+
+        var open = () => new FileStream(SnapshotFile, FileMode.Open, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete).Dispose();
+
+        open.Should().NotThrow("a reader of the snapshot must not be why a writer of it is refused");
+    }
+
+    /// <summary>
+    /// The owner's replace, which Windows refuses while ANY handle holds the file, lands once a reader that holds it for a read's moment lets go:
+    /// the production write retries the move for <see cref="AtomicFile.SharingRetry"/>, and a read is milliseconds.
+    /// </summary>
+    [Fact]
+    public void TheOwnersReplace_LandsWhenAReaderLetsGoInsideTheRetryWindow()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "the refusal of a move over a held file is Windows'; .NET's Unix locks are advisory");
+        Live(Key('a'), Now.AddHours(-2));
+        RoundCountsSnapshot.TryWrite(_store.Path, Now.AddHours(-1), _log);
+        Live(Key('b'), Now.AddHours(-1));
+        var reader = RoundCountsSnapshot.OpenForRead(SnapshotFile);
+        var seams = new AtomicSeams { Pause = _ => reader.Dispose() };
+
+        RoundCountsSnapshot.TryWrite(_store.Path, Now, _log, (path, text) => AtomicFile.Write(path, text, AtomicFile.SharingRetry, seams));
+
+        _sink.Lines.Should().BeEmpty("the reader let go inside the window, so the write was never refused for good");
+        Written().Rounds.Should().HaveCount(2, "the replace landed");
+    }
+
+    /// <summary>
     /// The default writer IS <see cref="AtomicFile"/>: only it removes the orphan temp of a writer that died, so a plain
     /// <c>File.WriteAllText</c> in its place would leave this one standing.
     /// </summary>
