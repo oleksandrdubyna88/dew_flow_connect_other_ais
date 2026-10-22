@@ -44,7 +44,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolved } from '../.github/scripts/lib/resolved.mjs';
-import { runsOnNativeLinux } from './lib/host-facts.mjs';
+import { launchHostOf } from './lib/host-facts.mjs';
 import { manifestPlan } from './lib/cli-args.mjs';
 import { builtEnv as builtEnvFor, classOf as classOfIn, deepestChild, linkSignIn, personsVibeHome, run, vibeArgs } from './lib/vibe.mjs';
 import { inventoryOf, unstaged, withEntry, withoutSignInLink } from './lib/vibe-manifest.mjs';
@@ -71,6 +71,14 @@ if (unstage) {
   writeFileSync(MANIFEST, `${JSON.stringify(moved, null, 2)}\n`);
   console.error(`moved the staged ${unstage} entries into versions: ${MANIFEST}`);
   process.exit(0);
+}
+
+// The host decision (E2 code gate G4), read ONCE from /proc/version through lib/host-facts.mjs's launchHostOf, BEFORE any Vibe launch: on Linux a banner that cannot be read REFUSES, as the product does
+// (WslGeneration.Unreadable) and as the series' stop rule says (N-H1 banner.read=false, E2 plan 3.4) — the script used to run that host with the keyring road OPEN. `--from` launches nothing and is not refused.
+const HOST = launchHostOf();
+if (HOST.refusal && !from) {
+  console.error(HOST.refusal);
+  process.exit(65);
 }
 
 const exe = from ? '' : flag('--vibe', '') || resolved('vibe');
@@ -130,10 +138,10 @@ const vibesOwn = (listing) => withoutSignInLink(listing, join(personsVibeHome(),
 
 /** The built environment of D17, for `home` — lib/vibe.mjs's, the product's (VibeLaunch.Built). */
 /**
- * On a NATIVE Linux host (E2.S0: the kernel banner read once, lib/host-facts.mjs runsOnNativeLinux) the built environment also carries the forced keyring backend, as the product's
+ * On a NATIVE Linux host (E2.S0: the kernel banner read once, lib/host-facts.mjs launchHostOf; an unread banner on Linux refuses, exit 65) the built environment also carries the forced keyring backend, as the product's
  * VibeLaunch.Built does there — so the manifest's launches are the signed-in launches N-V4 measures. Recorded in steps.json as `keyringRoad`.
  */
-const NATIVE_LINUX = runsOnNativeLinux();
+const NATIVE_LINUX = HOST.nativeLinux;
 const builtEnv = (home) => builtEnvFor(home, MODEL, process.platform, process.env, { nativeLinux: NATIVE_LINUX });
 
 function launch(label, args, home, cwd, input = '') {

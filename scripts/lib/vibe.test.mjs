@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { after, test } from 'node:test';
 import {
   MINIMAL_UNIX, MINIMAL_WINDOWS, builtEnv, classOf, deepestChild, dirLink, files, homeListing, linkSignIn, minimalEnv, personsVibeHome,
-  KEYRING_FAIL_BACKEND, NATIVE_LINUX_BUILT, armFilterOf, armsCellsError, armWanted, keyringArm, keyringRoadOf, keyringSetup, isNativeLinuxHost, pythonCommand, removeDirLink, run, vibePython, writeProbeKeyring,
+  KEYRING_FAIL_BACKEND, NATIVE_LINUX_BUILT, armFilterOf, armsCellsError, armWanted, keyringArm, keyringRoadOf, keyringSetup, isNativeLinuxHost, launchHost, pythonCommand, removeDirLink, run, vibePython, without, writeProbeKeyring,
 } from './vibe.mjs';
 import { codeOf } from './code-text.mjs';
 import { readBanner } from './host-facts.mjs';
@@ -221,7 +221,7 @@ function probeChildEnvFor() {
   const end = source.indexOf('\n}\n', start);
   assert.ok(start >= 0 && end > start, 'childEnvFor is no longer a top-level function of the probe');
   // What the function reads from outside is passed in by name; the host reading is an OPTION (`nativeLinux`), never imported in the slice.
-  return new Function('minimalEnv', 'NATIVE_LINUX_BUILT', `${source.slice(start, end + 2)}\nreturn childEnvFor;`)(minimalEnv, NATIVE_LINUX_BUILT);
+  return new Function('minimalEnv', 'NATIVE_LINUX_BUILT', 'without', `${source.slice(start, end + 2)}\nreturn childEnvFor;`)(minimalEnv, NATIVE_LINUX_BUILT, without);
 }
 
 const PIN = { VIBE_CLI: 'python', PYTHONUTF8: '1' };
@@ -328,7 +328,7 @@ test('S-N20: only arm a3c drops the keyring variable; the arms are otherwise as 
 
 test("S-N20 (judge J1): the Vibe probe's three wiring lines — the host read, childEnv and the local builtEnv — carry the native Linux option (the probe runs on import — a source guard over its CODE, comments stripped)", () => {
   const code = codeOf(readFileSync(join(repo, 'scripts', 'probe-vibe-confinement.mjs'), 'utf8'));
-  assert.match(code, /^const NATIVE_LINUX = runsOnNativeLinux\(\);$/mu, 'the Vibe probe no longer reads the host once through runsOnNativeLinux() — every child would run the open road');
+  assert.match(code, /^const NATIVE_LINUX = HOST\.nativeLinux;$/mu, 'the Vibe probe no longer takes its native Linux reading from the ONE host decision (launchHostOf) — every child would run the open road');
   assert.match(code, /^const childEnv = \(spec\) => childEnvFor\(spec, \{[^}]*\bnativeLinux: NATIVE_LINUX\b[^}]*\}\);$/mu, 'the Vibe probe\'s childEnv no longer passes `nativeLinux: NATIVE_LINUX` to childEnvFor — no child would carry the closed road on a native host (N-V2/N-V3/N-V4 would measure a launch E2 does not ship)');
   assert.match(code, /^const builtEnv = \(home\) => builtEnvFor\(home, BUILT_MODEL, process\.platform, process\.env, \{ nativeLinux: NATIVE_LINUX \}\);$/mu, 'the Vibe probe\'s local builtEnv no longer takes the native Linux option — the version run and M-V16\'s prime would run the open road');
 });
@@ -349,7 +349,58 @@ test("S-N20: the manifest script builds its launches' environment with the host 
   const source = codeOf(readFileSync(join(repo, 'scripts', 'vibe-home-manifest.mjs'), 'utf8'));
   assert.ok(source.includes("builtEnvFor(home, MODEL, process.platform, process.env, { nativeLinux: NATIVE_LINUX })"), "the manifest's built environment no longer takes the native Linux option — N-V4 would measure a launch E2 does not ship");
   assert.ok(source.includes("keyringRoad: NATIVE_LINUX ? 'closed' : 'open'"), 'steps.json no longer records keyringRoad');
-  assert.ok(source.includes('runsOnNativeLinux()'), 'the manifest no longer reads the host through runsOnNativeLinux');
+  assert.match(source, /^const NATIVE_LINUX = HOST\.nativeLinux;$/mu, 'the manifest no longer takes its native Linux reading from the ONE host decision (launchHostOf)');
+});
+
+// ------------------------------------------------------------------------------------------------------ E2 code gate G4: an unreadable banner on Linux refuses the launch
+// An unread /proc/version made isNativeLinuxHost false, so a probe run directly would have launched Vibe with the keyring road OPEN — and arm a3c proves that road reaches an available keyring.
+// The product refuses the same host (WslGeneration.Unreadable) and the series stops on it (E2 plan 3.4); the probes now refuse too, BEFORE any launch. launchHost is the pure decision.
+
+test('G4: launchHost — Linux with an unread banner is REFUSED, with a sentence naming /proc/version', () => {
+  for (const unread of [bannerOf(null), bannerOf(''), bannerOf('   \n')]) {
+    const decision = launchHost({ platform: 'linux', banner: unread });
+    assert.notEqual(decision.refusal, '', 'a Linux host whose banner could not be read was allowed to launch with the keyring road open');
+    assert.match(decision.refusal, /\/proc\/version/u, 'the refusal does not name /proc/version');
+    assert.equal(decision.nativeLinux, false);
+  }
+});
+
+test('G4: launchHost — Linux with a read native banner closes the road; Linux on WSL launches as today; win32 and darwin as today', () => {
+  assert.deepEqual(launchHost({ platform: 'linux', banner: bannerOf('Linux version 7.0.0-30-generic (x)\n') }), { refusal: '', nativeLinux: true });
+  assert.deepEqual(launchHost({ platform: 'linux', banner: bannerOf('Linux version 5.15.1-microsoft-standard-WSL2\n') }), { refusal: '', nativeLinux: false });
+  assert.deepEqual(launchHost({ platform: 'linux', banner: bannerOf('Linux version 4.4.0-19041-Microsoft\n') }), { refusal: '', nativeLinux: false });
+  for (const platform of ['win32', 'darwin']) {
+    assert.deepEqual(launchHost({ platform, banner: bannerOf(null) }), { refusal: '', nativeLinux: false }, `${platform} has no /proc/version and must still launch`);
+  }
+});
+
+test('G4: both Vibe scripts take the decision before any launch and exit 65 on a refusal (they run on import — a source guard over their CODE)', () => {
+  for (const [name, skips] of [['probe-vibe-confinement.mjs', 'reparse'], ['vibe-home-manifest.mjs', 'from']]) {
+    const code = codeOf(readFileSync(join(repo, 'scripts', name), 'utf8'));
+    assert.match(code, /^const HOST = launchHostOf\(\);$/mu, `${name} no longer reads the host through launchHostOf() — an unread banner would launch Vibe with the keyring road open`);
+    const refusal = new RegExp(String.raw`^if \(HOST\.refusal && !${skips}\) \{\n  console\.error\(HOST\.refusal\);\n  process\.exit\(65\);\n\}$`, 'mu');
+    assert.match(code, refusal, `${name} no longer refuses on HOST.refusal (exit 65) — a launch with an unread banner would go ahead; only the no-launch mode (--${skips === 'from' ? 'from' : 'reparse'}) may skip it`);
+    assert.ok(code.indexOf('HOST.refusal') < code.indexOf('const NATIVE_LINUX ='), `${name} refuses AFTER it already used the reading`);
+  }
+});
+
+// ------------------------------------------------------------------------------------------------------ E2 code gate G3: the child environment is built, never mutated
+
+test('G3: without(env, name) returns a NEW object that omits the key, and leaves its input alone', () => {
+  const env = Object.freeze({ A: '1', PYTHON_KEYRING_BACKEND: FAIL });
+  const dropped = without(env, 'PYTHON_KEYRING_BACKEND');
+  assert.deepEqual(dropped, { A: '1' });
+  assert.notEqual(dropped, env);
+  assert.equal(env.PYTHON_KEYRING_BACKEND, FAIL, 'the input was changed');
+  const same = without(env, 'ABSENT');
+  assert.deepEqual(same, env);
+  assert.notEqual(same, env, 'a name that is not there still returns a copy, never the same object');
+});
+
+test('G3: the probe never `delete`s from the environment it built — it builds a new object with without() (a source guard over its CODE)', () => {
+  const code = codeOf(readFileSync(join(repo, 'scripts', 'probe-vibe-confinement.mjs'), 'utf8'));
+  assert.doesNotMatch(code, /\bdelete\s+[\w.[\]'"]+/u, 'the probe still mutates an object with `delete` — build a new one with without() (the convention: never mutate)');
+  assert.match(code, /without\([^)]*'PYTHON_KEYRING_BACKEND'\)/u, 'the probe no longer drops PYTHON_KEYRING_BACKEND for a3c through without()');
 });
 
 test('isNativeLinuxHost: a Linux kernel banner that names neither Microsoft nor WSL is native; WSL2, an unread banner and win32 are not', () => {

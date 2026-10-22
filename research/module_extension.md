@@ -13247,3 +13247,11 @@ flowchart TD
   `runtimeSinceIsAhead.test.ts` (8, one new), `wslBannerVectors.test.ts` (11, the empty-banner expectation).
 - **Not here / open**: the limitation row (`shared/consultant-limitations.json`, `vibe`/`linux`) is S4's, in *Vibe on a native Linux host — the limitation row and what the panel may say* above; the server's own sentences are S2's (`module_runners.md`);
   the unmeasured-Vibe-version warning on a native host is the server's (S-N22).
+
+### The native-Linux table is pinned to the server's set (2026-10-22, the E2 code gate G1 of `todo/PLAN_kimi_and_vibe_on_native_linux_E2.md`)
+
+`ON_NATIVE_LINUX_SINCE` (`runtimeSince.ts`: from which coai-mcp the panel PROMISES a runtime on a native Linux host) and `HostAdmission.MeasuredOnNativeLinux` (`module_runners.md`: which runtimes the server ADMITS there) encode
+different facts — a version cannot be derived from a set — but they must name the same runtimes, or a card would promise a launch the server refuses (or the reverse). The C# test `NativeLinuxAdmissionTablesAgreeTests`
+reads the real server set and the keys of this table and fails naming the side that lacks a runtime; it also requires each named runtime's `linux` row in `shared/consultant-limitations.json` to be `confined` with a
+`measured` field. Adding Kimi (E3) is therefore ONE edit on each side plus its measured row, or a red test. Why C# and not node: the server side is read as the real set and the real loaded rows, and only this small
+flat object literal is read as text.

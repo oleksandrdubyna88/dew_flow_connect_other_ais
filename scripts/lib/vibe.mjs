@@ -69,10 +69,26 @@ export const NATIVE_LINUX_BUILT = { PYTHON_KEYRING_BACKEND: 'keyring.backends.fa
 
 /**
  * Whether the host is a NATIVE Linux one: this is Linux AND its kernel banner (host-facts.mjs readBanner: `{ read, text, namesWsl }`) was read and names
- * neither Microsoft nor WSL — the product's HostKind rule for a READ banner, and the one place the probes decide it. An UNREAD banner is not native here, while the product classifies the same host as HostKind.Linux (WslGeneration.Unreadable), where the admission refuses Vibe and VibeLaunch.Built would still add the fifth name; the probe runs that case OPEN - harmless, because no shipped launch differs, and not a case to measure (N-H1 banner.read=false stops the series, E2 plan 3.4).
+ * neither Microsoft nor WSL — the product's HostKind rule for a READ banner, and the one place the probes decide it. An UNREAD banner is not native here, while the product classifies the same host as HostKind.Linux (WslGeneration.Unreadable), where the admission refuses Vibe: the probes REFUSE that host before any launch (launchHost, E2 code gate G4) instead of running it with the road open.
  * PURE: the banner comes in, nothing is imported, so the probe's cut-out test can hand it over.
  */
 export const isNativeLinuxHost = ({ platform, banner }) => platform === 'linux' && banner?.read === true && banner.namesWsl === false;
+
+/**
+ * The ONE host decision of the Vibe probes (E2 code gate G4), PURE: the platform and the kernel banner (host-facts.mjs readBanner) come in, `{ refusal, nativeLinux }` goes out.
+ * On Linux a banner that could not be read REFUSES the launch (`refusal` is the sentence, empty otherwise) — the product refuses the same host (WslGeneration.Unreadable, DN6) and the
+ * series stops on it (N-H1 banner.read=false, E2 plan 3.4); an unread banner used to read as "not native" and the probe launched Vibe with the keyring road OPEN, which arm a3c proves reaches an
+ * available keyring. A read banner decides `nativeLinux` as isNativeLinuxHost does; win32 and darwin have no /proc/version and are untouched.
+ */
+export const launchHost = ({ platform, banner }) => (platform === 'linux' && banner?.read !== true
+  ? { refusal: UNREAD_BANNER_REFUSAL, nativeLinux: false }
+  : { refusal: '', nativeLinux: isNativeLinuxHost({ platform, banner }) });
+
+const UNREAD_BANNER_REFUSAL = 'refusing to launch Vibe: this is a Linux host and its kernel banner /proc/version could not be read, so the probe cannot tell a native Linux host (keyring road closed) from WSL1 or WSL2 '
+  + "(keyring road open) and would launch with the road open, which arm a3c proves reaches an available keyring; the product refuses the same host (DN6). Make /proc/version readable, or run on a host whose banner reads (E2 plan 3.4).";
+
+/** A NEW object holding every entry of `env` but `name` — the environment is built, never mutated (a `delete` on an object already built is a mutation). */
+export const without = (env, name) => Object.fromEntries(Object.entries(env).filter(([key]) => key !== name));
 
 /** `closed` when the child environment carries the forced backend (the launch E2 ships on a native host), else `open` — printed in the probe's header and rows. */
 export const keyringRoadOf = (env) => (env.PYTHON_KEYRING_BACKEND === NATIVE_LINUX_BUILT.PYTHON_KEYRING_BACKEND ? 'closed' : 'open');

@@ -10,7 +10,7 @@ import { dirname, join } from 'node:path';
 import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { KEYRING_FAIL_BACKEND as FAIL_BACKEND } from './vibe.mjs';
-import { collectHostFacts, hostFactsMode, keyringSession, mountTypeOf, pathEntries, PY_DISTRIBUTIONS, PY_KEYRING_CLASS, readBanner, redactSlot, resolveTool, runsOnNativeLinux, signInRecord } from './host-facts.mjs';
+import { collectHostFacts, hostFactsMode, keyringSession, mountTypeOf, pathEntries, PY_DISTRIBUTIONS, PY_KEYRING_CLASS, launchHostOf, readBanner, redactSlot, resolveTool, runsOnNativeLinux, signInRecord } from './host-facts.mjs';
 
 const PROBE = join(dirname(fileURLToPath(import.meta.url)), '..', 'probe-native-linux-host.mjs');
 const LINUX = process.platform === 'linux';
@@ -295,6 +295,15 @@ test('runsOnNativeLinux: one reading of /proc/version through the injected file 
   assert.equal(read('Linux version 5.15.1-microsoft-standard-WSL2\n'), false);
   assert.equal(read(null), false, 'an unread banner is not native');
   assert.equal(runsOnNativeLinux({ platform: 'win32', fsx: fakeFs({ '/proc/version': { content: 'Linux version 7.0.0-30-generic' } }) }), false);
+});
+
+test('launchHostOf (E2 code gate G4): through the injected file system — an unread banner on Linux refuses, a read native one closes the road, WSL and win32 are as before', () => {
+  const host = (platform, text) => launchHostOf({ platform, fsx: fakeFs(text === null ? {} : { '/proc/version': { content: text } }) });
+  assert.match(host('linux', null).refusal, /\/proc\/version/u, 'an unreadable /proc/version must refuse the launch');
+  assert.equal(host('linux', null).nativeLinux, false);
+  assert.deepEqual(host('linux', 'Linux version 7.0.0-30-generic (x)\n'), { refusal: '', nativeLinux: true });
+  assert.deepEqual(host('linux', 'Linux version 5.15.1-microsoft-standard-WSL2\n'), { refusal: '', nativeLinux: false });
+  assert.deepEqual(host('win32', null), { refusal: '', nativeLinux: false });
 });
 
 test('the probe accepts --vibe-python (a bad request is 65; off Linux an accepted line reaches the 69 platform refusal)', { skip: LINUX ? 'on Linux an accepted line runs the real reading — covered by the collectHostFacts case above' : false }, () => {

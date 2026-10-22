@@ -12,7 +12,7 @@
 // NAME and a list of installed distributions; neither asks for a password.
 import { readFileSync } from 'node:fs';
 import { posix } from 'node:path';
-import { KEYRING_FAIL_BACKEND, builtEnv as vibeBuiltEnv, isNativeLinuxHost, minimalEnv, personsVibeHome, vibePython } from './vibe.mjs';
+import { KEYRING_FAIL_BACKEND, builtEnv as vibeBuiltEnv, isNativeLinuxHost, launchHost, minimalEnv, personsVibeHome, vibePython } from './vibe.mjs';
 import { builtEnv as kimiBuiltEnv } from './kimi-home.mjs';
 
 /**
@@ -90,12 +90,19 @@ export function readBanner(fsx) {
 }
 
 /**
- * Whether THIS process runs on a NATIVE Linux host — the one reading the Vibe probe and the manifest script share (E2.S0): the platform and the kernel
+ * Whether THIS process runs on a NATIVE Linux host — the plain boolean reading (E2.S0; the Vibe probe and the manifest script now take `launchHostOf`, which also REFUSES an unread banner, and probe-host-vectors.test.mjs holds this reading to shared/wsl-banner-vectors.json): the platform and the kernel
  * banner, through `readBanner` and vibe.mjs's `isNativeLinuxHost` (so the "names Microsoft or WSL" rule has one home). `fsx` is injected for tests; the
  * default reads the real `/proc/version`, and off Linux reads nothing that answers.
  */
 export const runsOnNativeLinux = ({ platform = process.platform, fsx = { readFile: (path) => readFileSync(path, 'utf8') } } = {}) =>
   isNativeLinuxHost({ platform, banner: readBanner(fsx) });
+
+/**
+ * The Vibe probes' ONE host decision, read from the real `/proc/version` (E2 code gate G4): `{ refusal, nativeLinux }` through vibe.mjs's pure `launchHost`. A non-empty `refusal` (Linux, banner
+ * unread) means the script must exit before any launch. `fsx` is injected for tests, as in runsOnNativeLinux.
+ */
+export const launchHostOf = ({ platform = process.platform, fsx = { readFile: (path) => readFileSync(path, 'utf8') } } = {}) =>
+  launchHost({ platform, banner: readBanner(fsx) });
 
 const unescapeMount = (field) => field.replaceAll(/\\([0-7]{3})/gu, (_, octal) => String.fromCodePoint(Number.parseInt(octal, 8)));
 const holds = (mountPoint, path) => path === mountPoint || path.startsWith(mountPoint === '/' ? '/' : `${mountPoint}/`);
