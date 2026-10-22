@@ -159,6 +159,17 @@ public sealed class ServerNoticeLineTests
     }
 
     [Theory]
+    [InlineData("org-", 140)]
+    [InlineData("ak-", 300)]
+    public void AMoonshotIdLongerThanTheOldBound_IsMaskedWhole_NotLeftWithAReadableSuffix(string prefix, int length)
+    {
+        // A digit early in the run, then a long run of the id's own characters: the rule used to stop at 128 and leave the rest of the id readable.
+        var id = prefix + "1" + new string('a', length - 1) + "_b-c";
+
+        Safe($"Your account {id} is suspended").Should().Be($"Your account {prefix}[redacted] is suspended");
+    }
+
+    [Theory]
     [InlineData("author=octocat and api-version=2024-02-01 and count: 17")]
     [InlineData("could not reach https://coai.example.com:8443/api/v1/rounds")]
     [InlineData("SK-abcdefghijkl")]

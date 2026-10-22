@@ -115,6 +115,14 @@ test('a Moonshot account id with an underscore or a hyphen in its body is redact
   }
 });
 
+test('a Moonshot account id longer than the old bound is redacted whole, with no readable suffix', () => {
+  for (const [prefix, length] of [['org-', 140], ['ak-', 300]] as const) {
+    const id = `${prefix}1${'a'.repeat(length - 1)}_b-c`;
+
+    assert.equal(safeText(`Your account ${id} is suspended`, DETAIL_LIMIT), `Your account ${prefix}[redacted] is suspended`);
+  }
+});
+
 test('control characters never reach the line, because a torn line is unreadable to everyone', () => {
   const safe = safeText('before' + String.fromCharCode(0, 7) + 'after', TITLE_LIMIT);
 

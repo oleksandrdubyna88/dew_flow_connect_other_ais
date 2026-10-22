@@ -80,6 +80,8 @@ const SHAPES: readonly string[] = [
   'Your account org-0a1b_2c3d_4e5f <ak-9z8y-7x6w-5v4u> is suspended',
   'Your account org-0a1b2c3d4e5f_6a7b8c9d is suspended',
   'the org-settings_panel and ak-sorted-words',
+  // An id past the old 128 bound: masked whole, no readable suffix.
+  `Your account org-1${'a'.repeat(139)}_b-c is suspended`,
   // PARAMETER: the name decides, and these two are the pair that matters.
   '?access_token=xyzabcdef',
   '?api-version=2024-02-01',

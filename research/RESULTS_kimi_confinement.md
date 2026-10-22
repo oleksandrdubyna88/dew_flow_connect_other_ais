@@ -976,7 +976,7 @@ while any coai session launches Kimi (a probe of `kimi acp` takes no `KimiCreden
 The text to copy is what follows ` — the vendor said: `. Copy it with the tool, do not retype it.
 
 **How the first real line is checked against the redaction pattern (the real Moonshot id shape is NOT measured).** The `moonshot-id` pattern (`Redaction.cs` and its twin in
-`src_vs_code/src/notifications.ts`) takes `org-` or `ak-` followed by 8–128 letters, digits, `_` and `-` with at least one digit (widened 2026-10-22 from letters and digits; an id with NO digit is still not matched). Before the line goes anywhere:
+`src_vs_code/src/notifications.ts`) takes `org-` or `ak-` followed by 8–4096 letters, digits, `_` and `-` with at least one digit in the first 128 (the whole run is masked; widened 2026-10-22 from letters and digits; an id with NO digit is still not matched). Before the line goes anywhere:
 1. Look at the copied line. Anything shaped like an account id (`org-…`, `ak-…`, or any long opaque token next to the word "account") must already read `[redacted]` (`Redaction.Redacted`) — the ledger and the log are
    written through the redactor, so an id that is still readable there was NOT matched. That is a defect in the pattern, not in the copy.
 2. If an id is readable: write down only its SHAPE in this section (prefix, length, the character classes it uses — letters, digits, `_`, `-`, upper case), never the id. If the real id has no digit,

@@ -193,9 +193,9 @@ public sealed record AcpDiagnosis(string Name, string Cure, AcpFailureKind Kind,
 
     /// <summary>
     /// <paramref name="reason"/> followed by the line of the agent's stderr that held the row's phrase, quoted, when there is one (<see cref="Line"/> — already redacted and cut): a diagnosis found only on stderr
-    /// would otherwise lose the sentence it was found in, in the note every later reader prefers. Unchanged when the reason itself held the phrase. Handed to <see cref="Note"/>, which puts the cure LAST.
+    /// would otherwise lose the sentence it was found in, in the note every later reader prefers. Unchanged when the reason itself held the phrase. Handed to <see cref="Note"/>, which puts the cure LAST. The separator is <c>; </c>, never a bracket (the vendor's own parentheses must not be closed or confused by ours) and never <see cref="CureSeparator"/> (<c> — </c>), which <see cref="WithoutCure"/> and <see cref="CurelessReason"/> read the note by. The line is passed through <see cref="Redaction.SafeText"/> once more here (idempotent, bounded by <see cref="LineCap"/>): the record is public and a caller can construct one with a line that never saw <c>LineWith</c>.
     /// </summary>
-    public string Said(string reason) => Line.Length > 0 ? $"{reason} ({StderrLead}{Line})" : reason;
+    public string Said(string reason) => Line.Length > 0 ? $"{reason}; {StderrLead}{Redaction.SafeText(Line, LineCap)}" : reason;
 
     /// <summary>
     /// The shim's note for this failure: its name, the agent's reason, and the cure — when there is one (a known shape with no cure ends at the reason).

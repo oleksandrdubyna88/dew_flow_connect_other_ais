@@ -63,7 +63,7 @@ public sealed class TheStderrOnlyEvidenceReachesThePersonTests : IDisposable
         note.Should().Contain(sentence);
         var withoutCure = AcpDiagnosis.WithoutCure(note, KimiAcpProfile.Failures);
         withoutCure.Should().NotBe(note, "the cure is still the LAST thing in the note");
-        withoutCure.Should().EndWith(sentence + ")").And.NotContain("kimi login");
+        withoutCure.Should().EndWith(sentence).And.NotContain("kimi login");
     }
 
     [Fact]
@@ -92,22 +92,65 @@ public sealed class TheStderrOnlyEvidenceReachesThePersonTests : IDisposable
         }
     }
 
-    [Theory]
-    [InlineData("(Kimi said: ", ")")]
-    [InlineData("(the agent's stderr: ", ") — the cure")]
-    public void AClause_StopsAtAClosingParenthesisItDidNotOpen_WhateverWrapperClosesIt(string wrapper, string tail)
+    [Fact]
+    public async Task AResetClause_InParenthesesOfTheVendorsOwn_KeepsTheVendorsClosingParenthesis_AndAddsNone()
     {
-        var text = $"{KimiAcpProfile.QuotaSpent}: {NamesNoRow} {wrapper}You've reached your 5-hour usage limit. Your quota will reset at 14:00 UTC.{tail}";
+        // The runtime wraps nothing in parentheses any more, so a parenthesis in the clause is the vendor's: kept whole, and no second one of ours.
+        const string clause = "Your quota will reset at 14:00 UTC.)";
+
+        var round = await new AKimiRound(_dir).RunAsync(NamesNoRow, "provider.api_error: 429 You've reached your 5-hour usage limit. (Your quota will reset at 14:00 UTC.)\n");
+
+        foreach (var (where, line) in round.Lines)
+        {
+            line.Should().Contain($"\"{clause}\"", $"the {where} quotes the vendor's clause with the vendor's own closing parenthesis");
+            line.Should().NotContain("UTC.))", $"the {where}: no parenthesis of ours after the vendor's");
+        }
+    }
+
+    [Fact]
+    public async Task AResetClause_WithNestedVendorParentheses_IsQuotedWhole()
+    {
+        const string clause = "Your quota will reset in 2 hours (14:00 UTC).)";
+
+        var round = await new AKimiRound(_dir).RunAsync(NamesNoRow, "provider.api_error: 429 You've reached your 5-hour usage limit. (" + clause + "\n");
+
+        foreach (var (where, line) in round.Lines)
+        {
+            line.Should().Contain($"\"{clause}\"", $"the {where} quotes the nested clause whole");
+        }
+    }
+
+    [Theory]
+    [InlineData("; Kimi said: ", "")]
+    [InlineData("; the agent's stderr: ", " — the cure")]
+    public void AClause_EndsAtItsPeriod_OrAtTheEndOfTheText_WhateverOursWrapsItIn(string lead, string tail)
+    {
+        var text = $"{KimiAcpProfile.QuotaSpent}: {NamesNoRow}{lead}You've reached your 5-hour usage limit. Your quota will reset at 14:00 UTC.{tail}";
 
         KimiQuotaWords.ClauseOf(text).Should().Be("Your quota will reset at 14:00 UTC.");
         KimiQuotaWords.Said(text).Should().Contain("\"Your quota will reset at 14:00 UTC.\"");
     }
 
     [Fact]
-    public void AClauseWithItsOwnParenthesis_KeepsIt()
+    public void AClause_TheVendorOpenedWithAParenthesis_KeepsItsOwnClosingOne()
     {
-        var text = $"{KimiAcpProfile.QuotaSpent}: {NamesNoRow} (Kimi said: You've reached your 5-hour usage limit. Your quota will reset in 2 hours (14:00 UTC).)";
+        var text = $"{KimiAcpProfile.QuotaSpent}: {NamesNoRow}; Kimi said: You've reached your 5-hour usage limit. (Your quota will reset in 2 hours (14:00 UTC).)";
 
-        KimiQuotaWords.ClauseOf(text).Should().Be("Your quota will reset in 2 hours (14:00 UTC).");
+        KimiQuotaWords.ClauseOf(text).Should().Be("Your quota will reset in 2 hours (14:00 UTC).)");
+    }
+
+    // ---------- the quoted line is redacted and capped again where the note is composed ----------
+
+    [Fact]
+    public void ALineThatReachedTheNoteUnredactedAndTooLong_IsRedactedAndCappedAgainBySaid()
+    {
+        var token = "Zq8Lm3XvK7pRt2WbN5HcY9dFg4Js6AeU1oIx0Q";
+        var line = "note Bearer " + token + " " + new string('p', AcpDiagnosis.LineCap * 2);
+        var diagnosis = new AcpDiagnosis(KimiAcpProfile.ProviderError, string.Empty, AcpFailureKind.Failed, line);
+
+        var said = diagnosis.Said(NamesNoRow);
+
+        said.Should().NotContain(token[..10], "the line is redacted again where the note is composed");
+        said.Length.Should().BeLessThanOrEqualTo(NamesNoRow.Length + AcpDiagnosis.StderrLead.Length + AcpDiagnosis.LineCap + 20, "and capped again");
     }
 }
