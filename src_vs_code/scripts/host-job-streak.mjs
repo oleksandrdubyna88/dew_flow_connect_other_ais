@@ -33,9 +33,19 @@
  * <p>What still exits non-zero is a fault in THIS script — a `TypeError` in the counting, say.
  * Those are not caught anywhere, so they reach the top-level catch and are loud, which is the
  * distinction the whole file turns on.</p>
+ *
+ * <p><b>And how often the editor needed a second start (C22, 2026-10-22).</b> `run-host.mjs` starts the
+ * FIRST launch once more when the editor exits before the extension host ran a scenario, and writes a
+ * `::warning::` annotation whatever the second start does. A run that passed on its second start is
+ * green in the streak above, so the streak alone would hide how often that happens; this counts those
+ * annotations in the host job of each run of `main`, and prints the number beside the streak. It is
+ * the MEASURED effect of the retry — the number over the next twenty runs is what says whether the
+ * cold start was an accident or a habit — and, like the streak, it never prints a number it did not
+ * measure.</p>
  */
 
 import { argv, env, exit, stdout } from 'node:process';
+import { BEFORE_THE_HOST } from './run-host.mjs';
 
 /** The rule, from the comment beside the job it is about. One place to change it if it ever moves. */
 export const PROMOTE_AT = 20;
@@ -95,6 +105,31 @@ export function asText(streak, promoteAt = PROMOTE_AT) {
       : `not yet — ${promoteAt - streak} more green run(s) of main.`,
   ].join('\n');
 }
+
+/**
+ * How many first-launch warnings the host job's annotations carry.
+ *
+ * @param {readonly {name: string, annotations: readonly {annotation_level?: string, message?: string}[]}[]} jobs
+ *   the jobs of the runs being counted, each with the annotations it published.
+ * @returns {number} the `warning`-level annotations of THIS job (`JOB_NAME`) that say the editor exited before the
+ *   extension host ran a scenario. Another job's annotations are not this job's: a lint job's `::warning::` is nothing to
+ *   do with the editor's start, and the sentence it would have to share to be mistaken for one is `run-host.mjs`'s own.
+ */
+export function firstLaunchWarningsOf(jobs) {
+  return jobs
+    .filter((job) => job.name === JOB_NAME)
+    .flatMap((job) => job.annotations)
+    .filter((note) => note.annotation_level === 'warning' && (note.message ?? '').includes(BEFORE_THE_HOST))
+    .length;
+}
+
+/** What to say about the warnings: the number, over how many runs — the count `run-host.mjs`'s retry is judged by. */
+export const warningsText = (warnings, runs) =>
+  `extension-host first-launch warnings in the last ${runs} runs of main: ${warnings}`;
+
+/** What to say when the annotations could not be read: no figure, and what stopped it. */
+export const warningsUnknownText = (reason) =>
+  `extension-host first-launch warnings in the last runs of main: UNKNOWN — ${reason}`;
 
 /** A request that answered. */
 export const answered = (value) => ({ ok: true, value });
@@ -166,6 +201,13 @@ export async function textFor(count) {
   const got = await count();
 
   return got.ok ? asText(got.value) : unknownText(got.message);
+}
+
+/** The warnings line: the number, or why there is not one. Branches on a value and catches nothing, like `textFor`. */
+export async function warningsTextFor(count) {
+  const got = await count();
+
+  return got.ok ? warningsText(got.value.warnings, got.value.runs) : warningsUnknownText(got.message);
 }
 
 /**
@@ -246,15 +288,13 @@ async function hostJobOf(repo, token, runId) {
 }
 
 /**
- * The streak, asked for.
+ * The host job of each of the latest runs of `main`, newest first.
  *
  * <p>EVERY request goes through `asking`, both classes of them: a 502 on the twenty-sixth job
  * lookup is exactly as transient as one on the first, and a call site wired straight to the fetch
  * would be a hole the helper's own tests cannot see. (codex and gemini, on the plan round.)</p>
  */
-async function counted() {
-  const repo = env.GITHUB_REPOSITORY ?? 'oleksandrdubyna88/dew_flow_connect_other_ais';
-  const token = env.GITHUB_TOKEN ?? env.GH_TOKEN ?? '';
+async function hostJobsOfMain(repo, token) {
   // One more than the threshold is all that can change the answer: past PROMOTE_AT the streak is
   // "ready" whatever came before, so asking for a hundred runs would be a hundred job lookups for a
   // number that cannot move.
@@ -263,29 +303,57 @@ async function counted() {
     return runs;
   }
 
-  const attempts = [];
+  const jobs = [];
   for (const run of runs.value) {
     const job = await asking(() => hostJobOf(repo, token, run.id));
     if (!job.ok) {
       return job;
     }
     if (job.value !== undefined) {
-      attempts.push({ conclusion: job.value.conclusion });
+      jobs.push(job.value);
     }
   }
 
-  return answered(streakOf(attempts));
+  return answered(jobs);
+}
+
+/** The annotations one job published — a check run's id is the job's id. One page: the host job writes one at most. */
+async function annotationsOf(repo, token, job) {
+  const got = await requested(`${apiRoot()}/repos/${repo}/check-runs/${job.id}/annotations?per_page=100`, token);
+  if (!got.ok) {
+    return refused(`the annotations of job ${job.id} could not be read: ${got.message}`, got.status);
+  }
+
+  return answered({ name: job.name, annotations: Array.isArray(got.value) ? got.value : [] });
+}
+
+/** The first-launch warnings over `jobs`, one annotations request per job — each through `asking`, like every other. */
+async function warningsCounted(repo, token, jobs) {
+  const withNotes = [];
+  for (const job of jobs) {
+    const got = await asking(() => annotationsOf(repo, token, job));
+    if (!got.ok) {
+      return got;
+    }
+    withNotes.push(got.value);
+  }
+
+  return answered({ warnings: firstLaunchWarningsOf(withNotes), runs: jobs.length });
 }
 
 /** Ask, count, say — and say UNKNOWN rather than fail when GitHub could not be asked. */
 async function main() {
-  const text = await textFor(counted);
-  stdout.write(`${text}\n`);
+  const repo = env.GITHUB_REPOSITORY ?? 'oleksandrdubyna88/dew_flow_connect_other_ais';
+  const token = env.GITHUB_TOKEN ?? env.GH_TOKEN ?? '';
+  const jobs = await hostJobsOfMain(repo, token);
+  const text = await textFor(async () => (jobs.ok ? answered(streakOf(jobs.value)) : jobs));
+  const warnings = await warningsTextFor(async () => (jobs.ok ? warningsCounted(repo, token, jobs.value) : jobs));
+  stdout.write(`${text}\n${warnings}\n`);
 
   const summary = env.GITHUB_STEP_SUMMARY;
   if (summary) {
     const { appendFileSync } = await import('node:fs');
-    appendFileSync(summary, `### ${text.split('\n').join('\n\n')}\n`);
+    appendFileSync(summary, `### ${[text, warnings].join('\n').split('\n').join('\n\n')}\n`);
   }
 }
 

@@ -6,7 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import {
   ATTEMPTS, JOB_NAME, NO_ANSWER, PROMOTE_AT, REQUEST_CEILING_MS,
-  answered, asText, asking, refused, streakOf, textFor, worthRetrying,
+  answered, asText, asking, firstLaunchWarningsOf, refused, streakOf, textFor, warningsText, warningsTextFor,
+  worthRetrying,
 } from '../../scripts/host-job-streak.mjs';
 
 /**
@@ -326,4 +327,100 @@ test('a 502 on the JOBS request leaves the job green too', async () => {
   assert.match(ran.stdout, /asking again \(attempt 1 of 4\)/u,
     'the jobs call site is wired straight to the fetch and never retried');
   assert.doesNotMatch(ran.stdout, /consecutive green runs/u);
+});
+
+// ---- C22: how often the editor needed a second start ----------------------------------------------------------
+
+/** A `::warning::` annotation as the checks API reports it, with the text `run-host.mjs` writes. */
+const annotation = (level, message = 'the editor exited (code 1) before the extension host ran a scenario — VS Code\'s last [main] line: "x"') =>
+  ({ annotation_level: level, message });
+
+test('the first-launch warnings are counted in THIS job\'s annotations only, never another job\'s (B-E5-3)', () => {
+  const jobs = [
+    { name: JOB_NAME, annotations: [annotation('warning'), annotation('warning')] },
+    // The same sentence, in a job that is not the editor's: it would only be here by a copy-paste into another job.
+    { name: 'lint', annotations: [annotation('warning'), annotation('warning'), annotation('warning')] },
+  ];
+
+  assert.equal(firstLaunchWarningsOf(jobs), 2, 'another job\'s annotations were counted as the editor\'s');
+});
+
+test('only a WARNING that says the editor never reached the host is a first-launch warning', () => {
+  const jobs = [{
+    name: JOB_NAME,
+    annotations: [
+      annotation('warning'),
+      annotation('notice'),
+      annotation('failure'),
+      annotation('warning', 'Node.js 20 actions are deprecated'),
+      { annotation_level: 'warning' },
+    ],
+  }];
+
+  assert.equal(firstLaunchWarningsOf(jobs), 1);
+});
+
+test('no host job at all is zero warnings, said as a number', () => {
+  assert.equal(firstLaunchWarningsOf([]), 0);
+  assert.equal(warningsText(0, 0), 'extension-host first-launch warnings in the last 0 runs of main: 0');
+});
+
+test('the warnings line names the count and the number of runs it was counted over', () => {
+  assert.equal(warningsText(3, 25), 'extension-host first-launch warnings in the last 25 runs of main: 3');
+});
+
+test('annotations that could not be read say UNKNOWN and no figure', async () => {
+  const line = await warningsTextFor(async () => refused('the annotations of job 11 could not be read: 502', 502));
+
+  assert.match(line, /UNKNOWN/u);
+  assert.match(line, /could not be read/u);
+  assert.doesNotMatch(line, /runs of main: \d/u);
+});
+
+/** An API that knows three runs of `main`, each with the editor's job and a lint job; `notes` maps a job id to annotations. */
+function threeRuns(notes, seen) {
+  return (request, answer) => {
+    seen.push(request.url);
+    answer.writeHead(200, { 'content-type': 'application/json' });
+    const jobs = /\/actions\/runs\/(\d+)\/jobs/u.exec(request.url);
+    const annotations = /\/check-runs\/(\d+)\/annotations/u.exec(request.url);
+    if (jobs) {
+      const run = Number(jobs[1]);
+      answer.end(JSON.stringify({ jobs: [
+        { id: run * 10 + 2, name: 'lint', conclusion: 'success' },
+        { id: run * 10 + 1, name: JOB_NAME, conclusion: 'success' },
+      ] }));
+    } else if (annotations) {
+      answer.end(JSON.stringify(notes[annotations[1]] ?? []));
+    } else {
+      answer.end(JSON.stringify({ workflow_runs: [{ id: 1 }, { id: 2 }, { id: 3 }] }));
+    }
+  };
+}
+
+test('the script prints the streak AND the first-launch warnings of the last runs, from a fixture of run data', async () => {
+  const seen = [];
+  const ran = await running(threeRuns({ 11: [annotation('warning')], 31: [annotation('warning'), annotation('notice')] }, seen));
+
+  assert.equal(ran.status, 0, `the script failed: ${ran.stdout}`);
+  assert.match(ran.stdout, /extension-host streak on main: 3 of 20 consecutive green runs/u);
+  assert.match(ran.stdout, /first-launch warnings in the last 3 runs of main: 2\b/u, `got: ${ran.stdout}`);
+  const asked = seen.filter((url) => url.includes('/annotations')).map((url) => /check-runs\/(\d+)/u.exec(url)[1]).sort();
+  assert.deepEqual(asked, ['11', '21', '31'], 'only the editor\'s job of each run has its annotations read');
+});
+
+test('a 502 on the annotations leaves the streak printed, the warnings UNKNOWN, and the job green', async () => {
+  const base = threeRuns({}, []);
+  const ran = await running((request, answer) => {
+    if (request.url.includes('/annotations')) {
+      refusing(502)(request, answer);
+
+      return;
+    }
+    base(request, answer);
+  });
+
+  assert.equal(ran.status, 0, `the job was failed by a 502 on the annotations: ${ran.stdout}`);
+  assert.match(ran.stdout, /extension-host streak on main: 3 of 20/u, 'the streak was lost with the warnings');
+  assert.match(ran.stdout, /first-launch warnings in the last runs of main: UNKNOWN/u);
 });

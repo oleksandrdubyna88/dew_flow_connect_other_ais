@@ -977,6 +977,10 @@ export async function run(): Promise<void> {
   const scenarios = scenariosForThisLaunch();
   assert.ok(scenarios.length > 0, 'no scenario was discovered, and an empty run is not a pass');
 
+  // The harness's proof that the editor got as far as OUR code (`HOST_STARTED_PATTERN` in scripts/run-host.mjs): an
+  // editor that exits without this line never ran a scenario, and is started once more; one that exits after it never is.
+  console.log(`  host started: ${scenarios.length} scenarios`);
+
   const failures: string[] = [];
   for (const scenario of scenarios) {
     try {
