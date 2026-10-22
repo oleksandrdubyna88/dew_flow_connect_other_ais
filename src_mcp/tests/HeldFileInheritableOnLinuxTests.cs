@@ -124,6 +124,44 @@ public sealed class HeldFileInheritableOnLinuxTests : IDisposable
         HeldFile.Probe(LockFile).Should().Be(LockProbe.Free, "the descriptor leaked with its flock: nobody else can take the file until this process exits");
     }
 
+    /// <summary>C26 arm (a): a child the host forks AND EXECS while the take's descriptor is open (a sibling test starting a process is exactly that) must not carry the lock away.</summary>
+    [Fact]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public void AForkDuringTheTakesFailure_DoesNotCarryTheLockAway()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "the native take is Linux's");
+
+        var hold = LinuxHeldFile.TakeInheritable(LockFile, handle =>
+        {
+            GC.KeepAlive(handle);
+            _ = Start("sleep", "30000");
+            throw new IOException("the stream could not be made");
+        });
+
+        hold.Should().BeOfType<Hold.Unusable>();
+        HeldFile.Probe(LockFile).Should().Be(LockProbe.Free, "a descriptor opened inheritable and then closed must not survive in a child the host forked meanwhile");
+    }
+
+    /// <summary>C26 arm (b): a child forked after the flock and kept BEFORE its exec holds the open file description; the failed take must release the lock itself, not leave it to that child's exit.</summary>
+    [Fact]
+    public async Task AFailureWithAPreExecChild_StillLeavesTheFileFree()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "the native take is Linux's");
+        var taker = Start("hold-file", "fork-fail", LockFile);
+
+        var forked = await taker.StandardOutput.ReadLineAsync().WaitAsync(Patience, TestContext.Current.CancellationToken);
+        forked.Should().StartWith("forked ", $"the helper forks its pre-exec child before the stream fails (stderr: {await ReadErrorIfEndedAsync(taker)})");
+        var child = Process.GetProcessById(int.Parse(forked![7..]));
+        _children.Add(child);
+        (await taker.StandardOutput.ReadLineAsync().WaitAsync(Patience, TestContext.Current.CancellationToken)).Should().Be("unusable");
+
+        child.HasExited.Should().BeFalse("the precondition: the pre-exec child is alive, holding its copy of the descriptor");
+        HeldFile.Probe(LockFile).Should().Be(LockProbe.Free, "a pre-exec child the failed take's process forked still holds the flock after the failure: the abort path must flock(LOCK_UN) before it closes");
+    }
+
+    private static async Task<string> ReadErrorIfEndedAsync(Process process) =>
+        process.HasExited ? await process.StandardError.ReadToEndAsync() : "(still running)";
+
     [Fact]
     public async Task L_N1a_ANonInheritableTake_BesideAnInheritableHold_IsBusy()
     {
