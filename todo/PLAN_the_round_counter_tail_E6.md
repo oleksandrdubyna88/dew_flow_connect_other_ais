@@ -1,6 +1,7 @@
 # PLAN — Round counter tail, epic E6: both stores are counted, and launches per round
 
-> Status: **plan only, 2026-10-21 — the stories of epic E6, and the S1 cornerstone spec, by Fable.** Stories of epic E6 of
+> Status: **built on its branch, 2026-10-22 — not merged** (stories S1–S5; the plan round, the epics 4–6 cadence consultation, the risk
+> consultation and two code rounds folded in). The stories of epic E6 and the S1 cornerstone spec, by Fable. Stories of epic E6 of
 > [PLAN_the_round_counter_tail.md](PLAN_the_round_counter_tail.md) (its "### E6"), written the way
 > [the E3 stories](PLAN_the_round_counter_tail_E3.md) were.
 >

@@ -1,7 +1,9 @@
 # PLAN — the round counter's open tail is closed: the accounting, a second gauge, both stores, the live count
 
 > Status: **E1 measured 2026-10-21 (verdict: inconclusive — the follow-up path is not reached on agy 1.4.4; cumulative not measured);
-> E2 DEFERRED by the owner's decision of 2026-10-21 until the path fires again; E3–E7 not started; no product code written (plan of
+> E2 DEFERRED by the owner's decision of 2026-10-21 until the path fires again; E3 built and gated (PR #904); E4 measured 2026-10-21 (only the
+> Kimi TUI states the plan windows); E5 CUT PROVISIONALLY until ACP /usage is measured on Kimi 2.3.0; E6 built and gated on its branch; E7 not started
+> (waits for the owner's session token) (plan of
 > 2026-10-20, revised the same day after the coai plan gate, an Opus review and the epics 1–3 cadence consultation).** Scope: `src_mcp/runners/Reviewers` (the follow-up parts and the local ledger line),
 > `src_mcp/core/Consultation` (the one subtraction, reused), `src_server/src/Jobs/ReviewLauncher.cs` (the server's own follow-up
 > path, the same rule), `src_mcp/runners/Kimi` + `src_mcp/runners/Acp` (a Kimi gauge read under the sign-in's lock),
