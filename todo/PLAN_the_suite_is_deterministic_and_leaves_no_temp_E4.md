@@ -1261,3 +1261,11 @@ The code gate's verdict was `proceed`; its nine findings were each checked again
 - **"`readTimer` leaks in `SourceResolver`".** It is a `using var` declaration, which disposes on a throw as on a return.
 - **"`ManualClock.Pick` sorts on every fire".** At most about three timers are ever armed in these tests; the (due time, arming order) tie order is the
   contract, and a heap would change nothing a test can see.
+
+---
+
+## 19. The CodeRabbit round on PR #916 (2026-10-22) — five threads, all valid
+
+- **Line references** (`module_runners.md`, `module_tests.md`): the `try`/`handedOver` move had shifted `AcpClient.cs` — the turn timer and link are `:126-127`, the `/usage` bound `:223`, `SettledAsync`'s drain `:267` and its remark `:257-263`. Every `file:line` in the E4 sections of both documents was re-read against HEAD; the others were right except `Sanctioned`, now `:60` in the scan class.
+- **A swallowed fault** (`AReviewerThatAsksForSourceIsAskedAgainTests.WaitingForAsync`): `task.ContinueWith(_ => true)` turned a faulted `WhenTimersAsync` (the named "expected at least 2 timer(s) armed…") into success, so the test advanced a clock nothing waited on and failed 30 s later with an unrelated sentence. Now the task's own fault propagates and only a guard that ran out while the task was still pending becomes the "gave up" sentence; the call passes `within: Guard - 5 s` so the clock's sentence (with counts) wins. RED: `TheBoundedWait_PropagatesTheFaultOfTheTaskItAwaits_NamedTimeoutIncluded` — `Expected a <System.TimeoutException> to be thrown, but no exception was thrown.`; break-it (the `ContinueWith` back) red the same way, restored.
+- **Census rows** in the parent: C27's "Built by" cell was lost when C28–C38 were inserted after it and C38 carried it twice; both rows have seven cells again. The C6 smoke test has one identity (its current name, the old one mentioned once at the evidence).

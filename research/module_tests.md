@@ -5257,9 +5257,9 @@ The checklist a seam story is reviewed against: the "now" column is the code at 
 
 | Class (file) | Site (HEAD) | Decides | Clock |
 |---|---|---|---|
-| `AcpClient` (`runners/Acp/AcpClient.cs`; ctor `:31`, `_clock` `:34`) | `:121-122` `turnTimer = new CancellationTokenSource(ask.Deadline, _clock)`, the link second (before: `CreateLinkedTokenSource(ct)` + `CancelAfter`) | the turn's deadline (`AcpEnd.Deadline`) | `_clock` |
-| | `:202` `….WaitAsync(usageBound, _clock)` | the `/usage` bound | `_clock` |
-| | `:246` `reading.WaitAsync(AcpTransport.DrainGrace)` in `SettledAsync` | the drain after the tree was killed | **system — teardown** (remark at `:237-243`) |
+| `AcpClient` (`runners/Acp/AcpClient.cs`; ctor `:31`, `_clock` `:34`) | `:126-127` `turnTimer = new CancellationTokenSource(ask.Deadline, _clock)`, the link second (before: `CreateLinkedTokenSource(ct)` + `CancelAfter`) | the turn's deadline (`AcpEnd.Deadline`) | `_clock` |
+| | `:223` `….WaitAsync(usageBound, _clock)` | the `/usage` bound | `_clock` |
+| | `:267` `reading.WaitAsync(AcpTransport.DrainGrace)` in `SettledAsync` | the drain after the tree was killed | **system — teardown** (remark at `:257-263`) |
 | `ConsultantPlaces` (`src/Server/Consultation/ConsultantPlaces.cs`; ctor `:116`, `_clock` `:118`) | `:339-340` `budgetTimer = new CancellationTokenSource(budget, _clock)`, `copying` linked second | the one-shot budget (`OutOfBudget`) | `_clock` |
 | | `:290-292` `Stamping(…, clock).Begin()` → `clock.GetUtcNow().UtcDateTime` | the conversation folder's wall stamp | `_clock` |
 | `TurnLoop` (`runners/Reviewers/TurnLoop.cs`; ctor `:29-32`, `_clock` `:34`) | `:50` `started = _clock.GetTimestamp()`; `:79` `cap - _clock.GetElapsedTime(started)`; `:86`/`:89` a turn's start and elapsed | the conversation's cap, each turn's ledger elapsed (before: one `Stopwatch`, five reads) | `_clock` — the scheduler's, handed at `BoundedScheduler.cs:463` |
@@ -5367,7 +5367,7 @@ B21 the disposed-after-pick check removed → M14 `Expected ran to be False beca
 Over a NAMED SET of product files — `Clocked` at HEAD (`EveryBudgetInAClockedClassReadsItsClockTests.cs:35`) is `BoundedScheduler.cs`, `AcpClient.cs`, `ConsultantPlaces.cs`, `TurnLoop.cs`, `SourceResolver.cs`: S1 started with `BoundedScheduler.cs`; S2 added `AcpClient.cs`, S3 `ConsultantPlaces.cs`, S4 `TurnLoop.cs` and `SourceResolver.cs`, each addition being that story's structural red — it flags every
 `Stopwatch`, `.CancelAfter(`, `DateTime.UtcNow` (and `DateTimeOffset`, `.Now`), `Task.Delay(` and `.WaitAsync(` with a timeout whose argument list names no clock (`_clock`, `clock`, `TimeProvider…`); a `WaitAsync(ct)` /
 `WaitAsync(x.Token)` is a token alone and not a site. It reads the comment- and string-free joined line of `ProductionSources.CodeOf`, so an argument list is read across lines to its closing parenthesis. **Sanctioned sites** are
-`(file, snippet, reason)` entries matched on the statement around the site; the companion fails when an entry no longer matches exactly one site, so a stale list is red. **The allow-list as it stands now has six entries** (`Sanctioned`, `:40`).
+`(file, snippet, reason)` entries matched on the statement around the site; the companion fails when an entry no longer matches exactly one site, so a stale list is red. **The allow-list as it stands now has six entries** (`Sanctioned`, `:60`).
 Five are in `BoundedScheduler.cs` and were there from day one: `Stopwatch queued` (two: the slot queue, the shared-resource queue — reports), `Stopwatch watch` of the conversation (the reported elapsed; the loop's own cap reads the clock the
 scheduler hands it, S4), and the two DEFERRED sites of plan Q4, the 429 ladder's `Stopwatch` (judged against its budget) and `Task.Delay(wait, ct)` — named, not moved, until a 429-ladder failure is kept (D5). The sixth, added by S2, is
 `AcpClient.cs`'s `reading.WaitAsync(AcpTransport.DrainGrace)` (teardown). Nothing in `ConsultantPlaces.cs`, `TurnLoop.cs` or `SourceResolver.cs` is allowed: they are clean. Not scanned: `ReviewSnapshots.cs`, `ProcessLauncher.cs`, `ReviewerExecutor.cs`
@@ -5420,8 +5420,8 @@ guard, on the system clock), then it faults with `expected at least {n} timer(s)
 ## The suite is deterministic — E4 S2: the ACP client's clock (C5, C23, 2026-10-21)
 
 Source: `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp_E4.md` §8 S2 (§5.1 table 1 and §15 govern; its status section lists the deviations). Branch `feat/suite-e4-clock`. **Product change:** `AcpClient` takes `TimeProvider? clock = null` last
-(`AcpClient.cs:31`, `_clock` `:34`); `TurnAsync` arms the turn's deadline as `turnTimer = new CancellationTokenSource(ask.Deadline, _clock)` FIRST and links `deadline` second (`:121-122`), the old `CancelAfter` is gone; the `/usage` bound is
-`.WaitAsync(usageBound, _clock)` (`:202`); `SettledAsync` stays on the system clock with a remark naming the teardown rule (`:237-243`; the other graces — `AcpTransport.EndAsync`, `AcpSession` — stay too, see the inventory above). Evidence (C5): the usage test failed in CI because
+(`AcpClient.cs:31`, `_clock` `:34`); `TurnAsync` arms the turn's deadline as `turnTimer = new CancellationTokenSource(ask.Deadline, _clock)` FIRST and links `deadline` second (`:126-127`), the old `CancelAfter` is gone; the `/usage` bound is
+`.WaitAsync(usageBound, _clock)` (`:223`); `SettledAsync` stays on the system clock with a remark naming the teardown rule (`:257-263`; the other graces — `AcpTransport.EndAsync`, `AcpSession` — stay too, see the inventory above). Evidence (C5): the usage test failed in CI because
 the 2 s deadline also paid the agent's cold start (the turn ended `Deadline` where `Answered` was owed); C23 (`TheCancelReachesAnAgentThatIsStillListening`) is the same mechanism with a 5 s deadline. Test support: the fake CLI's `AcpAgent` script field `startDelayMs`
 (`tests_fakecli/AcpAgent.cs:30,92`), `FakeAcpAgent.StartDelay(ms)` and `WhenReceivedAsync(method, ct)` (`FakeAcpAgent.cs:70,125`), and `ClockedAcpTurn` — the test-side driver (starts the turn, waits for the event it means — timers armed, a method received —
 advances or cancels the caller, awaits the end; every wait under a 30 s guard a correct run never reaches; the caller is cancelled in a `finally`).
