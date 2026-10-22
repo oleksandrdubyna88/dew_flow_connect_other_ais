@@ -38,7 +38,7 @@ internal sealed class ZombieMaker : IDisposable
     public static async Task<ZombieMaker> StartAsync(string shell, string script)
     {
         var info = new ProcessStartInfo(shell) { UseShellExecute = false, RedirectStandardOutput = true, ArgumentList = { "-c", script } };
-        var parent = Process.Start(info)!;
+        var parent = Process.Start(info) ?? throw new InvalidOperationException($"{shell} was not started: Process.Start answered no process for the script that makes the zombie");
         try
         {
             var line = await parent.StandardOutput.ReadLineAsync().WaitAsync(Patience, TestContext.Current.CancellationToken);

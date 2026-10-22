@@ -838,10 +838,20 @@ public sealed class ReviewerExecutor(
         }
         catch (Exception e) when (e is not OutOfMemoryException)
         {
-            // Deliberately broad: this is a courtesy call on a failure path, and the vendor's own
-            // failure is the one the caller must still see.
+            // Deliberately broad AND best-effort: this is a courtesy call on a failure path, and the vendor's own
+            // failure is the one the caller must still see — so the round's outcome is untouched. But a cleanup that
+            // failed is never silent: the work it was meant to stop may still be running, and the person reading the
+            // round is owed the sentence. It goes through the one channel this class has (`note`), as an unkept
+            // answer's does.
+            note?.Invoke(CleanupFailed(invocation, e, AbandonBudget));
         }
     }
+
+    /// <summary>The note for a courtesy cleanup that did not finish: what ran it, why it stopped, and — for the bound — how long it was given.</summary>
+    private static string CleanupFailed(ReviewerInvocation invocation, Exception failure, TimeSpan budget) =>
+        failure is OperationCanceledException
+            ? $"{invocation.Provider}/{invocation.Role}: the cleanup after the kill did not finish within {budget.TotalMilliseconds:0} ms and was abandoned; work it was meant to stop may still be running"
+            : $"{invocation.Provider}/{invocation.Role}: the cleanup after the kill failed ({failure.GetType().Name}: {failure.Message}); work it was meant to stop may still be running";
 
     /// <summary>
     /// How long a courtesy cleanup may take before the round stops waiting for it. TEARDOWN, so it stays on the SYSTEM clock (E5 plan §3.14,

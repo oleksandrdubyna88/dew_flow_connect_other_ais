@@ -23,7 +23,7 @@ internal sealed record ClockedStep(TimeSpan Turn, string StdOut = "", string Out
 /// finishes red instead of hanging.
 /// </summary>
 /// <remarks>
-/// <para>Two shapes. <c>new ClockedLauncher(turn, stdout)</c> answers every launch alike — the cap tests' shape. <c>new ClockedLauncher(script)</c>
+/// <para>Two shapes. <c>ClockedLauncher.RepeatingOneAnswer(turn, stdout)</c> answers every launch alike, by name — the cap tests' shape. <c>new ClockedLauncher(script)</c>
 /// answers the n-th launch with the n-th <see cref="ClockedStep"/> (E5 S8, C30/C35): a turn that answers, then a turn that "runs" ten seconds
 /// against a two-second request; a junk launch and a repair that times out. A script that runs out answers a failure naming the launch, as the
 /// ceiling does.</para>
@@ -43,21 +43,26 @@ internal sealed class ClockedLauncher : IProcessLauncher
     private readonly ConcurrentQueue<TimeSpan> _timeouts = [];
     private int _count;
 
-    /// <summary>Every launch alike: <paramref name="turn"/> long, writing <paramref name="stdout"/>.</summary>
-    public ClockedLauncher(TimeSpan turn, string stdout, int ceiling = 20)
+    /// <summary>The n-th launch answers with the n-th entry of <paramref name="script"/>, in launch order.</summary>
+    public ClockedLauncher(IReadOnlyList<ClockedStep> script, int ceiling = 20)
+        : this(script, repeatsTheLast: false, ceiling)
     {
-        _script = [new ClockedStep(turn, stdout)];
-        _repeatsTheLast = true;
+    }
+
+    private ClockedLauncher(IReadOnlyList<ClockedStep> script, bool repeatsTheLast, int ceiling)
+    {
+        _script = script;
+        _repeatsTheLast = repeatsTheLast;
         _ceiling = ceiling;
     }
 
-    /// <summary>The n-th launch answers with the n-th entry of <paramref name="script"/>, in launch order.</summary>
-    public ClockedLauncher(IReadOnlyList<ClockedStep> script, int ceiling = 20)
-    {
-        _script = script;
-        _repeatsTheLast = false;
-        _ceiling = ceiling;
-    }
+    /// <summary>
+    /// EVERY launch gets the same answer: <paramref name="turn"/> long, writing <paramref name="stdout"/>. The name says it on purpose — a
+    /// two-argument constructor used to do this silently, and a test that wrote a one-entry script by that shape got the one answer repeated for
+    /// every later launch without saying so. Distinct answers are a <see cref="ClockedStep"/> script.
+    /// </summary>
+    public static ClockedLauncher RepeatingOneAnswer(TimeSpan turn, string stdout, int ceiling = 20) =>
+        new([new ClockedStep(turn, stdout)], repeatsTheLast: true, ceiling);
 
     public int Count => Volatile.Read(ref _count);
 

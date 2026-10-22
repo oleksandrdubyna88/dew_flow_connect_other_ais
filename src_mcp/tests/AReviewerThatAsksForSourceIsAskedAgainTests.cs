@@ -503,7 +503,7 @@ public sealed class AReviewerThatAsksForSourceIsAskedAgainTests : IAsyncLifetime
     public async Task AConversationThatOutlivesItsCap_IsOneTerminalTimeout_WithEveryTurnsUsageKept()
     {
         var clock = new ManualClock(Epoch);
-        var launcher = new ClockedLauncher(TimeSpan.FromMilliseconds(400), SevenIn);
+        var launcher = ClockedLauncher.RepeatingOneAnswer(TimeSpan.FromMilliseconds(400), SevenIn);
         var turn = new ReviewerWork(FakeCliInvocations.Invoke("gemini", [], timeout: TimeSpan.FromMilliseconds(700)));
         var work = turn with { Continue = new Endless(turn, followUps: 1) };
         var progress = new List<ReviewerProgress>();
@@ -535,7 +535,7 @@ public sealed class AReviewerThatAsksForSourceIsAskedAgainTests : IAsyncLifetime
     public async Task AConversationCapOnTheWork_EndsTheConversation_BeforeTheDerivedOneWould()
     {
         var clock = new ManualClock(Epoch);
-        var launcher = new ClockedLauncher(TimeSpan.FromMilliseconds(300), SevenIn);
+        var launcher = ClockedLauncher.RepeatingOneAnswer(TimeSpan.FromMilliseconds(300), SevenIn);
         var turn = new ReviewerWork(FakeCliInvocations.Invoke("gemini", [], timeout: TimeSpan.FromSeconds(2)));
         var work = turn with { Continue = new Endless(turn, followUps: 3), ConversationCap = TimeSpan.FromMilliseconds(900) };
 
@@ -565,7 +565,7 @@ public sealed class AReviewerThatAsksForSourceIsAskedAgainTests : IAsyncLifetime
         var turn = new ReviewerWork(FakeCliInvocations.Invoke("gemini", [], timeout: TimeSpan.FromSeconds(2)));
 
         var wholeClock = new ManualClock(Epoch);
-        var whole = new ClockedLauncher(TimeSpan.FromMilliseconds(700), SevenIn);
+        var whole = ClockedLauncher.RepeatingOneAnswer(TimeSpan.FromMilliseconds(700), SevenIn);
         var answered = await ConversationAsync(
             turn with { Continue = new Endless(turn, followUps: 3, stopsAtTheFollowUps: true) }, wholeClock, whole, [], TestContext.Current.CancellationToken);
 
@@ -575,7 +575,7 @@ public sealed class AReviewerThatAsksForSourceIsAskedAgainTests : IAsyncLifetime
         (wholeClock.GetUtcNow() - Epoch).Should().Be(TimeSpan.FromMilliseconds(2800), "four turns of exactly 700 ms");
 
         var cutClock = new ManualClock(Epoch);
-        var cut = new ClockedLauncher(TimeSpan.FromMilliseconds(700), SevenIn);
+        var cut = ClockedLauncher.RepeatingOneAnswer(TimeSpan.FromMilliseconds(700), SevenIn);
         var capped = await ConversationAsync(
             turn with { Continue = new Endless(turn, followUps: 3, stopsAtTheFollowUps: true), ConversationCap = TimeSpan.FromSeconds(2) },
             cutClock, cut, [], TestContext.Current.CancellationToken);
