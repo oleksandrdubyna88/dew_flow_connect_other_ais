@@ -28,6 +28,15 @@ interface Vector {
 const FILE = JSON.parse(readFileSync(join(__dirname, '..', '..', '..', 'shared', 'wsl-banner-vectors.json'), 'utf8')) as { vectors: Vector[] };
 const KIND_OF: Readonly<Record<Vector['generation'], HostKind>> = { none: 'linux', wsl1: 'wsl1', wsl2: 'wsl2' };
 
+/**
+ * The vectors speak of WSL generations (`none` = no WSL at all), not of host kinds. A BLANK banner is no WSL — and, since E2.S3 of
+ * research/PLAN_kimi_and_vibe_on_native_linux_E2.md, not a native Linux host either: the server's `ProcVersion.ReadFrom` calls it unread
+ * and refuses on it, so the extension's kind is `linux-unread`. Every other `none` banner is a native host.
+ */
+function kindOf(vector: Vector): HostKind {
+  return vector.banner.trim().length === 0 ? 'linux-unread' : KIND_OF[vector.generation];
+}
+
 test('the vectors cover all three generations, so the loop below checks something of each', () => {
   assert.ok(FILE.vectors.length >= 8, `the file holds ${FILE.vectors.length} vectors`);
   for (const generation of ['none', 'wsl1', 'wsl2'] as const) {
@@ -39,6 +48,6 @@ for (const vector of FILE.vectors) {
   test(`banner vector ${vector.id}: ${vector.generation}`, () => {
     assert.equal(namesWsl2(vector.banner), vector.generation === 'wsl2', `namesWsl2 for ${vector.id}`);
     assert.equal(isWsl(vector.banner), vector.generation !== 'none', `isWsl for ${vector.id}`);
-    assert.equal(hostKindOf('linux', vector.banner), KIND_OF[vector.generation], `hostKindOf for ${vector.id}`);
+    assert.equal(hostKindOf('linux', vector.banner), kindOf(vector), `hostKindOf for ${vector.id}`);
   });
 }

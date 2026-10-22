@@ -119,6 +119,18 @@ test('⤓ and ⟳ take the host kind: the note follows it, the line is one for e
   }
 });
 
+test('Kimi stays refused on a native Linux host after E2 (E3 measures it), and a host whose banner was not read is told the same refusal', () => {
+  const nativeSentence = 'On a native Linux host coai-mcp refuses Kimi for now — it is measured on WSL2 only — so a Kimi row is refused on this side.';
+
+  assert.ok(kimiNoteFor('linux').includes(nativeSentence), 'Kimi’s native note moved with Vibe’s');
+  assert.equal(kimiNoteFor('linux-unread'), kimiNoteFor('linux'), 'an unread banner is refused for Kimi with its native sentence: Kimi is refused on native Linux anyway');
+  assert.equal(vendorInstall(KIMI, 'linux', 'linux-unread').note, kimiNoteFor('linux-unread'));
+  assert.equal(vendorUpdate(KIMI, 'linux', '2.2.0', 'linux-unread').note, kimiNoteFor('linux-unread'));
+  assert.equal(vendorInstall(KIMI, 'linux', 'linux-unread').command, vendorInstall(KIMI, 'linux', 'wsl2').command, 'the same line on every Linux kind');
+  assert.match(runtimeSkewNote('0.64.0', [KIMI], 'linux-unread'), /could not read .* kernel banner/u, 'the card says why an unread host refuses a kimi row');
+  assert.match(runtimeSkewNote('0.64.0', [KIMI], 'linux-unread'), /refuses a kimi row here/u);
+});
+
 // ---------------------------------------------------------------- the help, in five languages
 
 /** What each language must say about Kimi on Linux, in its own words. */

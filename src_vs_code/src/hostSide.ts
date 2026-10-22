@@ -137,14 +137,22 @@ async function answered(underWsl: () => Promise<boolean>): Promise<boolean> {
 
 /**
  * Which host this extension runs on, as far as a Vibe row cares (DL1 of research/PLAN_kimi_and_vibe_on_linux.md): WSL2 runs it,
- * a native Linux host and WSL1 are refused, macOS is not measured, Windows is as it always was. One union, one source —
+ * WSL1 is refused, macOS is not measured, Windows is as it always was. One union, one source —
  * `process.platform` alone cannot tell WSL from a desktop Linux, and a POSIX path family cannot tell either from a Mac.
+ *
+ * <p>A native Linux host RUNS Vibe from coai-mcp 0.64.0 (E2 of research/PLAN_kimi_and_vibe_on_native_linux_E2.md), so a Linux host
+ * whose kernel banner could not be read — or read blank — is its own member, <b>`linux-unread`</b>: the server cannot tell it from WSL1
+ * (`ProcVersion.ReadFrom`: whitespace is not a read banner) and refuses a member on it, so the extension must not promise a row there.
+ * It is a member of the union, not a flag beside it, so that every exhaustive table over the union fails to COMPILE until it says what
+ * an unread host is told. Nothing persists it: it travels only inside the panel state (`hostKindConsumers.test.ts`).</p>
  */
-export type HostKind = 'windows' | 'wsl2' | 'wsl1' | 'linux' | 'darwin';
+export type HostKind = 'windows' | 'wsl2' | 'wsl1' | 'linux' | 'linux-unread' | 'darwin';
 
 /**
  * The host kind from what is known without asking the disk: Windows and macOS are what they say, and a Linux host is taken
- * to be a native one — the safe answer, since it only ever shows a refusal. {@link hostKindOf} narrows it by the banner.
+ * to be a native one. {@link hostKindOf} narrows it by the banner. A platform alone NEVER answers `linux-unread`: from E2 `linux`
+ * RUNS Vibe, so this fallback is a promise wherever a caller skips the banner — and the product's only caller that could
+ * (`vendorTerminal.ts`'s `host ?? hostKindOfPlatform(platform)`) is handed the kind `panelProvider.ts` read.
  */
 export function hostKindOfPlatform(platform: Platform): HostKind {
   if (platform === 'win32') {
@@ -155,13 +163,23 @@ export function hostKindOfPlatform(platform: Platform): HostKind {
 }
 
 /**
- * The host kind from the platform and this kernel's banner — pure. Only a Linux host reads the banner: WSL2 is the banner
- * naming `WSL2` or `microsoft-standard`, WSL1 any other that still names Microsoft or WSL, and the rest is native Linux.
+ * The host kind from the platform and this kernel's banner — pure. Only a Linux host reads the banner: a blank one is
+ * `linux-unread` (the server's rule: whitespace is not a read banner), WSL2 is the banner naming `WSL2` or
+ * `microsoft-standard`, WSL1 any other that still names Microsoft or WSL, and the rest is native Linux.
  */
 export function hostKindOf(platform: Platform, procVersion: string): HostKind {
   const kind = hostKindOfPlatform(platform);
-  if (kind !== 'linux' || !isWsl(procVersion)) {
-    return kind;
+
+  return kind === 'linux' ? linuxKindOf(procVersion) : kind;
+}
+
+/** What a Linux host is, by its kernel banner. */
+function linuxKindOf(procVersion: string): HostKind {
+  if (procVersion.trim().length === 0) {
+    return 'linux-unread';
+  }
+  if (!isWsl(procVersion)) {
+    return 'linux';
   }
 
   return namesWsl2(procVersion) ? 'wsl2' : 'wsl1';
@@ -169,7 +187,7 @@ export function hostKindOf(platform: Platform, procVersion: string): HostKind {
 
 /**
  * {@link hostKindOf} for THIS host, reading the banner itself — injected for the tests, and it never rejects: a banner that
- * cannot be read is an empty one, which is a native Linux host (a refusal, never a promise) — and it is SAID, once, through
+ * cannot be read is an empty one, which is `linux-unread` (a refusal, never a promise) — and it is SAID, once, through
  * `warn` (default: the extension's `console.warn`, which lands in the extension-host log).
  */
 export async function hostKind(
@@ -189,7 +207,7 @@ async function bannerOf(readBanner: () => Promise<string>, warn?: (line: string)
   } catch (reason) {
     (warn ?? console.warn)(
       `ConnectOtherAIs: /proc/version could not be read (${reason instanceof Error ? reason.message : String(reason)}); `
-      + 'this host is treated as a native Linux host, so a Vibe row is shown as refused here.',
+      + 'this host is treated as a Linux host whose banner could not be read, so a Vibe row is shown as refused here.',
     );
 
     return '';

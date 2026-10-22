@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { after, test } from 'node:test';
 
 import { compareVersions } from '../coaiInstall';
-import { ON_LINUX_SINCE, RUNTIME_SINCE } from '../runtimeSince';
+import { ON_LINUX_SINCE, ON_NATIVE_LINUX_SINCE, RUNTIME_SINCE } from '../runtimeSince';
 
 /**
  * A runtime's "first server that knows it" is a release that must NOT already exist without it (the release-guards family: `releaseAnchors`,
@@ -90,6 +90,17 @@ test('every entry of ON_LINUX_SINCE is held to the same guard: ahead of the newe
   assert.ok(rows.length >= 1, 'the table is empty — the loop would check nothing');
 
   const refusals = rows.map(([runtime, since]) => refusal(runtime, since, releasedMcp, sectionOf(since, realChangelog))).filter((said) => said.length > 0);
+
+  assert.deepEqual(refusals, []);
+});
+
+test('every entry of ON_NATIVE_LINUX_SINCE is held to the same guard: ahead of the newest released coai-mcp, or named in its release', () => {
+  const rows = Object.entries(ON_NATIVE_LINUX_SINCE);
+  assert.ok(rows.length >= 1, 'the table is empty — the loop would check nothing');
+
+  const refusals = rows
+    .filter(([runtime, since]) => refusal(runtime, since, releasedMcp, sectionOf(since, realChangelog)).length > 0)
+    .map(([runtime, since]) => `${runtime}: ON_NATIVE_LINUX_SINCE ${since} is not ahead of the released ${releasedMcp} and its section does not name ${runtime} on a native Linux host`);
 
   assert.deepEqual(refusals, []);
 });
