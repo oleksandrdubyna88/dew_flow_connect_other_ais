@@ -926,6 +926,62 @@ message. Fable: none (no cornerstone).
   window; `tree-probed-forever` green before and after; `EveryBudgetInAClockedClassReadsItsClockTests` untouched (no clock
   here); the product's default path proven unchanged by the existing `KimiCredentialsLockTests` all green.
 
+### S4 — status: built 2026-10-22 (Sonnet started, Opus finished; the spec above governed, deviations listed)
+
+**Built.** Branch `feat/suite-e5-s4` (cut from `775b52b5a`), code commit `947b4514b`. Product code changed in ONE file,
+`src_mcp/runners/Kimi/KimiCredentialsLock.cs`, because §3.7's fix needs an EVENT inside the shim's own take that a test can
+react to, and only the product's call site knows when the per-home file first answered busy: `WithHome` now calls
+`TakenOrWaitedFor` — one `take(path, TimeSpan.Zero)`, and only on `Hold.Busy` the test-only `WhenTheHomeFileIsBusy` (an
+`AsyncLocal` beside `BeforeTheHomeHold`, null in the product) and then the same `take(path, HomeWait)` as before. On the
+default path that is one more open attempt before the same 500 ms wait, with the same three outcomes and the same refusal
+sentence; `HeldFile` is not touched; the shim's take stays inheritable. `tests_fakecli/TreeHoldVerb.cs`: `tree-probed` takes
+the probe in `BeforeTheHomeHold` and lets it go FROM the seam (the `Task.Delay(250)` is gone); `tree-probed-forever` never
+lets go. Tests +3 (`KimiCredentialsLockTests`, 23 → 26): `ATreeHold_TellsTheBusySeamOnce_WhenTheHomeFileAnswersBusyAtTheFirstLook_AndThenWaits`
+(the seam unit), `ATreeHold_NeverTellsTheBusySeam_WhenTheHomeFileIsTakenAtOnce` (the guard arm),
+`AShimWhoseHomeFileAProbeNeverLetsGoOf_GivesUp_AndSaysWhoseFileItWas` (the forever arm, Windows and Linux). CI run
+`39811921845` on `947b4514b`: every job green — Windows 13,562 total, 0 failed, 108 skipped; Linux 13,561, 0 failed, 113
+skipped; macOS 13,561, 0 failed, 221 skipped. Whole `CoaiMcp.Tests.exe` locally on `947b4514b` through `low-priority.mjs`
+(Windows, Debug, 21 min 41 s, other sessions' runs alive): 13,562 total, 13,441 passed, 121 skipped, 0 failed — 13,559 at
+`775b52b5a` + 3.
+
+**REDs (local, Windows).**
+
+1. Red by compilation, the new tests against today's product: `error CS0117: 'KimiCredentialsLock' does not contain a definition for 'WhenTheHomeFileIsBusy'`.
+2. With a no-op stub (the member exists, nothing calls it): `Expected busyCalls.Count to be 1 because the seam fires on the first busy answer, but found 0 (difference of -1).`
+   The guard arm is red too on today's code, because today the first ask already waits: `Expected homeAsks to be equal to {default} because the no-wait look took it, so nothing waited, but {500ms} differs at index 0.`
+   And `AShimThatMeetsADisposalsProbe_WaitsItOut_AndTakesItsHold` (the verb now relies on the seam, which never fires) fails every time with the CI sentence: `the child ended (exit 69) without taking its lock: … coai-tree.lock is held by another process, and nothing but a disposal's probe ever takes it`.
+   `AShimWhoseHomeFileAProbeNeverLetsGoOf_…` was green against the stub (the old one-wait take) — green before and after, as the done-when asks.
+3. Green with the fix: the class 26 total, 0 failed, 3 skipped (the Linux-only ones).
+
+**The loops (§6), the class 100 times, `*KimiCredentialsLockTests`, each run through `low-priority.mjs`, with ONE whole
+`src_mcp` run beside it (started by the loop script, restarted while the loop ran).** The window was NOT exclusive: other
+sessions' test runs (single classes from four other worktrees) and builds were alive at the start, and this story's own
+RED/break-it builds ran in a second worktree during the before loop. Recorded as such.
+
+| Loop | Code | C3 failures | Other failures (not C3) |
+|---|---|---|---|
+| before, 17:04–18:10 | `775b52b5a` | **8 of 100** (runs 7, 71, 76, 77, 93, 94, 98, 99), every one the CI sentence, 1.3–5.9 s | `TheDefaultRoot_…_ItsWaitIsCutByTheToken` 3 (2.07–2.74 s against `< 2 s`); `AShimOnAFolderTheKernelCannotName_…` 1 (`TimeoutException` at `ShimChild.FailsAsync`, `ShimChild.cs:39`, 10.8 s) |
+| after, 18:11–19:11 | `947b4514b` (built in a second worktree, byte-identical files) | **0 of 100** | `TheDefaultRoot_…_ItsWaitIsCutByTheToken` 1 (2.67 s) |
+| B-E5-14, 19:12–19:27, 30 runs | `947b4514b` + the verb's release back on `Task.Delay(250)` | **1 of 30** (run 25, 9.7 s, the CI sentence) — the race is back | none |
+
+**Break-its.**
+
+- B-E5-13 (the seam fired BEFORE the no-wait look, always): the guard arm red — `Expected told to be empty because a file that is free at the first look was never busy, but found at least one item {"…\owned\kh-tree\coai-tree.lock"}.` — and the seam unit red on its order — `Expected order to be equal to {"look", "seam", "wait"} … but {"seam", "look", "wait"} differs at index 0.` The shim test stayed green (the probe is let go before the look then). Restored by writing the file, rebuilt, 26/0 green.
+- B-E5-14 (the verb's release put back on `Task.Delay(250)`, the product fix kept): the loop regressed, 1 of 30 with the CI sentence (row above) — recorded, not a unit red. Restored by writing the file, rebuilt, 26/0 green; `EveryBudgetInAClockedClassReadsItsClockTests` and `NoTestHoldsAnInheritableHandleTests` 11/0 green (untouched, no clock here).
+
+**Findings (named, not fixed — outside S4's files or spec).**
+
+- **The per-test lock paths are NOT machine-wide.** Every lock folder, home and `coai-tree.lock` of `KimiCredentialsLockTests` is under `TempDir.For("testsToDelete-kimilock-")` (`Directory.CreateTempSubdirectory`, a random name per test) and the shim child gets the same folder through `--locks`. So the "`coai-tree.lock` is held by another process" failures are C3 itself (the before loop reproduced the sentence 8 times on a per-test path), not cross-session shared state.
+- **A new timing case in the same class:** `TheDefaultRoot_IsOutsideTheHomesFoldersAndTemp_AndItsWaitIsCutByTheToken` asserts `waited.Elapsed < 2 s` around a 200 ms cancel of `TakeAsync`, whose take runs in non-cancellable one-second slices (`KimiCredentialsLock.cs:164-172`, `Slice`), through `Task.Run`. Red 3 of 100 before and 1 of 100 after, under load. A wall bound decides it; it is not C3 and S4's spec does not cover it — for the lead to file (the cancel is observed at most one slice late by design; the bound is the scheduler's).
+- `AShimOnAFolderTheKernelCannotName_TakesNoHold_AndSaysSo`: one 10 s `TimeoutException` in `ShimChild.FailsAsync` (the child's stderr not closed within `Patience`) under load — seen once, cause not read.
+- The whole suites beside (load only, Windows, Debug, ~57–59 min each, 13,559 total at `775b52b5a`): run 1 failed 4 — `AStreamsUsageIsNeverZeroTests.A_stream_over_the_answer_cap_is_unknown`, `QuestionOutlineTimingTests.TheOutlineOfThisCheckout_IsBuiltAtHead_InBoundedTime_AndTheTimeIsRecorded`, `AKimiRowRunsThroughTheServiceOnWsl2Tests.APlanRound_RunsTheKimiReviewer_InTheBuiltEnvironment_AndCountsItsAnswer(mode: "wsl2")`, `ConsultAntigravityDenialScenarioTests.AHungFollowUp_IsKilledByTheLauncher_InsideTheRemainingBudget_AndTheConversationIsKept`; run 2 failed 1 — `AChildThatExitedBeforeItsStartTimeWasReadTests.AChildThatIsStillEndingWhenTheReadFails_…(spelling: "InvalidOperationException")` (C34's class). None is S4's.
+
+**Deviations.** (1) The test file's seam unit asserts the ORDER look → seam → wait as a list and the no-wait look's
+`TimeSpan.Zero`, not only the call count; the guard arm also pins that a free file is taken by the no-wait look. (2) The
+forever arm also asserts the per-home file's path in the refusal ("says whose file"). (3) The docs of this story are written on
+the story branch (this block, `module_tests.md`, `module_runners.md`), as the brief asked, not in §2.9's one final pass.
+(4) No 20-run CI watch yet — it is the epic's, after the merge.
+
 ### S5 — C18's timing half (group A)
 
 - **Goal.** §3.8: beats seen through `projected`, the row released after three distinct ones.
