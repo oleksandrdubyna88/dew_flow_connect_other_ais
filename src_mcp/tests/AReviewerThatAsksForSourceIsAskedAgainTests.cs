@@ -1,5 +1,3 @@
-using System.Collections.Concurrent;
-using System.Threading.Channels;
 using CoaiMcp.Core.Feature;
 using CoaiMcp.Core.Findings;
 using CoaiMcp.Core.Rounds;
@@ -606,84 +604,6 @@ public sealed class AReviewerThatAsksForSourceIsAskedAgainTests : IAsyncLifetime
 
     private static async Task WaitingForAsync(Task task, string what) =>
         await WaitingForAsync(task.ContinueWith(_ => true, TaskScheduler.Default), what);
-
-    /// <summary>
-    /// An in-process launcher that costs no time and spends none: it never advances the clock (§5.4 point 6 — an advance from the
-    /// launcher's thread would run the clock's callbacks on it). Each launch records the request's timeout, signals ITS OWN handshake
-    /// (a <see cref="ClockHandshake"/> is single-shot) and waits; the test's driver advances by what the launch would have been allowed to
-    /// run, <c>min(turn, timeout)</c>, and releases it. Released, it answers the scripted text when the turn fits its timeout and
-    /// <c>TimedOut</c> when it does not. Past <c>ceiling</c> launches it answers a failure naming the count, so a loop nothing ends
-    /// finishes red instead of hanging.
-    /// </summary>
-    private sealed class ClockedLauncher(TimeSpan turn, string stdout, int ceiling = 20) : IProcessLauncher
-    {
-        private sealed record Arrival(ClockHandshake Handshake, TimeSpan Timeout);
-
-        private readonly Channel<Arrival> _arrivals = Channel.CreateUnbounded<Arrival>();
-        private readonly ConcurrentQueue<ClockHandshake> _handshakes = [];
-        private readonly ConcurrentQueue<TimeSpan> _timeouts = [];
-        private int _count;
-
-        public int Count => Volatile.Read(ref _count);
-
-        /// <summary>The timeout every launch was given, in launch order.</summary>
-        public IReadOnlyList<TimeSpan> Timeouts => [.. _timeouts];
-
-        public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
-        {
-            var launches = Interlocked.Increment(ref _count);
-            if (launches > ceiling)
-            {
-                return new ProcessResult(1, string.Empty, $"the stand-in was launched {launches} times, past its ceiling of {ceiling}: nothing ended the conversation", TimedOut: false);
-            }
-
-            var handshake = new ClockHandshake();
-            _handshakes.Enqueue(handshake);
-            _timeouts.Enqueue(request.Timeout);
-            _arrivals.Writer.TryWrite(new Arrival(handshake, request.Timeout));
-            handshake.Signal();
-            await handshake.WaitForReleaseAsync(ct);
-
-            return turn <= request.Timeout
-                ? new ProcessResult(0, stdout, string.Empty, TimedOut: false)
-                : new ProcessResult(-1, string.Empty, string.Empty, TimedOut: true);
-        }
-
-        /// <summary>The test's side: for each launch, wait until it is there, move the clock by what it was allowed to run, release it — until the run is over.</summary>
-        public async Task DriveAsync(Task run, ManualClock clock, CancellationToken ct)
-        {
-            using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            try
-            {
-                while (!run.IsCompleted)
-                {
-                    var next = _arrivals.Reader.ReadAsync(stop.Token).AsTask();
-                    if (await Task.WhenAny(run, next) == run)
-                    {
-                        return;
-                    }
-
-                    var arrival = await next;
-                    await arrival.Handshake.Reached;
-                    clock.Advance(TimeSpan.FromTicks(Math.Min(turn.Ticks, arrival.Timeout.Ticks)));
-                    arrival.Handshake.Release();
-                }
-            }
-            finally
-            {
-                await stop.CancelAsync();
-            }
-        }
-
-        /// <summary>Lets every parked launch go — in the test's <c>finally</c>, so a failing test never leaves a product thread waiting.</summary>
-        public void ReleaseAll()
-        {
-            foreach (var handshake in _handshakes)
-            {
-                handshake.Release();
-            }
-        }
-    }
 
     /// <summary>
     /// A continuation that always asks for another turn — the same launch again — unless <paramref name="stopsAtTheFollowUps"/>, which makes it
