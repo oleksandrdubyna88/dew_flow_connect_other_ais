@@ -494,3 +494,29 @@ still unmeasured (RESULTS §31).
 - Rejected, one line each: **distinct names per window** — behaviour is identical, the quoted line carries the window; **one source for three lists** — `RateLimit` is vendor-neutral, the coverage test (G3) answers it instead;
   **`Line` as a structured value** — it is a display aid only; **`Hit`'s seven scans** — pre-existing and negligible; **`EarliestOpening` scope** — the openings are sentence starts and S12 pins it;
   **`Window` slice out of range** — unreachable (the line is longer than 400 and start ≤ end); **LINQ on two elements** — noise.
+
+## The feature gate (round 1, 2026-10-22, verdict revise) — 2 findings, both accepted; fixed in a new PR
+
+The feature gate read the whole plan (stories 1–5, #900 + #915) over a local review view (#915's squash cherry-picked onto #900's,
+base `9134099c0`). One reviewer answered; both findings were verified against the code at `25db741c5` and accepted.
+
+- **F1 — BLOCKING, security: the matched line is windowed BEFORE it is redacted.** `AcpDiagnosis.LineWith`
+  (`src_mcp/runners/Acp/IAcpProfile.cs:118-121`) calls `Redaction.SafeText(Window(Around(text, at).Trim(), phrase), LineCap)`. On a
+  line longer than `LineCap` the window can start exactly at a credential's value and cut away its label (`Authorization: Bearer `),
+  so the redactor no longer recognises it and `failureLine` carries the bare token into the summary, the ledger and the log.
+  `SafeText` itself redacts the WHOLE value first and cuts after (`Redaction.cs:388-394`), so the fix is the same order here:
+  **redact the whole isolated line, then cut the window around the phrase in the REDACTED text.** If the isolated line is unbounded
+  (check what bounds the agent's stderr in `AcpTransport`), bound it first to a margin far wider than the window on each side of the
+  phrase (e.g. 8 KB): a cut that far away can never fall inside the 400-character window, so it cannot split a label from a value the
+  window will quote. RED: a line of 500 padding characters, ` Authorization: Bearer ` + a 59-character opaque token placed so the old
+  window starts exactly at the token, then the monthly sentence → `diagnosis.Line` must not contain the token and must contain the
+  phrase. Break-it: restore window-then-redact → red.
+- **F2 — minor: an unrelated hopeless word discards the matched line.** `KimiRuntime.SpentReason` (`:316-319`) returns `said` as soon as
+  `RateLimit.Hopeless(said)` is true, so a reason like `Internal error: daily worker failed` (`daily` is a hopeless word) with the
+  monthly sentence only in stderr drops `failureLine`: the summary loses the monthly sentence and says the vendor named no reset.
+  **Fix: quote a non-empty `failureLine` FIRST, whatever the reason says; fall back to the table's phrases only when there is no line
+  and the reason is not already hopeless.** RED: that reason + a monthly `failureLine` → the verdict's reason contains the matched
+  line and "Your quota will be refreshed in the next cycle". Break-it: the old order → red.
+
+Docs: `research/module_runners.md` (the order: isolate, redact, window), `research/module_tests.md`. After the fix PR merges, the
+feature gate runs its second (last) round with `again: true` over the new head.
