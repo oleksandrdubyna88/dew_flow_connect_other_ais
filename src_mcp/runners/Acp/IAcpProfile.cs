@@ -107,23 +107,36 @@ public sealed record AcpDiagnosis(string Name, string Cure, AcpFailureKind Kind,
     public static AcpDiagnosis Of(string reason, string stderr, IReadOnlyList<AcpKnownFailure> known) =>
         Of(reason, known) is { Known: true } named ? named : FromStderr(stderr, known);
 
-    /// <summary>The row stderr names, carrying the line it matched in (<see cref="Line"/>) — or <see cref="None"/>.</summary>
-    private static AcpDiagnosis FromStderr(string stderr, IReadOnlyList<AcpKnownFailure> known) =>
-        Hit(stderr, known) is { } hit ? new AcpDiagnosis(hit.Name, hit.Cure, hit.Kind, LineWith(stderr, hit.Phrase)) : None;
+    /// <summary>
+    /// The row stderr names, carrying the line it matched in (<see cref="Line"/>) — or <see cref="None"/>. The row is read from what the capture HELD (the truncation sentence
+    /// <see cref="BoundedText"/> appends is ours, never searched); the LINE is quoted only from complete lines: when the capture was cut, its last line is the one the boundary broke
+    /// and may end inside a credential too short for the redactor to recognise, so it is never quoted (the row keeps its name and the line is empty).
+    /// </summary>
+    private static AcpDiagnosis FromStderr(string stderr, IReadOnlyList<AcpKnownFailure> known)
+    {
+        var (captured, truncated) = BoundedText.Captured(stderr);
+
+        return Hit(captured, known) is { } hit ? new AcpDiagnosis(hit.Name, hit.Cure, hit.Kind, LineWith(CompleteLines(captured, truncated), hit.Phrase)) : None;
+    }
+
+    /// <summary><paramref name="captured"/> up to and including its last line break when the capture was <paramref name="truncated"/>; all of it otherwise (a stream that ended is complete, newline or not).</summary>
+    private static string CompleteLines(string captured, bool truncated) =>
+        truncated ? captured[..(captured.LastIndexOfAny(LineBreaks) + 1)] : captured;
 
     /// <summary>
-    /// The line of <paramref name="text"/> that holds the first <paramref name="phrase"/> (case-blind) — found with one scan, never by splitting the whole text — isolated at the
-    /// nearest <c>\r</c> or <c>\n</c> on each side (a CR-only progress line and a CRLF never join lines or leak a control character) and trimmed. The ORDER is the contract
-    /// (feature gate F1): the WHOLE isolated line is redacted FIRST (<see cref="Redaction.SafeText"/>, no cut), and only then is the window cut around the phrase in the REDACTED
-    /// text — a window cut first can start exactly at a credential's value and take its label away, and the bare token then survives. The line is quoted into the summary, the
-    /// ledger and the log. Empty when the text holds no phrase.
+    /// The line of <paramref name="text"/> that holds the first <paramref name="phrase"/> (case-blind). The ORDER is the contract (feature gate F1, risk consult R1): the WHOLE text is
+    /// redacted FIRST (<see cref="Redaction.SafeSource"/>: the layout kept, nothing cut — a private-key block spans lines, and a line cut from its block is key material the redactor can no longer
+    /// name), THEN the phrase is found in the redacted text, its line isolated at the nearest <c>\r</c> or <c>\n</c> on each side (a CR-only progress line and a CRLF never join lines or leak a
+    /// control character) and trimmed, THEN a window is cut around the phrase in the REDACTED line. Cut first, a window can start exactly at a credential's value and take its label away. The text
+    /// is the agent's stderr, bounded by the capture to 64 Ki characters, so this is one redaction pass over at most that on a failure path. A redaction that fails closed answers the marker, which holds
+    /// no phrase: the line is then empty and nothing of the raw text is quoted. Empty also when the text holds no phrase.
     /// </summary>
-    private static string LineWith(string text, string phrase) => LineWith(text, phrase, line => Redaction.SafeText(line, int.MaxValue));
+    private static string LineWith(string text, string phrase) => LineWith(text, phrase, Redaction.SafeSource);
 
     /// <summary><see cref="LineWith(string, string)"/> with the redactor passed in, so a test can make it fail closed.</summary>
     internal static string LineWith(string text, string phrase, Func<string, string> redact) =>
-        text.IndexOf(phrase, StringComparison.OrdinalIgnoreCase) is var at and >= 0
-            ? Window(redact(Around(text, at).Trim()), phrase)
+        redact(text) is var redacted && redacted.IndexOf(phrase, StringComparison.OrdinalIgnoreCase) is var at and >= 0
+            ? Window(Around(redacted, at).Trim(), phrase)
             : string.Empty;
 
     /// <summary>The line of <paramref name="text"/> that contains index <paramref name="at"/>: from after the previous <c>\r</c> or <c>\n</c> to the next one.</summary>

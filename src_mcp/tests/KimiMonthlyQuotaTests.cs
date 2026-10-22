@@ -275,12 +275,12 @@ public sealed class KimiMonthlyQuotaTests
     }
 
     [Fact]
-    public void WhenRedactionFailsClosed_TheLineIsTheRedactedMarker_NeverTheRawLine()
+    public void WhenRedactionFailsClosed_NothingIsQuoted_NeverTheRawLine()
     {
-        // Redaction.SafeText answers a redaction that timed out with Redaction.Redacted (Redaction.WhenRedactionTimesOut); the window must then quote that marker, not fall back to raw text.
+        // A redaction that timed out answers Redaction.Redacted (Redaction.WhenRedactionTimesOut) for the WHOLE text: the marker holds no phrase, so nothing is quoted — and never the raw text.
         var line = AcpDiagnosis.LineWith("noise Authorization: Bearer abcdefghijkl " + MonthlyLine, Phrase, _ => Redaction.WhenRedactionTimesOut(() => throw new System.Text.RegularExpressions.RegexMatchTimeoutException()));
 
-        line.Should().Be(Redaction.Redacted, "the phrase is not in the marker: nothing of the raw line may be quoted in its place");
+        line.Should().BeEmpty("the phrase is not in the marker: nothing of the raw text may be quoted in its place");
     }
 
     // ---------- feature gate round 1, F2: the matched line is quoted BEFORE the hopeless check ----------

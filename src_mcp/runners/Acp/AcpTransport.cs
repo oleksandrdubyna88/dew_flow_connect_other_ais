@@ -41,8 +41,8 @@ internal sealed class AcpTransport : IDisposable
     /// </summary>
     public const int MaxLineChars = 16 * 1024 * 1024;
 
-    /// <summary>How much of the agent's stderr is kept — its diagnosis lives in the last lines.</summary>
-    private const int StdErrChars = 64 * 1024;
+    /// <summary>How much of the agent's stderr is kept: the HEAD (BoundedText keeps the first characters and drops the rest), so a capture that was cut ends in a line the boundary broke — AcpDiagnosis never quotes it.</summary>
+    internal const int StdErrChars = 64 * 1024;
 
     private const int ChunkChars = 8192;
 

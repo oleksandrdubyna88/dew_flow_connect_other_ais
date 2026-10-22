@@ -4820,6 +4820,20 @@ Changed by design: `TheSixRowsStandInTheDecidedOrder…` became `TheSevenRowsSta
 | F2 guard `AReasonThatIsHopelessOnItsOwnAndHasNoMatchedLine_IsReturnedAsItIs` | green before and after | not applicable |
 
 The fail-closed case is tested through the seam, not by finding an input that really times out (that would assert a performance figure; the same stance as `Redaction.WhenRedactionTimesOut`'s own tests).
+(Renamed by the risk consult below: `WhenRedactionFailsClosed_NothingIsQuoted_NeverTheRawLine` — the whole text now answers the marker, which holds no phrase, so the line is empty rather than the marker.)
+
+**Risk consult (722eeb66, 2026-10-22) — `TheStderrLineIsQuotedSafelyTests`, 8 cases.** Every case asserts that no FRAGMENT of the planted secret appears in the diagnosis line, the shim's report JSON (`AskAcpMode.Report`) and the round's three lines (summary, ledger, log), by running the report through the real `AKimiRound`.
+
+| Test | Seen red as | Break-it (went red, restored by writing the file, rebuilt) |
+|---|---|---|
+| R1 `ALineInsideAPrivateKeyBlock_IsRedactedWithItsBlock_NotQuotedWithTheKeyBodyBesideIt` (a body line holding the phrase inside a `PRIVATE KEY` block; the test first proves `Redaction.SafeSource` over the whole text removes the body) | *Did not expect seen.Diagnosis.Line "MIIEvQIBADANBgkqhkiG9w0BAQEFAASC reached your monthly usage limit …" to contain "MIIEvQIBADAN" because the diagnosis line.* | redaction applied to the isolated line again (also reds the fail-closed case) |
+| R2 `ATokenCutByTheCaptureBoundary_LeavesNoFragmentInAnyRecordedText` (a `BoundedText` of the real `AcpTransport.StdErrChars` fed in 8192-character reads; the capture ends 5 characters into the token after ` Bearer `, asserted) | *Did not expect seen.Diagnosis.Line "reached your monthly usage limit … quota Bearer Lp5gU" to contain "Lp5gU" because the diagnosis line.* | the last line of a cut capture quoted again; separately the truncation sentence no longer split off (also reds the next case) |
+| R2 `ATruncationSentence_HoldingAPhraseOfItsOwn_IsNotSearched` | *Expected … Known to be False, but found True.* | the sentence searched as vendor text |
+| R2 guards `ACompleteLineBeforeTheCut_IsQuoted_AndTheTruncationSentenceIsNeverVendorText`, `AnUntruncatedStderr_KeepsItsLastLine_EvenWithoutATrailingNewline` | green before and after | not applicable |
+| R3 `AQuotedLine_ThatIsNotHopelessItself_GetsTheTablesPhrasesAppended` (theory: `something odd`, `[redacted]`) | *Expected reason "kimi_quota_spent: Internal error (Kimi said: [redacted])" to contain "monthly".* | `SpentReason` back to the line-wins-without-asking order |
+| R3 `ARedactedFailureLine_StillStopsTheLadder_AfterOneLaunch` (exit 75, `kimi_quota_spent`, reason `Internal error`, `failureLine` `[redacted]`, through `AKimiRound`) | *System.InvalidOperationException : Sequence contains more than one element* — the round's log held several FAILED lines because the ladder climbed (`BoundedScheduler.cs:624` loops while `!RateLimit.Hopeless(limited.Reason)`); green: one launch, `Attempts` 1, reason hopeless | same |
+
+R1 as the consult stated it (`{"api_key":` NEWLINE `"CANARY…"`, label on the previous line, value on the next) was checked with `Redaction.SafeSource` over the WHOLE text first: even the whole-text pass leaves the canary, because the labelled rule stops at each line's end by design. So that shape is not caught by the whole-text order either; the PEM block is the multi-line shape the redactor does mask, and it is the one pinned.
 
 ## The suite is deterministic — epic E1, "No run sees another" (2026-10-19)
 
