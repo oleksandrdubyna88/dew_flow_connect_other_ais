@@ -153,6 +153,62 @@ public sealed class KimiMonthlyQuotaTests
         diagnosis.Line.Should().Contain("reached your monthly usage limit");
     }
 
+    // ---------- code gate: G1 (redacted), G2 (cut at its own line end), G3 (every Spent phrase is hopeless) ----------
+
+    private const string Phrase = "reached your monthly usage limit";
+
+    [Fact]
+    public void TheMatchedLine_IsRedacted_AndKeepsThePhrase()
+    {
+        var stderr = "Authorization: Bearer abcdefghijkl " + MonthlyLine + " token sk-abcdefghijklmnop";
+
+        var line = AcpDiagnosis.Of(NamesNoRow, stderr, KimiAcpProfile.Failures).Line;
+
+        line.Should().NotContain("abcdefghijkl").And.NotContain("sk-abcdefghijklmnop", "the quoted line goes to the summary, the ledger and the log: a secret in stderr is masked first");
+        line.Should().Contain(Phrase).And.Contain("Your quota will be refreshed in the next cycle");
+    }
+
+    [Theory]
+    [InlineData("progress 10%\rprogress 20%\r{0}\r more")]
+    [InlineData("progress 10%\r\nprogress 20%\r\n{0}\r\n more")]
+    [InlineData("progress 10%\nprogress 20%\n{0}\n more")]
+    public void TheMatchedLine_IsOnlyItsOwnLine_NoMatterHowLinesAreSeparated(string layout)
+    {
+        var line = AcpDiagnosis.Of(NamesNoRow, string.Format(layout, MonthlyLine), KimiAcpProfile.Failures).Line;
+
+        line.Should().Be(MonthlyLine);
+        line.Should().NotContain("\r").And.NotContain("\n").And.NotContain("progress");
+    }
+
+    [Fact]
+    public void AWindowEdge_NeverSplitsASurrogatePair_AtEitherEnd()
+    {
+        // The window starts 60 characters before the phrase and holds 400: put a pair across each of those two edges.
+        const string pair = "\U0001F600";
+        var beforeThePhrase = new string('x', 100) + pair + new string('x', 59);
+        var phraseEnd = beforeThePhrase.Length + Phrase.Length;
+        var line = beforeThePhrase + Phrase + new string('y', 500 - phraseEnd) + pair + "zzz";
+
+        var kept = AcpDiagnosis.Of(NamesNoRow, line, KimiAcpProfile.Failures).Line;
+
+        kept.Length.Should().BeLessThanOrEqualTo(AcpDiagnosis.LineCap);
+        kept.Should().Contain(Phrase);
+        for (var i = 0; i < kept.Length; i++)
+        {
+            (char.IsHighSurrogate(kept[i]) == (i + 1 < kept.Length && char.IsLowSurrogate(kept[i + 1]))).Should().BeTrue($"index {i} is half of a pair");
+            (!char.IsLowSurrogate(kept[i]) || (i > 0 && char.IsHighSurrogate(kept[i - 1]))).Should().BeTrue($"index {i} is a lone low surrogate");
+        }
+    }
+
+    [Fact]
+    public void EverySpentPhraseOfTheTable_IsHopeless_ForTheRateLimitCheck()
+    {
+        // Derived from the table, not a hand list: a Spent row whose phrase RateLimit.Spent lacks would be retried on the ladder when the sentence rides in a reason.
+        var missing = KimiAcpProfile.Failures.Where(failure => failure.Kind == AcpFailureKind.Spent).Select(failure => failure.Phrase).Where(phrase => !RateLimit.Hopeless(phrase)).ToList();
+
+        missing.Should().BeEmpty("each Spent phrase of KimiAcpProfile.Failures must be in RateLimit.Spent: " + string.Join(", ", missing));
+    }
+
     // ---------- F2: K4 precedence, pinned ----------
 
     [Theory]

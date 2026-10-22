@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Notices;
 using CoaiMcp.Runners.Processes;
 
 namespace CoaiMcp.Runners.Acp;
@@ -93,7 +94,7 @@ public sealed record AcpDiagnosis(string Name, string Cure, AcpFailureKind Kind,
     /// <summary>Nothing recognised: the agent's own words stand.</summary>
     public static readonly AcpDiagnosis None = new(string.Empty, string.Empty, AcpFailureKind.Refused);
 
-    /// <summary>The longest matched line the report carries, in characters.</summary>
+    /// <summary>The maximum length, in characters, of a matched line carried in the report.</summary>
     public const int LineCap = 400;
 
     /// <summary>True when a phrase matched.</summary>
@@ -110,11 +111,26 @@ public sealed record AcpDiagnosis(string Name, string Cure, AcpFailureKind Kind,
     private static AcpDiagnosis FromStderr(string stderr, IReadOnlyList<AcpKnownFailure> known) =>
         Hit(stderr, known) is { } hit ? new AcpDiagnosis(hit.Name, hit.Cure, hit.Kind, LineWith(stderr, hit.Phrase)) : None;
 
-    /// <summary>The first line of <paramref name="text"/> holding <paramref name="phrase"/> (case-blind), trimmed and capped; empty when no line does.</summary>
+    /// <summary>
+    /// The line of <paramref name="text"/> that holds the first <paramref name="phrase"/> (case-blind) — found with one scan, never by splitting the whole text — isolated at the
+    /// nearest <c>\r</c> or <c>\n</c> on each side (a CR-only progress line and a CRLF never join lines or leak a control character), trimmed, cut to a window and passed through
+    /// <see cref="Redaction.SafeText"/> (the line is quoted into the summary, the ledger and the log: a secret in stderr is masked first). Empty when the text holds no phrase.
+    /// </summary>
     private static string LineWith(string text, string phrase) =>
-        text.Split('\n').FirstOrDefault(line => line.Contains(phrase, StringComparison.OrdinalIgnoreCase)) is { } found
-            ? Window(found.Trim(), phrase)
+        text.IndexOf(phrase, StringComparison.OrdinalIgnoreCase) is var at and >= 0
+            ? Redaction.SafeText(Window(Around(text, at).Trim(), phrase), LineCap)
             : string.Empty;
+
+    /// <summary>The line of <paramref name="text"/> that contains index <paramref name="at"/>: from after the previous <c>\r</c> or <c>\n</c> to the next one.</summary>
+    private static string Around(string text, int at)
+    {
+        var start = text.LastIndexOfAny(LineBreaks, at) + 1;
+        var stop = text.IndexOfAny(LineBreaks, at);
+
+        return text[start..(stop < 0 ? text.Length : stop)];
+    }
+
+    private static readonly char[] LineBreaks = ['\r', '\n'];
 
     /// <summary>A line of at most <see cref="LineCap"/> characters that still holds the phrase: the line whole when it fits, else a window that starts shortly before the phrase.</summary>
     private static string Window(string line, string phrase)

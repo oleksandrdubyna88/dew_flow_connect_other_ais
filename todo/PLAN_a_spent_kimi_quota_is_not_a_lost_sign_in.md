@@ -484,3 +484,13 @@ still unmeasured (RESULTS §31).
   and `("Authentication required: 429 Too Many Requests", …)` is `provider_error`. Pinned by `AReasonThatNamesARow_WinsOverAMonthlySentenceInStderr`. The claim above says so.
 - *F3 (doc nits) — accepted:* the `VendorDiagnosis` marker comment names both windows, the README row says what is merged, the `SpentReason` doc comment and `module_runners.md` say "the matched
   line", and the test's local `names` (which held phrases) is `phrases`.
+
+**Code gate (coai session c7c16214, 2026-10-22, proceed) — 16 findings: 8 accepted, 8 rejected.**
+- *G1 (security) — accepted:* the matched stderr line was quoted into reasons and logs unredacted. The final window now passes `Redaction.SafeText(window, LineCap)` (as `ClauseOf` does); the phrase survives.
+- *G2 (performance ×3, CodeRabbit ×2) — accepted:* `LineWith` no longer splits the whole stderr. It finds the phrase with one `IndexOf` and isolates the line at the nearest `\r` or `\n` on each side, so a CR-only progress line
+  and a CRLF never join lines or leak a control character; then trim, window, redact.
+- *G3 (coverage) — accepted:* a test derived from `KimiAcpProfile.Failures` — every Spent row's phrase is `RateLimit.Hopeless`.
+- *G4 (nit) — accepted:* the `LineCap` comment.
+- Rejected, one line each: **distinct names per window** — behaviour is identical, the quoted line carries the window; **one source for three lists** — `RateLimit` is vendor-neutral, the coverage test (G3) answers it instead;
+  **`Line` as a structured value** — it is a display aid only; **`Hit`'s seven scans** — pre-existing and negligible; **`EarliestOpening` scope** — the openings are sentence starts and S12 pins it;
+  **`Window` slice out of range** — unreachable (the line is longer than 400 and start ≤ end); **LINQ on two elements** — noise.
