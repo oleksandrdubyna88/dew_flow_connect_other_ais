@@ -1049,6 +1049,8 @@ The "before" columns reproduced nothing, so neither is a RED; the C35 case's RED
 3. **The inventory as E4 §5.1's table** (above, replacing the prose list).
 4. **The docs.** `module_runners.md`: the executor in the section's mermaid diagram (the one-clock subgraph with the teardown site), the class table's row, the section's opening ("E5 S8 added a fourth"), and a paragraph break the first pass had lost between the clock paragraph and the cleanup-I/O one. `module_tests.md`: the relabelled break-its, E4's B11–B14 and the unseamed RED.
 
+**The whole suite with every S8 commit in** (`node .agents/conventions/tools/low-priority.mjs ./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe`, Windows, Debug, 52 m 56 s with 3-5 sibling `CoaiMcp.Tests.exe` alive): **13,563 total, 13,442 passed, 121 skipped, 0 failed.** Against the seam-alone run's 13,560 that is +3, one more than the two named tests; the third was not traced to a name. One end-of-run warning: the run's temp folder `testsToDelete-coai-run-003310` could not be removed because an end-to-end test's `coai.db` was still held by another process — left for the family janitor, recorded, not edited.
+
 **Not redone, recorded as the first coder ran them:** the before/after loops and the seam-alone whole-suite run — the machine still carried 3-5 sibling `CoaiMcp.Tests.exe` (deviation 7 holds; no loop was run under the plan's single named load). **Deviation (docs placement):** §5 item 4 / lesson 9 hold the `research/` docs for ONE pass after the last story; this story wrote its two module sections on its own branch because the lead asked for them here — the epic's docs pass takes them as written.
 
 ### S9 — C31, the sizing deadline (group A)
