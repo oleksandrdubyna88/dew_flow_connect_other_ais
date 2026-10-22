@@ -134,10 +134,14 @@ internal sealed class ManualClock(DateTimeOffset start) : TimeProvider
                     + "never a product hook's or a callback's — a hook signals a ClockHandshake and the test advances.");
             }
 
+            // Both new readings FIRST: an advance the clock cannot hold throws here, before the advancing mark is set, so a refused advance moves
+            // nothing and wedges nothing (judge round L4a) — the next valid Advance is not "nested".
+            var now = _now + by;
+            var monotonic = _monotonic + by;
             _advancingThread = Environment.CurrentManagedThreadId;
             _advancingName = Thread.CurrentThread.Name ?? "unnamed";
-            _now += by;
-            _monotonic += by;
+            _now = now;
+            _monotonic = monotonic;
         }
     }
 

@@ -460,7 +460,7 @@ public sealed class AFeatureIsReviewedEndToEndTests : IAsyncLifetime
     /// machine, never against the arithmetic. No timeout is lengthened for it.</para>
     /// </remarks>
     [Fact]
-    public async Task TheRoundsDeadline_IsScaledByTheFollowUps_SoAConversationIsNotCutByAOneTurnBudget()
+    public async Task AReviewerThatAsksOnEveryTurn_IsReviewedEndToEnd_ARealProcessSmokeTestOfTheWiring()
     {
         var service = Service(escalationBudget: TimeSpan.FromMilliseconds(200), reviewerTimeout: TimeSpan.FromSeconds(2));
         Script(AsksForSell);

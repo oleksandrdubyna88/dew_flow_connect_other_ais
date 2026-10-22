@@ -69,7 +69,7 @@ in the table, or cap it by count, using the store's existing pruning seam if one
 
 > **Closed in code 2026-10-21** (E4 S5 and S4; the 20-run CI watch is still to come): C6 (this section's test — the round deadline) is pinned without wall time by `RoundDeadlineTests`, the scheduler-level test and the wiring arm (the end-to-end test stays a real-process smoke test, its remaining wall-clock exposure stated in its remark); C13 (the conversation-cap tests) runs on the manual clock. See `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp_E4.md` S4/S5 status.
 
-`AFeatureIsReviewedEndToEndTests.TheRoundsDeadline_IsScaledByTheFollowUps_SoAConversationIsNotCutByAOneTurnBudget`
+`AFeatureIsReviewedEndToEndTests.AReviewerThatAsksOnEveryTurn_IsReviewedEndToEnd_ARealProcessSmokeTestOfTheWiring`
 (`src_mcp/tests/AFeatureIsReviewedEndToEndTests.cs:424`) fails about 1 run in 3 on a clean `origin/main` as well. It runs
 for 12–20 s and reports "not started … the round reached its limit" before the reviewer launches. It is
 load-sensitive: the deadline is wall-clock. Make the clock injectable for that path, or derive the assertion from

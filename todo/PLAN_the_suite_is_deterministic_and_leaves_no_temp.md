@@ -82,7 +82,18 @@ are work in progress and are not in this table unless §4 says otherwise.
 | `AcpClientTests.TheCancelReachesAnAgentThatIsStillListening` (added 2026-10-21) | 1 (Windows, run 39325900821 attempt 1 — the same run and attempt as C18's product-angle failure) | #893's branch `docs/flaky-tests-and-temp-leak` (1; it touches no ACP code) | 10-19 | C23 | timing — C5's mechanism (the 5 s turn deadline also pays the agent's start) | this plan (**E4 S2**, the `AcpClient` clock) |
 | `SupervisedTeardownLinuxTests.AGrandchildBornAfterTheFirstListing_IsFoundByTheReListing` (added 2026-10-21; first recorded in the Review record on 10-20) | 1 (Linux, the Sonar/coverage job of PR #876 — another session's branch, a store change) | 1 (1) | 10-20 | C24 | timing inside the test, cause NOT yet read | this plan (E5, diagnosis gate first) |
 | `HeldFileInheritableOnLinuxTests.ATakeWhoseStreamCannotBeMade_ClosesItsDescriptor_AndLeavesTheFileFree` (added 2026-10-21) | 1 (Linux, run 39473785590, the coverage job of PR #897 — E2's branch, which does not touch it) | 1 (1) | 10-21 | C26 | shared state across parallel tests (inferred: an inheritable descriptor caught by another test's fork) | this plan (E5, diagnosis gate first) |
-| `AStreamsUsageIsNeverZeroTests.A_stream_over_the_answer_cap_is_unknown` (added 2026-10-21) | 0 CI; **1 local** (E2's full `src_mcp` run on a loaded Windows machine, 2026-10-20: exit 69 where 70 was expected; passes alone) | — | 10-20 | C27 | cause NOT yet read (69 is `ApiRuntime.EndedBeforeAnAnswerExit`, 70 is `AskApiMode.Failed`: under load the stream ENDED before the 8 MiB cap stopped it) | this plan (E5, diagnosis first) |
+| `AStreamsUsageIsNeverZeroTests.A_stream_over_the_answer_cap_is_unknown` (added 2026-10-21) | 0 CI; **1 local** (E2's full `src_mcp` run on a loaded Windows machine, 2026-10-20: exit 69 where 70 was expected; passes alone) | — | 10-20 | C27 | cause NOT yet read (69 is `ApiRuntime.EndedBeforeAnAnswerExit`, 70 is `AskApiMode.Failed`: under load the stream ENDED before the 8 MiB cap stopped it) | 
+| the PowerShell `ModuleAnalysisCache` appearing in `src_vs_code` (added 2026-10-22, E4 judge round) | 0 CI; seen in local runs | — | — | C28 | shared state: a child started without `LOCALAPPDATA` in its environment makes PowerShell write its cache into the working folder | this plan (E5, with C10–C12) |
+| `AZombieIsNotAliveTests.AKilledButUnreapedProcess_IsNotAlive` (added 2026-10-22) | 1 (Linux, run 39655713274) | — | — | C29 | timing inside the test: `/proc/<pid>/stat` read after the entry was reaped (`DirectoryNotFoundException`) | this plan (E5, Linux process-lifecycle group with C21, C24, C26) |
+| `AReviewerThatAsksForSourceIsAskedAgainTests.ATurnThatTimesOut_IsOneTerminalFailure_AndTheSlotIsReleased` and `ATurnWhoseRepairTimesOut_…` (added 2026-10-22) | 0 CI; suite-only in E4 S3's final run (13 142 tests, 4 failed) | — | 10-21 | C30 | timing — C13's MECHANISM (a real 2 s turn deadline against a cold `FakeCli` start), NOT closed by E4 S4 | this plan (E5) |
+| `TheSizingIsConcurrentAndBoundedTests.ASizingThatOutlastsItsDeadline_ReturnsGitFailedScopes_WithinIt` (added 2026-10-22) | 0 CI; suite-only in E4 S3's final run | — | 10-21 | C31 | timing: a real `Stopwatch` bound of 3 s on a 300 ms deadline, on a loaded machine | this plan (E5) |
+| `QuestionConsultScenarioTests.AQuestionIsAnsweredByARealChild_FencedAndRecorded` (added 2026-10-22) | 0 CI; suite-only in E4 S2's whole-suite run (status `failed`) | — | 10-21 | C32 | cause NOT read (a real fake-CLI child under suite load) | this plan (E5, diagnosis first) |
+| `TheServerAnswersInitializeAtOnceTests.Initialize_IsAnswered_WhileTheVaultReadAndTheProbeAreStillRunning` (added 2026-10-22) | 0 CI; suite-only in E4 S3's seam-alone run (an 11 s stdio round-trip timeout) | — | 10-21 | C33 | timing: a real server process started under a 51-minute, three-suite load | this plan (E5) |
+| `AChildThatExitedBeforeItsStartTimeWasReadTests…` (added 2026-10-22) | 0 CI; suite-only in E4 S3's seam-alone run (`Win32Exception`) | — | 10-21 | C34 | C2's family: a child gone before its start time was read, on Windows under load | this plan (E5, read with C2) |
+| `RepairRunsInsideTheBudgetTests.ARepairGetsWhatIsLEFTOfTheDeadline_NotAWholeSecondOne` (added 2026-10-22; also red once in S4's 20-run loop as "an unrelated repair-timeout test") | 0 CI; suite-only in E4 S3's seam-alone run | — | 10-21 | C35 | timing: two real 1.5 s launches against a 2 s budget, plus a 3.5 s wall bound | this plan (E5) |
+| `QuestionOutlineTimingTests` (added 2026-10-22) | 0 CI; **red alone too** on this machine: 61–68 s against its 60 s bound (E4 S2's seam-alone run) | — | 10-21 | C36 | a timing claim about THIS checkout's size, not about a race | this plan (E5, size or bound first) |
+| `AReviewerThatAsksForSourceIsAskedAgainTests.ASpentSourceBudget_MakesTheNextTurnFinal_WhateverTheCapSays` (added 2026-10-22) | 0 CI; suite-only in an E4 whole-suite run (message not kept) | — | 10-21 | C37 | cause NOT read (two real `FakeCli` turns inside C13's class) | this plan (E5, diagnosis first) |
+| `ASourceRequestIsServedOrRefusedTests.Supporting_material_cannot_displace_production_from_all_sixteen_source_slots` (added 2026-10-22) | 0 CI; suite-only in an E4 whole-suite run (message not kept) | — | 10-21 | C38 | cause NOT read; it reads sixteen files through a real git checkout under `SecuritySources`' collection deadline (C8's neighbourhood, inferred) | this plan (E5, diagnosis first) |this plan (E5, diagnosis first) |
 
 **Seen only in local whole-suite runs** (no CI failure in the 174 logs): the steering-file collision (C1), the three
 `AReviewerThatAsksForSourceIsAskedAgainTests` budgets (C13), `AFeatureIsReviewedEndToEndTests.TheRoundsDeadline_…` (C6),
@@ -90,7 +101,7 @@ are work in progress and are not in this table unless §4 says otherwise.
 `SqliteMigratorTests` (C7), the extension's `processLauncher.test.ts` "many lines" test (C9),
 `SessionStoreConcurrencyTests.EightWritersOnOneSession_DoNotDenyEachOther` (C25, 2026-10-20, in E2's full run and once in
 another plan's baseline run) and `AStreamsUsageIsNeverZeroTests.A_stream_over_the_answer_cap_is_unknown` (C27, the same
-E2 run). **Found by reading, not by a failure:** C10, C11, C12.
+E2 run). **Found by reading, not by a failure:** C10, C11, C12. **Added by the E4 judge round (2026-10-22), from E4's local whole-suite runs and the lead's reports:** C28–C38 (§4), all owned by E5.
 
 The macOS leg is not a required check, so auto-merge passes over its red — which is how C2 and C8 lived for three
 weeks: 54 of the 174 failed runs hold one of those two tests on that leg, and 60 hold one of them on any leg.
@@ -319,7 +330,7 @@ the clock placement is visible).
 
 ### C6 — the round-deadline end-to-end test: a whole round under 8 s of wall clock (TIMING, medium)
 
-**Evidence.** `AFeatureIsReviewedEndToEndTests.TheRoundsDeadline_IsScaledByTheFollowUps_SoAConversationIsNotCutByAOneTurnBudget`
+**Evidence.** `AFeatureIsReviewedEndToEndTests.AReviewerThatAsksOnEveryTurn_IsReviewedEndToEnd_ARealProcessSmokeTestOfTheWiring`
 (`src_mcp/tests/AFeatureIsReviewedEndToEndTests.cs:447-458`) fails "about 1 run in 3 on a clean `origin/main`"
 (`todo/PLAN_question_consultant_tails.md` §6) and failed in the full local run of 2026-10-18; never in the 174 failed CI
 logs. The one message on record (tails §6): the test ran 12–20 s and reported "not started … the round reached its
@@ -924,6 +935,85 @@ driven to completion by an event, not by throughput); a 20 s read bound struck b
 NOT get lengthened — the test then asserts the cap on a stream whose SIZE, not duration, is what is served (a handler
 that serves the bytes from memory in one write). **Confidence: low** — two numbers and no stack. Owner: E5
 (diagnosis first; a coder story only once a cause is shown).
+
+### C28 – C38 — added by the E4 judge round (2026-10-22): the suite-only failures E4's runs showed, and two cases that were known but not filed
+
+> Every case below is **owned by E5** (see "E5 intake — added by the E4 judge round" in `### E5`). Each is a failure seen in a
+> local whole-suite run of E4's stories, or reported to the lead, that passed when its class or method ran alone; none is a CI
+> failure unless it says so, and none was called a flake. **What is recorded is what the E4 status sections kept** — where a
+> message is not kept, the case says so and its first step is a kept log (D5), not a guess. The numbers continue C27.
+
+**C28 — the PowerShell `ModuleAnalysisCache` leaking into `src_vs_code`.** When a child process is started with an environment
+that lacks `LOCALAPPDATA`, PowerShell falls back to the working folder for its `ModuleAnalysisCache` file, which then lands in
+`src_vs_code` (the lead's report; no test message — the symptom is a stray file, so the next failure is kept with the child's
+`ProcessStartInfo.Environment`). Class: SHARED STATE (a file written outside the run's temp folder), the C10–C12 family; the fix
+is on the test side (the child's environment keeps `LOCALAPPDATA`, or points the cache into the run's temp folder).
+**Confidence: medium** (the mechanism is the lead's reading, not a kept trace).
+
+**C29 — `AZombieIsNotAliveTests` reads `/proc/<pid>/stat` after the entry was reaped.** Run 39655713274 (Linux):
+`DirectoryNotFoundException` from `BecomesZombieAsync` (`src_mcp/tests/AZombieIsNotAliveTests.cs`, the polling loop reads
+`/proc/{pid}/stat` with `File.ReadAllTextAsync` and no tolerance for the entry being gone). The test kills the background `sleep`
+and waits for its state to read `Z`; if the entry is reaped between two polls (the outer `sleep` is not the only possible
+reaper on a machine with a subreaper) the next read throws instead of the loop ending. Class: TIMING inside the test, the
+C21/C24/C26 group. **Fix (E5):** the poll treats a missing entry as "no longer a zombie" and fails with a sentence that says
+which state it saw last; no timeout lengthened. **Confidence: high** on the throw site, medium on who reaped.
+
+**C30 — `ATurnThatTimesOut_IsOneTerminalFailure_AndTheSlotIsReleased` and `ATurnWhoseRepairTimesOut_KeepsTheMalformedAttemptsCost_…`
+(`AReviewerThatAsksForSourceIsAskedAgainTests`, `:342` and `:366`).** Both failed in E4 S3's final whole-suite run (13 142 tests,
+4 failed; each green alone). No message was kept in the status sections. **E4 never touched them** — S3's final-run note labelled
+them "(C13, S4's)" in error. They are C13's MECHANISM, not a case S4 closed: each runs `Work(timeout: TimeSpan.FromSeconds(2))`
+through the REAL `ProcessLauncher` and a cold `FakeCli`, turn 1 must start, answer and be read inside the 2 s, and turn 2 sleeps
+10 s so only a launcher timer can end it. S4 moved the conversation cap, the work cap and the resolver onto the clock; the
+per-turn launch timeout of a real child stays the launcher's own timer (E4 §5.1 "stays"). **Fix (E5):** the turns that are not
+the subject answer at once with no start-up race to pay for (a hot launcher, or the in-process `ClockedLauncher` S4 built) and
+only the turn that must time out is slow; the 2 s is not lengthened. **Confidence: medium** (the shape matches C13; no message).
+
+**C31 — `TheSizingIsConcurrentAndBoundedTests.ASizingThatOutlastsItsDeadline_ReturnsGitFailedScopes_WithinIt` (`:116`).** Failed in
+E4 S3's final run; green alone; message not kept. The test asserts a WALL bound (`watch.Elapsed < 3 s`) around a 300 ms sizing
+deadline over a 4 s stand-in, so a suite-loaded machine that delays the continuation by 2.7 s fails it. **Fix (E5):** assert on
+the stand-in's own record (the deadline struck while the call was still pending), not on the wall time of the whole.
+**Confidence: medium.**
+
+**C32 — `QuestionConsultScenarioTests.AQuestionIsAnsweredByARealChild_FencedAndRecorded`.** Failed in E4 S2's whole-suite run (the
+record's status was `failed`); green alone (6 of 6). It starts a real fake-CLI child as a codex row. The cause is NOT read: the
+status says only `failed`. **Diagnosis first (D5):** keep the failed record's `reason` and the child's stderr on the next failure.
+**Confidence: low.**
+
+**C33 — `TheServerAnswersInitializeAtOnceTests.Initialize_IsAnswered_WhileTheVaultReadAndTheProbeAreStillRunning` (`:44`).** Failed
+in E4 S3's seam-alone run (a 51-minute run with three suites on the machine): the stdio round trip timed out at its 11 s bound
+(`timeoutSeconds: 10` in the test). A real server process started on a starved machine; the assertion that `initialize` is not
+held by a 20 s vault read is sound, the bound it is measured with is a wall bound. **Fix (E5):** the test waits for the answer
+by the event (the reply line), with the "must not wait for the vault read" claim carried by the stand-in's marker (the vault
+read had not finished when the reply arrived), not by 10 s against 20 s. **Confidence: medium.**
+
+**C34 — `AChildThatExitedBeforeItsStartTimeWasReadTests…`.** Failed in E4 S3's seam-alone run with a `Win32Exception`; green alone
+(10 tests). This is C2's family (a child gone before its start time is read) on Windows under load rather than on macOS.
+Read it with C2's fix (E3) before deciding whether the test or the launcher is short of a case. **Confidence: low** (the message
+beyond the exception type is not kept).
+
+**C35 — `RepairRunsInsideTheBudgetTests.ARepairGetsWhatIsLEFTOfTheDeadline_NotAWholeSecondOne` (`:35`).** Failed in E4 S3's
+seam-alone run (green alone, 5 tests) and once more, called "an unrelated repair-timeout test", in the 13-of-20 failures of S4's
+`AReviewerThatAsksForSourceIsAskedAgainTests` loop under three parallel suites. Two real 1.5 s launches against a 2 s budget plus
+a 3.5 s wall bound (`:57`): the outcome is the assertion, the bound is context, and under load either can fail. **Fix (E5):**
+the in-process clocked launcher of S4 carries the budget arithmetic (what is LEFT for the repair) with no process and no wall
+time. **Confidence: medium.**
+
+**C36 — `QuestionOutlineTimingTests` (red ALONE too).** 61–68 s against its 60 s bound on the E4 machine (S2's seam-alone run
+and recorded in `module_tests.md`); it times the outline of THIS checkout, so it measures the repository's size growing, not a
+race. It is the one case here that is not a flake: it fails every run on a large enough tree. **Fix (E5, or its owner's plan):** the
+bound is set from a measurement taken on a fixed fixture, not on the working tree; no bound lengthened for a tree that grew.
+**Confidence: high** that it is size, not load.
+
+**C37 — `AReviewerThatAsksForSourceIsAskedAgainTests.ASpentSourceBudget_MakesTheNextTurnFinal_WhateverTheCapSays` (`:210`).** Named
+in an E4 whole-suite run (message not kept in the status sections). Two real `FakeCli` turns inside C13's class with the default
+1-minute timeout, so its exposure is the real children's start and the shared steering folder, not a short deadline.
+**Diagnosis first (D5).** **Confidence: low.**
+
+**C38 — `ASourceRequestIsServedOrRefusedTests.Supporting_material_cannot_displace_production_from_all_sixteen_source_slots`
+(`:130`).** Named in an E4 whole-suite run (message not kept). It reads seventeen files through a real git checkout under
+`SecuritySources`, whose collection runs under C8's two-equal-30-s-timers neighbourhood; the inference is that a loaded machine
+starved the collection. **Diagnosis first (D5);** if the kept message names the collection deadline, C8's own plan owns it.
+**Confidence: low.**
 
 ## 5. The temp folder — what is in it, who made it, why it stays
 
@@ -1552,8 +1642,7 @@ separations must keep, written down now for the gated C4 story. Fable writes thi
 
 **Depends on.** E1 (the measurement rule). Not on E2, and not on E3's S1 any more (the launcher is not touched here).
 
-**Done when.** S12 red (`found AcpEnd.Deadline`), S16 red (`0 of 2 copied`), S14 red (no terminal `TimedOut` with the
-cap removed), S13 red (cut at turn 3 with a one-turn budget) — each then green, each with the suite green on its seam
+**Done when.** S12 red (`found AcpEnd.Deadline`), S16 red (the phase sentence a delayed git answer produces, "while reading the granted folders"; `0 of 2 copied` CAN also occur — S3 deviation 1), S14 red (the conversation's earlier turns lost — `EarlierTurns.Count` 0 where 3 are owed — on the old tests with the fake sleeping; B11 turns only the work-cap test red), S13 red (the scheduler-level test cut at the one-turn cap) — each then green, each with the suite green **except named timing cases, each green alone and filed in the census (C28–C38)** on its seam
 alone first; the loops of §10 recorded per case; C5, C6, C13, C17 not seen in the next 20 CI runs of their legs (a
 watch, §10); no timeout lengthened; `ProcessLauncher` unchanged unless C4's gate opened.
 
@@ -1565,7 +1654,7 @@ story only when its gate opens. C8's own plan's step 3 starts after S4 merges.
 **Outcome (2026-10-21, branch `feat/suite-e4-clock`, E4 S1–S5; the code gate is pending).** Built as written, with the deviations the E4 document's status sections list (§8) and `module_tests.md` records (*The suite is deterministic — E4 S1…S5*). S1: `ManualClock`
 (`src_mcp/tests/ManualClock.cs`), `ClockHandshake`, `MovableClock` and `FakeClock` gone, and `EveryBudgetInAClockedClassReadsItsClockTests` over `BoundedScheduler`, `AcpClient`, `ConsultantPlaces`, `TurnLoop` and `SourceResolver` (six allowed sites: `BoundedScheduler`'s five and
 `AcpClient`'s `DrainGrace`). S2: `AcpClient` reads its `_clock` for the turn deadline and the `/usage` bound (C5; C23 moved here from E5). S3: `ConsultantPlaces` for the one-shot budget and the folder stamp (C17). S4: `TurnLoop` and `SourceResolver`, with `BoundedScheduler`
-handing the loop its `_clock` (C13). S5: tests only — the pure `RoundDeadline.For` test, the scheduler-level test and the wiring arm (C6). The seam of each story landed alone first with the suite green on the default clock; no product timeout was lengthened (the C17 test passes a 5-minute budget as its INPUT, see below) and no product hook calls `Advance`.
+handing the loop its `_clock` (C13). S5: tests only — the pure `RoundDeadline.For` test, the scheduler-level test and the wiring arm (C6). The seam of each story landed alone first with the suite on the default clock green except named timing cases, each green alone and filed in the census (C28–C38, the judge round); no product timeout was lengthened (the C17 test passes a 5-minute budget as its INPUT, see below) and no product hook calls `Advance`.
 **Not done, and why:** S6 (C4, `ProcessLauncher`) is gated on a kept failure (D5) — the C4 test stays in the suite as a known intermittent, its next failure's message to be appended to the E4 document's §3 C4; the BoundedScheduler 429 ladder's `Stopwatch` and `Task.Delay` are named in the scan and deferred
 (Q4); the 20-run CI watches of §10 per leg have not run; the §10 loops are recorded per story (S2's "before" is the every-run RED, not a loop). **What differed from this section:** the C17 test's budget is 5 minutes (not 1 s) and `0 of 2 copied` can still occur when real work before the slow copy shares the budget; B11 turns only the work-cap test red;
 B16 also turns the end-to-end smoke test red on a real machine. The docs pass is done (`module_tests.md`, `module_runners.md`, `module_server.md`, the tails note); promotion of the E4 document waits for the code gate and the CI watch.
@@ -1591,6 +1680,18 @@ seen through the store's `projected` callback, the row released after three); C1
 directly, the smoke test's exposure stated — below); C9 (`replayingFan`'s CPU bound; the real-child smoke test keeps exit
 0 and every character and waits on `onExit`/`onError` with no 10 s timer); C27 (the streaming cap, diagnosis first);
 C7 (a kept failure per D5, else the slow step sized from a measurement). Scenarios S11, S17, S18, S19, S20, S22, S23.
+
+**E5 intake — added by the E4 judge round (2026-10-22).** Eleven cases join E5, every one filed in §4 from E4's local runs and
+none of them a case E4 closed: **C28** (PowerShell's `ModuleAnalysisCache` in `src_vs_code`), **C29** (`AZombieIsNotAliveTests`
+reads `/proc/<pid>/stat` after the entry was reaped; with C21, C24, C26), **C30** (`ATurnThatTimesOut_…` and
+`ATurnWhoseRepairTimesOut_…`: C13's mechanism, a real 2 s turn deadline against a cold `FakeCli`, which S4 did NOT close),
+**C31** (`ASizingThatOutlastsItsDeadline_…`), **C32** (`QuestionConsultScenarioTests.AQuestionIsAnsweredByARealChild_…`),
+**C33** (`TheServerAnswersInitializeAtOnceTests.Initialize_IsAnswered_…`), **C34** (`AChildThatExitedBeforeItsStartTimeWasReadTests…`,
+C2's family), **C35** (`RepairRunsInsideTheBudgetTests.ARepairGetsWhatIsLEFT…`), **C36** (`QuestionOutlineTimingTests`, red
+alone: a size, not a race), **C37** (`ASpentSourceBudget_MakesTheNextTurnFinal_…`) and **C38**
+(`ASourceRequestIsServedOrRefusedTests.Supporting_material_cannot_displace_production_…`). C30, C31 and C35 can reuse S4's
+in-process `ClockedLauncher` (so they MAY use `ManualClock` after all — the "no E5 story needs `ManualClock`" sentence above was
+true of the original list only); C32, C37 and C38 start with a kept log (D5), not a fix.
 
 **Depends on.** E1 only. **No E5 story needs `ManualClock`** (point 4, verified story by story below): C3, C18 and C16
 wait on events of their own making; C15 asserts a recorded number; C9 measures CPU; C21, C24, C26 are process-lifecycle

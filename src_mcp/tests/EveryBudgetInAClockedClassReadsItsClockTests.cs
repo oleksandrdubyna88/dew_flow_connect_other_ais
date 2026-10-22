@@ -12,7 +12,7 @@ namespace CoaiMcp.Tests;
 /// <para>The mistake this guards is per class and invisible: a <c>Stopwatch</c> left beside an injected timer, or a <c>CancelAfter</c> on a
 /// linked source that still uses the system timer, is the same race again while the test on the manual clock goes green. So over a NAMED
 /// SET of product files the scan flags every <c>Stopwatch</c>, <c>.CancelAfter(</c>, <c>DateTime.UtcNow</c>, <c>Task.Delay(</c> and
-/// <c>.WaitAsync(</c> with a timeout whose argument list carries no clock. The argument list is read to its closing parenthesis on the
+/// <c>.WaitAsync(</c> with a timeout, <c>new CancellationTokenSource(&lt;args&gt;)</c>, <c>new PeriodicTimer(</c>, <c>new Timer(</c> and <c>Thread.Sleep(</c> whose argument list carries no clock (<c>TimeProvider.System</c> is the system timer and does not count as one; <c>new CancellationTokenSource()</c> arms nothing and is exempt). The argument list is read to its closing parenthesis on the
 /// ONE joined line <see cref="ProductionSources"/> hands out, so a wrapped <c>WaitAsync(⏎ usageBound)</c> is not missed and a word in a
 /// comment or a string is not a site.</para>
 /// <para><b>Sanctioned sites</b> are an allow-list of <c>(file, snippet, reason)</c>; the companion fails when an allowed snippet is no
@@ -141,7 +141,7 @@ public sealed class EveryBudgetInAClockedClassReadsItsClockTests
     public void EveryBudgetInAClockedClass_ReadsItsClock_ExceptTheSitesNamedWithTheirReason()
     {
         string.Join("; ", Offenders(SitesOf(Clocked), Sanctioned)).Should().BeEmpty(
-            "a Stopwatch, CancelAfter, DateTime.UtcNow, Task.Delay or WaitAsync(timeout) that does not read the class's clock is the race the manual clock cannot see: "
+            "a Stopwatch, CancelAfter, DateTime.UtcNow, Task.Delay, WaitAsync(timeout), new CancellationTokenSource(budget), PeriodicTimer, Timer or Thread.Sleep that does not read the class's clock is the race the manual clock cannot see: "
             + "the test on the manual clock goes green while the system timer still decides");
     }
 
