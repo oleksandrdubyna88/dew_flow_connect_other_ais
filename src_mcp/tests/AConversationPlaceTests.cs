@@ -44,7 +44,7 @@ public sealed class AConversationPlaceTests : IDisposable
         public bool DroppedTheConversation(ProcessResult result) => false;
     }
 
-    private ConsultantPlaces Places() => new(Homes, Store, new ProcessLauncher(), _ => { });
+    private ConsultantPlaces Places(TimeProvider? clock = null) => new(Homes, Store, new ProcessLauncher(), _ => { }, clock);
 
     [Fact]
     public async Task ARuntimeThatDeclaresAHomesFolderWithoutACopy_GetsAnOwnedStampedLockedHome_InTheCheckout()
@@ -106,10 +106,49 @@ public sealed class AConversationPlaceTests : IDisposable
     // ---------- a question row's copies are made inside the row's budget (the #811 checkpoint round) ----------
 
     /// <summary>
+    /// The budget the copies are judged against, on the places' OWN clock. Minutes, not a second: the test advances the clock past it, and a
+    /// budget the system timer could also reach during the test would let a budget still armed on the system timer pass by luck.
+    /// </summary>
+    private static readonly TimeSpan RowBudget = TimeSpan.FromMinutes(5);
+
+    private static readonly DateTimeOffset Epoch = new(2031, 3, 4, 5, 6, 7, TimeSpan.Zero);
+
+    /// <summary>The guard every wait of a clocked test sits under: a failing test ends with its own sentence, never a hang.</summary>
+    private static CancellationTokenSource Guard()
+    {
+        var guard = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        guard.CancelAfter(TimeSpan.FromSeconds(30));
+
+        return guard;
+    }
+
+    /// <summary>A copy maker whose hook, on the product's thread, signals the test when a copy of <paramref name="slowName"/> starts and waits for its release.</summary>
+    private static ReviewSnapshots MakerParkedAt(string slowName, ClockHandshake meeting, SnapshotBudget budget, CancellationToken guard) =>
+        new(new ProcessLauncher(), SnapshotOptions.Default with
+        {
+            BeforeCopyOf = (_, path) =>
+            {
+                if (path.Contains(slowName, StringComparison.OrdinalIgnoreCase))
+                {
+                    meeting.Signal();
+                    meeting.WaitForReleaseAsync(guard).GetAwaiter().GetResult();
+                }
+            },
+        }, budget, ReviewSnapshots.Quiet);
+
+    private static string[] TreeOf(string folder) =>
+        Directory.Exists(Path.Combine(folder, "tree")) ? [.. Directory.EnumerateDirectories(Path.Combine(folder, "tree"))] : [];
+
+    /// <summary>
     /// Granted roots are copied one after another before Vibe starts, each up to D6's ceilings — ten slow roots would spend
     /// minutes of the row's budget before its launch. The copies are bounded by the row's own budget: past it the place is
     /// refused naming how many roots were copied of how many, and the copies made are disposed.
     /// </summary>
+    /// <remarks>
+    /// The budget runs on a manual clock (E4 S3, C17): git's answers and the fast copy meet NO clock pressure, so however slow
+    /// a runner is the fast root IS copied; the slow root's hook only signals that it got there and waits, and THIS thread advances the
+    /// clock past the budget — so the slow copy is cut on every run.
+    /// </remarks>
     [Fact]
     public async Task CopiesThatOutrunTheRowsBudget_RefuseThePlace_SayingHowManyWereCopied_AndKeepNone()
     {
@@ -117,25 +156,65 @@ public sealed class AConversationPlaceTests : IDisposable
         var fast = await RepositoryAsync(launcher, "fast");
         var slow = await RepositoryAsync(launcher, "slow");
         var budget = new SnapshotBudget(long.MaxValue / 2, 0, static _ => long.MaxValue / 2);
-        var places = Places();
-        places.Maker = new ReviewSnapshots(launcher, SnapshotOptions.Default with
-        {
-            // The slow root's file takes longer to copy than the whole budget.
-            BeforeCopyOf = (_, path) =>
-            {
-                if (path.Contains("slow", StringComparison.OrdinalIgnoreCase))
-                {
-                    Thread.Sleep(TimeSpan.FromSeconds(3));
-                }
-            },
-        }, budget, ReviewSnapshots.Quiet);
+        var clock = new ManualClock(Epoch);
+        var meeting = new ClockHandshake();
+        using var guard = Guard();
+        var places = Places(clock);
+        places.Maker = MakerParkedAt("slow", meeting, budget, guard.Token);
         var folder = Directory.CreateDirectory(_dir.At("row")).FullName;
 
-        using var place = await places.OneShotAsync(folder, [fast, slow], TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
+        var placing = places.OneShotAsync(folder, [fast, slow], RowBudget, guard.Token);
+        try
+        {
+            var first = await Task.WhenAny(meeting.Reached, placing).WaitAsync(guard.Token);
+            first.Should().BeSameAs(meeting.Reached, "the slow root's copy is reached while the budget is still armed on the places' clock — the place ended first, so something else times the budget");
+            clock.Advance(RowBudget + TimeSpan.FromMilliseconds(1));
+        }
+        finally
+        {
+            meeting.Release();
+        }
+
+        using var place = await placing.WaitAsync(guard.Token);
 
         place.Refusal.Should().Contain("1 of 2", "the sentence says how far the copying got").And.Contain("budget");
-        Directory.EnumerateDirectories(Path.Combine(folder, "tree")).Should().BeEmpty("the copy that was made is disposed");
+        TreeOf(folder).Should().BeEmpty("the copy that was made is disposed");
         budget.Held.Should().Be(0, "and its bytes are given back");
+        clock.ActiveTimers.Should().Be(0, "the budget's timer left the clock when it fired");
+    }
+
+    /// <summary>
+    /// A zero budget is a TEST's value (no product path hands one over, E4 plan §5.2): on a clock nobody advances it is out
+    /// before anything is copied, because <c>new CancellationTokenSource(TimeSpan.Zero, clock)</c> cancels in its constructor.
+    /// </summary>
+    [Fact]
+    public async Task AZeroBudget_IsOutBeforeAnythingIsCopied_OnAClockNobodyAdvances()
+    {
+        var launcher = new ProcessLauncher();
+        var fast = await RepositoryAsync(launcher, "fast");
+        var budget = new SnapshotBudget(long.MaxValue / 2, 0, static _ => long.MaxValue / 2);
+        var places = Places(new ManualClock(Epoch));
+        places.Maker = new ReviewSnapshots(launcher, SnapshotOptions.Default, budget, ReviewSnapshots.Quiet);
+        var folder = Directory.CreateDirectory(_dir.At("row")).FullName;
+
+        using var place = await places.OneShotAsync(folder, [fast], TimeSpan.Zero, TestContext.Current.CancellationToken);
+
+        place.Refusal.Should().Contain("before anything was copied", "the budget was out before the first copy").And.Contain("budget");
+        TreeOf(folder).Should().BeEmpty("nothing was copied");
+        budget.Held.Should().Be(0, "and nothing is held");
+    }
+
+    /// <summary>The conversation folder's stamp is the places' clock's instant, not the machine's.</summary>
+    [Fact]
+    public async Task AConversationFoldersStamp_IsTheClocksInstant()
+    {
+        var id = ConsultationStore.NewId();
+        var folder = ConsultantHomes.ConversationFolder(Homes, ConsultantHomes.Kimi, id);
+        var clock = new ManualClock(Epoch);
+
+        using var place = await Places(clock).ForConversationAsync(new HomeOnly(), id, _dir.At("repo"), Ceiling, TestContext.Current.CancellationToken);
+
+        ConversationFolder.Read(folder).StartedUtc.Should().Be(Epoch.UtcDateTime, "the stamp reads the places' clock, which no wall time has moved");
     }
 
     private async Task<string> RepositoryAsync(ProcessLauncher launcher, string name)

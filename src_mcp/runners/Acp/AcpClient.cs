@@ -28,8 +28,11 @@ namespace CoaiMcp.Runners.Acp;
 /// session exists, stdin closed, a short wait, the tree kill by pid, the wait. A test with a fake agent that spawns
 /// a heartbeat grandchild checks both pids are gone on each of those paths.</para>
 /// </remarks>
-public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary, TimeSpan usageBound, ITreeSupervisor supervisor)
+public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary, TimeSpan usageBound, ITreeSupervisor supervisor, TimeProvider? clock = null)
 {
+    /// <summary>The one clock the turn's budgets read (E4 plan §5.1): a test hands a manual one; the product is on the system clock.</summary>
+    private readonly TimeProvider _clock = clock ?? TimeProvider.System;
+
     /// <summary>The prompt that asks the agent for the session's token totals — its own command, answered without a model call.</summary>
     private const string UsagePrompt = "/usage";
 
@@ -106,17 +109,42 @@ public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary, Ti
             : profile.AgentRefusal(request, ask);
 
     /// <summary>
-    /// The turn. Everything after the start is inside the one <c>try</c> whose <c>finally</c> ends the agent — the
-    /// clock, the pump, the requests — so nothing that throws can leave the child running.
+    /// The turn. Everything after the start is inside a <c>try</c> whose <c>finally</c> ends the agent — the clock, the pump, the requests —
+    /// so nothing that throws can leave the child running. The deadline's two sources are armed INSIDE the first <c>try</c>: a clock that cannot
+    /// make a timer (or a caller's source already disposed) would otherwise throw before any <c>finally</c> existed, with the agent started.
+    /// Once <see cref="ConverseUntilAsync"/> has the turn its own <c>finally</c> ends the agent, and this one stands down.
     /// </summary>
     private async Task<AcpOutcome> TurnAsync(AcpTransport transport, AcpAsk ask, CancellationToken ct)
     {
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var session = new AcpSession(transport, boundary, deadline.Token);
+        var handedOver = false;
+        try
+        {
+            // Two sources, the timer FIRST and the link second (plan §5.2): the `using`s dispose the link before the timer, so a timer that
+            // fires between the two disposals meets a disposed link rather than a live link holding a disposed timer. The timer is armed here, a few
+            // microseconds before the session exists; the tests claim only that the TIMER decides the turn's end. `ct.IsCancellationRequested` still
+            // tells the caller's cancellation (`Failed`) from this deadline's.
+            using var turnTimer = new CancellationTokenSource(ask.Deadline, _clock);
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct, turnTimer.Token);
+            handedOver = true;
+
+            return await ConverseUntilAsync(transport, ask, ct, deadline.Token);
+        }
+        finally
+        {
+            if (!handedOver)
+            {
+                await transport.EndAsync(() => Task.CompletedTask);
+            }
+        }
+    }
+
+    /// <summary>The conversation under an armed deadline: the session, the pump, the requests, and the one <c>finally</c> that ends the agent and settles the pump.</summary>
+    private async Task<AcpOutcome> ConverseUntilAsync(AcpTransport transport, AcpAsk ask, CancellationToken ct, CancellationToken deadline)
+    {
+        var session = new AcpSession(transport, boundary, deadline);
         Ended ended;
         try
         {
-            deadline.CancelAfter(ask.Deadline);
             session.Pump();
             ended = await ConverseAsync(session, ask);
         }
@@ -192,7 +220,7 @@ public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary, Ti
         var kept = answered with { AnswerChars = mark };
         try
         {
-            await session.CallAsync("session/prompt", AcpMessages.Prompt(session.SessionId, UsagePrompt)).WaitAsync(usageBound);
+            await session.CallAsync("session/prompt", AcpMessages.Prompt(session.SessionId, UsagePrompt)).WaitAsync(usageBound, _clock);
 
             return kept with { Tokens = AcpUsageLine.Parse(After(session.Answer, mark)) };
         }
@@ -226,6 +254,12 @@ public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary, Ti
     /// Waits for the pump to end, for as long as the drain grace allows: the agent's tree is dead, so its output
     /// ends now — unless something that survived holds the pipe, which is the case the grace bounds.
     /// </summary>
+    /// <remarks>
+    /// <b>On the SYSTEM clock, on purpose</b> (E4 plan §5.1, teardown): this bounds how long a REAL pipe may still deliver bytes after the tree was
+    /// killed. It decides nothing a test races — the deadline has already fired or the answer is in — and on a manual clock that nobody advances it
+    /// would turn a two-second bound on a real pipe into a hang. The same holds for the graces under <see cref="AcpTransport.EndAsync"/> and
+    /// <see cref="AcpSession"/>.
+    /// </remarks>
     private static async Task SettledAsync(Task reading)
     {
         try

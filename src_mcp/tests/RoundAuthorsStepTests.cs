@@ -442,7 +442,7 @@ public sealed class RoundAuthorsStepTests : IDisposable
     public void ADeadlineThatPassesInThePeerPhase_StopsThere_NoReaderNoAssign_AndEverythingUnknown()
     {
         using var h = AuthorsStepHarness.Of("resumed-agent");
-        var clock = new MovableClock(new DateTimeOffset(T0));
+        var clock = new ManualClock(new DateTimeOffset(T0));
         var (reads, assigns) = (0, 0);
         var round = h.Round(1);
 
@@ -479,7 +479,7 @@ public sealed class RoundAuthorsStepTests : IDisposable
     public void ADeadlineThatPassesAfterTheRead_NeverAttributes_ButSaysTheReaderRan()
     {
         using var h = AuthorsStepHarness.Of("resumed-agent");
-        var clock = new MovableClock(new DateTimeOffset(T0));
+        var clock = new ManualClock(new DateTimeOffset(T0));
         var assigns = 0;
         var round = h.Round(1);
 
@@ -517,7 +517,7 @@ public sealed class RoundAuthorsStepTests : IDisposable
             world.Add(id, T0.AddSeconds(2), [PeerRound(1, T0.AddSeconds(5), T0.AddSeconds(9))]);
         }
 
-        var clock = new MovableClock(new DateTimeOffset(T0));
+        var clock = new ManualClock(new DateTimeOffset(T0));
         var loaded = new List<string>();
         var round = h.Round(1);
 

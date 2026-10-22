@@ -24,7 +24,7 @@ public sealed class TheSendsThemselvesTests : IDisposable
     private readonly string _dir =
         Path.Combine(Path.GetTempPath(), "coai-sends-" + Guid.NewGuid().ToString("N")[..8]);
     private readonly Serilog.ILogger _log = Serilog.Core.Logger.None;
-    private readonly MovableClock _clock = new(new DateTimeOffset(2026, 9, 17, 9, 0, 0, TimeSpan.Zero));
+    private readonly ManualClock _clock = new(new DateTimeOffset(2026, 9, 17, 9, 0, 0, TimeSpan.Zero));
 
     private RoundsDb Db() => RoundsDb.Open(_dir, _log, _clock)!;
 

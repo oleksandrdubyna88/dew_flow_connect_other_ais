@@ -39,9 +39,13 @@ namespace CoaiMcp.Runners.Feature;
 /// How long one file's read of git may take before it is refused as timed out — <see cref="SourceBudget.ReadDeadline"/>
 /// unless a test shortens it.
 /// </param>
-public sealed class SourceResolver(GitHistory git, ISourceOutliner outliner, string repoPath, string headSha, TimeSpan? readDeadline = null)
+/// <param name="clock">
+/// The clock the read deadline runs on — the system's unless a test moves time by hand (E4 plan §5.1 table 4).
+/// </param>
+public sealed class SourceResolver(GitHistory git, ISourceOutliner outliner, string repoPath, string headSha, TimeSpan? readDeadline = null, TimeProvider? clock = null)
 {
     private readonly TimeSpan _readDeadline = readDeadline ?? SourceBudget.ReadDeadline;
+    private readonly TimeProvider _clock = clock ?? TimeProvider.System;
 
     /// <summary>One file as the round holds it: refused with a sentence, or its redacted text, its lines, and its outline on demand.</summary>
     /// <param name="Transient">A refusal git may not repeat — a timeout, a failed process — so the round must not keep it.</param>
@@ -196,8 +200,8 @@ public sealed class SourceResolver(GitHistory git, ISourceOutliner outliner, str
     /// </summary>
     private async Task<Reading> ReadWithinDeadlineAsync(string path, CancellationToken ct)
     {
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        deadline.CancelAfter(_readDeadline);
+        using var readTimer = new CancellationTokenSource(_readDeadline, _clock);
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct, readTimer.Token);
         try
         {
             var reading = await CommittedFile.ReadAtAsync(git, repoPath, headSha, path, deadline.Token);

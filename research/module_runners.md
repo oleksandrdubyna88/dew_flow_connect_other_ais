@@ -48,7 +48,7 @@ sequenceDiagram
 | `WorktreeFailure` | `Worktrees/WorktreeFailure.cs` | what a failed round-tree `worktree add` says: reads git's own `error: unable to create file <rel>: <reason>` / `fatal: cannot create directory at '<rel>': <reason>` line and names the path, its length in UTF-16 units and git's reason, instead of only the closing `fatal: Could not reset index file` (which names the index); for `Filename too long` it adds the Windows limit of the KIND of path git could not make (`WindowsPathLimits.FileUnits` = 259 for a file, `WindowsPathLimits.FolderUnits` = 247 for a folder, read from the one shared type, Windows only) and `COAI_ROUND_WORKTREES`; a failure with no such line reads exactly as `FatalLine` always did. Round trees only — a review tree keeps its wire word `git_failed` |
 | `GitModules`, `SubmoduleMount` | `Git/GitModules.cs` | `.gitmodules` as (name, path); a file inside the repository under review, so absolute/traversing paths and names that could spell another config key drop the mount |
 | `DiffExclusions`, `ContextAssembler`, `CollectedDiff`, `DiffBase` | `Context/ContextAssembler.cs` | numstat → per-file diffs with `:(exclude,glob)` pathspecs; binary sizes via `cat-file -s`; every one of the three taken against the MERGE BASE, which the result names. `DiffExclusions.Excludes(path)` / `WhichExcludes` answer the same glob table for ONE path — the source resolver's question, since it has no git call to hand the pathspecs to. Each glob's matcher carries a 1000 ms match ceiling (SonarCloud S6444), and a match that hits it FAILS CLOSED — the path counts as excluded and is never served, the refusal naming that glob (`WhenMatchTimesOut`, reached by a test through the `FirstExcluding` seam) |
-| `SourceResolver` | `Feature/SourceResolver.cs` | source on demand for a feature reviewer (plan §4.9, S3.1): git objects at the round's pinned head and nothing else, one read per file per round, every name check before any process, every byte through `Redaction.SafeSource`, every cap from `SourceBudget` — the section below |
+| `SourceResolver` | `Feature/SourceResolver.cs` | source on demand for a feature reviewer (plan §4.9, S3.1): git objects at the round's pinned head and nothing else, one read per file per round, every name check before any process, every byte through `Redaction.SafeSource`, every cap from `SourceBudget` — the section below; the per-file read deadline is a timer source on its injectable `TimeProvider` (E4 S4) |
 | `CommittedFile.ReadAtAsync` | `Collecting/CommittedFile.cs` | the read without the commit check, for a caller that pinned the commit itself; `ReadAsync` is this after checking |
 | `IReviewerRuntime`: `CodexRuntime`, `DeepseekRuntime`, `GeminiRuntime`, `ClaudeRuntime`, `AntigravityRuntime`, `CustomCodexRuntime` | `Reviewers/ReviewerRuntime.cs`, `ClaudeRuntime.cs`, `CustomRuntime.cs` | THE vendor adapter: `Build` (argv, pure) + `ReadAnswer` + `ReadUsage`, the last two with working defaults. Flags verified against codex 0.147.0 / gemini 0.55.1 / claude 2.1.197 / agy 1.1.22; keys ride env, never argv; DeepSeek = Codex config-shifted. **An adapter records on the invocation what it LAUNCHED** — `Model:` always, `Effort:` where it actually passed a reasoning flag (only `LocalRuntime` does) — which four of six adapters silently did not until 2026-09-12, issue #129; `EveryAdapterRecordsWhatItLaunchedTests` drives every adapter's own `Build` rather than a hand-made invocation, because the test it replaces built the value it asserted. `ReviewerSettings.Confined` ("handed everything in its prompt, may reach nothing else") makes `ClaudeRuntime` extend `--disallowedTools` to every tool that reaches past the prompt — flag re-read on claude 2.1.258; codex and antigravity take no new flag, their sandboxes are already the strongest each offers |
 | `ReviewerRuntimeSelector` | same | unknown provider refuses naming the catalog |
@@ -56,7 +56,7 @@ sequenceDiagram
 | `Usage`, `UsageParser` | `core/Findings/UsageParser.cs` | schema-less scan over any vendor envelope; MAX per key name then sum per category, so a streamed cumulative total is never summed with itself; money only when the vendor priced the run |
 | `BoundedScheduler`, `ReviewerWork`, `ReviewerSummaryFactory` | `Reviewers/BoundedScheduler.cs` | global + per-provider semaphores; a rate limit climbs the ladder below; a launch is the reviewer's whole CONVERSATION (`ReviewerWork.Continue`, S3.2 — the section at the end), one terminal outcome either way |
 | `IReviewerContinuation`, `TurnDecision`, `ReviewerContinuation.None`, `TurnUsage` | `Reviewers/ReviewerContinuation.cs` | the seam a stage plugs a conversation into: after each answered turn, the next turn's whole work (launch AND repair) or a stop; `None` is every stage but one |
-| `TurnLoop` | `Reviewers/TurnLoop.cs` | the loop inside the held slot: the ladder per turn, each turn under its own deadline and the whole under `timeout × (1 + follow-ups)` — or under `ReviewerWork.ConversationCap` when the stage set a shorter one (the feature stage's whole-review limit for an api reviewer, `COAI_FEATURE_API_REVIEW_MINUTES`, twenty minutes by default, 2026-09-27) — every answered turn's usage on the outcome's base |
+| `TurnLoop` | `Reviewers/TurnLoop.cs` | the loop inside the held slot: the ladder per turn, each turn under its own deadline and the whole under `timeout × (1 + follow-ups)` — or under `ReviewerWork.ConversationCap` when the stage set a shorter one (the feature stage's whole-review limit for an api reviewer, `COAI_FEATURE_API_REVIEW_MINUTES`, twenty minutes by default, 2026-09-27) — every answered turn's usage on the outcome's base; its cap and its turns' elapsed read ONE injectable `TimeProvider` — the scheduler's, handed at construction (E4 S4, the section *The deadline classes read one injectable clock*) |
 | `SourceTurns`, `SourceConversation` | `Feature/SourceConversation.cs` | the feature stage's continuation: serves the requests through the round's one resolver, renders the tail, stops on no request, the cap or the spent budget; immutable across turns |
 | `RepairInstruction` | `Reviewers/RepairInstruction.cs` | the repair launch's closing paragraph — one text, appended to whichever prompt the launch it repairs was given |
 | `VendorIdentity`, `RuntimeResolution` | `Reviewers/RuntimeResolution.cs` | the ONE answer to "what is this vendor": which runtime it drives, the adapter for it, and how it authenticates — asked by both binaries, after two incidents where a second copy of it was the one that was wrong |
@@ -2398,7 +2398,7 @@ sequenceDiagram
   participant E as ReviewerExecutor (ladder per turn)
   participant C as IReviewerContinuation
   participant R as SourceResolver (one per round)
-  B->>L: RunAsync(work) — cap = timeout × (1 + FollowUps)
+  B->>L: RunAsync(work) — cap = timeout × (1 + FollowUps), read on the scheduler's _clock
   loop turn k
     L->>E: RunWithLadderAsync(work bounded by min(own timeout, cap left))
     E-->>L: Ok | TimedOut | NonZeroExit | …
@@ -2473,6 +2473,57 @@ sequenceDiagram
   `cacheReadInputTokens` as the cached subset beside counting it as billed input, `UsageParser` reads
   codex's `cached_input_tokens`; `RoundAudit`'s answered line says `over N turns`, `(N cached)` and
   `source: …`. That number, per turn, is what decides whether C3 gets its own plan (D25).
+
+## The deadline classes read one injectable clock — the ACP client, the turn loop, the source resolver (2026-10-21, E4 of `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp_E4.md`)
+
+Three classes in this module decide an outcome by a deadline, and tests that raced those deadlines against wall time lost on a loaded machine (C5, C23, C13 — the cold start of a process was paid out of the budget under test). Each now owns ONE optional
+`TimeProvider` (`TimeProvider? clock = null`, `_clock = clock ?? TimeProvider.System`) that every budget deciding the outcome reads; the product runs on the system clock and a test hands a `ManualClock`. The contract, the inventory with line numbers, the
+structural scan that guards it and the REDs per story are in [module_tests.md](module_tests.md) (*The suite is deterministic — E4 S1…S5*); the class-side facts are here. **Nothing is threaded through `PanelService` or `RoundEngine`** (plan D3).
+
+```mermaid
+flowchart TD
+  subgraph acp["AcpClient (runners/Acp) — one _clock"]
+    turn["TurnAsync: turnTimer = CancellationTokenSource(ask.Deadline, _clock)<br/>deadline = linked(ct, turnTimer.Token)"]
+    usage["UsageAsync: session/prompt WaitAsync(usageBound, _clock)"]
+    graces["SettledAsync DrainGrace · AcpTransport.EndAsync · AcpSession graces<br/>SYSTEM clock — teardown, bound a real pipe"]
+  end
+  subgraph sched["BoundedScheduler (runners/Reviewers) — _clock"]
+    loop["TurnLoop(runTurn, onProgress, _clock)<br/>cap = timeout x (1 + follow-ups) · each turn's elapsed"]
+    stopwatches["queue and conversation Stopwatches (reports)<br/>429 ladder Stopwatch + Task.Delay<br/>SYSTEM clock — named in the scan's allow-list"]
+  end
+  subgraph resolver["SourceResolver (runners/Feature) — one _clock"]
+    read["ReadWithinDeadlineAsync: readTimer = CancellationTokenSource(_readDeadline, _clock)<br/>deadline = linked(ct, readTimer.Token)"]
+  end
+  turn -->|"ends Deadline; a caller's cancellation still reads Cancelled"| out1["AcpOutcome"]
+  usage -->|"never changes the first prompt's end"| out1
+  loop -->|"left = cap - elapsed; launch while anything is left"| out2["ReviewerOutcome.Ok / TimedOut"]
+  read -->|"deadline struck: not served - timed out"| out3["Reading refused, transient"]
+```
+
+**The ACP client (S2).** `AcpClient` (`runners/Acp/AcpClient.cs`; the clock is the last constructor parameter, `:31`, field `:34`). The turn's deadline is its own timer source on the clock, declared BEFORE the linked source (`:126-127`) so the link is disposed first and a timer
+firing between the two disposals meets a disposed link; the old `CreateLinkedTokenSource(ct)` + `CancelAfter(ask.Deadline)` is gone. `ct.IsCancellationRequested` still separates a caller's cancellation (`Failed(e, true, …)`, end `Cancelled`) from the deadline (`Deadline`). The timer
+now starts a few microseconds before the session exists (before `new AcpSession`); a preemption between the two can observe it, so nothing claims otherwise — the tests assert only that the TIMER decides the turn's end. The `/usage` bound is `.WaitAsync(usageBound, _clock)` (`:223`) and still
+never changes the first prompt's end, answer or exit. A deadline of zero or less (or past the one-day `MaxDeadline`) is refused before any start, so no zero reaches the new source. **On the SYSTEM clock, on purpose** — the teardown: `SettledAsync`'s `DrainGrace` (`:267`), `AcpTransport.EndAsync`'s `_draining.CancelAfter(DrainGrace)`
+(`AcpTransport.cs:234`), `AcpSession.NotifyAsync`'s `GraceWait` source (`:175`), `WaitUntilQuietAsync` (`:186-197`) and `WatchExitAsync`'s `Task.Delay(ExitGrace, ct)` (`:265`) each bound how long a REAL pipe may still deliver bytes after the end — `WatchExitAsync`'s 300 ms lets a buffered
+answer through before the pending requests are broken, so it is a grace on real pipe progress, not "after the outcome is decided". On a manual clock nobody advances they would turn a bounded wait on a real pipe into a hang; the structural scan allows `SettledAsync`'s site by name and a remark there says why.
+A test therefore does not advance anything for the teardown: after the last advance the assertions run in real time, bounded by `GraceWait` + `DrainGrace` (3.5 s), and still find the received answer kept and the agent gone.
+
+**`TurnLoop` (S4)** (`runners/Reviewers/TurnLoop.cs`; clock last constructor parameter, `:29-32`, `_clock` `:34`). The conversation's elapsed and each turn's elapsed are `_clock.GetTimestamp()` / `GetElapsedTime(…)` (`:50`, `:79`, `:86`, `:89`) — the old single `Stopwatch` and its five reads. The
+per-turn TIMER is not here: it is the launcher's (or the test's stand-in), so the loop's arithmetic is the only thing the clock moves. **A turn is launched whenever ANYTHING is left** (`left <= TimeSpan.Zero` is the only no-launch case, which answers `TimedOut` with `Usage.None`), bounded to what is left
+(`Within`/`Bounded`) — so `timeout × (1 + follow-ups)` made of exact turns gives a final launch bounded to the remainder unless the remainder is exactly zero. That is what makes the counts exact on a manual clock: 400 ms turns under a 700 ms timeout and one follow-up (cap 1.4 s) are four launches
+(timeouts 700, 700, 600, 200 ms) and three earlier turns; 300 ms turns under a 900 ms `ConversationCap` are three launches and three earlier turns. The same arithmetic is what S5 pins for the round (`RoundDeadline.For`, `src/Server/Rounds/RoundDeadline.cs`).
+
+**`BoundedScheduler`'s one-clock rule (S4).** The scheduler already owned `_clock` (`BoundedScheduler.cs:103`, the reading a stated rate-limit reset is judged against — *Only the ladder's decision changes* above). It now also hands that clock to the loop it builds: `new TurnLoop((turn, token) => RunWithLadderAsync(…), onProgress, _clock)`
+(`:463`). The rule is "a loop inside a scheduler on clock X is on clock X": one clock per scheduler, not a new parameter anywhere above it (`PanelService` still constructs the scheduler with the default). **What it does not claim:** the scheduler's own five `Stopwatch`/`Task.Delay` sites stay on the system clock and are
+named in the scan's allow-list — the two queue `Stopwatch`es (`:291`, `:366`) and the conversation's reported `Stopwatch watch` (`:462`) only REPORT; the 429 ladder's `Stopwatch` (`:617`, judged against the ladder's budget beside a `_clock.GetUtcNow()` reset reading at `:675`) and its `Task.Delay(wait, ct)` (`:686`) decide
+and are DEFERRED — named, not moved, until a 429-ladder failure is kept (decision D5; plan Q4). The ladder therefore still mixes a `Stopwatch` elapsed with an injectable reset clock; the plan records that as the pattern it names and defers, not as sound.
+
+**`SourceResolver` (S4)** (`runners/Feature/SourceResolver.cs`; `clock` after `readDeadline`, `:45`, `_clock` `:48`). One file's read deadline is its own timer source on the clock, declared before the link (`:203-204`); `deadline.IsCancellationRequested && !ct.IsCancellationRequested` still names OUR deadline, so a read the deadline ends is
+`not served: path — timed out: git did not answer within 30 s; ask again next turn`, transient, and the turn goes on with what was served. A zero `readDeadline` (a test's value only: the three product construction sites pass none and get `SourceBudget.ReadDeadline`, 30 s) is out synchronously and refuses the read the same way. The launcher's own per-process timer
+(`GitHistory.RunAsync`, `Timeout = Budget`) is a callee and is not seamed here (it is the gated story S6, C4).
+
+**Not seamed on purpose.** `ReviewSnapshots`' `MaxElapsed` (60 s) is a host safety ceiling that protects a person's machine from one copy that never ends; a seam without a RED is refused (D3) and a ceiling on a manual clock nobody advances would turn a runaway copy into a hang — it stays on the system clock ([module_server.md](module_server.md), *the conversation's place*).
+`ProcessLauncher`'s timers and `ReviewerExecutor`'s `Stopwatch spent` are callees none of the E4 REDs races; `ProcessLauncher` is the subject of the gated S6 (`AReaderIsEndedWithItsTreeTests`, C4 — opens only when a failure of it is kept).
 
 ## A codex row on an endpoint with no model is refused (2026-10-03, PLAN_refuse_an_endpoint_row_without_a_model)
 
@@ -3621,7 +3672,7 @@ sequenceDiagram
   Note over S: asked model not among them: model_not_offered (65), nothing set or spent
   S->>A: set_config_option, prompt
   A-->>S: end_turn
-  S->>A: /usage (own bound)
+  S->>A: /usage (own bound, on the client's clock)
   A-->>S: Session total: N input, M output
   Note over S,A: tree kill by pid, then the hold disposed, then the report
 ```

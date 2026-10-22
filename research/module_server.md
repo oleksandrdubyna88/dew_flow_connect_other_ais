@@ -7822,7 +7822,7 @@ flowchart TD
   held -->|no| makeat["MakeAtAsync(Live(repo), folder/tree) — replaces a tree a previous server left"]
   refresh --> launch["launch: Workdir = tree · OwnedScratch = folder · prompt names tree"]
   makeat --> launch
-  row["question row, plan Cwd = Snapshot"] --> copies["OneShotAsync(row folder, granted roots) — a copy per root; a parent folder expanded into its repositories; none found: refused"]
+  row["question row, plan Cwd = Snapshot"] --> copies["OneShotAsync(row folder, granted roots) — a copy per root; a parent folder expanded into its repositories; none found: refused; the whole bounded by the row budget, a timer on the places clock"]
   copies --> rowlaunch["launch in tree · prompt names the copies · finally: the row folder deleted"]
   rowlaunch -. "holds .coai-question.lock for the row's life" .-> qlock["row scratch lock"]
   beat --> qsweep["PruneOldAnswerDirs — coai-question-* older than six hours"]
@@ -7836,7 +7836,7 @@ flowchart TD
 
 | What | Where |
 |---|---|
-| The place, the one-shot copies | `Server/Consultation/ConsultantPlaces.cs` |
+| The place, the one-shot copies | `Server/Consultation/ConsultantPlaces.cs` (its budget and folder stamp read the injectable `_clock`, `:118`) |
 | The parent-folder expansion (D1–D9): the walk and its listing seam, git's facts, the worktree selection, the tally, the link rule, the one copy method | `Server/Consultation/ParentExpansion.cs`, `RepositoryWalk.cs`, `FolderListing.cs`, `RepositoryFacts.cs`, `LinkedWorktrees.cs`, `OneShotTally.cs`, `GrantedPaths.cs`, `RepositoryCopier.cs` |
 | The row's `note` carrying what the place skipped | `QuestionRowLaunch.PlaceNotes` |
 | The conversation's snapshot registry | `Server/Consultation/ConversationSnapshots.cs` |
@@ -7922,6 +7922,14 @@ parent folder was expanded and copied (~30 s including git's confirmations, 411 
   turn budget. Past it the place is refused — *"copying the granted folders took longer than the row's budget (N s): k of
   m copied"* — and every copy made, one finished past the budget included, is disposed. The row ends `refused`; Vibe never
   starts. Each root still has its own `snapshot-<id>` under `tree` (the finding that they share one path was rejected).
+- **The places read ONE injectable clock (E4 S3, 2026-10-21).** `ConsultantPlaces` takes `TimeProvider? clock = null` last (`ConsultantPlaces.cs:116`, `_clock` `:118`; the system clock by default, a `ManualClock` in a test).
+  The one-shot budget is its own timer source on that clock, `budgetTimer = new CancellationTokenSource(budget, _clock)`, declared BEFORE the linked source `copying` (`:339-340`) so the link is disposed first;
+  `catch (OperationCanceledException) when (!ct.IsCancellationRequested)` still reads the budget's cancellation as the budget's, and the caller's own cancellation still leaves as one. The conversation folder's
+  wall stamp — what the home sweep reads to age a folder — is `clock.GetUtcNow().UtcDateTime` (`Stamping`, `:290-292`), no longer `DateTime.UtcNow`. A zero budget is out synchronously, before anything is asked of git
+  (the constructor cancels; no product path hands a zero: the row budget comes through `PanelSettings.IntVar`, `> 0`). **Not on the clock, on purpose:** `ReviewSnapshots.BuildOnceAsync`'s 60 s `Stopwatch` (`MaxElapsed`,
+  `runners/Snapshots/ReviewSnapshots.cs:171,214`) is a host safety ceiling per copy — it protects a person's machine from a copy that never ends, a seam on it would have no RED (plan D3), and on a manual clock nobody
+  advances it would turn a runaway copy into a hang; and `TakingTheLock`'s `HeldFile.TakeWithin(…, LockWait)` (10 s, `:121-125`) is a `DateTime.UtcNow` loop already behind its own test seam (E5's C3). The tests cut the slow copy by a
+  handshake — the hook signals, the TEST advances (module_tests.md, *E4 S3*) — and `EveryBudgetInAClockedClassReadsItsClockTests` keeps the file clean of an unclocked `CancelAfter`/`DateTime.UtcNow`.
 
 ## Where the Vibe homes are made, owned and swept (2026-10-15, `research/PLAN_vibe_live_round_fixes.md`)
 
