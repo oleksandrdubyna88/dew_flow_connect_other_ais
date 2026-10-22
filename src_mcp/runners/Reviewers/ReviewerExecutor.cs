@@ -415,9 +415,18 @@ public sealed class ReviewerExecutor(
     IProcessLauncher launcher,
     string? keepUnparseableIn = null,
     string? keepEmptyIn = null,
-    Action<string>? note = null)
+    Action<string>? note = null,
+    TimeProvider? clock = null)
 {
     private const int StdErrTail = 400;
+
+    /// <summary>
+    /// The one clock this class reads: the reviewer's elapsed time (the repair is left what the first launch left, and both launches'
+    /// durations are recorded from it) and the stamp of a kept answer's file name. A test passes the SAME instance it gives the scheduler and
+    /// the driver; a standalone caller gets the system clock. <see cref="AbandonBudget"/> is the one site that does NOT read it: a courtesy
+    /// cleanup after a kill is real I/O, and a manual clock nobody advances would park it for ever (E5 plan §3.14, rule 3).
+    /// </summary>
+    private readonly TimeProvider _clock = clock ?? TimeProvider.System;
 
     /// <summary>
     /// How much of a failing CLI's stderr travels with its exit code — in WHOLE LINES.
@@ -520,7 +529,7 @@ public sealed class ReviewerExecutor(
             // The note goes to the caller because this class has no logger of its own and should not grow one.
             : Kept(EvidenceFile.Keep(
                 directory,
-                $"{FileName.Safe(invocation.Provider)}-{FileName.Safe(invocation.Role)}-{DateTime.UtcNow:yyyyMMdd-HHmmss-fff}.txt",
+                $"{FileName.Safe(invocation.Provider)}-{FileName.Safe(invocation.Role)}-{_clock.GetUtcNow():yyyyMMdd-HHmmss-fff}.txt",
                 raw,
                 e => note?.Invoke($"the answer could not be kept in {directory}: {e.Message}")));
 
@@ -598,7 +607,7 @@ public sealed class ReviewerExecutor(
         // The reviewer's deadline bounds the REVIEWER, and this method makes up to two launches.
         // The clock starts here so the second one gets what the first left, exactly as the
         // rate-limit ladder already does — same helper, same arithmetic.
-        var spent = System.Diagnostics.Stopwatch.StartNew();
+        var spent = _clock.GetTimestamp();
         var first = await RunOnceAsync(invocation, ct);
 
         return (await ConcludedAsync(invocation, repair, first, spent, ct)) with { Warning = first.Warning, CliVersion = first.CliVersion };
@@ -606,7 +615,7 @@ public sealed class ReviewerExecutor(
 
     /// <summary>The reviewer's outcome once its first launch has run: that launch's own, or after its one repair.</summary>
     private async Task<ReviewerOutcome> ConcludedAsync(
-        ReviewerInvocation invocation, ReviewerInvocation? repair, OneLaunch first, System.Diagnostics.Stopwatch spent, CancellationToken ct)
+        ReviewerInvocation invocation, ReviewerInvocation? repair, OneLaunch first, long spent, CancellationToken ct)
     {
         var budget = invocation.Request.Timeout;
         var (outcome, review, usage, answer, evidence, notApplied, _) = first;
@@ -624,7 +633,7 @@ public sealed class ReviewerExecutor(
         // deadline, reporting `ok`. `reviewerTimeoutMinutes` bounded each LAUNCH, so a reviewer that
         // needed a repair could take twice what it was given — and the operator who reported "the
         // limit did not work again" was reading a real number.
-        var left = RetryLadder.Remaining(spent.Elapsed, budget);
+        var left = RetryLadder.Remaining(_clock.GetElapsedTime(spent), budget);
         var next = SecondLaunch(invocation, repair, evidence);
         if (NoRepairToRun(next.Launch, left) is { } why)
         {
@@ -637,7 +646,7 @@ public sealed class ReviewerExecutor(
         // would hand it back time the ladder had taken away. Raised on the code round.
         // Stamped with what it IS (story 4.1 of research/PLAN_every_round_is_counted.md): an adapter that repeats the
         // attempt on the wire reads it at launch, and it is the word the ledger's line below carries.
-        var started = spent.Elapsed;
+        var started = _clock.GetElapsedTime(spent);
         var launch = next.Launch! with { Attempt = next.Attempt };
         var second = await RunOnceAsync(RetryLadder.Lesser(left, launch), ct);
         var after = AfterTheRepair(launch, (usage, answer, evidence), second);
@@ -649,7 +658,7 @@ public sealed class ReviewerExecutor(
             Launches =
             [
                 new LaunchPart(LaunchAttempts.First, usage, started, LaunchLines.OutcomeOf(new ReviewerOutcome.Unparseable(Said(answer, Complaint(evidence))))),
-                SecondPart(next.Attempt, second.Outcome, second.Usage, spent.Elapsed - started, after),
+                SecondPart(next.Attempt, second.Outcome, second.Usage, _clock.GetElapsedTime(spent) - started, after),
             ],
         };
     }
@@ -815,7 +824,7 @@ public sealed class ReviewerExecutor(
     /// is usually the reason we are here, and a cancelled token would abort the very request that stops
     /// the work.
     /// </remarks>
-    private static async Task AbandonAsync(ReviewerInvocation invocation)
+    private async Task AbandonAsync(ReviewerInvocation invocation)
     {
         if (invocation.Adapter is null)
         {
@@ -834,8 +843,12 @@ public sealed class ReviewerExecutor(
         }
     }
 
-    /// <summary>How long a courtesy cleanup may take before the round stops waiting for it.</summary>
-    private static readonly TimeSpan AbandonBudget = TimeSpan.FromSeconds(10);
+    /// <summary>
+    /// How long a courtesy cleanup may take before the round stops waiting for it. TEARDOWN, so it stays on the SYSTEM clock (E5 plan §3.14,
+    /// rule 3): the cleanup is real I/O after the outcome is decided (for the remote runtime an HTTP cancel), and a manual clock nobody advances
+    /// would park it for ever. Settable only so a test can shorten the real wait; nothing in production sets it.
+    /// </summary>
+    internal TimeSpan AbandonBudget { get; init; } = TimeSpan.FromSeconds(10);
 
     /// <summary>What one launch came to, read: a terminal outcome, or the parsed review with what the run said beside it.</summary>
     private sealed record OneLaunch(
@@ -977,7 +990,7 @@ public sealed class ReviewerExecutor(
     }
 
     /// <summary>A launch whose tree was killed — by the caller or on its own deadline — or null when it ran to its end.</summary>
-    private static async Task<ReviewerLaunch?> KilledAsync(ReviewerInvocation invocation, ProcessResult result)
+    private async Task<ReviewerLaunch?> KilledAsync(ReviewerInvocation invocation, ProcessResult result)
     {
         // `Cancelled` BEFORE `TimedOut` (story 3.2 of research/PLAN_every_round_is_counted.md): a kill by the caller's
         // token sets both flags, a kill on the launch's own budget sets only the second, and reading the second alone
