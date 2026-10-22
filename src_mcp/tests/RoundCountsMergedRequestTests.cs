@@ -23,7 +23,7 @@ public sealed class RoundCountsMergedRequestTests
         var outcome = RoundCountsMergedMode.RequestOf(Args(Enumerable.Repeat(Absolute(1), 10_000)), Clock);
 
         outcome.Ok.Should().BeFalse("the cap counts the arguments given, not what is left once the duplicates are folded away");
-        outcome.Why.Should().Contain("10000 paths were given").And.Contain("at most 32");
+        outcome.Why.Should().Contain($"10000 snapshot paths were given; at most {RoundCountsMergedMode.MaxPaths} are read");
     }
 
     [Fact]
@@ -35,7 +35,7 @@ public sealed class RoundCountsMergedRequestTests
         var outcome = RoundCountsMergedMode.RequestOf(args, Clock);
 
         outcome.Ok.Should().BeFalse();
-        outcome.Why.Should().Contain("10000 paths were given").And.Contain("at most 32");
+        outcome.Why.Should().Contain($"10000 snapshot paths were given; at most {RoundCountsMergedMode.MaxPaths} are read");
         clock.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(5), "nothing is materialised, deduplicated or checked for being absolute past the cap");
     }
 
