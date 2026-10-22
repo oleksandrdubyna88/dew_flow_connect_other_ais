@@ -1,6 +1,7 @@
 # PLAN — E2 stories: the Vibe series on `ubuntu-claude`, and the C1 admission that a full pass switches on
 
-> Status: **plan only, nothing implemented yet, 2026-10-22.** Scope: the paid Vibe series on the owner's native Ubuntu host
+> Status: **plan only, nothing implemented yet, 2026-10-22 — the E2 plan round passed (coai 99e086b8, `proceed`, four findings, all
+> accepted and folded the same day; the record is at the end).** Scope: the paid Vibe series on the owner's native Ubuntu host
 > `ubuntu-claude` (N-H1, N-V0, N-V1–N-V6) and its record, `research/RESULTS_vibe_confinement.md` §32; one amendment to E1's probe
 > plumbing BEFORE the series (every native cell carries the closed keyring road the product will ship); then — only on a full pass —
 > the C1 admission in `src_mcp` (Vibe enters `HostAdmission.MeasuredOnNativeLinux`, `VibeLaunch.Built` forces Python `keyring`'s
@@ -462,6 +463,14 @@ a keyring is what a3c is for. On WSL2 and Windows nothing changes. No paid run.
   final object (not set to `undefined`). `childEnv` (`:506`) passes `nativeLinux`, read ONCE at start-up from `/proc/version` through
   `isNativeLinuxHost` and printed in the probe's header line and in every row (`keyringRoad: closed | open`). The `versionRun` (`:697`)
   and the `builtEnv(home)` path at `:464` go through the same option. The header comment (`:1-40`) says so.
+  **Why a3c's deletion holds even when the PROBE's own process has the name set** (plan round 99e086b8, finding 3): off Windows the base of
+  the child environment is `minimalEnv(platform, source)` (`probe-vibe-confinement.mjs:501`), an ALLOW-LIST over `MINIMAL_UNIX`
+  (`scripts/lib/vibe.mjs:30`, `:40-49` — only the thirteen named variables are copied, absent names stay absent), never a spread of
+  `process.env`; the `replaceEnv` path (`:497`) takes the arm's own object, which `builtEnv` builds over the same allow-list (`vibe.mjs:62-63`),
+  and the manifest script uses that `builtEnv` (`vibe-home-manifest.mjs:126`). So `PYTHON_KEYRING_BACKEND` can enter a child only through
+  `NATIVE_LINUX_BUILT` (S0) or an arm's own `env` — and a3c's deletion removes both. On `win32` the base IS the whole `source` (`:501`, as
+  the Windows cells were measured), but a3/a3c do not apply there (`keyringArm`, `vibe.mjs:287`) and the native-Linux spread never does.
+  S-N20 pins the inherited case below, so the allow-list stays the reason rather than an assumption.
 - `scripts/vibe-home-manifest.mjs` — `builtEnvFor(home, MODEL, process.platform, process.env, { nativeLinux })` (`:126`), the same reading;
   the manifest's `steps.json` records `keyringRoad`.
 - `scripts/probe-native-linux-host.mjs` — an optional `--vibe-python <path>` (added to `FLAGS`, `:35`, checked by `SAFE`, `:36`) handed to
@@ -478,12 +487,19 @@ a keyring is what a3c is for. On WSL2 and Windows nothing changes. No paid run.
   `win32`, nothing changes. RED today: `"M-V6 on a native Linux host carries no PYTHON_KEYRING_BACKEND — the signed-in cells would measure
   a launch E2 does not ship (DN10)"`; and, against a stub that only adds: `"a3c on a native Linux host still carried
   PYTHON_KEYRING_BACKEND — its marker could never be written, so a3 would prove nothing"`.
+  **The inherited case** (finding 3): *given* a `source` environment that itself holds `PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring`
+  (the probe run from a shell that set it), `nativeLinux: true`, *then* a3c's child environment LACKS the name, and a3's (and M-V6's)
+  carries `keyring.backends.fail.Keyring` — the forced value, never the inherited one; *given* `nativeLinux: false` (WSL2) with the same
+  `source`, no child carries the name at all. RED against a base built by spreading `source` instead of `minimalEnv`: `"a3c inherited
+  PYTHON_KEYRING_BACKEND from the probe's own shell — the child base is not the allow-list"` and `"a3 carried the shell's
+  keyring.backends.null.Keyring, not the forced keyring.backends.fail.Keyring"`.
 - `isNativeLinuxHost`: the three banners of `host-facts.test.mjs:206-208` (`7.0.0-30-generic` → true; `microsoft-standard-WSL2` → false;
   unread → false), `win32` → false; `builtEnv(…, { nativeLinux: true })` holds the name, `builtEnv(…)` does not.
 - The S-N17 cases (`:262-293`) stay green unchanged.
 
 **Break-its.** (B1) drop the `delete` for `dropsKeyring` → the a3c case red; (B2) make `isNativeLinuxHost` ignore `namesWsl` → the WSL2
-banner case red; (B3) spread `NATIVE_LINUX_BUILT` unconditionally in `builtEnv` → the WSL2 case of S-N20 red.
+banner case red; (B3) spread `NATIVE_LINUX_BUILT` unconditionally in `builtEnv` → the WSL2 case of S-N20 red; (B3b) build the Linux base
+as `{ ...source }` instead of `minimalEnv(platform, source)` → the inherited case red with its two messages.
 
 **Done when.** S-N20 and the `isNativeLinuxHost` cases observed red with the messages above, then green, on Windows and the Linux CI
 job; B1–B3 both ways; Opus review has no open finding; merged BEFORE S1's archive is taken.
@@ -620,9 +636,25 @@ banner could not be read is told it is refused and why; Kimi's native sentences 
   name vibe on a native Linux host"` (shown by setting the constant to 0.63.0 once).
 - `runtimeOnNativeLinux('kimi', '0.64.0')` is false (no entry); `runtimeOnNativeLinux('vibe', '')` is true (unknown is not old).
 
+**The `HostKind` audit — every consumer outside the two exhaustive note tables, decided** (plan round 99e086b8, finding 4). Read at
+`3fc30be3b` by a grep of `HostKind` and `hostKind` over `src_vs_code/src` (non-test) and of every `=== 'linux'`-shaped comparison; the
+coder re-runs the grep and extends the table if the tree moved:
+
+| Site | What it does with the kind | On `linux-unread` | The test that pins it |
+|---|---|---|---|
+| `hostSide.ts:149-155` `hostKindOfPlatform` | a platform alone → `windows` / `darwin` / `linux`; never asks a banner | never answers it — a platform alone is `linux`, which from E2 RUNS Vibe, so this fallback is a promise wherever a caller skips the banner; the only product caller that could skip it does not (next rows) | the existing case `vibeOnLinux.test.ts:257` ("a caller that names no host gets its platform's own") kept, its sentence updated to say the platform's kind is `linux` and the product never calls it without the banner |
+| `panelProvider.ts:473` `hostKindHere = hostKind()`; `:1415` into `PanelState.hostKind`; `:1954` `commandFor(vendor, hostPlatform(), await this.hostKindHere)` | asked once per window; carried, never compared | passes through unchanged — **as itself** | `panelView.ts:202` types the field as `HostKind`, so a `'linux-unread'` fixture is a compile-time member; a new card case renders a `PanelState` with `hostKind: 'linux-unread'` |
+| `panelView.ts:1161` `host = state.hostKind` → `runtimeSkewNote(serverVersion, [v], host)` | the card's host note | **as refused** (the `'linux-unread'` arm of `HOST_NOTES`) | S-N10's `runtimeSkewNote` case; the card case above asserts the refusal note and no greyed boxes (`runtimeHeld` is the server's knowledge of the runtime, not the host) |
+| `panelView.ts:1188` `kimiAllowNetworkSignIn: host === 'wsl2' \|\| host === 'linux' ? state.settings.kimiAllowNetworkSignIn : undefined` | shows the Linux-side Kimi network sign-in box | **as linux** — it is a Linux side, and the box is a setting, not a promise to run; the comparison gains `\|\| host === 'linux-unread'` | new case: a state with `hostKind: 'linux-unread'` yields the setting, `windows` and `darwin` yield `undefined` |
+| `vendorTerminal.ts:419` `vibeNoteFor(host ?? hostKindOfPlatform(platform))`, `:578` `kind = host ?? hostKindOfPlatform(platform)` | the install note per host | **as refused** when the host is passed (`VIBE_NOTES['linux-unread']`, `KIMI_NOTES['linux-unread']`); the `??` fallback stays the platform's kind (`linux`) — only a caller that asked no banner reaches it, and the product's one caller (`panelProvider.ts:1954`) passes the kind | new: `vendorInstall(VIBE, 'linux', 'linux-unread').note` is the refusal note and names the banner; the Kimi twin |
+| Serialisation | `hostKind` travels only inside the `PanelState` object from `panelProvider.ts:1415` into the panel's render (`panelView.ts:1161`); no write into settings, the ledger, a log line, a round, the `.mcp.json` block or the server — the grep finds none | nothing persists it — **as unknown to every store**, because no store receives it | a structural list test: the non-test sources that mention `hostKind` are exactly `hostSide.ts`, `panelProvider.ts`, `panelView.ts`, `vendorTerminal.ts`, `runtimeSince.ts` (`wslNetwork.ts:155` is a comment, updated) — a new consumer fails it until classified here |
+| `chatOrphans.ts:302`, `hostSide.ts:101`, `:124`, `:182`, `coaiInstall.ts:47`, `localEngines.ts:64` | compare `Platform` (`'linux'`), not `HostKind` | unaffected | — |
+
 **Break-its.** (B9) make `runtimeOnNativeLinux` fall back to `sinceMet` (no entry = met) → the Kimi-on-`linux` case red (Kimi's refusal
 gone); (B10) make `hostKind` return `'linux'` on a failed read → S-N10 red; (B11) drop the `'linux-unread'` arm of `HOST_NOTES` → the
-`linux-unread` note case red ("promised"); (B12) leave the ru sentence old → S-N11's ru case red.
+`linux-unread` note case red ("promised"); (B12) leave the ru sentence old → S-N11's ru case red; (B12b) leave `panelView.ts:1188` at
+`'wsl2' || 'linux'` → the audit's `kimiAllowNetworkSignIn` case red (`"a linux-unread side lost its Kimi network sign-in box"`); (B12c)
+add a `hostKind` mention to a settings writer → the structural list test red.
 
 **Done when.** S-N9, S-N10, S-N11 observed red then green; B9–B12 both ways; `npm test` green; `tsc` lists no site left over the widened
 union; the lead has read the ru and uk sentences; Opus review has no open finding.
@@ -679,19 +711,36 @@ exactly as §3.1 — never a path outside the shape.
 
 1. `dotnet publish src_mcp/src/CoaiMcp.csproj -c Release -r linux-x64 -p:Version=0.64.0-local` of the admission branch (S2 merged, S3/S4
    with it) on the lead's WSL2; sha256 recorded in the §32 tail ("32.10 The live round on the local binary").
-2. The binary to `<series2>/bin/coai-mcp`, mode `700`, by `scp`. **How the extension is pointed at it:** see Q1 (§9) — the parent names
-   "the server-path setting", and no such setting exists in `src_vs_code/package.json` at `3fc30be3b`; the fallback this document assumes
-   until the lead answers is to replace, on the host, the binary the extension installed (the file `entryPathIn(rid, version)` names,
-   `src_vs_code/src/coaiInstall.ts:61-63`, under the extension's global storage) with the local build, keeping a copy of the installed one
-   beside it (`<series2>/bin/installed-coai-mcp`), and restoring it after the round. Both sha256s recorded.
-3. Over Remote-SSH on `ubuntu-claude`: the `providers` answer shows the Vibe row enabled with NO refusal (the card: no host note, the row
-   not greyed; the server's `--host-facts`, run by its path from `<series2>/bin`, says `admission.Vibe` empty, banner read); then ONE live plan
-   round with the Vibe row (paid: one turn, counted against the cap's remainder) answers. A red here is a code change, not a release:
-   back to S2/S3 with the symptom; the binary restored.
+2. The binary to `<series2>/bin/coai-mcp`, mode `700`, by `scp`; its sha256 recorded. **It runs BESIDE the installed server, never in its
+   place** (plan round 99e086b8, findings 1 and 2, both accepted): replacing the file the extension installed under its global storage
+   (`entryPathIn`, `src_vs_code/src/coaiInstall.ts:61-63`) was the first draft here and is withdrawn — a running server makes the write fail
+   with `ETXTBSY`, a background update can overwrite the file mid-round, and an interrupted run leaves the host on an unofficial binary.
+   The parent's "server-path setting" (DN13, §6) does not exist in `src_vs_code/package.json` at `3fc30be3b`, so the route is this: a
+   scratch project folder INSIDE the series, `<series2>/live-project/` — a tiny git repository holding one committed plan file — with a
+   project-scoped `<series2>/live-project/.mcp.json` whose `mcpServers.coai` names `<series2>/bin/coai-mcp` and carries an `env` of
+   `COAI_DATA_DIR=<series2>/live-data` and `COAI_VENDORS=[<the Vibe row>]`. The block is produced by the extension's own
+   `mcpServerBlock(binaryPath, env)` (`src_vs_code/src/mcpBlock.ts:60-64`; the `Claude Code (one project)` shape of `:27`) on Windows and
+   copied by `scp`, so it is the shipped shape, not a hand-written one. Claude Code reads a project's `.mcp.json` only when opened in
+   that folder (`src_vs_code/src/mcpClientsRead.ts:29` names it as the per-project client file), so the person's normal sessions never
+   read it; the installed extension binary is never touched, so there is nothing to restore; and when `remove-series.sh` removes the
+   folder, the registration, the data folder and the binary go with it.
+3. The two checks, on the local build: **(a) the providers answer** — `<series2>/bin/coai-mcp --providers` (`src_mcp/src/Program.cs:386`,
+   a one-shot mode) run by its path under the same two variables shows the Vibe row enabled with NO refusal, and `--host-facts` by path
+   says `admission.Vibe` empty with the banner read; **(b) one live plan round** — a Claude Code session opened over Remote-SSH in
+   `<series2>/live-project` (`open`, then `review_plan` with the committed plan) gets the Vibe row's answer (paid: one turn, counted
+   against the cap's remainder). **The scripted alternative**, when no session should be opened on the host: the repository already drives
+   a coai-mcp over its stdio in `scripts/live-consult-all.mjs` — it spawns the binary by path with `COAI_DATA_DIR` and `COAI_VENDORS` in
+   the child's environment and speaks line-framed JSON-RPC over the pipes (`scripts/live-consult-all.mjs:26-45`, `tools/call` of
+   `consult` at `:94`); a Vibe consult goes through the same `VibeLaunch.Built`, so its answer is the closed road's too. It is copied into
+   `<series2>/run/` and started by the argument-array launcher of §3.1 (`node` by `node.txt`'s absolute path), never by an inline string;
+   `src_mcp/tests/StdioServer.cs` is the same shape for the C# suites and is not run on the host. A red here is a code change, not a
+   release: back to S2/S3 with the symptom; nothing on the host to restore.
 4. Green → the release: `src_mcp` 0.64.0 (release-please; the second-merger rule re-checks `VIBE_ON_NATIVE_LINUX_SINCE` against the tag)
    with an extension minor; the release notes carry the line: *Rollback: if a native-Linux Vibe row misbehaves, revert the `"Vibe"` entry of
    `HostAdmission.MeasuredOnNativeLinux` in a `src_mcp` patch release (the forced keyring backend stays — it only closes a road) and bump
-   `VIBE_ON_NATIVE_LINUX_SINCE` past the bad minor in an extension patch, so no card promises what the server no longer does.*
+   `VIBE_ON_NATIVE_LINUX_SINCE` past the bad minor in an extension patch, so no card promises what the server no longer does; the owner
+   presses Update once more. Nothing on any host needs restoring by hand: the pre-release round ran a separate binary beside the
+   installed one, never in its place.*
 5. After the release the owner presses *Update* on `ubuntu-claude`; the installed binary is the released one (sha256 against the asset);
    the same two checks (the providers answer, one live plan round) pass. A red here is the rollback line of step 4, executed.
 6. `remove-series.sh` on `<series2>`; `/promote-plan` for this document (and the parent only when E3 is done too, per the parent's E3
@@ -802,17 +851,19 @@ If any cell of §3.2 fails its pass column (or a stop rule of §3.4 ends the ser
 - **The installed coai-mcp's path failing the argument pattern** (a space or a character outside `ARG`) — copied into `bin/` first, sha256
   recorded; never a relaxed pattern.
 - **Two local builds, two series folders** (N-V6's from E1's code during S1; P7's from the admission branch in S5) — each in its own shaped
-  folder, each removed by its own `SERIES_PATH`.
+  folder, each removed by its own `SERIES_PATH`; neither is ever installed — P7's is registered only for a scratch project inside its
+  series folder, so an interrupted round leaves the host on the binary the extension installed (plan round findings 1 and 2).
 
 ## 9. Questions for the lead
 
 Assumed where possible, and said:
 
-- **Q1 (real).** How is the extension on `ubuntu-claude` pointed at the locally built binary for the P7 round? The parent (DN13, §6) says
-  "the server-path setting", but `src_vs_code/package.json` at `3fc30be3b` has no such setting, and `coaiInstall.ts` installs the binary
-  under the extension's global storage (`entryPathIn`, `:61-63`). This document assumes the fallback of S5 step 2 (replace the installed
-  file, keep a copy, restore after). If a supported route exists (an MCP registration of the local path, say), S5 uses it instead — a
-  one-line change here.
+- **Q1 — answered by the plan round (99e086b8, findings 1 and 2), no longer open.** The question was how the extension is pointed at the
+  locally built binary, since the parent's "server-path setting" does not exist. The route chosen (S5 step 2): the local build runs as a
+  SEPARATE stdio MCP server, registered through a project-scoped `.mcp.json` in a scratch project inside the series folder (the shipped
+  `mcpServerBlock` shape), or driven by `scripts/live-consult-all.mjs` over its stdio — never by replacing the installed binary, which
+  risked `ETXTBSY`, an update overwriting it mid-round, and a host left on an unofficial binary. The release check then uses the released
+  binary through the normal extension.
 - **Assumed: `'linux-unread'` as a member of the extension's `HostKind` union** (§2.4) rather than a flag beside `hostKind` — because the
   exhaustive tables then fail to compile until they say what such a host is told. The lead may prefer the flag; S3's brief would change,
   nothing else.
@@ -844,3 +895,13 @@ Assumed where possible, and said:
 - [ ] No committed file names the host other than as `ubuntu-claude`; no IP address anywhere.
 - [ ] `node .agents/conventions/tools/plan-lifecycle.mjs` clean; this document promoted with `/promote-plan` (its status `IMPLEMENTED
       <date>` with deviations; the parent promoted when E3 is done too).
+
+## The E2 plan round (99e086b8, 2026-10-22, proceed) — 4 findings, 4 accepted
+
+Verdict `proceed`. Every finding, its decision, and where it was folded; nothing was rejected.
+
+| # | Finding | Decision | Folded into |
+|---|---|---|---|
+| 1 + 2 (Major, codex + gemini) | S5 step 2 / Q1 replaced the extension's installed binary in its global storage for the pre-release round: `ETXTBSY` on a running server, a background update overwriting it mid-round, a host left on an unofficial binary after an interrupted run | **accepted** — the local build runs BESIDE the installed one as a separate stdio MCP server: registered only for a scratch project inside the series folder through a project-scoped `.mcp.json` written by the extension's own `mcpServerBlock` (`src_vs_code/src/mcpBlock.ts:60-64`), or driven over its stdio by the repository's existing `scripts/live-consult-all.mjs` (`:26-45`, `:94`); the providers check is the binary's own `--providers` by path; nothing is ever restored; the release check uses the released binary through the normal extension | S5 steps 2–4 (the rollback line now says nothing on a host needs restoring); §8; §9 (Q1 closed, the route and the reason stated) |
+| 3 (Major, gemini) | S0's "delete `PYTHON_KEYRING_BACKEND` for a3c" must hold when the PROBE's own process has the name set; the document did not say how the child environment is built | **accepted** — stated with lines: off Windows the base is the `minimalEnv` allow-list (`probe-vibe-confinement.mjs:501`, `vibe.mjs:30`, `:40-49`), the `replaceEnv` path and the manifest script build over the same allow-list (`:497`, `vibe.mjs:62-63`, `vibe-home-manifest.mjs:126`); S-N20 gains the inherited case (the probe run with the name set → a3c lacks it, a3 and M-V6 carry the forced value, WSL2 carries nothing) with its two RED messages and break-it B3b | S0 (Files, S-N20, break-its) |
+| 4 (Minor, gemini) | The new `'linux-unread'` member of `HostKind` needs an audit of every consumer outside the exhaustive note tables | **accepted** — the audit table in S3: `hostKindOfPlatform` (never answers it; the fallback is the platform's `linux`, reached by no product caller), `panelProvider.ts:473`/`:1415`/`:1954` (carried as itself), `panelView.ts:1161` (as refused), `panelView.ts:1188` (as linux — the Kimi network sign-in box, the comparison widened), `vendorTerminal.ts:419`/`:578` (as refused when the host is passed), serialisation (nothing persists it — a structural list test pins the set of consumers), and the `Platform` comparisons that are not `HostKind` at all; break-its B12b, B12c | S3 (the audit table, scenarios, break-its) |
