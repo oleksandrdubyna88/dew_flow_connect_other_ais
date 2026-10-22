@@ -76,20 +76,31 @@ internal sealed class InputEndSignallingTransport : ITransport
         return new ValueTask(mine.Task);
     }
 
-    /// <summary>The one cleanup. Never throws: its outcome — success or the failure — is the task every caller awaits.</summary>
+    /// <summary>
+    /// The one cleanup. Never throws: its outcome — success or the failure — is the task every caller awaits. Every step is attempted
+    /// even when an earlier one failed (the pump is still awaited and the token source still disposed), and a failure is logged here once.
+    /// </summary>
     private async Task RunDisposalAsync(TaskCompletionSource done)
     {
         try
         {
-            // A pump parked on a full buffer has no reader left to wait for: release it before waiting on it.
-            await _disposing.CancelAsync();
-            await _inner.DisposeAsync();
-            await _pump;
-            _disposing.Dispose();
+            try
+            {
+                // A pump parked on a full buffer has no reader left to wait for: release it before waiting on it.
+                await _disposing.CancelAsync();
+                await _inner.DisposeAsync();
+            }
+            finally
+            {
+                await _pump;
+                _disposing.Dispose();
+            }
+
             done.SetResult();
         }
         catch (Exception e)
         {
+            _log.Error(e, "the stdio transport could not be disposed cleanly");
             done.SetException(e);
         }
     }

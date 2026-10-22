@@ -215,4 +215,44 @@ public sealed class TheHostIsToldTheClientLeftBeforeTheSdkIsTests
         await both.Should().NotThrowAsync("overlapping disposals share the first one's cleanup");
         inner.Disposals.Should().Be(1, "only the first caller runs the cleanup; the other waits for it");
     }
+
+    /// <summary>An inner transport whose disposal fails while its input is still open.</summary>
+    private sealed class FailingStdin : ITransport
+    {
+        private readonly Channel<JsonRpcMessage> _input = Channel.CreateUnbounded<JsonRpcMessage>();
+
+        public string? SessionId => null;
+
+        public ChannelReader<JsonRpcMessage> MessageReader => _input.Reader;
+
+        public Task SendMessageAsync(JsonRpcMessage message, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public ValueTask DisposeAsync() => ValueTask.FromException(new IOException("the pipe would not close"));
+    }
+
+    private sealed class Captured(List<Serilog.Events.LogEvent> into) : Serilog.Core.ILogEventSink
+    {
+        public void Emit(Serilog.Events.LogEvent logEvent) => into.Add(logEvent);
+    }
+
+    /// <remarks>
+    /// The log assertion is the one with teeth (red when the catch only stores the failure). The reader-complete assertion is a GUARD: the
+    /// pump also ends on the cancel alone, so it holds before and after the finally that now awaits the pump on a failed inner disposal —
+    /// that ordering cannot be raced deterministically from here.
+    /// </remarks>
+    [Fact]
+    public async Task AnInnerDisposalThatFails_IsLogged_SaysWhyItFailed_AndTheReaderStillCompletes()
+    {
+        var events = new List<Serilog.Events.LogEvent>();
+        var log = new Serilog.LoggerConfiguration().WriteTo.Sink(new Captured(events)).CreateLogger();
+        var transport = new InputEndSignallingTransport(new FailingStdin(), () => Task.CompletedTask, log);
+        await Task.Delay(100, TestContext.Current.CancellationToken);
+
+        var dispose = async () => await transport.DisposeAsync();
+
+        await dispose.Should().ThrowAsync<IOException>("every caller observes the cleanup's failure");
+        events.Should().ContainSingle(e => e.Level == Serilog.Events.LogEventLevel.Error && e.Exception is IOException,
+            "a cleanup failure is logged once, with the exception, not only handed to the awaiting callers");
+        transport.MessageReader.Completion.IsCompleted.Should().BeTrue("the reader the SDK waits on is complete once disposal returns");
+    }
 }

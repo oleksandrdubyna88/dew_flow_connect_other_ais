@@ -110,6 +110,11 @@ test('TheRecordingRun_WritesTheVersionItWasGiven_AndParsesBackThroughTheUsageRea
     const [written] = parseUsage(fs.readFileSync(path.join(dir, PROBE_USAGE_FILE), 'utf8'));
     assert.deepEqual([written?.cli, written?.cliVersion], ['claude', '2.1.5']);
   } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
+    // A cleanup that fails (a held file on Windows) must not replace the test's own outcome.
+    try {
+      fs.rmSync(dir, { recursive: true, force: true });
+    } catch {
+      // the folder is left in the temp dir; the assertion above is what this test reports
+    }
   }
 });
