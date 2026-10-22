@@ -480,4 +480,25 @@ public sealed class ManualClockTests
         disposed.Advance(S(3));
         cancelled.Should().Be(0, "a disposed deadline fires nothing");
     }
+
+    /// <summary>
+    /// Judge round L4a. An advance the clock cannot hold (past <see cref="DateTimeOffset.MaxValue"/>) is refused BEFORE the clock records that
+    /// it is advancing — otherwise the refusal leaves the advancing mark set and every later, valid <c>Advance</c> throws "entered while thread N
+    /// is advancing", wedging a clock whose only fault was one bad argument.
+    /// </summary>
+    [Fact]
+    public void AnAdvanceTheClockCannotHold_IsRefusedAndMovesNothing_SoALaterValidAdvanceStillWorks()
+    {
+        var clock = new ManualClock(T0);
+        var fired = 0;
+        using var timer = clock.CreateTimer(_ => fired++, null, S(1), Timeout.InfiniteTimeSpan);
+
+        var overflowing = () => clock.Advance(TimeSpan.MaxValue);
+
+        overflowing.Should().Throw<ArgumentOutOfRangeException>("a wall clock cannot be moved past the last instant");
+        clock.GetUtcNow().Should().Be(T0, "a refused advance moves neither reading");
+        clock.Advance(S(1));
+        fired.Should().Be(1, "the clock is not wedged by the refused advance: the next valid advance moves it and fires the due timer");
+        clock.GetUtcNow().Should().Be(T0 + S(1));
+    }
 }

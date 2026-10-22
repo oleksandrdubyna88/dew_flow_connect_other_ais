@@ -48,7 +48,7 @@ public sealed class EveryBudgetInAClockedClassReadsItsClockTests
     ];
 
     /// <summary>One shape of unclocked budget: what it is called, how it is found, and whether it has an argument list to inspect.</summary>
-    private sealed record Rule(string Kind, Regex Pattern, bool HasArguments, bool TokenAloneIsFine);
+    private sealed record Rule(string Kind, Regex Pattern, bool HasArguments, bool TokenAloneIsFine, bool EmptyIsFine = false);
 
     private static Regex Re(string pattern) => new(pattern, RegexOptions.CultureInvariant, TimeSpan.FromSeconds(2));
 
@@ -59,10 +59,19 @@ public sealed class EveryBudgetInAClockedClassReadsItsClockTests
         new("DateTime.UtcNow", Re(@"\bDateTime(?:Offset)?\s*\.\s*(?:UtcNow|Now)\b"), HasArguments: false, TokenAloneIsFine: false),
         new("Task.Delay", Re(@"\bTask\s*\.\s*Delay\s*\("), HasArguments: true, TokenAloneIsFine: false),
         new("WaitAsync", Re(@"\.\s*WaitAsync\s*\("), HasArguments: true, TokenAloneIsFine: true),
+        // The seam's OWN shape (judge round M1): the timer source the clock replaced. `new CancellationTokenSource()` arms nothing and is exempt;
+        // `new CancellationTokenSource(budget)` arms the system timer and is a site unless its arguments name a clock.
+        new("new CancellationTokenSource(", Re(@"\bnew\s+CancellationTokenSource\s*\("), HasArguments: true, TokenAloneIsFine: false, EmptyIsFine: true),
+        new("new PeriodicTimer(", Re(@"\bnew\s+PeriodicTimer\s*\("), HasArguments: true, TokenAloneIsFine: false),
+        new("new Timer(", Re(@"\bnew\s+(?:System\s*\.\s*Threading\s*\.\s*)?Timer\s*\("), HasArguments: true, TokenAloneIsFine: false),
+        new("Thread.Sleep", Re(@"\bThread\s*\.\s*Sleep\s*\("), HasArguments: true, TokenAloneIsFine: false),
     ];
 
     /// <summary>An argument list that names a clock: the field <c>_clock</c>, a parameter <c>clock</c> or a <c>TimeProvider</c>.</summary>
     private static readonly Regex NamesAClock = Re(@"\b(?:_clock|clock|TimeProvider\w*)\b");
+
+    /// <summary><c>TimeProvider.System</c> IS the system timer: handing it to a budget is the race spelled with a clock's name, so it is removed before <see cref="NamesAClock"/> looks (judge round M1).</summary>
+    private static readonly Regex TheSystemClock = Re(@"\bTimeProvider\s*\.\s*System\b");
 
     /// <summary><c>WaitAsync(ct)</c> bounds a wait by a token and arms no timer: not a budget.</summary>
     private static readonly Regex TokenAlone = Re(@"^\s*(?:[\w.]+\.)?(?:ct|token|cancellationToken|\w*Token|None)\s*$");
@@ -83,7 +92,10 @@ public sealed class EveryBudgetInAClockedClassReadsItsClockTests
     }
 
     private static bool IsClocked(Rule rule, string arguments) =>
-        rule.HasArguments && (NamesAClock.IsMatch(arguments) || (rule.TokenAloneIsFine && TokenAlone.IsMatch(arguments)));
+        rule.HasArguments
+        && ((rule.EmptyIsFine && arguments.Trim().Length == 0)
+            || NamesAClock.IsMatch(TheSystemClock.Replace(arguments, string.Empty))
+            || (rule.TokenAloneIsFine && TokenAlone.IsMatch(arguments)));
 
     private static int Depth(char c) => c switch { '(' => 1, ')' => -1, _ => 0 };
 
@@ -175,12 +187,20 @@ public sealed class EveryBudgetInAClockedClassReadsItsClockTests
                     await t.WaitAsync(
                         usageBound);
                     await t.WaitAsync(timeout: 3, ct);
+                    using var a = new CancellationTokenSource(budget);
+                    using var b = new CancellationTokenSource(TimeSpan.FromSeconds(1), TimeProvider.System);
+                    await t.WaitAsync(bound, TimeProvider.System);
+                    using var c = new PeriodicTimer(period);
+                    using var d = new Timer(Tick, null, 0, 1000);
+                    using var e = new System.Threading.Timer(Tick, null, 0, 1000);
+                    Thread.Sleep(5);
                 }
             }
             """);
 
         SitesIn("Synthetic.cs", code).Select(site => site.Kind).Should().BeEquivalentTo(
-            ["Stopwatch", "CancelAfter", "DateTime.UtcNow", "Task.Delay", "WaitAsync", "WaitAsync"],
+            ["Stopwatch", "CancelAfter", "DateTime.UtcNow", "Task.Delay", "WaitAsync", "WaitAsync",
+             "new CancellationTokenSource(", "new CancellationTokenSource(", "WaitAsync", "new PeriodicTimer(", "new Timer(", "new Timer(", "Thread.Sleep"],
             "each unclocked shape is a site, and a WaitAsync whose argument list wraps onto the next line is still read to its closing parenthesis");
     }
 
@@ -200,6 +220,10 @@ public sealed class EveryBudgetInAClockedClassReadsItsClockTests
                     var s = "Stopwatch.StartNew() and x.CancelAfter(1) and Task.Delay(1)"; // Stopwatch, DateTime.UtcNow
                     /* source.CancelAfter(budget); */
                     var stamp = _clock.GetUtcNow();
+                    using var none = new CancellationTokenSource();
+                    using var clocked = new CancellationTokenSource(budget, _clock);
+                    using var tick = new PeriodicTimer(period, _clock);
+                    var t2 = "new Timer(Tick) and Thread.Sleep(1) and new PeriodicTimer(1)"; // new CancellationTokenSource(5)
                 }
             }
             """);

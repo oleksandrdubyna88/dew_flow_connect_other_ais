@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using CoaiMcp.Runners.Acp;
 using CoaiMcp.Runners.Processes;
 using FluentAssertions;
@@ -76,5 +77,76 @@ public sealed class AcpClientClockTests
         outcome.Reason.Should().Contain("outside 1..");
         File.Exists(agent.Log).Should().BeFalse("nothing was started");
         clock.ActiveTimers.Should().Be(0);
+    }
+
+    /// <summary>
+    /// A clock whose timers cannot be made. The turn's deadline is armed AFTER the agent was started, so a clock that throws there is the case the
+    /// "nothing that throws can leave the child running" promise of <c>TurnAsync</c> is about (judge round L2).
+    /// </summary>
+    private sealed class TimersThatThrow : TimeProvider
+    {
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period) =>
+            throw new InvalidOperationException("this clock has no timers");
+    }
+
+    /// <summary>Remembers the agent it was told of and how often it was asked to end one; the end itself is today's (<see cref="UnsupervisedTree"/>).</summary>
+    private sealed class RecordingTree : ITreeSupervisor
+    {
+        private int _ended;
+
+        public int Pid { get; private set; }
+
+        public int Ended => Volatile.Read(ref _ended);
+
+        public void Started(ProcessIdentity agent) => Pid = agent.Pid;
+
+        public void StartedUnidentified(int pid) => Pid = pid;
+
+        public Task<TreeEnd> EndAsync(Process agent)
+        {
+            Interlocked.Increment(ref _ended);
+
+            return UnsupervisedTree.Instance.EndAsync(agent);
+        }
+    }
+
+    /// <summary>
+    /// Judge round L2. The deadline's timer is armed after the agent exists; a clock that cannot make a timer must still get the agent ended
+    /// (the one <c>try</c> whose <c>finally</c> ends it) and the failure must reach the caller, not be swallowed into an outcome.
+    /// </summary>
+    [Fact]
+    public async Task AClockThatCannotArmTheDeadline_StillEndsTheAgentItStarted_AndTheFailureSurfaces()
+    {
+        using var agent = new FakeAcpAgent([FakeAcpAgent.AwaitCancel]);
+        var tree = new RecordingTree();
+        var client = new AcpClient(agent.Profile(), new FolderReadBoundary(agent.Cwd, KimiAcpProfile.Exclusions), AcpClient.DefaultUsageBound, tree, new TimersThatThrow());
+
+        try
+        {
+            var ask = async () => await client.AskAsync(agent.Ask(deadline: TimeSpan.FromSeconds(5)), TestContext.Current.CancellationToken);
+
+            await ask.Should().ThrowAsync<InvalidOperationException>().WithMessage("*no timers*");
+            tree.Pid.Should().BeGreaterThan(0, "the agent was started before the deadline was armed");
+            tree.Ended.Should().Be(1, "the agent's end ran: nothing that throws after the start may leave the child running");
+            AcpClientTests.Gone(tree.Pid).Should().BeTrue();
+        }
+        finally
+        {
+            LeftOver(tree.Pid);
+        }
+    }
+
+    /// <summary>The test's own cleanup, for a product that left the agent running: ends it, so a red run leaves nothing behind.</summary>
+    private static void LeftOver(int pid)
+    {
+        try
+        {
+            using var process = Process.GetProcessById(pid);
+            process.Kill(entireProcessTree: true);
+        }
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            // Already gone: the product ended it.
+        }
     }
 }

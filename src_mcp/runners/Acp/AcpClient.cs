@@ -109,18 +109,39 @@ public sealed class AcpClient(IAcpProfile profile, IAcpReadBoundary boundary, Ti
             : profile.AgentRefusal(request, ask);
 
     /// <summary>
-    /// The turn. Everything after the start is inside the one <c>try</c> whose <c>finally</c> ends the agent — the
-    /// clock, the pump, the requests — so nothing that throws can leave the child running.
+    /// The turn. Everything after the start is inside a <c>try</c> whose <c>finally</c> ends the agent — the clock, the pump, the requests —
+    /// so nothing that throws can leave the child running. The deadline's two sources are armed INSIDE the first <c>try</c>: a clock that cannot
+    /// make a timer (or a caller's source already disposed) would otherwise throw before any <c>finally</c> existed, with the agent started.
+    /// Once <see cref="ConverseUntilAsync"/> has the turn its own <c>finally</c> ends the agent, and this one stands down.
     /// </summary>
     private async Task<AcpOutcome> TurnAsync(AcpTransport transport, AcpAsk ask, CancellationToken ct)
     {
-        // Two sources, the timer FIRST and the link second (plan §5.2): the `using`s dispose the link before the timer, so a timer that
-        // fires between the two disposals meets a disposed link rather than a live link holding a disposed timer. The timer is armed here, a few
-        // microseconds before the session exists; the tests claim only that the TIMER decides the turn's end. `ct.IsCancellationRequested` still
-        // tells the caller's cancellation (`Failed`) from this deadline's.
-        using var turnTimer = new CancellationTokenSource(ask.Deadline, _clock);
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct, turnTimer.Token);
-        var session = new AcpSession(transport, boundary, deadline.Token);
+        var handedOver = false;
+        try
+        {
+            // Two sources, the timer FIRST and the link second (plan §5.2): the `using`s dispose the link before the timer, so a timer that
+            // fires between the two disposals meets a disposed link rather than a live link holding a disposed timer. The timer is armed here, a few
+            // microseconds before the session exists; the tests claim only that the TIMER decides the turn's end. `ct.IsCancellationRequested` still
+            // tells the caller's cancellation (`Failed`) from this deadline's.
+            using var turnTimer = new CancellationTokenSource(ask.Deadline, _clock);
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct, turnTimer.Token);
+            handedOver = true;
+
+            return await ConverseUntilAsync(transport, ask, ct, deadline.Token);
+        }
+        finally
+        {
+            if (!handedOver)
+            {
+                await transport.EndAsync(() => Task.CompletedTask);
+            }
+        }
+    }
+
+    /// <summary>The conversation under an armed deadline: the session, the pump, the requests, and the one <c>finally</c> that ends the agent and settles the pump.</summary>
+    private async Task<AcpOutcome> ConverseUntilAsync(AcpTransport transport, AcpAsk ask, CancellationToken ct, CancellationToken deadline)
+    {
+        var session = new AcpSession(transport, boundary, deadline);
         Ended ended;
         try
         {
