@@ -1426,3 +1426,45 @@ within one turn). Free launches: M-V7 a, a2 (6), plus the probe's
 `--version` run on its own home. Folders in WSL, nothing deleted, for the owner to remove by hand:
 `/tmp/testsToDelete-wsl-vibe-lv9-probe` (scratch `a`, `b`, `c`; each run's home, working folder, stdout, stderr, export; the listings),
 `/tmp/testsToDelete-wsl-vibe-lv9-checkout` (the copied probe).
+
+## 32. Vibe 2.26.1 on a native Linux host (ubuntu-claude) — the native cells of todo/PLAN_kimi_and_vibe_on_native_linux.md §5 (2026-10-22)
+
+> Status: **IN PROGRESS — predictions written before any run; the cells below are filled as they run.** The procedure is
+> `todo/PLAN_kimi_and_vibe_on_native_linux_E2.md` §3; its stop rules (§3.4) govern. Spend cap 30 paid turns (the owner's approval of
+> 2026-10-21).
+
+### 32.instruments
+
+- Series folder: `/tmp/testsToDelete-native-vibe-20261022-374500` on `ubuntu-claude` (mode 700, made by `make-series.sh`).
+- The probes: `git archive c7857f21d scripts shared .github/scripts/lib` (branch `docs/native-linux-e2`, S0 and its judge round in it;
+  the Linux CI job of that commit green, run 39769143254) — archive sha256
+  `294d2dfc0bad7e2f8c3280312d8a5bcb6bf702cfd7095e7ac94a18444aa2387b`.
+- The local build for N-V6: `coai-mcp` built from the same commit as a SELF-CONTAINED linux-x64 single file WITHOUT Native AOT
+  (`dotnet publish src_mcp/src/CoaiMcp.csproj -c Release -r linux-x64 --self-contained -p:PublishAot=false -p:PublishSingleFile=true`,
+  on Windows) — sha256 `bae02695b3f2f3f55a78cba7278979742f981a31670cc3acfde05be4b27cdece`. See deviation 32.7-2.
+- The installed coai-mcp on the host: `~/.vscode-server/data/User/globalStorage/remsoftdev.connect-other-ais/coai-mcp` (its version
+  and sha256 are read by the `facts` phase).
+
+### 32.0 Predictions (written before any run, unedited after)
+
+| Cell | Prediction |
+|---|---|
+| N-H1 | banner names no Microsoft/WSL (`7.0.0-30-generic`, read over ssh before the series); `banner.read` true; `PRETTY_NAME` Ubuntu; glibc ≥ 2.36; uid 0; `/tmp`, `/root`, `/root/.local/share`, `/root/.vibe` on ext4, no network type; the server's `PATH` without `/root/.local/bin`; every `PATH` entry root-owned, not writable by others; `vibe` resolves at `/usr/local/bin/vibe`; `rg`/`fd`/`kimi` absent allowed (kimi is NOT on PATH — it lives at `~/.kimi-code/bin/kimi`); the installed coai-mcp is 0.63.0 and its `--host-facts` reads "no such mode" (exit 64) |
+| N-V0 | `~/.vibe/.env` a regular file, mode 600, uid 0, a few dozen bytes; keyring distributions name `keyring 25.x` and `jeepney`/`secretstorage`; `get_keyring()` under the built environment answers a fail or chainer backend on a headless root; under the built environment PLUS the forced backend exactly `keyring.backends.fail.Keyring`; no `keyringrc.cfg`; `DBUS_SESSION_BUS_ADDRESS` unset; no bus socket under `/run/user/0`; no keyring daemon in `/proc` |
+| N-V1 | header `native Linux; keyringRoad: closed`; a, a2, a3: exit 1, *Missing MISTRAL_API_KEY*, 3 of 3 each, `keyringRoad: closed`; a3's marker absent 3 of 3; a3c (`keyringRoad: open`): marker present 3 of 3 (service `ai.mistral.vibe`); b: exit 0, answered (paid) 3 of 3, its home's `.env` still a link to `~/.vibe/.env`, `keyringRoad: closed` |
+| N-V2 | every row `keyringRoad: closed`; M-V6: the inside marker in the answer, the outside one absent, `read_file` `tool_denied` ×1 per run, 3 of 3; M-V1: `write_file`, `bash`, `run_typescript` denied, no new file, 3 of 3 per tool |
+| N-V3 | every row `keyringRoad: closed`; the same session id and the code word back, 3 of 3 |
+| N-V4 | `steps.json` `keyringRoad: closed`; no unknown path, no drift; the 12 `pinned` path→sha256 pairs EQUAL the shipped `linux` entry |
+| N-V5 | 48 vectors, no drift, exit 0 |
+| N-V6 | the local build's line: `hostKind` `linux`, `banner.read` true, `admission.Vibe` AND `admission.Kimi` non-empty (E1's set is empty at series time), `keyringSession` equal to the script's own raw reading field by field |
+
+Spend prediction: N-V1 3, N-V2 12, N-V3 6, N-V4 ≈2 tiny — 23 paid, cap 30.
+
+### 32.7 Deviations (numbered as they arise)
+
+1. **The S-N17 live check in WSL (§3.0 step 2) did not run:** the lead's session was refused access to WSL by its permission
+   classifier. The same check — a3c writes the marker, a3 does not — is N-V1's own teeth rule on the host (§3.2), with the same free arms;
+   a3c without a marker there stops the series exactly as it would have before the host.
+2. **N-V6's local build is a self-contained JIT build, not Native AOT:** §3.0 step 5 builds AOT in WSL (refused, as above), and AOT cannot
+   be cross-compiled from Windows. The `--host-facts` reading is the same C# code either way; what the shipped AOT binary does differently
+   (trimming, no JIT) does not touch a read-only facts mode. The release's AOT binary is exercised by S5's post-release round.
