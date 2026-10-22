@@ -4808,6 +4808,19 @@ Kimi 2.3.0 in PROMPT mode, 2026-10-21, verbatim; the ACP envelope around it (`Au
 Changed by design: `TheSixRowsStandInTheDecidedOrder…` became `TheSevenRowsStandInTheDecidedOrder…` (the new row beside the 5-hour one; `SpentNames` compared as distinct names); `KimiQuotaWords.ResetOpening`
 (one string) became `ResetOpenings` (the list), so three older assertions read `ResetOpenings[0]`.
 
+**Feature gate round 1 (F1, F2, 2026-10-22; branch `fix/kimi-failureline-redact-first`).** All in `KimiMonthlyQuotaTests`; the window arithmetic is computed from `AcpDiagnosis.WindowLeadIn` / `LineCap` (both public now), and each F1 test ASSERTS where the old window would have started or ended, so it keeps its teeth if either constant changes.
+
+| Test | Seen red as | Break-it (went red, restored by writing the file, rebuilt, green) |
+|---|---|---|
+| F1 `ACredentialWhoseLabelTheOldWindowWouldCut_IsRedactedBeforeTheWindow_AndTheTokenNeverSurvives` (500 padding + ` Authorization: Bearer ` + a 59-character opaque token + one space + the phrase, so the OLD window starts exactly ON the token) | *Did not expect kept "Lp5gUZvW96xmRH41qKbdA03tcJo87NFeQX2YsILp5gUZvW96xmRH41qKbdA reached your monthly usage limit …" to contain "Lp5gUZvW96xmRH41qKbdA03tcJo87NFeQX2YsILp5gUZvW96xmRH41qKbdA".* (the bare token, label cut away) | `LineWith` back to `Redaction.SafeText(Window(Around(text, at).Trim(), phrase), LineCap)` |
+| F1 `ACredentialCrossingTheWindowsEnd_IsRedactedBeforeTheWindow_AndNoFragmentOfItSurvives` (the phrase, filler, ` Bearer `, then a token whose first 5 characters are inside the old window: Bearer wants 8, so the fragment was quoted bare) | *Did not expect kept "ppp…reached your monthly usage limitfff… Bearer Lp5gU" to contain "Lp5gU".* | same |
+| F1 `WhenRedactionFailsClosed_TheLineIsTheRedactedMarker_NeverTheRawLine` (the internal `LineWith(text, phrase, redact)` seam fed `Redaction.WhenRedactionTimesOut` over a throwing thunk) | *Expected line to be the same string because the phrase is not in the marker …, "noise Authorization:." / "[redacted]"* (the old order ignored the redactor's verdict) | same |
+| F1 guard `RedactionNeverTouchesAnyPhraseOfTheTable` (every phrase of `KimiAcpProfile.Failures` survives `SafeText` unchanged — the premise of finding the phrase again in the redacted text) | green before and after | not applicable (a premise check) |
+| F2 `AnUnrelatedHopelessWordInTheReason_DoesNotDiscardTheMatchedLine` (reason `Internal error: daily worker failed`; `daily` is in `RateLimit.Spent`, asserted in the test) | *Expected verdict.Reason "kimi_quota_spent: Internal error: daily worker failed" to contain "provider.api_error: 429 You've reached your monthly usage limit for this billing".* | `SpentReason` back to `RateLimit.Hopeless(said) ? said : …` |
+| F2 guard `AReasonThatIsHopelessOnItsOwnAndHasNoMatchedLine_IsReturnedAsItIs` | green before and after | not applicable |
+
+The fail-closed case is tested through the seam, not by finding an input that really times out (that would assert a performance figure; the same stance as `Redaction.WhenRedactionTimesOut`'s own tests).
+
 ## The suite is deterministic — epic E1, "No run sees another" (2026-10-19)
 
 Source: `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md`, epic E1 (cases C1, C10, C11; decisions D1, scenarios S1–S4). Goal: two

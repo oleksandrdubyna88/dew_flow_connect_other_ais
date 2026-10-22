@@ -113,12 +113,17 @@ public sealed record AcpDiagnosis(string Name, string Cure, AcpFailureKind Kind,
 
     /// <summary>
     /// The line of <paramref name="text"/> that holds the first <paramref name="phrase"/> (case-blind) — found with one scan, never by splitting the whole text — isolated at the
-    /// nearest <c>\r</c> or <c>\n</c> on each side (a CR-only progress line and a CRLF never join lines or leak a control character), trimmed, cut to a window and passed through
-    /// <see cref="Redaction.SafeText"/> (the line is quoted into the summary, the ledger and the log: a secret in stderr is masked first). Empty when the text holds no phrase.
+    /// nearest <c>\r</c> or <c>\n</c> on each side (a CR-only progress line and a CRLF never join lines or leak a control character) and trimmed. The ORDER is the contract
+    /// (feature gate F1): the WHOLE isolated line is redacted FIRST (<see cref="Redaction.SafeText"/>, no cut), and only then is the window cut around the phrase in the REDACTED
+    /// text — a window cut first can start exactly at a credential's value and take its label away, and the bare token then survives. The line is quoted into the summary, the
+    /// ledger and the log. Empty when the text holds no phrase.
     /// </summary>
-    private static string LineWith(string text, string phrase) =>
+    private static string LineWith(string text, string phrase) => LineWith(text, phrase, line => Redaction.SafeText(line, int.MaxValue));
+
+    /// <summary><see cref="LineWith(string, string)"/> with the redactor passed in, so a test can make it fail closed.</summary>
+    internal static string LineWith(string text, string phrase, Func<string, string> redact) =>
         text.IndexOf(phrase, StringComparison.OrdinalIgnoreCase) is var at and >= 0
-            ? Redaction.SafeText(Window(Around(text, at).Trim(), phrase), LineCap)
+            ? Window(redact(Around(text, at).Trim()), phrase)
             : string.Empty;
 
     /// <summary>The line of <paramref name="text"/> that contains index <paramref name="at"/>: from after the previous <c>\r</c> or <c>\n</c> to the next one.</summary>
@@ -146,7 +151,8 @@ public sealed record AcpDiagnosis(string Name, string Cure, AcpFailureKind Kind,
         return line[WholeStart(line, start)..WholeEnd(line, end)];
     }
 
-    private const int WindowLeadIn = 60;
+    /// <summary>How many characters before the phrase a window starts.</summary>
+    public const int WindowLeadIn = 60;
 
     /// <summary>A start that does not land in the middle of a surrogate pair.</summary>
     private static int WholeStart(string text, int start) => start < text.Length && char.IsLowSurrogate(text[start]) ? start + 1 : start;

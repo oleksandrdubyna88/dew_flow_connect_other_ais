@@ -308,14 +308,15 @@ public sealed class KimiRuntime(string id, KimiHost host, KimiSeams seams, Seril
     /// <summary>
     /// The reason a spent allowance carries: the shim's own words, with NO cure in front. The round's summary, the ledger and the log diagnose a reason by its marker and put the
     /// table's cure before the vendor's line themselves (<c>BoundedScheduler.Because</c>); a reason that already led with the cure was said twice on every line (S7,
-    /// <c>ASpentKimiQuotaReadsAsAQuotaTests</c>). When the vendor's words alone would not stop the ladder (the sentence reached the shim on stderr only), the report's MATCHED LINE
-    /// — the vendor's own line, quoted — is added; only a report with no line falls back to the table's phrases for the name.
+    /// <c>ASpentKimiQuotaReadsAsAQuotaTests</c>). The report's MATCHED LINE — the vendor's own line, quoted — is added whenever there is one (the sentence reached the shim on stderr only), BEFORE the reason is
+    /// asked whether it is hopeless: an unrelated hopeless word in the reason (<c>Internal error: daily worker failed</c>) used to return it bare and drop the line (feature gate F2). Only a report
+    /// with no line falls back to the table's phrases for the name, and only when the reason does not already stop the ladder.
     /// </summary>
     private static string SpentReason(KimiReport report)
     {
         var said = Words(report);
 
-        return RateLimit.Hopeless(said) ? said : report.FailureLine.Length > 0 ? Quoted(said, report) : $"{said} ({KimiAcpProfile.SpentPhrasesOf(report.Failure)})";
+        return report.FailureLine.Length > 0 ? Quoted(said, report) : RateLimit.Hopeless(said) ? said : $"{said} ({KimiAcpProfile.SpentPhrasesOf(report.Failure)})";
     }
 
     /// <summary><paramref name="said"/> followed by the line of the agent's stderr the shim matched, quoted, when the reason itself did not hold the sentence; unchanged otherwise.</summary>

@@ -520,3 +520,16 @@ base `9134099c0`). One reviewer answered; both findings were verified against th
 
 Docs: `research/module_runners.md` (the order: isolate, redact, window), `research/module_tests.md`. After the fix PR merges, the
 feature gate runs its second (last) round with `again: true` over the new head.
+
+**Plan-round amendment (coai cf1948aa, accepted): no pre-cut at all.** The 8 KB bound proposed under F1 is dropped. `Redaction.SafeText` runs over the FULL isolated line (between the nearest
+`\r` or `\n` on each side of the phrase), with `limit = int.MaxValue` so its own cut never fires, and only THEN is the 400-character window cut around the phrase in the redacted text.
+What bounds the line is the agent's stderr capture: `AcpTransport.StdErrChars` = 64 Ki characters (`AcpTransport.cs:45`, a `BoundedText` at `:52`, appended at `:252`; it keeps the HEAD and drops the rest),
+so a single line is at most about 64 Ki characters. A redaction that cannot finish fails closed (`Redaction.WhenRedactionTimesOut`) and returns the marker `[redacted]`; the phrase is not in it, so the quoted line IS that marker, never raw text.
+
+**Built 2026-10-22** on top of the plan record `5697c3026` (branch `fix/kimi-failureline-redact-first`, one commit: `fix(mcp): the matched stderr line is redacted whole before it is windowed, and quoted before the hopeless check (spent-quota feature gate)`).
+F1: `AcpDiagnosis.LineWith` is now isolate, trim, `SafeText(line, int.MaxValue)`, then `Window` over the redacted text (`Window` already re-finds the phrase and keeps surrogate pairs whole through `WholeStart`/`WholeEnd`, so no
+second `SafeText` and no second cap). F2: `KimiRuntime.SpentReason` quotes a non-empty `failureLine` first and only then asks `RateLimit.Hopeless`; `KimiRuntime.Said` (the non-spent path) already quoted the line unconditionally, so it had no ordering defect.
+Deviations: (1) `WindowLeadIn` became `public const` and `LineWith(text, phrase, redact)` an `internal` overload, so the tests compute their padding from the constants and can drive the fail-closed branch
+without finding an input that really times out. (2) The end-of-window case uses a bare ` Bearer ` label, not ` Authorization: Bearer `: with the longer label the labelled pass grows the text (`Bearer` becomes `[redacted]`) and the OLD
+order's own 400-character cap trimmed the fragment away, so the case would not have had teeth. (3) The window can now end inside the `[redacted]` marker (`Bearer [reda`); that is a cosmetic cut of a marker, not of a secret.
+Tests and the REDs/break-its are in `research/module_tests.md` (feature gate round 1); the full suite ran once at lowered priority, 13 511 tests, 5 failed while other sessions' suites ran on the machine (AConversationPlaceTests copy budget, AcpClientUsageTests deadline, KimiCredentialsLockTests disposal probe, AChildThatExitedBeforeItsStartTimeWasReadTests x2 — wall-clock and process-lifetime tests, none touching Kimi quota), all green when their classes were rerun alone.
