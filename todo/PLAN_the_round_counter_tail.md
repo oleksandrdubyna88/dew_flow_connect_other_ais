@@ -1,6 +1,7 @@
 # PLAN — the round counter's open tail is closed: the accounting, a second gauge, both stores, the live count
 
-> Status: **plan only, nothing implemented yet (2026-10-20; revised the same day after the coai plan gate, an Opus review and
+> Status: **in progress (2026-10-22): E3 built and gated (PR #904); E1 and E4 measured and E6 built on their own branches; E2
+> deferred by the owner; E5 cut provisionally; E7 not started (plan of 2026-10-20, revised after the coai plan gate, an Opus review and
 > the epics 1–3 cadence consultation).** Scope: `src_mcp/runners/Reviewers` (the follow-up parts and the local ledger line),
 > `src_mcp/core/Consultation` (the one subtraction, reused), `src_server/src/Jobs/ReviewLauncher.cs` (the server's own follow-up
 > path, the same rule), `src_mcp/runners/Kimi` + `src_mcp/runners/Acp` (a Kimi gauge read under the sign-in's lock),

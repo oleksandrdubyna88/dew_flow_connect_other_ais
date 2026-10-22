@@ -351,9 +351,10 @@ public static class RateLimit
     /// throttle that clears, and refusing to wait it out would lose a reviewer that would have
     /// answered. (The plan round, two vendors independently.)</para>
     /// <para>Kimi's 5-hour plan quota — <i>You've reached your 5-hour usage limit. Your quota will reset …</i> — is the owner's own CLI answer (kimi 2.2.0,
-    /// 2026-10-19); the phrase names the window, so it takes neither codex's "hit your usage limit" nor the sales footer above.</para>
+    /// 2026-10-19); the phrase names the window, so it takes neither codex's "hit your usage limit" nor the sales footer above. Its MONTHLY twin — <i>You've reached your monthly usage limit
+    /// for this billing cycle. Your quota will be refreshed in the next cycle.</i> — is the release session's capture on Kimi 2.3.0, 2026-10-21 (prompt mode; the ACP form is unmeasured).</para>
     /// </remarks>
-    internal static readonly string[] Spent = ["daily", "exhausted", "hit your usage limit", "insufficient balance", "reached your 5-hour usage limit"];
+    internal static readonly string[] Spent = ["daily", "exhausted", "hit your usage limit", "insufficient balance", "reached your 5-hour usage limit", "reached your monthly usage limit"];
 
     /// <summary>
     /// Whether waiting is pointless: a SPENT allowance, not a per-minute throttle.

@@ -30,7 +30,7 @@ public sealed class ASpentKimiQuotaReadsAsAQuotaTests : IDisposable
     private static void ReadsAsAQuota(string where, string line)
     {
         line.Should().Contain(KimiQuotaWords.Opening, $"the {where} says the quota is used up");
-        line.Should().Contain(KimiQuotaWords.ResetOpening, $"the {where} quotes the reset clause Kimi gave");
+        line.Should().Contain(KimiQuotaWords.ResetOpenings[0], $"the {where} quotes the reset clause Kimi gave");
         line.Should().Contain("\"Your quota will reset at 14:00 UTC.\"", $"the {where} quotes the WHOLE reset clause, in the cure — not a prefix of it, and not only the vendor's line that the summary cuts");
         line.Should().NotContain("kimi login", $"the {where} never sends a person to sign in again — it would not help");
         line.Should().NotContain("exit 77", $"the {where} is not a sign-in refusal");
