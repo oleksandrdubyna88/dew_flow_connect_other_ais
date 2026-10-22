@@ -1004,3 +1004,36 @@ fires over ACP: `not_signed_in` is then what the vendor said, and the kept sente
 | The line (after ` — the vendor said: `, ids redacted by hand) | *not captured yet* |
 | `moonshot-id` matched the real id | *not captured yet* |
 | Outcome (quota text over ACP / S9: bare sign-in) | *not captured yet* |
+
+## 32. Kimi Code 2.2.0 on Windows — what was re-measured, and what was not (2026-10-20)
+
+Asked by the owner on 2026-10-20, because `providers` warned that Kimi 2.2.0 is not a version coai has measured. Kimi Code
+**2.2.0** (self-updated from 2.1.1), Windows 11, the SHIPPED shim `coai-mcp 0.62.0` (the extension's own binary), the same
+default model `kimi-code/k3-256k`. Run in a window with no other `kimi` process on the machine (the refresh token rotates;
+both other sessions held their Kimi rounds). 12 + 52 + 41 launches. Every value below is copied from the probe scripts' own
+result tables of those three runs (kept outside the repository, as for §27).
+
+**Re-measured on 2.2.0 — the same final outcome as 2.1.1 in each cell; intermediate runs differ where the row says so (M-K11's Grep + Glob rung):**
+
+| Cell | Result on 2.2.0 |
+|---|---|
+| M-K15 tree hold (§27), 4 arms × 3 | normal and normal-with-tools: both lock files free 153–164 ms after the shim's exit; shim killed: held while `kimi` lived, free 0–1994 ms after `kimi`'s own exit; killed during `rg`: `kimi` took ~5.1–5.2 s to end, free at once after it. No process of Kimi's outlived it; the credentials folder's names intact, not rotated. |
+| M-K11 owned-home inventory, 3 runs per step | the junction alone → `not_signed_in` (77); + `config` → `model_not_offered` (65); + `config-models` → answered. Grep + Glob inside the working folder on `config` + `config-models`: 2 of 3. The miss was the model's own malformed Grep call (an empty `type` parameter, retried in the answer), not a missing file. The probe's ladder then added the person's `bin` (it placed `rg.exe`/`fd.exe` in the owned home itself) and got 3 of 3. **The needed set is the same as 2.1.1: `config`, `config-models` (§17).** `bin` was admitted by the ladder, not shown to be needed. Kimi wrote no `bin/` into the owned home in any run without it: `rg.exe` came from `PATH`. |
+| M-K11c, 3 runs | 4 files made; unchanged after `kimi --version` (2.2.0); 16 after turn 1, 24 after a second start — Kimi's own session store. |
+| M-K13, 3 launches | with `KIMI_CODE_NO_AUTO_UPDATE=1`: no `updates/`, version 2.2.0 → 2.2.0; the `-p` control without the variable wrote `updates/latest.json` and `rollout.log`. The pin holds. |
+| M-K8b, 3 runs | an owned home whose `credentials` is a junction to the person's answers; nothing copied. |
+| M-K9e (untrusted, no `.git`) | the project's hooks (`config.toml`, `local.toml`) and both project MCP files NOT loaded, 3 of 3; project AGENTS.md, skills and sub-agents ARE loaded, as on 2.1.1. Trusted control: both MCP files load. |
+| M-K7b | `kimi-code/k3` and `kimi-code/kimi-for-coding` answer; `kimi-for-coding-highspeed` → 403 (subscription), as on 2.1.1. |
+| M-K5b, 3 runs | `/usage` after `session/load` prints only `Context: …` and `Session total: …` — cumulative over the session, and no plan-quota line. |
+
+**NOT measured on 2.2.0, so `KimiAcpProfile.MeasuredVersions` stays `["2.1.1"]`:** the write refusals through the shim
+(M-K3, M-K4) and the reads (M-K6). Their shim arms were never given an owned root (`--home`, `--persons-bin`, `--locks`),
+so the shipped shim refuses them by design (`launch failed: no owned root`); only their `-p` positive controls ran — they
+show Kimi writes when nothing refuses, not that coai refuses. M-K12 (the OS-home redirect, writes canaries into the real
+`~/.agents`) needs the owner's permission again. M-K8, M-K9 and M-K10 copy the credentials folder into a scratch home —
+skipped, because a copy duplicates a refresh token that rotates. The script fix is owned by
+`todo/PLAN_vibe_and_kimi_runtimes_E4.md`'s session (planned after the Kimi quota fix); M-K3/M-K4/M-K6 re-run when that
+fix lands, and M-K12 when the owner allows the `~/.agents` canaries again — both in one paid window, asked for together.
+
+**The sign-in survived:** one token refresh rotated the file in place through the junction (M-K11), and one `kimi -p` turn
+on the real home answered afterwards.
