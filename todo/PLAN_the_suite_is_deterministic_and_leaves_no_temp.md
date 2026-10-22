@@ -1661,6 +1661,16 @@ B16 also turns the end-to-end smoke test red on a real machine. The docs pass is
 
 ### E5 — Tests that wait for an event
 
+> **Stories: [PLAN_the_suite_is_deterministic_and_leaves_no_temp_E5.md](PLAN_the_suite_is_deterministic_and_leaves_no_temp_E5.md)
+> (written 2026-10-22 by Fable; self-contained, so a gate reviewer reads it instead of this file). Status: plan only,
+> nothing implemented yet.** Thirteen stories over the twenty cases E5 owns (the nine below and the intake C28–C38), no
+> cornerstone; it folds the NEW C24 evidence of CI run 39760284371 (the fake's pid file read while EMPTY — exit 97 is the
+> fake CLI's "a managed exception escaped" exit, `tests_fakecli/Program.cs:45` — a torn `File.WriteAllText` at
+> `SupervisionVerbs.cs:43` behind a wait on `File.Exists` alone at `:204`; the `R` arm stays gated), finds C28's two
+> PowerShell spawns (`kimiWindowsInstall.test.ts:55`, `vibeWindowsInstall.test.ts:52`), measures C36 on this checkout
+> (12.7 s, 3,561 files, 73 outlined) and names the one clock seam E5 lands (`ReviewerExecutor`, C35, under D3).
+> Where it re-read the code at `78d91db55` it supersedes the lines below.
+
 > **Restructured 2026-10-21 by the cadence consult for epics 4-5 (`15f733c7`) — its four points, each verified against
 > the code at `d9cdccf0e`, are folded at the end of this section.** The story list below is the fresher one; where §9
 > item 5 or the DoD still list E5's cases the old way, this section governs. C23 LEFT this epic for E4 S2 (point 3,
