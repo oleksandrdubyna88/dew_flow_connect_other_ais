@@ -745,8 +745,12 @@ internal sealed class RoundEngine(
     {
         var kept = KeptFindings.From(results, roundWork.Reviewers, session.State.Rejections);
         var streak = WithdrawalStreak.Of(loaded.Rounds, session.State.Stage.ToString(), _settings.WithdrawalsBeforeHold);
+        var holds = kept.HoldsTheGate || streak.HoldsTheGate;
         var record = live.Withdraw(cause, results.Count(r => r.Outcome.EndedByRoundToken), results, kept) with
         {
+            // The record's own word for "a person decides": a landed gating finding OR the count of withdrawals in a row. The extension reads this,
+            // not the wording of the note nor the gating count (a hold by count has neither a finding nor a count).
+            HoldsGate = holds,
             Note = streak.HoldsTheGate && !kept.HoldsTheGate ? streak.HoldNote : kept.NoteFor(cause),
             Sha = Stages.Of(stage.Stage).RecordsSha ? sha : string.Empty,
             Size = roundWork.Size,
@@ -757,7 +761,7 @@ internal sealed class RoundEngine(
             PlanSource = PlanSources.Stamp(stage, planText, sha),
             // Authors stays unset: a cancelled round is not settled (Windows.IsSettled) and is never asked for authors.
         };
-        var hold = kept.HoldsTheGate || streak.HoldsTheGate ? HoldNotice(session, record.Note, [.. kept.Findings.Where(f => f.IsGating)]) : null;
+        var hold = holds ? HoldNotice(session, record.Note, [.. kept.Findings.Where(f => f.IsGating)]) : null;
         var saved = WithdrawnSession(loaded, session, record, kept, hold, planText);
         var landed = SaveWithdrawn(saved, record);
         var caller = RoundCommands.CallerFor(loaded);
@@ -829,7 +833,8 @@ internal sealed class RoundEngine(
             session,
             $"The {RoundSubject.StageName(session.State.Stage.ToString())} round of {session.State.Branch} was withdrawn {streak.Count} times in a row without a verdict. " +
             $"Nothing is held yet; at {streak.Cap} in a row the gate is held for you.",
-            []));
+            [],
+            EscalationKinds.Info));
         _log.Information("a person was told: {Count} withdrawn rounds of the {Stage} stage in a row", streak.Count, session.State.Stage);
     }
 
@@ -984,7 +989,8 @@ internal sealed class RoundEngine(
             gating);
 
     /// <summary>A notice card for the session, whatever it says — the shape the hold and the informational notice share.</summary>
-    private static EscalationQuestion NoticeCard(PersistedSession session, string question, IReadOnlyList<Finding> findings) =>
+    private static EscalationQuestion NoticeCard(
+        PersistedSession session, string question, IReadOnlyList<Finding> findings, string kind = EscalationKinds.Notice) =>
         new(
             Guid.NewGuid().ToString("N")[..12],
             session.State.SessionId,
@@ -997,7 +1003,7 @@ internal sealed class RoundEngine(
             [.. findings],
             DateTime.UtcNow.ToString("O"))
         {
-            Kind = EscalationKinds.Notice,
+            Kind = kind,
         };
 
     /// <summary>

@@ -271,12 +271,13 @@ test('a cancelled row that kept findings shows them when opened, beside the with
   assert.doesNotMatch(rows, /This round found nothing/, 'a round that kept a finding is drawn as one that found nothing');
 });
 
-/* A cancelled round that HOLDS the gate is not "not judged": a person is being asked (security judge 2026-10-22, §13.4 of the S2 spec). The record carries it
- * two ways — a counted gating finding, or the server's own held-for-a-person sentence (a hold by count has no finding). */
+/* A cancelled round that HOLDS the gate is not "not judged": a person is being asked (security judge 2026-10-22, §13.4 of the S2 spec). The record says so with
+ * its own flag, `holdsGate` (a hold by count has no finding and a gating count of zero) — the badge reads that and nothing else; only a record with NO flag
+ * (an older server's) falls back to the gating count. The wording of the note is never consulted. */
 
 const HELD_BY_COUNT_SESSION = {
   ...CANCELLED_SESSION,
-  rounds: [{ ...CANCELLED_SESSION.rounds[0]!, gatingCount: 0, note: 'withdrawn 3 times in a row — held for a person' }],
+  rounds: [{ ...CANCELLED_SESSION.rounds[0]!, gatingCount: 0, holdsGate: true, note: 'withdrawn 3 times in a row — held for a person' }],
 };
 
 test('a cancelled round that holds the gate by a gating finding is drawn "cancelled — held for you", not "not judged"', () => {
@@ -296,12 +297,42 @@ test('a cancelled round that holds the gate by count alone is drawn held too', (
   assert.match(rows, /cancelled — held for you/);
 });
 
-test('a cancelled round with a counted gating finding is held whatever its note says', () => {
-  // The count is the record's own fact; the sentence is the server's wording and may change.
+test('a cancelled round held by the streak is drawn held even when its note lacks the phrase', () => {
+  // The flag is the record's own fact; the sentence is the server's wording and may change (or be translated, or edited by hand).
+  const session = {
+    ...CANCELLED_SESSION,
+    rounds: [{ ...CANCELLED_SESSION.rounds[0]!, gatingCount: 0, holdsGate: true, note: 'withdrawn three times running' }],
+  };
+  const rows = runningPage([session], CANCELLED_LOG).seen['rows']?.innerHTML ?? '';
+
+  assert.match(rows, /class="badge cancelled held"/, 'a hold by count was drawn as a free withdrawal because the page read the note instead of the flag');
+  assert.match(rows, /cancelled — held for you/);
+});
+
+test('a cancelled round whose flag says it holds nobody is not drawn held — not even when its note mentions a person', () => {
+  const session = {
+    ...CANCELLED_SESSION,
+    rounds: [{ ...CANCELLED_SESSION.rounds[0]!, gatingCount: 0, holdsGate: false, note: 'a person was told; held for a person only at three' }],
+  };
+  const rows = runningPage([session], CANCELLED_LOG).seen['rows']?.innerHTML ?? '';
+
+  assert.doesNotMatch(rows, /held for you/, 'the badge matched a phrase in the note instead of reading the flag');
+  assert.match(rows, /cancelled — not judged/);
+});
+
+test('a cancelled round from a server that wrote no flag falls back to its counted gating findings', () => {
+  // An older record: no `holdsGate`. The count is the only fact it has, and it was the badge's rule before the flag existed.
   const session = { ...CANCELLED_SESSION, rounds: [{ ...CANCELLED_SESSION.rounds[0]!, gatingCount: 2, note: 'withdrawn with gating findings' }] };
   const rows = runningPage([session], CANCELLED_LOG).seen['rows']?.innerHTML ?? '';
 
   assert.match(rows, /class="badge cancelled held"/, 'a withdrawal that counted gating findings was drawn as a free one');
+});
+
+test('a cancelled round with no flag, no count and the phrase in its note is NOT held — the note is never read', () => {
+  const session = { ...CANCELLED_SESSION, rounds: [{ ...CANCELLED_SESSION.rounds[0]!, gatingCount: 0, note: 'withdrawn 3 times in a row — held for a person' }] };
+  const rows = runningPage([session], CANCELLED_LOG).seen['rows']?.innerHTML ?? '';
+
+  assert.doesNotMatch(rows, /held for you/, 'the badge is still reading the sentence');
 });
 
 test('a free withdrawal keeps its own badge — "cancelled — not judged", not held', () => {

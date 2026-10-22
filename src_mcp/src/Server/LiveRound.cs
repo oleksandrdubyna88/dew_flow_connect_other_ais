@@ -284,6 +284,9 @@ public sealed class LiveRound
                 UsageNote = usage.NotCaptured ? Core.Findings.CostText.UsageNotCaptured : string.Empty,
                 Note = kept.NoteFor(cause),
                 Findings = [.. kept.Findings],
+                GatingOrdinals = kept.GatingOrdinals,
+                // The landed findings' own hold; the engine adds the hold by count (WithdrawalStreak) on top.
+                HoldsGate = kept.HoldsTheGate,
             };
         }
     }

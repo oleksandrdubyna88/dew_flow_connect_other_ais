@@ -3,7 +3,7 @@
    review. `reportUnusedDisableDirectives` turns this line into an error the day that happens. */
 import { PAGE_SIZE, asInstant, compareRows } from './pageTables';
 import { repoNameOf } from './pathTail';
-import { Escalation } from './escalations';
+import { answerLabel, Escalation } from './escalations';
 import { ChatLedgers, roundKey, usageRegion } from './panelView';
 import { TeamServerState } from './teamServerView';
 import { ModelPrice } from './modelPrices';
@@ -93,6 +93,12 @@ export interface LogRow {
    * that ran, and for every conversation (`noteOf`).
    */
   readonly note: string;
+  /**
+   * Whether a `cancelled` round holds the gate for a person — the record's own flag (`RoundRecord.HoldsGate`), the only thing the
+   * "cancelled — held for you" badge is decided by. Absent, not `false`, when the record has none (an older server's): the page then
+   * falls back to the gating count, as it did before the flag.
+   */
+  readonly holdsGate?: boolean;
 
   /**
    * How the gate closed: accepted and rejected counts, or `null` for a round the database has never
@@ -529,7 +535,7 @@ function rowFrom(
   // A round the caller withdrew (or the host stopped) judged nothing, but it KEEPS what the reviewers that had landed found (G4 of
   // `todo/PLAN_a_cancelled_review_stops_its_round.md`): the database holds them when it holds the round, and the session file always does.
   // When the database has never heard of the round, the file's own copy is what the row opens to.
-  const kept = status === 'cancelled' ? keptFindings(round.findings) : [];
+  const kept = status === 'cancelled' ? keptFindings(round.findings, round.gatingOrdinals) : [];
   const fromTheFile = kept.length > 0 && !known && inDatabase.length === 0;
   const found = fromTheFile ? kept : inDatabase;
   const foundCount = fromTheFile ? kept.length : counts.get(key) ?? found.length;
@@ -552,6 +558,7 @@ function rowFrom(
     subject: round.subject ?? '',
     status,
     note: noteOf(round),
+    ...(typeof round.holdsGate === 'boolean' ? { holdsGate: round.holdsGate } : {}),
     decided,
     verdict: round.verdict,
     gating: round.gatingCount,
@@ -583,15 +590,25 @@ function rowFrom(
  * The findings a cancelled round kept, as the session file spells them — reviewer text off the disk, so read member by member and never
  * trusted for a shape. Severity is capitalised the way the database writes it, so a row reads the same from either source.
  */
-function keptFindings(raw: unknown): DbFinding[] {
-  return Array.isArray(raw) ? raw.flatMap((item, ordinal) => keptFinding(item, ordinal)) : [];
+function keptFindings(raw: unknown, counted: unknown): DbFinding[] {
+  const gating = gatingPositions(counted);
+
+  return Array.isArray(raw) ? raw.flatMap((item, ordinal) => keptFinding(item, ordinal, gating)) : [];
 }
 
-function keptFinding(item: unknown, ordinal: number): DbFinding[] {
-  return typeof item === 'object' && item !== null ? [keptFindingOf(item as Record<string, unknown>, ordinal)] : [];
+/**
+ * The positions the server counted toward the gate, from the record's `gatingOrdinals` — or `undefined` when the record names none at all
+ * (an older server's), which is the one case a finding's gating is inferred from its severity. An EMPTY list is an answer: nothing counted.
+ */
+function gatingPositions(counted: unknown): ReadonlySet<number> | undefined {
+  return Array.isArray(counted) ? new Set(counted.filter((n): n is number => Number.isInteger(n))) : undefined;
 }
 
-function keptFindingOf(member: Record<string, unknown>, ordinal: number): DbFinding {
+function keptFinding(item: unknown, ordinal: number, gating: ReadonlySet<number> | undefined): DbFinding[] {
+  return typeof item === 'object' && item !== null ? [keptFindingOf(item as Record<string, unknown>, ordinal, gating)] : [];
+}
+
+function keptFindingOf(member: Record<string, unknown>, ordinal: number, gating: ReadonlySet<number> | undefined): DbFinding {
   const severity = textOf(member, 'severity');
 
   return {
@@ -604,7 +621,8 @@ function keptFindingOf(member: Record<string, unknown>, ordinal: number): DbFind
     why: textOf(member, 'why'),
     fix: textOf(member, 'fix'),
     role: textOf(member, 'role'),
-    isGating: ['blocking', 'major'].includes(severity.toLowerCase()),
+    // What the SERVER counted (GateRule, standing rejections included) when it wrote the position list; severity only for a record without one.
+    isGating: gating?.has(ordinal) ?? ['blocking', 'major'].includes(severity.toLowerCase()),
     providers: stringsOf(member['providers']).join(','),
     resolution: '',
     reason: '',
@@ -1016,7 +1034,7 @@ export function questionsHtml(questions: readonly Escalation[]): string {
   <div class="where">${escapeHtml(q.branch)} · ${escapeHtml(q.repoPath)} · asked ${escapeHtml(q.askedUtc)}</div>
   <p>${escapeHtml(q.question)}</p>
   ${findings.length > 0 ? `<div class="gating">Still gating:</div><ul>${findings}</ul>` : '<div class="gating">No findings attached.</div>'}
-  <button type="button" data-command="answer" data-id="${escapeHtml(q.id)}">Answer…</button>
+  <button type="button" data-command="answer" data-id="${escapeHtml(q.id)}">${answerLabel(q)}</button>
 </div>`;
   });
 
@@ -1827,9 +1845,10 @@ ${teamSectionHtml(waitingFor())}
 
   function badge(row) {
     var status = row.status;
-    // A cancelled round that HOLDS the gate is not "not judged": a person is being asked (security judge, 2026-10-22). The record carries it
-    // two ways — a counted gating finding, or the server's own sentence (a hold by count has no finding; KeptFindings.HeldForAPerson).
-    var held = status === 'cancelled' && (row.gating > 0 || String(row.note || '').indexOf('held for a person') >= 0);
+    // A cancelled round that HOLDS the gate is not "not judged": a person is being asked (security judge, 2026-10-22). The record says so with
+    // its own flag (RoundRecord.HoldsGate — a hold by count has no finding and a gating count of zero), and the flag is all this reads: never
+    // the wording of the note. A record with NO flag (an older server's) has only its gating count to go by.
+    var held = status === 'cancelled' && (typeof row.holdsGate === 'boolean' ? row.holdsGate : row.gating > 0);
     // A skip says in the badge itself that it did not block: "skipped" alone reads like a stage the
     // caller forgot, and the whole point of D1 is that it is recorded AND lets the release through.
     var said = status === 'awaiting' ? 'awaiting decisions'

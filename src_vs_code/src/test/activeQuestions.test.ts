@@ -143,6 +143,25 @@ test('every word a model or the server wrote is escaped, never markup', () => {
   assert.deepEqual(texts(region, 'advice').map(decoded), ['</div><script>alert(1)</script>'], 'and it reads as the words it was');
 });
 
+test('an informational card (the second withdrawal in a row) offers no decision buttons — only a way to dismiss it', () => {
+  const info = card({ id: 'info-1', kind: 'info', question: 'The plan review round of feat/x was withdrawn 2 times in a row without a verdict.' });
+  const page = runPanel(panelState('', { questions: [info] }));
+  const region = page.region('live-qconsults');
+  const buttons = page.commands.filter((one) => one.dataset['id'] === 'info-1');
+
+  assert.match(textOf(region), /withdrawn 2 times in a row/, 'the person is still told');
+  assert.doesNotMatch(textOf(region), /Answer…|Keep going|Stop and act|Stop and talk|Continue|Fix/, 'a notice that asks nothing is drawn with answer buttons');
+  assert.deepEqual(buttons.map((one) => one.textContent), ['Dismiss'], 'the only control is the dismissal');
+  assert.doesNotMatch(region, /A question is waiting on you/, 'and it is not headed as one');
+});
+
+test('a card that does ask for a decision keeps its Answer… button beside an informational one', () => {
+  const page = runPanel(panelState('', { questions: [card({ id: 'ask-1', kind: 'notice' }), card({ id: 'info-1', kind: 'info' })] }));
+  const answers = page.commands.filter((one) => one.dataset['command'] === 'answer').map((one) => [one.dataset['id'], one.textContent]);
+
+  assert.deepEqual(answers, [['ask-1', 'Answer…'], ['info-1', 'Dismiss']]);
+});
+
 test('nothing active draws nothing — the region is empty, as the one it replaced was', () => {
   assert.equal(runPanel(panelState('', {})).region('live-qconsults'), '');
 });

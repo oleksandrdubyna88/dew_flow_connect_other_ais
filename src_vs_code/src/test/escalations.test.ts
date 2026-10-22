@@ -4,6 +4,7 @@ import {
   Escalation,
   isOpenEscalation,
   modalText,
+  needsADecision,
   parseEscalation,
   shouldPrompt,
   statusBarText,
@@ -96,6 +97,19 @@ test('an expired question parses, keeps its status, and is not OPEN — the serv
 test('a question without a status is open — every file written before the status existed', () => {
   assert.equal(isOpenEscalation(parseEscalation(JSON.stringify(escalation()))!), true);
   assert.equal(isOpenEscalation(parseEscalation('{"id":"x","question":"ship?","status":""}')!), true, 'an empty status is no status');
+});
+
+test('an informational card asks for no decision: it raises no modal and is not counted as a question', () => {
+  // The second withdrawal in a row is TOLD to the person (`kind: "info"`), who has nothing to decide until the cap holds the gate. A modal with
+  // "Answer…" and a status bar saying "a review is waiting on your answer" would be the dead end this card was changed to stop being.
+  const info = escalation({ id: 'i-1', kind: 'info', openFindings: [] });
+  const asked = escalation({ id: 'q-1', kind: 'notice' });
+  const older = escalation({ id: 'o-1' });
+
+  assert.equal(needsADecision(info), false);
+  assert.equal(needsADecision(asked), true);
+  assert.equal(needsADecision(older), true, 'a card with no kind is judged as cards always were: it is a question');
+  assert.deepEqual([info, asked, older].filter(needsADecision).map((e) => e.id), ['q-1', 'o-1']);
 });
 
 test('the consultant answers folded under a card are carried as they were written', () => {

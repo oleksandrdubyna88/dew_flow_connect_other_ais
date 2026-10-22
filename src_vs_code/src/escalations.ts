@@ -59,10 +59,11 @@ export interface Escalation {
   readonly consultantAnswers?: readonly EscalationAdvice[];
   /**
    * Which producer wrote the card (research/PLAN_ask_human_is_for_the_gate.md, G4): `notice` for a round's call_human,
-   * `question` for an ask_human asked while the gate was held (or for a feature review's second round). Absent in a card
-   * an older server wrote.
+   * `question` for an ask_human asked while the gate was held (or for a feature review's second round), `info` for a notice
+   * that asks for nothing (the second withdrawal in a row — drawn without decision buttons, dismissed rather than answered).
+   * Absent in a card an older server wrote.
    */
-  readonly kind?: 'notice' | 'question';
+  readonly kind?: 'notice' | 'question' | 'info';
   /**
    * The directory this question was READ from, so its answer goes back beside it.
    *
@@ -109,6 +110,22 @@ export function parseEscalation(text: string, from = ''): Escalation | undefined
  */
 export function isOpenEscalation(escalation: Escalation): boolean {
   return (escalation.status ?? '') !== EXPIRED;
+}
+
+/**
+ * Whether a card asks the person for a decision — every card does except an INFORMATIONAL one (`kind: "info"`: the second withdrawal in a row,
+ * which the person is told about and has nothing to decide until the cap holds the gate).
+ *
+ * <p>A card with no kind (an older server's) or one this build does not know is a question, as it always was: taking the answer away from a
+ * card nobody here understands would leave a round blocked behind it.</p>
+ */
+export function needsADecision(escalation: Escalation): boolean {
+  return escalation.kind !== 'info';
+}
+
+/** What a card's one button says: a question is answered, an informational card is only dismissed — it offers no decision. */
+export function answerLabel(escalation: Escalation): string {
+  return needsADecision(escalation) ? 'Answer…' : 'Dismiss';
 }
 
 /**

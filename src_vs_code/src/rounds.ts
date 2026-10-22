@@ -111,6 +111,18 @@ export interface RoundRecord {
    * a verdict. `unknown` because it is reviewer text off the disk: `keptFindings` reads it member by member.
    */
   readonly findings?: unknown;
+  /**
+   * On a `cancelled` round: whether it HOLDS the gate for a person — by a kept finding the server counted, or by the count of withdrawals in a
+   * row (a hold by count has no finding and a gating count of zero). The record's own fact, decided once by the server: nothing here reads the
+   * wording of `note`. Absent on every round an older server wrote; the log then falls back to the gating count.
+   */
+  readonly holdsGate?: boolean;
+  /**
+   * Which of `findings` (by position) the server counted toward the gate — its rule, standing rejections included. `unknown` because it is
+   * read off a disk: `keptFindings` takes only whole numbers. ABSENT means an older server, and the log infers from severity as it always did;
+   * an EMPTY list is the server saying nothing in `findings` counts.
+   */
+  readonly gatingOrdinals?: unknown;
 }
 
 /**

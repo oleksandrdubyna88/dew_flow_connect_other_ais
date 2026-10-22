@@ -99,7 +99,8 @@ export const TYPE_AN_ANSWER_FOR_THE_GATE: DecisionChoice = {
  * own questions — is answered in words, so the box for them comes FIRST, and the decisions after it, because only a
  * decision decides: it releases a hold, or asks for the second round. A round's call_human
  * NOTICE is a CHOICE, as the module comment says: the three decisions only, since no AI waits on a notice for words (the
- * cadence consultation b6e9df3c, 2026-10-03, found a typed answer there went nowhere).</p>
+ * cadence consultation b6e9df3c, 2026-10-03, found a typed answer there went nowhere). An INFORMATIONAL card (`info`: the
+ * second withdrawal in a row) is told, not asked — it offers NO choice, only a dismissal the watcher writes without asking.</p>
  *
  * <p>A card with no kind — an older server — or with a kind this build does not know — a newer one — is judged as cards
  * always were: no findings gating meant a question. Taking the box away from a kind nobody here knows would bring back
@@ -116,6 +117,9 @@ export function answerChoices(escalation: {
       return [TYPE_AN_ANSWER_FOR_THE_GATE, ...decisions];
     case 'notice':
       return decisions;
+    case 'info':
+      // Told, not asked: no hold is bound to the card and no AI waits on it, so every choice here would be a button that does nothing.
+      return [];
     default:
       return escalation.openFindings.length === 0 ? [TYPE_AN_ANSWER, ...decisions] : decisions;
   }

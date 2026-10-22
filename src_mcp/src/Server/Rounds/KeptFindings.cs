@@ -33,6 +33,12 @@ public sealed record KeptFindings(ImmutableArray<Finding> Findings, int Gating, 
     /// </summary>
     public const string HeldForAPerson = "held for a person";
 
+    /// <summary>
+    /// Which of <see cref="Findings"/> (by position) count toward the gate — the same decision as <see cref="Gating"/>, standing rejections
+    /// excluded, kept per finding so the record can tell a reader which ones gate without it re-deriving the rule from severity.
+    /// </summary>
+    public IReadOnlyList<int> GatingOrdinals { get; init; } = [];
+
     /// <summary>Whether the withdrawal must hold the gate for a person.</summary>
     public bool HoldsTheGate => Gating > 0;
 
@@ -44,10 +50,15 @@ public sealed record KeptFindings(ImmutableArray<Finding> Findings, int Gating, 
         var landed = results.Select(r => (r.Invocation, Outcome: Landed(r.Outcome))).ToArray();
         var merged = SecurityRound.Merge(landed, work);
 
+        var counted = Counted(merged, rejections);
+
         return new(
             merged,
-            Counted(merged, rejections),
-            [.. landed.Where(r => Counted(SecurityRound.Merge([r], work), rejections) > 0).Select(r => r.Invocation.Provider).Distinct()]);
+            counted.GatingCount,
+            [.. counted.Gating.SelectMany(f => f.Providers).Distinct()])
+        {
+            GatingOrdinals = [.. Enumerable.Range(0, merged.Length).Where(i => counted.Gating.Any(g => ReferenceEquals(g, merged[i])))],
+        };
     }
 
     /// <summary>
@@ -68,6 +79,6 @@ public sealed record KeptFindings(ImmutableArray<Finding> Findings, int Gating, 
         };
 
     // Any threshold would do: the count does not depend on it, and a withdrawal has no panel to pass.
-    private static int Counted(ImmutableArray<Finding> merged, ImmutableArray<PriorRejection> rejections) =>
-        GateRule.Evaluate(merged, rejections, _ => int.MaxValue).GatingCount;
+    private static GateResult Counted(ImmutableArray<Finding> merged, ImmutableArray<PriorRejection> rejections) =>
+        GateRule.Evaluate(merged, rejections, _ => int.MaxValue);
 }

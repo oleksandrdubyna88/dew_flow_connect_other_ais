@@ -7,6 +7,7 @@ import {
   Escalation,
   isOpenEscalation,
   modalText,
+  needsADecision,
   parseEscalation,
   shouldPrompt,
   statusBarText,
@@ -16,6 +17,18 @@ import { type DirEntry, type JsonDirectoryShape } from './jsonDirectory';
 import { JsonDirectoryWatcher } from './jsonDirectoryWatcher';
 import { notify, notifyAndAsk } from './notify';
 import { askPerson } from './personWait';
+
+/** What a person chose, as the answer file records it. */
+interface Picked {
+  readonly decision: string;
+  readonly text: string;
+}
+
+/**
+ * An informational card's dismissal: no dialog, and an answer file nothing on the server reads — it only takes the card off the screen, which is
+ * the one thing that card can be asked to do (the round that wrote it has returned and no hold is bound to it).
+ */
+const DISMISSED: Picked = { decision: '', text: 'dismissed' };
 
 /** The setting that names other installations' data directories. */
 export const ALSO_WATCH_SETTING = 'coai.alsoWatchDataDirectories';
@@ -139,7 +152,9 @@ export class EscalationWatcher {
 
   /** What a person sees moved: the status bar, the views, and a modal for a question nobody was prompted with yet. */
   private changed(): void {
-    const open = this.records.items;
+    // Only the cards that ask for a decision are "questions": an informational one (kind `info`) is told, not asked, so it raises no modal and
+    // does not make the status bar claim a review is waiting on an answer. It stays in the sidebar and the log until dismissed.
+    const open = this.records.items.filter(needsADecision);
     const text = statusBarText(open.length);
     if (text.length === 0) {
       this.statusItem.hide();
@@ -187,37 +202,12 @@ export class EscalationWatcher {
    * item, for a person who wants to say something the buttons do not cover.</p>
    */
   async answerCommand(escalation: Escalation): Promise<void> {
-    // The question's branch says which review is asking: a feature session's first choice is also the
-    // person's request for that review's second round, and its detail says so.
-    const choices = answerChoices(escalation);
-    const picked = await askPerson(() => vscode.window.showQuickPick(
-      choices.map((c) => ({ label: c.label, detail: c.detail, choice: c })),
-      {
-        title: `ConnectOtherAIs — ${escalation.branch}`,
-        placeHolder: escalation.question,
-        ignoreFocusOut: true,
-        matchOnDetail: true,
-      },
-    ));
-    if (picked === undefined) {
-      return; // dismissing is not answering; the question stays open
+    const chosen = needsADecision(escalation) ? await this.choose(escalation) : DISMISSED;
+    if (chosen === undefined) {
+      return; // dismissing the dialog is not answering; the question stays open
     }
 
-    const decision = picked.choice.decision;
-    let text = picked.choice.label;
-    if (decision === '') {
-      const typed = await askPerson(() => vscode.window.showInputBox({
-        title: `ConnectOtherAIs — ${escalation.branch}`,
-        prompt: escalation.question,
-        placeHolder: 'Your answer goes back to the AI that asked',
-        ignoreFocusOut: true,
-      }));
-      if (typed === undefined || typed.trim().length === 0) {
-        return;
-      }
-
-      text = typed.trim();
-    }
+    const { decision, text } = chosen;
 
     // BESIDE THE QUESTION, not in this window's own directory. A question can come from another
     // installation — a Claude Code session inside WSL writing into the WSL store — and the server
@@ -292,6 +282,39 @@ export class EscalationWatcher {
       return;
     }
     await this.refresh();
+  }
+
+  /**
+   * The dialog for a card that asks for a decision: the choices (and, for a typed answer, the box), or `undefined` when the person closed it.
+   * The question's branch says which review is asking: a feature session's first choice is also the person's request for that review's second
+   * round, and its detail says so.
+   */
+  private async choose(escalation: Escalation): Promise<Picked | undefined> {
+    const choices = answerChoices(escalation);
+    const picked = await askPerson(() => vscode.window.showQuickPick(
+      choices.map((c) => ({ label: c.label, detail: c.detail, choice: c })),
+      {
+        title: `ConnectOtherAIs — ${escalation.branch}`,
+        placeHolder: escalation.question,
+        ignoreFocusOut: true,
+        matchOnDetail: true,
+      },
+    ));
+    if (picked === undefined) {
+      return undefined;
+    }
+    if (picked.choice.decision !== '') {
+      return { decision: picked.choice.decision, text: picked.choice.label };
+    }
+
+    const typed = await askPerson(() => vscode.window.showInputBox({
+      title: `ConnectOtherAIs — ${escalation.branch}`,
+      prompt: escalation.question,
+      placeHolder: 'Your answer goes back to the AI that asked',
+      ignoreFocusOut: true,
+    }));
+
+    return typed === undefined || typed.trim().length === 0 ? undefined : { decision: '', text: typed.trim() };
   }
 
   /** Whether an answer is already sitting there. A read that throws is "no answer", not a crash. */
