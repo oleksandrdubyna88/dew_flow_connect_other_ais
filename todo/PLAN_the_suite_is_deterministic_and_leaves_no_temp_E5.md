@@ -902,6 +902,56 @@ message. Fable: none (no cornerstone).
 - **Roles.** Opus brief with the flag-state table required; Sonnet; Opus review. One coder, in that order (all three read
   `/proc` through `ProcStat` and the fake's supervision verbs).
 
+### S2 — status: built 2026-10-22 (Sonnet; the spec above governed, deviations listed)
+
+**Built.** Branch `feat/suite-e5-s2` (cut from `775b52b5a`), four cases in order, each RED commit then fix commit: C21 (`03108c4a1` → `b1a791d85`), C29 (`182c0e51d` → `0a4514d8d`), C24 (`1db6dcb93` → `06b65d861`), C26 (`e29a1e42a` → `67a987252`, plus the flag test `041c25902`). Product code changed in ONE file, `src_mcp/runners/Files/LinuxHeldFile.cs`; everything else is tests and the fake CLI. New files: `tests/ZombieMaker.cs` (the one zombie-making helper; the second shell in `AZombieIsNotAliveTests` and the second `/proc` parser are gone), `tests/EveryPidFileTheFakeWritesIsWrittenWholeTests.cs`. Counts (Linux CI job): 13,567 total at the RED run → 13,569 at the fix run (`39777910289`: 0 failed, 113 skipped); the test cases added are the bash arms of `AZombie_IsGone_NotSignalled` and `AKilledButUnreapedProcess_IsNotAlive` (Fact → Theory, +1 each), the 3 scan tests, `APidFileThatHoldsNoPid_IsReportedAsUnreadable_NotAnEscapedException`, and the C26 arms `AForkDuringTheTakesFailure_DoesNotCarryTheLockAway`, `AFailureWithAPreExecChild_StillLeavesTheFileFree`, `AnFcntlThatFails_IsUnusable_AndLeavesNoLock`, `TheDescriptor_IsCloseOnExec_UntilTheTakeHasSucceeded` — plus one `NoSourceFileCarriesAControlByteTests` case per new source file (`ZombieMaker.cs`, the scan file). All Linux-only arms were proved on the Linux CI job (they skip on Windows by name).
+
+**REDs, seen on today's code — CI run `39775461792`, Linux job (`build · test · family checks`, commit `e29a1e42a`; exactly these 7 failed, nothing else).**
+
+1. C21: `PidfdLayerTests.AZombie_IsGone_NotSignalled(shell: "/bin/bash", …)` — 10 s 048 ms, `the outer sleep never reaps, so the killed child should have stayed a zombie` (the CI sentence, verbatim). The `/bin/sh` arm was green (dash does not reap there).
+2. C29: `AZombieIsNotAliveTests.AKilledButUnreapedProcess_IsNotAlive(shell: "/bin/bash", …)` — 159 ms, `System.IO.DirectoryNotFoundException : Could not find a part of the path '/proc/4152/stat'.`
+3. C24 unit: `SupervisedTeardownLinuxTests.APidFileThatHoldsNoPid_IsReportedAsUnreadable_NotAnEscapedException` — 241 ms, `Expected exit to be 0 because fake-cli: FormatException: The input string '' was not in a correct format. , but found 97` (the 2026-10-22 kept message, reproduced deterministically through an empty `torn.pid` in the folder).
+4. C24 scans (`EveryPidFileTheFakeWritesIsWrittenWholeTests`, 2 tests) — sites listed in the message: `AcpAgent.cs:405`, `SupervisionVerbs.cs:43`; and `SupervisionVerbs.cs:180, :184, :187, :204`.
+5. C26 (a): `AForkDuringTheTakesFailure_DoesNotCarryTheLockAway` — 7 ms, `Expected HeldFile.Probe(LockFile) to be LockProbe.Free … because a descriptor opened inheritable and then closed must not survive in a child the host forked meanwhile, but found LockProbe.Held.`
+6. C26 (b): `AFailureWithAPreExecChild_StillLeavesTheFileFree` — 59 ms, `… because a pre-exec child the failed take's process forked still holds the flock after the failure: the abort path must flock(LOCK_UN) before it closes, but found LockProbe.Held.` The helper (`hold-file fork-fail`) really forked a child that stayed before any exec (the test's precondition `child.HasExited == false` held).
+7. C26 (c): red by compilation, seen locally — `error CS1501: No overload for method 'TakeInheritable' takes 3 arguments` (the `fcntl` seam did not exist). (d), the guards `L_N1a_ASecondInheritableTake_IsBusy…` and `L_N1b…`, are green before and after.
+
+**Green.** CI run `39777910289` (commit `67a987252`), Linux job: 13,569 total, 0 failed, 113 skipped. The C24 `R` arm is **GATED, not reproduced**: (5) is in place (every `StateOf`/`survivors` assertion of the teardown class carries the whole report), S13's loop result is not part of this story; if the loop shows no `R` it closes with the 20-run watch.
+
+**The `LinuxHeldFile` descriptor contract** (open `O_CLOEXEC` → flock → stream → checked clear on success; `LOCK_UN` → close on the aborted path; NO unlock on a successful hold's disposal), state at each line:
+
+| Line | Descriptor | Lock (open file description) | Success path | Failure path |
+|---|---|---|---|---|
+| `open(…, O_CLOEXEC)` | open, `FD_CLOEXEC` set | none | next | `Unusable(errno)`, nothing to close |
+| `flock(LOCK_EX\|LOCK_NB)` | `FD_CLOEXEC` set | taken | next | `EWOULDBLOCK` → `Busy`, other errno → `Unusable`; `close` (no lock was ever taken) |
+| `stream(handle)` | `FD_CLOEXEC` set | taken | next | throws → `flock(LOCK_UN)`, then the handle's dispose closes → `Unusable(cause)`; file Free even if a pre-exec child holds a copy |
+| `fcntl(F_SETFD, 0)` (seam, checked) | `FD_CLOEXEC` cleared on success | taken | `Taken(stream)` — inheritable from here | errno ≠ 0 → `flock(LOCK_UN)`, dispose → `Unusable(IOException naming the errno)` |
+| `Taken` stream disposed later | closed | **not unlocked** — released when the last inheritor's copy closes | | |
+
+The diagnosis tool for a kept CI run of C26 is `strace -ff -tt -yy -e trace=process,openat,flock,fcntl,close` on the test host.
+
+**Break-its — done on Linux CI on two throwaway branches off the story branch (`break/e5-s2-a` run `39778382433`, `break/e5-s2-b` run `39779531150`; never merged), each red with the real symptom, the story branch untouched.**
+
+- B-E5-4 (the `comm` wait removed): both zombie tests, bash arm, red after 30 s — `… the killed child 3841 should have stayed a zombie; its /proc entry read: gone - the killed child's /proc entry is gone: it was reaped before it could be observed as a zombie (its parent was still a shell?)` (run A).
+- B-E5-5 (the helper polls `Z` with a raw `File.ReadAllText`, on top of B-E5-4): both bash arms red, but as a 30 s timeout with a STALE reason (`its /proc entry read: state R`), not C29's exception — `Polls.Until` treats an `IOException` as "not yet" and swallows the `DirectoryNotFoundException`. Red, with a different symptom than the spec predicted (run B).
+- B-E5-6 (`WritePid` back to `File.WriteAllText`): `EveryPidFileTheFakeWrites_GoesThroughWritePidFile` red naming `SupervisionVerbs.cs:44` (run A).
+- B-E5-7 (`StateOfPidFile` back to `int.Parse(File.ReadAllText(file))`): `APidFileThatHoldsNoPid_…` red, exit 97 `FormatException: The input string '' …` (run A).
+- B-E5-8 (`FD_CLOEXEC` never cleared): `L_N1b_TheHold_SurvivesItsOpenersSigkill_WhileTheGrandchildLives` red with the spec's sentence (`… the descriptor was not inherited (O_CLOEXEC) (S-K5)`), and also `TheTreeHoldIsExclusiveAndInheritedOnLinuxTests.L_N1b_…` and `KimiCredentialsLockTests.TheTreeHold_OutlivesItsOpener_WhileAChildLives` (run A).
+- B-E5-9a (`LOCK_UN` dropped from the abort path): `AFailureWithAPreExecChild_StillLeavesTheFileFree` red, `found LockProbe.Held` (run A). Arm (a) stayed green (the exec'd child closed its copy).
+- B-E5-9 (`O_CLOEXEC` dropped from the open): **arm (a) stays GREEN** — see deviation 4; `TheDescriptor_IsCloseOnExec_UntilTheTakeHasSucceeded` is red: `Expected (flags & FdCloexec) to be 1 because the descriptor was inheritable while the take was still open … but found 0` (run B).
+- B-E5-9b (an unlock after a SUCCESSFUL take): `L_N1b_…` red (`found False`, the lock is gone with the opener's SIGKILL while the grandchild lives), and also `L_N1a_ASecondInheritableTake_IsBusy_TheLockIsExclusive` (`but "taken"`), `L_N1a_ANonInheritableTake_BesideAnInheritableHold_IsBusy`, `L_N1a_ProcLocks_…` (no FLOCK line), and the Kimi tree-hold tests (run B).
+
+**Deviations.**
+
+1. **Files beyond the story's list.** `tests_fakecli/HoldFileVerb.cs` (the `fork-fail` mode — the spec's "`hold-file` family extended", but not in the Files list; it needs no `Program.cs` edit, which stays S10's alone) and `tests_fakecli/AcpAgent.cs:405` (`SpawnedInto` was a second `File.WriteAllText(pidFile, …)` that the scan, as the spec words it, would have named; routed through `Serving.WritePidFile`). `FakeCli.csproj` and `Program.cs` are untouched.
+2. **The scan's exemptions.** `Program.cs`'s `FAKECLI_VERSION_PID` write (S10's file; a `--version` writes its pid once and `CodexTierSupportTests` reads it after the launcher killed that process — nobody polls it) and lines naming an `.eof` marker. Both are named in the test's remark.
+3. **C24's "unit test of (3)"** is `APidFileThatHoldsNoPid_…`: an empty `torn.pid` placed in the folder of the existing `supervise-tree orphans` mode, so it needs no new seam and it is the behavioural RED of the kept message (exit 97) — stronger than the spec's unit.
+4. **`O_CLOEXEC` is defence in depth on the abort path, not independently observable there.** With `LOCK_UN` before the close, a child that exec'd a non-CLOEXEC copy no longer pins the lock, so arm (a) is green without `O_CLOEXEC` (run B proves it). What `O_CLOEXEC` still buys is that no exec'd child keeps the descriptor of a take that goes on to SUCCEED. The flag is therefore pinned directly by an added test that reads `F_GETFD` inside the stream seam (`TheDescriptor_IsCloseOnExec_UntilTheTakeHasSucceeded`: deterministic, no inheritable descriptor outlives the call) — its red is B-E5-9 above; arm (a) is kept as the record of the original mechanism (red on the pre-fix code, run `39775461792`).
+5. **B-E5-5 is red only together with B-E5-4, and as a timeout** (see above); B-E5-9b reds more tests than L_N1b.
+6. **Arm (c) is red by compilation, as the spec says, but not on CI**: pushing a non-compiling commit would only have hidden the other REDs; the CS1501 was seen locally and the arm pushed with the fix.
+7. **Break-its ran on throwaway branches** (the story branch has no break-it commits); the two branches were deleted after their runs were read.
+8. **Nothing run on Windows/macOS proves the Linux arms**; the Windows/macOS jobs only prove the scan tests and the skips.
+
 ### S3 — C16, the HTTP stub (group A)
 
 - **Goal.** §3.6: close admission → abort → drain with a bound → stop; the cancellation-aware handler contract; nothing swallowed.
