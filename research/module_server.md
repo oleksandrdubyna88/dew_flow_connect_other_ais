@@ -3707,7 +3707,7 @@ handed as ONE population keyed by `round_key`.
 ```mermaid
 flowchart LR
     round["RoundEngine · a round recorded"] --> proj["Projection.Write · RecordRound · RecordConsultMissed"]
-    proj --> snap["RoundCountsSnapshot.TryWrite<br/>(after the projection, its own catch + log line)"]
+    proj --> snap["RoundCountsSnapshot.TryWrite<br/>(only if RecordRound completed · its own catch + log line)"]
     snap -->|"RoundCounts.LaunchesIn · AtomicFile"| file[("round-counts-snapshot.json<br/>7 d · ≤ 5 000 rounds")]
     ext["extension · spawns<br/>coai-mcp --round-counts-merged [--now] [abs paths…]"] --> mode["RoundCountsMergedMode.Run"]
     mode -->|bad request| e65["sentence on stderr · exit 65"]
@@ -3728,11 +3728,18 @@ through its reviewer rows, so such a round is in no count). Bounded by time (sev
 (`RoundCountsSnapshot.MaxRounds` = 5 000, newest kept, `truncated: true` said). It is the SAME scan the counters make (`RoundCounts.LaunchesIn`), so the
 snapshot and `--round-counts` cannot disagree about which rounds are "the last seven days".
 
+**What a read answers.** `RoundCountsSnapshot.Read(path)` returns a `SnapshotReading` — a closed record hierarchy (C# doctrine §5, a failure with several meaningful
+cases; the shape of `SnapshotRead` beside the review snapshot): `SnapshotReading.Loaded(Document)` or `SnapshotReading.Refused(Refusal)` (`Reason` `missing` /
+`unreadable` / `newer-schema`, and `Detail`). A refusal carries no placeholder document and a document no refusal; `RoundCountsMerged.Fold` matches the two cases.
+
 - **The write point** is `RoundEngine`, AFTER `_projection.Write(...)` returns and outside its lambda (D2). `TryWrite` has its own `catch` and its own log sentence —
   *the round-counts snapshot could not be written: {ExceptionType}* — and logs the exception's TYPE only, never its message (a filesystem message carries the
   destination path, and with it the user's name). Best effort is the contract: a snapshot older than the latest round is a STALE store, visible through
   `writtenUtc`, and the next round's write cures it. A store whose `coai.db` is not there writes nothing. `--round-counts` and `--round-counts-merged` write
-  nothing, ever.
+  nothing, ever. **And only for a round the database holds** (code review, 2026-10-22): `Projection.Write` swallows a storage failure, and a snapshot read then would lack
+  the round yet be stamped now, which the other side reads as current. The engine sets a local `recorded` flag right after `RecordRound` returns and writes the snapshot
+  only when it is set — a failure of the later stuck-findings count does not suppress it (the round IS in the database), a failure of `RecordRound` does, and the
+  previous snapshot keeps its own `writtenUtc` and is visibly stale. `Projection`'s contract (never takes a round down) is unchanged.
 - **Residual, accepted (E6 §4.2):** five servers on one data directory each write the snapshot after their own round; a writer that read and then paused can
   replace a snapshot written later, so every round committed in between is missing until the next write. The bound is the rounds of that interval, not one
   round; `AtomicFile`'s GUID temps make it a stale file, never a torn one. Not held by a lock — a lock would be a second write transaction for a courtesy file.
@@ -3745,7 +3752,8 @@ snapshot and `--round-counts` cannot disagree about which rounds are "the last s
 **The mode.** `coai-mcp --round-counts-merged [--now <ISO-8601 UTC instant>] [<absolute snapshot path>…]` (`Server/RoundCountsMergedMode.cs`, its own `args[0]`
 for the reason `--round-counts` is: a server too old for it exits **64** and the extension falls back). Exit **0** the answer (no path is a valid request: this
 side alone, `stores[]` of one); **65** a request fault (`--now` missing its value, repeated or unparseable; an unknown flag; a relative path; more than 32
-distinct paths — a path given twice is read once); **74** this side's database will not read; **never 64**, and **a snapshot problem never changes the code**.
+path arguments — counted as GIVEN, before duplicates are folded, so a request of ten thousand paths is refused at its length and never copied; a path given twice
+within the cap is read once); **74** this side's database will not read; **never 64**, and **a snapshot problem never changes the code**.
 The answer is the plain answer (`nowUtc`, `windows[]`, `modelsKnownSince` — THIS side's instant, D11 — `gauge`) plus:
 
 - `rows[].roundKeys` (the distinct non-empty keys counted), `rows[].keyStore` (key → the id of the ONE store the round is counted in), `rows[].roundsWithoutKey`,
@@ -3754,17 +3762,18 @@ The answer is the plain answer (`nowUtc`, `windows[]`, `modelsKnownSince` — TH
 - `stores[]` — this side first (`live: true`, `asOf` now), then each snapshot store in the order its first path was given: `id`, `platform`, `host`, `wslDistro`,
   `side`, `directory`, `paths[]` (every spelling that reached it), `asOf` (`writtenUtc`), `quiet` (written no later than `now − 7 d`: counted as 0 *as of* its last
   write, never *not included*), `truncated`, `coaiMcpVersion`, and `conflicts`.
-- `storesNotIncluded[]` — one per path that yielded no store, in argument order: `{ path, reason, detail }` with `reason` `missing` (the path), `unreadable` (the
-  exception's message, or *not a round-counts snapshot*: not JSON, no integer `schema`, `schema < 1`, a missing required field, an id that is not 32 lower-case hex digits,
+- `storesNotIncluded[]` — one per path that yielded no store, in argument order: `{ path, reason, detail }` with `reason` `missing` (the path), `unreadable` (*the file
+  could not be read (<ExceptionType>)* — the exception's TYPE and a sentence of ours, never its message, which names the resolved path and with it a person — or *not a round-counts snapshot*: not JSON, no integer `schema`, `schema < 1`, a missing required field, an id that is not 32 lower-case hex digits,
   a key that is neither empty nor a key, a stamp that is not an ISO-8601 instant, more than 5 000 rounds, or a file over 16 MB) or `newer-schema` (*schema N — this
   coai-mcp reads schema 1; update coai-mcp on this side*). `schema` is read FIRST and leniently so a newer document is named as newer; an unknown property is
   ignored, which is how an added field keeps schema 1.
 
 **One identity rule** (`RoundCounts.Launch.Of`, D4): a round is its `round_key`; a round with no key is `<storeId>#<id>` — never the bare integer id, which every
 store counts from 1 (the pre-E6 `Distinct` counted `RoundId`, the collapse the parent plan names). A key in more than one store is ONE round, counted in the first
-store that holds it — this side, then the snapshots in argument order — and only that store's `parts[]` and `keyStore` carry it. When the copies differ (stage,
+store that holds it — this side, then the snapshot stores ordered by store id (ordinal), NEVER by argument order — and only that store's `parts[]` and `keyStore` carry it. When the copies differ (stage,
 reviewers or models) the result is still the owner's copy, and the OWNING store's `conflicts` counts the rounds concerned, so the block can say *N rounds appear in
-two stores with different contents — counted from <store>*; the answer depends on argument order only through that named choice. A snapshot whose id is this side's
+two stores with different contents — counted from <store>*; the answer does not depend on argument order at all (the same set of stores gives the same `keyStore`, parts and
+conflicts), only the `stores[]` listing follows the order the first paths were given. A snapshot whose id is this side's
 is this side reached through another spelling (its path joins `stores[0].paths[]`, its rounds are not read); two snapshots with one id are one store and the NEWER
 `writtenUtc` is the one counted (a tie keeps the first). Every store's rounds are concatenated and cut by the ONE `RoundCounts.Cut` at the one `now` — a snapshot
 round 4 h 59 m before `--now` is in `5h`, one exactly 5 h before is in `24h` and not `5h` — never at a snapshot's own write.

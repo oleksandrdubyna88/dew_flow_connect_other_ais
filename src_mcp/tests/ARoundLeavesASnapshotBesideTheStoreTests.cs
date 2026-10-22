@@ -119,14 +119,13 @@ public sealed class ARoundLeavesASnapshotBesideTheStoreTests : IAsyncLifetime
 
         answer.GetProperty("verdict").GetString().Should().Be("proceed", $"{answer}");
         File.Exists(Snapshot).Should().BeTrue("the snapshot is written after the round is recorded");
-        var read = RoundCountsSnapshot.Read(Snapshot);
-        read.Ok.Should().BeTrue($"{read.Refusal}");
-        read.Document.Schema.Should().Be(1);
-        var round = read.Document.Rounds.Should().ContainSingle().Which;
+        var document = RoundCountsSnapshot.Read(Snapshot).Should().BeOfType<SnapshotReading.Loaded>().Which.Document;
+        document.Schema.Should().Be(1);
+        var round = document.Rounds.Should().ContainSingle().Which;
         round.Key.Should().Be(KeyInTheDatabase()).And.HaveLength(32, "the key the projection wrote");
         round.Stage.Should().Be("PlanReview");
         round.Reviewers.Should().NotBeEmpty();
-        read.Document.Store.Id.Should().Be(RoundAuthorsMerge.SourceIdOf(read.Document.Store.Platform, read.Document.Store.WslDistro, _data.Path));
+        document.Store.Id.Should().Be(RoundAuthorsMerge.SourceIdOf(document.Store.Platform, document.Store.WslDistro, _data.Path));
         Directory.EnumerateFiles(_data.Path, "*.tmp").Should().BeEmpty();
     }
 
@@ -143,6 +142,35 @@ public sealed class ARoundLeavesASnapshotBesideTheStoreTests : IAsyncLifetime
         warnings.Should().ContainSingle("one line, and in its own words: not the projection's");
         warnings[0].Should().NotContain(_data.Path);
         _sink.Lines.Should().NotContain(line => line.Contains("could not be projected", StringComparison.Ordinal), "the round DID project");
+    }
+
+    /// <summary>
+    /// <c>Projection.Write</c> swallows a storage failure, so the round answers and nothing is recorded. A snapshot written then would be read
+    /// from a database without the round and stamped NOW, and the other side would take it for current. The previous snapshot stays as it was,
+    /// its own <c>writtenUtc</c> saying how old it is.
+    /// </summary>
+    [Fact]
+    public async Task AProjectionThatFailed_PublishesNoFreshSnapshot()
+    {
+        RoundsDb.Open(_data.Path, Serilog.Core.Logger.None)!.Dispose();
+        RefuseEveryRoundRow();
+        RoundCountsSnapshot.TryWrite(_data.Path, new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc), Serilog.Core.Logger.None);
+        var before = await File.ReadAllBytesAsync(Snapshot);
+
+        var answer = await PlanRound(Service());
+
+        answer.GetProperty("verdict").GetString().Should().Be("proceed", $"the round answers although its projection failed: {answer}");
+        _sink.Lines.Should().Contain(line => line.Contains("could not be projected", StringComparison.Ordinal), "the projection DID fail, which is the premise");
+        (await File.ReadAllBytesAsync(Snapshot)).Should().Equal(before, "a snapshot read from a database that lacks the round must not be stamped as current");
+    }
+
+    private void RefuseEveryRoundRow()
+    {
+        using var db = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={Path.Combine(_data.Path, RoundsDb.FileName)};Pooling=False");
+        db.Open();
+        using var trigger = db.CreateCommand();
+        trigger.CommandText = "CREATE TRIGGER refuse_rounds BEFORE INSERT ON rounds BEGIN SELECT RAISE(ABORT, 'storage is full'); END";
+        trigger.ExecuteNonQuery();
     }
 
     /// <summary>

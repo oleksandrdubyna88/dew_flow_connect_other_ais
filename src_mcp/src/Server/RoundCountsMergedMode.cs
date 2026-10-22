@@ -103,15 +103,16 @@ internal static class RoundCountsMergedMode
             ? Outcome<DateTime>.Of(at.UtcDateTime)
             : Outcome<DateTime>.Refuse($"{Mode} --now needs an ISO-8601 UTC instant, such as 2026-10-10T12:00:00Z; '{text}' is not one");
 
+    /// <summary>The cap is on the arguments GIVEN, counted before anything is deduplicated or copied: a request of ten thousand paths is refused at its length.</summary>
     private static Outcome<IReadOnlyList<string>> PathsOf(string[] rest) =>
         rest.FirstOrDefault(token => token.StartsWith("--", StringComparison.Ordinal)) is { } flag
             ? Outcome<IReadOnlyList<string>>.Refuse($"{Usage} — '{flag}' is not a flag it knows")
-            : Absolute([.. rest.Distinct(StringComparer.Ordinal)]);
+            : rest.Length > MaxPaths
+                ? Outcome<IReadOnlyList<string>>.Refuse($"{Usage} — {rest.Length} paths were given")
+                : Absolute([.. rest.Distinct(StringComparer.Ordinal)]);
 
     private static Outcome<IReadOnlyList<string>> Absolute(IReadOnlyList<string> paths) =>
         paths.FirstOrDefault(path => !Path.IsPathFullyQualified(path)) is { } relative
             ? Outcome<IReadOnlyList<string>>.Refuse($"{Usage} — '{relative}' is not an absolute path")
-            : paths.Count > MaxPaths
-                ? Outcome<IReadOnlyList<string>>.Refuse($"{Usage} — {paths.Count} paths were given")
-                : Outcome<IReadOnlyList<string>>.Of(paths);
+            : Outcome<IReadOnlyList<string>>.Of(paths);
 }

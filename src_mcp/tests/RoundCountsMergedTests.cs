@@ -128,15 +128,30 @@ public sealed class RoundCountsMergedTests : IDisposable
     }
 
     [Fact]
-    public void TheFirstStoreIsThisSide_ThenTheSnapshotsInArgumentOrder()
+    public void AKeyInTwoSnapshots_IsOwnedByTheSameStore_InEitherArgumentOrder()
     {
         var first = Snapshot("one", Document(Wsl("Ubuntu"), Now.AddMinutes(-6), Round(1, Key('a'), Now.AddHours(-1), nameof(Stage.CodeReview), Ran(Codex))));
-        var second = Snapshot("two", Document(Wsl("Debian"), Now.AddMinutes(-7), Round(1, Key('a'), Now.AddHours(-1), nameof(Stage.CodeReview), Ran(Codex))));
+        var second = Snapshot("two", Document(Wsl("Debian"), Now.AddMinutes(-7), Round(1, Key('a'), Now.AddHours(-1), nameof(Stage.CodeReview), Ran(Codex), Ran(Codex))));
+        var lowest = string.CompareOrdinal(Wsl("Ubuntu").Id, Wsl("Debian").Id) < 0 ? Wsl("Ubuntu").Id : Wsl("Debian").Id;
 
-        var owner = (RoundCountsMergedAnswer answer) => RowOf(answer, "5h", Codex).KeyStore[Key('a')];
+        var forward = RowOf(Merge(first, second), "5h", Codex);
+        var backward = RowOf(Merge(second, first), "5h", Codex);
 
-        owner(Merge(first, second)).Should().Be(Wsl("Ubuntu").Id);
-        owner(Merge(second, first)).Should().Be(Wsl("Debian").Id, "the named choice, and the only dependence on argument order");
+        forward.KeyStore[Key('a')].Should().Be(lowest, "of the snapshot stores, the lowest id owns a key they share");
+        backward.KeyStore.Should().Equal(forward.KeyStore, "the same set of stores gives the same ownership whatever order the paths came in");
+        backward.Parts.Should().BeEquivalentTo(forward.Parts, "the parts follow the ownership");
+        backward.Reviewers.Should().Be(forward.Reviewers, "and so does the count");
+        Merge(first, second).Stores.Select(s => s.Conflicts).Order().Should().Equal(Merge(second, first).Stores.Select(s => s.Conflicts).Order());
+    }
+
+    [Fact]
+    public void TheStoresAreListedThisSideFirst_ThenInTheOrderTheirFirstPathWasGiven()
+    {
+        var first = Snapshot("one", Document(Wsl("Ubuntu"), Now.AddMinutes(-6), Round(1, Key('a'), Now.AddHours(-1), nameof(Stage.CodeReview), Ran(Codex))));
+        var second = Snapshot("two", Document(Wsl("Debian"), Now.AddMinutes(-7), Round(1, Key('b'), Now.AddHours(-1), nameof(Stage.CodeReview), Ran(Codex))));
+
+        Merge(first, second).Stores.Select(s => s.WslDistro).Should().Equal(string.Empty, "Ubuntu", "Debian");
+        Merge(second, first).Stores.Select(s => s.WslDistro).Should().Equal(string.Empty, "Debian", "Ubuntu");
     }
 
     [Fact]
@@ -156,20 +171,18 @@ public sealed class RoundCountsMergedTests : IDisposable
     }
 
     [Fact]
-    public void ACopyThatDiffers_IsSaid_WhicheverSnapshotCameFirst_AndTheOwnerIsTheOneNamedFirst()
+    public void ACopyThatDiffers_IsSaid_WhicheverSnapshotCameFirst_AndTheOwnerIsTheLowestId()
     {
         var small = Snapshot("small", Document(Wsl("Ubuntu"), Now.AddMinutes(-6), Round(1, Key('a'), Now.AddHours(-1), nameof(Stage.CodeReview), Ran(Codex))));
         var large = Snapshot("large", Document(Wsl("Debian"), Now.AddMinutes(-7), Round(1, Key('a'), Now.AddHours(-1), nameof(Stage.CodeReview), Ran(Codex), Ran(Codex))));
+        var smallOwns = string.CompareOrdinal(Wsl("Ubuntu").Id, Wsl("Debian").Id) < 0;
 
-        var smallFirst = Merge(small, large);
-        var largeFirst = Merge(large, small);
-
-        RowOf(smallFirst, "5h", Codex).Reviewers.Should().Be(1, "counted from the first named store");
-        RowOf(largeFirst, "5h", Codex).Reviewers.Should().Be(2, "counted from the first named store");
-        smallFirst.Stores.Select(s => s.Conflicts).Should().Equal(0, 1, 0);
-        largeFirst.Stores.Select(s => s.Conflicts).Should().Equal(new[] { 0, 1, 0 }, "the conflict is said either way, against the store that owns the round");
-        smallFirst.Stores[1].WslDistro.Should().Be("Ubuntu");
-        largeFirst.Stores[1].WslDistro.Should().Be("Debian");
+        foreach (var answer in new[] { Merge(small, large), Merge(large, small) })
+        {
+            RowOf(answer, "5h", Codex).Reviewers.Should().Be(smallOwns ? 1 : 2, "counted from the owning store, the lowest id, whichever path came first");
+            answer.Stores.Single(s => s.WslDistro == "Ubuntu").Conflicts.Should().Be(smallOwns ? 1 : 0, "the conflict is said against the store that owns the round");
+            answer.Stores.Single(s => s.WslDistro == "Debian").Conflicts.Should().Be(smallOwns ? 0 : 1);
+        }
     }
 
     [Fact]

@@ -57,12 +57,25 @@ internal sealed partial class RoundCountsSnapshotJson : JsonSerializerContext;
 /// <summary>Why a snapshot path yielded no store: <c>missing</c>, <c>unreadable</c> or <c>newer-schema</c>, and the sentence that says it.</summary>
 public sealed record SnapshotRefusal(string Reason, string Detail);
 
-/// <summary>A snapshot read from a path: the document, or the refusal. <see cref="Document"/> is meaningful only when <see cref="Ok"/>.</summary>
-public readonly record struct SnapshotReading(bool Ok, RoundCountsSnapshotDocument Document, SnapshotRefusal Refusal)
+/// <summary>
+/// A snapshot read from a path: <see cref="Loaded"/> with its document, or <see cref="Refused"/> with the refusal — a closed hierarchy (the C# doctrine
+/// §5, for a failure with several meaningful cases), so a refusal cannot carry a placeholder document and a document cannot carry a refusal.
+/// </summary>
+public abstract record SnapshotReading
 {
-    public static SnapshotReading Of(RoundCountsSnapshotDocument document) => new(true, document, new SnapshotRefusal(string.Empty, string.Empty));
+    private SnapshotReading()
+    {
+    }
 
-    public static SnapshotReading Refuse(string reason, string detail) => new(false, default!, new SnapshotRefusal(reason, detail));
+    /// <summary>The snapshot was read; <paramref name="Document"/> has every stamp spelt the column's way.</summary>
+    public sealed record Loaded(RoundCountsSnapshotDocument Document) : SnapshotReading;
+
+    /// <summary>The path yielded no store; <paramref name="Refusal"/> says why.</summary>
+    public sealed record Refused(SnapshotRefusal Refusal) : SnapshotReading;
+
+    public static SnapshotReading Of(RoundCountsSnapshotDocument document) => new Loaded(document);
+
+    public static SnapshotReading Refuse(string reason, string detail) => new Refused(new SnapshotRefusal(reason, detail));
 }
 
 /// <summary>
@@ -180,18 +193,23 @@ public static class RoundCountsSnapshot
     /// A snapshot read from <paramref name="path"/>: the document (with every stamp spelt the column's way), or the reason it is not a store —
     /// <see cref="Missing"/>, <see cref="Unreadable"/> or <see cref="NewerSchema"/>. Never throws for a file problem.
     /// </summary>
-    public static SnapshotReading Read(string path) =>
-        File.Exists(path) ? ReadText(path) : SnapshotReading.Refuse(Missing, path);
+    public static SnapshotReading Read(string path) => Read(path, File.ReadAllText);
 
-    private static SnapshotReading ReadText(string path)
+    /// <param name="readText">The read itself — <see cref="File.ReadAllText(string)"/> in production; a seam so a test can fail it.</param>
+    internal static SnapshotReading Read(string path, Func<string, string> readText) =>
+        File.Exists(path) ? ReadText(path, readText) : SnapshotReading.Refuse(Missing, path);
+
+    private static SnapshotReading ReadText(string path, Func<string, string> readText)
     {
         try
         {
-            return new FileInfo(path).Length > MaxBytes ? SnapshotReading.Refuse(Unreadable, NotASnapshot) : Parsed(File.ReadAllText(path));
+            return new FileInfo(path).Length > MaxBytes ? SnapshotReading.Refuse(Unreadable, NotASnapshot) : Parsed(readText(path));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return SnapshotReading.Refuse(Unreadable, e.Message);
+            // The TYPE only, and a sentence of ours: a filesystem message names the file it was resolved to, and the path names the person.
+            // The `missing` refusal says the path the CALLER passed, which is theirs already.
+            return SnapshotReading.Refuse(Unreadable, $"the file could not be read ({e.GetType().Name})");
         }
     }
 

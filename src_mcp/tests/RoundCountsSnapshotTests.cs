@@ -46,10 +46,7 @@ public sealed class RoundCountsSnapshotTests : IDisposable
 
     private RoundCountsSnapshotDocument Written()
     {
-        var read = RoundCountsSnapshot.Read(SnapshotFile);
-        read.Ok.Should().BeTrue($"the snapshot reads back: {read.Refusal}");
-
-        return read.Document;
+        return RoundCountsSnapshot.Read(SnapshotFile).Should().BeOfType<SnapshotReading.Loaded>("the snapshot reads back").Which.Document;
     }
 
     [Fact]
@@ -278,6 +275,35 @@ public sealed class RoundCountsSnapshotTests : IDisposable
         _sink.Lines.Should().ContainSingle().Which.Should().Be("the round-counts snapshot could not be written: IOException");
     }
 
+    /// <summary>
+    /// A filesystem message names the file it was resolved to, and the file's path names a person; the refusal is echoed into the answer the
+    /// extension shows. So its detail is the exception's TYPE and a sentence of ours — never the message.
+    /// </summary>
+    [Theory]
+    [InlineData(typeof(IOException), "the file could not be read (IOException)")]
+    [InlineData(typeof(UnauthorizedAccessException), "the file could not be read (UnauthorizedAccessException)")]
+    public void AnUnreadableFile_IsRefusedWithTheExceptionsTypeAndNeverItsMessage(Type thrown, string sentence)
+    {
+        var path = Write(_store.Path, Document(Wsl("Ubuntu"), Now), "locked.json");
+        const string Message = @"Access to the path 'C:\Users\alice\AppData\coai-mcp\locked.json' is denied.";
+
+        var read = RoundCountsSnapshot.Read(path, _ => throw (Exception)Activator.CreateInstance(thrown, Message)!);
+
+        var refusal = read.Should().BeOfType<SnapshotReading.Refused>().Which.Refusal;
+        refusal.Reason.Should().Be(RoundCountsSnapshot.Unreadable);
+        refusal.Detail.Should().Be(sentence);
+        refusal.Detail.Should().NotContain("alice").And.NotContain(Message);
+    }
+
+    [Fact]
+    public void AMissingFile_IsRefusedWithThePathTheCallerPassed()
+    {
+        var path = Path.Combine(_store.Path, "nowhere", RoundCountsSnapshot.FileName);
+
+        RoundCountsSnapshot.Read(path).Should().BeOfType<SnapshotReading.Refused>().Which.Refusal
+            .Should().Be(new SnapshotRefusal(RoundCountsSnapshot.Missing, path));
+    }
+
     [Fact]
     public void ASnapshotReadBack_IsTheDocumentThatWasWritten()
     {
@@ -289,8 +315,7 @@ public sealed class RoundCountsSnapshotTests : IDisposable
 
         var read = RoundCountsSnapshot.Read(path);
 
-        read.Ok.Should().BeTrue();
-        read.Document.Should().BeEquivalentTo(document);
+        read.Should().BeOfType<SnapshotReading.Loaded>().Which.Document.Should().BeEquivalentTo(document);
     }
 
     [Fact]
@@ -303,7 +328,7 @@ public sealed class RoundCountsSnapshotTests : IDisposable
 
         var read = RoundCountsSnapshot.Read(path);
 
-        read.Document.Rounds.Single().StartedUtc.Should().Be(Now.AddHours(-1).ToString("O"), "windows compare these as text, so they must all be spelt one way");
+        read.Should().BeOfType<SnapshotReading.Loaded>().Which.Document.Rounds.Single().StartedUtc.Should().Be(Now.AddHours(-1).ToString("O"), "windows compare these as text, so they must all be spelt one way");
     }
 
     [Fact]
