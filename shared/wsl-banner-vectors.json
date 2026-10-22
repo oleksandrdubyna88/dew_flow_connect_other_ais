@@ -51,7 +51,7 @@
       "id": "wsl2-custom-kernel-without-any-marker",
       "banner": "Linux version 5.15.90.1-myown (me@box) (gcc 12.2.0) #1 SMP",
       "generation": "none",
-      "note": "A WSL2 kernel the owner built and tagged with nothing: it is indistinguishable from a native Linux kernel by its banner, so it reads as none and Vibe is refused as a native Linux host. Stated, not solved."
+      "note": "A WSL2 kernel the owner built and tagged with nothing: it is indistinguishable from a native Linux kernel by its banner, so it reads as none and Vibe is treated as a native Linux host (since E2.S2 of todo/PLAN_kimi_and_vibe_on_native_linux_E2.md: started, with the keyring road closed; Kimi refused). Stated, not solved."
     },
     {
       "id": "empty-banner",
