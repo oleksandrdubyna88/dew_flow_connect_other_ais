@@ -55,6 +55,10 @@ AppDomain.CurrentDomain.UnhandledException += (_, e) =>
 //   FAKECLI_SIDE_EFFECT  — write a file at this path: a vendor breaking its own read-only promise
 //   FAKECLI_RECORD_DIR   — write each launch's full argv into <pid>-<guid>.argv there, whole or not at all
 //   FAKECLI_RECORD_GATE  — hold that record open until this file exists, saying so in <gate>.held (a test of the recorder)
+//   FAKECLI_ANSWER_GATE  — hold the ANSWER until this file exists (E5 S10, C33): the launch has read its stdin and recorded
+//                          itself, says so in <gate>.held (its pid, written whole), waits, then says <gate>.answering the
+//                          instant before it writes anything. A test that must stand in "the vault read is still running"
+//                          closes the gate instead of guessing a sleep long enough, and opens it when it has seen what it came for
 //   FAKECLI_HELP_STDOUT / FAKECLI_HELP_EXIT / FAKECLI_HELP_SLEEP_MS
 //                        — what a bare `--help` prints and exits with (a claude's capability probe); stdin is
 //                          not read for it. Unset: the help prints nothing useful and exits 0
@@ -175,6 +179,11 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is
     }
 
     var steering = Steering.For(prompt.Text, read);
+
+    // A vendor whose answer a TEST holds back: the gate, not a sleep, so "the read has not ended" is a fact the test controls.
+    var answerGate = read("FAKECLI_ANSWER_GATE");
+    Gate.Hold(answerGate, Gate.AnswerParkBound);
+    Gate.Mark(answerGate, ".answering");
 
     // A vendor that takes its time. It exists for the health probe's timeout arm: a CLI that
     // never answers `--version` must be reported as silent rather than as whatever exit code the
@@ -556,7 +565,9 @@ static class VersionAnswer
         Append(read("FAKECLI_VERSION_COUNT"), "V\n");
         if (read("FAKECLI_VERSION_PID") is { Length: > 0 } pidFile)
         {
-            File.WriteAllText(pidFile, Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            // Whole or absent, like every pid file the fake writes: the launcher kills this child at its ceiling, and a plain
+            // write cut off by that kill leaves an EMPTY file the test's int.Parse then fails on (E5 S2's pid-file rule).
+            Serving.WritePidFile(pidFile, [Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture)]);
         }
 
         if (int.TryParse(read("FAKECLI_VERSION_SLEEP_MS"), out var napMs) && napMs > 0)
@@ -678,18 +689,49 @@ static class LaunchRecord
     /// <c>FAKECLI_RECORD_GATE</c>: with the record still open, say so in <c>&lt;gate&gt;.held</c> and wait for the
     /// gate file — the window a reader polling the directory can land in, held open on purpose so a test can stand in it.
     /// </summary>
-    private static void HoldOpen(string? gate)
+    private static void HoldOpen(string? gate) => Gate.Hold(gate, Gate.RecordParkBound);
+}
+
+/// <summary>
+/// "Wait until this file exists", the one gate the fake has — shared by <c>FAKECLI_RECORD_GATE</c> (a record held open) and
+/// <c>FAKECLI_ANSWER_GATE</c> (an answer held back), so a second copy of the wait is never written.
+/// </summary>
+static class Gate
+{
+    /// <summary>How long a record may be held open — unchanged since the gate was written.</summary>
+    public static readonly TimeSpan RecordParkBound = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// How long a held ANSWER parks before it gives up. Not a measurement of anything: a launch nobody ever released must not
+    /// outlive its test for ever. The test opens the gate in a <c>finally</c>, and the launcher's own kill ends the park first.
+    /// </summary>
+    public static readonly TimeSpan AnswerParkBound = TimeSpan.FromMinutes(2);
+
+    /// <summary>
+    /// Say the gate is reached — <c>&lt;gate&gt;.held</c>, holding this process's id, written whole — and wait for the gate file.
+    /// Nothing at all when no gate is named.
+    /// </summary>
+    public static void Hold(string? gate, TimeSpan bound)
     {
         if (gate is not { Length: > 0 })
         {
             return;
         }
 
-        File.WriteAllText(gate + ".held", string.Empty);
-        var until = DateTime.UtcNow.AddSeconds(30);
+        Serving.WritePidFile(gate + ".held", [Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture)]);
+        var until = DateTime.UtcNow + bound;
         while (!File.Exists(gate) && DateTime.UtcNow < until)
         {
             Thread.Sleep(10);
+        }
+    }
+
+    /// <summary>An empty marker beside the gate (<c>&lt;gate&gt;&lt;suffix&gt;</c>) — a test's proof of WHERE in the launch the fake stood.</summary>
+    public static void Mark(string? gate, string suffix)
+    {
+        if (gate is { Length: > 0 })
+        {
+            File.WriteAllText(gate + suffix, string.Empty);
         }
     }
 }
