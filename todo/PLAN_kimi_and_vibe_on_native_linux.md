@@ -805,6 +805,7 @@ Scouts are Sonnet, ⌈1.5N⌉ per epic.
 - **Goal.** Vibe 2.26.1 is measured on `ubuntu-claude` (N-V1–N-V6) with the keyring road closed as the product will close it, and —
   only on a full pass — admitted on a native Linux host, its launch there carrying the forced keyring backend, with the help, the card and
   the limitation row saying exactly that; released after a live round on a local binary, with a rollback line.
+- **Stories and the C1 spec.** [PLAN_kimi_and_vibe_on_native_linux_E2.md](PLAN_kimi_and_vibe_on_native_linux_E2.md) (2026-10-22: S0 the probe amendment, S1 the series and §32, S2–S5 only on a full pass).
 - **Scope.** The Vibe series (P2) and RESULTS_vibe §32; Vibe enters DN1's set; the forced keyring backend in `VibeLaunch.Built` and
   `EnvironmentRefusal` on `HostKind.Linux` only (DN10); the `vibe`/`linux` limitation row; `runtimeSince.ts` (`ON_NATIVE_LINUX_SINCE.vibe`,
   per-runtime `HOST_NOTES.linux`), the Vibe hint, `VIBE_NOTE_LINUX`, the unreadable-banner refusal in `hostSide.ts` (DN6's extension
