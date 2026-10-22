@@ -22,7 +22,7 @@ public sealed record MergedWindow(string Name, string FromUtc, string ToUtc, IRe
 
 /// <summary>One vendor row in one window, with the keys of the rounds it counted and each store's part of it.</summary>
 /// <param name="RoundKeys">The DISTINCT non-empty keys of the rounds counted, across stores.</param>
-/// <param name="KeyStore">Key to the id of the ONE store the round is counted in — the first that holds it.</param>
+/// <param name="KeyStore">Key to the id of the ONE store the round is counted in — this side if it holds it, else the lowest store id that does.</param>
 /// <param name="RoundsWithoutKey">The rounds counted whose key is empty.</param>
 /// <param name="Parts">The same count per store, in <c>stores[]</c> order; a store with no round for this provider here has none. They sum to the row.</param>
 public sealed record MergedRow(
@@ -69,8 +69,9 @@ public sealed record StoreNotIncluded(string Path, string Reason, string Detail)
 /// <remarks>
 /// <para><b>One identity rule.</b> A round is its key; a round with no key is its store and its id (<see cref="Launch.Of"/>) — never the integer
 /// id alone, which every store counts from 1. A key in more than one store is ONE round, counted in the first store that holds it (this side, then
-/// the snapshots in argument order) and in no other, so the per-store parts always sum to the row. When the copies differ, that is said
-/// (<see cref="MergedStore.Conflicts"/>) and the owner's copy is the one counted — the result depends on argument order only through that named choice.</para>
+/// the snapshot stores by store id, ordinal) and in no other, so the per-store parts always sum to the row. When the copies differ, that is said
+/// (<see cref="MergedStore.Conflicts"/>) and the owner's copy is the one counted — the same set of stores gives the same answer whatever order the
+/// paths were given in; only the listing in <c>stores[]</c> follows that order.</para>
 /// <para><b>One store, however many names.</b> A snapshot whose id is this side's is this side reached through another spelling (its path is
 /// joined, its rounds are not read: this side is read live); two snapshots with one id are one store, and the newer write is the one counted.</para>
 /// <para><b>One now.</b> Every store's rounds are cut by the plain counter's own <see cref="RoundCounts.Cut"/> at the caller's instant, never at a
@@ -125,24 +126,26 @@ public static class RoundCountsMerged
     // ---- which stores: identity folding -------------------------------------------------------------------------------------------
 
     private static Folded Fold(Folded so, Named named, string thisId) =>
-        !named.Reading.Ok ? so with { NotIncluded = [.. so.NotIncluded, NotIncludedOf(named)] }
-        : named.Reading.Document.Store.Id == thisId ? so with { ThisSidePaths = [.. so.ThisSidePaths, named.Path] }
-        : so with { Entries = Joined(so.Entries, named) };
+        named.Reading switch
+        {
+            SnapshotReading.Refused refused => so with { NotIncluded = [.. so.NotIncluded, new StoreNotIncluded(named.Path, refused.Refusal.Reason, refused.Refusal.Detail)] },
+            SnapshotReading.Loaded loaded when loaded.Document.Store.Id == thisId => so with { ThisSidePaths = [.. so.ThisSidePaths, named.Path] },
+            SnapshotReading.Loaded loaded => so with { Entries = Joined(so.Entries, named.Path, loaded.Document) },
+            _ => throw new InvalidOperationException("the union is closed"),
+        };
 
-    private static StoreNotIncluded NotIncludedOf(Named named) => new(named.Path, named.Reading.Refusal.Reason, named.Reading.Refusal.Detail);
-
-    private static IReadOnlyList<Entry> Joined(IReadOnlyList<Entry> entries, Named named)
+    private static IReadOnlyList<Entry> Joined(IReadOnlyList<Entry> entries, string path, RoundCountsSnapshotDocument document)
     {
-        var id = named.Reading.Document.Store.Id;
+        var id = document.Store.Id;
 
         return entries.Any(entry => entry.Counted.Store.Id == id)
-            ? [.. entries.Select(entry => entry.Counted.Store.Id == id ? Widened(entry, named) : entry)]
-            : [.. entries, new Entry([named.Path], named.Reading.Document)];
+            ? [.. entries.Select(entry => entry.Counted.Store.Id == id ? Widened(entry, path, document) : entry)]
+            : [.. entries, new Entry([path], document)];
     }
 
     /// <summary>The same store reached through one more path: the path is named, and the NEWER write is the one counted (two spellings of one file tie, and the first stays).</summary>
-    private static Entry Widened(Entry entry, Named named) =>
-        new([.. entry.Paths, named.Path], string.CompareOrdinal(named.Reading.Document.WrittenUtc, entry.Counted.WrittenUtc) > 0 ? named.Reading.Document : entry.Counted);
+    private static Entry Widened(Entry entry, string path, RoundCountsSnapshotDocument document) =>
+        new([.. entry.Paths, path], string.CompareOrdinal(document.WrittenUtc, entry.Counted.WrittenUtc) > 0 ? document : entry.Counted);
 
     // ---- the population: one key rule ---------------------------------------------------------------------------------------------
 
@@ -160,17 +163,21 @@ public static class RoundCountsMerged
     private static IReadOnlyList<Launch> InTheWeek(IEnumerable<Launch> launches, DateTime nowUtc) =>
         [.. launches.Where(launch => Inside(launch.StartedUtc, Stamp(nowUtc - Week), Stamp(nowUtc)))];
 
-    /// <summary>Key to the first store (this side, then argument order) that holds it.</summary>
+    /// <summary>Key to the first store that holds it: this side, then the snapshot stores by id — never by the order the paths were given in.</summary>
     private static Dictionary<string, string> OwnersOf(IReadOnlyList<Side> sides)
     {
         var owners = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var launch in sides.SelectMany(side => side.Launches).Where(launch => launch.RoundKey.Length > 0))
+        foreach (var launch in OwnershipOrder(sides).SelectMany(side => side.Launches).Where(launch => launch.RoundKey.Length > 0))
         {
             owners.TryAdd(launch.RoundKey, launch.StoreId);
         }
 
         return owners;
     }
+
+    /// <summary>This side is always first in <paramref name="sides"/>; the rest are put in id order, so one set of stores has one owner per key.</summary>
+    private static IEnumerable<Side> OwnershipOrder(IReadOnlyList<Side> sides) =>
+        sides.Take(1).Concat(sides.Skip(1).OrderBy(side => side.StoreId, StringComparer.Ordinal));
 
     /// <summary>Every store's rounds, minus the copies another store owns. A keyless round is its store's own.</summary>
     private static IReadOnlyList<Launch> CountedBy(IReadOnlyList<Side> sides, IReadOnlyDictionary<string, string> owners) =>

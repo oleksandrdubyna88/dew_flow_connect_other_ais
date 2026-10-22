@@ -261,8 +261,9 @@ cut by the ONE `RoundCounts.Cut` at the one `nowUtc` (`:159-168`, `Inside` `:178
 (`RowOf`), with per-store `parts[]` computed by the same `StagesOf` over the subset of each store.
 
 **A key in two stores is ONE round, attributed to ONE store** (plan round finding 3). A non-empty `round_key` that appears in more
-than one store is counted once, in the store that comes first in this order: this side, then the snapshots in argument order. Only
-that store's `parts[]` count it, so the parts always sum to the row. The answer carries no ledger lines; S3 applies the same rule to
+than one store is counted once, in the store that comes first in this order: this side, then the snapshot stores ordered by store id
+(ordinal) — never by the order the paths were given in, so the same set of stores gives the same `keyStore`, parts and conflicts whatever
+order they arrive in (code review, 2026-10-22). Only that store's `parts[]` count it, so the parts always sum to the row. The answer carries no ledger lines; S3 applies the same rule to
 the lines, so launches reconcile too: the row's `roundKeys` come with `keyStore` (key → store id), and a launch line counts only
 when it comes from that store's ledger tail.
 
@@ -605,7 +606,8 @@ account, and must not read a sign-in to find out. So:
   *cost unknown* when no list carries the model.
 - **Conflicting copies are said, not reconciled.** A key in two stores whose copies differ (reviewers, models, stage) is counted once
   from the owning store, and the block says *N rounds appear in two stores with different contents — counted from <store>*. The
-  result does not depend on argument order beyond that named choice.
+  result does not depend on argument order at all: the owner is this side, else the lowest store id (the `stores[]` listing alone
+  follows the order the paths were given in).
 
 | Test | Arrange → assert | RED today / without the rule |
 |---|---|---|

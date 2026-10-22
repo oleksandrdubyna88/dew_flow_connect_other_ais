@@ -618,6 +618,7 @@ internal sealed class RoundEngine(
             // And into the database, with what the round was ABOUT. Best-effort by construction:
             // the round is already answered and saved, and a projection that cannot be written must
             // never take it down.
+            var recorded = false;
             _projection.Write(db =>
             {
                 db.RecordRound(
@@ -636,6 +637,7 @@ internal sealed class RoundEngine(
                         Commands = [.. commands],
                         PlanShape = Core.Commands.GateCommands.ShapeOrdered(context),
                     });
+                recorded = true;
 
                 // Phase 2's instrument, and NOTHING is called: how many findings this round handed
                 // back that the caller had already accepted and fixed. It is counted here because
@@ -653,8 +655,14 @@ internal sealed class RoundEngine(
             });
             // The other side's counter reads a plain file instead of this database (E6.S1). AFTER the projection and outside it, with a
             // catch of its own: written inside the lambda above, a failure here would be logged as the ROUND failing to project and would
-            // skip the stuck-findings count that follows RecordRound. A courtesy file never takes a round down.
-            Store.RoundCountsSnapshot.TryWrite(_settings.DataDir, DateTime.UtcNow, _log);
+            // skip the stuck-findings count that follows RecordRound. A courtesy file never takes a round down. And only for a round the
+            // database holds: `Projection` swallows a storage failure, and a snapshot read then would lack the round yet be stamped now,
+            // which the other side reads as current. Not written, the previous one keeps its own `writtenUtc` and is visibly stale.
+            if (recorded)
+            {
+                Store.RoundCountsSnapshot.TryWrite(_settings.DataDir, DateTime.UtcNow, _log);
+            }
+
             if (notice is not null)
             {
                 _escalations.Notify(notice);

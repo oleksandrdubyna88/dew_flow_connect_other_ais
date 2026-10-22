@@ -52,7 +52,7 @@ C4Container
   Rel(ext, codex, "spawn — a CHAT, in an empty directory of its own")
   Rel(ext, gem, "spawn — a CHAT, in an empty directory of its own")
   Rel(ext, mcp, "writes the Team server token file the shim reads")
-  Rel(ext, mcp, "one-shot spawns: --providers, --log, --round-counts, --backfill-authors (an operator's verified, one-time writer, never the extension), --findings, --findings-many, --pairs-json, --real-method, --file-at, --tree-at, --trees, --tree-remove, --close-consult, --cadence, --consultants and --check-consultant (served since epic 4, spawned by the Consultant tab from epic 5)")
+  Rel(ext, mcp, "one-shot spawns: --providers, --log, --round-counts, --round-counts-merged (the other store's snapshot file, never its database), --backfill-authors (an operator's verified, one-time writer, never the extension), --findings, --findings-many, --pairs-json, --real-method, --file-at, --tree-at, --trees, --tree-remove, --close-consult, --cadence, --consultants and --check-consultant (served since epic 4, spawned by the Consultant tab from epic 5)")
   Rel(mcp, srv, "a review, when the reviewer is a Team server's")
   Rel(mcp, srv, "and first: which review roles do you run?")
   Rel(ext, srv, "the same question, for the panel's own picture")
@@ -904,6 +904,54 @@ built on it reads empty: the leg `scripts/seam-ledger-fields.mjs` (`npm run test
 `FakeCli` (a consultation that answers and a local round whose reviewer outlives the round's one-minute clock), reads the lines it wrote
 through the extension's own parser, and fails both when a key does not come back equal and when no line wrote it at all. `withdrawn` and
 `hostStopped` cannot be driven live (no review tool takes the request's token) and are pinned by the C# tests only. No diagram labels these fields.
+
+### Two data directories, one count: a snapshot file and a ledger tail cross, never a database (2026-10-22, E6 of [../todo/PLAN_the_round_counter_tail_E6.md](../todo/PLAN_the_round_counter_tail_E6.md))
+
+A person who runs rounds on Windows and inside WSL has two stores (a `coai.db` and a `usage.jsonl` each), and the Rounds block must count both. Two things cross
+the `\\wsl.localhost` / drvfs boundary, and they are the only two. **The other side's `coai.db` is never opened across it**: it is WAL, and SQLite's locks are not
+coordinated over that boundary.
+
+1. **`round-counts-snapshot.json`** — written by the OWNING `coai-mcp` after each round it RECORDS (schema 1, seven days, at most 5 000 rounds, through
+   `AtomicFile` so a reader sees the old file or the new one). Not written when the projection failed: a snapshot read from a database that lacks the round
+   would be stamped now and read as current, so the previous one stays, visibly stale through its own `writtenUtc`.
+2. **`usage.jsonl`** — the other side's append-only ledger, read from its END by the extension, each line tagged with the STORE ID it came from. A plain
+   append-only file is what makes that safe.
+
+The extension asks its own `coai-mcp` for the count: `--round-counts-merged [--now …] [<absolute snapshot path>…]`, one path per other data directory the window
+was told about (`coai.alsoWatchDataDirectories`). The binary reads THIS side's database live and each path as a file, and answers one population keyed by
+`round_key`: a key in several stores is one round, owned by this side first and then by the lowest store id — never by argument order — so the same set of
+stores gives the same answer however the paths came. A path it cannot use is a `storesNotIncluded[]` row with a reason (`missing`, `unreadable`, `newer-schema`),
+never a zero and never an exit code. The extension maps each directory to its store through the answer's `stores[].paths[]` (two spellings of one store are
+read once) and sums that store's ledger tail into the row's tokens and money. A server too old for the mode exits 64 and the extension falls back to
+`--round-counts` and this side alone.
+
+```mermaid
+flowchart LR
+    subgraph winSide["This side (Windows or WSL)"]
+        ext["Extension · roundsLoader"]
+        mcpHere["coai-mcp --round-counts-merged"]
+        dbHere[("coai.db · read live")]
+        ledgerHere[("usage.jsonl")]
+    end
+    subgraph otherSide["The other side (across the boundary)"]
+        mcpThere["coai-mcp · after each recorded round"]
+        dbThere[("coai.db · never opened here")]
+        snapThere[("round-counts-snapshot.json")]
+        ledgerThere[("usage.jsonl")]
+    end
+    ext -->|"spawn · snapshot paths of the other stores"| mcpHere
+    mcpHere --> dbHere
+    mcpHere -->|"reads the file"| snapThere
+    mcpHere -->|"stores[] · storesNotIncluded[]"| ext
+    ext -->|"reads the tail by store id"| ledgerThere
+    ext --> ledgerHere
+    mcpThere --> dbThere
+    mcpThere -->|"atomic write"| snapThere
+```
+
+The contract is held by two suites that each compare their side against their own idea of the names, so `scripts/seam-round-counts-merged.mjs`
+(`npm run test:seam`) runs the built binary over a real round and a hand-written snapshot and reads both stdouts through the extension's `parseRoundCounts`.
+Detail: [module_server.md](module_server.md) (*`--round-counts-merged` and the round-counts snapshot*) and [module_extension.md](module_extension.md).
 
 ### A setting whose ABSENCE must mean something (2026-09-08)
 
