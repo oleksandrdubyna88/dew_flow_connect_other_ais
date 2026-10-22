@@ -169,8 +169,10 @@ public sealed record SessionAnswer(
     IReadOnlyList<RoundRecord> Rounds)
 {
     /// <summary>
-    /// What the PERSON answered a <c>call_human</c> with, if they have: <c>proceed</c>, <c>fix</c>,
-    /// or empty. Their own words come with it whether or not they pressed a button.
+    /// What the PERSON answered a <c>call_human</c> with, if they have: <c>continue</c>, <c>fix</c>, <c>discuss</c>,
+    /// <c>proceed</c>, or empty. Their own words come with it whether or not they pressed a button. <c>proceed</c> is
+    /// reported only for the answer to the hold's own notice, and it applies nothing here: <c>resolve</c> is where it takes
+    /// effect (<see cref="HumanNote"/> says so).
     /// </summary>
     /// <remarks>
     /// Here because a resumed conversation must be able to LEARN of the decision rather than be
@@ -179,6 +181,12 @@ public sealed record SessionAnswer(
     /// changed nothing.
     /// </remarks>
     public string HumanDecision { get; init; } = string.Empty;
+
+    /// <summary>
+    /// What the AI must DO about the person's decision, when there is one it has not acted on: while a Proceed is on file and
+    /// not yet consumed, <c>a person pressed Proceed on the held gate — call resolve to advance</c>. Empty otherwise.
+    /// </summary>
+    public string HumanNote { get; init; } = string.Empty;
 
     public string HumanAnswer { get; init; } = string.Empty;
 

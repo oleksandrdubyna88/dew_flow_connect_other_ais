@@ -64,6 +64,13 @@ export interface Escalation {
    */
   readonly kind?: 'notice' | 'question';
   /**
+   * Which decisions the card offers (todo/PLAN_only_a_person_releases_the_gate.md, G5): the gate's notice lists
+   * `continue`, `fix`, `discuss` and `proceed`; an `ask_human` question card the first three, never `proceed`.
+   * Absent in a card an older server wrote — the answer window then offers the three it always did, so a newer
+   * extension against an older server never offers a button the server would read as prose.
+   */
+  readonly decisions?: readonly string[];
+  /**
    * The directory this question was READ from, so its answer goes back beside it.
    *
    * <p>Not a field the server writes — the file's content does not carry it. It is what the reader

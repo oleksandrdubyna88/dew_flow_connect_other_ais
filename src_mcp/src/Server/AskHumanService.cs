@@ -285,6 +285,9 @@ public sealed class AskHumanService
             ProductionRisk = facts.Input.ProductionRisk,
             RiskReason = facts.Input.RiskReason,
             Kind = EscalationKinds.Question,
+            // Never Proceed: the strongest decision is kept off the card whose words the AI chose (G4 of
+            // todo/PLAN_only_a_person_releases_the_gate.md) — and the server would read one written there as prose.
+            Decisions = EscalationDecisions.Question,
         };
 
     /// <summary>

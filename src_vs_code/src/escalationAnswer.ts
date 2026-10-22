@@ -14,7 +14,7 @@
 /** One thing a person can decide, and what it will actually cause. */
 export interface DecisionChoice {
   /** What the server reads. Empty means "they typed something instead of choosing". */
-  readonly decision: '' | 'continue' | 'fix' | 'discuss';
+  readonly decision: '' | 'continue' | 'fix' | 'discuss' | 'proceed';
   readonly label: string;
   /** What happens next. A button whose consequence is unstated is a button nobody presses twice. */
   readonly detail: string;
@@ -24,16 +24,17 @@ export interface DecisionChoice {
 export const FEATURE_BRANCH = ':feature';
 
 /**
- * The three things that can happen after the rounds run out — and notably none of them is "ship it
- * with the findings open". A human override meaning "ignore all this" would be an off switch on the
- * gate, so it is deliberately not offered; all three keep the findings alive.
+ * The three things that keep the findings alive after the rounds run out: another set of rounds, a pass
+ * after fixing, a conversation. They are on every card that offers decisions. The fourth — "proceed
+ * despite the findings", which ships WITH them open — is deliberately not among them; see
+ * {@link proceedChoice} for where it lives and why.
  *
  * <p>For a FEATURE review the first choice is also how a person asks for the review's second round
  * (D23 of the feature-review plan): a feature review is one round unless a reviewer failed, a finding
  * was `blocking`, or the person asks — and this button, on a question filed under the feature session,
- * is the asking. The same road `humanDecision` takes, written only by this window or the phone; no
- * argument the AI passes can claim it. So the detail says what it grants THERE: the second and last
- * round, not a fresh set.</p>
+ * is the asking. The same road a held gate's decisions take, written only by this window (anything
+ * that writes `<id>.answer.json` is a writer); no argument the AI passes can claim it. So the detail
+ * says what it grants THERE: the second and last round, not a fresh set.</p>
  *
  * @param branch the session's branch as the question names it — `:feature` for a feature review.
  */
@@ -61,6 +62,40 @@ export function decisionChoices(branch = ''): readonly DecisionChoice[] {
     },
   ];
 }
+
+/**
+ * The fourth decision — "ship it with the findings open" — and the only one that does (D1 of
+ * todo/PLAN_only_a_person_releases_the_gate.md).
+ *
+ * <p>This reverses an earlier rationale ("a human override meaning 'ignore all this' would be an off switch on the
+ * gate, so it is deliberately not offered") knowingly: the product already promised the override and shipped it
+ * through the calling AI's own tool argument, which made the GATED party the one that could release the gate. The
+ * objection was to WHO holds the switch. A button only a person can press, on the card that lists the findings
+ * being overridden, with its consequence written under it, is the gate asking the person — which is what a
+ * `call_human` means. So it is offered on the gate's NOTICE only (an AI-worded question card never carries it), and only when the
+ * card itself lists it: a card an older server wrote has no list, and a button that server would read as prose is
+ * the dead end this module has paid for twice.</p>
+ *
+ * <p>Nothing here makes the answer verified: it is written to a file in the data directory, and anything running
+ * as the same user can write that file too. What is closed is the protocol road — no argument of the AI's releases
+ * the gate.</p>
+ *
+ * @param branch the session's branch as the card names it — `:feature` for a feature review, which no git ref can spell.
+ */
+export function proceedChoice(branch = ''): DecisionChoice {
+  const where = branch === FEATURE_BRANCH || branch === '' ? 'this feature review' : `branch ${branch}`;
+  return {
+    decision: 'proceed',
+    label: 'Proceed despite the findings',
+    detail:
+      `The stage advances on ${where} with the findings open — nothing is fixed first. ` +
+      'Every finding the AI did not decide is recorded as proceeded over by you. Use it when the reviewers are plainly wrong, or no one is left to ask.',
+  };
+}
+
+/** The sentence a question card adds under Continue and Fix: the press releases the hold, whatever the question asked (D5). */
+const FOR_THE_HELD_GATE =
+  " It is a decision for the held gate (or a feature review's second round), not a reply to the question above.";
 
 /**
  * The answer file the server reads.
@@ -97,26 +132,52 @@ export const TYPE_AN_ANSWER_FOR_THE_GATE: DecisionChoice = {
  * <p>The card says which producer wrote it, so nothing here guesses. An AI's QUESTION — asked while the gate was held, or
  * in a feature review's second-round window, the only kinds that become a card since the server stopped carding the AI's
  * own questions — is answered in words, so the box for them comes FIRST, and the decisions after it, because only a
- * decision decides: it releases a hold, or asks for the second round. A round's call_human
- * NOTICE is a CHOICE, as the module comment says: the three decisions only, since no AI waits on a notice for words (the
+ * decision decides: it releases a hold, or asks for the second round — so Continue and Fix there say, in so many words, that
+ * they are a decision for the held gate and not a reply to the question (D5). A round's call_human
+ * NOTICE is a CHOICE, as the module comment says: the decisions only, since no AI waits on a notice for words (the
  * cadence consultation b6e9df3c, 2026-10-03, found a typed answer there went nowhere).</p>
+ *
+ * <p><b>Proceed is on the NOTICE only, and only when the card lists it</b> (G4, G5): the card that shows the findings being
+ * overridden is the card that can override them; an AI-worded question card never carries it, and the server reads
+ * a Proceed from anywhere else as prose. A list that is absent (an older server), is not a list, or does not name it offers the
+ * three it always did.</p>
  *
  * <p>A card with no kind — an older server — or with a kind this build does not know — a newer one — is judged as cards
  * always were: no findings gating meant a question. Taking the box away from a kind nobody here knows would bring back
- * the very symptom this answers.</p>
+ * the very symptom this answers. Neither of those kinds ever offers Proceed.</p>
  */
 export function answerChoices(escalation: {
   readonly branch: string;
   readonly openFindings: readonly unknown[];
   readonly kind?: string;
+  /** Which decisions the server says this card offers; absent in a card an older server wrote. */
+  readonly decisions?: unknown;
 }): readonly DecisionChoice[] {
   const decisions = decisionChoices(escalation.branch);
   switch (escalation.kind) {
     case 'question':
-      return [TYPE_AN_ANSWER_FOR_THE_GATE, ...decisions];
+      return [TYPE_AN_ANSWER_FOR_THE_GATE, ...decisions.map(forTheHeldGate)];
     case 'notice':
-      return decisions;
+      return withProceedWhenListed(decisions, escalation);
     default:
       return escalation.openFindings.length === 0 ? [TYPE_AN_ANSWER, ...decisions] : decisions;
   }
+}
+
+/** The notice's decisions, and Proceed last — only when the card itself lists it. */
+function withProceedWhenListed(
+  decisions: readonly DecisionChoice[],
+  escalation: { readonly branch: string; readonly decisions?: unknown },
+): readonly DecisionChoice[] {
+  return offers(escalation.decisions, 'proceed') ? [...decisions, proceedChoice(escalation.branch)] : decisions;
+}
+
+/** Whether the card's own list names a decision — a list that is not an array of words names nothing. */
+function offers(listed: unknown, decision: string): boolean {
+  return Array.isArray(listed) && listed.includes(decision);
+}
+
+/** Continue and Fix on a question card release the hold whatever the question asked; Discuss advances nothing and needs no warning. */
+function forTheHeldGate(choice: DecisionChoice): DecisionChoice {
+  return choice.decision === 'continue' || choice.decision === 'fix' ? { ...choice, detail: choice.detail + FOR_THE_HELD_GATE } : choice;
 }

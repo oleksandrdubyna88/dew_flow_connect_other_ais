@@ -130,15 +130,16 @@ public sealed class RoundMachineTests
     }
 
     [Fact]
-    public void AfterCallHuman_TheHumansProceed_AdvancesTheStage()
+    public void AfterCallHuman_ThePersonsProceed_AdvancesTheStage()
     {
         // The gap the first live run exposed: rounds exhausted, verdict call_human, the person
-        // says "go" — and the machine had no way to hear it.
+        // says "go" — and the machine had no way to hear it. Now it hears the PERSON'S decision,
+        // read from their card by the server, never a flag the caller sets.
         var s = Fresh(PanelConfig.Uniform(1, 2, StagePolicy.Human));
         var ok = (Transition.Ok)RoundMachine.CompleteRound(s, Failing(), AllSix);
         ok.Verdict.Should().BeOfType<RoundVerdict.CallHuman>();
 
-        var moved = RoundMachine.Resolve(ok.State, [], humanSaysProceed: true)
+        var moved = RoundMachine.Resolve(ok.State, [], HumanDecision.Proceed)
             .Should().BeOfType<Transition.Moved>().Subject;
 
         moved.State.Stage.Should().Be(Stage.CodeReview);
@@ -157,7 +158,7 @@ public sealed class RoundMachineTests
         var patient = new PanelConfig(new Dictionary<string, RoleGate> { ["PlanCritique"] = new(3, 2) });
         var awaiting = ((Transition.Ok)RoundMachine.CompleteRound(Fresh(patient), Failing(), AllSix)).State;
 
-        RoundMachine.Resolve(awaiting, [], humanSaysProceed: true)
+        RoundMachine.Resolve(awaiting, [], callerClaimsProceed: true)
             .Should().BeOfType<Transition.Refused>()
             .Which.Sentence.Should().Contain("call_human");
     }
@@ -174,7 +175,7 @@ public sealed class RoundMachineTests
         ok.Verdict.Should().BeOfType<RoundVerdict.Escalated>();
         var spent = ok.State with { RoundsRunThisStage = ok.State.Config.For(Stage.PlanReview).MaxRounds };
 
-        RoundMachine.Resolve(spent, [], humanSaysProceed: true)
+        RoundMachine.Resolve(spent, [], callerClaimsProceed: true)
             .Should().BeOfType<Transition.Refused>()
             .Which.Sentence.Should().Contain("call_human");
     }
@@ -186,19 +187,19 @@ public sealed class RoundMachineTests
         // redundant argument would discard a whole round's recorded decisions.
         var ok = (Transition.Ok)RoundMachine.CompleteRound(Fresh(), Passing(), AllSix);
 
-        RoundMachine.Resolve(ok.State, [], humanSaysProceed: true)
+        RoundMachine.Resolve(ok.State, [], callerClaimsProceed: true)
             .Should().BeOfType<Transition.Moved>()
             .Which.State.Stage.Should().Be(Stage.CodeReview);
     }
 
     [Fact]
-    public void TheOverrideDoorCloses_BehindTheHumanWhoWalkedThrough()
+    public void TheOverrideDoorCloses_BehindThePersonWhoWalkedThrough()
     {
         // One call_human verdict authorises ONE override. Left open, a later resolve in a fresh
         // stage would still be carrying permission granted for a decision already made.
         var s = Fresh(PanelConfig.Uniform(1, 2, StagePolicy.Human));
         var ok = (Transition.Ok)RoundMachine.CompleteRound(s, Failing(), AllSix);
-        var moved = (Transition.Moved)RoundMachine.Resolve(ok.State, [], humanSaysProceed: true);
+        var moved = (Transition.Moved)RoundMachine.Resolve(ok.State, [], HumanDecision.Proceed);
 
         moved.State.HumanGate.Should().BeFalse();
     }

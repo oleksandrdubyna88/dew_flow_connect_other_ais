@@ -19,7 +19,7 @@
     },
     {
       "file": "src_mcp/src/Server/Rounds/RoundEngine.cs",
-      "refusals": 11
+      "refusals": 12
     },
     {
       "file": "src_mcp/src/Server/Stages/FeatureStage.cs",

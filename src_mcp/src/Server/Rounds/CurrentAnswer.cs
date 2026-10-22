@@ -1,5 +1,7 @@
 using System.Globalization;
 using CoaiMcp.Core.Rounds;
+using Serilog;
+using Serilog.Core;
 
 namespace CoaiMcp.Server;
 
@@ -40,20 +42,25 @@ internal static class CurrentAnswer
 {
     /// <summary>The answer to the current hold — the newest among its own questions' — or null: none answered, or none recorded.</summary>
     public static EscalationAnswer? For(PersistedSession session, Escalations escalations) =>
-        NewestAnswerAmong(session.State.HoldQuestions, escalations);
+        NewestHearingAmong(session.State.HoldQuestions, escalations, Logger.None)?.Answer;
 
     /// <summary>What the person chose for the CURRENT hold, or <see cref="HumanDecision.None"/>.</summary>
     public static HumanDecision DecisionFor(PersistedSession session, Escalations escalations) =>
-        Escalations.DecisionOf(For(session, escalations));
+        DecisionFor(session, escalations, Logger.None);
+
+    /// <summary>
+    /// What the person chose for the CURRENT hold — a Proceed only when it answers the hold's own NOTICE
+    /// (<c>todo/PLAN_only_a_person_releases_the_gate.md</c>, G4); a Proceed written against anything else is logged and read as prose.
+    /// </summary>
+    public static HumanDecision DecisionFor(PersistedSession session, Escalations escalations, ILogger log) =>
+        NewestHearingAmong(session.State.HoldQuestions, escalations, log)?.Decision ?? HumanDecision.None;
 
     /// <summary>
     /// The answer that may be the person's request for a feature review's second round: the newest among
     /// the questions asked for it, given after the last round that ran — or null.
     /// </summary>
     public static EscalationAnswer? ForRequest(PersistedSession session, Escalations escalations) =>
-        NewestAnswerAmong(session.State.RequestQuestions, escalations) is { } answer && IsNewerThanTheLastRound(answer, session)
-            ? answer
-            : null;
+        RequestHearing(session, escalations, Logger.None)?.Answer;
 
     /// <summary>
     /// The answer <c>status</c> reports: the current hold's, else the feature review's request — the only answers the
@@ -65,35 +72,75 @@ internal static class CurrentAnswer
     /// file, moved onto the same rule as the other two.
     /// </remarks>
     public static EscalationAnswer? TheGatesAnswer(PersistedSession session, Escalations escalations) =>
-        For(session, escalations) ?? ForRequest(session, escalations);
+        TheGatesHearing(session, escalations, Logger.None)?.Answer;
 
-    /// <summary>A decision as <c>status</c> spells it — <c>continue</c>, <c>fix</c>, <c>discuss</c>, or empty.</summary>
+    /// <summary>The decision <c>status</c> reports: the current hold's, else the request's, by the one rule — <see cref="HumanDecision.None"/> when neither is answered.</summary>
+    public static HumanDecision TheGatesDecision(PersistedSession session, Escalations escalations) =>
+        TheGatesHearing(session, escalations, Logger.None)?.Decision ?? HumanDecision.None;
+
+    /// <summary>A decision as <c>status</c> spells it — <c>continue</c>, <c>fix</c>, <c>discuss</c>, <c>proceed</c>, or empty.</summary>
     public static string WordFor(HumanDecision decision) => decision switch
     {
         HumanDecision.Continue => "continue",
         HumanDecision.Fix => "fix",
         HumanDecision.Discuss => "discuss",
+        HumanDecision.Proceed => "proceed",
         _ => string.Empty,
     };
+
+    /// <summary>An answer, the question it answers, and what it decides — the decision already judged by the notice rule.</summary>
+    private sealed record Hearing(EscalationAnswer Answer, HumanDecision Decision);
+
+    private static Hearing? TheGatesHearing(PersistedSession session, Escalations escalations, ILogger log) =>
+        NewestHearingAmong(session.State.HoldQuestions, escalations, log) ?? RequestHearing(session, escalations, log);
+
+    private static Hearing? RequestHearing(PersistedSession session, Escalations escalations, ILogger log) =>
+        NewestHearingAmong(session.State.RequestQuestions, escalations, log) is { } hearing && IsNewerThanTheLastRound(hearing.Answer, session)
+            ? hearing
+            : null;
 
     /// <summary>
     /// The newest answer among the questions that carries a DECISION, else the newest at all — or null while none is
     /// answered.
     /// </summary>
     /// <remarks>
-    /// Words are not a decision, and they must not hide one either: a hold's question card offers "Type an answer…"
+    /// <para>Words are not a decision, and they must not hide one either: a hold's question card offers "Type an answer…"
     /// first (<c>research/PLAN_ask_human_is_for_the_gate.md</c>, G4), and a person who pressed "Keep going" on the notice and
     /// then typed a reply to the AI's question left a word-only answer newest — the hold read as unanswered (the cadence
-    /// consultation b6e9df3c, 2026-10-03).
+    /// consultation b6e9df3c, 2026-10-03).</para>
+    /// <para>"Carries a decision" is judged AFTER the notice rule, so a Proceed written against an <c>ask_human</c> card is
+    /// prose here too: it neither releases the hold nor hides a Continue the person pressed on the notice.</para>
     /// </remarks>
-    private static EscalationAnswer? NewestAnswerAmong(IReadOnlyList<string> questions, Escalations escalations) =>
+    private static Hearing? NewestHearingAmong(IReadOnlyList<string> questions, Escalations escalations, ILogger log) =>
         questions
             .Reverse()
-            .Select(escalations.ReadAnswer)
-            .OfType<EscalationAnswer>()
-            .OrderByDescending(answer => Escalations.DecisionOf(answer) != HumanDecision.None)
-            .ThenByDescending(answer => AnsweredAt(answer) ?? DateTime.MinValue)
+            .Select(id => HearingOf(id, escalations, log))
+            .OfType<Hearing>()
+            .OrderByDescending(hearing => hearing.Decision != HumanDecision.None)
+            .ThenByDescending(hearing => AnsweredAt(hearing.Answer) ?? DateTime.MinValue)
             .FirstOrDefault();
+
+    private static Hearing? HearingOf(string questionId, Escalations escalations, ILogger log) =>
+        escalations.ReadAnswer(questionId) is { } answer
+            ? new Hearing(answer, DecisionOnTheNotice(questionId, answer, escalations, log))
+            : null;
+
+    /// <summary>
+    /// The answer's decision, with Proceed honoured only when the answered question is the gate's NOTICE: the card that lists the
+    /// findings being overridden is the card that can override them, and a question file that is gone or says anything else is not it.
+    /// </summary>
+    private static HumanDecision DecisionOnTheNotice(string questionId, EscalationAnswer answer, Escalations escalations, ILogger log)
+    {
+        var decision = Escalations.DecisionOf(answer);
+        if (decision != HumanDecision.Proceed || escalations.Read(questionId) is { Kind: EscalationKinds.Notice })
+        {
+            return decision;
+        }
+
+        log.Warning("a Proceed was written against {Id}, which is not a readable notice of this gate; it is read as prose", questionId);
+
+        return HumanDecision.None;
+    }
 
     private static bool IsNewerThanTheLastRound(EscalationAnswer answer, PersistedSession session)
     {

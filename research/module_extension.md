@@ -11214,6 +11214,26 @@ came with it — `person_asked_in_conversation` ("then sent back to ask the pers
 and `TheLogNamesEveryQuestionOutcomeTests` (C#) enumerates `QuestionOutcomes` by reflection against the `OUTCOMES`
 map, so a server outcome without a label is a red build rather than a raw word in the tab.
 
+**Since 2026-10-22 a fourth decision exists, on the notice only** (`todo/PLAN_only_a_person_releases_the_gate.md`, S4). Every
+card the server writes lists the decisions it offers (`Escalation.decisions`: the notice `continue, fix, discuss, proceed`; an
+`ask_human` card `continue, fix, discuss`), and `answerChoices` appends **Proceed despite the findings**
+(`proceedChoice(branch)`, `decision: 'proceed'`) LAST, and only for `kind: 'notice'` whose list names it. Its detail says what it
+causes — *the stage advances on <branch / this feature review> with the findings open*, every finding the AI did not decide
+recorded as proceeded over by you. A card with no list (an older server), a list that does not name it, or one that is not a
+list offers the three it always did — a newer extension against an older server never offers a button the server would read as
+prose. A `question` card never offers it whatever its file lists, and an unknown or absent `kind` never does either; the box
+and the three decisions are as before, except that on a question card Continue and Fix now end with *a decision for the held
+gate, not a reply to the question above* (D5 — they release the hold whatever the question asked). `escalationWatcher.ts` is
+unchanged: it writes whatever choice was picked, in the unchanged `{ id, answer, decision, answeredUtc }` shape. The help
+(*Language: the questions are English*, *A question waiting on you*, in all five languages) says the same. This reverses the
+older rationale that a human override "would be an off switch on the gate": the objection was to WHO holds the switch, and the
+server no longer reads it from the AI's argument. Nothing here claims the answer is verified — the file is writable by any
+process running as the user (`todo/PLAN_a_signed_answer_releases_the_gate.md`). `scripts/seam-held-gate.mjs` (the last leg of
+`npm run test:seam`) runs the real binary to a held gate over the stand-in CLI with `HOME`/`USERPROFILE`/`CODEX_HOME` isolated,
+feeds the notice it wrote to `parseEscalation`, asserts `answerChoices` offers exactly the listed decisions, that the argument is
+refused over the wire, and that the extension's own `answerJson` for a Proceed is what releases the hold — a renamed field fails it
+on either side.
+
 **The watchers (A5)** — `debounced(refresh, 175)` with an injectable timer: one refresh 175 ms after the FIRST
 event of a burst, however many follow (a record rewritten per row, a temp renamed over its target), and the next
 event after it opens the next window. The consultation, escalation and question-consult watchers all take it;
