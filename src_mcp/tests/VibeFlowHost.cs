@@ -26,14 +26,21 @@ internal sealed class VibeFlowHost : IDisposable
 
     public const string Wsl2 = "wsl2";
 
+    /// <summary>A NATIVE Linux host with a read, non-WSL banner (E2.S2 of <c>todo/PLAN_kimi_and_vibe_on_native_linux_E2.md</c>): the same fake person, the same links as <see cref="Wsl2"/>.</summary>
+    public const string NativeLinux = "linux";
+
     private readonly IDisposable _seam;
 
-    private VibeFlowHost(IDisposable seam, string personsEnv, List<(string Link, string Target)> made)
+    private VibeFlowHost(IDisposable seam, VibeHost host, string personsEnv, List<(string Link, string Target)> made)
     {
         _seam = seam;
+        Host = host;
         PersonsEnv = personsEnv;
         Made = made;
     }
+
+    /// <summary>The host the flow runs as (a Windows flow's is <see cref="VibeHost.Current"/>).</summary>
+    public VibeHost Host { get; }
 
     /// <summary>The fake person's sign-in file.</summary>
     public string PersonsEnv { get; }
@@ -48,7 +55,7 @@ internal sealed class VibeFlowHost : IDisposable
         {
             Assert.SkipUnless(OperatingSystem.IsWindows(), "the Windows-host arm of this flow needs a Windows machine (the WSL2 arm runs everywhere)");
 
-            return new VibeFlowHost(new Nothing(), string.Empty, []);
+            return new VibeFlowHost(new Nothing(), VibeHost.Current, string.Empty, []);
         }
 
         var persons = Path.Combine(Directory.CreateDirectory(Path.Combine(scratch, "persons-vibe")).FullName, ".env");
@@ -60,10 +67,14 @@ internal sealed class VibeFlowHost : IDisposable
         List<(string Link, string Target)> made = [];
         var steps = real with { Link = (link, target) => { real.Link(link, target); made.Add((link, target)); } };
 
-        return new VibeFlowHost(VibeHost.Using(new VibeHost(HostKind.Wsl, WslGeneration.Wsl2, new VibeSignIn(persons) { Steps = steps })), persons, made);
+        var host = mode == NativeLinux
+            ? new VibeHost(HostKind.Linux, WslGeneration.None, new VibeSignIn(persons) { Steps = steps })
+            : new VibeHost(HostKind.Wsl, WslGeneration.Wsl2, new VibeSignIn(persons) { Steps = steps });
+
+        return new VibeFlowHost(VibeHost.Using(host), host, persons, made);
     }
 
-    /// <summary>The WSL2 arm made exactly the one link a Vibe home may hold — to the fake person's file, by its exact spelling — and the Windows arm none.</summary>
+    /// <summary>The WSL2 and native Linux arms made exactly the one link a Vibe home may hold — to the fake person's file, by its exact spelling — and the Windows arm none.</summary>
     public void AssertLinked(string mode)
     {
         if (mode == Windows)

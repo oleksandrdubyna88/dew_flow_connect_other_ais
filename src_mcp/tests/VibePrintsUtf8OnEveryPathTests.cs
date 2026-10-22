@@ -27,10 +27,13 @@ public sealed class VibePrintsUtf8OnEveryPathTests : IDisposable
     private const string Utf8 = "PYTHONUTF8";
 
     private static ProcessRequest BuiltRequest() =>
-        VibeLaunch.Built(new ProcessRequest("vibe", ["-p"], @"C:\w"), @"C:\h", "glm-5-3");
+        VibeLaunch.Built(new ProcessRequest("vibe", ["-p"], @"C:\w"), @"C:\h", "glm-5-3", HostKind.Windows);
 
-    private ReviewerInvocation Reviewer() =>
-        new VibeRuntime("vibe", HostKind.Windows).Build(RoleCatalog.ArchitectureRole, "review", @"C:\w", "C:/s.json", _dir,
+    /// <summary>The adapter for a host. A native Linux one is handed its generation (a READ banner): the test way in would read THIS machine's kernel.</summary>
+    private static VibeRuntime RuntimeFor(HostKind host) => new("vibe", host, wsl: WslGeneration.None);
+
+    private ReviewerInvocation Reviewer(HostKind host) =>
+        RuntimeFor(host).Build(RoleCatalog.ArchitectureRole, "review", @"C:\w", "C:/s.json", _dir,
             new ReviewerSettings("vibe") { Model = "glm-5-3", Timeout = TimeSpan.FromMinutes(10), OwnedScratch = _dir.At("round") });
 
     private ConsultantLaunch Consult() =>
@@ -39,31 +42,54 @@ public sealed class VibePrintsUtf8OnEveryPathTests : IDisposable
             Workdir = _dir.At("conv", "tree"),
         };
 
-    [Fact]
-    public async Task EveryVibePath_RunsInUtf8Mode()
+    /// <summary>The five request paths a Vibe child is made by — the reviewer, its retry, the consult, the question row, the providers probe — for one host.</summary>
+    private async Task<Dictionary<string, ProcessRequest>> PathsAsync(HostKind host)
     {
-        var consultant = new VibeConsultant(new VibeRuntime("vibe", HostKind.Windows));
+        var consultant = new VibeConsultant(RuntimeFor(host));
         var probe = new RecordingLauncher("python.exe C:\\Users\\p\\.local\\bin\\vibe 2.26.1\r\n");
-        await new VibeRuntime("vibe", HostKind.Windows).ProbeVersionAsync(probe, "vibe", TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        await RuntimeFor(host).ProbeVersionAsync(probe, "vibe", TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
         var question = Consult() with
         {
             Confinement = new LaunchConfinement.Planned(((Confinement.Planned)ConfinementPlanner.Plan("vibe", CapabilityGrant.None))),
             ScratchDir = _dir.At("row", "cwd"),
         };
 
-        var paths = new Dictionary<string, ProcessRequest>
+        return new Dictionary<string, ProcessRequest>
         {
-            ["the reviewer"] = Reviewer().Request,
-            ["a retry or a repair (ForLaunch)"] = new VibeRuntime("vibe", HostKind.Windows).ForLaunch(Reviewer()).Request,
+            ["the reviewer"] = Reviewer(host).Request,
+            ["a retry or a repair (ForLaunch)"] = RuntimeFor(host).ForLaunch(Reviewer(host)).Request,
             ["consult and the consultant check"] = consultant.Build(Consult()).Request,
             ["a question row"] = consultant.Build(question).Request,
             ["the providers probe"] = probe.Last!,
         };
+    }
 
-        foreach (var (path, request) in paths)
+    [Fact]
+    public async Task EveryVibePath_RunsInUtf8Mode()
+    {
+        foreach (var (path, request) in await PathsAsync(HostKind.Windows))
         {
             request.Environment.Should().ContainKey(Utf8, $"{path}: §26 — without it a non-cp1252 character kills the run").WhoseValue.Should().Be("1", path);
-            VibeLaunch.EnvironmentRefusal(request).Should().BeEmpty($"{path}: the one launch control admits what the one builder makes");
+            request.Environment.Should().NotContainKey(VibeLaunch.KeyringBackendVariable, $"{path}: a Windows launch is the measured four names");
+            VibeLaunch.EnvironmentRefusal(request, HostKind.Windows).Should().BeEmpty($"{path}: the one launch control admits what the one builder makes");
+        }
+    }
+
+    /// <summary>
+    /// S-N12's Linux leg (E2.S2): the same five request paths on a NATIVE Linux host each carry UTF-8 mode AND the closed keyring backend, and the control for that host admits each — one builder, one control (D17).
+    /// </summary>
+    [Fact]
+    public async Task EveryVibePath_OnANativeLinuxHost_RunsInUtf8Mode_AndClosesTheKeyringRoad()
+    {
+        var paths = await PathsAsync(HostKind.Linux);
+
+        paths.Should().HaveCount(5);
+        foreach (var (path, request) in paths)
+        {
+            request.Environment.Should().ContainKey(Utf8, $"{path}: §26").WhoseValue.Should().Be("1", path);
+            request.Environment.Should().ContainKey(VibeLaunch.KeyringBackendVariable, $"{path}: a native Linux Vibe launch carries no PYTHON_KEYRING_BACKEND")
+                .WhoseValue.Should().Be(VibeLaunch.KeyringBackendClosed, path);
+            VibeLaunch.EnvironmentRefusal(request, HostKind.Linux).Should().BeEmpty($"{path}: the control for a native Linux host admits what the one builder makes there");
         }
     }
 
@@ -74,11 +100,11 @@ public sealed class VibePrintsUtf8OnEveryPathTests : IDisposable
         Dictionary<string, string?> Without(string name) => built.Environment.Where(pair => pair.Key != name).ToDictionary(pair => pair.Key, pair => pair.Value);
         Dictionary<string, string?> With(string name, string value) => new(built.Environment) { [name] = value };
 
-        VibeLaunch.EnvironmentRefusal(built).Should().BeEmpty();
-        VibeLaunch.EnvironmentRefusal(built with { Environment = Without(Utf8) }).Should().NotBeEmpty("the three of 0.53.0 alone are no longer the built set");
-        VibeLaunch.EnvironmentRefusal(built with { Environment = With(Utf8, "0") }).Should().NotBeEmpty("UTF-8 mode switched off is not the built set");
-        VibeLaunch.EnvironmentRefusal(built with { Environment = With("PYTHONIOENCODING", "utf-8") }).Should().NotBeEmpty("no other name, Python's included");
-        VibeLaunch.EnvironmentRefusal(built with { Environment = With("VIBE_MCP_SERVERS", "[]") }).Should().NotBeEmpty("§22 A");
+        VibeLaunch.EnvironmentRefusal(built, HostKind.Windows).Should().BeEmpty();
+        VibeLaunch.EnvironmentRefusal(built with { Environment = Without(Utf8) }, HostKind.Windows).Should().NotBeEmpty("the three of 0.53.0 alone are no longer the built set");
+        VibeLaunch.EnvironmentRefusal(built with { Environment = With(Utf8, "0") }, HostKind.Windows).Should().NotBeEmpty("UTF-8 mode switched off is not the built set");
+        VibeLaunch.EnvironmentRefusal(built with { Environment = With("PYTHONIOENCODING", "utf-8") }, HostKind.Windows).Should().NotBeEmpty("no other name, Python's included");
+        VibeLaunch.EnvironmentRefusal(built with { Environment = With("VIBE_MCP_SERVERS", "[]") }, HostKind.Windows).Should().NotBeEmpty("§22 A");
     }
 
     /// <summary>

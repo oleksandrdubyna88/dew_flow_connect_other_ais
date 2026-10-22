@@ -1,5 +1,6 @@
 using CoaiMcp.Runners.Acp;
 using CoaiMcp.Runners.Kimi;
+using CoaiMcp.Runners.Platform;
 using CoaiMcp.Runners.Reviewers;
 using CoaiMcp.Runners.Vibe;
 using FluentAssertions;
@@ -30,7 +31,7 @@ public sealed class VersionWarningsTests
     {
         var manifest = new VibeHomeManifest("logs/session/plugins/", ["logs/**"], [new VibeHomeEntry("2.26.1", [])]);
 
-        VibeLaunch.VersionWarning(manifest, "2.27.0", "win32").Should().Be(VibeBefore);
+        VibeLaunch.VersionWarning(manifest, "2.27.0", "win32", HostKind.Windows).Should().Be(VibeBefore);
         VersionWarnings.Unmeasured(
             "Vibe", "2.27.0", "2.26.1 (win32)",
             "its confinement (research/RESULTS_vibe_confinement.md) and its home's plugin hashes belong to 2.26.1 (win32); this version's plugin files are admitted by name only",

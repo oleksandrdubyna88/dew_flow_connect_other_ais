@@ -22,7 +22,7 @@ public static class HostAdmission
     /// The runtimes (<c>Vibe</c>, <c>Kimi</c>) measured on a native Linux host — EMPTY in E1, so membership asked FIRST changes no answer. E2 adds Vibe, E3 Kimi: one entry plus its texts each, never a second admission.
     /// Compared case-insensitively, as <see cref="Refusal(string, HostKind, string, WslGeneration)"/> receives the names.
     /// </summary>
-    public static IReadOnlySet<string> MeasuredOnNativeLinux { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    public static IReadOnlySet<string> MeasuredOnNativeLinux { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Vibe" };
 
     /// <summary>
     /// Empty when <paramref name="runtime"/> (<c>Vibe</c>, <c>Kimi</c>) may start on this host, else the sentence. <paramref name="executable"/> is the CLI the launch would start; <paramref name="wsl"/> is

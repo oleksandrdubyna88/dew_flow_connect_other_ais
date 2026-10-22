@@ -50,7 +50,7 @@ public sealed class TheVibeProbeLeavesThePersonsHomeAloneTests
         var asked = launcher.Asked.Should().ContainSingle().Subject;
         asked.Arguments.Should().Equal("--version");
         asked.InheritsEnvironment.Should().BeFalse("an inherited environment gives Vibe the person's own home");
-        VibeLaunch.EnvironmentRefusal(asked).Should().BeEmpty("the probe is built exactly as a launch is (D17)");
+        VibeLaunch.EnvironmentRefusal(asked, VibeHost.Current.Kind).Should().BeEmpty("the probe is built exactly as a launch is (D17)");
         var home = asked.Environment[VibeLaunch.HomeVariable]!;
         home.Should().NotStartWith(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".vibe"));
         launcher.HomeExistedWhileItRan.Should().BeTrue("Vibe is handed a home that is there");

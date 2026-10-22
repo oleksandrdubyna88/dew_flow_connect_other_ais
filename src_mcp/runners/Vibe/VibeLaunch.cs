@@ -61,6 +61,19 @@ public static class VibeLaunch
     public const string Utf8On = "1";
 
     /// <summary>
+    /// Python <c>keyring</c>'s backend selector (DN10 of <c>todo/PLAN_kimi_and_vibe_on_native_linux.md</c>, C1 of
+    /// <c>todo/PLAN_kimi_and_vibe_on_native_linux_E2.md</c>): the fifth name of a launch on a NATIVE LINUX host, and only there.
+    /// </summary>
+    public const string KeyringBackendVariable = "PYTHON_KEYRING_BACKEND";
+
+    /// <summary>
+    /// The value <see cref="KeyringBackendVariable"/> carries: <c>fail.Keyring</c> raises on every call, and Vibe reads that as "no key" — so no keyring on the host
+    /// (Secret Service, KWallet, a <c>keyringrc.cfg</c>) is reachable from a coai launch and the sign-in comes only through the <c>.env</c> link coai makes.
+    /// Measured closed on Vibe 2.26.1 with keyring 25.7.0 (research/RESULTS_vibe_confinement.md §32: N-V1's arms a3/a3c, and every signed-in and resumed launch under it).
+    /// </summary>
+    public const string KeyringBackendClosed = "keyring.backends.fail.Keyring";
+
+    /// <summary>
     /// The CLI coai measured. <c>vibe</c> is two CLIs, and a remote flag cached in the home switched this account to the
     /// Rust one between two launches — which refuses <c>--time-limit</c> and <c>--output-dir</c> and is unmeasured (§3).
     /// </summary>
@@ -84,7 +97,7 @@ public static class VibeLaunch
     /// is refused here rather than started (one launch control; §22 A: a <c>VIBE_*</c> the child inherits configures Vibe
     /// whatever its home holds).
     /// </summary>
-    public static string EnvironmentRefusal(ProcessRequest request) =>
+    public static string EnvironmentRefusal(ProcessRequest request, HostKind host) =>
         Confined(request) && CarriesTheThree(request)
             ? string.Empty
             : $"this Vibe launch was not built with coai's own environment (the minimal set plus {HomeVariable}, {CliVariable}={PythonCli}, {ModelVariable} and {Utf8Variable}={Utf8On}, nothing inherited) and is refused (D17)";
@@ -94,7 +107,7 @@ public static class VibeLaunch
     /// launch (<c>VibeRuntime.Build</c>) and the <c>providers</c> probe alike, so the two cannot drift. What
     /// <see cref="EnvironmentRefusal"/> admits is exactly what this makes.
     /// </summary>
-    public static ProcessRequest Built(ProcessRequest request, string home, string model) => request with
+    public static ProcessRequest Built(ProcessRequest request, string home, string model, HostKind host) => request with
     {
         InheritsEnvironment = false,
         Passthrough = ProcessEnvironment.Minimal,
@@ -144,7 +157,7 @@ public static class VibeLaunch
     {
         var before = FirstOf(
             () => HostRefusal(host.Kind, request.Executable, host.Wsl),
-            () => EnvironmentRefusal(request),
+            () => EnvironmentRefusal(request, host.Kind),
             () => budget.Refusal(Value(request, HomeVariable)),
             () => ModelRefusal(Value(request, ModelVariable)),
             () => HomeMade(Value(request, HomeVariable)));
@@ -236,7 +249,7 @@ public static class VibeLaunch
 
         return after.Length > 0
             ? HomeVerdict.Refuse(after)
-            : Verdict(manifest, home, version.Version, host.Platform, host.SignIn.Admitted) with { CliVersion = Named(version.Version), SignInNote = signInNote };
+            : Verdict(manifest, home, version.Version, host.Platform, host.SignIn.Admitted, host.Kind) with { CliVersion = Named(version.Version), SignInNote = signInNote };
     }
 
     private static LaunchTurn Given(IDisposable turn, HomeVerdict inside)
@@ -319,20 +332,20 @@ public static class VibeLaunch
     /// (the owner's decision of 2026-10-13: "Vibe must WARN, not refuse — set it up once and it must work if it can"): its
     /// home's SHAPE was already checked before its `--version` started, so its plugin files are admitted by name.
     /// </summary>
-    internal static HomeVerdict Verdict(VibeHomeManifest manifest, string home, string version, string platform, AdmittedLink admitted) => manifest.For(version, platform) switch
+    internal static HomeVerdict Verdict(VibeHomeManifest manifest, string home, string version, string platform, AdmittedLink admitted, HostKind host) => manifest.For(version, platform) switch
     {
         [var entry] => HomeVerdict.Refuse(VibeHome.Refusal(home, manifest, entry, admitted)),
-        _ => new HomeVerdict(string.Empty, Unmeasured(manifest, version)),
+        _ => new HomeVerdict(string.Empty, Unmeasured(manifest, version, host)),
     };
 
     /// <summary>
     /// The warning for a Vibe version nobody measured — the same sentence on the launch (<see cref="LaunchTurn.Warning"/>)
     /// and on the row's card (<c>VibeRuntime.VersionWarning</c>) — or empty for a measured one.
     /// </summary>
-    public static string VersionWarning(VibeHomeManifest manifest, string version, string platform) =>
-        version.Length == 0 || manifest.For(version, platform).Count > 0 ? string.Empty : Unmeasured(manifest, version);
+    public static string VersionWarning(VibeHomeManifest manifest, string version, string platform, HostKind host) =>
+        version.Length == 0 || manifest.For(version, platform).Count > 0 ? string.Empty : Unmeasured(manifest, version, host);
 
-    private static string Unmeasured(VibeHomeManifest manifest, string version) =>
+    private static string Unmeasured(VibeHomeManifest manifest, string version, HostKind host) =>
         VersionWarnings.Unmeasured(
             "Vibe", version, manifest.Known,
             $"its confinement (research/RESULTS_vibe_confinement.md) and its home's plugin hashes belong to {manifest.Known}; this version's plugin files are admitted by name only",

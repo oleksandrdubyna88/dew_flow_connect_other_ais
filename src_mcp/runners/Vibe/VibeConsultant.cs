@@ -69,7 +69,7 @@ public sealed class VibeConsultant(VibeRuntime inner, string vendor = "vibe") : 
             .. launch.Handle.Length > 0 ? (string[])["--resume", launch.Handle] : [],
         ];
         ConsultantLaunches.MustCarryNoLineBreak(argv);
-        var request = VibeLaunch.Built(
+        var request = inner.Built(
             new ProcessRequest(Executable(launch.Settings), argv, Cwd(launch)) { StdIn = launch.Prompt, Timeout = launch.Settings.Timeout },
             VibeRuntime.ConsultantHome(owned),
             model);

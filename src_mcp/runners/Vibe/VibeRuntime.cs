@@ -140,7 +140,7 @@ public sealed class VibeRuntime(string id, VibeHost host, VibePathBudget? budget
     public ReviewerInvocation Build(string role, string prompt, string worktreePath, string schemaFilePath, string outputDir, ReviewerSettings settings)
     {
         var model = settings.Model.Length > 0 ? settings.Model : VibeModels.Default;
-        var request = VibeLaunch.Built(
+        var request = Built(
             new ProcessRequest(
                 settings.ExecutablePath.Length > 0 ? settings.ExecutablePath : DefaultExecutable,
                 Arguments(worktreePath, ExportFolder(OwnedOr(settings, outputDir), role, Guid.NewGuid()), settings.Timeout),
@@ -174,7 +174,7 @@ public sealed class VibeRuntime(string id, VibeHost host, VibePathBudget? budget
         try
         {
             return await launcher.RunAsync(
-                VibeLaunch.Built(new ProcessRequest(executable, ["--version"], home) { Timeout = timeout }, home, VibeModels.Default), ct);
+                Built(new ProcessRequest(executable, ["--version"], home) { Timeout = timeout }, home, VibeModels.Default), ct);
         }
         finally
         {
@@ -194,6 +194,13 @@ public sealed class VibeRuntime(string id, VibeHost host, VibePathBudget? budget
             // Left for the sweep; the probe's answer is what the caller asked for.
         }
     }
+
+    /// <summary>
+    /// <see cref="VibeLaunch.Built"/> for THIS adapter's host — the one forwarder every Vibe child of this runtime goes through (the review launch, the
+    /// <c>providers</c> probe, and the consultant's launches through <see cref="VibeConsultant"/>), so no caller spells the host's kind twice and none can
+    /// build a launch for another host than the one the adapter was given.
+    /// </summary>
+    internal ProcessRequest Built(ProcessRequest request, string home, string model) => VibeLaunch.Built(request, home, model, host.Kind);
 
     /// <summary>
     /// The shipped flag set (D2, D3, D7, D8) — the same argv <c>scripts/lib/vibe.mjs</c>'s <c>vibeArgs</c> measured. Never
@@ -279,7 +286,7 @@ public sealed class VibeRuntime(string id, VibeHost host, VibePathBudget? budget
     /// </summary>
     public string VersionWarning(string printedVersion) =>
         VibeHomeManifest.Builtin is VibeManifestLoad.Loaded { Manifest: var manifest }
-            ? VibeLaunch.VersionWarning(manifest, VibeLaunch.VersionIn(printedVersion), host.Platform)
+            ? VibeLaunch.VersionWarning(manifest, VibeLaunch.VersionIn(printedVersion), host.Platform, host.Kind)
             : string.Empty;
 
     /// <summary>The export's usage; unknown, never zero, when it is missing or null (D8, D9).</summary>

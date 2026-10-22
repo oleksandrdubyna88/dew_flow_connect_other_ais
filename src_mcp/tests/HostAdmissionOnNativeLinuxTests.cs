@@ -41,14 +41,48 @@ public sealed class HostAdmissionOnNativeLinuxTests
             $"an injected measured set {{{entry}}} did not admit Vibe on a read native Linux host — the names are compared case-sensitively");
     }
 
-    /// <summary>S-N16: the PRODUCT's set admits neither runtime on a native Linux host.</summary>
-    [Theory]
-    [InlineData("Vibe", "vibe", Wsl2OnlyVibe)]
-    [InlineData("Kimi", "kimi", Wsl2OnlyKimi)]
-    public void TheProductsSet_AdmitsNeitherRuntime_OnAReadNativeLinuxHost(string runtime, string executable, string sentence)
+    /// <summary>S-N16 / S-N6 (E2.S2; the flipped E1 case): the PRODUCT's set holds Vibe (research/RESULTS_vibe_confinement.md §32) and not Kimi (E3's).</summary>
+    [Fact]
+    public void TheProductsSet_AdmitsVibe_AndNotKimi_OnAReadNativeLinuxHost()
     {
-        HostAdmission.MeasuredOnNativeLinux.Should().BeEmpty("E1 admits nothing: E2 adds Vibe and E3 Kimi, one entry each");
-        HostAdmission.Refusal(runtime, HostKind.Linux, executable, WslGeneration.None).Should().Be(sentence);
+        HostAdmission.MeasuredOnNativeLinux.Should().BeEquivalentTo(["Vibe"], "E2 adds Vibe and only Vibe: Kimi is E3's one entry");
+        HostAdmission.Refusal("Vibe", HostKind.Linux, "vibe", WslGeneration.None).Should().BeEmpty("a read native Linux banner should admit Vibe now that it is measured");
+        HostAdmission.Refusal("Kimi", HostKind.Linux, "kimi", WslGeneration.None).Should().Be(Wsl2OnlyKimi);
+    }
+
+    /// <summary>
+    /// S-N6: runtime x host, through the callers' own entry points. Only Windows, WSL2 and a native Linux host with a read banner start Vibe; Kimi starts on Windows and WSL2 only.
+    /// </summary>
+    [Theory]
+    [InlineData("Vibe", HostKind.Windows, WslGeneration.None, true)]
+    [InlineData("Vibe", HostKind.Wsl, WslGeneration.Wsl2, true)]
+    [InlineData("Vibe", HostKind.Wsl, WslGeneration.Wsl1, false)]
+    [InlineData("Vibe", HostKind.Linux, WslGeneration.None, true)]
+    [InlineData("Vibe", HostKind.Linux, WslGeneration.Unreadable, false)]
+    [InlineData("Vibe", HostKind.MacOs, WslGeneration.None, false)]
+    [InlineData("Kimi", HostKind.Windows, WslGeneration.None, true)]
+    [InlineData("Kimi", HostKind.Wsl, WslGeneration.Wsl2, true)]
+    [InlineData("Kimi", HostKind.Wsl, WslGeneration.Wsl1, false)]
+    [InlineData("Kimi", HostKind.Linux, WslGeneration.None, false)]
+    [InlineData("Kimi", HostKind.Linux, WslGeneration.Unreadable, false)]
+    [InlineData("Kimi", HostKind.MacOs, WslGeneration.None, false)]
+    public void TheMatrix_StartsVibeOnWindowsWsl2AndAReadNativeLinux_AndKimiOnWindowsAndWsl2Only(string runtime, HostKind host, WslGeneration generation, bool starts)
+    {
+        var refusal = runtime == "Vibe"
+            ? CoaiMcp.Runners.Vibe.VibeLaunch.HostRefusal(host, "vibe", generation)
+            : CoaiMcp.Runners.Kimi.KimiLaunch.HostRefusal(host, "kimi", generation);
+
+        (refusal.Length == 0).Should().Be(starts, $"{runtime} on {host}/{generation}: {refusal}");
+    }
+
+    /// <summary>S-N6: the sentences of the native Linux answers through the product's set — Vibe's unreadable-banner one, Kimi's WSL2-only one (whatever the banner says, membership is asked first).</summary>
+    [Theory]
+    [InlineData("Vibe", "vibe", WslGeneration.Unreadable, UnreadableVibe)]
+    [InlineData("Kimi", "kimi", WslGeneration.None, Wsl2OnlyKimi)]
+    [InlineData("Kimi", "kimi", WslGeneration.Unreadable, Wsl2OnlyKimi)]
+    public void TheNativeLinuxSentences_AreTheBannerOneForVibe_AndTheWsl2OnlyOneForKimi(string runtime, string executable, WslGeneration generation, string sentence)
+    {
+        HostAdmission.Refusal(runtime, HostKind.Linux, executable, generation).Should().Be(sentence);
     }
 
     // ---------- S-N7 : an unreadable banner is never "native Linux" ----------
@@ -62,15 +96,15 @@ public sealed class HostAdmissionOnNativeLinuxTests
             "an unreadable /proc/version was admitted as native Linux — a WSL1 kernel would start Vibe");
     }
 
-    /// <summary>S-N7: membership is asked FIRST — with the product's (empty) set an unreadable banner gets today's WSL2-only sentence, byte for byte, so no answer changed in E1.</summary>
+    /// <summary>S-N7: membership is asked FIRST — a runtime outside the set (here an empty one, E1's shape) gets today's WSL2-only sentence whatever the banner says, byte for byte.</summary>
     [Theory]
     [InlineData("Vibe", "vibe", Wsl2OnlyVibe)]
     [InlineData("Kimi", "kimi", Wsl2OnlyKimi)]
-    public void WithTheProductsSet_AnUnreadableBanner_GetsTodaysWsl2OnlySentence(string runtime, string executable, string sentence)
+    public void ARuntimeOutsideTheSet_GetsTodaysWsl2OnlySentence_OnAnUnreadableBanner(string runtime, string executable, string sentence)
     {
-        HostAdmission.Refusal(runtime, HostKind.Linux, executable, WslGeneration.Unreadable).Should().Be(
+        HostAdmission.Refusal(runtime, HostKind.Linux, executable, WslGeneration.Unreadable, new HashSet<string>()).Should().Be(
             sentence,
-            "the banner was asked before the set — an answer changed while the set is empty");
+            "the banner was asked before the set — a runtime outside the set got the banner sentence");
     }
 
     /// <summary>The set is the Linux arm's alone: Windows and WSL answers do not read it.</summary>

@@ -87,7 +87,7 @@ public sealed class VibeLaunchControlTests : IDisposable
     {
         using var padded = TempDir.For("testsToDelete-vh-budget-");
         var home = Path.Combine(padded, new string('p', Math.Max(1, 120 - padded.Path.Length - 1)));
-        var request = VibeLaunch.Built(new ProcessRequest("vibe", ["-p"], _work), home, "glm-5-3");
+        var request = VibeLaunch.Built(new ProcessRequest("vibe", ["-p"], _work), home, "glm-5-3", HostKind.Windows);
         var vibe = new FakeVibe();
 
         using var turn = await VibeLaunch.TakeAsync(VibeHost.Of(HostKind.Windows), request, _out.At("export"), vibe, VibePathBudget.Windows, TestContext.Current.CancellationToken);
@@ -102,7 +102,7 @@ public sealed class VibeLaunchControlTests : IDisposable
     public async Task AHomeWhoseParentDoesNotExist_IsRefused_AndNoChainIsMade()
     {
         var parent = Path.Combine(_scratch, "not-made", "either");
-        var request = VibeLaunch.Built(new ProcessRequest("vibe", ["-p"], _work), Path.Combine(parent, "h"), "glm-5-3");
+        var request = VibeLaunch.Built(new ProcessRequest("vibe", ["-p"], _work), Path.Combine(parent, "h"), "glm-5-3", HostKind.Windows);
         var vibe = new FakeVibe();
 
         using var turn = await VibeLaunch.TakeAsync(VibeHost.Of(HostKind.Windows), request, _out.At("export"), vibe, VibePathBudget.None, TestContext.Current.CancellationToken);
@@ -189,18 +189,36 @@ public sealed class VibeLaunchControlTests : IDisposable
         failure.Cure.Contains(installCure, StringComparison.Ordinal).Should().Be(kind == "cli-not-found", "only a CLI that is not there is told to install it");
     }
 
-    /// <summary>S-V17 (DL1 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>): D18 lifts for WSL2 only — a native Linux host stays refused, with a sentence that says so.</summary>
+    /// <summary>
+    /// S-N5 (E2.S2; the flipped S-V17 pin): a native Linux host with a READ banner starts the row — in the five-name environment — and one whose banner could not be read is refused before anything starts.
+    /// The runtime is given its generation explicitly: <c>new VibeRuntime(id, HostKind.Linux)</c> alone would read THIS machine's kernel.
+    /// </summary>
     [Fact]
-    public async Task ANativeLinuxHost_IsRefused_BeforeAnythingStarts_WithTheWsl2OnlySentence()
+    public async Task ANativeLinuxHost_StartsTheRow_OnAReadBanner_InTheClosedKeyringEnvironment()
     {
         var vibe = new FakeVibe();
 
-        var outcome = await new ReviewerExecutor(vibe).RunAsync(Invocation(host: HostKind.Linux), ct: TestContext.Current.CancellationToken);
+        var outcome = await new ReviewerExecutor(vibe).RunAsync(NativeInvocation(WslGeneration.None), ct: TestContext.Current.CancellationToken);
 
-        outcome.Should().BeOfType<ReviewerOutcome.NotStarted>("a native Linux host should still be refused with the WSL2-only sentence, but Vibe started")
-            .Which.Reason.Should().Contain("DL1").And.Contain("WSL2 only").And.Contain("native Linux");
+        outcome.Should().BeOfType<ReviewerOutcome.Ok>("a native Linux host should start a Vibe row now that it is measured (RESULTS_vibe §32), but it was refused");
+        vibe.Started.Select(r => r.Arguments[0]).Should().Equal("--version", "-p");
+        vibe.Started.Should().OnlyContain(r => r.Environment[VibeLaunch.KeyringBackendVariable] == VibeLaunch.KeyringBackendClosed, "every Vibe child on a native Linux host carries the closed keyring backend");
+    }
+
+    [Fact]
+    public async Task ANativeLinuxHost_WithAnUnreadableBanner_IsRefused_BeforeAnythingStarts_WithTheBannerSentence()
+    {
+        var vibe = new FakeVibe();
+
+        var outcome = await new ReviewerExecutor(vibe).RunAsync(NativeInvocation(WslGeneration.Unreadable), ct: TestContext.Current.CancellationToken);
+
+        outcome.Should().BeOfType<ReviewerOutcome.NotStarted>("an unreadable banner could be a WSL1 kernel").Which.Reason.Should().Contain("kernel banner").And.Contain("DN6");
         vibe.Started.Should().BeEmpty();
     }
+
+    private ReviewerInvocation NativeInvocation(WslGeneration banner) =>
+        new VibeRuntime("vibe", HostKind.Linux, VibePathBudget.None, wsl: banner).Build(RoleCatalog.ArchitectureRole, "review this", _work, "/s.json", _out,
+            new ReviewerSettings("vibe") { Model = "glm-5-3", OwnedScratch = _scratch, Timeout = TimeSpan.FromMinutes(1) });
 
     [Fact]
     public async Task AHooksFileInTheHome_IsRefused_BeforeEvenTheVersionIsAsked()

@@ -84,9 +84,9 @@ public sealed class HostFactsModeTests : IDisposable
         Directory.EnumerateFileSystemEntries(_data).Should().BeEmpty("a read-only mode made something under the data folder");
     }
 
-    /// <summary>The CI runner is a native Linux VM: the REAL line says linux, banner read, and both runtimes refused (E1 admits nothing).</summary>
+    /// <summary>The CI runner is a native Linux VM: the REAL line says linux, banner read, Vibe admitted (E2.S2, research/RESULTS_vibe_confinement.md §32) and Kimi refused (E3's).</summary>
     [Fact]
-    public async Task OnANativeLinuxHost_TheRealLineSaysLinux_BannerRead_AndBothRuntimesRefused()
+    public async Task OnANativeLinuxHost_TheRealLineSaysLinux_BannerRead_VibeAdmitted_AndKimiRefused()
     {
         Assert.SkipUnless(OperatingSystem.IsLinux() && !VendorDiagnosis.OnWsl, "the real line of a native Linux host: runs on the Linux CI legs");
 
@@ -96,15 +96,15 @@ public sealed class HostFactsModeTests : IDisposable
         line.GetProperty("hostKind").GetString().Should().Be("linux");
         line.GetProperty("banner").GetProperty("read").GetBoolean().Should().BeTrue("the CI runner's /proc/version is readable");
         line.GetProperty("banner").GetProperty("text").GetString().Should().NotBeNullOrWhiteSpace();
-        line.GetProperty("admission").GetProperty("Vibe").GetString().Should().NotBeNullOrEmpty("E1 admits no runtime on a native Linux host");
-        line.GetProperty("admission").GetProperty("Kimi").GetString().Should().NotBeNullOrEmpty("E1 admits no runtime on a native Linux host");
+        line.GetProperty("admission").GetProperty("Vibe").GetString().Should().BeEmpty("E2 admits Vibe on a native Linux host with a read banner");
+        line.GetProperty("admission").GetProperty("Kimi").GetString().Should().NotBeNullOrEmpty("Kimi is E3's: still refused on a native Linux host");
         line.GetProperty("keyringSession").GetProperty("listing").GetString().Should().BeOneOf(KeyringSessionFacts.Read, KeyringSessionFacts.CannotTell);
     }
 
     // ---------- the report, for any host ----------
 
     [Fact]
-    public void ANativeLinuxHostWithAReadBanner_StatesBothWsl2OnlySentences()
+    public void ANativeLinuxHostWithAReadBanner_AdmitsVibe_AndStatesKimisWsl2OnlySentence()
     {
         var line = Parsed(HostFactsMode.Json(Report(HostKind.Linux, new BannerReading(true, "Linux version 6.8.0-45-generic (buildd@lcy02) #45-Ubuntu SMP\n"), WslGeneration.None)));
 
@@ -112,7 +112,7 @@ public sealed class HostFactsModeTests : IDisposable
         line.GetProperty("banner").GetProperty("read").GetBoolean().Should().BeTrue();
         line.GetProperty("banner").GetProperty("text").GetString().Should().Be("Linux version 6.8.0-45-generic (buildd@lcy02) #45-Ubuntu SMP", "the trailing newline of /proc/version is not part of the banner");
         line.GetProperty("banner").GetProperty("generation").GetString().Should().Be("None");
-        line.GetProperty("admission").GetProperty("Vibe").GetString().Should().Contain("Vibe runs on WSL2 only for now");
+        line.GetProperty("admission").GetProperty("Vibe").GetString().Should().BeEmpty("a read, non-WSL banner admits Vibe (E2.S2)");
         line.GetProperty("admission").GetProperty("Kimi").GetString().Should().Contain("Kimi runs on WSL2 only for now");
     }
 
@@ -123,7 +123,8 @@ public sealed class HostFactsModeTests : IDisposable
 
         line.GetProperty("banner").GetProperty("read").GetBoolean().Should().BeFalse();
         line.GetProperty("banner").GetProperty("generation").GetString().Should().Be("Unreadable");
-        line.GetProperty("admission").GetProperty("Vibe").GetString().Should().NotBeNullOrEmpty("an unreadable banner on a native Linux host stays refused");
+        line.GetProperty("admission").GetProperty("Vibe").GetString().Should().Contain("kernel banner", "an unreadable banner on a native Linux host stays refused, with the banner sentence");
+        line.GetProperty("admission").GetProperty("Kimi").GetString().Should().Contain("Kimi runs on WSL2 only for now");
     }
 
     [Fact]

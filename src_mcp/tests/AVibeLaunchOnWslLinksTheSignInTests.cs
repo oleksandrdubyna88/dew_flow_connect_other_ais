@@ -146,20 +146,21 @@ public sealed class AVibeLaunchOnWslLinksTheSignInTests : IDisposable
         VibeSignIn.For(HostKind.Wsl, nothing, "/home/p").Admitted.Should().Be(new AdmittedLink(".env", VibeSignIn.For(HostKind.Wsl, nothing, "/home/p").PersonsEnvFile));
         VibeSignIn.None.Admitted.Should().Be(AdmittedLink.None);
     }
-    /// <summary>S-V17, the launch half: a WSL2 banner starts; a native Linux host and a WSL1 host are refused before anything starts.</summary>
+    /// <summary>S-V17, the launch half (E2.S2 flipped the native row): a WSL2 banner starts and so does a native Linux host with a READ banner; a WSL1 host, an unreadable banner and macOS are refused before anything starts.</summary>
     [Theory]
     [InlineData(HostKind.Wsl, WslGeneration.Wsl2, true)]
     [InlineData(HostKind.Wsl, WslGeneration.Wsl1, false)]
-    [InlineData(HostKind.Linux, WslGeneration.None, false)]
+    [InlineData(HostKind.Linux, WslGeneration.None, true)]
+    [InlineData(HostKind.Linux, WslGeneration.Unreadable, false)]
     [InlineData(HostKind.MacOs, WslGeneration.None, false)]
-    public async Task OnlyAWsl2Host_StartsVibe(HostKind kind, WslGeneration generation, bool starts)
+    public async Task OnlyAMeasuredHost_StartsVibe(HostKind kind, WslGeneration generation, bool starts)
     {
         var host = new VibeHost(kind, generation, VibeSignIn.None);
         var vibe = new FakeVibe();
 
         using var turn = await TakeAsync(host, Invocation(host), vibe);
 
-        (turn.Refusal.Length == 0).Should().Be(starts, "a WSL1 banner was admitted as WSL2, or a native Linux host started");
+        (turn.Refusal.Length == 0).Should().Be(starts, "a WSL1 banner was admitted as WSL2, an unreadable banner started, or a native Linux host with a read banner was refused");
         (vibe.Started.Count > 0).Should().Be(starts);
     }
 
@@ -201,12 +202,12 @@ public sealed class AVibeLaunchOnWslLinksTheSignInTests : IDisposable
     {
         var onlyWindows = Shipped with { Versions = [.. Shipped.Versions.Where(entry => entry.Platform == "win32")] };
 
-        var verdict = VibeLaunch.Verdict(onlyWindows, _scratch, "2.26.1", "linux", AdmittedLink.None);
+        var verdict = VibeLaunch.Verdict(onlyWindows, _scratch, "2.26.1", "linux", AdmittedLink.None, HostKind.Wsl);
 
         verdict.Refusal.Should().BeEmpty();
         verdict.Warning.Should().Contain("2.26.1 (win32)").And.Contain("is not a version coai has measured");
-        VibeLaunch.VersionWarning(onlyWindows, "2.26.1", "linux").Should().Be(verdict.Warning, "the card and the launch say the same sentence");
-        VibeLaunch.VersionWarning(onlyWindows, "2.26.1", "win32").Should().BeEmpty();
+        VibeLaunch.VersionWarning(onlyWindows, "2.26.1", "linux", HostKind.Wsl).Should().Be(verdict.Warning, "the card and the launch say the same sentence");
+        VibeLaunch.VersionWarning(onlyWindows, "2.26.1", "win32", HostKind.Windows).Should().BeEmpty();
     }
 
     // ----------------------------------------------------------------------------- the real link, on Linux

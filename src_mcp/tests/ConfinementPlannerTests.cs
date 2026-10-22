@@ -336,7 +336,7 @@ public sealed class ConfinementPlannerTests
             request.Environment.Should().Contain(Runners.Vibe.VibeLaunch.CliVariable, "python").And.Contain(Runners.Vibe.VibeLaunch.ModelVariable, "glm-5-3");
             request.Environment[Runners.Vibe.VibeLaunch.HomeVariable].Should().StartWith(RowFolder + Path.DirectorySeparatorChar,
                 "the row's home lives in the row's own folder, gone with it");
-            Runners.Vibe.VibeLaunch.EnvironmentRefusal(request).Should().BeEmpty("the one launch control admits it (D17)");
+            Runners.Vibe.VibeLaunch.EnvironmentRefusal(request, Runners.Platform.HostKind.Windows).Should().BeEmpty("the one launch control admits it (D17)");
         }
     }
 

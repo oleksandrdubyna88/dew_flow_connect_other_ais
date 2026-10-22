@@ -360,12 +360,16 @@ public sealed class VibeLaunchRulesTests
         VibeLaunch.HostRefusal(host, "vibe", WslGeneration.None).Should().Contain("D18").And.Contain(HostKinds.Word(host)).And.Contain("Windows and WSL2 only");
     }
 
-    /// <summary>S-V17 (DL1): D18 lifts for WSL2 only. A native Linux host is refused with the sentence that says it is measured on WSL2 only.</summary>
+    /// <summary>
+    /// S-N5 (E2.S2 of <c>todo/PLAN_kimi_and_vibe_on_native_linux_E2.md</c>; the flipped S-V17 pin): Vibe is measured on a native Linux host (research/RESULTS_vibe_confinement.md §32), so a host whose kernel banner was READ and
+    /// names no WSL starts it; the same host with an unreadable banner is refused with the banner sentence, not the WSL2-only one.
+    /// </summary>
     [Fact]
-    public void ANativeLinuxHost_IsRefused_WithTheWsl2OnlySentence()
+    public void ANativeLinuxHost_IsAdmitted_OnAReadBanner()
     {
-        VibeLaunch.HostRefusal(HostKind.Linux, "vibe", WslGeneration.None).Should().Contain("DL1").And.Contain("WSL2 only").And.Contain("not yet on a native Linux host",
-            "a native Linux host should still be refused with the WSL2-only sentence, but Vibe started");
+        VibeLaunch.HostRefusal(HostKind.Linux, "vibe", WslGeneration.None).Should().BeEmpty(
+            "a native Linux host should start a Vibe row now that it is measured (RESULTS_vibe §32), but it was refused");
+        VibeLaunch.HostRefusal(HostKind.Linux, "vibe", WslGeneration.Unreadable).Should().Contain("kernel banner").And.Contain("DN6").And.NotContain("WSL2 only");
     }
 
     [Fact]
@@ -398,7 +402,10 @@ public sealed class VibeLaunchRulesTests
         generation.Should().Be(vector.Generation, $"vector '{id}': a WSL1 banner was admitted as WSL2, or the extension's rule and the server's differ");
         var kind = HostKinds.Of(windows: false, linux: true, macOs: false, wsl: VendorDiagnosis.NamesWsl(vector.Banner));
 
-        (VibeLaunch.HostRefusal(kind, "vibe", generation).Length == 0).Should().Be(vector.Generation == WslGeneration.Wsl2);
+        // A WSL kernel starts Vibe only when it is WSL2. A banner naming no WSL is a native Linux host with a READ banner, which E2.S2 admits (§32): the vector file still says what the rule is, and
+        // the admission now has one more way to start a row — so the expectation is "WSL2, or a native host", not "WSL2" alone (the E2 plan's §2.6 listed this pin as untouched; it cannot be).
+        var starts = vector.Generation == WslGeneration.Wsl2 || kind == HostKind.Linux;
+        (VibeLaunch.HostRefusal(kind, "vibe", generation).Length == 0).Should().Be(starts);
     }
 
     [Fact]
@@ -432,12 +439,12 @@ public sealed class VibeLaunchRulesTests
     {
         var built = TheBuiltOne();
 
-        VibeLaunch.EnvironmentRefusal(built).Should().BeEmpty();
-        VibeLaunch.EnvironmentRefusal(built with { InheritsEnvironment = true }).Should().Contain("D17");
-        VibeLaunch.EnvironmentRefusal(built with { Passthrough = ProcessEnvironment.Passthrough }).Should().Contain("D17");
-        VibeLaunch.EnvironmentRefusal(built with { Environment = new Dictionary<string, string?>(built.Environment) { [VibeLaunch.CliVariable] = "rust" } })
+        VibeLaunch.EnvironmentRefusal(built, HostKind.Windows).Should().BeEmpty();
+        VibeLaunch.EnvironmentRefusal(built with { InheritsEnvironment = true }, HostKind.Windows).Should().Contain("D17");
+        VibeLaunch.EnvironmentRefusal(built with { Passthrough = ProcessEnvironment.Passthrough }, HostKind.Windows).Should().Contain("D17");
+        VibeLaunch.EnvironmentRefusal(built with { Environment = new Dictionary<string, string?>(built.Environment) { [VibeLaunch.CliVariable] = "rust" } }, HostKind.Windows)
             .Should().Contain("VIBE_CLI=python");
-        VibeLaunch.EnvironmentRefusal(built with { Environment = new Dictionary<string, string?>(built.Environment) { ["VIBE_MCP_SERVERS"] = "[]" } })
+        VibeLaunch.EnvironmentRefusal(built with { Environment = new Dictionary<string, string?>(built.Environment) { ["VIBE_MCP_SERVERS"] = "[]" } }, HostKind.Windows)
             .Should().Contain("D17", "a fourth VIBE_* configures Vibe (§22 A)");
     }
 
