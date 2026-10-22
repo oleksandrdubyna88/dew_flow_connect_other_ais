@@ -124,7 +124,7 @@ export const isKimi = (entry) => KIMI_NAMES.includes(String(entry?.name ?? '').t
 export function listProcesses(platform = process.platform, spawn = spawnSync) {
   if (platform !== 'win32') return linuxProcesses();
   const r = spawn(SYSTEM32(String.raw`WindowsPowerShell\v1.0\powershell.exe`), ['-NoProfile', '-NonInteractive', '-Command',
-    'Get-CimInstance Win32_Process | ForEach-Object { "$($_.ProcessId),$($_.ParentProcessId),$($_.Name)" }'], { encoding: 'utf8', timeout: 30_000 });
+    'Get-CimInstance Win32_Process -ErrorAction Stop | ForEach-Object { "$($_.ProcessId),$($_.ParentProcessId),$($_.Name)" }'], { encoding: 'utf8', timeout: 30_000 });
   if (r.error || r.signal || r.status !== 0) {
     throw new Error(`the Windows process listing failed (${r.error?.code ?? r.signal ?? `exit ${r.status}`}): whether another kimi runs cannot be told`);
   }

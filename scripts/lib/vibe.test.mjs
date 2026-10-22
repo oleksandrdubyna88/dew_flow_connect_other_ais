@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { after, test } from 'node:test';
 import {
   MINIMAL_UNIX, MINIMAL_WINDOWS, builtEnv, classOf, deepestChild, dirLink, files, homeListing, linkSignIn, minimalEnv, personsVibeHome,
-  KEYRING_FAIL_BACKEND, armFilterOf, armWanted, keyringArm, keyringSetup, pythonCommand, removeDirLink, run, vibePython, writeProbeKeyring,
+  KEYRING_FAIL_BACKEND, armFilterOf, armsCellsError, armWanted, keyringArm, keyringSetup, pythonCommand, removeDirLink, run, vibePython, writeProbeKeyring,
 } from './vibe.mjs';
 
 const WINDOWS = process.platform === 'win32';
@@ -368,4 +368,24 @@ test('armFilterOf: an omitted --arms is "no filter"; a given one must name an ar
     assert.match(error, /--arms/u, `${JSON.stringify(argv)} was accepted`);
     assert.deepEqual(filter, [], 'an error carries no filter');
   }
+});
+
+// CodeRabbit, second look (vibe.mjs:366, probe-vibe-confinement.mjs:82).
+test('armFilterOf: another option is not an arm name - `--arms --cells M-V7` is an error, not a filter naming "--cells"', () => {
+  for (const argv of [['--arms', '--cells', 'M-V7'], ['--arms', '-x'], ['--cells', 'M-V7', '--arms', '--repeats', '1']]) {
+    const { filter, error } = armFilterOf(argv);
+    assert.match(error, /--arms/u, `${JSON.stringify(argv)} was accepted`);
+    assert.deepEqual(filter, []);
+  }
+  assert.deepEqual(armFilterOf(['--arms', 'a3', '--cells', 'M-V7']), { filter: ['a3'], error: '' }, 'a later option after a real value is fine');
+});
+
+test('armsCellsError: with --arms every selected cell must be an arm cell that has a wanted arm - the default cell list (M-V5 resumes with paid turns, M-V9 launches a control) is refused', () => {
+  const byCell = { 'M-V7': [{ arm: 'a: forced' }, { arm: 'a3: fake home' }, { arm: 'b: paid' }], 'M-V9': [{ arm: 'hook' }] };
+  assert.equal(armsCellsError([], ['M-V5', 'M-V7', 'M-V9'], byCell), '', 'no --arms: no constraint');
+  assert.equal(armsCellsError(['a3'], ['M-V7'], byCell), '');
+  assert.match(armsCellsError(['a3'], ['M-V5'], byCell), /M-V5/u, 'M-V5 has no arms: it would run its paid two-turn resume unchecked');
+  assert.match(armsCellsError(['a3'], ['M-V7', 'M-V9'], byCell), /M-V9/u, 'M-V9 has no wanted arm: only its positive control would launch');
+  assert.match(armsCellsError(['a3'], ['M-V1', 'M-V5', 'M-V7', 'M-V9'], byCell), /M-V1/u, 'the default cell list is not a compatible selection');
+  assert.match(armsCellsError(['zz'], ['M-V7'], byCell), /M-V7/u, 'a filter that selects nothing in a cell is refused, not a successful run with no measurement');
 });

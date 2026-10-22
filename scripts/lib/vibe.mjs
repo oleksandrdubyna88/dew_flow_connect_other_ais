@@ -362,6 +362,18 @@ export const armWanted = (arm, filter) => !filter || filter.length === 0 || filt
 export function armFilterOf(argv) {
   const at = argv.indexOf('--arms');
   if (at < 0) return { filter: [], error: '' };
-  const names = String(argv[at + 1] ?? '').split(',').map((n) => n.trim()).filter(Boolean);
+  const raw = String(argv[at + 1] ?? '').trim();
+  const names = raw.startsWith('-') ? [] : raw.split(',').map((n) => n.trim()).filter(Boolean); // another option (`--cells`) is not an arm name
   return names.length > 0 ? { filter: names, error: '' } : { filter: [], error: '--arms was given without an arm name (a3,a3c ...): refusing to run every arm, the paid one included' };
+}
+
+/**
+ * With `--arms`, every selected cell must be an arm cell (`armsByCell[cell]`) that has at least one wanted arm; else a message naming the first cell that is not.
+ * The filter only reaches the cells that run arms: M-V5 (the paid two-turn resume) has none and ran unchecked, and M-V9 launches a positive control after its
+ * ordinary arm is filtered out - so the default cell list is not a compatible selection and the caller names the cells (`--cells M-V7`). '' without `--arms`.
+ */
+export function armsCellsError(filter, cells, armsByCell) {
+  if (!filter || filter.length === 0) return '';
+  const bad = cells.find((cell) => !(armsByCell[cell] ?? []).some((a) => armWanted(a.arm, filter)));
+  return bad === undefined ? '' : `--arms ${filter.join(',')} selects no arm in cell ${bad}: name the cells it applies to (--cells M-V7) - without that ${bad} would still launch what the filter was meant to keep out`;
 }

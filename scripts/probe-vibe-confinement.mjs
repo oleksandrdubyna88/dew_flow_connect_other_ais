@@ -59,7 +59,7 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative } from 'node:path';
 import { resolved } from '../.github/scripts/lib/resolved.mjs';
 import {
-  builtEnv as builtEnvFor, dirLink, files, fwd, armFilterOf, armWanted, homeListing, keyringArm, keyringSetup, linkSignIn, minimalEnv, personsVibeHome, pythonCommand, run, vibeArgs, vibePython,
+  builtEnv as builtEnvFor, dirLink, files, fwd, armFilterOf, armsCellsError, armWanted, homeListing, keyringArm, keyringSetup, linkSignIn, minimalEnv, personsVibeHome, pythonCommand, run, vibeArgs, vibePython,
 } from './lib/vibe.mjs';
 
 const argv = process.argv.slice(2);
@@ -477,6 +477,13 @@ const ARMS = {
     },
   })),
 };
+
+// --arms reaches only the cells that run arms: refuse a cell selection it cannot keep free, before anything launches.
+const armsCellsMessage = armsCellsError(armFilter, cells, ARMS);
+if (armsCellsMessage) {
+  console.error(armsCellsMessage);
+  process.exit(65);
+}
 
 // ------------------------------------------------------------------------------------------------------------ launching
 

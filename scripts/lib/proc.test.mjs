@@ -370,3 +370,11 @@ test('the Windows listing parses a PowerShell that finished, and a guard fed a f
   const down = () => listProcesses('win32', () => ({ error: undefined, signal: null, status: 1, stdout: '' }));
   await assert.rejects(() => waitForNoOtherKimi('x', { list: down, sleep: async () => {}, log: () => {} }), /cannot be told/u);
 });
+
+// CodeRabbit, second look (proc.mjs:126): Get-CimInstance can report a NON-terminating error and PowerShell still exits 0 with no output - an empty list.
+test('the Windows listing asks PowerShell to STOP on an error (-ErrorAction Stop), so a failed enumeration is a non-zero exit, not an empty list', () => {
+  let asked = '';
+  listProcesses('win32', (file, args) => { asked = args.join(' '); return { error: undefined, signal: null, status: 0, stdout: '' }; });
+  assert.match(asked, /Get-CimInstance Win32_Process -ErrorAction Stop/u, 'a non-terminating Get-CimInstance error would be read as "no process"');
+  assert.match(asked, /-NoProfile -NonInteractive -Command/u);
+});
