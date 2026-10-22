@@ -564,3 +564,26 @@ Every case asserts no fragment of the secret in the diagnosis line, the shim's r
   is passed LAST through `Redaction.SafeText(window, LineCap)` — this supersedes "no second `SafeText`" in the build note above. The second pass reads at most `LineCap` characters of already-redacted text and can only take more out.
 - **`AcpClient` copying `StdErrTruncated` had no test.** Added through the real client and the fake agent. The finding proposed `FakeAcpAgent.Spew`, but `spew` writes on STDOUT (the protocol stream), so the fake agent gained a `stderr` step.
 - **`research/module_tests.md` said `WindowLeadIn` and `LineCap` were "both public now".** At HEAD, `WindowLeadIn` is `internal const` (T5) and `LineCap` is `public const`; corrected.
+
+## The feature gate (round 2, the last, 2026-10-22, verdict proceed) — 2 minor findings, both accepted; fixed in a new PR
+
+Round 2 read the whole plan again over the review view with #917 in it (base `9134099c0`); the blocking finding of round 1 is closed.
+Two minor findings, verified against `151cc6526` and accepted:
+
+- **T1 — a NON-spent diagnosis found only on stderr loses its evidence.** `AskAcpMode`'s `DiagnosedNote` (`src_mcp/src/Acp/AskAcpMode.cs`
+  ~:323) builds the shim's note from `outcome.Reason` alone. When the reason names no row (`Internal error`) and stderr holds
+  `Authentication required: 503 Service Unavailable`, the diagnosis is `provider_error` with a matched line, but the note — which the
+  executor keeps and `ReviewerSummaryFactory` prefers — says only `Internal error`; the summary, ledger and log lose the provider's
+  sentence. The same for a Refused diagnosis found only on stderr. **Fix:** when `diagnosis.Line` is non-empty (already redacted and
+  cut by `LineWith`), the reason handed to `diagnosis.Note` carries it (`<reason> (the agent's stderr: <line>)` or the neighbouring
+  wording), the cure still LAST so `WithoutCure` keeps working. RED: a product scenario — reason `Internal error`, stderr `Authentication
+  required: 503 Service Unavailable` — whose summary/ledger/log today lack the 503 sentence; and a Refused (`not_signed_in`) twin.
+- **T2 — a reset clause quoted from a stderr-only line swallows the runtime's closing parenthesis.** `KimiRuntime.Quoted` wraps the
+  matched line as `(Kimi said: <line>)`; `KimiQuotaWords.ClauseOf` ends a clause at a period FOLLOWED BY WHITESPACE (`~:64`), so a line
+  ending `Your quota will reset at 14:00 UTC.` yields `Your quota will reset at 14:00 UTC.)`. **Fix:** take the clause from the vendor's
+  own words (the reason and the matched line, unwrapped) before any runtime punctuation is added — or end a clause at a period followed by
+  whitespace OR the end of the text OR a closing parenthesis the runtime added; the first is preferred (no punctuation guessing). RED: a
+  stderr-only `… Your quota will reset at 14:00 UTC.` at the line's end → the quoted clause has no `)`.
+
+Docs with the fix: `research/module_runners.md` (the note carries the matched line for every diagnosis found on stderr), `research/module_tests.md`.
+After this PR merges the plan's open items are only the capture step (§5 step 1, waiting for the owner's Kimi quota) and the promotion.
