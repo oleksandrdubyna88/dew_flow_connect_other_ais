@@ -5073,7 +5073,7 @@ Not run here, by the story's own terms: the S-N17 live check (arms a3 and a3c, o
 ## E2.S0 — every native-Linux Vibe probe child carries the closed road (2026-10-22, `todo/PLAN_kimi_and_vibe_on_native_linux_E2.md` story S0; scenario S-N20; DN10)
 
 Node tests only (`node --test scripts/lib/*.test.mjs scripts/native/*.test.mjs`, which the Linux `build-test` job runs as *Probe script tests*); nothing here runs `kimi`, `vibe` or Python, opens a credential or touches WSL.
-Each case was watched RED against stubs that compile and answer the wrong value, then GREEN, then broken on purpose (break-its B1–B7 of the plan's S0 status) and restored byte-identical. 344 → 360 tests on Windows (303 pass, 57 skipped by name).
+Each case was watched RED against stubs that compile and answer the wrong value, then GREEN, then broken on purpose (break-its B1–B7 of the plan's S0 status) and restored byte-identical. 344 → 399 tests on Windows (342 pass, 57 skipped by name; 39 of the new ones are `cli-args.test.mjs`, last row).
 
 | Test (file) | What it pins | RED (observed) and break-it |
 |---|---|---|
@@ -5087,6 +5087,7 @@ Each case was watched RED against stubs that compile and answer the wrong value,
 | `isNativeLinuxHost` | `7.0.0-30-generic` → true; `microsoft-standard-WSL2`, an unread banner, `win32`, `darwin` → false (banners via the real `readBanner`) | B2: *microsoft-standard-WSL2 is not a native host* |
 | `builtEnv` option / `NATIVE_LINUX_BUILT` | the option adds exactly `NATIVE_LINUX_BUILT`; the shell's value is not on the allow-list; `KEYRING_FAIL_BACKEND` is the same spelling; `keyringRoadOf` reads `closed`/`open` | B3 |
 | N-V0 `--vibe-python` — `host-facts.test.mjs` (3 cases) | `deps.vibePython` names the interpreter every Python question goes to (default unchanged); `runsOnNativeLinux` over an injected file system (native / WSL2 / unread / win32); the probe accepts `--vibe-python` and refuses an unsafe value | B4, B6 |
+| the shared argument parser — `scripts/lib/cli-args.test.mjs` (39 tests) | every value-taking flag of the manifest script, the Vibe probe and the host probe, with no value / a `--flag` / an empty string as its value, is a usage error naming the flag; unknown flag, stray word, repeat refused; `manifestPlan(['--unstage'])` is `usage`, never `measure`; a source guard that no script keeps a private `argv.indexOf` lookup | stub with the old fall-through: *--unstage with no value planned "measure" - that is the fall-through that started Vibe*; C1 (check removed), C2 (manifest back on `indexOf`) |
 
 Not run here: the Linux CI job's reading of the same files (dispatched on the branch).
 

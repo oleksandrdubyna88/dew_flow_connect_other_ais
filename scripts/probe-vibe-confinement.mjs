@@ -63,16 +63,21 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdir
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative } from 'node:path';
 import { resolved } from '../.github/scripts/lib/resolved.mjs';
+import { FLAG_SPECS, parseFlags } from './lib/cli-args.mjs';
 import { runsOnNativeLinux } from './lib/host-facts.mjs';
 import {
   NATIVE_LINUX_BUILT, builtEnv as builtEnvFor, dirLink, files, fwd, armFilterOf, armsCellsError, armWanted, homeListing, keyringArm, keyringRoadOf, keyringSetup, linkSignIn, minimalEnv, personsVibeHome, pythonCommand, run, vibeArgs, vibePython,
 } from './lib/vibe.mjs';
 
 const argv = process.argv.slice(2);
-const flag = (name, fallback) => {
-  const i = argv.indexOf(name);
-  return i >= 0 && i + 1 < argv.length ? argv[i + 1] : fallback;
-};
+// A flag that takes a value and gets none (or another --flag) is a usage error (lib/cli-args.mjs), never "flag not given".
+const parsedArgs = parseFlags(argv, FLAG_SPECS.vibeProbe);
+if (!parsedArgs.ok) {
+  console.error(`usage: probe-vibe-confinement.mjs [--vibe <exe>] [--scratch <dir>] [--repeats N] [--cli python|rust|inherit] [--cells <list>] [--arms <list>] | --reparse <scratch>
+${parsedArgs.error}`);
+  process.exit(65);
+}
+const flag = (name, fallback) => parsedArgs.values[name] ?? fallback;
 const ALL_CELLS = ['M-V1', 'M-V2', 'M-V3', 'M-V3b', 'M-V4', 'M-V5', 'M-V6', 'M-V7', 'M-V8', 'M-V9', 'M-V10', 'M-V11', 'M-V12', 'M-V13', 'M-V14', 'M-V16'];
 const reparse = flag('--reparse', '');
 const exe = flag('--vibe', '') || (reparse ? '' : resolved('vibe'));

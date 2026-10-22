@@ -555,10 +555,10 @@ slice).
 
 ### S0 — status: built 2026-10-22 on `docs/native-linux-e2` (not merged; the Opus review and the Linux CI job are open)
 
-Built as the spec above, test-first, with the deviations below. Nothing paid ran and no CLI was started by the tests: the whole story is `node --test`
-over cut-out functions and injected file systems. `node --test scripts/lib/*.test.mjs scripts/native/*.test.mjs` on Windows: **360 tests, 303 pass,
+Built as the spec above, test-first, with the deviations below. The tests start no CLI and nothing paid ran in them (one accidental manual run is recorded below): the whole story is `node --test`
+over cut-out functions and injected file systems. `node --test scripts/lib/*.test.mjs scripts/native/*.test.mjs` on Windows: **399 tests, 342 pass,
 0 fail, 57 skipped** (the bash/`/proc`/`setsid` cases skip by name, saying they run on the Linux CI job); before the story it was 344 / 287 / 0 / 57,
-so the story adds 16 tests (12 in `vibe.test.mjs`, 4 in `host-facts.test.mjs`), all green on Windows. The Linux CI job (*Probe script tests*) is dispatched
+so the story adds 55 tests (12 in `vibe.test.mjs`, 4 in `host-facts.test.mjs`, 39 in the new `cli-args.test.mjs` of the incident below), all green on Windows. The Linux CI job (*Probe script tests*) is dispatched
 on the branch; its verdict is the story's remaining half of "Done when".
 
 **What was built, where.**
@@ -621,6 +621,20 @@ is the same state).
 | B5 | M-V7's setup stops handing `dropsKeyring` over | the wiring guard |
 | B6 | `--vibe-python` removed from `FLAGS` | the probe-accepts-the-flag case |
 | B7 | the manifest drops the option | `the manifest's built environment no longer takes the native Linux option — N-V4 would measure a launch E2 does not ship` |
+
+**Incident and fix (2026-10-22): a value-taking flag with no value started Vibe.** While smoke-testing S0 the builder ran `node scripts/vibe-home-manifest.mjs --unstage` (no platform) to see that the
+script still loaded. The script read `flag('--unstage', '')` as `''`, took that as "the flag was not given", skipped the unstage branch and fell through to `measure()`: it made three `vibe --version`
+launches and one tiny model turn (about 7 000 input tokens on the Mistral subscription; Windows, the Credential Manager sign-in), all on the script's own scratch homes under the temp
+folder, which the builder then removed. `~/.vibe` and the repository were untouched (no `--write`, `git status` showed only the builder's own edits) and no Vibe process of the builder's was left running.
+The defect was the script's, not the invocation's: all three scripts (`vibe-home-manifest.mjs`, `probe-vibe-confinement.mjs`, `probe-native-linux-host.mjs`) read a value-taking flag with no value, or with another
+`--flag` as its value, as an absent flag (the host probe accepted `--series --kimi`, since `--kimi` matches its safe pattern), and none refused an unknown flag such as `--help`. The fix: one pure parser,
+`scripts/lib/cli-args.mjs` (`parseFlags`, `FLAG_SPECS` with the arity audit, `manifestPlan`), which the three scripts now call first — a value-taking flag needs exactly one non-empty value that is not a `--flag`
+(and, for the host probe, one that matches its safe pattern), and an unknown flag, a stray word or a repeated flag is refused too; a refusal names the flag and exits 65 before anything is read or launched.
+`cli-args.test.mjs` (39 tests) walks every value-taking flag of every script (manifest `--vibe --scratch --from --unstage`; Vibe probe `--vibe --scratch --repeats --cells --cli --arms --reparse`; host probe
+`--series --scratch --kimi --coai-mcp --vibe-python`), once with no value and once with a `--flag` or an empty string as its value, plus `manifestPlan(['--unstage'])`. RED (stub keeping the old fall-through,
+37 of 38 failing): `--unstage with no value planned "measure" - that is the fall-through that started Vibe`, `--unstage with no value was accepted`, `--unstage took "--write" as its value`. Break-its, restored byte-identical:
+C1 (the missing-value check removed from the parser) — the same cases red; C2 (the manifest script back on a private `argv.indexOf` lookup) — `vibe-home-manifest.mjs still has a private argv.indexOf flag lookup - the fall-through that started Vibe`.
+The tests exercise the pure parser and source text only; none of the three scripts is started by them (except the pre-existing host-probe cases of `host-facts.test.mjs`, which stop at the usage or platform refusal off Linux).
 
 **Done when, as it stands.** S-N20 and the `isNativeLinuxHost` cases red then green on Windows: yes. Green on the Linux CI job: dispatched, not yet read here. B1–B3 both ways: yes. Opus review: open.
 Merged before S1's archive: open (the branch is `docs/native-linux-e2`; no PR was made by this story).

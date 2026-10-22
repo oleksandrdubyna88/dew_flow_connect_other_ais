@@ -45,16 +45,21 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolved } from '../.github/scripts/lib/resolved.mjs';
 import { runsOnNativeLinux } from './lib/host-facts.mjs';
+import { manifestPlan } from './lib/cli-args.mjs';
 import { builtEnv as builtEnvFor, classOf as classOfIn, deepestChild, linkSignIn, personsVibeHome, run, vibeArgs } from './lib/vibe.mjs';
 import { inventoryOf, unstaged, withEntry, withoutSignInLink } from './lib/vibe-manifest.mjs';
 
-const argv = process.argv.slice(2);
-const flag = (name, fallback) => {
-  const i = argv.indexOf(name);
-  return i >= 0 && i + 1 < argv.length ? argv[i + 1] : fallback;
-};
-const write = argv.includes('--write');
-const stage = argv.includes('--stage');
+// A flag that takes a value and gets none (or another --flag) is a USAGE error, decided by lib/cli-args.mjs before anything is read or launched. It used to be read as
+// "flag not given": `--unstage` alone fell through to measure() and started Vibe on a paid turn.
+const plan = manifestPlan(process.argv.slice(2));
+if (plan.mode === 'usage') {
+  console.error(`usage: vibe-home-manifest.mjs [--vibe <exe>] [--scratch <dir>] [--write] | --from <scratch> [--write] | --unstage <platform>
+${plan.error}`);
+  process.exit(65);
+}
+const flag = (name, fallback) => plan.values[name] ?? fallback;
+const write = plan.flags.includes('--write');
+const stage = plan.flags.includes('--stage');
 const unstage = flag('--unstage', '');
 const from = flag('--from', '');
 
