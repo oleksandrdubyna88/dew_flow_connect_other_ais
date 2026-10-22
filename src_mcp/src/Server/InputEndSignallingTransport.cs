@@ -36,6 +36,8 @@ internal sealed class InputEndSignallingTransport : ITransport
     private readonly Channel<JsonRpcMessage> _messages = Channel.CreateBounded<JsonRpcMessage>(
         new BoundedChannelOptions(Capacity) { FullMode = BoundedChannelFullMode.Wait, SingleReader = true, SingleWriter = true });
     private readonly Task _pump;
+    // The first disposal's outcome; non-null once disposal has started. See DisposeAsync.
+    private TaskCompletionSource? _disposal;
 
     public InputEndSignallingTransport(ITransport inner, Func<Task> onInputEnded, Serilog.ILogger? log = null)
     {
@@ -54,13 +56,42 @@ internal sealed class InputEndSignallingTransport : ITransport
     public Task SendMessageAsync(JsonRpcMessage message, CancellationToken cancellationToken = default) =>
         _inner.SendMessageAsync(message, cancellationToken);
 
-    public async ValueTask DisposeAsync()
+    /// <summary>
+    /// Disposes once, however many callers and however they overlap: a stop registration, a failed-start continuation and <c>await using</c>
+    /// can all reach here. The first caller runs the cleanup; every other caller — later or concurrent, even one re-entered from a callback the
+    /// cleanup itself fires — awaits that same cleanup's outcome instead of running its own (a second run would reach a disposed token source).
+    /// </summary>
+    public ValueTask DisposeAsync()
     {
-        // A pump parked on a full buffer has no reader left to wait for: release it before waiting on it.
-        await _disposing.CancelAsync();
-        await _inner.DisposeAsync();
-        await _pump;
-        _disposing.Dispose();
+        var mine = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var first = Interlocked.CompareExchange(ref _disposal, mine, null);
+
+        if (first is not null)
+        {
+            return new ValueTask(first.Task);
+        }
+
+        _ = RunDisposalAsync(mine);
+
+        return new ValueTask(mine.Task);
+    }
+
+    /// <summary>The one cleanup. Never throws: its outcome — success or the failure — is the task every caller awaits.</summary>
+    private async Task RunDisposalAsync(TaskCompletionSource done)
+    {
+        try
+        {
+            // A pump parked on a full buffer has no reader left to wait for: release it before waiting on it.
+            await _disposing.CancelAsync();
+            await _inner.DisposeAsync();
+            await _pump;
+            _disposing.Dispose();
+            done.SetResult();
+        }
+        catch (Exception e)
+        {
+            done.SetException(e);
+        }
     }
 
     private async Task PumpAsync()

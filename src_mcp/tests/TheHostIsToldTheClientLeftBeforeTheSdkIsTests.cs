@@ -24,11 +24,17 @@ public sealed class TheHostIsToldTheClientLeftBeforeTheSdkIsTests
 
         public Task SendMessageAsync(JsonRpcMessage message, CancellationToken cancellationToken = default) => Task.CompletedTask;
 
-        public ValueTask DisposeAsync()
-        {
-            Input.Writer.TryComplete();
+        /// <summary>How many times the transport's cleanup reached this inner transport.</summary>
+        public int Disposals => _disposals;
 
-            return ValueTask.CompletedTask;
+        private int _disposals;
+
+        public async ValueTask DisposeAsync()
+        {
+            Interlocked.Increment(ref _disposals);
+            // Slow on purpose: a second, overlapping disposal has time to run its own cleanup while this one is still going.
+            await Task.Delay(200);
+            Input.Writer.TryComplete();
         }
     }
 
@@ -179,5 +185,34 @@ public sealed class TheHostIsToldTheClientLeftBeforeTheSdkIsTests
             await foreach (var _ in transport.MessageReader.ReadAllAsync(TestContext.Current.CancellationToken)) { }
         };
         await read.Should().NotThrowAsync("the reader still completes, whatever ended the pump");
+    }
+
+    [Fact]
+    public async Task DisposingTwice_IsSafe_AndCleansUpOnce()
+    {
+        var inner = new Stdin();
+        var transport = new InputEndSignallingTransport(inner, () => Task.CompletedTask);
+        await Task.Delay(100, TestContext.Current.CancellationToken);
+
+        await transport.DisposeAsync();
+        var again = async () => await transport.DisposeAsync();
+
+        await again.Should().NotThrowAsync("a stop registration and `await using` can both dispose the same transport");
+        inner.Disposals.Should().Be(1, "the second disposal finds the cleanup already done");
+    }
+
+    [Fact]
+    public async Task TwoConcurrentDisposals_RunTheCleanupOnce()
+    {
+        var inner = new Stdin();
+        var transport = new InputEndSignallingTransport(inner, () => Task.CompletedTask);
+        await Task.Delay(100, TestContext.Current.CancellationToken);
+
+        var first = transport.DisposeAsync().AsTask();
+        var second = transport.DisposeAsync().AsTask();
+        var both = async () => await Task.WhenAll(first, second);
+
+        await both.Should().NotThrowAsync("overlapping disposals share the first one's cleanup");
+        inner.Disposals.Should().Be(1, "only the first caller runs the cleanup; the other waits for it");
     }
 }

@@ -101,12 +101,15 @@ test('AProbeLine_WhoseVersionWasNeverAsked_HasNoVersion — absent, never an emp
 
 test('TheRecordingRun_WritesTheVersionItWasGiven_AndParsesBackThroughTheUsageReader', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-probe-ledger-'));
-  const run = recordingRun(async () => ({ code: 0, output: ANSWERED }), probeUsagePath(dir), () => NOW, '2.1.5');
+  try {
+    const run = recordingRun(async () => ({ code: 0, output: ANSWERED }), probeUsagePath(dir), () => NOW, '2.1.5');
 
-  await run(['--model', 'haiku', '-p', 'hi', '--output-format', 'json']);
-  await flushLedgers();
+    await run(['--model', 'haiku', '-p', 'hi', '--output-format', 'json']);
+    await flushLedgers();
 
-  const [written] = parseUsage(fs.readFileSync(path.join(dir, PROBE_USAGE_FILE), 'utf8'));
-  assert.deepEqual([written?.cli, written?.cliVersion], ['claude', '2.1.5']);
-  fs.rmSync(dir, { recursive: true, force: true });
+    const [written] = parseUsage(fs.readFileSync(path.join(dir, PROBE_USAGE_FILE), 'utf8'));
+    assert.deepEqual([written?.cli, written?.cliVersion], ['claude', '2.1.5']);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
