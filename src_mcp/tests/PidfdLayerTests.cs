@@ -469,12 +469,14 @@ public sealed class PidfdLayerTests
     }
 
     /// <summary>S-K22's half this layer owns: an exited process its parent has not reaped — a zombie — is Gone, never a survivor.</summary>
-    [Fact]
-    public async Task AZombie_IsGone_NotSignalled()
+    [Theory]
+    [InlineData("/bin/sh", "sleep 600 & echo $!; exec sleep 600")]
+    [InlineData("/bin/bash", "sleep 600 & echo $!; sleep 2; exec sleep 600")]
+    public async Task AZombie_IsGone_NotSignalled(string shell, string script)
     {
-        Assert.SkipUnless(OperatingSystem.IsLinux(), "zombies and pidfd are Linux's");
+        Assert.SkipUnless(OperatingSystem.IsLinux() && File.Exists(shell), "zombies and pidfd are Linux's");
         using var road = PidfdLayer.Using(wrapperPresent: false);
-        var info = new ProcessStartInfo("/bin/sh") { UseShellExecute = false, RedirectStandardOutput = true, ArgumentList = { "-c", "sleep 600 & echo $!; exec sleep 600" } };
+        var info = new ProcessStartInfo(shell) { UseShellExecute = false, RedirectStandardOutput = true, ArgumentList = { "-c", script } };
         using var parent = Process.Start(info)!;
         try
         {
