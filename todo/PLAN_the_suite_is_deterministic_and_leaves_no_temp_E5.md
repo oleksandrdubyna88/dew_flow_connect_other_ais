@@ -936,6 +936,50 @@ message. Fable: none (no cornerstone).
   no `Task.Delay` or poll left in the test; the PR says the new assertion is stronger (three DISTINCT beats observed at the
   write, not inferred from a poll).
 
+### S5 — status: built 2026-10-22 (Sonnet, finished by Opus after a rate limit; the spec above governed, deviations listed)
+
+**Built.** `src_mcp/tests/QuestionFanOutTests.cs` only; no product line changed (the heartbeat loop, `QuestionFanOut.cs:302-318`
+since E3 S25, is the subject). `TheHeartbeatIsRewritten_WhileARowRuns_OnTheConfiguredInterval` no longer holds the row for
+`Wait = 1.5 s` while polling the store every 40 ms. A private `DistinctBeats` is the store's `projected` callback
+(`QuestionConsultStore.cs:25`, invoked on every write at `:58` and `:126`): it collects the distinct `HeartbeatUtc` values of the
+one record while it says `consulting`, and opens the row's gate on the third. The scripted claude row awaits that gate.
+`SettledOrFailAsync` (E3 S25's 30 s guard in the same file) gained an overload whose sentence is read after the guard fires, so a
+failure says how many beats were seen. **Why the new assertion is stronger:** the old one inferred the rewrites from what a 40 ms
+poll happened to catch inside a fixed 1.5 s — how many timer ticks the scheduler granted; the new one sees three DISTINCT beats
+at the write itself, and the row stays running until it has, so no duration is part of the claim. No `Task.Delay` and no poll
+left in the test. Test count unchanged (the class: 32 before, 32 after; one test redesigned, none added).
+
+**RED by break-it (the product is right today — lesson 5).** Green on today's product (the class, 32 of 32). **B-E5-15**
+(`HeartbeatAsync` returning before its loop): `the row was never released: 1 distinct heartbeat(s) seen in 30 s, 3 expected`
+after 32 s 457 ms — the plan's sentence verbatim. Restored by writing the file back, rebuilt, green. **B-E5-16** (the gate
+opened on the first beat, `wanted: 1`): `Expected seen.Count to be greater than or equal to 3 because a row that stayed running
+until three DISTINCT heartbeats were written was seen with at least three - the first write and two rewrites, but found 2.`
+(the opening write and one beat that landed before the row settled). Restored by writing, rebuilt, green.
+
+**The loop (§6): the one test, 20 runs, each its own process.** Load: one whole `src_mcp` run from another story's worktree
+(S4) beside, plus other sessions' class runs (S4's `KimiCredentialsLockTests`, another session's `AcpClientTests`; during the
+before-loop also S6's class and a native-Linux session's classes) — not the clean single-run window of §6, which could not be
+held without stopping sibling sessions. **Before** (the old test, rebuilt from `docs/suite-e5-stories`): **0 of 20** (7.4–22.0 s
+per process). **After: 0 of 20** (4.2–10.1 s). Neither loop reproduced CI's `found 1` on this machine; the CI failures (runs
+38906020752, 39253800395) are the evidence, the new claim carries no duration a loaded scheduler could cut, and the 20-run CI
+watch decides.
+
+**Deviations.** (1) `ScriptedLauncher.cs` is unchanged — no `Gate` on `ScriptedAnswer`. The script is already async
+(`Func<ScriptedLaunch, Task<ScriptedAnswer?>>`), so the row awaits the gate inside it, exactly as E3 S25's
+`RunWithRefusedBeatsAsync` in the same file already does; a `Gate` field would be a second way to do one thing (the reuse
+rule, step 1). (2) The row budget went 20 s → 60 s: a changed test INPUT, not a longer wait — the green run never approaches
+it, and at 20 s a missing beat would end the row `timed_out` before the 30 s guard could name the missing beats (E3 S25's
+tests use the same 60 s for the same reason). (3) `SettledOrFailAsync`'s lazy-sentence overload (above). (4) The load window
+(above).
+
+**Whole suite (Windows, Debug, `low-priority.mjs`, 49 min 23 s, with another worktree's whole run and sibling class runs alive on
+the machine):** 13,559 total, 13,437 passed, 121 skipped, 1 failed —
+`APartitionOfAHugeRangeIsLinearTests.TwentyThousandUnfilteredAndFifteenThousandFilteredRecords_ArePartitionedInUnderASecond`
+(3 s 382 ms: `Expected watch.Elapsed to be less than 1s because matching is a lookup, not a scan of the filtered list, but found
+1s, 953ms and 347.0µs.`). It touches no file of this story and is green alone straight after (its class, 2 of 2, 3.4 s). A
+suite-only failure of a loaded run, filed here, not edited: a wall bound on a CPU claim, a candidate for the CPU-measured shape
+S7 gives C9.
+
 ### S6 — C15, the follow-up launch's timeout (group A)
 
 - **Goal.** §3.9 (a) and (b): the recorded timeout asserted; the smoke test kept with its exposure stated.
