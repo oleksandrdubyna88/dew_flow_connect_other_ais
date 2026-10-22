@@ -1326,6 +1326,8 @@ stdout, stderr, export and home).
 > node itself started under `env -i` with the MinimalUnix names only. `~/.vibe` was LISTED (name, type, size, mode, mtime) and its
 > `.env` `stat`-ed (type, size, mode, mtime) before and after each phase; the `.env` was never opened, read, copied or printed.
 > Nothing was deleted. `kimi` was not started. Paths write `~` for the home folder.
+>
+> *Since 2026-10-22 (E2.S0, `todo/PLAN_kimi_and_vibe_on_native_linux_E2.md`) the probe's environments on a NATIVE Linux host differ from the ones this section ran: every child carries `PYTHON_KEYRING_BACKEND=keyring.backends.fail.Keyring` except arm a3c, and the header and rows say `keyringRoad: closed | open`. This section's cells ran WSL2 and are unchanged.*
 
 ### 31.0 Predictions (written before any run)
 

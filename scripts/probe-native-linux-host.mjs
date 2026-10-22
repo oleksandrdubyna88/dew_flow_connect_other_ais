@@ -18,7 +18,7 @@
 // never runs `kimi login`, `vibe --setup` or a Vibe/Kimi turn, never prints another process's environment (it reads the NAMES of the VS
 // Code server's variables to answer one yes/no, and its PATH value from the file make-series.sh wrote), never ends a process.
 //
-//   node scripts/probe-native-linux-host.mjs [--series <folder>] [--scratch <dir>] [--kimi <path>] [--coai-mcp <path>]
+//   node scripts/probe-native-linux-host.mjs [--series <folder>] [--scratch <dir>] [--kimi <path>] [--coai-mcp <path>] [--vibe-python <path>]
 //
 // The pure core is lib/host-facts.mjs (this file runs on import, so a test cannot import it — hence the split).
 import { spawnSync } from 'node:child_process';
@@ -32,7 +32,7 @@ import { linuxProcesses, waitForNoOtherKimi } from './lib/proc.mjs';
 import { minimalEnv } from './lib/vibe.mjs';
 
 const EXIT = { ok: 0, badRequest: 65, unavailable: 69 };
-const FLAGS = ['--series', '--scratch', '--kimi', '--coai-mcp'];
+const FLAGS = ['--series', '--scratch', '--kimi', '--coai-mcp', '--vibe-python'];
 const SAFE = /^[A-Za-z0-9_.,=/:@-]+$/u;
 
 /** `--flag value` pairs only; any other word, a repeated or unknown flag, or a value off the safe pattern is a bad request. */
@@ -99,7 +99,7 @@ async function main() {
     const facts = collectHostFacts({
       fsx, run, env: process.env, uid: process.getuid(), home, platform: { node: process.version, glibc: glibc() }, listing: processes,
       serverEnvNames: () => serverEnvNames(home), series: args.values['--series'] ?? '', scratch, hash: sha256, now: () => new Date(),
-      coaiMcp: args.values['--coai-mcp'] ?? '', kimi, kimiClear, ownedRoot, progress,
+      coaiMcp: args.values['--coai-mcp'] ?? '', vibePython: args.values['--vibe-python'] ?? '', kimi, kimiClear, ownedRoot, progress,
     });
     const text = `${JSON.stringify(facts, null, 2)}\n`;
     if (!own) writeFileSync(join(scratch, 'host-facts.json'), text);

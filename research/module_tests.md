@@ -5070,6 +5070,26 @@ Each scenario was watched RED against a stub that compiles and answers the wrong
 
 Not run here, by the story's own terms: the S-N17 live check (arms a3 and a3c, once each, in WSL, free), and the one paid WSL2 Kimi turn (`probe-kimi-tree-hold.mjs --arms normal --repeats 1`) — the lead's.
 
+## E2.S0 — every native-Linux Vibe probe child carries the closed road (2026-10-22, `todo/PLAN_kimi_and_vibe_on_native_linux_E2.md` story S0; scenario S-N20; DN10)
+
+Node tests only (`node --test scripts/lib/*.test.mjs scripts/native/*.test.mjs`, which the Linux `build-test` job runs as *Probe script tests*); nothing here runs `kimi`, `vibe` or Python, opens a credential or touches WSL.
+Each case was watched RED against stubs that compile and answer the wrong value, then GREEN, then broken on purpose (break-its B1–B7 of the plan's S0 status) and restored byte-identical. 344 → 360 tests on Windows (303 pass, 57 skipped by name).
+
+| Test (file) | What it pins | RED (observed) and break-it |
+|---|---|---|
+| S-N20 native — `vibe.test.mjs`: `on a native Linux host an M-V6-shaped child carries the forced keyring backend` | `childEnvFor` with `nativeLinux: true` holds `PYTHON_KEYRING_BACKEND=keyring.backends.fail.Keyring` and still no shell variable | *M-V6 on a native Linux host carries no PYTHON_KEYRING_BACKEND — the signed-in cells would measure a launch E2 does not ship (DN10)*; B3 (child) |
+| S-N20 WSL2 / win32 — `on WSL2 (nativeLinux false) …`, `on win32 nothing changes` | the same spec holds no such name when `nativeLinux` is false or absent; the Windows environment is the whole `source` as before | B3 (child): *WSL2 carried PYTHON_KEYRING_BACKEND — a measured launch was changed* |
+| S-N20 a3c / a3 — `on a native host arm a3c has the name ABSENT from the final object, a3 carries the fail value` | the name is deleted (not `undefined`) for a3c, whose fake `HOME` stays; a3 carries the fail value | B1: *a3c on a native Linux host still carried PYTHON_KEYRING_BACKEND — its marker could never be written, so a3 would prove nothing* |
+| S-N20 replaced environment | the built environment / M-V12 / M-V16 children carry the road on a native host, and `dropsKeyring` removes it there too | *a replaced environment on a native Linux host carries no PYTHON_KEYRING_BACKEND*; B1b |
+| S-N20 inherited case | the probe's own shell holding `PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring`: a3c lacks the name, a3 and M-V6 carry the FORCED value, WSL2 carries nothing (a3 on WSL2: its own forced value) | B3b (`{ ...source }` base): *WSL2: a child inherited PYTHON_KEYRING_BACKEND from the probe's own shell*; with B1: *a3c inherited PYTHON_KEYRING_BACKEND from the probe's own shell — the child base is not the allow-list* |
+| `only arm a3c drops the keyring variable` | `keyringArm(...).dropsKeyring` is true for a3c alone (and false on Windows) | actual `[]`, expected `['a3c']` |
+| two wiring guards (source text) | M-V7's setup hands `keyringSetup`'s `dropsKeyring` to the spec; the manifest builds with `{ nativeLinux: NATIVE_LINUX }` and records `keyringRoad` (both scripts run on import and cannot be imported) | B5, B7 |
+| `isNativeLinuxHost` | `7.0.0-30-generic` → true; `microsoft-standard-WSL2`, an unread banner, `win32`, `darwin` → false (banners via the real `readBanner`) | B2: *microsoft-standard-WSL2 is not a native host* |
+| `builtEnv` option / `NATIVE_LINUX_BUILT` | the option adds exactly `NATIVE_LINUX_BUILT`; the shell's value is not on the allow-list; `KEYRING_FAIL_BACKEND` is the same spelling; `keyringRoadOf` reads `closed`/`open` | B3 |
+| N-V0 `--vibe-python` — `host-facts.test.mjs` (3 cases) | `deps.vibePython` names the interpreter every Python question goes to (default unchanged); `runsOnNativeLinux` over an injected file system (native / WSL2 / unread / win32); the probe accepts `--vibe-python` and refuses an unsafe value | B4, B6 |
+
+Not run here: the Linux CI job's reading of the same files (dispatched on the branch).
+
 ## The suite is deterministic — E3 S4 (C18's product side, 2026-10-20)
 
 Source: `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp.md`, epic E3, story S4 (scenarios S24, S25, S27; the lead's decisions, the E3 plan round `ac57ee60` and

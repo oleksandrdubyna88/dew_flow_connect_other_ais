@@ -4130,3 +4130,22 @@ Scripts only (`scripts/`); no product code changed and no answer of any runner c
   (`ownedRefusal`). M-K12's `~/.agents` canary still lives in the person's real `~/.agents`, written and removed by exact paths only.
 
 Tests: `proc.test.mjs`, `kimi.test.mjs`, `kimi-home.test.mjs`, `kimi-arms.test.mjs`, `vibe.test.mjs`, `kimi-schedule.test.mjs` — listed in [module_tests.md](module_tests.md) (section *E1.S3*). No paid or live run was made.
+
+## Every native-Linux Vibe probe child carries the closed keyring road — E2.S0 of the native-Linux plan (2026-10-22, `todo/PLAN_kimi_and_vibe_on_native_linux_E2.md`; DN10)
+
+Scripts only (`scripts/`); no product code changed and no answer of any runner changed. E1.S3 put the forced backend into M-V7's arms a, a2 and a3 only; the signed-in cells the native-host series
+measures (N-V2 M-V6/M-V1, N-V3 M-V5, N-V4 the manifest) were still launched with the plain four-name environment, i.e. a launch the product will NOT ship on a native host. S0 closes that:
+
+- **One definition, one reading.** `scripts/lib/vibe.mjs` holds `NATIVE_LINUX_BUILT` (`{ PYTHON_KEYRING_BACKEND: 'keyring.backends.fail.Keyring' }`; `KEYRING_FAIL_BACKEND` is derived from it) and the pure
+  `isNativeLinuxHost({ platform, banner })` — Linux AND the `/proc/version` banner read and naming neither Microsoft nor WSL, the product's `HostKind` rule. `scripts/lib/host-facts.mjs`'s
+  `runsOnNativeLinux()` reads the banner (`readBanner`) and applies it; the Vibe probe and the manifest script both call it once at start-up. `builtEnv(home, model, platform, env, { nativeLinux })`
+  adds `NATIVE_LINUX_BUILT` exactly as `VibeLaunch.Built` will on `HostKind.Linux`.
+- **The probe.** `childEnvFor(spec, { cli, platform, env, nativeLinux })` (cut out of the probe by `vibe.test.mjs`, so the host reading is an option, not an import) adds the road after the base and before
+  `spec.env` — on the `replaceEnv` path too — and deletes `PYTHON_KEYRING_BACKEND` from the final object when `spec.dropsKeyring`. Only arm **a3c** has `dropsKeyring` (its purpose is to reach a keyring:
+  its marker must appear, or a3 proved nothing). The base is the `minimalEnv` allow-list, never a spread of the probe's own shell, so a `PYTHON_KEYRING_BACKEND` in that shell cannot reach any child (the
+  inherited case of S-N20). Every launch's `meta`, every row and `results.json` say `keyringRoad: closed | open`, and the header line says it before the first launch.
+- **WSL2 and Windows are unchanged**: nothing is added there (arms a, a2, a3 keep the forced value E1 gave them).
+- **The manifest script** builds its launches with the same option and records `keyringRoad` in `steps.json` (N-V4's launches are the signed-in ones under the closed road).
+- **N-V0** takes `--vibe-python <path>` (`probe-native-linux-host.mjs`, `deps.vibePython`) for a host whose Vibe tool Python is not where `vibePython` looks; its forced-backend reading uses the same `builtEnv` option.
+
+Tests: `vibe.test.mjs` (S-N20, `isNativeLinuxHost`, `builtEnv`, `keyringRoadOf`, two wiring guards) and `host-facts.test.mjs` — listed in [module_tests.md](module_tests.md) (section *E2.S0*). No paid run.

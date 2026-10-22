@@ -10,7 +10,7 @@ import { dirname, join } from 'node:path';
 import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { KEYRING_FAIL_BACKEND as FAIL_BACKEND } from './vibe.mjs';
-import { collectHostFacts, hostFactsMode, keyringSession, mountTypeOf, pathEntries, PY_DISTRIBUTIONS, PY_KEYRING_CLASS, readBanner, redactSlot, resolveTool, signInRecord } from './host-facts.mjs';
+import { collectHostFacts, hostFactsMode, keyringSession, mountTypeOf, pathEntries, PY_DISTRIBUTIONS, PY_KEYRING_CLASS, readBanner, redactSlot, resolveTool, runsOnNativeLinux, signInRecord } from './host-facts.mjs';
 
 const PROBE = join(dirname(fileURLToPath(import.meta.url)), '..', 'probe-native-linux-host.mjs');
 const LINUX = process.platform === 'linux';
@@ -266,6 +266,40 @@ test("N-V0 is honest when Vibe's Python is absent: the fact is \"no python\", an
   assert.equal(run.calls.length, 0);
   assert.equal(facts.v0.python.found, false);
   assert.equal(facts.v0.keyringBackend.status, 'no python');
+});
+
+// E2.S0 (todo/PLAN_kimi_and_vibe_on_native_linux_E2.md): `--vibe-python <path>` names the interpreter N-V0 asks when Vibe's tool Python is not where
+// vibePython looks; and the one reading of "is THIS a native Linux host" the Vibe probe and the manifest script share.
+test("N-V0 asks the interpreter named by deps.vibePython (--vibe-python) when one is given, and vibePython's own location otherwise", () => {
+  const named = '/opt/vibe/bin/python';
+  const fsx = fakeFs(world({ [named]: { content: '', mode: 0o755 } }));
+  const run = fakeRunner((file, args) => (args[1] === PY_DISTRIBUTIONS ? okRun('[]') : okRun('keyring.backends.fail.Keyring\n')));
+  const facts = collectHostFacts(baseDeps(fsx, { run, vibePython: named }));
+  assert.equal(facts.v0.python.path, named, 'the facts name the interpreter they asked');
+  assert.equal(facts.v0.python.found, true);
+  assert.deepEqual([...new Set(run.calls.map((c) => c.file))], [named], 'every Python question went to the named interpreter');
+  const without = collectHostFacts(baseDeps(fakeFs(world()), { run: fakeRunner() }));
+  assert.equal(without.v0.python.path, `${HOME}/.local/share/uv/tools/mistral-vibe/bin/python`, 'default unchanged');
+});
+
+test('N-V0 forces the backend through the product-shaped option, not by spelling the variable itself', () => {
+  const fsx = fakeFs(world({ [`${HOME}/.local/share/uv/tools/mistral-vibe/bin/python`]: { content: '', mode: 0o755 } }));
+  const run = fakeRunner((file, args, options) => (args[1] === PY_DISTRIBUTIONS ? okRun('[]') : okRun(options.env.PYTHON_KEYRING_BACKEND ? `${FAIL_BACKEND}\n` : 'x.Y\n')));
+  const facts = collectHostFacts(baseDeps(fsx, { run }));
+  assert.equal(facts.v0.keyringBackend.failBackendForced, true);
+});
+
+test('runsOnNativeLinux: one reading of /proc/version through the injected file system — native, WSL2 and unread', () => {
+  const read = (text) => runsOnNativeLinux({ platform: 'linux', fsx: fakeFs(text === null ? {} : { '/proc/version': { content: text } }) });
+  assert.equal(read('Linux version 7.0.0-30-generic (x)\n'), true);
+  assert.equal(read('Linux version 5.15.1-microsoft-standard-WSL2\n'), false);
+  assert.equal(read(null), false, 'an unread banner is not native');
+  assert.equal(runsOnNativeLinux({ platform: 'win32', fsx: fakeFs({ '/proc/version': { content: 'Linux version 7.0.0-30-generic' } }) }), false);
+});
+
+test('the probe accepts --vibe-python (a bad request is 65; off Linux an accepted line reaches the 69 platform refusal)', { skip: LINUX ? 'on Linux an accepted line runs the real reading — covered by the collectHostFacts case above' : false }, () => {
+  assert.equal(probe(['--vibe-python', '/opt/vibe/bin/python']).status, 69);
+  assert.equal(probe(['--vibe-python', 'a b']).status, 65);
 });
 
 /** A stand-in for kimi-home.mjs's ownedRoot over the injected file system: <root>/home, <root>/os, <root>/cache — posix, recorded. */

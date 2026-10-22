@@ -1,6 +1,6 @@
 # PLAN — E2 stories: the Vibe series on `ubuntu-claude`, and the C1 admission that a full pass switches on
 
-> Status: **plan only, nothing implemented yet, 2026-10-22 — the E2 plan round passed (coai 99e086b8, `proceed`, four findings, all
+> Status: **plan, 2026-10-22; story S0 (the probe amendment) built the same day on `docs/native-linux-e2` (its status sits under E2.S0 — not merged, review open), every other story not started — the E2 plan round passed (coai 99e086b8, `proceed`, four findings, all
 > accepted and folded the same day; the C1 risk consult 8e2480a0 answered and folded the same day; both records are at the end).**
 > Scope: the paid Vibe series on the owner's native Ubuntu host
 > `ubuntu-claude` (N-H1, N-V0, N-V1–N-V6) and its record, `research/RESULTS_vibe_confinement.md` §32; one amendment to E1's probe
@@ -552,6 +552,78 @@ job; B1–B3 both ways; Opus review has no open finding; merged BEFORE S1's arch
 **Roles.** Opus brief; Sonnet codes; Opus reviews (reading `childEnvFor` for the one deleted name and the cut-out test's `new Function`
 seam, which only sees what `minimalEnv` and the sliced source give it — `isNativeLinuxHost` must be passed in, not imported inside the
 slice).
+
+### S0 — status: built 2026-10-22 on `docs/native-linux-e2` (not merged; the Opus review and the Linux CI job are open)
+
+Built as the spec above, test-first, with the deviations below. Nothing paid ran and no CLI was started by the tests: the whole story is `node --test`
+over cut-out functions and injected file systems. `node --test scripts/lib/*.test.mjs scripts/native/*.test.mjs` on Windows: **360 tests, 303 pass,
+0 fail, 57 skipped** (the bash/`/proc`/`setsid` cases skip by name, saying they run on the Linux CI job); before the story it was 344 / 287 / 0 / 57,
+so the story adds 16 tests (12 in `vibe.test.mjs`, 4 in `host-facts.test.mjs`), all green on Windows. The Linux CI job (*Probe script tests*) is dispatched
+on the branch; its verdict is the story's remaining half of "Done when".
+
+**What was built, where.**
+
+- `scripts/lib/vibe.mjs` — `NATIVE_LINUX_BUILT` (one object literal), `KEYRING_FAIL_BACKEND` now derived from it (one spelling; `keyringArm`'s `forced` is a copy of it),
+  pure `isNativeLinuxHost({ platform, banner })`, `builtEnv(…, { nativeLinux })`, `keyringRoadOf(env)` (`closed | open`), and `dropsKeyring: true` on arm a3c alone
+  (`false` on every other arm).
+- `scripts/lib/host-facts.mjs` — `runsOnNativeLinux({ platform, fsx })`: `readBanner` + `isNativeLinuxHost`, the ONE reading the Vibe probe and the manifest script share;
+  `deps.vibePython` (the interpreter `--vibe-python` names) for N-V0; N-V0's forced reading goes through `builtEnv(…, { nativeLinux: true })` instead of re-spreading the variable.
+- `scripts/probe-vibe-confinement.mjs` — `NATIVE_LINUX` read once; `childEnvFor(spec, { cli, platform, env, nativeLinux })` adds `NATIVE_LINUX_BUILT` after the base and before
+  `spec.env` and deletes the name when `spec.dropsKeyring`; the local `builtEnv(home)` (so `versionRun` and M-V16's prime) takes the option; M-V7's setup hands `dropsKeyring`
+  to the spec; every launch's `meta` and every row carry `keyringRoad`; the header line and `results.json` say `keyringRoad: closed | open`.
+- `scripts/vibe-home-manifest.mjs` — `builtEnv` takes the option from `runsOnNativeLinux()`; `steps.json` records `keyringRoad`.
+- `scripts/probe-native-linux-host.mjs` — `--vibe-python <path>` (in `FLAGS`, so `SAFE` checks it), handed to `collectHostFacts`.
+
+**Deviations from the spec (all small, none changes a measured launch on WSL2 or Windows).**
+
+1. **The host reading lives in `host-facts.mjs`, not `vibe.mjs`.** The spec puts the pure `isNativeLinuxHost` in `vibe.mjs` (done) but both scripts also need to READ `/proc/version`;
+   `host-facts.mjs` already imports `vibe.mjs`, so the reader (`runsOnNativeLinux`) sits beside `readBanner` and `vibe.mjs` imports nothing back (no cycle, one copy of the "names Microsoft or WSL" rule).
+2. **The road is added on the `replaceEnv` path too**, not only on the base path. Every `replaceEnv` child (the built environment of M-V16, the `versionRun`, and M-V12's question-row
+   environment) is a Vibe launch the probe starts, and the plan's own sentence is "every Vibe launch the probes make"; `dropsKeyring` is honoured there as well. The `--cli inherit` behaviour of that path is unchanged.
+3. **On WSL2 arms a, a2 and a3 still carry their own forced value** — E1 measured them that way (`keyringArm`, unchanged). "WSL2 carries nothing" in S-N20's inherited case therefore holds for every child
+   that is not one of those three arms (M-V6-shaped and a3c are asserted absent; a3 is asserted to carry the arm's own forced value, never the shell's).
+4. **B3b's two spec messages cannot both fire from `{ ...source }` alone**, because the built code is immune on two further counts: the a3c child has the name deleted, and an a3/M-V6 child has the forced value
+   written AFTER the base. The mutation is still caught (its WSL2 legs and the `SECRET` leg go red); the `a3c inherited …` message fires when B3b is combined with B1 (see the break-its), and the `a3 carried the shell's …` message is the guard for a base that would let an arm's own absent value fall through to the shell's — with the arm's forced value written last it is not reachable by one mutation.
+5. **Two source guards were added** (`vibe.test.mjs`): the probe's M-V7 setup and the manifest script run on import and cannot be imported, so a text assertion pins that the setup hands `keyringSetup`'s
+   `dropsKeyring` to the spec and that the manifest builds its environment with the option and records `keyringRoad`. They are guards of wiring, not behaviour; the behaviour is in the cut-out cases.
+6. **`trustWithVibe`'s environment was left alone** (§4, *E1's open tail*): it serves M-V4, which no native cell runs.
+
+**REDs observed (before the real definitions; `isNativeLinuxHost`/`keyringRoadOf`/`runsOnNativeLinux` were stubs that compiled and answered `false`/`"open"`, `childEnvFor` ignored the option).**
+
+| Case | Failure message |
+|---|---|
+| S-N20 M-V6 on a native host | `M-V6 on a native Linux host carries no PYTHON_KEYRING_BACKEND — the signed-in cells would measure a launch E2 does not ship (DN10)` |
+| S-N20 replaced environment | `a replaced environment on a native Linux host carries no PYTHON_KEYRING_BACKEND` |
+| S-N20 inherited case | `M-V6 carried the shell's keyring.backends.null.Keyring, not the forced keyring.backends.fail.Keyring` |
+| S-N20 only a3c drops | `Expected values to be strictly deep-equal` — actual `[]`, expected `['a3c']` |
+| S-N20 wiring guard | `M-V7's setup no longer hands keyringSetup's dropsKeyring to the spec — a3c would carry the variable on a native host` |
+| `isNativeLinuxHost` | `7.0.0-30-generic is a native host` |
+| `builtEnv` option | `builtEnv(..., { nativeLinux: true }) carries no PYTHON_KEYRING_BACKEND` |
+| `keyringRoadOf` | actual `'open'`, expected `'closed'` |
+| N-V0 `--vibe-python` | `the facts name the interpreter they asked` |
+| `runsOnNativeLinux` | `Expected values to be strictly equal` (false for a native banner) |
+| the probe accepts `--vibe-python` | exit 65 where 69 was expected |
+
+The a3c message `a3c on a native Linux host still carried PYTHON_KEYRING_BACKEND — its marker could never be written, so a3 would prove nothing` is the "stub that only adds" RED; it was observed as B1 below (the drop removed from the finished code
+is the same state).
+
+**Break-its — each applied to the finished code, the named test seen red with the real symptom, the file restored byte-identical (compared), the suite green again.**
+
+| | Mutation | Red |
+|---|---|---|
+| B1 | drop the `delete` for `dropsKeyring` (base path) | `a3c on a native Linux host still carried PYTHON_KEYRING_BACKEND — its marker could never be written, so a3 would prove nothing`; and the inherited case: `a3c inherited PYTHON_KEYRING_BACKEND from the probe's own shell — the child base is not the allow-list` |
+| B1b | drop the `delete` on the `replaceEnv` path | the replaced-environment case |
+| B2 | `isNativeLinuxHost` ignores `namesWsl` | `microsoft-standard-WSL2 is not a native host` |
+| B3 | `builtEnv` spreads `NATIVE_LINUX_BUILT` unconditionally | the Linux built-environment case and the `builtEnv` option case |
+| B3 (child) | `childEnvFor` adds the road unconditionally | the WSL2 cases: `WSL2 carried PYTHON_KEYRING_BACKEND — a measured launch was changed`, `WSL2: a child inherited PYTHON_KEYRING_BACKEND …`, and the three pre-existing environment cases |
+| B3b | base is `{ ...source }` instead of `minimalEnv(platform, source)` | `SECRET reached the child`, `the shell still does not reach the child`, `WSL2: a child inherited PYTHON_KEYRING_BACKEND from the probe's own shell`; combined with B1 (and the road moved after `spec.env`) the spec's `a3c inherited PYTHON_KEYRING_BACKEND from the probe's own shell — the child base is not the allow-list` fires as well |
+| B4 | N-V0 ignores `deps.vibePython` | `the facts name the interpreter they asked` |
+| B5 | M-V7's setup stops handing `dropsKeyring` over | the wiring guard |
+| B6 | `--vibe-python` removed from `FLAGS` | the probe-accepts-the-flag case |
+| B7 | the manifest drops the option | `the manifest's built environment no longer takes the native Linux option — N-V4 would measure a launch E2 does not ship` |
+
+**Done when, as it stands.** S-N20 and the `isNativeLinuxHost` cases red then green on Windows: yes. Green on the Linux CI job: dispatched, not yet read here. B1–B3 both ways: yes. Opus review: open.
+Merged before S1's archive: open (the branch is `docs/native-linux-e2`; no PR was made by this story).
 
 ### E2.S1 — The series on `ubuntu-claude`, and RESULTS_vibe §32 (no code; the lead)
 

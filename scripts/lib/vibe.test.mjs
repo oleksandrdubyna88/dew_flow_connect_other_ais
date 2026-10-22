@@ -9,8 +9,9 @@ import { fileURLToPath } from 'node:url';
 import { after, test } from 'node:test';
 import {
   MINIMAL_UNIX, MINIMAL_WINDOWS, builtEnv, classOf, deepestChild, dirLink, files, homeListing, linkSignIn, minimalEnv, personsVibeHome,
-  KEYRING_FAIL_BACKEND, armFilterOf, armsCellsError, armWanted, keyringArm, keyringSetup, pythonCommand, removeDirLink, run, vibePython, writeProbeKeyring,
+  KEYRING_FAIL_BACKEND, NATIVE_LINUX_BUILT, armFilterOf, armsCellsError, armWanted, keyringArm, keyringRoadOf, keyringSetup, isNativeLinuxHost, pythonCommand, removeDirLink, run, vibePython, writeProbeKeyring,
 } from './vibe.mjs';
+import { readBanner } from './host-facts.mjs';
 
 const WINDOWS = process.platform === 'win32';
 const POSIX_ONLY = WINDOWS && 'a POSIX file or process semantic — it runs on the Linux CI job and in WSL';
@@ -218,7 +219,8 @@ function probeChildEnvFor() {
   const start = source.indexOf('function childEnvFor(');
   const end = source.indexOf('\n}\n', start);
   assert.ok(start >= 0 && end > start, 'childEnvFor is no longer a top-level function of the probe');
-  return new Function('minimalEnv', `${source.slice(start, end + 2)}\nreturn childEnvFor;`)(minimalEnv);
+  // What the function reads from outside is passed in by name; the host reading is an OPTION (`nativeLinux`), never imported in the slice.
+  return new Function('minimalEnv', 'NATIVE_LINUX_BUILT', `${source.slice(start, end + 2)}\nreturn childEnvFor;`)(minimalEnv, NATIVE_LINUX_BUILT);
 }
 
 const PIN = { VIBE_CLI: 'python', PYTHONUTF8: '1' };
@@ -248,6 +250,120 @@ test('a replaced environment is the arm\'s own plus the pin on every platform, a
     assert.deepEqual(childEnvFor({ replaceEnv: { A: '1' } }, { cli: 'python', platform, env: shell }), { A: '1', ...PIN });
     assert.equal('VIBE_CLI' in childEnvFor({ home: 'H' }, { cli: 'inherit', platform, env: { VIBE_CLI: 'rust' } }), false);
   }
+});
+
+// ------------------------------------------------------------------------------------------------------ S-N20: the closed road on a native host
+// E2.S0 of todo/PLAN_kimi_and_vibe_on_native_linux_E2.md (DN10): on a native Linux host every Vibe child the probe starts carries the forced
+// keyring backend the product's launch carries (VibeLaunch.Built), so the signed-in cells N-V2/N-V3/N-V4 measure the launch E2 ships; arm a3c
+// alone drops it (its teeth). WSL2 and Windows are unchanged. Nothing here runs Vibe.
+
+const NULL_BACKEND = 'keyring.backends.null.Keyring';
+const bannerOf = (text) => readBanner({ readFile: () => { if (text === null) throw new Error('ENOENT'); return text; } });
+const SHELL = { PATH: '/usr/bin', HOME: '/home/op', LANG: 'C.UTF-8', SECRET: 'hunter2' };
+/** The spec M-V7 hands the probe for `arm`, as the probe's own setup builds it (its env and its dropsKeyring come from keyringSetup's spec). */
+const armSpec = (arm) => {
+  const k = keyringArm(arm, 'linux', { scratch: '/s/M-V7-run' });
+  return { home: '/h/1', env: k.env, dropsKeyring: k.dropsKeyring };
+};
+const M_V6 = { home: '/h/1' };
+
+test('S-N20: on a native Linux host an M-V6-shaped child carries the forced keyring backend', () => {
+  const childEnvFor = probeChildEnvFor();
+  const env = childEnvFor(M_V6, { cli: 'python', platform: 'linux', env: SHELL, nativeLinux: true });
+  assert.equal(env.PYTHON_KEYRING_BACKEND, FAIL, 'M-V6 on a native Linux host carries no PYTHON_KEYRING_BACKEND — the signed-in cells would measure a launch E2 does not ship (DN10)');
+  assert.equal(env.SECRET, undefined, 'the shell still does not reach the child');
+});
+
+test('S-N20: on WSL2 (nativeLinux false) the same spec holds no such name, and the option defaults to that shape', () => {
+  const childEnvFor = probeChildEnvFor();
+  const env = childEnvFor(M_V6, { cli: 'python', platform: 'linux', env: SHELL, nativeLinux: false });
+  assert.equal('PYTHON_KEYRING_BACKEND' in env, false, 'WSL2 carried PYTHON_KEYRING_BACKEND — a measured launch was changed');
+  assert.deepEqual(env, childEnvFor(M_V6, { cli: 'python', platform: 'linux', env: SHELL }), 'the option defaults to the WSL2 shape');
+});
+
+test('S-N20: on a native host arm a3c has the name ABSENT from the final object, a3 carries the fail value', () => {
+  const childEnvFor = probeChildEnvFor();
+  const a3c = childEnvFor(armSpec('a3c'), { cli: 'python', platform: 'linux', env: SHELL, nativeLinux: true });
+  assert.equal('PYTHON_KEYRING_BACKEND' in a3c, false, 'a3c on a native Linux host still carried PYTHON_KEYRING_BACKEND — its marker could never be written, so a3 would prove nothing');
+  assert.equal(a3c.HOME, '/s/M-V7-run/fake-home', 'a3c keeps the fake HOME — only the variable goes');
+  const a3 = childEnvFor(armSpec('a3'), { cli: 'python', platform: 'linux', env: SHELL, nativeLinux: true });
+  assert.equal(a3.PYTHON_KEYRING_BACKEND, FAIL);
+  assert.equal(a3.HOME, '/s/M-V7-run/fake-home');
+});
+
+test('S-N20: a replaced environment (the built environment, M-V12, M-V16) on a native host carries the name too, and dropsKeyring removes it there as well', () => {
+  const childEnvFor = probeChildEnvFor();
+  const replaced = childEnvFor({ replaceEnv: { VIBE_HOME: '/h/2' } }, { cli: 'python', platform: 'linux', env: SHELL, nativeLinux: true });
+  assert.equal(replaced.PYTHON_KEYRING_BACKEND, FAIL, 'a replaced environment on a native Linux host carries no PYTHON_KEYRING_BACKEND');
+  const dropped = childEnvFor({ replaceEnv: { VIBE_HOME: '/h/2', PYTHON_KEYRING_BACKEND: FAIL }, dropsKeyring: true }, { cli: 'python', platform: 'linux', env: SHELL, nativeLinux: true });
+  assert.equal('PYTHON_KEYRING_BACKEND' in dropped, false);
+});
+
+test('S-N20: on win32 nothing changes', () => {
+  const childEnvFor = probeChildEnvFor();
+  const shell = { Path: 'C:\\x', SECRET: 'hunter2' };
+  const env = childEnvFor({ home: 'H', env: { A: 'b' } }, { cli: 'python', platform: 'win32', env: shell, nativeLinux: false });
+  assert.deepEqual(env, { ...shell, NoDefaultCurrentDirectoryInExePath: '1', VIBE_HOME: 'H', A: 'b', ...PIN });
+});
+
+test('S-N20 (the inherited case): the probe run from a shell that holds PYTHON_KEYRING_BACKEND — a3c still lacks it, a3 and M-V6 carry the FORCED value, WSL2 carries nothing', () => {
+  const childEnvFor = probeChildEnvFor();
+  const shell = { ...SHELL, PYTHON_KEYRING_BACKEND: NULL_BACKEND };
+  const native = (spec) => childEnvFor(spec, { cli: 'python', platform: 'linux', env: shell, nativeLinux: true });
+  assert.equal('PYTHON_KEYRING_BACKEND' in native(armSpec('a3c')), false, "a3c inherited PYTHON_KEYRING_BACKEND from the probe's own shell — the child base is not the allow-list");
+  assert.equal(native(armSpec('a3')).PYTHON_KEYRING_BACKEND, FAIL, "a3 carried the shell's keyring.backends.null.Keyring, not the forced keyring.backends.fail.Keyring");
+  assert.equal(native(M_V6).PYTHON_KEYRING_BACKEND, FAIL, "M-V6 carried the shell's keyring.backends.null.Keyring, not the forced keyring.backends.fail.Keyring");
+  const wsl = (spec) => childEnvFor(spec, { cli: 'python', platform: 'linux', env: shell, nativeLinux: false });
+  assert.equal('PYTHON_KEYRING_BACKEND' in wsl(M_V6), false, "WSL2: a child inherited PYTHON_KEYRING_BACKEND from the probe's own shell");
+  assert.equal('PYTHON_KEYRING_BACKEND' in wsl(armSpec('a3c')), false, "WSL2: a3c inherited PYTHON_KEYRING_BACKEND from the probe's own shell");
+  assert.equal(wsl(armSpec('a3')).PYTHON_KEYRING_BACKEND, FAIL, "WSL2: a3 carries its OWN forced value (E1's arm), never the shell's");
+});
+
+test('S-N20: only arm a3c drops the keyring variable; the arms are otherwise as E1 left them', () => {
+  const drops = ['a', 'a2', 'a3', 'a3c', 'b'].filter((arm) => keyringArm(arm, 'linux', { scratch: '/s' }).dropsKeyring === true);
+  assert.deepEqual(drops, ['a3c']);
+  assert.equal(keyringArm('a3c', 'win32', { scratch: 'C:\\s' }).dropsKeyring === true, false, 'a3c does not apply on Windows and drops nothing there');
+});
+
+test("S-N20: the probe hands keyringSetup's dropsKeyring to the spec it launches (the setup is not importable — a source guard)", () => {
+  const source = readFileSync(join(repo, 'scripts', 'probe-vibe-confinement.mjs'), 'utf8');
+  assert.match(source, /dropsKeyring: keyring\.dropsKeyring/u, "M-V7's setup no longer hands keyringSetup's dropsKeyring to the spec — a3c would carry the variable on a native host");
+});
+
+test("S-N20: the manifest script builds its launches' environment with the host reading and records keyringRoad (it runs on import — a source guard)", () => {
+  const source = readFileSync(join(repo, 'scripts', 'vibe-home-manifest.mjs'), 'utf8');
+  assert.ok(source.includes("builtEnvFor(home, MODEL, process.platform, process.env, { nativeLinux: NATIVE_LINUX })"), "the manifest's built environment no longer takes the native Linux option — N-V4 would measure a launch E2 does not ship");
+  assert.ok(source.includes("keyringRoad: NATIVE_LINUX ? 'closed' : 'open'"), 'steps.json no longer records keyringRoad');
+  assert.ok(source.includes('runsOnNativeLinux()'), 'the manifest no longer reads the host through runsOnNativeLinux');
+});
+
+test('isNativeLinuxHost: a Linux kernel banner that names neither Microsoft nor WSL is native; WSL2, an unread banner and win32 are not', () => {
+  const generic = bannerOf('Linux version 7.0.0-30-generic (x)\n');
+  const wsl = bannerOf('Linux version 5.15.1-microsoft-standard-WSL2\n');
+  const unread = bannerOf(null);
+  assert.equal(isNativeLinuxHost({ platform: 'linux', banner: generic }), true, '7.0.0-30-generic is a native host');
+  assert.equal(isNativeLinuxHost({ platform: 'linux', banner: wsl }), false, 'microsoft-standard-WSL2 is not a native host');
+  assert.equal(isNativeLinuxHost({ platform: 'linux', banner: unread }), false, 'an unread banner is not a native host');
+  assert.equal(isNativeLinuxHost({ platform: 'win32', banner: generic }), false, 'win32 is never a native Linux host');
+  assert.equal(isNativeLinuxHost({ platform: 'darwin', banner: generic }), false);
+});
+
+test("builtEnv: the native Linux option adds exactly NATIVE_LINUX_BUILT; without it the environment is today's", () => {
+  const env = { PATH: '/usr/bin', HOME: '/home/u' };
+  const plain = builtEnv('/tmp/h', 'm', 'linux', env);
+  assert.equal('PYTHON_KEYRING_BACKEND' in plain, false);
+  const closed = builtEnv('/tmp/h', 'm', 'linux', env, { nativeLinux: true });
+  assert.equal(closed.PYTHON_KEYRING_BACKEND, FAIL, 'builtEnv(..., { nativeLinux: true }) carries no PYTHON_KEYRING_BACKEND');
+  assert.deepEqual(closed, { ...plain, ...NATIVE_LINUX_BUILT }, 'the option adds nothing but NATIVE_LINUX_BUILT');
+  assert.equal(builtEnv('/tmp/h', 'm', 'linux', { PATH: '/p', PYTHON_KEYRING_BACKEND: NULL_BACKEND }).PYTHON_KEYRING_BACKEND, undefined, "the shell's value is not on the allow-list");
+});
+
+test('NATIVE_LINUX_BUILT is the ONE spelling of the forced backend, and keyringRoadOf reads a child environment as closed or open', () => {
+  assert.deepEqual(NATIVE_LINUX_BUILT, { PYTHON_KEYRING_BACKEND: FAIL });
+  assert.equal(KEYRING_FAIL_BACKEND, NATIVE_LINUX_BUILT.PYTHON_KEYRING_BACKEND);
+  assert.equal(keyringRoadOf({ PYTHON_KEYRING_BACKEND: FAIL }), 'closed');
+  assert.equal(keyringRoadOf({}), 'open');
+  assert.equal(keyringRoadOf({ PYTHON_KEYRING_BACKEND: NULL_BACKEND }), 'open', 'another backend is not the closed road');
 });
 
 // ------------------------------------------------------------------------------------------------------ M-V7's keyring arms (S-N17)

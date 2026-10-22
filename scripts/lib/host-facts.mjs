@@ -10,8 +10,9 @@
 // a mode, an owner, a mtime. `fsx.readFile` is used for /proc, /etc/os-release and the two data files make-series.sh wrote, and
 // the test's spy fails the build the day it is called for anything else. The two Python programs below ask for a backend's CLASS
 // NAME and a list of installed distributions; neither asks for a password.
+import { readFileSync } from 'node:fs';
 import { posix } from 'node:path';
-import { KEYRING_FAIL_BACKEND, builtEnv as vibeBuiltEnv, minimalEnv, personsVibeHome, vibePython } from './vibe.mjs';
+import { KEYRING_FAIL_BACKEND, builtEnv as vibeBuiltEnv, isNativeLinuxHost, minimalEnv, personsVibeHome, vibePython } from './vibe.mjs';
 import { builtEnv as kimiBuiltEnv } from './kimi-home.mjs';
 
 /**
@@ -87,6 +88,14 @@ export function readBanner(fsx) {
   const text = attempt(() => fsx.readFile('/proc/version').trim(), '');
   return { read: text.length > 0, text, namesWsl: /microsoft|wsl/iu.test(text) };
 }
+
+/**
+ * Whether THIS process runs on a NATIVE Linux host — the one reading the Vibe probe and the manifest script share (E2.S0): the platform and the kernel
+ * banner, through `readBanner` and vibe.mjs's `isNativeLinuxHost` (so the "names Microsoft or WSL" rule has one home). `fsx` is injected for tests; the
+ * default reads the real `/proc/version`, and off Linux reads nothing that answers.
+ */
+export const runsOnNativeLinux = ({ platform = process.platform, fsx = { readFile: (path) => readFileSync(path, 'utf8') } } = {}) =>
+  isNativeLinuxHost({ platform, banner: readBanner(fsx) });
 
 const unescapeMount = (field) => field.replaceAll(/\\([0-7]{3})/gu, (_, octal) => String.fromCodePoint(Number.parseInt(octal, 8)));
 const holds = (mountPoint, path) => path === mountPoint || path.startsWith(mountPoint === '/' ? '/' : `${mountPoint}/`);
@@ -259,7 +268,7 @@ function keyringReadings(deps, interpreter) {
     return home;
   };
   const built = vibeBuiltEnv(freshHome('v0-home-built'), 'none', 'linux', env);
-  const forced = { ...vibeBuiltEnv(freshHome('v0-home-forced'), 'none', 'linux', env), PYTHON_KEYRING_BACKEND: KEYRING_FAIL_BACKEND };
+  const forced = vibeBuiltEnv(freshHome('v0-home-forced'), 'none', 'linux', env, { nativeLinux: true });
   say(deps, "asking Vibe's Python for its keyring class (built environment)...");
   const builtEnvironment = python(run, interpreter, PY_KEYRING_CLASS, built, scratch);
   say(deps, "asking Vibe's Python for its keyring class (fail backend forced)...");
@@ -275,7 +284,7 @@ function distributionsOf(deps, interpreter, readEnv) {
 function v0Of(deps) {
   const { fsx, run, env, uid, home, scratch, listing, serverEnvNames } = deps;
   const vibeHome = personsVibeHome(env, home, 'linux');
-  const interpreter = vibePython('linux', env, home);
+  const interpreter = deps.vibePython || vibePython('linux', env, home);
   const hasPython = statOf(fsx, interpreter) !== null;
   const configHomes = [posix.join(home, '.config'), ...(env.XDG_CONFIG_HOME ? [env.XDG_CONFIG_HOME] : [])];
   const readEnv = vibeBuiltEnv(posix.join(scratch, 'v0-home-built'), 'none', 'linux', env);

@@ -44,6 +44,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolved } from '../.github/scripts/lib/resolved.mjs';
+import { runsOnNativeLinux } from './lib/host-facts.mjs';
 import { builtEnv as builtEnvFor, classOf as classOfIn, deepestChild, linkSignIn, personsVibeHome, run, vibeArgs } from './lib/vibe.mjs';
 import { inventoryOf, unstaged, withEntry, withoutSignInLink } from './lib/vibe-manifest.mjs';
 
@@ -123,7 +124,12 @@ const inventory = (home) => inventoryOf(home);
 const vibesOwn = (listing) => withoutSignInLink(listing, join(personsVibeHome(), '.env'));
 
 /** The built environment of D17, for `home` — lib/vibe.mjs's, the product's (VibeLaunch.Built). */
-const builtEnv = (home) => builtEnvFor(home, MODEL);
+/**
+ * On a NATIVE Linux host (E2.S0: the kernel banner read once, lib/host-facts.mjs runsOnNativeLinux) the built environment also carries the forced keyring backend, as the product's
+ * VibeLaunch.Built does there — so the manifest's launches are the signed-in launches N-V4 measures. Recorded in steps.json as `keyringRoad`.
+ */
+const NATIVE_LINUX = runsOnNativeLinux();
+const builtEnv = (home) => builtEnvFor(home, MODEL, process.platform, process.env, { nativeLinux: NATIVE_LINUX });
 
 function launch(label, args, home, cwd, input = '') {
   console.error(`[manifest] ${label} …`);
@@ -166,7 +172,7 @@ const v2 = launch('home A: vibe --version again', ['--version'], homeA, work);
 steps.push({ ...v2, after: inventory(homeA) });
 const v3 = launch('home B: vibe --version', ['--version'], homeB, work);
 steps.push({ ...v3, after: inventory(homeB) });
-writeFileSync(join(scratch, 'steps.json'), JSON.stringify({ exe, version, scratch, platform: process.platform, signIn, steps }, null, 2));
+writeFileSync(join(scratch, 'steps.json'), JSON.stringify({ exe, version, scratch, platform: process.platform, keyringRoad: NATIVE_LINUX ? 'closed' : 'open', signIn, steps }, null, 2));
 return { version, steps };
 }
 
