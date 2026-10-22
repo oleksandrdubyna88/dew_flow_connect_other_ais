@@ -188,6 +188,15 @@ public sealed record AcpDiagnosis(string Name, string Cure, AcpFailureKind Kind,
     /// <summary>What stands between the agent's reason and the cure in the shim's note.</summary>
     public const string CureSeparator = " — ";
 
+    /// <summary>What stands before the matched line in the note — the line is the agent's own, from its stderr.</summary>
+    public const string StderrLead = "the agent's stderr: ";
+
+    /// <summary>
+    /// <paramref name="reason"/> followed by the line of the agent's stderr that held the row's phrase, quoted, when there is one (<see cref="Line"/> — already redacted and cut): a diagnosis found only on stderr
+    /// would otherwise lose the sentence it was found in, in the note every later reader prefers. Unchanged when the reason itself held the phrase. Handed to <see cref="Note"/>, which puts the cure LAST.
+    /// </summary>
+    public string Said(string reason) => Line.Length > 0 ? $"{reason} ({StderrLead}{Line})" : reason;
+
     /// <summary>
     /// The shim's note for this failure: its name, the agent's reason, and the cure — when there is one (a known shape with no cure ends at the reason).
     /// The ONE place the note's shape is written; <see cref="WithoutCure"/> reads it back.

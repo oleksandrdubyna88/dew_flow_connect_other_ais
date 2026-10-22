@@ -195,6 +195,9 @@ internal sealed class FakeAcpAgent : IDisposable
     /// <summary><paramref name="chars"/> characters written on the agent's STDERR, no newline — the protocol stream untouched.</summary>
     public static string StdErr(int chars) => $$"""{"kind":"stderr","chars":{{chars}}}""";
 
+    /// <summary>The text <paramref name="text"/> written on the agent's STDERR as given — a vendor's own error line; end it with a line break for a complete line.</summary>
+    public static string StdErrText(string text) => $$"""{"kind":"stderrText","text":{{Quote(text)}}}""";
+
     public const string AwaitCancel = """{"kind":"awaitCancel"}""";
 
     public static string Sleep(int ms) => $$"""{"kind":"sleep","ms":{{ms}}}""";

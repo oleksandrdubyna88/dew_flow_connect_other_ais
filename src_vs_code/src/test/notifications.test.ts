@@ -106,6 +106,15 @@ test('a Moonshot account id is redacted, and an ordinary word that starts alike 
   }
 });
 
+test('a Moonshot account id with an underscore or a hyphen in its body is redacted whole, and a digitless run with them is not', () => {
+  const given = 'Your account org-0a1b_2c3d_4e5f <ak-9z8y-7x6w-5v4u> and org-0a1b2c3d4e5f_6a7b8c9d are suspended';
+
+  assert.equal(safeText(given, DETAIL_LIMIT), 'Your account org-[redacted] <ak-[redacted]> and org-[redacted] are suspended');
+  for (const plain of ['the org-settings_panel', 'ak-sorted-words']) {
+    assert.equal(safeText(plain, DETAIL_LIMIT), plain);
+  }
+});
+
 test('control characters never reach the line, because a torn line is unreadable to everyone', () => {
   const safe = safeText('before' + String.fromCharCode(0, 7) + 'after', TITLE_LIMIT);
 

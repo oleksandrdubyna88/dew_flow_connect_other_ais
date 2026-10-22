@@ -41,6 +41,7 @@ namespace CoaiMcp.FakeCli;
 ///     {"kind":"stray","text":"not json"}               a line that is not JSON-RPC
 ///     {"kind":"spew","chars":N}                        one line of N characters
 ///     {"kind":"stderr","chars":N}                      N characters on STDERR, no newline — what drives the client's stderr capture and its truncation flag
+///     {"kind":"stderrText","text":"…"}             the text on STDERR, as given (put its own line break in it) — what a vendor's own error line is
 ///     {"kind":"awaitCancel"}                           reads stdin until session/cancel arrives, then goes on (the prompt ends cancelled)
 ///     {"kind":"sleep","ms":100}
 ///     {"kind":"hang"}                                  never returns: the kill path
@@ -340,6 +341,11 @@ internal static class AcpAgent
             case "stderr":
                 // Stderr only: the protocol stream stays clean, so the turn still answers.
                 Console.Error.Write(new string('e', (int)Number(step, "chars")));
+                Console.Error.Flush();
+                break;
+            case "stderrText":
+                // Stderr only, the vendor's own sentence as given: the protocol stream stays clean.
+                Console.Error.Write(Text(step, "text"));
                 Console.Error.Flush();
                 break;
             case "awaitCancel":

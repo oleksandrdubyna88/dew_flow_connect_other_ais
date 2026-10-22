@@ -181,9 +181,9 @@ const SECRETS: ReadonlyArray<readonly [RegExp, string]> = [
   [/\b(bearer|basic|token)[ \t]+[a-z0-9._~+/=-]{8,4096}/gi, `$1 ${REDACTED}`],
   // Vendor key shapes that are unmistakable on sight.
   [/\b(sk-|ghp_|gho_|ghu_|ghs_|github_pat_|xox[baprs]-)[A-Za-z0-9._-]{8,512}/g, `$1${REDACTED}`],
-  // A Moonshot account id (org-… / ak-…): an alphanumeric body of 8–128 with at least one digit, so an ordinary word like
+  // A Moonshot account id (org-… / ak-…): a body of 8–128 letters, digits, `_` and `-` with at least one digit (any run: the real shape is not measured), so an ordinary word like
   // `org-settings-panel` stays. Not in the vendor-key row above: that list is unmistakable on sight, and `org-` is not.
-  [/\b(org-|ak-)(?=[A-Za-z0-9]{0,127}[0-9])[A-Za-z0-9]{8,128}/g, `$1${REDACTED}`],
+  [/\b(org-|ak-)(?=[A-Za-z0-9_-]{0,127}[0-9])[A-Za-z0-9_-]{8,128}/g, `$1${REDACTED}`],
 ];
 
 /** A query or fragment parameter, so its NAME can be judged before its value is kept. */

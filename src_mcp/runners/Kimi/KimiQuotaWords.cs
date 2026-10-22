@@ -35,7 +35,7 @@ public static class KimiQuotaWords
 
     /// <summary>
     /// Kimi's reset clause out of <paramref name="reason"/> — from the earliest of <see cref="ResetOpenings"/> to the first period followed by whitespace — a space, a newline or a tab (so "reset in 2.5 hours."
-    /// stays whole), or to the end of the text when it has no such period — redacted through the product's one redactor and capped. Empty when Kimi said none.
+    /// stays whole), or to a closing parenthesis it did not open (our own wrapper's, see <see cref="ClauseEnd"/>), or to the end of the text when it has neither — redacted through the product's one redactor and capped. Empty when Kimi said none.
     /// </summary>
     public static string ClauseOf(string reason) =>
         EarliestOpening(reason) is var start and >= 0
@@ -48,24 +48,35 @@ public static class KimiQuotaWords
 
     private static string Middle(string reason) => ClauseOf(reason) is { Length: > 0 } clause ? $"\"{clause}\"" : NoReset;
 
-    private static string Cut(string reason, int start)
-    {
-        var stop = SentenceEnd(reason, start);
+    private static string Cut(string reason, int start) => reason[start..ClauseEnd(reason, start)].Trim();
 
-        return (stop < 0 ? reason[start..] : reason[start..(stop + 1)]).Trim();
-    }
-
-    /// <summary>The index of the first period followed by whitespace of any kind — a space, a newline, a tab — from <paramref name="from"/>, or -1. A decimal point ("2.5") is not one.</summary>
-    private static int SentenceEnd(string text, int from)
+    /// <summary>
+    /// Where the clause that begins at <paramref name="from"/> ends (exclusive): after the first period followed by whitespace of any kind — a space, a newline, a tab; a decimal point ("2.5") is not one — or
+    /// BEFORE the first closing parenthesis the clause did not open, or at the end of the text. The clause is read out of a text that may be wrapped in our own punctuation — the runtime quotes the vendor's line as
+    /// <c>(Kimi said: …)</c> and the shim's note as <c>(the agent's stderr: …)</c> — and a parenthesis the vendor's sentence never opened is the end of that wrapper, not a word Kimi said; one it did open
+    /// (<c>reset in 2 hours (14:00 UTC).</c>) stays. Counted, never guessed: the depth is the only state.
+    /// </summary>
+    private static int ClauseEnd(string text, int from)
     {
-        for (var dot = text.IndexOf('.', from); dot >= 0; dot = text.IndexOf('.', dot + 1))
+        var depth = 0;
+        for (var at = from; at < text.Length; at++)
         {
-            if (dot + 1 < text.Length && char.IsWhiteSpace(text[dot + 1]))
+            depth += Depth(text[at]);
+            if (depth < 0)
             {
-                return dot;
+                return at;
+            }
+
+            if (EndsASentence(text, at))
+            {
+                return at + 1;
             }
         }
 
-        return -1;
+        return text.Length;
     }
+
+    private static int Depth(char c) => c switch { '(' => 1, ')' => -1, _ => 0 };
+
+    private static bool EndsASentence(string text, int at) => text[at] == '.' && at + 1 < text.Length && char.IsWhiteSpace(text[at + 1]);
 }
