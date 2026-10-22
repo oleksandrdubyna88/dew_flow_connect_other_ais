@@ -155,18 +155,60 @@ function recordingReads(reads: string[]): ForeignReads {
   };
 }
 
-test('TheOtherStoresLedgerTail_IsReadBesideThisSides_WithItsStore (no store named: the directory stands for it)', async () => {
+test('AnOldBinary_ReadsNoForeignLedgerTail — a plain answer names no store, so two spellings of one directory can never double the money', async () => {
   const mine = dirWithLedger([launch({ tokensIn: 1 })]);
-  const other = dirWithLedger([launch({ tokensIn: 2 })]);
-  const load = roundsLoader(() => 'coai-mcp', path.join(mine, 'usage.jsonl'), answering({ code: 64, output: '' }), [], [other]);
+  const first = dirWithLedger([launch({ tokensIn: 2 })]);
+  const second = dirWithLedger([launch({ tokensIn: 2 })]); // another spelling of the same store: nothing says so without an id
+  const reads: string[] = [];
+  const load = roundsLoader(() => 'coai-mcp', path.join(mine, 'usage.jsonl'), answering({ code: 64, output: '' }), [], [first, second], recordingReads(reads));
 
   const loaded = await load(NOW);
 
-  assert.deepEqual(loaded.ledger.map((one) => [one.tokensIn, one.store]), [[1, undefined], [2, other]],
+  assert.deepEqual(reads, [], 'a foreign ledger tail was read though no store was named: the same directory twice would count twice');
+  assert.deepEqual(loaded.ledger.map((one) => [one.tokensIn, one.store]), [[1, undefined]], 'the old binary\'s read is today\'s single-store one');
+  assert.deepEqual(loaded.otherLedgers, []);
+  assert.equal(loaded.ledgerFailure, '');
+  cleanup(mine, first, second);
+});
+
+test('a merged call that timed out names no store either — its snapshot stores are not included, and so is their money', async () => {
+  const mine = dirWithLedger([launch({ tokensIn: 1 })]);
+  const other = dirWithLedger([launch({ tokensIn: 2 })]);
+  const reads: string[] = [];
+  const load = roundsLoader(() => 'coai-mcp', path.join(mine, 'usage.jsonl'), answering({ code: -1, output: '' }), [], [other], recordingReads(reads));
+
+  const loaded = await load(NOW);
+
+  assert.deepEqual(reads, []);
+  assert.deepEqual(loaded.ledger.map((one) => one.tokensIn), [1]);
+  cleanup(mine, other);
+});
+
+test('a directory the merged answer does not name (no snapshot there) has its ledger left unread — a store not included contributes nothing', async () => {
+  const mine = dirWithLedger([launch({ tokensIn: 1 })]);
+  const unnamed = dirWithLedger([launch({ tokensIn: 2 })]);
+  const reads: string[] = [];
+  const load = roundsLoader(() => 'coai-mcp', path.join(mine, 'usage.jsonl'), answering({ code: 0, output: MERGED_JSON }), [], [unnamed], recordingReads(reads));
+
+  const loaded = await load(NOW);
+
+  assert.deepEqual(reads, []);
+  assert.deepEqual(loaded.ledger.map((one) => one.tokensIn), [1]);
+  cleanup(mine, unnamed);
+});
+
+test('TheOtherStoresLedgerTail_IsReadBesideThisSides_WithItsStore', async () => {
+  const mine = dirWithLedger([launch({ tokensIn: 1 })]);
+  const wsl = dirWithLedger([launch({ tokensIn: 2 })]);
+  const load = roundsLoader(() => 'coai-mcp', path.join(mine, 'usage.jsonl'), answering({ code: 0, output: mergedNaming(snapshotIn(wsl)) }), [], [wsl]);
+
+  const loaded = await load(NOW);
+
+  assert.deepEqual(loaded.ledger.map((one) => [one.tokensIn, one.store]), [[1, THIS_STORE], [2, WSL_STORE]],
     'the other store\'s tail was not read beside this side\'s, or it carries no store');
   assert.equal(loaded.ledgerFailure, '');
-  assert.deepEqual(loaded.otherLedgers, [{ store: other, directory: other, failure: '' }]);
-  cleanup(mine, other);
+  assert.deepEqual(loaded.otherLedgers, [{ store: WSL_STORE, directory: wsl, failure: '' }]);
+  cleanup(mine, wsl);
 });
 
 test('a store the merged answer names is tagged with ITS ID — and this side\'s own lines with this side\'s', async () => {
@@ -185,14 +227,14 @@ test('ATailThatWillNotRead_IsNotIncluded_LikeTheSnapshot — in otherLedgers, NE
   const mine = dirWithLedger([launch({ tokensIn: 1 })]);
   const broken = dirWithLedger(undefined);
   fs.mkdirSync(path.join(broken, 'usage.jsonl')); // a directory in the ledger's place: it exists and will not read
-  const load = roundsLoader(() => 'coai-mcp', path.join(mine, 'usage.jsonl'), answering({ code: 64, output: '' }), [], [broken]);
+  const load = roundsLoader(() => 'coai-mcp', path.join(mine, 'usage.jsonl'), answering({ code: 0, output: mergedNaming(snapshotIn(broken)) }), [], [broken]);
 
   const loaded = await load(NOW);
 
   assert.equal(loaded.ledgerFailure, '', 'a foreign failure hid every money cell of THIS side');
   assert.deepEqual(loaded.ledger.map((one) => one.tokensIn), [1], 'this side\'s line was lost with the other tail');
   assert.equal(loaded.otherLedgers?.length, 1);
-  assert.equal(loaded.otherLedgers?.[0]?.store, broken);
+  assert.equal(loaded.otherLedgers?.[0]?.store, WSL_STORE);
   assert.match(loaded.otherLedgers?.[0]?.failure ?? '', /not a file/u);
   cleanup(mine, broken);
 });
@@ -200,11 +242,11 @@ test('ATailThatWillNotRead_IsNotIncluded_LikeTheSnapshot — in otherLedgers, NE
 test('AnOtherStoreWithNoLedger_IsNoLines_NotAFailure', async () => {
   const mine = dirWithLedger([launch()]);
   const empty = dirWithLedger(undefined);
-  const load = roundsLoader(() => 'coai-mcp', path.join(mine, 'usage.jsonl'), answering({ code: 64, output: '' }), [], [empty]);
+  const load = roundsLoader(() => 'coai-mcp', path.join(mine, 'usage.jsonl'), answering({ code: 0, output: mergedNaming(snapshotIn(empty)) }), [], [empty]);
 
   const loaded = await load(NOW);
 
-  assert.deepEqual(loaded.otherLedgers, [{ store: empty, directory: empty, failure: '' }]);
+  assert.deepEqual(loaded.otherLedgers, [{ store: WSL_STORE, directory: empty, failure: '' }]);
   assert.equal(loaded.ledger.length, 1);
   cleanup(mine, empty);
 });
@@ -244,7 +286,7 @@ test('AForeignTailThatNeverAnswers_DoesNotHoldThisSidesCounts — did not answer
   const dead = dirWithLedger(undefined);
   let reads = 0;
   const foreign: ForeignReads = { deadlineMs: 30, read: () => { reads += 1; return new Promise(() => undefined); } };
-  const load = roundsLoader(() => 'coai-mcp', path.join(mine, 'usage.jsonl'), answering({ code: -1, output: '' }), [], [dead], foreign);
+  const load = roundsLoader(() => 'coai-mcp', path.join(mine, 'usage.jsonl'), answering({ code: 0, output: mergedNaming(snapshotIn(dead)) }), [], [dead], foreign);
 
   const first = await load(NOW);
   const second = await load(NOW + 1_000);
@@ -264,7 +306,7 @@ test('a foreign read that settles after its deadline is used by the next refresh
   let release: (tail: Tail<UsageEntry>) => void = () => undefined;
   let reads = 0;
   const foreign: ForeignReads = { deadlineMs: 20, read: () => { reads += 1; return new Promise((resolve) => { release = resolve; }); } };
-  const load = roundsLoader(() => 'coai-mcp', path.join(mine, 'usage.jsonl'), answering({ code: 64, output: '' }), [], [slow], foreign);
+  const load = roundsLoader(() => 'coai-mcp', path.join(mine, 'usage.jsonl'), answering({ code: 0, output: mergedNaming(snapshotIn(slow)) }), [], [slow], foreign);
 
   await load(NOW);
   release({ records: [parseUsageLine(JSON.stringify(launch({ tokensIn: 7 })))!], bytesRead: 1, failure: '' });

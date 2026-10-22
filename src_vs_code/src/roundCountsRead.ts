@@ -1,6 +1,5 @@
 import { join } from 'node:path';
 
-import { DATABASE_FILE } from './dataDir';
 import { ForeignLedgers, foreignTargets, type ForeignReads, SNAPSHOT_FILE } from './foreignLedgers';
 import { readTailSince } from './ledgerTail';
 import { NO_SERVER, RoundCountsRead, roundCountsFrom, type RoundStore, WINDOW_MS } from './roundCounts';
@@ -21,7 +20,7 @@ import { parseUsageLine, type UsageEntry } from './usage';
  * coordinated across the `\\wsl.localhost` / drvfs boundary. What crosses is a plain JSON snapshot the owning side's
  * coai-mcp writes after every round (read by `--round-counts-merged`, which this module asks FIRST — E6.S1) and that
  * side's append-only `usage.jsonl`, read from its end ({@link roundsLoader}, `foreignLedgers.ts` — E6.S2).
- * {@link otherStores} only asks whether a `coai.db` EXISTS, for the sentence that names the stores.</p>
+ * `storeReach.ts` only asks, off the render path, whether a `coai.db` EXISTS, for the sentence that names the stores.</p>
  */
 
 /** Reading counts rounds in SQL over an index; a cap well above that, and below a repaint anybody waits on. */
@@ -114,12 +113,4 @@ function storesOf(read: RoundCountsRead): readonly RoundStore[] {
 /** This side's own lines carry this side's store id once the merged answer has named it — and none before, so a single-store read is as it was. */
 function taggedWith(store: string | undefined, records: readonly UsageEntry[]): readonly StoredLine[] {
   return store === undefined ? records : records.map((record) => ({ ...record, store }));
-}
-
-/**
- * The directories, among the other installations this window was told about, that hold a store of their own — asked
- * by EXISTENCE of the file and nothing more, so the block can name them without reading a byte of them.
- */
-export function otherStores(directories: readonly string[], exists: (path: string) => boolean): readonly string[] {
-  return directories.filter((directory) => exists(join(directory, DATABASE_FILE)));
 }

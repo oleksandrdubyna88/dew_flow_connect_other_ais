@@ -10,7 +10,7 @@ import type { UsageEntry } from './usage';
  *
  * <p><b>What crosses the boundary is an append-only text file, read from its end</b> — never the other side's `coai.db`, which
  * is WAL and not coordinated across `\\wsl.localhost` / drvfs. A line is tagged with the STORE it came from, in memory only:
- * the id the merged answer gave the store (so two spellings of one store are one store, read ONCE), else the directory itself.</p>
+ * the id the merged answer gave the store (so two spellings of one store are one store, read ONCE). A directory no store of the answer names is not read at all.</p>
  *
  * <p><b>Bounded, and never in this side's way.</b> Every read races the D7 deadline; one that loses is a failure *did not answer
  * in time* in {@link OtherLedger}, and this side's counts and money are published without it. A read still pending at the
@@ -54,15 +54,16 @@ export function foreignTargets(directories: readonly string[], stores: readonly 
   return targets.filter((target, at) => targets.findIndex((other) => other.store === target.store) === at);
 }
 
-/** One directory's store — none for this side's own — named by the answer's id, else by the directory itself. */
+/**
+ * One directory's store — none for this side's own, and none for a directory NO store of the answer names. That is the old
+ * binary (a plain answer names no store), a merged call that timed out, and a store whose snapshot was not counted: with no id
+ * there is no telling two spellings of one directory apart, so reading both would double the money — and a store that is *not
+ * included* contributes neither its rounds nor its spend.
+ */
 function targetOf(directory: string, stores: readonly RoundStore[]): readonly ForeignTarget[] {
   const store = stores.find((one) => one.paths.includes(join(directory, SNAPSHOT_FILE)));
 
-  return store?.live === true ? [] : [{ store: idOf(store, directory), directory }];
-}
-
-function idOf(store: RoundStore | undefined, directory: string): string {
-  return store === undefined ? directory : store.id;
+  return store === undefined || store.live ? [] : [{ store: store.id, directory }];
 }
 
 /** Either the tail, or the instant the deadline won. */
