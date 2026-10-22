@@ -287,13 +287,7 @@ async function hostJobOf(repo, token, runId) {
   return answered((got.value.jobs ?? []).find((job) => job.name === JOB_NAME));
 }
 
-/**
- * The host job of each of the latest runs of `main`, newest first.
- *
- * <p>EVERY request goes through `asking`, both classes of them: a 502 on the twenty-sixth job
- * lookup is exactly as transient as one on the first, and a call site wired straight to the fetch
- * would be a hole the helper's own tests cannot see. (codex and gemini, on the plan round.)</p>
- */
+/** The host job of each of the latest runs of `main`, newest first, every request through `asking`. */
 async function hostJobsOfMain(repo, token) {
   // One more than the threshold is all that can change the answer: past PROMOTE_AT the streak is
   // "ready" whatever came before, so asking for a hundred runs would be a hundred job lookups for a
@@ -341,19 +335,35 @@ async function warningsCounted(repo, token, jobs) {
   return answered({ warnings: firstLaunchWarningsOf(withNotes), runs: jobs.length });
 }
 
-/** Ask, count, say — and say UNKNOWN rather than fail when GitHub could not be asked. */
-async function main() {
+/**
+ * The streak, asked for — and, from the same jobs, the first-launch warnings.
+ *
+ * <p>EVERY request goes through `asking`, both classes of them: a 502 on the twenty-sixth job
+ * lookup is exactly as transient as one on the first, and a call site wired straight to the fetch
+ * would be a hole the helper's own tests cannot see. (codex and gemini, on the plan round.)</p>
+ */
+async function counted() {
   const repo = env.GITHUB_REPOSITORY ?? 'oleksandrdubyna88/dew_flow_connect_other_ais';
   const token = env.GITHUB_TOKEN ?? env.GH_TOKEN ?? '';
   const jobs = await hostJobsOfMain(repo, token);
-  const text = await textFor(async () => (jobs.ok ? answered(streakOf(jobs.value)) : jobs));
-  const warnings = await warningsTextFor(async () => (jobs.ok ? warningsCounted(repo, token, jobs.value) : jobs));
-  stdout.write(`${text}\n${warnings}\n`);
+
+  return {
+    streak: jobs.ok ? answered(streakOf(jobs.value)) : jobs,
+    warnings: jobs.ok ? await warningsCounted(repo, token, jobs.value) : jobs,
+  };
+}
+
+/** Ask, count, say — and say UNKNOWN rather than fail when GitHub could not be asked. */
+async function main() {
+  const { streak, warnings } = await counted();
+  const text = await textFor(async () => streak);
+  const warningsLine = await warningsTextFor(async () => warnings);
+  stdout.write(`${text}\n${warningsLine}\n`);
 
   const summary = env.GITHUB_STEP_SUMMARY;
   if (summary) {
     const { appendFileSync } = await import('node:fs');
-    appendFileSync(summary, `### ${[text, warnings].join('\n').split('\n').join('\n\n')}\n`);
+    appendFileSync(summary, `### ${[text, warningsLine].join('\n').split('\n').join('\n\n')}\n`);
   }
 }
 
