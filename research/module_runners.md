@@ -4026,6 +4026,7 @@ flowchart TD
   S -->|"yes"| B{"kernel banner read? (WslGeneration)"}
   B -->|"Unreadable"| R6["refused: the kernel banner /proc/version could not be read"]
   B -->|"read, not WSL"| P
+  B -->|"a WSL generation on a Linux host (cannot happen)"| R7["refused: the host and the banner disagree"]
   H -->|"wsl.exe bridge on Windows, macOS, other"| R3["refused: D18"]
   P["places: ~/.kimi-code/bin/kimi; rg and fd in bin, then PATH, then ~/.local/bin"] --> E["built environment: HOME to os/, XDG_CACHE_HOME to cache/ beside it"]
   E --> M{"MountLocality.Judge of the sign-in's real path, on EVERY launch before any process starts"}
@@ -4045,7 +4046,7 @@ flowchart TD
   set, `HostAdmission.MeasuredOnNativeLinux` (a public read-only set, **EMPTY** in E1 — E2.S2 put Vibe in it, below; names compared case-insensitively), and an `internal` overload takes the set so a test can inject one. **Membership is asked FIRST**: a runtime
   not in the set gets the sentence above unchanged whatever the banner says, so with the empty set no answer of any host changed (the pins in `KimiLaunchChecksTests` and `VibeLaunchRulesTests` stand). A runtime IN
   the set is admitted only on a banner that was READ; `WslGeneration.Unreadable` gets its own sentence, written once beside the others (*{runtime} is refused on this Linux host — the kernel banner /proc/version could not
-  be read, so coai cannot tell a native Linux host from WSL1 (DN6 of todo/PLAN_kimi_and_vibe_on_native_linux.md)*) — reachable today only through an injected set. `Unreadable` is produced ONLY by
+  be read, so coai cannot tell a native Linux host from WSL1 (DN6 of todo/PLAN_kimi_and_vibe_on_native_linux.md)*) — reachable today only through an injected set. The arm is an ALLOW-LIST (E2 judge round, F4): `(in the set, WslGeneration.None)` is the one admitting answer; `Unreadable` gets the banner sentence, and any other generation (a WSL banner on a host that read as native Linux — impossible in production) gets *the host reads as native Linux but its kernel banner says Wsl2; the two facts disagree* — a generation added later is refused until someone admits it. `Unreadable` is produced ONLY by
   `WslGenerations.Of(onLinux, BannerReading)` — Linux with a `/proc/version` that is absent, throws or is empty (`ProcVersion.ReadFrom` over a seam; `ProcVersion.Reading` is the one read, `Text` unchanged for
   `VendorDiagnosis`); `WslGenerations.Of(string)` never answers it, so `shared/wsl-banner-vectors.json` and the extension's parity test do not move. `WslGenerations.ForHost(kind)` is now the ONE place `VibeHost`,
   `KimiHost` and `VibeRuntime`'s test door decide whether to read the kernel: WSL **and native Linux** (it was WSL only, three copies). `KeyringSessionFacts.Of(environment, isSocket, listing, uid)` (`runners/Platform/`) reads

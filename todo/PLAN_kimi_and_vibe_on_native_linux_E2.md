@@ -1,7 +1,6 @@
 # PLAN — E2 stories: the Vibe series on `ubuntu-claude`, and the C1 admission that a full pass switches on
 
-> Status: **plan, 2026-10-22; story S0 (the probe amendment) built the same day on `docs/native-linux-e2` (its status sits under E2.S0 — not merged, review open), S1 measured the same day (every cell passed, RESULTS_vibe §32), S2 (the C1 flip in the server) built the same day on `feat/native-e2-s2` (its status sits under E2.S2 — not merged, review open), S3–S5 not started — the E2 plan round passed (coai 99e086b8, `proceed`, four findings, all
-> accepted and folded the same day; the C1 risk consult 8e2480a0 answered and folded the same day; both records are at the end).**
+> Status: **stories S0–S4 built and merged on `docs/native-linux-e2` (2026-10-22): S0 the probe amendment, S1 measured (every cell passed, RESULTS_vibe §32), S2 the C1 flip in the server, S3 the extension's half, S4 the limitation row and the docs; the Opus judge round is done (F1–F4 accepted and fixed, F5 is the owner's §9 question — record at the end); the code gate (coai `review_code`) is next; S5 (the live round on a local binary, the release, the rollback line) is open.** The E2 plan round passed earlier (coai 99e086b8, `proceed`, four findings, all accepted and folded the same day; the C1 risk consult 8e2480a0 answered and folded the same day; both records are at the end).
 > Scope: the paid Vibe series on the owner's native Ubuntu host
 > `ubuntu-claude` (N-H1, N-V0, N-V1–N-V6) and its record, `research/RESULTS_vibe_confinement.md` §32; one amendment to E1's probe
 > plumbing BEFORE the series (every native cell carries the closed keyring road the product will ship); then — only on a full pass —
@@ -566,13 +565,13 @@ job; B1–B3 both ways; Opus review has no open finding; merged BEFORE S1's arch
 seam, which only sees what `minimalEnv` and the sliced source give it — `isNativeLinuxHost` must be passed in, not imported inside the
 slice).
 
-### S0 — status: built 2026-10-22 on `docs/native-linux-e2` (not merged; the Opus review and the Linux CI job are open)
+### S0 — status: built 2026-10-22 on `docs/native-linux-e2`, merged there; the Linux CI job is green (run 39769143254, on `c7857f21d`); the Opus judge round is done (the record at the end)
 
 Built as the spec above, test-first, with the deviations below. The tests start no CLI and nothing paid ran in them (one accidental manual run is recorded below): the whole story is `node --test`
 over cut-out functions and injected file systems. `node --test scripts/lib/*.test.mjs scripts/native/*.test.mjs` on Windows: **401 tests, 344 pass,
 0 fail, 57 skipped** (after the judge round below) (the bash/`/proc`/`setsid` cases skip by name, saying they run on the Linux CI job); before the story it was 344 / 287 / 0 / 57,
-so the story adds 57 tests (12 in `vibe.test.mjs`, 4 in `host-facts.test.mjs`, 39 in the new `cli-args.test.mjs` of the incident below), all green on Windows. The Linux CI job (*Probe script tests*) is dispatched
-on the branch; its verdict is the story's remaining half of "Done when".
+so the story adds 57 tests (12 in `vibe.test.mjs`, 4 in `host-facts.test.mjs`, 39 in the new `cli-args.test.mjs` of the incident below), all green on Windows. The Linux CI job (*Probe script tests*) ran green (run 39769143254,
+`success`, on `c7857f21d`): that was the story's remaining half of "Done when".
 
 **What was built, where.**
 
@@ -665,7 +664,7 @@ refused a trailing value-less flag, `--help` and unknown flags, its only hole be
 **J6.** The audit test is no longer circular: it compares each script's `FLAG_SPECS` entry with the flags that script's code actually reads (quoted `--flag` literals, plus `--arms` for `armFilterOf(argv)`), so a script reading a flag its spec lacks, or a spec flag nothing reads, is red — break-its: `flag('--bogus', '')` added to the Vibe probe,
 and the manifest's `--stage` read misspelt, both red with `… reads flags its FLAG_SPECS.<script> does not declare (or declares ones it never reads)`. Windows: `node --test scripts/lib/*.test.mjs scripts/native/*.test.mjs` → **401 tests, 344 pass, 0 fail, 57 skipped**.
 
-**Done when, as it stands.** S-N20 and the `isNativeLinuxHost` cases red then green on Windows: yes. Green on the Linux CI job: dispatched, not yet read here. B1–B3 both ways: yes. Opus review: open.
+**Done when, as it stands.** S-N20 and the `isNativeLinuxHost` cases red then green on Windows: yes. Green on the Linux CI job: yes — run 39769143254 (`success`). B1–B3 both ways: yes. Opus review: done (the judge round at the end).
 Merged before S1's archive: open (the branch is `docs/native-linux-e2`; no PR was made by this story).
 
 ### E2.S1 — The series on `ubuntu-claude`, and RESULTS_vibe §32 (no code; the lead)
@@ -797,7 +796,7 @@ THE LINUX CI JOB (its messages copied from that job's log into the summary; it s
 **Roles.** Opus brief (it fixes the two constants' names, the `host` parameter's position, and the order "no-op first, red, then the
 arm"); Sonnet codes; Opus reviews, reading `EnvironmentRefusal`'s two counts side by side with `Built`.
 
-### S2 — status: built 2026-10-22 on `feat/native-e2-s2` (not merged; the Opus review is open)
+### S2 — status: built 2026-10-22 on `feat/native-e2-s2`, merged into `docs/native-linux-e2`; the Opus judge round is done (F2 and F4 touched it: the banner pin and the allow-list arm, see the record at the end)
 
 Built as the spec above, RED first, with the deviations below. The product is `d9a3d07e8` (the arm) over `65036a3b9` (the RED commit: the host threaded
 through `Built`, `EnvironmentRefusal`, `Verdict` and `VersionWarning` as a NO-OP, the two new test classes, the flipped pins). Three break-it commits were then
@@ -964,7 +963,9 @@ union; the lead has read the ru and uk sentences; Opus review has no open findin
 **Roles.** Opus brief (it carries §2.5's sentences verbatim and the union decision of §2.4); Sonnet codes; Opus reviews (every `HostKind`
 site, and that no `'linux'` arm silently serves `'linux-unread'`).
 
-### S3 — status: built 2026-10-22 on `feat/native-e2-s3` (from `docs/native-linux-e2` `755e19142`; not merged; the lead's read of ru/uk and the Opus review are open)
+### S3 — status: built 2026-10-22 on `feat/native-e2-s3` (from `docs/native-linux-e2` `755e19142`), merged into `docs/native-linux-e2` (`6ef0bd4a3`); the Opus judge round is done; the lead's read of ru/uk is open
+
+**First run on the merged tree:** CI run 39825037272 (dispatched on `9b259700d`, `docs/native-linux-e2` after the S3 and S4 merge) — all jobs green (`completed`, `success`: extension typecheck and test, workflows actionlint, build · test · family checks, macOS · mcp · server · bench, Windows · mcp, the real-editor job).
 
 Built as the spec above, test-first, `src_vs_code` and its docs only (`src_mcp` is S2's, `shared/consultant-limitations.json` S4's — neither touched).
 The extension's `npm test` (compile + every file under `out/test` and the source `.test.mjs` files): see *Result* below.
@@ -1062,7 +1063,9 @@ the Opus review; the release number if another `src_mcp` minor ships first (DL14
 **Roles.** Opus brief; Sonnet codes the row and the tests, and drafts the docs from S1's §32 and S2/S3's summaries; Opus reviews the docs
 against the code (the self-audit of the Knowledge Base Sync rule).
 
-### S4 — status: built 2026-10-22 on `feat/native-e2-s4` (from `docs/native-linux-e2` 755e19142; not merged; the Opus review of the docs against the code is open)
+### S4 — status: built 2026-10-22 on `feat/native-e2-s4` (from `docs/native-linux-e2` 755e19142), merged into `docs/native-linux-e2` (`33a9f1c7a`); the Opus judge round (the docs against the code) is done
+
+**First run on the merged tree:** CI run 39825037272 (dispatched on `9b259700d`) — all jobs green (`completed`, `success`: extension typecheck and test, workflows actionlint, build · test · family checks, macOS · mcp · server · bench, Windows · mcp, the real-editor job).
 
 Built as the spec above, test-first. **What changed.**
 
@@ -1300,3 +1303,21 @@ Verdict `proceed`. Every finding, its decision, and where it was folded; nothing
 | 2 | The closure is a claim about MEASURED versions: `keyring` 25.7.0's core short-circuits env → config → discovery (so the forced backend beats `keyringrc.cfg` and plugin entry points) and Vibe 2.26.1's Linux credential reads go through `keyring.get_password` (no direct D-Bus path found); but `VibeLaunch.cs:322` RUNS an unmeasured Vibe with a warning (the owner's 2026-10-13 decision), and a later Vibe could call `set_keyring` or Secret Service directly | yes | The owner's warn-and-run kept. §2.3 qualifies the claim by version; the admission remarks and §32 say *measured closed on Vibe 2.26.1 (keyring 25.7.0)* (§2.5, the limitation row too); on `HostKind.Linux` the unmeasured-version warning gains one pinned clause (§2.5), `Verdict`/`VersionWarning`/`Unmeasured` take the host, tested by S-N22 (S2) with break-it B8b; §9 carries the NON-blocking owner question "refuse unmeasured Vibe versions on native Linux?" |
 | 3 | Host misclassification: a WSL kernel misread as native Linux still gets the forced backend; a WSL-kernel container follows the unchanged WSL branch; a blank or missing banner refuses | yes — `HostKind.cs:59`, `WslGeneration.cs:29-30`, `:40-45` | Recorded in §2.4 as the reason the doubt is closed: the banner is classification, not attestation; each misread lands on the safe side (a closed road on a WSL launch opens nothing; the WSL branch is unchanged; an unread banner refuses) |
 | 4 | S2 needs DELIVERY tests, not only request-dictionary assertions: a real child observing the value on every road, with a conflicting server value; a missing or wrong fifth entry refusing BEFORE spawning. And S1's pass criteria should name a signed-in and a resumed launch succeeding under `fail.Keyring` | yes — the fake CLI already records `PYTHON*` values (`tests_fakecli/Program.cs:617-627`); real-child launches exist (`ACliRowsEffortTests.cs:25`) | S-N23 in S2 (`VibeNativeLinuxDeliveryTests`, Linux CI job, six roads including both version probes, the conflicting server value, the refusal half proven by the record file never written, the WSL2 no-leak leg) with its REDs and break-its B5–B7, B8c; §3.2 and S1 name the signed-in (N-V2) and resumed (N-V3) launches under `fail.Keyring` as pass criteria, covered once S0 lands |
+
+## The E2 Opus judge round (2026-10-22) — F1–F4 accepted, F5 is the owner's §9 question
+
+The Opus judge read the merged tree of S0–S4 (`docs/native-linux-e2` `9b259700d`). Five findings; four accepted and fixed, one handed to the owner. F2, F3 and F4 are fixed in the commit that carries this record; F1 was handed over by the lead outside this commit and is not restated here.
+
+| # | Finding | Verdict | What changed |
+|---|---|---|---|
+| F1 | handed over by the lead; not part of this commit | accepted | fixed outside this commit |
+| F2 | `VibeLaunchRulesTests.OnlyAWsl2Banner_StartsVibe` read the generation with the pure text rule `WslGenerations.Of(vector.Banner)`, which maps the shared `empty-banner` vector ("") to `None`, host kind Linux, "starts". The test therefore asserted that Vibe is ADMITTED on an empty banner, while the product reads the banner through `ProcVersion.ReadFrom` (unread, so `Unreadable`, so refused, DN6) and the extension maps the same vector to `linux-unread`. A test that asserts something false. | accepted | the test reads the vector the product's way — `WslGenerations.Of(onLinux: true, ProcVersion.ReadFrom(() => vector.Banner))` — expects the generation `Unreadable` for an unread banner, and `starts = Wsl2 \|\| (kind == Linux && the banner was read)`; renamed `AWsl2OrAReadNativeBanner_StartsVibe_AnUnreadOneDoesNot`. |
+| F3 | stale status lines: this plan's line 3, S0's "Linux CI not yet read", the parent plan's status line and its `### E2`, the `todo/README.md` row, no `research/module_tests.md` pointer for S3's S-N9–S-N11, no CI run id on S3 and S4 | accepted | all of them, in this commit (S3 and S4 carry CI run 39825037272 as their first run on the merged tree) |
+| F4 | `HostAdmission.NativeLinux` ended in `_ => string.Empty`: a DEFAULT-ADMIT. `HostKind.Linux` with `Wsl1` or `Wsl2` is impossible in production (a WSL banner makes the host `HostKind.Wsl`) but would have been admitted, against §2.1's rule that the absence of a fact refuses. | accepted | an allow-list: `(true, WslGeneration.None)` is the ONE admitting arm; `Unreadable` keeps the banner sentence; every other generation gets a new sentence (*the host reads as native Linux but its kernel banner says Wsl2; the two facts disagree, so coai cannot tell what it is running on (DN6)*). The "could not be read" sentence would be false here (the banner WAS read) and the "WSL2 only" one would blame the wrong fact. A generation added to the enum later is refused until someone admits it. |
+| F5 | whether a Vibe version with no manifest entry should be REFUSED on a native Linux host | the owner's — §9, the last bullet (non-blocking) | nothing: E2 keeps the 2026-10-13 decision (warn, never refuse) |
+
+**RED, GREEN, break-it.**
+
+- F2, RED: the OLD test body run against the product's real path for `empty-banner` (only its generation line swapped for the product's, and its first assertion removed so that the `starts` expectation is the one under test) failed: *Expected (VibeLaunch.HostRefusal(kind, "vibe", generation).Length == 0) to be True, but found False.* — `OnlyAWsl2Banner_StartsVibe(id: "empty-banner")`. The old expectation ("native Linux starts") contradicts the product, which refuses. GREEN: the rewritten test passes for every vector.
+- F4, RED: `HostAdmissionOnNativeLinuxTests.ANativeLinuxHost_WhoseBannerNamesWsl_IsRefused_ByTheAllowList` (Wsl1 and Wsl2) failed: *Expected HostAdmission.Refusal("Vibe", HostKind.Linux, "vibe", generation) "" to contain "disagree".* (the combination was admitted). GREEN after the allow-list. Break-it: the default arm restored (`_ => string.Empty`) turned both red again; the fix put back, green.
+- Run: `*HostAdmission*` 41/41, `*VibeRuntimeTests` 31/31, `*VibeLaunch*` 72 (70 pass, 2 skip by name on Windows), `*KimiLaunch*` 88/88, `*HostFactsModeTests` 11 (10 pass, 1 skip), `*ConsultantLimitationsTests` 17/17.

@@ -85,6 +85,20 @@ public sealed class HostAdmissionOnNativeLinuxTests
         HostAdmission.Refusal(runtime, HostKind.Linux, executable, generation).Should().Be(sentence);
     }
 
+    /// <summary>
+    /// F4 of the E2 Opus judge round: the native Linux arm is an ALLOW-LIST — only a READ banner naming no WSL admits. HostKind.Linux with a WSL generation cannot happen in production (a WSL banner makes the host
+    /// <see cref="HostKind.Wsl"/>), but "absence of a fact refuses" must hold for the impossible combination too: it is refused, with the sentence that says the two facts disagree (NOT the "could not be read" one — it was read).
+    /// </summary>
+    [Theory]
+    [InlineData(WslGeneration.Wsl1)]
+    [InlineData(WslGeneration.Wsl2)]
+    public void ANativeLinuxHost_WhoseBannerNamesWsl_IsRefused_ByTheAllowList(WslGeneration generation)
+    {
+        HostAdmission.Refusal("Vibe", HostKind.Linux, "vibe", generation).Should().Contain("disagree").And.Contain("DN6").And.NotContain("could not be read",
+            $"HostKind.Linux with {generation} was admitted — the native arm is a default-admit, not an allow-list");
+        HostAdmission.Refusal("Vibe", HostKind.Linux, "vibe", generation, VibeMeasured).Should().Contain("disagree");
+    }
+
     // ---------- S-N7 : an unreadable banner is never "native Linux" ----------
 
     /// <summary>S-N7 (teeth): a runtime in the set is still refused when the banner could not be read, with the DN6 sentence.</summary>

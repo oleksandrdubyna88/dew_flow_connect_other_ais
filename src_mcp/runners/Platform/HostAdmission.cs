@@ -44,20 +44,25 @@ public static class HostAdmission
     };
 
     /// <summary>
-    /// Membership is asked FIRST: a runtime not in the set gets today's sentence whatever the banner says, so an empty set changes no answer. A runtime in the set is admitted only on a banner that was READ — an
-    /// unreadable one could be a WSL1 kernel (DN6).
+    /// Membership is asked FIRST: a runtime not in the set gets today's sentence whatever the banner says, so an empty set changes no answer. A runtime in the set is admitted only on a banner that was READ and names no WSL — an
+    /// ALLOW-LIST (<c>(true, None)</c> is the one admitting arm; every other generation is refused, so a generation added later is refused until someone admits it). An unreadable banner could be a WSL1 kernel (DN6); a
+    /// WSL banner on a host that read as native Linux cannot happen in production, and the two facts disagreeing is a refusal too.
     /// </summary>
     private static string NativeLinux(string runtime, WslGeneration wsl, IReadOnlySet<string> measured) => (InSet(runtime, measured), wsl) switch
     {
         (false, _) => Wsl2Only(runtime, "it is measured on WSL2 and not yet on a native Linux host", string.Empty),
+        (true, WslGeneration.None) => string.Empty,
         (true, WslGeneration.Unreadable) => BannerUnreadable(runtime),
-        _ => string.Empty,
+        (true, _) => BannerDisagrees(runtime, wsl),
     };
 
     private static bool InSet(string runtime, IReadOnlySet<string> measured) => measured.Any(name => name.Equals(runtime, StringComparison.OrdinalIgnoreCase));
 
     private static string BannerUnreadable(string runtime) =>
         $"{runtime} is refused on this Linux host — the kernel banner /proc/version could not be read, so coai cannot tell a native Linux host from WSL1 ({NativePlan})";
+
+    private static string BannerDisagrees(string runtime, WslGeneration wsl) =>
+        $"{runtime} is refused on this Linux host — the host reads as native Linux but its kernel banner says {wsl}; the two facts disagree, so coai cannot tell what it is running on ({NativePlan})";
 
     private static string NothingMeasured(string runtime, HostKind host) =>
         $"{runtime} is refused on a {HostKinds.Word(host)} host until it is measured there ({Parent}) — {runtime} is measured on Windows and WSL2 only";

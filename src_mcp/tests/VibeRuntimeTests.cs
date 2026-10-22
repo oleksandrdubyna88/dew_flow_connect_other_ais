@@ -390,22 +390,24 @@ public sealed class VibeLaunchRulesTests
 
     /// <summary>
     /// S-V17: every banner of <c>shared/wsl-banner-vectors.json</c> — the ONE rule for which WSL a kernel is, which the extension's tests read
-    /// too — through the generation predicate; only a WSL2 banner starts Vibe. A WSL2 kernel with no marker reads as none (the vector says so).
+    /// too — read the way the PRODUCT reads a kernel banner (<see cref="ProcVersion.ReadFrom"/> then <see cref="WslGenerations.Of(bool, BannerReading)"/>, never the pure text predicate alone). Only a WSL2 banner or a READ
+    /// banner naming no WSL starts Vibe; a banner that was not read (the empty vector) is <see cref="WslGeneration.Unreadable"/> and is refused (DN6) — the extension maps the same vector to <c>linux-unread</c>.
     /// </summary>
     [Theory]
     [MemberData(nameof(WslBannerVectors.Ids), MemberType = typeof(WslBannerVectors))]
-    public void OnlyAWsl2Banner_StartsVibe(string id)
+    public void AWsl2OrAReadNativeBanner_StartsVibe_AnUnreadOneDoesNot(string id)
     {
         var vector = WslBannerVectors.Named(id);
-        var generation = WslGenerations.Of(vector.Banner);
+        var reading = ProcVersion.ReadFrom(() => vector.Banner);
+        var generation = WslGenerations.Of(onLinux: true, reading);
 
-        generation.Should().Be(vector.Generation, $"vector '{id}': a WSL1 banner was admitted as WSL2, or the extension's rule and the server's differ");
-        var kind = HostKinds.Of(windows: false, linux: true, macOs: false, wsl: VendorDiagnosis.NamesWsl(vector.Banner));
+        generation.Should().Be(reading.Read ? vector.Generation : WslGeneration.Unreadable,
+            $"vector '{id}': a WSL1 banner was admitted as WSL2, an unread banner was not Unreadable, or the extension's rule and the server's differ");
+        var kind = HostKinds.Of(windows: false, linux: true, macOs: false, wsl: VendorDiagnosis.NamesWsl(reading.Text));
 
-        // A WSL kernel starts Vibe only when it is WSL2. A banner naming no WSL is a native Linux host with a READ banner, which E2.S2 admits (§32): the vector file still says what the rule is, and
-        // the admission now has one more way to start a row — so the expectation is "WSL2, or a native host", not "WSL2" alone (the E2 plan's §2.6 listed this pin as untouched; it cannot be).
-        var starts = vector.Generation == WslGeneration.Wsl2 || kind == HostKind.Linux;
-        (VibeLaunch.HostRefusal(kind, "vibe", generation).Length == 0).Should().Be(starts);
+        // A WSL kernel starts Vibe only when it is WSL2. A banner naming no WSL is a native Linux host, which E2.S2 admits (§32) only when the banner was READ: an unread one could be a WSL1 kernel (DN6).
+        var starts = vector.Generation == WslGeneration.Wsl2 || (kind == HostKind.Linux && reading.Read);
+        (VibeLaunch.HostRefusal(kind, "vibe", generation).Length == 0).Should().Be(starts, $"vector '{id}'");
     }
 
     [Fact]

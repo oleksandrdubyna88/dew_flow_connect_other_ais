@@ -1,6 +1,6 @@
 # PLAN — Vibe and Kimi on a native Linux host: measure there first, then admit each one that passes
 
-> Status: **epic E1 coded 2026-10-21 (PR #914: the host scripts and `--host-facts`, the per-runtime admission set, Vibe's keyring arms, the Kimi probe fixes); E2 and E3 are plan only, nothing of them written, 2026-10-21 — the plan gate passed (coai 942810c1, `good_enough`, its ten accepted
+> Status: **epic E1 coded 2026-10-21 (PR #914: the host scripts and `--host-facts`, the per-runtime admission set, Vibe's keyring arms, the Kimi probe fixes); E2 built and Vibe measured on `ubuntu-claude` 2026-10-22 (stories S0–S4 merged on `docs/native-linux-e2`; RESULTS_vibe §32, every cell passed; S5, the live round and the release, open), E3 is plan only, nothing of it written — the plan gate passed (coai 942810c1, `good_enough`, its ten accepted
 > findings folded below), the consult answered (634d4907, 3 of 3), the E1 plan round passed (b54f22f5, `proceed`, folded the same
 > day), the cadence consult for epics 1–3 answered (e9a9b20e, folded the same day: the keyring road is CLOSED, not guessed), and the
 > work is split into three epics (E1 → E2, E1 → E3, at the bottom; E1's stories are
@@ -819,6 +819,7 @@ Scouts are Sonnet, ⌈1.5N⌉ per epic.
   and the live round on the local binary answered, then the release and the post-release round — or a cell failed and the record alone
   shipped with nothing admitted; WSL2's Vibe launch unchanged (its pins untouched); the series folder removed by `remove-series.sh`;
   `plan-lifecycle.mjs` clean.
+- **Progress (2026-10-22).** S1 done-when: measured 2026-10-22, pass (RESULTS_vibe §32). S0, S2, S3, S4 built and merged on `docs/native-linux-e2`; the Opus judge round done; the code gate and S5 open.
 - **Cornerstone areas.** **C1** (Fable spec: the admission's inputs — the measured set, the read banner, the closed keyring road in the
   launch it permits, the refusal sentences — and the rule that absence of a fact is a refusal, never an admission; it starts from E1's
   plumbing).
