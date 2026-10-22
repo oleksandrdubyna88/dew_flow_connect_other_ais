@@ -5532,3 +5532,27 @@ A kept failure of it ("the round reached its limit") reopens C6 against the setu
 **Evidence and counts.** Today's end-to-end test with `FAKECLI_SLEEP_MS=1900` failed 20 of 20 runs, two messages alternating — `"reviewers": "0 of 1 reviewers answered; failed: codex/FeatureReview: timeout"` (8.8 s) and `"… failed: codex/FeatureReview: cancelled; the round reached its 0 minute limit and the reviewers still running were cancelled"` (9.6 s), both under
 `Expected answer.GetProperty("verdict").GetString() to be "proceed" … "verdict": "revise"`. After: the smoke test plus the wiring arm 0 of 20, the scheduler-level test 0 of 20, the pure test 0 of 20. Test count +3, as written. `EveryBudgetInAClockedClassReadsItsClockTests` 6 of 6 green (S5 touches no clocked class).
 Whole `CoaiMcp.Tests.exe` at the time (Windows, Debug, 25 min 41 s on a loaded machine): 13,152 total, 13,032 passed, 120 skipped, 0 failed. The 20 Windows CI runs of the plan's watch are still to come.
+
+## The suite is deterministic — E5 S3: the HTTP stub's teardown (C16, 2026-10-22)
+
+`ApiEndpointStub` (`src_mcp/tests/ApiEndpointStub.cs`), the stand-in OpenAI-compatible endpoint 16 test classes share, used to stop its `HttpListener` while a
+handler was still writing the response's headers: on Linux CI the managed listener's `Stop()` enumerated the header collection the handler was filling
+(`NullReferenceException` out of the test's `Dispose`; runs 37134428327, 37138270645, 38063638766, 39278975228). The stub tracked nothing, so it could neither wait
+for the handler nor keep the listener away from it.
+
+`Dispose` is now, in this order: **close admission** (the serving loop admits each accepted context under a lock; after the close it aborts one and handles none)
+-> **abort** every in-flight response -> **cancel `Disposing`** (both synchronous, before any wait) -> **drain** the tracked handlers for `DrainBound` (2 s; reached
+only by a handler that ignores both its token and its aborted response, which is then named in the journal as `dispose: a handler outlived the 2 s bound and was
+aborted: <Method> <Path>`) -> **`Stop()`/`Close()`**. Never a wait before the cancel, never a stop while a handler may be writing. Idempotent. A late callback
+(returning from `Answers` after `Dispose`) finds its response aborted; its write throws into `AnsweredAsync`'s catch and is journaled. `HandledAsync` journals a
+failure before the answer's own catch (a body read on an aborted connection). The handler contract: `Answers` as before (the fifty callers unchanged), or
+`CancellableAnswers = (seen, token) => ...` for a handler that blocks and should be freed by the dispose; `IsListening` and `HandlersFinished()` are the observers the
+tests await instead of polling.
+
+Tests: `ApiEndpointStubTests` (4): `AStubDisposedWhileItsHandlerWrites_WaitsForTheHandler_AndDoesNotThrow` (a 300 ms real sleep inside the handler — the subject, the one
+sleep E5 keeps; the listener is still listening when the handler ends), `AHandlerStillActivePastTheBound_IsAbortedBeforeTheListenerStops_AndDisposeDoesNotThrow` (the
+`outlived` sentence, then the late write fails and is journaled), `AHandlerThatWaitsOnTheDisposingToken_IsReleasedByDispose_WithoutCostingTheBound` (carried by events, not a
+stopwatch), `ADisposedStub_IsQuietWhenNothingIsRunning_AndWhenDisposedAgain`. Break-its B-E5-10 (abort and cancel dropped), -11 (stop before drain), -12 (sentence dropped)
+each red. The race itself is Linux-only and has no arm; the order that excludes it is what is pinned, and the Linux CI leg plus the plan's 20-run watch decide.
+Teardown cost over the 183 tests of the stub-using classes: 125-249 ms before, 138-250 ms after (170 disposals). Plan:
+[PLAN_the_suite_is_deterministic_and_leaves_no_temp_E5.md](../todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp_E5.md) §3.6 / S3.
