@@ -3,16 +3,17 @@ import { isLaunchLine, type LedgerLine } from './roundMoney';
 
 /**
  * Launches per round (E6.S3 of todo/PLAN_the_round_counter_tail_E6.md): the launch lines that carry a round key, divided by
- * the keyed rounds. Pure.
+ * the rounds those lines name (the covered population). Pure.
  *
  * <p>A launch is whatever {@link isLaunchLine} says — never a second allow-list here — of THIS row's vendor (one round key is
  * in every vendor row of a multi-vendor round, and each row counts its own vendor's launches), of a round in the row's
  * `roundKeys`, and from the store the answer's `keyStore` attributes that key to. Membership in the keys IS the window's cut
  * (the round started inside it), so there is no second time comparison.</p>
  *
- * <p>The denominator is the keyed rounds. A keyed round none of whose lines is a launch is reported apart; a round with no key
- * (written before coai-mcp 0.60.2, or skipped) cannot be tied to a line at all and is reported apart, differently — only
- * THOSE are blamed on the version.</p>
+ * <p>The denominator is the COVERED rounds: the keyed rounds with at least one eligible launch line. A keyed round none of
+ * whose lines is a launch is not averaged in (it would drag the ratio down by rounds nobody could count) — it is reported
+ * apart; a round with no key (written before coai-mcp 0.60.2, or skipped) cannot be tied to a line at all and is reported
+ * apart, differently — only THOSE are blamed on the version. With no covered round there is no ratio, never a 0.</p>
  */
 
 /** What a row says about its rounds: whose, which keys, how many have none, and who owns each key. */
@@ -24,9 +25,9 @@ export type LaunchLine = Pick<LedgerLine, 'attempt' | 'cli' | 'provider' | 'roun
 export interface LaunchFigure {
   /** Launch lines of this vendor's keyed rounds. */
   readonly launches: number;
-  /** The keyed rounds — the denominator. */
+  /** The keyed rounds with at least one eligible launch line — the denominator. */
   readonly rounds: number;
-  /** Launches over rounds; nothing when there is no keyed round to divide by. */
+  /** Launches over rounds; nothing when no round has a launch line to divide by. */
   readonly perRound: number | undefined;
   /** Keyed rounds that no launch line names. */
   readonly keyedWithoutLaunch: number;
@@ -41,8 +42,8 @@ export function launchesPerRound(row: LaunchRow, lines: readonly LaunchLine[]): 
 
   return {
     launches: launches.length,
-    rounds: keys.size,
-    perRound: keys.size === 0 ? undefined : launches.length / keys.size,
+    rounds: withLaunch.size,
+    perRound: withLaunch.size === 0 ? undefined : launches.length / withLaunch.size,
     keyedWithoutLaunch: row.roundKeys.filter((key) => !withLaunch.has(key)).length,
     withoutKey: row.roundsWithoutKey,
   };

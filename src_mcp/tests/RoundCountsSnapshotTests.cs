@@ -331,6 +331,53 @@ public sealed class RoundCountsSnapshotTests : IDisposable
         read.Should().BeOfType<SnapshotReading.Loaded>().Which.Document.Rounds.Single().StartedUtc.Should().Be(Now.AddHours(-1).ToString("O"), "windows compare these as text, so they must all be spelt one way");
     }
 
+    /// <summary>A valid snapshot's text with one node replaced — the way to say a <c>null</c> element, which the typed fixtures cannot build.</summary>
+    private string Tampered(Action<JsonNode> change)
+    {
+        var node = JsonNode.Parse(RoundCountsSnapshot.Serialize(
+            Document(Wsl("Ubuntu"), Now, Round(1, Key('b'), Now.AddHours(-1), nameof(Stage.CodeReview), Ran("codex")))))!;
+        change(node);
+        var path = Path.Combine(_store.Path, "tampered.json");
+        File.WriteAllText(path, node.ToJsonString());
+
+        return path;
+    }
+
+    private static void ShouldBeRefusedAsNotASnapshot(SnapshotReading read) =>
+        read.Should().BeOfType<SnapshotReading.Refused>().Which.Refusal
+            .Should().Be(new SnapshotRefusal(RoundCountsSnapshot.Unreadable, "not a round-counts snapshot"));
+
+    /// <summary>The nullable annotations reject a null PROPERTY but not a null ELEMENT of a list, so a null round got as far as the shape checks and crashed them.</summary>
+    [Fact]
+    public void ANullRound_IsUnreadable_NotACrash()
+    {
+        var path = Tampered(node => node["rounds"] = new JsonArray((JsonNode?)null));
+
+        var read = () => RoundCountsSnapshot.Read(path);
+
+        read.Should().NotThrow("a file from the other side is data, not a promise: a null round is a refusal");
+        ShouldBeRefusedAsNotASnapshot(RoundCountsSnapshot.Read(path));
+    }
+
+    [Fact]
+    public void ANullReviewer_IsUnreadable_NotACrash()
+    {
+        var path = Tampered(node => node["rounds"]![0]!["reviewers"] = new JsonArray((JsonNode?)null));
+
+        var read = () => RoundCountsSnapshot.Read(path);
+
+        read.Should().NotThrow("a null reviewer is a refusal, not a NullReferenceException in the merge");
+        ShouldBeRefusedAsNotASnapshot(RoundCountsSnapshot.Read(path));
+    }
+
+    [Fact]
+    public void ANullReviewersArray_IsUnreadable()
+    {
+        var path = Tampered(node => node["rounds"]![0]!["reviewers"] = null);
+
+        ShouldBeRefusedAsNotASnapshot(RoundCountsSnapshot.Read(path));
+    }
+
     [Fact]
     public void TheJson_ForAWslStore_NamesItsHostAndDistribution()
     {

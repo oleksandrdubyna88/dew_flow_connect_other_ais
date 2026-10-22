@@ -488,6 +488,12 @@ second time comparison. `roundsBlock.ts` — one cell in `rowLine` (`:209-219`) 
 `LAUNCHES_PER_ROUND` beside `PER_LAUNCH` in `roundMoney.ts`. The population is both sides' lines (S2) against both sides'
 keys (S1).
 
+**The denominator (corrected after the FEATURE gate).** `rounds` is the COVERED population the parent plan names — the keyed rounds with at
+least one eligible launch line (`withLaunch.size`), not every keyed round: 3 launches of A with a second keyed round B on no line is 3.0
+(`keyedWithoutLaunch` 1), not 1.5, and with no launch line at all the ratio is undefined (a dash, with *N rounds carry no launch count*),
+never 0. The rounds that carry no launch line are reported apart (`keyedWithoutLaunch`, keyless ones through `withoutKey`), not averaged in.
+Tests: `TheRatio_IsOverTheRoundsThatHaveALaunchLine`, `NoLaunchLineAtAll_IsNoRatio_NotZero`.
+
 **Not changed:** `isLaunchLine`, `ONE_LAUNCH_ATTEMPTS`; the median; `perRoundCell`. **Ships:** extension. **Docs:**
 `module_extension.md` (a `launchesPerRound.ts` row; the Rounds block paragraph), `module_tests.md`.
 
@@ -517,7 +523,7 @@ and, when the other side … not included: it is never opened across the boundar
 from a snapshot the other side's coai-mcp writes after every round — never its database — each named with its part and its age;
 a side with no snapshot (an older coai-mcp there), one that could not be read, or one written by a newer coai-mcp is *not
 included* with the reason; a side quiet for a week is 0 *as of* its last write; and *launches per round* is the launch lines
-that carry a round key divided by the keyed rounds, with the rounds that carry no such line said apart. Twins at `helpDe.ts:208`,
+that carry a round key divided by the rounds those lines name, with a keyed round that carries no such line said apart and not averaged in. Twins at `helpDe.ts:208`,
 `helpEs.ts:208`, `helpRu.ts:208`, `helpUk.ts:200`.
 
 **Not changed:** the Models card's shape; `ranOnOf`; the money floors. **Ships:** extension. **Docs:** `module_extension.md`

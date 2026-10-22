@@ -343,6 +343,36 @@ public sealed class RoundCountsMergedTests : IDisposable
         Merge(Snapshot("bad-key", bad)).StoresNotIncluded.Should().ContainSingle().Which.Reason.Should().Be("unreadable");
     }
 
+    /// <summary>
+    /// A null element in the other side's file used to dereference null inside the merge's key check, an exception the reader's
+    /// <c>JsonException</c> handling does not catch: the whole answer failed instead of that one store being not included.
+    /// </summary>
+    [Theory]
+    [InlineData("round")]
+    [InlineData("reviewer")]
+    public void ANullElementInOneStore_LeavesThatStoreNotIncluded_AndThisSidesRowsIntact(string nullIn)
+    {
+        Live(Key('a'), Now.AddHours(-1));
+        var valid = Snapshot("null-element", Document(Wsl("Ubuntu"), Now.AddMinutes(-6), Round(1, Key('b'), Now.AddHours(-2), nameof(Stage.CodeReview), Ran(Codex))));
+        var node = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(valid))!;
+        if (nullIn == "round")
+        {
+            node["rounds"] = new System.Text.Json.Nodes.JsonArray((System.Text.Json.Nodes.JsonNode?)null);
+        }
+        else
+        {
+            node["rounds"]![0]!["reviewers"] = new System.Text.Json.Nodes.JsonArray((System.Text.Json.Nodes.JsonNode?)null);
+        }
+
+        File.WriteAllText(valid, node.ToJsonString());
+
+        var answer = Merge(valid);
+
+        answer.StoresNotIncluded.Should().ContainSingle().Which.Reason.Should().Be("unreadable");
+        answer.Stores.Should().ContainSingle("only this side is counted");
+        RowOf(answer, "5h", Codex).Rounds.Code.Should().Be(1, "this side's rows are intact");
+    }
+
     [Fact]
     public void ANewerSchema_IsNotIncluded_NamingBothSchemas()
     {

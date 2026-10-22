@@ -7927,8 +7927,10 @@ The wording of the block, the card and the help is S4's and is NOT changed here;
   store it is today's sentence. `storeWords.ts` names a store (*this machine*, *WSL: Ubuntu*, *Windows*, *Linux*, *macOS*; an id no answer named is
   its directory). The block says *Money from <store> not included: <why>* for a foreign tail that did not read.
 - *Launches per round (S3).* `launchesPerRound.ts` (pure): a launch is `isLaunchLine` (never a second allow-list) of THIS row's vendor, whose round
-  is in the row's `roundKeys`, from the store `keyStore` names; the figure is launches over the KEYED rounds, with the keyed rounds that no line
-  names (*N rounds carry no launch count*) and the rounds with no key (*written before coai-mcp 0.60.2*, said only of those) reported apart.
+  is in the row's `roundKeys`, from the store `keyStore` names; the figure is launches over the COVERED rounds (the keyed rounds with at least one
+  eligible launch line, `withLaunch.size`) — so 3 launches of round A with a second keyed round B on no line is 3.0, not 1.5, and with no launch
+  line at all the ratio is undefined (a dash), never 0. The keyed rounds that no line names (*N rounds carry no launch count*) and the rounds with
+  no key (*written before coai-mcp 0.60.2*, said only of those) are reported apart, not averaged in.
   `launchesCell.ts` words it: the 7 d figure in the cell beside *Reviewers per round* (new header; model and kind lines carry an empty cell), 5 h
   and 24 h with their counts and the fact in its tooltip; a Team-server row is a dash *launches run on <server>, not recorded here*; a ledger that
   did not read is *unavailable*, an unavailable count *count unavailable*. `LAUNCHES_PER_ROUND` sits beside `PER_LAUNCH` in `roundMoney.ts`.

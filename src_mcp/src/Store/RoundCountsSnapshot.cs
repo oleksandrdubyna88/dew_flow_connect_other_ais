@@ -277,7 +277,18 @@ public static class RoundCountsSnapshot
     internal static string Misshapen(RoundCountsSnapshotDocument document) =>
         ShapeChecks.Select(check => check(document)).FirstOrDefault(why => why.Length > 0) ?? string.Empty;
 
-    private static readonly Func<RoundCountsSnapshotDocument, string>[] ShapeChecks = [IdFault, KeyFault, StampFault, SizeFault];
+    /// <summary>NullFault is first: the later checks dereference every round, and a check that crashes is not a refusal.</summary>
+    private static readonly Func<RoundCountsSnapshotDocument, string>[] ShapeChecks = [NullFault, IdFault, KeyFault, StampFault, SizeFault];
+
+    /// <summary>
+    /// The nullable annotations reject a null property but let a null ELEMENT of a list through, so a <c>null</c> round, a null reviewers array
+    /// or a null reviewer is checked here, at the boundary, before anything dereferences it.
+    /// </summary>
+    private static string NullFault(RoundCountsSnapshotDocument document) =>
+        document.Rounds.All(HasNoNull) ? string.Empty : "a round or a reviewer is null";
+
+    private static bool HasNoNull(SnapshotRound? round) =>
+        round?.Reviewers is { } reviewers && reviewers.All(reviewer => reviewer is not null);
 
     private static string IdFault(RoundCountsSnapshotDocument document) =>
         IsStoreId(document.Store.Id) ? string.Empty : "the store id is not 32 lower-case hex digits";

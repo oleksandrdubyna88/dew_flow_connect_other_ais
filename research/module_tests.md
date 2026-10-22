@@ -5766,3 +5766,22 @@ copies of one path are now refused (65), where they were read once; the extensio
 public `Read(path)` is unchanged. (3) Finding 4 uses a closed hierarchy and not `Outcome<T>`: `Outcome<T>` carries `default` in `Value` on a refusal and one `Why` string,
 and a snapshot refusal has two meaningful parts (a machine `Reason` the extension reads, and a `Detail`); the doctrine (§5) names a closed hierarchy for that case, and
 `SnapshotRead` (review snapshot) is the precedent for its shape and for the `_ => throw "the union is closed"` arm.
+
+## Two stores, one count — E6 FEATURE-gate follow-ups: the launches denominator and a null element in a snapshot (2026-10-22)
+
+Both fixed test first. Extension: `npm run compile; node --test out/test/launchesPerRound.test.js out/test/roundsBlock*.test.js`. C#: `dotnet build dew_flow_connect_other_ais.slnx`, then
+`CoaiMcp.Tests.exe --filter-class "*RoundCounts*"`. Each row: the real-symptom RED against the unfixed code, GREEN, then a plant (the fix broken, built, run, restored byte-for-byte, GREEN again).
+
+| Finding | Test | RED against the unfixed code | Plant (RED again) |
+|---|---|---|---|
+| 1. Launches per round is over the rounds that HAVE a launch line, not every keyed round | `launchesPerRound.test.ts` `TheRatio_IsOverTheRoundsThatHaveALaunchLine` (keys [A, B], three launch lines of A only → 3 launches, 1 round, 3.0, `keyedWithoutLaunch` 1) | `+ actual - expected`: `perRound: 1.5` against `3`, `rounds: 2` against `1` | `rounds`/`perRound` back on `keys.size`: this test, `NoLaunchLineAtAll_…` and `roundsBlockLaunches` `TheCell_ShowsSevenDays_…` red (3 of 76) |
+| (same) | `NoLaunchLineAtAll_IsNoRatio_NotZero` (keyed rounds, no lines → `perRound` undefined, `rounds` 0, *2 rounds carry no launch count*) | `Expected values to be strictly equal: 2 !== 0` (`rounds` was the 2 keyed rounds, so the ratio was 0 launches over 2, a 0.0 in the cell) | (same plant) |
+| 2. A null element in the other side's snapshot is a refusal, not a crash | `RoundCountsSnapshotTests.ANullRound_IsUnreadable_NotACrash` (`rounds: [null]`) | `Did not expect any exception because a file from the other side is data, not a promise: a null round is a refusal, but found System.NullReferenceException: Object reference not set to an instance of an object.` (thrown from `KeyFault`, past the reader's `JsonException` handling) | `NullFault` removed from `ShapeChecks`: the same message |
+| (same) | `ANullReviewer_IsUnreadable_NotACrash` (`reviewers: [null]`) | `Expected type to be CoaiMcp.Store.SnapshotReading+Refused, but found CoaiMcp.Store.SnapshotReading+Loaded.` (the null reviewer passed the reader and would be dereferenced later, in the merge's `LaunchesOf`) | (same plant) |
+| (same) | `RoundCountsMergedTests.ANullElementInOneStore_LeavesThatStoreNotIncluded_AndThisSidesRowsIntact` (theory: a null round, a null reviewer) | `Xunit.MicrosoftTestingPlatform.XunitException: System.NullReferenceException : Object reference not set to an instance of an object.` ×2 (the whole merged answer failed) | (same plant: both rows red) |
+| (same) | `ANullReviewersArray_IsUnreadable` | guard — already green: `RespectNullableAnnotations` refuses a null PROPERTY | — |
+
+Tests that assumed the old denominator and were updated on purpose: `roundsBlockLaunches.test.ts` `TheCell_ShowsSevenDays_AndTheTooltipTheOtherWindowsAndTheFact` (the 7 d figure of
+3 launches over 3 keyed rounds, one with no line, was 1.0; it is 3 launches over the 2 covered rounds, 1.5, as the 24 h window already was). The other `launchesPerRound.test.ts` tests
+(5 launches over 2 keyed rounds with a launch each; the owner-store 3 over 2; keys [A, B, C] with lines for A only asserting the fact, not `rounds`) hold under either denominator.
+Help text in five languages said *divided by the rounds that carry one* (a round key); it now says the rounds those lines name.

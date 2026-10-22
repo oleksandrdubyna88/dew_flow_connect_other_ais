@@ -46,7 +46,7 @@ import type { Vendor } from './vendors';
  * age (`storeSentence.ts`); a store that could not be counted is *not included* with its reason and never a 0; a count cell's
  * tooltip lists each store's part and a sub-row per store says where the rounds were held (`storeColumns.ts`) — labelled as
  * STORES, because coai cannot tell whether two stores sign in to one vendor account. Tokens and money are both stores' ledgers
- * (the footnote says whose), launches per round is over the rounds that carry a key.</p>
+ * (the footnote says whose), launches per round is over the rounds that have a launch line.</p>
  */
 
 export { type StoreFacts, storeSentence };
@@ -263,7 +263,7 @@ function rowLine(facts: Facts, provider: string, mine: readonly MoneyGroup[]): s
 
 /**
  * The launches-per-round cell: a Team-server row's launches run elsewhere, a count or a ledger that is unavailable says so, and
- * otherwise the figure over the keyed rounds (E6.S3).
+ * otherwise the figure over the rounds that have a launch line (E6.S3).
  */
 function launchesCellOf(facts: Facts, provider: string): string {
   const server = facts.input.ranOn(provider);

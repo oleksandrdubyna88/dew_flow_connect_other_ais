@@ -3763,7 +3763,7 @@ The answer is the plain answer (`nowUtc`, `windows[]`, `modelsKnownSince` — TH
   `side`, `directory`, `paths[]` (every spelling that reached it), `asOf` (`writtenUtc`), `quiet` (written no later than `now − 7 d`: counted as 0 *as of* its last
   write, never *not included*), `truncated`, `coaiMcpVersion`, and `conflicts`.
 - `storesNotIncluded[]` — one per path that yielded no store, in argument order: `{ path, reason, detail }` with `reason` `missing` (the path), `unreadable` (*the file
-  could not be read (<ExceptionType>)* — the exception's TYPE and a sentence of ours, never its message, which names the resolved path and with it a person — or *not a round-counts snapshot*: not JSON, no integer `schema`, `schema < 1`, a missing required field, an id that is not 32 lower-case hex digits,
+  could not be read (<ExceptionType>)* — the exception's TYPE and a sentence of ours, never its message, which names the resolved path and with it a person — or *not a round-counts snapshot*: not JSON, no integer `schema`, `schema < 1`, a missing required field, a `null` round, a `null` reviewers array or a `null` reviewer (the nullable annotations reject a null property but not a null list element, so `NullFault` — first in `ShapeChecks` — refuses them before a check dereferences one), an id that is not 32 lower-case hex digits,
   a key that is neither empty nor a key, a stamp that is not an ISO-8601 instant, more than 5 000 rounds, or a file over 16 MB) or `newer-schema` (*schema N — this
   coai-mcp reads schema 1; update coai-mcp on this side*). `schema` is read FIRST and leniently so a newer document is named as newer; an unknown property is
   ignored, which is how an added field keeps schema 1.

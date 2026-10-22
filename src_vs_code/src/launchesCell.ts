@@ -7,7 +7,8 @@ import { LAUNCHES_PER_ROUND } from './roundMoney';
  * The Rounds block's *launches per round* cell (E6.S3, D9): the 7 d figure in the cell, the other windows and the fact about the
  * rounds it does not cover in its tooltip. Pure — {@link launchesPerRound} does the counting, this words it.
  *
- * <p>A row that ran no keyed round in a window has no figure there: a dash, never a division by nothing.</p>
+ * <p>A row with no round that has a launch line in a window has no figure there: a dash, never a division by nothing and never a
+ * 0 drawn from rounds nobody could count (the tooltip's fact says how many keyed rounds carry no launch count).</p>
  */
 
 /** The cell for a row that runs on a Team server: its launch lines are `cli: remote` and never launches, so a number would always be 0. */

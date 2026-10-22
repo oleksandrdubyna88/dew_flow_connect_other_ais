@@ -49,6 +49,21 @@ test('a row with no keyless round says nothing of 0.60.2, and a row where every 
   assert.equal(launchFact(launchesPerRound(row(), [line(KEY_A), line(KEY_B)])), '');
 });
 
+test('TheRatio_IsOverTheRoundsThatHaveALaunchLine — a keyed round with no line is reported apart, not averaged in', () => {
+  const figure = launchesPerRound(row(), [line(KEY_A), line(KEY_A, { attempt: 'retry' }), line(KEY_A, { attempt: 'repair' })]);
+
+  assert.deepEqual(figure, { launches: 3, rounds: 1, perRound: 3, keyedWithoutLaunch: 1, withoutKey: 0 });
+});
+
+test('NoLaunchLineAtAll_IsNoRatio_NotZero — keyed rounds, none with a launch line: a dash, and every keyed round said apart', () => {
+  const figure = launchesPerRound(row(), []);
+
+  assert.equal(figure.rounds, 0);
+  assert.equal(figure.perRound, undefined, 'a ratio of 0 was drawn from rounds nobody could count');
+  assert.equal(figure.keyedWithoutLaunch, 2);
+  assert.match(launchFact(figure), /2 rounds carry no launch count/u);
+});
+
 test('a row with no keyed round has no per-round figure — a dash, never a division by nothing', () => {
   const figure = launchesPerRound(row({ roundKeys: [], roundsWithoutKey: 4 }), [line(KEY_A)]);
 

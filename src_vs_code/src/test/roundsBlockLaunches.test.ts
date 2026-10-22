@@ -44,10 +44,10 @@ test('TheCell_ShowsSevenDays_AndTheTooltipTheOtherWindowsAndTheFact', () => {
   const html = roundsBlock(input(windowsRead(), LINES));
   const cell = cellsOf(html, '<b>codex</b>')['Launches per round'] ?? '';
 
-  assert.match(cell, />1\.0<\/span>$/u, '3 launches over the 3 keyed rounds of the 7 d window is 1.0');
+  assert.match(cell, />1\.5<\/span>$/u, '3 launches over the 2 rounds of the 7 d window that have a launch line (the third keyed round has none) is 1.5');
   assert.match(cell, /5 h: 2\.0 \(2 launches over 1 round\)/u);
   assert.match(cell, /24 h: 1\.5 \(3 launches over 2 rounds\)/u);
-  assert.match(cell, /7 d: 1\.0 \(3 launches over 3 rounds\)/u);
+  assert.match(cell, /7 d: 1\.5 \(3 launches over 2 rounds\)/u);
   assert.match(cell, /launches per round/u);
   assert.match(cell, /1 round carries no launch count/u);
   assert.match(cell, /1 round written before coai-mcp 0\.60\.2 carries no round key/u);
