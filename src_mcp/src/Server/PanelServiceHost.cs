@@ -31,6 +31,7 @@ public sealed class PanelServiceHost : IPanelServiceSource
     private readonly Func<string, string> _readText;
 
     private readonly Noticing _noticing;
+    private readonly CancellationToken _hostStopping;
     private readonly Lock _gate = new();
 
     private PanelService _current;
@@ -47,18 +48,25 @@ public sealed class PanelServiceHost : IPanelServiceSource
     /// <see cref="Assemble"/> — which runs again whenever the settings file moves — hands the same
     /// instance to the rebuilt service instead of dropping it. (gemini, on the plan round.)
     /// </param>
+    /// <param name="hostStopping">
+    /// The server's own stopping token, handed to EVERY service this host builds — the rebuilds included. REQUIRED, for the reason
+    /// <paramref name="noticing"/> is: the production road cannot forget it. A local round that ends cancelled reads it to tell a host stop
+    /// from a person's withdrawal (E3.S2 of todo/PLAN_the_round_counter_tail_E3.md, decision D4).
+    /// </param>
     public PanelServiceHost(
         Func<string, string?> env,
         VaultKeys keys,
         DateTime vaultReadUtc,
         IProcessLauncher launcher,
         Serilog.ILogger log,
-        Noticing noticing)
-        : this(env, keys, vaultReadUtc, launcher, log, noticing, File.ReadAllText)
+        Noticing noticing,
+        CancellationToken hostStopping)
+        : this(env, keys, vaultReadUtc, launcher, log, noticing, File.ReadAllText, hostStopping)
     {
     }
 
     /// <summary>The same host with the settings file read through <paramref name="readText"/> — a test seam, never public API.</summary>
+    /// <remarks>Its <paramref name="hostStopping"/> defaults to a token that never fires: only the public constructor is the production road.</remarks>
     internal PanelServiceHost(
         Func<string, string?> env,
         VaultKeys keys,
@@ -66,7 +74,8 @@ public sealed class PanelServiceHost : IPanelServiceSource
         IProcessLauncher launcher,
         Serilog.ILogger log,
         Noticing noticing,
-        Func<string, string> readText)
+        Func<string, string> readText,
+        CancellationToken hostStopping = default)
     {
         _readText = readText;
         _env = env;
@@ -75,6 +84,7 @@ public sealed class PanelServiceHost : IPanelServiceSource
         _launcher = launcher;
         _log = log;
         _noticing = noticing;
+        _hostStopping = hostStopping;
         _stamp = Stamp();
         _current = Start();
     }
@@ -177,7 +187,7 @@ public sealed class PanelServiceHost : IPanelServiceSource
         var settings = PanelSettings.FromEnvironment(configuration);
         Reloaded(settings, first);
 
-        return new PanelService(settings, _keys, _vaultReadUtc, _launcher, _log, _noticing);
+        return new PanelService(settings, _keys, _vaultReadUtc, _launcher, _log, _noticing, hostStopping: _hostStopping);
     }
 
     /// <summary>

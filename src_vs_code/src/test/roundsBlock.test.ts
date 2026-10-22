@@ -89,14 +89,15 @@ test('before the first read the block is counting, never zero', () => {
   assert.doesNotMatch(html, /<td>/u);
 });
 
-test('consultations, questions and chat sit beside the rounds as recorded turns, priced per recorded turn', () => {
+test('consultations, questions and chat sit beside the rounds as recorded turns; consult lines with no id are one consultation each', () => {
   const lines = [usageLine(), usageLine({ model: 'gpt-6-astra', kind: 'consult' }), usageLine({ model: 'gpt-6-astra', kind: 'consult' }), usageLine({ kind: 'question' })];
   const chat = [{ ...usageLine({ model: 'gpt-6-astra' }), kind: 'chat' }];
   const html = roundsBlock(input({ snapshot: snapshot(counted(), lines), chat }));
 
   assert.equal(rowCells(html, '<b>codex</b>')[5], 'consult 2 · question 1 · chat 1 recorded turns');
   const consult = rowCells(html, '>consult · 2 recorded turns<');
-  assert.match(consult[10]!, /~\$1\.0\d*<\/span> <span class="hint">per recorded turn/u, '$2 over 2 consult turns');
+  // E3.S4: two consult lines that carry no consultation id are two units — the older-line reading, said in the label.
+  assert.match(consult[10]!, /~\$1\.0\d*<\/span> <span class="hint">per consultation \(some lines per turn\)/u, '$2 over 2 consult turns');
 });
 
 test('AProbe_IsItsOwnKind_NeverARound — a --probe-api completion sits beside the rounds as a probe, on no model line', () => {
@@ -337,4 +338,56 @@ test('the shipped Review rounds page draws the Rounds block first on its spendin
     assert.doesNotMatch(body.innerHTML, absent);
     assert.ok(body.innerHTML.indexOf('rounds-block') < body.innerHTML.indexOf('class="windows"'), 'the Rounds block is not the first block');
   }
+});
+
+test('TheConsultLine_SaysPerConsultation — identified consult lines divide by consultations; question and chat stay per recorded turn', () => {
+  const lines = [
+    usageLine({ model: 'gpt-6-astra', kind: 'consult', consultation: 'A' }),
+    usageLine({ model: 'gpt-6-astra', kind: 'consult', consultation: 'A' }),
+    usageLine({ model: 'gpt-6-astra', kind: 'consult', consultation: 'B' }),
+    usageLine({ kind: 'question' }),
+  ];
+  const chat = [{ ...usageLine({ model: 'gpt-6-astra' }), kind: 'chat' }];
+  const html = roundsBlock(input({ snapshot: snapshot(counted(), lines), chat }));
+
+  const consult = rowCells(html, '>consult · 3 recorded turns<');
+  assert.match(consult[10]!, /~\$1\.5\d*<\/span> <span class="hint">per consultation<\/span>/u, '$3 over 2 consultations, not 3 turns');
+  assert.match(consult[10]!, /over 2 consultations/u, 'the tooltip names the divisor');
+  assert.match(rowCells(html, '>question · 1 recorded turns<')[10]!, /per recorded turn/u);
+  assert.match(rowCells(html, '>chat · 1 recorded turns<')[10]!, /per recorded turn/u);
+});
+
+test('ACheckLineAndARefusedConsultation_AreNamedInTheTooltip_NotCalledOlderLines', () => {
+  const lines = [
+    usageLine({ model: 'gpt-6-astra', kind: 'consult', consultation: 'A' }),
+    usageLine({ model: 'gpt-6-astra', kind: 'consult', role: 'consult-check' }),
+    usageLine({ model: 'gpt-6-astra', kind: 'consult', outcome: 'refused before the launch' }),
+  ];
+  const consult = rowCells(roundsBlock(input({ snapshot: snapshot(counted(), lines) })), '>consult · 3 recorded turns<');
+
+  assert.match(consult[10]!, /per consultation \(some lines per turn\)<\/span>/u);
+  assert.match(consult[10]!, /2 lines without a consultation id counted one each/u);
+  assert.match(consult[10]!, /consultant checks/u);
+  assert.match(consult[10]!, /refused before their launch/u);
+  assert.doesNotMatch(consult[10]!, /written before the consultation field existed/u, 'no older line is in the window');
+});
+
+test('AMixedConsultWindow_SaysSomeLinesPerTurn_AndTheTooltipSaysHowManyWereCountedOneEach', () => {
+  const lines = [
+    usageLine({ model: 'gpt-6-astra', kind: 'consult', consultation: 'A' }),
+    usageLine({ model: 'gpt-6-astra', kind: 'consult', consultation: 'A' }),
+    usageLine({ model: 'gpt-6-astra', kind: 'consult' }),
+  ];
+  const consult = rowCells(roundsBlock(input({ snapshot: snapshot(counted(), lines) })), '>consult · 3 recorded turns<');
+
+  assert.match(consult[10]!, /per consultation \(some lines per turn\)<\/span>/u);
+  assert.match(consult[10]!, /1 line without a consultation id counted one each/u);
+  assert.match(consult[10]!, /over 2 consultations/u, 'A is one consultation, the line with no id is another');
+});
+
+test('TheFootnote_SaysConsultationsArePerConsultation', () => {
+  const html = roundsBlock(input());
+
+  assert.match(html, /Consultations are counted per consultation/u);
+  assert.match(html, /Questions and chat are counted in recorded turns/u);
 });

@@ -15,6 +15,7 @@ import { CARRY_BUDGET, REMOTE_CARRY_BUDGET, carriedTurn, rowInstructed } from '.
 import { chatSettingsFrom } from './chatSettings';
 import { ChatOutcome, ReportedUsage, chatTurnRecord } from './chatUsage';
 import { recordChatTurn } from './chatUsageFile';
+import { cachedCliVersion } from './cliVersionMemory';
 import { coaiDataDir } from './dataDir';
 import { Vendor } from './vendors';
 import { pushChatDraft } from './chatPanel';
@@ -597,6 +598,10 @@ export function ledger(
     // The RUNTIME behind that row, written down beside its id: a preset is a row in a list somebody
     // edits, and resolving an old line through the list as it is today would move history.
     vendor: turn.vendor.runtime,
+    // What RAN, written beside `vendor` rather than derived from it (E3.S3, D7), and the version the catalog probe last
+    // read for this row — remembered, never asked: a turn spawns nothing to fill a ledger field.
+    cli: turn.vendor.runtime,
+    cliVersion: cachedCliVersion(turn.vendor.id),
     model: turn.model,
     conversation: thread.saveId,
     title: thread.title,
