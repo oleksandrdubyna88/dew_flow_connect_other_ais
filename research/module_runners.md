@@ -118,7 +118,7 @@ sequenceDiagram
   reaches one to three rules in this repository since the operator raised the budget to 90 000 bytes
   (2026-10-16; `RuleFiles.DefaultBudgetBytes`)** — the base and the tier spend **80 008** bytes (79 944 until 2026-10-18, 79 967 until 2026-10-19, 79 986 until 2026-10-20), which
   left **56** at the old 80 000 (the tail took nothing, so `common/test-leftovers.md` reached no
-  reviewer) and leave **9 992** now (10 056 until 2026-10-18, 10 033 until 2026-10-19, when PROJECT.md named `--round-authors`, 10 014 until 2026-10-20, when it also named `--backfill-authors`); the smallest rule outside the tier is 2 197. Over 3 000 branch
+  reviewer) and leave **9 976** now (10 056 until 2026-10-18, 10 033 until 2026-10-19, when PROJECT.md named `--round-authors`, 10 014 until 2026-10-20, when it also named `--backfill-authors`, 9 992 until 2026-10-21, when it named `--host-facts`); the smallest rule outside the tier is 2 197. Over 3 000 branch
   names the tail takes one rule on 30 %, two on 62 %, three on 8 % (mean 1.78), and
   `common/test-leftovers.md` is drawn on 9.8 % — drawn, not owed: a rule that must reach every reviewer
   belongs in the tier. Numbers: `research/RESULTS_rules_selection_budget.md` (last section).
@@ -4020,7 +4020,11 @@ flowchart TD
   H -->|"Windows, a Windows kimi"| P
   H -->|"WSL, generation WSL2"| P
   H -->|"WSL1"| R1["refused: this is WSL1 - wsl --set-version distro 2, from Windows"]
-  H -->|"native Linux"| R2["refused: Kimi runs on WSL2 only for now"]
+  H -->|"native Linux"| S{"Kimi in HostAdmission.MeasuredOnNativeLinux? (the set is EMPTY: E3 adds Kimi)"}
+  S -->|"no - asked first, so every answer is today's"| R2["refused: Kimi runs on WSL2 only for now"]
+  S -->|"yes"| B{"kernel banner read? (WslGeneration)"}
+  B -->|"Unreadable"| R6["refused: the kernel banner /proc/version could not be read"]
+  B -->|"read, not WSL"| P
   H -->|"wsl.exe bridge on Windows, macOS, other"| R3["refused: D18"]
   P["places: ~/.kimi-code/bin/kimi; rg and fd in bin, then PATH, then ~/.local/bin"] --> E["built environment: HOME to os/, XDG_CACHE_HOME to cache/ beside it"]
   E --> M{"MountLocality.Judge of the sign-in's real path, on EVERY launch before any process starts"}
@@ -4036,6 +4040,19 @@ flowchart TD
   shared `shared/wsl-banner-vectors.json`). Refused: WSL1 (the WSL1 sentence and its cure, run from Windows), native Linux (*Kimi runs on WSL2 only for now — it is measured on WSL2 and not yet on a native Linux host*), a
   Windows host that would start `wsl.exe` or a `\\wsl$` path, macOS and every other host. `KimiHost` (kind + generation, with the `AsyncLocal` flow seam `KimiHost.Using` that `VibeHost` has) reaches
   `KimiLaunch.TakeAsync` and `KimiRuntime`; the bare-`HostKind` constructors are `internal` test doors. `KimiSeams.Using` is the same kind of seam for the person's places and the shim's binary.
+- **Native Linux, E1.S2 of `todo/PLAN_kimi_and_vibe_on_native_linux_E1.md` (2026-10-21) — the shared plumbing, with BOTH runtimes still refused.** The `HostKind.Linux` arm of `HostAdmission.Refusal` asks a per-runtime
+  set, `HostAdmission.MeasuredOnNativeLinux` (a public read-only set, **EMPTY**; names compared case-insensitively), and an `internal` overload takes the set so a test can inject one. **Membership is asked FIRST**: a runtime
+  not in the set gets the sentence above unchanged whatever the banner says, so with the empty set no answer of any host changed (the pins in `KimiLaunchChecksTests` and `VibeLaunchRulesTests` stand). A runtime IN
+  the set is admitted only on a banner that was READ; `WslGeneration.Unreadable` gets its own sentence, written once beside the others (*{runtime} is refused on this Linux host — the kernel banner /proc/version could not
+  be read, so coai cannot tell a native Linux host from WSL1 (DN6 of todo/PLAN_kimi_and_vibe_on_native_linux.md)*) — reachable today only through an injected set. `Unreadable` is produced ONLY by
+  `WslGenerations.Of(onLinux, BannerReading)` — Linux with a `/proc/version` that is absent, throws or is empty (`ProcVersion.ReadFrom` over a seam; `ProcVersion.Reading` is the one read, `Text` unchanged for
+  `VendorDiagnosis`); `WslGenerations.Of(string)` never answers it, so `shared/wsl-banner-vectors.json` and the extension's parity test do not move. `WslGenerations.ForHost(kind)` is now the ONE place `VibeHost`,
+  `KimiHost` and `VibeRuntime`'s test door decide whether to read the kernel: WSL **and native Linux** (it was WSL only, three copies). `KeyringSessionFacts.Of(environment, isSocket, listing, uid)` (`runners/Platform/`) reads
+  the three keyring-session facts of DN10 — `DBUS_SESSION_BUS_ADDRESS` set, a socket at `$XDG_RUNTIME_DIR/bus` (else `/run/user/<uid>/bus`), a `gnome-keyring-daemon` / `kwalletd*` / `keepassxc` in the listing (what counts as a daemon is ONE file, `shared/keyring-daemon-vectors.json`, which this class's test and the facts script's own independent reading both read; `keepassxc-proxy` is not one) — each its own
+  value, an unreadable listing `cannot tell`; **no admission reads them** (coai closes the keyring road itself in E2). **`coai-mcp --host-facts`** (`src/HostFactsMode.cs`, `Startup.HostFacts`, listed in `.agents/PROJECT.md`)
+  prints ONE line — `{"server","hostKind","banner":{"read","text","generation"},"admission":{"Vibe","Kimi"},"keyringSession":{"busAddressSet","busSocket","daemons","listing"},"decides"}` — and exits 0, never 64; it is
+  read-only (no home, lock, network or data folder), NOT a writer mode, and classified in `EveryModeIsClassifiedForAMissingNamedRootTests` as a mode that never reaches the data directory. It is the product's own
+  reading, set beside the facts script's raw one (two readings, on purpose). The report is `HostFactsReport` (`runners/Platform/HostFactsReport.cs`); the mode only serialises it (source-generated JSON, Native AOT).
 - **DL5 — the CLI and the tools are found where the installers put them.** `KimiAcpProfile.InstalledExecutableFor` and `KimiPlaces` find `<KIMI_INSTALL_DIR or ~/.kimi-code>/bin/kimi` on Linux and WSL
   (spelled with `/` by the HOST, never `Path.Combine`); macOS still guesses nothing. `KimiTools` searches the person's bin, then `PATH`, then `~/.local/bin` (a third place — where DL12's `fd` link goes), and the
   directory each of `rg` and `fd` was found in joins the built `PATH` through `ToolFolders`, so a `~/.local/bin/fd` is found though the editor's `PATH` lacks it. A candidate counts only when it is an executable file
@@ -4075,3 +4092,41 @@ flowchart TD
 **Not built here, by the plan's own scope:** a Kimi consultant and a Kimi question row (`RuntimeCapabilities.Runtimes` and `ConsultantResolution` do not list Kimi; that is `feat/kimi-consultant`'s), so the harness
 has a plan round and a code round and no consult or question flow for Kimi. Tests: `KimiLaunchChecksTests` (S-K20), `KimiToolsOnLinuxTests`, `KimiPlacesOnLinuxTests`, `KimiEnvironmentOnLinuxTests`, `MountLocalityNetworkTests`,
 `KimiNetworkSignInSettingTests`, `KimiSurvivorMarkerReportTests`, `AKimiRowRunsThroughTheServiceOnWsl2Tests` — listed in [module_tests.md](module_tests.md).
+
+## The probe instruments measure the product's road — E1.S3 of the native-Linux plan (2026-10-21, `todo/PLAN_kimi_and_vibe_on_native_linux_E1.md`; DN4, DN5)
+
+Scripts only (`scripts/`); no product code changed and no answer of any runner changed. What the probes now do that they did not, and where it lives:
+
+- **Vibe's M-V7 measures the closed keyring road** (`scripts/lib/vibe.mjs` `keyringArm` / `keyringSetup` / `writeProbeKeyring`, wired in `scripts/probe-vibe-confinement.mjs`). On Linux arms a and a2 carry
+  `PYTHON_KEYRING_BACKEND=keyring.backends.fail.Keyring` — the environment the launch E2 ships; arm a3 carries it AND a `HOME` whose `.config/python_keyring/keyringrc.cfg` names the probe's own AVAILABLE backend
+  (`keyring-backend/probe_marker.py`, `MarkerKeyring`: appends the SERVICE name to a marker file, returns `None`, so no key exists); a3c is the same fake HOME without the variable. The row's `keyringMarker`
+  flag says whether the backend was reached: a3 must NOT (the forced backend wins), a3c MUST (else a3 proved nothing). Everything is written inside the arm's scratch. On Windows nothing changes and a3/a3c do not run.
+  `--arms a3,a3c` (`armWanted`) runs just those two, so the free live check never reaches the paid arm b. The precedence claim stays "to be proven" until a3/a3c are run (the lead's WSL check, then N-V1).
+- **One Kimi rule for every probe** (`scripts/lib/proc.mjs`). `linuxProcesses` returns `{ pid, ppid, comm, name }` with `name` read as `LinuxProcessListing` reads it, and `isKimi` is a port of
+  `ForeignKimiWatch.IsKimi`, so a running `kimi acp` (comm `MainThread`) is seen. The "no other kimi" wait is `waitForNoOtherKimi`, shared: `probe-kimi-tree-hold.mjs` runs it before every run and
+  `probe-kimi-confinement.mjs` now runs it before every launch (a kimi that does not end in 10 minutes stops the run). Parity with the product is pinned by `proc.test.mjs`, whose cases are the product's own, and — since the code gate on E1 (G22) — by ONE shared file, `shared/kimi-identity-vectors.json` (process by `exe` / hidden-exe `argv[0]` and `comm` → listed name → `isKimi`),
+  read by `proc.test.mjs` AND by the C# `KimiIdentityVectorTests` over `ForeignKimiWatch.IsKimi`: changing the product's identities forces the probe's. `lockState` names every flock ending (75 Held, any other exit by its number, a signal or a spawn error by its name).
+- **An owned launch of the confinement probe reads no credential** (`scripts/lib/kimi.mjs` `manifest`, `credentialShape`, `CredentialWatch`). Its record of the person's `~/.kimi-code` around each launch hashes every file except `credentials/`, which is recorded by
+  `lstat` only (names with the slot's hex redacted, size, mode, mtime); the hash function is injected so a test proves it is never called for those paths. M-K3's and M-K6's arms moved to `scripts/lib/kimi-arms.mjs`
+  and now run on an owned root (shim arms) / an owned home with `owned: true` (the `-p` controls); `lib/kimi-home.mjs` `unixBuiltEnv` names `XDG_CACHE_HOME` beside `os/` as `KimiEnvironment` does (DL11), and
+  `ownedRoot` makes the 0700 `cache/` folder on a Linux host. `XDG_CACHE_HOME` is named whenever `home` is an owned `<root>/home`, with or without the OS-home redirect (J2 of the Opus judge: M-K12 arm (a) and its `-p` control keep the real `HOME`
+  but no longer extract into the person's `~/.cache`), or outright by a `cacheDir` option. **The sentence this bullet used to open with, "never reads a credential", was false until 2026-10-21**: the probe built `CredentialGuard(REAL_HOME)` at
+  start (its constructor parses every `credentials/*.json` and hashes the `refresh_token`) and re-read after every owned launch. Now every launch is watched by `CredentialWatch` through an `lstat` SHAPE (name, inode, size, mtime;
+  rotation is `null` = unknown); the content-reading `CredentialGuard` is built lazily, only for the legacy cells that COPY the sign-in into a scratch home (M-K8, M-K9's user-hook and trust arms, M-K10 — NOT M-K7: its empty home and its `credentials: false` copy carry none), and those are
+  refused (`copiedHome()` throws before any byte is copied) unless `--allow-copied-credentials` is passed — the native series template never passes it (`native-run.mjs` `RESERVED_FLAGS`). A launch counts as a copied-credentials one only when its home is in `filledHomes`, the set of homes
+  `copiedHome` actually filled (`launchesOnCopiedCredentials`); before the re-check of 2026-10-21 it was "has a home, not shared, not owned", so M-K7's arms built the content guard without the flag and every later launch re-read the sign-in. S-N2's twin injects the reader and proves it is never called for an owned-only run or for M-K7's launches.
+  The probe's own `kimi --version` (before any cell) now runs after the no-other-kimi wait, in `versionEnv(<scratch>/version)` — the built environment of an owned root, its cache named — and after `homeBefore` is recorded; it used to inherit the real `HOME` and `~/.kimi-code`.
+  Off Windows the default `--cells` is the OWNED set (`OWNED_CELLS` in `lib/kimi-d19.mjs`: M-K3–M-K6, M-K11, M-K11c, M-K12, M-K13, M-K9e, M-K7b, M-K5b); a requested cell that launches on the real home (M-K1, M-K2, M-K7, M-K8, M-K8b, M-K9, M-K10, M-K11b) is refused unless `--allow-real-home` is passed, which the series template can never pass.
+- **Judge and gate fixes of the Kimi probes (2026-10-21)** (details in `todo/PLAN_kimi_and_vibe_on_native_linux_E1.md`, *Code gate and judge fixes*): `makeAgentsCanary` creates both `~/.agents` files exclusively (`wx`) and takes its own skill back if `AGENTS.md` appeared; the survivor's start time is
+  read when it is first listed and must match at the kill (`survivorsOf`); the D19 cells build their specs through `ownedSpecFor` like the 2.2.0 window's, so `requireOwned` covers them; `armWanted` accepts a missing filter; one `redactSlot` (exported from `lib/kimi.mjs`) replaces the three copies of the slot-hex redaction.
+- **N-K2 sees an abrupt death and the next launch** (`scripts/lib/kimi-schedule.mjs`, `scripts/probe-kimi-tree-hold.mjs`). A new arm `killed-hard` ends the shim with SIGKILL (the shim handles SIGTERM and ends the agent's
+  tree itself, so TERM proves nothing about an abandoned survivor marker); it counts only when a `*.survivors.json` existed in the lock folder at the kill. Every killed arm's repetition is a PAIR — `<arm>-<n>`, then at
+  once `<arm>-<n>-next`, a normal launch recording the marker before it, the shim's report and the marker after it — repeat-outer; each survivor of a kill is recorded with its NEW parent (pid, comm, exe basename).
+- **The live-survivor arm** (`killed-hard-live`, `scripts/probe-kimi-tree-hold.mjs`; N-K2 / cornerstone C2): SIGKILL, then a `-next` launch started WHILE the killed arm's own kimi runs — the probe's "no other kimi"
+  wait is bypassed for exactly that process, by pid and start time (`waitForNoOtherKimi({ except })`), every other kimi still blocking — then an `-after` launch once it has ended. It records the marker before and after,
+  the refusal text, the survivor's new parent and a verdict against `KimiSurvivorGate`'s promise (Busy naming the survivor, nothing started, the marker stands). Runs only with `--allow-live-survivor`, on a host
+  where the owner allowed the window: a failure of the gate would put two refreshers on one sign-in. (The gate's reconcile may also END an orphan by identity when the writing shim is gone; the verdict reports that as `UNEXPECTED`.)
+- **The 2.2.0 window's cells run on owned roots** (`scripts/lib/kimi-arms.mjs`: M-K3, M-K4, M-K6, M-K12). Every arm carries `requireOwned` and the launch refuses one with no `<root>/home` beside `<root>/os`
+  (`ownedRefusal`). M-K12's `~/.agents` canary still lives in the person's real `~/.agents`, written and removed by exact paths only.
+
+Tests: `proc.test.mjs`, `kimi.test.mjs`, `kimi-home.test.mjs`, `kimi-arms.test.mjs`, `vibe.test.mjs`, `kimi-schedule.test.mjs` — listed in [module_tests.md](module_tests.md) (section *E1.S3*). No paid or live run was made.

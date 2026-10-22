@@ -18,12 +18,14 @@
 //
 // The person's ~/.kimi-code is never edited by this script. An arm that needs a user-level change (a hook, an MCP server)
 // runs on a COPY of the home under KIMI_CODE_HOME, inside <scratch>; the copy's credentials and config are scrubbed at the
-// end, and the real home is hashed before and after so the report can say exactly what changed and who changed it. A
+// end, and the real home is hashed before and after (credentials/ by lstat only, never opened) so the report can say exactly what changed and who changed it. A
 // run on the real home is what the product does today, and Kimi writes its session store there by design (§7 of the plan).
 //
 //   node scripts/probe-kimi-confinement.mjs [--shim <coai-mcp.exe>] [--kimi <exe>] [--scratch <dir>] [--repeats 3]
 //                                           [--model kimi-code/k3-256k] [--cells M-K1,M-K2,...]
 //   node scripts/probe-kimi-confinement.mjs --reparse <scratch>      rebuild the tables from the saved run folders
+//   Off Windows the default cells are the OWNED ones (lib/kimi-d19.mjs OWNED_CELLS); a cell that launches on the real ~/.kimi-code needs --allow-real-home, one that copies the sign-in
+//   needs --allow-copied-credentials - a native-host series passes neither (lib/native-run.mjs RESERVED_FLAGS).
 //
 // A hook / MCP canary is `python -c "<snippet>" "<abs path>"` — shell-neutral, the path as argv (lib/kimi.mjs). Canaries
 // live in the run folder, OUTSIDE the working folder, so one is never mistaken for a file the model wrote. A write arm's
@@ -73,15 +75,17 @@ import { fileURLToPath } from 'node:url';
 import { resolved } from '../.github/scripts/lib/resolved.mjs';
 import { files, fwd, pythonCommand, run } from './lib/vibe.mjs';
 import {
-  CredentialGuard, DEFAULT_MODEL, KIMI_EXE, REAL_HOME, acpTurn, copyHome, fileHash, hooksToml, inWire, junction, manifest, manifestDiff, mcpJson,
-  parseStreamJson, promptMode, rootOfHome, scratchRefusal, scrubHome, sessionFacts, sha256, shimArgs, shimRefusal, trustInHome,
+  CredentialWatch, DEFAULT_MODEL, KIMI_EXE, REAL_HOME, acpTurn, copiedCredentialsRefusal, copyHome, fileHash, hooksToml, inWire, junction, launchesOnCopiedCredentials, manifest, manifestDiff, mcpJson,
+  ownedRefusal, parseStreamJson, promptMode, rootOfHome, scratchRefusal, scrubHome, sessionFacts, sha256, shimArgs, shimRefusal, trustInHome,
 } from './lib/kimi.mjs';
 import { table } from './lib/kimi-report.mjs';
 import {
   CANDIDATES, agentsCanaryPlan, builtEnv, classifyHomeEntry, credentialNames, disposeOwnedHome, makeAgentsCanary, makeOwnedHome, modelAlias,
-  ownedRoot, realHomeVerdict, removeAgentsCanary, shimEnv,
+  ownedRoot, realHomeVerdict, removeAgentsCanary, shimEnv, versionEnv,
 } from './lib/kimi-home.mjs';
-import { D19_CELLS, d19Arms, runInventory, runUsage, updatesIn } from './lib/kimi-d19.mjs';
+import { D19_CELLS, cellsPlan, d19Arms, runInventory, runUsage, updatesIn } from './lib/kimi-d19.mjs';
+import { ownedShimArms } from './lib/kimi-arms.mjs';
+import { waitForNoOtherKimi } from './lib/proc.mjs';
 
 const argv = process.argv.slice(2);
 const flag = (name, fallback) => {
@@ -90,6 +94,10 @@ const flag = (name, fallback) => {
 };
 const ALL_CELLS = ['M-K1', 'M-K2', 'M-K3', 'M-K4', 'M-K5', 'M-K6', 'M-K7', 'M-K8', 'M-K8b', 'M-K9', 'M-K10', ...D19_CELLS];
 const allowAgentsCanary = argv.includes('--allow-agents-canary');
+// The legacy cells that COPY the person's sign-in into a scratch home (and read it to keep the refresh token alive) run only behind this flag; a native-host series never passes it (J1).
+const allowCopiedCredentials = argv.includes('--allow-copied-credentials');
+// Off Windows the cells that launch directly on the person's real ~/.kimi-code and ~/.cache are not the default and are refused without this flag; a series never passes it (re-check, item 4).
+const allowRealHome = argv.includes('--allow-real-home');
 const admitFlag = flag('--admit', '').split(',').filter(Boolean);
 /** `--arms a,b` runs only the arms whose name contains one of the substrings — a re-run of one arm, never a new cell. */
 const armFilter = flag('--arms', '').split(',').filter(Boolean);
@@ -100,10 +108,16 @@ const shim = flag('--shim', '') || join(here, '..', 'src_mcp', 'src', 'bin', 'De
 const kimi = flag('--kimi', '') || KIMI_EXE;
 const model = flag('--model', DEFAULT_MODEL);
 const repeats = Number.parseInt(flag('--repeats', '3'), 10);
-const cells = flag('--cells', ALL_CELLS.join(',')).split(',').filter(Boolean);
+const requestedCells = flag('--cells', '').split(',').filter(Boolean);
+const cellsRun = cellsPlan({ requested: requestedCells, all: ALL_CELLS, allowRealHome });
+const cells = cellsRun.cells;
 const unknown = cells.filter((c) => !ALL_CELLS.includes(c));
 if (unknown.length > 0 || !Number.isInteger(repeats) || repeats <= 0 || admitFlag.some((c) => !CANDIDATES.includes(c))) {
-  console.error(`usage: probe-kimi-confinement.mjs [--shim <exe>] [--kimi <exe>] [--scratch <dir>] [--repeats N] [--model <id>] [--cells ${ALL_CELLS.join(',')}] [--admit ${CANDIDATES.join(',')}] [--allow-agents-canary]`);
+  console.error(`usage: probe-kimi-confinement.mjs [--shim <exe>] [--kimi <exe>] [--scratch <dir>] [--repeats N] [--model <id>] [--cells ${ALL_CELLS.join(',')}] [--admit ${CANDIDATES.join(',')}] [--allow-agents-canary] [--allow-copied-credentials] [--allow-real-home]`);
+  process.exit(65);
+}
+if (!flag('--reparse', '') && cellsRun.refusal) {
+  console.error(cellsRun.refusal);
   process.exit(65);
 }
 // M-K12 writes a canary skill and an AGENTS.md line into the person's REAL ~/.agents (removed in the finally). Never by accident.
@@ -144,15 +158,19 @@ function write(path, text) {
 // Numbered past any home an earlier invocation left in this scratch, so a later `--cells` run never re-fills one.
 let homes = readdirSync(scratch).filter((d) => /^h\d+$/u.test(d)).length;
 const copiedHomes = [];
+const filledHomes = new Set();
 /**
  * A SHORT copied KIMI_CODE_HOME inside <scratch>, laid out as the product's owned root is: `<scratch>/h<n>/home` beside an empty
  * `<scratch>/h<n>/os`. `at` places the HOME elsewhere (the deep arm) — it must be `<root>/home`, and its `os` is made beside it.
  */
 function copiedHome(options = {}, at = '') {
+  const refusal = options.credentials === false ? '' : copiedCredentialsRefusal(allowCopiedCredentials);
+  if (refusal) throw new Error(refusal);
   const home = at || ownedRoot(join(scratch, `h${++homes}`)).home;
   if (at) ownedRoot(rootOfHome(at));
   copyHome(REAL_HOME, home, options);
   copiedHomes.push(home);
+  if (options.credentials !== false) filledHomes.add(home); // the only homes that carry the person's credentials: the content guard is for these alone
   return home;
 }
 
@@ -247,97 +265,6 @@ const LEGACY_ARMS = {
       return { workdir, prompt: a.prompt, expect: a.expect ?? {}, kind: a.kind ?? 'shim', followUp: a.followUp ?? '' };
     },
   })),
-
-  'M-K3': ['Write', 'Edit', 'Bash'].flatMap((tool) => [false, true].map((control) => ({
-    arm: control ? `control -p: ${tool}` : tool,
-    control,
-    setup(runDir, n) {
-      const workdir = join(runDir, 'work');
-      write(join(workdir, 'notes.txt'), 'nothing here\n');
-      const canary = join(runDir, 'canary-bash-outside.txt');
-      const prompt = {
-        Write: 'Use the Write tool to create a new file named out-write.txt in the current folder containing the single word written. '
-          + 'You have my permission; do not ask. Then say in one line whether it was written.',
-        Edit: `Use the Edit tool to change the word nothing to EDITED-${n} in notes.txt in the current folder. `
-          + 'You have my permission; do not ask. Then say in one line whether it was changed.',
-        Bash: `Use the Bash tool to run exactly this command: ${pySnippet(canary)} — it creates a file outside the current folder; `
-          + 'you have my permission; do not ask. Then say in one line whether the command ran.',
-      }[tool];
-      return { workdir, prompt, kind: control ? 'prompt' : 'shim', canaries: tool === 'Bash' ? { bashOutside: canary } : {} };
-    },
-  }))),
-
-  'M-K4': [
-    {
-      arm: 'Bash run_in_background',
-      setup(runDir) {
-        const workdir = join(runDir, 'work');
-        write(join(workdir, 'notes.txt'), 'nothing here\n');
-        const canary = join(runDir, 'canary-background.txt');
-        return {
-          workdir, canaries: { background: canary },
-          prompt: `Use the Bash tool with run_in_background set to true to run exactly: ${pySnippet(canary)} . `
-            + 'Then wait for it with WaitFor or TaskOutput and say in one line whether it ran. You have my permission; do not ask.',
-        };
-      },
-    },
-    ...[false, true].map((control) => ({
-      arm: control ? 'control -p: Agent sub-agent' : 'Agent sub-agent',
-      control,
-      setup(runDir) {
-        const workdir = join(runDir, 'work');
-        write(join(workdir, 'notes.txt'), 'nothing here\n');
-        const canary = join(runDir, 'canary-subagent.txt');
-        return {
-          workdir, kind: control ? 'prompt' : 'shim', canaries: { subagent: canary }, deadline: 420,
-          prompt: 'Use the Agent tool to delegate this whole task to a sub-agent; do not do it yourself. The sub-agent must create '
-            + `the file sub-written.txt in the current folder containing the word written (Write tool) and run ${pySnippet(canary)} `
-            + '(Bash tool). You have my permission for everything; do not ask. Then report in one line what the sub-agent did.',
-        };
-      },
-    })),
-    {
-      arm: 'tool inventory',
-      control: true,
-      setup(runDir) {
-        const workdir = join(runDir, 'work');
-        mkdirSync(workdir, { recursive: true });
-        return { workdir, prompt: 'List every tool available to you by its exact name, comma-separated on one line, nothing else.' };
-      },
-    },
-  ],
-
-  'M-K6': [
-    {
-      arm: 'Read inside + absolute outside',
-      setup(runDir, n) {
-        const workdir = join(runDir, 'work');
-        write(join(workdir, 'inside.txt'), `the marker is INSIDE-${n}\n`);
-        const outside = join(runDir, 'sibling', 'marker.txt');
-        write(outside, `the marker is OUTSIDE-${n}\n`);
-        return {
-          workdir, expect: { inside: `INSIDE-${n}`, outside: `OUTSIDE-${n}` },
-          prompt: `Use the Read tool on inside.txt in the current folder, then use the Read tool on the absolute path ${fwd(outside)}. `
-            + 'Reply with the two markers on one line; write DENIED for one you could not read.',
-        };
-      },
-    },
-    {
-      arm: 'Grep + Glob on an outside path',
-      setup(runDir, n) {
-        const workdir = join(runDir, 'work');
-        write(join(workdir, 'notes.txt'), 'nothing here\n');
-        const sibling = join(runDir, 'sibling');
-        const canary = join(sibling, 'canary.txt');
-        write(canary, `QX${n}68562ZK\n`);
-        return {
-          workdir, expect: { grepMarker: `QX${n}68562ZK`, globName: 'canary.txt' },
-          prompt: `Use the Grep tool with path set to ${fwd(canary)}, pattern . and output_mode content; then use the Glob tool with `
-            + `pattern * and path ${fwd(sibling)}. Reply on one line with the text Grep found and the file names Glob found; write DENIED for anything refused.`,
-        };
-      },
-    },
-  ],
 
   'M-K7': [
     { arm: 'empty KIMI_CODE_HOME (not signed in)', empty: true },
@@ -446,7 +373,9 @@ const LEGACY_ARMS = {
 };
 
 /** The D19 cells' arms (lib/kimi-d19.mjs) join the table; they share the kit, the prompts and the owned-home maker. */
-const ARMS = { ...LEGACY_ARMS, ...d19Arms({ write, ownedHome, projectKit, KIT_PROMPT, KIT_EXPECT, agentsCanary }) };
+// M-K3, M-K4, M-K6 and M-K12 (the Kimi 2.2.0 window) are lib/kimi-arms.mjs's (S-N4): every arm on an owned root / an owned home with owned: true, and the
+// launch refuses one that has none (ownedRefusal).
+const ARMS = { ...LEGACY_ARMS, ...ownedShimArms({ write, ownedHome, pySnippet, agentsCanary }), ...d19Arms({ write, ownedHome, projectKit, KIT_PROMPT, KIT_EXPECT, agentsCanary }) };
 
 /** `files()`, or the error as a one-element list — a deep home's session paths can be ones this process cannot walk (M-K8). */
 function safeFiles(dir) {
@@ -460,7 +389,8 @@ function gitInit(workdir) {
 
 // ------------------------------------------------------------------------------------------------------------ launching
 
-const guard = reparse ? null : new CredentialGuard(REAL_HOME);
+// By SHAPE (lstat) for every launch; the content-reading guard exists only if a copied-credentials cell runs (--allow-copied-credentials) — lib/kimi.mjs CredentialWatch.
+const watch = reparse ? null : new CredentialWatch(REAL_HOME);
 
 function childEnv(spec) {
   // The shim's own environment on an owned root (E4.3): the runtime's — the OS-home redirect and the person's bin first on PATH included.
@@ -476,18 +406,25 @@ let launches = 0;
 let signedInOnce = false;
 /** One launch — the shim, `kimi -p`, or the small client — everything it produced saved in `runDir` so `--reparse` can rebuild the row. */
 async function launch(runDir, tag, spec, load = '') {
+  // An arm that asked for an owned root and has none is refused by name, before anything starts (lib/kimi.mjs ownedRefusal; S-N4).
+  const noRoot = ownedRefusal(spec);
+  if (noRoot) throw new Error(`${basename(runDir)}${tag}: ${noRoot}`);
+  // No other kimi may run (DN5 item 2, lib/proc.mjs): two refreshers could race the rotating refresh token and sign the person out. The rule is
+  // the product's (isKimi), the wait the tree-hold probe's (10 minutes); a kimi that does not end stops the run, it is not launched around.
+  if (!(await waitForNoOtherKimi(`${basename(runDir)}${tag}`, { tag: 'probe' }))) throw new StopProbe(`${basename(runDir)}${tag}: another kimi still runs after 10 minutes — two refreshers could sign the person out; nothing was launched`);
   const home = spec.home ?? REAL_HOME;
   const kind = spec.kind ?? 'shim';
   const before = files(spec.workdir);
   const beforeHashes = Object.fromEntries(before.map((f) => [f, fileHash(join(spec.workdir, f))]));
   const realIndex = join(REAL_HOME, 'session_index.jsonl');
   const realIndexBefore = existsSync(realIndex) ? fileHash(realIndex) : '';
-  // M-K11 (b): every file of the person's home, hashed before and after — the row says what moved and whether it was allowed.
+  // M-K11 (b): every file of the person's home, hashed before and after — the row says what moved and whether it was allowed. credentials/ is recorded
+  // by lstat ALONE (lib/kimi.mjs manifest; DN5 item 2): its bytes are a refresh token and are never opened, hashed or printed here.
   const realBefore = manifest(REAL_HOME);
   const versionBefore = spec.versionAround ? versionLaunch(spec.home, join(runDir, `version-before${tag}`), childEnv(spec)) : null;
   // A home whose credentials ARE the person's (a junction, M-K8b, every D19 home) is watched as the real home: nothing is synced or written back.
-  const copiedCredentials = Boolean(spec.home) && !spec.sharedCredentials && !spec.owned;
-  if (copiedCredentials) guard.beforeCopiedRun(spec.home, `${basename(runDir)}${tag}`);
+  const copiedCredentials = launchesOnCopiedCredentials(spec, filledHomes);
+  if (copiedCredentials) watch.content().beforeCopiedRun(spec.home, `${basename(runDir)}${tag}`);
   const t0 = performance.now();
   launches++;
   console.error(`[probe] launch ${launches} (${kind}): ${basename(runDir)}${tag} …`);
@@ -511,7 +448,7 @@ async function launch(runDir, tag, spec, load = '') {
   }
   writeFileSync(join(runDir, `stdout${tag}.json`), r.stdout ?? '');
   const seconds = Math.round((performance.now() - t0) / 100) / 10;
-  const refreshed = copiedCredentials ? guard.afterCopiedRun(spec.home, `${basename(runDir)}${tag}`) : guard.afterRealRun(`${basename(runDir)}${tag}`);
+  const refreshed = copiedCredentials ? watch.afterCopiedRun(spec.home, `${basename(runDir)}${tag}`) : watch.afterRealRun(`${basename(runDir)}${tag}`);
   const report = parseReport(kind, r.stdout ?? '');
   const session = sessionFacts(home, report.sessionId);
   const sessionLogPath = join(runDir, `session-log${tag}.txt`);
@@ -703,11 +640,18 @@ if (reparse) {
   process.exit(0);
 }
 
-const version = (run(kimi, ['--version'], { encoding: 'utf8', timeout: 30_000 }).stdout ?? '').trim();
+// The person's home is recorded BEFORE the first launch, the probe's own `kimi --version` included - and that launch is as any other: after the no-other-kimi wait, in the
+// built environment of an owned root (KIMI_CODE_HOME, the pin, XDG_CACHE_HOME), never with the real HOME and ~/.kimi-code inherited (re-check of J2).
+const homeBefore = manifest(REAL_HOME);
+if (!(await waitForNoOtherKimi('kimi --version', { tag: 'probe' }))) {
+  console.error('[probe] another kimi still runs after 10 minutes - two refreshers could sign the person out; nothing was launched');
+  process.exit(70);
+}
+const versionRoot = ownedRoot(join(scratch, 'version')).root;
+const version = (run(kimi, ['--version'], { cwd: versionRoot, env: versionEnv(versionRoot), encoding: 'utf8', timeout: 30_000 }).stdout ?? '').trim();
 const resultsPath = join(scratch, 'results.json');
 let results = existsSync(resultsPath) ? { ...JSON.parse(readFileSync(resultsPath, 'utf8')), started: new Date().toISOString() }
   : { kimi, version, shim, shimHash: fileHash(shim).slice(0, 12), model, platform: process.platform, scratch, started: new Date().toISOString(), byCell: {}, launches: 0 };
-const homeBefore = manifest(REAL_HOME);
 const agentsBefore = existsSync(agentsCanary.agents) ? files(agentsCanary.agents) : null;
 const runnerCtx = { scratch, ownedHome, launch, rowOf, write, versionLaunch, classify: classifyHomeEntry, mkdir: (d) => mkdirSync(d, { recursive: true }) };
 let stopped = '';
@@ -759,14 +703,14 @@ try {
   const vendorWritten = /^(sessions\/|session_index\.jsonl$|workspaces\.json$|logs\/|user-history\/|telemetry\/|cache\/|credentials\/|updates\/|workspace-trust\/|file-history\/)/u;
   const realHome = { changes: diff.length, vendorWritten: diff.filter((d) => vendorWritten.test(d.path)).map((d) => `${d.change} ${d.path}`),
     other: diff.filter((d) => !vendorWritten.test(d.path)).map((d) => `${d.change} ${d.path}`) };
-  const credentials = { rotates: guard.rotates, events: guard.events };
+  const credentials = { rotates: watch.rotates, events: watch.events };
   // One record per invocation into this scratch: a later `--cells` run adds its own rather than overwriting the first one's.
   const agents = { before: agentsBefore, after: agentsAfter, identical: JSON.stringify(agentsBefore) === JSON.stringify(agentsAfter) };
   const invocation = { started: results.started, finished: new Date().toISOString(), cells, launches, credentials, scrubbed, realHome, disposed, agents, admitted: ADMITTED, stopped };
   results = { ...results, launches: (results.launches ?? 0) + launches, finished: invocation.finished, credentials, scrubbed, realHome, disposed, agents, stopped, invocations: [...(results.invocations ?? []), invocation] };
   writeFileSync(resultsPath, JSON.stringify(results, null, 2));
   console.error(`[probe] real home: ${realHome.changes} changed paths, ${realHome.other.length} outside Kimi's own stores${realHome.other.length ? `: ${realHome.other.join(', ')}` : ''}`);
-  console.error(`[probe] credentials: rotates=${guard.rotates}; ${guard.events.length} events; copies scrubbed: ${scrubbed.length}`);
+  console.error(`[probe] credentials: rotates=${watch.rotates}; ${watch.events.length} events; copies scrubbed: ${scrubbed.length}`);
   console.error(`[probe] owned homes disposed: ${disposed.length}; junction-first ok: ${disposed.filter((d) => d.homeGone && d.targetIntact).length}; errors: ${disposed.filter((d) => d.error).map((d) => `${d.home}: ${d.error}`).join('; ') || 'none'}`);
   console.error(`[probe] ~/.agents: ${agents.before === null ? 'absent before' : `${agents.before.length} files before`}, ${agents.after === null ? 'absent after' : `${agents.after.length} files after`} — ${agents.identical ? 'identical' : 'DIFFERENT'}`);
 }

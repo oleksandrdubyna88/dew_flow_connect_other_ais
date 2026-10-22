@@ -7,7 +7,7 @@ namespace CoaiMcp.Runners.Kimi;
 /// which WSL it is when it is one. The shape of <see cref="Vibe.VibeHost"/> without its sign-in, which Kimi finds another way (<see cref="KimiPlaces"/>). Resolved once, where the adapter is made.
 /// </summary>
 /// <param name="Kind">The host (<see cref="HostKinds.Current"/> for this process).</param>
-/// <param name="Wsl">Which WSL, when <paramref name="Kind"/> is <see cref="HostKind.Wsl"/> — a WSL1 kernel reads as that host too, and is refused.</param>
+/// <param name="Wsl">Which WSL, when <paramref name="Kind"/> is <see cref="HostKind.Wsl"/> — a WSL1 kernel reads as that host too, and is refused — or, on <see cref="HostKind.Linux"/>, <see cref="WslGeneration.Unreadable"/> when the kernel banner could not be read.</param>
 public sealed record KimiHost(HostKind Kind, WslGeneration Wsl)
 {
     /// <summary>
@@ -15,7 +15,7 @@ public sealed record KimiHost(HostKind Kind, WslGeneration Wsl)
     /// not one gets a refusal, never a quiet admission.
     /// </summary>
     public static KimiHost Of(HostKind kind, WslGeneration? wsl = null) =>
-        new(kind, wsl ?? (kind == HostKind.Wsl ? WslGenerations.Current : WslGeneration.None));
+        new(kind, wsl ?? WslGenerations.ForHost(kind));
 
     /// <summary>This process's host, as the product asks it: the operating system and the kernel's banner.</summary>
     public static KimiHost ThisProcess() => Of(HostKinds.Current);
