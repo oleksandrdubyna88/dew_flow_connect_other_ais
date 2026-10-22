@@ -29,7 +29,10 @@ own pull request (the owner chose `gemini-3.8-flash-low`); it is not part of thi
 
 ### Attempt 2 — model `gemini-3.8-flash-low` (the owner's live agy reviewer row)
 
-Two launches, then the probe's own cap (400 000 input tokens by the reports' own sums) stopped it.
+Two launches, then the probe's own cap (400 000 input tokens by the reports' own sums) stopped it. **The cap was overshot:**
+452 k were spent, because the probe then checked the cap only AFTER a launch, and launch 2 alone took 357 k. The probe now
+checks BEFORE each launch, refusing one that would pass the cap if it were as large as the largest so far
+(`scripts/lib/spendCap.mjs`, with its test). One launch can still exceed the largest seen so far.
 
 | Launch | Wall time | Outcome | Denied | Answer | Input | Output | Reasoning | Cached | `view_file` calls |
 |---|---|---|---|---|---|---|---|---|---|
