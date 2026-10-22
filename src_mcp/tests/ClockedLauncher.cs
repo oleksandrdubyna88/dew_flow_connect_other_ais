@@ -11,7 +11,8 @@ namespace CoaiMcp.Tests;
 /// <param name="StdOut">What it writes to stdout (the usage a codex adapter reads there, or a gemini answer).</param>
 /// <param name="OutFile">What it writes to the file named by the request's <c>-o</c> argument (a codex answer); nothing when empty.</param>
 /// <param name="Exit">Its exit code.</param>
-internal sealed record ClockedStep(TimeSpan Turn, string StdOut = "", string OutFile = "", int Exit = 0);
+/// <param name="Overruns">A vendor that answers although it ran past its timeout — what the real launcher will not do (it kills at the deadline), and the only way to reach "the first launch answered but the budget is spent". The clock moves by the whole <paramref name="Turn"/>.</param>
+internal sealed record ClockedStep(TimeSpan Turn, string StdOut = "", string OutFile = "", int Exit = 0, bool Overruns = false);
 
 /// <summary>
 /// An in-process launcher that costs no time and spends none: it never advances the clock (E4 plan §5.4 point 6 — an advance from the
@@ -32,7 +33,7 @@ internal sealed record ClockedStep(TimeSpan Turn, string StdOut = "", string Out
 /// </remarks>
 internal sealed class ClockedLauncher : IProcessLauncher
 {
-    private sealed record Arrival(ClockHandshake Handshake, TimeSpan Timeout, TimeSpan Turn);
+    private sealed record Arrival(ClockHandshake Handshake, TimeSpan Timeout, ClockedStep Step);
 
     private readonly IReadOnlyList<ClockedStep> _script;
     private readonly bool _repeatsTheLast;
@@ -79,11 +80,11 @@ internal sealed class ClockedLauncher : IProcessLauncher
         var handshake = new ClockHandshake();
         _handshakes.Enqueue(handshake);
         _timeouts.Enqueue(request.Timeout);
-        _arrivals.Writer.TryWrite(new Arrival(handshake, request.Timeout, step.Turn));
+        _arrivals.Writer.TryWrite(new Arrival(handshake, request.Timeout, step));
         handshake.Signal();
         await handshake.WaitForReleaseAsync(ct);
 
-        return step.Turn <= request.Timeout
+        return step.Turn <= request.Timeout || step.Overruns
             ? await Answered(request, step)
             : new ProcessResult(-1, string.Empty, string.Empty, TimedOut: true);
     }
@@ -117,6 +118,10 @@ internal sealed class ClockedLauncher : IProcessLauncher
         return at >= 0 && at + 1 < request.Arguments.Count ? request.Arguments[at + 1] : string.Empty;
     }
 
+    /// <summary>How long the launch runs on the clock: its turn, cut at the request's timeout unless the step overruns.</summary>
+    private static TimeSpan RunsFor(Arrival arrival) =>
+        arrival.Step.Overruns ? arrival.Step.Turn : TimeSpan.FromTicks(Math.Min(arrival.Step.Turn.Ticks, arrival.Timeout.Ticks));
+
     /// <summary>The test's side: for each launch, wait until it is there, move the clock by what it was allowed to run, release it — until the run is over.</summary>
     public async Task DriveAsync(Task run, ManualClock clock, CancellationToken ct)
     {
@@ -133,7 +138,7 @@ internal sealed class ClockedLauncher : IProcessLauncher
 
                 var arrival = await next;
                 await arrival.Handshake.Reached;
-                clock.Advance(TimeSpan.FromTicks(Math.Min(arrival.Turn.Ticks, arrival.Timeout.Ticks)));
+                clock.Advance(RunsFor(arrival));
                 arrival.Handshake.Release();
             }
         }

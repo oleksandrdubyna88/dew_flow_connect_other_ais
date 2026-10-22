@@ -824,7 +824,7 @@ public sealed class ReviewerExecutor(
     /// is usually the reason we are here, and a cancelled token would abort the very request that stops
     /// the work.
     /// </remarks>
-    private static async Task AbandonAsync(ReviewerInvocation invocation)
+    private async Task AbandonAsync(ReviewerInvocation invocation)
     {
         if (invocation.Adapter is null)
         {
@@ -843,8 +843,12 @@ public sealed class ReviewerExecutor(
         }
     }
 
-    /// <summary>How long a courtesy cleanup may take before the round stops waiting for it.</summary>
-    private static readonly TimeSpan AbandonBudget = TimeSpan.FromSeconds(10);
+    /// <summary>
+    /// How long a courtesy cleanup may take before the round stops waiting for it. TEARDOWN, so it stays on the SYSTEM clock (E5 plan §3.14,
+    /// rule 3): the cleanup is real I/O after the outcome is decided (for the remote runtime an HTTP cancel), and a manual clock nobody advances
+    /// would park it for ever. Settable only so a test can shorten the real wait; nothing in production sets it.
+    /// </summary>
+    internal TimeSpan AbandonBudget { get; init; } = TimeSpan.FromSeconds(10);
 
     /// <summary>What one launch came to, read: a terminal outcome, or the parsed review with what the run said beside it.</summary>
     private sealed record OneLaunch(
@@ -986,7 +990,7 @@ public sealed class ReviewerExecutor(
     }
 
     /// <summary>A launch whose tree was killed — by the caller or on its own deadline — or null when it ran to its end.</summary>
-    private static async Task<ReviewerLaunch?> KilledAsync(ReviewerInvocation invocation, ProcessResult result)
+    private async Task<ReviewerLaunch?> KilledAsync(ReviewerInvocation invocation, ProcessResult result)
     {
         // `Cancelled` BEFORE `TimedOut` (story 3.2 of research/PLAN_every_round_is_counted.md): a kill by the caller's
         // token sets both flags, a kill on the launch's own budget sets only the second, and reading the second alone
