@@ -209,9 +209,11 @@ test('every language says the Rounds block comes first on the spending tab, and 
   assert.ok(article !== undefined, 'the spending article has been renamed, and this test is now asserting nothing');
   for (const language of HELP_LANGUAGES) {
     const said = Object.values(bodyFor(article, language).body).join(' ');
-    for (const named of ['**Rounds**', '*count unavailable*', '**5 h**', '**7 d**', '--round-counts-merged', '--round-counts`']) {
+    for (const named of ['**Rounds**', '*count unavailable*', '**5 h**', '**7 d**', '--round-counts-merged', '--round-counts']) {
       assert.ok(said.includes(named), `the ${language} spending article never says “${named}” — stale rather than missing`);
     }
+    // `--round-counts` is a prefix of `--round-counts-merged`, so the loop above cannot tell the fallback from the merged call: ask again with the merged one removed.
+    assert.ok(said.replaceAll('--round-counts-merged', '').includes('--round-counts'), `the ${language} spending article names --round-counts-merged but never the single-store fallback --round-counts`);
   }
 });
 

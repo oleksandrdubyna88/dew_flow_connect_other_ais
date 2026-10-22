@@ -7959,6 +7959,9 @@ The wording of the block, the card and the help is S4's and is NOT changed here;
   empty cache; held 60 s) asks the panel's own off-loop `reachable(<dir>/coai.db)` and races it against `STORE_REACH_DEADLINE_MS` (2 s). A probe still
   pending at the deadline is KEPT (one in flight per directory; a refresh takes its answer if the share came back), and `StoreFacts.notAnswering`
   says *<dir> is not answering; its rounds are not included* — a dead share costs one bounded background check per refresh and never a blocked draw.
+  The Rounds page does not even wait for that check: `usageTab()` awaits the COUNTS only (`refreshCountsThenReach`), draws from the reach cache as it
+  stands, and the probe, run in the background, calls `PanelProvider.onStoreReachChanged` once when it changed the cache — `extension.ts` wires it to
+  `refreshRoundsLog`, which returns at once when the page is closed (disposal-safe), so a dead share never delays the page by its 2 s deadline.
   The merged call still reads the snapshot paths of those directories (the 8 s spawn cap and the D7 fallback bound it; gating the snapshot
   paths on the probe, open question 2 of the plan, is the recorded tail).
 - *The live contract leg (S5).* `scripts/seam-round-counts-merged.mjs` (registered in `run-seam.mjs` beside the usage-counts and ledger-fields legs,

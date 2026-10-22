@@ -323,6 +323,9 @@ export function activate(context: vscode.ExtensionContext): CoaiExports {
   // A Team-server answer landing repaints the rounds log too, not only the sidebar — the page is where the company
   // figures are, and it may be open with the sidebar closed (todo/PLAN_team_usage_by_person.md, 1.1).
   panel.onTeamUsageChanged = () => { void refreshRoundsLog(roundsLog, watcher, panel); };
+  // The Rounds page draws from the cached store reach and does not wait for the probe; when the probe changes the cache it repaints.
+  // `refreshRoundsLog` returns at once when the page is closed, so a probe landing late never paints a disposed webview.
+  panel.onStoreReachChanged = () => { void refreshRoundsLog(roundsLog, watcher, panel); };
   // The panel repaints whenever the watcher's state moves, so a question answered in the modal
   // disappears from the sidebar without anyone asking it to.
   watcher.onChanged = () => {

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
-import { refreshCountsAndReach, STORE_REACH_DEADLINE_MS, StoreReach } from '../storeReach';
+import { refreshCountsAndReach, refreshCountsThenReach, STORE_REACH_DEADLINE_MS, StoreReach } from '../storeReach';
 import { roundsBlock } from '../roundsBlock';
 import { counted, snapshot } from './roundCountsFixtures';
 
@@ -114,6 +114,61 @@ test('refreshCountsAndReach refreshes the counts AND the reach, and says to repa
   assert.equal(asked.length, 1, 'a held answer was probed again');
 });
 
+test('OpeningTheRoundsPage_WithAProbeThatNeverAnswers_DrawsBeforeTheProbeSettles — the page waits for the counts, a later reach result repaints once', async () => {
+  let settle: (here: boolean) => void = () => undefined;
+  let asked = 0;
+  // A deadline far beyond the test: only the page's own behaviour, not the race's timeout, may end the wait.
+  const reach = new StoreReach(() => { asked += 1; return new Promise<boolean>((resolve) => { settle = resolve; }); }, { deadlineMs: 60_000 });
+  const counts = { refresh: async () => true };
+  let repaints = 0;
+  let repainted: () => void = () => undefined;
+  const repaintedOnce = new Promise<void>((resolve) => { repainted = resolve; });
+  const repaint = (): void => { repaints += 1; repainted(); };
+
+  const never = Symbol('the page was still waiting on the reach probe');
+  const outcome = await Promise.race([
+    refreshCountsThenReach(counts, reach, [WSL], repaint),
+    new Promise<symbol>((resolve) => { setTimeout(() => resolve(never), 50); }),
+  ]);
+
+  assert.notEqual(outcome, never, 'the page waited for a reach probe that never answers: opening it on a dead share stalls for the probe\'s deadline');
+  assert.equal(outcome, true, 'the counts changed, so the page must draw');
+  assert.equal(asked, 1, 'the reach refresh must still START when the page opens');
+  assert.deepEqual(reach.current([WSL]), [], 'the page draws from the cache as it stands, with the store not yet known');
+  assert.equal(repaints, 0, 'a repaint before the probe answered');
+
+  settle(true);
+  await repaintedOnce;
+
+  assert.deepEqual(reach.current([WSL]), [{ directory: WSL, reach: 'here' }]);
+  assert.equal(repaints, 1, 'a reach result that changed the cache must repaint the page exactly once');
+});
+
+test('a reach refresh that changed nothing repaints nothing — the page does not loop on its own probe', async () => {
+  const reach = new StoreReach(async () => true);
+  let repaints = 0;
+  const repaint = (): void => { repaints += 1; };
+
+  await refreshCountsThenReach({ refresh: async () => false }, reach, [WSL], repaint);
+  await new Promise<void>((resolve) => { setTimeout(resolve, 20); });
+  assert.equal(repaints, 1, 'the first answer for a store is a change');
+  await refreshCountsThenReach({ refresh: async () => false }, reach, [WSL], repaint);
+  await new Promise<void>((resolve) => { setTimeout(resolve, 20); });
+
+  assert.equal(repaints, 1, 'a held, unchanged answer repainted the page again');
+});
+
+test('the Rounds page never awaits the reach probe — it awaits the counts and hands the reach a repaint (wiring)', () => {
+  const text = readFileSync(join(__dirname, '..', '..', 'src', 'panelProvider.ts'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//gu, ' ')
+    .replace(/(^|[^:])\/\/.*$/gmu, '$1');
+  const page = /async usageTab\(\)[\s\S]*?\r?\n {2}\}\r?\n/u.exec(text)?.[0] ?? '';
+
+  assert.ok(page.length > 0, 'usageTab was renamed, and this guard is asserting nothing');
+  assert.doesNotMatch(page, /await\s+(refreshCountsAndReach|this\.storeReach\.refresh)\(/u, 'usageTab awaits the reach probe: a store on a dead share holds the Rounds page back for the probe deadline');
+  assert.match(page, /refreshCountsThenReach\(/u, 'usageTab does not use the counts-then-background-reach refresh');
+});
+
 test('OpeningTheRoundsPage_WithSettingsNeverOpened_RefreshesTheReach — the page\'s own tick asks the stores, not only the counts (wiring)', () => {
   // The Rounds page is `usageTab()`. The reach cache used to be refreshed only beside the counts in `refreshRoundCounts`, which a render
   // starts only while the Settings page is open — so with Settings never opened the page read an EMPTY cache: another installation's store
@@ -124,7 +179,7 @@ test('OpeningTheRoundsPage_WithSettingsNeverOpened_RefreshesTheReach — the pag
   const page = /async usageTab\(\)[\s\S]*?\r?\n {2}\}\r?\n/u.exec(text)?.[0] ?? '';
 
   assert.ok(page.length > 0, 'usageTab was renamed, and this guard is asserting nothing');
-  assert.match(page, /\b(refreshCountsAndReach|storeReach\.refresh)\(/u, 'the Rounds page refreshes the counts but never the reach of the other stores: with Settings closed it draws an empty cache');
+  assert.match(page, /\b(refreshCountsThenReach|refreshCountsAndReach|storeReach\.refresh)\(/u, 'the Rounds page refreshes the counts but never the reach of the other stores: with Settings closed it draws an empty cache');
 });
 
 test('the panel no longer probes existence while it draws — the Rounds block reads the cached reach (wiring)', () => {

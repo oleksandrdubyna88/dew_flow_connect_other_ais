@@ -57,6 +57,26 @@ export async function refreshCountsAndReach(
   return counted || reached;
 }
 
+/**
+ * The Rounds PAGE's refresh: waits for the counts only, and lets the reach probe run behind the draw. The page draws from the reach
+ * cache as it stands; `repaint` is called once if the probe, when it settles, changed that cache. A store on a dead share would
+ * otherwise hold the page back for the probe's whole deadline. Resolves with whether the COUNTS changed.
+ */
+export async function refreshCountsThenReach(
+  counts: { refresh(): Promise<boolean> },
+  reach: StoreReach,
+  directories: readonly string[],
+  repaint: () => void,
+): Promise<boolean> {
+  // Started first so the probe runs beside the counts; never awaited here. `refresh` does not throw (a probe that throws reads as
+  // absent), and a throwing `repaint` is logged rather than lost as an unhandled rejection.
+  void reach.refresh(directories)
+    .then((changed) => { if (changed) { repaint(); } })
+    .catch((reason: unknown) => { console.error('ConnectOtherAIs: the store reach refresh could not repaint the Rounds page', reason); });
+
+  return counts.refresh();
+}
+
 export class StoreReach {
   private readonly known = new Map<string, Known>();
 

@@ -81,7 +81,7 @@ import { RoundsLogCache } from './roundsLogCache';
 import { finishedRounds, RoundCountsCache } from './roundCountsCache';
 import { PLAN_PRICES_SETTING, type PlanPriceRefusal, planPricesFrom, savePlanPrice } from './planPrice';
 import { roundsLoader } from './roundCountsRead';
-import { refreshCountsAndReach, StoreReach } from './storeReach';
+import { refreshCountsAndReach, refreshCountsThenReach, StoreReach } from './storeReach';
 import { PROBE_USAGE_FILE, probeUsagePath } from './probeUsageFile';
 import { ranOnOf, roundsBlock } from './roundsBlock';
 import { chatLedgerLines } from './roundMoney';
@@ -430,6 +430,12 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       this.onTeamUsageChanged();
     },
   });
+
+  /**
+   * Told when a background reach probe changed what the Rounds block names (a store found, lost, or not answering). The Review
+   * rounds page wires its repaint here; that repaint is a no-op once the page is closed, so a late probe cannot paint a disposed webview.
+   */
+  onStoreReachChanged: () => void = () => undefined;
 
   /** Told when a Team-server answer lands. The Review rounds page wires its repaint here. */
   onTeamUsageChanged: () => void = () => undefined;
@@ -899,8 +905,10 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     const vendors = this.vendorsHere();
     const usage = this.remembered(await this.readUsage());
     // The page's own tick: a read when due (at most once a minute, sooner after an ending), never per tick. The reach of the other
-    // stores is refreshed beside the counts: `refreshRoundCounts` runs only while Settings is open, and this page must not draw an empty cache.
-    await refreshCountsAndReach(this.roundCounts, this.storeReach, otherDirectories(this.dataDir.fsPath));
+    // stores is refreshed beside the counts — `refreshRoundCounts` runs only while Settings is open, and this page must not draw an
+    // empty cache — but NOT awaited: a store on a dead share would hold the page back for the probe's 2 s deadline. The page draws
+    // from the cache as it stands and `onStoreReachChanged` repaints it when the probe changes that cache.
+    await refreshCountsThenReach(this.roundCounts, this.storeReach, otherDirectories(this.dataDir.fsPath), () => { this.onStoreReachChanged(); });
     const rounds = await this.roundsBlockHtml(vendors);
 
     return usageTabHtml(
