@@ -5207,7 +5207,7 @@ files were renamed, the class deleted); `FixedClock` (an instant that cannot mov
 7. `ITimer.Dispose()` retires the timer AT ONCE, even from inside its own callback (a `CancellationTokenSource` disposes its timer there; a `Dispose` that waited would wait for itself). Only `DisposeAsync()` waits,
    for a callback already picked (at once from inside that callback); a timer disposed between its pick and its call never runs its callback. `Change` after disposal returns `false`; a due time or period below −1 ms or
    above 0xFFFFFFFE ms is refused with `ArgumentOutOfRangeException`, as the system refuses it.
-8. `ActiveTimers` and `WhenTimersAsync(atLeast)` — the EVENT a test waits on before it advances ("the product armed its deadline"). A fired or disposed timer leaves the count, and because a `CancellationTokenSource`
+8. `ActiveTimers` and `WhenTimersAsync(atLeast, within = null)` (bounded at 30 s by default, faulting with the counts — code gate G3) — the EVENT a test waits on before it advances ("the product armed its deadline"). A fired or disposed timer leaves the count, and because a `CancellationTokenSource`
    disposes its timer before its registrations run, a test that means "the deadline struck" asserts the TOKEN after the advance, never the count inside a callback.
 9. No `RecordingWait` (a stand-in waits with `Task.Delay(delay, clock, ct)`). 10. Thread-safe: one lock over the readings and the timer list.
 11. `ClockHandshake` (`src_mcp/tests/ClockHandshake.cs`): the hook's side `Signal()` then `await WaitForReleaseAsync(ct)`; the test's `await handshake.Reached; clock.Advance(…); handshake.Release();`, with `Release()` also in
@@ -5289,6 +5289,20 @@ product hook from advancing a different clock; the scan is a source scan of nine
 ### E4 judge round (Opus, 2026-10-22) — what changed
 
 Source: `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp_E4.md` §17. **The scan:** four rules and the `TimeProvider.System` exclusion above, each with a synthetic row (red first: `Expected … to be a collection with 13 item(s) … contains 7 item(s) less`); nothing tripped on the five real files, and the break-it (`SourceResolver`'s `new CancellationTokenSource(_readDeadline, _clock)` without the clock) turned the scan red. **`AcpClient.TurnAsync`:** the deadline's two sources are armed inside a `try` whose `finally` ends the agent until `ConverseUntilAsync` has the turn; `AcpClientClockTests.AClockThatCannotArmTheDeadline_StillEndsTheAgentItStarted_AndTheFailureSurfaces` (a `TimeProvider` whose `CreateTimer` throws, a recording supervisor) was red with `Expected tree.Ended to be 1 … but found 0`. **`ManualClock.Move`:** both new readings are computed before the advancing mark is set; `ManualClockTests.AnAdvanceTheClockCannotHold_IsRefusedAndMovesNothing_SoALaterValidAdvanceStillWorks` was red with `Advance was entered while thread … is advancing this clock`. **Renamed:** the end-to-end smoke test is `AReviewerThatAsksOnEveryTurn_IsReviewedEndToEnd_ARealProcessSmokeTestOfTheWiring`. **Records:** S2's extra break-its are B22–B25; the parent's census gained C28–C38 (E5's intake).
+
+### E4 code gate (67791431, 2026-10-22, proceed) — what changed
+
+Source: `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp_E4.md` §18 (5 accepted, 4 rejected). **The companion** in
+`EveryBudgetInAClockedClassReadsItsClockTests`: every product file (all `src_*`, tests excluded, read through `ProductionSources`) whose primary constructor, positional
+record or explicit constructor takes a `TimeProvider` must be in `Clocked` or in `Unscanned` with a reason; a stale or reason-less `Unscanned` entry, or a `Clocked` file that no longer takes a
+clock, is red; a synthetic test pins the detector (primary, record, explicit: yes; static method, comment, string: no). It was red first with eight unclassified files; the break-it
+(`SourceResolver` out of `Clocked`) was red naming it. **`Unscanned`, with the reasons:** `BackfillAttribution.cs` (forwards the clock to the peer lookup as a deadline instant), `BackfillRun.cs` (defaults and
+forwards it; arms nothing), `RoundAuthorsStep.cs` (instants: a deadline, an elapsed from `GetTimestamp`), `SessionHolds.cs` (a wall stamp: a cached entry's age against its recheck), `ObservedSession.cs`
+(`ReadBudget`'s clock for `MaxTime` as an instant comparison), `RoundsDb.cs` (wall stamps for columns; its one `DateTime.UtcNow` is a row's `opened_utc`), `CollectRun.cs` (a stamp: the run id),
+`src_bugs/src/RateLimiter.cs` (a rate window compared as instants). None has a scan shape today; a timer added to one moves it to `Clocked`, red first. `IsClocked` is three small helpers
+(`EmptyAndFine`, `NamesAClockIn`, `TokenAloneAndFine`), complexity ≤ 4 each. **`ManualClock.WhenTimersAsync(atLeast, within = null)`** is bounded: default `DefaultTimerWait` (30 s, the suite's
+guard, on the system clock), then it faults with `expected at least {n} timer(s) armed within {s}s; {k} are armed` (RED against the unbounded API: the outer wait's "The operation has timed out."; break-it red).
+**`ClockedAcpTurn`:** `DrivenAsync(…, clock, expectedTimers)`; its guard sentence ends "(timers the test expected: n; armed: k)"; its outer net is 5 s longer than the clock's own bound so the named sentence wins.
 
 ## The suite is deterministic — E4 S2: the ACP client's clock (C5, C23, 2026-10-21)
 

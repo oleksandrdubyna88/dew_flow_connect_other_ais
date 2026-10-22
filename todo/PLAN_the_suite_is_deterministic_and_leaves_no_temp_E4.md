@@ -1220,3 +1220,44 @@ at its `file:line` and all six were accepted. What changed:
   (b) The end-to-end smoke test `TheRoundsDeadline_IsScaledByTheFollowUps_SoAConversationIsNotCutByAOneTurnBudget` overclaimed once S5
   moved the arithmetic out of it; renamed `AReviewerThatAsksOnEveryTurn_IsReviewedEndToEnd_ARealProcessSmokeTestOfTheWiring`, its remark
   kept, and the three plan references updated.
+
+
+---
+
+## 18. The E4 code gate (67791431, 2026-10-22, proceed) — 9 findings: 5 accepted, 4 rejected
+
+The code gate's verdict was `proceed`; its nine findings were each checked against the code on `feat/suite-e4-clock` at `6922ef7b8`.
+
+**Accepted (5, four fixes — findings 2 and 8 are one):**
+
+- **G1 (findings 2 and 8) — `IsClocked` packed too many conditions** (cyclomatic complexity > 4). Split into `EmptyAndFine`, `NamesAClockIn` and `TokenAloneAndFine`;
+  `IsClocked` is `HasArguments && (the three)`. No behaviour change — the scan and its self-tests stay green, which is the proof.
+- **G2 (finding 3) — the scanned set was hand-kept.** A companion now fails when a product file whose CONSTRUCTOR (primary, positional record or explicit)
+  takes a `TimeProvider` is in neither `Clocked` nor the new explicit `Unscanned` list; it reads the same `ProductionSources` the scan reads. A second test
+  fails on a stale `Unscanned` entry, on a missing reason, and on a `Clocked` file that no longer takes a clock; a synthetic test proves the detector
+  sees all three constructor shapes and not a static method, a comment or a string. RED: the first run listed eight unclassified files —
+  `src_bugs/src/RateLimiter.cs; src_mcp/src/Collecting/CollectRun.cs; src_mcp/src/Server/SessionHolds.cs; src_mcp/src/Store/ObservedSession.cs;
+  src_mcp/src/Store/RoundsDb.cs; src_mcp/src/Server/Backfill/BackfillAttribution.cs; src_mcp/src/Server/Backfill/BackfillRun.cs;
+  src_mcp/src/Server/Rounds/RoundAuthorsStep.cs` — each read and classified with a reason (the list is in `module_tests.md`: all eight use their clock
+  as an INSTANT — a stamp, a deadline, an age — and arm no timer and wait for nothing; none has a scan shape today). Break-it: `SourceResolver`
+  taken out of `Clocked` → the companion red, `found "src_mcp/runners/Feature/SourceResolver.cs"`; restored by writing the file.
+- **G3 (finding 5) — `ManualClock.WhenTimersAsync` could wait forever.** It takes `TimeSpan? within = null` (default `ManualClock.DefaultTimerWait`, 30 s —
+  the suite's guard, on the SYSTEM clock) and faults with `TimeoutException("expected at least {n} timer(s) armed within {s}s; {k} are armed")`. The
+  returned task is still the waiter's own, so an already-met or just-met wait is still completed synchronously (M11 unchanged). RED
+  (`WhenTimersAsync_FaultsNamingTheCountsWhenTheTimersAreNeverArmed_InsteadOfWaitingForever`, against the unbounded API with the test's own 2 s outer
+  bound): `Expected exception message to match the equivalent of "expected at least 2 timer(s) armed within *; 1 are armed", but "The operation has
+  timed out." does not.` — the outer wait's message, not the named one. Green with `within: 200 ms`; break-it (the expiry not armed) red the same way after
+  the test's 20 s guard. Existing callers keep their behaviour: they wait under the same 30 s, `ClockedAcpTurn.AdvanceOnceArmed` now passes its guard as
+  `within`, and the outer net there is 5 s longer so the NAMED sentence surfaces first.
+- **G4 (finding 7) — `ClockedAcpTurn.ReachedAsync`'s TimeoutException named the guard, not the expectation.** `DrivenAsync` takes an optional
+  `ManualClock` and `expectedTimers`; the sentence (`NeverReached`) now ends "(timers the test expected: 2; armed: 1)"; a drive that faulted with the
+  clock's own named exception is rethrown as it is. The four waiting callers pass their clock and count. The sentence is pure, so it has a unit test
+  (`TheGuardsSentence_NamesTheTimersTheTestExpected_AndTheNumberArmed`), red by absence (the method did not exist).
+
+**Rejected (4):**
+
+- **"The agent is orphaned if the arming throws" (the orphan claim, raised twice).** Already closed by the judge round's L2: `TurnAsync`'s `finally`
+  ends the agent through `AcpTransport.EndAsync` → the supervisor FIRST; `AClockThatCannotArmTheDeadline_StillEndsTheAgentItStarted_…` is the RED that proves it.
+- **"`readTimer` leaks in `SourceResolver`".** It is a `using var` declaration, which disposes on a throw as on a return.
+- **"`ManualClock.Pick` sorts on every fire".** At most about three timers are ever armed in these tests; the (due time, arming order) tie order is the
+  contract, and a heap would change nothing a test can see.

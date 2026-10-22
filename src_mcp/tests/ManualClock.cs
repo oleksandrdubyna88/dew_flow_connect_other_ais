@@ -74,11 +74,16 @@ internal sealed class ManualClock(DateTimeOffset start) : TimeProvider
         return timer;
     }
 
+    /// <summary>The suite's guard: how long a test waits for the product to arm a timer before it says what is missing.</summary>
+    public static readonly TimeSpan DefaultTimerWait = TimeSpan.FromSeconds(30);
+
     /// <summary>
     /// Completes when at least <paramref name="atLeast"/> timers are scheduled, at once if they already are: the EVENT a test waits on
-    /// ("the product has armed its deadline") before it advances.
+    /// ("the product has armed its deadline") before it advances. It is BOUNDED: if the timers are not armed within
+    /// <paramref name="within"/> (default <see cref="DefaultTimerWait"/>, on the SYSTEM clock — the manual one does not move by itself) the task
+    /// faults with a <see cref="TimeoutException"/> that names what was waited for and how many are armed, instead of waiting forever.
     /// </summary>
-    public Task WhenTimersAsync(int atLeast)
+    public Task WhenTimersAsync(int atLeast, TimeSpan? within = null)
     {
         lock (_gate)
         {
@@ -89,8 +94,26 @@ internal sealed class ManualClock(DateTimeOffset start) : TimeProvider
 
             var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             _waiters.Add((atLeast, done));
+            ExpireAfter(within ?? DefaultTimerWait, atLeast, done);
             return done.Task;
         }
+    }
+
+    /// <summary>A real timer that faults the wait with its sentence if it is still pending at the bound; the wait finishing disposes the timer.</summary>
+    private void ExpireAfter(TimeSpan bound, int atLeast, TaskCompletionSource done)
+    {
+        var expiry = TimeProvider.System.CreateTimer(_ => Expire(bound, atLeast, done), null, bound, Timeout.InfiniteTimeSpan);
+        _ = done.Task.ContinueWith(_ => expiry.Dispose(), TaskScheduler.Default);
+    }
+
+    private void Expire(TimeSpan bound, int atLeast, TaskCompletionSource done)
+    {
+        lock (_gate)
+        {
+            _waiters.RemoveAll(waiter => waiter.Done == done);
+        }
+
+        done.TrySetException(new TimeoutException($"expected at least {atLeast} timer(s) armed within {bound.TotalSeconds:0.###}s; {ActiveTimers} are armed"));
     }
 
     /// <summary>The wall clock alone moves (the monotonic reading does not): a host that slept, a clock stepped forward.</summary>

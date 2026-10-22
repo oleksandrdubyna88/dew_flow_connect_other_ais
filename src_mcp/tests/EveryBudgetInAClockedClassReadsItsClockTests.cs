@@ -34,6 +34,26 @@ public sealed class EveryBudgetInAClockedClassReadsItsClockTests
     /// <summary>The product files judged. Each seam story adds its class here, red first, then green once the seam is in.</summary>
     private static readonly string[] Clocked = [BoundedScheduler, AcpClientFile, ConsultantPlaces, TurnLoop, SourceResolver];
 
+    /// <summary>A product file whose constructor takes a <see cref="TimeProvider"/> and is NOT in <see cref="Clocked"/>, with the one-line reason (judge round G2).</summary>
+    private sealed record NotScanned(string File, string Reason);
+
+    /// <summary>
+    /// The product files that take a clock in a constructor and are deliberately not scanned. Each reads its injected clock only by comparing
+    /// instants (<c>GetUtcNow</c>, <c>GetTimestamp</c>) and carries none of the scan's shapes today; a later timer in one of them moves it to
+    /// <see cref="Clocked"/>, red first. The companion fails when a file with a clock constructor is in neither list, and when an entry here no longer has one.
+    /// </summary>
+    private static readonly NotScanned[] Unscanned =
+    [
+        new("src_mcp/src/Server/Backfill/BackfillAttribution.cs", "forwards its clock to the peer lookup (AuthorPeers.Find) as a deadline instant; no timer, no wait — E5/E7's own tests pin it"),
+        new("src_mcp/src/Server/Backfill/BackfillRun.cs", "only defaults and forwards the clock to BackfillAttribution; it arms nothing itself"),
+        new("src_mcp/src/Server/Rounds/RoundAuthorsStep.cs", "reads its clock as instants (a deadline, an elapsed from GetTimestamp) for the round-authors step; no timer, no wait"),
+        new("src_mcp/src/Server/SessionHolds.cs", "a wall STAMP only: a cached entry's age against the ten-minute recheck; it waits for nothing"),
+        new("src_mcp/src/Store/ObservedSession.cs", "ReadBudget carries a clock for the transcript read's MaxTime as an instant comparison; the read arms no timer"),
+        new("src_mcp/src/Store/RoundsDb.cs", "a wall STAMP for its rows' columns (the clock is what a test controls); its one DateTime.UtcNow is the session row's opened_utc, a stamp and not a budget"),
+        new("src_mcp/src/Collecting/CollectRun.cs", "a wall STAMP only: the run id is the clock's instant; the run waits for nothing"),
+        new("src_bugs/src/RateLimiter.cs", "a rate window compared as instants (GetUtcNow ticks per subject); no timer, no wait — its own tests move the clock"),
+    ];
+
     /// <summary>A site that is allowed to stay, and why. <paramref name="Snippet"/> must occur in exactly one site's statement of <paramref name="File"/>.</summary>
     private sealed record Allowed(string File, string Snippet, string Reason);
 
@@ -92,10 +112,16 @@ public sealed class EveryBudgetInAClockedClassReadsItsClockTests
     }
 
     private static bool IsClocked(Rule rule, string arguments) =>
-        rule.HasArguments
-        && ((rule.EmptyIsFine && arguments.Trim().Length == 0)
-            || NamesAClock.IsMatch(TheSystemClock.Replace(arguments, string.Empty))
-            || (rule.TokenAloneIsFine && TokenAlone.IsMatch(arguments)));
+        rule.HasArguments && (EmptyAndFine(rule, arguments) || NamesAClockIn(arguments) || TokenAloneAndFine(rule, arguments));
+
+    /// <summary>An empty argument list on a rule that exempts it (<c>new CancellationTokenSource()</c> arms nothing).</summary>
+    private static bool EmptyAndFine(Rule rule, string arguments) => rule.EmptyIsFine && arguments.Trim().Length == 0;
+
+    /// <summary>A clock named in the arguments — <c>TimeProvider.System</c> does not count: it is the system timer.</summary>
+    private static bool NamesAClockIn(string arguments) => NamesAClock.IsMatch(TheSystemClock.Replace(arguments, string.Empty));
+
+    /// <summary>A token alone on a rule that accepts it (<c>WaitAsync(ct)</c> arms no timer).</summary>
+    private static bool TokenAloneAndFine(Rule rule, string arguments) => rule.TokenAloneIsFine && TokenAlone.IsMatch(arguments);
 
     private static int Depth(char c) => c switch { '(' => 1, ')' => -1, _ => 0 };
 
@@ -122,6 +148,70 @@ public sealed class EveryBudgetInAClockedClassReadsItsClockTests
         var stop = code.IndexOf(';', end);
         var to = Math.Min((stop < 0 ? code.Length : stop + 1) + 60, code.Length);
         return code[from..to].Trim();
+    }
+
+    // ---- the companion: the scanned set cannot drift (judge round G2) ----
+
+    private static readonly Regex PrimaryConstructor = Re(@"\b(?:class|record|struct)\s+\w+(?:<[^<>]*>)?\s*\(");
+
+    private static readonly Regex DeclaredType = Re(@"\b(?:class|record|struct)\s+(\w+)");
+
+    private static readonly Regex ATimeProvider = Re(@"\bTimeProvider\b");
+
+    /// <summary>The text between the parenthesis at <paramref name="open"/> and the one that closes it.</summary>
+    private static string ParametersAt(string code, int open) => code[(open + 1)..ClosingParen(code, open)];
+
+    private static IEnumerable<string> PrimaryParameterLists(string code) =>
+        PrimaryConstructor.Matches(code).Select(match => ParametersAt(code, match.Index + match.Length - 1));
+
+    private static IEnumerable<Match> ExplicitConstructorsOf(string code, string type) =>
+        Re($@"\b(?:public|internal|protected|private)\s+{Regex.Escape(type)}\s*\(").Matches(code);
+
+    private static IEnumerable<string> ExplicitParameterLists(string code) =>
+        DeclaredType.Matches(code).Select(match => match.Groups[1].Value).Distinct()
+            .SelectMany(type => ExplicitConstructorsOf(code, type))
+            .Select(match => ParametersAt(code, match.Index + match.Length - 1));
+
+    /// <summary>Whether a constructor of a type declared in this code — primary, positional record or explicit — takes a <see cref="TimeProvider"/>. A static method that does is not a constructor.</summary>
+    private static bool TakesAClockInAConstructor(string code) =>
+        PrimaryParameterLists(code).Concat(ExplicitParameterLists(code)).Any(parameters => ATimeProvider.IsMatch(parameters));
+
+    private static List<string> ProductFilesWithAClockConstructor() =>
+        [.. ProductionSources.Files().Where(file => file.EndsWith(".cs", StringComparison.Ordinal) && TakesAClockInAConstructor(ProductionSources.CodeOf(file)))];
+
+    [Fact]
+    public void EveryProductFileWhoseConstructorTakesAClock_IsScanned_OrNamedAsNotScannedWithItsReason()
+    {
+        string[] unclassified =
+        [
+            .. ProductFilesWithAClockConstructor()
+                .Where(file => !Clocked.Contains(file) && !Unscanned.Any(entry => entry.File == file)),
+        ];
+
+        string.Join("; ", unclassified).Should().BeEmpty(
+            "a class that owns a clock is judged by the scan or named here with a reason; a hand-kept set that a new clocked class can miss is how the race comes back");
+    }
+
+    [Fact]
+    public void TheNotScannedList_IsNotStale_AndEveryEntryHasAReason()
+    {
+        var withAClock = ProductFilesWithAClockConstructor();
+
+        string[] stale = [.. Unscanned.Where(entry => !withAClock.Contains(entry.File) || Clocked.Contains(entry.File)).Select(entry => entry.File)];
+
+        string.Join("; ", stale).Should().BeEmpty("an entry whose file no longer takes a clock (or is now scanned) must leave the list");
+        Unscanned.Should().OnlyContain(entry => entry.Reason.Length > 20, "every unscanned file says why");
+        Clocked.Should().OnlyContain(file => withAClock.Contains(file), "the scanned set holds only files that take a clock — a file that lost its clock leaves it");
+    }
+
+    [Fact]
+    public void TheCompanion_SeesAClockInEveryConstructorShape_AndNotInAStaticMethodAProseOrAComment()
+    {
+        TakesAClockInAConstructor(ProductionSources.Joined("class A(IFoo foo, TimeSpan t, TimeProvider? clock = null) { }")).Should().BeTrue("a primary constructor");
+        TakesAClockInAConstructor(ProductionSources.Joined("record B(long Max, TimeProvider Clock) { }")).Should().BeTrue("a positional record");
+        TakesAClockInAConstructor(ProductionSources.Joined("class C { public C(Func<int, int> f, TimeProvider? clock = null) { } }")).Should().BeTrue("an explicit constructor");
+        TakesAClockInAConstructor(ProductionSources.Joined("class D { internal static int Run(TimeProvider clock) => 1; }")).Should().BeFalse("a static method is not a constructor");
+        TakesAClockInAConstructor(ProductionSources.Joined("class E(int n) { /* TimeProvider clock */ string s = \"TimeProvider\"; }")).Should().BeFalse("prose is not a parameter");
     }
 
     private static List<Site> SitesOf(IEnumerable<string> files) =>

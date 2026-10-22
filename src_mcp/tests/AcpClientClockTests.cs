@@ -17,6 +17,17 @@ public sealed class AcpClientClockTests
     private static AcpClient ClientFor(FakeAcpAgent agent, ManualClock clock) =>
         new(agent.Profile(), new FolderReadBoundary(agent.Cwd, KimiAcpProfile.Exclusions), AcpClient.DefaultUsageBound, UnsupervisedTree.Instance, clock);
 
+    /// <summary>Judge round G4: the guard's sentence names the timers the test expected and the number armed, not only the guard.</summary>
+    [Fact]
+    public void TheGuardsSentence_NamesTheTimersTheTestExpected_AndTheNumberArmed()
+    {
+        var clock = new ManualClock(ClockedAcpTurn.Start);
+        using var one = clock.CreateTimer(_ => { }, null, TimeSpan.FromSeconds(1), Timeout.InfiniteTimeSpan);
+
+        ClockedAcpTurn.NeverReached(clock, 2).Should().Contain("timers the test expected: 2").And.Contain("armed: 1");
+        ClockedAcpTurn.NeverReached(null, 0).Should().Contain("not stated").And.Contain("unknown");
+    }
+
     /// <summary>
     /// Caller-first. The caller cancels while the prompt is outstanding and the deadline's timer is still armed: the end is the CALLER's
     /// (<c>Cancelled</c>, from <c>ct.IsCancellationRequested</c>), never <c>Deadline</c> — the clock did not move — and the agent still gets its
@@ -33,7 +44,7 @@ public sealed class AcpClientClockTests
             await clock.WhenTimersAsync(1);
             await agent.WhenReceivedAsync("session/prompt", TestContext.Current.CancellationToken);
             await caller.CancelAsync();
-        });
+        }, clock, expectedTimers: 1);
 
         outcome.End.Should().Be(AcpEnd.Cancelled, outcome.Reason);
         clock.GetUtcNow().Should().Be(ClockedAcpTurn.Start, "the clock never moved, so nothing here is a deadline");

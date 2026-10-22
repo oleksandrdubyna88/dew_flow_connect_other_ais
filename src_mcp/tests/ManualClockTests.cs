@@ -254,6 +254,34 @@ public sealed class ManualClockTests
         }
     }
 
+    /// <summary>
+    /// Judge round G3. A wait for timers the product never arms must not hang the test forever: it faults with a TimeoutException that names
+    /// what was waited for and how many are armed. The OUTER bound here is the test's own net — a hang would surface as ITS message, not the named one.
+    /// </summary>
+    [Fact]
+    public async Task WhenTimersAsync_FaultsNamingTheCountsWhenTheTimersAreNeverArmed_InsteadOfWaitingForever()
+    {
+        var clock = new ManualClock(T0);
+        using var one = clock.CreateTimer(_ => { }, null, S(1), Timeout.InfiniteTimeSpan);
+
+        var waiting = async () => await clock.WhenTimersAsync(2, within: Ms(200)).WaitAsync(Guard);
+
+        (await waiting.Should().ThrowAsync<TimeoutException>()).WithMessage("expected at least 2 timer(s) armed within 0.2s; 1 are armed");
+    }
+
+    [Fact]
+    public async Task WhenTimersAsync_IsCompletedByTheTimerArmedInTime_AndItsBoundIsTheSuitesGuardByDefault()
+    {
+        var clock = new ManualClock(T0);
+        var waiting = clock.WhenTimersAsync(1, within: S(10));
+        waiting.IsCompleted.Should().BeFalse("nothing is armed yet");
+
+        using var timer = clock.CreateTimer(_ => { }, null, S(1), Timeout.InfiniteTimeSpan);
+        await waiting.WaitAsync(Guard);
+
+        ManualClock.DefaultTimerWait.Should().Be(TimeSpan.FromSeconds(30), "a wait without a bound of its own is held to the suite's 30 s guard");
+    }
+
     [Fact]
     public void WhenTimersAsync_IsPendingUntilTheTimersAreArmed_AndTheCountDropsWhenOneFiresOrIsDisposed()
     {

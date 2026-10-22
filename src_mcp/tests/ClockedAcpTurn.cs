@@ -27,14 +27,14 @@ internal static class ClockedAcpTurn
     /// source, to cancel it), and returns the outcome. Whatever happens, the caller is cancelled on the way out so a failed drive never
     /// leaves the agent running.
     /// </summary>
-    public static async Task<AcpOutcome> DrivenAsync(AcpClient client, AcpAsk ask, Func<CancellationTokenSource, Task> drive)
+    public static async Task<AcpOutcome> DrivenAsync(AcpClient client, AcpAsk ask, Func<CancellationTokenSource, Task> drive, ManualClock? clock = null, int expectedTimers = 0)
     {
         var ct = TestContext.Current.CancellationToken;
         using var caller = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var turn = client.AskAsync(ask, caller.Token);
         try
         {
-            await ReachedAsync(drive(caller), ct);
+            await ReachedAsync(drive(caller), ct, clock, expectedTimers);
 
             return await turn.WaitAsync(Guard, ct);
         }
@@ -45,24 +45,36 @@ internal static class ClockedAcpTurn
         }
     }
 
-    /// <summary>The drive under the guard; a drive that never gets where it means is named as such, not left as a bare timeout.</summary>
-    private static async Task ReachedAsync(Task drive, CancellationToken ct)
+    /// <summary>
+    /// The drive under the guard; a drive that never gets where it means is named as such, not left as a bare timeout. A drive that waited on
+    /// <see cref="ManualClock.WhenTimersAsync"/> faults with ITS sentence (counts included) first — the outer net is a few seconds longer than the
+    /// clock's own bound — and that is rethrown as it is; otherwise the sentence names the timers the test expected and the number armed.
+    /// </summary>
+    private static async Task ReachedAsync(Task drive, CancellationToken ct, ManualClock? clock, int expectedTimers)
     {
         try
         {
-            await drive.WaitAsync(Guard, ct);
+            await drive.WaitAsync(Guard + OuterSlack, ct);
         }
-        catch (TimeoutException e)
+        catch (TimeoutException e) when (!drive.IsFaulted)
         {
-            throw new TimeoutException($"the product never reached what the test waits for within {Guard.TotalSeconds:F0}s on the manual clock — a deadline or bound that is not on the clock never arms its timer there", e);
+            throw new TimeoutException(NeverReached(clock, expectedTimers), e);
         }
     }
+
+    /// <summary>The guard's sentence: what the product never reached, the timers the test expected and how many the clock holds.</summary>
+    internal static string NeverReached(ManualClock? clock, int expectedTimers) =>
+        $"the product never reached what the test waits for within {Guard.TotalSeconds:F0}s on the manual clock — a deadline or bound that is not on the clock never arms its timer there "
+        + $"(timers the test expected: {(expectedTimers > 0 ? expectedTimers.ToString() : "not stated")}; armed: {(clock is null ? "unknown, no clock was handed to the driver" : clock.ActiveTimers.ToString())})";
+
+    /// <summary>How much longer the outer net waits than the clock's own named bound, so the named sentence is the one that surfaces.</summary>
+    private static readonly TimeSpan OuterSlack = TimeSpan.FromSeconds(5);
 
     /// <summary>The drive of a deadline: wait until the clock holds <paramref name="timers"/> timers, then move it by <paramref name="by"/>.</summary>
     public static Func<CancellationTokenSource, Task> AdvanceOnceArmed(ManualClock clock, int timers, TimeSpan by) =>
         async _ =>
         {
-            await clock.WhenTimersAsync(timers);
+            await clock.WhenTimersAsync(timers, Guard);
             clock.Advance(by);
         };
 }

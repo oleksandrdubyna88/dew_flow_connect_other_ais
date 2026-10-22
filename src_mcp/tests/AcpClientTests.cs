@@ -677,7 +677,7 @@ public sealed class AcpClientTests
             await clock.WhenTimersAsync(1);
             await agent.WhenReceivedAsync("session/prompt", TestContext.Current.CancellationToken);
             clock.Advance(deadline);
-        });
+        }, clock, expectedTimers: 1);
 
         outcome.End.Should().Be(AcpEnd.Deadline, outcome.Reason);
         agent.Received("session/cancel").Should().ContainSingle();

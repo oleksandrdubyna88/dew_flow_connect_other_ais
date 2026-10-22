@@ -42,7 +42,7 @@ public sealed class AcpClientUsageTests
         var clock = new ManualClock(ClockedAcpTurn.Start);
         var bound = TimeSpan.FromSeconds(1);
 
-        var outcome = await ClockedAcpTurn.DrivenAsync(ClientFor(agent, bound, clock), agent.Ask(), ClockedAcpTurn.AdvanceOnceArmed(clock, 2, bound));
+        var outcome = await ClockedAcpTurn.DrivenAsync(ClientFor(agent, bound, clock), agent.Ask(), ClockedAcpTurn.AdvanceOnceArmed(clock, 2, bound), clock, expectedTimers: 2);
 
         outcome.End.Should().Be(AcpEnd.Answered, "the answer was given before /usage was asked: " + outcome.Reason);
         outcome.Answer.Should().Be("OK");
@@ -63,7 +63,7 @@ public sealed class AcpClientUsageTests
         var clock = new ManualClock(ClockedAcpTurn.Start);
         var deadline = TimeSpan.FromSeconds(2);
 
-        var outcome = await ClockedAcpTurn.DrivenAsync(ClientFor(agent, TimeSpan.FromSeconds(60), clock), agent.Ask(deadline: deadline), ClockedAcpTurn.AdvanceOnceArmed(clock, 2, deadline));
+        var outcome = await ClockedAcpTurn.DrivenAsync(ClientFor(agent, TimeSpan.FromSeconds(60), clock), agent.Ask(deadline: deadline), ClockedAcpTurn.AdvanceOnceArmed(clock, 2, deadline), clock, expectedTimers: 2);
 
         outcome.End.Should().Be(AcpEnd.Answered, "the deadline struck while /usage was asked, and /usage never changes the end: " + outcome.Reason);
         outcome.Answer.Should().Be("OK", "the answer received before the deadline is kept");
