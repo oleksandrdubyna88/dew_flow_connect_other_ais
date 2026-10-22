@@ -13,13 +13,14 @@ namespace CoaiMcp.Tests;
 /// stdin. That took 19–32 s in the logs and 30–62 s on a copy of the data; the client killed it, started another, and seven sessions did it together.
 /// </summary>
 /// <remarks>
-/// The real binary over real stdio, because what is asserted is the ORDER the process does things in. The slow parts are
-/// made deterministic rather than hoped for: <c>creds</c> on the server's PATH is the fake CLI sleeping, and so is the
-/// CLI the consultants survey probes.
+/// The real binary over real stdio, because what is asserted is the ORDER the process does things in. The slow part is
+/// made deterministic rather than hoped for: <c>creds</c> on the server's PATH is the fake CLI, and in the first test it
+/// answers only once the TEST opens a gate (<c>FAKECLI_ANSWER_GATE</c>) — no wall bound stands in for the order (E5 S10,
+/// C33: a 10 s reply bound against a 20 s sleep failed an 11 s round trip on a starved machine). The other test keeps its sleep.
 /// </remarks>
 public sealed class TheServerAnswersInitializeAtOnceTests : IDisposable
 {
-    /// <summary>Far longer than the answer may take, so a server that waits for it cannot pass by luck.</summary>
+    /// <summary>How long the fake vault sleeps in the test that ends the server mid-read (the other one uses a gate).</summary>
     private const int SlowMs = 20_000;
 
     private readonly string _data = Directory.CreateTempSubdirectory("coai-init-").FullName;
@@ -44,35 +45,84 @@ public sealed class TheServerAnswersInitializeAtOnceTests : IDisposable
     public async Task Initialize_IsAnswered_WhileTheVaultReadAndTheProbeAreStillRunning()
     {
         var fake = SlowCredsOnPath();
+        var gate = Path.Combine(_bin, "answer.gate");
         using var server = StdioServer.Start(_data, "debug", 1800,
             ("PATH", _bin + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH")),
             ("COAI_CREDS_KEY", "test-config-key"),
             ("FAKECLI_HELP_STDOUT", "creds config -  (" + Server.KeyVault.StdinMarker + ")"), // a current creds: the key goes on stdin
             ("COAI_EXE_CODEX", fake),
             ("FAKECLI_MODE", "vendor"),
-            ("FAKECLI_SLEEP_MS", SlowMs.ToString()));
+            ("FAKECLI_ANSWER_GATE", gate)); // the vault read parks here, and stays parked until THIS test opens the gate
         try
         {
-            var clock = Stopwatch.StartNew();
+            // The vault read the server starts in the background cannot end while the gate is closed — by construction, not by
+            // a sleep long enough to hope for. So a reply that arrives now was given BEFORE the read: the order is a fact.
+            await InitializeWhileTheGateIsClosed(server, gate);
+            File.Exists(gate + ".answering").Should().BeFalse("the fake CLI answers only after its gate opens, and this test has not opened it");
 
-            // Ten seconds, against a vault read that takes twenty: only a server that answers BEFORE it can pass.
-            await StdioServer.RoundTrip(server,
-                "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},"
-                + "\"clientInfo\":{\"name\":\"init-test\",\"version\":\"0\"}}}",
-                timeoutSeconds: 10);
-            clock.Elapsed.Should().BeLessThan(TimeSpan.FromMilliseconds(SlowMs), "initialize must not wait for the vault read");
+            // And the read is still running behind that reply: it reached the gate and is parked there, alive. A server that
+            // waited for the read before it answered would find that child already killed by the read's own timeout.
+            var held = gate + ".held";
+            (await Polls.Until(() => File.Exists(held), TimeSpan.FromSeconds(GuardSeconds)))
+                .Should().BeTrue("the vault read never reached the answer gate, so the proof below would hold for nothing");
+            Running(int.Parse(File.ReadAllText(held).Trim(), System.Globalization.CultureInfo.InvariantCulture))
+                .Should().BeTrue("the vault read had already ended when initialize was answered: the server waited for it");
 
+            await File.WriteAllTextAsync(gate, string.Empty, TestContext.Current.CancellationToken); // the read may end now
             await server.StandardInput.WriteLineAsync("""{"jsonrpc":"2.0","method":"notifications/initialized"}""");
             await server.StandardInput.FlushAsync();
 
             // And a TOOL still sees the finished start: providers answers once the vault read has ended, and says how it went.
+            // 90 s is the guard it always was: a hang's bound, not a measurement.
             var providers = await StdioServer.Call(server, 2, "providers", "{}", timeoutSeconds: 90);
             // The fake prints no JSON body, so the read the tool waited for ends as the vault's own "not valid JSON" sentence.
             providers.ToString().Should().Contain("config entry", "the vault read finished before the tool answered, and its outcome is reported");
+            File.Exists(gate + ".answering").Should().BeTrue("the read that finished is the one that waited at the gate, not some other launch");
         }
         finally
         {
+            // Open in a finally too: a failing test must never leave the fake parked behind it.
+            await File.WriteAllTextAsync(gate, string.Empty, CancellationToken.None);
             await StdioServer.StopAsync(server);
+        }
+    }
+
+    /// <summary>
+    /// The suite's guard on the reply, named as one: it says a server HUNG, and does not measure how quickly a healthy one
+    /// answers — the 10 s that used to stand here did, and an 11 s round trip under load failed a server that was right.
+    /// </summary>
+    private const int GuardSeconds = 60;
+
+    private static async Task InitializeWhileTheGateIsClosed(Process server, string gate)
+    {
+        try
+        {
+            await StdioServer.RoundTrip(server,
+                "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},"
+                + "\"clientInfo\":{\"name\":\"init-test\",\"version\":\"0\"}}}",
+                timeoutSeconds: GuardSeconds);
+        }
+        catch (TimeoutException)
+        {
+            Assert.Fail($"the server never answered initialize within {GuardSeconds} s ({WhatTheGateSays(File.Exists(gate))})");
+        }
+    }
+
+    /// <summary>What the gate's state says about a reply that did not come: parked on the vault read, or merely slow.</summary>
+    private static string WhatTheGateSays(bool gateIsOpen) => gateIsOpen
+        ? "the answer gate was open: the vault read was free to end, so the server is slow, not parked on it"
+        : "the answer gate was still closed: the server waited for the vault read";
+
+    private static bool Running(int pid)
+    {
+        try
+        {
+            using var process = Process.GetProcessById(pid);
+            return !process.HasExited;
+        }
+        catch (ArgumentException)
+        {
+            return false;
         }
     }
 
