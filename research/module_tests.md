@@ -5256,8 +5256,20 @@ was `notice`; extension: the page read the note and severity), GREEN, and — fo
 | Extension `roundsLog.test.ts`: a standing-rejection Blocking finding is not gating (`gatingOrdinals`); absent → severity; empty → none; the row's `holdsGate` present only when recorded | `the row inferred "gating" from the severity instead of reading what the server counted`; `row.holdsGate` undefined | `isGating` back to severity only |
 | Extension `answerChoices.test.ts` / `activeQuestions.test.ts` / `escalations.test.ts` / `roundsLog.test.ts`: an `info` card offers no choice, draws only *Dismiss* (no Answer…/Keep going/Stop buttons), is not a "question" (no modal, no status bar) | `a notice that asks nothing is drawn with answer buttons`; the three-decision list returned for `info`; `needsADecision` stubbed true | `case 'info'` removed from `answerChoices`: red |
 
-**Not covered, said plainly.** `EscalationWatcher.answerCommand`'s dismissal path (an `info` card writes a `dismissed` answer file without a dialog) needs the
-VS Code host; the pure decisions (`needsADecision`, `answerChoices`, the button label) are tested.
+*(The dismissal path is covered since round 4 — below. What the VS Code host still owns is only the dialog's own rendering and the notifications.)*
+
+### A cancelled review stops its round — round 4 of the review (2026-10-22)
+
+S2 spec §13 "round 4". Behaviour tests were watched RED against the code without the change, GREEN, and RED again with a plant. After the round the server suite
+(`CoaiMcp.Tests.exe`) ran 13 618 tests, 0 failed, 121 skipped (POSIX-only); the extension `npm test` ran 6 663, 0 failed, 3 skipped.
+
+| Test | Seen red as | Plant (RED again) |
+|---|---|---|
+| `AWithdrawnRoundKeepsWhatLandedTests.TheOrdinals_FollowTheValueOfAFinding_NotItsReference` (a gate result whose gating finding is a `with { }` COPY) | `Expected KeptFindings.OrdinalsOf(merged, counted) to be equal to {1} because the copy is the same finding: …, but found empty collection.` | `ReferenceEquals` restored (with the count check in place): `System.InvalidOperationException : the gate counted 1 gating finding(s) but 0 could be found in the merged list of 2` |
+| `…OrdinalsThatDisagreeWithTheCount_FailLoudly_NeverAnEmptyListForAGatingRound` | `Expected a <System.InvalidOperationException> to be thrown because a counted finding that cannot be found in the merged list is a defect, not an empty answer, but no exception was thrown.` | check removed: the same message |
+| `…TheHoldNotice_ListsOnlyWhatTheGateCounted_NotEveryBlockingFinding` (a standing-rejection Blocking + a counted Major) | `Expected notice.OpenFindings.Select(f => f.Title) to be equal to {"The index is never built"} because a standing rejection is blocking by severity …, but {"The rollback is missing", "The index is never built"} contains 1 item(s) too many.` | `Where(f => f.IsGating)` restored: the same message |
+| Extension `escalationAnswering.test.ts`: an `info` card dismissed writes exactly one `<id>.answer.json` beside the card with `{ id, answer: "dismissed", decision: "", answeredUtc }`, no temp left, and the dialog (a spy that fails the test) is never called; an own card (no `from`) is answered in this window's directory; a card that asks shows the dialog and writes the pick; a closed dialog writes nothing; a card with no kind is a question; an existing answer is never overwritten; an id that is not a name is refused; a refused write is returned with its folder | a refactor of existing behaviour — the unit did not exist, so the first run was green; the plants are the evidence | `chooseAnswer` always asks: `a dialog was shown for a card that asks for nothing` (5 tests red); `DISMISSED.decision` changed to `continue`: `+ decision: 'continue' - decision: ''` |
+| Extension `roundsLog.test.ts`: a kept finding with no severity (absent, or a number) renders, with severity `""` and not gating | green on first run — `textOf` already returns `""` for a non-text member; the test pins that, it was not red before | — |
 
 **Not covered, said plainly.** The engine's wiring of `NoticeFor` (that `Announce` passes the real save result) has no engine-level test: `PanelService` builds its
 own `SessionStore` (`FileWriter` is an `init` seam), so a failing save cannot be injected through the service. The decision and the refusal are tested; the

@@ -221,6 +221,60 @@ public sealed class AWithdrawnRoundKeepsWhatLandedTests : IAsyncLifetime
         kept.GatingProviders.Should().Equal(["codex"], "only the vendor whose answer carried the counted finding is named");
     }
 
+    // ---------- round 4 (code review, 2026-10-22): the ordinals and the notice follow what the gate COUNTED ----------
+
+    private static Finding Raised(Severity severity, string title, string why, string provider) =>
+        new(severity, Category.Completeness, string.Empty, 0, title, why, "fix it", [provider]) { Role = "Architecture" };
+
+    [Fact]
+    public void TheOrdinals_FollowTheValueOfAFinding_NotItsReference()
+    {
+        var minor = Raised(Severity.Minor, "The heading is vague", "a reader cannot tell what the section decides", "gemini");
+        var blocking = Raised(Severity.Blocking, "The rollback is missing", "nothing undoes the migration if step two fails", "codex");
+        ImmutableArray<Finding> merged = [minor, blocking];
+
+        // A gate that hands back COPIES of what it counted (a `with { }` is value-equal and not reference-equal).
+        var counted = new GateResult(1, false, [blocking with { }], []);
+
+        KeptFindings.OrdinalsOf(merged, counted).Should().Equal(
+            [1],
+            "the copy is the same finding: an empty list would be read downstream as 'none of these gate' for a round that does");
+    }
+
+    [Fact]
+    public void OrdinalsThatDisagreeWithTheCount_FailLoudly_NeverAnEmptyListForAGatingRound()
+    {
+        var minor = Raised(Severity.Minor, "The heading is vague", "a reader cannot tell what the section decides", "gemini");
+        var stranger = Raised(Severity.Blocking, "Something no merged finding says", "it is not in the merged list at all", "codex");
+        ImmutableArray<Finding> merged = [minor];
+
+        var act = () => KeptFindings.OrdinalsOf(merged, new GateResult(1, false, [stranger], []));
+
+        act.Should().Throw<InvalidOperationException>("a counted finding that cannot be found in the merged list is a defect, not an empty answer");
+    }
+
+    [Fact]
+    public void TheHoldNotice_ListsOnlyWhatTheGateCounted_NotEveryBlockingFinding()
+    {
+        var rejectedBlocking = Raised(Severity.Blocking, "The rollback is missing", "nothing undoes the migration if step two fails", "codex");
+        var countedMajor = Raised(Severity.Major, "The index is never built", "the query scans the whole table on every call", "gemini");
+        var results = new (ReviewerInvocation, ReviewerOutcome)[]
+        {
+            (new ReviewerInvocation("codex", "Architecture", new CoaiMcp.Runners.Processes.ProcessRequest("cli", [], ".")), new ReviewerOutcome.Ok(new NormalisedReview([rejectedBlocking], []), false)),
+            (new ReviewerInvocation("gemini", "Architecture", new CoaiMcp.Runners.Processes.ProcessRequest("cli", [], ".")), new ReviewerOutcome.Ok(new NormalisedReview([countedMajor], []), false)),
+        };
+        var work = results.Select(r => new ReviewerWork(r.Item1)).ToArray();
+        var kept = KeptFindings.From(results, work, [new PriorRejection(rejectedBlocking, "already decided")]);
+        var session = new PersistedSession(new SessionState("s", "D:/r", "main", new PanelConfig()), []);
+
+        var notice = RoundEngine.HeldWithdrawalNotice(session, kept.NoteFor(EndCauses.Withdrawn), kept);
+
+        kept.Findings.Should().HaveCount(2, "both landed and both are kept");
+        notice.OpenFindings.Select(f => f.Title).Should().Equal(
+            ["The index is never built"],
+            "a standing rejection is blocking by severity but is not what holds the gate; the card must not present it as if it were");
+    }
+
     // ---------- a conversation cut in a follow-up turn (security judge, 2026-10-22, §13.2) ----------
 
     private static (ReviewerInvocation, ReviewerOutcome)[] ConversationEndedBy(ReviewerOutcome ending, out ReviewerWork[] work)

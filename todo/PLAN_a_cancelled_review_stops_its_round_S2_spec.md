@@ -648,5 +648,15 @@ status bar. (4) see (1). (5) `RoundRecord.GatingOrdinals` carries which kept fin
 fallback reads it (absent → severity, empty → none gate). (6) `KeptFindings.From` takes the gating vendors from the merged findings, once. No `coai.db`
 column was added: the rounds log reads the hold from the session file.
 
+**Round 4 (code review of round 3, 2026-10-22).** Four accepted findings, test-first where behaviour changed. (1) `KeptFindings.GatingOrdinals` matches counted
+findings to merged ones by value (`Finding` is a record), one merged finding per counted one, and throws when the number found differs from
+`GateResult.GatingCount` — it never writes an empty list for a round that gates (it used `ReferenceEquals`, which would have yielded `[]` had `GateRule` ever
+returned copies). (2) The withdrawal's hold notice lists `KeptFindings.CountedFindings` (the findings at `GatingOrdinals`), not every blocking/major finding, so a
+standing rejection is not shown as holding the gate. (3) The severity-less kept finding in `roundsLog.ts`: `textOf` already returns `""` for a missing or
+non-text severity, so `severity.toLowerCase()` cannot throw; a test pins that the row renders. The suggested `(severity ?? '')` was NOT applied — it is dead code
+and pushes `keptFindingOf` over the complexity baseline. (4) The info card's dismissal is a testable unit (`escalationAnswering.ts`, `answerEscalation`; dialog,
+disk and clock injected). Convention, now written down: an info card's dismissal answer is `decision: ""` with `text: "dismissed"`, one `<id>.answer.json` beside
+the card; the server never reads it.
+
 **The two PR B asks** (the judge's, recorded in the plan's S3 section): persist landed findings progressively on the running record, and a startup
 reconcile that holds the gate for a cancelled or interrupted round whose landed findings gate.

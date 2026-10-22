@@ -57,9 +57,40 @@ public sealed record KeptFindings(ImmutableArray<Finding> Findings, int Gating, 
             counted.GatingCount,
             [.. counted.Gating.SelectMany(f => f.Providers).Distinct()])
         {
-            GatingOrdinals = [.. Enumerable.Range(0, merged.Length).Where(i => counted.Gating.Any(g => ReferenceEquals(g, merged[i])))],
+            GatingOrdinals = OrdinalsOf(merged, counted),
         };
     }
+
+    /// <summary>
+    /// The positions in <paramref name="merged"/> of the findings the gate counted. Matched by VALUE (<see cref="Finding"/> is a record), one
+    /// merged finding per counted one, so a gate that hands back copies still names the right positions. The number found must equal the
+    /// gate's own count: a disagreement is a defect and throws — an empty list is read downstream as "none of these gate", and writing one for a
+    /// round that does gate would let the record say the opposite of the hold.
+    /// </summary>
+    internal static IReadOnlyList<int> OrdinalsOf(ImmutableArray<Finding> merged, GateResult counted)
+    {
+        var unmatched = counted.Gating.ToList();
+        var ordinals = new List<int>();
+        for (var i = 0; i < merged.Length; i++)
+        {
+            var at = unmatched.IndexOf(merged[i]);
+            if (at < 0)
+            {
+                continue;
+            }
+
+            unmatched.RemoveAt(at);
+            ordinals.Add(i);
+        }
+
+        return ordinals.Count == counted.GatingCount
+            ? ordinals
+            : throw new InvalidOperationException(
+                $"the gate counted {counted.GatingCount} gating finding(s) but {ordinals.Count} could be found in the merged list of {merged.Length}");
+    }
+
+    /// <summary>The findings the gate counted — what holds the gate, as opposed to every finding that is blocking or major by severity.</summary>
+    public IEnumerable<Finding> CountedFindings => GatingOrdinals.Select(i => Findings[i]);
 
     /// <summary>
     /// What a reviewer LANDED: its answer, or — when the round's token cut a later turn of its conversation — the last turn that answered

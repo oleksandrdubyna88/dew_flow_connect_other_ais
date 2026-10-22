@@ -2432,6 +2432,13 @@ flowchart TD
   instead of re-merging each reviewer alone — same answer, one merge. (5) *The second withdrawal's notice is informational.* `EscalationKinds.Info`
   (`"info"`): `NoticeCard` takes the kind, `Tell` sends `Info`; the hold's cards stay `notice`. Nothing is added to `coai.db`: the rounds log reads the hold
   from the session file's round, and the table's `findings.is_gating` is still the severity rule for every round, as before.
+- **Round 4 of the review (2026-10-22; S2 spec §13, "round 4").** (1) *The ordinals no longer depend on object identity.* `KeptFindings.OrdinalsOf(merged,
+  counted)` matches each counted finding to one merged finding by VALUE (`Finding` is a record; one merged finding per counted one, so two equal findings
+  take two positions) instead of `ReferenceEquals`, and the number of positions found must equal `GateResult.GatingCount`: a disagreement throws
+  `InvalidOperationException` — an empty list is read downstream as "none of these gate", and writing one for a round that gates would contradict the hold.
+  (2) *The hold notice lists what the gate counted.* `RoundEngine.HeldWithdrawalNotice` builds the card from `KeptFindings.CountedFindings` (the findings at
+  `GatingOrdinals`) rather than every finding that is blocking or major by severity, so a standing rejection — kept, but discounted — is not presented as
+  holding the gate. (A hold caused only by the withdrawal count lists no findings.) The completed path's `NoticeIfAPersonMustDecide` is unchanged.
 - **Smaller guarantees of the same change.** The status word is one string in core (`Core.Rounds.RoundStatus.Cancelled`; `RoundRecord.Cancelled`
   and `Windows.IsRecorded` both use it). `BoundedScheduler.RunAllAsync` (the wrapper that discards the return stamp) is `internal` and the
   runners assembly grants its internals to the tests only, so the engine can only call `RunAllStampedAsync`

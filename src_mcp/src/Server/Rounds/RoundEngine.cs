@@ -761,7 +761,7 @@ internal sealed class RoundEngine(
             PlanSource = PlanSources.Stamp(stage, planText, sha),
             // Authors stays unset: a cancelled round is not settled (Windows.IsSettled) and is never asked for authors.
         };
-        var hold = holds ? HoldNotice(session, record.Note, [.. kept.Findings.Where(f => f.IsGating)]) : null;
+        var hold = holds ? HeldWithdrawalNotice(session, record.Note, kept) : null;
         var saved = WithdrawnSession(loaded, session, record, kept, hold, planText);
         var landed = SaveWithdrawn(saved, record);
         var caller = RoundCommands.CallerFor(loaded);
@@ -979,6 +979,13 @@ internal sealed class RoundEngine(
         verdict is not RoundVerdict.CallHuman human
             ? null
             : HoldNotice(session, human.Reason, [.. merged.Where(f => f.IsGating)]);
+
+    /// <summary>
+    /// The hold notice of a withdrawal: it lists the findings the server COUNTED (<see cref="KeptFindings.GatingOrdinals"/>), not every finding that is
+    /// blocking or major by severity — a standing rejection is kept on the record but does not hold the gate, and the card must not say it does.
+    /// </summary>
+    internal static EscalationQuestion HeldWithdrawalNotice(PersistedSession session, string note, KeptFindings kept) =>
+        HoldNotice(session, note, [.. kept.CountedFindings]);
 
     /// <summary>The one shape a hold's notice has — minted for a <c>call_human</c> verdict, and again for a hold no question binds.</summary>
     private static EscalationQuestion HoldNotice(PersistedSession session, string reason, IReadOnlyList<Finding> gating) =>

@@ -338,6 +338,17 @@ test('a kept list from a record that names no gating positions falls back to sev
   assert.deepEqual(row.found.map((f) => f.isGating), [true, false]);
 });
 
+test('a kept finding with no severity at all still renders — the severity fallback never reads a missing value', () => {
+  // A hand-edited or newer file: the member is absent, or is not text. The page must draw the row (a TypeError here would blank the whole log).
+  const bare = { category: 'completeness', file: '', line: 0, title: 'no severity', why: '', fix: '', providers: [], role: '' };
+  const notText = { ...bare, severity: 7, title: 'severity is a number' };
+  const older = round({ status: 'cancelled', verdict: 'withdrawn', gatingCount: 0, reviewers: '', findings: [bare, notText] });
+
+  const rows = rowsFrom([session([older])], NOW);
+
+  assert.deepEqual(rows[0]?.found.map((f) => [f.title, f.severity, f.isGating]), [['no severity', '', false], ['severity is a number', '', false]]);
+});
+
 test('a kept list whose gating positions are empty is authoritative: nothing in it gates, whatever the severities', () => {
   const blocking = { severity: 'blocking', category: 'completeness', file: '', line: 0, title: 'discounted', why: '', fix: '', providers: [], role: '' };
   const withNone = round({ status: 'cancelled', verdict: 'withdrawn', gatingCount: 0, reviewers: '', findings: [blocking], gatingOrdinals: [] });

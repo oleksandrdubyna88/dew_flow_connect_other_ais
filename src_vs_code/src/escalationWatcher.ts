@@ -2,7 +2,8 @@ import { writeFile } from 'node:fs/promises';
 import * as vscode from 'vscode';
 import { renameWithRetry } from './atomicFile';
 import { sortedJoin } from './codeUnitOrder';
-import { answerChoices, answerJson } from './escalationAnswer';
+import { answerChoices } from './escalationAnswer';
+import { type AnswerFiles, type AnswerOutcome, type Picked, answerEscalation } from './escalationAnswering';
 import {
   Escalation,
   isOpenEscalation,
@@ -12,23 +13,93 @@ import {
   shouldPrompt,
   statusBarText,
 } from './escalations';
-import { answerPaths, usableDirs, watchedDirs } from './escalationDirs';
+import { usableDirs, watchedDirs } from './escalationDirs';
 import { type DirEntry, type JsonDirectoryShape } from './jsonDirectory';
 import { JsonDirectoryWatcher } from './jsonDirectoryWatcher';
 import { notify, notifyAndAsk } from './notify';
 import { askPerson } from './personWait';
 
-/** What a person chose, as the answer file records it. */
-interface Picked {
-  readonly decision: string;
-  readonly text: string;
+/**
+ * The disk an answer is written to. Node's write and rename, never VS Code's: those make missing parent folders, so an answer typed after the
+ * question's folder went away (a share unmounted) made the folder again — a data directory recreated by a reply
+ * (research/PLAN_paths_per_side.md E5.7, D3). Node's fail with ENOENT, which `answerEscalation` returns as a failure. The existence check is
+ * VS Code's stat, as it always was; a stat that throws is "no answer", not a crash.
+ */
+const ANSWER_FILES: AnswerFiles = {
+  exists: async (path) => {
+    try {
+      await vscode.workspace.fs.stat(vscode.Uri.file(path));
+
+      return true;
+    } catch {
+      return false;
+    }
+  },
+  write: (path, bytes) => writeFile(path, bytes),
+  rename: renameWithRetry,
+};
+
+/** The outcomes after which the card's state has moved, so the views read the directories again: it left (written) or someone else made it leave. */
+const REFRESHING: ReadonlySet<AnswerOutcome['kind']> = new Set(['written', 'already-answered']);
+
+/** An id that is not a name cannot become a path. It arrived in a file this window did not write, and answering it would mean writing wherever that file asked us to. */
+function tellRefusedId(escalation: Escalation): void {
+  void notify({
+    as: 'error',
+    class: 'refusal',
+    source: 'escalationWatcher',
+    code: 'question-id-is-not-a-filename',
+    subject: escalation.id,
+    title: `That question's id is not a name this window can write a file for: ${escalation.id}`,
+    cure: 'The file was written by something else; this window will not write wherever it asks.',
+  });
+}
+
+function tellAlreadyAnswered(escalation: Escalation): void {
+  void notify({
+    as: 'information',
+    class: 'refusal',
+    source: 'escalationWatcher',
+    code: 'question-already-answered',
+    subject: escalation.id,
+    title: 'That question has already been answered — in another window, or by somebody else on this one.',
+  });
 }
 
 /**
- * An informational card's dismissal: no dialog, and an answer file nothing on the server reads — it only takes the card off the screen, which is
- * the one thing that card can be asked to do (the round that wrote it has returned and no hold is bound to it).
+ * KEPT, not swallowed. A mount can go read-only or disappear between the question being found and the answer being typed, and an answer that
+ * silently failed to land looks exactly like one that did — while the round it was for blocks. The question stays open so it can be tried
+ * again. (codex and local, the plan round.)
  */
-const DISMISSED: Picked = { decision: '', text: 'dismissed' };
+function tellNotWritten(escalation: Escalation, dir: string, reason: unknown): void {
+  void notify({
+    as: 'error',
+    class: 'failure',
+    source: 'escalationWatcher',
+    code: 'answer-not-written',
+    subject: escalation.id,
+    title: `The answer could not be written to ${dir} — the question is still open. ${asText(reason)}`,
+    cure: 'The question stays open, so it can be answered again once the folder is writable.',
+    detail: asText(reason),
+  });
+}
+
+/** What a person is told about an answer that did not simply land; the other outcomes say nothing. */
+function tell(escalation: Escalation, outcome: AnswerOutcome): void {
+  switch (outcome.kind) {
+    case 'refused-id':
+      tellRefusedId(escalation);
+      break;
+    case 'already-answered':
+      tellAlreadyAnswered(escalation);
+      break;
+    case 'failed':
+      tellNotWritten(escalation, outcome.dir, outcome.reason);
+      break;
+    default:
+      break;
+  }
+}
 
 /** The setting that names other installations' data directories. */
 export const ALSO_WATCH_SETTING = 'coai.alsoWatchDataDirectories';
@@ -202,97 +273,34 @@ export class EscalationWatcher {
    * item, for a person who wants to say something the buttons do not cover.</p>
    */
   async answerCommand(escalation: Escalation): Promise<void> {
-    const chosen = await this.choose(escalation);
-    if (chosen === undefined) {
-      return; // dismissing the dialog is not answering; the question stays open
-    }
-
-    const { decision, text } = chosen;
-
     // BESIDE THE QUESTION, not in this window's own directory. A question can come from another
     // installation — a Claude Code session inside WSL writing into the WSL store — and the server
     // that asked polls the directory it wrote in and nowhere else. An answer written here would
-    // leave that round blocked for ever, having been answered.
-    // Atomic: the server polls this directory, and half a file must never resolve a question. WHERE
-    // those two paths are is `answerPaths`, which is pure and tested — the directory comes from the
-    // question, and the temp is beside the target because a rename across filesystems throws EXDEV.
-    // Both were comments here until the plan round pointed out that a comment is not a guarantee.
-    const paths = answerPaths(escalation.id, this.dataDir.fsPath, escalation.from);
-    if (paths === undefined) {
-      // An id that is not a name cannot become a path. It arrived in a file this window did not
-      // write, and answering it would mean writing wherever that file asked us to.
-      void notify({
-        as: 'error',
-        class: 'refusal',
-        source: 'escalationWatcher',
-        code: 'question-id-is-not-a-filename',
-        subject: escalation.id,
-        title: `That question's id is not a name this window can write a file for: ${escalation.id}`,
-        cure: 'The file was written by something else; this window will not write wherever it asks.',
-      });
+    // leave that round blocked for ever, having been answered. The decision of who is asked, what is
+    // written and where is `answerEscalation` (pure, with the dialog and the disk injected — and tested,
+    // including an informational card's dismissal); this method is the editor and the notifications.
+    const outcome = await answerEscalation(escalation, {
+      dataDir: this.dataDir.fsPath,
+      files: ANSWER_FILES,
+      ask: (card) => this.ask(card),
+      now: () => new Date().toISOString(),
+    });
+    await this.report(escalation, outcome);
+  }
 
-      return;
+  /** What an answer's outcome means to the person: a notification for each way it did not land, and a refresh for the ways the card's state moved. */
+  private async report(escalation: Escalation, outcome: AnswerOutcome): Promise<void> {
+    tell(escalation, outcome);
+    if (REFRESHING.has(outcome.kind)) {
+      await this.refresh();
     }
-    const dir = vscode.Uri.file(paths.dir);
-    const target = vscode.Uri.file(paths.target);
-    const temp = vscode.Uri.file(paths.temp);
-    const bytes = new TextEncoder().encode(
-      answerJson(escalation.id, text.trim(), new Date().toISOString(), decision),
-    );
-    try {
-      // FIRST WRITER WINS. Two windows can be told to watch each other, and then both show the same
-      // modal; the second one to be answered would otherwise overwrite a decision already given and
-      // acted on. Checked here, immediately before the write, rather than at discovery — the gap
-      // between the two is exactly where the other window answers. (codex and local, the plan round.)
-      const already = await this.answered(target);
-      if (already) {
-        void notify({
-          as: 'information',
-          class: 'refusal',
-          source: 'escalationWatcher',
-          code: 'question-already-answered',
-          subject: escalation.id,
-          title: 'That question has already been answered — in another window, or by somebody else on this one.',
-        });
-        await this.refresh();
-
-        return;
-      }
-      // Node's write and rename, never VS Code's: those make missing parent folders, so an answer typed after the
-      // question's folder went away (a share unmounted) made the folder again — a data directory recreated by a reply
-      // (research/PLAN_paths_per_side.md E5.7, D3). Node's fail with ENOENT, which is the failure handled below.
-      await writeFile(temp.fsPath, bytes);
-      await renameWithRetry(temp.fsPath, target.fsPath);
-    } catch (reason) {
-      // KEPT, not swallowed. A mount can go read-only or disappear between the question being found
-      // and the answer being typed, and an answer that silently failed to land looks exactly like one
-      // that did — while the round it was for blocks. The question stays open so it can be tried
-      // again. (codex and local, the plan round.)
-      void notify({
-        as: 'error',
-        class: 'failure',
-        source: 'escalationWatcher',
-        code: 'answer-not-written',
-        subject: escalation.id,
-        title: `The answer could not be written to ${dir.fsPath} — the question is still open. ${asText(reason)}`,
-        cure: 'The question stays open, so it can be answered again once the folder is writable.',
-        detail: asText(reason),
-      });
-
-      return;
-    }
-    await this.refresh();
   }
 
   /**
    * The dialog for a card that asks for a decision: the choices (and, for a typed answer, the box), or `undefined` when the person closed it.
    * The question's branch says which review is asking: a feature session's first choice is also the person's request for that review's second
-   * round, and its detail says so.
+   * round, and its detail says so. Never reached for an informational card (`chooseAnswer`).
    */
-  private async choose(escalation: Escalation): Promise<Picked | undefined> {
-    return needsADecision(escalation) ? this.ask(escalation) : DISMISSED;
-  }
-
   private async ask(escalation: Escalation): Promise<Picked | undefined> {
     const choices = answerChoices(escalation);
     const picked = await askPerson(() => vscode.window.showQuickPick(
@@ -323,16 +331,5 @@ export class EscalationWatcher {
     })))?.trim() ?? '';
 
     return typed.length === 0 ? undefined : { decision: '', text: typed };
-  }
-
-  /** Whether an answer is already sitting there. A read that throws is "no answer", not a crash. */
-  private async answered(target: vscode.Uri): Promise<boolean> {
-    try {
-      await vscode.workspace.fs.stat(target);
-
-      return true;
-    } catch {
-      return false;
-    }
   }
 }
