@@ -907,6 +907,22 @@ site, and that no `'linux'` arm silently serves `'linux-unread'`).
 **Roles.** Opus brief; Sonnet codes the row and the tests, and drafts the docs from S1's §32 and S2/S3's summaries; Opus reviews the docs
 against the code (the self-audit of the Knowledge Base Sync rule).
 
+### S4 — status: built 2026-10-22 on `feat/native-e2-s4` (from `docs/native-linux-e2` 755e19142; not merged; the Opus review of the docs against the code is open)
+
+Built as the spec above, test-first. **What changed.**
+
+- `shared/consultant-limitations.json` — the `vibe`/`linux` row is §2.5's, word for word: `confined`, `measured` with `date` **2026-10-22** (§32's date; the spec's `2026-10-xx` placeholder filled), `cliVersion` `vibe 2.26.1`, the `cells` and `document` of §2.5, no `source`. Nothing else in the file moved (`git diff` is 8 lines added, 3 removed, inside that one row).
+- `src_mcp/tests/ConsultantLimitationsTests.cs` — S-N8's C# half (two tests: the row; the `wsl` row's text as a literal plus the `windows`/`macos`/Kimi-`linux` standings). `src_vs_code/src/test/vibeOnLinux.test.ts` — the `linux` row test flipped to `confined` / `native Linux host` / `keyring off` / `~/.vibe/.env` / the version-bound clause / `Section 32`.
+- Docs: `research/module_runners.md` (the Vibe reviewer intro, the launch-control line, the Kimi diagram's set check, DL1's refused list, and a new bullet *Native Linux, E2.S4* under DL1), `research/module_extension.md` (a separate short subsection *Vibe on a native Linux host — the limitation row*, and the old `linux`-row sentence qualified), `research/module_tests.md` (a new *E2.S4* section), `research/PLAN_kimi_and_vibe_on_linux.md:22` (the open-tail line).
+
+**RED, GREEN, break-its.** RED against the E1 row — C#: *Expected row.Standing to be LimitationStanding.Confined … because the vibe/linux row still says unmeasured - the admission says one thing and the row another, but found LimitationStanding.Unmeasured*; extension: *the admission starts Vibe there; the row must not still say unmeasured — actual 'unmeasured', expected 'confined'* (both the real symptom, not a setup error; the `wsl` literal test was green throughout). GREEN after the row: `CoaiMcp.Tests.exe --filter-class "*ConsultantLimitationsTests"` 17/17; `vibeOnLinux.test.js` + `kimiOnLinux.test.js` 42/42. **B13** (`standing` back to `unmeasured`): both sides red with the messages above. **B14** (`keyring off` → `keyring disabled`): the C# test red, *Expected row.Text … to contain "keyring off" because the admission never reads as native Linux without the keyring sentence (S-N8)*, the extension test red too. The row was restored byte-identical after each (compared against a copy) and the tests re-run green.
+
+**Deviations from the spec.**
+
+1. **There is no generated file derived from `consultant-limitations.json`.** The spec asked to find and regenerate them; there are none: the server EMBEDS the file (`CoaiMcp.Runners.csproj:34`, logical name `CoaiMcp.Runners.consultant-limitations.json`), the existing `TheFile_ParsesThroughTheSourceGeneratedContext_AndTheServerCarriesThatFile` holds the embedded copy equal to the repository's (it passes after a rebuild), and the extension reads the JSON directly (`vibeOnLinux.test.ts`, `kimiOnLinux.test.ts`; `consultantHealth.ts` only types what `--consultants` returns). `src_vs_code/src/securityLane.generated.ts` is rewritten by `npm run compile` and was NOT staged.
+2. **The docs describe S2's and S3's behaviour (the set holding `Vibe`, the fifth environment name, `ON_NATIVE_LINUX_SINCE`) from this plan, not from merged code**: S4 was built on `docs/native-linux-e2`, which carries neither story. The new bullet and subsection say so and defer to the code on any disagreement; the lead reconciles the `file:line` citations when S2/S3 merge, and S2/S3 still owe their own module-doc rows (`module_tests.md` rows for S-N5, S-N9–S-N12, S-N21, S-N22; the extension's notes section). Where the spec's line ranges overlap theirs, S4's text is a separate short subsection.
+3. **The `cells` text names N-V1 to N-V6 and details N-V1 to N-V4**, as §2.5 pins it; §32's N-V5 (48 `.env` vectors) and N-V6 (`--host-facts` read twice) passed too and are not spelled in the row.
+
 ### E2.S5 — The P7 rollout: a live round on a LOCAL binary, the release, the post-release round, the rollback line
 
 **Goal.** Before any tag, the admission branch is proven live on `ubuntu-claude`; the release carries the rollback line; after the release

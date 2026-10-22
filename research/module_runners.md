@@ -3067,8 +3067,11 @@ the consultant's launch and the question row are S3's.
 Mistral Vibe (`vibe`, the Python CLI, on the person's own Mistral subscription — its sign-in is in the OS keyring,
 research/RESULTS_vibe_confinement.md §12) reviews plans and code as a CLI row, runtime `vibe`. Every flag and every check
 cites the RESULTS cell it rests on — Windows 3 of 3, Vibe 2.26.1 — and, since E2 of `research/PLAN_kimi_and_vibe_on_linux.md`
-(2026-10-16), WSL2 (the scout's cells, n = 1, RESULTS §30): a launch on a Windows host or a **WSL2** host starts; a native Linux
-host, a WSL1 host, macOS and a Windows row naming `wsl.exe` are refused (D18, DL1). Machine-only (D12: `MachineOnlyRuntimes`, so the Team server
+(2026-10-16), WSL2 (the scout's cells, n = 1, RESULTS §30): a launch on a Windows host or a **WSL2** host starts; a WSL1 host, macOS
+and a Windows row naming `wsl.exe` are refused (D18, DL1). **Since E2 of `todo/PLAN_kimi_and_vibe_on_native_linux_E2.md`
+(2026-10-22) a native Linux host with a READ kernel banner starts too** — with Vibe's keyring road closed in the launch, and
+measured so on Vibe 2.26.1 (keyring 25.7.0), RESULTS §32; a native host whose banner could not be read is refused (see *Native Linux,
+E2.S4* under DL1 below). Machine-only (D12: `MachineOnlyRuntimes`, so the Team server
 refuses a `vibe` row by name); not in any default vendor list (D11).
 
 ```mermaid
@@ -3121,9 +3124,11 @@ sequenceDiagram
   on the home its first launch left. Without an owned scratch (a caller that set none) the home falls back to the
   launch's own `coai-answers-*` folder, which the six-hour sweep removes.
 - **The launch control** (`VibeLaunch.TakeAsync(VibeHost, …)`, through `IReviewerRuntime.TakeTurnAsync`), in this order: the host
-  (`HostRefusal(host, executable, wsl)`: Windows and WSL2 admitted; WSL1 refused with the WSL1 sentence, a native Linux host with the
-  WSL2-only sentence (DL1), macOS and `Other` with D18's; a Windows row naming a WSL bridge, `wsl.exe` or `\\wsl$\…`, still D18's); the environment is the
-  built one; the model is on `VibeModels.Curated` (`mistral-medium-3.5`, `glm-5-3` — the two seen as `active_model`,
+  (`HostRefusal(host, executable, wsl)`: Windows and WSL2 admitted; WSL1 refused with the WSL1 sentence; a native Linux host admitted
+  when its kernel banner was read (**since E2, 2026-10-22: `Vibe` is in `HostAdmission.MeasuredOnNativeLinux`, RESULTS §32**) and
+  refused with the banner sentence when it was not; macOS and `Other` with D18's; a Windows row naming a WSL bridge, `wsl.exe` or `\\wsl$\…`, still D18's); the environment is the
+  built one (on a native Linux host FIVE names, the fifth `PYTHON_KEYRING_BACKEND=keyring.backends.fail.Keyring`; the four everywhere else, and
+  a launch carrying the fifth is refused there); the model is on `VibeModels.Curated` (`mistral-medium-3.5`, `glm-5-3` — the two seen as `active_model`,
   §11/§17/§24 — because Vibe exits 0 on an alias it does not know, §11); the home is made when absent and is not a link;
   the home's TURN is taken (`VibeHomeTurns`, in-process, keyed by the full path, dropped when its last holder leaves);
   the home's SHAPE is checked (`VibeHome.Refusal(home, manifest)`) BEFORE anything of Vibe's starts on it; `vibe
@@ -4012,7 +4017,7 @@ Tests: `KimiRuntimeTests`, `KimiIsClassifiedFromItsReportTests`, `OneKimiLaunchA
 
 ## Kimi on WSL2 — the host admission, the places, the cache, network storage and the marker report (2026-10-17, E6 server half of `research/PLAN_kimi_and_vibe_on_linux.md`)
 
-**Shipped 2026-10-19 in coai-mcp 0.61.0** (PR #879; Vibe on WSL2 since 0.59.0) and checked live on a WSL2 machine: the providers answer shows kimi 2.2.0 enabled on its own sign-in, and a plan round got Kimi's answer. **Not proven yet:** the install button pressed live on a machine without `rg`; a native Linux run (native Linux stays refused); the Kimi 2.2.0 confinement re-measurement. The M-K14 question (the person's own `kimi` open) is the follow-up plan `PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md`. E5 built Kimi's Linux mechanisms behind a closed door; E6 opens it, for WSL2 only. The extension's half (hints, install line, the *Clear the stuck Kimi marker* button, `KIMI_ON_LINUX_SINCE`) is `module_extension.md`'s.
+**Shipped 2026-10-19 in coai-mcp 0.61.0** (PR #879; Vibe on WSL2 since 0.59.0) and checked live on a WSL2 machine: the providers answer shows kimi 2.2.0 enabled on its own sign-in, and a plan round got Kimi's answer. **Not proven yet:** the install button pressed live on a machine without `rg`; a native Linux run of KIMI (native Linux stays refused for Kimi — E3; Vibe has been admitted there since E2, 2026-10-22, RESULTS §32); the Kimi 2.2.0 confinement re-measurement. The M-K14 question (the person's own `kimi` open) is the follow-up plan `PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md`. E5 built Kimi's Linux mechanisms behind a closed door; E6 opens it, for WSL2 only. The extension's half (hints, install line, the *Clear the stuck Kimi marker* button, `KIMI_ON_LINUX_SINCE`) is `module_extension.md`'s.
 
 ```mermaid
 flowchart TD
@@ -4020,7 +4025,7 @@ flowchart TD
   H -->|"Windows, a Windows kimi"| P
   H -->|"WSL, generation WSL2"| P
   H -->|"WSL1"| R1["refused: this is WSL1 - wsl --set-version distro 2, from Windows"]
-  H -->|"native Linux"| S{"Kimi in HostAdmission.MeasuredOnNativeLinux? (the set is EMPTY: E3 adds Kimi)"}
+  H -->|"native Linux"| S{"HostAdmission.MeasuredOnNativeLinux: Vibe yes (E2, RESULTS 32); Kimi no (E3 adds it)"}
   S -->|"no - asked first, so every answer is today's"| R2["refused: Kimi runs on WSL2 only for now"]
   S -->|"yes"| B{"kernel banner read? (WslGeneration)"}
   B -->|"Unreadable"| R6["refused: the kernel banner /proc/version could not be read"]
@@ -4037,10 +4042,10 @@ flowchart TD
 
 - **DL1 — one admission for two runtimes.** `HostAdmission.Refusal(runtime, host, executable, wsl)` (`runners/Platform/`) is the single home of the host sentences; `VibeLaunch.HostRefusal` and `KimiLaunch.HostRefusal`
   are one-line calls with the runtime's name, so the two cannot word the same refusal two ways. Admitted: a Windows host starting a Windows CLI, and `HostKind.Wsl` whose kernel is WSL2 (`WslGenerations.NamesWsl2`, the
-  shared `shared/wsl-banner-vectors.json`). Refused: WSL1 (the WSL1 sentence and its cure, run from Windows), native Linux (*Kimi runs on WSL2 only for now — it is measured on WSL2 and not yet on a native Linux host*), a
+  shared `shared/wsl-banner-vectors.json`). Refused: WSL1 (the WSL1 sentence and its cure, run from Windows), native Linux for a runtime not in the native set — today Kimi (*Kimi runs on WSL2 only for now — it is measured on WSL2 and not yet on a native Linux host*; Vibe is in the set since E2, see *Native Linux, E2.S4* below), a
   Windows host that would start `wsl.exe` or a `\\wsl$` path, macOS and every other host. `KimiHost` (kind + generation, with the `AsyncLocal` flow seam `KimiHost.Using` that `VibeHost` has) reaches
   `KimiLaunch.TakeAsync` and `KimiRuntime`; the bare-`HostKind` constructors are `internal` test doors. `KimiSeams.Using` is the same kind of seam for the person's places and the shim's binary.
-- **Native Linux, E1.S2 of `todo/PLAN_kimi_and_vibe_on_native_linux_E1.md` (2026-10-21) — the shared plumbing, with BOTH runtimes still refused.** The `HostKind.Linux` arm of `HostAdmission.Refusal` asks a per-runtime
+- **Native Linux, E1.S2 of `todo/PLAN_kimi_and_vibe_on_native_linux_E1.md` (2026-10-21) — the shared plumbing, with BOTH runtimes still refused (the state at E1; E2.S4 below records what E2 changed).** The `HostKind.Linux` arm of `HostAdmission.Refusal` asks a per-runtime
   set, `HostAdmission.MeasuredOnNativeLinux` (a public read-only set, **EMPTY**; names compared case-insensitively), and an `internal` overload takes the set so a test can inject one. **Membership is asked FIRST**: a runtime
   not in the set gets the sentence above unchanged whatever the banner says, so with the empty set no answer of any host changed (the pins in `KimiLaunchChecksTests` and `VibeLaunchRulesTests` stand). A runtime IN
   the set is admitted only on a banner that was READ; `WslGeneration.Unreadable` gets its own sentence, written once beside the others (*{runtime} is refused on this Linux host — the kernel banner /proc/version could not
@@ -4053,6 +4058,25 @@ flowchart TD
   prints ONE line — `{"server","hostKind","banner":{"read","text","generation"},"admission":{"Vibe","Kimi"},"keyringSession":{"busAddressSet","busSocket","daemons","listing"},"decides"}` — and exits 0, never 64; it is
   read-only (no home, lock, network or data folder), NOT a writer mode, and classified in `EveryModeIsClassifiedForAMissingNamedRootTests` as a mode that never reaches the data directory. It is the product's own
   reading, set beside the facts script's raw one (two readings, on purpose). The report is `HostFactsReport` (`runners/Platform/HostFactsReport.cs`); the mode only serialises it (source-generated JSON, Native AOT).
+- **Native Linux, E2.S4 of `todo/PLAN_kimi_and_vibe_on_native_linux_E2.md` (2026-10-22) — what a native Linux host admits now: Vibe, with the keyring road closed; Kimi still not.** This bullet is the *summary*
+  the limitation-row story owns; the code it summarises is S2's (the admission and the launch) and S3's (the extension), which land beside it on the admission branch, and where a sentence below and the code disagree
+  the code is right and this bullet is the one to fix.
+  - **The set holds `Vibe`.** `HostAdmission.MeasuredOnNativeLinux` is `{ "Vibe" }` (E1's EMPTY set filled by one entry, conditioned in prose on RESULTS §32); `Kimi` is NOT in it (E3). Membership is still asked first and the
+    banner second, so the three answers on a native Linux host are: Vibe + a banner that was READ and names no WSL → admitted; Vibe + `WslGeneration.Unreadable` → refused with the DN6 banner sentence (the absence of a fact is a
+    refusal, never an admission); Kimi → the WSL2-only sentence, unchanged. The keyring-session facts of DN10 still decide nothing. A banner that names Microsoft reads as `HostKind.Wsl` and follows the unchanged WSL branch.
+  - **The launch closes the keyring road, on native Linux only.** `VibeLaunch.Built(request, home, model, host)` adds a FIFTH environment name on `HostKind.Linux` — `PYTHON_KEYRING_BACKEND=keyring.backends.fail.Keyring` (DN10) — and
+    `EnvironmentRefusal(request, host)` demands exactly those five names there and exactly the four everywhere else (it refuses a WSL2 or Windows launch that carries the fifth, so a measured launch cannot change by accident).
+    The sign-in can then come only through `~/.vibe/.env`, which coai links into its own home and never copies. WSL2's and Windows' launches are byte-identical to what §31 and §12 measured.
+  - **The claim is bounded by what was measured.** *The keyring road was measured closed on Vibe 2.26.1 (keyring 25.7.0)* — `research/RESULTS_vibe_confinement.md` §32 (N-V1 to N-V6, native Ubuntu, 22 paid turns of 30, every cell passed: the
+    forced backend wins against an AVAILABLE keyring, `a3` 3 of 3 with its teeth `a3c` 3 of 3; a read inside served and outside denied, every write denied, a resumed turn remembered, the 12 pinned plugin hashes equal the `linux` manifest entry).
+    §32.9 states what it does not show: a desktop with a running Secret Service daemon, another Vibe or another `keyring`, a non-root account. A Vibe version with no manifest entry still RUNS with a warning (the owner's decision of
+    2026-10-13); on `HostKind.Linux` that warning gains one clause saying the closure is measured only on Vibe 2.26.1 with keyring 25.7.0, and the question of refusing such a version is an open, non-blocking owner question in the plan (§9).
+  - **The limitation row says the same, in the same words.** `shared/consultant-limitations.json` `vibe`/`linux` is `confined`, *measured* 2026-10-22 on vibe 2.26.1 (`Section 32 …`, document `research/RESULTS_vibe_confinement.md`), worded like the
+    `wsl` row: a copy coai makes of the live tree, `read_file` its one tool, every write and shell call denied, then *On a native Linux host coai turns Vibe's keyring off, so it signs in only through ~/.vibe/.env, linked into coai's own home and never
+    copied - the keyring road was measured closed on vibe 2.26.1 (keyring 25.7.0).* The row used to say `unmeasured` and *coai refuses it on a native Linux host*; while the admission started Vibe there that would have been two records
+    contradicting each other. Pinned by `ConsultantLimitationsTests.TheVibeLinuxRow_SaysWhatTheAdmissionDoes_…` (S-N8; standing, the three phrases `native Linux host`, `keyring off`, `~/.vibe/.env`, the `measured closed … (keyring 25.7.0)` clause,
+    the evidence fields, `Section 32`) and the extension's `vibeOnLinux.test.ts`; the `wsl` row is held byte-identical by a literal in the same file. The `kimi`/`linux` row did not change and stays `unmeasured`. That file has no generated copy: the
+    server embeds it (`CoaiMcp.Runners.consultant-limitations.json`, held to the repository's file by `TheFile_ParsesThroughTheSourceGeneratedContext_AndTheServerCarriesThatFile`) and the extension reads it directly.
 - **DL5 — the CLI and the tools are found where the installers put them.** `KimiAcpProfile.InstalledExecutableFor` and `KimiPlaces` find `<KIMI_INSTALL_DIR or ~/.kimi-code>/bin/kimi` on Linux and WSL
   (spelled with `/` by the HOST, never `Path.Combine`); macOS still guesses nothing. `KimiTools` searches the person's bin, then `PATH`, then `~/.local/bin` (a third place — where DL12's `fd` link goes), and the
   directory each of `rg` and `fd` was found in joins the built `PATH` through `ToolFolders`, so a `~/.local/bin/fd` is found though the editor's `PATH` lacks it. A candidate counts only when it is an executable file

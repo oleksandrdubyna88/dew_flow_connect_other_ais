@@ -379,13 +379,20 @@ test('the Vibe wsl row says what the Windows row says about what Vibe reads: a c
   assert.match(vibeRow('wsl').text, copy, 'the snapshot is the same on WSL');
 });
 
-test('the Vibe linux row says measured on WSL2 only, and claims nothing about native Linux', () => {
+test('the Vibe linux row is confined on a native Linux host, with the keyring off, and rests on §32 (E2.S4, S-N8)', () => {
   const row = vibeRow('linux');
 
-  assert.equal(row.standing, 'unmeasured');
-  assert.match(row.text, /measured on WSL2 only/u);
-  assert.match(row.source ?? '', /WSL2/u);
-  assert.doesNotMatch(row.text, /only on Windows/u);
+  assert.equal(row.standing, 'confined', 'the admission starts Vibe there; the row must not still say unmeasured');
+  assert.ok(row.measured !== undefined && row.source === undefined, 'a measured row, never both');
+  assert.match(row.text, /native Linux host/u);
+  assert.match(row.text, /keyring off/u, 'the admission never reads as native Linux without the keyring sentence');
+  assert.match(row.text, /~\/\.vibe\/\.env/u);
+  assert.match(row.text, /the keyring road was measured closed on vibe 2\.26\.1 \(keyring 25\.7\.0\)/u);
+  assert.doesNotMatch(row.text, /measured on WSL2 only|refuses it|only on Windows/u, 'the refusal this release lifts');
+  assert.equal(row.measured.date, '2026-10-22');
+  assert.equal(row.measured.cliVersion, 'vibe 2.26.1');
+  assert.ok(row.measured.cells.startsWith('Section 32'), row.measured.cells);
+  assert.equal(row.measured.document, 'research/RESULTS_vibe_confinement.md');
 });
 
 test('the Vibe windows and macos rows are as they were', () => {
