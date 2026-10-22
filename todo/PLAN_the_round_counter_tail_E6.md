@@ -239,7 +239,7 @@ ones, and a relative path is relative to a working directory the extension does 
 1. *This side* — `RoundCounts.LaunchesIn(dataDir, nowUtc)`; a missing `coai.db` is this side with no rounds (as today, exit 0);
    one that will not read is **74** with `Program.WhyUnreadable` (as today). This side's store entry: `id` = the D1 id of this side,
    `live: true`, `asOf: nowUtc`, `paths: []`.
-2. *Each snapshot path* — `File.ReadAllText`, then the document. Every failure is a row of `storesNotIncluded[]`, never an exit
+2. *Each snapshot path* — read shared (see the deviation below; not `File.ReadAllText`), then the document. Every failure is a row of `storesNotIncluded[]`, never an exit
    code and never a 0:
 
    | Condition | `reason` | `detail` |
@@ -251,6 +251,12 @@ ones, and a relative path is relative to a working directory the extension does 
    *Deviation as built: the `unreadable` detail for a read that threw is NOT the exception's message — a filesystem message names the
    file, and the file's path names the person. The code says `the file could not be read (<ExceptionType>)`: the type only, in a sentence of
    ours (`RoundCountsSnapshot.ReadText`).*
+
+   *Deviation as built: the snapshot reader is NOT `File.ReadAllText` but `RoundCountsSnapshot.ReadShared`, which opens the file with
+   `FileShare.ReadWrite | FileShare.Delete` — `File.ReadAllText` opens with `FileShare.Read`, which forbids another process to open the
+   file for writing for as long as the reader holds it, and a reader must never forbid the owner's writer. Measured: a move over a held
+   file is refused by Windows for EVERY holder share mode, `FileShare.Delete` included, so sharing cannot protect the owner's atomic
+   replace; that replace relies on `AtomicFile`'s sharing retry (`AtomicFile.SharingRetry`) and on a read lasting milliseconds.*
 
    `schema` is read FIRST, leniently (a `JsonDocument` property), so a newer document is named as newer rather than as unreadable.
 3. *Identity* — a snapshot whose `store.id` equals this side's id is this side's own store named through another spelling: its
@@ -384,7 +390,7 @@ flowchart LR
 | `ARecordedRound_LeavesASnapshotBesideTheStore_WithItsKey` | a round through `RoundEngine` with a fake reviewer (the `ARoundIsMintedAKeyTests` shape) → `round-counts-snapshot.json` exists, `schema` 1, one round with the 32-hex key the projection wrote, `store.id == SourceIdOf(dir)` | no such file is written |
 | `TwoDistributionsWithTheDefaultDirectory_AreTwoStores` | two snapshots, same `dataDir`, `wslDistro` Ubuntu and Debian → two `stores[]` entries, both counted (plan round finding 0); RED with the directory-only id: one store, one distro's rounds dropped |
 | `AKeyInTwoStores_IsOneRound_AttributedToTheFirst` | the same non-empty key in this side and in a snapshot → the row counts 1, only this side's `parts[]` has it, `keyStore` names this side (finding 3); RED: parts sum to 2 against a total of 1 |
-| `TheReadModes_WriteNothing` (`RoundCountsTests` +1, `AReaderModeNeverMakesTheDataDirectoryTests` +1) | `--round-counts` and `--round-counts-merged` over a store → the directory's listing is byte-identical before and after; a missing named root is not made | — (guard; a plant that writes the snapshot from `Read` goes red) |
+| `TheReadModes_WriteNothing` (`RoundCountsTests` +1, `AReaderModeNeverMakesTheDataDirectoryTests` +1) | `--round-counts` and `--round-counts-merged` over a store → a reader creates no snapshot (`round-counts-snapshot.json` is not there after, in a store with rounds or without), and the directory's listing otherwise changes only by SQLite's own `-wal` and `-shm` sidecars that a first read of a WAL database may create — those are set aside in the comparison, and a second read adds nothing; a missing named root is not made | — (guard; a plant that writes the snapshot from `Read` goes red) |
 | `OnlyTheLastSevenDays_AreInTheSnapshot` | rounds at −6 d 23 h and −7 d 1 h → the first in, the second out; `fromUtc` = `now − 7 d` | — (new writer) |
 | `PastTheCap_TheNewestAreKept_AndTruncatedIsSaid` | 5 001 rounds in one transaction → 5 000 entries, newest first, `truncated: true`; 5 000 → `false` | — (new writer) |
 | `TheSnapshot_IsWrittenWhole_OrTheOldOneStays` | `AtomicFile`'s `AtomicSeams` with `AfterTemp` throwing → the previous document is intact and no `.tmp` remains | — (reuses `AtomicFile`'s own guarantee; the plant is a `File.WriteAllText` in its place) |
@@ -456,7 +462,7 @@ subsection beside `--round-counts` `:3474`, the snapshot's schema, the engine's 
 
 | Test | Asserts | RED today because |
 |---|---|---|
-| `TheOtherStoresLedgerTail_IsReadBesideThisSides_WithItsStore` | `roundsLoader` over two directories, each with a `usage.jsonl` → the snapshot's `ledger` holds both tails, each record carrying `store: <directory>` (an in-memory field of the load, never written to disk) | `roundsLoader` (`roundCountsRead.ts:39-54`) reads `usagePath` and `besidePaths` only |
+| `TheOtherStoresLedgerTail_IsReadBesideThisSides_WithItsStore` | `roundsLoader` over two directories, each with a `usage.jsonl` → the snapshot's `ledger` holds both tails, each record carrying `store: <store id>` — the id of the store the directory belongs to, not the directory (an in-memory field of the load, never written to disk) | `roundsLoader` (`roundCountsRead.ts:39-54`) reads `usagePath` and `besidePaths` only |
 | `ATailThatWillNotRead_IsNotIncluded_LikeTheSnapshot` | the other directory's ledger is a directory in the file's place → `otherLedgers` names it with the store (NEVER the global `ledgerFailure`, which hides every money cell, `roundsBlock.ts:107`); this side's lines still read and its money stays visible with a partial-coverage note | the other tail is not read at all |
 | `AForeignLedgerError_KeepsThisSidesMoney_AndSaysItIsPartial` | one readable local $1 launch, the other store's `usage.jsonl` is a directory → the block shows $1 and *money from <store> not included: <reason>* (cadence consultation c5759f9a, turn 2) | money cells read *unavailable* |
 | `TwoSpellingsOfOneStore_AreReadOnce_AndTheMoneyIsCountedOnce` | the merged answer names one store with two `paths[]`, both directories open the same `usage.jsonl` with one $1 launch → 1 round, 1 launch, $1 | $2 beside one round (both tails concatenated) |

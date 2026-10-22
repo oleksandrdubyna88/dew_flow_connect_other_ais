@@ -12,9 +12,11 @@ import { DATABASE_FILE } from './dataDir';
  * background through the panel's off-loop `reachable` probe, and a probe that has not answered within the deadline loses the
  * race — the store reads *not answering*, which the Rounds block says and does not count.</p>
  *
- * <p><b>One probe in flight per directory.</b> A probe still pending at its deadline is KEPT, not abandoned: the next refresh
- * awaits the same promise instead of starting another against a share that is down, and takes its answer if it has settled by
- * then (the share came back). Only the existence of `coai.db` is asked; nothing is opened.</p>
+ * <p><b>One probe in flight per directory.</b> A probe still pending at its deadline is KEPT, not abandoned, and a refresh
+ * neither waits for it again nor starts another against a share that is down: an UNSETTLED probe is skipped. Once it has settled
+ * (the share came back, or the OS gave up) the next refresh consumes its answer at once, whatever the age of the cache. Only
+ * after that does the cache age decide when a fresh probe is started. Only the existence of `coai.db` is asked; nothing is
+ * opened.</p>
  */
 
 /** How long a probe may take before the store reads *not answering* — well inside the 8 s spawn cap. */
@@ -40,6 +42,12 @@ export interface ReachOptions {
 interface Known {
   readonly reach: Reach;
   readonly atMs: number;
+}
+
+/** A probe in flight: `settled` flips when it answers (or throws), however long after its deadline that is. */
+interface Probe {
+  readonly read: Promise<boolean>;
+  settled: boolean;
 }
 
 /**
@@ -80,7 +88,7 @@ export async function refreshCountsThenReach(
 export class StoreReach {
   private readonly known = new Map<string, Known>();
 
-  private readonly pending = new Map<string, Promise<boolean>>();
+  private readonly pending = new Map<string, Probe>();
 
   private readonly settings: Required<ReachOptions>;
 
@@ -106,15 +114,19 @@ export class StoreReach {
   }
 
   private due(directory: string): boolean {
+    const probe = this.pending.get(directory);
+    if (probe !== undefined) {
+      return probe.settled;
+    }
     const known = this.known.get(directory);
 
-    return known === undefined || this.pending.has(directory) || this.settings.clock() - known.atMs >= this.settings.maxAgeMs;
+    return known === undefined || this.settings.clock() - known.atMs >= this.settings.maxAgeMs;
   }
 
   private async check(directory: string): Promise<boolean> {
-    const read = this.pending.get(directory) ?? this.start(directory);
-    this.pending.set(directory, read);
-    const reach = await this.raced(read);
+    const probe = this.pending.get(directory) ?? this.start(directory);
+    this.pending.set(directory, probe);
+    const reach = await this.raced(probe.read);
     if (reach !== 'not-answering') {
       this.pending.delete(directory);
     }
@@ -125,8 +137,13 @@ export class StoreReach {
   }
 
   /** A probe that throws is a store that is not there, like a path `access` refuses. */
-  private start(directory: string): Promise<boolean> {
-    return this.probe(join(directory, DATABASE_FILE)).catch(() => false);
+  private start(directory: string): Probe {
+    const probe: Probe = {
+      settled: false,
+      read: this.probe(join(directory, DATABASE_FILE)).catch(() => false).then((here) => { probe.settled = true; return here; }),
+    };
+
+    return probe;
   }
 
   private async raced(read: Promise<boolean>): Promise<Reach> {

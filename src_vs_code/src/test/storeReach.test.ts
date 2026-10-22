@@ -65,10 +65,45 @@ test('a probe that settles after its deadline is used by the next refresh — th
   await reach.refresh([WSL]);
   assert.deepEqual(reach.current([WSL]), [{ directory: WSL, reach: 'not-answering' }]);
   settle(true);
+  // The probe has SETTLED once its answer has been delivered; a refresh in the very same tick still sees it in flight.
+  await new Promise<void>((resolve) => { setTimeout(resolve, 5); });
   await reach.refresh([WSL]);
 
   assert.deepEqual(reach.current([WSL]), [{ directory: WSL, reach: 'here' }]);
   assert.equal(asked, 1);
+});
+
+test('a second refresh while the first probe still hangs waits no second deadline and starts no second probe', async () => {
+  const dead = deadShare();
+  const deadlineMs = 300;
+  const reach = new StoreReach(dead.probe, { deadlineMs });
+
+  assert.equal(await reach.refresh([WSL]), true, 'the first refresh lost its race, which is a change');
+  const startedAt = Date.now();
+  const changed = await reach.refresh([WSL]);
+  const waitedMs = Date.now() - startedAt;
+
+  assert.equal(changed, false, 'the same unanswered probe reported another change');
+  assert.ok(waitedMs < deadlineMs / 2, `the second refresh waited ${waitedMs} ms for the SAME probe: every refresh costs a whole deadline against a dead share`);
+  assert.equal(dead.asked.length, 1, 'a second probe was started while the first was still in flight');
+  assert.deepEqual(reach.current([WSL]), [{ directory: WSL, reach: 'not-answering' }]);
+});
+
+test('a probe that answers after its deadline is in the cache after the next refresh, not a cache age later', async () => {
+  let settle: (here: boolean) => void = () => undefined;
+  let asked = 0;
+  // The default 60 s age: only consuming the settled probe can put the answer in the cache before it expires.
+  const reach = new StoreReach(() => { asked += 1; return new Promise<boolean>((resolve) => { settle = resolve; }); }, { deadlineMs: 10 });
+
+  await reach.refresh([WSL]);
+  assert.deepEqual(reach.current([WSL]), [{ directory: WSL, reach: 'not-answering' }]);
+  settle(true);
+  await new Promise<void>((resolve) => { setTimeout(resolve, 5); });
+  const changed = await reach.refresh([WSL]);
+
+  assert.deepEqual(reach.current([WSL]), [{ directory: WSL, reach: 'here' }], 'the late answer waited for the cache to expire');
+  assert.equal(changed, true, 'the late answer changed the cache, so the panel must repaint');
+  assert.equal(asked, 1, 'the late answer was thrown away and asked again');
 });
 
 test('the store file is what is probed — coai.db, never read; absent and present are told apart', async () => {
