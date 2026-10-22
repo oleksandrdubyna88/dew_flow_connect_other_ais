@@ -20,8 +20,8 @@ namespace CoaiMcp.Server;
 /// deadline is its own, and a stop that merely preceded it did not end the round.</description></item>
 /// <item><description><b>The host's stopping token</b> is only OBSERVED: it cancels nothing of the round and records nothing itself — the round
 /// keeps running, exactly as before E3. It reaches a ledger line only through the caller's callback above, i.e. only when a caller token is
-/// actually wired and fires while the host is stopping. (Live, no review tool passes the request's token, so a client closing stdin fires the host's
-/// token alone and any later cancellation is the clock's.)</description></item>
+/// actually wired and fires while the host is stopping. (The four review tools pass the request's token, so a client closing stdin fires the host's
+/// token first and the SDK's cancellation of the in-flight request second: the round is filed <c>hostStopped</c>.)</description></item>
 /// </list>
 /// <para>The source is recorded when it fires: a callback sets the first cause once (<see cref="Interlocked.CompareExchange{T}(ref T, T, T)"/>)
 /// together with the moment it fired. <see cref="CauseAt"/> then names that cause, but only when it fired at or before the moment the
@@ -64,6 +64,12 @@ internal sealed class RoundCancellation : IDisposable
     /// <c>endCause</c> are one answer: the first source to fire, or <c>unknown</c> when none has.
     /// </summary>
     public string CauseNow() => CauseAt(Stopwatch.GetTimestamp());
+
+    /// <summary>
+    /// The moment (a <see cref="Stopwatch.GetTimestamp"/> value) the round's FIRST cancellation source fired — null while none has. What the
+    /// scheduler compares a cut turn's observation against (§10.2 of todo/PLAN_a_cancelled_review_stops_its_round_S2_spec.md).
+    /// </summary>
+    public long? FiredAt => Volatile.Read(ref _first)?.At;
 
     /// <summary>
     /// The ledger's <c>endCause</c> word for an outcome that landed at <paramref name="landedAt"/> (a <see cref="Stopwatch.GetTimestamp"/>

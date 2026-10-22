@@ -147,6 +147,18 @@ public sealed class RoundAudit(Serilog.ILogger log, string stage, int number)
             (record.CompletedUtc - record.StartedUtc).TotalSeconds);
     }
 
+    /// <summary>The line of a round that judged nothing because the call was taken back (or the host stopped): its cause, what it spent.</summary>
+    public void Withdrawn(string cause, RoundRecord record)
+    {
+        _log.Information(
+            "round {Round} {Stage} was {Cause}: {Reviewers}; {TokensIn} in / {TokensOut} out tokens{Cost}{Uncaptured} over {Seconds:0.0}s",
+            number, stage, cause, record.Reviewers,
+            record.TokensIn, record.TokensOut,
+            CostText.Of(record.CostUsd, record.CostNote.Length > 0, nothing: " (no cost reported)"),
+            CostText.Uncaptured(record.UsageNote.Length > 0, " for a reviewer, so the total is a floor"),
+            (record.CompletedUtc - record.StartedUtc).TotalSeconds);
+    }
+
     /// <summary>
     /// Where a finding points, or nothing at all.
     /// </summary>

@@ -217,18 +217,7 @@ public sealed class LiveRound
         string reviewers,
         IReadOnlyList<(ReviewerInvocation Invocation, ReviewerOutcome Outcome)> results)
     {
-        // Failures that still burned tokens count towards the round's total: an unparseable
-        // answer is a completed run whose usage the vendor reported. Counting only `Ok` made a
-        // round with two fallen reviewers report roughly half of what it actually cost.
-        //
-        // And the EARLIER TURNS of a conversation (S3.2), read off every outcome's base: a reviewer whose
-        // turn 2 timed out still spent what turn 1 cost, and reading only the terminal usage would file
-        // that turn as free — the same under-report, one turn over. And the earlier LAUNCHES of the last
-        // turn: a repair that failed on its own launch still paid for the malformed attempt before it
-        // (2026-09-26). `TotalUsage` is the one member that adds all of it, shared with the ledger.
-        var usage = results
-            .Select(r => r.Outcome.TotalUsage)
-            .Aggregate(Core.Findings.Usage.None, (total, one) => total.Add(one));
+        var usage = UsageOf(results);
 
         lock (_gate)
         {
@@ -241,6 +230,56 @@ public sealed class LiveRound
                 CostNote = usage.NoPriceSet ? Core.Findings.CostText.NoPriceSet : string.Empty,
                 // A reviewer killed before its vendor reported usage leaves the total a floor, and it says so.
                 UsageNote = usage.NotCaptured ? Core.Findings.CostText.UsageNotCaptured : string.Empty,
+            };
+        }
+    }
+
+    /// <summary>
+    /// What the round consumed: the usage of every reviewer that reported any, every launch of every turn.
+    /// </summary>
+    /// <remarks>
+    /// Failures that still burned tokens count towards the round's total: an unparseable
+    /// answer is a completed run whose usage the vendor reported. Counting only `Ok` made a
+    /// round with two fallen reviewers report roughly half of what it actually cost.
+    /// <para>And the EARLIER TURNS of a conversation (S3.2), read off every outcome's base: a reviewer whose
+    /// turn 2 timed out still spent what turn 1 cost, and reading only the terminal usage would file
+    /// that turn as free — the same under-report, one turn over. And the earlier LAUNCHES of the last
+    /// turn: a repair that failed on its own launch still paid for the malformed attempt before it
+    /// (2026-09-26). `TotalUsage` is the one member that adds all of it, shared with the ledger.</para>
+    /// </remarks>
+    private static Core.Findings.Usage UsageOf(IReadOnlyList<(ReviewerInvocation Invocation, ReviewerOutcome Outcome)> results) =>
+        results
+            .Select(r => r.Outcome.TotalUsage)
+            .Aggregate(Core.Findings.Usage.None, (total, one) => total.Add(one));
+
+    /// <summary>
+    /// The record of a round the caller withdrew (or the host stopped): no verdict, no findings, the usage folded exactly as
+    /// <see cref="Finish"/> folds it — a reviewer the cancel killed still spent what its vendor reported.
+    /// </summary>
+    /// <param name="cause"><see cref="EndCauses.Withdrawn"/> or <see cref="EndCauses.HostStopped"/> — the round's recorded first cause.</param>
+    /// <param name="cut">How many turns carry the scheduler's mark.</param>
+    public RoundRecord Withdraw(
+        string cause,
+        int cut,
+        IReadOnlyList<(ReviewerInvocation Invocation, ReviewerOutcome Outcome)> results)
+    {
+        var usage = UsageOf(results);
+
+        lock (_gate)
+        {
+            var answered = _states.Values.Count(s => s.Status is ReviewerState.Done);
+
+            return Record(cause, 0, $"{answered} of {_states.Count} answered, {cut} cut", RoundRecord.Cancelled) with
+            {
+                CompletedUtc = DateTime.UtcNow,
+                TokensIn = usage.TokensIn,
+                TokensOut = usage.TokensOut,
+                CostUsd = usage.CostUsd,
+                CostNote = usage.NoPriceSet ? Core.Findings.CostText.NoPriceSet : string.Empty,
+                UsageNote = usage.NotCaptured ? Core.Findings.CostText.UsageNotCaptured : string.Empty,
+                Note = cause == EndCauses.HostStopped
+                    ? "the host stopped while the round ran"
+                    : "the caller withdrew the call while the round ran",
             };
         }
     }

@@ -74,6 +74,18 @@ public abstract record ReviewerOutcome
     /// </remarks>
     public string Warning { get; init; } = string.Empty;
 
+    /// <summary>
+    /// True when the round's own token ended this turn (the scheduler's mark, D2 of todo/PLAN_a_cancelled_review_stops_its_round.md): killed
+    /// while running, cut while queued for a slot, or cut while waiting on the rate-limit ladder. False for every turn that ended on its own
+    /// terms — a <see cref="Cancelled"/> whose token nobody fired included.
+    /// </summary>
+    /// <remarks>
+    /// A property on the BASE, not a seventh subtype: <c>ReviewerNotices.ByType</c> is keyed by TYPE and
+    /// <c>TheReviewerFailuresAreWrittenDownTests</c> compares its keys against the sealed subtypes. This assembly learns no ledger word by it —
+    /// it says "the token I was handed fired", nothing more; the engine files the cause.
+    /// </remarks>
+    public bool EndedByRoundToken { get; init; }
+
     /// <summary>The CLI release the launch control asked before the first launch (<see cref="LaunchTurn.CliVersion"/>) — what the ledger line names; empty when none was asked.</summary>
     public string CliVersion { get; init; } = string.Empty;
 
@@ -954,15 +966,19 @@ public sealed class ReviewerExecutor(
             // Redacted before anything below reads it: every tail, transcript and reason is cut from these two streams.
             return (Redacted(await launcher.RunAsync(request, ct), invocation.Redact), null);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException e)
         {
+            // The moment the exception is FIRST seen, before the courtesy below that can take ten seconds: an adapter's own cancellation
+            // thrown a moment before the caller cancelled is not a cut, and the scheduler can only tell it from one by comparing this with
+            // the moment the round's first source fired (§10.2 of todo/PLAN_a_cancelled_review_stops_its_round_S2_spec.md).
+            var seenAt = System.Diagnostics.Stopwatch.GetTimestamp();
             // The round was abandoned and the tree was killed. A killed process runs no cleanup of
             // its own, so anything it started ELSEWHERE is still running — for a Team server
             // reviewer, on the company's subscription, for an answer nobody will now collect. This
             // is the only moment anybody still knows the job existed.
             await AbandonAsync(invocation);
 
-            throw;
+            throw new LaunchCancelledException(e, seenAt);
         }
         catch (System.ComponentModel.Win32Exception e)
         {

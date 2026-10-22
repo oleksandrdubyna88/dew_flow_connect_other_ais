@@ -300,10 +300,14 @@ internal sealed class RoundEngine(
         // processes, two caches, and nothing guarantees this one has ever asked. So it asks here,
         // once, where there is still a Task to await on. (gemini and codex, story 4's plan round,
         // both Blocking.)
-        await WarmRemoteRolesAsync(cancellation.Token);
-
+        //
+        // Inside the `try` since a cancel during it must be read as a cancel of the setup: it once escaped this method unlogged.
+        // What the round has come to, decided ONCE (D11 of todo/PLAN_a_cancelled_review_stops_its_round.md) and read by the catch arms: a
+        // withdrawal stays a withdrawal whatever is thrown after it, a completion is never re-filed as one.
+        var ending = RoundEnding.Setup;
         try
         {
+            await WarmRemoteRolesAsync(cancellation.Token);
             // From the stage's own head when it names one: a feature session lives under a branch no
             // git ref can spell, and the commit its round reads is the ref the caller passed.
             var sha = await _worktrees.ResolveShaAsync(repoPath, stage.Head.Length > 0 ? stage.Head : branch);
@@ -413,7 +417,7 @@ internal sealed class RoundEngine(
             //
             // What a plan reviewer's answer is READ AS is settled once, where the reviewer finishes — before the ledger, the
             // live view, the audit and the stand-down below are told (D8 of research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md).
-            var results = await _scheduler.RunAllAsync(work, _executor, cancellation.Token, progress =>
+            var run = await _scheduler.RunAllStampedAsync(work, _executor, cancellation.Token, progress =>
             {
                 live.Report(progress);
                 audit.Moved(progress);
@@ -433,7 +437,17 @@ internal sealed class RoundEngine(
             },
             // Issue #485: with the switch on, the local reviewer stands down once the cloud was quiet.
             _settings.StopLocalWhenQuiet ? StandDown.For(work) : null,
-            PlanIncomplete.Settler(stage.Stage, planText));
+            PlanIncomplete.Settler(stage.Stage, planText),
+            () => cancellation.FiredAt);
+            var results = run.Results;
+            // The withdraw-or-complete question, asked ONCE, from the recorded first cause read at the moment the scheduler returned and
+            // from the marks the scheduler set on the turns the round token ended. Nothing below this line asks it again.
+            ending = RoundEndings.Decide(cancellation, run, work.Count == 0);
+            if (ending is RoundEnding.Withdrawn)
+            {
+                return Withdraw(loaded, live, audit, stage, roundWork, results, cancellation.CauseAt(run.ReturnedAt), sha, planText, ct);
+            }
+
             // What ran, and — since 2026-09-07 — who was enabled for this stage and could not.
             //
             // The deadline is reported only when IT is what ended the round: the round's recorded FIRST cause is
@@ -659,6 +673,19 @@ internal sealed class RoundEngine(
 
             return JsonSerializer.Serialize(answer, ServerJsonContext.Default.ReviewAnswer);
         }
+        catch (OperationCanceledException) when (RoundEndings.IsAWithdrawal(ending, cancellation))
+        {
+            // A withdrawal (its record is already written and its line said) or a cancel during setup, before anything was launched. Tested on
+            // the ROUND's recorded cause, not on the caller's token alone: an OperationCanceledException a setup step raises for its OWN reason
+            // (its timeout, its own token) while the round token is clear, or because the round's CLOCK ran out, is nobody's withdrawal and
+            // falls to the failure arms below, as it always has.
+            if (ending is RoundEnding.Setup)
+            {
+                _log.Information("the {Stage} round was withdrawn during setup: nothing was launched", session.State.Stage);
+            }
+
+            throw;
+        }
         catch (SessionStoreException e)
         {
             // The round ran and its findings are in the log; what failed is writing the state
@@ -682,6 +709,67 @@ internal sealed class RoundEngine(
             // gets something it can act on.
             _log.Error(e, "unhandled failure in the {Stage} stage", session.State.Stage);
             return Error($"the round failed: {e.Message} (see the coai-mcp log for the stack)");
+        }
+    }
+
+    /// <summary>
+    /// The round the caller withdrew (or the host stopped): ONE terminal record, then the cancellation — never a verdict (D2, D3, D5 of
+    /// todo/PLAN_a_cancelled_review_stops_its_round.md, §3 of its S2 spec).
+    /// </summary>
+    /// <remarks>
+    /// <para>The session saved is <paramref name="loaded"/> — the session as read under the claim, with any person's answer already applied —
+    /// plus the record: the state machine never sees the round, so no budget round is spent, no hold is raised, no feature base or ground
+    /// moves, no findings are merged and no lens is spent. The journal keeps the round's number, so the next round is `n+1`.</para>
+    /// <para>Never cancelled with the call (the token is not passed to anything here): the save, the projection. A save the disk refuses is
+    /// logged and the reply is still a cancellation — retrying it, and keeping an unsaved ending in this process, is the provisional-record
+    /// story (D10), not this one.</para>
+    /// <para>Returns `string` only so the caller can `return await` it: it always throws.</para>
+    /// </remarks>
+    /// <exception cref="OperationCanceledException">Always — with the caller's token, so the SDK sees the request it cancelled end cancelled.</exception>
+    private string Withdraw(
+        PersistedSession loaded,
+        LiveRound live,
+        RoundAudit audit,
+        StageRun stage,
+        RoundWork roundWork,
+        IReadOnlyList<(ReviewerInvocation Invocation, ReviewerOutcome Outcome)> results,
+        string cause,
+        string sha,
+        string planText,
+        CancellationToken ct)
+    {
+        var record = live.Withdraw(cause, results.Count(r => r.Outcome.EndedByRoundToken), results) with
+        {
+            Sha = Stages.Of(stage.Stage).RecordsSha ? sha : string.Empty,
+            Size = roundWork.Size,
+            Gitlinks = roundWork.Gitlinks,
+            CadenceNote = stage.Cadence.Call.Note,
+            // The ground it was ADMITTED on, read from the state it began from: `loaded` is what is saved.
+            AdmittedBy = FeatureSecondRound.AdmittedBy(loaded.State),
+            PlanSource = PlanSources.Stamp(stage, planText, sha),
+            // Authors stays unset: a cancelled round is not settled (Windows.IsSettled) and is never asked for authors.
+        };
+        SaveWithdrawn(loaded with { Rounds = [.. loaded.Rounds, record] }, record);
+        var caller = RoundCommands.CallerFor(loaded);
+        _projection.Write(db => db.RecordRound(
+            loaded.State,
+            record,
+            [],
+            new Store.RoundContext(planText, sha, caller, [], WhatTheCallerWasDoing(loaded, record)) { BaseRef = roundWork.BaseRef }));
+        audit.Withdrawn(cause, record);
+
+        throw new OperationCanceledException(ct);
+    }
+
+    private void SaveWithdrawn(PersistedSession saved, RoundRecord record)
+    {
+        try
+        {
+            _store.Save(saved);
+        }
+        catch (SessionStoreException e)
+        {
+            _log.Error(e, "the withdrawal of round {Number} could not be recorded", record.Number);
         }
     }
 
@@ -851,7 +939,7 @@ internal sealed class RoundEngine(
     /// <see cref="RoundCancellation"/>).
     /// </summary>
     private static string EndCauseOf(ReviewerOutcome finished, RoundCancellation cancellation, long landedAt) =>
-        finished is ReviewerOutcome.Cancelled ? cancellation.CauseAt(landedAt) : string.Empty;
+        finished.EndedByRoundToken || finished is ReviewerOutcome.Cancelled ? cancellation.CauseAt(landedAt) : string.Empty;
 
     /// <summary>How many reviewers this stage is CONFIGURED to run, before any work is built.</summary>
     /// <remarks>

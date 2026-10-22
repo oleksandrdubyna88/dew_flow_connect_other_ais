@@ -5158,7 +5158,50 @@ fix planted out.
 | **The cross-side check.** `scripts/seam-ledger-fields.mjs`, a leg of `npm run test:seam` (`run-seam.mjs`): the REAL `coai-mcp` over stdio against `FakeCli` — a consultation that answers (`consultation`, `cli`, `cliVersion`, `effort`, `effortFrom`, `tier`) and a local round whose reviewer outlives the round's one-minute clock (`endCause: roundClock`) — its `usage.jsonl` read through the extension's own `parseUsageLine`. Fails when a key does not come back equal **or when no line wrote it at all** (a renamed C# key writes nothing, so a compare-only leg would stay green). `ledgerFieldsSeam.test.mjs` holds the verdict to both halves without a server | passes on the unmodified tree: 2 lines, all 7 keys | C# `Consultation` serialized as `consultationId`: `the writer never wrote consultation on any of its 2 lines: [{"utc":…`. TS `consultationOf(parsed.consultation)` → `consultationOf(undefined)`: `a key the writer put on a line did not come back from parseUsageLine:  line 1: consultation is "dd539641839e4559a45bffa3f6b4db4f" on disk and undefined through parseUsageLine` |
 | **G: `cliVersion` spellings.** Fixtures of `aChatTurnNamesItsCli.test.ts` (`parseCliVersion('codex-cli 0.131.0')` → `0.131.0`), `chatUsage.test.ts` and `probeUsageFile.test.ts` now carry what production writes on those lines | fixture-only; no behaviour changed | — |
 
-**What the live leg could not drive, and why it matters.** A `notifications/cancelled` for a running `review_plan` is never seen by the round: no review
-tool takes the SDK's request token (only `ask_human` does), so `withdrawn` and `hostStopped` cannot be written by a live server today and are pinned by
+### A cancelled review stops its round — S1 + S2 (PR A, 2026-10-21)
+
+Plan [PLAN_a_cancelled_review_stops_its_round.md](../todo/PLAN_a_cancelled_review_stops_its_round.md) and its S2 spec. Shared fixtures:
+`InMemoryMcpServer` (the real SDK server over an in-memory pipe the test holds both ends of, so what the SDK SENDS is read, not assumed) and
+`WithdrawalRig` (a repository, a data directory and a reviewer process played per PROVIDER: `BlockUntilCancelled`, `BlockThenHoldTheAnswer`,
+`Answer`, `AnswerThenHold`, `Throttled`; the session file, `coai.db`, the ledger and the hold-notice directory are read as another process
+would read them). Every test below was seen RED for the stated reason (against stubs of `RoundEndings`/`LiveRound.Withdraw`/the marks), then
+GREEN, then RED again with the code planted out.
+
+| Test | Seen red as | Plant (RED again) |
+|---|---|---|
+| S1 `TheRequestsTokenReachesTheReviewToolsTests.TheReviewTools_TakeTheRequestsToken` (reflective over `Tools.All`) | `Expected parameters {repoPath, branch, planText, …} to have an item matching (p.ParameterType == CancellationToken) because review_plan must declare the SDK's per-request token` | a review lambda without the token |
+| S1 `ACancelledReviewPlan_CancelsItsRound` (in-memory SDK server, `notifications/cancelled`) | `System.TimeoutException` — the fake reviewer's token never fired within 5 s | the same |
+| S1 `WhatTheSdkSendsForACancelledRequestTests` (characterisation, with a control) | n/a — measured: no message with the id, handler returning or throwing; D5's fallback not shipped | — |
+| S2 `AWithdrawnRound_IsRecordedCancelled_AndMovesNoGate` | `Expected round.Status to be the same string … "done" / "cancelled"` (verdict `call_human`, `HumanGate`, `RoundsRunThisStage` 1) | B1 `Decide` on the cause alone; B7 returning instead of throwing; B8 the catch arm never matching |
+| S2 `AWithdrawnRound_NotifiesNobody` | `Expected _rig.HoldNotices() to be empty … but found at least one item {…escalations\….json}` | the round completing before the decision |
+| S2 `AWithdrawnRound_SpendsItsNumber` | `KeyNotFoundException` — the second call was refused `GateHeld` (no `verdict`) | B6 saving the begun session |
+| S2 `AWithdrawnRound_KeepsWhatItSpent` | `Expected round.Status … "done"` | B14 `Withdraw` summing `Ok` usage only |
+| S2 `AWithdrawnRound_IsProjected_WithNoFindings` | `Expected row to be equal to {"cancelled", "withdrawn", "0", "the caller withdrew the call while the round ran"}, but {"done", "call_human", "0", ""}` | — |
+| S2 `SomeLanded_SomeCutByCancel_IsWithdrawn` (Killed, Ladder) | `Expected round.Status … because one answer is not a panel` ("done" for Killed; the Ladder shape stays red until the mark exists) | B15 the sentence counting every reviewer answered; B3 the ladder mark removed |
+| S2 `ALadderCutTurn_SaysWithdrawn` / `AQueuedTurnCutByTheCancel_SaysWithdrawn` | `Expected …"endCause" to be "withdrawn" … but "" has a length of 0` | B5 `EndCauseOf` back to `Cancelled`-only; B4 the queued mark removed |
+| S2 `AHostStopWithTheCall_IsRecordedHostStopped` | `Expected round.Status … "done"` | — |
+| S2 `AgainAfterAWithdrawnAgain_IsNotRefusedAsNothingSince` | the third call refused "nothing since" (no `verdict`): `LastCodeRound` picked the cancelled round's sha | B10 `LastCodeRound` unfiltered; B6 saving `session` |
+| S2 `ResolveReadsTheCompletedRound_NotACancelledOne` | the withdrawn code round completed `call_human` with `AwaitingResolve`, so `resolve` succeeded | — |
+| S2 `AWithdrawnRound_KeepsThePersonsAnswerApplied` | `Expected session.Rounds[^1].Status … "done"` (the round re-held the gate) | B6 |
+| S2 `ExactlyOneTerminalBranch_PerInterleaving` (nine rows over `RoundEndings.Decide`) and `…_ThroughTheEngine` (BothAnswered, OneCut, BothQueuedOrRunning, ClockFirst; exactly one of withdrawn / completed) | `Expected RoundEndings.Decide(…) to be RoundEnding.Withdrawn, but found RoundEnding.Completed`; `OneCut`/`BothQueuedOrRunning` took the completed branch | B1 (cause alone), B2 (marks alone) |
+| S2 `EveryReviewerLandedBeforeTheCancel_TheRoundCompletes` (guard) | green before and after | B1; `RoundCut.WhenKilled` marking every outcome after the fire |
+| S2 `ACancelAfterTheSchedulerReturned_CompletesTheRound` (§10.3) and `ACancelBeforeTheSchedulerReturned_WithdrawsALaneOnlyRound` | the second: `Expected … Withdrawn, but found Completed` | P4b the engine reading a fresh clock; P4 the stamp zero |
+| S2 `ACancelDuringSetup_RecordsNothing` | `Expected thrown to be assignable to OperationCanceledException … but found <null>` (the task returned "the round failed") | B8 |
+| S2 `ASetupStepsOwnTimeout_IsAFailure_NotAWithdrawal` (§10.1, guard) and `OnlyAPersonsOrTheHostsCancel_IsAWithdrawal` (caller / host / **clock** / none during setup) | green before and after; the clock rows are the existing `SecurityLaneRoundTests.The_round_deadline_cancels_context_collection_before_reviewers_start`, which went red (`TaskCanceledException` instead of the "round failed" sentence) when the arm tested the round token alone | B8b the arm testing no round token; B8c the arm ignoring the recorded cause |
+| S2 `TheLedgerWordsAndTheRecordWords_AreTheSame` | — (units of `LiveRound.Withdraw`) | — |
+| S2 `TheSchedulerMarksWhatTheRoundTokenEndedTests` (the four sites; the engine lane's queue; a `Cancelled` nobody fired; a paid answer; marked BEFORE reported; the rule as a theory; `AnAdaptersOwnCancellation_BeforeTheCallerCancels_IsNotACut` and its twin; the stamp) | `Expected outcome.EndedByRoundToken to be True because the launcher reported the kill the round's token ordered, but found False` (and per site); the provenance twin `… to be False because the adapter's cancellation was thrown before any round source fired, but found True` while `RoundCancellation.FiredAt` was a stub | P1/P1b, P2, B3, B4/B4b, P3 (moment ignored), P3b (stamp late), P4 |
+| S2 `TheReadersSkipACancelledRoundTests` (`FailedInRoundOne`, `LastReviewed`, `LastJudgedCodeRound`; `FirstCodeRound` still counts it — guard) and `AWindowRunsFromThePreviousRecordedRoundsStartTests.ACancelledRound_OpensNoWindow` | the readers: written after the filters, proven by the plants | P6a–P6d, B11 |
+| Extension `roundsLog.test.ts` `a cancelled round is its own status, never done or awaiting`; `bundledPage.test.ts` `a cancelled round is drawn in a state of its own` and `a cancelled row expands to its reviewers and the withdrawal note, and asks for no findings` | `actual: 'done', expected: 'cancelled'`; `class="badge done"`, and the opened row said `Reading what this round found…` | B12 `statusOf` without the branch; B13 `noFindings` not covering `cancelled`; `detail()` without the cancelled branch |
+
+**Not covered, said plainly.** Moving `WarmRemoteRolesAsync` inside the `try` (a cancel while a Team server is asked which roles it runs) only adds a
+log line on a path that needs a signed-in Team server to reach; plant P7 stays green and no test pins it. The readers D9 lists as "none" are pinned
+only where the spec names a test (T13, T14, T15). `ALocalCancellationCarriesItsSourceTests` had four tests that `await`ed a withdrawn call and now
+assert the cancellation instead (`Record.ExceptionAsync`); the one that asserted the reply did not say "minute limit" asserts there is no reply.
+
+**What the live leg could not drive, and why it matters.** *(Superseded in part, 2026-10-21: the four review tools now take the SDK's request token —
+*A cancelled review stops its round* in `module_server.md` — so a live server CAN write `withdrawn` and `hostStopped`. The seam leg has not been
+extended to drive them yet; that is story S4 / PR C of `todo/PLAN_a_cancelled_review_stops_its_round.md`, and until it lands the leg below still takes
+`roundClock`.)* At the time of writing, a `notifications/cancelled` for a running `review_plan` was never seen by the round: no review
+tool took the SDK's request token (only `ask_human` did), so `withdrawn` and `hostStopped` could not be written by a live server and were pinned by
 the C# tests alone (`module_server.md`, *A client that closes stdin is the host ending*). The seam leg says so in its header and takes the one
 local word a live server can write — `roundClock` — which costs it a real minute.

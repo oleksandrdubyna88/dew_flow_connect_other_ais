@@ -227,8 +227,33 @@ public sealed class BoundedScheduler(
         CancellationToken ct = default,
         Action<ReviewerProgress>? onProgress = null,
         StandDown? standDown = null,
-        Func<ReviewerOutcome, ReviewerOutcome>? settle = null)
+        Func<ReviewerOutcome, ReviewerOutcome>? settle = null) =>
+        (await RunAllStampedAsync(work, executor, ct, onProgress, standDown, settle)).Results;
+
+    /// <summary>
+    /// <see cref="RunAllAsync"/> with the moment it returned: the outcomes, and a timestamp taken as the scheduler's LAST act, so the caller
+    /// never reads the clock after the await and a cancel that fires after the scheduler returned is not read as having ended any turn
+    /// (§10.3 of todo/PLAN_a_cancelled_review_stops_its_round_S2_spec.md).
+    /// </summary>
+    /// <remarks>
+    /// Every turn the ROUND'S token ended carries <see cref="ReviewerOutcome.EndedByRoundToken"/> — killed while running, cut while queued for
+    /// a slot, cut while waiting on the rate-limit ladder (D2). The mark is set where the ending is OBSERVED, before the outcome is reported,
+    /// so the ledger, the live view and the stand-down see the marked outcome.
+    /// </remarks>
+    /// <param name="roundFiredAt">
+    /// When the round's first cancellation source fired (a <see cref="System.Diagnostics.Stopwatch.GetTimestamp"/> value), or null while none
+    /// has — what tells an adapter's own cancellation, thrown before the round was cancelled, from a cut. Omitted, the token alone decides.
+    /// </param>
+    public async Task<SchedulerRun> RunAllStampedAsync(
+        IReadOnlyList<ReviewerWork> work,
+        ReviewerExecutor executor,
+        CancellationToken ct = default,
+        Action<ReviewerProgress>? onProgress = null,
+        StandDown? standDown = null,
+        Func<ReviewerOutcome, ReviewerOutcome>? settle = null,
+        Func<long?>? roundFiredAt = null)
     {
+        var cut = new RoundCut(ct, roundFiredAt);
         PeakConcurrency = 0;
         _peakPerProvider.Clear();
         _running = 0;
@@ -265,10 +290,13 @@ public sealed class BoundedScheduler(
                 var engineStandDown = w.IsSecurity ? null : standDown;
                 var progress = w.IsSecurity ? onProgress : cloudProgress;
                 return w.Invocation.IsOnEngine
-                    ? EngineLaneAsync(w, executor, onProgress, engineStandDown, settled, ct)
-                    : MachineLaneAsync(w, global, perProvider[w.Invocation.Provider], runningPerProvider, executor, progress, settled, ct);
+                    ? EngineLaneAsync(w, executor, onProgress, engineStandDown, settled, cut)
+                    : MachineLaneAsync(w, global, perProvider[w.Invocation.Provider], runningPerProvider, executor, progress, settled, cut);
             });
-            return await Task.WhenAll(tasks);
+            var results = await Task.WhenAll(tasks);
+
+            // The LAST act: nothing after this line can move the moment the engine compares the round's first cause against.
+            return new SchedulerRun(results, System.Diagnostics.Stopwatch.GetTimestamp());
         }
         finally
         {
@@ -293,25 +321,25 @@ public sealed class BoundedScheduler(
         ReviewerExecutor executor,
         Action<ReviewerProgress>? onProgress,
         Func<ReviewerOutcome, ReviewerOutcome> settle,
-        CancellationToken ct)
+        RoundCut cut)
     {
         var queued = System.Diagnostics.Stopwatch.StartNew();
-        if (!await Took(global, ct))
+        if (!await Took(global, cut.Token))
         {
-            return Abandoned(onProgress, w.Invocation, queued.Elapsed);
+            return Abandoned(onProgress, w.Invocation, queued.Elapsed, endedByRoundToken: true);
         }
         try
         {
-            if (!await Took(provider, ct))
+            if (!await Took(provider, cut.Token))
             {
-                return Abandoned(onProgress, w.Invocation, queued.Elapsed);
+                return Abandoned(onProgress, w.Invocation, queued.Elapsed, endedByRoundToken: true);
             }
             try
             {
                 Entered(w.Invocation.Provider, runningPerProvider);
                 try
                 {
-                    return await LaunchAsync(w, executor, onProgress, settle, ct);
+                    return await LaunchAsync(w, executor, onProgress, settle, cut);
                 }
                 finally
                 {
@@ -366,7 +394,7 @@ public sealed class BoundedScheduler(
         Action<ReviewerProgress>? onProgress,
         StandDown? standDown,
         Func<ReviewerOutcome, ReviewerOutcome> settle,
-        CancellationToken ct)
+        RoundCut cut)
     {
         var engine = w.Invocation.SharedResource;
         var resource = Limiter(_perResource, engine, sharedResourceCap);
@@ -376,9 +404,9 @@ public sealed class BoundedScheduler(
         {
             return StoodDownNow(onProgress, w.Invocation, standDown);
         }
-        if (!await Took(resource, ct))
+        if (!await Took(resource, cut.Token))
         {
-            return Abandoned(onProgress, w.Invocation, queued.Elapsed);
+            return Abandoned(onProgress, w.Invocation, queued.Elapsed, endedByRoundToken: true);
         }
         if (standDown is { Quiet: true })
         {
@@ -388,7 +416,7 @@ public sealed class BoundedScheduler(
         EnteredResource(engine);
         try
         {
-            return await LaunchAsync(w, executor, onProgress, settle, ct);
+            return await LaunchAsync(w, executor, onProgress, settle, cut);
         }
         finally
         {
@@ -463,7 +491,7 @@ public sealed class BoundedScheduler(
         ReviewerExecutor executor,
         Action<ReviewerProgress>? onProgress,
         Func<ReviewerOutcome, ReviewerOutcome> settle,
-        CancellationToken ct)
+        RoundCut cut)
     {
         Report(onProgress, w.Invocation, "running");
         var watch = System.Diagnostics.Stopwatch.StartNew();
@@ -472,13 +500,13 @@ public sealed class BoundedScheduler(
         {
             // Settled HERE, before anybody is told: the ledger, the live view, the audit, the stand-down count and the
             // round's results all read this one outcome (D8 of research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md).
-            var outcome = settle(await loop.RunAsync(w, ct));
+            var outcome = cut.WhenKilled(settle(await loop.RunAsync(w, cut.Token)));
             Report(onProgress, w.Invocation, outcome is ReviewerOutcome.Ok ? "done" : "failed", outcome, watch.Elapsed, TurnLoop.Note(outcome));
             return (w.Invocation, outcome);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException e)
         {
-            return Abandoned(onProgress, w.Invocation, watch.Elapsed, "was cancelled while it was running", loop.Earlier);
+            return Abandoned(onProgress, w.Invocation, watch.Elapsed, "was cancelled while it was running", loop.Earlier, cut.Ended(e));
         }
     }
 
@@ -497,12 +525,14 @@ public sealed class BoundedScheduler(
         ReviewerInvocation invocation,
         TimeSpan elapsed,
         string what = "was still queued",
-        IReadOnlyList<TurnUsage>? earlier = null)
+        IReadOnlyList<TurnUsage>? earlier = null,
+        bool endedByRoundToken = false)
     {
         var outcome = new ReviewerOutcome.NotStarted(
             $"the round ended while this reviewer {what}, after {elapsed.TotalSeconds:F0}s")
         {
             EarlierTurns = earlier ?? [],
+            EndedByRoundToken = endedByRoundToken,
         };
         Report(onProgress, invocation, "failed", outcome, elapsed);
 
@@ -643,8 +673,10 @@ public sealed class BoundedScheduler(
             if (!await WaitedOut(wait.Value, ct))
             {
                 // Cancelled while WAITING: no launch was killed, so the turn ends as the refusal it last saw — the
-                // ladder's own ending when its budget runs out — and every launch already paid for rides out on it.
-                return limited with { Attempts = attempts };
+                // ladder's own ending when its budget runs out — and every launch already paid for rides out on it. MARKED: the
+                // round's token ended the wait (`Task.Delay` throws for `ct` alone), so this refusal is the round's cut and not an
+                // ordinary rate limit (D2). The ladder's other exits below are its own endings and stay unmarked.
+                return limited with { Attempts = attempts, EndedByRoundToken = true };
             }
 
             attempts += 1;

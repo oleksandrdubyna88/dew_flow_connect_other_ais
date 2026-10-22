@@ -1817,8 +1817,23 @@ line only (like `resetsUtc`), decided by `RoundEngine` where the tokens are held
   row whose server ended it) — never empty. `EndCauses.OfLocal` is gone: the decision lives where the tokens are.
 - `EndCauses.RoundClock` and `Unknown` are **local-only words** (`EndCauses.LocalOnly`, the `UsageKinds.LocalOnly` shape);
   `Known` names all seven. The Team server writes neither and is unchanged (`HowAJobEndedIsSaidTests` pins its four words, not `Known`).
-- `UsageLedger.Record(..., endCause = "")` writes it on the last line of the last turn; the engine passes it only when the finished
-  outcome `is ReviewerOutcome.Cancelled`. Consultation and question-row endings write no cause (a withdrawn consultation writes no
+- `UsageLedger.Record(..., endCause = "")` writes it on the last line of the last turn; the engine passes it when the finished outcome
+  `is ReviewerOutcome.Cancelled` **or carries the scheduler's mark** (below) — so a ladder-cut `RateLimited` line keeps its outcome and gains
+  `withdrawn`/`hostStopped`, a queued-out `NotStarted` gains the cause, and a turn the ROUND CLOCK cut (the clock cancels the same token) says
+  `roundClock` where it said nothing. A `Cancelled` nobody fired stays `unknown`.
+- **The mark: `ReviewerOutcome.EndedByRoundToken`** (S2 of [PLAN_a_cancelled_review_stops_its_round.md](../todo/PLAN_a_cancelled_review_stops_its_round.md);
+  a property on the base outcome, not a seventh subtype — `ReviewerNotices.ByType` is keyed by type). It says "the token I was handed fired",
+  nothing more; this assembly learns no ledger word by it. `BoundedScheduler` sets it at the four sites where a cut turn ends, through the pure
+  `RoundCut`, BEFORE the outcome is reported (so the ledger, the live view and the stand-down see it): (1) killed while running and reported
+  `Cancelled` with the token fired; (2) the launch threw `OperationCanceledException` — marked when it carries the round token or the round token
+  had fired by the moment `ReviewerExecutor` first saw the exception (`LaunchCancelledException.ObservedAt`, stamped before the abandon courtesy;
+  compared with `RunAllStampedAsync`'s optional `roundFiredAt`, the engine passing `RoundCancellation.FiredAt`), so an adapter's own cancellation
+  thrown before the caller cancelled is not a cut; (3) still queued for a slot (`Took` false); (4) waiting on the ladder (`WaitedOut` false) —
+  the ladder's own endings (`wait is null`, `Hopeless`) stay unmarked. `StandDown.Record` and the summary ignore it: a cut cloud reviewer is a
+  failure, never "quiet".
+- `RunAllStampedAsync` returns `SchedulerRun(Results, ReturnedAt)`: the stamp is the scheduler's last act, so the engine compares the round's
+  recorded first cause with the moment the scheduler returned and never reads a clock after the await (`RunAllAsync` is unchanged: it returns
+  `.Results`). Consultation and question-row endings write no cause (a withdrawn consultation writes no
   line; a cut question row is `Interrupted`).
 - **The host token:** `Program.StartedAsync` hands its `stop` to `PanelServiceHost` (a REQUIRED constructor parameter, so the production
   road cannot forget it), which hands it to every `PanelService` it builds — the rebuilds on a settings change included — and

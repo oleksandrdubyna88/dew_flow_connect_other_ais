@@ -963,8 +963,10 @@ public sealed class PanelService
     private static CodeRound SinceWhenFinished(PersistedSession session) =>
         session.State.Stage == Stage.Done ? LastCodeRound(session) : NoCodeRound;
 
+    // The last code round that JUDGED: a withdrawn one read nothing, and comparing the branch with the commit it merely mounted would refuse
+    // the `again` that retries it as "nothing since".
     private static CodeRound LastCodeRound(PersistedSession session) =>
-        session.Rounds.LastOrDefault(r => r.Stage == nameof(Stage.CodeReview)) is { } last
+        session.Rounds.LastOrDefault(r => r.Stage == nameof(Stage.CodeReview) && r.Status != RoundRecord.Cancelled) is { } last
             ? new CodeRound(last.Number, last.Sha)
             : NoCodeRound;
 

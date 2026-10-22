@@ -183,9 +183,9 @@ internal sealed class FeatureStage(
     private static bool ReadsTheSameHeadByDesign(SessionState state) =>
         state.SecondRound is SecondRoundGround.ReviewerFailure or SecondRoundGround.PersonAsked;
 
-    /// <summary>The last feature round that actually ran — a skip read no head worth comparing with.</summary>
-    private static RoundRecord? LastReviewed(PersistedSession session) =>
-        session.Rounds.LastOrDefault(r => r.Stage == nameof(Stage.FeatureReview) && r.Verdict != RoundRecord.Skipped);
+    /// <summary>The last feature round that actually ran — a skip read no head worth comparing with, and neither did a withdrawn round.</summary>
+    internal static RoundRecord? LastReviewed(PersistedSession session) =>
+        session.Rounds.LastOrDefault(r => r.Stage == nameof(Stage.FeatureReview) && r.Verdict != RoundRecord.Skipped && r.Status != RoundRecord.Cancelled);
 
     private static string Unmoved(RoundRecord? last, string head) =>
         last is { Sha.Length: > 0 } reviewed && string.Equals(reviewed.Sha, head, StringComparison.OrdinalIgnoreCase)

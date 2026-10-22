@@ -270,7 +270,7 @@ public sealed class ALocalCancellationCarriesItsSourceTests : IAsyncLifetime
     [Fact]
     public void WhenOnlyTheHostFired_AndTheClockThenEndsTheRound_TheCauseIsTheClock()
     {
-        // The live shape: no review tool passes the request token, so a client closing stdin fires the host's token and nothing else. The
+        // A host token that fires with NO caller token wired (a call whose request token never fires): the host stop alone ends nothing. The
         // round goes on; when its own clock then ends a reviewer, the clock is why — the host stop ended nothing.
         using var host = new CancellationTokenSource();
         using var round = new RoundCancellation(host.Token, CancellationToken.None, TimeSpan.FromMilliseconds(30));
@@ -320,7 +320,8 @@ public sealed class ALocalCancellationCarriesItsSourceTests : IAsyncLifetime
         var round = RoundAsync(service, call.Token);
         await reviewers.Arrived.Task.WaitAsync(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken);
         await call.CancelAsync();
-        await round;
+        // A withdrawn round is answered with a cancellation, not a reply (S2 of todo/PLAN_a_cancelled_review_stops_its_round.md).
+        await Record.ExceptionAsync(() => round);
 
         CausesOfCancelledLines().Should().NotBeEmpty().And.OnlyContain(c => c == EndCauses.Withdrawn, "a person (the MCP client) withdrew the call");
     }
@@ -336,7 +337,7 @@ public sealed class ALocalCancellationCarriesItsSourceTests : IAsyncLifetime
         // A stopping host cancels the request it was serving as well: that is the host's doing, not a withdrawal.
         await host.CancelAsync();
         await call.CancelAsync();
-        await round;
+        await Record.ExceptionAsync(() => round);
 
         CausesOfCancelledLines().Should().NotBeEmpty().And.OnlyContain(c => c == EndCauses.HostStopped);
     }
@@ -353,7 +354,7 @@ public sealed class ALocalCancellationCarriesItsSourceTests : IAsyncLifetime
         await reviewers.Killed.Task.WaitAsync(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken);
         await host.CancelAsync();
         reviewers.Release.TrySetResult();
-        await round;
+        await Record.ExceptionAsync(() => round);
 
         CausesOfCancelledLines().Should().NotBeEmpty().And.OnlyContain(c => c == EndCauses.Withdrawn,
             "the call's token killed the reviewer; the host stopping afterwards, before the line was written, did not");
@@ -401,10 +402,12 @@ public sealed class ALocalCancellationCarriesItsSourceTests : IAsyncLifetime
         await reviewers.Killed.Task.WaitAsync(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken);
         await Task.Delay(TimeSpan.FromSeconds(9), TestContext.Current.CancellationToken);
         reviewers.Release.TrySetResult();
-        var reply = await round;
+        var thrown = await Record.ExceptionAsync(() => round);
 
         CausesOfCancelledLines().Should().NotBeEmpty().And.OnlyContain(c => c == EndCauses.Withdrawn);
-        reply.Should().NotContain("minute limit", "a person ended the round first; the clock striking afterwards is not why");
+        // The reply used to be a sentence that had to NOT say "minute limit"; a withdrawn round now has no sentence at all — it ends cancelled,
+        // which is the stronger form of the same fact: a person ended the round first, and the clock striking afterwards is not why.
+        thrown.Should().BeAssignableTo<OperationCanceledException>("a person ended the round first; the clock striking afterwards is not why");
     }
 
     [Fact]

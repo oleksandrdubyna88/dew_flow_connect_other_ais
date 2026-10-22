@@ -68,9 +68,9 @@ internal static class FeatureSecondRound
             "answered in round 1; its findings were decided and are carried, not re-bought (D23)"));
 
     /// <summary>The (provider, role) pairs the last feature round recorded as failed.</summary>
-    private static HashSet<(string Provider, string Role)> FailedInRoundOne(PersistedSession session)
+    internal static HashSet<(string Provider, string Role)> FailedInRoundOne(PersistedSession session)
     {
-        var last = session.Rounds.LastOrDefault(r => r.Stage == nameof(Stage.FeatureReview) && r.Verdict != RoundRecord.Skipped);
+        var last = session.Rounds.LastOrDefault(r => r.Stage == nameof(Stage.FeatureReview) && r.Verdict != RoundRecord.Skipped && r.Status != RoundRecord.Cancelled);
         var pairs = last?.ReviewerStates.Where(s => s.Status == ReviewerState.Failed).Select(s => (s.Provider, s.Role)) ?? [];
 
         return new HashSet<(string, string)>(pairs, ProviderAndRole.Instance);
