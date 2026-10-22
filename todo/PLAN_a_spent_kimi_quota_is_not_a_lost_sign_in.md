@@ -1,6 +1,6 @@
 # PLAN — a spent Kimi quota is not a lost sign-in
 
-> Status: **partly built, 2026-10-20: stories 1, 2, 3 and 4 are coded on `docs/kimi-quota-is-not-a-sign-in`; the capture step (§5 step 1) has NOT run, so the real ACP sentence is
+> Status: **partly built, 2026-10-21: stories 1–4 merged in #900 (released in coai-mcp 0.63.0); story 5 (the MONTHLY quota, seen 2026-10-21) is CODED 2026-10-21 (D8–D10, S10–S13; see "Story 5 — built" below); the capture step (§5 step 1) has NOT run, so the real ACP sentence is
 > still unmeasured, and the plan is NOT promoted.** Deviations are in §8 (story 3). The 0.61.0 and 0.62.0 releases shipped (tags
 > `extension-v0.61.0`, `extension-v0.62.0`), so the owner's "release first, fix after" block is lifted. The plan gate ran once
 > (session def84902, `good_enough`, 11 findings, all accepted), an Opus judge read it (12 findings, all verified by the lead)
@@ -396,3 +396,101 @@ seen red first (the messages are in `research/module_tests.md`, "Code gate and j
 - Widening the id pattern: its real shape is not measured; the capture step (§5 step 1, RESULTS §31) is where that is decided, with a test in each half.
 - A literal instead of `KimiAcpProfile.QuotaSpent`: the constant is the one name shared by the table, the shim and the diagnosis row — a literal would be a second copy.
 - Performance of `FirstLineWith` and of `Classify`: both run once per failed reviewer over a short stderr tail; measured nothing, so nothing is changed.
+
+## Story 5 — the MONTHLY quota is a spent quota too (2026-10-21)
+
+**Symptom (measured 2026-10-21 by the release session on Kimi 2.3.0, three of three `kimi -p` launches; recorded in
+`research/RESULTS_the_round_counter_tail.md` §M2 on its branch).** The owner's monthly Kimi quota was 100% used, and every
+launch was refused with:
+
+> `provider.api_error: 429 You've reached your monthly usage limit for this billing cycle. Your quota will be refreshed in the next cycle. To continue now, purchase extra usage or upgrade your plan: https://www.kimi.com/membership/subscription?tab=quota`
+
+(then exit 127 and a libuv assertion `!(handle->flags & UV_HANDLE_CLOSING)` in prompt mode — prompt mode is not the product's road;
+the product talks ACP).
+
+**Why coai gets it wrong (read on `origin/main` `0426984a1`).** D1 wrote: "The monthly form is **not measured** and gets no row until
+someone sees it". It is seen now. Today:
+- `KimiAcpProfile.Failures` (`src_mcp/runners/Acp/KimiAcpProfile.cs:82`) knows only `"reached your 5-hour usage limit"`; over ACP the
+  monthly answer arrives inside `Authentication required: 429 …` (the §2 hypothesis), so it falls to the NEUTRAL row 5
+  (`provider_error`, exit 70, no cure) — honest, but not a spent quota: the round is not told it is hopeless, and the summary does
+  not say the quota is used up.
+- `RateLimit.Spent` (`src_mcp/runners/Reviewers/ReviewerExecutor.cs:356`) has no monthly phrase, so on any road that reaches the
+  rate-limit check the generic wording can be read as a transient limit and retried on the ladder.
+- `KimiQuotaWords.ResetOpening` (`src_mcp/runners/Kimi/KimiQuotaWords.cs:25`) is `"Your quota will reset"`; the monthly text says
+  `"Your quota will be refreshed in the next cycle"`, so `ClauseOf` finds no clause and the sentence says "the vendor named no reset"
+  although Kimi named one.
+
+**Decisions.**
+- **D8 — a monthly row, before the neutral row.** `KimiAcpProfile.Failures` gains `"reached your monthly usage limit"` →
+  `kimi_quota_spent`, Kind `Spent`, exit 75, placed beside the 5-hour row (rows 1–3 stay before the `Authentication required:` rows).
+  The narrow phrase, as D1 chose for the 5-hour one — never a bare "usage limit".
+- **D9 — the observed phrase joins `RateLimit.Spent`**, with the verbatim line above (the URL is Kimi's public membership page, no
+  account data; kept) in `GateReportingTests`' `observed` dictionary — the test that refuses a phrase with no vendor answer behind it.
+- **D10 — the reset clause has two openings.** `KimiQuotaWords` keeps ONE list of openings (`"Your quota will reset"`,
+  `"Your quota will be refreshed"`); `ClauseOf` takes the earliest found. The monthly clause is then quoted: *"Your quota will be
+  refreshed in the next cycle."* Never parsed into a time (D3 stands).
+- Not here: the `kimi -p` libuv crash (not the product's road), and buying extra usage (the owner's call).
+
+**Scenarios (each red is the message before the fix).**
+- **S10** `AcpDiagnosis.Of("the agent answered with an error (-32000): Authentication required: 429 You've reached your monthly usage
+  limit for this billing cycle. Your quota will be refreshed in the next cycle. …", KimiAcpProfile.Failures)` → `kimi_quota_spent`,
+  Spent. Red: `provider_error`. (The ACP envelope is the §2 hypothesis; the inner sentence is measured.)
+- **S11** `RateLimit.Hopeless(<the monthly line>)` is true, and the `observed` dictionary carries the line. Red: false / "a guess".
+- **S12** `KimiQuotaWords.ClauseOf(<the monthly line>)` is `"Your quota will be refreshed in the next cycle."`. Red: empty.
+- **S13** the S7-shaped product round (`AKimiRound`) with a shim answering the monthly envelope → the summary, ledger and log say the
+  quota is used up and quote the refreshed clause, never "kimi login", one launch, `RateLimited` hopeless. Red: `provider_error` lines.
+- Guards stay green: the 5-hour, balance, 401 and bare sign-in rows; the neutral row for a 503.
+
+**Build.** One story, Sonnet codes red-first, Opus reviews; the code gate over the diff. Docs: `research/module_runners.md` (the
+Kimi failure table), `research/module_tests.md`, `research/RESULTS_kimi_confinement.md` §31 (the capture record gains this CLI
+sighting as "seen in prompt mode; the ACP form still unmeasured").
+
+**Story 5 — built (2026-10-21).** D8: `KimiAcpProfile.Failures` gained `"reached your monthly usage limit"` → `kimi_quota_spent`, Spent, beside the 5-hour row (the table is seven rows).
+D9: the phrase joined `RateLimit.Spent`; the verbatim line is the `observed` row (it lives as `KimiMonthlyQuotaTests.MonthlyLine`, one constant used by S10–S13 and the
+`observed` dictionary). D10: `KimiQuotaWords.ResetOpening` became the ONE list `ResetOpenings`; `ClauseOf` takes the earliest. S10–S13 were each red first, green, and
+broken-and-restored (`research/module_tests.md`). Deviations: (1) the monthly row reuses the name `kimi_quota_spent` and the cure `KimiQuotaWords.Fixed`, so `SpentNames` still
+has two names. `SpentPhraseOf(name)` first answered with the FIRST (5-hour) phrase, which the code-review round (F1) showed was wrong for a monthly sentence seen on stderr only; what
+shipped after that round: the shim's report carries the MATCHED LINE (`failureLine`, see the review record) and `SpentReason` quotes it, `SpentPhraseOf` became `SpentPhrasesOf` (all the
+Spent phrases of the name, joined by " or ") and is only the fallback for a report with no line; (2) the const `ResetOpening` is gone (three older assertions read `ResetOpenings[0]`).
+Claim as released: "a monthly-quota answer that carries Kimi's measured sentence — in its reason, or in stderr when its reason names no other row — reads as a spent quota"; the ACP form is
+still unmeasured (RESULTS §31).
+
+**Done when.** S10–S13 red then green with break-its; the guards green; the whole suite green; released with the next mcp minor.
+
+**Story 5's plan round (coai session `c7c16214`, 2026-10-21, verdict proceed) — 3 findings: 2 accepted, 1 rejected.**
+- *Accepted — the ACP shape is unmeasured, so the claim is narrowed.* `AcpDiagnosis.Of` matches a row as a case-blind SUBSTRING of the
+  error text plus stderr, so the monthly row fires wherever the measured sentence appears in the REASON, whatever envelope wraps it, and in stderr when the reason names no row (K4: a reason that
+  names a row wins — see the review round, F2); what stays
+  unverified is that ACP delivers the sentence at all (and not, say, a bare `Authentication required` — S9's outcome). The release note
+  and the DoD say exactly that: "a monthly-quota answer that carries Kimi's measured sentence reads as a spent quota"; the ACP form is
+  recorded by the capture step (§5 step 1) at its first sighting, and S10's constructed envelope is replaced then.
+- *Accepted — the clause's end.* `ClauseOf` already ends a clause at the first period followed by whitespace (the #900 CodeRabbit
+  fix), so the monthly clause stops at "cycle." and the sales sentence and the URL after it stay out. S12 gains that assertion: the
+  clause does NOT contain "purchase" or "https://".
+- *Rejected — case sensitivity:* `ClauseOf` already searches with `OrdinalIgnoreCase` (`KimiQuotaWords.cs:41`), and
+  `AcpDiagnosis.Of` matches rows case-blind; the new opening joins the same search.
+
+
+**Code-review round (Opus judge + cadence consult 8d2f51e1, 2026-10-21) — 3 findings, all accepted.**
+- *F1 (medium) — accepted; fix shape: carry the matched evidence.* When the monthly sentence reached the shim only on STDERR (the reason names no row, e.g. `-32603 Internal error`),
+  `AcpDiagnosis.Of(reason, stderr, …)` picked the monthly row, but the report's reason was still the bare one, so `SpentReason` appended the FIRST row's phrase for the shared name
+  (`reached your 5-hour usage limit`) and the clause stayed in stderr: the ledger said 5-hour for a monthly quota and "the vendor named no reset". Before story 5 that input was an honest
+  `provider_error`. Now `AcpDiagnosis.Line` holds the one stderr line that held the row's phrase (trimmed, a window of at most 400 characters that still holds the phrase, never
+  splitting a surrogate pair; empty when the reason itself matched); the shim writes it as `failureLine`; `KimiReport.FailureLine` reads it (absent = empty, so an older shim's report works);
+  `SpentReason` and `Said` quote it as `(Kimi said: <line>)`, so `ClauseOf` finds "Your quota will be refreshed in the next cycle." A report with no line falls back to
+  `SpentPhrasesOf(name)`, which names every window of the name and never passes one off as the vendor's. No other reader of the report JSON needed a change (the confinement probe script
+  reads fields by name; the extension does not read this report).
+- *F2 (claim) — accepted as a narrowed claim and a guard; K4 kept.* A reason that names a row wins over stderr: `("Authentication required", monthly sentence in stderr)` is `not_signed_in`,
+  and `("Authentication required: 429 Too Many Requests", …)` is `provider_error`. Pinned by `AReasonThatNamesARow_WinsOverAMonthlySentenceInStderr`. The claim above says so.
+- *F3 (doc nits) — accepted:* the `VendorDiagnosis` marker comment names both windows, the README row says what is merged, the `SpentReason` doc comment and `module_runners.md` say "the matched
+  line", and the test's local `names` (which held phrases) is `phrases`.
+
+**Code gate (coai session c7c16214, 2026-10-22, proceed) — 16 findings: 8 accepted, 8 rejected.**
+- *G1 (security) — accepted:* the matched stderr line was quoted into reasons and logs unredacted. The final window now passes `Redaction.SafeText(window, LineCap)` (as `ClauseOf` does); the phrase survives.
+- *G2 (performance ×3, CodeRabbit ×2) — accepted:* `LineWith` no longer splits the whole stderr. It finds the phrase with one `IndexOf` and isolates the line at the nearest `\r` or `\n` on each side, so a CR-only progress line
+  and a CRLF never join lines or leak a control character; then trim, window, redact.
+- *G3 (coverage) — accepted:* a test derived from `KimiAcpProfile.Failures` — every Spent row's phrase is `RateLimit.Hopeless`.
+- *G4 (nit) — accepted:* the `LineCap` comment.
+- Rejected, one line each: **distinct names per window** — behaviour is identical, the quoted line carries the window; **one source for three lists** — `RateLimit` is vendor-neutral, the coverage test (G3) answers it instead;
+  **`Line` as a structured value** — it is a display aid only; **`Hit`'s seven scans** — pre-existing and negligible; **`EarliestOpening` scope** — the openings are sentence starts and S12 pins it;
+  **`Window` slice out of range** — unreachable (the line is longer than 400 and start ≤ end); **LINQ on two elements** — noise.

@@ -49,21 +49,22 @@ public sealed class KimiQuotaIsNotASignInTests
     }
 
     [Fact]
-    public void TheSixRowsStandInTheDecidedOrder_AndSpentNamesAreDerived()
+    public void TheSevenRowsStandInTheDecidedOrder_AndSpentNamesAreDerived()
     {
         Table.Select(failure => failure.Name).Should().Equal(
-            "subscription_model", "kimi_quota_spent", "balance_spent", "not_signed_in", "provider_error", "not_signed_in");
+            "subscription_model", "kimi_quota_spent", "kimi_quota_spent", "balance_spent", "not_signed_in", "provider_error", "not_signed_in");
         Table.Select(failure => failure.Phrase).Should().Equal(
             "Your current subscription does not have access to",
             "reached your 5-hour usage limit",
+            "reached your monthly usage limit",
             "insufficient balance",
             "Authentication required: 401",
             "Authentication required:",
             "Authentication required");
-        KimiAcpProfile.SpentNames.Should().BeEquivalentTo(Table.Where(failure => failure.Kind == AcpFailureKind.Spent).Select(failure => failure.Name));
+        KimiAcpProfile.SpentNames.Should().BeEquivalentTo(Table.Where(failure => failure.Kind == AcpFailureKind.Spent).Select(failure => failure.Name).Distinct());
         KimiAcpProfile.SpentNames.Should().BeEquivalentTo(["kimi_quota_spent", "balance_spent"]);
-        Table[4].Cure.Should().BeEmpty("a provider error has no cure to give");
-        Table[4].Kind.Should().Be(AcpFailureKind.Failed);
+        Table[5].Cure.Should().BeEmpty("a provider error has no cure to give");
+        Table[5].Kind.Should().Be(AcpFailureKind.Failed);
     }
 
     // ---------- S2 ----------
@@ -117,7 +118,7 @@ public sealed class KimiQuotaIsNotASignInTests
         diagnosis.Should().NotBeNull();
         diagnosis!.Kind.Should().Be(DiagnosisKind.Refused);
         diagnosis.Cure.Should().Be(KimiQuotaWords.Said($"kimi_quota_spent: {Inner}"), "the cure quotes the vendor's reset clause itself (K1): every reader of the diagnosis leads with it");
-        diagnosis.Cure.Should().Contain(KimiQuotaWords.Opening).And.Contain(KimiQuotaWords.ResetOpening);
+        diagnosis.Cure.Should().Contain(KimiQuotaWords.Opening).And.Contain(KimiQuotaWords.ResetOpenings[0]);
         VendorDiagnosis.Classify("kimi_quota_spent: Authentication required: 429 You've reached your 5-hour usage limit.", wsl: false)!.Cure
             .Should().Be(KimiQuotaWords.Said("x"), "a vendor line with no reset clause says the vendor named none");
         diagnosis.Cure.Should().NotContain("kimi login").And.NotContain("waiting is the only cure");
@@ -171,7 +172,7 @@ public sealed class KimiQuotaIsNotASignInTests
 
         verdict.Limited.Should().BeTrue("exit 75 and a Spent name is a limit");
         RateLimit.Hopeless(verdict.Reason).Should().BeTrue("the vendor's own words ride in the reason: " + verdict.Reason);
-        verdict.Reason.Should().NotContain("(insufficient balance)").And.NotContain("kimi login").And.StartWith("kimi_quota_spent: ").And.Contain(KimiQuotaWords.ResetOpening);
+        verdict.Reason.Should().NotContain("(insufficient balance)").And.NotContain("kimi login").And.StartWith("kimi_quota_spent: ").And.Contain(KimiQuotaWords.ResetOpenings[0]);
         verdict.Reason.Should().NotContain(KimiQuotaWords.Opening, "the reason is the vendor's words; whoever writes the line puts the cure in front (S7), so it is never said twice");
         verdict.Usage.Should().Be(Usage.Unknown);
     }

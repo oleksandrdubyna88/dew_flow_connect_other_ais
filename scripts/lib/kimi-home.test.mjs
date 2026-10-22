@@ -4,14 +4,14 @@
 // canary takes out exactly what it put in, and Kimi's config and reports parse. Runs nothing of Kimi's; makes folders and
 // links only under this user's own temp folder, and removes them.
 import assert from 'node:assert/strict';
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
 import { MINIMAL_UNIX, MINIMAL_WINDOWS } from './vibe.mjs';
 import {
   CANDIDATES, agentsCanaryPlan, builtEnv, classifyHomeEntry, credentialNames, disposeOwnedHome, inventory, makeAgentsCanary, makeOwnedHome, minimalConfigToml,
-  modelAlias, outputTokens, parseUsageLine, personsOauth, realHomeVerdict, removeAgentsCanary, shimEnv,
+  modelAlias, outputTokens, parseUsageLine, ownedRoot, personsOauth, realHomeVerdict, removeAgentsCanary, shimEnv, versionEnv,
 } from './kimi-home.mjs';
 
 const WINDOWS = process.platform === 'win32';
@@ -88,9 +88,9 @@ test('on Linux the owned home\'s credentials is a SYMLINK to the person\'s folde
   disposeOwnedHome(home, real, credentialNames(real));
 });
 
-test('the Linux built environment is MinimalUnix + the two variables, PATH joined with ":", and the OS home is HOME alone (DL11)', () => {
+test('the Linux built environment is MinimalUnix + the two variables + the cache folder, PATH joined with ":", and the OS home is HOME alone (DL11)', () => {
   const env = builtEnv({ home: '/r/home', profile: '/r/os', personsBin: '/p/bin', platform: 'linux', parent: { PATH: '/usr/bin', HOME: '/home/u', USER: 'u', APPDATA: 'x' } });
-  assert.deepEqual(Object.keys(env).filter((k) => !MINIMAL_UNIX.includes(k)).sort(), ['KIMI_CODE_HOME', 'KIMI_CODE_NO_AUTO_UPDATE']);
+  assert.deepEqual(Object.keys(env).filter((k) => !MINIMAL_UNIX.includes(k)).sort(), ['KIMI_CODE_HOME', 'KIMI_CODE_NO_AUTO_UPDATE', 'XDG_CACHE_HOME']);
   assert.equal(env.HOME, '/r/os');
   assert.equal(env.PATH, '/p/bin:/usr/bin');
   for (const name of ['USERPROFILE', 'HOMEDRIVE', 'HOMEPATH', 'NoDefaultCurrentDirectoryInExePath', 'APPDATA']) assert.equal(name in env, false, name);
@@ -199,4 +199,100 @@ test('Kimi\'s reports parse: the /usage line, every outputTokens of a session lo
   assert.equal(modelAlias(log), 'kimi-code/k3');
   assert.equal(modelAlias(''), '');
   assert.equal(statSync(base).isDirectory(), true);
+});
+
+// ------------------------------------------------------------------------------------------------------ the cache folder beside os/ (S-N3)
+// DL11: Kimi extracts about 2 MB of native files on every launch into $XDG_CACHE_HOME, else $HOME/.cache — inside os/, which must stay EMPTY.
+// The product names its own cache/ folder (KimiEnvironment.cs:34, :94; KimiPlaces.Cache = <root>/cache); the probe's Linux built environment must,
+// or a direct `kimi -p` control or `kimi --version` fills os/ — an artefact that would read as a product failure.
+
+test('S-N3: the Linux built environment names XDG_CACHE_HOME as the cache folder beside os/ — for the shim and for a direct launch', () => {
+  const direct = builtEnv({ home: '/r/home', profile: '/r/os', platform: 'linux', parent: { PATH: '/usr/bin' } });
+  const shim = shimEnv({ root: '/r', personsBin: '/p/bin', platform: 'linux', parent: { PATH: '/usr/bin' } });
+
+  assert.equal(direct.XDG_CACHE_HOME, '/r/cache', 'the Linux built environment has no XDG_CACHE_HOME — a direct kimi launch fills os/ (DL11)');
+  assert.equal(shim.XDG_CACHE_HOME, '/r/cache');
+});
+
+// J2 of the Opus judge on E1: this test used to pin "no profile -> no cache variable", which let every launch with the REAL OS home (M-K12 (a) and its
+// control, N-K5 / M-K11c's `kimi --version`) extract Kimi's native files into the person's real ~/.cache. The cache is named whenever the home is an owned
+// `<root>/home`, with or without the OS-home redirect; a home that is not an owned one still gets none.
+test('J2: an owned <root>/home names XDG_CACHE_HOME even with no OS-home redirect (HOME stays the parent one); a home that is not <root>/home gets none; Windows never has one', () => {
+  const parent = { PATH: '/usr/bin', HOME: '/home/op' };
+  const real = builtEnv({ home: '/r/home', platform: 'linux', parent });
+  assert.equal(real.XDG_CACHE_HOME, '/r/cache', 'a launch on an owned home with the real OS home writes the native files of Kimi into the real ~/.cache of the person');
+  assert.equal(real.HOME, '/home/op', 'the real OS home is kept — M-K12 (a) measures it');
+  assert.equal('XDG_CACHE_HOME' in builtEnv({ home: '/somewhere/else', platform: 'linux', parent }), false, 'not an owned root: nothing to name');
+  assert.equal('XDG_CACHE_HOME' in builtEnv({ home: 'C:/r/home', profile: 'C:/r/os', platform: 'win32', parent: {} }), false);
+});
+
+test('G0: an explicit cacheDir names the cache folder, over the derivations; the default keeps the derivation beside os/', () => {
+  const parent = { PATH: '/usr/bin' };
+  assert.equal(builtEnv({ home: '/r/home', profile: '/r/os', cacheDir: '/elsewhere/cache', platform: 'linux', parent }).XDG_CACHE_HOME, '/elsewhere/cache');
+  assert.equal(builtEnv({ home: '/x/home', cacheDir: '/elsewhere/cache', platform: 'linux', parent }).XDG_CACHE_HOME, '/elsewhere/cache', 'even for a home that is no owned root');
+  assert.equal(builtEnv({ home: '/r/home', profile: '/r/os', platform: 'linux', parent }).XDG_CACHE_HOME, '/r/cache');
+  assert.equal('XDG_CACHE_HOME' in builtEnv({ home: 'C:/r/home', cacheDir: 'C:/c', platform: 'win32', parent: {} }), false);
+});
+
+test('S-N3: an owned root of a Linux host also holds the cache folder beside os/ (owner-only), as KimiHome.MakeCache makes it; a Windows root does not', () => {
+  const made = ownedRoot(join(base, 'kh-cache'), { platform: 'linux' });
+
+  assert.equal(made.cache, join(made.root, 'cache'));
+  assert.equal(existsSync(made.cache), true, 'the Linux owned root has no cache folder beside os/');
+  assert.deepEqual(readdirSync(made.os), [], 'os/ must stay empty');
+  assert.equal(existsSync(ownedRoot(join(base, 'kh-nocache'), { platform: 'win32' }).cache ?? ''), false, 'Windows has no such variable and no such folder');
+});
+
+test('the ~/.agents canary is removed by its own exact paths only: a stranger\'s file inside the canary folder survives, and the removal says so instead of deleting it', () => {
+  const osHome = join(base, 'os-home-stranger');
+  mkdirSync(osHome);
+  const plan = agentsCanaryPlan(osHome, { skillName: 'coai-probe-canary-ee11', word: 'GANNET-7' });
+  makeAgentsCanary(plan);
+  const stranger = join(plan.skillDir, 'not-ours.txt');
+  writeFileSync(stranger, 'somebody else\'s');
+
+  assert.throws(() => removeAgentsCanary(plan), /still there|not empty|ENOTEMPTY/u, 'a removal that cannot be exact must fail loudly');
+  assert.equal(readFileSync(stranger, 'utf8'), 'somebody else\'s', 'the removal deleted a file it did not make (a recursive delete)');
+  assert.equal(existsSync(plan.skillFile), false, 'the canary\'s own file is removed');
+  rmSync(stranger);
+  removeAgentsCanary(plan);
+  assert.equal(existsSync(plan.agents), false);
+});
+
+// J4 of the Opus judge on E1: the "does it exist" check ran at PLAN time, the write came later - a file the owner created in between was overwritten.
+test('J4: makeAgentsCanary never overwrites an AGENTS.md the owner created after the plan was made, and leaves nothing of its own behind', () => {
+  const osHome = join(base, 'os-home-race');
+  mkdirSync(osHome);
+  const plan = agentsCanaryPlan(osHome, { skillName: 'coai-probe-canary-ff22', word: 'GANNET-7' });
+  mkdirSync(plan.agents, { recursive: true });
+  writeFileSync(plan.agentsMd, 'the owner wrote this after the start check');
+
+  assert.throws(() => makeAgentsCanary(plan), /EEXIST|exists/u);
+
+  assert.equal(readFileSync(plan.agentsMd, 'utf8'), 'the owner wrote this after the start check', "the canary overwrote the owner's AGENTS.md");
+  assert.equal(existsSync(plan.skillDir), false, 'the canary skill it had already written was not taken back');
+});
+
+test('J4: makeAgentsCanary writes both files with an exclusive create - a skill file that appeared after the plan stops it and is left alone', () => {
+  const osHome = join(base, 'os-home-race2');
+  mkdirSync(osHome);
+  const plan = agentsCanaryPlan(osHome, { skillName: 'coai-probe-canary-ff23', word: 'GANNET-7' });
+  mkdirSync(plan.skillDir, { recursive: true });
+  writeFileSync(plan.skillFile, 'not ours');
+
+  assert.throws(() => makeAgentsCanary(plan), /exists/u);
+  assert.equal(readFileSync(plan.skillFile, 'utf8'), 'not ours');
+  assert.equal(existsSync(plan.agentsMd), false);
+});
+
+// Re-check of J2: the probe's own `kimi --version` (before any cell) ran with NO env - the real HOME, the real ~/.kimi-code, no pin - so Kimi extracted into the
+// person's real cache. It now runs in the built environment of an owned root.
+test('re-check J2: the version launch runs in an owned root\'s built environment - KIMI_CODE_HOME, the cache folder and the pin named, HOME untouched', () => {
+  const env = versionEnv('/r/version', { platform: 'linux', parent: { PATH: '/usr/bin', HOME: '/home/op', SECRET: 'x' } });
+
+  assert.equal(env.KIMI_CODE_HOME, '/r/version/home', 'the version launch has no owned KIMI_CODE_HOME - it reads the real ~/.kimi-code');
+  assert.equal(env.XDG_CACHE_HOME, '/r/version/cache', 'the version launch has no owned XDG_CACHE_HOME - Kimi extracts into the real cache');
+  assert.equal(env.KIMI_CODE_NO_AUTO_UPDATE, '1');
+  assert.equal(env.HOME, '/home/op');
+  assert.equal('SECRET' in env, false, 'nothing is inherited but the minimal names');
 });

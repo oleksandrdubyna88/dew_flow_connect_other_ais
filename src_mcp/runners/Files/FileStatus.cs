@@ -17,6 +17,8 @@ public sealed record FileStatus(int Type, int Permissions, uint OwnerUid, ulong 
 
     public bool IsSymbolicLink => Type == 0xA000;
 
+    public bool IsSocket => Type == 0xC000;
+
     /// <summary>The same file: one device, one inode.</summary>
     public bool SameFileAs(FileStatus other) => Inode == other.Inode && DeviceMajor == other.DeviceMajor && DeviceMinor == other.DeviceMinor;
 
