@@ -1,7 +1,8 @@
 # PLAN — E2 stories: the Vibe series on `ubuntu-claude`, and the C1 admission that a full pass switches on
 
 > Status: **plan only, nothing implemented yet, 2026-10-22 — the E2 plan round passed (coai 99e086b8, `proceed`, four findings, all
-> accepted and folded the same day; the record is at the end).** Scope: the paid Vibe series on the owner's native Ubuntu host
+> accepted and folded the same day; the C1 risk consult 8e2480a0 answered and folded the same day; both records are at the end).**
+> Scope: the paid Vibe series on the owner's native Ubuntu host
 > `ubuntu-claude` (N-H1, N-V0, N-V1–N-V6) and its record, `research/RESULTS_vibe_confinement.md` §32; one amendment to E1's probe
 > plumbing BEFORE the series (every native cell carries the closed keyring road the product will ship); then — only on a full pass —
 > the C1 admission in `src_mcp` (Vibe enters `HostAdmission.MeasuredOnNativeLinux`, `VibeLaunch.Built` forces Python `keyring`'s
@@ -115,12 +116,19 @@ home named). E2 makes the host an input of both:
   `keyring.backends.fail.Keyring` (a fifth name with another value, or a four-name launch, is refused); on `HostKind.Windows`,
   `HostKind.Wsl` and every other host it demands exactly the FOUR and REFUSES a launch carrying the fifth. The refusal sentence (`:90`)
   names the five on Linux and the four elsewhere.
-- Every caller passes its host's kind: `VibeRuntime.Build` (`VibeRuntime.cs:141-156`; the runtime holds its `VibeHost`, `:41`),
-  `VibeRuntime.ProbeVersionAsync` (`:170-179`, the `providers` probe's `--version`), `VibeConsultant.Build` (`VibeConsultant.cs:72-75`,
-  through its `inner` runtime), and `VibeLaunch.TakeAsync` (`:146-147`, which already holds `host`). So the review launch, the consultant
-  launch, the question row and the `--version` probe all carry the closed road on a native host — one builder, one control, as D17
-  demands — and `VibePrintsUtf8OnEveryPathTests.EveryVibePath_RunsInUtf8Mode` (`src_mcp/tests/VibePrintsUtf8OnEveryPathTests.cs:41-67`)
-  gains a Linux leg that walks the same five paths.
+- **`Built` has exactly THREE direct callers** (verified by the C1 risk consult 8e2480a0 and re-read at `3fc30be3b`; an earlier draft here
+  said four): `VibeRuntime.Build` (`VibeRuntime.cs:143`, the review launch; the runtime holds its `VibeHost`, `:41`),
+  `VibeRuntime.ProbeVersionAsync` (`VibeRuntime.cs:177`, the `providers` probe's `--version` — it BYPASSES `TakeAsync` and goes straight to
+  the launcher, so its host argument is load-bearing on its own), and `VibeConsultant.Build` (`VibeConsultant.cs:72`, the consult and the
+  question row, through its `inner` runtime). `VibeLaunch.TakeAsync` (`VibeLaunch.cs:143-154`) is the VALIDATION site, not a builder: it
+  calls `EnvironmentRefusal` (`:147`) on a request one of the three made, and its own `--version` (`VersionAsync`, `:278-293`) is that same
+  request `with { Arguments = ["--version"] }` — the second version-probe path, which inherits whatever the builder wrote. The retry/repair
+  road (`VibeRuntime.ForLaunch`, `VibeRuntime.cs:250`) rebuilds arguments on the invocation's existing request and calls no builder, so it
+  carries what `Build` made. Each of the three callers passes its host's kind; `TakeAsync` passes `host.Kind` to the control. One builder,
+  one control, as D17 demands — and `VibePrintsUtf8OnEveryPathTests.EveryVibePath_RunsInUtf8Mode`
+  (`src_mcp/tests/VibePrintsUtf8OnEveryPathTests.cs:41-67`) gains a Linux leg that walks the same five request paths (the reviewer, the
+  retry, the consult, the question row, the providers probe), while S2's DELIVERY tests (S-N23) prove the value reaches a real child on
+  every road, both version probes included.
 
 **Never inherited from the server's environment.** `Built` sets `InheritsEnvironment = false` and `Passthrough = ProcessEnvironment.Minimal`
 (`:99-100`); the Unix minimal list (`ProcessEnvironment.cs:90-91`) is `PATH HOME USER LOGNAME SHELL LANG LC_ALL LC_CTYPE TERM TMPDIR
@@ -132,6 +140,20 @@ Windows, and coai's value winning over a server-environment value.
 there would be a change to a measured launch, and E2 does not make it. The pins that keep WSL2 and Windows byte-identical are in §2.6.
 
 **Kimi's launch never carries it** — Kimi has no keyring road (its sign-in is a file coai links); `KimiEnvironment` is not touched.
+
+**The claim is qualified by the MEASURED versions, and an unmeasured Vibe says so** (C1 risk consult 8e2480a0, point 2, verified by the
+lead). What the closure rests on is specific: `keyring` **25.7.0**'s core short-circuits `load_env()` → `load_config()` → discovery, so the
+forced backend beats a `keyringrc.cfg` AND any backend a plugin entry point would offer; and Vibe **2.26.1**'s Linux credential reads go
+through `keyring.get_password` — no direct D-Bus or Secret Service path was found in it. A later Vibe could call `keyring.set_keyring`,
+or Secret Service directly, and the variable would close nothing. The product today RUNS a Vibe version with no manifest entry, with a
+warning (`VibeLaunch.Verdict`, `VibeLaunch.cs:322-326` → `Unmeasured`, `:335-339`, through `VersionWarnings.Unmeasured`,
+`src_mcp/runners/Reviewers/VersionWarnings.cs:23-24`; the owner's decision of 2026-10-13: Vibe warns, never refuses) — and E2 keeps that
+decision. What E2 adds instead, in three places: (a) the admission remarks (`HostAdmission.cs:22`, `VibeLaunch.cs:72-78`) and §32 say
+*the keyring road was measured closed on Vibe 2.26.1 (keyring 25.7.0)*; (b) on `HostKind.Linux` the unmeasured-version warning gains ONE
+clause (§2.5 pins the words; S2's S-N22 tests it), so a person running another Vibe on a native host is told the closure is unmeasured for
+it; (c) §9 carries a NON-blocking question for the owner — whether an unmeasured Vibe should be refused on native Linux rather than warned.
+To carry the clause, `Verdict`, `VersionWarning` and `Unmeasured` take the host (`VibeHost`, or its `Kind` beside the `Platform` string
+they take today), and `VibeRuntime.VersionWarning` (`VibeRuntime.cs:280-283`) passes it — the same sentence on the launch and on the card.
 
 **The probes measure this launch, not today's.** E1 put the forced backend into M-V7's arms a, a2 and a3 only (`scripts/lib/vibe.mjs:284-298`).
 But on a native host the product closes the road in EVERY launch — the signed-in review launches that N-V2 (M-V6, M-V1) and N-V3 (M-V5)
@@ -160,6 +182,15 @@ partial table, `HOST_NOTES` (`runtimeSince.ts:150-157`), gets its arm written in
 `linux-unread` every runtime with a Linux entry is refused: Vibe with the banner sentence, Kimi with its native sentence (Kimi is refused
 on native Linux in E2 anyway).
 
+**The banner is classification, not attestation — and every misclassification lands on the safe side** (C1 risk consult 8e2480a0,
+point 3, the reason the lead's doubt is closed). Three cases: (i) a WSL2 kernel misread as native Linux (a banner that names neither
+`microsoft` nor `WSL`, which no shipped WSL kernel produces — `shared/wsl-banner-vectors.json` holds the rule) would get the forced backend
+on a launch that WSL2 was measured without — the variable only CLOSES a road, so the launch still signs in through the linked `.env` and
+nothing opens; (ii) a container whose kernel banner names Microsoft (a WSL-kernel container) reads as `HostKind.Wsl` (`HostKind.cs:59`)
+and follows the UNCHANGED WSL branch, judged WSL1/WSL2 by `WslGenerations.Of` (`WslGeneration.cs:29-30`) exactly as today; (iii) a blank
+or missing banner is `Unreadable` and refuses a member (§2.1). The admission never reads the banner as proof of what the host IS — only
+as which measured branch applies — and the one answer that would be unsafe (an unknown host admitted) is the one it cannot give.
+
 ### 2.5 The sentences — pinned words
 
 Every text that today says native Linux is refused changes in the same direction and names the same two facts: the release, and the
@@ -167,7 +198,18 @@ closed keyring. The words below are what S-N8 and S-N11 search for; a coder may 
 
 **Server (not shown to a person; the remarks):** `HostAdmission.cs:7-11` and `:22`, `VibeLaunch.cs:72-78` say *Vibe is measured on a
 native Linux host (research/RESULTS_vibe_confinement.md §32, Vibe 2.26.1, 2026-10-xx) and its launch there closes the keyring road
-(`PYTHON_KEYRING_BACKEND=keyring.backends.fail.Keyring`, DN10); Kimi is not yet measured there (E3)*.
+(`PYTHON_KEYRING_BACKEND=keyring.backends.fail.Keyring`, DN10) — the keyring road was measured closed on Vibe 2.26.1 (keyring 25.7.0);
+Kimi is not yet measured there (E3)*.
+
+**The unmeasured-version warning on a native Linux host** (S-N22 pins it): today's sentence (`VersionWarnings.cs:23-24`, filled by
+`VibeLaunch.Unmeasured`, `:335-339`) — *Vibe X is not a version coai has measured (it measured 2.26.1); it is run anyway, but its
+confinement (research/RESULTS_vibe_confinement.md) and its home's plugin hashes belong to 2.26.1; this version's plugin files are admitted
+by name only — re-run …* — gains, on `HostKind.Linux` ONLY, this clause after `admitted by name only`:
+
+> `, and the keyring closure (PYTHON_KEYRING_BACKEND) is measured only on Vibe 2.26.1 with keyring 25.7.0 — on this native Linux host another Vibe could reach a keyring by a road this build does not close`
+
+The pinned words: `keyring closure` and `measured only on Vibe 2.26.1 with keyring 25.7.0`. On WSL2, Windows and every other host the
+sentence is byte-identical to today's (no clause). The same sentence is the launch's warning and the card's (`VibeRuntime.VersionWarning`).
 
 **The extension's one English sentence** (a constant `VIBE_NATIVE_LINUX` in `vendorTerminal.ts`, imported by `vendors.ts`'s hint and
 by the help where English is read; translated by hand into the four other files):
@@ -222,7 +264,7 @@ assertion).
   "runtime": "vibe",
   "platform": "linux",
   "standing": "confined",
-  "text": "Reads only a copy coai makes of the live tree, without its .git, .vibe/, skills and AGENTS.md: read_file is its one tool, a read outside that copy was refused, and every write and shell call was denied - measured on vibe 2.26.1 on a native Linux host. On a native Linux host coai turns Vibe's keyring off, so it signs in only through ~/.vibe/.env, linked into coai's own home and never copied.",
+  "text": "Reads only a copy coai makes of the live tree, without its .git, .vibe/, skills and AGENTS.md: read_file is its one tool, a read outside that copy was refused, and every write and shell call was denied - measured on vibe 2.26.1 on a native Linux host. On a native Linux host coai turns Vibe's keyring off, so it signs in only through ~/.vibe/.env, linked into coai's own home and never copied - the keyring road was measured closed on vibe 2.26.1 (keyring 25.7.0).",
   "measured": {
     "date": "2026-10-xx",
     "cliVersion": "vibe 2.26.1",
@@ -354,7 +396,10 @@ marker NOT written 3 of 3, *Missing MISTRAL_API_KEY*) prove that the variable be
 the arm proved nothing: the probe is fixed and `n-v1` re-run (free), never counted. Arm a (fresh home, forced backend) and a2
 (`VIBE_TEST_DISABLE_KEYRING=1` too) must end exit 1 with *Missing MISTRAL_API_KEY* 3 of 3 even when N-V0 shows a keyring daemon or a bus.
 Every signed-in home (arm b and every N-V2/N-V3 home) keeps `.env` as a link to `~/.vibe/.env`, and with S0 every one of those launches
-carried the forced backend — §32 says so in its own column.
+carried the forced backend — §32 says so in its own column. **So the pass criteria of this series include, beside a3c's marker written
+and a3's absent: a SIGNED-IN launch and a RESUMED launch both succeed under `fail.Keyring`** (C1 risk consult 8e2480a0, point 4) — N-V2
+(M-V6, M-V1: signed-in homes that answer) and N-V3 (M-V5: a resumed second turn) cover exactly that once S0 has landed, because S0 is what
+puts the variable into those launches; without S0 they would prove nothing about the closed road.
 
 **Around every phase:** `~/.vibe` listed (names, types, sizes, modes, mtimes) before and after — identical; `~/.vibe/.env` `stat` (type, size,
 mode, owner, mtime) identical; the probe records both in its tables. The spend counter is kept by the lead in the §32 draft, per phase,
@@ -516,7 +561,9 @@ slice).
 the host, for the duration of the series only.
 
 **Scenarios.** The cells of §3.2 against §3.3's predictions, with §3.4's stop rules. The record is the scenario: every cell's table in §32,
-the `~/.vibe` verdict per phase, the spend against the cap, the removal verdict.
+the `~/.vibe` verdict per phase, the spend against the cap, the removal verdict. The pass criteria, named: a3c's marker written and a3's
+absent (N-V1); a signed-in launch (N-V2) and a resumed launch (N-V3) succeeding under `fail.Keyring` — covered once S0 lands (§3.2); the
+pinned hashes equal (N-V4); the two readings agreeing (N-V6).
 
 **Break-its.** None — a measurement has no mutant. What replaces them: the teeth rule (a3c), the free pre-checks (N-V0's forced class
 reading), and the two readings of N-V6 (one implementation read twice could only agree with itself).
@@ -537,10 +584,15 @@ exactly that there and only there; every WSL2 and Windows answer and launch byte
 - `src_mcp/runners/Platform/HostAdmission.cs:22-25` (the entry and its remark), `:7-11` (the class remark).
 - `src_mcp/runners/Vibe/VibeLaunch.cs:58-61` (two constants), `:72-78` (the remark), `:87-90` (`EnvironmentRefusal(request, HostKind host)`),
   `:97-108` (`Built(request, home, model, HostKind host)`), `:111-119` (`CarriesTheFour`/`CarriesTheFive` — rename `CarriesTheThree`, which
-  has been four since §26), `:146-147` (`TakeAsync` passes `host.Kind`).
-- `src_mcp/runners/Vibe/VibeRuntime.cs:141-156`, `:170-179`; `src_mcp/runners/Vibe/VibeConsultant.cs:72-75` — the host's kind through the
-  runtime (a `Built`-forwarding method on `VibeRuntime` so no caller spells the kind twice is the Opus brief's call).
-- Tests: NEW `src_mcp/tests/VibeNativeLinuxLaunchTests.cs` (S-N12, S-N21); `VibeRuntimeTests.cs:363-368`, `VibeLaunchControlTests.cs:192-202`
+  has been four since §26), `:146-147` (`TakeAsync` passes `host.Kind` — the validation site), `:322-339` (`Verdict`, `VersionWarning`,
+  `Unmeasured` take the host for the native-Linux clause of §2.5).
+- **The host threaded into the three `Built` callers and the validation site**, no more and no fewer: `VibeRuntime.cs:143` (the review
+  launch), `VibeRuntime.cs:177` (the providers `--version` probe — it bypasses `TakeAsync`, so this argument alone decides what the probe
+  carries), `VibeConsultant.cs:72` (consult and question row); and `VibeLaunch.cs:147` (`EnvironmentRefusal(request, host.Kind)`). A
+  `Built`-forwarding method on `VibeRuntime` so no caller spells the kind twice is the Opus brief's call. `VibeRuntime.VersionWarning`
+  (`:280-283`) passes the host for the clause.
+- Tests: NEW `src_mcp/tests/VibeNativeLinuxLaunchTests.cs` (S-N12, S-N21, S-N22) and NEW `src_mcp/tests/VibeNativeLinuxDeliveryTests.cs`
+  (S-N23, a real child on the Linux CI job); `VibeRuntimeTests.cs:363-368`, `VibeLaunchControlTests.cs:192-202`
   (S-N5, flipped); `HostAdmissionOnNativeLinuxTests.cs:45-52`, `:66-72` (the product's set holds Vibe: Vibe admitted on a read banner,
   the banner sentence on an unread one; Kimi keeps today's sentence in both); `HostFactsModeTests` (the Linux assertion: `admission.Vibe`
   empty, `admission.Kimi` non-empty on the `ubuntu-latest` runner); `VibePrintsUtf8OnEveryPathTests.cs:41-67` (a `HostKind.Linux` leg over
@@ -575,15 +627,46 @@ exactly that there and only there; every WSL2 and Windows answer and launch byte
   WSL2-only sentence (`KimiLaunchChecksTests.cs:196-203`, `:228-236` unchanged).
 - The E1 case `TheProductsSet_AdmitsNeitherRuntime_OnAReadNativeLinuxHost` (`:45-52`) becomes `TheProductsSet_AdmitsVibe_AndNotKimi_OnAReadNativeLinuxHost`;
   its old assertion "E1 admits nothing" is the one line that must change, and the summary says so.
+- **S-N22 (the unmeasured-version clause).** *Given* a manifest with an entry for 2.26.1 only and a `--version` of `2.27.0`, *then* on
+  `HostKind.Linux` `VibeLaunch.VersionWarning` and the launch's `LaunchTurn.Warning` contain `keyring closure` and `measured only on Vibe
+  2.26.1 with keyring 25.7.0`; on `HostKind.Wsl` (WSL2) and `HostKind.Windows` the sentence is byte-identical to today's (a literal in the
+  test, no clause); for 2.26.1 itself the warning is empty on every host; `VibeRuntime.VersionWarning` on a native host gives the same
+  sentence as the launch. RED (the clause not written): `"an unmeasured Vibe 2.27.0 on a native Linux host was not told the keyring closure
+  is measured only on 2.26.1 — a later Vibe could reach a keyring by a road this build does not close"`.
+- **S-N23 (DELIVERY — the value reaches a real child on every road), `VibeNativeLinuxDeliveryTests`, `[Linux only]` by a skip reason
+  elsewhere.** Not a request-dictionary assertion: a REAL child through the real `ProcessLauncher` (as `ACliRowsEffortTests.cs:25` and
+  `AChildThatExitedBeforeItsStartTimeWasReadTests.cs:35` already launch one). The child is the fake CLI (`src_mcp/tests_fakecli`,
+  `FakeCli` beside the test binary — `AFakeCliSteeringFileIsBesideItsBinaryTests.cs:24` names it), whose `RecordEnvironment`
+  (`src_mcp/tests_fakecli/Program.cs:617-627`) already writes every `VIBE_*` and `PYTHON*` name WITH its value to a record file — so
+  `PYTHON_KEYRING_BACKEND` lands in it with no change to the fake. The test runs under `VibeHost.Using` a `HostKind.Linux` host with a
+  read banner and a fake sign-in in its own scratch (the `VibeFlowHost` shape, `src_mcp/tests/VibeFlowHost.cs`), and with the TEST PROCESS's
+  own environment set to `PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring` for the duration (restored in `finally`) — a CONFLICTING
+  value. Six roads, each a case: the review launch (`VibeRuntime.Build` → `ReviewerExecutor`), the retry/repair (`ForLaunch`), the consult
+  (`VibeConsultant.Build`), the question row (`ConsultantLaunches.ForQuestion` over the consultant's request), the providers probe
+  (`ProbeVersionAsync`), and `TakeAsync`'s own `--version` (the record file of the `--version` child). *Then* each record file holds
+  `PYTHON_KEYRING_BACKEND=keyring.backends.fail.Keyring` — never the null one, never absent. And the refusal half: a request whose fifth
+  entry is MISSING (`built with { Environment = Without(name) }`) or WRONG (`With(name, "keyring.backends.null.Keyring")`) handed to
+  `TakeAsync` on the Linux host is refused BEFORE spawning — the outcome is `NotStarted`/`Refused` with the D17 sentence and the fake's
+  record file was NEVER written (the strongest observation: not "refused", but "no child existed"). REDs, against the threading left out
+  on one road at a time: `"the providers --version probe on a native Linux host reached the child WITHOUT keyring.backends.fail.Keyring
+  (it carried keyring.backends.null.Keyring from the server's own environment) — the one road that bypasses TakeAsync"` (the probe road
+  is the one to show first, since it bypasses validation), `"the consult child on a native Linux host carried no PYTHON_KEYRING_BACKEND"`,
+  and for the refusal half, against a control that validates after spawning: `"a Vibe launch missing PYTHON_KEYRING_BACKEND on a native
+  Linux host SPAWNED before it was refused — the fake wrote its record file"`. On WSL2 (the `VibeFlowHost.Wsl2` arm) the same six record
+  files hold NO `PYTHON_KEYRING_BACKEND` line even with the conflicting server value set — the pin that the closed road never leaks.
 
 **Break-its.** (B4) remove `"Vibe"` from the set → S-N5 red with the refusal sentence; (B5) add the fifth name on every host → S-N12's
-WSL2 leg red; (B6) make `EnvironmentRefusal` on Linux accept four names → S-N12's "a four-name launch on Linux is refused" leg red; (B7)
-read the variable from the process environment → the inherited-value leg red; (B8) change `NATIVE_LINUX_BUILT`'s value in `vibe.mjs` →
-S-N21 red (and S-N20 still green, which is why S-N21 exists).
+WSL2 leg red and S-N23's WSL2 leg red; (B6) make `EnvironmentRefusal` on Linux accept four names → S-N12's "a four-name launch on Linux is
+refused" leg red and S-N23's refusal half red; (B7) read the variable from the process environment → the inherited-value leg of S-N12 red
+and S-N23's six roads red (they carry the null backend); (B8) change `NATIVE_LINUX_BUILT`'s value in `vibe.mjs` → S-N21 red (and S-N20
+still green, which is why S-N21 exists); (B8b) drop the clause on Linux → S-N22 red; add it on every host → S-N22's WSL2 literal red; (B8c)
+pass `HostKind.Windows` from `ProbeVersionAsync` only → S-N23's providers-probe road red while the other five stay green — the proof that
+the delivery test sees each road on its own.
 
-**Done when.** S-N12 (with the no-op red shown first), S-N21, S-N5, S-N6 observed red then green; B4–B8 both ways; the §2.6 pins green
-WITHOUT an edit; the whole `CoaiMcp.Tests` executable green; `coai-mcp --host-facts` on the `ubuntu-latest` job shows `admission.Vibe` empty;
-Opus review has no open finding.
+**Done when.** S-N12 (with the no-op red shown first), S-N21, S-N22, S-N5, S-N6 observed red then green; S-N23 observed red then green ON
+THE LINUX CI JOB (its messages copied from that job's log into the summary; it skips by name on Windows and macOS); B4–B8c both ways; the
+§2.6 pins green WITHOUT an edit; the whole `CoaiMcp.Tests` executable green; `coai-mcp --host-facts` on the `ubuntu-latest` job shows
+`admission.Vibe` empty; Opus review has no open finding.
 
 **Roles.** Opus brief (it fixes the two constants' names, the `host` parameter's position, and the order "no-op first, red, then the
 arm"); Sonnet codes; Opus reviews, reading `EnvironmentRefusal`'s two counts side by side with `Built`.
@@ -767,6 +850,8 @@ document's status line says `IMPLEMENTED <date>` with the deviations; `plan-life
 | S-N12 | S2 | `CoaiMcp.Tests` — NEW `VibeNativeLinuxLaunchTests` |
 | S-N20 (new, E2) | S0 | `node --test scripts/lib/vibe.test.mjs` |
 | S-N21 (new, E2) | S2 | `CoaiMcp.Tests` — `VibeNativeLinuxLaunchTests` (parses `vibe.mjs`) |
+| S-N22 (new, E2) | S2 | `CoaiMcp.Tests` — `VibeNativeLinuxLaunchTests` (the unmeasured-version clause) |
+| S-N23 (new, E2) | S2 | `CoaiMcp.Tests` — `VibeNativeLinuxDeliveryTests` (a real child on the Linux CI job; skips by name elsewhere) |
 | §5 N-H1, N-V0, N-V1–N-V6; §7 Vibe rules; §14 Q1, Q2 | S1 | the record, §32 |
 | §10 P7 (Vibe), DN13 | S5 | the two live rounds, §32.10–32.11 |
 
@@ -872,6 +957,10 @@ Assumed where possible, and said:
   owner's languages).
 - **Assumed: `trustWithVibe`'s environment stays out of E2** (it serves a cell E2 does not run); the Opus brief of S0 may take the
   one-line fix if it wants it.
+- **For the owner, NON-blocking (C1 risk consult 8e2480a0, point 2):** should a Vibe version with no manifest entry be REFUSED on a native
+  Linux host, rather than run with the warning and its new clause (§2.5)? The keyring closure is measured on Vibe 2.26.1 with keyring
+  25.7.0 only; a later Vibe could reach a keyring by a road the variable does not close. E2 keeps the owner's 2026-10-13 decision
+  (warn, never refuse) and ships the clause; a "refuse" answer is one arm in `VibeLaunch.Verdict` for `HostKind.Linux`, a follow-up.
 
 ## 10. Definition of Done — epic E2
 
@@ -905,3 +994,12 @@ Verdict `proceed`. Every finding, its decision, and where it was folded; nothing
 | 1 + 2 (Major, codex + gemini) | S5 step 2 / Q1 replaced the extension's installed binary in its global storage for the pre-release round: `ETXTBSY` on a running server, a background update overwriting it mid-round, a host left on an unofficial binary after an interrupted run | **accepted** — the local build runs BESIDE the installed one as a separate stdio MCP server: registered only for a scratch project inside the series folder through a project-scoped `.mcp.json` written by the extension's own `mcpServerBlock` (`src_vs_code/src/mcpBlock.ts:60-64`), or driven over its stdio by the repository's existing `scripts/live-consult-all.mjs` (`:26-45`, `:94`); the providers check is the binary's own `--providers` by path; nothing is ever restored; the release check uses the released binary through the normal extension | S5 steps 2–4 (the rollback line now says nothing on a host needs restoring); §8; §9 (Q1 closed, the route and the reason stated) |
 | 3 (Major, gemini) | S0's "delete `PYTHON_KEYRING_BACKEND` for a3c" must hold when the PROBE's own process has the name set; the document did not say how the child environment is built | **accepted** — stated with lines: off Windows the base is the `minimalEnv` allow-list (`probe-vibe-confinement.mjs:501`, `vibe.mjs:30`, `:40-49`), the `replaceEnv` path and the manifest script build over the same allow-list (`:497`, `vibe.mjs:62-63`, `vibe-home-manifest.mjs:126`); S-N20 gains the inherited case (the probe run with the name set → a3c lacks it, a3 and M-V6 carry the forced value, WSL2 carries nothing) with its two RED messages and break-it B3b | S0 (Files, S-N20, break-its) |
 | 4 (Minor, gemini) | The new `'linux-unread'` member of `HostKind` needs an audit of every consumer outside the exhaustive note tables | **accepted** — the audit table in S3: `hostKindOfPlatform` (never answers it; the fallback is the platform's `linux`, reached by no product caller), `panelProvider.ts:473`/`:1415`/`:1954` (carried as itself), `panelView.ts:1161` (as refused), `panelView.ts:1188` (as linux — the Kimi network sign-in box, the comparison widened), `vendorTerminal.ts:419`/`:578` (as refused when the host is passed), serialisation (nothing persists it — a structural list test pins the set of consumers), and the `Platform` comparisons that are not `HostKind` at all; break-its B12b, B12c | S3 (the audit table, scenarios, break-its) |
+
+## The C1 risk consult (8e2480a0, 2026-10-22, gpt-6-astra) — four points, each verified by the lead and acted on
+
+| # | What the consult found | Verified | Acted on — where |
+|---|---|---|---|
+| 1 | `VibeLaunch.Built` has THREE direct callers — `VibeConsultant.cs:72`, `VibeRuntime.cs:143` (the launch), `VibeRuntime.cs:177` (the `--version` probe); `TakeAsync` is the validation site, not a builder; the providers probe bypasses `TakeAsync` but uses `Built`, so its host argument matters | yes — re-read at `3fc30be3b`; an earlier draft here said "four callers" | §2.3 rewritten (the three callers, the validation site, `TakeAsync`'s own `--version` as the second probe path, `ForLaunch` carrying what `Build` made); S2's host threading names exactly those three plus `VibeLaunch.cs:147` |
+| 2 | The closure is a claim about MEASURED versions: `keyring` 25.7.0's core short-circuits env → config → discovery (so the forced backend beats `keyringrc.cfg` and plugin entry points) and Vibe 2.26.1's Linux credential reads go through `keyring.get_password` (no direct D-Bus path found); but `VibeLaunch.cs:322` RUNS an unmeasured Vibe with a warning (the owner's 2026-10-13 decision), and a later Vibe could call `set_keyring` or Secret Service directly | yes | The owner's warn-and-run kept. §2.3 qualifies the claim by version; the admission remarks and §32 say *measured closed on Vibe 2.26.1 (keyring 25.7.0)* (§2.5, the limitation row too); on `HostKind.Linux` the unmeasured-version warning gains one pinned clause (§2.5), `Verdict`/`VersionWarning`/`Unmeasured` take the host, tested by S-N22 (S2) with break-it B8b; §9 carries the NON-blocking owner question "refuse unmeasured Vibe versions on native Linux?" |
+| 3 | Host misclassification: a WSL kernel misread as native Linux still gets the forced backend; a WSL-kernel container follows the unchanged WSL branch; a blank or missing banner refuses | yes — `HostKind.cs:59`, `WslGeneration.cs:29-30`, `:40-45` | Recorded in §2.4 as the reason the doubt is closed: the banner is classification, not attestation; each misread lands on the safe side (a closed road on a WSL launch opens nothing; the WSL branch is unchanged; an unread banner refuses) |
+| 4 | S2 needs DELIVERY tests, not only request-dictionary assertions: a real child observing the value on every road, with a conflicting server value; a missing or wrong fifth entry refusing BEFORE spawning. And S1's pass criteria should name a signed-in and a resumed launch succeeding under `fail.Keyring` | yes — the fake CLI already records `PYTHON*` values (`tests_fakecli/Program.cs:617-627`); real-child launches exist (`ACliRowsEffortTests.cs:25`) | S-N23 in S2 (`VibeNativeLinuxDeliveryTests`, Linux CI job, six roads including both version probes, the conflicting server value, the refusal half proven by the record file never written, the WSL2 no-leak leg) with its REDs and break-its B5–B7, B8c; §3.2 and S1 name the signed-in (N-V2) and resumed (N-V3) launches under `fail.Keyring` as pass criteria, covered once S0 lands |
