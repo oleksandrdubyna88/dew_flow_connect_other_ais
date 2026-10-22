@@ -684,33 +684,76 @@ public sealed class QuestionFanOutTests : IAsyncLifetime
     /// <summary>
     /// The sweep's reading of a stale beat was covered in S2; the WRITING was not, because every scripted row
     /// settled in under a second. The interval is a seam here (thirty seconds in production, two hundred
-    /// milliseconds in this test), so the proof costs under two seconds instead of thirty.
+    /// milliseconds in this test).
     /// </summary>
+    /// <remarks>
+    /// E5 S5 (C18's timing half): the test used to hold the row for a fixed 1.5 s and count the distinct beats a 40 ms poll of the
+    /// file happened to see — how many timer ticks the scheduler granted inside a fixed delay, which read <c>found 1</c> on a loaded
+    /// Windows runner. Now the beats are seen where they are WRITTEN (the store's <c>projected</c> callback, which runs on every write)
+    /// and the row waits on a gate that the third distinct beat opens, so the claim is "a heartbeat is rewritten while a row runs"
+    /// and nothing in it is a duration. A 30 s guard FAILS the test with its own sentence if the beat never comes.
+    /// </remarks>
     [Fact]
     public async Task TheHeartbeatIsRewritten_WhileARowRuns_OnTheConfiguredInterval()
     {
-        var settings = Settings([Row("slow", "claude", "claude", "opus", "question-opinion")], budget: TimeSpan.FromSeconds(20));
-        var launcher = new ScriptedLauncher(_real, launch => Task.FromResult<ScriptedAnswer?>(
-            launch.Request.Executable == "claude" ? ScriptedAnswer.Claude("A ladder.") with { Wait = TimeSpan.FromMilliseconds(1500) } : null));
-        var store = Store();
-        var fresh = Fresh();
-        var beats = new HashSet<string>(StringComparer.Ordinal);
-
-        var run = FanOut(launcher, settings, heartbeatEvery: TimeSpan.FromMilliseconds(200)).RunAsync(fresh, Input(settings), TestContext.Current.CancellationToken);
-        while (!run.IsCompleted)
+        var settings = Settings([Row("slow", "claude", "claude", "opus", "question-opinion")], budget: TimeSpan.FromSeconds(60));
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var launcher = new ScriptedLauncher(_real, async launch =>
         {
-            if (store.Read(fresh.Id) is { Status: QuestionConsultStatuses.Consulting, HeartbeatUtc.Length: > 0 } live)
+            if (launch.Request.Executable != "claude")
             {
-                beats.Add(live.HeartbeatUtc);
+                return null;
             }
 
-            await Task.Delay(40, TestContext.Current.CancellationToken);
+            await gate.Task;
+
+            return ScriptedAnswer.Claude("A ladder.");
+        });
+        var fresh = Fresh();
+        var seen = new DistinctBeats(fresh.Id, wanted: 3, gate);
+        var store = new QuestionConsultStore(_data, projected: seen.Observe);
+
+        var run = FanOut(launcher, settings, heartbeatEvery: TimeSpan.FromMilliseconds(200), store: store).RunAsync(fresh, Input(settings), TestContext.Current.CancellationToken);
+
+        var settled = await SettledOrFailAsync(run, gate, () => $"the row was never released: {seen.Count} distinct heartbeat(s) seen in 30 s, 3 expected");
+        settled.Rows.Single().Status.Should().Be(RowOutcomes.Answered, "the row answered once released; the beat was not the row");
+        seen.Count.Should().BeGreaterThanOrEqualTo(3,
+            "a row that stayed running until three DISTINCT heartbeats were written was seen with at least three — the first write and two rewrites");
+    }
+
+    /// <summary>The distinct <c>HeartbeatUtc</c> values one consulting record is written with — counted at the write, and the gate opened on the wanted one.</summary>
+    private sealed class DistinctBeats(string id, int wanted, TaskCompletionSource gate)
+    {
+        private readonly Lock _gate = new();
+        private readonly HashSet<string> _beats = new(StringComparer.Ordinal);
+
+        public int Count
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _beats.Count;
+                }
+            }
         }
 
-        var settled = await run;
-        settled.Rows.Single().Status.Should().Be(RowOutcomes.Answered, "the row answered after its wait; the beat was not the row");
-        beats.Count.Should().BeGreaterThanOrEqualTo(3,
-            "a row that ran a second and a half on a 200 ms beat was seen with at least three distinct heartbeats — the first write and two rewrites");
+        public void Observe(QuestionConsultRecord record)
+        {
+            if (record.Id != id || record.Status != QuestionConsultStatuses.Consulting || record.HeartbeatUtc.Length == 0)
+            {
+                return;
+            }
+
+            lock (_gate)
+            {
+                _beats.Add(record.HeartbeatUtc);
+                if (_beats.Count >= wanted)
+                {
+                    gate.TrySetResult();
+                }
+            }
+        }
     }
 
     // ---------- E3 S25 (C18's product side): a heartbeat the disk refuses is said and skipped, never the end of the question ----------
@@ -748,7 +791,11 @@ public sealed class QuestionFanOutTests : IAsyncLifetime
     }
 
     /// <summary>The settled record, or a test failure with the guard's own sentence after 30 s — never a bare timeout, and the row's gate is opened so nothing is left waiting.</summary>
-    private static async Task<QuestionConsultRecord> SettledOrFailAsync(Task<QuestionConsultRecord> run, TaskCompletionSource gate, string guard)
+    private static Task<QuestionConsultRecord> SettledOrFailAsync(Task<QuestionConsultRecord> run, TaskCompletionSource gate, string guard) =>
+        SettledOrFailAsync(run, gate, () => guard);
+
+    /// <summary>The same guard with a sentence read AFTER the 30 s — for a message that carries what the test had seen by then.</summary>
+    private static async Task<QuestionConsultRecord> SettledOrFailAsync(Task<QuestionConsultRecord> run, TaskCompletionSource gate, Func<string> guard)
     {
         try
         {
@@ -757,7 +804,7 @@ public sealed class QuestionFanOutTests : IAsyncLifetime
         catch (TimeoutException)
         {
             gate.TrySetResult();
-            Assert.Fail(guard);
+            Assert.Fail(guard());
             throw;
         }
     }
