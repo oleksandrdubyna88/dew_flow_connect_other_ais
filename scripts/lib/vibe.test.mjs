@@ -11,6 +11,7 @@ import {
   MINIMAL_UNIX, MINIMAL_WINDOWS, builtEnv, classOf, deepestChild, dirLink, files, homeListing, linkSignIn, minimalEnv, personsVibeHome,
   KEYRING_FAIL_BACKEND, NATIVE_LINUX_BUILT, armFilterOf, armsCellsError, armWanted, keyringArm, keyringRoadOf, keyringSetup, isNativeLinuxHost, pythonCommand, removeDirLink, run, vibePython, writeProbeKeyring,
 } from './vibe.mjs';
+import { codeOf } from './code-text.mjs';
 import { readBanner } from './host-facts.mjs';
 
 const WINDOWS = process.platform === 'win32';
@@ -325,13 +326,27 @@ test('S-N20: only arm a3c drops the keyring variable; the arms are otherwise as 
   assert.equal(keyringArm('a3c', 'win32', { scratch: 'C:\\s' }).dropsKeyring === true, false, 'a3c does not apply on Windows and drops nothing there');
 });
 
+test("S-N20 (judge J1): the Vibe probe's three wiring lines — the host read, childEnv and the local builtEnv — carry the native Linux option (the probe runs on import — a source guard over its CODE, comments stripped)", () => {
+  const code = codeOf(readFileSync(join(repo, 'scripts', 'probe-vibe-confinement.mjs'), 'utf8'));
+  assert.match(code, /^const NATIVE_LINUX = runsOnNativeLinux\(\);$/mu, 'the Vibe probe no longer reads the host once through runsOnNativeLinux() — every child would run the open road');
+  assert.match(code, /^const childEnv = \(spec\) => childEnvFor\(spec, \{[^}]*\bnativeLinux: NATIVE_LINUX\b[^}]*\}\);$/mu, 'the Vibe probe\'s childEnv no longer passes `nativeLinux: NATIVE_LINUX` to childEnvFor — no child would carry the closed road on a native host (N-V2/N-V3/N-V4 would measure a launch E2 does not ship)');
+  assert.match(code, /^const builtEnv = \(home\) => builtEnvFor\(home, BUILT_MODEL, process\.platform, process\.env, \{ nativeLinux: NATIVE_LINUX \}\);$/mu, 'the Vibe probe\'s local builtEnv no longer takes the native Linux option — the version run and M-V16\'s prime would run the open road');
+});
+
+test('the comment-stripping the guards use: a line quoted in a comment does not satisfy a guard', () => {
+  const quoted = "// const NATIVE_LINUX = runsOnNativeLinux();\n/* const NATIVE_LINUX = runsOnNativeLinux(); */\n/**\n * const NATIVE_LINUX = runsOnNativeLinux();\n */\nconst x = 'https://example.test'; // trailing runsOnNativeLinux()\n";
+  const code = codeOf(quoted);
+  assert.equal(code.includes('runsOnNativeLinux'), false, code);
+  assert.ok(code.includes("'https://example.test'"), 'a URL inside a string must survive');
+});
+
 test("S-N20: the probe hands keyringSetup's dropsKeyring to the spec it launches (the setup is not importable — a source guard)", () => {
-  const source = readFileSync(join(repo, 'scripts', 'probe-vibe-confinement.mjs'), 'utf8');
+  const source = codeOf(readFileSync(join(repo, 'scripts', 'probe-vibe-confinement.mjs'), 'utf8'));
   assert.match(source, /dropsKeyring: keyring\.dropsKeyring/u, "M-V7's setup no longer hands keyringSetup's dropsKeyring to the spec — a3c would carry the variable on a native host");
 });
 
 test("S-N20: the manifest script builds its launches' environment with the host reading and records keyringRoad (it runs on import — a source guard)", () => {
-  const source = readFileSync(join(repo, 'scripts', 'vibe-home-manifest.mjs'), 'utf8');
+  const source = codeOf(readFileSync(join(repo, 'scripts', 'vibe-home-manifest.mjs'), 'utf8'));
   assert.ok(source.includes("builtEnvFor(home, MODEL, process.platform, process.env, { nativeLinux: NATIVE_LINUX })"), "the manifest's built environment no longer takes the native Linux option — N-V4 would measure a launch E2 does not ship");
   assert.ok(source.includes("keyringRoad: NATIVE_LINUX ? 'closed' : 'open'"), 'steps.json no longer records keyringRoad');
   assert.ok(source.includes('runsOnNativeLinux()'), 'the manifest no longer reads the host through runsOnNativeLinux');

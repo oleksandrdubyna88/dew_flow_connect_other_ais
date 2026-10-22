@@ -5070,10 +5070,10 @@ Each scenario was watched RED against a stub that compiles and answers the wrong
 
 Not run here, by the story's own terms: the S-N17 live check (arms a3 and a3c, once each, in WSL, free), and the one paid WSL2 Kimi turn (`probe-kimi-tree-hold.mjs --arms normal --repeats 1`) — the lead's.
 
-## E2.S0 — every native-Linux Vibe probe child carries the closed road (2026-10-22, `todo/PLAN_kimi_and_vibe_on_native_linux_E2.md` story S0; scenario S-N20; DN10)
+## E2.S0 — every native-Linux Vibe launch of the probes carries the closed road (2026-10-22, `todo/PLAN_kimi_and_vibe_on_native_linux_E2.md` story S0; scenario S-N20; DN10)
 
 Node tests only (`node --test scripts/lib/*.test.mjs scripts/native/*.test.mjs`, which the Linux `build-test` job runs as *Probe script tests*); nothing here runs `kimi`, `vibe` or Python, opens a credential or touches WSL.
-Each case was watched RED against stubs that compile and answer the wrong value, then GREEN, then broken on purpose (break-its B1–B7 of the plan's S0 status) and restored byte-identical. 344 → 399 tests on Windows (342 pass, 57 skipped by name; 39 of the new ones are `cli-args.test.mjs`, last row).
+Each case was watched RED against stubs that compile and answer the wrong value, then GREEN, then broken on purpose (break-its B1–B7 of the plan's S0 status) and restored byte-identical. 344 → 401 tests on Windows (344 pass, 57 skipped by name; 39 of the new ones are `cli-args.test.mjs`, last row). The judge round (2026-10-22) added the probe-wiring guard and the comment-stripping case to `vibe.test.mjs` and made the flag audit compare each spec with the flags the script's code reads (`lib/code-text.mjs` `codeOf` strips comments for every source guard).
 
 | Test (file) | What it pins | RED (observed) and break-it |
 |---|---|---|

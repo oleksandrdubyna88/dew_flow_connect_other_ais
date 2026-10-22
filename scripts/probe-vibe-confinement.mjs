@@ -56,7 +56,7 @@
 // LISTED (names, sizes, mtimes — never contents) before and after the run, and the two listings are saved and compared.
 //
 // Native Linux (E2.S0 of todo/PLAN_kimi_and_vibe_on_native_linux_E2.md, DN10): on a host whose /proc/version is read and names neither Microsoft nor WSL (lib/host-facts.mjs
-// runsOnNativeLinux, read ONCE at start-up) every child carries PYTHON_KEYRING_BACKEND=keyring.backends.fail.Keyring - the launch the product will ship there - so the signed-in
+// runsOnNativeLinux, read ONCE at start-up) every Vibe launch carries PYTHON_KEYRING_BACKEND=keyring.backends.fail.Keyring - the launch the product will ship there - so the signed-in
 // cells measure THAT launch; arm a3c alone drops it (its teeth: a keyring must be reachable). On WSL2 and Windows nothing is added. The header line and every row say
 // `keyringRoad: closed | open`.
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
@@ -113,9 +113,9 @@ mkdirSync(scratch, { recursive: true });
 
 const WINDOWS = process.platform === 'win32';
 /**
- * Whether this is a NATIVE Linux host (E2.S0), read ONCE at start-up from /proc/version through lib/host-facts.mjs's runsOnNativeLinux (the product's rule: the banner
- * read and naming neither Microsoft nor WSL). On such a host every child carries the forced keyring backend of the launch E2 ships (DN10), except arm a3c; on WSL2
- * and Windows nothing is added.
+ * Whether this is a NATIVE Linux host (E2.S0), read ONCE at start-up from /proc/version through lib/host-facts.mjs's runsOnNativeLinux (the product's HostKind rule for a READ
+ * banner naming neither Microsoft nor WSL; an UNREAD banner is not native here, while the product classifies the same host as HostKind.Linux (WslGeneration.Unreadable), where the admission refuses Vibe and VibeLaunch.Built would still add the fifth name; the probe runs that case OPEN - harmless, because no shipped launch differs, and not a case to measure (N-H1 banner.read=false stops the series, E2 plan 3.4)). On such a host every Vibe launch carries the forced keyring backend of
+ * the launch E2 ships (DN10), except arm a3c; on WSL2 and Windows S0 adds nothing.
  */
 const NATIVE_LINUX = runsOnNativeLinux();
 /** The person's Vibe home (DL2): VIBE_HOME of this environment when set, else ~/.vibe. Read for config.toml copies and the listing only. */
@@ -513,7 +513,7 @@ function childEnvFor(spec, { cli, platform, env: source, nativeLinux = false }) 
   const pin = cli === 'inherit' ? {} : { VIBE_CLI: cli, PYTHONUTF8: '1' };
   // E2.S0: on a native Linux host the child carries the launch E2 ships (DN10) — NATIVE_LINUX_BUILT — in EVERY launch, so the signed-in cells measure it; an arm that
   // reaches a keyring on purpose (a3c) says so with `dropsKeyring` and has the name DELETED from the final object. The base below is an allow-list (minimalEnv), never a
-  // spread of the probe's own shell, so a PYTHON_KEYRING_BACKEND in that shell can enter a child only through NATIVE_LINUX_BUILT or an arm's own env.
+  // spread of the probe's own shell, so a PYTHON_KEYRING_BACKEND in that shell can enter a Vibe launch only through NATIVE_LINUX_BUILT or an arm's own env (trustWithVibe, M-V4 only and not a native cell, passes the whole environment; on win32 the base is the whole shell environment).
   const road = nativeLinux ? NATIVE_LINUX_BUILT : {};
   if (spec.replaceEnv) {
     const replaced = { ...spec.replaceEnv, ...road, ...pin };
@@ -721,7 +721,7 @@ const personsBefore = homeListing(REAL_HOME);
 
 // On a home of the probe's own, in the built environment: a bare `vibe --version` writes `vibehistory` into whatever
 // VIBE_HOME it gets, and with none that is the person's ~/.vibe (§24).
-console.error(`[probe] host: ${NATIVE_LINUX ? 'native Linux' : process.platform === 'linux' ? 'Linux, not native (WSL2 or an unread banner)' : process.platform}; keyringRoad: ${NATIVE_LINUX ? 'closed' : 'open'} (PYTHON_KEYRING_BACKEND is ${NATIVE_LINUX ? 'set in every child but a3c' : 'added to no child'})`);
+console.error(`[probe] host: ${NATIVE_LINUX ? 'native Linux' : process.platform === 'linux' ? 'Linux, not native (WSL2 or an unread banner)' : process.platform}; keyringRoad: ${NATIVE_LINUX ? 'closed' : 'open'} (PYTHON_KEYRING_BACKEND is ${NATIVE_LINUX ? 'set in every Vibe launch but a3c' : 'S0 adds it to no launch'})`);
 const versionRun = run(exe, ['--version'], { encoding: 'utf8', timeout: 30_000, env: childEnv({ replaceEnv: builtEnv(shortHome({ copy: false })) }) });
 const resultsPath = join(scratch, 'results.json');
 let results = existsSync(resultsPath) ? JSON.parse(readFileSync(resultsPath, 'utf8'))

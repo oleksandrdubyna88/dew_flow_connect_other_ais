@@ -437,6 +437,17 @@ rest — a failed M-V1 or M-V5 is a stop-and-ask, not a retry.
 ### 3.4 Stop rules, per cell (parent §7, the Vibe rules)
 
 - a confinement cell below 3 of 3 (N-V1 a/a2/a3, N-V2, N-V3) → Vibe stays refused; the record ships alone (§5);
+- **the road is not provably closed — checked BEFORE a paid phase counts (S0's stop rule, the Opus judge round of 2026-10-22).** The probes decide
+  "native" by reading `/proc/version` themselves (`runsOnNativeLinux`, S0); a misread silently runs the series on the OPEN road, which measures
+  a launch E2 does not ship. So, per phase (`n-v1` … `n-v4`, and every re-run): its header line (`[probe] host: …`, stderr) must say
+  `native Linux; keyringRoad: closed`; every row of its `results.json`/table must say `keyringRoad: closed` — except arm **a3c, which must say
+  `open`** (its teeth); the `results.json` header (`nativeLinux: true, keyringRoad: closed`) and the manifest's `steps.json`
+  (`keyringRoad: closed`) likewise. Any other reading → **stop the series, do not count the phase, record why** (the banner text, the header line,
+  the row that said `open`). A phase run on the open road is a measurement of today's product on a host the product will not run it on;
+- **N-H1 reports `banner.read = false`** → stop the series before any paid run, and measure only a READ native banner. An unread banner runs the
+  probe OPEN (S0: `isNativeLinuxHost` is false for it), while the product classifies the same host as `HostKind.Linux` with
+  `WslGeneration.Unreadable` and would add the fifth name on it (§2.3) — so the series would measure a launch the product makes differently;
+  the admission refuses Vibe there, which is why that case is harmless to ship, and why it is not a case to measure;
 - `~/.vibe` changes, or the `.env` link in any owned home is replaced or re-targeted → stop the series at once;
 - **N-V1 arm a or a3 is signed in, or a3's marker is written** → a keyring reaches coai's launch with the road closed: stop; the owner
   decides (DN4, DN10) — this is the finding that would mean the closed road does not close;
@@ -469,7 +480,9 @@ rest — a failed M-V1 or M-V5 is a stop-and-ask, not a retry.
 3. **32.0 Predictions** — §3.3's table as it was written before the runs, unedited.
 4. **32.1 … 32.6** — one subsection per cell, N-V1 to N-V6: the probe's table, observed against predicted, the `.env`-link checks, the
    `~/.vibe` listing verdict per phase, and for N-V1 the column that says every launch carried `PYTHON_KEYRING_BACKEND` and a3/a3c's marker
-   outcomes.
+   outcomes. **Every paid or probe phase's table — N-V1, N-V2, N-V3 and N-V4 (the manifest's `steps.json`), not only N-V1 — carries the
+   `keyringRoad` column** (`closed` in every row, `open` in a3c's alone) beside the header line it was copied from (`native Linux; keyringRoad:
+   closed`) and N-H1's `banner.read` (§3.4's two stop rules are the check; this column is the evidence that they were run).
 5. **32.7 Deviations** from this procedure, each one numbered.
 6. **32.8 Spend** — paid turns per phase and in total against the cap; free launches counted beside them; the folders removed and the
    `remove-series.sh` verdict (exit 0, the `.env` `stat` identical).
@@ -490,7 +503,7 @@ lead runs S1 and S5. `node .agents/conventions/tools/plan-lifecycle.mjs` clean a
 
 ### E2.S0 — Every native cell carries the closed road (the probe amendment, before the series)
 
-**Goal.** On a native Linux host — the banner read and naming no Microsoft/WSL, the product's own rule — every Vibe launch the probes make
+**Goal.** On a native Linux host — the banner read and naming no Microsoft/WSL (the product's HostKind rule for a read banner; an unread one runs the probe open — S0's judge round and §3.4) — every Vibe launch the probes make
 carries `PYTHON_KEYRING_BACKEND=keyring.backends.fail.Keyring`, exactly as `VibeLaunch.Built` will; arm a3c alone drops it, because reaching
 a keyring is what a3c is for. On WSL2 and Windows nothing changes. No paid run.
 
@@ -556,9 +569,9 @@ slice).
 ### S0 — status: built 2026-10-22 on `docs/native-linux-e2` (not merged; the Opus review and the Linux CI job are open)
 
 Built as the spec above, test-first, with the deviations below. The tests start no CLI and nothing paid ran in them (one accidental manual run is recorded below): the whole story is `node --test`
-over cut-out functions and injected file systems. `node --test scripts/lib/*.test.mjs scripts/native/*.test.mjs` on Windows: **399 tests, 342 pass,
-0 fail, 57 skipped** (the bash/`/proc`/`setsid` cases skip by name, saying they run on the Linux CI job); before the story it was 344 / 287 / 0 / 57,
-so the story adds 55 tests (12 in `vibe.test.mjs`, 4 in `host-facts.test.mjs`, 39 in the new `cli-args.test.mjs` of the incident below), all green on Windows. The Linux CI job (*Probe script tests*) is dispatched
+over cut-out functions and injected file systems. `node --test scripts/lib/*.test.mjs scripts/native/*.test.mjs` on Windows: **401 tests, 344 pass,
+0 fail, 57 skipped** (after the judge round below) (the bash/`/proc`/`setsid` cases skip by name, saying they run on the Linux CI job); before the story it was 344 / 287 / 0 / 57,
+so the story adds 57 tests (12 in `vibe.test.mjs`, 4 in `host-facts.test.mjs`, 39 in the new `cli-args.test.mjs` of the incident below), all green on Windows. The Linux CI job (*Probe script tests*) is dispatched
 on the branch; its verdict is the story's remaining half of "Done when".
 
 **What was built, where.**
@@ -626,8 +639,9 @@ is the same state).
 script still loaded. The script read `flag('--unstage', '')` as `''`, took that as "the flag was not given", skipped the unstage branch and fell through to `measure()`: it made three `vibe --version`
 launches and one tiny model turn (about 7 000 input tokens on the Mistral subscription; Windows, the Credential Manager sign-in), all on the script's own scratch homes under the temp
 folder, which the builder then removed. `~/.vibe` and the repository were untouched (no `--write`, `git status` showed only the builder's own edits) and no Vibe process of the builder's was left running.
-The defect was the script's, not the invocation's: all three scripts (`vibe-home-manifest.mjs`, `probe-vibe-confinement.mjs`, `probe-native-linux-host.mjs`) read a value-taking flag with no value, or with another
-`--flag` as its value, as an absent flag (the host probe accepted `--series --kimi`, since `--kimi` matches its safe pattern), and none refused an unknown flag such as `--help`. The fix: one pure parser,
+The defect was the script's, not the invocation's, and it differed per script. `vibe-home-manifest.mjs`: a value-taking flag with no value (`--unstage`, `--from`, `--vibe`, `--scratch`), or followed by another `--flag`, was read as an absent flag, and an
+unknown flag such as `--help` was ignored — every one of those fell through to `measure()`, a paid run. `probe-vibe-confinement.mjs`: the same lookup, and its worst case is `--cells` with no value, which fell back to EVERY cell (`ALL_CELLS`) — a full paid run; the other value flags fell back to their defaults and unknown flags were ignored.
+`probe-native-linux-host.mjs` was already stricter: its even-argument-count check and allow-list refused a trailing value-less flag, `--help` and any unknown flag, and its only hole was taking another `--flag` as a value (`--series --kimi`, since `--kimi` matches its safe pattern). The fix: one pure parser,
 `scripts/lib/cli-args.mjs` (`parseFlags`, `FLAG_SPECS` with the arity audit, `manifestPlan`), which the three scripts now call first — a value-taking flag needs exactly one non-empty value that is not a `--flag`
 (and, for the host probe, one that matches its safe pattern), and an unknown flag, a stray word or a repeated flag is refused too; a refusal names the flag and exits 65 before anything is read or launched.
 `cli-args.test.mjs` (39 tests) walks every value-taking flag of every script (manifest `--vibe --scratch --from --unstage`; Vibe probe `--vibe --scratch --repeats --cells --cli --arms --reparse`; host probe
@@ -635,6 +649,21 @@ The defect was the script's, not the invocation's: all three scripts (`vibe-home
 37 of 38 failing): `--unstage with no value planned "measure" - that is the fall-through that started Vibe`, `--unstage with no value was accepted`, `--unstage took "--write" as its value`. Break-its, restored byte-identical:
 C1 (the missing-value check removed from the parser) — the same cases red; C2 (the manifest script back on a private `argv.indexOf` lookup) — `vibe-home-manifest.mjs still has a private argv.indexOf flag lookup - the fall-through that started Vibe`.
 The tests exercise the pure parser and source text only; none of the three scripts is started by them (except the pre-existing host-probe cases of `host-facts.test.mjs`, which stop at the usage or platform refusal off Linux).
+
+**S0 — judge round (Opus, 2026-10-22).** The judge read S0 at `417548c17`: the code is ready for the paid series, with one condition (J1) and five low items (J2–J6), all accepted and fixed in this round.
+**J1 (condition).** (a) The Vibe probe's own wiring had no test: with `nativeLinux: NATIVE_LINUX` deleted from `childEnv` (`probe-vibe-confinement.mjs`, the `childEnvFor` call) the whole suite stayed green (399 tests, 342 pass, 0 fail, 57 skipped — observed before the fix), i.e. the series
+would have run on the OPEN road without a test noticing. `vibe.test.mjs` now guards the probe's three wiring lines over its CODE (`lib/code-text.mjs` `codeOf` drops comment lines and trailing `//` comments, so a comment quoting the line cannot keep a guard green; the manifest and
+`dropsKeyring` guards use it too): `const NATIVE_LINUX = runsOnNativeLinux();`, `childEnv` passing `nativeLinux: NATIVE_LINUX`, and the local `builtEnv` taking the option. RED→break-its, each restored byte-identical: `nativeLinux: NATIVE_LINUX` removed from `childEnv` →
+`the Vibe probe's childEnv no longer passes nativeLinux: NATIVE_LINUX to childEnvFor — no child would carry the closed road on a native host (N-V2/N-V3/N-V4 would measure a launch E2 does not ship)`; `const NATIVE_LINUX = false;` → `the Vibe probe no longer reads the host once through
+runsOnNativeLinux() — every child would run the open road`; the option dropped from the local `builtEnv` → `the Vibe probe's local builtEnv no longer takes the native Linux option — the version run and M-V16's prime would run the open road`. (b) §3.4 gains two STOP RULES and §3.5 the evidence column:
+before any paid phase counts, its header line must say `native Linux; keyringRoad: closed`, every row `closed` except a3c's `open`, and `results.json`/`steps.json` `closed` — otherwise stop and record why; and the series STOPS when N-H1 reports `banner.read = false` (an unread banner runs the probe open while
+the product would add the name — measure only a READ native banner). §3.5 item 4 requires the `keyringRoad` column in the N-V2, N-V3 and N-V4 tables too, not only N-V1's.
+**J2.** The incident write-up above is reworded per script: the manifest script and the Vibe probe read a missing value as an absent flag (the probe's worst case: `--cells` with no value fell back to EVERY cell — a full paid run), while the host probe's even-argument check and allow-list already
+refused a trailing value-less flag, `--help` and unknown flags, its only hole being another `--flag` as a value (`--series --kimi`); `cli-args.mjs`'s header and `module_runners.md` say the same. **J3.** `vibe.mjs`, the probe's header and `module_runners.md` now state the unread-banner rule exactly: the product classifies it
+`HostKind.Linux` with `WslGeneration.Unreadable`, the admission refuses Vibe there (§2.3's `Built` would still add the fifth name); the probe runs that case open — harmless because no shipped launch differs, and not a case to measure (§3.4). The S0 goal sentence is corrected to match. **J4.** "every probe child" /
+"cannot reach any child" became "every Vibe launch" (`trustWithVibe` passes the whole environment, M-V4 only, not a native cell; win32's base is the whole shell environment). **J5.** The header line says `S0 adds it to no launch` on WSL2/Windows (arms a/a2/a3 carry the name there); no test asserted that text.
+**J6.** The audit test is no longer circular: it compares each script's `FLAG_SPECS` entry with the flags that script's code actually reads (quoted `--flag` literals, plus `--arms` for `armFilterOf(argv)`), so a script reading a flag its spec lacks, or a spec flag nothing reads, is red — break-its: `flag('--bogus', '')` added to the Vibe probe,
+and the manifest's `--stage` read misspelt, both red with `… reads flags its FLAG_SPECS.<script> does not declare (or declares ones it never reads)`. Windows: `node --test scripts/lib/*.test.mjs scripts/native/*.test.mjs` → **401 tests, 344 pass, 0 fail, 57 skipped**.
 
 **Done when, as it stands.** S-N20 and the `isNativeLinuxHost` cases red then green on Windows: yes. Green on the Linux CI job: dispatched, not yet read here. B1–B3 both ways: yes. Opus review: open.
 Merged before S1's archive: open (the branch is `docs/native-linux-e2`; no PR was made by this story).

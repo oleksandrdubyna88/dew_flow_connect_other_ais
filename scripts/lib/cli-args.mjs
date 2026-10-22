@@ -1,8 +1,9 @@
 // lib/cli-args.mjs - the argument parser the Vibe manifest script, the Vibe confinement probe and the native host probe share.
 //
 // Why it exists (E2.S0 follow-up): `vibe-home-manifest.mjs --unstage` with NO value read `flag('--unstage', '')` as '', skipped the unstage branch and fell
-// through to measure() - which STARTED Vibe and spent a paid turn. Three scripts each had their own lookup that treated "a value-taking flag with no value" as
-// "the flag was not given". Here that is a usage error, decided by a PURE function before anything is launched, so a test can prove it without starting a script.
+// through to measure() - which STARTED Vibe and spent a paid turn. The manifest script and the Vibe probe each had a lookup that treated "a value-taking flag with no value" as
+// "the flag was not given" (the probe's worst case: `--cells` with no value fell back to EVERY cell, a full paid run); the host probe's own parser already refused a trailing
+// value-less flag and any unknown flag, and only took another `--flag` as a value (`--series --kimi`). Here that is a usage error, decided by a PURE function before anything is launched, so a test can prove it without starting a script.
 //
 // The rules (a script that gets any other argv prints the error and exits 65, the usage code, before it reads a file or starts a process):
 //   - a flag in `values` takes exactly ONE value: it must be present, non-empty and not itself a `--flag`; with `safe`, it must also match that pattern;

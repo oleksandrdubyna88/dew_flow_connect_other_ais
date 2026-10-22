@@ -63,14 +63,14 @@ export const BUILT_FIXED = { VIBE_CLI: 'python', PYTHONUTF8: '1' };
  * todo/PLAN_kimi_and_vibe_on_native_linux.md, E2 of its plan): `keyring` 25.7.0 takes PYTHON_KEYRING_BACKEND from the environment BEFORE its config
  * file (core.py:96-115) and `fail.Keyring` raises on every call, which Vibe catches (vibe/utils/keyring.py:165-170) — so no keyring is reachable and
  * the sign-in can only come through the linked `.env`. The product's VibeLaunch.Built adds the same on HostKind.Linux. ONE object literal of quoted
- * values, like BUILT_FIXED, so a C# test can parse it (S-N21). Every probe child on a native host carries it (E2.S0) except arm a3c.
+ * values, like BUILT_FIXED, so a C# test can parse it (S-N21). Every Vibe launch the probes make on a native host carries it (E2.S0) except arm a3c.
  */
 export const NATIVE_LINUX_BUILT = { PYTHON_KEYRING_BACKEND: 'keyring.backends.fail.Keyring' };
 
 /**
  * Whether the host is a NATIVE Linux one: this is Linux AND its kernel banner (host-facts.mjs readBanner: `{ read, text, namesWsl }`) was read and names
- * neither Microsoft nor WSL — the product's own rule (HostKind), and the one place the probes decide it. An unread banner is not native, as the
- * product's is not. PURE: the banner comes in, nothing is imported, so the probe's cut-out test can hand it over.
+ * neither Microsoft nor WSL — the product's HostKind rule for a READ banner, and the one place the probes decide it. An UNREAD banner is not native here, while the product classifies the same host as HostKind.Linux (WslGeneration.Unreadable), where the admission refuses Vibe and VibeLaunch.Built would still add the fifth name; the probe runs that case OPEN - harmless, because no shipped launch differs, and not a case to measure (N-H1 banner.read=false stops the series, E2 plan 3.4).
+ * PURE: the banner comes in, nothing is imported, so the probe's cut-out test can hand it over.
  */
 export const isNativeLinuxHost = ({ platform, banner }) => platform === 'linux' && banner?.read === true && banner.namesWsl === false;
 
@@ -297,7 +297,7 @@ const KEYRING_ARMS = ['a', 'a2', 'a3', 'a3c', 'b'];
  * launch E2 ships): arms a and a2 carry the forced backend; a3 carries it AND a `HOME` whose keyringrc.cfg names a keyring that IS available
  * (`<scratch>/fake-home`, written by `writeProbeKeyring`) — the forced backend must beat it, so the marker never appears; a3c is the same fake
  * HOME WITHOUT the variable — its teeth: the marker must appear, else a3 proved nothing. a3c ALONE has dropsKeyring: true: even on a native host, where
- * every probe child carries NATIVE_LINUX_BUILT, the probe deletes the name from a3c's child (E2.S0). On win32 every arm is today's (the Credential Manager
+ * every Vibe launch the probe makes carries NATIVE_LINUX_BUILT, the probe deletes the name from a3c's launch (E2.S0). On win32 every arm is today's (the Credential Manager
  * road, RESULTS §12) and a3/a3c do not apply. `applies: false` = the probe does not run that arm on this platform.
  */
 export function keyringArm(arm, platform = process.platform, { scratch }) {
