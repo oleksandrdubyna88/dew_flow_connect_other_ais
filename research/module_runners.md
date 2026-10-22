@@ -3843,7 +3843,11 @@ flowchart LR
   reverse). The TREE HOLD (`<key>.tree.lock` + `<root>/coai-tree.lock`, the SHIM's, `FileShare.Inheritable`) is taken immediately before
   the agent starts: `kimi` inherits it, so the sign-in stays held while EITHER lives — a coai-mcp killed over a still-refreshing `kimi`
   must not let a second refresher in. MEASURED by E4.3 (M-K15, RESULTS §27): both files are Held while `kimi` lives and Free in the poll it is gone in, 6 of 6 cut launches, three with an `rg` running — nothing of Kimi's outlived it, so the hold GATES.
-  The per-home file is waited for 500 ms (`HomeWait`): a disposal's `HomeProbe` opens it exclusively for an instant. The residual: every turn ends in a tree kill, so a `kimi` between its refresh request and the write of the rotated pair loses the
+  The per-home file is waited for 500 ms (`HomeWait`): a disposal's `HomeProbe` opens it exclusively for an instant. Since E5 S4 (C3, 2026-10-22) `WithHome` asks it in two steps
+  (`TakenOrWaitedFor`): one look that does not wait, and — only when that look answers BUSY — the TEST-ONLY seam `WhenTheHomeFileIsBusy` (an `AsyncLocal`
+  beside `BeforeTheHomeHold`, null in the product) and then the same 500 ms take as before. In the product that is one more open attempt before the
+  same wait, with the same three outcomes; `HeldFile` is untouched and the take stays inheritable. The seam exists so the fake shim releases its
+  stand-in probe from the event "the shim met a busy file", not from a timer. The residual: every turn ends in a tree kill, so a `kimi` between its refresh request and the write of the rotated pair loses the
   rotation, exactly as the person's own `kimi` would; `kimi login` cures it (M-K14 decides whether a grace is needed).
   **M-K14 note, 2026-10-20 (`PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md` D6).** Every Kimi exit 77 recorded since 2026-10-16 is **unclassifiable**: coai kept only
   the cure, never the vendor's text, and no `kimi-code.log` survives (the homes are removed after each round). On 2026-10-18/19 they coincided with a 100 %-used 5-hour quota,

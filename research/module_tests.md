@@ -4259,7 +4259,7 @@ M-K15 measurement (a script, not a test); `KimiRuntime`'s request to the shim an
 | Suite | What it holds | Seen red as |
 |---|---|---|
 | `NoTestHoldsAnInheritableHandleTests` (B1) | no code line under `src_mcp/tests` calls `HoldTree(`, passes `inheritable: true` or names `FileShare.Inheritable`; the scan's own pattern is checked on four sample lines | against the committed `KimiCredentialsLockTests`: *Expected Offenders() to be empty because only the fake CLI child - the shim - holds an inheritable handle; a test holding one lends it to every process the parallel tests start, but found at least one item {"KimiCredentialsLockTests.cs:122: KimiCredentialsLock.HoldTree(Persons, _dir.At("owned"), TimeSpan.FromMilliseconds(50)).Should().BeOfType<TreeHolding.Unusable>();"}* (lines 246 and 256 too). `KimiCredentialsLockTests` now runs the `Unusable` and `Busy` arms in a second `tree-hold` child (exit 69, stderr names the kind) and re-takes with `HeldFile.TakeWithin`/`Take` |
-| `KimiCredentialsLockTests.AShimThatMeetsADisposalsProbe_WaitsItOut_AndTakesItsHold` (M1) | a child shim whose per-home file is held for 250 ms by a probe-like hold between its two takes (seam `BeforeTheHomeHold`) still takes its hold, and the file stays `Held` | *the child ended (exit 69) without taking its lock: fake-cli: the tree hold was not taken: Unusable: …ownedkh-pcoai-tree.lock is held by another process, and nothing but a disposal's probe ever takes it* (with the wait set to zero — the old behaviour) |
+| `KimiCredentialsLockTests.AShimThatMeetsADisposalsProbe_WaitsItOut_AndTakesItsHold` (M1) | a child shim whose per-home file is held by a probe-like hold between its two takes (seam `BeforeTheHomeHold`) still takes its hold, and the file stays `Held`. Since E5 S4 (C3) the probe is let go from the shim's own first BUSY answer (seam `WhenTheHomeFileIsBusy`), no longer after a 250 ms timer — see the E5 S4 section below | *the child ended (exit 69) without taking its lock: fake-cli: the tree hold was not taken: Unusable: …ownedkh-pcoai-tree.lock is held by another process, and nothing but a disposal's probe ever takes it* (with the wait set to zero — the old behaviour) |
 | `KimiHomeTests.AKhChildThatIsALink_IsNeverUnlinkedThrough`, `AHomeFolderThatIsALink_IsNeverUnlinkedThrough` (M2) | a `kh-*` child that is a junction to an outside folder shaped like a home, and a `home/` that is a junction to one: `DisposeAllUnder` counts 0, `Dispose` is `Stopped` naming the link, the outside `credentials` junction is still a link and the person's folder is whole | *Expected OwnedPaths.IsLinkIfThere(outside.Link) to be True because the junction OUTSIDE the swept folder is untouched, but found False.* — the old code unlinked a junction outside coai's tree |
 | `KimiLaunchControlTests` row `a UNC sign-in home` (M3; S2.25's UNC row) | a person's home on `\kimi-test-host.invalidshare…` is refused by its spelling, naming "is not on a local drive", before any read | *Expected turn.Refusal "not signed in to Kimi Code — \kimi-test-host.invalidshare.kimi-codeconfig.toml names no managed:kimi-code provider with an OAuth slot; …" to contain "is not on a local drive"* — the config of a UNC host had been read |
 | `KimiLaunchControlTests.TheVersionProbe_GetsTheLaunchRequestsPath_NotThisProcesses` (M4) | the `--version` request carries the launch request's built PATH, marker entry included | *Expected KimiEnvironment.PathOf(asked) to be the same string because one PATH source feeds the probe and the launch, but they differ at index 104* |
@@ -5600,3 +5600,30 @@ Source: `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp_E5.md` §3.13, 
 **Limits (stated).** The stand-in proves what each launch is HANDED; the real launcher's deadline is `ProcessLauncherTests`'. C30's cold-start cause stayed INFERRED — it was not seen in 32 runs; the move removes it from the outcome rather than confirming it. `ClockedStep.Overruns` models a vendor the real launcher cannot be made to be.
 
 **E5 checkpoint 1 — what changed (coai `51b4e0fd`, 2026-10-22, proceed).** Six accepted findings, each in its own place above: F0 the pid-file scan matches whole files; F1+F4 `LinuxHeldFile`'s aborted take checks the unlock; F3 `ClockedLauncher.RepeatingOneAnswer`; F5 a failed cleanup after a kill is recorded through the executor's note (`ACleanupThatFailsAfterAKillIsRecordedAndChangesNothingTests`, 4 tests); F6 `ZombieMaker` throws a clear `InvalidOperationException` when `Process.Start` answers nothing. The decision record is `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp_E5.md` §12.
+
+## The suite is deterministic — E5 S4: the Kimi shim's probe (C3, 2026-10-22)
+
+Source: `todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp_E5.md` §3.7 and its `### S4 — status` block (the REDs, the
+two 100-run loops, the break-its, the findings). Branch `feat/suite-e5-s4`.
+
+**What was wrong.** `AShimThatMeetsADisposalsProbe_WaitsItOut_AndTakesItsHold` played a disposal's probe in the fake shim
+(`TreeHoldVerb`, mode `tree-probed`) by holding the per-home `coai-tree.lock` and letting it go from `Task.Delay(250)` on a
+cold child's thread pool — inside the product's 500 ms `HomeWait`. Under load the release came late and the shim gave up:
+exit 69, `… coai-tree.lock is held by another process, and nothing but a disposal's probe ever takes it`. Reproduced 8 of 100
+class runs under one whole suite beside (Windows), on a per-test lock path — so it is C3 itself, not shared state.
+
+**What pins it now.** The product's `WithHome` asks the per-home file in two steps (`TakenOrWaitedFor`: a no-wait look, then
+— only on BUSY — the test-only seam `KimiCredentialsLock.WhenTheHomeFileIsBusy` and the same 500 ms take; see
+`module_runners.md`). The fake shim lets its probe go FROM that seam, so the shim provably met a busy file and waited it out,
+with no clock in the outcome. 0 of 100 after, same load.
+
+| Test | Holds | Seen red as |
+|---|---|---|
+| `KimiCredentialsLockTests.ATreeHold_TellsTheBusySeamOnce_WhenTheHomeFileAnswersBusyAtTheFirstLook_AndThenWaits` | over `TakeTreeThrough` with a take that answers `Busy` once: the seam is told once, with the home file's path; the home file is asked twice (`TimeSpan.Zero`, then a wait); the order is look → seam → wait; the hold is taken | *Expected busyCalls.Count to be 1 because the seam fires on the first busy answer, but found 0 (difference of -1).* (a no-op stub); B-E5-13: *Expected order to be equal to {"look", "seam", "wait"} … but {"seam", "look", "wait"} differs at index 0.* |
+| `KimiCredentialsLockTests.ATreeHold_NeverTellsTheBusySeam_WhenTheHomeFileIsTakenAtOnce` (guard) | a free home file is taken by the no-wait look: the seam is never told, nothing waits | today's code: *Expected homeAsks to be equal to {default} … but {500ms} differs at index 0.*; B-E5-13: *Expected told to be empty because a file that is free at the first look was never busy, but found at least one item …* |
+| `KimiCredentialsLockTests.AShimWhoseHomeFileAProbeNeverLetsGoOf_GivesUp_AndSaysWhoseFileItWas` (Windows, Linux) | `tree-probed-forever`: the probe never lets go, the shim exits 69 naming the home file's path and the refusal sentence — the product's 500 ms is the subject, the test has no timer | green before and after (the other side of M1) |
+
+Findings named in the status block, not fixed: `TheDefaultRoot_IsOutsideTheHomesFoldersAndTemp_AndItsWaitIsCutByTheToken`
+(a `< 2 s` wall bound around a 200 ms cancel of one-second take slices) was red 3 of 100 before and 1 of 100 after under the
+same load — a separate timing case for the lead; one `ShimChild.FailsAsync` `TimeoutException` in
+`AShimOnAFolderTheKernelCannotName_TakesNoHold_AndSaysSo`, seen once.
