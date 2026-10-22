@@ -102,9 +102,11 @@ public abstract class ConsultScenarioBase : IAsyncLifetime
     /// launcher ended it by that timeout.
     /// </summary>
     /// <remarks>
-    /// The record a test reads instead of a stopwatch around the whole consult (<c>research/PLAN_the_suite_is_deterministic_and_leaves_no_temp_E5.md</c>
+    /// The record a test reads instead of a stopwatch around the whole consult (<c>todo/PLAN_the_suite_is_deterministic_and_leaves_no_temp_E5.md</c>
     /// §3.9): the claim "the follow-up gets only what the first launch left" is about a launch's TIMEOUT, a number the product
-    /// computes, and the whole turn's wall time also holds git, snapshots and record writes.
+    /// computes, and the whole turn's wall time also holds git, snapshots and record writes. <c>Elapsed</c> is timed INSIDE the
+    /// turn's own stopwatch (<c>ConsultantTurn.RunAsync</c> starts it before the launch and reads it after), so
+    /// <c>budget - Elapsed</c> is never less than what the turn computed as left — an upper bound a capped follow-up always meets.
     /// </remarks>
     protected sealed record ConsultantLaunch(TimeSpan Timeout, TimeSpan Elapsed, bool TimedOut);
 
