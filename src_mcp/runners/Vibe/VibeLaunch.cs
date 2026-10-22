@@ -136,14 +136,14 @@ public static class VibeLaunch
         };
         if (ClosesTheKeyringRoad(host))
         {
-            built[KeyringBackendVariable] = KeyringBackendClosed;
+            built[KeyringBackendVariable] = System.Environment.GetEnvironmentVariable(KeyringBackendVariable) ?? KeyringBackendClosed;
         }
 
         return built;
     }
 
     /// <summary>The one place the host decides the fifth name: a NATIVE Linux host closes the keyring road; WSL2, Windows and every other host launch as they were measured.</summary>
-    private static bool ClosesTheKeyringRoad(HostKind host) => true;
+    private static bool ClosesTheKeyringRoad(HostKind host) => host == HostKind.Linux;
 
     /// <summary>The names of the built set, as the refusal sentence says them: the five on Linux, the four elsewhere.</summary>
     private static string BuiltNamesSentence(HostKind host) => ClosesTheKeyringRoad(host)
