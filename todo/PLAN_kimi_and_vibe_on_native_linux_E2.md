@@ -871,6 +871,68 @@ union; the lead has read the ru and uk sentences; Opus review has no open findin
 **Roles.** Opus brief (it carries §2.5's sentences verbatim and the union decision of §2.4); Sonnet codes; Opus reviews (every `HostKind`
 site, and that no `'linux'` arm silently serves `'linux-unread'`).
 
+### S3 — status: built 2026-10-22 on `feat/native-e2-s3` (from `docs/native-linux-e2` `755e19142`; not merged; the lead's read of ru/uk and the Opus review are open)
+
+Built as the spec above, test-first, `src_vs_code` and its docs only (`src_mcp` is S2's, `shared/consultant-limitations.json` S4's — neither touched).
+The extension's `npm test` (compile + every file under `out/test` and the source `.test.mjs` files): see *Result* below.
+
+**What was built, where.**
+
+- `runtimeSince.ts` — `VIBE_ON_NATIVE_LINUX_SINCE = '0.64.0'`, `ON_NATIVE_LINUX_SINCE = { vibe }` (no `kimi`), `runtimeOnNativeLinux` (**false when the runtime has
+  no entry**, true for an unknown server), `HOST_NOTES.linux` per runtime (`nativeLinuxNote`: Vibe nothing at/above 0.64.0, the update note below it, Kimi's unchanged
+  refusal at any version), the NEW `HOST_NOTES['linux-unread']` arm, `hostRuntimes` counting a native entry too (`hasLinuxEntry`), and `VIBE_NATIVE_LINUX`.
+- `hostSide.ts` — `HostKind` gains `'linux-unread'`; `hostKindOf('linux', blank or whitespace)` answers it (aligned with the server: today's `linux` for a blank banner is gone);
+  `hostKind` answers it on a failed read, still one warning, whose text now says *treated as a Linux host whose banner could not be read, so a Vibe row is shown as refused here*.
+- `vendorTerminal.ts` — `VIBE_NOTE_LINUX` is `VIBE_SCRIPT_NOTE + VIBE_ENV_FILE + ' ' + VIBE_NATIVE_LINUX`, NEW `VIBE_NOTE_LINUX_UNREAD`, `VIBE_NOTES` gained the key (six different notes),
+  `KIMI_NOTES['linux-unread'] = KIMI_NOTE_LINUX`.
+- `vendors.ts` (the hint), `helpContent.ts`, `helpDe/Es/Ru/Uk.ts` — §2.5's sentences, the old refusal removed; the question-consultant parenthesis in five languages.
+- `panelView.ts` — `onLinuxSide(host)` (`wsl2 | linux | linux-unread`) decides the Kimi network sign-in box; comments in `panelProvider.ts`, `panelView.ts`, `wslNetwork.ts`, `kimiLinuxLine.ts` brought level.
+
+**RED, observed** (against a compile scaffold — the union member and the two table entries mirroring the old `linux` text, nothing else — because the widened union is
+what the compiler forces first; the failures are the plan's own messages): S-N9 `server "0.64.0": a native Linux host with coai-mcp 0.64.0 was still told Vibe is refused there — the
+card does not know ON_NATIVE_LINUX_SINCE` (actual `coai-mcp refuses a vibe row on a native Linux host for now — Vibe is measured on WSL2 only.`, expected `''`) and `native Linux at 0.58.0`;
+S-N10 `an unreadable banner promised a Vibe row: it is neither native Linux nor WSL, it is a refusal` (`'linux' !== 'linux-unread'`), `server "0.59.0": an unreadable banner promised a Vibe
+row`, and `hostKindOf('linux', '')` `'linux' !== 'linux-unread'`; S-N11 `the en article never says On a native Linux host coai-mcp runs Vibe from coai-mcp 0.64.0 and turns Vibe's keyring off
+there, … about Vibe on a native Linux host`, the hint (`the hint does not say what the server does on a native Linux host`), the install note, and `the en question-consultant help does not
+say what is refused for a Vibe row: …`; the audit `a linux-unread side lost its Kimi network sign-in box` (`0 !== 1`); the structural test red on the `wslNetwork.ts` comment. The full
+suite then added one the plan's file list did not name: `wslBannerVectors.test.ts` — `hostKindOf for empty-banner` (`'linux-unread'` vs `'linux'`).
+
+**Break-its, each red then restored (tree clean afterwards).** B9 (`runtimeOnNativeLinux` → `sinceMet`): `Kimi has no native entry: absence is a refusal, not "met"`, `server "0.57.0": Kimi's
+native refusal moved`, and `kimiOnLinux`'s `native Linux: refused at ANY version, never "update"`. B10 (`hostKind` returns a native banner on a failed read): `an unreadable banner promised a Vibe
+row: it is neither native Linux nor WSL, it is a refusal`. B11 (no `linux-unread` arm — here the key retargeted to `darwin`, so it still compiles): `server "0.59.0": an unreadable banner
+promised a Vibe row`, `the card says why an unread host refuses a kimi row`. B12 (ru sentence old): `the ru article never says На нативном Linux-хосте coai-mcp запускает Vibe …` and `the ru help
+still says: На нативном Linux-хосте coai-mcp пока отклоняет Vibe — он измерен только на WSL2`. B12b (`onLinuxSide` without `linux-unread`): `a linux-unread side lost its Kimi network sign-in box`.
+B12c (a `hostKind` comment added to `settingsShape.ts`): `a new consumer of the host kind (settingsShape.ts) was not classified in the audit table of E2.S3` and `settingsShape.ts mentions the host
+kind: a persisted linux-unread would outlive the window that could not read its banner`. The guard (`VIBE_ON_NATIVE_LINUX_SINCE` set to `0.63.0` once): `vibe: ON_NATIVE_LINUX_SINCE 0.63.0 is not ahead
+of the released 0.63.0 and its section does not name vibe on a native Linux host`.
+
+**The `HostKind` audit — outcome.** Each row of the table above was implemented as decided and pinned: `hostKindOfPlatform` never answers `linux-unread` (the `vibeOnLinux` case kept, its sentence
+updated); `panelProvider.ts:473/:1415/:1954` carry it as itself (comments only; a `PanelState` with `hostKind: 'linux-unread'` is a compile-time member and a card case renders it); `panelView.ts:1161`
+draws the refusal (`runtimeNote` matches the banner sentence, `runtimeHeld` is false, the page shows it on the card); `panelView.ts:1188` keeps the box **as linux** (`onLinuxSide`;
+`windows`/`wsl1`/`darwin` give `undefined`); `vendorTerminal.ts:419/:578` use `VIBE_NOTES`/`KIMI_NOTES` when the host is passed and the platform's `linux` when not;
+serialisation: the grep re-run found the same five modules, and `hostKindConsumers.test.ts` pins the list (it scans raw text, comments included, so the `wslNetwork.ts:155` comment was
+reworded rather than listed). Nothing outside the audit table consumes the kind.
+
+**Deviations from the spec.**
+
+1. **`VIBE_NATIVE_LINUX` lives in `runtimeSince.ts`, re-exported by `vendorTerminal.ts`.** The spec puts it in `vendorTerminal.ts` for `vendors.ts` to import, but `vendorTerminal.ts` imports `Vendor`
+   from `vendors.ts`: that is a new import cycle (`importCycles.test.mjs` freezes the count, and the graph counts type imports). `runtimeSince.ts` is imported by both and already holds the release
+   the sentence interpolates. The tests import it from `vendorTerminal`, as the spec says.
+2. **`wslBannerVectors.test.ts` changed** (not in the spec's file list): the shared vector `empty-banner` has generation `none` (no WSL), which the test mapped to `linux`; a blank banner is now
+   `linux-unread`. `shared/wsl-banner-vectors.json` is untouched (it speaks of WSL generations, and the server's tests read it too).
+3. **The RED was taken against a scaffold, not against bare E1 code** — a widened union does not compile without its table entries, so the two entries (mirroring the old `linux` text) and the
+   new constants existed before the first red run; every behaviour the tests pin was still the old one.
+4. **`onLinuxSide` is a new helper** in `panelView.ts` (the ternary would have grown to three comparisons inside an already long function); `hasLinuxEntry` likewise in `runtimeSince.ts`
+   (`ON_NATIVE_LINUX_SINCE` is a subset of `ON_LINUX_SINCE`, so counting it changes no result today — it follows the spec's sentence and stays right if a native-only runtime ever exists).
+5. **Kimi's tables hold five different notes for six kinds** — `KIMI_NOTES['linux-unread']` is `KIMI_NOTE_LINUX`, as the spec says; `kimiOnLinux.test.ts` asserts the equality.
+
+**Result.** `npm test` (final run): **6501 compiled tests, 6478 pass, 0 fail, 23 skipped**, plus the 14 source `.test.mjs` files, 0 fail, exit 0. The first full run had two failures — `wslBannerVectors`
+(`hostKindOf for empty-banner`, fixed, deviation 2) and `notificationsFile.test.js` *a write that never settles does not hold the window open, and says so* (`the rest lands, and a complete drain says
+true`: `false !== true`, 30 s, under the suite's parallel load; it passes alone, 20/20, and passed in the final full run — nothing in it touches the host kind). Targeted files green: `vibeOnLinux` 40/40, `hostKindLogsAnUnreadableBanner` 5/5, `kimiOnLinux` 11/11, `kimiNetworkSignInSetting` 13/13, `hostKindConsumers` 2/2, `runtimeSinceIsAhead`
+8/8, `wslBannerVectors` 11/11. `npm run typecheck` clean; `eslint` clean on every touched file. **Open:** the lead reads the ru and uk sentences (§2.5's table, as pinned, plus the parenthesis
+the plan left to "the same words": de `mit abgeschaltetem Schlüsselbund von Vibe`, es `con el llavero de Vibe desactivado`, ru `с отключённой связкой ключей Vibe`, uk `з вимкненою в’язкою ключів Vibe`);
+the Opus review; the release number if another `src_mcp` minor ships first (DL14).
+
 ### E2.S4 — The limitation row and the docs
 
 **Goal.** `shared/consultant-limitations.json`'s `vibe`/`linux` row is `confined` and says what §2.5 says; `module_runners.md`,
