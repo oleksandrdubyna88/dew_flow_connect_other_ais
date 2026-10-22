@@ -403,6 +403,67 @@ public sealed class AFeatureIsReviewedEndToEndTests : IAsyncLifetime
         tail.Should().Contain(UnchangedBody, "the other request of the same turn is served");
     }
 
+    /// <summary>The real launcher, except that the SECOND turn of a conversation waits for the round's cancel — and ends as the cancel orders.</summary>
+    private sealed class HoldsTurnTwo(IProcessLauncher inner, bool throws) : IProcessLauncher
+    {
+        public TaskCompletionSource TurnTwoArrived { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
+        {
+            var turnTwo = Core.Feature.TurnTail.HeadingPrefix + "2 of";
+            if (!request.StdIn.Contains(turnTwo, StringComparison.Ordinal) && !request.Arguments.Any(a => a.Contains(turnTwo, StringComparison.Ordinal)))
+            {
+                return await inner.RunAsync(request, ct);
+            }
+
+            TurnTwoArrived.TrySetResult();
+            try
+            {
+                await Task.Delay(Timeout.Infinite, ct);
+            }
+            catch (OperationCanceledException) when (!throws)
+            {
+                // The launcher's own answer for a kill the caller's token ordered.
+            }
+
+            return new ProcessResult(-1, string.Empty, string.Empty, TimedOut: true, Cancelled: true);
+        }
+    }
+
+    /// <summary>
+    /// A conversation cut in its follow-up turn keeps what its ANSWERED turn found. Turn 1 answered with a gating finding (made while waiting for
+    /// source); the cancel fires during turn 2. The finding was the reviewer's whole landed answer, and discarding it would let the agent cancel
+    /// past an adverse reviewer and ask again — the hole the first hold left open for every conversation of more than one turn (security judge, 2026-10-22).
+    /// The completed path is untouched: a LATER turn that fails still fails the reviewer there (AFailedSecondTurn_… above).
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AWithdrawalDuringAFollowUpTurn_KeepsTheAnsweredTurnsFindings(bool launcherThrows)
+    {
+        var turnTwo = new HoldsTurnTwo(_launcher, launcherThrows);
+        var service = Service(launcher: turnTwo, gate: new RoleGate(2, 0));
+        Turn(1, FindingAndAsk);
+        Turn(2, Clean);
+        using var call = new CancellationTokenSource();
+        var round = service.ReviewFeatureAsync(_repo, PlanPath, _base, Epics, Lessons, ct: call.Token);
+
+        await turnTwo.TurnTwoArrived.Task.WaitAsync(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken);
+        await call.CancelAsync();
+        var thrown = await Record.ExceptionAsync(() => round);
+
+        thrown.Should().BeAssignableTo<OperationCanceledException>("the call was taken back");
+        var session = Session();
+        var record = session.Rounds.Last(r => r.Stage == nameof(Stage.FeatureReview));
+        record.Status.Should().Be(RoundRecord.Cancelled);
+        record.Findings.Should().ContainSingle().Which.Title.Should().Be("Sell may round the other way", "what turn 1 answered is kept, though turn 2 never did");
+        record.GatingCount.Should().Be(1);
+        record.Note.Should().Be("withdrawn with a gating finding from codex — held for a person");
+        session.State.HumanGate.Should().BeTrue("an answered turn's gating finding holds the gate, as a single-turn reviewer's does");
+        session.State.HoldQuestions.Should().ContainSingle();
+        session.Pending.Should().ContainSingle().Which.Title.Should().Be("Sell may round the other way");
+    }
+
     [Fact]
     public async Task AFailedSecondTurn_StillCostsWhatTheFirstTurnCost_InTheLedgerAndTheRoundTotal()
     {

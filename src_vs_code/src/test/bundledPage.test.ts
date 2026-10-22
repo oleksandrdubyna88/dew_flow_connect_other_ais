@@ -265,10 +265,51 @@ test('a cancelled row that kept findings shows them when opened, beside the with
   assert.doesNotThrow(() => page.click(clickInRow('tr[data-key]', 'data-key', key)), 'opening a cancelled row that kept findings threw');
 
   const rows = page.seen['rows']?.innerHTML ?? '';
-  assert.match(rows, /class="badge cancelled"/, 'a held withdrawal is still drawn as cancelled');
+  assert.match(rows, /class="badge cancelled[ "]/, 'a held withdrawal is still drawn as a cancelled one');
   assert.match(rows, /held for a person/, 'the note that says why the gate is held is not on the page');
   assert.match(rows, /The rollback is missing/, 'the finding the cancel kept is not shown');
   assert.doesNotMatch(rows, /This round found nothing/, 'a round that kept a finding is drawn as one that found nothing');
+});
+
+/* A cancelled round that HOLDS the gate is not "not judged": a person is being asked (security judge 2026-10-22, §13.4 of the S2 spec). The record carries it
+ * two ways — a counted gating finding, or the server's own held-for-a-person sentence (a hold by count has no finding). */
+
+const HELD_BY_COUNT_SESSION = {
+  ...CANCELLED_SESSION,
+  rounds: [{ ...CANCELLED_SESSION.rounds[0]!, gatingCount: 0, note: 'withdrawn 3 times in a row — held for a person' }],
+};
+
+test('a cancelled round that holds the gate by a gating finding is drawn "cancelled — held for you", not "not judged"', () => {
+  const page = runningPage([HELD_SESSION], { ...LOG, rounds: [] });
+  const rows = page.seen['rows']?.innerHTML ?? '';
+
+  assert.match(rows, /class="badge cancelled held"/, 'a withdrawal that holds the gate is not told apart from a free one');
+  assert.match(rows, /cancelled — held for you/, 'the badge does not say a person is being asked');
+  assert.doesNotMatch(rows, /not judged/, 'a held withdrawal is drawn as one that leaves nothing for the person to do');
+});
+
+test('a cancelled round that holds the gate by count alone is drawn held too', () => {
+  const page = runningPage([HELD_BY_COUNT_SESSION], CANCELLED_LOG);
+  const rows = page.seen['rows']?.innerHTML ?? '';
+
+  assert.match(rows, /class="badge cancelled held"/, 'a hold by count (no finding) read as a free withdrawal');
+  assert.match(rows, /cancelled — held for you/);
+});
+
+test('a cancelled round with a counted gating finding is held whatever its note says', () => {
+  // The count is the record's own fact; the sentence is the server's wording and may change.
+  const session = { ...CANCELLED_SESSION, rounds: [{ ...CANCELLED_SESSION.rounds[0]!, gatingCount: 2, note: 'withdrawn with gating findings' }] };
+  const rows = runningPage([session], CANCELLED_LOG).seen['rows']?.innerHTML ?? '';
+
+  assert.match(rows, /class="badge cancelled held"/, 'a withdrawal that counted gating findings was drawn as a free one');
+});
+
+test('a free withdrawal keeps its own badge — "cancelled — not judged", not held', () => {
+  const page = runningPage([CANCELLED_SESSION], CANCELLED_LOG);
+  const rows = page.seen['rows']?.innerHTML ?? '';
+
+  assert.match(rows, /class="badge cancelled"/);
+  assert.doesNotMatch(rows, /held for you/, 'a withdrawal that holds nobody is drawn as if it did');
 });
 
 test('a cancelled row the database holds findings for asks for them when opened', () => {

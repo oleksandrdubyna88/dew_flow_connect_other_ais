@@ -27,6 +27,12 @@ public sealed record KeptFindings(ImmutableArray<Finding> Findings, int Gating, 
     /// <summary>Nothing landed.</summary>
     public static KeptFindings None { get; } = new([], 0, []);
 
+    /// <summary>
+    /// The words every held withdrawal's note ends with — by a landed finding or by the count of withdrawals in a row. The extension tells a held
+    /// cancelled round from a free one by them (and by the record's gating count), so the sentence is spelled once, here.
+    /// </summary>
+    public const string HeldForAPerson = "held for a person";
+
     /// <summary>Whether the withdrawal must hold the gate for a person.</summary>
     public bool HoldsTheGate => Gating > 0;
 
@@ -35,20 +41,28 @@ public sealed record KeptFindings(ImmutableArray<Finding> Findings, int Gating, 
         IReadOnlyList<ReviewerWork> work,
         ImmutableArray<PriorRejection> rejections)
     {
-        var merged = SecurityRound.Merge(results, work);
+        var landed = results.Select(r => (r.Invocation, Outcome: Landed(r.Outcome))).ToArray();
+        var merged = SecurityRound.Merge(landed, work);
 
         return new(
             merged,
             Counted(merged, rejections),
-            [.. results.Where(r => Counted(SecurityRound.Merge([r], work), rejections) > 0).Select(r => r.Invocation.Provider).Distinct()]);
+            [.. landed.Where(r => Counted(SecurityRound.Merge([r], work), rejections) > 0).Select(r => r.Invocation.Provider).Distinct()]);
     }
+
+    /// <summary>
+    /// What a reviewer LANDED: its answer, or — when the round's token cut a later turn of its conversation — the last turn that answered
+    /// (<see cref="ReviewerOutcome.LastAnswered"/>). A later turn that failed on its own terms is not cut and lands nothing, as on the completed path.
+    /// </summary>
+    private static ReviewerOutcome Landed(ReviewerOutcome outcome) =>
+        outcome is { EndedByRoundToken: true, LastAnswered: { } answered } ? answered : outcome;
 
     /// <summary>The sentence the cancelled record carries: the free withdrawal's own words, or why a person was asked.</summary>
     public string NoteFor(string cause) =>
         (HoldsTheGate, cause == EndCauses.HostStopped) switch
         {
-            (true, true) => $"the host stopped with a gating finding from {string.Join(", ", GatingProviders)} — held for a person",
-            (true, false) => $"withdrawn with a gating finding from {string.Join(", ", GatingProviders)} — held for a person",
+            (true, true) => $"the host stopped with a gating finding from {string.Join(", ", GatingProviders)} — {HeldForAPerson}",
+            (true, false) => $"withdrawn with a gating finding from {string.Join(", ", GatingProviders)} — {HeldForAPerson}",
             (false, true) => "the host stopped while the round ran",
             (false, false) => "the caller withdrew the call while the round ran",
         };

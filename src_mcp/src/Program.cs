@@ -2583,6 +2583,7 @@ internal static class Program
         (or COAI_ESCALATION_SECONDS, which wins),
         COAI_SWEEP_SECONDS (the background sweep's beat, 60, 10–3600),
         COAI_CONSULTANTS_REUSE_SECONDS (one consultants survey per window per data directory, 300),
+        COAI_WITHDRAWALS_BEFORE_HOLD (withdrawn rounds of one stage in a row that hold the gate for a person, 3, at least 1),
         COAI_CREDS_KEY (the CredsForDevs config-entry key holding vendor keys),
         COAI_LOG_LEVEL.
         """;

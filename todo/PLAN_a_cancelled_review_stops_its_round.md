@@ -86,7 +86,10 @@ file (`RemoteRuntime.cs:290-297`), and nothing retries it later (`AbandonAsync` 
   `call_human` (`HumanGate`, the hold notice, `review_*` refused until a person answers), persisted BEFORE the session claim is released, the
   record saying why (*withdrawn with a gating finding from <vendor> — held for a person*). With no gating finding landed the withdrawal stays
   free: the gate unmoved, nobody notified. (The first draft said "unmoved, no notice" unconditionally; that let the gated agent cancel past an
-  adverse panel and retry for a clean one.)
+  adverse panel and retry for a clean one.) *(Hardened 2026-10-22, security judge — S2 spec §13.)* A free withdrawal is not free forever: withdrawals
+  of one stage IN A ROW (no judged round between them) are counted; the person is told at two, and at the cap (`COAI_WITHDRAWALS_BEFORE_HOLD`, default
+  3) the withdrawal holds the gate exactly as a gating finding does — otherwise withdrawing is a free resample of the panel. A conversation cut in a
+  follow-up turn keeps the findings of its last answered turn; a hold whose save failed sends no notice.
 - **G5** The reply follows the protocol: no response for the cancelled request — accepted only on the seam leg's observation (D5).
 - **G6** A round that already finished is untouched; a cancel racing the round's end has one deterministic answer (D2).
 - **G7** A second caller of the same session meets `Busy` until the withdrawal is written, then starts the next round normally.
@@ -294,6 +297,10 @@ the success save is `RoundEngine.cs:597`, outside `_gate`; the scheduler reports
     free withdrawal is the case with nothing gating. Specified as §12 of the S2 spec; the failed-save case (the hold is lost with the save until
     PR B's in-process map) is why PR A and PR B ship in one release (spec §10.5), and PR B's map must hold the HELD session too.
 
+19. **The security judge's hardening of PR A (2026-10-22).** Four items, specified in the S2 spec §13: the consecutive-withdrawal cap (the HIGH one —
+    a free withdrawal was a panel-sampling oracle), the last answered turn of a cut conversation kept, no hold notice for a hold that was not saved, and
+    the *cancelled — held for you* badge. Two asks go to PR B (S3 below).
+
 ## Epics
 
 One epic. Cornerstones: 1 of 1 — S2 (the record a withdrawal leaves; it decides what the gate, the database and every reader see).
@@ -332,6 +339,17 @@ usage — red today at the provisional step (no such write), and red on a plant 
 that save throws: today "run it again", the file `running`, the findings gone; `TheObserverIsFinished_BeforeTerminalPersistence` — an
 observer gated to write after a completion's save: red with it unawaited (the file ends `cancelled` over `done`).
 Guard: `TheCadenceRecord_IsWrittenWhole_WhenCancelled`.
+
+**The judge's two PR B asks (2026-10-22), both part of S3.** (1) *Persist landed findings progressively on the running record*: when a reviewer
+lands, its findings are written to the running round (`LiveRound.Report` already persists each progress event) so a killed or stopped process loses
+nothing a reviewer had paid for — today the findings live only in the process until `Withdraw`/`Finish`. (2) *A startup reconcile that holds the
+gate* for a `cancelled` or `interrupted` round whose landed findings gate — the findings counted by the same rule (`GateRule.Evaluate`; in
+`coai.db` that is `rounds.gating > 0`) — when there is no later judged round and no `HumanGate` on the session: it sets `HumanGate`/`AwaitingResolve`,
+mints the hold's notice and records its id, as `WithTheHoldReissued` does for a hold with no question. The same pass must also hold the gate for a
+run of withdrawals that reached the cap (S2 spec §13.1) when that hold was lost with its save, since a hold by count leaves no `gating` to read.
+RED: `AKilledProcess_LosesNoLandedFinding` (a reviewer lands, the process is killed before the round ends, the running record on disk carries the
+finding) and `AStartupReconcile_HoldsTheGate_ForACancelledRoundWhoseLandedFindingsGate` (+ the interrupted shape, + a later judged round or an existing
+hold leaves it alone).
 
 **S4 — the host's stop, the remote row, the live leg** (PR C; D6's bound, D7). RED:
 `AStoppingHost_WritesHostStopped_BeforeTheProcessEnds` — `running`, because the loop's end waits 1 s for its own tasks only;

@@ -30,9 +30,13 @@ internal sealed class TurnLoop(
 {
     private ImmutableList<TurnUsage> _earlier = [];
     private ImmutableList<string> _served = [];
+    private ReviewerOutcome.Ok? _lastAnswered;
 
     /// <summary>The turns that answered so far — read by the caller's cancellation catch.</summary>
     public IReadOnlyList<TurnUsage> Earlier => _earlier;
+
+    /// <summary>The last turn that answered, or null before any has — what a withdrawal during a follow-up turn keeps (<see cref="ReviewerOutcome.LastAnswered"/>).</summary>
+    public ReviewerOutcome.Ok? LastAnswered => _lastAnswered;
 
     /// <summary>The one terminal outcome of the whole conversation.</summary>
     /// <exception cref="OperationCanceledException">The round ended; <see cref="Earlier"/> holds what answered before it did.</exception>
@@ -50,7 +54,7 @@ internal sealed class TurnLoop(
             outcome = SecurityAnswerLimit.Apply(work, outcome);
             if (outcome is not ReviewerOutcome.Ok answered)
             {
-                return outcome with { EarlierTurns = _earlier };
+                return outcome with { EarlierTurns = _earlier, LastAnswered = _lastAnswered };
             }
 
             var decision = await AfterAsync(work, turn, answered, elapsed, ct);
@@ -101,6 +105,7 @@ internal sealed class TurnLoop(
     {
         // Its launches with it — the ledger writes each as its own line (story 3.3 of research/PLAN_every_round_is_counted.md).
         _earlier = _earlier.Add(new TurnUsage(turn, answered.LastTurnUsage, elapsed) { Launches = answered.Launches });
+        _lastAnswered = answered;
         var decision = await work.Continue.AfterAsync(turn, answered, ct);
         if (decision is TurnDecision.Stop)
         {

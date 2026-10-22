@@ -744,8 +744,10 @@ internal sealed class RoundEngine(
         CancellationToken ct)
     {
         var kept = KeptFindings.From(results, roundWork.Reviewers, session.State.Rejections);
+        var streak = WithdrawalStreak.Of(loaded.Rounds, session.State.Stage.ToString(), _settings.WithdrawalsBeforeHold);
         var record = live.Withdraw(cause, results.Count(r => r.Outcome.EndedByRoundToken), results, kept) with
         {
+            Note = streak.HoldsTheGate && !kept.HoldsTheGate ? streak.HoldNote : kept.NoteFor(cause),
             Sha = Stages.Of(stage.Stage).RecordsSha ? sha : string.Empty,
             Size = roundWork.Size,
             Gitlinks = roundWork.Gitlinks,
@@ -755,9 +757,9 @@ internal sealed class RoundEngine(
             PlanSource = PlanSources.Stamp(stage, planText, sha),
             // Authors stays unset: a cancelled round is not settled (Windows.IsSettled) and is never asked for authors.
         };
-        var notice = kept.HoldsTheGate ? HoldNotice(session, record.Note, [.. kept.Findings.Where(f => f.IsGating)]) : null;
-        var saved = WithdrawnSession(loaded, session, record, kept, notice, planText);
-        SaveWithdrawn(saved, record);
+        var hold = kept.HoldsTheGate || streak.HoldsTheGate ? HoldNotice(session, record.Note, [.. kept.Findings.Where(f => f.IsGating)]) : null;
+        var saved = WithdrawnSession(loaded, session, record, kept, hold, planText);
+        var landed = SaveWithdrawn(saved, record);
         var caller = RoundCommands.CallerFor(loaded);
         _projection.Write(db => db.RecordRound(
             saved.State,
@@ -766,11 +768,7 @@ internal sealed class RoundEngine(
             new Store.RoundContext(planText, sha, caller, [], WhatTheCallerWasDoing(loaded, record)) { BaseRef = roundWork.BaseRef }));
         audit.Withdrawn(cause, record);
         audit.Findings(kept.Findings);
-        if (notice is not null)
-        {
-            _escalations.Notify(notice);
-            _log.Information("a person was asked to decide: {Reason}", record.Note);
-        }
+        Announce(hold, landed, streak, session, record);
 
         throw new OperationCanceledException(ct);
     }
@@ -793,8 +791,47 @@ internal sealed class RoundEngine(
                 Carried = [],
             };
 
-    private void SaveWithdrawn(PersistedSession saved, RoundRecord record) =>
+    private bool SaveWithdrawn(PersistedSession saved, RoundRecord record) =>
         Recorded(() => _store.Save(saved), _log, record.Number);
+
+    /// <summary>
+    /// Tells the person what the withdrawal needs them to know: the hold's notice when the gate was held AND the hold was saved, else — for the
+    /// second withdrawal in a row — the informational one.
+    /// </summary>
+    /// <remarks>
+    /// A hold whose save the disk refused sends nothing: the notice is bound to the session's <c>HoldQuestions</c> by identity, and a session that
+    /// never recorded it would leave a card that answers nothing (security judge, 2026-10-22, §13.3 of the S2 spec). The refusal is logged; the
+    /// <c>coai.db</c> row still carries the gating count, which is what PR B's reconcile reads.
+    /// </remarks>
+    private void Announce(EscalationQuestion? hold, bool landed, WithdrawalStreak streak, PersistedSession session, RoundRecord record)
+    {
+        switch (streak.NoticeFor(hold is not null, landed))
+        {
+            case WithdrawalNotice.Hold when hold is not null:
+                _escalations.Notify(hold);
+                _log.Information("a person was asked to decide: {Reason}", record.Note);
+                break;
+            case WithdrawalNotice.HoldLost:
+                _log.Error("the {Stage} gate was to be held after round {Number} but the hold could not be saved; its notice was not sent", record.Stage, record.Number);
+                break;
+            case WithdrawalNotice.Mention:
+                Tell(streak, session);
+                break;
+            default:
+                break;
+        }
+    }
+
+    /// <summary>The informational notice of the second withdrawal in a row — not a hold, bound to nothing.</summary>
+    private void Tell(WithdrawalStreak streak, PersistedSession session)
+    {
+        _escalations.Notify(NoticeCard(
+            session,
+            $"The {RoundSubject.StageName(session.State.Stage.ToString())} round of {session.State.Branch} was withdrawn {streak.Count} times in a row without a verdict. " +
+            $"Nothing is held yet; at {streak.Cap} in a row the gate is held for you.",
+            []));
+        _log.Information("a person was told: {Count} withdrawn rounds of the {Stage} stage in a row", streak.Count, session.State.Stage);
+    }
 
     /// <summary>
     /// Runs the withdrawal's save and answers whether it landed: a save the disk refused is LOGGED, never allowed to turn the cancellation
@@ -940,17 +977,24 @@ internal sealed class RoundEngine(
 
     /// <summary>The one shape a hold's notice has — minted for a <c>call_human</c> verdict, and again for a hold no question binds.</summary>
     private static EscalationQuestion HoldNotice(PersistedSession session, string reason, IReadOnlyList<Finding> gating) =>
+        NoticeCard(
+            session,
+            $"The {RoundSubject.StageName(session.State.Stage.ToString())} gate needs your decision: {reason}. " +
+            "Proceed anyway, or fix the findings and review again?",
+            gating);
+
+    /// <summary>A notice card for the session, whatever it says — the shape the hold and the informational notice share.</summary>
+    private static EscalationQuestion NoticeCard(PersistedSession session, string question, IReadOnlyList<Finding> findings) =>
         new(
             Guid.NewGuid().ToString("N")[..12],
             session.State.SessionId,
             session.State.RepoPath,
             session.State.Branch,
-            $"The {RoundSubject.StageName(session.State.Stage.ToString())} gate needs your decision: {reason}. " +
-            "Proceed anyway, or fix the findings and review again?",
+            question,
             string.Empty,
             "en",
             string.Empty,
-            [.. gating],
+            [.. findings],
             DateTime.UtcNow.ToString("O"))
         {
             Kind = EscalationKinds.Notice,

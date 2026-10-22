@@ -588,4 +588,56 @@ otherwise cancel past an adverse panel and retry for a clean one.
 8. **Open tail.** A withdrawal whose save fails also loses the HOLD (logged, answered as a cancellation) until PR B's retry and in-process map of
    unsaved endings; that map must hold the held session, not only the record. PR A and PR B therefore ship in one release (§10.5) — now with a
    security reason, not only a status one. A person's override of a HELD withdrawn code round closes the epic in the cadence with the record's verdict word `withdrawn` (`PanelService.Finish` passes `Rounds[^1].Verdict`; the word is informational). `status` returns the kept findings on the cancelled round itself (`rounds[].findings`, the way it returns every
-   round member but `authors`) and, on a held round, as `pending`.
+   round member but `authors`) and, on a held round, as `pending`. *(§13.3 adds: a hold whose save fails sends no notice; the `coai.db` row is still
+   written and carries `gating > 0`, which PR B's startup reconcile reads — see §13.)*
+
+## 13. The security judge's hardening of PR A (2026-10-22)
+
+An independent security judge reviewed the diff `788187964..HEAD` (the PR A work of §11–§12). Four items; each was written test-first (RED, GREEN, a plant).
+They override §12 where they differ, and G4 of the plan carries the first.
+
+1. **(HIGH) A free withdrawal is a panel-sampling oracle.** A withdrawal that judges nothing and spends no round let the gated agent cancel every
+   round whose partial answers it disliked and ask again, until a draw came back clean. `Withdraw` now counts the CONSECUTIVE `cancelled` rounds of
+   this stage since the last JUDGED round (`WithdrawalStreak.Of(loaded.Rounds, stage, cap)`, the round being recorded included). A judged round is one
+   with `Status = done` and a verdict other than `skipped`; it resets the count. A skipped round, an interrupted one and another stage's rounds
+   neither add nor reset. The count is read from the journal the round began from, so a restarted server counts the same.
+   - **At 2** the person is sent an informational notice (`Escalations.Notify`, the channel the hold uses, `Kind = notice`, bound to nothing): *the
+     <stage> round of <branch> was withdrawn N times in a row without a verdict. Nothing is held yet; at <cap> in a row the gate is held for you.*
+     It is sent once per run (at exactly two), and not when the same withdrawal holds the gate — the hold's own notice is the one card.
+   - **At the cap** (`COAI_WITHDRAWALS_BEFORE_HOLD`, default 3, read with `IntVar` like the neighbouring COAI_* round settings: an integer ≥ 1, else the
+     default; `PanelSettings.WithdrawalsBeforeHold`) the withdrawal HOLDS the gate exactly as a kept gating finding does:
+     `kept.HoldsTheGate || streak.HoldsTheGate` builds the same `HoldNotice` and the same held session (§12.2). The record's `Note` is *withdrawn N times
+     in a row — held for a person* (the gating-finding sentence wins when both apply); `GatingCount` is the counted findings (0 when nothing landed).
+     The sentence's tail is one constant, `KeptFindings.HeldForAPerson`, which the extension reads (item 4).
+   - **Both causes count.** `hostStopped` rounds are `cancelled` too and are counted: a host that restarts three times under a round holds the gate.
+     That is a deliberate over-count (the security question is "was a verdict ever reached", not "who pressed cancel").
+   - **A person's answer does not reset the count.** Only a judged round does, as specified; after a released hold the next withdrawal in a row is held
+     again at once. Safe, and a person is asked each time; if it proves noisy, resetting at the held round is a one-line change in `WithdrawalStreak.Judged`.
+   - Tests (`ConsecutiveWithdrawalsAreCappedTests`): `TwoWithdrawalsInARow_TellThePerson`, `TheThirdWithdrawalInARow_HoldsTheGate`,
+     `AJudgedRoundBetween_ResetsTheCount`, `TheCapComesFromTheSetting` (+ the setting's parse and the pure count).
+2. **(MEDIUM) A cut during a feature follow-up turn discarded turn 1's answered findings.** `TurnLoop` remembers the last turn that answered
+   (`LastAnswered`, set where `_earlier` is extended) and carries it on the non-answer it returns (`ReviewerOutcome.LastAnswered`, on the base like
+   `EarlierTurns`); `BoundedScheduler.Abandoned` carries it on the `NotStarted` it builds from `loop.Earlier`. `KeptFindings.From` merges
+   `LastAnswered` for outcomes the ROUND's token ended (`EndedByRoundToken`) only — the completed path is untouched: a later turn that fails on its own
+   terms is still a failed reviewer there, and its earlier findings are still discarded. Test: `AWithdrawalDuringAFollowUpTurn_KeepsTheAnsweredTurnsFindings`
+   (a feature round, turn 1 answers with a gating finding, the cancel fires during turn 2 — both roads: the launcher reports the kill, and the launcher
+   throws the cancellation), plus the pure `KeptFindings` pair in `AWithdrawnRoundKeepsWhatLandedTests`.
+3. **(LOW) A hold whose save failed sent a hold notice.** The notice is bound to the session by identity (`HoldQuestions`); a session the disk refused never
+   recorded it, so the card was an orphan. `SaveWithdrawn` now answers whether the save landed and `WithdrawalStreak.NoticeFor(held, landed)` decides:
+   hold + saved → the hold notice; hold + refused → NO notice and one error line (*the <stage> gate was to be held after round N but the hold could not be
+   saved; its notice was not sent*). The `coai.db` projection is still written: it carries `gating > 0` for a finding hold, which PR B's startup
+   reconcile reads (below) — and nothing for a hold by count, which is why PR B's reconcile also counts the streak (the PR B asks). Tests:
+   `AHoldThatCouldNotBeSavedSendsNoNoticeTests`, driven through `RoundEngine.Recorded` and the decision it feeds.
+4. **(LOW) Display.** A cancelled round that HOLDS the gate is drawn *cancelled — held for you* (`badge cancelled held`, a filled orange pill), distinct from
+   *cancelled — not judged*. The record carries it two ways, and the page reads both: `gatingCount > 0` or a note containing *held for a person*
+   (`KeptFindings.HeldForAPerson`; a hold by count has no finding). The session's `HumanGate` is not used: it describes the session NOW, and the
+   badge is about the round. The kept findings keep their awaiting state and open as before. Tests (`bundledPage.test.ts`): the held badge by a
+   finding, by count alone, by a gating count whatever the note says, and the free badge unchanged.
+
+**Deviations.** (a) Item 3 has no engine-level test: `PanelService` builds its own `SessionStore` (`FileWriter` is an `init` seam), so a failing
+save cannot be injected through the service; the decision is a pure function and the refusal comes from `Recorded` itself. (b) The informational
+notice is a `notice`-kind card like the hold's, so the panel offers its answer buttons; answering it changes nothing (it is in no `HoldQuestions`).
+(c) The setting is a server environment variable only; no panel control was added.
+
+**The two PR B asks** (the judge's, recorded in the plan's S3 section): persist landed findings progressively on the running record, and a startup
+reconcile that holds the gate for a cancelled or interrupted round whose landed findings gate.

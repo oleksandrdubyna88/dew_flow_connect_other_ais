@@ -290,7 +290,8 @@ internal sealed class WithdrawalRig : IAsyncDisposable
         int globalConcurrency = 3,
         TimeSpan[]? ladder = null,
         Serilog.ILogger? log = null,
-        ProviderSettings[]? also = null) => new(
+        ProviderSettings[]? also = null,
+        int withdrawalsBeforeHold = PanelSettings.DefaultWithdrawalsBeforeHold) => new(
         new PanelSettings
         {
             Providers = [.. (providers ?? ["codex"]).Select(p => new ProviderSettings(p) { ExecutablePath = FakeCliExe }), .. also ?? []],
@@ -301,6 +302,7 @@ internal sealed class WithdrawalRig : IAsyncDisposable
             RoundTimeout = roundTimeout,
             GlobalConcurrency = globalConcurrency,
             RetryLadder = ladder ?? Runners.Reviewers.RetryLadder.Default,
+            WithdrawalsBeforeHold = withdrawalsBeforeHold,
         },
         VaultKeys.None("no vault in tests"), default, launcher, log ?? Logger.None, Noticing.None, hostStopping: hostStopping);
 

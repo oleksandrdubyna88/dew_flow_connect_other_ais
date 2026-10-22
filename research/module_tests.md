@@ -5220,6 +5220,27 @@ code planted out.
 | Extension `roundsLog.test.ts` `a cancelled round that kept findings reads them — from the database when it knows the round, from the file when it does not` | `0 !== 1` (`foundCount`: the kept finding was invisible) | `fromTheFile` forced false; `noFindings` back to `status === 'cancelled'` |
 | Extension `bundledPage.test.ts` `a cancelled row that kept findings shows them when opened…` and `…the database holds findings for asks for them when opened` | two failures: the finding text absent from the opened row; no `findings` command sent | `detail()` without `foundOnly` for a cancelled row; `noFindings` always true for `cancelled` |
 
+### A cancelled review stops its round — the security judge's hardening (2026-10-22)
+
+S2 spec §13. Each test was watched RED against the code without the change, for the stated reason, GREEN, and RED again with the change planted out.
+
+| Test | Seen red as | Plant (RED again) |
+|---|---|---|
+| `ConsecutiveWithdrawalsAreCappedTests.TwoWithdrawalsInARow_TellThePerson` (one codex reviewer waits for the cancel; two withdrawals; one informational card naming the stage, branch and count; the gate not held; a third call still runs) | `Expected Notices() to contain a single item, but the collection is empty.` | — (cap plant below) |
+| `…TheThirdWithdrawalInARow_HoldsTheGate` (note, `HumanGate`, `AwaitingResolve`, one hold question and its card, no budget spent, the fourth call refused `Unresolved` and launching nobody) | `Expected round.Note to be the same string, but they differ at index 0: (actual) "the caller withdrew the." (expected) "withdrawn 3 times in a."` | hold ignores the count (`kept.HoldsTheGate ?` only): this and `TheCapComesFromTheSetting` red |
+| `…AJudgedRoundBetween_ResetsTheCount` (journal seeded `cancelled, done/revise`; the first withdrawal is quiet, the second is "2 times", not a hold) | `Expected Notices() to contain a single item, but the collection is empty.` | `Judged` always false: this and the pure count red |
+| `…TheCapComesFromTheSetting` (cap 2: the second withdrawal holds, and the informational card is not also sent) | `Expected session.State.HumanGate to be True because the second withdrawal in a row reaches a cap of two, but found False.` | the count excludes the round being recorded (`new(rounds…`): five of eleven red |
+| `…TheSettingIsReadFromTheEnvironment_AtLeastOne` (absent, 5, 1, 0, -2, a word) | `Expected …WithdrawalsBeforeHold to be 5, but found 3.` (the property existed, unparsed) | — |
+| `…TheCount_IsTheRunOfCancelledRoundsOfTheStage_SinceTheLastJudgedOne_AndTheOneBeingRecorded` (pure: skipped, interrupted and another stage's round are neutral) | `Expected WithdrawalStreak.Of(…).Count to be 3 …, but found 1.` (a stub) | as above |
+| `AHoldThatCouldNotBeSavedSendsNoNoticeTests` (`RoundEngine.Recorded` → `WithdrawalStreak.NoticeFor`: saved hold → `Hold`; refused hold → `HoldLost`; a free withdrawal mentions only the second in a row) | `Expected Twice.NoticeFor(held: true, landed) to be WithdrawalNotice.HoldLost because an orphan card bound to no HoldQuestions …, but found WithdrawalNotice.None.` (a stub that sends nothing; the old engine sent the notice unconditionally) | `(true, false) => Hold`: `AHoldTheDiskRefused_SendsNoNotice_AndIsToldApart` red |
+| `AFeatureIsReviewedEndToEndTests.AWithdrawalDuringAFollowUpTurn_KeepsTheAnsweredTurnsFindings` (theory: the launcher reports the kill / throws the cancellation; turn 1 answers a gating finding and asks for source, the cancel fires during turn 2; the finding is on the record, `GatingCount` 1, the gate held, `Pending` has it) | `Expected record.Findings to contain a single item, but the collection is empty.` (both rows) | `TurnLoop` forgets the answered turn: both rows red; `Abandoned` drops it: the throwing row red |
+| `AWithdrawnRoundKeepsWhatLandedTests.ATurnTheRoundCut_KeepsTheLastAnsweredTurnsFindings` / `ALaterTurnThatFailedOnItsOwnTerms_StillDiscardsTheEarlierTurns_AsTheCompletedPathDoes` (pure `KeptFindings`) | the first red with the engine test (no `LastAnswered` merged); the second is a guard, green before | `Landed` ignores `EndedByRoundToken`: the second red |
+| Extension `bundledPage.test.ts`: held by a finding / by count alone / by a gating count whatever the note says; a free withdrawal keeps `cancelled — not judged` | the held rows were drawn `<span class="badge cancelled">cancelled — not judged</span>` | no note check: the count-only row red; no gating check: the gating-with-a-plain-note row red |
+
+**Not covered, said plainly.** The engine's wiring of `NoticeFor` (that `Announce` passes the real save result) has no engine-level test: `PanelService` builds its
+own `SessionStore` (`FileWriter` is an `init` seam), so a failing save cannot be injected through the service. The decision and the refusal are tested; the
+call between them is three lines.
+
 **Not covered, said plainly.** The failed-save case loses the hold until PR B (no test can pin a guarantee that does not exist yet; `Recorded` is
 tested directly, not through a failing store, because `PanelService` builds its own `SessionStore` and the store wraps its IO failures itself).
 The kept findings of a withdrawn round are not re-read by a later round's `DecidedEarlier`/rejection machinery: they are in the database like any

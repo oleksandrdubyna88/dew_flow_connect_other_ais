@@ -1560,6 +1560,7 @@ ${TEXT_CONTROLS_CSS}
   .badge.running { background: var(--vscode-charts-blue); color: var(--vscode-editor-background); }
   .badge.interrupted { background: var(--vscode-charts-orange); color: var(--vscode-editor-background); }
   .badge.cancelled { background: transparent; color: var(--vscode-charts-orange); border: 1px solid var(--vscode-charts-orange); }
+  .badge.cancelled.held { background: var(--vscode-charts-orange); color: var(--vscode-editor-background); font-weight: 600; }
   .badge.done { background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
   .badge.awaiting { background: var(--vscode-charts-purple); color: var(--vscode-editor-background); }
   .badge.skipped { background: transparent; color: var(--vscode-descriptionForeground); border: 1px dashed var(--vscode-descriptionForeground); }
@@ -1824,14 +1825,19 @@ ${teamSectionHtml(waitingFor())}
       + shown + ' <span class="deciding">&#183; ' + took(r.decideSeconds) + '</span></td>';
   }
 
-  function badge(status) {
+  function badge(row) {
+    var status = row.status;
+    // A cancelled round that HOLDS the gate is not "not judged": a person is being asked (security judge, 2026-10-22). The record carries it
+    // two ways — a counted gating finding, or the server's own sentence (a hold by count has no finding; KeptFindings.HeldForAPerson).
+    var held = status === 'cancelled' && (row.gating > 0 || String(row.note || '').indexOf('held for a person') >= 0);
     // A skip says in the badge itself that it did not block: "skipped" alone reads like a stage the
     // caller forgot, and the whole point of D1 is that it is recorded AND lets the release through.
     var said = status === 'awaiting' ? 'awaiting decisions'
       : status === 'skipped' ? 'skipped — did not block'
+      : held ? 'cancelled — held for you'
       : status === 'cancelled' ? 'cancelled — not judged'
       : status;
-    return '<span class="badge ' + esc(status) + '">' + esc(said) + '</span>';
+    return '<span class="badge ' + esc(status) + (held ? ' held' : '') + '">' + esc(said) + '</span>';
   }
   function decided(row) {
     // Nothing for a round the database never saw, and nothing while the gate is still open - the
@@ -1970,7 +1976,7 @@ ${teamSectionHtml(waitingFor())}
         + '<td class="col-stage">' + esc(r.stage) + '</td>'
         + '<td class="num col-number">' + r.number + '</td>'
         + '<td class="what col-subject" title="' + esc(r.subject) + '">' + esc(r.subject) + '</td>'
-        + '<td class="col-status">' + badge(r.status) + decided(r) + '</td>'
+        + '<td class="col-status">' + badge(r) + decided(r) + '</td>'
         + '<td class="col-verdict">' + esc(r.verdict) + '</td>'
         + '<td class="num col-gating">' + r.gating + '</td>'
         + '<td class="num col-findings">' + num(r.findings) + '</td>'

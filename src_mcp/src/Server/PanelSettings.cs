@@ -548,6 +548,16 @@ public sealed record PanelSettings
     /// </remarks>
     public int FeatureSourceFollowUps { get; init; } = Core.Feature.SourceBudget.DefaultFollowUps;
 
+    /// <summary>How many withdrawals of one stage in a row, none followed by a judged round, hold the gate for a person.</summary>
+    public const int DefaultWithdrawalsBeforeHold = 3;
+
+    /// <summary>
+    /// How many consecutive withdrawn rounds of one stage hold the gate — <c>COAI_WITHDRAWALS_BEFORE_HOLD</c>, three by default, at least one
+    /// (security judge, 2026-10-22: a free withdrawal is otherwise a free resample of the panel). A round that is judged resets the count; the
+    /// person is told when it reaches two. <see cref="IntVar"/> reads it, so zero or a word falls back to the default.
+    /// </summary>
+    public int WithdrawalsBeforeHold { get; init; } = DefaultWithdrawalsBeforeHold;
+
     /// <summary>The default whole-review limit for an api reviewer on the feature stage, in minutes.</summary>
     public const int DefaultFeatureApiReviewMinutes = 20;
 
@@ -1046,6 +1056,8 @@ public sealed record PanelSettings
             // Zero is the meaningful value here — single-turn — and the ceiling is a decision, so neither
             // IntVar nor CountVar reads it; `WhyFollowUps` names a value outside 0..3.
             FeatureSourceFollowUps = FollowUpsOf(env(Key.FollowUps)),
+            // `IntVar`: a cap of zero would hold every withdrawal before it is counted, so zero falls back rather than meaning "always".
+            WithdrawalsBeforeHold = IntVar(env, "COAI_WITHDRAWALS_BEFORE_HOLD", DefaultWithdrawalsBeforeHold),
             // `IntVar`: a zero-minute review is not a review, so zero falls back rather than meaning "no cap".
             FeatureApiReview = TimeSpan.FromMinutes(IntVar(env, "COAI_FEATURE_API_REVIEW_MINUTES", DefaultFeatureApiReviewMinutes)),
             LocalReasoningEffort = env("COAI_LOCAL_REASONING_EFFORT") is { Length: > 0 } effort

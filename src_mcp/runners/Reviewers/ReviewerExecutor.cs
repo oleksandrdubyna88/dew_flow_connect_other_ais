@@ -86,6 +86,18 @@ public abstract record ReviewerOutcome
     /// </remarks>
     public bool EndedByRoundToken { get; init; }
 
+    /// <summary>
+    /// The last turn of this reviewer's conversation that ANSWERED, when the round's token ended a LATER turn — so a withdrawal during a follow-up
+    /// turn keeps what the reviewer had already found. Null for every other outcome: a single-turn reviewer, a conversation that ended on its own
+    /// terms (a failed later turn still fails the reviewer, and its earlier findings are discarded), the completed one.
+    /// </summary>
+    /// <remarks>
+    /// On the BASE, like <see cref="EarlierTurns"/>, because the outcome that carries it is the CUT one — <see cref="Cancelled"/>, <see cref="NotStarted"/> —
+    /// and a cut turn has no review of its own. Nothing reads it except <c>KeptFindings</c>, and that only when <see cref="EndedByRoundToken"/> is set
+    /// (security judge, 2026-10-22; §13.2 of the S2 spec). Never a second answer to count: the ledger and the round total read <see cref="EarlierTurns"/>.
+    /// </remarks>
+    public Ok? LastAnswered { get; init; }
+
     /// <summary>The CLI release the launch control asked before the first launch (<see cref="LaunchTurn.CliVersion"/>) — what the ledger line names; empty when none was asked.</summary>
     public string CliVersion { get; init; } = string.Empty;
 

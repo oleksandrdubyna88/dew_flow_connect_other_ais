@@ -193,4 +193,39 @@ public sealed class AWithdrawnRoundKeepsWhatLandedTests : IAsyncLifetime
         rejected.Findings.Should().ContainSingle("kept even when it no longer counts");
         rejected.Gating.Should().Be(0, "the completed path discounts a standing rejection; so does the hold");
     }
+
+    // ---------- a conversation cut in a follow-up turn (security judge, 2026-10-22, §13.2) ----------
+
+    private static (ReviewerInvocation, ReviewerOutcome)[] ConversationEndedBy(ReviewerOutcome ending, out ReviewerWork[] work)
+    {
+        var finding = new Finding(Severity.Blocking, Category.Completeness, string.Empty, 0, "The rollback is missing", "nothing undoes the migration if step two fails", "add the down step", []);
+        var answered = new ReviewerOutcome.Ok(new NormalisedReview([finding], []), false);
+        var invocation = new ReviewerInvocation("codex", "Architecture", new CoaiMcp.Runners.Processes.ProcessRequest("cli", [], "."));
+        work = [new ReviewerWork(invocation)];
+
+        return [(invocation, ending with { LastAnswered = answered })];
+    }
+
+    [Fact]
+    public void ATurnTheRoundCut_KeepsTheLastAnsweredTurnsFindings()
+    {
+        var results = ConversationEndedBy(new ReviewerOutcome.NotStarted("the round ended") { EndedByRoundToken = true }, out var work);
+
+        var kept = KeptFindings.From(results, work, []);
+
+        kept.Findings.Should().ContainSingle().Which.Title.Should().Be("The rollback is missing");
+        kept.Gating.Should().Be(1);
+        kept.GatingProviders.Should().Equal("codex");
+    }
+
+    [Fact]
+    public void ALaterTurnThatFailedOnItsOwnTerms_StillDiscardsTheEarlierTurns_AsTheCompletedPathDoes()
+    {
+        var results = ConversationEndedBy(new ReviewerOutcome.TimedOut(), out var work);
+
+        var kept = KeptFindings.From(results, work, []);
+
+        kept.Findings.Should().BeEmpty("a failed later turn is a failed reviewer: the round was not cut, so nothing of it is kept");
+        kept.Gating.Should().Be(0);
+    }
 }

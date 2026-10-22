@@ -2364,8 +2364,8 @@ flowchart TD
     M --> R["RunAllStampedAsync returns the outcomes + its own return stamp"]
     R --> D{"RoundEndings.Decide(cause at the stamp, any mark, no reviewer)"}
     D -- "Withdrawn" --> K2["KeptFindings: every landed finding kept, does any gate?"]
-    K2 -- "none gates" --> W["LiveRound.Withdraw -> save loaded + record + findings -> projection -> OperationCanceledException(ct)"]
-    K2 -- "one gates" --> H["same, but the gate is HELD: HumanGate + notice, saved before the claim is released"]
+    K2 -- "none gates and fewer than the cap in a row" --> W["LiveRound.Withdraw -> save loaded + record + findings -> projection -> OperationCanceledException(ct)"]
+    K2 -- "one gates, or the withdrawals in a row reached the cap" --> H["same, but the gate is HELD: HumanGate + notice, saved before the claim is released"]
     H --> W2["projection -> OperationCanceledException(ct)"]
     D -- "Completed" --> N["CompleteRound as today"]
 ```
@@ -2408,6 +2408,19 @@ flowchart TD
   stays free: `loaded` + record, no hold, no notice. A withdrawal whose save the disk refuses (`RoundEngine.Recorded`: `SessionStoreException`,
   `IOException`, `UnauthorizedAccessException`) is logged and still answered as a cancellation; **until PR B (S3's retry and in-process map of
   unsaved endings) ships, such a failure also loses the hold** — one more reason the two PRs ship in one release.
+- **The security judge's hardening (2026-10-22; S2 spec §13).** (1) *A run of withdrawals is itself held.* A withdrawal judges nothing and spends no
+  round, so unchecked it was a free resample of the panel. `WithdrawalStreak.Of(loaded.Rounds, stage, cap)` counts the consecutive `cancelled` rounds of
+  the stage since the last JUDGED one (`done` and not `skipped`; skipped, interrupted and other stages' rounds neither add nor reset), the round being
+  recorded included. At exactly 2 the person gets an informational `notice` card (`Escalations.Notify`; bound to no `HoldQuestions`, answering it
+  changes nothing) — not when that withdrawal holds; at the cap (`PanelSettings.WithdrawalsBeforeHold`, `COAI_WITHDRAWALS_BEFORE_HOLD`, default 3, an
+  integer ≥ 1 read with `IntVar`) the withdrawal holds exactly as a gating finding does (`kept.HoldsTheGate || streak.HoldsTheGate`, one `HoldNotice`,
+  the same held session), with the note *withdrawn N times in a row — held for a person* (the tail is `KeptFindings.HeldForAPerson`, which the
+  extension reads). `hostStopped` rounds count too. A judged round resets the count; a person's answer does not. (2) *A cut conversation keeps its
+  last answered turn.* `TurnLoop.LastAnswered` → `ReviewerOutcome.LastAnswered` (on the base, like `EarlierTurns`; carried on the non-answer the loop
+  returns and on the `NotStarted` `BoundedScheduler.Abandoned` builds), merged by `KeptFindings.From` for outcomes with `EndedByRoundToken` only — a later
+  turn that fails on its own terms still discards the earlier turns, as on the completed path. (3) *No orphan card.* `SaveWithdrawn` answers whether the
+  save landed and `WithdrawalStreak.NoticeFor(held, landed)` chooses `Hold` / `HoldLost` / `Mention` / `None`: a hold whose save the disk refused sends no
+  hold notice (one error line instead); the `coai.db` row is still written with its `gating`, which PR B's reconcile reads.
 - **Smaller guarantees of the same change.** The status word is one string in core (`Core.Rounds.RoundStatus.Cancelled`; `RoundRecord.Cancelled`
   and `Windows.IsRecorded` both use it). `BoundedScheduler.RunAllAsync` (the wrapper that discards the return stamp) is `internal` and the
   runners assembly grants its internals to the tests only, so the engine can only call `RunAllStampedAsync`

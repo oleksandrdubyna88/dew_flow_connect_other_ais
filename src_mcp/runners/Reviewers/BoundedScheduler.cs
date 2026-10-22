@@ -512,7 +512,7 @@ public sealed class BoundedScheduler(
         }
         catch (OperationCanceledException e)
         {
-            return Abandoned(onProgress, w.Invocation, watch.Elapsed, "was cancelled while it was running", loop.Earlier, cut.Ended(e));
+            return Abandoned(onProgress, w.Invocation, watch.Elapsed, "was cancelled while it was running", loop.Earlier, cut.Ended(e), loop.LastAnswered);
         }
     }
 
@@ -526,19 +526,22 @@ public sealed class BoundedScheduler(
     /// change's code round, against two of the three waits.
     /// </remarks>
     /// <param name="earlier">The turns that answered before the round ended — kept, so they are still billed.</param>
+    /// <param name="lastAnswered">The last of them, with its findings — kept for a withdrawal (<see cref="ReviewerOutcome.LastAnswered"/>).</param>
     private static (ReviewerInvocation, ReviewerOutcome) Abandoned(
         Action<ReviewerProgress>? onProgress,
         ReviewerInvocation invocation,
         TimeSpan elapsed,
         string what = "was still queued",
         IReadOnlyList<TurnUsage>? earlier = null,
-        bool endedByRoundToken = false)
+        bool endedByRoundToken = false,
+        ReviewerOutcome.Ok? lastAnswered = null)
     {
         var outcome = new ReviewerOutcome.NotStarted(
             $"the round ended while this reviewer {what}, after {elapsed.TotalSeconds:F0}s")
         {
             EarlierTurns = earlier ?? [],
             EndedByRoundToken = endedByRoundToken,
+            LastAnswered = lastAnswered,
         };
         Report(onProgress, invocation, "failed", outcome, elapsed);
 
