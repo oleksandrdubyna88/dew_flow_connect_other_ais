@@ -20,12 +20,14 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class AZombieIsNotAliveTests
 {
-    [Fact]
-    public async Task AKilledButUnreapedProcess_IsNotAlive()
+    [Theory]
+    [InlineData("/bin/sh", "sleep 600 & echo $!; exec sleep 600")]
+    [InlineData("/bin/bash", "sleep 600 & echo $!; sleep 2; exec sleep 600")]
+    public async Task AKilledButUnreapedProcess_IsNotAlive(string shell, string script)
     {
-        Assert.SkipUnless(OperatingSystem.IsLinux(), "a zombie is read from /proc, which Linux alone has");
-        var start = new ProcessStartInfo("/bin/sh") { UseShellExecute = false, RedirectStandardOutput = true };
-        foreach (var arg in new[] { "-c", "sleep 600 & echo $!; exec sleep 600" })
+        Assert.SkipUnless(OperatingSystem.IsLinux() && File.Exists(shell), "a zombie is read from /proc, which Linux alone has");
+        var start = new ProcessStartInfo(shell) { UseShellExecute = false, RedirectStandardOutput = true };
+        foreach (var arg in new[] { "-c", script })
         {
             start.ArgumentList.Add(arg);
         }
