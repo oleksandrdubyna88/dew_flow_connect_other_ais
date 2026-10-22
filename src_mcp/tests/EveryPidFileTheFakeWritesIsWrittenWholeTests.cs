@@ -44,8 +44,8 @@ public sealed class EveryPidFileTheFakeWritesIsWrittenWholeTests
             .Select(row => $"{Path.GetFileName(file)}:{row.line}: {row.text.Trim()}")),
     ];
 
-    /// <summary>Every site, joined — the assertion lists them all, not the first — with the braces escaped for the assertion's own formatter.</summary>
-    private static string Listed(List<string> sites) => string.Join(" | ", sites).Replace("{", "{{", StringComparison.Ordinal).Replace("}", "}}", StringComparison.Ordinal);
+    /// <summary>Every site, joined — the assertion lists them all, not just the first.</summary>
+    private static string Listed(List<string> sites) => string.Join(" | ", sites);
 
     [Fact]
     public void EveryPidFileTheFakeWrites_GoesThroughWritePidFile()

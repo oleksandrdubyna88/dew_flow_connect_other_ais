@@ -40,7 +40,35 @@ internal static class SupervisionVerbs
         return Process.Start(info)!;
     }
 
-    internal static void WritePid(string file, Process child) => File.WriteAllText(file, child.Id.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    /// <summary>The child's pid into <paramref name="file"/>, WHOLE OR NOT AT ALL (<see cref="Serving.WritePidFile"/>): a poller that sees the file sees a pid, never the empty file <c>File.WriteAllText</c> leaves between create and write (C24).</summary>
+    internal static void WritePid(string file, Process child) => Serving.WritePidFile(file, [child.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)]);
+
+    /// <summary>What the pid file holds right now: its text, or empty when it is not there yet or cannot be read this instant — "not yet", never a throw (C24).</summary>
+    private static string PidContent(string file)
+    {
+        try
+        {
+            return File.Exists(file) ? File.ReadAllText(file) : string.Empty;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return string.Empty;
+        }
+    }
+
+    /// <summary>The file holds a pid: it exists AND its content parses. A transiently empty or half-written file is "not yet" — the next poll reads it again — never an exception.</summary>
+    internal static bool PidWritten(string file) => int.TryParse(PidContent(file), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out _);
+
+    /// <summary>Waits until every pid file holds a pid AND <paramref name="others"/> holds; the bound's expiry on a pid file is the failure, and it says what the file held last.</summary>
+    private static void WaitedForPids(Func<bool> others, params string[] files)
+    {
+        _ = Waited(() => files.All(PidWritten) && others());
+        var never = files.Where(file => !PidWritten(file)).Select(file => $"{Path.GetFileName(file)} never held a pid within {Patience.TotalSeconds:0} s (content: '{PidContent(file)}')").ToArray();
+        if (never.Length > 0)
+        {
+            throw new TimeoutException(string.Join("; ", never));
+        }
+    }
 
     /// <summary>Waits until <paramref name="done"/> holds, polling every 20 ms, for as long as <see cref="Patience"/> allows.</summary>
     private static bool Waited(Func<bool> done)
@@ -128,9 +156,13 @@ internal static class SupervisionVerbs
 
     /// <summary>Every pid file in the folder, and what /proc says of it NOW: its state letter, or <c>gone</c> when no entry is left — a zombie would read <c>Z</c>.</summary>
     private static Dictionary<string, string> StatesOf(string dir) =>
-        Directory.GetFiles(dir, "*.pid").ToDictionary(
-            file => Path.GetFileName(file),
-            file => ProcStat.ReadFor(int.Parse(File.ReadAllText(file)), ProcReads.Real) is ProcStatRead.Read { Line: var line } ? line.State : "gone");
+        Directory.GetFiles(dir, "*.pid").ToDictionary(file => Path.GetFileName(file), StateOfPidFile);
+
+    /// <summary>One pid file's state, never an exception: a file that holds no pid (a torn write) is a NAMED state, <c>unreadable: '&lt;content&gt;'</c>, not exit 97.</summary>
+    private static string StateOfPidFile(string file) =>
+        int.TryParse(PidContent(file), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var pid)
+            ? ProcStat.ReadFor(pid, ProcReads.Real) is ProcStatRead.Read { Line: var line } ? line.State : "gone"
+            : $"unreadable: '{PidContent(file).TrimEnd()}'";
 
     private static string[] AgentArguments(string mode, string dir) => mode switch
     {
@@ -177,16 +209,16 @@ internal static class SupervisionVerbs
         switch (mode)
         {
             case "managed":
-                _ = Waited(() => File.Exists(Path.Combine(dir, "c1.pid")) && File.Exists(Path.Combine(dir, "c2.pid")) && agent.HasExited && ManagedEnded(managed!));
+                WaitedForPids(() => agent.HasExited && ManagedEnded(managed!), Path.Combine(dir, "c1.pid"), Path.Combine(dir, "c2.pid"));
                 return false;
             case "orphans":
             case "managed-live":
-                _ = Waited(() => File.Exists(Path.Combine(dir, "c1.pid")) && File.Exists(Path.Combine(dir, "c2.pid")) && agent.HasExited);
+                WaitedForPids(() => agent.HasExited, Path.Combine(dir, "c1.pid"), Path.Combine(dir, "c2.pid"));
                 return false;
             case "zombie":
-                _ = Waited(() => File.Exists(Path.Combine(dir, "g.pid")) && agent.HasExited);
+                WaitedForPids(() => agent.HasExited, Path.Combine(dir, "g.pid"));
                 Thread.Sleep(900);
-                return int.TryParse(File.ReadAllText(Path.Combine(dir, "g.pid")), out var pid) && ProcStat.ReadFor(pid, ProcReads.Real) is ProcStatRead.Read { Line.State: "Z" };
+                return StateOfPidFile(Path.Combine(dir, "g.pid")) == "Z";
             default:
                 return false;
         }
@@ -201,7 +233,7 @@ internal static class SupervisionVerbs
         }
 
         File.WriteAllText(Path.Combine(dir, "trigger"), "go");
-        _ = Waited(() => File.Exists(Path.Combine(dir, "late.pid")));
+        WaitedForPids(() => true, Path.Combine(dir, "late.pid"));
         File.WriteAllText(Path.Combine(dir, "listed.txt"), string.Join(",", members.Select(member => member.Pid)));
     }
 

@@ -402,7 +402,7 @@ internal static class AcpAgent
 
     /// <summary>A FakeCli child with every stream of its own, its pid written to the file.</summary>
     private static void SpawnedInto(string pidFile, params string[] arguments) =>
-        File.WriteAllText(pidFile, Spawned(arguments).Id.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Serving.WritePidFile(pidFile, [Spawned(arguments).Id.ToString(System.Globalization.CultureInfo.InvariantCulture)]);
 
     private static Process Spawned(params string[] arguments) => SupervisionVerbs.StartChild(arguments);
 

@@ -90,15 +90,28 @@ public sealed class SupervisedTeardownLinuxTests : IDisposable
         return IsGone(pid);
     }
 
+    /// <summary>What the pid file holds right now ("" when it is not there or cannot be read this instant) — the sentence of a wait that ran out names it.</summary>
+    private static string HeldBy(string file)
+    {
+        try
+        {
+            return File.Exists(file) ? File.ReadAllText(file) : string.Empty;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return string.Empty;
+        }
+    }
+
     private int PidIn(string file)
     {
         var until = DateTime.UtcNow + Patience;
-        while (!(File.Exists(file) && int.TryParse(File.ReadAllText(file), out _)) && DateTime.UtcNow < until)
+        while (!int.TryParse(HeldBy(file), out _) && DateTime.UtcNow < until)
         {
             Thread.Sleep(25);
         }
 
-        var pid = int.Parse(File.ReadAllText(file));
+        int.TryParse(HeldBy(file), out var pid).Should().BeTrue($"{Path.GetFileName(file)} never held a pid within {Patience.TotalSeconds:0} s (content: '{HeldBy(file).TrimEnd()}')");
         Remember(pid);
 
         return pid;
@@ -116,6 +129,9 @@ public sealed class SupervisedTeardownLinuxTests : IDisposable
 
     private static string StateOf(JsonElement report, string file) => report.GetProperty("states").GetProperty(file).GetString()!;
 
+    /// <summary>The reason an assertion on a supervise-tree report fails with: the sentence, then the WHOLE report (survivors, every pid's state) — the next failure's kept message names the step (C24 (5), D5).</summary>
+    private static string Why(string reason, JsonElement report) => $"{reason} | report: {report}";
+
     [Fact]
     public async Task AnAgentThatExitsFirst_LeavesNoSameGroupAndNoSetsidChild()
     {
@@ -125,9 +141,9 @@ public sealed class SupervisedTeardownLinuxTests : IDisposable
 
         var c1 = PidIn(_dir.At("c1.pid"));
         var c2 = PidIn(_dir.At("c2.pid"));
-        report.GetProperty("survivors").GetArrayLength().Should().Be(0);
-        StateOf(report, "c1.pid").Should().Be("gone", $"the same-group grandchild of an agent that crashed first is still alive (pid {c1})");
-        StateOf(report, "c2.pid").Should().Be("gone", $"the setsid grandchild of an agent that crashed first is still alive (pid {c2})");
+        report.GetProperty("survivors").GetArrayLength().Should().Be(0, Why("the teardown reported survivors", report));
+        StateOf(report, "c1.pid").Should().Be("gone", Why($"the same-group grandchild of an agent that crashed first is still alive (pid {c1})", report));
+        StateOf(report, "c2.pid").Should().Be("gone", Why($"the setsid grandchild of an agent that crashed first is still alive (pid {c2})", report));
         (await GoneSoonAsync(c1)).Should().BeTrue();
         (await GoneSoonAsync(c2)).Should().BeTrue();
     }
@@ -141,7 +157,7 @@ public sealed class SupervisedTeardownLinuxTests : IDisposable
 
         var report = await SupervisedAsync("orphans");
 
-        StateOf(report, "torn.pid").Should().Be("unreadable: ''", "an empty pid file is a torn write the report names, not a FormatException that ends the fake with exit 97");
+        StateOf(report, "torn.pid").Should().Be("unreadable: ''", Why("an empty pid file is a torn write the report names, not a FormatException that ends the fake with exit 97", report));
     }
 
     [Fact]
@@ -153,8 +169,8 @@ public sealed class SupervisedTeardownLinuxTests : IDisposable
 
         var late = PidIn(_dir.At("late.pid"));
         File.ReadAllText(_dir.At("listed.txt")).Split(',').Should().NotContain(late.ToString(), "the grandchild was born after the first listing");
-        report.GetProperty("survivors").GetArrayLength().Should().Be(0, "a grandchild born after the first listing survived the confirmation");
-        StateOf(report, "late.pid").Should().Be("gone");
+        report.GetProperty("survivors").GetArrayLength().Should().Be(0, Why("a grandchild born after the first listing survived the confirmation", report));
+        StateOf(report, "late.pid").Should().Be("gone", Why($"the late grandchild (pid {late}) was not gone after the teardown", report));
         (await GoneSoonAsync(late)).Should().BeTrue();
     }
 
@@ -166,9 +182,9 @@ public sealed class SupervisedTeardownLinuxTests : IDisposable
         var report = await SupervisedAsync("zombie");
 
         var exited = PidIn(_dir.At("g.pid"));
-        report.GetProperty("zombieBefore").GetBoolean().Should().BeTrue("the precondition: the orphan really was a zombie of the shim before the teardown");
-        report.GetProperty("survivors").GetArrayLength().Should().Be(0, $"an exited grandchild (state Z, pid {exited}) was recorded as a survivor");
-        StateOf(report, "g.pid").Should().Be("gone", "a zombie stayed in /proc after the drain");
+        report.GetProperty("zombieBefore").GetBoolean().Should().BeTrue(Why("the precondition: the orphan really was a zombie of the shim before the teardown", report));
+        report.GetProperty("survivors").GetArrayLength().Should().Be(0, Why($"an exited grandchild (state Z, pid {exited}) was recorded as a survivor", report));
+        StateOf(report, "g.pid").Should().Be("gone", Why("a zombie stayed in /proc after the drain", report));
     }
 
     [Fact]
@@ -178,11 +194,11 @@ public sealed class SupervisedTeardownLinuxTests : IDisposable
 
         var report = await SupervisedAsync("managed");
 
-        report.GetProperty("managedExitedBefore").GetBoolean().Should().BeTrue("the precondition: the managed child had already exited before the teardown, so the teardown has nothing to kill in it");
+        report.GetProperty("managedExitedBefore").GetBoolean().Should().BeTrue(Why("the precondition: the managed child had already exited before the teardown, so the teardown has nothing to kill in it", report));
         // 137 would mean the child was killed while still alive (the precondition above missed); a status taken from under .NET would end the supervise-tree process itself (exit 134, FailFast on ECHILD) and fail the earlier exit-0 assertion.
-        report.GetProperty("managedExit").GetInt32().Should().Be(17, "the managed child's own exit code was lost: 137 means it was killed while still alive, anything else means the drain took its status (expected 17)");
-        report.GetProperty("survivors").GetArrayLength().Should().Be(0);
-        StateOf(report, "c2.pid").Should().Be("gone");
+        report.GetProperty("managedExit").GetInt32().Should().Be(17, Why("the managed child's own exit code was lost: 137 means it was killed while still alive, anything else means the drain took its status (expected 17)", report));
+        report.GetProperty("survivors").GetArrayLength().Should().Be(0, Why("the teardown reported survivors", report));
+        StateOf(report, "c2.pid").Should().Be("gone", Why("the setsid orphan was not gone after the teardown", report));
     }
 
     [Fact]
@@ -192,10 +208,10 @@ public sealed class SupervisedTeardownLinuxTests : IDisposable
 
         var report = await SupervisedAsync("managed-live");
 
-        report.GetProperty("managedAliveBefore").GetBoolean().Should().BeTrue("the precondition: the managed child was still alive when the teardown started");
-        report.GetProperty("managedExit").GetInt32().Should().Be(137, "DL9: every live descendant is SIGKILLed, a child .NET started too — only its STATUS is never taken by the drain");
-        report.GetProperty("survivors").GetArrayLength().Should().Be(0);
-        StateOf(report, "c2.pid").Should().Be("gone");
+        report.GetProperty("managedAliveBefore").GetBoolean().Should().BeTrue(Why("the precondition: the managed child was still alive when the teardown started", report));
+        report.GetProperty("managedExit").GetInt32().Should().Be(137, Why("DL9: every live descendant is SIGKILLed, a child .NET started too — only its STATUS is never taken by the drain", report));
+        report.GetProperty("survivors").GetArrayLength().Should().Be(0, Why("the teardown reported survivors", report));
+        StateOf(report, "c2.pid").Should().Be("gone", Why("the setsid orphan was not gone after the teardown", report));
     }
 
     // ---------- shim-acp: the ACP client as --ask-acp runs it ----------
