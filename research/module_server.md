@@ -3775,7 +3775,7 @@ reviewers or models) the result is still the owner's copy, and the OWNING store'
 two stores with different contents — counted from <store>*; the answer does not depend on argument order at all (the same set of stores gives the same `keyStore`, parts and
 conflicts), only the `stores[]` listing follows the order the first paths were given. A snapshot whose id is this side's
 is this side reached through another spelling (its path joins `stores[0].paths[]`, its rounds are not read); two snapshots with one id are one store and the NEWER
-`writtenUtc` is the one counted (a tie keeps the first). Every store's rounds are concatenated and cut by the ONE `RoundCounts.Cut` at the one `now` — a snapshot
+`writtenUtc` is the one counted (a tie goes to the document at the ordinally smallest path, so argument order never decides). Every store's rounds are concatenated and cut by the ONE `RoundCounts.Cut` at the one `now` — a snapshot
 round 4 h 59 m before `--now` is in `5h`, one exactly 5 h before is in `24h` and not `5h` — never at a snapshot's own write.
 
 Tests: `RoundCountsSnapshotTests`, `ARoundLeavesASnapshotBesideTheStoreTests`, `RoundCountsMergedTests`, `RoundCountsMergedCliScenarioTests`, `RoundCountsTests` (+3), and

@@ -251,7 +251,8 @@ ones, and a relative path is relative to a working directory the extension does 
 3. *Identity* — a snapshot whose `store.id` equals this side's id is this side's own store named through another spelling: its
    path joins `stores[0].paths[]` and its rounds are NOT read (this side is read live). A snapshot whose id equals an earlier
    snapshot's joins that store's `paths[]`; the one with the NEWER `writtenUtc` is the one counted (two spellings normally open
-   one file and tie).
+   one file and tie). On an equal `writtenUtc` the document at the ordinally smallest path is the one counted, so the counted
+   document never depends on the order the paths were given in (code review, 2026-10-22).
 4. *Quiet* — `writtenUtc <= fromUtc of the 7d window` ⇒ `quiet: true`; its rounds cannot be inside any window, and the store
    is still a `stores[]` entry with parts of 0 — the parent's rule: 0 *as of*, never *not included*.
 

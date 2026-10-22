@@ -108,7 +108,7 @@ internal static class RoundCountsMergedMode
         rest.FirstOrDefault(token => token.StartsWith("--", StringComparison.Ordinal)) is { } flag
             ? Outcome<IReadOnlyList<string>>.Refuse($"{Usage} — '{flag}' is not a flag it knows")
             : rest.Length > MaxPaths
-                ? Outcome<IReadOnlyList<string>>.Refuse($"{Usage} — {rest.Length} paths were given")
+                ? Outcome<IReadOnlyList<string>>.Refuse($"{Usage} — {rest.Length} snapshot paths were given; at most {MaxPaths} are read")
                 : Absolute([.. rest.Distinct(StringComparer.Ordinal)]);
 
     private static Outcome<IReadOnlyList<string>> Absolute(IReadOnlyList<string> paths) =>

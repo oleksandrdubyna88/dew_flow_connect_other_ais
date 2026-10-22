@@ -73,7 +73,8 @@ public sealed record StoreNotIncluded(string Path, string Reason, string Detail)
 /// (<see cref="MergedStore.Conflicts"/>) and the owner's copy is the one counted — the same set of stores gives the same answer whatever order the
 /// paths were given in; only the listing in <c>stores[]</c> follows that order.</para>
 /// <para><b>One store, however many names.</b> A snapshot whose id is this side's is this side reached through another spelling (its path is
-/// joined, its rounds are not read: this side is read live); two snapshots with one id are one store, and the newer write is the one counted.</para>
+/// joined, its rounds are not read: this side is read live); two snapshots with one id are one store, and the newer write is the one counted; on equal writes the document at the ordinally
+/// smallest path is — a tie-break that, like the ownership above, depends on the inputs alone and never on the order the paths were given in.</para>
 /// <para><b>One now.</b> Every store's rounds are cut by the plain counter's own <see cref="RoundCounts.Cut"/> at the caller's instant, never at a
 /// snapshot's write.</para>
 /// <para><b>A problem is a row, not an exit code.</b> A snapshot that cannot be read is in <c>storesNotIncluded</c> with its reason; a store quiet
@@ -86,8 +87,8 @@ public static class RoundCountsMerged
     /// <summary>A path and what reading it gave.</summary>
     internal sealed record Named(string Path, SnapshotReading Reading);
 
-    /// <summary>A snapshot store as it is counted: every path that reached it, and the document that is counted.</summary>
-    private sealed record Entry(IReadOnlyList<string> Paths, RoundCountsSnapshotDocument Counted);
+    /// <summary>A snapshot store as it is counted: every path that reached it, the document that is counted, and the path that document was read from.</summary>
+    private sealed record Entry(IReadOnlyList<string> Paths, RoundCountsSnapshotDocument Counted, string CountedPath);
 
     private sealed record Folded(IReadOnlyList<string> ThisSidePaths, IReadOnlyList<Entry> Entries, IReadOnlyList<StoreNotIncluded> NotIncluded)
     {
@@ -140,12 +141,26 @@ public static class RoundCountsMerged
 
         return entries.Any(entry => entry.Counted.Store.Id == id)
             ? [.. entries.Select(entry => entry.Counted.Store.Id == id ? Widened(entry, path, document) : entry)]
-            : [.. entries, new Entry([path], document)];
+            : [.. entries, new Entry([path], document, path)];
     }
 
-    /// <summary>The same store reached through one more path: the path is named, and the NEWER write is the one counted (two spellings of one file tie, and the first stays).</summary>
+    /// <summary>
+    /// The same store reached through one more path: the path is named, and the NEWER write is the one counted. A tie on <c>writtenUtc</c> (two spellings
+    /// of one file normally tie, with identical contents) goes to the document at the ordinally smallest path, so the counted document is a function of
+    /// the documents and their paths alone and never of the order the paths were given in.
+    /// </summary>
     private static Entry Widened(Entry entry, string path, RoundCountsSnapshotDocument document) =>
-        new([.. entry.Paths, path], string.CompareOrdinal(document.WrittenUtc, entry.Counted.WrittenUtc) > 0 ? document : entry.Counted);
+        Supersedes(document, path, entry)
+            ? new Entry([.. entry.Paths, path], document, path)
+            : entry with { Paths = [.. entry.Paths, path] };
+
+    private static bool Supersedes(RoundCountsSnapshotDocument document, string path, Entry entry) =>
+        string.CompareOrdinal(document.WrittenUtc, entry.Counted.WrittenUtc) switch
+        {
+            > 0 => true,
+            0 => string.CompareOrdinal(path, entry.CountedPath) < 0,
+            _ => false,
+        };
 
     // ---- the population: one key rule ---------------------------------------------------------------------------------------------
 

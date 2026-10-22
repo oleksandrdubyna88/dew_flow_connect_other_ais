@@ -224,6 +224,23 @@ public sealed class RoundCountsMergedTests : IDisposable
         answer.Stores[1].Paths.Should().Equal(older, newer);
     }
 
+    /// <summary>Two documents of ONE store written at the same instant but saying different things: nothing in them says which is newer, so the path decides (the ordinally smallest).</summary>
+    [Fact]
+    public void TwoSnapshotsOfOneStoreWrittenAtTheSameInstant_GiveTheSameAnswerInEitherOrder()
+    {
+        var written = Now.AddMinutes(-6);
+        var a = Snapshot("tie-a", Document(Wsl("Ubuntu"), written, Round(1, Key('b'), Now.AddHours(-1), nameof(Stage.CodeReview), Ran(Codex))));
+        var z = Snapshot("tie-z", Document(Wsl("Ubuntu"), written, Round(1, Key('c'), Now.AddHours(-2), nameof(Stage.CodeReview), Ran(Codex), Ran(Codex))));
+
+        var forward = Merge(a, z);
+        var backward = Merge(z, a);
+
+        backward.Windows.Should().BeEquivalentTo(forward.Windows, "the counted document must not depend on the order the paths came in");
+        backward.Stores.Select(s => (s.Id, s.AsOf, s.Conflicts, s.Quiet)).Should().Equal(forward.Stores.Select(s => (s.Id, s.AsOf, s.Conflicts, s.Quiet)));
+        backward.Stores[1].Paths.Should().BeEquivalentTo(forward.Stores[1].Paths, "both spellings are named either way");
+        RowOf(forward, "5h", Codex).RoundKeys.Should().Equal([Key('b')], "on a tie the document at the ordinally smallest path is the one counted");
+    }
+
     [Fact]
     public void ASnapshotOfThisSidesOwnStore_IsNotCountedTwice()
     {

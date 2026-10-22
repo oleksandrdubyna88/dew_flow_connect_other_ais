@@ -185,6 +185,18 @@ public sealed class RoundCountsMergedCliScenarioTests : IDisposable
     }
 
     [Fact]
+    public void ThirtyThreePaths_AreRefusedWithTheCountAndTheLimitInTheSentence()
+    {
+        var tooMany = Enumerable.Range(0, 33).Select(n => _others.At("many", $"{n}.json")).ToArray();
+
+        var (code, text, error) = Run(Merged(tooMany));
+
+        code.Should().Be(65);
+        text.Should().BeEmpty();
+        error.Should().Contain($"33 snapshot paths were given; at most {RoundCountsMergedMode.MaxPaths} are read");
+    }
+
+    [Fact]
     public void ThirtyTwoPaths_AreAccepted()
     {
         var paths = Enumerable.Range(0, 32).Select(n => _others.At("many", $"{n}.json")).ToArray();
