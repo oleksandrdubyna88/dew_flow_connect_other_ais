@@ -391,3 +391,15 @@ dead button. Either order is safe; 1 before 2 is the only order that closes the 
 4. **D6 — ship order.** Recommendation: this server release before or with the cancel plan's, because the cancel
    plan makes the hold reachable by a cancel.
 5. **R1 — the file road against a local agent.** Recommendation: a separate plan (a signed answer); not this one.
+
+## 11. What the plan round changed (2026-10-22, coai session 00b03b61)
+
+These override the sections above where they differ.
+
+1. **The claim is narrowed (finding 0).** This plan closes the PROTOCOL road: the tool argument no longer releases a gate, and only a written answer to the hold's own notice does. It does NOT make that answer person-authored. An agent with shell or file access as the server's user can still write  (R1). Every surface that promises "only a person" (tool descriptions, , help, Program text) says exactly that: *released only by an answer on the notice card — not by any argument of the calling AI*. None of them claims the answer is verified. The FILE road is closed by a follow-up plan, , created as a stub in the same PR as this plan's first code PR, with this R1 as its symptom.
+2. **A live contract leg (finding 1).** A seam script, a sibling of  with HOME/USERPROFILE/CODEX_HOME isolated, runs the BUILT coai-mcp to a held gate over FakeCli. It reads the notice file the server wrote and feeds it to the extension's real notice parser. It asserts the card offers exactly the  the notice lists, Proceed included. The leg is wired into run-seam.mjs, and a renamed field fails it on either side.
+3. **Held sessions from before the upgrade (finding 2).** When a held session is read and its standing notice carries no  list, the server REWRITES that notice in place: the same id, the same questions,  added, via an idempotent AtomicFile write. No duplicate card, and the answer file is untouched. Test: .
+4. **A scenario through the real product (finding 3).** , in the repo's scenario harness, drives the full flow: review → call_human → the notice file → an answer file with  → resolve → the stage advanced. The attack is a scenario too: resolve with the argument and no answer → refused, still held. Both are catalogued in research/module_tests.md with the runner command (the CoaiMcp.Tests exe, ).
+5. **Pending findings under a person's Proceed (finding 4).** Resolve with no decisions, consuming a recorded Proceed, records every still-Pending finding with the disposition  (a decision record, not a silent drop). Earlier recorded decisions are kept. The stage then advances. Test: .
+6. **The agent learns of the Proceed (finding 5).** While a Proceed is on file and not yet consumed,  and every refused  say: *a person pressed Proceed on the held gate — call resolve to advance*. The resolve reply then names the decision as the person's.
+7. **One refusal for every review entry (finding 6).** , ,  and  share one hold check in the engine. They answer GateHeld while no person has answered, and the item-6 sentence once a Proceed is on file. Test over all four tools.
