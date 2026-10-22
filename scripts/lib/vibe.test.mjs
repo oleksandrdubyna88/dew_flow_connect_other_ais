@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { after, test } from 'node:test';
 import {
   MINIMAL_UNIX, MINIMAL_WINDOWS, builtEnv, classOf, deepestChild, dirLink, files, homeListing, linkSignIn, minimalEnv, personsVibeHome,
-  pythonCommand, removeDirLink, run, vibePython,
+  KEYRING_FAIL_BACKEND, armFilterOf, armsCellsError, armWanted, keyringArm, keyringSetup, pythonCommand, removeDirLink, run, vibePython, writeProbeKeyring,
 } from './vibe.mjs';
 
 const WINDOWS = process.platform === 'win32';
@@ -248,4 +248,144 @@ test('a replaced environment is the arm\'s own plus the pin on every platform, a
     assert.deepEqual(childEnvFor({ replaceEnv: { A: '1' } }, { cli: 'python', platform, env: shell }), { A: '1', ...PIN });
     assert.equal('VIBE_CLI' in childEnvFor({ home: 'H' }, { cli: 'inherit', platform, env: { VIBE_CLI: 'rust' } }), false);
   }
+});
+
+// ------------------------------------------------------------------------------------------------------ M-V7's keyring arms (S-N17)
+// DN4/DN5 item 5/DN10 of todo/PLAN_kimi_and_vibe_on_native_linux.md: on a native Linux host coai's Vibe launch sets PYTHON_KEYRING_BACKEND=
+// keyring.backends.fail.Keyring, so M-V7 must measure THAT road — arms a and a2 carry it — and arms a3/a3c give Vibe a keyring that IS available
+// (a fake HOME whose keyringrc.cfg names a probe-owned backend), so the claim "the forced backend beats an available one" is proven, not assumed.
+// Nothing here runs Vibe or Python; the backend's text is checked as text.
+
+const FAIL = 'keyring.backends.fail.Keyring';
+const scratchOf = (name) => join(base, name);
+
+test('S-N17: on Linux arms a and a2 carry PYTHON_KEYRING_BACKEND, a3 carries it AND a fake HOME, a3c the fake HOME only, b is as before', () => {
+  const scratch = '/s/M-V7-run';
+  const arm = (name) => keyringArm(name, 'linux', { scratch });
+
+  assert.equal(arm('a').env.PYTHON_KEYRING_BACKEND, FAIL, "M-V7 arm a on Linux carries no PYTHON_KEYRING_BACKEND — it measures today's open keyring road, not the launch E2 ships (DN10)");
+  assert.deepEqual(arm('a').env, { PYTHON_KEYRING_BACKEND: FAIL });
+  assert.deepEqual(arm('a2').env, { VIBE_TEST_DISABLE_KEYRING: '1', PYTHON_KEYRING_BACKEND: FAIL });
+  assert.deepEqual(arm('a3').env, { PYTHON_KEYRING_BACKEND: FAIL, HOME: '/s/M-V7-run/fake-home' }, 'a3 must carry the forced backend AND the fake HOME');
+  assert.deepEqual(arm('a3c').env, { HOME: '/s/M-V7-run/fake-home' }, 'a3c is a3 without the variable — its teeth');
+  assert.deepEqual(arm('b').env, {});
+  assert.equal(KEYRING_FAIL_BACKEND, FAIL);
+});
+
+test('S-N17: a3 and a3c share one fake HOME and one marker file inside the arm scratch; a, a2 and b have neither', () => {
+  const scratch = '/s/M-V7-run';
+  const a3 = keyringArm('a3', 'linux', { scratch });
+  const a3c = keyringArm('a3c', 'linux', { scratch });
+
+  assert.equal(a3.fakeHome, '/s/M-V7-run/fake-home');
+  assert.equal(a3c.fakeHome, a3.fakeHome);
+  assert.equal(a3c.markerFile, a3.markerFile);
+  assert.ok(a3.markerFile.startsWith(`${scratch}/`), `the marker file ${a3.markerFile} is outside the arm scratch`);
+  for (const name of ['a', 'a2', 'b']) {
+    const other = keyringArm(name, 'linux', { scratch });
+    assert.deepEqual([other.fakeHome, other.markerFile, other.applies], ['', '', true], name);
+  }
+  assert.throws(() => keyringArm('nope', 'linux', { scratch }), /nope/u);
+});
+
+test('S-N17: on Windows every arm is today\'s — a empty, a2 only VIBE_TEST_DISABLE_KEYRING, b empty — and a3/a3c do not apply', () => {
+  const arm = (name) => keyringArm(name, 'win32', { scratch: 'C:\\s\\M-V7' });
+
+  assert.deepEqual(arm('a').env, {});
+  assert.deepEqual(arm('a2').env, { VIBE_TEST_DISABLE_KEYRING: '1' });
+  assert.deepEqual(arm('b').env, {});
+  assert.deepEqual([arm('a3').applies, arm('a3c').applies], [false, false], 'a Linux-only arm was offered on Windows');
+});
+
+test('S-N17: writeProbeKeyring writes the config and the backend ONLY under the fake home, names the marker, and never makes it', () => {
+  const scratch = scratchOf('keyring-write');
+  const fakeHome = join(scratch, 'fake-home');
+  const markerFile = join(scratch, 'keyring-marker.txt');
+  mkdirSync(scratch, { recursive: true });
+  writeFileSync(join(scratch, 'sibling.txt'), 'untouched');
+
+  const written = writeProbeKeyring(fakeHome, markerFile);
+
+  assert.deepEqual(written.sort(), ['.config/python_keyring/keyringrc.cfg', 'keyring-backend/probe_marker.py']);
+  assert.deepEqual(files(scratch), ['fake-home/.config/python_keyring/keyringrc.cfg', 'fake-home/keyring-backend/probe_marker.py', 'sibling.txt'],
+    'something was written outside the fake home');
+  assert.equal(existsSync(markerFile), false, 'the marker exists before any keyring call — arm a3c could never tell');
+  const cfg = readFileSync(join(fakeHome, '.config', 'python_keyring', 'keyringrc.cfg'), 'utf8');
+  assert.match(cfg, /^\[backend\]$/mu);
+  assert.match(cfg, /^default-keyring = probe_marker\.MarkerKeyring$/mu);
+  assert.ok(cfg.includes(`keyring-path = ${fakeHome.replaceAll('\\', '/')}/keyring-backend`), cfg);
+});
+
+test('S-N17: the probe backend appends the SERVICE name to the marker and returns nothing — no key exists anywhere', () => {
+  const scratch = scratchOf('keyring-backend');
+  const markerFile = join(scratch, 'marker.txt');
+  writeProbeKeyring(join(scratch, 'fake-home'), markerFile);
+
+  const py = readFileSync(join(scratch, 'fake-home', 'keyring-backend', 'probe_marker.py'), 'utf8');
+
+  assert.match(py, /class MarkerKeyring\(KeyringBackend\):/u);
+  assert.match(py, /priority = 1/u);
+  assert.ok(py.includes(JSON.stringify(markerFile.replaceAll('\\', '/'))), 'the module does not name the marker file');
+  assert.match(py, /open\(MARKER, 'a'/u, 'the marker is appended to');
+  for (const verb of ['get_password', 'set_password', 'delete_password']) assert.match(py, new RegExp(`def ${verb}\\(`, 'u'), verb);
+  assert.deepEqual(py.match(/^\s*return\b.*$/gmu).map((l) => l.trim()), ['return None', 'return None', 'return None'], 'the backend returns something other than None');
+  assert.equal(/username|password\)|\.write\((?!service)/u.test(py.replace(/def \w+\([^)]*\)/gu, '')), false, 'the backend writes more than the service name');
+});
+
+test('S-N17: keyringSetup makes the fake home for a3 and a3c only', () => {
+  const scratch = scratchOf('keyring-setup');
+  mkdirSync(scratch, { recursive: true });
+
+  const a = keyringSetup('a', 'linux', { scratch: join(scratch, 'a') });
+  const a3 = keyringSetup('a3', 'linux', { scratch: join(scratch, 'a3') });
+  const a3c = keyringSetup('a3c', 'linux', { scratch: join(scratch, 'a3c') });
+
+  assert.equal(existsSync(join(scratch, 'a')), false, 'arm a made a folder');
+  for (const k of [a3, a3c]) assert.equal(existsSync(join(k.fakeHome, '.config', 'python_keyring', 'keyringrc.cfg')), true, k.arm);
+  assert.deepEqual(a.env, { PYTHON_KEYRING_BACKEND: FAIL });
+});
+
+test('S-N17: --arms picks M-V7 arms by the name before the colon, so the free live check can run a3 and a3c and nothing paid', () => {
+  const names = ['a: empty short VIBE_HOME', 'a2: empty home + VIBE_TEST_DISABLE_KEYRING=1', 'a3: forced backend + a fake HOME', 'a3c: the same fake HOME, NO forced backend', 'b: VIBE_ACTIVE_MODEL=nope'];
+
+  assert.deepEqual(names.filter((n) => armWanted(n, ['a3', 'a3c'])), [names[2], names[3]], 'a --arms filter let arm a, a2 or the paid arm b through');
+  assert.deepEqual(names.filter((n) => armWanted(n, [])), names, 'no filter = every arm');
+  assert.deepEqual(names.filter((n) => armWanted(n, ['a'])), [names[0]], 'a does not match a2, a3 or a3c');
+});
+
+test('G18: armWanted treats a missing filter (null or undefined) as "every arm", not as a crash on .length', () => {
+  assert.equal(armWanted('a3: forced backend', undefined), true);
+  assert.equal(armWanted('a3: forced backend', null), true);
+});
+
+// CodeRabbit (probe-vibe-confinement.mjs): `--arms ""` / `--arms ,` parsed to [], which armWanted reads as "no filter" - every arm ran, the PAID arm b included.
+test('armFilterOf: an omitted --arms is "no filter"; a given one must name an arm - an empty value, a bare comma or a missing value is an error, never every arm', () => {
+  assert.deepEqual(armFilterOf(['--cells', 'M-V7']), { filter: [], error: '' });
+  assert.deepEqual(armFilterOf(['--arms', 'a3,a3c']), { filter: ['a3', 'a3c'], error: '' });
+  assert.deepEqual(armFilterOf(['--arms', ' a3 , ,a3c ']), { filter: ['a3', 'a3c'], error: '' });
+  for (const argv of [['--arms', ''], ['--arms', ','], ['--arms', ' , '], ['--arms'], ['--cells', 'M-V7', '--arms']]) {
+    const { filter, error } = armFilterOf(argv);
+    assert.match(error, /--arms/u, `${JSON.stringify(argv)} was accepted`);
+    assert.deepEqual(filter, [], 'an error carries no filter');
+  }
+});
+
+// CodeRabbit, second look (vibe.mjs:366, probe-vibe-confinement.mjs:82).
+test('armFilterOf: another option is not an arm name - `--arms --cells M-V7` is an error, not a filter naming "--cells"', () => {
+  for (const argv of [['--arms', '--cells', 'M-V7'], ['--arms', '-x'], ['--cells', 'M-V7', '--arms', '--repeats', '1']]) {
+    const { filter, error } = armFilterOf(argv);
+    assert.match(error, /--arms/u, `${JSON.stringify(argv)} was accepted`);
+    assert.deepEqual(filter, []);
+  }
+  assert.deepEqual(armFilterOf(['--arms', 'a3', '--cells', 'M-V7']), { filter: ['a3'], error: '' }, 'a later option after a real value is fine');
+});
+
+test('armsCellsError: with --arms every selected cell must be an arm cell that has a wanted arm - the default cell list (M-V5 resumes with paid turns, M-V9 launches a control) is refused', () => {
+  const byCell = { 'M-V7': [{ arm: 'a: forced' }, { arm: 'a3: fake home' }, { arm: 'b: paid' }], 'M-V9': [{ arm: 'hook' }] };
+  assert.equal(armsCellsError([], ['M-V5', 'M-V7', 'M-V9'], byCell), '', 'no --arms: no constraint');
+  assert.equal(armsCellsError(['a3'], ['M-V7'], byCell), '');
+  assert.match(armsCellsError(['a3'], ['M-V5'], byCell), /M-V5/u, 'M-V5 has no arms: it would run its paid two-turn resume unchecked');
+  assert.match(armsCellsError(['a3'], ['M-V7', 'M-V9'], byCell), /M-V9/u, 'M-V9 has no wanted arm: only its positive control would launch');
+  assert.match(armsCellsError(['a3'], ['M-V1', 'M-V5', 'M-V7', 'M-V9'], byCell), /M-V1/u, 'the default cell list is not a compatible selection');
+  assert.match(armsCellsError(['zz'], ['M-V7'], byCell), /M-V7/u, 'a filter that selects nothing in a cell is refused, not a successful run with no measurement');
 });

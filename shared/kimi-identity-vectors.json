@@ -1,0 +1,28 @@
+{
+  "why": [
+    "ONE rule for which running process is a Kimi (DL10 of research/PLAN_kimi_and_vibe_on_linux.md): a listing reads a process's NAME from the basename of its /proc/<pid>/exe link",
+    "(one trailing ' (deleted)' taken off), or - when the exe is hidden - from the basename of argv[0] (nothing is taken off argv[0]); the process is a Kimi when that name is 'kimi' or",
+    "'kimi.exe' in any case, OR its comm is exactly 'kimi' (case-sensitive). A comm of 'MainThread' alone is not Kimi - a running `kimi acp` has it, and its exe is the witness.",
+    "Both halves read this file and assert their own code against it: the product (ForeignKimiWatch.IsKimi over LinuxProcessListing, KimiIdentityVectorTests in src_mcp/tests) and the",
+    "probes (isKimi over linuxProcesses, scripts/lib/proc.test.mjs). A change to one side's rule turns only that side red; a change here turns both.",
+    "exe: the /proc/<pid>/exe target, or null when the exe is hidden (EACCES); argv: the cmdline arguments, read only when exe is null; comm: the stat comm.",
+    "name: what the listing reads; isKimi: the answer."
+  ],
+  "vectors": [
+    { "id": "kimi-acp-main-thread-exe-is-the-witness", "exe": "/root/.kimi-code/bin/kimi", "argv": [], "comm": "MainThread", "name": "kimi", "isKimi": true },
+    { "id": "main-thread-alone-is-not-kimi", "exe": "/usr/bin/some-python", "argv": [], "comm": "MainThread", "name": "some-python", "isKimi": false },
+    { "id": "tui-comm-kimi-is-the-second-witness", "exe": "/usr/bin/wrapped-binary", "argv": [], "comm": "kimi", "name": "wrapped-binary", "isKimi": true },
+    { "id": "comm-is-case-sensitive", "exe": "/usr/bin/python3", "argv": [], "comm": "Kimi", "name": "python3", "isKimi": false },
+    { "id": "windows-spelling-kimi-exe", "exe": "/mnt/c/Users/x/.kimi-code/bin/kimi.exe", "argv": [], "comm": "MainThread", "name": "kimi.exe", "isKimi": true },
+    { "id": "name-is-compared-ignoring-case", "exe": "/opt/KIMI", "argv": [], "comm": "MainThread", "name": "KIMI", "isKimi": true },
+    { "id": "deleted-binary-is-still-kimi", "exe": "/root/.kimi-code/bin/kimi (deleted)", "argv": [], "comm": "MainThread", "name": "kimi", "isKimi": true },
+    { "id": "only-one-deleted-suffix-is-stripped", "exe": "/x/kimi (deleted) (deleted)", "argv": [], "comm": "worker", "name": "kimi (deleted)", "isKimi": false },
+    { "id": "a-name-that-only-contains-kimi-is-not-kimi", "exe": "/usr/bin/kimi-helper", "argv": [], "comm": "worker", "name": "kimi-helper", "isKimi": false },
+    { "id": "coai-mcp-is-not-kimi", "exe": "/usr/local/bin/coai-mcp", "argv": [], "comm": "coai-mcp", "name": "coai-mcp", "isKimi": false },
+    { "id": "hidden-exe-argv-zero-bare-kimi", "exe": null, "argv": ["kimi", "acp"], "comm": "MainThread", "name": "kimi", "isKimi": true },
+    { "id": "hidden-exe-argv-zero-absolute-kimi", "exe": null, "argv": ["/home/me/.local/bin/kimi", "acp"], "comm": "MainThread", "name": "kimi", "isKimi": true },
+    { "id": "hidden-exe-systemd-user-is-not-kimi", "exe": null, "argv": ["/usr/lib/systemd/systemd", "--user"], "comm": "systemd", "name": "systemd", "isKimi": false },
+    { "id": "hidden-exe-comm-kimi-although-argv-zero-says-node", "exe": null, "argv": ["node", "app.js"], "comm": "kimi", "name": "node", "isKimi": true },
+    { "id": "deleted-suffix-is-never-stripped-from-argv-zero", "exe": null, "argv": ["/opt/kimi (deleted)"], "comm": "worker", "name": "kimi (deleted)", "isKimi": false }
+  ]
+}

@@ -8,7 +8,7 @@ namespace CoaiMcp.Runners.Vibe;
 /// sign-in lives. Resolved once, where the adapter is made.
 /// </summary>
 /// <param name="Kind">The host (<see cref="HostKinds.Current"/> for this process).</param>
-/// <param name="Wsl">Which WSL, when <paramref name="Kind"/> is <see cref="HostKind.Wsl"/> — a WSL1 kernel reads as that host too, and is refused.</param>
+/// <param name="Wsl">Which WSL, when <paramref name="Kind"/> is <see cref="HostKind.Wsl"/> — a WSL1 kernel reads as that host too, and is refused — or, on <see cref="HostKind.Linux"/>, <see cref="WslGeneration.Unreadable"/> when the kernel banner could not be read.</param>
 /// <param name="SignIn">The person's sign-in file, whose link an owned home may hold.</param>
 public sealed record VibeHost(HostKind Kind, WslGeneration Wsl, VibeSignIn SignIn)
 {
@@ -20,7 +20,7 @@ public sealed record VibeHost(HostKind Kind, WslGeneration Wsl, VibeSignIn SignI
     {
         var kind = HostKinds.Current;
 
-        return new VibeHost(kind, kind == HostKind.Wsl ? WslGenerations.Current : WslGeneration.None, VibeSignIn.ForThisProcess(kind));
+        return new VibeHost(kind, WslGenerations.ForHost(kind), VibeSignIn.ForThisProcess(kind));
     }
 
     /// <summary>
