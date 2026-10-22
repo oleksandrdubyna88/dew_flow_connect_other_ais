@@ -5237,6 +5237,28 @@ S2 spec §13. Each test was watched RED against the code without the change, for
 | `AWithdrawnRoundKeepsWhatLandedTests.ATurnTheRoundCut_KeepsTheLastAnsweredTurnsFindings` / `ALaterTurnThatFailedOnItsOwnTerms_StillDiscardsTheEarlierTurns_AsTheCompletedPathDoes` (pure `KeptFindings`) | the first red with the engine test (no `LastAnswered` merged); the second is a guard, green before | `Landed` ignores `EndedByRoundToken`: the second red |
 | Extension `bundledPage.test.ts`: held by a finding / by count alone / by a gating count whatever the note says; a free withdrawal keeps `cancelled — not judged` | the held rows were drawn `<span class="badge cancelled">cancelled — not judged</span>` | no note check: the count-only row red; no gating check: the gating-with-a-plain-note row red |
 
+### A cancelled review stops its round — round 3 of the review (2026-10-22)
+
+S2 spec §13 "round 3". Each behaviour test was watched RED against the code without the change (C#: the engine's record had no flag/ordinals and the card kind
+was `notice`; extension: the page read the note and severity), GREEN, and — for the vendor computation — RED again with a plant.
+
+| Test | Seen red as | Plant (RED again) |
+|---|---|---|
+| `AWithdrawnRoundKeepsWhatLandedTests.AWithdrawalAfterAGatingFinding_HoldsTheGateForAPerson` (+ `HoldsGate` true, `GatingOrdinals` `[0]`) | `Expected round.HoldsGate to be True because the record says the gate is held …, but found False.` | — |
+| `…AWithdrawalWithOnlyNonGatingFindings_StaysFree_AndKeepsThem` (`HoldsGate` false, no ordinals) | green before (the defaults) — a guard | — |
+| `…AStandingRejection_IsNotAGatingFinding_ForTheHold` (`GatingOrdinals`, `GatingProviders` empty when rejected) | `Expected counted.GatingOrdinals to be equal to {0}, but found empty collection.` | gating vendors read from every merged finding: `Expected rejected.GatingProviders to be empty, but found at least one item {"codex"}.` |
+| `…OnlyTheFindingsThatCount_AreNamedByPosition_AndTheirVendorsAreTheGatingProviders` (a minor from gemini and a blocking from codex) | `Expected kept.GatingOrdinals.Select(…) to be equal to {"The rollback is missing"}, but found empty collection.` | same plant: `Expected kept.GatingProviders to be equal to {"codex"} …, but {"gemini", "codex"} contains 1 item(s) too many.` |
+| `ConsecutiveWithdrawalsAreCappedTests.TheThirdWithdrawalInARow_HoldsTheGate` / `TheCapComesFromTheSetting` (`HoldsGate` true with `GatingCount` 0) | `Expected round.HoldsGate to be True because a hold by count has no finding and no gating count …, but found False.` | — |
+| `…TwoWithdrawalsInARow_TellThePerson` (the card's `kind` is `info`; neither round holds) | `Expected NoticeKinds() to be "info" … but "notice" has a length of 6` | — |
+| `ASessionFromAnOlderBuildStillRunsTests` (absent/null `findings`, `gatingOrdinals`, no `holdsGate` read as empty/false; a save and a load keep all three) | green on first run — the contract guard for the read-only list | — |
+| `ASessionFileKeepsWhatANewerServerWroteTests.EveryBaggedTypesMembers_AreTheListedOnesOrRetired` | n/a — the committed list gained `holdsGate`, `gatingOrdinals` | — |
+| Extension `bundledPage.test.ts`: held by the streak with a note lacking the phrase; flag false with a note that mentions a person; no flag, no count, phrase in the note; no flag with a count (fallback) | the three first drawn `cancelled — not judged` / `cancelled held` wrongly (the page read the note) | page reads `note` again: the three red |
+| Extension `roundsLog.test.ts`: a standing-rejection Blocking finding is not gating (`gatingOrdinals`); absent → severity; empty → none; the row's `holdsGate` present only when recorded | `the row inferred "gating" from the severity instead of reading what the server counted`; `row.holdsGate` undefined | `isGating` back to severity only |
+| Extension `answerChoices.test.ts` / `activeQuestions.test.ts` / `escalations.test.ts` / `roundsLog.test.ts`: an `info` card offers no choice, draws only *Dismiss* (no Answer…/Keep going/Stop buttons), is not a "question" (no modal, no status bar) | `a notice that asks nothing is drawn with answer buttons`; the three-decision list returned for `info`; `needsADecision` stubbed true | `case 'info'` removed from `answerChoices`: red |
+
+**Not covered, said plainly.** `EscalationWatcher.answerCommand`'s dismissal path (an `info` card writes a `dismissed` answer file without a dialog) needs the
+VS Code host; the pure decisions (`needsADecision`, `answerChoices`, the button label) are tested.
+
 **Not covered, said plainly.** The engine's wiring of `NoticeFor` (that `Announce` passes the real save result) has no engine-level test: `PanelService` builds its
 own `SessionStore` (`FileWriter` is an `init` seam), so a failing save cannot be injected through the service. The decision and the refusal are tested; the
 call between them is three lines.

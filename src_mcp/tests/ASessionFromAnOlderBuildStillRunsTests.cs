@@ -189,4 +189,46 @@ public sealed class ASessionFromAnOlderBuildStillRunsTests
         session.Rounds[0].ReviewerStates.Should().NotBeNull().And.BeEmpty("absent");
         session.Rounds[1].ReviewerStates.Should().NotBeNull().And.BeEmpty("explicitly null");
     }
+
+    [Fact]
+    public void ACancelledRoundsKeptFindingsAndHoldFlag_AreEmptyAndFalseWhetherAbsentOrNull()
+    {
+        // The kept findings are a read-only list on the public contract, and the record's hold facts arrived after the findings did: a file written
+        // before them (or one a hand edit left null) must read as "kept nothing, holds nothing", never as a null the log would fall over.
+        var session = JsonSerializer.Deserialize("""
+            {
+              "state": { "sessionId": "s", "repoPath": "D:/x", "branch": "main", "stage": "PlanReview" },
+              "rounds": [
+                { "stage": "PlanReview", "number": 1, "verdict": "withdrawn", "status": "cancelled" },
+                { "stage": "PlanReview", "number": 2, "verdict": "withdrawn", "status": "cancelled", "findings": null, "gatingOrdinals": null }
+              ]
+            }
+            """, ServerJsonContext.Default.PersistedSession)!;
+
+        session.Rounds.Should().OnlyContain(r => r.Findings != null && r.Findings.Count == 0 && r.GatingOrdinals != null && r.GatingOrdinals.Count == 0 && !r.HoldsGate);
+    }
+
+    [Fact]
+    public void ACancelledRoundsKeptFindingsHoldFlagAndGatingOrdinals_SurviveASaveAndALoad()
+    {
+        var finding = new CoaiMcp.Core.Findings.Finding(
+            CoaiMcp.Core.Findings.Severity.Blocking, CoaiMcp.Core.Findings.Category.Completeness, string.Empty, 0, "The rollback is missing", "why", "fix", ["codex"]);
+        var round = new RoundRecord("PlanReview", 1, "withdrawn", 1, "1 of 2 answered, 1 cut", DateTime.UtcNow)
+        {
+            Status = RoundRecord.Cancelled,
+            Findings = [finding],
+            HoldsGate = true,
+            GatingOrdinals = [0],
+        };
+
+        var written = JsonSerializer.Serialize(round, ServerJsonContext.Default.RoundRecord);
+        var read = JsonSerializer.Deserialize(written, ServerJsonContext.Default.RoundRecord)!;
+
+        read.Findings.Should().ContainSingle().Which.Title.Should().Be("The rollback is missing");
+        read.HoldsGate.Should().BeTrue();
+        read.GatingOrdinals.Should().Equal(0);
+        using var document = JsonDocument.Parse(written);
+        document.RootElement.GetProperty("holdsGate").GetBoolean().Should().BeTrue("the extension reads the flag by this name");
+        document.RootElement.GetProperty("gatingOrdinals").EnumerateArray().Select(e => e.GetInt32()).Should().Equal(0);
+    }
 }

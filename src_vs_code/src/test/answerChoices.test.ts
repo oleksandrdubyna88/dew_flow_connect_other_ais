@@ -55,6 +55,13 @@ test('an empty kind is an older card, judged by its findings as before', () => {
   assert.doesNotMatch(choices[0]!.detail, /decide nothing/, 'an older card says nothing about a review it may not belong to');
 });
 
+test('an informational card offers no choice at all — not Keep going, not Stop and act, not a box for words', () => {
+  // The second withdrawal in a row is told to the person (kind "info"). It used to be a notice with no findings, so Answer… opened the three
+  // decisions, none of which did anything: the round that wrote it had already returned and no hold was bound to it.
+  assert.deepEqual(answerChoices({ branch: 'feat/x', openFindings: [], kind: 'info' }), []);
+  assert.deepEqual(answerChoices({ branch: FEATURE_BRANCH, openFindings: [], kind: 'info' }), [], 'a feature review\'s card is no different');
+});
+
 /**
  * A kind this build does not know comes from a NEWER server. Taking the box away from it would bring back the very
  * symptom of 2026-10-03 — the gate's buttons and no words — so it is judged as a card with no kind (the own review).

@@ -61,6 +61,14 @@ public sealed class ConsecutiveWithdrawalsAreCappedTests : IAsyncLifetime
             .OrderBy(q => q.GetProperty("askedUtc").GetString(), StringComparer.Ordinal)
             .Select(q => q.GetProperty("question").GetString() ?? string.Empty)];
 
+    /// <summary>The kind every notice the person was sent carries, oldest first — the card's own word for whether it asks for a decision.</summary>
+    private List<string> NoticeKinds() =>
+        [.. _rig.HoldNotices()
+            .Where(f => f.EndsWith(".json", StringComparison.Ordinal) && !f.EndsWith(".answer.json", StringComparison.Ordinal))
+            .Select(f => JsonDocument.Parse(File.ReadAllText(f)).RootElement)
+            .OrderBy(q => q.GetProperty("askedUtc").GetString(), StringComparer.Ordinal)
+            .Select(q => q.GetProperty("kind").GetString() ?? string.Empty)];
+
     private static RoundRecord Seeded(int number, string status, string verdict) =>
         new(nameof(Stage.PlanReview), number, verdict, 0, "seeded", DateTime.UtcNow) { Status = status };
 
@@ -83,9 +91,12 @@ public sealed class ConsecutiveWithdrawalsAreCappedTests : IAsyncLifetime
 
         thrown.Should().BeAssignableTo<OperationCanceledException>("the second call is still answered as a cancellation");
         Notices().Should().ContainSingle().Which.Should().Contain("plan review round of feature was withdrawn 2 times in a row without a verdict");
+        NoticeKinds().Should().ContainSingle().Which.Should().Be(EscalationKinds.Info,
+            "the mention asks for no decision: it is sent as an informational card, which the panel draws without answer buttons");
         var session = _rig.Session(service);
         session.State.HumanGate.Should().BeFalse("the notice informs; it is not a hold");
         session.State.HoldQuestions.Should().BeEmpty();
+        session.Rounds.Should().OnlyContain(r => !r.HoldsGate, "neither of the two withdrawals holds the gate");
         session.Rounds.Should().HaveCount(2).And.OnlyContain(r => r.Status == RoundRecord.Cancelled);
 
         var third = await WithdrawAsync(service, reviewers);
@@ -107,6 +118,9 @@ public sealed class ConsecutiveWithdrawalsAreCappedTests : IAsyncLifetime
         round.Status.Should().Be(RoundRecord.Cancelled);
         round.Note.Should().Be("withdrawn 3 times in a row — held for a person");
         round.GatingCount.Should().Be(0, "nothing landed: the cap holds, not a finding");
+        round.HoldsGate.Should().BeTrue("a hold by count has no finding and no gating count: the record's own flag is what says it holds");
+        round.GatingOrdinals.Should().BeEmpty();
+        NoticeKinds().Should().Contain(EscalationKinds.Notice, "the hold's notice is the decision card");
         session.State.HumanGate.Should().BeTrue("a third free resample is refused: a person decides");
         session.State.AwaitingResolve.Should().BeTrue();
         session.State.HoldQuestions.Should().ContainSingle("the hold is bound to the notice that releases it");
@@ -146,6 +160,7 @@ public sealed class ConsecutiveWithdrawalsAreCappedTests : IAsyncLifetime
         var session = _rig.Session(service);
         session.State.HumanGate.Should().BeTrue("the second withdrawal in a row reaches a cap of two");
         session.Rounds[^1].Note.Should().Be("withdrawn 2 times in a row — held for a person");
+        session.Rounds[^1].HoldsGate.Should().BeTrue();
         Notices().Should().ContainSingle("the hold's own notice is the one the person gets; the informational one would be a second card for the same fact");
     }
 

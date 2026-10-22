@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
   compareRows,
   LogRow,
+  questionsHtml,
   roundsLogHtml,
   rowMatches,
   rowsFrom,
@@ -307,6 +308,63 @@ test('a cancelled round that kept findings reads them — from the database when
   const known = rowsFrom([session([cancelled])], NOW, undefined, undefined, dbLog({ findings: [], foundCount: 1 }))[0]!;
   assert.equal(known.status, 'cancelled', 'a held withdrawal is still a cancelled round');
   assert.equal(known.foundState, 'unasked', 'a cancelled round with findings must read them from the database when opened');
+});
+
+test('a kept finding the server did not count — a standing rejection — is NOT shown as gating, whatever its severity', () => {
+  // The server decides what counts toward the gate (GateRule: a blocking finding rejected before with a reason and raised again with the same
+  // argument is discounted) and writes the positions of the ones that do beside the kept list. Inferring it from severity shows the discounted
+  // one as gating on a round that holds nobody.
+  const blocking = (title: string) => ({
+    severity: 'blocking', category: 'completeness', file: '', line: 0, title, why: 'w', fix: 'f', providers: ['codex'], role: 'Architecture',
+  });
+  const discounted = round({
+    status: 'cancelled', verdict: 'withdrawn', gatingCount: 1, reviewers: '1 of 2 answered, 1 cut',
+    findings: [blocking('already decided'), blocking('the real one')], gatingOrdinals: [1],
+  });
+
+  const [row] = rowsFrom([session([discounted])], NOW) as [LogRow];
+
+  assert.deepEqual(row.found.map((f) => [f.title, f.isGating]), [['already decided', false], ['the real one', true]],
+    'the row inferred "gating" from the severity instead of reading what the server counted');
+});
+
+test('a kept list from a record that names no gating positions falls back to severity — an older file, no worse than before', () => {
+  const kept = { severity: 'major', category: 'completeness', file: '', line: 0, title: 'old', why: '', fix: '', providers: [], role: '' };
+  const minor = { ...kept, severity: 'minor', title: 'minor' };
+  const older = round({ status: 'cancelled', verdict: 'withdrawn', gatingCount: 1, reviewers: '', findings: [kept, minor] });
+
+  const [row] = rowsFrom([session([older])], NOW) as [LogRow];
+
+  assert.deepEqual(row.found.map((f) => f.isGating), [true, false]);
+});
+
+test('a kept list whose gating positions are empty is authoritative: nothing in it gates, whatever the severities', () => {
+  const blocking = { severity: 'blocking', category: 'completeness', file: '', line: 0, title: 'discounted', why: '', fix: '', providers: [], role: '' };
+  const withNone = round({ status: 'cancelled', verdict: 'withdrawn', gatingCount: 0, reviewers: '', findings: [blocking], gatingOrdinals: [] });
+
+  const [row] = rowsFrom([session([withNone])], NOW) as [LogRow];
+
+  assert.equal(row.found[0]?.isGating, false, 'an empty list means the server counted none; only an ABSENT one allows the severity fallback');
+});
+
+test('the rounds log draws an informational card without an Answer… button — it can only be dismissed', () => {
+  const asked: Escalation = {
+    id: 'q-1', sessionId: 's', repoPath: 'D:/repo', branch: 'feat/x', question: 'Nothing is held yet.', openFindings: [], askedUtc: '2026-10-22T10:00:00Z',
+  };
+  const html = questionsHtml([{ ...asked, id: 'ask-1', kind: 'notice' }, { ...asked, id: 'info-1', kind: 'info' }]);
+  const buttons = [...html.matchAll(/<button[^>]*data-id="([^"]+)"[^>]*>([^<]*)<\/button>/g)].map(([, id, label]) => [id, label]);
+
+  assert.deepEqual(buttons, [['ask-1', 'Answer…'], ['info-1', 'Dismiss']], 'the card that asks for nothing offered an answer');
+});
+
+test('the row carries the record\'s hold flag, and only when the record has one', () => {
+  const held = rowsFrom([session([round({ status: 'cancelled', verdict: 'withdrawn', holdsGate: true })])], NOW)[0]!;
+  const free = rowsFrom([session([round({ status: 'cancelled', verdict: 'withdrawn', holdsGate: false })])], NOW)[0]!;
+  const older = rowsFrom([session([round({ status: 'cancelled', verdict: 'withdrawn' })])], NOW)[0]!;
+
+  assert.equal(held.holdsGate, true);
+  assert.equal(free.holdsGate, false);
+  assert.equal('holdsGate' in older, false, 'an older record has no flag: absent, not false — the page then falls back to the gating count');
 });
 
 // ---------- how long the deciding took ----------

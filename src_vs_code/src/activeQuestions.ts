@@ -1,5 +1,5 @@
 import { escapeHtml } from './escapeHtml';
-import type { Escalation, EscalationAdvice } from './escalations';
+import { answerLabel, needsADecision, type Escalation, type EscalationAdvice } from './escalations';
 import { questionHtml } from './questionLayout';
 import { CONSULTING, INTERRUPTED, type QuestionConsult, type QuestionConsultRow } from './questionConsults';
 import { shortDuration } from './usage';
@@ -32,7 +32,9 @@ export function activeQuestionsBody(cards: readonly Escalation[], records: reado
   return [
     '<h2>Active questions</h2>',
     stage('Consulting', consulting.map((one) => consultingCard(one, nowMs))),
-    stage('A question is waiting on you', cards.map((card) => waitingCard(card, records, nowMs))),
+    stage('A question is waiting on you', cards.filter(needsADecision).map((card) => waitingCard(card, records, nowMs))),
+    // Told, not asked (`kind: "info"`): nothing blocks behind these, so they are not headed as a question and carry no decision.
+    stage('For your information', cards.filter((card) => !needsADecision(card)).map((card) => waitingCard(card, records, nowMs))),
     // S4b item 9: a question whose server stopped answering — swept by it, or shown so by a silent heartbeat — is
     // terminal here rather than spinning for ever; the watcher keeps it the window a finished one is kept.
     stage('Interrupted — its server stopped answering', interrupted.map((one) => consultingCard(one, nowMs))),
@@ -79,10 +81,9 @@ function waitingCard(card: Escalation, records: readonly QuestionConsult[], nowM
   <div class="said">${questionHtml(card.question)}</div>
 ${findings(card)}${riskLine(card)}  <div class="meta">${escapeHtml(card.branch)}${card.translationNote ? ` · shown untranslated: ${escapeHtml(card.translationNote)}` : ''}</div>
 ${followed(card)}${answersOf(card, records, nowMs)}
-  <button data-command="answer" data-id="${escapeHtml(card.id)}">Answer…</button>
+  <button data-command="answer" data-id="${escapeHtml(card.id)}">${answerLabel(card)}</button>
 </div>`;
 }
-
 function findings(card: Escalation): string {
   return card.openFindings
     .map((f) => `  <div class="finding">• ${escapeHtml(f.severity)} ${escapeHtml(f.category)} — ${escapeHtml(f.title)}</div>\n`)

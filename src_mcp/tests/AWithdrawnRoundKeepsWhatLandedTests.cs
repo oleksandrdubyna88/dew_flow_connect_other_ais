@@ -96,6 +96,8 @@ public sealed class AWithdrawnRoundKeepsWhatLandedTests : IAsyncLifetime
         round.Verdict.Should().Be(EndCauses.Withdrawn);
         round.Findings.Should().ContainSingle().Which.Title.Should().Be("The rollback is missing", "what codex found is kept on the record, not discarded");
         round.GatingCount.Should().Be(1);
+        round.HoldsGate.Should().BeTrue("the record says the gate is held; no reader has to read the note or the count to learn it");
+        round.GatingOrdinals.Should().Equal(0);
         round.Note.Should().Be("withdrawn with a gating finding from codex — held for a person");
         session.State.HumanGate.Should().BeTrue("a gating finding landed: the gate is held, durably, before the claim was released");
         session.State.HoldQuestions.Should().ContainSingle("the hold is bound to the notice that releases it");
@@ -148,6 +150,8 @@ public sealed class AWithdrawnRoundKeepsWhatLandedTests : IAsyncLifetime
         round.Status.Should().Be(RoundRecord.Cancelled);
         round.Findings.Should().ContainSingle().Which.Title.Should().Be("The heading is vague", "kept, though it gates nothing");
         round.GatingCount.Should().Be(0);
+        round.HoldsGate.Should().BeFalse("a free withdrawal holds nobody");
+        round.GatingOrdinals.Should().BeEmpty("the minor finding is kept and counts for nothing");
         round.Note.Should().Be("the caller withdrew the call while the round ran", "no hold, so the free withdrawal's own sentence");
         session.State.HumanGate.Should().BeFalse();
         session.State.AwaitingResolve.Should().BeFalse();
@@ -177,7 +181,8 @@ public sealed class AWithdrawnRoundKeepsWhatLandedTests : IAsyncLifetime
     [Fact]
     public void AStandingRejection_IsNotAGatingFinding_ForTheHold()
     {
-        var finding = new Finding(Severity.Blocking, Category.Completeness, string.Empty, 0, "The rollback is missing", "nothing undoes the migration if step two fails", "add the down step", []) { Role = "Architecture" };
+        // Providers as the parser stamps them (ReviewParser: `[provider]`): the vendors the hold names are read from the merged findings.
+        var finding = new Finding(Severity.Blocking, Category.Completeness, string.Empty, 0, "The rollback is missing", "nothing undoes the migration if step two fails", "add the down step", ["codex"]) { Role = "Architecture" };
         var review = new NormalisedReview([finding], []);
         var results = new (ReviewerInvocation, ReviewerOutcome)[]
         {
@@ -190,15 +195,37 @@ public sealed class AWithdrawnRoundKeepsWhatLandedTests : IAsyncLifetime
 
         counted.Gating.Should().Be(1);
         counted.GatingProviders.Should().Equal("codex");
+        counted.GatingOrdinals.Should().Equal(0);
         rejected.Findings.Should().ContainSingle("kept even when it no longer counts");
         rejected.Gating.Should().Be(0, "the completed path discounts a standing rejection; so does the hold");
+        rejected.GatingOrdinals.Should().BeEmpty("a blocking finding that is a standing rejection is kept but is not one that gates");
+        rejected.GatingProviders.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void OnlyTheFindingsThatCount_AreNamedByPosition_AndTheirVendorsAreTheGatingProviders()
+    {
+        var blocking = new Finding(Severity.Blocking, Category.Completeness, string.Empty, 0, "The rollback is missing", "nothing undoes the migration if step two fails", "add the down step", ["codex"]) { Role = "Architecture" };
+        var minor = new Finding(Severity.Minor, Category.Clarity, string.Empty, 0, "The heading is vague", "a reader cannot tell what the section decides", "name the decision", ["gemini"]) { Role = "Architecture" };
+        var results = new (ReviewerInvocation, ReviewerOutcome)[]
+        {
+            (new ReviewerInvocation("gemini", "Architecture", new CoaiMcp.Runners.Processes.ProcessRequest("cli", [], ".")), new ReviewerOutcome.Ok(new NormalisedReview([minor], []), false)),
+            (new ReviewerInvocation("codex", "Architecture", new CoaiMcp.Runners.Processes.ProcessRequest("cli", [], ".")), new ReviewerOutcome.Ok(new NormalisedReview([blocking], []), false)),
+        };
+        var work = results.Select(r => new ReviewerWork(r.Item1)).ToArray();
+
+        var kept = KeptFindings.From(results, work, []);
+
+        kept.Findings.Should().HaveCount(2, "everything that landed is kept");
+        kept.GatingOrdinals.Select(i => kept.Findings[i].Title).Should().Equal("The rollback is missing");
+        kept.GatingProviders.Should().Equal(["codex"], "only the vendor whose answer carried the counted finding is named");
     }
 
     // ---------- a conversation cut in a follow-up turn (security judge, 2026-10-22, §13.2) ----------
 
     private static (ReviewerInvocation, ReviewerOutcome)[] ConversationEndedBy(ReviewerOutcome ending, out ReviewerWork[] work)
     {
-        var finding = new Finding(Severity.Blocking, Category.Completeness, string.Empty, 0, "The rollback is missing", "nothing undoes the migration if step two fails", "add the down step", []);
+        var finding = new Finding(Severity.Blocking, Category.Completeness, string.Empty, 0, "The rollback is missing", "nothing undoes the migration if step two fails", "add the down step", ["codex"]);
         var answered = new ReviewerOutcome.Ok(new NormalisedReview([finding], []), false);
         var invocation = new ReviewerInvocation("codex", "Architecture", new CoaiMcp.Runners.Processes.ProcessRequest("cli", [], "."));
         work = [new ReviewerWork(invocation)];

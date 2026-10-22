@@ -53,7 +53,7 @@ public sealed record EscalationQuestion(
     public string Kind { get => field ?? string.Empty; init; } = string.Empty;
 }
 
-/// <summary>The two producers of a card. A card is only ever the GATE's: the AI's own questions are asked in its conversation.</summary>
+/// <summary>The producers of a card. A card is only ever the GATE's: the AI's own questions are asked in its conversation.</summary>
 public static class EscalationKinds
 {
     /// <summary>A round's <c>call_human</c> notice — answered with a decision.</summary>
@@ -61,6 +61,13 @@ public static class EscalationKinds
 
     /// <summary>An <c>ask_human</c> question on a held gate (or a feature review's second-round request) — answered in words or with a decision.</summary>
     public const string Question = "question";
+
+    /// <summary>
+    /// A notice that asks for NOTHING — the second withdrawal in a row is told to the person, who has no decision to make until the cap holds
+    /// the gate. The extension draws it without decision buttons and offers a dismissal instead; one that does not know the word draws it as a card
+    /// of unknown kind, as it always drew those.
+    /// </summary>
+    public const string Info = "info";
 }
 
 /// <summary>The words a question file's <c>status</c> can hold — absent and empty are open.</summary>

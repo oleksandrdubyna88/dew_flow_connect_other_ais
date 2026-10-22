@@ -185,8 +185,30 @@ public sealed record RoundRecord(
     /// cannot discard what the panel found (G4 of todo/PLAN_a_cancelled_review_stops_its_round.md, revised 2026-10-22). Empty for
     /// every round that ran to a verdict (its findings are the session's <see cref="PersistedSession.Pending"/> and the database's).
     /// </summary>
+    /// <remarks>
+    /// Normalised on the way in, for the reason spelled out on <see cref="PersistedSession.UsedPrompts"/> — a session file written before the
+    /// member, or with an explicit <c>null</c>, reads as an empty list. Exposed read-only: a public contract hands out a view, not a list to edit.
+    /// </remarks>
+    public IReadOnlyList<Finding> Findings
+    {
+        get => field ??= [];
+        init => field = value ?? [];
+    }
+
+    /// <summary>
+    /// Whether this CANCELLED round holds the gate for a person — by a kept finding that counts toward the gate, or by the count of withdrawals in a row
+    /// (<see cref="WithdrawalStreak"/>). The record's own fact, decided once by the engine, so no reader has to infer it from the wording of
+    /// <see cref="Note"/> or from <see cref="GatingCount"/>; false for every round that was not withdrawn and for a record written before the field.
+    /// </summary>
+    public bool HoldsGate { get; init; }
+
+    /// <summary>
+    /// Which of <see cref="Findings"/> (by position) count toward the gate — decided by <see cref="KeptFindings"/> with the server's own rule, standing
+    /// rejections included, so a reader does not guess it from severity. Empty for every round that kept no gating finding and for a record written
+    /// before the field; a reader that finds the member ABSENT may fall back to severity, one that finds it empty may not.
+    /// </summary>
     /// <remarks>Normalised on the way in, for the reason spelled out on <see cref="PersistedSession.UsedPrompts"/>.</remarks>
-    public List<Finding> Findings
+    public IReadOnlyList<int> GatingOrdinals
     {
         get => field ??= [];
         init => field = value ?? [];

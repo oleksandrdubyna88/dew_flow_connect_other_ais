@@ -639,5 +639,14 @@ save cannot be injected through the service; the decision is a pure function and
 notice is a `notice`-kind card like the hold's, so the panel offers its answer buttons; answering it changes nothing (it is in no `HoldQuestions`).
 (c) The setting is a server environment variable only; no panel control was added.
 
+**Round 3 (code review of the hardening, 2026-10-22).** Six accepted findings, test-first where behaviour changed; they supersede item 4's "the page reads
+both" and deviation (b). (1) `RoundRecord.Findings` is `IReadOnlyList<Finding>`, normalised to `[]` on read. (2) `RoundRecord.HoldsGate` is set by
+`Withdraw` to `kept.HoldsTheGate || streak.HoldsTheGate`; the badge is decided by that flag alone (a record with no flag falls back to `gatingCount > 0`; the
+note is never read, so `KeptFindings.HeldForAPerson` is only the sentence's tail now). (3) The second-withdrawal notice is `kind: "info"`
+(`EscalationKinds.Info`): the extension draws it with a *Dismiss* button instead of Answer…, offers no decision, raises no modal and is not counted in the
+status bar. (4) see (1). (5) `RoundRecord.GatingOrdinals` carries which kept findings the server counted (standing rejections excluded); the log's session-file
+fallback reads it (absent → severity, empty → none gate). (6) `KeptFindings.From` takes the gating vendors from the merged findings, once. No `coai.db`
+column was added: the rounds log reads the hold from the session file.
+
 **The two PR B asks** (the judge's, recorded in the plan's S3 section): persist landed findings progressively on the running record, and a startup
 reconcile that holds the gate for a cancelled or interrupted round whose landed findings gate.

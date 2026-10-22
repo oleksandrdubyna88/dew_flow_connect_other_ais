@@ -2421,6 +2421,17 @@ flowchart TD
   turn that fails on its own terms still discards the earlier turns, as on the completed path. (3) *No orphan card.* `SaveWithdrawn` answers whether the
   save landed and `WithdrawalStreak.NoticeFor(held, landed)` chooses `Hold` / `HoldLost` / `Mention` / `None`: a hold whose save the disk refused sends no
   hold notice (one error line instead); the `coai.db` row is still written with its `gating`, which PR B's reconcile reads.
+- **Round 3 of the review (2026-10-22; S2 spec §13, "round 3").** (1) *The record says whether it holds.* `RoundRecord.HoldsGate` (bool, default false) is set
+  in `RoundEngine.Withdraw` to `kept.HoldsTheGate || streak.HoldsTheGate` — a hold by the count has no finding and `GatingCount` 0, so nothing else on the
+  record tells; the extension's badge reads this flag and never the wording of `Note`. (2) *Each kept finding's gating result is persisted.*
+  `KeptFindings.GatingOrdinals` (positions in the merged list that `GateRule.Evaluate` counted, standing rejections excluded) is copied to
+  `RoundRecord.GatingOrdinals`; a reader that finds the member absent (an older file) may infer from severity, one that finds it empty may not.
+  (3) *`RoundRecord.Findings` is `IReadOnlyList<Finding> { get; init; }`* (and `GatingOrdinals` is `IReadOnlyList<int>`), both normalised to `[]` for an
+  absent or `null` member, so a session file written before still reads; the committed member list of `RoundRecord` gained `holdsGate` and
+  `gatingOrdinals`. (4) *`KeptFindings.From` computes the gating vendors once* from the merged result (`counted.Gating.SelectMany(f => f.Providers).Distinct()`)
+  instead of re-merging each reviewer alone — same answer, one merge. (5) *The second withdrawal's notice is informational.* `EscalationKinds.Info`
+  (`"info"`): `NoticeCard` takes the kind, `Tell` sends `Info`; the hold's cards stay `notice`. Nothing is added to `coai.db`: the rounds log reads the hold
+  from the session file's round, and the table's `findings.is_gating` is still the severity rule for every round, as before.
 - **Smaller guarantees of the same change.** The status word is one string in core (`Core.Rounds.RoundStatus.Cancelled`; `RoundRecord.Cancelled`
   and `Windows.IsRecorded` both use it). `BoundedScheduler.RunAllAsync` (the wrapper that discards the return stamp) is `internal` and the
   runners assembly grants its internals to the tests only, so the engine can only call `RunAllStampedAsync`
