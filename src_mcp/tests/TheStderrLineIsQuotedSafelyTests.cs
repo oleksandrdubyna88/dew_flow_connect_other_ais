@@ -116,15 +116,21 @@ public sealed class TheStderrLineIsQuotedSafelyTests : IDisposable
     }
 
     [Fact]
-    public void APhraseOnlyOnTheCutLine_NamesNoRow_BecauseTheRowAndTheLineAreReadFromTheSameCompleteLines()
+    public async Task APhraseOnlyOnTheCutLine_StillNamesItsRow_AndOnlyItsQuoteIsWithheld_SoTheSpentQuotaStopsTheLadder()
     {
+        // The row is read from the whole kept head (the phrase is intact whenever it matches; the sentence is not in the text at all); the quote only from complete lines.
+        // Unclassified, a spent quota is not hopeless and the 429 ladder would retry it.
         var token = Opaque(59);
         var (stderr, truncated) = Captured(new string('p', AcpTransport.StdErrChars - FromThePhrase.Length - 20) + "\n" + FromThePhrase + " Bearer " + token + "\nmore\n");
+        stderr.Should().EndWith(token[..11], "the arithmetic: the capture ends 11 characters into the token, after the whole phrase");
 
-        var diagnosis = AcpDiagnosis.Of(NamesNoRow, stderr, KimiAcpProfile.Failures, truncated);
+        var seen = await ThroughTheProduct(stderr, truncated);
 
-        diagnosis.Known.Should().BeFalse("the line the boundary broke is never read, for the row or for the quote");
-        diagnosis.Line.Should().BeEmpty();
+        seen.Diagnosis.Name.Should().Be(KimiAcpProfile.QuotaSpent, "the row is named from the kept head");
+        seen.Diagnosis.Line.Should().BeEmpty("the line the boundary broke is never quoted");
+        NothingOf(token, 5, seen);
+        ReadsAsASpentQuota(seen.Round);
+        RateLimit.Hopeless(((ReviewerOutcome.RateLimited)seen.Round.Outcome).Reason).Should().BeTrue("with no line to quote the table's phrases stand for the name");
     }
 
     [Fact]
@@ -136,16 +142,17 @@ public sealed class TheStderrLineIsQuotedSafelyTests : IDisposable
         var diagnosis = AcpDiagnosis.Of(NamesNoRow, stderr, KimiAcpProfile.Failures, stderrTruncated: true);
 
         diagnosis.Line.Should().NotContain("Lp5gU");
-        diagnosis.Known.Should().BeFalse();
+        diagnosis.Line.Should().BeEmpty();
+        diagnosis.Name.Should().Be(KimiAcpProfile.QuotaSpent, "the row is read from the whole kept head");
     }
 
     [Fact]
-    public void ATruncatedCaptureWithNoLineBreakAtAll_IsNeverQuoted_ByDesign()
+    public void ATruncatedCaptureWithNoLineBreakAtAll_IsNeverQuoted_ByDesign_ButStillNamesItsRow()
     {
-        // One unbroken truncated line has no complete line in it: nothing of it is read.
+        // One unbroken truncated line has no complete line in it: nothing of it is quoted.
         var diagnosis = AcpDiagnosis.Of(NamesNoRow, FromThePhrase, KimiAcpProfile.Failures, stderrTruncated: true);
 
-        diagnosis.Known.Should().BeFalse();
+        diagnosis.Name.Should().Be(KimiAcpProfile.QuotaSpent);
         diagnosis.Line.Should().BeEmpty();
     }
 

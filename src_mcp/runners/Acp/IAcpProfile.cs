@@ -105,14 +105,15 @@ public sealed record AcpDiagnosis(string Name, string Cure, AcpFailureKind Kind,
     /// one pass, so a bare sign-in reason plus any stderr line holding a longer row's phrase took that row's name, whatever the agent had said about the turn itself.
     /// </summary>
     public static AcpDiagnosis Of(string reason, string stderr, IReadOnlyList<AcpKnownFailure> known, bool stderrTruncated = false) =>
-        Of(reason, known) is { Known: true } named ? named : FromStderr(CompleteLines(stderr, stderrTruncated), known);
+        Of(reason, known) is { Known: true } named ? named : FromStderr(stderr, stderrTruncated, known);
 
     /// <summary>
-    /// The row stderr names, carrying the line it matched in (<see cref="Line"/>) — or <see cref="None"/>. <paramref name="lines"/> is the ONE text both are read from: the row and the line
-    /// come from the same complete lines (<see cref="CompleteLines"/>), so a phrase on a line the capture boundary broke names no row and is quoted nowhere.
+    /// The row stderr names, carrying the line it matched in (<see cref="Line"/>) — or <see cref="None"/>. The ROW is read from the whole kept head: the phrase is intact whenever it matches, and the
+    /// capture's truncation sentence is not in the text at all (it is a flag, <paramref name="truncated"/>). Only the QUOTE is read from complete lines (<see cref="CompleteLines"/>): the line the capture
+    /// boundary broke is never quoted. A phrase only on that line therefore names its row with an empty line, and the reason falls back to the table's phrases — still hopeless, so the ladder does not retry a spent quota.
     /// </summary>
-    private static AcpDiagnosis FromStderr(string lines, IReadOnlyList<AcpKnownFailure> known) =>
-        Hit(lines, known) is { } hit ? new AcpDiagnosis(hit.Name, hit.Cure, hit.Kind, LineWith(lines, hit.Phrase)) : None;
+    private static AcpDiagnosis FromStderr(string stderr, bool truncated, IReadOnlyList<AcpKnownFailure> known) =>
+        Hit(stderr, known) is { } hit ? new AcpDiagnosis(hit.Name, hit.Cure, hit.Kind, LineWith(CompleteLines(stderr, truncated), hit.Phrase)) : None;
 
     /// <summary>
     /// The lines of <paramref name="stderr"/> that are COMPLETE. Whether the capture was cut is STATE the capture carries (<c>BoundedText.Truncated</c>, <c>AcpOutcome.StdErrTruncated</c>), never inferred from the text:
