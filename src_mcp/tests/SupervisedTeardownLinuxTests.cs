@@ -132,6 +132,18 @@ public sealed class SupervisedTeardownLinuxTests : IDisposable
         (await GoneSoonAsync(c2)).Should().BeTrue();
     }
 
+    /// <summary>C24 (3): a pid file that holds no pid is a NAMED state in the report, never the fake's exit 97 (CI run 39760284371: <c>FormatException: The input string '' was not in a correct format.</c>).</summary>
+    [Fact]
+    public async Task APidFileThatHoldsNoPid_IsReportedAsUnreadable_NotAnEscapedException()
+    {
+        OnLinux();
+        File.WriteAllText(_dir.At("torn.pid"), string.Empty);
+
+        var report = await SupervisedAsync("orphans");
+
+        StateOf(report, "torn.pid").Should().Be("unreadable: ''", "an empty pid file is a torn write the report names, not a FormatException that ends the fake with exit 97");
+    }
+
     [Fact]
     public async Task AGrandchildBornAfterTheFirstListing_IsFoundByTheReListing()
     {
