@@ -120,7 +120,10 @@ is told through this plan's gate; a boundary named on one side is not a boundary
 | callers that redact before they cut (`OpeningOfLastLine`, the probe note, kept evidence, the keep-failure note) | this plan, E3.S1–S4 — they call the redactor and do not edit it, so they can land **before** the redaction plan | none |
 
 Order: the redaction plan first for `Redaction.cs` itself; E3.S1–S4 of this plan are independent of it. What is disjoint:
-the redaction plan never changes a caller of the redactor; this plan never changes a pass.
+the redaction plan changes no caller that E3 names (its S3/Q6 does edit two other callers, `AskApiMode.cs` and
+`ProbeApiMode.cs` — named here as the exceptions; they do not overlap E3.S1–S4); this plan never changes a pass. The
+reciprocal table is written into the redaction plan's own file on its branch before either side builds the shared file
+(cadence consult 74decbae).
 
 ## 5. Build order
 
@@ -318,8 +321,15 @@ CLI is read.
 says *the rate limit check in quota.cs is exhausted*, exit 1 → `NonZeroExit`, `Attempts == 1`, the ladder never waits),
 `AnErrorEventSayingUsageLimit_IsALimit_AndHopeless` (`{"type":"error","message":"You've hit your usage limit…"}` →
 `RateLimited`, `Hopeless`), `AStderrLineSayingHighDemand_StillCounts`, `TheReasonIsTheEventsSentence_NotAStdoutLine`.
-Fix: `CodexRuntime.RateLimited` override = `RateLimitVerdict.ByText(result with { StdOut = WhyItFailed(invocation, result) })`
-— the existing parser (`:707-729`) is the only reader of stdout; no new API on `RateLimit`. `DeepseekRuntime` inherits it.
+Also RED (cadence consult 74decbae, verified): `AMixedErrorStream_TheHopelessEventWins` — exit 1, empty stderr, stdout
+`{"type":"error","message":"HTTP 429 Too Many Requests"}` then `{"type":"turn.failed","error":{"message":"You've hit your
+usage limit."}}` → `RateLimited`, `Hopeless`, `Attempts == 1` (a constructed input, not a captured sequence). Today's
+`WhyItFailed` returns at the FIRST conclusive event (`ReviewerRuntime.cs:721`), so feeding only its result would keep the
+transient 429 and relaunch.
+Fix: `CodexRuntime.RateLimited` override = `RateLimitVerdict.ByText` over the messages of EVERY `error`/`turn.failed`
+event (one new private reader beside `WhyItFailed`, sharing `CouldBeAFailure` and the event parsing, joined so `Spent`
+sees each; a hopeless message wins over a transient one) plus stderr — stdout's other lines are never read. `WhyItFailed`
+keeps its display role unchanged. No new API on `RateLimit`. `DeepseekRuntime` inherits it.
 Break-it: delete the override → the first test reads `rate limited (after 5 attempts)`. Docs: `module_runners.md` :1193.
 
 **S2 — claude.** RED: `AClaudeReviewerIsRateLimitedOnlyWhenItsEnvelopeSaysErrorTests` —
@@ -333,10 +343,12 @@ cross-reference.
 `AModelLineSayingQuota_OnStdout_IsAnExitNotALimit` (a stream-json `assistant` line whose text says *quota*, exit 1),
 `TheAgyErrorOnStderr_IsALimit_WithItsStatedReset` (fixture `consult-quota.stderr.txt` → `RateLimited`,
 `CooldownParser.StatedReset` non-null), `AnEmptyStderr_WithAQuotaWordOnStdout_IsAnExit`.
-Fix: `AntigravityRuntime.RateLimited` = `ByText(result with { StdOut = string.Empty })`. **Fact to establish in the
-story:** whether agy ever writes `RESOURCE_EXHAUSTED` into a stream-json `result` event on stdout (the only recorded form
-is stderr); if a captured stdout form exists in the fixtures or the research, that event's error field is read as codex's
-is — otherwise stderr only, said in the adapter's doc as what was checked. Break-it as S1. Docs: the same section.
+Also RED: `TheStructuredResultEventOnStdout_WithEmptyStderr_IsALimit` — the recorded refusal of
+`research/RESULTS_vendor_quota_gauges.md` §3.1 (a stream-json `{"event":"result","result":{"status":"ERROR","error":
+"Individual quota reached. … Resets in 88h49m9s."}}` on stdout) with stderr EMPTY → `RateLimited`, `Hopeless`.
+Fix: `AntigravityRuntime.RateLimited` = `ByText` over stderr plus the `error` field of a stdout `result` event whose
+`status` is `ERROR` (the fact the plan first left open is established by that record — cadence consult 74decbae); every
+other stdout line (model text, `step_update`) is never read. Break-it as S1. Docs: the same section.
 
 **S4 — the two recorded sentences.** RED: `ASessionLimitAndASpendLimitAreLimitsTests` —
 `CodexsSessionLimit_IsALimit_WhoseClockIsRead` (`You've hit your session limit · resets 9:30pm (UTC)` as a codex error
@@ -361,7 +373,12 @@ to be the stderr line. Done when the three stories are green and the WSL and sta
 `AnAgyRefusal_ShowsItsResetClauseWhole_InTheCell` (`ReviewerSummaryFactory.Describe` of a `RateLimited` whose reason is
 the 290-character agy line → the cell contains `Resets in 110h12m4s` whole), `TheClauseIsRedactedBeforeItIsCut` (a
 `Bearer …` inside the clause → `[redacted]`, never a head), `AReasonWithNoStatedClause_IsCutAsBefore`,
-`TheLedgerLineIsUnchanged` (`DescribeWhole` byte for byte as today).
+`TheLedgerLineIsUnchanged` (`DescribeWhole` byte for byte as today), and (cadence consult 74decbae)
+`ACredentialRightBeforeTheClause_IsNeverExposedByExtraction` — the synthetic reason `rate limit; Bearer
+FAKECANARYavailable again at 9:30pm`: `ClockTime` has no opening word boundary, so extracting first and redacting the
+clause after would show `available again at 9:30pm` cut out of the credential. ORDER, therefore: redact the WHOLE reason
+(uncut) first, extract the clause from the redacted text, then cap the cell. The new lead is applied in `Describe` only;
+the shared `Described` path that `DescribeWhole` uses is not changed.
 Fix: in `Described` for `RateLimited` (`BoundedScheduler.cs:774-775`) quote the vendor's reset clause FIRST — the
 quotation rule `KimiQuotaWords` set (`:10`: a quotation, never a parsed time, in a cell) — through one new pure reader
 `CooldownParser.StatedClause(reason)` that returns the text the existing `Duration`/`ClockTime`/`OnDate` patterns
