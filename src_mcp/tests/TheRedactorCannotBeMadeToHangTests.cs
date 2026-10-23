@@ -78,6 +78,80 @@ public sealed class TheRedactorCannotBeMadeToHangTests
             "whatever happened, the answer is cut to the limit");
     }
 
+    /// <summary>The two real sizes: a security-lane file (<c>SecuritySignals.MaxFileCharacters</c>) and the ACP stderr bound.</summary>
+    public static TheoryData<string, int> LineShapesAtTheRealSizes()
+    {
+        var data = new TheoryData<string, int>();
+        foreach (var size in (int[])[262_144, 65_536])
+        {
+            foreach (var shape in LineShapes)
+            {
+                data.Add(shape, size);
+            }
+        }
+
+        return data;
+    }
+
+    private static readonly string[] LineShapes =
+    [
+        "labels-that-decline", "one-endless-block", "blank-heavy-block", "huge-indentation", "label-value-pairs", "fifty-thousand-pairs", "no-line-break", "unclosed-triple-quote",
+    ];
+
+    /// <summary>
+    /// A line-spanning shape of about <paramref name="size"/> characters — the adversarial inputs of the
+    /// continuation pass (plan D7): every shape the cursor could be made to rescan.
+    /// </summary>
+    private static string LineShape(string shape, int size) => shape switch
+    {
+        "labels-that-decline" => Repeat("api_key:\n", size),
+        "one-endless-block" => "api_key: |\n" + Repeat("  " + new string('x', 98) + "\n", size),
+        "blank-heavy-block" => "api_key: |\n" + Repeat("  x\n\n", size),
+        "huge-indentation" => Repeat(new string(' ', size / 4) + "api_key:\n" + new string(' ', (size / 4) + 1) + "v\n", size),
+        "label-value-pairs" => Repeat("token:\n  v\n", size),
+        "fifty-thousand-pairs" => string.Concat(Enumerable.Repeat("token:\n  v\n", 50_000)),
+        "no-line-break" => new string('x', size),
+        "unclosed-triple-quote" => "password = \"\"\"\n" + Repeat("FAKE-LINE\n", size),
+        _ => throw new ArgumentOutOfRangeException(nameof(shape)),
+    };
+
+    private static string Repeat(string unit, int size)
+    {
+        var text = new System.Text.StringBuilder(size + unit.Length);
+        while (text.Length < size)
+        {
+            text.Append(unit);
+        }
+
+        return text.ToString();
+    }
+
+    [Theory]
+    [MemberData(nameof(LineShapesAtTheRealSizes))]
+    public void ALineSpanningShape_IsAnsweredUnderTheCeiling_ThroughAllThreeEntryPoints(string shape, int size)
+    {
+        var value = LineShape(shape, size);
+        var timings = new List<string>();
+
+        foreach (var (entry, run) in (IEnumerable<(string, Func<string>)>)
+        [
+            ("SafeText", () => Redaction.SafeText(value, Redaction.DetailLimit)),
+            ("SafeSource", () => Redaction.SafeSource(value)),
+            ("FirstSecretClass", () => Redaction.FirstSecretClass(value)),
+        ])
+        {
+            var clock = Stopwatch.StartNew();
+            run();
+            clock.Stop();
+            timings.Add($"{entry} {clock.Elapsed.TotalMilliseconds:0} ms");
+            clock.Elapsed.Should().BeLessThan(Ceiling,
+                "{0} at {1} characters took {2:0} ms through {3} — the pass has one advancing cursor and no pattern, so what it visits it visits a bounded number of times",
+                shape, value.Length, clock.Elapsed.TotalMilliseconds, entry);
+        }
+
+        TestContext.Current.SendDiagnosticMessage($"MEASURED {shape} @ {value.Length}: {string.Join(", ", timings)}");
+    }
+
     [Fact]
     public void EveryPattern_IsNonBacktrackingOrSaysWhyNot()
     {

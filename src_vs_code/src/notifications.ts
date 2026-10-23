@@ -1,4 +1,5 @@
 import { namesACredential } from './credentialWords';
+import { redactLabelContinuations } from './labelContinuations';
 import { redactPrivateKeyBlocks } from './privateKeyBlocks';
 
 /**
@@ -202,8 +203,14 @@ const PARAMETER = /([?&#])([^\s=&#]{1,64})=([^\s&#]{1,4096})/g;
  * over arbitrary text here has bounded repetition and no backtracking trap, and a backreference is
  * how that promise gets quietly broken. A JSON body redacts as `"password": "[redacted]"`, with the
  * quotes kept, because the line still has to read like what it was.</p>
+ *
+ * <p>The joiner takes the quote classes (`["']{0,3}`, so `password='x'` and a triple-quoted `"""x"""` are
+ * values), the pinned `{0,4}` before the `:`/`=` (`password     =x` stays), `{0,32}` after it (eight JSON
+ * levels at four spaces), and an optional YAML block indicator so `password: >  x` masks the value rather than
+ * the `>`. It is `Redaction.cs`'s joiner, byte for byte. A line break is still never a gap: a value on the
+ * NEXT line is `labelContinuations.ts`'s work.</p>
  */
-const LABELLED = /([A-Za-z][A-Za-z0-9_.-]{0,63})("?[ \t]{0,4}[:=][ \t]{0,4}"?)([^\s"',;)}]{1,4096})/g;
+const LABELLED = /([A-Za-z][A-Za-z0-9_.-]{0,63})(["']{0,3}[ \t]{0,4}[:=][ \t]{0,32}(?:[|>][-+]?[0-9]?[ \t]{0,32})?["']{0,3})([^\s"',;)}]{1,4096})/g;
 
 /**
  * Whether a character may be written down at all.
@@ -221,6 +228,11 @@ function isPrintable(character: string): boolean {
   return code >= 32 && code !== 127;
 }
 
+/** Whether a character survives the FIRST strip: printable, or the layout the two line-spanning passes read — tab, LF, CR. */
+function isSourceCharacter(character: string): boolean {
+  return isPrintable(character) || character === '\t' || character === '\n' || character === '\r';
+}
+
 /**
  * One string, made fit to be written down.
  *
@@ -231,16 +243,23 @@ function isPrintable(character: string): boolean {
  *
  * <p>Control characters go first, for the reason `serverSettingsSync.displayable` gives about a
  * different arbitrary string: they are not an attack anybody is expecting, they are how a corrupted
- * value produces a line nobody can read — and here, one that no `JSON.parse` can read back.</p>
+ * value produces a line nobody can read — and here, one that no `JSON.parse` can read back. All of them
+ * but the LAYOUT (tab, LF, CR): the two line-spanning passes need the line breaks, and the layout is dropped
+ * right after them.</p>
  */
 export function safeText(value: string, limit: number): string {
-  const printable = [...value].filter(isPrintable).join('');
+  const withLayout = [...value].filter(isSourceCharacter).join('');
 
   // A private-key block FIRST, before any pattern reads a line of it: a key body is not one line, and
   // the labelled pass alone took out `"private_key": "-----BEGIN` and left the body (2026-09-26).
-  const withoutBlocks = redactPrivateKeyBlocks(printable, REDACTED);
+  const withoutBlocks = redactPrivateKeyBlocks(withLayout, REDACTED);
 
-  const withoutParameters = withoutBlocks.replace(
+  // Then a credential label that ends a line and the value on the NEXT one — still before the strip,
+  // because the strip is what glues them and leaves the second line of a block scalar looking like prose.
+  const withoutContinuations = redactLabelContinuations(withoutBlocks, REDACTED);
+  const printable = [...withoutContinuations].filter(isPrintable).join('');
+
+  const withoutParameters = printable.replace(
     PARAMETER,
     (whole: string, lead: string, name: string) =>
       (namesACredential(name) ? `${lead}${name}=${REDACTED}` : whole),

@@ -99,8 +99,15 @@ public static partial class Redaction
     private const string ParameterPattern =
         @"([?&#])([^" + JsSpace + @"=&#]{1,64})=([^" + JsSpace + @"&#]{1,4096})";
 
+    /// <summary>
+    /// A credential named and given on ONE line. The joiner takes the quote classes (<c>["']{0,3}</c>, so
+    /// <c>password='x'</c> and a triple-quoted <c>"""x"""</c> are values), the pinned <c>{0,4}</c> before the
+    /// <c>:</c>/<c>=</c> (<c>password     =x</c> stays), <c>{0,32}</c> after it (eight JSON levels at four spaces), and an
+    /// optional YAML block indicator so <c>password: &gt;  x</c> masks the value rather than the <c>&gt;</c>. A line break
+    /// is still never a gap: the value on the NEXT line is <see cref="LabelContinuations"/>' work.
+    /// </summary>
     private const string LabelledPattern =
-        @"([A-Za-z][A-Za-z0-9_.-]{0,63})(""?[ \t]{0,4}[:=][ \t]{0,4}""?)([^" + JsSpace + @"""',;)}]{1,4096})";
+        @"([A-Za-z][A-Za-z0-9_.-]{0,63})([""']{0,3}[ \t]{0,4}[:=][ \t]{0,32}(?:[|>][-+]?[0-9]?[ \t]{0,32})?[""']{0,3})([^" + JsSpace + @"""',;)}]{1,4096})";
 
     /// <summary>Why the ASCII word boundary keeps three patterns off <c>NonBacktracking</c>.</summary>
     private const string BoundaryReason =
@@ -262,8 +269,11 @@ public static partial class Redaction
     /// </summary>
     /// <remarks>
     /// <para>Control characters go first: they are not an attack anybody is expecting, they are how
-    /// a corrupted value produces a line no parser can read back. Then a private-key block, whole
-    /// (<see cref="PrivateKeyBlocks"/> — the one shape that is not one line); then a parameter whose
+    /// a corrupted value produces a line no parser can read back — all of them but the LAYOUT (tab, LF, CR),
+    /// which the two line-spanning passes need and which is dropped right after them. Then a private-key block,
+    /// whole (<see cref="PrivateKeyBlocks"/> — a shape that is not one line); then a credential label that ends
+    /// a line and the value on the next (<see cref="LabelContinuations"/> — the other one); then the layout goes;
+    /// then a parameter whose
     /// NAME reads as a credential; then the three shapes recognisable on sight, in array order; then a
     /// credential named and given in ordinary text — LAST, so that an <c>Authorization: Bearer …</c> has
     /// already lost its value by the time this one sees the word. Then the cut, and the suffix after
@@ -312,16 +322,23 @@ public static partial class Redaction
     /// 2026-09-26): a file NAME is refused only for a fixed shape, so the credential words have to
     /// be applied where a credential actually is — inside the file. <see cref="SafeText"/> cannot
     /// serve that: it drops every character under 32, tab and newline included, because a NOTICE is
-    /// one line. Here tab, LF and CR stay where they were, and the labelled pass therefore stops at
-    /// each line's end exactly as it does in a notice. No cut, because what bounds a served file is
+    /// one line. Here tab, LF and CR stay where they were, so the labelled PATTERN still stops at each
+    /// line's end — and <see cref="LabelContinuations"/> reaches the value a credential label leaves on the
+    /// NEXT line, with every line break kept. No cut, because what bounds a served file is
     /// the source budget rather than a field's limit — a cut here would hand the reviewer a file
     /// ending mid-declaration with a suffix it cannot ask past.</para>
     /// <para>Fails closed as <see cref="SafeText"/> does: a file whose redaction could not finish is
     /// served as <see cref="Redacted"/>, never as it arrived.</para>
     /// </remarks>
     public static string SafeSource(string text) =>
-        WhenRedactionTimesOut(() => SecretsTaken(
-            new string([.. text.Where(IsSourceCharacter)]), System.Diagnostics.Stopwatch.StartNew()));
+        WhenRedactionTimesOut(() => Source(text));
+
+    private static string Source(string text)
+    {
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+
+        return SecretsTaken(LinesTaken(new string([.. text.Where(IsSourceCharacter)]), clock), clock);
+    }
 
     /// <summary>A character that may be served in source: printable, or the layout a file is made of — tab, LF, CR.</summary>
     internal static bool IsSourceCharacter(char unit) => IsPrintable(unit) || unit is '\t' or '\n' or '\r';
@@ -358,21 +375,46 @@ public static partial class Redaction
         }
     }
 
-    /// <summary>The passes in their order: the block, the parameter, the three shapes, the labelled credential.</summary>
+    /// <summary>
+    /// The passes in their order: the block, the continuation, the parameter, the three shapes, the labelled
+    /// credential — under the same deadline as the redaction (the first version ran five passes with no clock).
+    /// </summary>
+    /// <remarks>
+    /// A continuation answers <c>labelled</c>: it is the labelled rule's reach, not a new shape. It comes before the
+    /// parameter pass, so a continuation beside a query credential answers <c>labelled</c> and a query credential
+    /// alone answers <c>parameter</c>; a block still answers <c>private-key</c> first.
+    /// </remarks>
     private static string ClassOf(string text)
     {
+        var clock = System.Diagnostics.Stopwatch.StartNew();
         if (PrivateKeyBlocks.Redact(text) != text)
         {
             return PrivateKeyClass;
         }
 
+        StopIfOverdue(clock);
+        if (LabelContinuations.Redact(text) != text)
+        {
+            return "labelled";
+        }
+
+        StopIfOverdue(clock);
         if (Parameter().Replace(text, RedactParameter) != text)
         {
             return "parameter";
         }
 
+        StopIfOverdue(clock);
+
         return Shapes.FirstOrDefault(shape => shape.Pattern.IsMatch(text)).Name
-            ?? (Labelled().Replace(text, RedactLabelled) != text ? "labelled" : string.Empty);
+            ?? LabelledClass(text, clock);
+    }
+
+    private static string LabelledClass(string text, System.Diagnostics.Stopwatch clock)
+    {
+        StopIfOverdue(clock);
+
+        return Labelled().Replace(text, RedactLabelled) != text ? "labelled" : string.Empty;
     }
 
     /// <summary>The three shapes recognisable on sight, named as <see cref="Patterns"/> names them.</summary>
@@ -384,30 +426,46 @@ public static partial class Redaction
         (MoonshotId(), "moonshot-id"),
     ];
 
-    /// <summary>The four passes, in the order the contract fixes, under one deadline — then the cut.</summary>
+    /// <summary>The passes, in the order the contract fixes, under one deadline — the strip in the middle — then the cut.</summary>
+    /// <remarks>
+    /// <c>PrivateKeyBlocks → LabelContinuations → [drop the layout] → parameter → the four shapes → labelled → [the cut]</c>.
+    /// The two line-spanning passes need the line breaks the strip removes, so every control character but tab, LF
+    /// and CR goes first (what <see cref="SafeSource"/> reads), the two passes run, and only then does the layout go.
+    /// </remarks>
     private static string Passes(string value, int limit)
     {
         var clock = System.Diagnostics.Stopwatch.StartNew();
-        var named = SecretsTaken(new string([.. value.Where(IsPrintable)]), clock);
+        var withLayout = LinesTaken(new string([.. value.Where(IsSourceCharacter)]), clock);
+        var named = SecretsTaken(new string([.. withLayout.Where(IsPrintable)]), clock);
 
         return named.Length <= limit ? named : named[..limit] + Truncated;
     }
 
     /// <summary>
-    /// The redaction passes alone: a private-key block first, then a parameter, the three shapes, then a
-    /// credential named and given.
+    /// The two line-spanning passes: a private-key block, then a credential label and its value on the next line.
     /// </summary>
     /// <remarks>
     /// The block goes FIRST, before any pattern reads a line of it: a key body is not one line, and the
     /// labelled pass that found <c>"private_key": "-----BEGIN</c> took out the header's first word and left
-    /// the body (<see cref="PrivateKeyBlocks"/>). It is procedural rather than a sixth pattern, so it is not
-    /// on <see cref="Patterns"/>; it is under the same deadline as the rest.
+    /// the body (<see cref="PrivateKeyBlocks"/>). The continuation follows it, so a label whose value is a key
+    /// has already lost its body before the continuation could take <c>-----BEGIN</c> for a token. Both are
+    /// procedural, not patterns, so neither is on <see cref="Patterns"/>; both are under the same deadline.
     /// </remarks>
-    private static string SecretsTaken(string printable, System.Diagnostics.Stopwatch clock)
+    private static string LinesTaken(string withLayout, System.Diagnostics.Stopwatch clock)
     {
-        var withoutBlocks = PrivateKeyBlocks.Redact(printable);
+        var withoutBlocks = PrivateKeyBlocks.Redact(withLayout);
         StopIfOverdue(clock);
-        var withoutParameters = Parameter().Replace(withoutBlocks, RedactParameter);
+
+        return LabelContinuations.Redact(withoutBlocks);
+    }
+
+    /// <summary>
+    /// The one-line redaction passes: a parameter, the three shapes, then a credential named and given.
+    /// </summary>
+    private static string SecretsTaken(string lines, System.Diagnostics.Stopwatch clock)
+    {
+        StopIfOverdue(clock);
+        var withoutParameters = Parameter().Replace(lines, RedactParameter);
         StopIfOverdue(clock);
         var redacted = Secrets.Aggregate(withoutParameters, (text, secret) =>
         {

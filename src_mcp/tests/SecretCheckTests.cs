@@ -37,6 +37,8 @@ public sealed class SecretCheckTests
     [InlineData("connect with https://deploy:hunter22secret@registry.example.com/v2", "url-authority")]
     [InlineData("I call GET /x?api_key=abc123def456 and it works", "parameter")]
     [InlineData("the config has password: hunter22secret in it", "labelled")]
+    // A value on the NEXT line (PLAN_redaction_reaches_a_value_on_the_next_line.md, R1): the context bound for the internet is refused, not sent.
+    [InlineData("the config:\n{\n  \"api_key\":\n    \"FAKE-CANARY-0001\",\n}", "labelled")]
     [InlineData("-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA\n-----END RSA PRIVATE KEY-----", "private-key")]
     // K6 of the code gate: the Moonshot account id is a personal identifier, so a consultant row on the internet refuses it like any other secret shape — pinned, not accidental.
     [InlineData("my account is org-0a1b2c3d4e5f6a7b on the plan", "moonshot-id")]

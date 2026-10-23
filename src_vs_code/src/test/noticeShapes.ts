@@ -57,6 +57,72 @@ function privateKey(kind: string, breaks: string, footer = true): string {
   return `${head}${breaks}MIIEvQIBADANBgEXAMPLEBODYLINEONE0123456789${breaks}EXAMPLEBODYLINETWOabcdefghij+/=${breaks}${tail}`;
 }
 
+/**
+ * Lines joined by a REAL line break — the shape a file or a pretty-printed body has, which the
+ * `\\n` of a JSON-escaped string (two characters) is not. `LabelContinuations` reads the real
+ * ones, and the notice road runs it BEFORE the strip that would glue them
+ * (`todo/PLAN_redaction_reaches_a_value_on_the_next_line.md`, D9).
+ */
+function lines(...parts: readonly string[]): string {
+  return parts.join('\n');
+}
+
+/** A value on the NEXT line, in every shape the plan measured (R1 to R11), the declines, and what must not change. Every canary is fake. */
+const NEXT_LINE_SHAPES: readonly string[] = [
+  // R1/R2: JSON, the value on the next line, at four and at eight spaces.
+  lines('{', '  "api_key":', '    "FAKE-CANARY-0001",', '}'),
+  lines('{', '  "nested": {', '    "api_key":', '        "FAKE-CANARY-0002"', '  }', '}'),
+  lines('{"api_key":', '"FAKE-CANARY-0001",', '"name": "kept"}'),
+  // R3 to R6: YAML, a block scalar (one and two lines), a folded header with one and five spaces.
+  lines('api_key:', '  FAKE-CANARY-0003'),
+  lines('password: >', '  FAKE-CANARY-0004'),
+  lines('password: |', '  FAKE-FIRST', '  FAKE-SECOND'),
+  lines('password: |-', '  FAKE-FIRST', '  FAKE-SECOND', 'ordinary: visible'),
+  lines('X-Api-Key:', ' FAKE-CANARY-0005'),
+  lines('X-Api-Key:', '     FAKE-CANARY-0006'),
+  // R7 to R9: a shell continuation, a CRLF break, a wrapped value (the residual).
+  lines('export TOKEN=\\', 'FAKE-CANARY-0007'),
+  'client_secret=\r\nFAKE-CANARY-0008',
+  'client_secret=FAKE-CANA\r\nRY-0009',
+  // R10: nested YAML, both shapes of the pair.
+  lines('service:', '  api_key:', '    FAKE-CANARY-0010'),
+  lines('service:', '  api_key: FAKE-CANARY-0012'),
+  // R11: TOML triple quotes, both kinds, closed and not, text before the closing quotes.
+  lines('password = """', 'FAKE-CANARY-0011', '"""'),
+  lines("secret = '''", '  FAKE-FIRST', '', "  FAKE-SECOND'''  # note", 'after = 1'),
+  lines('password = """', 'FAKE-FIRST', 'FAKE-SECOND'),
+  // The child of a credential-named container keeps its label; a blank line inside a block does not end it.
+  lines('credentials:', '  password: FAKE-CANARY-CHILD'),
+  lines('password: |', '  FAKE-FIRST', '', '  FAKE-SECOND', 'ordinary: visible'),
+  // Compound labels, tabs, an indicator with a digit, base64 padding as a value.
+  lines('db_password:', '  FAKE-CANARY-0015'),
+  lines('apiKey:', '  "FAKE-CANARY-0015"'),
+  lines('"client_secret":', '    "FAKE-CANARY-0015"'),
+  lines("'api_key' :", '\tFAKE-CANARY-0015'),
+  lines('authorization:', '  FAKE0CANARY0BASE64=='),
+  lines('password: |2', '    FAKE-FIRST', '   FAKE-SECOND'),
+  // The declines, which stay as they are (before the strip glues them).
+  lines('password:', 'the one you chose last week'),
+  lines('the key', 'to this is patience'),
+  lines('api_key:', '', '  FAKE-DECLINED'),
+  lines('api_key:', 'name: visible'),
+  lines('title:', '  not a credential'),
+  'api_key:\n',
+  // One-line quote classes and the widened gap (S-16 and D6).
+  "password='FAKE-CANARY-0016'",
+  'password = """FAKE-CANARY-0016"""',
+  "'client_secret': 'FAKE-CANARY-0016'",
+  `api_key:${' '.repeat(32)}FAKE-CANARY-0017`,
+  `api_key:${' '.repeat(33)}FAKE-CANARY-0017`,
+  'password: >  FAKE-CANARY-0004',
+  'password     =x',
+];
+
+/** A PEM header, ASSEMBLED rather than written down for the reason `privateKey()` gives. */
+function header(kind: string): string {
+  return `-----BEGIN ${kind}PRIVATE` + ` KEY-----`;
+}
+
 /** Every secret shape the redactor knows, and several it must LEAVE ALONE. */
 const SHAPES: readonly string[] = [
   // The three SECRETS patterns.
@@ -105,6 +171,9 @@ const SHAPES: readonly string[] = [
   privateKey('ENCRYPTED ', '\\n'),
   privateKey('', '\\n', false),
   'const header = "-----BEGIN PRIVATE' + ' KEY-----"; return header.length;',
+  // A label whose value is a key, on the next line: the block pass has taken the body before the continuation reads it.
+  lines('"private_key":', '"' + privateKey('', '\n')),
+  ...NEXT_LINE_SHAPES,
 ];
 
 /**
@@ -154,7 +223,33 @@ export function noticeShapes(): readonly string[] {
   // three source files as text.
   for (const code of [0, 1, 8, 11, 12, 14, 31, 127]) {
     shapes.push(`before${control(code)}after`, `${control(code)}sk-abcdefghijklmnop`);
+    // A control character beside a label that continues on the next line: dropped before the two
+    // line-spanning passes read the label (all but tab, LF, CR), so it neither hides the label nor ends a key's run.
+    shapes.push(
+      `password:${control(code)}\n  FAKE-CANARY-0018`,
+      `pass${control(code)}word:\n  FAKE-CANARY-0018`,
+      `${header('')}\n${'MIIEFAKEBODYLINE0123456789'}${control(code)}\nMIIEFAKEBODYLINE9876543210`,
+    );
   }
+
+  // White space that is NOT a line break, inside a value the continuation pass reads and outside it: JavaScript's
+  // own `\s` is the value class's edge in both halves.
+  for (const code of [0x85, 0xa0, 0x1680, 0x180e, 0x2000, 0x2028, 0x2029, 0x202f, 0x205f, 0x3000, 0xfeff]) {
+    shapes.push(
+      `api_key:\n  FAKE-CANARY-0019${control(code)}TAIL`,
+      `api_key:\n  ${control(code)}FAKE-CANARY-0019`,
+      `api_key:${control(code)}\n  FAKE-CANARY-0019`,
+    );
+  }
+
+  // A continued value at the very bound of its token, and beside a break at each end of the text.
+  shapes.push(
+    `api_key:\n  ${'v'.repeat(4096)}TAIL`,
+    `api_key:\n  ${'v'.repeat(4097)}`,
+    `api_key:\r\n`,
+    `\n\napi_key:\n  FAKE-CANARY-0020\n\n`,
+    `\r\rapi_key:\r  FAKE-CANARY-0020`,
+  );
 
   // Length, at each boundary. `a` repeated, then a secret at the very end so truncation and
   // redaction are exercised together.
@@ -204,6 +299,17 @@ export function noticeRecords(): readonly Record<string, unknown>[] {
       code: 'refused',
       title: String.fromCharCode(1),
       subject: 'kept',
+    },
+    {
+      // A two-line block scalar with REAL line breaks, in the detail a server notice carries and the
+      // extension reads back (S-12 of the next-line plan): neither line may reach the page, and the line the
+      // parser reads must be the line the writer wrote.
+      utc: '2026-10-23T10:00:00.000Z',
+      class: 'failure',
+      source: 'reviewer',
+      code: 'refused',
+      title: lines('{', '  "api_key":', '    "FAKE-CANARY-0001",', '}'),
+      detail: lines('password: |', '  FAKE-FIRST', '  FAKE-SECOND'),
     },
     {
       utc: '2026-09-21T10:00:02.000Z',
