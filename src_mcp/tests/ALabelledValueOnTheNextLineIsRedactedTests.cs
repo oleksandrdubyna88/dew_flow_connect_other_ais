@@ -285,22 +285,100 @@ public sealed class ALabelledValueOnTheNextLineIsRedactedTests
     }
 
     [Fact]
-    public void ATripleQuotedValue_OfSeveralLines_AndATextBeforeTheClosingQuotes_IsAllRedacted()
+    public void ATripleQuotedValue_OfSeveralLines_AndATextBeforeTheClosingQuotes_IsAllRedacted_WhenTheLabelIsAColon()
     {
-        var given = Lines("secret = '''", "  FAKE-FIRST", "", "  FAKE-SECOND'''  # note", "after = 1");
+        // The `:` label keeps its blocks. (An `=` label does not: S2b — see AnAssignment_TakesAtMostTheOneNextLine_….)
+        var given = Lines("secret: '''", "  FAKE-FIRST", "", "  FAKE-SECOND'''  # note", "after: 1");
 
         var safe = Source(given);
 
         safe.Should().NotContain("FAKE-");
-        safe.Should().Be(Lines("secret = '''", "  [redacted]", "", "  [redacted]'''  # note", "after = 1"));
+        safe.Should().Be(Lines("secret: '''", "  [redacted]", "", "  [redacted]'''  # note", "after: 1"));
     }
 
     [Fact]
-    public void AnUnclosedTripleQuote_RedactsToTheEndOfTheText()
+    public void AnUnclosedTripleQuote_AfterAColon_RedactsToTheEndOfTheText()
     {
-        var given = Lines("password = \"\"\"", "FAKE-FIRST", "FAKE-SECOND");
+        var given = Lines("password: \"\"\"", "FAKE-FIRST", "FAKE-SECOND");
 
         Source(given).Should().NotContain("FAKE-");
+    }
+
+    // ---------- S2b: a YAML list under a credential key ----------
+
+    [Fact]
+    public void AYamlList_UnderACredentialKey_HasEveryItemsValueRedacted_AndKeepsTheDashes_OnBothRoads()
+    {
+        var given = Lines("api_key:", "  - FAKE-CANARY-L1", "  - FAKE-CANARY-L2", "name: visible");
+
+        var source = Source(given);
+        var notice = Notice(given);
+
+        source.Should().NotContain("FAKE-CANARY-L");
+        source.Should().Be(Lines("api_key:", "  - [redacted]", "  - [redacted]", "name: visible"));
+        notice.Should().NotContain("FAKE-CANARY-L");
+        notice.Should().Contain("name: visible");
+    }
+
+    [Fact]
+    public void AListItem_WithAQuotedValue_AndAnItemThatIsAnAssignment_AreHandledLikeAnyValue()
+    {
+        var quoted = Lines("tokens:", "  - \"FAKE-CANARY-L1\",", "  - 'FAKE-CANARY-L2'");
+        var mapping = Lines("credentials:", "  - name: ci", "    password: FAKE-CANARY-L3");
+
+        Source(quoted).Should().Be(Lines("tokens:", "  - \"[redacted]\",", "  - '[redacted]'"));
+        Source(mapping).Should().Be(Lines("credentials:", "  - name: ci", "    password: [redacted]"), "an item that is itself an assignment is left to the labelled rule");
+    }
+
+    [Fact]
+    public void AListThatStopsBeingAList_EndsTheMasking()
+    {
+        var given = Lines("api_key:", "  - FAKE-CANARY-L1", "    nested continuation", "  - FAKE-CANARY-L2", "other: x");
+
+        var safe = Source(given);
+
+        safe.Should().Contain("nested continuation", "only consecutive items of one indentation are values");
+        safe.Should().NotContain("FAKE-CANARY-L1").And.Contain("other: x");
+    }
+
+    // ---------- S2b: a label whose separator is `=` is a code assignment, not a block ----------
+
+    [Theory]
+    [InlineData("private static readonly IReadOnlyDictionary<string, string?> WithoutTheKey =\n    new Dictionary<string, string?> { [KeyVariable] = null };", "KeyVault.cs")]
+    [InlineData("type KeyRead =\n  | { readonly kind: 'value'; readonly value: unknown }\n  | { readonly kind: 'absent' };", "chatStoreImport.ts")]
+    [InlineData("internal const string TheRoundsKey = \"\"\"\n    ALTER TABLE rounds ADD COLUMN round_key TEXT NOT NULL DEFAULT '';\n    \"\"\";", "Schema.cs")]
+    [InlineData("var token =\n    (await Load(key)).Value;", "a parenthesised expression")]
+    [InlineData("const secret =\n  [first, second];", "an array literal")]
+    public void ACodeAssignment_IsServedByteForByte(string given, string what)
+    {
+        Source(given).Should().Be(given, what);
+        Redaction.FirstSecretClass(given).Should().Be(string.Empty, what);
+    }
+
+    [Theory]
+    [InlineData("client_secret =\n  FAKE-CANARY-EQ1", "client_secret =\n  [redacted]")]
+    [InlineData("password =\n\t\"FAKE-CANARY-EQ1\",", "password =\n\t\"[redacted]\",")]
+    [InlineData("export TOKEN=\\\nFAKE-CANARY-EQ1", "export TOKEN=[redacted]\n[redacted]")]
+    [InlineData("password = \"\"\"\nFAKE-CANARY-EQ1\n\"\"\"", "password = \"\"\"\n[redacted]\n\"\"\"")]
+    public void AnAssignmentWithAValueShapedNextLine_IsStillRedacted(string given, string expected)
+    {
+        Source(given).Should().Be(expected);
+    }
+
+    [Fact]
+    public void AnAssignment_TakesAtMostTheOneNextLine_AndNeverOpensABlock()
+    {
+        var given = Lines("secret = '''", "  FAKE-FIRST", "  FAKE-SECOND", "'''");
+
+        Source(given).Should().Be(Lines("secret = '''", "  [redacted]", "  FAKE-SECOND", "'''"));
+    }
+
+    [Fact]
+    public void AColonLabel_KeepsItsBlocks()
+    {
+        var given = Lines("password: \"\"\"", "FAKE-FIRST", "FAKE-SECOND", "\"\"\"", "after: 1");
+
+        Source(given).Should().Be(Lines("password: \"\"\"", "[redacted]", "[redacted]", "\"\"\"", "after: 1"));
     }
 
     [Theory]

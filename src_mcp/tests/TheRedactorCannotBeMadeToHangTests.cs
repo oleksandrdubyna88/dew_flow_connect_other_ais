@@ -95,7 +95,7 @@ public sealed class TheRedactorCannotBeMadeToHangTests
 
     private static readonly string[] LineShapes =
     [
-        "labels-that-decline", "one-endless-block", "blank-heavy-block", "huge-indentation", "label-value-pairs", "fifty-thousand-pairs", "no-line-break", "unclosed-triple-quote",
+        "labels-that-decline", "one-endless-block", "blank-heavy-block", "huge-indentation", "label-value-pairs", "fifty-thousand-pairs", "no-line-break", "unclosed-triple-quote", "assignment-lines", "list-items",
     ];
 
     /// <summary>
@@ -111,7 +111,9 @@ public sealed class TheRedactorCannotBeMadeToHangTests
         "label-value-pairs" => Repeat("token:\n  v\n", size),
         "fifty-thousand-pairs" => string.Concat(Enumerable.Repeat("token:\n  v\n", 50_000)),
         "no-line-break" => new string('x', size),
-        "unclosed-triple-quote" => "password = \"\"\"\n" + Repeat("FAKE-LINE\n", size),
+        "unclosed-triple-quote" => "password: \"\"\"\n" + Repeat("FAKE-LINE\n", size),
+        "assignment-lines" => Repeat("password =\n  FAKE\n", size),
+        "list-items" => "api_key:\n" + Repeat("  - FAKE-ITEM\n", size),
         _ => throw new ArgumentOutOfRangeException(nameof(shape)),
     };
 

@@ -171,16 +171,56 @@ test('S-15: compound labels reach their next-line value', () => {
   }
 });
 
-test('R11: TOML triple quotes — the closing quotes are kept, an unclosed one redacts to the end', () => {
+test('R11: a TOML triple-quoted value of one line is redacted, its closing quotes kept', () => {
   assert.equal(
     source(lines('password = """', 'FAKE-CANARY-0011', '"""', 'name = "visible"')),
     lines('password = """', '[redacted]', '"""', 'name = "visible"'),
   );
+});
+
+test('a colon label keeps its triple-quote block, to the closing quotes or the end of the text', () => {
   assert.equal(
-    source(lines("secret = '''", '  FAKE-FIRST', '', "  FAKE-SECOND'''  # note", 'after = 1')),
-    lines("secret = '''", '  [redacted]', '', "  [redacted]'''  # note", 'after = 1'),
+    source(lines("secret: '''", '  FAKE-FIRST', '', "  FAKE-SECOND'''  # note", 'after: 1')),
+    lines("secret: '''", '  [redacted]', '', "  [redacted]'''  # note", 'after: 1'),
   );
-  assert.ok(!source(lines('password = """', 'FAKE-FIRST', 'FAKE-SECOND')).includes('FAKE-'));
+  assert.ok(!source(lines('password: """', 'FAKE-FIRST', 'FAKE-SECOND')).includes('FAKE-'));
+});
+
+test('S2b: a YAML list under a credential key has every item redacted and its dashes kept', () => {
+  const given = lines('api_key:', '  - FAKE-CANARY-L1', '  - FAKE-CANARY-L2', 'name: visible');
+
+  assert.equal(source(given), lines('api_key:', '  - [redacted]', '  - [redacted]', 'name: visible'));
+  assert.ok(!notice(given).includes('FAKE-CANARY-L'), notice(given));
+  assert.equal(
+    source(lines('tokens:', '  - "FAKE-CANARY-L1",', "  - 'FAKE-CANARY-L2'")),
+    lines('tokens:', '  - "[redacted]",', "  - '[redacted]'"),
+  );
+  assert.equal(
+    source(lines('credentials:', '  - name: ci', '    password: FAKE-CANARY-L3')),
+    lines('credentials:', '  - name: ci', '    password: FAKE-CANARY-L3'),
+    'an item that is itself an assignment is left to the labelled rule',
+  );
+  const broken = source(lines('api_key:', '  - FAKE-CANARY-L1', '    nested continuation', '  - FAKE-CANARY-L2', 'other: x'));
+  assert.ok(broken.includes('nested continuation') && !broken.includes('FAKE-CANARY-L1') && broken.includes('other: x'));
+});
+
+test('S2b: a code assignment is served byte for byte', () => {
+  for (const given of [
+    'private static readonly IReadOnlyDictionary<string, string?> WithoutTheKey =\n    new Dictionary<string, string?> { [KeyVariable] = null };',
+    "type KeyRead =\n  | { readonly kind: 'value'; readonly value: unknown }\n  | { readonly kind: 'absent' };",
+    'internal const string TheRoundsKey = """\n    ALTER TABLE rounds ADD COLUMN round_key TEXT NOT NULL DEFAULT \'\';\n    """;',
+    'var token =\n    (await Load(key)).Value;',
+    'const secret =\n  [first, second];',
+  ]) {
+    assert.equal(source(given), given, given);
+  }
+});
+
+test('S2b: an assignment with a value-shaped next line is still redacted, and takes only that one line', () => {
+  assert.equal(source('client_secret =\n  FAKE-CANARY-EQ1'), 'client_secret =\n  [redacted]');
+  assert.equal(source('password =\n\t"FAKE-CANARY-EQ1",'), 'password =\n\t"[redacted]",');
+  assert.equal(source('password = """\nFAKE-CANARY-EQ1\n"""'), 'password = """\n[redacted]\n"""');
+  assert.equal(source(lines("secret = '''", '  FAKE-FIRST', '  FAKE-SECOND', "'''")), lines("secret = '''", '  [redacted]', '  FAKE-SECOND', "'''"));
 });
 
 test('S-11: a block scalar of 262 144 characters has no canary anywhere, and the line after it survives', () => {
@@ -208,7 +248,7 @@ test('the pass is linear on the adversarial shapes: nothing takes a second', () 
     ['a line of 65 536 spaces then a label', `${' '.repeat(65_536)}api_key:\n${' '.repeat(65_537)}v\n`.repeat(2)],
     ['fifty thousand pairs', 'token:\n  v\n'.repeat(50_000)],
     ['no line break', 'x'.repeat(262_144)],
-    ['an unclosed triple quote', `password = """\n${'FAKE-LINE\n'.repeat(26_000)}`],
+    ['an unclosed triple quote', `password: """\n${'FAKE-LINE\n'.repeat(26_000)}`],
   ];
 
   for (const [what, text] of shapes) {

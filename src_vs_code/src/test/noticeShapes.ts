@@ -116,6 +116,22 @@ const NEXT_LINE_SHAPES: readonly string[] = [
   `api_key:${' '.repeat(33)}FAKE-CANARY-0017`,
   'password: >  FAKE-CANARY-0004',
   'password     =x',
+  // S2b: a YAML list under a credential key, its items quoted, mapped and broken by a deeper line.
+  lines('api_key:', '  - FAKE-CANARY-L1', '  - FAKE-CANARY-L2', 'name: visible'),
+  lines('tokens:', '  - "FAKE-CANARY-L1",', "  - 'FAKE-CANARY-L2'"),
+  lines('credentials:', '  - name: ci', '    password: FAKE-CANARY-L3'),
+  lines('api_key:', '  - FAKE-CANARY-L1', '    nested continuation', '  - FAKE-CANARY-L2', 'other: x'),
+  // S2b: a label whose separator is `=` is a code assignment — it never opens a block, takes at most one value-shaped line.
+  lines('private static readonly IReadOnlyDictionary<string, string?> WithoutTheKey =', '    new Dictionary<string, string?> { [KeyVariable] = null };'),
+  lines('type KeyRead =', "  | { readonly kind: 'value'; readonly value: unknown }", "  | { readonly kind: 'absent' };"),
+  lines('internal const string TheRoundsKey = """', "    ALTER TABLE rounds ADD COLUMN round_key TEXT NOT NULL DEFAULT '';", '    """;'),
+  lines('var token =', '    (await Load(key)).Value;'),
+  lines('const secret =', '  [first, second];'),
+  lines('client_secret =', '  FAKE-CANARY-EQ1'),
+  lines('password =', '\t"FAKE-CANARY-EQ1",'),
+  lines('password = """', 'FAKE-CANARY-EQ1', '"""'),
+  lines("secret = '''", '  FAKE-FIRST', '  FAKE-SECOND', "'''"),
+  lines("secret: '''", '  FAKE-FIRST', '', "  FAKE-SECOND'''  # note", 'after: 1'),
 ];
 
 /** A PEM header, ASSEMBLED rather than written down for the reason `privateKey()` gives. */

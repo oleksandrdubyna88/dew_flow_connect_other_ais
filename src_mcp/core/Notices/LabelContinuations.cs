@@ -77,7 +77,11 @@ internal static class LabelContinuations
         TripleSingle,
     }
 
-    private readonly record struct Ending(Opening Opening, bool Backslash);
+    /// <summary>
+    /// What a label's line ends with: the opening, whether a <c>\</c> ended it, and whether the separator was <c>=</c> — a code or
+    /// config ASSIGNMENT, which never opens a block (see <see cref="Continue"/>).
+    /// </summary>
+    private readonly record struct Ending(Opening Opening, bool Backslash, bool Assignment);
 
     /// <summary>The text with every continued credential value replaced, line breaks kept.</summary>
     public static string Redact(string text)
@@ -101,9 +105,16 @@ internal static class LabelContinuations
     }
 
     /// <summary>Applies the evidence of one label's line and answers where the scan goes on.</summary>
+    /// <remarks>
+    /// A label whose separator is <c>=</c> is an ASSIGNMENT — <c>WithoutTheKey =</c>, <c>type KeyRead =</c>,
+    /// <c>TheRoundsKey = """</c> — and what follows it in code is an expression, not a secret scalar. It never opens a
+    /// block: it takes AT MOST the one next line, and only when that line is shaped like a value
+    /// (<see cref="IsValueShaped"/>); an opening indicator or triple quote on its line then counts as evidence, since
+    /// <c>password = """</c> LF <c>FAKE</c> is the TOML shape. The <c>:</c> labels (YAML, JSON, headers) keep their blocks.
+    /// </remarks>
     private static int Continue(Writer writer, string text, Line line, Ending ending)
     {
-        switch (ending.Opening)
+        switch (ending.Assignment ? Opening.Plain : ending.Opening)
         {
             case Opening.Indicator:
                 return MaskIndented(writer, text, line.Next, IndentEnd(text, line.Start, line.End) - line.Start);
@@ -112,10 +123,7 @@ internal static class LabelContinuations
             case Opening.TripleSingle:
                 return MaskTriple(writer, text, line.Next, TripleSingle);
             default:
-                MaskPlain(writer, text, line, ending.Backslash);
-
-                // The continuation line is read again as a label's line of its own: it may end in one.
-                return line.Next;
+                return MaskPlain(writer, text, line, ending);
         }
     }
 
@@ -136,6 +144,7 @@ internal static class LabelContinuations
             return false;
         }
 
+        var assignment = text[at - 1] == '=';
         at = SkipBack(text, at - 1, floor, BeforeJoinerGap, IsBlank);
         at = SkipBack(text, at, floor, QuoteRun, IsQuote);
         if (!NamesACredential(text, floor, at))
@@ -143,7 +152,7 @@ internal static class LabelContinuations
             return false;
         }
 
-        ending = new Ending(opening, backslash);
+        ending = new Ending(opening, backslash, assignment);
 
         return true;
     }
@@ -197,24 +206,45 @@ internal static class LabelContinuations
 
     // ---------- the plain continuation ----------
 
-    /// <summary>Masks the value token on the line after a label's line, when there is evidence and the line is not a child assignment.</summary>
-    private static void MaskPlain(Writer writer, string text, Line label, bool backslash)
+    /// <summary>
+    /// Masks the value on the line after a label's line, when there is evidence and the line is not a child assignment —
+    /// the value token, or, for a YAML list item, the value after each item's dash. Answers where the scan goes on.
+    /// </summary>
+    private static int MaskPlain(Writer writer, string text, Line label, Ending ending)
     {
         var next = LineAt(text, label.Next);
         var indentEnd = IndentEnd(text, next.Start, next.End);
-        if (indentEnd >= next.End || !HasEvidence(text, label, indentEnd - next.Start, text[indentEnd], backslash) || IsAssignment(text, indentEnd, next.End))
+        var opened = ending.Assignment && ending.Opening != Opening.Plain;
+        if (indentEnd >= next.End
+            || !(opened || HasEvidence(text, label, indentEnd - next.Start, text[indentEnd], ending.Backslash))
+            || IsAssignment(text, indentEnd, next.End)
+            || (ending.Assignment && !IsValueShaped(text, indentEnd, next.End)))
         {
-            return;
+            return label.Next;
         }
 
-        var valueStart = indentEnd;
-        while (valueStart < next.End && valueStart - indentEnd < QuoteRun && IsQuote(text[valueStart]))
+        if (!ending.Assignment && TryListValue(text, indentEnd, next.End, out _))
+        {
+            return MaskListItems(writer, text, next, indentEnd - next.Start);
+        }
+
+        MaskValueToken(writer, text, indentEnd, next.End);
+
+        // The continuation line is read again as a label's line of its own: it may end in one.
+        return label.Next;
+    }
+
+    /// <summary>The quote run (up to three) and then the value token — the labelled rule's own class and bound — starting at <paramref name="from"/>.</summary>
+    private static void MaskValueToken(Writer writer, string text, int from, int to)
+    {
+        var valueStart = from;
+        while (valueStart < to && valueStart - from < QuoteRun && IsQuote(text[valueStart]))
         {
             valueStart++;
         }
 
         var valueEnd = valueStart;
-        while (valueEnd < next.End && valueEnd - valueStart < ValueLimit && IsValueCharacter(text[valueEnd]))
+        while (valueEnd < to && valueEnd - valueStart < ValueLimit && IsValueCharacter(text[valueEnd]))
         {
             valueEnd++;
         }
@@ -227,6 +257,84 @@ internal static class LabelContinuations
 
     private static bool HasEvidence(string text, Line label, int nextIndent, char first, bool backslash) =>
         backslash || IsQuote(first) || nextIndent > IndentEnd(text, label.Start, label.End) - label.Start;
+
+    /// <summary>
+    /// Whether a line (after its indentation) reads as ONE value, not as code: an optional quote, a single token with no white
+    /// space, quote or bracket inside — so never <c>new X(…)</c>, <c>| { … }</c>, <c>[a, b]</c>, <c>(expr)</c>, a heredoc or a
+    /// raw-string opener — an optional closing quote, and at most a trailing <c>,</c> or <c>;</c>.
+    /// </summary>
+    private static bool IsValueShaped(string text, int from, int to)
+    {
+        var end = SkipBackBlanks(text, from, to);
+        end -= end > from && text[end - 1] is ',' or ';' ? 1 : 0;
+        var start = from + (from < end && IsQuote(text[from]) ? 1 : 0);
+        end -= end > start && IsQuote(text[end - 1]) ? 1 : 0;
+        if (end <= start || text[start] is '|' or '<')
+        {
+            return false;
+        }
+
+        for (var at = start; at < end; at++)
+        {
+            if (IsJsSpace(text[at]) || IsQuote(text[at]) || text[at] is '(' or ')' or '[' or ']' or '{' or '}')
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static int SkipBackBlanks(string text, int floor, int to)
+    {
+        var end = to;
+        while (end > floor && IsBlank(text[end - 1]))
+        {
+            end--;
+        }
+
+        return end;
+    }
+
+    /// <summary>A YAML list item: a dash, then white space, then something. <paramref name="valueFrom"/> is where the item's value starts.</summary>
+    private static bool TryListValue(string text, int indentEnd, int to, out int valueFrom)
+    {
+        valueFrom = indentEnd + 1;
+        if (indentEnd + 1 >= to || text[indentEnd] != '-' || !IsBlank(text[indentEnd + 1]))
+        {
+            return false;
+        }
+
+        valueFrom = IndentEnd(text, indentEnd + 1, to);
+
+        return valueFrom < to;
+    }
+
+    /// <summary>
+    /// A YAML list under a credential label: every consecutive item of the first item's indentation has the value after its
+    /// dash replaced and the dash kept; an item that is itself an assignment, a line that is not an item and a deeper or shallower
+    /// line end the list. Answers the first line not consumed.
+    /// </summary>
+    private static int MaskListItems(Writer writer, string text, Line first, int itemIndent)
+    {
+        var line = first;
+        while (true)
+        {
+            var indentEnd = IndentEnd(text, line.Start, line.End);
+            if (indentEnd - line.Start != itemIndent || !TryListValue(text, indentEnd, line.End, out var valueFrom) || IsAssignment(text, valueFrom, line.End))
+            {
+                return line.Start;
+            }
+
+            MaskValueToken(writer, text, valueFrom, line.End);
+            if (!line.HasBreak(text))
+            {
+                return line.Next;
+            }
+
+            line = LineAt(text, line.Next);
+        }
+    }
 
     /// <summary>Whether a line (after its indentation) is itself <c>["']? label ["']{0,3} [ \t]{0,4} [:=]</c> — and not base64 padding.</summary>
     private static bool IsAssignment(string text, int from, int to)
