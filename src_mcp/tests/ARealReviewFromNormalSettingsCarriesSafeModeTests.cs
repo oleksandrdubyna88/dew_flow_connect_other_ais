@@ -310,7 +310,7 @@ public sealed class ARealReviewFromNormalSettingsCarriesSafeModeTests : IAsyncLi
             "two rows on one executable are one installed release, asked its help once and — it declares the flag — its version once; a codex row asks nothing");
         var answer = claude.ByExecutable.Values.Should().ContainSingle().Subject;
         answer.SafeMode.Should().Be(CoaiMcp.Runners.Reviewers.SafeModeSupport.Declared);
-        answer.Version.Should().Be("2.1.309");
+        answer.Version.Should().Be(CoaiMcp.Runners.Reviewers.ClaudeRelease.Parse("2.1.309"));
     }
 
     [Fact]

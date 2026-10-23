@@ -45,7 +45,7 @@ internal sealed record ClaudeCapabilities(IReadOnlyDictionary<string, ClaudeCapa
         var answers = await Task.WhenAll(executables.Select(exe => AskOneAsync(launcher, exe, workingDirectory, ct)));
         foreach (var (exe, answer) in executables.Zip(answers))
         {
-            log.Information("claude safe-mode probe: {Executable} — {Answer}, release {Version}: {Reason}", exe, answer.SafeMode, answer.Version.Length > 0 ? answer.Version : "not read", answer.Reason);
+            log.Information("claude safe-mode probe: {Executable} — {Answer}, release {Version}: {Reason}", exe, answer.SafeMode, answer.Version.IsKnown ? answer.Version.Value : "not read", answer.Reason);
         }
 
         return new ClaudeCapabilities(executables.Zip(answers).ToDictionary(pair => pair.First, pair => pair.Second, StringComparer.Ordinal));

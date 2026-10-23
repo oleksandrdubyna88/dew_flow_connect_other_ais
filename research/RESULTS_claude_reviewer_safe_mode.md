@@ -111,12 +111,18 @@ needs was lost (rows 2–4, 6). Permission rules survive safe mode (5′). Hooks
 hook was not tried and is assumed to go the same way, which is the trade the card states.
 
 **Observed on one release, so the launch says so on every other.** The list of releases whose effect was observed is ONE constant,
-`ClaudeSafeMode.ObservedVersions` (`runners/Reviewers/ClaudeSafeMode.cs`), currently `2.1.309` — this section. A release is added to it only by a new run recorded
+`ClaudeSafeMode.ObservedVersions` (`runners/Reviewers/ClaudeSafeMode.cs`, typed `ClaudeRelease` values), currently `2.1.309` — this section, observed for project-path `SessionStart` and `PreToolUse` hooks. A release is added to it only by a new run recorded
 here; a version bump is not evidence. A launch whose claude declares `--safe-mode` always SENDS it (never a refusal), and carries no note only when the installed
 `claude --version` is on that list. On any other release the launch carries the note *`--safe-mode` is sent; its effect (the reviewed branch's hooks and CLAUDE.md do
 not apply) was observed on claude 2.1.309 only, not on <version>*; when the version could not be read, the note says the installed release is not known, so the
 effect is not observed for it. coai's read-only claim therefore rests on plan mode and
 `--disallowedTools`, never on a hook. Both scratch folders were removed afterwards; nothing else was.
+
+### Second run — a project-path `PreToolUse` hook, 2026-10-23, claude 2.1.309 (Windows)
+
+Second run, 2026-10-23, claude 2.1.309 (Windows), `--model sonnet`: a PreToolUse hook (matcher Read) registered in the scratch worktree's OWN .claude/settings.json (the project path a reviewed branch controls) that appends a marker and exits 2 for a path naming HOOKDENIED. Arm B (control, coai's argv without --safe-mode): marker PRESENT, the read of HOOKDENIED.txt refused with 'PreToolUse:Read hook error: … blocked by the project PreToolUse hook'. Arm A (coai's argv with --safe-mode): marker absent, both reads succeeded. A first attempt of this run had an invalid control (the hook script used require() in a .mjs file and failed, so neither arm fired); it was discarded and rerun with a .cjs hook. Cost: 0.064 and 0.039 USD.
+
+**Conclusion.** On 2.1.309 both project-path hook types tried (SessionStart and PreToolUse) are off under `--safe-mode`; other hook events (e.g. PostToolUse, Stop, UserPromptSubmit) were not tried. This closes the gap the first run left open (rows 5′ and 8′ ran the `PreToolUse` hook through `--settings`, not the project path), for the one hook event named here and for 2.1.309 only.
 
 ### The setup the plan wrote before the run
 
@@ -181,7 +187,7 @@ run without it.
 ## 7. What this record does not say
 
 * That the effect holds under coai's invocation — §5 does, on 2.1.309 only, and for a project-path `SessionStart` hook (row 1).
-* That a project-path `PreToolUse` hook, or a user-settings hook, is switched off — §5 ran the `PreToolUse` hook through `--settings`, not the project path.
+* That a user-settings hook, or a project-path hook of any event other than `SessionStart` and `PreToolUse` (e.g. `PostToolUse`, `Stop`, `UserPromptSubmit`), is switched off — §5's second run saw the project-path `PreToolUse` hook off, the first run the `SessionStart` one; no other event was tried.
 * That another claude version behaves like 2.1.309 — 2.1.258 and 2.1.197 *declare* the flag in their help, and that is all that is known of them; a launch on them (or on any
   unread release) sends the flag with a note that the effect is not observed there.
 * That the Team server's claude declares the flag — `POST_DEPLOY.md` has the one-line check.

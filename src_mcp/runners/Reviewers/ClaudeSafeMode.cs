@@ -34,10 +34,11 @@ public sealed record ClaudeSafeMode(IReadOnlyList<string> Arguments, string Note
     /// <summary>
     /// The claude releases on which the flag's EFFECT — a reviewed branch's project hook does not run, its <c>CLAUDE.md</c> does not apply — was
     /// OBSERVED, not merely documented by a help text: the one place the list lives. A canary run recorded in
-    /// research/RESULTS_claude_reviewer_safe_mode.md §5 (2026-10-23, claude 2.1.309): the branch's own <c>.claude/settings.json</c> SessionStart hook ran without the
-    /// flag and did not run with it. A release is added here only by a new run recorded in that file — a version bump is not evidence.
+    /// research/RESULTS_claude_reviewer_safe_mode.md §5 (2026-10-23, claude 2.1.309): the branch's own <c>.claude/settings.json</c> SessionStart hook, and in a second run
+    /// its PreToolUse hook, ran without the flag and did not run with it. Observed for SessionStart and PreToolUse project hooks on 2.1.309; other hook events
+    /// (PostToolUse, Stop, UserPromptSubmit) were not tried. A release is added here only by a new run recorded in that file — a version bump is not evidence.
     /// </summary>
-    public static IReadOnlyList<string> ObservedVersions { get; } = ["2.1.309"];
+    public static IReadOnlyList<ClaudeRelease> ObservedVersions { get; } = [ClaudeRelease.Parse("2.1.309")];
 
     /// <summary>The decision for one launch, from the row's switch and what the installed CLI's help said.</summary>
     public static ClaudeSafeMode For(ReviewerSettings settings) =>
@@ -51,14 +52,14 @@ public sealed record ClaudeSafeMode(IReadOnlyList<string> Arguments, string Note
     /// What the person is owed about a launch that SENT the flag: nothing on a release where its effect was observed (<see cref="ObservedVersions"/>), else a
     /// sentence saying the flag went but its effect was not observed on this release — a help that declares a flag is not a measurement of what it does.
     /// </summary>
-    private static string NoteWithSent(string version) =>
-        ObservedVersions.Contains(version, StringComparer.Ordinal)
+    private static string NoteWithSent(ClaudeRelease version) =>
+        ObservedVersions.Contains(version)
             ? string.Empty
             : $"{ClaudeCapability.SafeModeFlag} is sent; its effect (the reviewed branch's hooks and CLAUDE.md do not apply) was observed on claude {string.Join(", ", ObservedVersions)} only, {NotObservedOn(version)}";
 
     /// <summary>The tail of that sentence: the release by name, or — when the version could not be read — that the effect is therefore not observed for it.</summary>
-    private static string NotObservedOn(string version) =>
-        version.Length > 0
+    private static string NotObservedOn(ClaudeRelease version) =>
+        version.IsKnown
             ? $"not on {version}"
             : "and the installed release is not known, so the effect is not observed for it";
 
