@@ -5,11 +5,13 @@
 > `AntigravityRuntime.cs`, `BoundedScheduler.cs` (the summary line), `VendorDiagnosis.cs`, `VendorProbe.cs`,
 > `src_mcp/runners/Files/EvidenceFile.cs`, `src_mcp/core/Notices/Redaction.cs` with its mirror
 > `src_vs_code/src/notifications.ts` (one story, ordered AFTER the redaction plan on `docs/redaction-across-lines`),
-> their tests, `research/module_runners.md` and `research/module_core.md`. Exactly six items — R1, R3, R4, R5, R6, R8 —
-> in three epics. Two owner questions (R2 the environment, R7 the branch's own configuration) are **not in scope**: they
-> are listed in §9 with options and a recommendation only, and no story here builds on them. **This plan adds NO new
-> refusal of any kind** (owner decision 2026-10-23: nothing may be refused only because it is unmeasured — a note, never
-> a refusal).
+> their tests, `research/module_runners.md` and `research/module_core.md`. Five epics: E1–E3 are the six scout items
+> (R1, R3, R4, R5, R6, R8); E4 (R2: the three reviewers start from an allow-list environment, with a visible switch back)
+> and E5 (R7: the Claude reviewer runs `--safe-mode` so the reviewed branch's `CLAUDE.md`, hooks and MCP servers do not
+> steer it; a card note for codex and claude) were added the same day after the owner answered §9 and the question
+> consultant's two precedents were verified. **This plan adds NO new refusal of any kind** (owner decision 2026-10-23:
+> nothing may be refused only because it is unmeasured — a note, never a refusal): E4 and E5 are safety DEFAULTS with
+> notes, each with a visible way back.
 >
 > Related docs: [module_runners.md](../research/module_runners.md) (§*What counts as hopeless* :1193, §*A stated reset is
 > never waited out locally* :1229, §*WSL, measured* :874), [module_core.md](../research/module_core.md) (`Redaction`, :58–60),
@@ -55,10 +57,14 @@ hold *exhausted* or *daily*, `Hopeless` (`:373-374`) stops the ladder and the co
    limit*, both already recorded in this repository, are not (E1);
 3. what the person reads is whole where it matters (agy's stated reset is cut mid-number in the cell), carries a
    cure for the one agy failure that has none, and warns about an unmeasured agy version the way Vibe's does (E2);
-4. every vendor line that reaches a note, a file or a card is redacted before it is cut, on every road (E3).
+4. every vendor line that reaches a note, a file or a card is redacted before it is cut, on every road (E3);
+5. a local codex, claude or agy reviewer no longer starts with the developer's whole environment — an allow-list the
+   three CLIs are measured to sign in under, a visible switch back, the mode on the round's record (E4);
+6. the Claude reviewer is not steered by the reviewed branch's own `CLAUDE.md`, hooks and MCP servers (`--safe-mode`,
+   declared by both recorded `claude --help` texts), and the codex and claude cards say the branch's configuration
+   reaches the reviewer (E5).
 
-Two questions the owner has to answer (R2, R7) are written down in §9 with options and a recommendation; they are not
-in this plan's scope and get their own plan if the owner says yes.
+§9 records the owner's answers and the two verified precedents E4 and E5 are built on.
 
 This plan creates no growth surface: no table, directory, cache or spawned process is added.
 
@@ -90,6 +96,14 @@ Every reference below was read in the worktree at 151cc652. Three scout claims n
   shape, which these three CLIs do not have.
 - **No "never wait even when a reset is stated".** `RetryLadder.ResetOutlasts` (`:90-91`) is right: a stated reset beyond
   the budget stops the ladder; one inside it is waited out.
+- **Never `--bare` for the Claude reviewer.** Both recorded help texts say it skips *keychain reads*
+  (`help-2.1.258-windows.txt:40-44`, `help-2.1.197-wsl.txt:33`), and the lead's 2.1.309 text says *OAuth and keychain are
+  never read* — the owner signs in to every CLI through the browser, so `--bare` is a launch that cannot sign in.
+  `--safe-mode` is the flag that keeps *Auth … work[ing] normally* (`help-2.1.258-windows.txt:198-208`).
+- **No automatic retry with the full environment** when an allow-listed launch (E4) fails. A failure is reported with the
+  mode it ran in; the person flips the visible setting. A silent second launch would hide the one thing E4 exists to show.
+- **No full sanitised snapshot for codex and claude in this plan** — it is E5's open tail (§*Open tail* under E5), because
+  for CLIs that can read any path they are told a snapshot alone is not a block, and the owner has not asked for it.
 
 ## 4. The boundary with the redaction plan (both sides)
 
@@ -110,6 +124,13 @@ the redaction plan never changes a caller of the redactor; this plan never chang
 
 ## 5. Build order
 
+0. **E5.S2 first — the Claude reviewer's `--safe-mode`.** Out of numeric order on purpose, and here is why: it is a
+   security item with an observed mechanism, not a theoretical one. A headless claude session in a worktree ran that
+   worktree's project `SessionStart` hook (`dew_flow_conventions · research/RESULTS_subagent_model_tiers.md` §*E3 — the
+   self-install observed (2026-10-14)*), and coai's Claude reviewer runs with the reviewed worktree as its working
+   directory (`ClaudeRuntime.cs:104`) — so a branch under review can run a command inside its own reviewer today. The fix
+   is one flag the detector already in `ClaudeCapability` can confirm from `--help`, declared by both recorded help texts
+   (2.1.258 and 2.1.197). E1–E3 cost money and truth; this one costs trust. One story, one release, before the rest.
 1. **E1** — classification. S1 codex, S2 claude, S3 agy (the three overrides), then S4 the phrases. Ships in one coai-mcp
    release; the Team server's reviewer path uses the same executor (`src_server/src/Jobs/ReviewLauncher.cs`), so it ships
    there with the next deploy.
@@ -117,8 +138,11 @@ the redaction plan never changes a caller of the redactor; this plan never chang
    version warning (+ the model fact).
 3. **E3.S1–S4** — redact-before-cut on the four roads. Independent of `Redaction.cs`.
 4. **E3.S5** — the three shapes, both halves, after `docs/redaction-across-lines` is merged. Rebase, then build.
-
-R2 and R7 (§9) are outside this order: an owner's *yes* opens a new `todo/` plan; a *no* is recorded here as a non-item.
+5. **E4** — the allow-list environment for the three local reviewers, after E1–E3: its last step is a manual, paid
+   sign-in smoke of the three real CLIs by the owner or the lead after the release (§6), and that step should not wait
+   on the cheaper epics.
+6. **E5.S1, S3** — the fact's record and the card note; **E5's `--restricted` verification** is the lead's one-turn launch,
+   after S2 ships, and decides whether a second flag follows in its own story.
 
 Each epic goes through the coai plan gate before its code and the code gate after it, as the Kimi quota plan did.
 
@@ -136,6 +160,10 @@ dotnet build dew_flow_connect_other_ais.slnx -c Debug -m:4
 ./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-class "*AnAntigravityThatTimedOutSigningInIsToldTheCure*"
 ./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-class "*AnAntigravityVersionIsWarnedNotRefused*"
 ./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-class "*IsRedactedBeforeItIsCut*"
+./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-class "*ALocalReviewerStartsFromTheAllowlist*"
+./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-class "*ASentinelNeverReachesAReviewer*"
+./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-class "*TheClaudeReviewerRunsInSafeMode*"
+./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-class "*AReviewerSteeredByTheBranchSaysSo*"
 # the whole suite, through the family wrapper (what CI runs)
 node .agents/conventions/tools/low-priority.mjs ./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe
 # E3.S5 only: the extension's half and the parity corpus
@@ -146,9 +174,14 @@ node .agents/conventions/tools/plan-lifecycle.mjs
 Every story follows RED → GREEN → break-it: the test is written first and watched fail with the real symptom (not a
 setup error); after the fix it passes; then the fix is reverted once to prove the test has teeth, and restored. Both
 observations go into the story's commit message. No story runs a vendor CLI: every test feeds a `ProcessResult` or a
-fixture file. The one measurement in scope (E2.S3's model fact) is a recorded run under the real CLI, done by the
-builder of that story in a scratch repository, written to `research/RESULTS_*.md` before any code depends on it. The
-`claude -p` hook fact (§9) belongs to R7's own plan, not to this one.
+fixture file. Three steps are NOT suite tests and are said so here: E2.S3's model fact (a recorded run under the real
+agy, by the story's builder, in a scratch repository, written to `research/RESULTS_*.md` before code depends on it);
+E4's **sign-in smoke** — after the release, the owner or the lead runs one round with each of codex, claude and agy on the
+allow-list default and records that all three found their browser sign-in (paid, so never in the suite; the bench's
+2026-10-01 measurement is the evidence it starts from, not a substitute for it); and E5's **`--restricted` check** — the
+lead's one-turn launch of coai's exact Claude argv plus `--restricted --strict-mcp-config`, recording whether it conflicts
+with `--permission-mode plan` / `--disallowedTools` (`ClaudeRuntime.cs:94-95`) and whether the file tools are confined to
+`--add-dir`. The E4 child-process test uses the suite's fake CLI (a script that prints its environment), never a vendor's.
 
 ## 7. Definition of Done
 
@@ -168,8 +201,15 @@ builder of that story in a scratch repository, written to `research/RESULTS_*.md
 - [ ] `research/module_runners.md` (the codex/claude/agy failure reading, the hopeless words, the WSL section, the
       stated-reset section) and `research/module_core.md` (the shapes) match the code; Mermaid renders.
 - [ ] The boundary table of §4 is also in the redaction plan's file once it is on `main`.
-- [ ] The owner's answers to §9 (R2, R7) are recorded here; a "yes" opens its own `todo/` plan, a "no" closes the
-      question as a recorded non-item. Neither is built by this plan.
+- [ ] A local codex, claude or agy reviewer starts from the allow-list by default: a sentinel variable in the server's
+      environment is absent from the child's, the profile and proxy names are present, the ledger line says which mode
+      ran, the visible setting switches back, and no launch is silently retried with the full environment.
+- [ ] The post-release sign-in smoke of the three real CLIs on the allow-list is recorded in `research/` (owner/lead).
+- [ ] The Claude reviewer's argv carries `--safe-mode` when the installed CLI declares it; when it does not, the launch
+      goes without it and the card and the round carry a NOTE — never a refusal; `--bare` appears nowhere.
+- [ ] The codex and claude cards say the reviewed branch's own configuration reaches the reviewer; the Claude row says
+      what `--safe-mode` switches off.
+- [ ] The `--restricted` one-turn check is recorded; a follow-up story exists or a recorded non-item says why not.
 - [ ] `node .agents/conventions/tools/plan-lifecycle.mjs` clean; the whole `CoaiMcp.Tests.exe` suite green; this plan
       promoted with its deviations when the last built epic ships.
 
@@ -190,29 +230,49 @@ builder of that story in a scratch repository, written to `research/RESULTS_*.md
   is written on the failure path only.
 - **The agy "measured version" constant goes stale** the next time agy is measured. Same risk Vibe and Kimi carry; the
   constant's doc names the RESULTS record it came from, and the warning says *re-run the probe*, never *refused*.
-- **R2 built with a wrong allowlist breaks a sign-in that lives in an env var nobody listed.** That is why it is an
-  owner question outside this plan, with the setting OFF by default as the recommendation, and a measured round per
-  vendor before any default flips.
+- **E4's allow-list breaks a sign-in that lives in an env var nobody listed.** The owner signs in through the browser
+  on every CLI (no env-var sign-in), and the three CLIs are measured to find that sign-in under exactly the bench's list
+  (2026-10-01, Windows). Linux and macOS are NOT measured under it — the post-release smoke covers them, the card shows a
+  broken sign-in before a round (`providers` probes with the same mode), and the visible setting is the way back.
+- **The pass-through is not secret-free.** `ProcessEnvironment.Passthrough` carries the proxy names (`:51`), and a proxy
+  URL can hold `user:password@`. The allow-list narrows what a reviewer can print; it does not make the environment
+  clean. Say so in the setting's description and in the docs; never call it "secret-free".
+- **`--safe-mode` on a Claude that does not declare it** would refuse the launch. The detector reads `--help` first
+  (the `ClaudeCapability` probe, `:111`); an undeclared flag is left out with a NOTE. A declared flag the CLI then
+  mis-handles is caught by the first live round and is a plain failure with its sentence, never a silent loss.
+- **`--restricted` may conflict with the shipped argv** (`--permission-mode plan` + `--disallowedTools`,
+  `ClaudeRuntime.cs:94-95`) or confine `--add-dir` reads in a way a review needs. It is NOT sent until the lead's
+  one-turn check says what it does; E5.S2 ships `--safe-mode` alone.
 
-## 9. Open owner questions — NOT in scope (listed with options and a recommendation only)
+## 9. The two owner questions — asked, answered the same day, and what the answers rest on
 
-**R2 — should the LOCAL codex, claude and agy reviewers stop inheriting the whole environment?** Today a local
-`coai-mcp` reviewer is started with the developer's entire environment (`ProcessLauncher.cs:99`; the comment `:85-98`
-says this is deliberate: that is where sign-ins, proxies and PATH live). Kimi, Vibe and every question consultant start
-from `ProcessEnvironment.Minimal`; the Team server confines every reviewer (`src_server/src/Jobs/Confinement.cs:38`).
-A read-anywhere reviewer (claude unconfined keeps `Bash`; codex `exec -s read-only` can still run commands) handed a
-prompt-injected diff could print `env` into its answer, which the person then reads and the ledger keeps (redacted by
-shape only — a secret with no recognisable shape passes).
+Both were first written here as open questions with options; the owner answered on 2026-10-23 and asked for the question
+consultant (consultId `fc43c9c96ce244cdb5c087f793ffcd4f`, gpt-6-astra). Its two precedents were verified by the lead
+before this section was rewritten. The options are kept so the record shows what was chosen against.
+
+**R2 — the LOCAL codex, claude and agy reviewers inherit the whole environment.** A local `coai-mcp` reviewer is started
+with the developer's entire environment (`ProcessLauncher.cs:99`; the comment `:85-98` says this is deliberate: that is
+where sign-ins, proxies and PATH live). Kimi, Vibe and every question consultant start from `ProcessEnvironment.Minimal`;
+the Team server confines every reviewer (`src_server/src/Jobs/Confinement.cs:38`). A read-anywhere reviewer (claude
+unconfined keeps `Bash`; codex `exec -s read-only` can still run commands) handed a prompt-injected diff could print
+`env` into its answer, which the person then reads and the ledger keeps (redacted by shape only — a secret with no
+recognisable shape passes).
 
 | option | what it is | cost |
 |---|---|---|
 | A — keep as is | nothing changes; the comment's reasoning stands | the exposure above stays on local runs |
-| B — a visible setting, **off by default** (recommended) | `InheritsEnvironment = false` + `ProcessEnvironment.Passthrough` + each CLI's own names (`OPENAI_API_KEY`, `CODEX_HOME`, `ANTHROPIC_API_KEY`, `CLAUDE_CONFIG_DIR`, `ANTIGRAVITY_API_KEY`, the proxy and certificate names), reusing the server's `Confinement` shape; `providers` probes with the same confinement so the card shows a broken sign-in BEFORE a round | an env-var sign-in not on the list breaks when the person switches it on — visible at once on the card |
-| C — the setting on by default | as B, flipped | the same break, silently, on the first round after the release |
+| B — a visible setting, off by default | an allow-list behind a switch the person turns on | an env-var sign-in not on the list breaks when switched on — visible at once on the card |
+| **C — the allow-list by default, a visible switch back (chosen)** | `InheritsEnvironment = false` + `ProcessEnvironment.Passthrough` + the OS profile names + each CLI's own config names; the round's record says which mode ran; `providers` probes in the same mode | the same break on the first round after the release — bounded by the owner's answer and the precedent below, and by the post-release smoke |
 
-Recommendation: **B**, then one measured round per vendor with it on (Windows and WSL), recorded in `research/`, and
-only then a decision on C. The claude allowlist plan (`PLAN_the_claude_reviewer_is_confined_by_an_allowlist.md`) is the
-sibling decision about tools; this one is about the environment, and the two should be decided together.
+**The owner's answer:** they sign in to every CLI through the **browser** — there is no env-var sign-in to lose — so the
+one cost that made B the first recommendation is not there. **The precedent (verified):**
+`dew_flow_benchmark · src/Bench.Domain/Probes/ProbeChildEnvironment.cs` (worktree `bench-probe-optout`) is an allow-list
+(`PATH, PATHEXT, SystemRoot, windir, ComSpec, OS, NUMBER_OF_PROCESSORS, ProgramData, USERPROFILE, HOME, HOMEDRIVE,
+HOMEPATH, APPDATA, LOCALAPPDATA, USERNAME, TEMP, TMP, TMPDIR`, plus the `ProgramFiles`/`ProgramW6432`/`PROCESSOR_`
+prefixes) whose doc comment records that **claude 2.1.258, codex-cli 0.156.1 and agy 1.2.14 each started, found their
+browser login and answered under exactly this set (2026-10-01, Windows)** — claude keeps its OAuth under `~/.claude`,
+codex under `~/.codex`, agy under `%LOCALAPPDATA%`. It is another repository: evidence to cite, never a reference from
+coai code (the list is copied into coai with its source named). → **E4.**
 
 **R7 — the reviewed branch configures two of its own reviewers.** codex and claude run with the worktree as their
 working directory (`ReviewerRuntime.cs:654,672`; `ClaudeRuntime.cs:98,104`), so the branch's `AGENTS.md`, `CLAUDE.md`,
@@ -221,20 +281,28 @@ not run inside it (`AntigravityRuntime.cs:62-64`). Vibe and Kimi get a sanitised
 snapshot is a block for them only because their reads are bounded to the working folder — codex and claude can read any
 path they are told, so a snapshot alone is not a block for them.
 
-| option | size | what it is |
+**The fact, established three ways.** (1) The precedent (verified): `dew_flow_conventions ·
+research/RESULTS_subagent_model_tiers.md` §*E3 — the self-install observed (2026-10-14)* — a HEADLESS claude session in a
+worktree ran that worktree's project `SessionStart` hook, which installed a hook into `~/.claude`. So a reviewed branch's
+`.claude/settings*.json` can plausibly run commands inside a Claude reviewer; not yet verified under coai's exact
+invocation (`--permission-mode plan` + `--disallowedTools`). (2) The repository's own recorded help texts: `--safe-mode`
+is declared by 2.1.258 (`help-2.1.258-windows.txt:198-208`) AND 2.1.197 (`help-2.1.197-wsl.txt:166`) — *all customizations
+(CLAUDE.md, skills, plugins, hooks, MCP servers, custom commands and agents …) disabled … Admin-managed (policy)
+settings still apply. Auth, model selection, built-in tools, and permissions work normally. Sets `CLAUDE_CODE_SAFE_MODE=1`*;
+`--setting-sources <user,project,local>` by both (`:211-212`, `:179`); `--restricted` by 2.1.258 only (`:180-194`: removes
+the command-running tools and `WebFetch` unless `--tools` names them, *ignores user, project and local settings files
+(managed settings and `--settings` still apply; add `--strict-mcp-config` to skip MCP servers too)*, and *confines the file
+tools to the working directories (`--add-dir` included)*); `--bare` by both — and it skips **keychain reads**, which is the
+owner's sign-in (§3). (3) The lead ran `claude --help` on 2.1.309 (free): the same four flags, the same wording, and for
+`--bare` the sharper *OAuth and keychain are never read*.
+
+| option | what it is | decision |
 |---|---|---|
-| a — a card note now | S | the codex and claude rows say *reads the branch's own CLI configuration*; agy's says *reads the branch through `--add-dir`; whether it honours a `.gemini/` there is not measured* (`runtimeNote` on the card already draws such a sentence, `modelCard.ts:188-203`) |
-| b — the sanitised snapshot for codex and claude too | M | `NeedsASanitisedSnapshot => true` on both adapters, with `.codex/`, `.claude/`, `CLAUDE.md`, `AGENTS.md`, `.gemini/` in the exclusion list — removes the configuration from the tree they are pointed at, not from a path they can still be told |
-| c — nothing | — | recorded as a non-item with this reasoning |
-
-Recommendation: **a** (it is a sentence, and a small plan of its own), **b as its own plan** after the owner says
-whether a review must be blind to the branch's agent configuration — the same question the Vibe snapshot answered
-*yes* for. Neither is built here.
-
-**A fact to establish before R7.b: does headless `claude -p` run project hooks** (`.claude/settings.json` →
-`hooks`)? Not measured anywhere in this repository. A canary hook in a scratch repository, one `claude -p` launch under
-the reviewer's exact argv (`ClaudeRuntime.cs:91-103`), recorded in `research/RESULTS_*.md`. If it does, R7 is a
-security question and b moves up; if it does not, R7 is only about instructions the model reads.
+| a — a card note | the codex and claude rows say the branch's own configuration reaches the reviewer; agy's says it reads the branch through `--add-dir` and a `.gemini/` there is not measured (`runtimeNote`, `modelCard.ts:188-203`) | **E5.S3, built** |
+| b′ — the CLI's own flag for Claude | `--safe-mode` on every Claude reviewer launch where `--help` declares it; a NOTE where it does not | **E5.S2, built first (§5)** |
+| b″ — `--restricted --strict-mcp-config` as a second flag | also confines file reads to `--add-dir` — closes part of the unconfined-read finding of `PLAN_the_claude_reviewer_is_confined_by_an_allowlist.md` | **a lead's one-turn check, then its own story or a recorded non-item** |
+| b — the sanitised snapshot for codex and claude (`NeedsASanitisedSnapshot => true`, `.codex/`, `.claude/`, `CLAUDE.md`, `AGENTS.md`, `.gemini/` excluded; citations through the snapshot's `MapBack`) | removes the configuration from the tree they are pointed at, not from a path they can still be told | **E5's open tail — not built now** |
+| codex | no flag that skips `AGENTS.md`/`.codex/` is known on codex-cli | the card note only; the snapshot stays the tail |
 
 ## Epics
 
@@ -363,4 +431,105 @@ shape to one half only → parity red. Lands by rebase onto the merged redaction
 
 Cornerstones: 0 of 1 — E3.S3.
 
-There is no fourth epic: R2 and R7 are §9's open questions, outside this plan's scope by the owner's instruction.
+### E4 — a local codex, claude or agy reviewer starts from an allow-list, with a visible way back (R2)
+
+Goal: the three local reviewers no longer start with the developer's whole environment. The child gets
+`ProcessEnvironment.Passthrough` (the proxy and certificate names, `ProcessEnvironment.cs:50-52`), the OS profile names the
+bench measured the three CLIs signing in under (§9: `PATH, PATHEXT, SystemRoot, windir, ComSpec, OS, NUMBER_OF_PROCESSORS,
+ProgramData, USERPROFILE, HOME, HOMEDRIVE, HOMEPATH, APPDATA, LOCALAPPDATA, USERNAME, TEMP, TMP, TMPDIR`, the
+`ProgramFiles`/`ProgramW6432`/`PROCESSOR_` prefixes; on Linux and macOS also `USER, LOGNAME, SHELL, LANG, LC_ALL, LC_CTYPE,
+TERM, XDG_CONFIG_HOME, XDG_CACHE_HOME, XDG_DATA_HOME, XDG_RUNTIME_DIR, DOTNET_ROOT` — the names `MinimalUnix` `:90-91` already
+needs, plus the XDG trio a CLI's config dir can be moved by), and each CLI's own config names (`CODEX_HOME`,
+`CLAUDE_CONFIG_DIR`, `ANTHROPIC_API_KEY`/`OPENAI_API_KEY`/`ANTIGRAVITY_API_KEY` for a row whose key is set — the adapters
+set those three on the request already, `ReviewerRuntime.cs:691-692`, `ClaudeRuntime.cs:109-111`, `AntigravityRuntime.cs:67-69`;
+agy names no config variable in its adapter, which is what was checked). A visible operator setting switches back to
+inherit; the round's record says which mode ran; a failure under the allow-list is NEVER retried with the full environment.
+Depends on E1 (a sign-in failure must be classified as what it is before this changes how often it happens). Done when
+the stories are green, `module_runners.md` §*The launcher's two environments* (:599) describes the third environment, and
+the post-release smoke is recorded.
+
+**S1 — the list and the switch.** RED: `ALocalReviewerStartsFromTheAllowlistTests` —
+`ByDefault_TheRequestDoesNotInherit_AndNamesTheReviewerAllowlist` (each of the three `Build` results carries
+`InheritsEnvironment == false` and `Passthrough` set-equal to the new `ProcessEnvironment.Reviewer` list for the platform),
+`WithTheSettingOnInherit_TheRequestInheritsAsToday`, `TheRowsApiKeyIsStillAppliedOnTop` (`Environment` applied last,
+`ProcessLauncher.cs:82-83`), `TheReviewerListIsASupersetOfPassthrough_AndNeverNamesACredentialWord` (no name containing
+`KEY`, `TOKEN`, `SECRET`, `PASSWORD` except the three per-row key names the adapters set themselves). Fix: one
+`ProcessEnvironment.ReviewerFor(isWindows)` beside `MinimalFor` (`:97-98`), its doc naming the bench record as its source;
+the three adapters' `Build` return `request with { InheritsEnvironment = !settings.AllowlistedEnvironment, Passthrough =
+ProcessEnvironment.Reviewer }` through ONE helper (`ReviewerEnvironment.Apply(request, settings)` — the server's
+`Confinement.Apply` shape, `src_server/src/Jobs/Confinement.cs:38`, which stays the server's: there is no unconfined launch
+there); `ReviewerSettings` gains `EnvironmentMode` (`allowlist` default, `inherit`) read from the vendor's settings beside
+`Confined` (`:140`), surfaced in the panel's settings with a one-line description that says the pass-through still carries
+the proxy URL. Break-it: default to `inherit` → the first test red. Docs: `module_runners.md` :599.
+
+**S2 — the proof in a child process (the RED test the lead asked for).** RED: `ASentinelNeverReachesAReviewerTests` —
+`AnUnrelatedVariableInTheServersEnvironment_IsAbsentFromTheChilds` (the test process sets
+`COAI_TEST_SENTINEL_SECRET=…`, launches the suite's fake CLI — a script that prints its environment — through the real
+`ProcessLauncher` with a request built by each of the three adapters, and asserts the printed environment has no
+`COAI_TEST_SENTINEL_SECRET` while `PATH` and the profile names are present), `WithInheritOn_TheSentinelIsPresent` (the way
+back works), `AProxyNameIsPresentEitherWay`. Three vendors × two modes through one `[Theory]`. Break-it: set
+`InheritsEnvironment = true` in the helper → the sentinel appears. No vendor CLI is run.
+
+**S3 — the record says which mode ran, and nothing retries.** RED: `ALaunchLineSaysItsEnvironmentModeTests` —
+`TheLedgerLineCarriesAllowlistOrInherit` (`LaunchOptions`, `LaunchOptions.cs:133-141`, gains `Environment = "allowlist" |
+"inherit"`, written by the same path that writes `Cli`/`CliVersion` — story 3.4 of the round counter, `module_runners.md`
+:1740), `TheProbeRunsInTheSameMode` (`VendorProbe` builds its `--version` request through the same helper, so the card
+shows a broken sign-in before a round), `AFailureUnderTheAllowlist_IsReportedInThatMode_AndNotRelaunched` (the executor
+makes one launch; the outcome's sentence ends *(allow-listed environment — switch the vendor's environment setting to
+inherit to compare)*). Break-it: add a second launch on failure → red. Docs: `module_runners.md` :1740 and the extension's
+usage view if it lists launch options (`module_extension.md`).
+
+**S4 — the post-release sign-in smoke (manual, paid, owner/lead).** One round per vendor on the allow-list default,
+Windows first, then WSL/Linux (unmeasured by the bench), recorded in `research/RESULTS_reviewer_allowlist_sign_in.md`
+with versions; a vendor that fails is switched to `inherit` by the setting and the missing name is added to the list in a
+follow-up story — never by widening the default blind.
+
+Cornerstones: 0 of 2 — E4.S1, E4.S2.
+
+### E5 — the Claude reviewer is not steered by the branch it reviews, and the cards say who is (R7)
+
+Goal: `--safe-mode` on every Claude reviewer launch whose CLI declares it (both recorded versions do), detected from
+`--help` through the probe that already reads it, a NOTE where it is absent; the codex and claude cards say the reviewed
+branch's own configuration reaches the reviewer. S2 is built FIRST of the whole plan (§5). Depends on nothing. Done when
+the stories are green and `module_runners.md` §*The claude consultant is confined by an allowlist* (:1448) gains the
+reviewer's paragraph.
+
+**S1 — the fact, recorded.** No code. `research/RESULTS_claude_reviewer_safe_mode.md`: the three sources of §9 (the
+conventions E3 observation, the two recorded help fixtures with line numbers, the lead's 2.1.309 run), the `--bare`
+exclusion and why, and the open `--restricted` question with the exact one-turn command the lead will run. Written before
+S2's code so the plan gate reads the fact and not a claim.
+
+**S2 — `--safe-mode`, detected, never refused.** RED: `TheClaudeReviewerRunsInSafeModeTests` —
+`WhenHelpDeclaresSafeMode_TheArgvCarriesIt` (fixture `help-2.1.258-windows.txt` → `--safe-mode` present, before
+`--permission-mode`), `WhenHelpDeclaresIt_OnTheOlderCli_Too` (fixture `help-2.1.197-wsl.txt:166`),
+`WhenHelpDoesNotDeclareIt_TheArgvGoesWithout_AndTheLaunchCarriesANote` (a fake help text without the flag → no
+`--safe-mode`, `LaunchTurn.Warning`/the invocation's note says *the installed claude does not declare --safe-mode; the
+reviewed branch's CLAUDE.md, hooks and MCP servers reach this reviewer*), `ADeclarationWithARequiredValue_IsNotSupport`
+(the `RestrictedIn` rule, `ClaudeCapability.cs:130-137`, applied to the new flag), `BareIsNeverSent`,
+`TheConsultantsArgvIsUnchanged` (the question consultant and the stuck consultant keep theirs — this story is the
+reviewer's). Fix: `ClaudeCapability` grows a second declaration (`SafeModeIn(helpText)`, same ANSI-stripping line scan,
+same *flag, not flag-with-value* rule) read by the SAME `ProbeAsync` (`:111`, one `--help` per launch, never a second
+process); `ClaudeRuntime.Build` takes the capability (as the consultant's planner does) and emits `--safe-mode` when
+declared; the card's existing `versionWarningNote`/`runtimeNote` carries the absent-flag note through `providers`. The
+`--restricted --strict-mcp-config` pair is NOT added here: after S2 ships, the lead runs one turn of coai's exact argv
+plus those two flags and records whether they conflict with `--permission-mode plan`/`--disallowedTools` and whether
+`--add-dir` reads survive; a *yes, compatible* opens its own story (it would also close part of
+`PLAN_the_claude_reviewer_is_confined_by_an_allowlist.md`), a *no* is a recorded non-item. Break-it: drop the flag from
+the argv → the first test red; send `--bare` → `BareIsNeverSent` red. Docs: `module_runners.md` :1448; `POST_DEPLOY.md`
+(the Team server's installed claude declares the flag, or its rows carry the note).
+
+**S3 — the card says who steers the reviewer.** RED: `AReviewerSteeredByTheBranchSaysSoTests` —
+`TheCodexRowSaysTheBranchsAgentsMdAndCodexConfigReachIt`, `TheClaudeRowSaysWhatSafeModeSwitchesOff` (and, when the flag
+is absent, what reaches it), `TheAgyRowSaysItReadsTheBranchThroughAddDir_AndAGeminiFolderIsNotMeasured`,
+`NoRowsEnabledChanges`. Fix: a per-runtime `ConfigurationNote` on `IReviewerRuntime` (default empty, like
+`VersionWarning` `:373`) folded into `VendorHealth.Note` by the probe; the card draws it as it draws `runtimeNote`
+(`modelCard.ts:188-203`) — a sentence, never a held switch. Break-it: return empty for codex → red. Docs:
+`module_runners.md` and `module_extension.md` (the card's notes).
+
+**Open tail (not built now):** the sanitised snapshot for codex and claude — `NeedsASanitisedSnapshot => true` on both
+adapters (`ReviewerRuntime.cs:410`), `.codex/`, `.claude/`, `CLAUDE.md`, `AGENTS.md`, `.gemini/` excluded, every finding's
+path mapped back through the snapshot's `MapBack` as Vibe's and Kimi's are (`src_mcp/runners/Snapshots/*`). For CLIs that
+read any path they are told it narrows what they are pointed at, not what they can reach — which is why it waits for the
+`--restricted` answer (which does confine reads) and for the owner to ask.
+
+Cornerstones: 0 of 1 — E5.S2.
