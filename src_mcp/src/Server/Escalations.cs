@@ -51,6 +51,24 @@ public sealed record EscalationQuestion(
     /// Empty in a card an older server wrote — the extension then guesses as it always did.
     /// </summary>
     public string Kind { get => field ?? string.Empty; init; } = string.Empty;
+
+    /// <summary>
+    /// Which decisions this card offers (<c>todo/PLAN_only_a_person_releases_the_gate.md</c>, G5) — <see cref="EscalationDecisions.Notice"/>
+    /// on the gate's own notice, <see cref="EscalationDecisions.Question"/> on an <c>ask_human</c> card. The extension offers a
+    /// decision only when the file lists it, so a newer extension against an older server never offers a button the server would read as
+    /// prose. Empty in a card an older server wrote — the extension then offers the three it always did.
+    /// </summary>
+    public IReadOnlyList<string> Decisions { get => field ?? []; init; } = [];
+}
+
+/// <summary>The decisions a card can list, spelled as the answer file spells them.</summary>
+public static class EscalationDecisions
+{
+    /// <summary>The gate's own notice: the three that keep the findings alive, and the one that ships with them open.</summary>
+    public static IReadOnlyList<string> Notice { get; } = ["continue", "fix", "discuss", "proceed"];
+
+    /// <summary>An <c>ask_human</c> card: never Proceed — the strongest button is kept off the card whose words the AI chose.</summary>
+    public static IReadOnlyList<string> Question { get; } = ["continue", "fix", "discuss"];
 }
 
 /// <summary>The two producers of a card. A card is only ever the GATE's: the AI's own questions are asked in its conversation.</summary>
@@ -90,7 +108,12 @@ public sealed record EscalationAdvice(
 /// <summary>What a person wrote back, and — when they pressed a button — what they chose.</summary>
 public sealed record EscalationAnswer(string Id, string Answer, string AnsweredUtc)
 {
-    /// <summary><c>proceed</c> or <c>fix</c>. Absent for a typed answer, and absent is not a choice.</summary>
+    /// <summary><c>continue</c>, <c>fix</c>, <c>discuss</c> or <c>proceed</c> — the button pressed. Absent for a typed answer, and absent is not a choice.</summary>
+    /// <remarks>
+    /// <c>proceed</c> is read only from the answer to a hold's own NOTICE (<see cref="CurrentAnswer"/>); written against any other
+    /// card it is prose. The file is written by the extension, and anything running as the same user can write it too —
+    /// the claim is the protocol road, not a verified person.
+    /// </remarks>
     public string? Decision { get; init; }
 }
 
@@ -218,6 +241,36 @@ public sealed class Escalations(string dataDir, TimeSpan? pollInterval = null)
     public bool Expire(string id, DateTime nowUtc) =>
         Rewrite(id, question => question with { Status = EscalationStatuses.Expired, ExpiredUtc = nowUtc.ToString("O") });
 
+    /// <summary>
+    /// A standing NOTICE written before the card listed its decisions gets the list, in place: the same id, the same question, the
+    /// answer file untouched (<c>todo/PLAN_only_a_person_releases_the_gate.md</c> §11.3). A second card for the same hold would be two buttons
+    /// for one question. Idempotent — a notice that already lists its decisions, a question card and a card that is gone are left as
+    /// they are — and false when nothing was written.
+    /// </summary>
+    /// <remarks>
+    /// A card with no kind is not refreshed: it cannot be told from an <c>ask_human</c> card, and the server honours a Proceed only from a notice.
+    /// </remarks>
+    public bool OfferDecisions(string id) =>
+        Read(id) is { Kind: EscalationKinds.Notice, Decisions.Count: 0 }
+        && Rewrite(id, question => question.Decisions.Count > 0 ? question : question with { Decisions = EscalationDecisions.Notice });
+
+    /// <summary>
+    /// <see cref="OfferDecisions"/> for every question a held session's hold is bound to — what "a held session is read" does (§11.3).
+    /// Nothing for a session that is not held.
+    /// </summary>
+    internal void OfferHeldNotices(PersistedSession session)
+    {
+        if (!session.State.HumanGate)
+        {
+            return;
+        }
+
+        foreach (var id in session.State.HoldQuestions)
+        {
+            OfferDecisions(id);
+        }
+    }
+
     /// <summary>D8: the consultants' answers folded under the card, whole — the last attach wins, rows and all.</summary>
     public bool Attach(string id, IReadOnlyList<EscalationAdvice> answers) =>
         Rewrite(id, question => question with { ConsultantAnswers = answers });
@@ -262,6 +315,7 @@ public sealed class Escalations(string dataDir, TimeSpan? pollInterval = null)
             "continue" => HumanDecision.Continue,
             "fix" => HumanDecision.Fix,
             "discuss" => HumanDecision.Discuss,
+            "proceed" => HumanDecision.Proceed,
             _ => HumanDecision.None,
         };
 

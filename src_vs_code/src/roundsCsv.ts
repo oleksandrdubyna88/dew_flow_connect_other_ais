@@ -251,16 +251,22 @@ function countOf(value: number | undefined): number | null {
 /**
  * The word the PAGE uses for a decision, so the file and the screen say the same thing.
  *
- * <p>`took` / `declined` / `open`, from `resolution` — the same mapping `foundHtml` renders in the
- * expanded row. A file that said `accept` where the screen said `took` would be a second vocabulary
- * for one fact.</p>
+ * <p>`took` / `declined` / `proceeded over` / `open`, from `resolution` — the same mapping `foundHtml`
+ * renders in the expanded row. A file that said `accept` where the screen said `took` would be a second
+ * vocabulary for one fact. `proceeded over` is the server's `proceeded`: a finding a person's Proceed
+ * carried the stage over — decided by a person, neither taken nor argued with, so never `open`.</p>
  */
 export function decisionWord(resolution: unknown): string {
-  if (resolution === 'accept') {
-    return 'took';
+  switch (resolution) {
+    case 'accept':
+      return 'took';
+    case 'reject':
+      return 'declined';
+    case 'proceeded':
+      return 'proceeded over';
+    default:
+      return 'open';
   }
-
-  return resolution === 'reject' ? 'declined' : 'open';
 }
 
 /** What one finding contributes to a line, in `FINDING_COLUMNS` order. */

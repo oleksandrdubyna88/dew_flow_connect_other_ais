@@ -76,11 +76,16 @@ internal sealed class RoundEngine(
     /// </summary>
     /// <remarks>
     /// <para>The decision lives in the escalation answer file, keyed by session, because that is
-    /// where the panel and the phone both write it. Reading it HERE, immediately before a round
+    /// where the panel writes it (anything that writes <c>&lt;id&gt;.answer.json</c> is a writer). Reading it HERE, immediately before a round
     /// would begin, means the person can answer at any point during the wait and the next attempt
     /// simply works — no restart, no re-open, nothing to poll.</para>
     /// <para><c>Continue</c> and <c>Fix</c> grant a fresh set of rounds; <c>Discuss</c> and a typed
-    /// answer with no button pressed leave the gate held, which is what both of them mean.</para>
+    /// answer with no button pressed leave the gate held, which is what both of them mean. <c>Proceed</c>
+    /// is left to <c>resolve</c> — the stage advances in one place — so the begin that follows refuses it
+    /// with the sentence naming <c>resolve</c> (<see cref="RoundMachine.ReviewAfterProceed"/>).</para>
+    /// <para>A held session read here also has its standing notice refreshed in place when an older server wrote it
+    /// without its <c>decisions</c> list (<see cref="Escalations.OfferHeldNotices"/>), so a hold that outlived an upgrade
+    /// offers Proceed on the card it already has — never on a second one.</para>
     /// <para><b>Only an answer to THIS hold</b> (<see cref="CurrentAnswer"/>): the newest answered
     /// question is walked to past an unanswered notice, so an answer to an earlier hold opened a later
     /// one on its own until the reader asked when the answer was given (D12, 2026-09-26).</para>
@@ -97,7 +102,8 @@ internal sealed class RoundEngine(
             return WithTheHoldReissued(session);
         }
 
-        var decision = CurrentAnswer.DecisionFor(session, _escalations);
+        _escalations.OfferHeldNotices(session);
+        var decision = CurrentAnswer.DecisionFor(session, _escalations, _log);
         var opened = RoundMachine.ApplyHumanDecision(session.State, decision);
         if (ReferenceEquals(opened, session.State) || opened.HumanGate)
         {
@@ -112,6 +118,15 @@ internal sealed class RoundEngine(
         _store.Save(next);
         return next;
     }
+
+    /// <summary>
+    /// The sentence every review entry answers once the person has pressed Proceed on the held gate and nothing has consumed it
+    /// yet — or empty. Held and answered-Proceed only: <c>GateHeld</c> remains what an unanswered, or otherwise answered, hold gets.
+    /// </summary>
+    private string ProceedOnFile(PersistedSession session) =>
+        session.State.HumanGate && CurrentAnswer.DecisionFor(session, _escalations, _log) == HumanDecision.Proceed
+            ? RoundMachine.ReviewAfterProceed
+            : string.Empty;
 
     /// <summary>
     /// A held gate that records no question — a hold an older build raised — is released by NO answer:
@@ -239,6 +254,14 @@ internal sealed class RoundEngine(
         }
 
         session = ApplyAnyHumanDecision(session);
+        // ONE hold check for every review entry — review_plan, review_code, review_document and review_feature all come through
+        // here (§11.7 of todo/PLAN_only_a_person_releases_the_gate.md): GateHeld while no person has answered, and the sentence
+        // naming `resolve` once a Proceed is on file. Nothing is saved for a refusal.
+        if (ProceedOnFile(session) is { Length: > 0 } pressed)
+        {
+            return Error(pressed, from);
+        }
+
         session = session with
         {
             State = session.State with
@@ -819,6 +842,9 @@ internal sealed class RoundEngine(
             DateTime.UtcNow.ToString("O"))
         {
             Kind = EscalationKinds.Notice,
+            // The only card that offers Proceed: it lists the findings being overridden (G4/G5 of
+            // todo/PLAN_only_a_person_releases_the_gate.md). A card an older server wrote has no list, and offers three.
+            Decisions = EscalationDecisions.Notice,
         };
 
     /// <summary>

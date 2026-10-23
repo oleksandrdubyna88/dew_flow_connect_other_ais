@@ -1569,6 +1569,7 @@ ${TEXT_CONTROLS_CSS}
   .finding { border-left: 3px solid var(--vscode-panel-border); padding: 2px 0 6px 10px; margin: 6px 0; }
   .finding.took { border-left-color: var(--vscode-charts-green, var(--vscode-charts-blue)); }
   .finding.declined { border-left-color: var(--vscode-charts-orange); }
+  .finding.proceeded { border-left-color: var(--vscode-charts-yellow, var(--vscode-charts-orange)); }
   .finding .sev { font-weight: 600; }
   .finding .where { opacity: .75; font-family: var(--vscode-editor-font-family); font-size: .92em; }
   .finding .why { opacity: .85; margin: 2px 0 0; }
@@ -1857,7 +1858,9 @@ ${teamSectionHtml(waitingFor())}
     var out = '<div class="findings">';
     for (var i = 0; i < row.found.length; i++) {
       var f = row.found[i];
-      var mark = f.resolution === 'accept' ? 'took' : f.resolution === 'reject' ? 'declined' : 'open';
+      var mark = f.resolution === 'accept' ? 'took' : f.resolution === 'reject' ? 'declined' : f.resolution === 'proceeded' ? 'proceeded' : 'open';
+      // A person's Proceed carried the stage over this finding: said in words, and its reason is the same sentence.
+      var label = mark === 'proceeded' ? 'proceeded over' : mark;
       out += '<div class="finding ' + esc(mark) + '">'
         + '<span class="sev">' + esc(f.severity) + '</span> '
         + '<span class="where">' + esc(f.file ? f.file + ':' + f.line : 'no file') + '</span> '
@@ -1866,8 +1869,8 @@ ${teamSectionHtml(waitingFor())}
         + '<div class="why">' + esc(f.why) + '</div>'
         + (f.securityEvidence ? '<details><summary>Security evidence (unverified)</summary><pre>' + esc(JSON.stringify(f.securityEvidence, null, 2)) + '</pre></details>' : '')
         + (f.fix ? '<div class="why"><i>fix:</i> ' + esc(f.fix) + '</div>' : '')
-        + '<div class="verdict">' + esc(f.providers) + ' / ' + esc(f.role) + ' &middot; <b>' + esc(mark) + '</b>'
-        + (f.reason ? ': ' + esc(f.reason) : '') + '</div>'
+        + '<div class="verdict">' + esc(f.providers) + ' / ' + esc(f.role) + ' &middot; <b>' + esc(label) + '</b>'
+        + (f.reason && mark !== 'proceeded' ? ': ' + esc(f.reason) : '') + '</div>'
         + '</div>';
     }
     return out + '</div>';

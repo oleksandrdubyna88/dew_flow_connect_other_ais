@@ -546,7 +546,7 @@ public sealed class AFeatureIsReviewedEndToEndTests : IAsyncLifetime
 
         // Every argument the caller has: `again`, `humanDecision: proceed`, and a question it asked itself.
         Parse(await ReviewAsync(service, again: true)).TryGetProperty("error", out _).Should().BeTrue("again: true alone is no ground");
-        Parse(await service.ResolveAsync(_repo, "any-branch", "[]", humanSaysProceed: true, feature: PlanPath))
+        Parse(await service.ResolveAsync(_repo, "any-branch", "[]", callerClaimsProceed: true, feature: PlanPath))
             .TryGetProperty("error", out _).Should().BeTrue("there is nothing to resolve, and the override is not the person's request either");
         Parse(await service.AskHumanAsync(_repo, "any-branch", "Round 1 found a seam. Review the feature again?", feature: PlanPath))
             .GetProperty("status").GetString().Should().Be("no_answer_yet");
@@ -596,6 +596,37 @@ public sealed class AFeatureIsReviewedEndToEndTests : IAsyncLifetime
 
         // A standing call_human is a person's decision, and un-ticking every vendor must not dissolve it (§4.4).
         Parse(await ReviewAsync(Service(ticked: false))).GetProperty("error").GetString().Should().Contain("ask_human");
+    }
+
+    /// <summary>
+    /// <c>todo/PLAN_only_a_person_releases_the_gate.md</c> on a FEATURE review held by <c>call_human</c>: the caller's argument releases
+    /// nothing, a person's Proceed on the notice is refused to every review entry with the sentence naming <c>resolve</c> (§11.7), and
+    /// <c>resolve</c> then closes the review with the findings recorded as proceeded over (§11.5).
+    /// </summary>
+    [Fact]
+    public async Task AHeldFeatureReview_IsReleasedByThePersonsProceedOnItsNotice_AndByNothingTheCallerPasses()
+    {
+        var service = Service(escalationBudget: TimeSpan.FromMilliseconds(200));
+        Script(BlockingFinding);
+        Parse(await ReviewAsync(service)).GetProperty("verdict").GetString().Should().Be("revise");
+        await service.ResolveAsync(_repo, "any-branch", AcceptTheFinding, feature: PlanPath);
+        Write("src/Shop.cs", Shop("var total = n * 3;"));
+        await Commit("the fix pull request");
+        Parse(await ReviewAsync(service, again: true)).GetProperty("verdict").GetString().Should().Be("call_human");
+
+        var claimed = Parse(await service.ResolveAsync(_repo, "any-branch", RejectTheFinding, true, feature: PlanPath));
+        claimed.TryGetProperty("error", out _).Should().BeTrue($"the caller's argument is no decision: {claimed}");
+        claimed.GetProperty("error").GetString().Should().Contain("Proceed despite the findings");
+        Session().State.HumanGate.Should().BeTrue();
+
+        ThePersonAnswers("proceed", "Proceed despite the findings", question: "The ");
+        var review = Parse(await ReviewAsync(service, again: true));
+        review.GetProperty("error").GetString().Should().Contain("a person pressed Proceed on the held gate — call resolve to advance");
+
+        var resolved = Parse(await service.ResolveAsync(_repo, "any-branch", "[]", feature: PlanPath));
+        resolved.TryGetProperty("error", out var error).Should().BeFalse($"the person's Proceed closes the review: {error}");
+        Session().State.HumanGate.Should().BeFalse();
+        Session().State.Stage.Should().Be(Stage.Done);
     }
 
     // ---------- D23: a partly failed round retries only the reviewers that failed ----------

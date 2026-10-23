@@ -1200,8 +1200,9 @@ asked without `document` / `feature` — and `RoundMachine.GateHeld` says the sa
 
 Every card now says which producer wrote it: `EscalationQuestion.Kind` is `notice` (`RoundEngine.HoldNotice`) or
 `question` (`AskHumanService.Card`); a card an older server wrote has none, and the extension falls back to its old
-guess. `status`'s `humanDecision` / `humanAnswer` come from `CurrentAnswer.TheGatesAnswer` — the hold's answer, else
-the feature request's — the third reader of the answer file moved onto the identity rule the other two already used;
+guess. `status`'s `humanDecision` / `humanAnswer` come from `CurrentAnswer.TheGatesAnswer` / `TheGatesDecision` — the hold's answer, else
+the feature request's — the third reader of the answer file moved onto the identity rule the other two already used (and `humanNote`
+says what to do about a Proceed on file — see *Only an answer on the notice card releases the gate*);
 the session-wide `Escalations.DecisionFor` / `AnswerTextFor` / `LatestAnswerFor` went with it.
 
 ```mermaid
@@ -2286,19 +2287,128 @@ Three changes, all small, none of them new vocabulary:
 
 - `BeginPlanRound` / `BeginCodeRound` refuse while `HumanGate` is set, with a sentence naming every
   way out — a refusal with no door is a stall.
-- `Resolve` clears `HumanGate` only for `humanSaysProceed`.
+- `Resolve` clears `HumanGate` only for a person's Proceed, read from the hold's notice (since 2026-10-22 —
+  it was a boolean the calling AI set, which made the gated party the one that could release the gate; see
+  *Only an answer on the notice card releases the gate* below).
 - `RoundMachine.ApplyHumanDecision` is what a person's answer does to the state, and
-  `PanelService.ApplyAnyHumanDecision` reads it from the escalation file immediately before a round
+  `RoundEngine.ApplyAnyHumanDecision` reads it from the escalation file immediately before a round
   would begin. Reading it at the last moment means the person can answer during the wait and the
   next attempt simply works — no restart, no polling.
 
 `HumanDecision` moved from `Server` to `Core.Rounds` for this: the state machine acts on it now, so
-it is part of the machine rather than a label the server puts on an answer file. The three answers
+it is part of the machine rather than a label the server puts on an answer file. The first three answers
 are unchanged and were always described this way to the person — `continue` and `fix` grant a FRESH
-set of rounds, `discuss` advances nothing.
+set of rounds, `discuss` advances nothing. The fourth, `proceed`, arrived 2026-10-22 and is the only one that
+ships with the findings open.
 
 Only the `human` policy raises the gate. `continue_anyway` and `good_enough` advance on resolve, and
 a gate over them would break a configuration whose whole point is not to stop; a test pins that.
+
+## Only an answer on the notice card releases the gate (2026-10-22)
+
+> Plan: [PLAN_only_a_person_releases_the_gate.md](../todo/PLAN_only_a_person_releases_the_gate.md) (the server half; the
+> extension half is in [module_extension.md](module_extension.md), *Active questions*).
+
+**What was wrong.** `resolve(humanDecision: "proceed")` released a held gate from the tool argument alone. The tools told
+the AI to pass it "once the person says so", and nothing verified the report: the **gated party was the only party that
+could speak the word that releases the gate**. Found by the security lane's judge, pre-existing in every earlier `coai-mcp`.
+
+**What is true now.** The argument is a **claim** the service judges, never a decision. The decision is read from the
+answer file of the hold's own notice (`CurrentAnswer`, bound to the hold by identity), and `Proceed` is the fourth member of
+`HumanDecision`.
+
+```mermaid
+sequenceDiagram
+    participant AI as calling AI
+    participant S as PanelService / RoundEngine
+    participant M as RoundMachine
+    participant F as escalations/{id}.json + .answer.json
+    participant P as the panel (escalationWatcher)
+    S->>F: call_human: write the NOTICE (kind notice, decisions continue/fix/discuss/proceed), saved as the hold's question
+    AI->>S: resolve(decisions, humanDecision: "proceed")
+    S->>F: read the answer of the hold's notice (CurrentAnswer) - none
+    S->>M: Resolve(state, decisions, personsDecision None, callerClaimsProceed true)
+    M-->>AI: refused: read from their card, never from this argument (names "Proceed despite the findings" and ask_human)
+    P->>F: the person presses "Proceed despite the findings": answer.json {decision: proceed}
+    AI->>S: review_plan / review_code / review_document / review_feature
+    S-->>AI: a person pressed Proceed on the held gate - call resolve to advance (status says it too)
+    AI->>S: resolve(decisions or none)
+    S->>F: read: Proceed, and the question is a NOTICE of this hold
+    S->>M: Resolve(state, decisions + undecided as Decision.ProceededOver, Proceed)
+    M-->>AI: Moved: HumanGate false, HoldQuestions empty, stage advanced, PlanProceeded
+```
+
+- **One judge for the claim** — `RoundMachine.ClaimRefusal(state, personsDecision, callerClaimsProceed)`, called by
+  `Resolve` and by the service before it counts the findings that await a decision. *Refused* (with
+  `RoundMachine.ClaimOnAHeldGate`, naming the card and `ask_human`) when honouring it would have changed the outcome: the gate
+  is held and no person's Proceed is on file — including a hold whose round the AI already resolved, and a withdrawal-shaped
+  hold (`HumanGate`, `AwaitingResolve`, last round not `call_human`); or (as always) the gate is not held and the stage would
+  not advance anyway. *Ignored* when redundant: the person's Proceed is on file, or the gate already decided to advance
+  (`AdvanceOnResolve`). A refusal records nothing. `Resolve(state, decisions, HumanDecision personsDecision, bool
+  callerClaimsProceed)` replaced the boolean; a Proceed on a gate that is not held is `None`.
+- **Proceed is honoured only from the hold's own NOTICE** (`CurrentAnswer.DecisionOnTheNotice`): the answered question's file
+  must say `kind: notice`. A Proceed written against an `ask_human` question card, against a card an older server wrote (no
+  kind), or against a question file that is gone is **prose** — logged, never a release — and it does not hide a Continue the
+  person pressed on the notice (the ordering of "carries a decision" is judged after the rule). `status` reports the same
+  effective decision (`CurrentAnswer.TheGatesDecision`).
+- **Every card lists its decisions** (`EscalationQuestion.Decisions`, `EscalationDecisions`): the notice
+  `["continue","fix","discuss","proceed"]` (`RoundEngine.HoldNotice`, also the re-issued one), an `ask_human` card
+  `["continue","fix","discuss"]` (`AskHumanService.Card`). Absent in a file an older server wrote — read as `[]`. The extension offers
+  Proceed only when the file lists it.
+- **A Proceed after the AI already resolved is reachable (G6).** `resolve` with no decisions on a held, already-resolved gate
+  applies the person's Proceed; without one the no-round refusal stands. The stage still advances in ONE place, `Resolve`;
+  `ApplyHumanDecision` leaves a Proceed alone and `status` applies nothing.
+- **Findings nobody decided are recorded, not dropped** (`ProceededOver.Recorded`): under a consumed Proceed every still-pending
+  finding becomes a `Decision.ProceededOver` — its OWN disposition, never a rejection (plan §13.1, consultation 1da4d9f4). A Proceed
+  authorises THIS stage transition only: the record is not added to the session's standing rejections and `GateRule`'s discount never
+  reads it, so the same defect raised in a later round — `again: true` included — gates in full (`RoundMachine.Resolve` also refuses
+  a `ProceededOver` record when no Proceed is being consumed). It is persisted as `findings.resolution = 'proceeded'` with the
+  reason `proceeded over by a person` (`DecisionAt.Resolution` / `Reason`), reported by the `resolve` reply
+  (`ProceededOver.Instruction`), counted in neither the round's `accepted` nor `rejected`, and ignored by `DecidedEarlier` (so a later
+  round does not flag a re-raise of it) and by *What it keeps missing*. The log page draws it as *proceeded over*, the CSV writes
+  `proceeded over`, `CarriedDecision` spells it `proceeded`; `status` lists no decisions; the gate history lists only real rejections.
+  The AI's own decisions are kept as given.
+- **The agent is told** while a Proceed is on file and not yet consumed: `status` carries `humanDecision: "proceed"` and
+  `humanNote: "a person pressed Proceed on the held gate — call resolve to advance"`, every refused review entry answers the same
+  sentence (`RoundMachine.ReviewAfterProceed`), and the `resolve` reply names the decision as the person's
+  (`ProceededOver.Instruction`). **One refusal for all four review entries**: `review_plan`, `review_code`, `review_document` and
+  `review_feature` all come through `RoundEngine.RunStageAsync`, where `ProceedOnFile` runs after the pre-round read; they answer
+  `GateHeld` while no person has answered and the Proceed sentence once one is on file.
+- **A hold that outlived an upgrade is refreshed in place** (`Escalations.OfferDecisions`, `OfferHeldNotices`, called when a
+  held session is read by a review entry, `resolve` or `status`): a standing notice with no `decisions` list gets the list —
+  same id, same question, an idempotent atomic write; the answer file is untouched and no second card appears. A card with no
+  `kind` is not refreshed (it cannot be told from an `ask_human` card), so a Proceed on it needs a notice from this server.
+- **What the surfaces say.** The instructions, the `resolve` and `review_feature` descriptions, `GateHeld`, the
+  `HoldNotice` text and the help all say the same thing: the gate is released only by an answer on the notice card, not by any
+  argument of the AI's. None claims the answer is verified.
+
+**Residuals, named so nobody reads this as "an agent cannot proceed".**
+
+- **R1 — the file road's trust boundary is the data directory (open).** An agent with a shell or a file tool on the same machine,
+  running as the same user, can write `escalations/<notice>.answer.json` itself. This closes the road the tools PROMISED closed
+  (the argument); it does not make the answer unforgeable against a local process. The follow-up is
+  [PLAN_a_signed_answer_releases_the_gate.md](../todo/PLAN_a_signed_answer_releases_the_gate.md).
+- **D5 — Continue/Fix pressed on an `ask_human` question card asked during a hold still releases the hold.** That is G1/G4 of
+  the ask-human plan, shipped 2026-10-03: the card is the gate's, shows the hold's findings, and each decision's detail says
+  it acts on the review. What this change takes from the objection: Proceed is never on that card, and a question card's Continue
+  and Fix now say *for the held gate* in so many words. **The card shows the hold's findings even after the AI resolved them**
+  (plan §13.2): `AskHumanService.OpenFindingsOf` copies the pending gating findings when there are any and otherwise — while
+  `HumanGate` holds — the `OpenFindings` of the hold's own notice (the first of `HoldQuestions` that is not a question card). Before
+  that a plain `resolve` cleared `Pending` and the card listed none for a gate it could still release, which was the premise D5 rested
+  on; a hold whose notice is gone lists none rather than guessing.
+- **The withdrawal hold of the cancel plan** (on `feat/cancel-stops-the-round`) raises the same `HumanGate` and is covered by
+  construction (`AWithdrawalHold_IsNotReleasedByTheArgument`); that plan's spec sentence *"take a person's `humanDecision: proceed`"*
+  should read *"take a person's Proceed from the notice"* on whichever branch lands second.
+- **The shared gate rule still says to pass `humanDecision`.** `.agents/conventions/common/coai-review-gate.md` (the conventions
+  submodule, generated into the extension's `gateRule.ts` snippet) tells the AI the person "says so and you pass `humanDecision:
+  "proceed"`". The server now answers that with the refusal sentence that names the card, so nothing breaks, but the text is
+  stale until the conventions repository is changed and the pin moved. This is a **delivery step before the release**
+  (plan §7 step 3): a follow-up pull request in BOTH conventions repositories replaces that sentence with *a person answers on the
+  notice card*, and the pin is bumped here, regenerating `gateRule.ts` and the snippets. Opened as drafts on 2026-10-23:
+  dew_flow_conventions #83 (with a paid `held-gate` behaviour fixture — on the old text the model chose to pass
+  `humanDecision`, quoting the rule) and its twin in the second conventions repository.
+- **Mixed versions.** New server + old extension: the card offers three (a Proceed has no button until the extension updates; Keep
+  going / Stop and act work). Old server + new extension: the old server writes no list, the extension offers three.
 
 ## Prompts are a catalog, resolved per round
 
@@ -5190,7 +5300,7 @@ after), and every `ask_human` question asked while the hold stands (`PanelServic
 which re-reads and saves the session under its claim, retrying a busy claim for up to a second and then
 asking unrecorded with a warning — the hold's own notice still answers it). `CurrentAnswer.For` takes
 the newest answer to one of THOSE questions (`Escalations.ReadAnswer` by id) when any is recorded; the
-list is released with the hold (`RoundMachine.ApplyHumanDecision`, and `Resolve` on `humanSaysProceed`)
+list is released with the hold (`RoundMachine.ApplyHumanDecision`, and `Resolve` on a person's Proceed)
 and a round that ends any other way clears it. **The clock decides nothing any more (2026-09-27, the
 gate's findings #24/#30 on epic 3's code round).** It stayed as the residual for a session that recorded
 no question — a hold an older build raised before the field existed — and that residual was the bypass
@@ -7211,7 +7321,7 @@ where the person's request comes FROM, which reviewers a retry asks, and what a 
 
 ```mermaid
 flowchart TD
-  answer["escalations/&lt;id&gt;.answer.json<br/>written by the panel (escalationWatcher) or the phone — never by a tool"] --> latest["CurrentAnswer.ForRequest(session)<br/>the newest answer to one of SessionState.RequestQuestions — the ask_human questions asked on this session after round 1"]
+  answer["escalations/&lt;id&gt;.answer.json<br/>written by the panel (escalationWatcher) - anything that writes the file is a writer, no tool does"] --> latest["CurrentAnswer.ForRequest(session)<br/>the newest answer to one of SessionState.RequestQuestions — the ask_human questions asked on this session after round 1"]
   latest --> req["PersonsRequest.Apply(session)<br/>feature · gate not held · an answer to a question asked FOR round 2, newer than the last round that ran"]
   req --> machine["RoundMachine.ApplyPersonsRequest → SecondRound = PersonAsked"]
   machine --> begin["stage.Begin — admitted on the ground"]
@@ -7227,9 +7337,9 @@ flowchart TD
 
 - **The provenance road exists, and no tool argument reaches it.** The person's request is D23's third
   ground, and it arrives ONLY as an escalation answer with `decision: continue` or `fix` — the file the
-  panel's quick pick (`escalationWatcher.answerCommand` → `answerJson`) and the phone write beside a
-  question, the same road `humanDecision` has always travelled. `ask_human` writes the QUESTION and waits;
-  `resolve`'s `humanDecision: "proceed"` is read by `RoundMachine.Resolve` and touches no ground;
+  panel's quick pick (`escalationWatcher.answerCommand` → `answerJson`) writes beside a
+  question, the road a held gate's decisions travel (Proceed included since 2026-10-22). `ask_human` writes the QUESTION and waits;
+  `resolve`'s `humanDecision: "proceed"` is only a claim `RoundMachine.Resolve` judges, and touches no ground;
   `review_feature`'s `again` is a begin's choice and nothing more. `PersonsRequest.Apply` reads the answer
   through `CurrentAnswer.ForRequest` before the begin: the newest answer to one of the session's
   `RequestQuestions` — the `ask_human` questions asked on the feature session AFTER round 1, recorded by
@@ -7268,7 +7378,7 @@ flowchart TD
   under a feature session (`branch === ':feature'`, the server's `SessionKey.FeatureBranch`) is the person's
   request; `decisionChoices(branch)` gives that choice a detail that says what it grants THERE — the second
   and last round, or a fresh set after a `call_human` — and nothing else about the modal or the file moved
-  (`humanDecision.test.ts`). No fourth decision, no new file shape.
+  (`humanDecision.test.ts`). No new file shape; the one later decision, Proceed, is on the `call_human` notice only and never on a question card.
 - **A retry asks only the reviewers that failed.** `FeatureSecondRound.OnlyTheFailed` keeps the
   `(provider, role)` pairs the last feature round's `ReviewerStates` recorded as `failed` and names the rest
   as not asked, with the reason; when none of the failed is still configured it asks everyone, because a

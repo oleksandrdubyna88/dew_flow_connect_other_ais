@@ -11,6 +11,14 @@ public abstract record Decision
 
     public sealed record Rejected(Finding Finding, string Reason) : Decision;
 
+    /// <summary>
+    /// A finding a person's Proceed carried the stage over without anyone deciding it. Its own disposition, and NOT a
+    /// rejection: it is recorded and reported, but it is never added to the session's standing rejections and the gate's
+    /// discount never reads it — a Proceed authorises THIS stage transition only, so the same defect raised in a later
+    /// round gates in full. Only the server builds it, and only while consuming a person's Proceed.
+    /// </summary>
+    public sealed record ProceededOver(Finding Finding) : Decision;
+
     private Decision() { }
 }
 
@@ -71,8 +79,9 @@ public static class RoundMachine
     /// </summary>
     /// <remarks>
     /// It names every way out, because a refusal with no door is a stall. The AI can fetch the
-    /// person (<c>ask_human</c>), the person can end the stage (<c>resolve</c> with
-    /// <c>humanDecision: proceed</c>), or they can grant more rounds from the panel.
+    /// person (<c>ask_human</c>); the person ends the hold from the notice card, with one of its buttons —
+    /// including <c>Proceed despite the findings</c>, which ships with the findings open. No argument of the
+    /// AI's does (<c>todo/PLAN_only_a_person_releases_the_gate.md</c>): the sentence names the card, not the argument.
     /// </remarks>
     internal const string GateHeld =
         "the rounds for this stage are spent and the verdict was call_human — a person has to decide " +
@@ -80,8 +89,35 @@ public static class RoundMachine
         "you passed it to this review when it is a document's or a feature's, because only the held " +
         "session's question reaches the person's card: 'Keep going — more rounds' or 'Stop and " +
         "act on the findings' each grant a fresh set of rounds, and 'Stop and talk to me' advances " +
-        "nothing. If they would rather ship with the findings open, they say so and you pass " +
-        "humanDecision: \"proceed\" to resolve. Running the review again is not one of your options.";
+        "nothing. To proceed with the findings open the person presses 'Proceed despite the findings' " +
+        "on the ConnectOtherAIs notice for this gate: the gate is released only by an answer on that " +
+        "card, not by any argument of yours. Running the review again is not one of your options.";
+
+    /// <summary>
+    /// What a <c>resolve</c> that claimed <c>humanDecision: proceed</c> is refused with while the gate is held and the
+    /// notice carries no Proceed — the road moved, and the sentence says where to.
+    /// </summary>
+    internal const string ClaimOnAHeldGate =
+        "a person's decision is read from their card, never from this argument — the gate is still held. " +
+        "Ask them to press \"Proceed despite the findings\" on the ConnectOtherAIs notice (ask_human puts the " +
+        "question to them if no card is open), or resolve without humanDecision to record your decisions.";
+
+    /// <summary>
+    /// What the AI is told while a person's Proceed is on file and not yet consumed — by <c>status</c>, and by every
+    /// <c>review_*</c> entry it refuses.
+    /// </summary>
+    public const string ProceedPressed = "a person pressed Proceed on the held gate — call resolve to advance";
+
+    /// <summary>The refusal of a review entry once a Proceed is on file: the sentence, and which call carries it.</summary>
+    public const string ReviewAfterProceed =
+        ProceedPressed + " (with your decisions if the round still awaits them, or none)";
+
+    /// <summary>The reason a finding is recorded with when a person proceeded over it without a decision of the AI's.</summary>
+    public const string ProceededOver = "proceeded over by a person";
+
+    /// <summary>Why a <see cref="Decision.ProceededOver"/> record is refused when no person's Proceed is being consumed.</summary>
+    public const string ProceededOverNeedsAProceed =
+        "a proceeded-over record exists only under a person's Proceed on a held gate — it cannot be recorded any other way";
 
     public static Transition BeginPlanRound(SessionState s) => s switch
     {
@@ -620,38 +656,71 @@ public static class RoundMachine
                     (s.Config.OnExhausted == StagePolicy.Escalate ? " and the escalation ladder is exhausted" : string.Empty))),
         };
 
-    /// <param name="humanSaysProceed">
-    /// The human's override after a <see cref="RoundVerdict.CallHuman"/>: the rounds are spent,
-    /// findings still gate, and a PERSON decided to go anyway. Honoured only in exactly that
-    /// state — the first live run exposed the gap where the human said "proceed" and the machine
-    /// had no way to hear it, leaving the code gate unreachable forever.
-    /// </param>
-    public static Transition Resolve(SessionState s, IReadOnlyList<Decision> decisions, bool humanSaysProceed = false)
-    {
-        if (!s.AwaitingResolve)
-        {
-            // The document clause exists because of the shape of the mistake, not the shape of the
-            // state: a caller that has just run a document round and resolves without naming the
-            // document lands on the BRANCH's session, which is idle and correct and has nothing to
-            // decide. Without the clause, the one sentence they are given sends them to run another
-            // review — the one thing that would make it worse.
-            return new Transition.Refused(
-                "there is no completed round awaiting decisions — run a review first. If you were "
-              + "resolving a DOCUMENT round, pass its document: a document review is its own "
-              + "session, keyed by the document rather than by the branch.");
-        }
+    private static bool GrantsAFreshSet(SessionState s, HumanDecision personsDecision) =>
+        s.HumanGate && personsDecision is HumanDecision.Continue or HumanDecision.Fix;
 
-        // The override is judged by what it would CHANGE, not by how many rounds are left.
-        // Two corrections, both from the code gate's own review of this file: the old check asked
-        // whether rounds remained, and an exhausted Escalate stage has none either — so the flag
-        // could skip a configured ladder (the reachable bypass). And when the gate has already
-        // decided to advance, the flag adds nothing, so refusing the whole resolve over a
-        // redundant argument would throw away a legitimate round's decisions.
-        if (humanSaysProceed && !s.HumanGate && !s.AdvanceOnResolve)
+    /// <summary>
+    /// Why a <c>resolve</c> that came with a caller's claim is refused — or empty when the claim changes nothing and is ignored.
+    /// </summary>
+    /// <remarks>
+    /// <para>The claim (<c>humanDecision: proceed</c>) is judged by what it would CHANGE, not by how many rounds are left.
+    /// Refused when it would have: the gate is held and no person's Proceed is on file, or the gate is not held and the stage
+    /// would not advance anyway (the reachable bypass the code gate's own review of this file found — an exhausted Escalate
+    /// stage has no rounds left either). Ignored when redundant: the person's Proceed is on file, or the gate already decided to
+    /// advance, because refusing the whole resolve over a redundant argument would throw away a legitimate round's decisions.</para>
+    /// <para>One judge for the claim, public so the service can ask it BEFORE it counts the findings that await a decision —
+    /// a claim refused for the wrong reason is a refusal with no door.</para>
+    /// </remarks>
+    public static string ClaimRefusal(SessionState s, HumanDecision personsDecision, bool callerClaimsProceed) =>
+        !callerClaimsProceed || ProceedsOnAHeldGate(s, personsDecision) ? string.Empty
+        : s.HumanGate ? ClaimOnAHeldGate
+        : s.AdvanceOnResolve ? string.Empty
+        : "a human override applies only after the verdict was call_human — until then the gate decides, " +
+          "so revise and review again";
+
+    /// <summary>A Proceed means something only on a held gate (D2): anywhere else it is <see cref="HumanDecision.None"/>.</summary>
+    private static bool ProceedsOnAHeldGate(SessionState s, HumanDecision personsDecision) =>
+        personsDecision == HumanDecision.Proceed && s.HumanGate;
+
+    /// <summary>
+    /// The document clause exists because of the shape of the mistake, not the shape of the
+    /// state: a caller that has just run a document round and resolves without naming the
+    /// document lands on the BRANCH's session, which is idle and correct and has nothing to
+    /// decide. Without the clause, the one sentence they are given sends them to run another
+    /// review — the one thing that would make it worse.
+    /// </summary>
+    private const string NoRoundAwaitingDecisions =
+        "there is no completed round awaiting decisions — run a review first. If you were "
+      + "resolving a DOCUMENT round, pass its document: a document review is its own "
+      + "session, keyed by the document rather than by the branch.";
+
+    /// <summary>The sentence a resolve is refused with before any decision is read, or empty.</summary>
+    private static string RefusalBeforeDecisions(SessionState s, HumanDecision personsDecision, bool callerClaimsProceed) =>
+        !s.AwaitingResolve && !ProceedsOnAHeldGate(s, personsDecision)
+            ? (callerClaimsProceed && s.HumanGate ? ClaimOnAHeldGate : NoRoundAwaitingDecisions)
+            : ClaimRefusal(s, personsDecision, callerClaimsProceed);
+
+    /// <param name="personsDecision">
+    /// What the PERSON chose on the hold's own notice, read by the server from the answer file — never from a tool argument.
+    /// <see cref="HumanDecision.Proceed"/> after a <see cref="RoundVerdict.CallHuman"/> is the override: the rounds are spent,
+    /// findings still gate, and a person decided to go anyway. It releases the hold and advances the stage, and — because it is
+    /// the person's — it is also honoured on a held gate whose round the AI already resolved (G6). On a gate that is not held it
+    /// is <see cref="HumanDecision.None"/>. <see cref="HumanDecision.Continue"/> and <see cref="HumanDecision.Fix"/> reset the
+    /// stage's round count here; the engine's read before the next round is what opens the gate.
+    /// </param>
+    /// <param name="callerClaimsProceed">
+    /// What the calling AI passed as <c>humanDecision: proceed</c>. It decides nothing: <see cref="ClaimRefusal"/> judges it and
+    /// it never reaches the state.
+    /// </param>
+    public static Transition Resolve(
+        SessionState s,
+        IReadOnlyList<Decision> decisions,
+        HumanDecision personsDecision = HumanDecision.None,
+        bool callerClaimsProceed = false)
+    {
+        if (RefusalBeforeDecisions(s, personsDecision, callerClaimsProceed) is { Length: > 0 } refusal)
         {
-            return new Transition.Refused(
-                "a human override applies only after the verdict was call_human — until then the gate decides, " +
-                "so revise and review again");
+            return new Transition.Refused(refusal);
         }
 
         var unreasoned = decisions.OfType<Decision.Rejected>().Where(d => string.IsNullOrWhiteSpace(d.Reason)).ToList();
@@ -661,22 +730,31 @@ public static class RoundMachine
                 $"a rejection without a reason is not a decision — {unreasoned.Count} rejection(s) carry none");
         }
 
+        var proceeds = ProceedsOnAHeldGate(s, personsDecision);
+        if (!proceeds && decisions.OfType<Decision.ProceededOver>().Any())
+        {
+            return new Transition.Refused(ProceededOverNeedsAProceed);
+        }
+
+        // Only a REJECTION stands: a proceeded-over finding is recorded by the caller of this method and read by nobody here.
         var rejections = s.Rejections.AddRange(
             decisions.OfType<Decision.Rejected>().Select(d => new PriorRejection(d.Finding, d.Reason)));
 
         // The gate is NOT cleared by recording decisions. It used to be, unconditionally, which
         // meant the AI reopened the gate it had just been stopped by simply by doing the next
-        // thing the protocol asks of it. Only a person clears it: `humanSaysProceed` here, or a
+        // thing the protocol asks of it. Only a person clears it: their Proceed here, or a
         // decision through ApplyHumanDecision.
         var next = s with
         {
             AwaitingResolve = false,
             Rejections = rejections,
-            HumanGate = s.HumanGate && !humanSaysProceed,
+            HumanGate = s.HumanGate && !proceeds,
+            // A fresh set of rounds is the person's doing, and a held gate's Continue/Fix is what grants it.
+            RoundsRunThisStage = GrantsAFreshSet(s, personsDecision) ? 0 : s.RoundsRunThisStage,
             // The person's override releases the hold the way their decision does: its questions go with it.
-            HoldQuestions = humanSaysProceed ? [] : s.HoldQuestions,
+            HoldQuestions = proceeds ? [] : s.HoldQuestions,
         };
-        if (s.AdvanceOnResolve || humanSaysProceed)
+        if (s.AdvanceOnResolve || proceeds)
         {
             next = next with
             {

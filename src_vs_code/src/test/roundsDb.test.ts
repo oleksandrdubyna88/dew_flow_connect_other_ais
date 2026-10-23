@@ -158,6 +158,15 @@ test('the page can render a finding under its round', () => {
   assert.match(script, /raised again/, 'including that one was raised over a standing rejection');
 });
 
+test('the page draws a finding a person proceeded over as that, not as open', () => {
+  const html = roundsLogHtml(rowsFrom([session([round()])], NOW, () => undefined, [], LOG), [], 'n');
+  const script = html.slice(html.indexOf('<script'));
+
+  assert.match(script, /'proceeded'/, 'the detail region knows the stored resolution');
+  assert.match(script, /proceeded over/, 'and says it in words');
+  assert.match(html, /\.finding\.proceeded \{/, 'with a mark of its own');
+});
+
 // ---------- the two questions the data exists for ----------
 
 test('what the caller ACCEPTS is shown by category, by role and by vendor', () => {
