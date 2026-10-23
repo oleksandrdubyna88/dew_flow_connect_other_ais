@@ -152,7 +152,8 @@ export async function runningUnderWsl(): Promise<boolean> {
 
 /**
  * This kernel's banner. REJECTS when it cannot be read (a Windows host has no /proc/version): the caller decides what an
- * unreadable banner means — `runningUnderWsl` says "not WSL", `hostKind` says so out loud and treats the host as native Linux.
+ * unreadable banner means — `runningUnderWsl` says "not WSL", and the host-kind reader says so out loud and treats the host as a
+ * Linux host whose banner could not be read (`linux-unread`), which no runtime row is promised on.
  */
 export async function readProcVersion(): Promise<string> {
   return readFile('/proc/version', 'utf8');

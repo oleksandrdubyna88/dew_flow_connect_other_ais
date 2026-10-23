@@ -71,9 +71,9 @@ public static class KimiPersonsConfig
     private static SlotRead Measured(KimiOauthSlot slot) => slot switch
     {
         { Storage: not "file" } => new SlotRead.Refused(
-            $"Kimi's sign-in on this machine is stored as '{(slot.Storage.Length > 0 ? slot.Storage : "(unset)")}', not as files (storage = \"file\"), and coai's junction sign-in was measured for file storage only — refused as unmeasured (D19)"),
+            $"Kimi's sign-in on this machine is stored as '{(slot.Storage.Length > 0 ? slot.Storage : "(unset)")}', not as files (storage = \"file\") — coai links the sign-in's credential files into its own home, and there is no credentials folder to link (D19)"),
         { Type: not "kimi" } => new SlotRead.Refused(
-            $"the managed:kimi-code provider is type '{(slot.Type.Length > 0 ? slot.Type : "(unset)")}', not 'kimi' — refused as unmeasured (D19)"),
+            $"the managed:kimi-code provider is type '{(slot.Type.Length > 0 ? slot.Type : "(unset)")}', not 'kimi' — coai writes type = \"kimi\" into the owned config, so it would run Kimi's protocol against a service you set up for another kind of provider (D19)"),
         _ => new SlotRead.Found(slot),
     };
 

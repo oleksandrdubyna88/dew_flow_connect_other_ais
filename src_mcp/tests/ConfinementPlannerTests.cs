@@ -148,16 +148,33 @@ public sealed class ConfinementPlannerTests
     [Theory]
     [InlineData("antigravity", Capability.Web, "cannot fetch a page headless")]
     [InlineData("api", Capability.Disk, "cannot do 'disk'")]
-    [InlineData("api", Capability.Web, "not been measured")]
     [InlineData("local", Capability.Disk, "cannot do 'disk'")]
     [InlineData("local", Capability.Web, "cannot do 'web'")]
-    [InlineData("vibe", Capability.Web, "not been measured")]
     public void APairTheMatrixRefuses_IsRefusedByThePlannerToo_WithTheMatrixsOwnSentence(string runtime, Capability capability, string says)
     {
         var grant = capability == Capability.Disk ? CapabilityGrant.Disk(RootA) : new CapabilityGrant(capability, []);
 
         ConfinementPlanner.Plan(runtime, grant).Should().BeOfType<Confinement.Refused>()
             .Which.Reason.Should().Contain(says, "the planner asks the matrix first and never re-decides it");
+    }
+
+    /// <summary>
+    /// The owner's decision of 2026-10-23: an unmeasured web pair is PLANNED, not refused — and the plan gives it no web tool at all (the mechanism does not exist for it), so the row cannot reach the web: it answers from
+    /// what it has, flagged. The risk is a weaker answer, never egress.
+    /// </summary>
+    [Theory]
+    [InlineData("vibe")]
+    [InlineData("api")]
+    public void AnUnmeasuredWebPair_IsPlannedWithNoWebTool_FlaggedUnmeasured(string runtime)
+    {
+        var plan = ConfinementPlanner.Plan(runtime, CapabilityGrant.Web).Should().BeOfType<Confinement.Planned>("an unmeasured pair is a note now").Subject;
+
+        plan.Flag.Should().Be(AdmissionFlag.Unmeasured);
+        plan.Cwd.Should().Be(CwdKind.Scratch, "a web row stands nowhere near the checkout");
+        plan.Leading.Should().BeEmpty("no --search");
+        plan.Flags.Concat(plan.Leading).Should().NotContain(["--search", "WebSearch", "WebFetch"]);
+        plan.AddDirs.Should().BeEmpty();
+        plan.Flags.Should().Equal(runtime == "vibe" ? ConfinementPlanner.VibeReadOnly : []);
     }
 
     [Fact]
@@ -336,7 +353,7 @@ public sealed class ConfinementPlannerTests
             request.Environment.Should().Contain(Runners.Vibe.VibeLaunch.CliVariable, "python").And.Contain(Runners.Vibe.VibeLaunch.ModelVariable, "glm-5-3");
             request.Environment[Runners.Vibe.VibeLaunch.HomeVariable].Should().StartWith(RowFolder + Path.DirectorySeparatorChar,
                 "the row's home lives in the row's own folder, gone with it");
-            Runners.Vibe.VibeLaunch.EnvironmentRefusal(request).Should().BeEmpty("the one launch control admits it (D17)");
+            Runners.Vibe.VibeLaunch.EnvironmentRefusal(request, Runners.Platform.HostKind.Windows).Should().BeEmpty("the one launch control admits it (D17)");
         }
     }
 

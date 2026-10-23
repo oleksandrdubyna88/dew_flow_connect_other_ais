@@ -58,9 +58,47 @@ export const minimalWindowsEnv = () => minimalEnv('win32');
  */
 export const BUILT_FIXED = { VIBE_CLI: 'python', PYTHONUTF8: '1' };
 
-/** D17's BUILT environment for `home` and `model`: the platform's minimal list, the home, the fixed variables and the model — nothing else. */
-export const builtEnv = (home, model, platform = process.platform, env = process.env) =>
-  ({ ...minimalEnv(platform, env), VIBE_HOME: home, ...BUILT_FIXED, VIBE_ACTIVE_MODEL: model });
+/**
+ * The ONE name coai's NATIVE-Linux Vibe launch adds to the built environment beyond the four of BUILT_FIXED + VIBE_HOME/VIBE_ACTIVE_MODEL (DN10 of
+ * todo/PLAN_kimi_and_vibe_on_native_linux.md, E2 of its plan): `keyring` 25.7.0 takes PYTHON_KEYRING_BACKEND from the environment BEFORE its config
+ * file (core.py:96-115) and `fail.Keyring` raises on every call, which Vibe catches (vibe/utils/keyring.py:165-170) — so no keyring is reachable and
+ * the sign-in can only come through the linked `.env`. The product's VibeLaunch.Built adds the same on HostKind.Linux. ONE object literal of quoted
+ * values, like BUILT_FIXED, so a C# test can parse it (S-N21). Every Vibe launch the probes make on a native host carries it (E2.S0) except arm a3c.
+ */
+export const NATIVE_LINUX_BUILT = { PYTHON_KEYRING_BACKEND: 'keyring.backends.fail.Keyring' };
+
+/**
+ * Whether the host is a NATIVE Linux one: this is Linux AND its kernel banner (host-facts.mjs readBanner: `{ read, text, namesWsl }`) was read and names
+ * neither Microsoft nor WSL — the product's HostKind rule for a READ banner, and the one place the probes decide it. An UNREAD banner is not native here, while the product classifies the same host as HostKind.Linux (WslGeneration.Unreadable), where the admission refuses Vibe: the probes REFUSE that host before any launch (launchHost, E2 code gate G4) instead of running it with the road open.
+ * PURE: the banner comes in, nothing is imported, so the probe's cut-out test can hand it over.
+ */
+export const isNativeLinuxHost = ({ platform, banner }) => platform === 'linux' && banner?.read === true && banner.namesWsl === false;
+
+/**
+ * The ONE host decision of the Vibe probes (E2 code gate G4), PURE: the platform and the kernel banner (host-facts.mjs readBanner) come in, `{ refusal, nativeLinux }` goes out.
+ * On Linux a banner that could not be read REFUSES the launch (`refusal` is the sentence, empty otherwise) — the product refuses the same host (WslGeneration.Unreadable, DN6) and the
+ * series stops on it (N-H1 banner.read=false, E2 plan 3.4); an unread banner used to read as "not native" and the probe launched Vibe with the keyring road OPEN, which arm a3c proves reaches an
+ * available keyring. A read banner decides `nativeLinux` as isNativeLinuxHost does; win32 and darwin have no /proc/version and are untouched.
+ */
+export const launchHost = ({ platform, banner }) => (platform === 'linux' && banner?.read !== true
+  ? { refusal: UNREAD_BANNER_REFUSAL, nativeLinux: false }
+  : { refusal: '', nativeLinux: isNativeLinuxHost({ platform, banner }) });
+
+const UNREAD_BANNER_REFUSAL = 'refusing to launch Vibe: this is a Linux host and its kernel banner /proc/version could not be read, so the probe cannot tell a native Linux host (keyring road closed) from WSL1 or WSL2 '
+  + "(keyring road open) and would launch with the road open, which arm a3c proves reaches an available keyring; the product refuses the same host (DN6). Make /proc/version readable, or run on a host whose banner reads (E2 plan 3.4).";
+
+/** A NEW object holding every entry of `env` but `name` — the environment is built, never mutated (a `delete` on an object already built is a mutation). */
+export const without = (env, name) => Object.fromEntries(Object.entries(env).filter(([key]) => key !== name));
+
+/** `closed` when the child environment carries the forced backend (the launch E2 ships on a native host), else `open` — printed in the probe's header and rows. */
+export const keyringRoadOf = (env) => (env.PYTHON_KEYRING_BACKEND === NATIVE_LINUX_BUILT.PYTHON_KEYRING_BACKEND ? 'closed' : 'open');
+
+/**
+ * D17's BUILT environment for `home` and `model`: the platform's minimal list, the home, the fixed variables and the model — nothing else; on a
+ * NATIVE Linux host (`nativeLinux`, read by the caller from the kernel banner through isNativeLinuxHost) also NATIVE_LINUX_BUILT, exactly as VibeLaunch.Built.
+ */
+export const builtEnv = (home, model, platform = process.platform, env = process.env, { nativeLinux = false } = {}) =>
+  ({ ...minimalEnv(platform, env), VIBE_HOME: home, ...BUILT_FIXED, ...(nativeLinux ? NATIVE_LINUX_BUILT : {}), VIBE_ACTIVE_MODEL: model });
 
 export const fwd = (p) => p.replaceAll('\\', '/');
 
@@ -265,12 +303,8 @@ export function vibeArgs({ workdir, exportDir, trust = false, timeLimit = 120, r
 
 // ------------------------------------------------------------------------------------------------------ M-V7's keyring arms (S-N17)
 
-/**
- * The backend coai's native-Linux Vibe launch forces (DN10 of todo/PLAN_kimi_and_vibe_on_native_linux.md): `keyring` 25.7.0 takes
- * `PYTHON_KEYRING_BACKEND` from the environment BEFORE its config file (core.py:96-115) and `fail.Keyring` raises on every call, which Vibe
- * catches (vibe/utils/keyring.py:165-170) — so no keyring is reachable and the sign-in can only come through the linked `.env`.
- */
-export const KEYRING_FAIL_BACKEND = 'keyring.backends.fail.Keyring';
+/** The backend coai's native-Linux Vibe launch forces (DN10) — NATIVE_LINUX_BUILT's value, the one spelling (E2.S0). */
+export const KEYRING_FAIL_BACKEND = NATIVE_LINUX_BUILT.PYTHON_KEYRING_BACKEND;
 
 const KEYRING_ARMS = ['a', 'a2', 'a3', 'a3c', 'b'];
 
@@ -278,21 +312,22 @@ const KEYRING_ARMS = ['a', 'a2', 'a3', 'a3c', 'b'];
  * M-V7's arm `arm` (a, a2, a3, a3c, b) as the environment it adds to the child and the files it needs — PURE, no file is made. On Linux (the
  * launch E2 ships): arms a and a2 carry the forced backend; a3 carries it AND a `HOME` whose keyringrc.cfg names a keyring that IS available
  * (`<scratch>/fake-home`, written by `writeProbeKeyring`) — the forced backend must beat it, so the marker never appears; a3c is the same fake
- * HOME WITHOUT the variable — its teeth: the marker must appear, else a3 proved nothing. On win32 every arm is today's (the Credential Manager
+ * HOME WITHOUT the variable — its teeth: the marker must appear, else a3 proved nothing. a3c ALONE has dropsKeyring: true: even on a native host, where
+ * every Vibe launch the probe makes carries NATIVE_LINUX_BUILT, the probe deletes the name from a3c's launch (E2.S0). On win32 every arm is today's (the Credential Manager
  * road, RESULTS §12) and a3/a3c do not apply. `applies: false` = the probe does not run that arm on this platform.
  */
 export function keyringArm(arm, platform = process.platform, { scratch }) {
   if (!KEYRING_ARMS.includes(arm)) throw new Error(`keyringArm: no M-V7 arm "${arm}" (${KEYRING_ARMS.join(', ')})`);
-  const none = { arm, applies: true, env: {}, fakeHome: '', markerFile: '' };
+  const none = { arm, applies: true, dropsKeyring: false, env: {}, fakeHome: '', markerFile: '' };
   if (isWindows(platform)) return { ...none, applies: !['a3', 'a3c'].includes(arm), env: arm === 'a2' ? { VIBE_TEST_DISABLE_KEYRING: '1' } : {} };
   const p = pathOf(platform);
   const fakeHome = p.join(scratch, 'fake-home');
-  const forced = { PYTHON_KEYRING_BACKEND: KEYRING_FAIL_BACKEND };
+  const forced = { ...NATIVE_LINUX_BUILT };
   return {
     a: { ...none, env: forced },
     a2: { ...none, env: { VIBE_TEST_DISABLE_KEYRING: '1', ...forced } },
     a3: { ...none, env: { ...forced, HOME: fakeHome }, fakeHome, markerFile: p.join(scratch, 'keyring-marker.txt') },
-    a3c: { ...none, env: { HOME: fakeHome }, fakeHome, markerFile: p.join(scratch, 'keyring-marker.txt') },
+    a3c: { ...none, dropsKeyring: true, env: { HOME: fakeHome }, fakeHome, markerFile: p.join(scratch, 'keyring-marker.txt') },
     b: none,
   }[arm];
 }

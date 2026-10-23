@@ -251,9 +251,14 @@
     {
       "runtime": "vibe",
       "platform": "linux",
-      "standing": "unmeasured",
-      "text": "Not run here: Vibe is measured on WSL2 only for now, so coai refuses it on a native Linux host.",
-      "source": "Not measured on native Linux: every Linux Vibe cell is WSL2 (sections 30 and 31 of research/RESULTS_vibe_confinement.md), and a desktop Linux may keep Vibe's sign-in in a keyring instead of ~/.vibe/.env, which coai cannot see; the launch is refused until one native-Linux run (L-V10 of research/PLAN_kimi_and_vibe_on_linux.md) is recorded."
+      "standing": "confined",
+      "text": "Reads only a copy coai makes of the live tree, without its .git, .vibe/, skills and AGENTS.md: read_file is its one tool, a read outside that copy was refused, and every write and shell call was denied - measured on vibe 2.26.1 on a native Linux host. On a native Linux host coai turns Vibe's keyring off, so it signs in only through ~/.vibe/.env, linked into coai's own home and never copied - the keyring road was measured closed on vibe 2.26.1 (keyring 25.7.0).",
+      "measured": {
+        "date": "2026-10-22",
+        "cliVersion": "vibe 2.26.1",
+        "cells": "Section 32 (N-V1 to N-V6, through the shipped probes with the forced keyring backend), native Ubuntu, 3 of 3 on every cell: N-V1: a fresh owned home is signed out 3 of 3 with the backend forced, and with a keyring that IS available the forced backend still wins (a3 3 of 3, its teeth a3c 3 of 3); N-V2: a read inside the working folder served 3 of 3, outside denied 3 of 3; write_file, bash and run_typescript each denied 3 of 3, no file written; N-V3: a resumed turn remembered 3 of 3; N-V4: the 12 pinned plugin hashes equal the linux entry; ~/.vibe identical before and after every phase",
+        "document": "research/RESULTS_vibe_confinement.md"
+      }
     },
     {
       "runtime": "vibe",
@@ -278,8 +283,8 @@
       "runtime": "kimi",
       "platform": "linux",
       "standing": "unmeasured",
-      "text": "Not run here: Kimi is measured on WSL2 only for now, so coai refuses it on a native Linux host.",
-      "source": "Not measured on native Linux: every Linux Kimi cell is WSL2 (section 29 of research/RESULTS_kimi_confinement.md); the launch is refused until one native-Linux run is recorded (DL1 of research/PLAN_kimi_and_vibe_on_linux.md)."
+      "text": "Not measured here: coai runs Kimi on a native Linux host by the owner's decision of 2026-10-23, not by a measurement, so nothing is claimed about what it can read or write here.",
+      "source": "Not measured on native Linux: every Linux Kimi cell is WSL2 (section 29 of research/RESULTS_kimi_confinement.md). Kimi is admitted on a native Linux host by the owner's decision of 2026-10-23 (todo/PLAN_kimi_and_vibe_on_native_linux_E2.md, DN1 of E2) with a note, never a refusal; the wsl row says what was measured."
     },
     {
       "runtime": "kimi",

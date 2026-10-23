@@ -245,6 +245,20 @@ public sealed class KimiRuntimeTests : IDisposable
         runtime.VersionWarning("nothing printed").Should().BeEmpty();
     }
 
+    /// <summary>The owner's decision of 2026-10-23: on a native Linux host the card says Kimi is not measured there — before a round, in the very channel the version warning uses — and says nothing on a measured host.</summary>
+    [Fact]
+    public void OnANativeLinuxHost_TheCardCarriesTheNotMeasuredNote_JoinedWithTheVersionWarning()
+    {
+        var seams = new KimiSeams(Places, () => (ShimExe, []));
+        var native = (IReviewerRuntime)new KimiRuntime("kimi", new KimiHost(HostKind.Linux, WslGeneration.None), seams);
+        var wsl2 = (IReviewerRuntime)new KimiRuntime("kimi", new KimiHost(HostKind.Wsl, WslGeneration.Wsl2), seams);
+
+        native.VersionWarning("kimi, version 2.1.1").Should().Contain("not measured").And.Contain("owner's decision of 2026-10-23").And.NotContain("is not a version coai has measured");
+        native.VersionWarning("kimi, version 2.2.0").Should().Contain("owner's decision of 2026-10-23").And.Contain("Kimi 2.2.0 is not a version coai has measured");
+        native.VersionWarning("nothing printed").Should().Contain("owner's decision of 2026-10-23", "the host note does not depend on a version being printed");
+        wsl2.VersionWarning("kimi, version 2.1.1").Should().BeEmpty("Kimi is measured on WSL2");
+    }
+
     // ---------- the launch as it starts ----------
 
     [Theory]

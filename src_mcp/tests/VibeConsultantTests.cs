@@ -94,7 +94,7 @@ public sealed class VibeConsultantTests
     {
         var request = Consultant().Build(Turn()).Request;
 
-        VibeLaunch.EnvironmentRefusal(request).Should().BeEmpty("the one launch control admits exactly what it builds (D17)");
+        VibeLaunch.EnvironmentRefusal(request, HostKind.Windows).Should().BeEmpty("the one launch control admits exactly what it builds (D17)");
         request.InheritsEnvironment.Should().BeFalse("§22 A: an inherited VIBE_* configures Vibe whatever its home holds");
         request.Environment[VibeLaunch.CliVariable].Should().Be("python", "§3: the measured CLI");
         request.Environment[VibeLaunch.ModelVariable].Should().Be("glm-5-3", "D10: the model rides the explicit environment");

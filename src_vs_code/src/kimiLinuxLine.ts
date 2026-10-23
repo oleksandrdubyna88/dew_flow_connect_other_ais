@@ -1,4 +1,4 @@
-import { KIMI_ON_LINUX_SINCE } from './runtimeSince';
+import { KIMI_ON_LINUX_SINCE, KIMI_ON_NATIVE_LINUX_SINCE } from './runtimeSince';
 
 /**
  * The ⤓ / ⟳ line for Kimi on a Linux host — DL12 of research/PLAN_kimi_and_vibe_on_linux.md (E6).
@@ -130,8 +130,22 @@ export const KIMI_OWN_OPEN =
 /** What runs where, for a WSL2 side (the plan's DL1) — the release is the one `ON_LINUX_SINCE` names. */
 export const KIMI_RUNS_ON_WSL = `Kimi runs on this side, WSL2, from coai-mcp ${KIMI_ON_LINUX_SINCE}.`;
 
-/** What a native Linux side is told — Vibe's sentence for the same host (`VIBE_NOTE_LINUX`), with Kimi's name: refused for now, measured on WSL2 only (DL1). */
-export const KIMI_NATIVE_LINUX = 'On a native Linux host coai-mcp refuses Kimi for now — it is measured on WSL2 only — so a Kimi row is refused on this side.';
+/**
+ * What a native Linux side is told about Kimi: it RUNS from `KIMI_ON_NATIVE_LINUX_SINCE`, although it is NOT MEASURED there — the owner's decision of
+ * 2026-10-23 (DN1 of todo/PLAN_kimi_and_vibe_on_native_linux_E2.md: "unmeasured" is a note, never a refusal). Vibe's sentence for the same host is
+ * `VIBE_NATIVE_LINUX`; Vibe is measured there, so it says what closes its keyring, and this one says what is NOT known.
+ */
+export const KIMI_NATIVE_LINUX =
+  `On a native Linux host coai-mcp runs Kimi from coai-mcp ${KIMI_ON_NATIVE_LINUX_SINCE}, although Kimi is not measured there: `
+  + 'it is admitted by the owner’s decision of 2026-10-23, and the row carries a note that says so.';
 
-/** What a WSL1 side is told — Vibe's sentence for the same host (`VIBE_NOTE_WSL1`): WSL2 only (the plan's F0 / S-K20), and what helps is moving the distro. */
-export const KIMI_ON_WSL1 = 'This is WSL1, and coai-mcp runs Kimi on WSL2 only, so a Kimi row is refused on this side. Move this distro to WSL2 with `wsl --set-version <distro> 2`, run in Windows.';
+/**
+ * A Linux host whose kernel banner could not be read (`linux-unread`, `hostSide.ts`): the server cannot tell it from WSL1 and refuses a Kimi row on it
+ * — an AMBIGUITY refusal, not a measurement one, so it stays. Vibe's twin is `VIBE_NOTE_LINUX_UNREAD`.
+ */
+export const KIMI_LINUX_UNREAD =
+  'coai-mcp could not read this host’s kernel banner, so it cannot tell a native Linux host from WSL1 and refuses a Kimi row on this side; '
+  + 'the extension-host log names the cause.';
+
+/** What a WSL1 side is told — Vibe's sentence for the same host (`VIBE_NOTE_WSL1`): WSL1 has no pidfd (the real reason, not "measured"), and what helps is moving the distro. */
+export const KIMI_ON_WSL1 = 'This is WSL1 — it has no pidfd, so coai-mcp cannot end the process tree of Kimi there — and a Kimi row is refused on this side. Move this distro to WSL2 with `wsl --set-version <distro> 2`, run in Windows.';

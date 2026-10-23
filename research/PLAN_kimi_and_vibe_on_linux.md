@@ -19,7 +19,7 @@
 > **Open tail — what is NOT done and NOT proven:**
 >
 > - The install button for Kimi's `rg`/`fd` was **not pressed live** in WSL on a machine without `rg` (E6's done-when asked for it). It is proven by tests (S-K17, S-K10) only.
-> - **Native Linux is still refused** for both runtimes, with the WSL2-only sentence (DL1, Q1). It needs one native-Linux run (L-V10 for Vibe; the same for Kimi) before the refusal can lift.
+> - **Native Linux was refused for Kimi** with the WSL2-only sentence (DL1, Q1), until one native-Linux run could lift it (E3); **the owner lifted it on 2026-10-23 without that run** ("unmeasured" is a note, never a refusal). *Vibe admitted on a native Linux host by E2 of `todo/PLAN_kimi_and_vibe_on_native_linux.md` (RESULTS_vibe §32, 2026-10-22); Kimi was still refused there (E3) until the owner's decision of 2026-10-23: Kimi is admitted on a native Linux host WITHOUT a measurement, with a note — DN1 of `todo/PLAN_kimi_and_vibe_on_native_linux_E2.md`.*
 > - **M-K14** (the refresh-race measurement: do two refreshers of ONE sign-in — coai's turns and the person's own `kimi`, or
 >   several coai servers — break the rotating token) was not run. The exit-77 "not signed in" answers that raised it are
 >   re-judged by the follow-up plan `PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md` (written on branch `docs/kimi-quota-is-not-a-sign-in`, not yet merged at promotion). Q3's default (keep the wait, then Busy) stands until then.

@@ -25,7 +25,9 @@ namespace CoaiMcp.Runners.Vibe;
 /// reviewer of a round, inside the round's own scratch folder (<see cref="ReviewerSettings.OwnedScratch"/>) — and the child
 /// is given <see cref="ProcessEnvironment.Minimal"/> plus exactly <c>VIBE_HOME</c>, <c>VIBE_CLI=python</c> (§3: the
 /// Python CLI, the measured one), <c>VIBE_ACTIVE_MODEL</c> (§17: it takes effect under the minimal environment) and
-/// <c>PYTHONUTF8=1</c> (§26: without it a character outside the console's code page killed the run with exit 2).
+/// <c>PYTHONUTF8=1</c> (§26: without it a character outside the console's code page killed the run with exit 2) — and, on a NATIVE Linux host only,
+/// <c>PYTHON_KEYRING_BACKEND=keyring.backends.fail.Keyring</c> (DN10, E2 of <c>todo/PLAN_kimi_and_vibe_on_native_linux.md</c>: no keyring on the host is reachable, the sign-in comes only through the linked <c>.env</c>; measured
+/// closed on Vibe 2.26.1 with keyring 25.7.0, research/RESULTS_vibe_confinement.md §32). The host is this adapter's own (<see cref="Built"/> forwards its kind), so no caller spells it twice.
 /// Nothing is inherited: an MCP server supplied only through a <c>VIBE_*</c> variable starts under an empty home (§22 A).
 /// Before every launch <see cref="TakeTurnAsync"/> checks all of it (<see cref="VibeLaunch"/>).</para>
 /// <para><b>The prompt on stdin, the answer from <c>--output json</c>, usage from <c>--output-dir</c></b> (D7): a 33 KB
@@ -140,7 +142,7 @@ public sealed class VibeRuntime(string id, VibeHost host, VibePathBudget? budget
     public ReviewerInvocation Build(string role, string prompt, string worktreePath, string schemaFilePath, string outputDir, ReviewerSettings settings)
     {
         var model = settings.Model.Length > 0 ? settings.Model : VibeModels.Default;
-        var request = VibeLaunch.Built(
+        var request = Built(
             new ProcessRequest(
                 settings.ExecutablePath.Length > 0 ? settings.ExecutablePath : DefaultExecutable,
                 Arguments(worktreePath, ExportFolder(OwnedOr(settings, outputDir), role, Guid.NewGuid()), settings.Timeout),
@@ -174,7 +176,7 @@ public sealed class VibeRuntime(string id, VibeHost host, VibePathBudget? budget
         try
         {
             return await launcher.RunAsync(
-                VibeLaunch.Built(new ProcessRequest(executable, ["--version"], home) { Timeout = timeout }, home, VibeModels.Default), ct);
+                Built(new ProcessRequest(executable, ["--version"], home) { Timeout = timeout }, home, VibeModels.Default), ct);
         }
         finally
         {
@@ -194,6 +196,13 @@ public sealed class VibeRuntime(string id, VibeHost host, VibePathBudget? budget
             // Left for the sweep; the probe's answer is what the caller asked for.
         }
     }
+
+    /// <summary>
+    /// <see cref="VibeLaunch.Built"/> for THIS adapter's host — the one forwarder every Vibe child of this runtime goes through (the review launch, the
+    /// <c>providers</c> probe, and the consultant's launches through <see cref="VibeConsultant"/>), so no caller spells the host's kind twice and none can
+    /// build a launch for another host than the one the adapter was given.
+    /// </summary>
+    internal ProcessRequest Built(ProcessRequest request, string home, string model) => VibeLaunch.Built(request, home, model, host.Kind);
 
     /// <summary>
     /// The shipped flag set (D2, D3, D7, D8) — the same argv <c>scripts/lib/vibe.mjs</c>'s <c>vibeArgs</c> measured. Never
@@ -279,7 +288,7 @@ public sealed class VibeRuntime(string id, VibeHost host, VibePathBudget? budget
     /// </summary>
     public string VersionWarning(string printedVersion) =>
         VibeHomeManifest.Builtin is VibeManifestLoad.Loaded { Manifest: var manifest }
-            ? VibeLaunch.VersionWarning(manifest, VibeLaunch.VersionIn(printedVersion), host.Platform)
+            ? VibeLaunch.VersionWarning(manifest, VibeLaunch.VersionIn(printedVersion), host.Platform, host.Kind)
             : string.Empty;
 
     /// <summary>The export's usage; unknown, never zero, when it is missing or null (D8, D9).</summary>

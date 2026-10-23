@@ -150,21 +150,21 @@ test('the words are the file’s words, and a word outside them is refused rathe
   }
 });
 
-test('an unmeasured pair names the record its row cites: the Vibe probe for vibe, the first run for the rest, unchanged', () => {
-  const vibe = admit('vibe', 'web').reason;
-  assert.ok(vibe.includes('a measured cell in research/RESULTS_vibe_confinement.md is what admits it'), vibe);
-  assert.ok(!vibe.includes('RESULTS_question_consultant_capabilities.md'), 'no cell of that run could admit a Vibe pair');
-  assert.equal(admit('api', 'web').reason,
-    "'api' has not been measured for 'web' (not measured; vendor-specific (a tails-plan item)) — a measured cell in "
-    + 'research/RESULTS_question_consultant_capabilities.md is what admits it; until then give this row a prompt of another capability');
+test('an unmeasured pair is ADMITTED, flagged unmeasured, with the caveat that the answer may come without the capability (owner decision 2026-10-23)', () => {
+  for (const runtime of ['vibe', 'api']) {
+    const admission = admit(runtime, 'web');
+
+    assert.equal(admission.admitted, true, `${runtime} × web: a refusal whose only reason is "not measured" is a note now: ${admission.reason}`);
+    assert.equal(admission.standing, 'unmeasured');
+    assert.equal(admission.flag, 'unmeasured');
+    assert.equal(admission.reason, '');
+    assert.equal(admission.caveat, 'not measured on this runtime for this capability: the row runs anyway, and the answer may come without it');
+  }
 });
 
-test('a refusal says what cures it: a measurement for an unmeasured pair, another prompt for an unsupported one', () => {
-  assert.match(admit('api', 'web').reason, /not been measured/u);
-  assert.match(admit('api', 'web').reason, /RESULTS_question_consultant_capabilities\.md/u);
+test('a refusal says what cures it: another prompt or runtime for an unsupported pair, the table’s own words for a pair it does not know', () => {
   assert.match(admit('antigravity', 'web').reason, /cannot fetch a page headless/u);
   assert.match(admit('gemini', 'none').reason, /claude, codex, antigravity, local, api, vibe/u);
-  assert.match(admit('vibe', 'web').reason, /not been measured/u, 'no Vibe cell exercises the web (S3 of PLAN_vibe_and_kimi_runtimes.md)');
   assert.match(admit('claude', 'shell').reason, /none, disk, web/u);
 });
 

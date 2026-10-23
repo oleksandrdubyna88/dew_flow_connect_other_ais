@@ -14,6 +14,12 @@ public enum AdmissionFlag
 
     /// <summary>Held only by the CLI's headless default, which nobody configured — allowed, flagged.</summary>
     DefaultDeny,
+
+    /// <summary>
+    /// The pair was never measured (web search on <c>vibe</c> and <c>api</c>) — the owner's decision of 2026-10-23: a refusal whose only reason is "not measured" is a note. The row runs; its plan gives it no tool it was not measured with,
+    /// so the risk is a weaker answer (it may come without the capability), never a reach it should not have.
+    /// </summary>
+    Unmeasured,
 }
 
 /// <summary>The flag words as the shared vectors spell them.</summary>
@@ -24,6 +30,7 @@ public static class AdmissionFlags
         AdmissionFlag.None => string.Empty,
         AdmissionFlag.Unconfined => "unconfined",
         AdmissionFlag.DefaultDeny => "default-deny",
+        AdmissionFlag.Unmeasured => "unmeasured",
         _ => throw new ArgumentOutOfRangeException(nameof(flag), flag, "a flag this build does not spell — map it here"),
     };
 
@@ -32,6 +39,7 @@ public static class AdmissionFlags
     {
         AdmissionFlag.Unconfined => "unconfined: can read this machine — a shell is always there, and no flag removes it",
         AdmissionFlag.DefaultDeny => "held only by the CLI's headless permission default, which nobody configured",
+        AdmissionFlag.Unmeasured => "not measured on this runtime for this capability: the row runs anyway, and the answer may come without it",
         _ => string.Empty,
     };
 }
@@ -47,8 +55,8 @@ public abstract record Admission
 }
 
 /// <summary>
-/// The one rule that turns a table row into a decision: confined admits; unconfined and default-deny
-/// admit FLAGGED; unsupported and unmeasured refuse; a pair the table does not know refuses by name.
+/// The one rule that turns a table row into a decision: confined admits; unconfined, default-deny and unmeasured
+/// admit FLAGGED (unmeasured since the owner's decision of 2026-10-23: a note, never a refusal); unsupported refuses; a pair the table does not know refuses by name.
 /// </summary>
 /// <remarks>
 /// A3's "blocked in the UI and refused by the server" is one rule because the extension's
@@ -87,8 +95,8 @@ public static class CapabilityMatrix
             CapabilityStanding.Confined => new Admission.Admitted(row.Standing, AdmissionFlag.None),
             CapabilityStanding.Unconfined => new Admission.Admitted(row.Standing, AdmissionFlag.Unconfined),
             CapabilityStanding.DefaultDeny => new Admission.Admitted(row.Standing, AdmissionFlag.DefaultDeny),
-            CapabilityStanding.Unsupported => new Admission.Refused(Unsupported(row)),
-            _ => new Admission.Refused(Unmeasured(row)),
+            CapabilityStanding.Unmeasured => new Admission.Admitted(row.Standing, AdmissionFlag.Unmeasured),
+            _ => new Admission.Refused(Unsupported(row)),
         };
     }
 
@@ -102,23 +110,4 @@ public static class CapabilityMatrix
     private static string Unsupported(RuntimeCapabilityRow row) =>
         $"'{row.Runtime}' cannot do '{row.Capability.Spelled()}': {row.MeasuredWith.Note} — give this row a prompt of another capability, or this prompt another runtime";
 
-    private static string Unmeasured(RuntimeCapabilityRow row) =>
-        $"'{row.Runtime}' has not been measured for '{row.Capability.Spelled()}' ({row.MeasuredWith.Note}) — a measured cell in {RecordOf(row)} is what admits it; until then give this row a prompt of another capability";
-
-    /// <summary>The record a pair's measurement belongs in when nothing else is cited — the first run's.</summary>
-    private const string FirstRunRecord = "research/RESULTS_question_consultant_capabilities.md";
-
-    /// <summary>
-    /// The record a row's <c>resultRef</c> cites — the file a measurement of that pair would land in (the Vibe rows cite
-    /// research/RESULTS_vibe_confinement.md, S3 of todo/PLAN_vibe_and_kimi_runtimes.md) — read off the row, never a
-    /// second sentence per runtime; the first run's record when the row names none.
-    /// </summary>
-    internal static string RecordOf(RuntimeCapabilityRow row)
-    {
-        var cited = row.MeasuredWith.ResultRef;
-        var at = cited.IndexOf("research/RESULTS_", StringComparison.Ordinal);
-        var end = at < 0 ? -1 : cited.IndexOf(".md", at, StringComparison.Ordinal);
-
-        return end < 0 ? FirstRunRecord : cited[at..(end + 3)];
-    }
 }

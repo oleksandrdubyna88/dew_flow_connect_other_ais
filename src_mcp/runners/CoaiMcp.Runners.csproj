@@ -39,6 +39,9 @@
          model a launch names, one per curated id (D10 and D19; E4.2 of todo/PLAN_vibe_and_kimi_runtimes_E4.md): read by
          KimiModelBlocks, whose ids ARE KimiModels.Curated. Embedded for the same reason. -->
     <EmbeddedResource Include="..\..\shared\kimi-model-blocks.json" LogicalName="CoaiMcp.Runners.kimi-model-blocks.json" />
+    <!-- The runtimes admitted on a NATIVE Linux host and the first release that runs each (E2 of todo/PLAN_kimi_and_vibe_on_native_linux_E2.md): read by NativeLinuxAdmission, whose names ARE
+         HostAdmission.MeasuredOnNativeLinux; the extension is held to the same file by its own test. Embedded for the same reason. -->
+    <EmbeddedResource Include="..\..\shared\native-linux-admission.json" LogicalName="CoaiMcp.Runners.native-linux-admission.json" />
   </ItemGroup>
 
   <ItemGroup>

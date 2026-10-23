@@ -467,9 +467,10 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   private latestTeamServer = '';
   private latestCheckedAt = 0;
   /**
-   * What this window runs on — Windows, WSL2, WSL1, a native Linux host or a Mac — asked of the kernel ONCE, when the panel is
-   * made, and never rejecting (`hostKind`). The Models cards read it through the state (a Vibe card on a native Linux host
-   * says it is refused, never "update coai-mcp"), and ⤓ / ⟳ read it for their note.
+   * What this window runs on — Windows, WSL2, WSL1, a native Linux host, a Linux host whose banner could not be read
+   * (`linux-unread`) or a Mac — asked of the kernel ONCE, when the panel is made, and never rejecting (`hostKind`). The Models
+   * cards read it through the state (a Vibe card on an unread host says it is refused, never "update coai-mcp"), and ⤓ / ⟳ read it
+   * for their note. It is carried as itself: this module compares nothing and persists nothing.
    */
   private readonly hostKindHere: Promise<HostKind> = hostKind();
   /** Each vendor's installed and published CLI version, and when they were last read. */
@@ -1951,9 +1952,9 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // The extension HOST's platform, which is the one that matters here: the terminal this opens
     // runs on this side, so a WSL window wants the linux instructions. `hostSide.ts` is where that
     // doctrine and its narrowing now live, in one place — this used to be one of three copies.
-    // WSL is a Linux host to the extension, and Vibe's note differs between WSL2, WSL1 and a native Linux box (DL1 of
-    // research/PLAN_kimi_and_vibe_on_linux.md): the host kind is asked of this window once (`hostKindHere`) and `commandFor`
-    // REQUIRES it, so a dropped argument is a compile error rather than the native-Linux note shown on WSL.
+    // WSL is a Linux host to the extension, and Vibe's note differs between WSL2, WSL1, a native Linux box and a host whose banner
+    // could not be read (DL1 of research/PLAN_kimi_and_vibe_on_linux.md): the host kind is asked of this window once (`hostKindHere`)
+    // and `commandFor` REQUIRES it, so a dropped argument is a compile error rather than the native-Linux note shown on WSL.
     const install = commandFor(vendor, hostPlatform(), await this.hostKindHere);
     if (install.command.length === 0) {
       const open = 'Open the instructions';

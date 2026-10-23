@@ -355,17 +355,23 @@ public sealed class VibeLaunchRulesTests
     [Theory]
     [InlineData(HostKind.MacOs)]
     [InlineData(HostKind.Other)]
-    public void AHostNothingWasMeasuredOn_IsRefused_NamingThePlanAndTheTwoMeasuredHosts(HostKind host)
+    public void AHostWithNoLaunchPath_IsRefused_NamingTheRealReason_NotThatNothingWasMeasured(HostKind host)
     {
-        VibeLaunch.HostRefusal(host, "vibe", WslGeneration.None).Should().Contain("D18").And.Contain(HostKinds.Word(host)).And.Contain("Windows and WSL2 only");
+        VibeLaunch.HostRefusal(host, "vibe", WslGeneration.None).Should().Contain("D18").And.Contain("Vibe has no launch path on a " + HostKinds.Word(host) + " host")
+            .And.Contain("reading it through a file descriptor, which it can do on Linux only")
+            .And.NotContain("measured", "the reason is that coai's sign-in judgement is a Linux descriptor's, not that nobody measured it (owner decision 2026-10-23)");
     }
 
-    /// <summary>S-V17 (DL1): D18 lifts for WSL2 only. A native Linux host is refused with the sentence that says it is measured on WSL2 only.</summary>
+    /// <summary>
+    /// S-N5 (E2.S2 of <c>todo/PLAN_kimi_and_vibe_on_native_linux_E2.md</c>; the flipped S-V17 pin): Vibe is measured on a native Linux host (research/RESULTS_vibe_confinement.md §32), so a host whose kernel banner was READ and
+    /// names no WSL starts it; the same host with an unreadable banner is refused with the banner sentence, not the WSL2-only one.
+    /// </summary>
     [Fact]
-    public void ANativeLinuxHost_IsRefused_WithTheWsl2OnlySentence()
+    public void ANativeLinuxHost_IsAdmitted_OnAReadBanner()
     {
-        VibeLaunch.HostRefusal(HostKind.Linux, "vibe", WslGeneration.None).Should().Contain("DL1").And.Contain("WSL2 only").And.Contain("not yet on a native Linux host",
-            "a native Linux host should still be refused with the WSL2-only sentence, but Vibe started");
+        VibeLaunch.HostRefusal(HostKind.Linux, "vibe", WslGeneration.None).Should().BeEmpty(
+            "a native Linux host should start a Vibe row now that it is measured (RESULTS_vibe §32), but it was refused");
+        VibeLaunch.HostRefusal(HostKind.Linux, "vibe", WslGeneration.Unreadable).Should().Contain("kernel banner").And.Contain("DN6").And.NotContain("WSL2 only");
     }
 
     [Fact]
@@ -380,25 +386,30 @@ public sealed class VibeLaunchRulesTests
     [InlineData(WslGeneration.None)]
     public void AWsl1Host_IsRefused_WithTheWsl1Sentence(WslGeneration generation)
     {
-        VibeLaunch.HostRefusal(HostKind.Wsl, "vibe", generation).Should().Contain("WSL2 only").And.Contain("this is WSL1").And.Contain("Run this from Windows (not inside WSL):").And.Contain("`wsl --set-version <distro> 2`",
+        VibeLaunch.HostRefusal(HostKind.Wsl, "vibe", generation).Should().Contain("Vibe is refused on this WSL1 host").And.Contain("has no pidfd").And.NotContain("measured").And.Contain("Run this from Windows (not inside WSL):").And.Contain("`wsl --set-version <distro> 2`",
             "a WSL1 banner was admitted as WSL2");
     }
 
     /// <summary>
     /// S-V17: every banner of <c>shared/wsl-banner-vectors.json</c> — the ONE rule for which WSL a kernel is, which the extension's tests read
-    /// too — through the generation predicate; only a WSL2 banner starts Vibe. A WSL2 kernel with no marker reads as none (the vector says so).
+    /// too — read the way the PRODUCT reads a kernel banner (<see cref="ProcVersion.ReadFrom"/> then <see cref="WslGenerations.Of(bool, BannerReading)"/>, never the pure text predicate alone). Only a WSL2 banner or a READ
+    /// banner naming no WSL starts Vibe; a banner that was not read (the empty vector) is <see cref="WslGeneration.Unreadable"/> and is refused (DN6) — the extension maps the same vector to <c>linux-unread</c>.
     /// </summary>
     [Theory]
     [MemberData(nameof(WslBannerVectors.Ids), MemberType = typeof(WslBannerVectors))]
-    public void OnlyAWsl2Banner_StartsVibe(string id)
+    public void AWsl2OrAReadNativeBanner_StartsVibe_AnUnreadOneDoesNot(string id)
     {
         var vector = WslBannerVectors.Named(id);
-        var generation = WslGenerations.Of(vector.Banner);
+        var reading = ProcVersion.ReadFrom(() => vector.Banner);
+        var generation = WslGenerations.Of(onLinux: true, reading);
 
-        generation.Should().Be(vector.Generation, $"vector '{id}': a WSL1 banner was admitted as WSL2, or the extension's rule and the server's differ");
-        var kind = HostKinds.Of(windows: false, linux: true, macOs: false, wsl: VendorDiagnosis.NamesWsl(vector.Banner));
+        generation.Should().Be(reading.Read ? vector.Generation : WslGeneration.Unreadable,
+            $"vector '{id}': a WSL1 banner was admitted as WSL2, an unread banner was not Unreadable, or the extension's rule and the server's differ");
+        var kind = HostKinds.Of(windows: false, linux: true, macOs: false, wsl: VendorDiagnosis.NamesWsl(reading.Text));
 
-        (VibeLaunch.HostRefusal(kind, "vibe", generation).Length == 0).Should().Be(vector.Generation == WslGeneration.Wsl2);
+        // A WSL kernel starts Vibe only when it is WSL2. A banner naming no WSL is a native Linux host, which E2.S2 admits (§32) only when the banner was READ: an unread one could be a WSL1 kernel (DN6).
+        var starts = vector.Generation == WslGeneration.Wsl2 || (kind == HostKind.Linux && reading.Read);
+        (VibeLaunch.HostRefusal(kind, "vibe", generation).Length == 0).Should().Be(starts, $"vector '{id}'");
     }
 
     [Fact]
@@ -432,12 +443,12 @@ public sealed class VibeLaunchRulesTests
     {
         var built = TheBuiltOne();
 
-        VibeLaunch.EnvironmentRefusal(built).Should().BeEmpty();
-        VibeLaunch.EnvironmentRefusal(built with { InheritsEnvironment = true }).Should().Contain("D17");
-        VibeLaunch.EnvironmentRefusal(built with { Passthrough = ProcessEnvironment.Passthrough }).Should().Contain("D17");
-        VibeLaunch.EnvironmentRefusal(built with { Environment = new Dictionary<string, string?>(built.Environment) { [VibeLaunch.CliVariable] = "rust" } })
+        VibeLaunch.EnvironmentRefusal(built, HostKind.Windows).Should().BeEmpty();
+        VibeLaunch.EnvironmentRefusal(built with { InheritsEnvironment = true }, HostKind.Windows).Should().Contain("D17");
+        VibeLaunch.EnvironmentRefusal(built with { Passthrough = ProcessEnvironment.Passthrough }, HostKind.Windows).Should().Contain("D17");
+        VibeLaunch.EnvironmentRefusal(built with { Environment = new Dictionary<string, string?>(built.Environment) { [VibeLaunch.CliVariable] = "rust" } }, HostKind.Windows)
             .Should().Contain("VIBE_CLI=python");
-        VibeLaunch.EnvironmentRefusal(built with { Environment = new Dictionary<string, string?>(built.Environment) { ["VIBE_MCP_SERVERS"] = "[]" } })
+        VibeLaunch.EnvironmentRefusal(built with { Environment = new Dictionary<string, string?>(built.Environment) { ["VIBE_MCP_SERVERS"] = "[]" } }, HostKind.Windows)
             .Should().Contain("D17", "a fourth VIBE_* configures Vibe (§22 A)");
     }
 

@@ -298,7 +298,7 @@ public sealed class JunctionsTests : IDisposable
         var refusal = Junctions.Refusal(host, Link, Target);
         var made = Junctions.Make(host, Link, Target);
 
-        refusal.Should().Contain("D18").And.Contain(HostKinds.Word(host)).And.Contain("a sign-in link is made only on a host that admits Kimi").And.NotContain("hosts only");
+        refusal.Should().Contain("D18").And.Contain(HostKinds.Word(host)).And.Contain("a sign-in link is made only on a host that admits Kimi").And.NotContain("hosts only").And.NotContain("measured", "the reason is the missing lock family, not that nobody measured it");
         made.Should().Be(refusal);
         NothingIsAt(Link).Should().BeTrue("nothing is made on a host Kimi is refused on");
     }

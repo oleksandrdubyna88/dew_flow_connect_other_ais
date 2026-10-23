@@ -18,7 +18,7 @@
 // never runs `kimi login`, `vibe --setup` or a Vibe/Kimi turn, never prints another process's environment (it reads the NAMES of the VS
 // Code server's variables to answer one yes/no, and its PATH value from the file make-series.sh wrote), never ends a process.
 //
-//   node scripts/probe-native-linux-host.mjs [--series <folder>] [--scratch <dir>] [--kimi <path>] [--coai-mcp <path>]
+//   node scripts/probe-native-linux-host.mjs [--series <folder>] [--scratch <dir>] [--kimi <path>] [--coai-mcp <path>] [--vibe-python <path>]
 //
 // The pure core is lib/host-facts.mjs (this file runs on import, so a test cannot import it — hence the split).
 import { spawnSync } from 'node:child_process';
@@ -26,20 +26,19 @@ import { createHash } from 'node:crypto';
 import { lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { FLAG_SPECS, parseFlags } from './lib/cli-args.mjs';
 import { collectHostFacts } from './lib/host-facts.mjs';
 import { ownedRoot } from './lib/kimi-home.mjs';
 import { linuxProcesses, waitForNoOtherKimi } from './lib/proc.mjs';
 import { minimalEnv } from './lib/vibe.mjs';
 
 const EXIT = { ok: 0, badRequest: 65, unavailable: 69 };
-const FLAGS = ['--series', '--scratch', '--kimi', '--coai-mcp'];
-const SAFE = /^[A-Za-z0-9_.,=/:@-]+$/u;
+const FLAGS = FLAG_SPECS.hostProbe.values;
 
-/** `--flag value` pairs only; any other word, a repeated or unknown flag, or a value off the safe pattern is a bad request. */
+/** `--flag value` pairs only (lib/cli-args.mjs): an unknown or repeated flag, a stray word, a flag with no value (or another --flag as its value) or a value off the safe pattern is a bad request. */
 function parseArgs(argv) {
-  const pairs = Array.from({ length: Math.floor(argv.length / 2) }, (_, i) => [argv[2 * i], argv[(2 * i) + 1]]);
-  const valid = argv.length % 2 === 0 && pairs.every(([flag, value]) => FLAGS.includes(flag) && SAFE.test(value)) && new Set(pairs.map(([flag]) => flag)).size === pairs.length;
-  return valid ? { ok: true, values: Object.fromEntries(pairs) } : { ok: false, values: {} };
+  const parsed = parseFlags(argv, FLAG_SPECS.hostProbe);
+  return parsed.ok ? { ok: true, values: parsed.values, error: '' } : { ok: false, values: {}, error: parsed.error };
 }
 
 /** The NAMES of the VS Code server's environment variables (never a value): the server is the process whose `exe` lies under ~/.vscode-server/. */
@@ -82,7 +81,7 @@ const noOtherKimi = (kimi) => (kimi === '' ? Promise.resolve(true) : waitForNoOt
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (!args.ok) {
-    process.stderr.write(`usage: node scripts/probe-native-linux-host.mjs [${FLAGS.map((f) => `${f} <value>`).join('] [')}]\n`);
+    process.stderr.write(`usage: node scripts/probe-native-linux-host.mjs [${FLAGS.map((f) => `${f} <value>`).join('] [')}]\n${args.error}\n`);
     return EXIT.badRequest;
   }
   if (process.platform !== 'linux') {
@@ -99,7 +98,7 @@ async function main() {
     const facts = collectHostFacts({
       fsx, run, env: process.env, uid: process.getuid(), home, platform: { node: process.version, glibc: glibc() }, listing: processes,
       serverEnvNames: () => serverEnvNames(home), series: args.values['--series'] ?? '', scratch, hash: sha256, now: () => new Date(),
-      coaiMcp: args.values['--coai-mcp'] ?? '', kimi, kimiClear, ownedRoot, progress,
+      coaiMcp: args.values['--coai-mcp'] ?? '', vibePython: args.values['--vibe-python'] ?? '', kimi, kimiClear, ownedRoot, progress,
     });
     const text = `${JSON.stringify(facts, null, 2)}\n`;
     if (!own) writeFileSync(join(scratch, 'host-facts.json'), text);

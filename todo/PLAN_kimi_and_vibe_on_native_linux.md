@@ -1,6 +1,6 @@
 # PLAN — Vibe and Kimi on a native Linux host: measure there first, then admit each one that passes
 
-> Status: **epic E1 coded 2026-10-21 (PR #914: the host scripts and `--host-facts`, the per-runtime admission set, Vibe's keyring arms, the Kimi probe fixes); E2 and E3 are plan only, nothing of them written, 2026-10-21 — the plan gate passed (coai 942810c1, `good_enough`, its ten accepted
+> Status: **epic E1 coded 2026-10-21 (PR #914: the host scripts and `--host-facts`, the per-runtime admission set, Vibe's keyring arms, the Kimi probe fixes); E2 built and Vibe measured on `ubuntu-claude` 2026-10-22 (stories S0–S4 merged on `docs/native-linux-e2`; RESULTS_vibe §32, every cell passed; S5, the live round and the release, open), E3 is plan only, nothing of it written — the plan gate passed (coai 942810c1, `good_enough`, its ten accepted
 > findings folded below), the consult answered (634d4907, 3 of 3), the E1 plan round passed (b54f22f5, `proceed`, folded the same
 > day), the cadence consult for epics 1–3 answered (e9a9b20e, folded the same day: the keyring road is CLOSED, not guessed), and the
 > work is split into three epics (E1 → E2, E1 → E3, at the bottom; E1's stories are
@@ -10,6 +10,8 @@
 > read-only `coai-mcp --host-facts` (E1), the measurement on the owner's native Ubuntu host `ubuntu-claude` (SSH), then the
 > per-runtime admission in `src_mcp/runners/Platform/HostAdmission.cs`, Vibe's closed keyring road (DN10), the extension's host notes
 > and help, `shared/consultant-limitations.json`, and the RESULTS documents.
+>
+> **Changed by the owner on 2026-10-23 (DN1 of [the E2 plan](PLAN_kimi_and_vibe_on_native_linux_E2.md)): "unmeasured" is a note, never a refusal.** Kimi is admitted on a native Linux host NOW, without the E3 measurement, with a visible note (`basis` `owner-decision` in `shared/native-linux-admission.json`, first release 0.64.0); "measure first, no admission ships before its cells" no longer holds for Kimi. E3's measurement is optional evidence, not a gate. Every safety refusal stays.
 >
 > Parent (implemented): [PLAN_kimi_and_vibe_on_linux.md](../research/PLAN_kimi_and_vibe_on_linux.md) — DL1 refused a native Linux host
 > "until one native-Linux run of L-V9 is recorded" (§2 item 1, DL1, §5 row L-V10, and its open tail). Evidence it rests on:
@@ -656,7 +658,7 @@ process — the admission is a branch in a pure function.
 - [ ] A live round on the LOCALLY BUILT binary answered before each release was tagged (DN13); the rollback line is in the release notes.
 - [ ] N-H1, N-V0 and every Vibe cell recorded in RESULTS_vibe §32 with predictions, the commit, the spend; `~/.vibe` unchanged.
 - [ ] Vibe admitted on native Linux ONLY if every Vibe cell passed; else the failure recorded and nothing admitted.
-- [ ] N-K0 and every Kimi cell recorded in RESULTS_kimi §33 (after the owner's install and sign-in); Kimi admitted only if all passed.
+- [ ] Optional since 2026-10-23 (Kimi is already admitted, with a note, by the owner's decision — DN1 of the E2 plan): N-K0 and every Kimi cell recorded in RESULTS_kimi §33 (after the owner's install and sign-in); a pass turns the Kimi row's `basis` to `measured`.
 - [ ] An unreadable banner is refused (S-N7, teeth proven), on the server and in the extension.
 - [ ] Limitation rows, hints, install notes, help in five languages and `ON_NATIVE_LINUX_SINCE` match what the server does.
 - [ ] `module_runners.md`, `module_extension.md` and the parent's open tail updated.
@@ -805,6 +807,7 @@ Scouts are Sonnet, ⌈1.5N⌉ per epic.
 - **Goal.** Vibe 2.26.1 is measured on `ubuntu-claude` (N-V1–N-V6) with the keyring road closed as the product will close it, and —
   only on a full pass — admitted on a native Linux host, its launch there carrying the forced keyring backend, with the help, the card and
   the limitation row saying exactly that; released after a live round on a local binary, with a rollback line.
+- **Stories and the C1 spec.** [PLAN_kimi_and_vibe_on_native_linux_E2.md](PLAN_kimi_and_vibe_on_native_linux_E2.md) (2026-10-22: S0 the probe amendment, S1 the series and §32, S2–S5 only on a full pass).
 - **Scope.** The Vibe series (P2) and RESULTS_vibe §32; Vibe enters DN1's set; the forced keyring backend in `VibeLaunch.Built` and
   `EnvironmentRefusal` on `HostKind.Linux` only (DN10); the `vibe`/`linux` limitation row; `runtimeSince.ts` (`ON_NATIVE_LINUX_SINCE.vibe`,
   per-runtime `HOST_NOTES.linux`), the Vibe hint, `VIBE_NOTE_LINUX`, the unreadable-banner refusal in `hostSide.ts` (DN6's extension
@@ -818,6 +821,7 @@ Scouts are Sonnet, ⌈1.5N⌉ per epic.
   and the live round on the local binary answered, then the release and the post-release round — or a cell failed and the record alone
   shipped with nothing admitted; WSL2's Vibe launch unchanged (its pins untouched); the series folder removed by `remove-series.sh`;
   `plan-lifecycle.mjs` clean.
+- **Progress (2026-10-22).** S1 done-when: measured 2026-10-22, pass (RESULTS_vibe §32). S0, S2, S3, S4 built and merged on `docs/native-linux-e2`; the Opus judge round done; the code gate and S5 open.
 - **Cornerstone areas.** **C1** (Fable spec: the admission's inputs — the measured set, the read banner, the closed keyring road in the
   launch it permits, the refusal sentences — and the rule that absence of a fact is a refusal, never an admission; it starts from E1's
   plumbing).
@@ -827,6 +831,8 @@ Scouts are Sonnet, ⌈1.5N⌉ per epic.
   the keyring sentence (S-N8, S-N11 pin the words); a release before the local-binary round (P7's order is the gate).
 
 ### E3 — Kimi measured, then conditionally admitted
+
+- **Status change (2026-10-23): E3 is no longer a gate.** The owner decided that nothing is refused only because it is not measured (DN1 of the E2 plan). Kimi is admitted on native Linux already, with a note; this epic is now the optional measurement that can turn the Kimi row's `basis` from `owner-decision` to `measured`. The text below describes that measurement as it was planned.
 
 - **Goal.** After the owner installs Kimi and signs in on `ubuntu-claude`, Kimi is measured in the risk order (instruments → normal
   launch and tree hold → killed agent, descendant teardown and the NEXT launch's recovery → write/read boundaries → inventory), and — only

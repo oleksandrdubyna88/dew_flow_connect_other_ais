@@ -43,7 +43,7 @@ internal sealed class KimiFlowHost : IDisposable
             Assert.SkipUnless(OperatingSystem.IsWindows(), "the Windows-host arm of this flow needs a Windows machine (the WSL2 arm runs everywhere)");
         }
 
-        if (mode is Windows or Wsl2)
+        if (mode is Windows or Wsl2 or Linux)
         {
             TheOwnersKimi.SkipWhenARealKimiRuns();
         }

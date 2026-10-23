@@ -12738,12 +12738,18 @@ flowchart LR
   S --> N{"vibeNoteFor(hostKind)"}
   N -->|"wsl2"| NW["runs here from 0.59.0; sign-in ~/.vibe/.env, linked, never copied"]
   N -->|"wsl1"| N1["refused; wsl --set-version <distro> 2"]
-  N -->|"linux"| NL["refused for now; measured on WSL2 only"]
+  N -->|"linux (since E2.S3)"| NL["runs from 0.64.0 with Vibe's keyring off; sign-in ~/.vibe/.env only"]
+  N -->|"linux-unread (E2.S3)"| NU["refused: banner not read, cannot tell native from WSL1"]
   N -->|"darwin"| NM["not measured"]
   R --> L{"cardContextFor: state.hostKind"}
   L -->|"wsl2 and server < VIBE_ON_LINUX_SINCE 0.59.0"| LN["card: Update coai-mcp to run Vibe here"]
-  L -->|"linux or wsl1, ANY server"| LR["card: the refusal sentence, never update"]
+  L -->|"linux and server < VIBE_ON_NATIVE_LINUX_SINCE 0.64.0"| LNN["card: Update coai-mcp to run Vibe here (native Linux host)"]
+  L -->|"wsl1, or linux-unread, ANY server"| LR["card: the refusal sentence, never update"]
 ```
+
+> **Superseded for native Linux by E2.S3 (2026-10-22)** — the diagram above is as E3 left it, with the two lines for `linux` and
+> `linux-unread` updated; the sentences below that say a native Linux host is *refused for now / measured on WSL2 only* describe 0.59.0–0.63.0.
+> The current account is *Vibe on a native Linux host, on the panel's side* at the end of this file.
 
 - **The runtime list.** `RUNTIMES` gains `vibe` (last, so it equals `shared/feature-availability.json`'s `runtimes`,
   which `featureAvailability.test.ts` holds it to); both `package.json` runtime enums list it. `CLI_RUNTIMES`
@@ -12756,7 +12762,8 @@ flowchart LR
   Never in `DEFAULT_VENDORS`. Its hint names what a person meets first: Windows, and WSL2 from coai-mcp 0.59.0
   (when coai-mcp itself runs there — a VS Code window attached to WSL; the sign-in there is `~/.vibe/.env`, made by
   `vibe --setup`, linked by coai and never copied), "On a native Linux host coai-mcp refuses Vibe for now — it is measured on
-  WSL2 only" (E3 of `research/PLAN_kimi_and_vibe_on_linux.md`, which lifted D18 for WSL2), and the coai-mcp release that
+  WSL2 only" (E3 of `research/PLAN_kimi_and_vibe_on_linux.md`, which lifted D18 for WSL2; **replaced by E2.S3**: the hint now says
+  `VIBE_NATIVE_LINUX`, see the last section), and the coai-mcp release that
   knows the runtime. Kimi's hint was unchanged then: Windows only (Kimi on WSL2 came with 0.61.0, see *Kimi on Linux and WSL, on the panel's side* below).
 - **The models** (D10): `VIBE_MODELS` is the curated list coai-mcp's `VibeModels.Curated` launches on —
   `mistral-medium-3.5` (Vibe's default) and `glm-5-3`, seen accepted on Vibe 2.26.1 (`VIBE_MODELS_SEEN_ON`).
@@ -12829,7 +12836,8 @@ flowchart LR
   **WSL2** (Vibe runs on this side from coai-mcp 0.59.0; the sign-in coai uses is the file `~/.vibe/.env`, which
   `vibe --setup` makes; coai links it into its own homes and never copies it; a sign-in kept in a keyring is invisible to coai),
   **WSL1** (refused; the cure is `wsl --set-version <distro> 2`), **native Linux** (the same sign-in sentence, then "On a native
-  Linux host coai-mcp refuses Vibe for now — it is measured on WSL2 only"), **macOS** (nothing measured). Windows keeps its keyring
+  Linux host coai-mcp refuses Vibe for now — it is measured on WSL2 only" — E3's wording, **replaced by E2.S3** with `VIBE_NATIVE_LINUX`,
+  and a sixth note, `linux-unread`, was added: see the last section), **macOS** (nothing measured). Windows keeps its keyring
   sentence. The command is one for all of them. `OFFICIAL_SOURCES` is no longer a list of command PREFIXES — a prefix check passes a line of
   several steps on its first one, whatever follows. It is `{ urls, packages }`: the hosts a command may fetch from
   (`https://antigravity.google/`, `https://mistral.ai/vibe/`, and `https://astral.sh/uv/` — the uv installer Mistral's
@@ -13046,7 +13054,8 @@ The extension's half of lifting D18 for WSL2 (DL1, DL2, DL14); the server's half
   server. `runtimeSkewNote(version, vendors, host)` adds a sentence per HOST KIND for a switched-on row whose runtime has an entry:
   **wsl2** with a server older than the entry — *Update coai-mcp to run Vibe here: …*; **linux** and **wsl1** at ANY server version — a
   refusal (*coai-mcp refuses a vibe row on a native Linux host for now — Vibe is measured on WSL2 only*; *This is WSL1 … move this
-  distro to WSL2 with `wsl --set-version <distro> 2`*), because 0.59.0 still refuses both and an update would not help; Windows and
+  distro to WSL2 with `wsl --set-version <distro> 2`*), because 0.59.0 still refuses both and an update would not help (**the `linux`
+  arm is E2.S3's now: it follows `ON_NATIVE_LINUX_SINCE`, and Kimi alone kept this sentence until 2026-10-23, when the owner's decision gave Kimi a native entry too — see *Kimi on a native Linux host* below**); Windows and
   macOS say nothing. A server that does not know the runtime keeps the old sentence (one note per row). The host kind is ONE source,
   `PanelState.hostKind` (`hostKindOfState`: else this platform's — Linux alone is a native host), never mixed with the path family;
   `namesWsl2` (`wslNetwork.ts`: the banner holds `WSL2` or `microsoft-standard`) is the server's `NamesWsl2` rule, so a
@@ -13056,12 +13065,13 @@ The extension's half of lifting D18 for WSL2 (DL1, DL2, DL14); the server's half
   `RUNTIME_SINCE`.
 - **The help** (`helpContent.ts`, `helpDe/Es/Ru/Uk.ts`): the choose-reviewers and question-consultant articles say, in all five
   languages, that Vibe runs on Windows and on WSL2 from 0.59.0, the `~/.vibe/.env` sign-in that coai links and never copies, that a
-  keyring sign-in is invisible to coai, and that on a native Linux host coai-mcp refuses Vibe for now (measured on WSL2 only), and that WSL2 applies when coai-mcp itself
+  keyring sign-in is invisible to coai, and that on a native Linux host coai-mcp refuses Vibe for now (measured on WSL2 only — **E2.S3
+  replaced that with the 0.64.0 sentence in all five languages**), and that WSL2 applies when coai-mcp itself
   runs there (a VS Code window attached to WSL).
 - **`shared/consultant-limitations.json`**: the Vibe `wsl` row is `confined`, *measured* 2026-10-16 on vibe 2.26.1 — L-V9 of
   `RESULTS_vibe_confinement.md` §31, WSL2, 3 of 3 on every cell (L-V1, the L-V2 read, L-V3 with `write_file`, `bash` and
-  `run_typescript`, L-V4), worded like the Windows row (a copy coai makes of the live tree); the `linux` row stays
-  `unmeasured` and says *measured on WSL2 only*; `windows` and `macos` are as before.
+  `run_typescript`, L-V4), worded like the Windows row (a copy coai makes of the live tree); the `linux` row stayed
+  `unmeasured` and said *measured on WSL2 only* until E2.S4 (the section *Vibe on a native Linux host — the limitation row* below); `windows` and `macos` are as before.
 - **Tests**: `vibeOnLinux.test.ts` (32) — the table, `namesWsl2` over eight banners, the host kind, the card note per host kind
   against 0.58.0 / 0.59.0 / unknown servers, the note per host kind, the hint, the five languages, the JSON rows;
   `vibeStageBoxes.test.ts` (2) — a host note does not grey the boxes, a server that does not know Vibe does.
@@ -13073,7 +13083,19 @@ The extension's half of lifting D18 for WSL2 (DL1, DL2, DL14); the server's half
   no raw tag (teeth shown: with the escape removed it fails). `readProcVersion` rejects when `/proc/version` cannot be read
   (`runningUnderWsl` still answers "not WSL"); `hostKind` logs ONE line through `console.warn` (the extension has no output channel;
   its host-side diagnostics carry the `ConnectOtherAIs:` prefix into the extension-host log) naming the cause and that the host is treated as
-  native Linux (`hostKindLogsAnUnreadableBanner.test.ts`).
+  native Linux (`hostKindLogsAnUnreadableBanner.test.ts`) — **since E2.S3 as a Linux host whose banner could not be read (`linux-unread`)**.
+
+### Vibe on a native Linux host — the limitation row and what the panel may say (E2.S4 of `todo/PLAN_kimi_and_vibe_on_native_linux_E2.md`, 2026-10-22)
+
+E2 admits Vibe on a native Linux host (server half: `module_runners.md`, *Native Linux, E2.S2* and *E2.S4*). This subsection is the *limitation-row* part only — the sentences the panel shows and the card notes
+are S3's story (`ON_NATIVE_LINUX_SINCE`, the `linux-unread` host kind, `VIBE_NATIVE_LINUX`, the six install notes), described in *Vibe on a native Linux host, on the panel's side* below; where this text and the code disagree the code is right.
+
+- **The limitation row** (`shared/consultant-limitations.json`, `vibe`/`linux`; S-N8): `confined`, measured 2026-10-22 on vibe 2.26.1 — RESULTS §32, native Ubuntu, 3 of 3 on every cell (the closed keyring road with its teeth, a read inside served and outside
+  denied, `write_file`/`bash`/`run_typescript` denied, `--resume`, the 12 pinned plugin hashes equal to the `linux` entry). The text says *measured on vibe 2.26.1 on a native Linux host* and *the keyring road was measured closed on vibe 2.26.1
+  (keyring 25.7.0)* — the version bound is in the row, not only in the plan. `vibeOnLinux.test.ts` holds it (`standing`, `measured` and no `source`, the three phrases, the date, the cells starting `Section 32`, the document); the previous test —
+  *the Vibe linux row says measured on WSL2 only, and claims nothing about native Linux* — was the one the E1 row satisfied and is replaced, not kept beside it. The row is read at one place by the extension (the Consultant tab prints what
+  `--consultants` hands it from the server's embedded copy), so there is nothing to regenerate in `src_vs_code`.
+- **Not a promise.** The row describes the launch the server makes; an older coai-mcp (the one that still refuses a native Linux row) answers its own, older row — the card's update note for that case is S3's (`nativeLinuxNote` in `runtimeSince.ts`).
 
 ## Kimi on Linux and WSL, on the panel's side (2026-10-17, E6 of `research/PLAN_kimi_and_vibe_on_linux.md`)
 
@@ -13083,11 +13105,11 @@ The extension's half of lifting D18 for Kimi on WSL2 (DL1, DL12, DL14, Q3, S-K9,
 
 - **`KIMI_ON_LINUX_SINCE = '0.61.0'`** (`runtimeSince.ts`): 0.58.0 was released from main without either runtime, Vibe-on-Linux shipped in 0.59.0, and main then released 0.60.0 without Kimi, so Kimi on Linux ships in 0.61.0 (DL14, whoever merges second bumps). It joins `ON_LINUX_SINCE`; the
   per-host-kind sentences of `runtimeSkewNote` therefore apply to a Kimi row with no new code (only the label *Kimi*): *Update coai-mcp
-  to run Kimi here* on WSL2 below 0.61.0, a refusal at any version on a native Linux host and on WSL1. The unreleased Kimi-consultant
+  to run Kimi here* on WSL2 below 0.61.0, and (since 2026-10-23) below 0.64.0 on a native Linux host; WSL1 is a refusal at any version. The unreleased Kimi-consultant
   branch sets `KIMI_CONSULTANT_SINCE` to 0.58.0: whichever of the two merges second bumps its constant (DL14).
 - **`kimiNoteFor(host)`** (`vendorTerminal.ts`) is Vibe's `vibeNoteFor` for Kimi: a `Record<HostKind, string>`, so a host kind added later
   is a compile error. WSL2 *runs on this side from coai-mcp 0.61.0* and says that while the person's own `kimi` is open coai's turns
-  wait and then answer busy (Q3); native Linux and WSL1 carry Vibe's two refusal sentences with Kimi's name; macOS is not measured;
+  wait and then answer busy (Q3); WSL1 carries Vibe's refusal sentence with Kimi's name; native Linux says Kimi RUNS from 0.64.0 though it is not measured there (2026-10-23); macOS is not measured;
   Windows is as it was. `vendorInstall(vendor, platform, host?)` takes the host kind; without one Linux is native (the safe answer).
 - **The Linux ⤓/⟳ line** (`kimiLinuxLine.ts`, DL12) provisions `rg` and `fd` and ends with Moonshot's script and a check. One line,
   `&&`-joined, each step that holds a `||` wrapped in `{ …; }` (without the braces a failed step handed control to the next step's own
@@ -13165,3 +13187,84 @@ The extension's half of lifting D18 for Kimi on WSL2 (DL1, DL12, DL14, Q3, S-K9,
   marker button against a real marker; whether the providers field is named as proposed (server half); `KimiTools.Refusal` must say the
   same generic sentence (lower-case first letter); the three texts E3 listed as still Windows-only (`architecture.md:39`,
   `research/README.md`, the `coai.vibeHomesDirectory` help) are untouched.
+
+## Vibe on a native Linux host, on the panel's side (2026-10-22, E2.S3 of `todo/PLAN_kimi_and_vibe_on_native_linux_E2.md`)
+
+The extension's half of admitting Vibe on a native Linux host (the server's half is E2.S2). From **coai-mcp 0.64.0** a native Linux host
+RUNS a Vibe row with Vibe's keyring turned off (`PYTHON_KEYRING_BACKEND`, DN10), so it signs in only through `~/.vibe/.env`. Kimi is still
+refused there (E3). What the extension says, and how a host whose kernel banner could not be read is told apart:
+
+```mermaid
+flowchart TD
+  B["/proc/version"] -->|"read OK, non-blank"| K{"hostKindOf"}
+  B -->|"read failed: ONE console.warn, ConnectOtherAIs: prefix"| U["linux-unread"]
+  B -->|"read, but blank or whitespace"| U
+  K -->|"names WSL2 / microsoft-standard"| W2["wsl2"]
+  K -->|"names Microsoft / WSL otherwise"| W1["wsl1"]
+  K -->|"names neither"| L["linux"]
+  W2 --> H["HOST_NOTES (runtimeSince.ts): update below 0.59.0"]
+  L --> N{"runtimeOnNativeLinux(runtime, server)"}
+  N -->|"vibe, server >= 0.64.0 or unknown"| NO["no note"]
+  N -->|"vibe, server <= 0.63.0"| NU["Update coai-mcp to run Vibe here ... 0.64.0 is the first release that runs it there"]
+  N -->|"kimi: no ON_NATIVE_LINUX_SINCE entry"| NK["refuses a kimi row on a native Linux host for now - measured on WSL2 only"]
+  U --> UN["could not read this host's kernel banner ... cannot tell a native Linux host from WSL1 and refuses a row here, never update"]
+```
+
+- **The union.** `HostKind` (`hostSide.ts`) is `'windows' | 'wsl2' | 'wsl1' | 'linux' | 'linux-unread' | 'darwin'`. `linux-unread` is a *member*,
+  not a flag, so that the exhaustive tables over the union (`VIBE_NOTES`, `KIMI_NOTES` in `vendorTerminal.ts`) fail to COMPILE until they say what
+  an unread host is told; the partial one (`HOST_NOTES`, `runtimeSince.ts`) got its arm by hand. `hostKindOf('linux', blank)` answers it — the
+  server's `ProcVersion.ReadFrom` calls a blank or whitespace banner unread and refuses a member on it, and the two sides must agree or the card
+  promises a row the launch refuses; `hostKind` answers it on a failed read, still warning once (*…treated as a Linux host whose banner could
+  not be read, so a Vibe row is shown as refused here*). `hostKindOfPlatform` never answers it (a platform alone is `linux`; the product's
+  only caller that could skip the banner is handed the kind `panelProvider` read). `shared/wsl-banner-vectors.json` speaks of WSL
+  GENERATIONS, so `wslBannerVectors.test.ts` maps its `empty-banner` row (generation `none`) to `linux-unread` and every other `none` to `linux`.
+- **`ON_NATIVE_LINUX_SINCE`** (`runtimeSince.ts`): `VIBE_ON_NATIVE_LINUX_SINCE = '0.64.0'` (the next minor after the newest released
+  `src_mcp`, 0.63.0 — the second merger re-checks, DL14), the table `{ vibe }` (no `kimi` until E3), and `runtimeOnNativeLinux(runtime, version)` —
+  **false for a runtime with no entry** (absence is a refusal, unlike `sinceMet`, where no entry is met), true for an unknown server.
+  `runtimeSinceIsAhead.test.ts` holds the table to the same guard as `RUNTIME_SINCE` (its RED message: *vibe: ON_NATIVE_LINUX_SINCE 0.63.0 is not
+  ahead of the released 0.63.0 and its section does not name vibe on a native Linux host*).
+- **The card.** `HOST_NOTES.linux` is per runtime (`nativeLinuxNote`): Vibe says nothing at or above 0.64.0 or on an unknown server, and
+  *Update coai-mcp to run Vibe here: the coai-mcp you have installed (0.63.0) refuses a vibe row on a native Linux host, and 0.64.0 is the first
+  release that runs it there (with Vibe's keyring off) — the MCP server tab.* below it; Kimi says the same with *(not measured there — admitted by the owner's decision of 2026-10-23)* in the parenthesis (it kept *coai-mcp refuses a kimi row on a native Linux
+  host for now — Kimi is measured on WSL2 only.* at any version until 2026-10-23). `HOST_NOTES['linux-unread']` says *coai-mcp could not read this host's kernel
+  banner (/proc/version), so it cannot tell a native Linux host from WSL1 and refuses a <id> row here — the extension-host log names the cause.*
+  for every runtime with a Linux entry and any server; never "update". The card's boxes are still switched off by `runtimeHeld` alone.
+- **The sentences.** `VIBE_NATIVE_LINUX` is the extension's one English sentence (*On a native Linux host coai-mcp runs Vibe from coai-mcp 0.64.0
+  and turns Vibe's keyring off there, so it signs in only through ~/.vibe/.env, which coai links and never copies.*); it is defined in
+  `runtimeSince.ts` beside the release it interpolates — **not** in `vendorTerminal.ts` as the plan first put it, because `vendors.ts` (the
+  hint) importing it from `vendorTerminal.ts` (which imports `Vendor` from `vendors.ts`) would be a new import cycle — and re-exported by
+  `vendorTerminal.ts`. The hint, the `linux` install note (`VIBE_SCRIPT_NOTE + VIBE_ENV_FILE + ' ' + VIBE_NATIVE_LINUX`, which keeps *a sign-in kept
+  in a keyring is invisible to coai*) and the English help say it; `helpDe/Es/Ru/Uk.ts` carry its hand translation, and the question-consultant
+  article's parenthesis became *(on a native Linux host from coai-mcp 0.64.0, with Vibe's keyring off; on macOS coai-mcp refuses it for now)* in
+  all five. The new `linux-unread` install note names the banner and the log. Six host kinds, six different Vibe notes.
+- **The `HostKind` audit** (plan round 99e086b8, finding 4), each consumer decided and pinned: `hostKindOfPlatform` never answers it;
+  `panelProvider` asks once and carries it as itself (`hostKindHere` → `PanelState.hostKind` → `commandFor`); `panelView.cardContextFor` draws the
+  refusal note for it (`runtimeSkewNote`) and greys nothing; the Kimi network sign-in box is kept for it (`onLinuxSide` in `panelView.ts` —
+  it is a setting of a Linux side's home, not a promise to run); `vendorInstall`/`vendorUpdate` use the refusal note when the host is passed;
+  and **nothing persists it** — `hostKindConsumers.test.ts` pins that the only non-test sources that mention the host kind are `hostSide.ts`,
+  `panelProvider.ts`, `panelView.ts`, `runtimeSince.ts` and `vendorTerminal.ts`, so a new consumer (above all a settings writer) fails until it is
+  classified in the plan's audit table.
+- **Tests**: `vibeOnLinux.test.ts` (40), `hostKindLogsAnUnreadableBanner.test.ts` (5), `kimiOnLinux.test.ts` (11, one new: Kimi's native note
+  unchanged and the unread twin), `kimiNetworkSignInSetting.test.ts` (13, one new), `hostKindConsumers.test.ts` (2, new),
+  `runtimeSinceIsAhead.test.ts` (8, one new), `wslBannerVectors.test.ts` (11, the empty-banner expectation).
+- **Not here / open**: the limitation row (`shared/consultant-limitations.json`, `vibe`/`linux`) is S4's, in *Vibe on a native Linux host — the limitation row and what the panel may say* above; the server's own sentences are S2's (`module_runners.md`);
+  the unmeasured-Vibe-version warning on a native host is the server's (S-N22).
+
+### The native-Linux table is held to ONE shared file (2026-10-22, the E2 code gate G1 of `todo/PLAN_kimi_and_vibe_on_native_linux_E2.md`; reshaped by PR #922's CI round)
+
+`ON_NATIVE_LINUX_SINCE` (`runtimeSince.ts`: from which coai-mcp the panel PROMISES a runtime on a native Linux host) and `HostAdmission.AdmittedOnNativeLinux` (`module_runners.md`: which runtimes the server ADMITS there) are two readings of
+ONE fact, so the fact lives in ONE file, `shared/native-linux-admission.json` (`runtimes[]`: `runtime`, `since`, `source` — today `vibe`, `0.64.0`, RESULTS §32). The server LOADS it (embedded; `NativeLinuxAdmission`, whose names ARE the
+set); the extension cannot read `shared/` at run time (an installed VSIX has none, and a generator would be a second artefact for a three-line table), so it keeps its constant and `src/test/nativeLinuxAdmissionFile.test.ts`
+holds it to the file: the same runtimes, and the same release for each. The first version of this guard was a C# test that parsed `runtimeSince.ts` with a regular expression; `NothingReadsAnotherProgramsSourceTests` refused it (a
+test that parses another program's source goes quiet rather than red), and no test reads the other side's source now. The C# test `NativeLinuxAdmissionFileTests` also requires each named runtime's `linux` row in
+`shared/consultant-limitations.json` to be `confined` with a `measured` field (for a `measured` basis; see below for `owner-decision`). Adding Kimi was therefore ONE edit to the shared file, ONE to `ON_NATIVE_LINUX_SINCE`, plus its row — or a red test naming the side that lacks it.
+
+### Kimi on a native Linux host — admitted unmeasured, with a note (2026-10-23, DN1 of the E2 plan; the owner's decision)
+
+The owner decided that "unmeasured" is a note, never a refusal (*"Unmeasured — remove the protection altogether, just leave a note … Same for Kimi."*). The extension's half:
+
+- **The table.** `KIMI_ON_NATIVE_LINUX_SINCE = '0.64.0'` (`runtimeSince.ts`, the same release as Vibe's) and `ON_NATIVE_LINUX_SINCE.kimi`; `runtimeOnNativeLinux('kimi', v)` is true from 0.64.0 and for an unknown server. `nativeLinuxNote` therefore asks an OLD server (below 0.64.0) to update — *… 0.64.0 is the first release that runs it there (not measured there — admitted by the owner's decision of 2026-10-23)*, the parenthesis per runtime (`NATIVE_DETAIL`: Vibe's is its keyring) — and says NOTHING to a current server. The "not measured" sentence is the SERVER's, on the row's warning (`module_runners.md`, *Native Linux, DN1 of E2*): saying it in both places would be two sources for one fact.
+- **The sentences.** `KIMI_NATIVE_LINUX` (`kimiLinuxLine.ts`) now reads *On a native Linux host coai-mcp runs Kimi from coai-mcp 0.64.0, although Kimi is not measured there: it is admitted by the owner's decision of 2026-10-23, and the row carries a note that says so.* The Kimi hint, the `⤓`/`⟳` note (`KIMI_NOTE_LINUX`) and the help in five languages (`SAID_NATIVE` in `kimiOnLinux.test.ts` pins each language's sentence; the old refusal sentences are in its `GONE` list) say it. A host whose kernel banner could not be read (`linux-unread`) is still refused by the server — an ambiguity, not a measurement — so it has its own note, `KIMI_LINUX_UNREAD` (`KIMI_NOTE_LINUX_UNREAD`), which no longer equals the native one.
+- **The guard.** `nativeLinuxAdmissionFile.test.ts` also reads `basis` and `note` from `shared/native-linux-admission.json`: a legal basis, an `owner-decision` row's note says "not measured" and names the decision; Kimi is `owner-decision`, Vibe `measured`. The C# half (`NativeLinuxAdmissionFileTests`) requires an `unmeasured` `linux` limitation row for an `owner-decision` runtime.
+- **Follow-up decisions the same day (DN1b of the plan).** The WSL1 notes (`KIMI_ON_WSL1`, `VIBE_NOTE_WSL1`, the card's `wsl1` note) say WSL1 has no pidfd; the macOS install notes and the help in five languages say macOS has no launch path and why (Vibe: the sign-in is read through a Linux-only descriptor; Kimi: no exclusive lock); the question-consultant article says "no launch path" instead of "refuses it for now". `capabilityAdmission.ts` admits an unmeasured pair FLAGGED `unmeasured` (the twin of `CapabilityMatrix`), and `qconsultView.ts` shows it as a note without the "Can read this machine" tick (`unmeasuredBlock`). The effort refusals for unmeasured runtimes (`featureAvailability.ts`) are kept: no flag exists to send one.
+- **Tests changed** (they encoded "Kimi refused on native Linux"): `kimiOnLinux.test.ts`, `vibeOnLinux.test.ts` (the table test, the Kimi refusal-at-every-version test), `kimiWindowsInstall.test.ts` (the Linux install note).

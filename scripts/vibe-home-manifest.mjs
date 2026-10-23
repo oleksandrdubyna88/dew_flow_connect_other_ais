@@ -44,16 +44,22 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolved } from '../.github/scripts/lib/resolved.mjs';
+import { launchHostOf } from './lib/host-facts.mjs';
+import { manifestPlan } from './lib/cli-args.mjs';
 import { builtEnv as builtEnvFor, classOf as classOfIn, deepestChild, linkSignIn, personsVibeHome, run, vibeArgs } from './lib/vibe.mjs';
 import { inventoryOf, unstaged, withEntry, withoutSignInLink } from './lib/vibe-manifest.mjs';
 
-const argv = process.argv.slice(2);
-const flag = (name, fallback) => {
-  const i = argv.indexOf(name);
-  return i >= 0 && i + 1 < argv.length ? argv[i + 1] : fallback;
-};
-const write = argv.includes('--write');
-const stage = argv.includes('--stage');
+// A flag that takes a value and gets none (or another --flag) is a USAGE error, decided by lib/cli-args.mjs before anything is read or launched. It used to be read as
+// "flag not given": `--unstage` alone fell through to measure() and started Vibe on a paid turn.
+const plan = manifestPlan(process.argv.slice(2));
+if (plan.mode === 'usage') {
+  console.error(`usage: vibe-home-manifest.mjs [--vibe <exe>] [--scratch <dir>] [--write] | --from <scratch> [--write] | --unstage <platform>
+${plan.error}`);
+  process.exit(65);
+}
+const flag = (name, fallback) => plan.values[name] ?? fallback;
+const write = plan.flags.includes('--write');
+const stage = plan.flags.includes('--stage');
 const unstage = flag('--unstage', '');
 const from = flag('--from', '');
 
@@ -65,6 +71,14 @@ if (unstage) {
   writeFileSync(MANIFEST, `${JSON.stringify(moved, null, 2)}\n`);
   console.error(`moved the staged ${unstage} entries into versions: ${MANIFEST}`);
   process.exit(0);
+}
+
+// The host decision (E2 code gate G4), read ONCE from /proc/version through lib/host-facts.mjs's launchHostOf, BEFORE any Vibe launch: on Linux a banner that cannot be read REFUSES, as the product does
+// (WslGeneration.Unreadable) and as the series' stop rule says (N-H1 banner.read=false, E2 plan 3.4) — the script used to run that host with the keyring road OPEN. `--from` launches nothing and is not refused.
+const HOST = launchHostOf();
+if (HOST.refusal && !from) {
+  console.error(HOST.refusal);
+  process.exit(65);
 }
 
 const exe = from ? '' : flag('--vibe', '') || resolved('vibe');
@@ -123,7 +137,12 @@ const inventory = (home) => inventoryOf(home);
 const vibesOwn = (listing) => withoutSignInLink(listing, join(personsVibeHome(), '.env'));
 
 /** The built environment of D17, for `home` — lib/vibe.mjs's, the product's (VibeLaunch.Built). */
-const builtEnv = (home) => builtEnvFor(home, MODEL);
+/**
+ * On a NATIVE Linux host (E2.S0: the kernel banner read once, lib/host-facts.mjs launchHostOf; an unread banner on Linux refuses, exit 65) the built environment also carries the forced keyring backend, as the product's
+ * VibeLaunch.Built does there — so the manifest's launches are the signed-in launches N-V4 measures. Recorded in steps.json as `keyringRoad`.
+ */
+const NATIVE_LINUX = HOST.nativeLinux;
+const builtEnv = (home) => builtEnvFor(home, MODEL, process.platform, process.env, { nativeLinux: NATIVE_LINUX });
 
 function launch(label, args, home, cwd, input = '') {
   console.error(`[manifest] ${label} …`);
@@ -166,7 +185,7 @@ const v2 = launch('home A: vibe --version again', ['--version'], homeA, work);
 steps.push({ ...v2, after: inventory(homeA) });
 const v3 = launch('home B: vibe --version', ['--version'], homeB, work);
 steps.push({ ...v3, after: inventory(homeB) });
-writeFileSync(join(scratch, 'steps.json'), JSON.stringify({ exe, version, scratch, platform: process.platform, signIn, steps }, null, 2));
+writeFileSync(join(scratch, 'steps.json'), JSON.stringify({ exe, version, scratch, platform: process.platform, keyringRoad: NATIVE_LINUX ? 'closed' : 'open', signIn, steps }, null, 2));
 return { version, steps };
 }
 

@@ -5,7 +5,7 @@ import { test } from 'node:test';
 
 import { catalogHtml } from '../catalogPage';
 import { NEVER_TRANSFERRED } from '../configTransfer';
-import { type PanelState } from '../panelView';
+import { cardContextFor, type PanelState } from '../panelView';
 import type { ProviderHealth, ProvidersAnswer } from '../providers';
 import { serverSettingsJson } from '../serverSettingsFile';
 import { type Side } from '../coaiInstall';
@@ -103,6 +103,17 @@ test('the Kimi card carries ONE tick-box for it on WSL2 and on Linux, and tickin
     box.fire('change');
 
     assert.deepEqual(settingWrite(settingMessageFrom(lastWrite(shown))), { kind: 'plain', key: 'kimiAllowNetworkSignIn', value: true }, host);
+  }
+});
+
+test('a Linux side whose kernel banner could not be read keeps the box: it is a setting of this side, not a promise to run Kimi', () => {
+  const unread = stateOn('linux-unread', true);
+
+  assert.equal(boxesIn(unread).length, 1, 'a linux-unread side lost its Kimi network sign-in box');
+  assert.equal(cardContextFor(unread)(KIMI).kimiAllowNetworkSignIn, true, 'the card carries the stored setting, as a linux side does');
+  assert.equal(cardContextFor(stateOn('linux-unread', false))(KIMI).kimiAllowNetworkSignIn, false);
+  for (const host of ['windows', 'wsl1', 'darwin'] as const) {
+    assert.equal(cardContextFor(stateOn(host, true))(KIMI).kimiAllowNetworkSignIn, undefined, `${host}: no mount table to judge, so no setting on the card`);
   }
 });
 

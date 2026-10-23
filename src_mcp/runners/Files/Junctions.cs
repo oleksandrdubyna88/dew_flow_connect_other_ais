@@ -199,7 +199,7 @@ public static partial class Junctions
 
     private static string HostAdmitted(HostKind host) => HostKinds.HasKimiLockFamily(host)
         ? string.Empty
-        : $"a sign-in link is made only on a host that admits Kimi; Kimi is refused on a {HostKinds.Word(host)} host until it is measured there (D18 of todo/PLAN_vibe_and_kimi_runtimes.md)";
+        : $"a sign-in link is made only on a host that admits Kimi; Kimi has no launch path on a {HostKinds.Word(host)} host — its sign-in hold needs an exclusive lock that its processes inherit, and only Windows, Linux and WSL give one (D18 of todo/PLAN_vibe_and_kimi_runtimes.md)";
 
     /// <summary>
     /// DL6: on a Linux or WSL host, the FILESYSTEM that holds the real path — read from <c>/proc/self/mountinfo</c> — is judged by its type (<see cref="MountLocality"/>); a Windows filesystem is refused wherever it is mounted,

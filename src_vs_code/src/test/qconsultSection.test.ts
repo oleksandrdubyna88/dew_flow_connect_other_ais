@@ -119,6 +119,14 @@ test('a codex row says it can read this machine, its tick is on and cannot be ta
   assert.match(on.html, /Codex has no setting that limits what it reads/, 'the reason is written beside the tick');
 });
 
+test('a vibe web row switches on and says web search is not measured on it — and shows no can-read tick, because nothing here reads the machine (owner decision 2026-10-23)', () => {
+  const on = page([row('vibe-web', { vendor: 'vibe', runtime: 'vibe', prompt: 'question-web' })]);
+
+  assert.equal(controlOf(on, 'qconsultRowEnabled', 'vibe-web').disabled, false, 'an unmeasured pair is a note, not a block');
+  assert.match(on.html, /data-flag="unmeasured"[^>]*>Not measured on this runtime for this capability: the row runs anyway, and the answer may come without it\./u);
+  assert.doesNotMatch(on.html, /qconsultRowCanRead-vibe-web/u, 'the can-read tick belongs to a runtime that CAN read the machine');
+});
+
 test('a confined pair asks for no acknowledgement at all', () => {
   const on = page([row('sonnet-disk', { prompt: 'question-disk' })]);
 

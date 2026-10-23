@@ -112,7 +112,7 @@ test('⤓ for Kimi says where it lands, that VS Code must restart, and that the 
     const note = vendorInstall(KIMI, platform).note;
     assert.match(note, /shell rc file|rc file/iu, `${platform}: the script edits one rc file`);
     assert.match(note, /\/login/u, platform);
-    assert.match(note, platform === 'darwin' ? /does not run Kimi on macOS/u : /measured on WSL2 only/u, `${platform}: the button installs; where a review waits, the note says why`);
+    assert.match(note, platform === 'darwin' ? /does not run Kimi on macOS/u : /not measured there: it is admitted by the owner’s decision of 2026-10-23/u, `${platform}: the button installs; the note says whether coai-mcp runs the row there, and that a native Linux host runs it unmeasured`);
     assert.match(note, /▶/u, platform);
   }
 });

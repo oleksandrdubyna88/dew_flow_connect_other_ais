@@ -71,6 +71,9 @@ AppDomain.CurrentDomain.UnhandledException += (_, e) =>
 //                           todo/PLAN_vibe_and_kimi_runtimes.md); {{env:NAME}} in it is the value NAME had in THIS child
 //   FAKECLI_RECORD_ENV    — a file this launch writes every environment variable NAME it was started with into, one per
 //                           line, and the VALUE of each VIBE_* and PYTHON* — what crossed the process boundary, not what a dictionary said
+//   FAKECLI_VERSION_RECORD_ENV — the same record for a bare `--version` child (E2.S2, S-N23: the version probes of a Vibe launch — the
+//                           providers probe and the launch control's own — carry the built environment too, and a `--version` returns before
+//                           the launch's FAKECLI_RECORD_ENV is ever read; a launch that follows it writes ITS record to the other file)
 //   FAKECLI_HOME_WRITE    — a path relative to this child's VIBE_HOME, written as a file: a Vibe that leaves something in
 //                           its home the next launch's check must refuse
 //
@@ -554,6 +557,7 @@ static class VersionAnswer
     public static int Give(Func<string, string?> read)
     {
         Append(read("FAKECLI_VERSION_COUNT"), "V\n");
+        VibeShape.RecordEnvironment(read("FAKECLI_VERSION_RECORD_ENV"));
         if (read("FAKECLI_VERSION_PID") is { Length: > 0 } pidFile)
         {
             File.WriteAllText(pidFile, Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture));
@@ -613,7 +617,7 @@ static class VibeShape
         File.WriteAllText(Path.Combine(args[at + 1], "export.json"), WithEnvironment(exportText));
     }
 
-    private static void RecordEnvironment(string? envRecord)
+    internal static void RecordEnvironment(string? envRecord)
     {
         if (envRecord is not { Length: > 0 })
         {

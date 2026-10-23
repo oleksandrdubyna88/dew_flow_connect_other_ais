@@ -252,11 +252,11 @@ public sealed class AVibeReviewerRunsThroughAFakeVibeTests : IAsyncLifetime
         flow.AssertLinked(mode);
     }
 
-    /// <summary>S-V17 through the whole plan-round flow: a NATIVE Linux host is refused, with the WSL2-only sentence, before the fake Vibe is started — on every machine, the host being given.</summary>
+    /// <summary>S-V17 through the whole plan-round flow (E2.S2: a native host with a READ banner now starts — <c>VibeNativeLinuxDeliveryTests</c> sees that through a real child): a NATIVE Linux host whose kernel banner could not be read is refused, with the banner sentence, before the fake Vibe is started — on every machine, the host being given.</summary>
     [Fact]
-    public async Task APlanRoundOnANativeLinuxHost_IsRefused_NamingWsl2Only_AndNothingIsStarted()
+    public async Task APlanRoundOnANativeLinuxHostWithAnUnreadableBanner_IsRefused_NamingTheBanner_AndNothingIsStarted()
     {
-        using var linux = VibeHost.Using(new VibeHost(HostKind.Linux, WslGeneration.None, VibeSignIn.None));
+        using var linux = VibeHost.Using(new VibeHost(HostKind.Linux, WslGeneration.Unreadable, VibeSignIn.None));
         var (repo, data) = await RepositoryAsync();
         var record = Directory.CreateDirectory(_dir.At("argv")).FullName;
         Steer(Clean, recordDir: record);
@@ -265,7 +265,7 @@ public sealed class AVibeReviewerRunsThroughAFakeVibeTests : IAsyncLifetime
 
         var planned = JsonDocument.Parse(await service.ReviewPlanAsync(repo, "feature", Scope)).RootElement;
 
-        planned.GetProperty("reviewers").GetString().Should().Contain("WSL2 only", "a native Linux host should still be refused with the WSL2-only sentence, but Vibe started");
+        planned.GetProperty("reviewers").GetString().Should().Contain("kernel banner", "an unreadable banner on a native Linux host should be refused with the banner sentence, but Vibe started");
         Directory.GetFiles(record, "*.argv").Should().BeEmpty("the refusal comes before any process of Vibe's starts");
     }
 }

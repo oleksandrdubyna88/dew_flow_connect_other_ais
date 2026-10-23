@@ -61,6 +61,25 @@ public static class VibeLaunch
     public const string Utf8On = "1";
 
     /// <summary>
+    /// Python <c>keyring</c>'s backend selector (DN10 of <c>todo/PLAN_kimi_and_vibe_on_native_linux.md</c>, C1 of
+    /// <c>todo/PLAN_kimi_and_vibe_on_native_linux_E2.md</c>): the fifth name of a launch on a NATIVE LINUX host, and only there.
+    /// </summary>
+    public const string KeyringBackendVariable = "PYTHON_KEYRING_BACKEND";
+
+    /// <summary>
+    /// The value <see cref="KeyringBackendVariable"/> carries: <c>fail.Keyring</c> raises on every call, and Vibe reads that as "no key" — so no keyring on the host
+    /// (Secret Service, KWallet, a <c>keyringrc.cfg</c>) is reachable from a coai launch and the sign-in comes only through the <c>.env</c> link coai makes.
+    /// Measured closed on Vibe 2.26.1 with keyring 25.7.0 (research/RESULTS_vibe_confinement.md §32: N-V1's arms a3/a3c, and every signed-in and resumed launch under it).
+    /// </summary>
+    public const string KeyringBackendClosed = "keyring.backends.fail.Keyring";
+
+    /// <summary>
+    /// What the closure was MEASURED on (research/RESULTS_vibe_confinement.md §32): <c>keyring</c> 25.7.0's core short-circuits env, config and discovery, and Vibe 2.26.1's Linux credential reads go through
+    /// <c>keyring.get_password</c> — a later Vibe could do otherwise.
+    /// </summary>
+    public const string KeyringClosureMeasuredOn = "Vibe 2.26.1 with keyring 25.7.0";
+
+    /// <summary>
     /// The CLI coai measured. <c>vibe</c> is two CLIs, and a remote flag cached in the home switched this account to the
     /// Rust one between two launches — which refuses <c>--time-limit</c> and <c>--output-dir</c> and is unmeasured (§3).
     /// </summary>
@@ -70,57 +89,89 @@ public static class VibeLaunch
     public static readonly TimeSpan VersionTimeout = TimeSpan.FromSeconds(60);
 
     /// <summary>
-    /// D18, lifted for WSL2 by DL1 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c>: Vibe only where it was measured — a Windows host starting a
-    /// Windows <c>vibe</c>, or a WSL2 host. Every number is Windows' or WSL2's. <b>WSL1 is not WSL2</b> (a syscall translation layer),
-    /// and a native Linux host is not measured at all (a desktop keyring Vibe may use instead of <c>.env</c>, other filesystems, other
-    /// packaging) — each is refused with its own sentence. A WSL bridge named as the executable of a WINDOWS host is the Linux side by
-    /// another door, and stays refused (a Windows process cannot take a Linux lock or end a Linux process tree).
+    /// D18, lifted for WSL2 by DL1 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c> and for a NATIVE Linux host by E2 of <c>todo/PLAN_kimi_and_vibe_on_native_linux.md</c> (C1): Vibe only where it was measured — a Windows host
+    /// starting a Windows <c>vibe</c>, a WSL2 host, or a native Linux host whose kernel banner was READ. Vibe is measured on a native Linux host (research/RESULTS_vibe_confinement.md §32, Vibe 2.26.1, 2026-10-22) and its
+    /// launch there closes the keyring road (<c>PYTHON_KEYRING_BACKEND=keyring.backends.fail.Keyring</c>, DN10 — see <see cref="Built"/>) — the keyring road was measured closed on Vibe 2.26.1 (keyring 25.7.0); Kimi is not yet
+    /// measured there (E3). <b>WSL1 is not WSL2</b> (a syscall translation layer) and a host whose banner could not be read could be WSL1 — each is refused with its own sentence. A WSL bridge named as the executable of a
+    /// WINDOWS host is the Linux side by another door, and stays refused (a Windows process cannot take a Linux lock or end a Linux process tree).
     /// </summary>
     public static string HostRefusal(HostKind host, string executable, WslGeneration wsl) => HostAdmission.Refusal("Vibe", host, executable, wsl);
 
     /// <summary>
     /// D17: the launch is the built one — not inheriting this process's environment, keeping only the minimal names, and
-    /// carrying exactly the three Vibe variables with the Python CLI pinned, and Python's UTF-8 mode on (§26). A path that built a Vibe launch any other way
+    /// carrying exactly the three Vibe variables with the Python CLI pinned, and Python's UTF-8 mode on (§26) — plus, on a NATIVE LINUX host and only there, the fifth name
+    /// <see cref="KeyringBackendVariable"/>=<see cref="KeyringBackendClosed"/> (DN10). The host decides which set is the built one: on Linux a launch with four names, or a fifth with another value, is refused (the keyring road
+    /// would be open); on Windows, WSL2 and every other host the fifth name is refused (a measured launch is not changed). A path that built a Vibe launch any other way
     /// is refused here rather than started (one launch control; §22 A: a <c>VIBE_*</c> the child inherits configures Vibe
     /// whatever its home holds).
     /// </summary>
-    public static string EnvironmentRefusal(ProcessRequest request) =>
-        Confined(request) && CarriesTheThree(request)
+    public static string EnvironmentRefusal(ProcessRequest request, HostKind host) =>
+        Confined(request) && CarriesTheBuiltNames(request, host)
             ? string.Empty
-            : $"this Vibe launch was not built with coai's own environment (the minimal set plus {HomeVariable}, {CliVariable}={PythonCli}, {ModelVariable} and {Utf8Variable}={Utf8On}, nothing inherited) and is refused (D17)";
+            : $"this Vibe launch was not built with coai's own environment (the minimal set plus {BuiltNamesSentence(host)}, nothing inherited) and is refused (D17)";
 
     /// <summary>
     /// <paramref name="request"/> in the BUILT environment (D17) — the one builder every Vibe child goes through: a review
-    /// launch (<c>VibeRuntime.Build</c>) and the <c>providers</c> probe alike, so the two cannot drift. What
-    /// <see cref="EnvironmentRefusal"/> admits is exactly what this makes.
+    /// launch (<c>VibeRuntime.Build</c>), the consultant's launches (<c>VibeConsultant.Build</c>) and the <c>providers</c> probe alike, so they cannot drift. What
+    /// <see cref="EnvironmentRefusal"/> admits for the same <paramref name="host"/> is exactly what this makes. On <see cref="HostKind.Linux"/> the environment gains
+    /// <see cref="KeyringBackendVariable"/>=<see cref="KeyringBackendClosed"/> (DN10): Python <c>keyring</c> takes its backend from that variable before its config file and before any discovery, and
+    /// <c>fail.Keyring</c> raises on every call, which Vibe reads as "no key" — so no keyring on the host is reachable and the sign-in can come only through the <c>.env</c> link coai makes. The value is coai's own,
+    /// written here: <see cref="ProcessEnvironment.Minimal"/> does not name the variable, so the server's own value never reaches the child. WSL2 and Windows launches are admitted as they were measured and carry four names.
     /// </summary>
-    public static ProcessRequest Built(ProcessRequest request, string home, string model) => request with
+    public static ProcessRequest Built(ProcessRequest request, string home, string model, HostKind host) => request with
     {
         InheritsEnvironment = false,
         Passthrough = ProcessEnvironment.Minimal,
-        Environment = new Dictionary<string, string?>
+        Environment = BuiltEnvironment(home, model, host),
+    };
+
+    private static Dictionary<string, string?> BuiltEnvironment(string home, string model, HostKind host)
+    {
+        var built = new Dictionary<string, string?>
         {
             [HomeVariable] = home,
             [CliVariable] = PythonCli,
             [ModelVariable] = model,
             [Utf8Variable] = Utf8On,
-        },
-    };
+        };
+        if (ClosesTheKeyringRoad(host))
+        {
+            built[KeyringBackendVariable] = KeyringBackendClosed;
+        }
+
+        return built;
+    }
+
+    /// <summary>The one place the host decides the fifth name: a NATIVE Linux host closes the keyring road; WSL2, Windows and every other host launch as they were measured.</summary>
+    private static bool ClosesTheKeyringRoad(HostKind host) => host == HostKind.Linux;
+
+    /// <summary>The names of the built set, as the refusal sentence says them: the five on Linux, the four elsewhere.</summary>
+    private static string BuiltNamesSentence(HostKind host) => ClosesTheKeyringRoad(host)
+        ? $"{HomeVariable}, {CliVariable}={PythonCli}, {ModelVariable}, {Utf8Variable}={Utf8On} and {KeyringBackendVariable}={KeyringBackendClosed}"
+        : $"{HomeVariable}, {CliVariable}={PythonCli}, {ModelVariable} and {Utf8Variable}={Utf8On}";
 
     /// <summary>Nothing inherited but the platform's minimal names.</summary>
     private static bool Confined(ProcessRequest request) =>
         !request.InheritsEnvironment && request.Passthrough.SetEquals(ProcessEnvironment.Minimal);
 
-    /// <summary>Exactly the built names — the three Vibe variables and UTF-8 mode — the Python CLI pinned, UTF-8 on and a home named.</summary>
-    private static bool CarriesTheThree(ProcessRequest request) =>
-        request.Environment.Count == 4
-        && request.Environment.Keys.All(name => name is HomeVariable or CliVariable or ModelVariable or Utf8Variable)
-        && Pinned(request)
+    /// <summary>
+    /// Exactly the built names FOR THIS HOST — the three Vibe variables and UTF-8 mode, and on a native Linux host the keyring backend — the Python CLI pinned, UTF-8 on, a home named, and the
+    /// fifth name's value the closed backend. Counted both ways (the count, and every name in the set) so a four-name launch on Linux and a five-name one elsewhere are each refused.
+    /// </summary>
+    private static bool CarriesTheBuiltNames(ProcessRequest request, HostKind host) =>
+        request.Environment.Count == (ClosesTheKeyringRoad(host) ? 5 : 4)
+        && request.Environment.Keys.All(name => IsBuiltName(name, host))
+        && Pinned(request, host)
         && Value(request, HomeVariable).Length > 0;
 
-    /// <summary>The two fixed values: the measured CLI, and UTF-8 mode on (§3, §26).</summary>
-    private static bool Pinned(ProcessRequest request) =>
-        Value(request, CliVariable) == PythonCli && Value(request, Utf8Variable) == Utf8On;
+    private static bool IsBuiltName(string name, HostKind host) =>
+        name is HomeVariable or CliVariable or ModelVariable or Utf8Variable || (ClosesTheKeyringRoad(host) && name == KeyringBackendVariable);
+
+    /// <summary>The fixed values: the measured CLI, UTF-8 mode on (§3, §26) and, on a native Linux host, the closed keyring backend (§32).</summary>
+    private static bool Pinned(ProcessRequest request, HostKind host) =>
+        Value(request, CliVariable) == PythonCli
+        && Value(request, Utf8Variable) == Utf8On
+        && (!ClosesTheKeyringRoad(host) || Value(request, KeyringBackendVariable) == KeyringBackendClosed);
 
     /// <summary>D10, before the launch: an alias outside the curated list is refused with the list.</summary>
     public static string ModelRefusal(string model) =>
@@ -144,7 +195,7 @@ public static class VibeLaunch
     {
         var before = FirstOf(
             () => HostRefusal(host.Kind, request.Executable, host.Wsl),
-            () => EnvironmentRefusal(request),
+            () => EnvironmentRefusal(request, host.Kind),
             () => budget.Refusal(Value(request, HomeVariable)),
             () => ModelRefusal(Value(request, ModelVariable)),
             () => HomeMade(Value(request, HomeVariable)));
@@ -236,7 +287,7 @@ public static class VibeLaunch
 
         return after.Length > 0
             ? HomeVerdict.Refuse(after)
-            : Verdict(manifest, home, version.Version, host.Platform, host.SignIn.Admitted) with { CliVersion = Named(version.Version), SignInNote = signInNote };
+            : Verdict(manifest, home, version.Version, host.Platform, host.SignIn.Admitted, host.Kind) with { CliVersion = Named(version.Version), SignInNote = signInNote };
     }
 
     private static LaunchTurn Given(IDisposable turn, HomeVerdict inside)
@@ -319,24 +370,34 @@ public static class VibeLaunch
     /// (the owner's decision of 2026-10-13: "Vibe must WARN, not refuse — set it up once and it must work if it can"): its
     /// home's SHAPE was already checked before its `--version` started, so its plugin files are admitted by name.
     /// </summary>
-    internal static HomeVerdict Verdict(VibeHomeManifest manifest, string home, string version, string platform, AdmittedLink admitted) => manifest.For(version, platform) switch
+    internal static HomeVerdict Verdict(VibeHomeManifest manifest, string home, string version, string platform, AdmittedLink admitted, HostKind host) => manifest.For(version, platform) switch
     {
         [var entry] => HomeVerdict.Refuse(VibeHome.Refusal(home, manifest, entry, admitted)),
-        _ => new HomeVerdict(string.Empty, Unmeasured(manifest, version)),
+        _ => new HomeVerdict(string.Empty, Unmeasured(manifest, version, host)),
     };
 
     /// <summary>
     /// The warning for a Vibe version nobody measured — the same sentence on the launch (<see cref="LaunchTurn.Warning"/>)
     /// and on the row's card (<c>VibeRuntime.VersionWarning</c>) — or empty for a measured one.
     /// </summary>
-    public static string VersionWarning(VibeHomeManifest manifest, string version, string platform) =>
-        version.Length == 0 || manifest.For(version, platform).Count > 0 ? string.Empty : Unmeasured(manifest, version);
+    public static string VersionWarning(VibeHomeManifest manifest, string version, string platform, HostKind host) =>
+        version.Length == 0 || manifest.For(version, platform).Count > 0 ? string.Empty : Unmeasured(manifest, version, host);
 
-    private static string Unmeasured(VibeHomeManifest manifest, string version) =>
+    /// <summary>
+    /// The sentence for a version nobody measured. On a NATIVE LINUX host only it gains one clause after <c>admitted by name only</c> (E2 of <c>todo/PLAN_kimi_and_vibe_on_native_linux_E2.md</c>, §2.5): the keyring closure
+    /// is measured on one Vibe and one <c>keyring</c> (<see cref="KeyringClosureMeasuredOn"/>), and another Vibe could call <c>keyring.set_keyring</c> or Secret Service directly, so a person running one there is told
+    /// the closure is unmeasured for it. Warn, never refuse (the owner's decision of 2026-10-13); WSL2, Windows and every other host get today's sentence byte for byte.
+    /// </summary>
+    private static string Unmeasured(VibeHomeManifest manifest, string version, HostKind host) =>
         VersionWarnings.Unmeasured(
             "Vibe", version, manifest.Known,
-            $"its confinement (research/RESULTS_vibe_confinement.md) and its home's plugin hashes belong to {manifest.Known}; this version's plugin files are admitted by name only",
+            $"its confinement (research/RESULTS_vibe_confinement.md) and its home's plugin hashes belong to {manifest.Known}; this version's plugin files are admitted by name only{KeyringClause(host)}",
             "re-run `node scripts/vibe-home-manifest.mjs --write` and `node scripts/probe-vibe-confinement.mjs` with this Vibe to measure it");
+
+    /// <summary>The clause a NATIVE Linux host's unmeasured-version warning gains (the pinned words: <c>keyring closure</c>, <c>measured only on Vibe 2.26.1 with keyring 25.7.0</c>); nothing on any other host.</summary>
+    private static string KeyringClause(HostKind host) => ClosesTheKeyringRoad(host)
+        ? $", and the keyring closure ({KeyringBackendVariable}) is measured only on {KeyringClosureMeasuredOn} — on this native Linux host another Vibe could reach a keyring by a road this build does not close"
+        : string.Empty;
 
     /// <summary>
     /// The release as a ledger line names it: <c>vibe 2.26.1</c>. Never Vibe's raw <c>--version</c> line, which starts with the

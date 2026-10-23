@@ -61,7 +61,7 @@ public sealed class KimiLaunchControlTests : IDisposable
 
     public static TheoryData<string> Refusals => new()
     {
-        "a native Linux host", "a WSL1 host", "the tools missing", "a model outside the plan", "an inherited request", "a config with no slot",
+        "a native Linux host whose banner could not be read", "a WSL1 host", "the tools missing", "a model outside the plan", "an inherited request", "a config with no slot",
         "a credentials folder that is not there", "a credentials folder that is a link", "a block on moonshot-ai",
         "a UNC sign-in home",
     };
@@ -78,13 +78,13 @@ public sealed class KimiLaunchControlTests : IDisposable
         var expected = "";
         switch (row)
         {
-            case "a native Linux host":
-                host = KimiHost.Of(HostKind.Linux);
-                expected = "Kimi runs on WSL2 only for now — it is measured on WSL2 and not yet on a native Linux host";
+            case "a native Linux host whose banner could not be read":
+                host = new KimiHost(HostKind.Linux, WslGeneration.Unreadable);
+                expected = "Kimi is refused on this Linux host — the kernel banner /proc/version could not be read";
                 break;
             case "a WSL1 host":
                 host = new KimiHost(HostKind.Wsl, WslGeneration.Wsl1);
-                expected = "this is WSL1";
+                expected = "Kimi is refused on this WSL1 host";
                 break;
             case "the tools missing":
                 places = places with { ToolsRefusal = KimiTools.Refusal(true, places.PersonsBin, string.Empty, ".EXE", _ => false) };
@@ -500,6 +500,88 @@ public sealed class KimiLaunchControlTests : IDisposable
         turn.Refusal.Should().BeEmpty("the owner's rule: warn and run");
         turn.Warning.Should().Contain("2.2.0").And.Contain("2.1.1").And.Contain("probe-kimi-confinement.mjs").And.Contain("probe-kimi-tree-hold.mjs").And.NotContain("re-plumbed");
         turn.CliVersion.Should().Be("kimi 2.2.0");
+    }
+
+    // ---------- the owner's decision of 2026-10-23: "unmeasured" is a note, never a refusal ----------
+
+    /// <summary>One launch on a NATIVE Linux host whose banner was read (the host Kimi was refused on until it was measured there), on a mount table of a local disk.</summary>
+    private async Task<(LaunchTurn Turn, FakeKimi Fake)> OnNativeLinuxAsync(string version = "2.1.1")
+    {
+        using var standIn = WindowsStandIn.Begin();
+        using var rooted = Rooted();
+        var places = _person.Places();
+        var fake = new FakeKimi(version);
+        Junctions.StandInMountInfo(() => RootExt4, _ => new MountIdentity.NotAsked());
+        try
+        {
+            var turn = await KimiLaunch.TakeAsync(new KimiHost(HostKind.Linux, WslGeneration.None), Request(places), places, fake, TestContext.Current.CancellationToken);
+            turn.Dispose();
+
+            return (turn, fake);
+        }
+        finally
+        {
+            Junctions.StandInMountInfo(null);
+        }
+    }
+
+    [Fact]
+    public async Task KimiOnANativeLinuxHost_WithAReadBanner_IsAdmitted_AndTheLaunchCarriesTheNotMeasuredNote()
+    {
+        var (turn, fake) = await OnNativeLinuxAsync();
+
+        turn.Refusal.Should().BeEmpty("Kimi was refused here only because it was not measured; the owner's decision of 2026-10-23 admits it");
+        fake.Started.Should().NotBeEmpty("the version was asked: the launch went on");
+        turn.Warning.Should().Contain("not measured").And.Contain("native Linux").And.Contain("owner's decision of 2026-10-23").And.NotContain("\n");
+    }
+
+    private const string K9Block = "\n[models.\"kimi-code/k9\"]\nprovider = \"managed:kimi-code\"\nmodel = \"k9\"\nmax_context_size = 1000\ncapabilities = [ \"a\" ]\n";
+
+    [Fact]
+    public async Task AnUncuratedKimiCodeId_WithTheirOwnBlock_Runs_AndTheLaunchCarriesTheNotInTheListNote()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        using var rooted = Rooted();
+        File.WriteAllText(_person.PersonsConfig, KimiFixture.OwnerConfig() + K9Block);
+        var places = _person.Places();
+        var fake = new FakeKimi();
+
+        using var turn = await KimiLaunch.TakeAsync(HostKind.Windows, Request(places, "kimi-code/k9"), places, fake, TestContext.Current.CancellationToken);
+
+        turn.Refusal.Should().BeEmpty("the person wrote the block; an id coai has not seen answer is a note, not a refusal (owner decision 2026-10-23)");
+        turn.Warning.Should().Contain("the model 'kimi-code/k9' is not in coai's measured list").And.NotContain("\n");
+        fake.Started.Should().NotBeEmpty("the version was asked: the launch went on");
+    }
+
+    [Fact]
+    public async Task AnUncuratedKimiCodeId_WithNoBlock_IsRefusedForTheMissingBlock_AndStartsNothing()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        using var rooted = Rooted();
+        var places = _person.Places();
+        var fake = new FakeKimi();
+
+        using var turn = await KimiLaunch.TakeAsync(HostKind.Windows, Request(places, "kimi-code/k9"), places, fake, TestContext.Current.CancellationToken);
+
+        turn.Refusal.Should().Contain("the model 'kimi-code/k9' has no model block");
+        fake.Started.Should().BeEmpty("a refusal starts nothing");
+    }
+
+    [Fact]
+    public async Task TheNativeLinuxNote_IsJoinedWithTheVersionWarning_NotReplacedByIt()
+    {
+        var (turn, _) = await OnNativeLinuxAsync("2.2.0");
+
+        turn.Refusal.Should().BeEmpty();
+        turn.Warning.Should().Contain("owner's decision of 2026-10-23").And.Contain("Kimi 2.2.0 is not a version coai has measured");
+    }
+
+    [Fact]
+    public async Task OnWsl2_TheLaunchCarriesNoHostNote()
+    {
+        var (turn, _, _) = await OnWsl2WithMountsAsync(RootExt4, allowNetworkSignIn: false);
+
+        turn.Warning.Should().BeEmpty("Kimi is measured on WSL2: nothing to say");
     }
 
     [Theory]

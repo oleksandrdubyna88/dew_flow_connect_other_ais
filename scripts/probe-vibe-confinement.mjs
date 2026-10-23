@@ -54,19 +54,30 @@
 // the person's Vibe home's `.env` (made by lstat alone — never opened, read or copied), and an arm that would have run on the
 // person's real ~/.vibe runs on such a home instead: nothing is written into ~/.vibe by the probe. The person's Vibe home is
 // LISTED (names, sizes, mtimes — never contents) before and after the run, and the two listings are saved and compared.
+//
+// Native Linux (E2.S0 of todo/PLAN_kimi_and_vibe_on_native_linux_E2.md, DN10): on a host whose /proc/version is read and names neither Microsoft nor WSL (lib/host-facts.mjs
+// launchHostOf, read ONCE at start-up; an unread banner on Linux REFUSES, exit 65) every Vibe launch carries PYTHON_KEYRING_BACKEND=keyring.backends.fail.Keyring - the launch the product will ship there - so the signed-in
+// cells measure THAT launch; arm a3c alone drops it (its teeth: a keyring must be reachable). On WSL2 and Windows nothing is added. The header line and every row say
+// `keyringRoad: closed | open`.
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative } from 'node:path';
 import { resolved } from '../.github/scripts/lib/resolved.mjs';
+import { FLAG_SPECS, parseFlags } from './lib/cli-args.mjs';
+import { launchHostOf } from './lib/host-facts.mjs';
 import {
-  builtEnv as builtEnvFor, dirLink, files, fwd, armFilterOf, armsCellsError, armWanted, homeListing, keyringArm, keyringSetup, linkSignIn, minimalEnv, personsVibeHome, pythonCommand, run, vibeArgs, vibePython,
+  NATIVE_LINUX_BUILT, builtEnv as builtEnvFor, dirLink, files, fwd, armFilterOf, armsCellsError, armWanted, homeListing, keyringArm, keyringRoadOf, keyringSetup, linkSignIn, minimalEnv, personsVibeHome, pythonCommand, run, vibeArgs, vibePython, without,
 } from './lib/vibe.mjs';
 
 const argv = process.argv.slice(2);
-const flag = (name, fallback) => {
-  const i = argv.indexOf(name);
-  return i >= 0 && i + 1 < argv.length ? argv[i + 1] : fallback;
-};
+// A flag that takes a value and gets none (or another --flag) is a usage error (lib/cli-args.mjs), never "flag not given".
+const parsedArgs = parseFlags(argv, FLAG_SPECS.vibeProbe);
+if (!parsedArgs.ok) {
+  console.error(`usage: probe-vibe-confinement.mjs [--vibe <exe>] [--scratch <dir>] [--repeats N] [--cli python|rust|inherit] [--cells <list>] [--arms <list>] | --reparse <scratch>
+${parsedArgs.error}`);
+  process.exit(65);
+}
+const flag = (name, fallback) => parsedArgs.values[name] ?? fallback;
 const ALL_CELLS = ['M-V1', 'M-V2', 'M-V3', 'M-V3b', 'M-V4', 'M-V5', 'M-V6', 'M-V7', 'M-V8', 'M-V9', 'M-V10', 'M-V11', 'M-V12', 'M-V13', 'M-V14', 'M-V16'];
 const reparse = flag('--reparse', '');
 const exe = flag('--vibe', '') || (reparse ? '' : resolved('vibe'));
@@ -89,6 +100,14 @@ if (unknown.length > 0 || !Number.isInteger(repeats) || repeats <= 0 || !CLIS.in
   console.error(`usage: probe-vibe-confinement.mjs [--vibe <exe>] [--scratch <dir>] [--repeats N] [--cli ${CLIS.join('|')}] [--cells ${ALL_CELLS.join(',')}]`);
   process.exit(65);
 }
+// The host decision (E2 code gate G4), read ONCE from /proc/version through lib/host-facts.mjs's launchHostOf, BEFORE anything is created or launched: on Linux a banner that cannot be read REFUSES, as the
+// product does (WslGeneration.Unreadable) and as the series' stop rule says (N-H1 banner.read=false, E2 plan 3.4) — the probe used to run that host with the keyring road OPEN, which arm a3c proves reaches an
+// available keyring. `--reparse` launches nothing and is not refused.
+const HOST = launchHostOf();
+if (HOST.refusal && !reparse) {
+  console.error(HOST.refusal);
+  process.exit(65);
+}
 const scratch = reparse || flag('--scratch', '') || mkdtempSync(join(tmpdir(), 'testsToDelete-vcp-'));
 // The scratch path ends up inside a hook's SHELL command (a hook's `command` is a shell string by Vibe's design), so it is
 // held to characters that need no quoting beyond the double quotes the command puts around it — never a quote, `$`, `%`,
@@ -101,6 +120,11 @@ if (!/^[A-Za-z0-9 _\-.:\\/~()]+$/.test(scratch)) {
 mkdirSync(scratch, { recursive: true });
 
 const WINDOWS = process.platform === 'win32';
+/**
+ * Whether this is a NATIVE Linux host (E2.S0): the host decision above, read ONCE from /proc/version (the product's HostKind rule for a READ banner naming neither Microsoft nor WSL; an UNREAD banner on Linux
+ * never gets here — it is refused above). On such a host every Vibe launch carries the forced keyring backend of the launch E2 ships (DN10), except arm a3c; on WSL2 and Windows S0 adds nothing.
+ */
+const NATIVE_LINUX = HOST.nativeLinux;
 /** The person's Vibe home (DL2): VIBE_HOME of this environment when set, else ~/.vibe. Read for config.toml copies and the listing only. */
 const REAL_HOME = personsVibeHome();
 // Vibe's own interpreter: M-V4 persists trust through Vibe's OWN TrustedFoldersManager, so the file's format is Vibe's.
@@ -175,7 +199,7 @@ function trustWithVibe(home, paths) {
 const BUILT_MODEL = 'mistral-medium-3.5';
 
 /** D17's BUILT environment for `home` — lib/vibe.mjs's, the product's (VibeLaunch.Built), on the curated default model. */
-const builtEnv = (home) => builtEnvFor(home, BUILT_MODEL);
+const builtEnv = (home) => builtEnvFor(home, BUILT_MODEL, process.platform, process.env, { nativeLinux: NATIVE_LINUX });
 
 /** Every cached plugin package in `home` that carries a plugin.json — after one turn, Vibe's built-in package (§24). */
 function builtInPackages(home) {
@@ -334,7 +358,7 @@ const ARMS = {
       // Not signed in on purpose: on Linux this arm IS L-V1 (a fresh home has no keyring and no .env).
       const home = shortHome({ copy: false, signIn: false });
       const keyring = keyringSetup(a.id, process.platform, { scratch: runDir });
-      return { workdir, home, prompt: REPLY_OK, env: keyring.env, canaries: keyring.markerFile ? { keyringMarker: keyring.markerFile } : {} };
+      return { workdir, home, prompt: REPLY_OK, env: keyring.env, dropsKeyring: keyring.dropsKeyring, canaries: keyring.markerFile ? { keyringMarker: keyring.markerFile } : {} };
     },
   })),
 
@@ -491,19 +515,26 @@ if (armsCellsMessage) {
 
 // Pure: the CLI pin, the platform and the environment come in, like lib/vibe.mjs's minimalEnv(platform, env). lib/vibe.test.mjs
 // cuts this function out of this file by its first and last line, so keep the opening line and the closing `}` in column 0.
-function childEnvFor(spec, { cli, platform, env: source }) {
+function childEnvFor(spec, { cli, platform, env: source, nativeLinux = false }) {
   // UTF-8 mode with the CLI pin (§26): without it a character outside cp1252 in an answer kills the run with exit 2.
   const pin = cli === 'inherit' ? {} : { VIBE_CLI: cli, PYTHONUTF8: '1' };
-  if (spec.replaceEnv) return { ...spec.replaceEnv, ...pin };
+  // E2.S0: on a native Linux host the child carries the launch E2 ships (DN10) — NATIVE_LINUX_BUILT — in EVERY launch, so the signed-in cells measure it; an arm that
+  // reaches a keyring on purpose (a3c) says so with `dropsKeyring` and gets a NEW object WITHOUT the name (without(), never a `delete` on what was built). The base below is an allow-list (minimalEnv), never a
+  // spread of the probe's own shell, so a PYTHON_KEYRING_BACKEND in that shell can enter a Vibe launch only through NATIVE_LINUX_BUILT or an arm's own env (trustWithVibe, M-V4 only and not a native cell, passes the whole environment; on win32 the base is the whole shell environment).
+  const road = nativeLinux ? NATIVE_LINUX_BUILT : {};
+  // The final environment of a spec: a3c's `dropsKeyring` gets a NEW object without PYTHON_KEYRING_BACKEND, every other spec its environment as built.
+  const finished = (env) => (spec.dropsKeyring ? without(env, 'PYTHON_KEYRING_BACKEND') : env);
+  if (spec.replaceEnv) {
+    return finished({ ...spec.replaceEnv, ...road, ...pin });
+  }
   // NoDefaultCurrentDirectoryInExePath as Claude Code sets it for the processes it starts, which vibe inherits through coai.
   // Windows starts from the whole environment, as the RESULTS cells there were measured; every other platform starts from the
   // product's minimal list (§31.4: on Linux the probe handed Vibe every variable of the operator's shell, which the product never does).
   const base = platform === 'win32' ? source : minimalEnv(platform, source);
-  const env = { ...base, NoDefaultCurrentDirectoryInExePath: '1', ...(spec.home ? { VIBE_HOME: spec.home } : {}), ...(spec.env ?? {}), ...pin };
-  if (cli === 'inherit') delete env.VIBE_CLI;
-  return env;
+  const env = { ...base, NoDefaultCurrentDirectoryInExePath: '1', ...(spec.home ? { VIBE_HOME: spec.home } : {}), ...road, ...(spec.env ?? {}), ...pin };
+  return finished(cli === 'inherit' ? without(env, 'VIBE_CLI') : env);
 }
-const childEnv = (spec) => childEnvFor(spec, { cli, platform: process.platform, env: process.env });
+const childEnv = (spec) => childEnvFor(spec, { cli, platform: process.platform, env: process.env, nativeLinux: NATIVE_LINUX });
 
 let launches = 0;
 /** One vibe launch; everything it produced is saved in `runDir` so `--reparse` can rebuild the row. */
@@ -516,13 +547,14 @@ function launch(runDir, tag, armSpec, resume = '', { cell = '', n = 0 } = {}) {
   launches++;
   // Said before the launch, not after: one launch can take minutes (the code round, codex, 2026-10-12).
   console.error(`[probe] launch ${launches}: ${cell} repeat ${n} ${basename(runDir)}${tag} …`);
+  const env = childEnv(spec);
   const r = run(exe, args, { cwd: spec.workdir, input: spec.prompt, encoding: 'utf8', timeout: ((spec.timeLimit ?? 120) + 90) * 1000,
-    env: childEnv(spec), maxBuffer: 64 * 1024 * 1024 });
+    env, maxBuffer: 64 * 1024 * 1024 });
   writeFileSync(join(runDir, `stdout${tag}.json`), r.stdout ?? '');
   const meta = {
     args, exit: r.status, signal: r.signal, spawnError: r.error ? String(r.error) : '', seconds: Math.round((performance.now() - t0) / 100) / 10,
     stderrTail: String(r.stderr ?? '').slice(-1500), before, promptBytes: Buffer.byteLength(spec.prompt),
-    envNames: spec.replaceEnv ? Object.keys(spec.replaceEnv) : Object.keys(spec.env ?? {}), home: spec.home ?? spec.replaceEnv?.VIBE_HOME ?? '',
+    keyringRoad: keyringRoadOf(env), envNames: spec.replaceEnv ? Object.keys(spec.replaceEnv) : Object.keys(spec.env ?? {}), home: spec.home ?? spec.replaceEnv?.VIBE_HOME ?? '',
   };
   writeFileSync(join(runDir, `meta${tag}.json`), JSON.stringify(meta, null, 2));
   return meta;
@@ -600,7 +632,7 @@ function rowOf(runDir, cell, arm, n, spec, tag = '') {
     tools: summariseTools(out.effects), toolCalls: out.effects.length,
     newFiles: after.filter((f) => !meta.before.includes(f)), canaries, expect, inSession, export: exp,
     notes: spec.notes ?? '', trustedFile: spec.trustedFile ?? '', stderrTail: meta.stderrTail, promptBytes: meta.promptBytes,
-    envNames: meta.envNames, home: meta.home, workdir: spec.workdir,
+    keyringRoad: meta.keyringRoad ?? '', envNames: meta.envNames, home: meta.home, workdir: spec.workdir,
   };
 }
 
@@ -613,7 +645,7 @@ function runArm(cell, a, n) {
   writeFileSync(join(runDir, 'spec.json'), JSON.stringify({ cell, arm: a.arm, n, spec }, null, 2));
   launch(runDir, '', spec, '', { cell, n });
   const row = rowOf(runDir, cell, a.arm, n, spec);
-  console.log(JSON.stringify({ cell, arm: a.arm, run: n, exit: row.exit, s: row.seconds, canaries: row.canaries, expect: row.expect,
+  console.log(JSON.stringify({ cell, arm: a.arm, run: n, exit: row.exit, s: row.seconds, keyringRoad: row.keyringRoad, canaries: row.canaries, expect: row.expect,
     newFiles: row.newFiles, tools: row.tools.slice(0, 200), answer: row.answer.slice(0, 120).replace(/\s+/gu, ' ') }));
   return row;
 }
@@ -637,7 +669,7 @@ function runResume(n) {
   if (id) launch(runDir, '-t2', t2, id, { cell, n });
   const r2 = id ? rowOf(runDir, cell, 'turn 2', n, t2, '-t2') : null;
   const row = { cell, arm: 'two turns (--resume)', run: n, turn1: r1, turn2: r2, sameSession: r2 ? (r2.export.sessionId || r2.sessionId) === id : null };
-  console.log(JSON.stringify({ cell, run: n, exit1: r1.exit, exit2: r2?.exit, u1: r1.export.usage, u2: r2?.export.usage, remembered: r2?.expect.word, same: row.sameSession }));
+  console.log(JSON.stringify({ cell, run: n, keyringRoad: r1.keyringRoad, exit1: r1.exit, exit2: r2?.exit, u1: r1.export.usage, u2: r2?.export.usage, remembered: r2?.expect.word, same: row.sameSession }));
   return row;
 }
 
@@ -694,10 +726,11 @@ const personsBefore = homeListing(REAL_HOME);
 
 // On a home of the probe's own, in the built environment: a bare `vibe --version` writes `vibehistory` into whatever
 // VIBE_HOME it gets, and with none that is the person's ~/.vibe (§24).
+console.error(`[probe] host: ${NATIVE_LINUX ? 'native Linux' : process.platform === 'linux' ? 'Linux, not native (WSL)' : process.platform}; keyringRoad: ${NATIVE_LINUX ? 'closed' : 'open'} (PYTHON_KEYRING_BACKEND is ${NATIVE_LINUX ? 'set in every Vibe launch but a3c' : 'S0 adds it to no launch'})`);
 const versionRun = run(exe, ['--version'], { encoding: 'utf8', timeout: 30_000, env: childEnv({ replaceEnv: builtEnv(shortHome({ copy: false })) }) });
 const resultsPath = join(scratch, 'results.json');
 let results = existsSync(resultsPath) ? JSON.parse(readFileSync(resultsPath, 'utf8'))
-  : { vibe: exe, version: (versionRun.stdout ?? '').trim(), cli, platform: process.platform, scratch, started: new Date().toISOString(), byCell: {}, launches: 0 };
+  : { vibe: exe, version: (versionRun.stdout ?? '').trim(), cli, platform: process.platform, nativeLinux: NATIVE_LINUX, keyringRoad: NATIVE_LINUX ? 'closed' : 'open', scratch, started: new Date().toISOString(), byCell: {}, launches: 0 };
 for (const cell of cells) {
   const rows = [];
   if (cell === 'M-V5') {

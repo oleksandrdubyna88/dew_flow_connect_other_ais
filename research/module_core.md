@@ -812,7 +812,7 @@ consultant or the confined reviewer ships was moved (A12: a tails-plan item of i
 ```mermaid
 flowchart LR
   seed["shared/runtime-capabilities.json<br/>18 rows (6 runtimes × 3), each citing its probe cells"] --> RC[RuntimeCapabilities.Builtin<br/>refused whole if a pair is undecided]
-  RC --> CM["CapabilityMatrix.Admit(runtime, capability)<br/>confined → admit · unconfined / default-deny → admit FLAGGED · unsupported / unmeasured → refuse"]
+  RC --> CM["CapabilityMatrix.Admit(runtime, capability)<br/>confined → admit · unconfined / default-deny / unmeasured → admit FLAGGED · unsupported → refuse"]
   CM --> CP["ConfinementPlanner.Plan(runtime, grant)<br/>Leading · Flags · CwdKind · AddDirs · Flag"]
   CP -->|Planned| AD[adapters compose, add nothing]
   CP -->|Refused| X1[a sentence]
@@ -833,7 +833,7 @@ flowchart LR
   does not spell, and a row that cites neither a cell nor a note saying why — because a confinement
   decided by a default arm is the thing the table exists to end. `local` and `api` carry no probe cell
   for `none`: the record says they are confined BY CONSTRUCTION (no process, no tools) and the row says
-  so in its note. `api × web` is `unmeasured` and therefore refused; a measurement, not an edit, admits it.
+  so in its note. `api × web` is `unmeasured` — since the owner's decision of 2026-10-23 an unmeasured pair RUNS, flagged `unmeasured` (the answer may come without the capability), and the planner gives it no web tool, so it cannot reach the web; before that it was refused, and a measurement was what admitted it.
 - **The planner is the one place, and the goldens hold the WHOLE argv.** `ConfinementPlannerTests`
   asserts each adapter's planned launch as a complete list, so an adapter that composes a sandbox flag
   of its own — or drops one — is red; a structural test subtracts the plan's fragments from the argv and
@@ -853,9 +853,9 @@ flowchart LR
   `--trust` or `--add-dir` (D3). `--enabled-tools` and `--trust` joined the sandbox vocabulary; `--agent` did not,
   because agy's adapter names its own read-only agent. The rows: `none` and `disk` `confined` on research/RESULTS_vibe_confinement.md's
   M-V11/M-V1/M-V15 and M-V6/M-V14/M-V1 — denied writes do not prove bounded READS, so the disk row rests on M-V6's
-  read cell itself — and `web` `unmeasured` (no Vibe cell exercises the web), so the matrix refuses it. Those rows
+  read cell itself — and `web` `unmeasured` (no Vibe cell exercises the web), so the matrix admits it FLAGGED `unmeasured` (2026-10-23; it was refused) and the planner stands it in an empty folder with `read_file` only. Those rows
   cite the Vibe record and its `M-V…` cells, dated 2026-10-12, and `CapabilityMatrixTests` holds each row to the
-  record it cites (`Records`), not to one record for all. **An unmeasured pair's refusal names the record its own row cites** (before the S3 gate): `CapabilityMatrix.RecordOf` reads the `research/RESULTS_….md` its `resultRef` names (the first run's record when it names none), and `capabilityAdmission.ts`'s `recordOf` is its twin — so `vibe × web` sends a person to research/RESULTS_vibe_confinement.md, and the first five runtimes' sentences are byte for byte what they were.
+  record it cites (`Records`), not to one record for all. **An unmeasured pair is a NOTE, not a refusal** (owner decision 2026-10-23): `AdmissionFlag.Unmeasured`, caveat *not measured on this runtime for this capability: the row runs anyway, and the answer may come without it*; `capabilityAdmission.ts` is the twin and both answer `shared/capability-matrix-vectors.json`. (Until then the refusal named the record its row cites: `CapabilityMatrix.RecordOf` and the TypeScript `recordOf`, both removed.) The settings tab shows the note without the "Can read this machine" tick; `ApiConsultant` builds a `web` row as a `none` completion only when the plan carries `AdmissionFlag.Unmeasured` (an unflagged web plan is refused by name, so the caveat cannot be lost).
 - **Refuse, never redact — and the refusal never quotes what it refused.** A web row's model may be
   unconfined (codex, F2), so what the row is GIVEN is the only thing ours to control, and a question
   with a hole where a path was still says there was a path. The sanitiser answers ONE class — the first

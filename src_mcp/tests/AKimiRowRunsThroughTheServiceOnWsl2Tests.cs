@@ -189,9 +189,12 @@ public sealed class AKimiRowRunsThroughTheServiceOnWsl2Tests : IAsyncLifetime
         _person.Hash().Should().Contain(entry => entry.StartsWith("credentials", StringComparison.Ordinal), "the person's sign-in folder is still whole");
     }
 
-    /// <summary>S-K20 through the whole plan-round flow: a NATIVE Linux host is refused, with the WSL2-only sentence, before the fake Kimi is started — on every machine, the host being given.</summary>
+    /// <summary>
+    /// S-K20 through the whole plan-round flow, as the owner's decision of 2026-10-23 changed it: a NATIVE Linux host (banner read) is no longer refused for being unmeasured — the fake Kimi is started, the round counts its answer, and the
+    /// reviewer's state carries the note that Kimi is not measured on this host. On every machine, the host being given.
+    /// </summary>
     [Fact]
-    public async Task APlanRoundOnANativeLinuxHost_IsRefused_NamingWsl2Only_AndNothingIsStarted()
+    public async Task APlanRoundOnANativeLinuxHost_RunsTheKimiReviewer_AndItsStateCarriesTheNotMeasuredNote()
     {
         using var flow = KimiFlowHost.Enter(KimiFlowHost.Linux, _person, _dir.At("flow"));
         var agent = Steer();
@@ -200,10 +203,15 @@ public sealed class AKimiRowRunsThroughTheServiceOnWsl2Tests : IAsyncLifetime
         await service.OpenAsync(repo, "feature");
 
         var planned = JsonDocument.Parse(await service.ReviewPlanAsync(repo, "feature", Scope)).RootElement;
+        var status = JsonDocument.Parse(await service.StatusAsync(repo, "feature")).RootElement;
 
-        planned.GetProperty("reviewers").GetString().Should().Contain("Kimi runs on WSL2 only for now").And.Contain("not yet on a native Linux host", "a native Linux host should still be refused with the WSL2-only sentence, but Kimi started");
-        File.Exists(agent.EnvFile).Should().BeFalse("the refusal comes before any process of Kimi's starts");
-        agent.Entries().Should().BeEmpty();
+        planned.GetProperty("verdict").GetString().Should().Be("proceed", $"Kimi was refused on a native Linux host only because it was not measured there: {planned}");
+        planned.GetProperty("reviewers").GetString().Should().Contain("owner's decision of 2026-10-23", "the round's reviewer line, what the calling AI reads, carries the note");
+        var reviewer = status.GetProperty("rounds")[0].GetProperty("reviewerStates")[0];
+        reviewer.GetProperty("status").GetString().Should().Be("done", reviewer.ToString());
+        reviewer.TryGetProperty("warning", out var warning).Should().BeTrue($"the reviewer's state carries the note: {reviewer}");
+        warning.GetString().Should().Contain("not measured").And.Contain("owner's decision of 2026-10-23");
+        agent.ReceivedMethods().Should().Contain(["initialize", "session/new", "session/prompt"], "the shim spoke ACP to the agent it started");
     }
 
     /// <summary>A WSL1 kernel reads as a WSL host and is refused with the WSL1 sentence and its cure — the same shared rule as Vibe's.</summary>
@@ -218,7 +226,7 @@ public sealed class AKimiRowRunsThroughTheServiceOnWsl2Tests : IAsyncLifetime
 
         var planned = JsonDocument.Parse(await service.ReviewPlanAsync(repo, "feature", Scope)).RootElement;
 
-        planned.GetProperty("reviewers").GetString().Should().Contain("this is WSL1").And.Contain("wsl --set-version <distro> 2");
+        planned.GetProperty("reviewers").GetString().Should().Contain("this WSL1 host").And.Contain("wsl --set-version <distro> 2");
         File.Exists(agent.EnvFile).Should().BeFalse();
     }
 }
