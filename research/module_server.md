@@ -2404,7 +2404,9 @@ sequenceDiagram
   "proceed"`". The server now answers that with the refusal sentence that names the card, so nothing breaks, but the text is
   stale until the conventions repository is changed and the pin moved. This is a **delivery step before the release**
   (plan §7 step 3): a follow-up pull request in BOTH conventions repositories replaces that sentence with *a person answers on the
-  notice card*, and the pin is bumped here, regenerating `gateRule.ts` and the snippets.
+  notice card*, and the pin is bumped here, regenerating `gateRule.ts` and the snippets. Opened as drafts on 2026-10-23:
+  dew_flow_conventions #83 (with a paid `held-gate` behaviour fixture — on the old text the model chose to pass
+  `humanDecision`, quoting the rule) and its twin in the second conventions repository.
 - **Mixed versions.** New server + old extension: the card offers three (a Proceed has no button until the extension updates; Keep
   going / Stop and act work). Old server + new extension: the old server writes no list, the extension offers three.
 
