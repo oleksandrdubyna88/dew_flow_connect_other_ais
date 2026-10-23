@@ -33,6 +33,7 @@ written.
 | Module | What it holds |
 |---|---|
 | `notifications.ts` | the record, the line it becomes, the line read back. Six classes, by what the person must DO |
+| `labelContinuations.ts` | the second line-spanning pass `safeText` runs, beside `privateKeyBlocks.ts` (2026-10-23): a credential label that ends a line takes the value on the next line with it, on evidence only (deeper indent, an opening quote, a trailing `\`, a block indicator, a triple quote) and never onto a child assignment. The port of `LabelContinuations.cs`, byte for byte — `safeText` runs it after the key blocks and BEFORE the strip that glues the lines (the strip drops every control character but tab, LF and CR first, the layout after), and `run-parity.mjs` compares both halves over real-line-break shapes (R1–R11, the child container, a blank line in a block, a two-line scalar) |
 | `notificationsFile.ts` | `notifications.jsonl` (this side) and `server-notices.jsonl` (`coai-mcp`), **two files merged at read time** |
 | `notice.ts` | the pure half of the funnel: what a caller says, and the record it becomes |
 | `notify.ts` | the host half — the only module allowed to call `window.show*Message` |

@@ -5630,3 +5630,32 @@ fix planted out.
 tool takes the SDK's request token (only `ask_human` does), so `withdrawn` and `hostStopped` cannot be written by a live server today and are pinned by
 the C# tests alone (`module_server.md`, *A client that closes stdin is the host ending*). The seam leg says so in its header and takes the one
 local word a live server can write — `roundClock` — which costs it a real minute.
+
+## A credential's value on the next line is redacted (2026-10-23, S1+S2 of `todo/PLAN_redaction_reaches_a_value_on_the_next_line.md`)
+
+`ALabelledValueOnTheNextLineIsRedactedTests` (55 rows, `src_mcp/tests`), `labelContinuations.test.ts` (19, `src_vs_code/src/test`), one row in `SecretCheckTests`, the line-spanning
+shapes of `TheRedactorCannotBeMadeToHangTests` and 39 new shapes (crossed with the eleven wraps) plus 62 control-character and Unicode-space shapes and one record in `noticeShapes.ts` (parity: 445 → 936 shapes, 4 → 5 records). Every canary is fake (`FAKE-CANARY-…`);
+every line break in a fixture is a REAL one. Every test was seen red on the unfixed code first (the plan's S-5, S-6 and the source half of S-13 are the guards that must be green before — and were).
+
+| Test | Seen red as | Break-it (went red) |
+|---|---|---|
+| `R1_AJsonValueOnTheNextLine_…` (S-1) | *Did not expect safe "{\n  \"api_key\":\n    \"FAKE-CANARY-0001\",\n}" to contain "FAKE-CANARY-0001".* | the pass disabled |
+| `R2_ANestedJsonValue_EightSpacesDeep_…` (S-2, notice road) | *Did not expect safe "{  "nested": {    "api_key":        "FAKE-CANARY-0002"  }}" to contain "FAKE-CANARY-0002".* | the strip first (the first draft's order) |
+| `EachShapeWithEvidence_HasItsValueRedacted_ThroughSafeSource` (S-3: R3, R5 ×2, R6, R7, R10's pair) | *Did not expect safe "api_key:\n  FAKE-CANARY-0003" to contain "FAKE-CANARY".* | the deeper-indent evidence removed: 14 red |
+| `R4_…`, `R4b_…` (S-4, both roads) | *Did not expect source "password: [redacted]\n  FAKE-CANARY-0004\n" to contain "FAKE-CANARY-0004".*; notice: *Did not expect notice "password: \|  [redacted]  FAKE-SECOND" to contain "FAKE-SECOND".* | the strip first |
+| `ADecline_LeavesTheTextUntouched_…` ×6, `ANestedKeyWithItsValueOnItsOwnLine_…`, `ALabelThatIsNotACredential_…`, `ATwoBreakGap_…`, `ALabelAfterALabel_…` (S-5) | green before and after | credential check removed: `ALabelThatIsNotACredential_…` red; check AND child rule removed: the `service:` row red too (*Did not expect safe "service:\n  api_key: …" to contain "FAKE-CANARY-0012"*) |
+| `ACredentialNamedContainer_KeepsItsChildsLabel_OnTheSourceRoad`, `AChildAssignmentWithItsOwnQuote_…` (S-13) | green before and after | the child-assignment rule removed: *Expected Source(given) to be the same string, but they differ on line 2 and column 3 (index 15)* |
+| `ABase64ValueEndingInPadding_…` | *Did not expect Source(given) "authorization:\n  FAKE0CANARY0BASE64==" to contain "FAKE0CANARY0BASE64".* | the evidence removed |
+| `ABlankLineInsideABlockScalar_…`, `ABlockEndsAtTheFirstLineThatIsNotDeeper_…` (S-14) | *Did not expect safe "password: [redacted]\n  FAKE-FIRST\n\n  FAKE-SECOND\nordinary: visible" to contain "FAKE-FIRST".* | — |
+| `ACompoundLabel_ReachesItsNextLineValue` ×7 (S-15) | *Did not expect Source(given) "db_password:\n  FAKE-CANARY-0015" to contain "FAKE-CANARY-0015".* (one row each) | the evidence removed |
+| `R11_…`, `ATripleQuotedValue_…`, `AnUnclosedTripleQuote_…`, `AnySingleOrTripleQuotedValue_OnOneLine_…` ×3 (S-16) | *Did not expect … to contain "FAKE-"*; *Expected Notice(given) to be the same string, but they differ at index 10: "password='FAKE-CANAR" / "password='[redacted]"* | — |
+| `AGapOfThirtyTwo_AfterTheJoiner_…`, `FiveSpacesBeforeTheJoiner_StillStay_…` (D6) | *Did not expect Notice(given) "api_key:                                FAKE-CANARY-0017" to contain "FAKE-CANARY-0017".*; the second is green before and after (the pinned `password     =x`) | the post-joiner gap back to `{0,4}` |
+| `R1_IsRecognisedAsALabelledSecret_ByTheSecretCheck`, `ThePrecedenceOfTheClasses_IsPinned`, `SecretCheckTests` row (S-7) | *Expected Redaction.FirstSecretClass(given) to be "labelled"* (found `""`); *…differ at index 0: "parameter" / "labelled"*; *Expected type to be …SecretCheckResult+Refused, but found …+Clean.* | — |
+| `ARealLineBreakPrivateKey_InANotice_…` (D5's one deliberate output change) | *Expected safe to be the same string, but they differ at index 58: ".[redacted]-----END." / ".[redacted][redacted]."* | the strip first |
+| `AControlCharacterInsideAFooterlessKeyBody_…` | green before and after | the spec's literal order (no first strip): *Did not expect Notice(cut) "-----BEGIN PRIVATE KEY-----[redacted]FAKEKEYBODYLINETWO" to contain "FAKEKEYBODYLINETWO".* |
+| `ABlockScalar_OfTwoHundredSixtyTwoThousandCharacters_HasNoCanaryAnywhere` (S-11; content, not time) | *Expected FirstCanary(safe) to be "none" … "FAKE-CANARY-DEEP-1 (at"* | a 65 536 cap reinstated: *…"FAKE-CANARY-DEEP-63 (at"* |
+| `TheRedactorCannotBeMadeToHangTests.ALineSpanningShape_…` (S-8: 8 shapes × 262 144 / 65 536 × `SafeText`, `SafeSource`, `FirstSecretClass`) | green before (no pass) — the guard it ships under; the measured times are in the plan | — |
+| `labelContinuations.test.ts` (S-1 … S-16 through `safeText` and the pass alone, S-11, the linearity row) | *AssertionError … {  "nested": {    "api_key":        "FAKE-CANARY-0002"  }}*; *X-Api-Key:     FAKE-CANARY-0006*; 8 of its first 9 red | the TypeScript evidence moved: S-3, S-15 and the base64 row red |
+| `npm run test:parity` (R1–R11, the child container, blank lines in a block, a two-line scalar, control bytes and Unicode spaces beside a label, the 4 096 token bound, a record with R1 and R4b) | green before (both halves leave the shapes alone) and after | the pass not called in `safeText` only: *safeText at 1000: 101 of 936 cases differ — one half of this product would write a secret the other would have taken out* |
+
+NOT covered here (S3): the product legs — an ACP stderr of 64 Ki through `TheStderrLineIsQuotedSafelyTests`, and `ServerNoticeLine` written / the extension's parser read.
