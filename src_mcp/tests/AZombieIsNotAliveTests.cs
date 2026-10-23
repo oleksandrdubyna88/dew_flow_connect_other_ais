@@ -13,19 +13,17 @@ namespace CoaiMcp.Tests;
 /// reaped it, and a check by pid and start time alone called it alive. Under a parent that never reaps — a server
 /// running as a container's first process is one — that entry stays for ever, and the slot would stay unavailable for
 /// ever over a process that has already exited.</para>
-/// <para>The zombie is made by <see cref="ZombieMaker"/> (the one helper, C21/C29): a shell starts a background <c>sleep</c> and then <c>exec</c>s another
-/// <c>sleep</c>, which never waits for children. The kill waits for that <c>exec</c>; a shell that has not yet exec'd may reap the dead child itself.</para>
+/// <para>The zombie is made by <see cref="ZombieMaker"/> (the one helper, C21/C29): the fake CLI's <c>unreaped-child</c> verb forks a child and never waits for it. An executable and an argv — the shell script
+/// this test first ran (E5 checkpoint 2, F0) broke the rule to launch external processes as an executable plus argv, and had a race of its own: a shell that has not yet exec'd may reap the dead child itself.</para>
 /// </remarks>
 public sealed class AZombieIsNotAliveTests
 {
-    [Theory]
-    [InlineData("/bin/sh", "sleep 600 & echo $!; exec sleep 600")]
-    [InlineData("/bin/bash", "sleep 600 & echo $!; sleep 2; exec sleep 600")]
-    public async Task AKilledButUnreapedProcess_IsNotAlive(string shell, string script)
+    [Fact]
+    public async Task AKilledButUnreapedProcess_IsNotAlive()
     {
-        Assert.SkipUnless(OperatingSystem.IsLinux() && File.Exists(shell), "a zombie is read from /proc, which Linux alone has");
-        using var zombie = await ZombieMaker.StartAsync(shell, script);
-        ProcessTree.IsAlive(zombie.Identity).Should().BeTrue("the background sleep is running");
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "a zombie is read from /proc, which Linux alone has");
+        using var zombie = await ZombieMaker.StartAsync();
+        ProcessTree.IsAlive(zombie.Identity).Should().BeTrue("the child is running until it is killed");
 
         await zombie.KillToZombieAsync();
 

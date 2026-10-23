@@ -113,6 +113,13 @@ if (args is ["acp-agent", var acpScript])
 // A descendant that outlives its round inside a folder (D4 / S7 of the temp plan): its working folder is wherever it was started. It says
 // `ready <pid>` — the EVENT its parent waits for, never a sleep — closes all three pipes and waits to be killed by that pid. BEFORE the vendor
 // mode, for the same reason as the ACP stand-in: a FAKECLI_MODE another test left in the process environment must not turn it into a reviewer.
+// A parent that never reaps (C21/C29, E5 checkpoint 2 F0): `unreaped-child` prints the pid of a child it never waits for, so a test that kills that child can observe the zombie. An executable
+// and an argv, not `sh -c <script>`; BEFORE the vendor mode for the same reason as the stand-ins above.
+if (args is ["unreaped-child"])
+{
+    return CoaiMcp.FakeCli.UnreapedChildVerb.Run();
+}
+
 if (args is ["cwd-hold"])
 {
     Console.Out.WriteLine($"ready {Environment.ProcessId}");

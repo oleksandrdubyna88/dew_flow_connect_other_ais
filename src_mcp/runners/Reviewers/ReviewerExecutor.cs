@@ -1,5 +1,6 @@
 using CoaiMcp.Core.Rounds;
 using CoaiMcp.Core.Findings;
+using CoaiMcp.Core.Notices;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Files;
 
@@ -843,15 +844,37 @@ public sealed class ReviewerExecutor(
             // failed is never silent: the work it was meant to stop may still be running, and the person reading the
             // round is owed the sentence. It goes through the one channel this class has (`note`), as an unkept
             // answer's does.
-            note?.Invoke(CleanupFailed(invocation, e, AbandonBudget));
+            Report(invocation, e);
         }
     }
 
-    /// <summary>The note for a courtesy cleanup that did not finish: what ran it, why it stopped, and — for the bound — how long it was given.</summary>
+    /// <summary>
+    /// Says through <c>note</c> that a cleanup did not finish — and contains a failure of the saying itself (E5 checkpoint 2, F2).
+    /// </summary>
+    /// <remarks>
+    /// The report is as much a courtesy on a failure path as the cleanup: a <c>note</c> callback that throws must not escape <see cref="AbandonAsync"/> and replace the
+    /// reviewer's own outcome with its own failure. There is no further channel to tell (this class has no logger of its own), so the failure of the report is dropped on purpose.
+    /// </remarks>
+    private void Report(ReviewerInvocation invocation, Exception failure)
+    {
+        try
+        {
+            note?.Invoke(CleanupFailed(invocation, failure, AbandonBudget));
+        }
+        catch (Exception reporting) when (reporting is not OutOfMemoryException)
+        {
+            // Best-effort by design, see the remarks: the round's outcome is the one thing that must survive.
+        }
+    }
+
+    /// <summary>
+    /// The note for a courtesy cleanup that did not finish: what ran it, why it stopped, and — for the bound — how long it was given. An adapter's exception text may echo a
+    /// credential the vendor's API sent back, so it is written through the product's one redactor and cut to a note's one line (E5 checkpoint 2, F1).
+    /// </summary>
     private static string CleanupFailed(ReviewerInvocation invocation, Exception failure, TimeSpan budget) =>
         failure is OperationCanceledException
             ? $"{invocation.Provider}/{invocation.Role}: the cleanup after the kill did not finish within {budget.TotalMilliseconds:0} ms and was abandoned; work it was meant to stop may still be running"
-            : $"{invocation.Provider}/{invocation.Role}: the cleanup after the kill failed ({failure.GetType().Name}: {failure.Message}); work it was meant to stop may still be running";
+            : $"{invocation.Provider}/{invocation.Role}: the cleanup after the kill failed ({failure.GetType().Name}: {Redaction.SafeText(failure.Message, ComplaintCap)}); work it was meant to stop may still be running";
 
     /// <summary>
     /// How long a courtesy cleanup may take before the round stops waiting for it. TEARDOWN, so it stays on the SYSTEM clock (E5 plan §3.14,

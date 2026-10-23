@@ -1770,3 +1770,19 @@ Over the merged diff of S2, S3 and S8 (`fc4141bef`). Each accepted finding was c
 2. *`ApiEndpointStub`'s blocking `Dispose`.* Rejected: test-only; its bound is reached only by a handler that ignores the token and the aborted response; teardown was measured unchanged.
 3. *O(n²) admission.* Rejected: n is a few per test.
 4. *Removing the abort loop.* Rejected: it IS the C16 fix; B-E5-10 turns it red.
+
+### Checkpoint 2 — the code round (coai 51b4e0fd again, 2026-10-23, proceed; 4 of 8 — Gemini's quota out): 4 findings, 3 accepted, 1 rejected (the outline budget: a product finding filed for its own plan)
+
+Over the merged diff of the coded stories after checkpoint 1. Each accepted finding was checked against the code first; behaviour changes went RED first.
+
+**Accepted (3)**
+
+| Finding | Where | What changed | Evidence |
+|---|---|---|---|
+| F0 (convention) | `ZombieMaker.cs`, `AZombieIsNotAliveTests.cs`, `PidfdLayerTests.cs` | The zombie fixture launched `/bin/sh -c "<script>"` — against the convention "launch external processes as an executable plus argv, never a shell string" — and carried a race of its own (a shell that has not exec'd may reap the dead child). It is now the fake CLI's new verb `unreaped-child` (`UnreapedChildVerb.cs`): it forks a child that stays (`PreExecChild.cs`, the one fork the fake CLI makes — `hold-file fork-fail` uses it too, so its private `fork`/`pause` imports are gone), prints the child's pid and never waits for it. The fixture no longer waits for "the parent is a `sleep`": the verb is never a shell. The two Theories over `/bin/sh` and `/bin/bash` are now one Fact each; C21/C29 are kept (a parent that never reaps; `Z` read through `ProcStat.ReadFor` only). | Linux-only, so it is proved on the Linux CI job (run recorded in the PR). No other test here runs a shell with a script string; the one `sh -c` left is `AntigravityReadOnlyTests.TheHookCommand_AsAgyRunsIt…`, which runs the hook command string exactly as agy does (agy defines it as a shell command) and cannot be an argv. |
+| F1 (security) | `ReviewerExecutor.CleanupFailed` | The note for a failed cleanup carried the adapter exception's MESSAGE unredacted; a vendor's API can echo a bearer token into it. The message now goes through `Redaction.SafeText` with the note's one-line cap (`ComplaintCap`, 240). | RED: `ACleanupWhoseMessageCarriesACredential_IsRecordedMasked` — `Did not expect notes "…Authorization: Bearer fake-bearer-value-0000-1111-2222-3333…" to contain "fake-bearer-value-…"`; `ACleanupWhoseMessageIsVeryLong_IsRecordedCut` — `Expected notes to be less than 600, but found 5132`. Break-it: the redaction removed → both red again; restored by writing the file back, rebuilt, 7 of 7 green. |
+| F2 (reliability) | `ReviewerExecutor.AbandonAsync` (new `Report`) | `note?.Invoke(…)` in the catch was unprotected: a throwing callback escaped `AbandonAsync` and could replace the `TimedOut` outcome with its own failure. The report is now best-effort too (`Report` drops its own failure on purpose — the class has no other channel to tell). | RED: `ANoteCallbackThatThrows_NeverChangesTheOutcome` — `System.InvalidOperationException : the note sink is broken` escaped the scheduler call. Break-it: the catch narrowed to `OutOfMemoryException` → red the same way; restored, green. |
+
+**Rejected (1)**
+
+1. *The outline budget.* A product finding, not a defect of this epic's tests: filed for its own plan instead of being folded into E5.

@@ -1,6 +1,4 @@
 using System.Diagnostics;
-using System.Reflection;
-using System.Runtime.InteropServices;
 using CoaiMcp.Runners.Files;
 
 namespace CoaiMcp.FakeCli;
@@ -22,17 +20,8 @@ internal static class HoldFileVerb
         _ => 64,
     };
 
-    [DllImport("libc", EntryPoint = "fork")]
-    private static extern int Fork();
-
-    [DllImport("libc", EntryPoint = "pause")]
-    private static extern int Pause();
-
     /// <summary>The take whose stream cannot be made, with a PRE-EXEC child alive at the moment of failure. The child never execs and never exits by itself: it sits in <c>pause()</c> until the test kills it.</summary>
-    /// <remarks>
-    /// <c>pause</c> is bound BEFORE the fork (<see cref="Marshal.Prelink(MethodInfo)"/>), so the child — which has one thread and a runtime that was running others — does no symbol lookup between the fork and the wait.
-    /// What the child does if the runtime misbehaves there is "stay" or "die"; the test reads the child's pid and fails with a sentence if it is not alive when the probe runs.
-    /// </remarks>
+    /// <remarks>The child is <see cref="PreExecChild"/>, the one fork this fake CLI makes.</remarks>
     private static int TakeThenForkThenFail(string file)
     {
         if (!OperatingSystem.IsLinux())
@@ -40,16 +29,10 @@ internal static class HoldFileVerb
             return 64;
         }
 
-        Marshal.Prelink(typeof(HoldFileVerb).GetMethod(nameof(Pause), BindingFlags.NonPublic | BindingFlags.Static)!);
         var hold = LinuxHeldFile.TakeInheritable(file, handle =>
         {
             GC.KeepAlive(handle);
-            var child = Fork();
-            while (child == 0)
-            {
-                _ = Pause();
-            }
-
+            var child = PreExecChild.Start();
             Console.Out.WriteLine($"forked {child}");
             Console.Out.Flush();
 

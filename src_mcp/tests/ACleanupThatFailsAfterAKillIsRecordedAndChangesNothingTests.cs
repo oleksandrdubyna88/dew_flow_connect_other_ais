@@ -79,6 +79,52 @@ public sealed class ACleanupThatFailsAfterAKillIsRecordedAndChangesNothingTests
         notes.Should().BeEmpty("a cleanup that worked has nothing to say");
     }
 
+    /// <summary>E5 checkpoint 2, F1 (security): the note is written down and shown, and an adapter's exception text may carry what the vendor's API echoed back — a bearer token among it.</summary>
+    [Fact]
+    public async Task ACleanupWhoseMessageCarriesACredential_IsRecordedMasked()
+    {
+        const string FakeToken = "fake-bearer-value-0000-1111-2222-3333";
+        var notes = new List<string>();
+        var adapter = new CleanupThatFails(_ => throw new HttpRequestException($"the cancel was refused: Authorization: Bearer {FakeToken}"));
+        var executor = new ReviewerExecutor(new KilledOnItsDeadline(), note: notes.Add);
+
+        var outcome = await executor.RunAsync(Invocation(adapter), ct: TestContext.Current.CancellationToken).WaitAsync(Guard, TestContext.Current.CancellationToken);
+
+        outcome.Should().BeOfType<ReviewerOutcome.TimedOut>();
+        notes.Should().ContainSingle().Which.Should().Contain("HttpRequestException").And.NotContain(FakeToken, "the exception's message goes through the product's one redactor before it is written");
+    }
+
+    /// <summary>A message longer than a table cell is cut: the note is one sentence, not an HTTP body or a stack.</summary>
+    [Fact]
+    public async Task ACleanupWhoseMessageIsVeryLong_IsRecordedCut()
+    {
+        var notes = new List<string>();
+        var adapter = new CleanupThatFails(_ => throw new InvalidOperationException(new string('x', 5_000)));
+        var executor = new ReviewerExecutor(new KilledOnItsDeadline(), note: notes.Add);
+
+        await executor.RunAsync(Invocation(adapter), ct: TestContext.Current.CancellationToken).WaitAsync(Guard, TestContext.Current.CancellationToken);
+
+        notes.Should().ContainSingle().Which.Length.Should().BeLessThan(600);
+    }
+
+    /// <summary>E5 checkpoint 2, F2: the report is best-effort too — a note callback that throws must not replace the timed-out outcome with its own failure.</summary>
+    [Fact]
+    public async Task ANoteCallbackThatThrows_NeverChangesTheOutcome()
+    {
+        var calls = 0;
+        var adapter = new CleanupThatFails(_ => throw new InvalidOperationException("the DELETE was refused"));
+        var executor = new ReviewerExecutor(new KilledOnItsDeadline(), note: _ =>
+        {
+            calls++;
+            throw new InvalidOperationException("the note sink is broken");
+        });
+
+        var outcome = await executor.RunAsync(Invocation(adapter), ct: TestContext.Current.CancellationToken).WaitAsync(Guard, TestContext.Current.CancellationToken);
+
+        outcome.Should().BeOfType<ReviewerOutcome.TimedOut>("reporting a failed cleanup is a courtesy on a failure path: its own failure cannot replace the reviewer's outcome");
+        calls.Should().Be(1, "the note was tried once");
+    }
+
     [Fact]
     public async Task ACleanupThatThrows_WithNoNoteChannel_StillLeavesTheOutcomeAlone()
     {
