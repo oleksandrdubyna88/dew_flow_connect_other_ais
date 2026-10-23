@@ -57,6 +57,9 @@ public sealed class LaunchTurn : IDisposable
     /// (<c>LaunchOptions.CliVersion</c>: a version already asked, never a spawn of its own).</param>
     public static LaunchTurn Holding(IDisposable held, string warning = "", string cliVersion = "") => new(string.Empty, held, warning, cliVersion);
 
+    /// <summary>Start it, nothing held, with the sentence the person is owed about it — what <see cref="ReviewerInvocation.Note"/> carried; plain <see cref="Free"/> when it is empty.</summary>
+    public static LaunchTurn Noting(string warning) => new(string.Empty, null, warning);
+
     /// <summary>Empty when the launch may start.</summary>
     public string Refusal { get; }
 

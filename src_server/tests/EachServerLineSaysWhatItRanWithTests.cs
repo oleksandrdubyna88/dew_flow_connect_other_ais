@@ -214,8 +214,8 @@ public sealed class EachServerLineSaysWhatItRanWithTests : IDisposable
 
         private readonly ConcurrentQueue<ProcessRequest> _requests = new();
 
-        /// <summary>The one review launch — never a <c>--version</c>.</summary>
-        public ProcessRequest Launch => _requests.Single(r => r.Arguments is not ["--version"]);
+        /// <summary>The one review launch — never a <c>--version</c>, and never the claude capability probe's <c>--help</c>.</summary>
+        public ProcessRequest Launch => _requests.Single(r => r.Arguments is not ["--version"] and not ["--help"]);
 
         public int VersionsAsked => _requests.Count(r => r.Arguments is ["--version"]);
 

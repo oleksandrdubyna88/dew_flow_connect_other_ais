@@ -19,9 +19,27 @@ public enum RestrictedSupport
     Unknown,
 }
 
+/// <summary>What the installed claude's own <c>--help</c> said about <c>--safe-mode</c> — or that nobody asked.</summary>
+/// <remarks>The same four answers as <see cref="RestrictedSupport"/>, for the reviewer's flag
+/// (research/RESULTS_claude_reviewer_safe_mode.md): a help that did not come back is <see cref="Unknown"/>, never "not declared".</remarks>
+public enum SafeModeSupport
+{
+    /// <summary>Nobody asked: the launch goes without the flag, and its note says the capability was never read.</summary>
+    Unprobed = 0,
+
+    /// <summary>The help came back and declares <c>--safe-mode</c> as a flag.</summary>
+    Declared,
+
+    /// <summary>The help came back and does not declare it (or declares it taking a value, which our argv cannot feed).</summary>
+    NotDeclared,
+
+    /// <summary>The help did not come back whole, so nothing is known about the flag.</summary>
+    Unknown,
+}
+
 /// <summary>
-/// What the INSTALLED claude CLI can be asked to do — today, whether it knows <c>--restricted</c> — and why we
-/// believe it.
+/// What the INSTALLED claude CLI can be asked to do — whether it knows <c>--restricted</c> (the consultants' flag) and
+/// <c>--safe-mode</c> (the reviewers') — and why we believe it.
 /// </summary>
 /// <param name="Reason">One sentence for the log and, on <see cref="RestrictedSupport.Unknown"/>, for the caller.</param>
 /// <param name="CouldNotStart">
@@ -29,6 +47,8 @@ public enum RestrictedSupport
 /// unrunnable file — which is a CLI that is not there rather than one that would not say (the whole-branch review, L):
 /// the turn is then refused as <c>cli-not-found</c> with the install cure, never as the vendor refusing anything.
 /// </param>
+/// <param name="SafeMode">What the SAME help said about <c>--safe-mode</c> — read from the one <c>--help</c> this probe runs, never
+/// from a second process. Only the claude REVIEWER reads it; the consultants' argv and their refusals are <see cref="Support"/>'s, unchanged.</param>
 /// <remarks>
 /// <para><b>Why the argv has to ask.</b> Measured 2026-10-02 (research/RESULTS_claude_consultant_confinement.md,
 /// harness scripts/probe-claude-consultant-confinement.mjs): claude 2.1.258 on Windows, launched with
@@ -49,7 +69,7 @@ public enum RestrictedSupport
 /// (todo/PLAN_the_claude_reviewer_is_confined_by_an_allowlist.md) and reads the same fact through
 /// <see cref="ReviewerSettings.ClaudeCli"/>.</para>
 /// </remarks>
-public sealed partial record ClaudeCapability(RestrictedSupport Support, string Reason, bool CouldNotStart = false)
+public sealed partial record ClaudeCapability(RestrictedSupport Support, string Reason, bool CouldNotStart = false, SafeModeSupport SafeMode = SafeModeSupport.Unprobed)
 {
     /// <summary>The default of <see cref="ReviewerSettings.ClaudeCli"/> — which the consultant's builder refuses.</summary>
     public static ClaudeCapability Unprobed { get; } = new(RestrictedSupport.Unprobed, "the installed claude was never asked");
@@ -61,10 +81,19 @@ public sealed partial record ClaudeCapability(RestrictedSupport Support, string 
     public static ClaudeCapability NoRestricted { get; } = new(RestrictedSupport.NotDeclared, "claude --help does not declare --restricted");
 
     /// <summary>A help that did not come back, and why.</summary>
-    public static ClaudeCapability Unknown(string reason) => new(RestrictedSupport.Unknown, reason);
+    public static ClaudeCapability Unknown(string reason) => new(RestrictedSupport.Unknown, reason, SafeMode: SafeModeSupport.Unknown);
 
     /// <summary>The flag itself, as the argv carries it and as the help declares it.</summary>
     public const string RestrictedFlag = "--restricted";
+
+    /// <summary>
+    /// The reviewer's flag: every customization of the reviewed branch — <c>CLAUDE.md</c>, hooks, skills, plugins — off, sign-in
+    /// and permissions untouched. NOT <c>--bare</c>, which skips the keychain read the owner's browser sign-in lives in.
+    /// </summary>
+    public const string SafeModeFlag = "--safe-mode";
+
+    /// <summary>The variable the CLI itself sets when <see cref="SafeModeFlag"/> is given; a reviewer whose row switched safe mode off must not inherit it.</summary>
+    public const string SafeModeVariable = "CLAUDE_CODE_SAFE_MODE";
 
     /// <summary>
     /// How long the CLI has to print its help, per ask.
@@ -108,15 +137,23 @@ public sealed partial record ClaudeCapability(RestrictedSupport Support, string 
     /// consultation over it would be a false alarm; a second failure is a CLI that is not answering. The caller's
     /// cancellation is not an answer: it is rethrown, so a withdrawn turn is never recorded as a refusal.
     /// </remarks>
-    public static async Task<ClaudeCapability> ProbeAsync(IProcessLauncher launcher, string executable, string workingDirectory, CancellationToken ct)
+    public static Task<ClaudeCapability> ProbeAsync(IProcessLauncher launcher, string executable, string workingDirectory, CancellationToken ct) =>
+        ProbeAsync(launcher, executable, workingDirectory, request => request, ct);
+
+    /// <summary>
+    /// The same ask, the request shaped by <paramref name="shape"/> before it starts — how the Team server's reviewer path asks under
+    /// the job's own confinement, slot <c>HOME</c>, temporary folder and cancellation instead of the server's whole environment.
+    /// </summary>
+    public static async Task<ClaudeCapability> ProbeAsync(
+        IProcessLauncher launcher, string executable, string workingDirectory, Func<ProcessRequest, ProcessRequest> shape, CancellationToken ct)
     {
-        var first = await AskAsync(launcher, executable, workingDirectory, ct);
+        var first = await AskAsync(launcher, executable, workingDirectory, shape, ct);
         if (first.Support != RestrictedSupport.Unknown)
         {
             return first;
         }
 
-        var second = await AskAsync(launcher, executable, workingDirectory, ct);
+        var second = await AskAsync(launcher, executable, workingDirectory, shape, ct);
 
         return second.Support == RestrictedSupport.Unknown ? second with { Reason = $"asked twice: {second.Reason}" } : second;
     }
@@ -131,17 +168,24 @@ public sealed partial record ClaudeCapability(RestrictedSupport Support, string 
     /// is NOT support: sent bare before <c>--tools</c>, it would take <c>--tools</c> as its value, and the turn would
     /// run with the user's whole tool set.</para>
     /// </remarks>
-    public static bool RestrictedIn(string helpText) =>
+    public static bool RestrictedIn(string helpText) => Declares(helpText, RestrictedFlag);
+
+    /// <summary>Whether a help text DECLARES <c>--safe-mode</c> as a flag — the rule of <see cref="RestrictedIn"/>: a flag, never prose, never one taking a value.</summary>
+    /// <remarks>A <c>--safe-mode &lt;x&gt;</c> would take the next argument as its value, so it is not the flag this argv sends.</remarks>
+    public static bool SafeModeIn(string helpText) => Declares(helpText, SafeModeFlag);
+
+    private static bool Declares(string helpText, string flag) =>
         Ansi().Replace(helpText, string.Empty).Split('\n')
-            .Select(RestrictedOn)
+            .Select(line => DeclarationOn(line, flag))
             .FirstOrDefault(found => found != Declaration.Absent) == Declaration.Flag;
 
-    private static async Task<ClaudeCapability> AskAsync(IProcessLauncher launcher, string executable, string workingDirectory, CancellationToken ct)
+    private static async Task<ClaudeCapability> AskAsync(
+        IProcessLauncher launcher, string executable, string workingDirectory, Func<ProcessRequest, ProcessRequest> shape, CancellationToken ct)
     {
         try
         {
             var result = await launcher.RunAsync(
-                new ProcessRequest(executable, ["--help"], workingDirectory) { Timeout = ProbeTimeout },
+                shape(new ProcessRequest(executable, ["--help"], workingDirectory) { Timeout = ProbeTimeout }),
                 ct);
             ct.ThrowIfCancellationRequested();
 
@@ -163,7 +207,10 @@ public sealed partial record ClaudeCapability(RestrictedSupport Support, string 
         // of the option table, and a --restricted line further down is simply not in it (the whole-branch review, L).
         { Truncated: true } => Unknown("claude --help was cut short, so the rest of its options were never read"),
         _ when string.IsNullOrWhiteSpace(result.StdOut) => Unknown("claude --help printed nothing"),
-        _ => RestrictedIn(result.StdOut) ? WithRestricted : NoRestricted,
+        _ => (RestrictedIn(result.StdOut) ? WithRestricted : NoRestricted) with
+        {
+            SafeMode = SafeModeIn(result.StdOut) ? SafeModeSupport.Declared : SafeModeSupport.NotDeclared,
+        },
     };
 
     private enum Declaration
@@ -173,11 +220,11 @@ public sealed partial record ClaudeCapability(RestrictedSupport Support, string 
         TakesValue,
     }
 
-    /// <summary>What one help line declares about <c>--restricted</c>.</summary>
-    private static Declaration RestrictedOn(string line)
+    /// <summary>What one help line declares about <paramref name="flag"/>.</summary>
+    private static Declaration DeclarationOn(string line, string flag)
     {
         var tokens = OptionHead(line);
-        var at = Array.FindIndex(tokens, token => NameOf(token) == RestrictedFlag);
+        var at = Array.FindIndex(tokens, token => NameOf(token) == flag);
 
         return at < 0 ? Declaration.Absent : TakesAValue(tokens, at) ? Declaration.TakesValue : Declaration.Flag;
     }

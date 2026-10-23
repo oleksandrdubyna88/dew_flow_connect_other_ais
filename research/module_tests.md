@@ -2981,6 +2981,35 @@ outside that range is told `default` exactly as before. Each path is driven agai
 **What it does NOT prove.** A real codex 0.110–0.130 completing a review: none can use this account's model with a
 ChatGPT login (the measurement's every run ended in a 400 after config load), so the fake CLI stands in for the release.
 
+### The claude reviewer's `--safe-mode`, through both reviewer paths (2026-10-23, E5.S2 of `todo/PLAN_codex_agy_and_claude_reviewers_get_what_kimi_got.md`)
+
+The flow: ordinary settings (a claude row and its executable — no capability, no safe-mode field) → a review round → the stage asks the installed claude's `--help` before it builds
+the roster, every round → the roster copies the answer onto the row → the child is STARTED with `--safe-mode` in the argv it recorded. The flag in `Build` alone is not the flow: the reviewer
+paths did not probe, so the first design would have shipped a flag nothing sent. Each path is driven against the fake CLI whose `--help` prints the REAL 2.1.258 help (declares
+the flag) or a help without it, and the child records its own argv and environment names (`FAKECLI_RECORD_DIR`, `FAKECLI_RECORD_ENV`):
+
+| Path | Scenario test | Covered |
+|---|---|---|
+| Local plan, code and document rounds | `ARealReviewFromNormalSettingsCarriesSafeModeTests` (`APlanReview…`, `ACodeReview…`, `ADocumentReview…`) | yes |
+| Local feature round | `AFeatureIsReviewedEndToEndTests.AFeatureRound_AsksItsClaudeBeforeItBuilds_AndSendsSafeMode` | yes |
+| An in-place swap of the CLI between rounds | `ASwappedCliBetweenRounds_IsReadAgain` (declares, then not: the second round goes without the flag) | yes |
+| A claude without the flag; a help that never answers | `AClaudeWithoutTheFlag_RunsWithoutIt_AndTheRoundSaysSo`, `AHelpThatNeverAnswers_RunsWithoutTheFlag_AndSaysItCouldNotBeRead` (the round's reviewer line carries the note) | yes |
+| The way back (row `safeMode: off`) | `ARowThatSwitchedSafeModeOff_IsLaunchedWithoutIt_AndWithoutTheInheritedVariable` with its control `ARowOnSafeMode_LeavesTheInheritedVariableToTheCli` (the recorder sees an inherited name) | yes |
+| Who is asked | `TheRoundAsksEachClaudeExecutableOnce_AndNoOtherRuntime`, `ARowThatSwitchedSafeModeOff_IsNeverAsked` | yes |
+| The argv, notes and the consultants unchanged | `TheClaudeReviewerRunsInSafeModeTests` (both real help fixtures, an unreadable help, a value-taking flag, `BareIsNeverSent`, `TheConsultantsArgvIsUnchanged`, `TheConsultantsUnknownStaysARefusal` fresh, resumed and question) | yes |
+| Team server job (the twin) and its confined probe | `TheTeamClaudeReviewerRunsInSafeModeTests` (`ARealTeamReview_FromNormalSettings_CarriesSafeMode`, `TheTeamProbeRunsUnderTheJobsConfinement`, `ASwappedCliBetweenJobs_IsReadAgain`) | yes |
+| The extension's switch | `aClaudeRowHasASafeModeSwitch.test.ts` (stored as `off` only, crosses only to a binary that lists `safeMode`, the select writes the row, the user-hooks sentence, the skew note) | yes |
+
+```bash
+./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-class "*TheClaudeReviewerRunsInSafeModeTests" --filter-class "*ARealReviewFromNormalSettingsCarriesSafeModeTests"
+./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-method "*AFeatureRound_AsksItsClaudeBeforeItBuilds_AndSendsSafeMode*"
+./src_server/tests/bin/Debug/net10.0/CoaiServer.Tests.exe --filter-class "*TheTeamClaudeReviewerRunsInSafeModeTests"
+```
+
+**What it does NOT prove.** That a branch's hook stops running under coai's exact argv: the tests assert what is SENT. The effect is the lead's paid canary run, recorded in
+`research/RESULTS_claude_reviewer_safe_mode.md` §5 and pending. Nor that a real claude 2.1.309 declares the flag as the fixtures do (its text is the lead's report, no fixture).
+The server tests' existing `Scripted` launcher now answers the probe's `--help` without counting it as a launch.
+
 ## An older build's edit after the move is a revision (2026-10-07, R7 of `research/PLAN_one_model_catalog.md` epic 5)
 
 The flow: a chat preset moves into the catalog → an older build edits the preset → this build reads it → Chat (the

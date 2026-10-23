@@ -245,10 +245,12 @@ internal sealed class FeatureStage(
         // As every review stage does before it builds: an Off codex row on 0.110–0.130 is sent no tier
         // (research/PLAN_codex_tier_floor.md).
         var tiers = await roster.CodexTiersAsync(launcher, workingDir, ct);
+        // And each claude's --safe-mode, every round (E5.S2).
+        var claude = await roster.ClaudeCapabilitiesAsync(launcher, ct);
         var work = roster.BuildWork(
             settings.Rounds.RolesForRound(Stage.FeatureReview, round), workingDir, context, round,
             stage: Stage.FeatureReview, readsCheckout: false, seed: PanelService.StableSeed(session.State.SessionId, round),
-            source: source, securityFiles: securityDiff, securitySources: securitySources, codexTiers: tiers,
+            source: source, securityFiles: securityDiff, securitySources: securitySources, codexTiers: tiers, claude: claude,
             // The round's own scratch: no checkout here, so no snapshot — the folder its Vibe homes live in (D17).
             scratch: await roster.ScratchAsync(launcher, Stage.FeatureReview, workingDir, readsCheckout: false, ct));
 

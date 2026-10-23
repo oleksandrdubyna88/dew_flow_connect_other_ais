@@ -1,6 +1,6 @@
 # PLAN — the codex, agy and claude reviewers get what Kimi got: a failure is classified from the CLI's own words, and what the person reads is whole, cured and redacted
 
-> Status: **plan only, nothing implemented yet, 2026-10-23.** Scope: `src_mcp/runners/Reviewers/ReviewerExecutor.cs`
+> Status: **E5.S1 and E5.S2 are built on branch `docs/cli-reviewer-gaps` (2026-10-23), nothing is released, and E5.S4's paid run is pending; the other stories are plan only.** Scope: `src_mcp/runners/Reviewers/ReviewerExecutor.cs`
 > (`RateLimit`, the stderr tail, the kept evidence), `ReviewerRuntime.cs` (`CodexRuntime`), `ClaudeRuntime.cs`,
 > `AntigravityRuntime.cs`, `BoundedScheduler.cs` (the summary line), `VendorDiagnosis.cs`, `VendorProbe.cs`,
 > `src_mcp/runners/Files/EvidenceFile.cs`, `src_mcp/core/Notices/Redaction.cs` with its mirror
@@ -600,3 +600,71 @@ read any path they are told it narrows what they are pointed at, not what they c
 `--restricted` answer (which does confine reads) and for the owner to ask.
 
 Cornerstones: 0 of 1 — E5.S2.
+
+### E5.S1/S2 — status: built 2026-10-23, paid S4 run pending
+
+Built on branch `docs/cli-reviewer-gaps`; nothing is released. **E5.S3 (the card note) and E5.S4's paid run are NOT built** — the run is the lead's, its commands and
+its eight observations are in [RESULTS_claude_reviewer_safe_mode.md](../research/RESULTS_claude_reviewer_safe_mode.md) §5, and until a row there says *observed* the
+docs claim the flag is SENT, never that a branch's hook cannot run. No other epic was started.
+
+**What shipped.**
+
+- **S1** — `research/RESULTS_claude_reviewer_safe_mode.md` (the three sources with line numbers, why never `--bare`, the one trade, the pending canary and `--restricted`
+  runs), with its row in `research/README.md`.
+- **S2, the decision** — `ClaudeSafeMode.For(ReviewerSettings)` (`runners/Reviewers/ClaudeSafeMode.cs`): `--safe-mode` (placed before `--permission-mode`) when the row's
+  `SafeMode` is on and `ClaudeCli.SafeMode == Declared`; else no flag and a note naming the branch's `CLAUDE.md` and hooks (never MCP) — one sentence each for
+  not-declared, unknown (*could not be read*), never-asked and switched-off. `ClaudeCapability` grew `SafeModeSupport SafeMode` and `SafeModeIn(helpText)` (the
+  `RestrictedIn` rule, generalised to one `Declares(help, flag)`), read from the SAME `--help`; `Unknown(reason)` sets both. Never `--bare`; never a retry without the flag.
+- **S2, both reviewer paths ask.** Local: `RosterBuilder.ClaudeCapabilitiesAsync` → `ClaudeCapabilities` (beside `CodexTiers`), once per distinct executable whose row is ON,
+  every round, no cache, in the coai data folder — passed through the plan, code, document and feature stages into `BuildWork(…, claude:)` → `RosterFrame` → `SettingsFor`
+  (security lane included). Team server: `ReviewLauncher` probes per job through the same `Shaped(request, slot, work)` that shapes the launch (confinement, slot `HOME`,
+  the job's folder as temp, the job's cancellation).
+- **S2, the note and the way back.** `ReviewerInvocation.Note` (made by the pure `Build`) → `ClaudeRuntime.TakeTurnAsync` → `LaunchTurn.Noting` → the outcome's `Warning` → the
+  round's reviewer line. The row setting `safeMode` (`on` default, `off`; `VendorDto`/`ProviderSettings.SafeMode`; `--features` lists `safeMode`; the extension's model card
+  select, stored as `off` only, sent only to a binary that lists the feature) removes the flag AND an inherited `CLAUDE_CODE_SAFE_MODE` from the child's environment.
+- **The card note of E5.S4's recorded trade** (*safe mode also switches off your own user hooks for this reviewer; coai's own limits keep it read-only*) is the hint under the
+  select and in its help — the only place it is said. The consultants' argv and their `Unknown` → refusal are untouched.
+
+**RED observed first** (against the code before the fix, not a setup error):
+
+| test | failure message |
+|---|---|
+| `WhenHelpDeclaresSafeMode_TheArgvCarriesIt` | `Expected argv {"-p", "--output-format", "json", "--permission-mode", "plan", "--disallowedTools", …} to contain "--safe-mode".` |
+| `WhenHelpDoesNotDeclareIt_…AndTheLaunchCarriesANote` | `Expected launch.Note "" to contain "the installed claude does not declare --safe-mode".` |
+| `AnUnreadableHelp_IsUnknown_AndSaysSo` / `ALaunchNobodyProbed_…` | `Expected launch.Note "" to contain "could not be read"` / `"was not asked"` |
+| `TheSafeModeSettingOff_DropsTheFlag_AndSaysSo` | `Expected off.Note "" to contain "switched off".` |
+| `ADeclarationWithARequiredValue_IsNotSupport` (with `SafeModeIn` stubbed to false) | `Expected ClaudeCapability.SafeModeIn("Options:\n  --safe-mode [mode] …") to be True because an OPTIONAL value is not taken from a following option, but found False.` |
+| `ARealReviewFromNormalSettingsCarriesSafeModeTests` (the reviewer path never reads what it asked: `ClaudeCapabilities.For` stubbed to `Unprobed`) | 6 of 15 red: `Expected launches to contain only items matching … because every claude review launch carries --safe-mode, but {{"-p", "--output-format", "json", "--permission-mode", "plan", …` and `reviewers: "all 1 reviewers answered; warned — claude/PlanCritique: the installed claude was not asked about --safe-mode for this launch, so it was not sent; …"` where `does not declare --safe-mode` was expected |
+| `TheTeamClaudeReviewerRunsInSafeModeTests` (the server never probes) | 4 of 6 red: `Expected claude.Probes to contain a single item because the job asks the box's claude for its help before it builds the launch, but the collection is empty.` |
+
+**Break-its** (each by editing the code, running, then WRITING the file back and rebuilding — a copy would keep its mtime):
+
+| break | red |
+|---|---|
+| the flag dropped from `Build`'s argv | `WhenHelpDeclaresSafeMode_TheArgvCarriesIt`, `WhenHelpDeclaresIt_OnTheOlderCli_Too`, and the plan, code, document and swapped-CLI scenarios |
+| `SafeModeFlag` set to `--bare` | `BareIsNeverSent`, `WhenHelpDeclares…` |
+| `SafeModeIn` as a substring test | `AMentionInProse_IsNotADeclaration`, both `ADeclarationWithARequiredValue_IsNotSupport` cases |
+| `Unknown(reason)` no longer sets `SafeMode` | `AnUnreadableHelp_IsUnknown_AndSaysSo` |
+| the env removal dropped | `TheSafeModeSettingOff_DropsTheFlag_AndSaysSo`, `TheRowsApiKeyIsStillApplied_…`, `ARowThatSwitchedSafeModeOff_IsLaunchedWithoutIt_AndWithoutTheInheritedVariable` (the child's own environment record) |
+| an Off row still probed | `ARowThatSwitchedSafeModeOff_IsNeverAsked` |
+| the consultant treats `Unknown` as ready | `TheConsultantsUnknownStaysARefusal` (and `AClaudeThatCannotBeStarted_IsRefusedAsCliNotFound_WithTheInstallCure`) |
+| a static cache of the answer | `ASwappedCliBetweenRounds_IsReadAgain` (the others it reds are the cache outliving the test) |
+| the document stage not passing `claude:` | `ADocumentReview_FromNormalSettings_CarriesSafeMode` |
+| the feature stage not passing `claude:` | `AFeatureRound_AsksItsClaudeBeforeItBuilds_AndSendsSafeMode` |
+| the note not carried by `TakeTurnAsync` | `WhenHelpDoesNotDeclareIt_…`, `AClaudeWithoutTheFlag_RunsWithoutIt_AndTheRoundSaysSo`, `AHelpThatNeverAnswers_…` |
+| the Team probe not shaped | `TheTeamProbeRunsUnderTheJobsConfinement`: `Expected probe.InheritsEnvironment to be False because the probe is confined like the review …, but found True.` |
+| the extension's feature gate, the claude-only rule and the runtime check removed | three of six in `aClaudeRowHasASafeModeSwitch.test.ts` |
+
+**Deviations from the plan, and why.**
+
+1. **`claude:` is an OPTIONAL parameter of `BuildWork`**, unlike `codexTiers`. A required one would have changed about a hundred test call sites for a fault that is visible
+   (no flag, a note) instead of fatal; the four stages' scenario tests are what hold each stage to asking.
+2. **The local probe runs in the coai data folder, not the worktree** — the one place a help must not be started from is the tree under review.
+3. **The absent-flag note does not travel on the Team server path.** `ReviewAttempt` has no per-launch warning channel, so there the note is the box's own `claude --help` and
+   `POST_DEPLOY.md` (*A third thing item 11 can be*) says how to read it. The Team server has no per-row `safeMode`; it keeps the default.
+4. **The setting is a per-row field** (like `fast`), not a panel-wide key like `coai.kimiAllowNetworkSignIn`, because a second claude row may differ. It is drawn on claude cards only.
+5. **The user-hooks sentence is the setting's hint and help, not a launch note**; E5.S3's `ConfigurationNote` stays unbuilt.
+6. **The extension's tests were written after its code** (RED first is not observed for `aClaudeRowHasASafeModeSwitch.test.ts`); the break-it row above is their teeth.
+7. **Existing server test helpers now ignore a `--help` request** (`ReviewLauncherTests.Scripted`, `EachServerLineSaysWhatItRanWithTests.Received`): a claude job asks it first, and those tests count launches.
+
+**Test runs** (executables only): `the whole `CoaiMcp.Tests.exe` suite through `low-priority.mjs`: 13686 total, 0 failed; `CoaiServer.Tests.exe`: 620 total, 0 failed, 1 skipped; the extension's `npm test`: 6515 tests, 0 failed (one unrelated `chatStoreFile` race test failed once under load and passed alone three times); the new classes alone: `TheClaudeReviewerRunsInSafeModeTests` 14, `ARealReviewFromNormalSettingsCarriesSafeModeTests` 15, `TheTeamClaudeReviewerRunsInSafeModeTests` 6, `aClaudeRowHasASafeModeSwitch.test.ts` 6, plus the feature twin in `AFeatureIsReviewedEndToEndTests`; `plan-lifecycle.mjs` clean.`

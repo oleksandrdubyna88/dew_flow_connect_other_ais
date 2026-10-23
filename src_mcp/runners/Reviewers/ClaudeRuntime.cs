@@ -86,11 +86,14 @@ public sealed class ClaudeRuntime(string id = "claude") : IReviewerRuntime
         // Once each, for the argv AND the record of what was sent: two calls that must agree are one value.
         var effort = EffortArguments(settings);
         var fast = ClaudeFastMode.Args(settings);
+        var safe = ClaudeSafeMode.For(settings);
         var request = new ProcessRequest(
             settings.ExecutablePath.Length > 0 ? settings.ExecutablePath : DefaultExecutable,
             [
                 "-p",
                 "--output-format", "json",
+                // The reviewed branch's own CLAUDE.md and hooks do not steer the reviewer — when the CLI declares the flag (E5.S2).
+                .. safe.Arguments,
                 "--permission-mode", "plan",
                 "--disallowedTools", .. DisallowedTools(settings),
                 // No MCP server at all: the person's own list held coai itself (issue #514).
@@ -106,16 +109,42 @@ public sealed class ClaudeRuntime(string id = "claude") : IReviewerRuntime
             // The prompt rides stdin, like every other vendor here: on Windows these CLIs are
             // shims, and a multi-line argument is truncated at its first newline.
             StdIn = prompt,
-            Environment = settings.ApiKey.Length > 0
-                ? new Dictionary<string, string?> { ["ANTHROPIC_API_KEY"] = settings.ApiKey }
-                : new Dictionary<string, string?>(),
+            Environment = EnvironmentFor(settings, safe),
             Timeout = settings.Timeout,
         };
         return new ReviewerInvocation(Provider, role, request, OutputFile: string.Empty, this, Model: settings.Model, Effort: settings.ReasoningEffort)
         {
             Sent = new(effort.Length > 0 ? settings.ReasoningEffort : string.Empty, ClaudeFastMode.TierOf(fast, settings.Fast)),
+            Note = safe.Note,
         };
     }
+
+    /// <summary>
+    /// The row's key, and — when the row switched safe mode off — the CLI's own <c>CLAUDE_CODE_SAFE_MODE</c> REMOVED (a null value is how
+    /// the launcher unsets a name), so the switch is a way back for a person whose shell already sets it.
+    /// </summary>
+    private static Dictionary<string, string?> EnvironmentFor(ReviewerSettings settings, ClaudeSafeMode safe)
+    {
+        var environment = new Dictionary<string, string?>();
+        if (settings.ApiKey.Length > 0)
+        {
+            environment["ANTHROPIC_API_KEY"] = settings.ApiKey;
+        }
+
+        if (safe.ClearsTheVariable)
+        {
+            environment[ClaudeCapability.SafeModeVariable] = null;
+        }
+
+        return environment;
+    }
+
+    /// <summary>
+    /// The launch control: start it, carrying the note <see cref="Build"/> made — the flag it left out and why — to the outcome. No
+    /// check can refuse here: a claude without <c>--safe-mode</c> is a launch with a note, never a refusal.
+    /// </summary>
+    public Task<LaunchTurn> TakeTurnAsync(ReviewerInvocation invocation, IProcessLauncher launcher, CancellationToken ct) =>
+        Task.FromResult(LaunchTurn.Noting(invocation.Note));
 
     /// <summary>The review is the envelope's <c>result</c> string; the rest is metadata.</summary>
     public string? ReadAnswer(ReviewerInvocation invocation, ProcessResult result)

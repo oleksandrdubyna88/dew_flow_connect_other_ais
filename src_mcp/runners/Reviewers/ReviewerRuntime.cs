@@ -154,9 +154,22 @@ public sealed record ReviewerSettings(string Provider)
     /// that lacks the flag (2.1.197: <c>error: unknown option '--restricted'</c>, measured 2026-10-02), and "not
     /// declared" would launch a claude that HAS it unconfined. So a new call site that forgets
     /// <c>PrepareAsync</c> fails loudly in its first test instead of running unconfined in the field (epic 3's
-    /// review). The claude REVIEWER does not read this field yet.</para>
+    /// review). The claude REVIEWER reads only <see cref="ClaudeCapability.SafeMode"/> of it (<see cref="ClaudeSafeMode"/>) — a
+    /// launch nobody probed goes without <c>--safe-mode</c> and says so, rather than being refused.</para>
     /// </remarks>
     public ClaudeCapability ClaudeCli { get; init; } = ClaudeCapability.Unprobed;
+
+    /// <summary>
+    /// For a <c>claude</c> reviewer only: whether it starts in the CLI's own safe mode, so the reviewed branch's <c>CLAUDE.md</c>,
+    /// hooks and plugins do not steer it — on by default, and sent only when the installed CLI declares the flag
+    /// (<see cref="ClaudeCli"/>; <see cref="ClaudeSafeMode"/>). Off is the visible way back: no flag, and an inherited
+    /// <c>CLAUDE_CODE_SAFE_MODE</c> is removed from the child's environment too.
+    /// </summary>
+    /// <remarks>
+    /// The consultants never read it: their argv and their refusal on an unreadable <c>--restricted</c> are unchanged. The Team
+    /// server leaves it at its default — it has no per-row setting, and its reviewer already runs in an empty folder.
+    /// </remarks>
+    public bool SafeMode { get; init; } = true;
 
     /// <summary>
     /// For a <c>codex</c> vendor only: whether the INSTALLED CLI can be told the standard tier — read off its own
@@ -266,6 +279,15 @@ public sealed record ReviewerInvocation(
     /// <remarks>Story 3.4 of research/PLAN_every_round_is_counted.md: the raw half of what a ledger line says the launch ran
     /// with. <see cref="SentOptions"/> says why it sits beside <see cref="Effort"/> rather than replacing it.</remarks>
     public SentOptions Sent { get; init; } = SentOptions.Nothing;
+
+    /// <summary>
+    /// What the adapter's <c>Build</c> decided about this launch that the person is owed — a flag it left out and why — carried
+    /// to the launch control (<see cref="LaunchTurn.Noting"/>) and so to the outcome's <see cref="ReviewerOutcome.Warning"/>.
+    /// Empty for nearly every launch.
+    /// </summary>
+    /// <remarks>The claude reviewer's absent <c>--safe-mode</c> is the first (<see cref="ClaudeSafeMode"/>). <c>Build</c> is pure, so
+    /// the sentence is made there, from the settings it was given, and travels on the invocation.</remarks>
+    public string Note { get; init; } = string.Empty;
 
     /// <summary>
     /// What this launch RAN WITH, labelled for its ledger line — set by whoever knows the row it was built for (the

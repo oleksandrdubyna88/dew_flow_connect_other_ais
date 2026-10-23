@@ -529,8 +529,18 @@ public sealed class ReviewLauncherTests
         /// <summary>Thrown by the SECOND launch instead of answering — a job abandoned mid-continuation.</summary>
         public Exception? SecondThrows { get; init; }
 
+        /// <summary>The claude capability probes (<c>--help</c>) the launcher asked — not launches, so <see cref="Requests"/> keeps counting reviews.</summary>
+        public List<ProcessRequest> Probes { get; } = [];
+
         public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
         {
+            if (request.Arguments is ["--help"])
+            {
+                Probes.Add(request);
+
+                return new ProcessResult(0, "Usage: claude [options]", string.Empty, TimedOut: false);
+            }
+
             Requests.Add(request);
             WorkDirectoryExistedAtEveryLaunch &= Directory.Exists(JobDirectory(request));
             SchemaExistedAtEveryLaunch &= File.Exists(Path.Combine(JobDirectory(request), SchemaFile.Name));

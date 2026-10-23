@@ -19,6 +19,7 @@ export const NEW_CONTROLS: readonly string[] = [
   'model.effort',
   'model.stream',
   'model.fast',
+  'model.safeMode',
 ];
 
 /**

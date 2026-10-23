@@ -145,6 +145,15 @@ public sealed record ProviderSettings(string Provider)
         _ => Core.Catalog.FastMode.Off,
     };
 
+    /// <summary>
+    /// A claude row's safe mode for its reviewer launches: ON unless the row says <c>off</c> — the safe default, a row written before the
+    /// field existed included. The visible way back from <c>--safe-mode</c> (<see cref="Runners.Reviewers.ClaudeSafeMode"/>); other runtimes ignore it.
+    /// </summary>
+    public bool SafeMode { get; init; } = true;
+
+    /// <summary>A row's <c>safeMode</c> as written: only <c>off</c>, any case, switches it off; anything else — absent included — is on.</summary>
+    internal static bool SafeModeOf(string? said) => !string.Equals(said?.Trim(), "off", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>Whether this vendor's reviews run somewhere other than this machine.</summary>
     /// <remarks>
     /// The same question <c>PanelService.Remote</c> asked privately, asked of the row instead: the
@@ -1425,6 +1434,7 @@ public sealed record PanelSettings
                 Price = PriceOf(v.Price),
                 Api = ApiRowOf(v),
                 Fast = ProviderSettings.FastOf(v.Fast),
+                SafeMode = ProviderSettings.SafeModeOf(v.SafeMode),
                 // Trimmed at its edges only: the inside is the person's own text, line breaks and all.
                 SystemPrompt = v.SystemPrompt?.Trim() ?? string.Empty,
                 // The extension's rule (`isMinutes`): 1 to a day; anything else is unset, the round's timeout.

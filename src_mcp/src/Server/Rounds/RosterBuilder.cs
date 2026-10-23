@@ -85,15 +85,15 @@ internal sealed class RosterBuilder(
     /// The security lane's roster for these settings — the one place its decisions are made, shared by
     /// the work it appends and the source reader that must not read for a pairing that will not run.
     /// </summary>
-    internal SecurityRoster Security() => Security(CodexTiers.None, RoundScratch.None);
+    internal SecurityRoster Security() => Security(CodexTiers.None, ClaudeCapabilities.None, RoundScratch.None);
 
     /// <summary>
     /// The security lane's roster, its codex rows launched with what this round's codex executables said about the
-    /// standard tier (research/PLAN_codex_tier_floor.md) — the lane's reviewers are launched through <see cref="SettingsFor"/>
-    /// like every other row, so they read the same answers.
+    /// standard tier (research/PLAN_codex_tier_floor.md) and its claude rows with what theirs said about <c>--safe-mode</c> — the
+    /// lane's reviewers are launched through <see cref="SettingsFor"/> like every other row, so they read the same answers.
     /// </summary>
-    internal SecurityRoster Security(CodexTiers tiers, RoundScratch scratch) => new(_settings, _prompts, _canRun, _runtimeFor,
-        (provider, runtime) => SettingsFor(provider, runtime, runtime is ApiRuntime ? ApiRowView.Of(provider, _settings.ApiOverrides) : NotApi, tiers, scratch), log);
+    internal SecurityRoster Security(CodexTiers tiers, ClaudeCapabilities claude, RoundScratch scratch) => new(_settings, _prompts, _canRun, _runtimeFor,
+        (provider, runtime) => SettingsFor(provider, runtime, runtime is ApiRuntime ? ApiRowView.Of(provider, _settings.ApiOverrides) : NotApi, tiers, claude, scratch), log);
 
     /// <summary>
     /// The round's own scratch (<see cref="RoundScratch"/>), prepared before the roster is built because a snapshot is made
@@ -149,6 +149,18 @@ internal sealed class RosterBuilder(
     internal Task<CodexTiers> CodexTiersAsync(Runners.Processes.IProcessLauncher launcher, string workingDirectory, CancellationToken ct) =>
         CodexTiers.AskAsync(
             _settings.Providers.Where(_canRun).SelectMany(RuntimeRow), launcher, workingDirectory, log, ct);
+
+    /// <summary>
+    /// Asks every runnable claude executable whose safe mode is on whether its <c>--help</c> declares <c>--safe-mode</c> — once each, every
+    /// round, before the roster is built — for <see cref="BuildWork"/>'s <c>claude</c> (todo/PLAN_codex_agy_and_claude_reviewers_get_what_kimi_got.md, E5.S2).
+    /// </summary>
+    /// <remarks>
+    /// Asked in the coai DATA folder, never in the worktree: the tree under review is the one place a help must not be started from.
+    /// Every runnable row, for the reason <see cref="CodexTiersAsync"/> gives: the security lane names its own vendors.
+    /// </remarks>
+    internal Task<ClaudeCapabilities> ClaudeCapabilitiesAsync(Runners.Processes.IProcessLauncher launcher, CancellationToken ct) =>
+        ClaudeCapabilities.AskAsync(
+            _settings.Providers.Where(_canRun).SelectMany(RuntimeRow), launcher, _settings.DataDir, log, ct);
 
     private IEnumerable<(ProviderSettings Provider, IReviewerRuntime Runtime)> RuntimeRow(ProviderSettings provider) =>
         _runtimeFor(provider) is { } runtime ? [(provider, runtime)] : [];
@@ -206,9 +218,13 @@ internal sealed class RosterBuilder(
         IReadOnlyDictionary<string, string>? securitySources = null,
         // The round's own scratch (ScratchAsync): its snapshot and the folder its Vibe homes live in. Absent, a runtime that
         // must not start in the checkout is LEFT OUT of a stage that mounts one, with its reason — never started in it.
-        RoundScratch? scratch = null)
+        RoundScratch? scratch = null,
+        // What this round's claude executables said about --safe-mode (ClaudeCapabilitiesAsync), asked by the stage before it builds.
+        // Optional, unlike codexTiers: forgetting it does not fail a launch, it sends no flag and the reviewer's note says the CLI was
+        // never asked — and the end-to-end tests (ARealReviewFromNormalSettingsCarriesSafeModeTests) hold every stage to asking.
+        ClaudeCapabilities? claude = null)
     {
-        var frame = FrameFor(stage, context, worktreePath, readsCheckout, codexTiers, source, scratch);
+        var frame = FrameFor(stage, context, worktreePath, readsCheckout, codexTiers, claude ?? ClaudeCapabilities.None, source, scratch);
 
         // Only what can actually run: a vendor whose CLI is missing or whose key is absent is
         // reported by `providers` and left out of the deal rather than dealt work it cannot do.
@@ -252,7 +268,7 @@ internal sealed class RosterBuilder(
             (provider, item) => CanCarry(provider, item.Role) && FitsTheCap(frame, provider, item));
 
         var ordinary = collector.Work(ordinaryDue: ids.Count > 0, frame.Scratch);
-        return securityFiles is null ? ordinary : Security(frame.Tiers, frame.Scratch).Append(ordinary, securityFiles, stage, round, securitySources);
+        return securityFiles is null ? ordinary : Security(frame.Tiers, frame.Claude, frame.Scratch).Append(ordinary, securityFiles, stage, round, securitySources);
     }
 
     /// <summary>
@@ -272,7 +288,7 @@ internal sealed class RosterBuilder(
     /// so. The caller knows which stage it is running; it passes it.</para>
     /// </remarks>
     private RosterFrame FrameFor(
-        Stage stage, string context, string worktreePath, bool readsCheckout, CodexTiers tiers,
+        Stage stage, string context, string worktreePath, bool readsCheckout, CodexTiers tiers, ClaudeCapabilities claude,
         Runners.Feature.SourceTurns? source, RoundScratch? scratch)
     {
         var row = Stages.Of(stage);
@@ -287,7 +303,7 @@ internal sealed class RosterBuilder(
         RosterFrame.OwnTheWorkspace(roundScratch, launchDir, worktreePath);
 
         return new RosterFrame(stage, row, context, schemaFile, outputDir, repairDir, launchDir, hasCheckout,
-            source ?? Runners.Feature.SourceTurns.None, tiers, roundScratch);
+            source ?? Runners.Feature.SourceTurns.None, tiers, claude, roundScratch);
     }
 
     /// <summary>
@@ -468,7 +484,7 @@ internal sealed class RosterBuilder(
         // what a row's prompt cap measures, so the size it checks is the size that is sent.
         var (prompt, instruction) = FirstPrompt(frame, seat.Provider, seat.Runtime, seat.Choice);
         var repairBase = _reviewerPrompt.ComposePrompt(seat.Choice, frame.Context, frame.Row.Reads, frame.Row.Answers, frame.FollowUps);
-        var launch = SettingsFor(seat.Provider, seat.Runtime, seat.Api, frame.Tiers, frame.Scratch)
+        var launch = SettingsFor(seat.Provider, seat.Runtime, seat.Api, frame.Tiers, frame.Claude, frame.Scratch)
             with
         { Conversation = ConversationKey.Of(seat.Provider.Provider, seat.Role, prompt) };
         var redact = Redacting(instruction);
@@ -521,7 +537,7 @@ internal sealed class RosterBuilder(
     /// module's view (the row over the environment over the calibrated default); a CLI row's from the
     /// panel's local-engine settings, as they always have.
     /// </summary>
-    private ReviewerSettings SettingsFor(ProviderSettings provider, IReviewerRuntime runtime, ApiRowView api, CodexTiers tiers, RoundScratch scratch)
+    private ReviewerSettings SettingsFor(ProviderSettings provider, IReviewerRuntime runtime, ApiRowView api, CodexTiers tiers, ClaudeCapabilities claude, RoundScratch scratch)
     {
         var settings = new ReviewerSettings(provider.Provider)
         {
@@ -541,6 +557,10 @@ internal sealed class RosterBuilder(
             // Only CodexRuntime reads it: whether this row's installed codex can be told the standard tier, as the stage
             // asked it before building (research/PLAN_codex_tier_floor.md) — Unprobed for every row nobody asked about.
             CodexTier = tiers.For(provider, runtime),
+            // Only ClaudeRuntime's reviewer reads these two: what this row's installed claude said about --safe-mode, as the stage
+            // asked it before building (E5.S2) — Unprobed for a row nobody asked about — and the row's own switch for it.
+            ClaudeCli = claude.For(provider, runtime),
+            SafeMode = provider.SafeMode,
             // Only RemoteRuntime uses it, to find this machine's token for its Team server.
             DataDir = _settings.DataDir,
             // A reviewer starts no MCP server (issue #514); read per round, so a server added to

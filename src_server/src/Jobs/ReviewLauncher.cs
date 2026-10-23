@@ -148,7 +148,8 @@ public sealed class ReviewLauncher(
         try
         {
             work = Directory.CreateTempSubdirectory("coai-server-job-").FullName;
-            var first = Confined(runtime, vendor, job, work, environment);
+            var cli = await ClaudeCliAsync(runtime, work, environment, ct);
+            var first = Confined(runtime, vendor, job, work, environment, cli);
             var attempt = await AttemptAsync(first, job, ct);
 
             // Every line the attempt writes says what its launch ran with (story 3.4 of research/PLAN_every_round_is_counted.md):
@@ -370,7 +371,8 @@ public sealed class ReviewLauncher(
         VendorConfig vendor,
         JobRecord job,
         string work,
-        IReadOnlyDictionary<string, string?> slot)
+        IReadOnlyDictionary<string, string?> slot,
+        ClaudeCapability cli)
     {
         var policy = Confinement.OfEveryJob;
         var built = runtime.Build(
@@ -389,13 +391,32 @@ public sealed class ReviewLauncher(
                 // reads is the SLOT's (its CODEX_HOME and HOME), not this server's: naming a server the
                 // slot does not declare would stop codex from starting at all.
                 McpServersToSwitchOff = NoMcpServers.CodexConfigured(SlotFirst(slot)),
+                // Only the claude reviewer reads it: what THIS host's claude said about --safe-mode, asked for this job just before
+                // (ClaudeCliAsync). The server has no per-row setting, so safe mode keeps its default — on.
+                ClaudeCli = cli,
             }));
 
-        return built with
-        {
-            Request = policy.Apply(built.Request) with { Environment = OwnTemporaryDirectory(slot, work) },
-        };
+        return built with { Request = Shaped(built.Request, slot, work) };
     }
+
+    /// <summary>
+    /// A request as this server's job starts it: confined (<see cref="Confinement"/>), the slot's own variables, the job's directory as
+    /// its temporary one. The launch AND the claude capability probe go through here, so what the probe learns is learned under the
+    /// environment the review will run in — never under this server's whole one.
+    /// </summary>
+    private static ProcessRequest Shaped(ProcessRequest request, IReadOnlyDictionary<string, string?> slot, string work) =>
+        Confinement.OfEveryJob.Apply(request) with { Environment = OwnTemporaryDirectory(slot, work) };
+
+    /// <summary>
+    /// What this host's claude says about <c>--safe-mode</c>, read off its own <c>--help</c> FRESH for every job — no cache: an in-place
+    /// upgrade is only seen by asking, and a remembered answer would still need the spawn. Asked under the job's <see cref="Shaped"/>
+    /// request, in the job's own folder, within the job's cancellation. Not claude: nothing is asked.
+    /// </summary>
+    private async Task<ClaudeCapability> ClaudeCliAsync(
+        IReviewerRuntime runtime, string work, IReadOnlyDictionary<string, string?> slot, CancellationToken ct) =>
+        runtime is ClaudeRuntime
+            ? await ClaudeCapability.ProbeAsync(launcher, runtime.DefaultExecutable, work, request => Shaped(request, slot, work), ct)
+            : ClaudeCapability.Unprobed;
 
     /// <summary>
     /// The slot's own variables, plus the job's directory as its temporary one — in every spelling

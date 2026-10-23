@@ -12232,6 +12232,17 @@ the fast tier, As the CLI is set; help `fastMode`, the "new" tag `model.fast`) i
 The seam writes a codex row set to On and reads `--providers`' `fast` back: `on` from a binary that lists `fastMode`,
 `off` from one handed nothing.
 
+## A claude row's reviewer safe mode on the new model card (2026-10-23, E5.S2 of `todo/PLAN_codex_agy_and_claude_reviewers_get_what_kimi_got.md`)
+
+New Settings page only; a setting, not an action. `catalogFields.safeModeField` keeps a claude row's `safeMode` only as `off` (On, the default, is stored as nothing, so a
+row that never set it and one set to on read alike; no other runtime has the flag). `vendorsWire.safeModeOnTheWire` sends `off` in `COAI_VENDORS` only to a binary whose
+`--features` lists `safeMode` (`FEATURES.safeMode`; `FeaturesMode.cs` lists it) — an older binary skips the member and has no safe mode to switch, and the card then says
+*this side's coai-mcp does not take its reviewer safe-mode switch yet* (`IGNORED`, only for a state the person chose). The card draws a two-state select
+(`modelCardFields.safeModeField`: On — the branch cannot steer it, Off — the branch's CLAUDE.md and hooks apply; help `safeMode`, the "new" tag `model.safeMode`) in a claude
+CLI row's tuning, with the one recorded trade beside it: *safe mode also switches off your own user hooks for this reviewer; coai's own limits keep it read-only, never a
+hook* (`aClaudeRowHasASafeModeSwitch.test.ts` holds the sentence). The seam is the panel's one vendor write (`data-setting="safeMode"`); the claude row's `providers` health
+is unchanged. The absent-flag note is the round's, not the card's (the card note for it is E5.S3's `ConfigurationNote`, not built here).
+
 ## A chat runs on its row's fast mode (2026-10-07, research/PLAN_fast_mode.md, Story C)
 
 `cliChatLaunch.chatLaunchFor` adds the tier a chat forces, by the review launch's rule (`forcedTier`): the row's state

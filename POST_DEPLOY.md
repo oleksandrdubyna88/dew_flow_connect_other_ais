@@ -294,6 +294,17 @@ nobody can use is worse, and the exposure needs a colleague who means harm — b
 known state rather than to a safe one, and the fix is to go forward again with the flag the installed
 CLI accepts rather than to sit there.
 
+### A third thing item 11 can be: the box's `claude` and `--safe-mode`
+
+The Team server's claude reviewer is sent `--safe-mode` when — and only when — the installed `claude --help` declares it, asked fresh for every job
+(`ReviewLauncher`, E5.S2 of `todo/PLAN_codex_agy_and_claude_reviewers_get_what_kimi_got.md`). Check it once per deploy, on the box, as the service user:
+`claude --help | grep -e "--safe-mode"` — it must print the option's line (the recorded 2.1.197 and 2.1.258 helps both do). Two outcomes, neither a refusal:
+
+1. **It prints nothing** (an older or renamed claude): every claude review goes without the flag and nothing says so on the wire — the server has no per-launch warning
+   channel, so this check IS the note. The reviewers still run; the exposure is the one the flag exists to close.
+2. **It prints the line and every claude review then fails** with a message naming `--safe-mode`: a declared flag the CLI mis-handles. The job is NOT retried without the
+   flag; roll back as above, then fix forward.
+
 ## Going back from catalog epic 5 (item 12): the downgrade path, said plainly
 
 **Installing the older extension again is NOT a way back.** The newer extension stamps the settings file coai-mcp reads,

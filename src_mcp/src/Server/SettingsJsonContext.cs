@@ -75,7 +75,9 @@ internal sealed record VendorDto(
     /// <summary>For an `api` row: ask for the answer as a stream (research/PLAN_api_streaming.md). Absent or false is today's call.</summary>
     bool? Stream = null,
     /// <summary>The row's fast mode (research/PLAN_fast_mode.md): `off`, `on` or `cli`. Absent is Off — the owner's default.</summary>
-    string? Fast = null);
+    string? Fast = null,
+    /// <summary>A claude row's safe mode for its REVIEWER launches (todo/PLAN_codex_agy_and_claude_reviewers_get_what_kimi_got.md, E5.S2): `on` or `off`. Absent is on — the safe default.</summary>
+    string? SafeMode = null);
 
 /// <summary>
 /// One vendor row's price on the wire — dollars per million tokens (PLAN_feature_review.md S3.7).

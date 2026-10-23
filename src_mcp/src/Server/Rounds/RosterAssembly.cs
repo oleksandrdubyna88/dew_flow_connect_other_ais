@@ -21,6 +21,7 @@ internal sealed record RosterFrame(
     bool HasCheckout,
     Runners.Feature.SourceTurns Turns,
     CodexTiers Tiers,
+    ClaudeCapabilities Claude,
     RoundScratch Scratch)
 {
     /// <summary>How many follow-up turns a reviewer of this round may take — the feature stage's source turns, else none.</summary>

@@ -1,7 +1,7 @@
 import { apiSettingsFields } from './apiSettingsView';
 import { type BinarySays, confirmButton, describedBy, type FirstSeen, newTag, skew } from './catalogShell';
 import { escapeHtml } from './escapeHtml';
-import { effortField, fastField, maxPromptField, streamField, systemPromptField, thinkingLine, timeoutField, usesBoxes } from './modelCardFields';
+import { effortField, fastField, maxPromptField, safeModeField, streamField, systemPromptField, thinkingLine, timeoutField, usesBoxes } from './modelCardFields';
 import { rowHasFastTier } from './fastTier';
 import {
   type CheckFacts, checkButton, cliBadge, contractNote, healthBadge, kimiMarkerNote, kimiNetworkSignInField, offMachineNote, verdictBadge, versionWarningNote, worldButtons,
@@ -154,6 +154,7 @@ const IGNORED: readonly { readonly feature: string; readonly what: string; reado
   { feature: 'systemPrompt', what: 'its system prompt', set: (vendor) => (vendor.systemPrompt ?? '').length > 0 },
   { feature: 'timeoutMinutes', what: 'its own time limit', set: (vendor) => vendor.runtime !== 'api' && vendor.timeoutMinutes !== undefined },
   { feature: 'maxPromptKib', what: 'its prompt cap', set: (vendor) => vendor.maxPromptKib !== undefined },
+  { feature: 'safeMode', what: 'its reviewer safe-mode switch', set: (vendor) => vendor.safeMode !== undefined },
   { feature: 'cliEffort', what: 'its effort', set: (vendor) => vendor.runtime !== 'api' && (vendor.effort ?? '').length > 0 },
   { feature: 'apiStream', what: 'streaming the answer', set: (vendor) => vendor.runtime === 'api' && vendor.stream === true },
   // A consultation reads the row's settings only from a binary that takes the whole row (C2; the epics 4–5 consultation).
@@ -242,12 +243,17 @@ function tuning(vendor: Vendor, id: string, facts: ModelCardFacts): string {
   return vendor.runtime === 'api'
     ? apiSettingsFields(vendor, id, context.reported[vendor.id], context.serverVersion) + streamField(vendor, id, newTag('model.stream', facts.firstSeen, facts.now)) + maxPromptField(vendor, id)
     : effortField(vendor, id, probedOf(context, vendor.id), newTag('model.effort', facts.firstSeen, facts.now)) + thinkingLine(vendor) + timeoutField(vendor, id)
-      + maxPromptField(vendor, id) + fastOf(vendor, id, facts);
+      + maxPromptField(vendor, id) + fastOf(vendor, id, facts) + safeModeOf(vendor, id, facts);
 }
 
 /** The fast-mode select, for a row that has a tier (research/PLAN_fast_mode.md). */
 function fastOf(vendor: Vendor, id: string, facts: ModelCardFacts): string {
   return rowHasFastTier(vendor) ? fastField(vendor, id, newTag('model.fast', facts.firstSeen, facts.now)) : '';
+}
+
+/** The reviewer safe-mode select, for a claude row — the only runtime with the flag (E5.S2 of todo/PLAN_codex_agy_and_claude_reviewers_get_what_kimi_got.md). */
+function safeModeOf(vendor: Vendor, id: string, facts: ModelCardFacts): string {
+  return vendor.runtime === 'claude' ? safeModeField(vendor, id, newTag('model.safeMode', facts.firstSeen, facts.now)) : '';
 }
 
 function answers(vendor: Vendor, id: string, facts: ModelCardFacts): string {
