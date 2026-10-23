@@ -217,7 +217,7 @@ const HOST_NOTES: Readonly<Partial<Record<HostKind, (installedServerVersion: str
     `coai-mcp could not read this host's kernel banner (/proc/version), so it cannot tell a native Linux host from WSL1 and refuses a ${vendor.id} row here `
     + '— the extension-host log names the cause.',
   wsl1: (_version, vendor) =>
-    `This is WSL1, and coai-mcp runs ${labelOf(vendor.runtime)} on WSL2 only: a ${vendor.id} row is refused here. `
+    `This is WSL1 — it has no pidfd, so coai-mcp cannot end the process tree of ${labelOf(vendor.runtime)} there — and a ${vendor.id} row is refused here. `
     + 'Move this distro to WSL2 with `wsl --set-version <distro> 2`, run in Windows.',
 };
 

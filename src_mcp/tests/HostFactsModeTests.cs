@@ -154,7 +154,7 @@ public sealed class HostFactsModeTests : IDisposable
     [Fact]
     public void TheSentencesAreWrittenAsText_NotEscaped()
     {
-        HostFactsMode.Json(Report(HostKind.Wsl, BannerReading.Unread, WslGeneration.Wsl1)).Should().Contain("WSL2 only for now — it is measured", "the em dash was escaped to \\u2014");
+        HostFactsMode.Json(Report(HostKind.Wsl, BannerReading.Unread, WslGeneration.Wsl1)).Should().Contain("WSL1 host — WSL1 translates", "the em dash was escaped to \\u2014");
     }
 
     /// <summary>G2 of the code gate (2026-10-21): the line is serialized by the source-generated context, so any value — a quote, a backslash, a newline, a non-ASCII character, an emoji — comes back from <c>JsonDocument.Parse</c> as the same string, and the line stays ONE line.</summary>

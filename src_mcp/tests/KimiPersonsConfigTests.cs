@@ -47,21 +47,21 @@ public sealed class KimiPersonsConfigTests
     }
 
     [Fact]
-    public void AKeyringStorage_IsRefusedAsUnmeasured()
+    public void AKeyringStorage_IsRefusedBecauseThereAreNoFilesToLink()
     {
         var read = KimiPersonsConfig.Read(KimiFixture.OwnerConfig().Replace("storage = \"file\"", "storage = \"keyring\""), "your config.toml");
 
-        read.Should().BeOfType<SlotRead.Refused>().Which.Reason.Should().Contain("'keyring'").And.Contain("storage = \"file\"").And.Contain("unmeasured");
+        read.Should().BeOfType<SlotRead.Refused>().Which.Reason.Should().Contain("'keyring'").And.Contain("storage = \"file\"").And.Contain("no credentials folder to link").And.NotContain("unmeasured", "the reason is that a keyring sign-in has no files to link (impossible), not that nobody measured it");
     }
 
     [Fact]
-    public void AnotherProviderType_IsRefusedAsUnmeasured()
+    public void AnotherProviderType_IsRefusedBecauseCoaiWouldRunKimisProtocolAgainstIt()
     {
         var text = KimiFixture.OwnerConfig().Replace("[providers.\"managed:kimi-code\"]\ntype = \"kimi\"", "[providers.\"managed:kimi-code\"]\ntype = \"openai\"");
 
         var read = KimiPersonsConfig.Read(text, "your config.toml");
 
-        read.Should().BeOfType<SlotRead.Refused>().Which.Reason.Should().Contain("type 'openai'").And.Contain("not 'kimi'").And.Contain("unmeasured");
+        read.Should().BeOfType<SlotRead.Refused>().Which.Reason.Should().Contain("type 'openai'").And.Contain("not 'kimi'").And.Contain("coai writes type = \"kimi\" into the owned config").And.Contain("set up for another kind of provider").And.NotContain("unmeasured", "the reason is that coai would run Kimi's protocol against another provider's endpoint, not that nobody measured it");
     }
 
     [Fact]

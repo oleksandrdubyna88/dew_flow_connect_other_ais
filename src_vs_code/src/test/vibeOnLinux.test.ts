@@ -322,8 +322,9 @@ test('⤓ for Vibe on a host whose banner was not read says it cannot tell nativ
   assert.doesNotMatch(note, /runs Vibe from coai-mcp|Vibe runs on this side/u, 'a host that cannot be classified is not told Vibe runs here');
 });
 
-test('⤓ for Vibe on macOS says nothing is measured there, and on Windows is unchanged', () => {
-  assert.match(vendorInstall(VIBE, 'darwin').note, /macOS/u);
+test('⤓ for Vibe on macOS says it has no launch path there — and why — and on Windows is unchanged', () => {
+  assert.match(vendorInstall(VIBE, 'darwin').note, /does not run Vibe on macOS — it has no launch path there: coai-mcp links its sign-in only after reading it through a file descriptor, which it can do on Linux only/u);
+  assert.doesNotMatch(vendorInstall(VIBE, 'darwin').note, /nothing is measured/u, 'the reason is the Linux-only descriptor, not that nobody measured it (owner decision 2026-10-23)');
   assert.doesNotMatch(vendorInstall(VIBE, 'darwin').note, /WSL2/u);
 
   const windows = vendorInstall(VIBE, 'win32').note;
@@ -334,7 +335,7 @@ test('⤓ for Vibe on macOS says nothing is measured there, and on Windows is un
 test('⤓ for Vibe on WSL1 says it is WSL1 and names the cure: wsl --set-version <distro> 2', () => {
   const note = vendorInstall(VIBE, 'linux', 'wsl1').note;
 
-  assert.match(note, /WSL1/u);
+  assert.match(note, /This is WSL1 — it has no pidfd, so coai-mcp cannot end the process tree of Vibe there — and a Vibe row is refused on this side/u);
   assert.ok(note.includes('`wsl --set-version <distro> 2`'), note);
   assert.doesNotMatch(note, /Vibe runs on this side/u, 'a WSL1 host is not told Vibe runs here');
   assert.match(note, /vibe --setup/u, 'the sign-in is still said');
@@ -417,13 +418,34 @@ const GONE: Record<string, readonly string[]> = {
     'На нативному Linux-хості coai-mcp поки відхиляє Vibe — він виміряний лише на WSL2', '(на нативному Linux-хості та на macOS coai-mcp поки його відхиляє)'],
 };
 
+/** What the reviewers article says about macOS and Vibe, per language: no launch path — and why (the Linux-only descriptor), never "not measured" (owner decision 2026-10-23). */
+const SAID_MACOS: Record<string, string> = {
+  en: 'On macOS coai-mcp has no launch path for Vibe: it links Vibe’s sign-in only after reading it through a file descriptor, which it can do on Linux only.',
+  de: 'Unter macOS hat coai-mcp keinen Startweg für Vibe: Es verlinkt Vibes Anmeldung nur, nachdem es sie über einen Dateideskriptor gelesen hat, und das kann es nur unter Linux.',
+  es: 'En macOS coai-mcp no tiene ruta de arranque para Vibe: solo enlaza el inicio de sesión de Vibe tras leerlo mediante un descriptor de archivo, algo que solo puede hacer en Linux.',
+  ru: 'На macOS у coai-mcp нет пути запуска для Vibe: он связывает вход Vibe ссылкой только после чтения файла через файловый дескриптор, а это он умеет лишь на Linux.',
+  uk: 'На macOS у coai-mcp немає шляху запуску для Vibe: він зв’язує вхід Vibe посиланням лише після читання файлу через дескриптор файлу, а це він уміє лише на Linux.',
+};
+
+test('the five languages say macOS has no launch path for Vibe, and why — and none says macOS is not measured', () => {
+  const article = HELP_ARTICLES.find((one) => one.id === 'choose-reviewers');
+  assert.ok(article !== undefined, 'the reviewers article has been renamed, and this test is now asserting nothing');
+
+  for (const language of HELP_LANGUAGES) {
+    const { body } = bodyFor(article, language);
+
+    assert.ok(body.setup.includes(SAID_MACOS[language]!), `the ${language} article never says: ${SAID_MACOS[language]}`);
+    assert.doesNotMatch(body.setup, /macOS is not measured|macOS ist nicht gemessen|macOS no está medido|macOS не измерен|macOS не виміряно/u, `the ${language} article still says macOS is not measured`);
+  }
+});
+
 /** The question-consultant article's one sentence about the host a Vibe row runs on, per language. */
 const QUESTION_ROW: Record<string, readonly string[]> = {
-  en: [`on WSL2 from coai-mcp ${VIBE_ON_LINUX_SINCE} (on a native Linux host from coai-mcp ${VIBE_ON_NATIVE_LINUX_SINCE}, with Vibe's keyring off; on macOS coai-mcp refuses it for now)`],
-  de: [`unter WSL2 ab coai-mcp ${VIBE_ON_LINUX_SINCE} (auf einem nativen Linux-Host ab coai-mcp ${VIBE_ON_NATIVE_LINUX_SINCE}, mit abgeschaltetem Schlüsselbund von Vibe; unter macOS lehnt coai-mcp es vorerst ab)`],
-  es: [`en WSL2, desde coai-mcp ${VIBE_ON_LINUX_SINCE} (en un host Linux nativo desde coai-mcp ${VIBE_ON_NATIVE_LINUX_SINCE}, con el llavero de Vibe desactivado; en macOS coai-mcp lo rechaza por ahora)`],
-  ru: [`в WSL2 — начиная с coai-mcp ${VIBE_ON_LINUX_SINCE} (на нативном Linux-хосте — начиная с coai-mcp ${VIBE_ON_NATIVE_LINUX_SINCE}, с отключённой связкой ключей Vibe; на macOS coai-mcp пока его отклоняет)`],
-  uk: [`в WSL2 — починаючи з coai-mcp ${VIBE_ON_LINUX_SINCE} (на нативному Linux-хості — починаючи з coai-mcp ${VIBE_ON_NATIVE_LINUX_SINCE}, з вимкненою в’язкою ключів Vibe; на macOS coai-mcp поки його відхиляє)`],
+  en: [`on WSL2 from coai-mcp ${VIBE_ON_LINUX_SINCE} (on a native Linux host from coai-mcp ${VIBE_ON_NATIVE_LINUX_SINCE}, with Vibe's keyring off; on macOS coai-mcp has no launch path for it)`],
+  de: [`unter WSL2 ab coai-mcp ${VIBE_ON_LINUX_SINCE} (auf einem nativen Linux-Host ab coai-mcp ${VIBE_ON_NATIVE_LINUX_SINCE}, mit abgeschaltetem Schlüsselbund von Vibe; unter macOS hat coai-mcp keinen Startweg dafür)`],
+  es: [`en WSL2, desde coai-mcp ${VIBE_ON_LINUX_SINCE} (en un host Linux nativo desde coai-mcp ${VIBE_ON_NATIVE_LINUX_SINCE}, con el llavero de Vibe desactivado; en macOS coai-mcp no tiene ruta de arranque para él)`],
+  ru: [`в WSL2 — начиная с coai-mcp ${VIBE_ON_LINUX_SINCE} (на нативном Linux-хосте — начиная с coai-mcp ${VIBE_ON_NATIVE_LINUX_SINCE}, с отключённой связкой ключей Vibe; на macOS у coai-mcp нет пути запуска для него)`],
+  uk: [`в WSL2 — починаючи з coai-mcp ${VIBE_ON_LINUX_SINCE} (на нативному Linux-хості — починаючи з coai-mcp ${VIBE_ON_NATIVE_LINUX_SINCE}, з вимкненою в’язкою ключів Vibe; на macOS у coai-mcp немає шляху запуску для нього)`],
 };
 
 test(`the five languages say the same about Vibe on Linux: WSL2 from ${VIBE_ON_LINUX_SINCE}, the .env sign-in, never copied, a native host from ${VIBE_ON_NATIVE_LINUX_SINCE} with the keyring off`, () => {

@@ -528,12 +528,12 @@ const VIBE_NOTE_LINUX_UNREAD =
   + 'WSL1 and refuses a Vibe row on this side; the extension-host log names the cause.';
 
 const VIBE_NOTE_MACOS =
-  VIBE_SCRIPT_NOTE + ' coai-mcp does not run Vibe on macOS — nothing is measured there — so a reviewer on this side '
+  VIBE_SCRIPT_NOTE + ' coai-mcp does not run Vibe on macOS — it has no launch path there: coai-mcp links its sign-in only after reading it through a file descriptor, which it can do on Linux only — so a reviewer on this side '
   + 'waits for that.';
 
 /** WSL1 is not WSL2: a syscall translation layer with no real process tree, so a Vibe row is refused until the distro moves. */
 const VIBE_NOTE_WSL1 =
-  VIBE_SCRIPT_NOTE + ' This is WSL1, and coai-mcp runs Vibe on WSL2 only, so a Vibe row is refused on this side. Move this '
+  VIBE_SCRIPT_NOTE + ' This is WSL1 — it has no pidfd, so coai-mcp cannot end the process tree of Vibe there — and a Vibe row is refused on this side. Move this '
   + 'distro to WSL2 with `wsl --set-version <distro> 2`, run in Windows.';
 
 /** The note per host. A record over the whole union, so a host kind added later is a compile error here, not a wrong note. */
@@ -549,7 +549,7 @@ const VIBE_NOTES: Readonly<Record<HostKind, string>> = {
 /**
  * Which note ⤓ and ⟳ show for Vibe on this host (DL1 of research/PLAN_kimi_and_vibe_on_linux.md) — pure, and the host is a
  * REQUIRED argument: WSL2 runs Vibe, and so does a native Linux host from coai-mcp 0.64.0 (with Vibe's keyring off); WSL1 and a Linux host
- * whose kernel banner could not be read are refused, macOS is not measured, Windows is as it was.
+ * whose kernel banner could not be read are refused, macOS has no launch path, Windows is as it was.
  */
 export function vibeNoteFor(host: HostKind): string {
   return VIBE_NOTES[host];
@@ -648,7 +648,7 @@ const KIMI_NOTE_WSL1 = `${KIMI_LINUX_SHARED} ${KIMI_ON_WSL1}`;
 const KIMI_NOTE_MACOS =
   'Moonshot’s own installer, from code.kimi.com. It is a piped script — read it first if that matters to you. It puts Kimi in '
   + '~/.kimi-code/bin and edits one shell rc file so that folder is on your PATH (open a new shell, or restart VS Code). '
-  + KIMI_SIGN_IN + ' coai-mcp does not run Kimi on macOS — nothing is measured there — so a reviewer on this side waits for '
+  + KIMI_SIGN_IN + ' coai-mcp does not run Kimi on macOS — it has no launch path there: its sign-in hold needs an exclusive lock that its processes inherit, and only Windows, Linux and WSL give one — so a reviewer on this side waits for '
   + 'that; this line installs Kimi only, not the ripgrep and fd it would need.';
 
 /** The note per host — a record over the whole union, as Vibe's is (`VIBE_NOTES`): a host kind added later is a compile error here. */
@@ -664,7 +664,7 @@ const KIMI_NOTES: Readonly<Record<HostKind, string>> = {
 /**
  * Which note ⤓ and ⟳ show for Kimi on this host (DL1 of research/PLAN_kimi_and_vibe_on_linux.md) — the same host-kind union Vibe's note
  * is chosen by (`hostSide.ts`): WSL2 runs the row, and so does a native Linux host from coai-mcp 0.64.0 — not measured there, by the owner's decision of
- * 2026-10-23; WSL1 and a host whose kernel banner could not be read are refused, macOS is not measured, Windows is as it was.
+ * 2026-10-23; WSL1 and a host whose kernel banner could not be read are refused, macOS has no launch path, Windows is as it was.
  */
 export function kimiNoteFor(host: HostKind): string {
   return KIMI_NOTES[host];

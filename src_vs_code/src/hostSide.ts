@@ -137,7 +137,7 @@ async function answered(underWsl: () => Promise<boolean>): Promise<boolean> {
 
 /**
  * Which host this extension runs on, as far as a Vibe row cares (DL1 of research/PLAN_kimi_and_vibe_on_linux.md): WSL2 runs it,
- * WSL1 is refused, macOS is not measured, Windows is as it always was. One union, one source —
+ * WSL1 is refused, macOS has no launch path, Windows is as it always was. One union, one source —
  * `process.platform` alone cannot tell WSL from a desktop Linux, and a POSIX path family cannot tell either from a Mac.
  *
  * <p>A native Linux host RUNS Vibe from coai-mcp 0.64.0 (E2 of research/PLAN_kimi_and_vibe_on_native_linux_E2.md) and Kimi from the same release —

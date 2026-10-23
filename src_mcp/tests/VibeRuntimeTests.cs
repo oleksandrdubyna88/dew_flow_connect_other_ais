@@ -355,9 +355,11 @@ public sealed class VibeLaunchRulesTests
     [Theory]
     [InlineData(HostKind.MacOs)]
     [InlineData(HostKind.Other)]
-    public void AHostNothingWasMeasuredOn_IsRefused_NamingThePlanAndTheTwoMeasuredHosts(HostKind host)
+    public void AHostWithNoLaunchPath_IsRefused_NamingTheRealReason_NotThatNothingWasMeasured(HostKind host)
     {
-        VibeLaunch.HostRefusal(host, "vibe", WslGeneration.None).Should().Contain("D18").And.Contain(HostKinds.Word(host)).And.Contain("Windows and WSL2 only");
+        VibeLaunch.HostRefusal(host, "vibe", WslGeneration.None).Should().Contain("D18").And.Contain("Vibe has no launch path on a " + HostKinds.Word(host) + " host")
+            .And.Contain("reading it through a file descriptor, which it can do on Linux only")
+            .And.NotContain("measured", "the reason is that coai's sign-in judgement is a Linux descriptor's, not that nobody measured it (owner decision 2026-10-23)");
     }
 
     /// <summary>
@@ -384,7 +386,7 @@ public sealed class VibeLaunchRulesTests
     [InlineData(WslGeneration.None)]
     public void AWsl1Host_IsRefused_WithTheWsl1Sentence(WslGeneration generation)
     {
-        VibeLaunch.HostRefusal(HostKind.Wsl, "vibe", generation).Should().Contain("WSL2 only").And.Contain("this is WSL1").And.Contain("Run this from Windows (not inside WSL):").And.Contain("`wsl --set-version <distro> 2`",
+        VibeLaunch.HostRefusal(HostKind.Wsl, "vibe", generation).Should().Contain("Vibe is refused on this WSL1 host").And.Contain("has no pidfd").And.NotContain("measured").And.Contain("Run this from Windows (not inside WSL):").And.Contain("`wsl --set-version <distro> 2`",
             "a WSL1 banner was admitted as WSL2");
     }
 

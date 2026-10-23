@@ -40,6 +40,16 @@ public sealed class QuestionAdmissionTests
             .Should().BeOfType<RowAdmission.Admitted>().Which.Plan.Flag.Should().Be(AdmissionFlag.DefaultDeny);
     }
 
+    [Theory]
+    [InlineData("vibe")]
+    [InlineData("api")]
+    public void AnUnmeasuredWebPair_IsAdmitted_AndFlaggedUnmeasured(string runtime)
+    {
+        Admit(Row(runtime, runtime, "question-web"), Settings())
+            .Should().BeOfType<RowAdmission.Admitted>("web search is not measured on this runtime: a note, never a refusal (owner decision 2026-10-23)")
+            .Which.Plan.Flag.Should().Be(AdmissionFlag.Unmeasured);
+    }
+
     [Fact]
     public void AConfinedPair_CarriesNoFlag()
     {

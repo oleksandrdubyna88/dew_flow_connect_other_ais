@@ -97,12 +97,12 @@ public sealed class ApiConsultant(IReviewerRuntime inner, string vendor, string 
         return built with { Request = ConsultantLaunches.ForQuestion(built.Request) };
     }
 
-    /// <summary>The plan a launch carries, when it is a <c>none</c> question row — anything else is refused by name.</summary>
+    /// <summary>The plan a launch carries, when it is a <c>none</c> question row — or a <c>web</c> one, which runs with no web tool (flagged unmeasured, owner decision 2026-10-23) — anything else is refused by name.</summary>
     private static Confinement.Planned QuestionRowOf(ConsultantLaunch launch) => launch.Confinement switch
     {
-        LaunchConfinement.Planned { Plan.Grant.Capability: Capability.None } planned => planned.Plan,
+        LaunchConfinement.Planned { Plan.Grant.Capability: Capability.None or Capability.Web } planned => planned.Plan,
         LaunchConfinement.Planned planned => throw new ArgumentException(
-            $"the api runtime cannot do '{planned.Plan.Grant.Capability.Spelled()}': a hosted completion has no process and no tools — only a 'none' prompt runs on 'api'",
+            $"the api runtime cannot do '{planned.Plan.Grant.Capability.Spelled()}': a hosted completion has no process and no tools — a 'none' prompt runs on 'api', and a 'web' prompt runs without the web (flagged unmeasured); a 'disk' prompt cannot",
             nameof(launch)),
         _ => throw new ArgumentException(
             "the api runtime answers question rows only — it has no stuck-consultant shape to ship, and ConsultantResolution refuses it by name",

@@ -51,9 +51,9 @@ public static class HostAdmission
     internal static string Refusal(string runtime, HostKind host, string executable, WslGeneration wsl, IReadOnlySet<string> admittedOnNativeLinux) => host switch
     {
         HostKind.Windows => HostKinds.RunsInWsl(executable) ? WslBridge(runtime, executable) : string.Empty,
-        HostKind.Wsl => wsl == WslGeneration.Wsl2 ? string.Empty : Wsl2Only(runtime, "it is measured on WSL2, and this is WSL1", "; Run this from Windows (not inside WSL): `wsl --set-version <distro> 2`"),
+        HostKind.Wsl => wsl == WslGeneration.Wsl2 ? string.Empty : Wsl1(runtime),
         HostKind.Linux => NativeLinux(runtime, wsl, admittedOnNativeLinux),
-        _ => NothingMeasured(runtime, host),
+        _ => NoLaunchPath(runtime, host),
     };
 
     /// <summary>
@@ -63,7 +63,7 @@ public static class HostAdmission
     /// </summary>
     private static string NativeLinux(string runtime, WslGeneration wsl, IReadOnlySet<string> admitted) => (InSet(runtime, admitted), wsl) switch
     {
-        (false, _) => Wsl2Only(runtime, "it is measured on WSL2 and not yet on a native Linux host", string.Empty),
+        (false, _) => NoRow(runtime),
         (true, WslGeneration.None) => string.Empty,
         (true, WslGeneration.Unreadable) => BannerUnreadable(runtime),
         (true, _) => BannerDisagrees(runtime, wsl),
@@ -77,12 +77,29 @@ public static class HostAdmission
     private static string BannerDisagrees(string runtime, WslGeneration wsl) =>
         $"{runtime} is refused on this Linux host — the host reads as native Linux but its kernel banner says {wsl}; the two facts disagree, so coai cannot tell what it is running on ({NativePlan})";
 
-    private static string NothingMeasured(string runtime, HostKind host) =>
-        $"{runtime} is refused on a {HostKinds.Word(host)} host until it is measured there ({Parent}) — {runtime} is measured on Windows and WSL2 only";
+    /// <summary>
+    /// A host with NO launch path (macOS, any other): the sentence names what is missing there, not that nobody measured it (the owner's decision of 2026-10-23: a refusal whose only reason is "not measured" is a note). Kimi: its sign-in hold
+    /// needs an exclusive lock that its processes inherit (<see cref="HostKinds.HasKimiLockFamily"/>). Vibe: coai links its sign-in only after reading the file through a descriptor, which <c>RegularFiles</c> can do on Linux only
+    /// (<c>RegularFiles.LinuxOnly</c>) — on such a host every launch would be refused at that step, or run signed out.
+    /// </summary>
+    private static string NoLaunchPath(string runtime, HostKind host) =>
+        $"{runtime} has no launch path on a {HostKinds.Word(host)} host — {NoPathReason(runtime)} ({Parent})";
 
-    private static string Wsl2Only(string runtime, string why, string cure) =>
-        $"{runtime} runs on WSL2 only for now — {why} ({Plan}){cure}";
+    private static string NoPathReason(string runtime) => runtime.Equals("Kimi", StringComparison.OrdinalIgnoreCase)
+        ? "its sign-in hold needs an exclusive lock that its processes inherit, and only Windows, Linux and WSL give one"
+        : "coai links its sign-in only after reading it through a file descriptor, which it can do on Linux only";
+
+    /// <summary>
+    /// WSL1 is refused for what it IS, not for being unmeasured: it translates Linux system calls for Windows and has no pidfd, so coai cannot end the CLI's process tree by identity (the tree supervisor and the verified teardown need one).
+    /// The cure is the distro's: WSL2.
+    /// </summary>
+    private static string Wsl1(string runtime) =>
+        $"{runtime} is refused on this WSL1 host — WSL1 translates Linux system calls for Windows and has no pidfd, so coai cannot end {runtime}'s process tree by identity ({Plan}); Run this from Windows (not inside WSL): `wsl --set-version <distro> 2`";
+
+    /// <summary>A runtime with NO row in <c>shared/native-linux-admission.json</c>: an absent fact refuses (no runtime is in that state today).</summary>
+    private static string NoRow(string runtime) =>
+        $"{runtime} is not admitted on a native Linux host — shared/native-linux-admission.json has no row for it, and an absent fact refuses ({NativePlan})";
 
     private static string WslBridge(string runtime, string executable) =>
-        $"'{executable}' would start {runtime} on the Linux side, which is refused until it is measured there ({Parent}) — point this row at a Windows {runtime.ToLowerInvariant()}";
+        $"'{executable}' would start {runtime} on the Linux side, which a Windows process cannot supervise — it cannot take a Linux lock or end a Linux process tree ({Parent}) — point this row at a Windows {runtime.ToLowerInvariant()}";
 }

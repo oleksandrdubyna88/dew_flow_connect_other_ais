@@ -147,5 +147,5 @@ export const KIMI_LINUX_UNREAD =
   'coai-mcp could not read this host’s kernel banner, so it cannot tell a native Linux host from WSL1 and refuses a Kimi row on this side; '
   + 'the extension-host log names the cause.';
 
-/** What a WSL1 side is told — Vibe's sentence for the same host (`VIBE_NOTE_WSL1`): WSL2 only (the plan's F0 / S-K20), and what helps is moving the distro. */
-export const KIMI_ON_WSL1 = 'This is WSL1, and coai-mcp runs Kimi on WSL2 only, so a Kimi row is refused on this side. Move this distro to WSL2 with `wsl --set-version <distro> 2`, run in Windows.';
+/** What a WSL1 side is told — Vibe's sentence for the same host (`VIBE_NOTE_WSL1`): WSL1 has no pidfd (the real reason, not "measured"), and what helps is moving the distro. */
+export const KIMI_ON_WSL1 = 'This is WSL1 — it has no pidfd, so coai-mcp cannot end the process tree of Kimi there — and a Kimi row is refused on this side. Move this distro to WSL2 with `wsl --set-version <distro> 2`, run in Windows.';

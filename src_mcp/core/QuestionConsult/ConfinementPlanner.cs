@@ -154,7 +154,7 @@ public static class ConfinementPlanner
         "codex" => Codex(grant, flag),
         "antigravity" => Antigravity(grant, flag),
         "vibe" => Vibe(grant, flag),
-        // A completion has no tools, so it has no sandbox flag: the question alone, from nowhere.
+        // A completion has no tools, so it has no sandbox flag: the question alone, from nowhere. A `web` grant on `api` (flagged unmeasured, owner decision 2026-10-23) gets the same: no web tool, so no reach.
         _ => new Confinement.Planned(runtime, grant, [], [], CwdKind.Scratch, [], flag),
     };
 
@@ -197,7 +197,7 @@ public static class ConfinementPlanner
     private static Confinement.Planned Vibe(CapabilityGrant grant, AdmissionFlag flag) => grant.Capability switch
     {
         Capability.Disk => new("vibe", grant, [], VibeReadOnly, CwdKind.Snapshot, [], flag) { SnapshotSources = grant.Roots },
-        // `web` never reaches here: the matrix refuses it (no Vibe cell exercises the web).
+        // A `web` grant reaches here FLAGGED unmeasured (owner decision 2026-10-23): Vibe has no web tool in this launch (read_file only), so the row stands in an empty folder and answers from what it has — it cannot reach the web.
         _ => new("vibe", grant, [], VibeReadOnly, CwdKind.Scratch, [], flag),
     };
 

@@ -84,7 +84,7 @@ public sealed class KimiLaunchControlTests : IDisposable
                 break;
             case "a WSL1 host":
                 host = new KimiHost(HostKind.Wsl, WslGeneration.Wsl1);
-                expected = "this is WSL1";
+                expected = "Kimi is refused on this WSL1 host";
                 break;
             case "the tools missing":
                 places = places with { ToolsRefusal = KimiTools.Refusal(true, places.PersonsBin, string.Empty, ".EXE", _ => false) };
@@ -533,6 +533,38 @@ public sealed class KimiLaunchControlTests : IDisposable
         turn.Refusal.Should().BeEmpty("Kimi was refused here only because it was not measured; the owner's decision of 2026-10-23 admits it");
         fake.Started.Should().NotBeEmpty("the version was asked: the launch went on");
         turn.Warning.Should().Contain("not measured").And.Contain("native Linux").And.Contain("owner's decision of 2026-10-23").And.NotContain("\n");
+    }
+
+    private const string K9Block = "\n[models.\"kimi-code/k9\"]\nprovider = \"managed:kimi-code\"\nmodel = \"k9\"\nmax_context_size = 1000\ncapabilities = [ \"a\" ]\n";
+
+    [Fact]
+    public async Task AnUncuratedKimiCodeId_WithTheirOwnBlock_Runs_AndTheLaunchCarriesTheNotInTheListNote()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        using var rooted = Rooted();
+        File.WriteAllText(_person.PersonsConfig, KimiFixture.OwnerConfig() + K9Block);
+        var places = _person.Places();
+        var fake = new FakeKimi();
+
+        using var turn = await KimiLaunch.TakeAsync(HostKind.Windows, Request(places, "kimi-code/k9"), places, fake, TestContext.Current.CancellationToken);
+
+        turn.Refusal.Should().BeEmpty("the person wrote the block; an id coai has not seen answer is a note, not a refusal (owner decision 2026-10-23)");
+        turn.Warning.Should().Contain("the model 'kimi-code/k9' is not in coai's measured list").And.NotContain("\n");
+        fake.Started.Should().NotBeEmpty("the version was asked: the launch went on");
+    }
+
+    [Fact]
+    public async Task AnUncuratedKimiCodeId_WithNoBlock_IsRefusedForTheMissingBlock_AndStartsNothing()
+    {
+        using var standIn = WindowsStandIn.Begin();
+        using var rooted = Rooted();
+        var places = _person.Places();
+        var fake = new FakeKimi();
+
+        using var turn = await KimiLaunch.TakeAsync(HostKind.Windows, Request(places, "kimi-code/k9"), places, fake, TestContext.Current.CancellationToken);
+
+        turn.Refusal.Should().Contain("the model 'kimi-code/k9' has no model block");
+        fake.Started.Should().BeEmpty("a refusal starts nothing");
     }
 
     [Fact]

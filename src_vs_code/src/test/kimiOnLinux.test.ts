@@ -19,7 +19,7 @@ import { VENDOR_PRESETS, type Vendor } from '../vendors';
  * <p>Per host kind (E3's union, `hostSide.ts`: windows, wsl2, wsl1, linux, darwin): Windows is as it
  * was; WSL2 runs the row from KIMI_ON_LINUX_SINCE; WSL1 is refused ("measured on WSL2, and this is WSL1"); native Linux RUNS the row from
  * KIMI_ON_NATIVE_LINUX_SINCE although it is not measured there (the owner’s decision of 2026-10-23: "unmeasured" is a note the server puts on the
- * row, never a refusal); a host whose banner was not read is refused (coai cannot tell it from WSL1); macOS is not measured.</p>
+ * row, never a refusal); a host whose banner was not read is refused (coai cannot tell it from WSL1); macOS has no launch path.</p>
  */
 
 const KIMI: Vendor = {
@@ -52,7 +52,8 @@ test('a Linux or WSL side whose server is older than KIMI_ON_LINUX_SINCE does no
   assert.equal(runtimeSkewNote(KIMI_ON_LINUX_SINCE, [KIMI], 'wsl2'), '', 'a server at KIMI_ON_LINUX_SINCE runs it on WSL2');
   assert.match(runtimeSkewNote(KIMI_ON_LINUX_SINCE, [KIMI], 'linux'), /update coai-mcp to run Kimi here/iu, 'native Linux: the WSL2 release does not run a native host — update');
   assert.equal(runtimeSkewNote(KIMI_ON_NATIVE_LINUX_SINCE, [KIMI], 'linux'), '', 'a server at KIMI_ON_NATIVE_LINUX_SINCE runs Kimi on a native host: no refusal, the server puts the not-measured note on the row');
-  assert.match(runtimeSkewNote(KIMI_ON_LINUX_SINCE, [KIMI], 'wsl1'), /This is WSL1, and coai-mcp runs Kimi on WSL2 only/u);
+  assert.match(runtimeSkewNote(KIMI_ON_LINUX_SINCE, [KIMI], 'wsl1'), /This is WSL1 — it has no pidfd, so coai-mcp cannot end the process tree of Kimi there — and a kimi row is refused here/u);
+  assert.doesNotMatch(runtimeSkewNote(KIMI_ON_LINUX_SINCE, [KIMI], 'wsl1'), /measured/u, 'the reason is what WSL1 lacks, not that nobody measured it');
   assert.match(runtimeSkewNote('0.56.0', [KIMI], 'wsl2'), new RegExp(KIMI_RUNTIME_SINCE.replaceAll('.', '\\.'), 'u'), 'a server that does not know Kimi at all speaks first, once');
   assert.doesNotMatch(runtimeSkewNote('0.56.0', [KIMI], 'wsl2'), /run Kimi here/iu);
 });
@@ -83,9 +84,10 @@ test('⤓ for Kimi says, per host kind, whether coai-mcp runs the row there', ()
   assert.match(note('wsl2'), /your own `kimi` is open on this side, coai’s Kimi turns wait for it to close and then answer busy/u, 'Q3');
   assert.ok(note('linux').includes(KIMI_NATIVE_LINUX));
   assert.doesNotMatch(note('linux'), /refuses Kimi for now/u);
-  assert.match(note('wsl1'), /This is WSL1, and coai-mcp runs Kimi on WSL2 only/u);
+  assert.match(note('wsl1'), /This is WSL1 — it has no pidfd, so coai-mcp cannot end the process tree of Kimi there — and a Kimi row is refused on this side/u);
   assert.match(note('wsl1'), /wsl --set-version <distro> 2/u, 'what helps on WSL1 is moving the distro, not updating coai-mcp');
-  assert.match(note('darwin'), /does not run Kimi on macOS/u);
+  assert.match(note('darwin'), /does not run Kimi on macOS — it has no launch path there: its sign-in hold needs an exclusive lock that its processes inherit, and only Windows, Linux and WSL give one/u);
+  assert.doesNotMatch(note('darwin'), /nothing is measured/u, 'the reason is the missing lock, not that nobody measured it (owner decision 2026-10-23)');
   assert.match(note('windows'), /Git for Windows/u, 'Windows is as it was');
   assert.doesNotMatch(note('linux'), /WSL1/u);
   assert.doesNotMatch(note('wsl2'), /native Linux|This is WSL1|macOS/u, 'WSL2 is told none of the refusals');
@@ -184,6 +186,26 @@ test('the five languages say the same about Kimi on Linux: WSL2 from KIMI_ON_LIN
     for (const old of GONE[language]!) {
       assert.ok(!said.includes(old), `the ${language} article still says: ${old}`);
     }
+  }
+});
+
+/** What the reviewers article says about WSL1 and macOS for Kimi, per language: WSL1 has no pidfd, macOS has no exclusive lock — never "not measured" (owner decision 2026-10-23). */
+const SAID_NO_PATH: Record<string, string> = {
+  en: 'WSL1 is refused too (it has no pidfd), and on macOS coai-mcp has no launch path for Kimi: its sign-in hold needs an exclusive lock that macOS does not give.',
+  de: 'WSL1 wird ebenfalls abgelehnt (es hat kein pidfd), und unter macOS hat coai-mcp keinen Startweg für Kimi: Dessen Anmeldesperre braucht eine exklusive Sperre, die macOS nicht bietet.',
+  es: 'WSL1 también se rechaza (no tiene pidfd), y en macOS coai-mcp no tiene ruta de arranque para Kimi: su bloqueo del inicio de sesión necesita un bloqueo exclusivo que macOS no ofrece.',
+  ru: 'WSL1 тоже отклоняется (в нём нет pidfd), а на macOS у coai-mcp нет пути запуска для Kimi: удержанию его входа нужна эксклюзивная блокировка, которой macOS не даёт.',
+  uk: 'WSL1 теж відхиляється (у ньому немає pidfd), а на macOS у coai-mcp немає шляху запуску для Kimi: утриманню його входу потрібне ексклюзивне блокування, якого macOS не дає.',
+};
+
+test('the five languages say why WSL1 and macOS are refused for Kimi — the missing pidfd and the missing lock — and none says macOS has no launch path', () => {
+  const article = HELP_ARTICLES.find((one) => one.id === 'choose-reviewers');
+  assert.ok(article !== undefined, 'the reviewers article has been renamed, and this test is now asserting nothing');
+
+  for (const language of HELP_LANGUAGES) {
+    const { body } = bodyFor(article, language);
+
+    assert.ok(body.setup.includes(SAID_NO_PATH[language]!), `the ${language} article never says: ${SAID_NO_PATH[language]}`);
   }
 });
 

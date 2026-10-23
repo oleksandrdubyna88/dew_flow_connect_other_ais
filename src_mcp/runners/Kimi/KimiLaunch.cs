@@ -21,6 +21,7 @@ public static class KimiLaunch
     /// <summary>D10, before the launch: why this model is not launched on, or empty when it is curated.</summary>
     public static string ModelRefusal(string model) => KimiModels.RefusalFor(model, KimiModels.Curated);
 
+
     /// <summary>
     /// D18, lifted for WSL2 by DL1 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c> (E6) and for a native Linux host by the owner's decision of 2026-10-23 (<see cref="HostNote"/>): a Windows host starting a Windows <c>kimi</c>, a WSL2 host,
     /// or a native Linux host whose kernel banner was READ. WSL1 (a syscall translation layer), a Linux host whose banner could not be read (coai cannot tell it from WSL1) and every other host are refused, each with its own sentence;
@@ -103,7 +104,7 @@ public static class KimiLaunch
             return LaunchTurn.Refused(survivors, RefusalCause.LaunchControl);
         }
 
-        return await InsideAsync(places, request, prepared.Expected, Joined(HostNote(host), NetworkWarning(host, places, allowNetworkSignIn)), new Attempt(turn, taken.Stream), launcher, ct);
+        return await InsideAsync(places, request, prepared.Expected, Joined(HostNote(host), Joined(KimiModels.NoteFor(ModelOf(request), KimiModels.Curated), NetworkWarning(host, places, allowNetworkSignIn))), new Attempt(turn, taken.Stream), launcher, ct);
     }
 
     /// <summary>

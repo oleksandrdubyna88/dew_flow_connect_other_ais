@@ -180,7 +180,7 @@ public sealed class CapabilityMatrixTests
     }
 
     [Fact]
-    public void TheVibeRows_RestOnTheVibeProbe_AndItsWebIsUnmeasured_SoRefused()
+    public void TheVibeRows_RestOnTheVibeProbe_AndItsWebIsUnmeasured_SoAdmittedWithANote()
     {
         foreach (var capability in (Capability[])[Capability.None, Capability.Disk])
         {
@@ -193,8 +193,8 @@ public sealed class CapabilityMatrixTests
 
         RuntimeCapabilities.Builtin.Of("vibe", Capability.Disk)!.MeasuredWith.Cells.Should().Contain("M-V6",
             "denied writes do not prove bounded READS — the disk row rests on the read cell itself");
-        CapabilityMatrix.Admit("vibe", Capability.Web).Should().BeOfType<Admission.Refused>()
-            .Which.Reason.Should().Contain("not been measured", "no Vibe cell exercises the web");
+        CapabilityMatrix.Admit("vibe", Capability.Web).Should().BeOfType<Admission.Admitted>()
+            .Which.Flag.Should().Be(AdmissionFlag.Unmeasured, "no Vibe cell exercises the web: the row runs with a note, never a refusal (owner decision 2026-10-23)");
     }
 
     /// <summary>D13's two refusals kept apart: the flags are what the data says, never what a runtime name suggests.</summary>
@@ -218,30 +218,18 @@ public sealed class CapabilityMatrixTests
         }
     }
 
-    [Fact]
-    public void AnUnmeasuredPair_IsRefused_NamingTheRecordThatWouldAdmitIt()
+    /// <summary>The owner's decision of 2026-10-23: a row that asks for web search on a runtime where web was not measured RUNS, with a note — the risk is a weaker answer, not egress.</summary>
+    [Theory]
+    [InlineData("api")]
+    [InlineData("vibe")]
+    public void AnUnmeasuredPair_IsAdmittedFlagged_NeverRefusedForBeingUnmeasured(string runtime)
     {
-        var refused = CapabilityMatrix.Admit("api", Capability.Web).Should().BeOfType<Admission.Refused>().Which;
+        var admitted = CapabilityMatrix.Admit(runtime, Capability.Web).Should().BeOfType<Admission.Admitted>("a refusal whose only reason is \"not measured\" is a note now").Which;
 
-        refused.Reason.Should().Contain("not been measured").And.Contain("RESULTS_question_consultant_capabilities.md",
-            "the cure for an unmeasured pair is a measurement, and the sentence says where it goes");
-    }
-
-    /// <summary>
-    /// An unmeasured pair names the record ITS row cites — the record a measurement would land in — so an unmeasured Vibe
-    /// pair names the Vibe probe's record (S3 of todo/PLAN_vibe_and_kimi_runtimes.md), and the first five runtimes' sentences
-    /// stay exactly what they were.
-    /// </summary>
-    [Fact]
-    public void AnUnmeasuredVibePair_NamesTheVibeRecord_AndTheApiSentenceIsUnchanged()
-    {
-        var vibe = CapabilityMatrix.Admit("vibe", Capability.Web).Should().BeOfType<Admission.Refused>().Which.Reason;
-
-        vibe.Should().Contain("a measured cell in research/RESULTS_vibe_confinement.md is what admits it")
-            .And.NotContain("RESULTS_question_consultant_capabilities.md", "no cell of that run could admit a Vibe pair");
-        CapabilityMatrix.Admit("api", Capability.Web).Should().BeOfType<Admission.Refused>().Which.Reason.Should().Be(
-            "'api' has not been measured for 'web' (not measured; vendor-specific (a tails-plan item)) — a measured cell in "
-            + "research/RESULTS_question_consultant_capabilities.md is what admits it; until then give this row a prompt of another capability");
+        admitted.Standing.Should().Be(CapabilityStanding.Unmeasured);
+        admitted.Flag.Should().Be(AdmissionFlag.Unmeasured);
+        AdmissionFlag.Unmeasured.Spelled().Should().Be("unmeasured");
+        AdmissionFlag.Unmeasured.Caveat().Should().Contain("not measured").And.Contain("the answer may come without it");
     }
 
     [Fact]

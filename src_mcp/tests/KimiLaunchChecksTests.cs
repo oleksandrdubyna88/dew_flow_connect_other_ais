@@ -53,13 +53,29 @@ public sealed class KimiLaunchChecksTests
             .And.Contain("a moonshot-ai/* id bills your own API key, so coai sends nothing (D10)");
     }
 
+    /// <summary>The owner's decision of 2026-10-23: a Kimi Code id coai has not seen answer is a NOTE, not a refusal — whether it can run is the model block's question (the person's own, else a pinned one).</summary>
     [Fact]
-    public void AnUncuratedKimiCodeId_IsRefusedWithTheList()
+    public void AnUncuratedKimiCodeId_IsNotRefusedForBeingUnmeasured_ButCarriesTheNoteWithTheList()
     {
-        KimiLaunch.ModelRefusal("kimi-code/k9").Should()
-            .Contain("the model 'kimi-code/k9' is not one coai has seen Kimi answer")
-            .And.Contain("choose one of kimi-code/k3-256k, kimi-code/k3, kimi-code/kimi-for-coding, kimi-code/kimi-for-coding-highspeed")
-            .And.EndWith("(D10)");
+        KimiLaunch.ModelRefusal("kimi-code/k9").Should().BeEmpty("an id on the Kimi Code plan that coai has not seen answer is run with a note (owner decision 2026-10-23)");
+        KimiModels.NoteFor("kimi-code/k9", KimiModels.Curated).Should()
+            .Contain("the model 'kimi-code/k9' is not in coai's measured list")
+            .And.Contain("kimi-code/k3-256k, kimi-code/k3, kimi-code/kimi-for-coding, kimi-code/kimi-for-coding-highspeed")
+            .And.Contain("owner's decision of 2026-10-23");
+        KimiModels.NoteFor("kimi-code/k3", KimiModels.Curated).Should().BeEmpty("a curated id carries no note");
+        KimiModels.NoteFor("moonshot-ai/kimi-k2.6", KimiModels.Curated).Should().BeEmpty("a model off the plan is refused (it bills the person's own key), not noted");
+    }
+
+    /// <summary>With no block of the person's own and none pinned, the id cannot run: there is no context size or capability list to write — the REAL reason, said as such.</summary>
+    [Fact]
+    public void AnUncuratedKimiCodeId_WithNoBlockAnywhere_IsRefusedForTheMissingBlock_NotForBeingUnmeasured()
+    {
+        KimiModelBlocks.For("kimi-code/k9", string.Empty, ((BlocksLoad.Loaded)KimiModelBlocks.Builtin).Blocks).Should().BeOfType<BlockRead.Refused>().Which.Reason.Should()
+            .Contain("the model 'kimi-code/k9' has no model block")
+            .And.Contain("[models.\"kimi-code/k9\"]")
+            .And.Contain("max_context_size")
+            .And.Contain("choose one of kimi-code/k3-256k")
+            .And.NotContain("seen Kimi answer");
     }
 
     [Fact]
@@ -185,12 +201,13 @@ public sealed class KimiLaunchChecksTests
     [Theory]
     [InlineData(HostKind.MacOs)]
     [InlineData(HostKind.Other)]
-    public void AHostNothingWasMeasuredOn_IsRefused_NamingThePlanAndTheTwoMeasuredHosts(HostKind host)
+    public void AHostWithNoLaunchPath_IsRefused_NamingTheRealReason_NotThatNothingWasMeasured(HostKind host)
     {
         KimiLaunch.HostRefusal(host, "kimi", WslGeneration.None).Should()
-            .Contain("Kimi is refused on a " + HostKinds.Word(host) + " host")
+            .Contain("Kimi has no launch path on a " + HostKinds.Word(host) + " host")
+            .And.Contain("exclusive lock that its processes inherit")
             .And.Contain("D18")
-            .And.Contain("Windows and WSL2 only");
+            .And.NotContain("measured", "the reason is that the lock family does not exist there, not that nobody measured it (owner decision 2026-10-23)");
     }
 
     /// <summary>DL1, superseded by the owner's decision of 2026-10-23 (DN1 of E2): a native Linux host whose banner was READ admits Kimi (with a note); one whose banner could not be read stays refused — coai cannot tell it from WSL1.</summary>
@@ -214,7 +231,7 @@ public sealed class KimiLaunchChecksTests
     public void AWsl1Host_IsRefused_WithTheWsl1Sentence(WslGeneration generation)
     {
         KimiLaunch.HostRefusal(HostKind.Wsl, "kimi", generation).Should()
-            .Contain("Kimi runs on WSL2 only").And.Contain("this is WSL1")
+            .Contain("Kimi is refused on this WSL1 host").And.Contain("has no pidfd").And.NotContain("measured")
             .And.Contain("Run this from Windows (not inside WSL):").And.Contain("`wsl --set-version <distro> 2`", "a WSL1 banner was admitted as WSL2 for a Kimi row");
     }
 
@@ -247,6 +264,8 @@ public sealed class KimiLaunchChecksTests
         HostKinds.RunsInWsl(executable).Should().BeTrue();
         KimiLaunch.HostRefusal(HostKind.Windows, executable, WslGeneration.None).Should()
             .Contain($"'{executable}' would start Kimi on the Linux side")
+            .And.Contain("cannot take a Linux lock or end a Linux process tree")
+            .And.NotContain("measured")
             .And.Contain("D18")
             .And.Contain("point this row at a Windows kimi");
     }

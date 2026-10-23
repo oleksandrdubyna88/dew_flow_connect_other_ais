@@ -209,10 +209,23 @@ function flagBlock(view: QuestionRowView): string {
   if (!view.admission.admitted || view.admission.flag.length === 0) {
     return '';
   }
+  if (view.admission.flag === 'unmeasured') {
+    return unmeasuredBlock(view);
+  }
   const id = escapeHtml(view.id);
 
   return `  <div class="hint stale" data-flag="${escapeHtml(view.admission.flag)}">Can read this machine — ${escapeHtml(view.admission.caveat)}.</div>
   <div class="check-row"><label for="qconsultRowCanRead-${id}"><input type="checkbox" id="qconsultRowCanRead-${id}" checked disabled> Can read this machine — ${escapeHtml(whyItStaysOn(view.runtime, view.admission.flag))}</label>${help('qconsultRowCanRead')}</div>`;
+}
+
+/**
+ * An UNMEASURED pair (owner decision 2026-10-23): a note, no tick — nothing here reads the machine, so "Can read this machine" would be false. The row runs and its answer may come
+ * without the capability it asked for.
+ */
+function unmeasuredBlock(view: QuestionRowView): string {
+  const said = view.admission.caveat;
+
+  return `  <div class="hint stale" data-flag="unmeasured">${escapeHtml(said.charAt(0).toUpperCase() + said.slice(1))}.</div>`;
 }
 
 /** Why the tick cannot be taken off, per flag — the measured fact, in the runtime's own name. */

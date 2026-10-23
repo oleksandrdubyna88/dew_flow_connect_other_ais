@@ -226,7 +226,7 @@ public sealed class AKimiRowRunsThroughTheServiceOnWsl2Tests : IAsyncLifetime
 
         var planned = JsonDocument.Parse(await service.ReviewPlanAsync(repo, "feature", Scope)).RootElement;
 
-        planned.GetProperty("reviewers").GetString().Should().Contain("this is WSL1").And.Contain("wsl --set-version <distro> 2");
+        planned.GetProperty("reviewers").GetString().Should().Contain("this WSL1 host").And.Contain("wsl --set-version <distro> 2");
         File.Exists(agent.EnvFile).Should().BeFalse();
     }
 }

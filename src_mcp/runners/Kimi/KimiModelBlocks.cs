@@ -81,7 +81,7 @@ public sealed record KimiModelBlocks(string SeenOn, IReadOnlyList<KimiModelBlock
     private static BlockRead Pinned(string id, KimiModelBlocks pinned) =>
         pinned.Blocks.FirstOrDefault(block => block.Id == id) is { } entry
             ? new BlockRead.Found(entry)
-            : new BlockRead.Refused(KimiModels.RefusalFor(id, [.. pinned.Blocks.Select(block => block.Id)]));
+            : new BlockRead.Refused(KimiModels.RefusalFor(id, [.. pinned.Blocks.Select(block => block.Id)]) is { Length: > 0 } offPlan ? offPlan : KimiModels.NoBlockRefusal(id, [.. pinned.Blocks.Select(block => block.Id)]));
 
     private static BlockRead Persons(string id, string text, string header)
     {

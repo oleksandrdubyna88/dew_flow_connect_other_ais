@@ -20,13 +20,14 @@ export type { Capability, CapabilityStanding, RuntimeCapabilityRow };
  * `shared/capability-matrix-vectors.json`, which is what makes "blocked in the UI and refused by the
  * server" one rule rather than two copies. Pure: no VS Code, no I/O.</p>
  *
- * <p>Confined admits; unconfined and default-deny admit FLAGGED — the row runs, and its flag is shown on the row
- * and beside every answer (D13, revised 2026-10-03); unsupported and unmeasured refuse; a runtime or a capability
+ * <p>Confined admits; unconfined, default-deny and unmeasured admit FLAGGED — the row runs, and its flag is shown on the row
+ * and beside every answer (D13, revised 2026-10-03; unmeasured since the owner's decision of 2026-10-23: a refusal whose only reason is
+ * "not measured" is a note — the row runs and the answer may come without the capability); unsupported refuses; a runtime or a capability
  * the table does not know refuses by name and never defaults.</p>
  */
 
 /** What an admitted pair carries beside its standing: nothing, or the caveat the row shows. */
-export type AdmissionFlag = '' | 'unconfined' | 'default-deny';
+export type AdmissionFlag = '' | 'unconfined' | 'default-deny' | 'unmeasured';
 
 export interface Admission {
   readonly admitted: boolean;
@@ -39,26 +40,11 @@ export interface Admission {
   readonly caveat: string;
 }
 
-/** The record a pair's measurement belongs in when its row cites none — the first run's. */
-const FIRST_RUN_RECORD = 'research/RESULTS_question_consultant_capabilities.md';
-
-/**
- * The record a row's `resultRef` cites — the file a measurement of that pair would land in (the Vibe rows cite
- * research/RESULTS_vibe_confinement.md, S3 of PLAN_vibe_and_kimi_runtimes.md) — read off the row, never a second sentence
- * per runtime; the first run's record when the row names none. The twin of `CapabilityMatrix.RecordOf`.
- */
-function recordOf(row: RuntimeCapabilityRow): string {
-  const cited = row.measuredWith.resultRef;
-  const at = cited.indexOf('research/RESULTS_');
-  const end = at < 0 ? -1 : cited.indexOf('.md', at);
-
-  return end < 0 ? FIRST_RUN_RECORD : cited.slice(at, end + 3);
-}
-
 const CAVEATS: Readonly<Record<AdmissionFlag, string>> = {
   '': '',
   unconfined: 'unconfined: can read this machine — a shell is always there, and no flag removes it',
   'default-deny': "held only by the CLI's headless permission default, which nobody configured",
+  unmeasured: 'not measured on this runtime for this capability: the row runs anyway, and the answer may come without it',
 };
 
 /** The file's spelling and nothing else: the panel writes `disk`, never `Disk`. */
@@ -92,8 +78,7 @@ const DECISIONS: Readonly<Record<CapabilityStanding, (row: RuntimeCapabilityRow)
   'default-deny': (row) => admitted(row, 'default-deny'),
   unsupported: (row) => refused(row.standing, `'${row.runtime}' cannot do '${row.capability}': ${row.measuredWith.note} — `
     + 'give this row a prompt of another capability, or this prompt another runtime'),
-  unmeasured: (row) => refused(row.standing, `'${row.runtime}' has not been measured for '${row.capability}' `
-    + `(${row.measuredWith.note}) — a measured cell in ${recordOf(row)} is what admits it; until then give this row a prompt of another capability`),
+  unmeasured: (row) => admitted(row, 'unmeasured'),
 };
 
 function admitted(row: RuntimeCapabilityRow, flag: AdmissionFlag): Admission {
