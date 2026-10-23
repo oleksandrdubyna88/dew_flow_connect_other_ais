@@ -610,9 +610,9 @@ by token. Over-masking, never a leak; not pinned by a test.
 **Suites (the committed code, as executables).** `CoaiMcp.Tests.exe` whole through `low-priority.mjs`: 13 753 tests, 13 632 passed,
 0 failed, 121 skipped, 17 min 49 s. `npm run lint`: clean. `npm test`: 6 534 tests, 6 532 passed, 0 failed, 2 skipped. **One
 first `npm test` run failed one test**, `chatTestsLeaveNoTemp.test.mjs` ("chatStoreLock.test.js removes every temp folder it makes"),
-because `chatStoreLock.test.js` hit \`EPERM: operation not permitted, open …\\a1.lock\` in the Windows temp folder; the same two
+because `chatStoreLock.test.js` hit `EPERM: operation not permitted, open …\a1.lock` in the Windows temp folder; the same two
 files pass alone (16 of 16, 4 of 4) and a second whole run passed everything — an environment error of that run (the file system,
-not this change). \`npm run test:parity\`: 1 189 shapes at both limits, 5 records, 17 codes, byte for byte. \`plan-lifecycle.mjs\`: clean.
+not this change). `npm run test:parity`: 1 189 shapes at both limits, 5 records, 17 codes, byte for byte. `plan-lifecycle.mjs`: clean.
 
 Releases: one coai-mcp release and one extension release carry S1–S3 together (the notice road is shared, D9); the
 server release is the one that closes R1 on the served-file and stderr roads.
