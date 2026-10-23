@@ -1,6 +1,6 @@
 # PLAN — the codex, agy and claude reviewers get what Kimi got: a failure is classified from the CLI's own words, and what the person reads is whole, cured and redacted
 
-> Status: **E5.S1 and E5.S2 are built on branch `docs/cli-reviewer-gaps` (2026-10-23), nothing is released, and E5.S4's paid run is pending; the other stories are plan only.** Scope: `src_mcp/runners/Reviewers/ReviewerExecutor.cs`
+> Status: **E5.S1 and E5.S2 are built on branch `docs/cli-reviewer-gaps` (2026-10-23), nothing is released, and E5.S4's paid canary run was made by the lead on claude 2.1.309 (the branch's hook did not run under `--safe-mode`); the other stories are plan only.** Scope: `src_mcp/runners/Reviewers/ReviewerExecutor.cs`
 > (`RateLimit`, the stderr tail, the kept evidence), `ReviewerRuntime.cs` (`CodexRuntime`), `ClaudeRuntime.cs`,
 > `AntigravityRuntime.cs`, `BoundedScheduler.cs` (the summary line), `VendorDiagnosis.cs`, `VendorProbe.cs`,
 > `src_mcp/runners/Files/EvidenceFile.cs`, `src_mcp/core/Notices/Redaction.cs` with its mirror
@@ -601,11 +601,12 @@ read any path they are told it narrows what they are pointed at, not what they c
 
 Cornerstones: 0 of 1 — E5.S2.
 
-### E5.S1/S2 — status: built 2026-10-23, paid S4 run pending
+### E5.S1/S2 — status: built 2026-10-23; S4's paid run made the same day
 
-Built on branch `docs/cli-reviewer-gaps`; nothing is released. **E5.S3 (the card note) and E5.S4's paid run are NOT built** — the run is the lead's, its commands and
-its eight observations are in [RESULTS_claude_reviewer_safe_mode.md](../research/RESULTS_claude_reviewer_safe_mode.md) §5, and until a row there says *observed* the
-docs claim the flag is SENT, never that a branch's hook cannot run. No other epic was started.
+Built on branch `docs/cli-reviewer-gaps`; nothing is released. **E5.S3 (the card note) is NOT built.** E5.S4's paid run was made by the lead on claude 2.1.309 and is recorded in
+[RESULTS_claude_reviewer_safe_mode.md](../research/RESULTS_claude_reviewer_safe_mode.md) §5: the branch's project hook did not run under `--safe-mode` and did run
+without it; reads, sign-in and permission rules held; a hook handed in by `--settings` did NOT run under `--safe-mode` (the trade). Rows 5 and 8 used a scratch
+`--settings` file, not the owner's user settings. The effect claim is limited to 2.1.309. No other epic was started.
 
 **What shipped.**
 

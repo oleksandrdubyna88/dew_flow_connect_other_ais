@@ -1,6 +1,7 @@
 # RESULTS — the claude reviewer and `--safe-mode`: what is known, and what the lead's paid run must still observe
 
-> Status: **record, 2026-10-23 — the facts of E5.S1 only; the canary and behaviour run (E5.S4) is pending, run by the lead.** For epic E5 of
+> Status: **record, 2026-10-23 — the facts of E5.S1, and the lead's canary and behaviour run (E5.S4, §5) on claude 2.1.309: the branch's
+> hook did not run under `--safe-mode` and did run without it.** §6 (`--restricted`) is still open. For epic E5 of
 > [PLAN_codex_agy_and_claude_reviewers_get_what_kimi_got.md](../todo/PLAN_codex_agy_and_claude_reviewers_get_what_kimi_got.md). Written before the
 > code of E5.S2 so that the gate reads a fact and not a claim. Nothing here was measured by running a claude CLI in this change: every line is
 > either a quotation of a committed file, a record the plan carries from another repository, or a command left for the lead to run.
@@ -71,7 +72,32 @@ managed hooks stay. A person who protects a read with a user `PreToolUse` hook t
 reviewer read-only is coai's own confinement — `--permission-mode plan` and `--disallowedTools` — never a user hook. The card says so next to the
 setting. Whether a canary denied only by a user hook is readable under safe mode is part of S4 (§5, row 8).
 
-## 5. Canary and behaviour run — pending, run by the lead
+## 5. Canary and behaviour run — run by the lead, 2026-10-23, claude 2.1.309 (Windows)
+
+**What was run.** Two paid turns, `--model sonnet`, each in its own fresh `testsToDelete-safemode-canary-{A,B}` git folder (cwd = that folder,
+`--add-dir` = that folder, as `ClaudeRuntime.Build` sends it), arm A with `--safe-mode`, arm B without, both exit 0, `is_error: false` (cost
+0.167 and 0.080 USD). Two deviations from the setup below, said plainly: (a) rows 5 and 8 were NOT run against the person's USER settings — the lead
+does not edit the owner's `~/.claude/settings.json`; both arms instead got a scratch `--settings <file>` holding `permissions.deny` for
+`Read(./DENIED.txt)` and a `PreToolUse` hook (matcher `Read`) that exits 2 for any path naming `HOOKDENIED`; (b) one prompt asked for all reads and
+the write, so the write row is what plan mode did with it. Row 7 (the fast-mode file) was not run separately; the `--settings` file of (a) stands in
+for "a `--settings` file is still read".
+
+| # | observation | arm A (`--safe-mode`) | arm B (control) |
+|---|---|---|---|
+| 1 | `canary-marker.txt` after the turn | **absent** | **present** — the control fired |
+| 2 | the turn answered, sign-in intact | yes | yes |
+| 3 | `NOTE.txt` read | `note-content-alpha` | `note-content-alpha` |
+| 4 | `outside-add-dir/ADD.txt` read | `add-content-beta` | `add-content-beta` |
+| 5′ | `permissions.deny` from a `--settings` file | **enforced** — "File is in a directory that is denied by your permission settings." | enforced, same sentence |
+| 6 | create `WRITE-TEST.txt` | not attempted (plan mode), no file | not attempted (plan mode), no file |
+| 8′ | a read denied ONLY by a `PreToolUse` hook in a `--settings` file | **readable** — the hook did not run | denied — "PreToolUse:Read hook error: … blocked by the canary PreToolUse hook" |
+
+**What it shows, on 2.1.309 only.** The reviewed branch's project hook does not run in a `--safe-mode` reviewer (row 1), and nothing the review
+needs was lost (rows 2–4, 6). Permission rules survive safe mode (5′). Hooks do NOT — not even a hook handed in by `--settings` (8′); a user-settings
+hook was not tried and is assumed to go the same way, which is the trade the card states. coai's read-only claim therefore rests on plan mode and
+`--disallowedTools`, never on a hook. Both scratch folders were removed afterwards; nothing else was.
+
+### The setup the plan wrote before the run
 
 > **Not run.** This section is the lead's to fill: one real, paid, cheap Claude turn per arm, in a scratch folder whose name starts `testsToDelete-`.
 > The claim "a branch's hook cannot run inside the reviewer" is limited to the CLI versions in the table below, and until a row says *observed*, the
