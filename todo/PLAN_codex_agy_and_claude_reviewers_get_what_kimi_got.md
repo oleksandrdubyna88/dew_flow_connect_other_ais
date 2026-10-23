@@ -549,7 +549,16 @@ that starts from ordinary settings, runs the local round path against the fake C
 observes `--safe-mode` in the eventual argv (and the Team-server twin in its job test). A help that timed out, was cut
 or failed is UNKNOWN, not "does not declare": the launch goes without the flag and its note says the capability could
 not be read (`AnUnreadableHelp_IsUnknown_AndSaysSo`). A visible per-vendor setting `SafeMode` (`on` default, `off`) is
-the way back the §1 promise needs — E4's environment switch cannot remove an argv flag (`TheSafeModeSettingOff_DropsTheFlag_AndSaysSo`); the card's existing `versionWarningNote`/`runtimeNote` carries the absent-flag note through `providers`. The
+the way back the §1 promise needs — E4's environment switch cannot remove an argv flag (`TheSafeModeSettingOff_DropsTheFlag_AndSaysSo`;
+`off` also removes an inherited `CLAUDE_CODE_SAFE_MODE` from the child's environment, or the way back is not one).
+Risk consult 958e430d (verified against `ClaudeRuntime.cs:85-110`): the probe is FRESH per round — no executable+version
+cache (a cache still needs a version spawn to see an in-place update; budget the existing two 10 s probe attempts), test
+`ASwappedCliBetweenRounds_IsReadAgain`; an unsupported-flag failure is NEVER retried without `--safe-mode`; on the Team
+server the probe request goes through the same `Confinement`, slot `HOME`/config, temp folder and cancellation budget as
+the launch (`ClaudeCapability.AskAsync` `:139` inherits today — test `TheTeamProbeRunsUnderTheJobsConfinement`); the
+consultants' argv and their Unknown → refusal for `--restricted` stay exactly as they are (`TheConsultantsUnknownStaysARefusal`,
+fresh, resumed and question consultations). The absent-flag note does not say MCP servers reach the reviewer — it already
+sends `--strict-mcp-config`; it names the branch's CLAUDE.md and hooks only; the card's existing `versionWarningNote`/`runtimeNote` carries the absent-flag note through `providers`. The
 `--restricted --strict-mcp-config` pair is NOT added here: after S2 ships, the lead runs one turn of coai's exact argv
 plus those two flags and records whether they conflict with `--permission-mode plan`/`--disallowedTools` and whether
 `--add-dir` reads survive; a *yes, compatible* opens its own story (it would also close part of
@@ -574,7 +583,11 @@ the argv; they do not prove a branch's hook stops running under coai's exact inv
 observes that the review is not quietly worse (cadence consult 5119c081; the recorded help says permissions and built-in
 tools work normally, which is a claim, not an observation): an allowed file read in the worktree, a read through the
 `--add-dir` directory, a user permission denial still enforced, a prohibited write still refused, and the fast-mode
-`--settings` file still applied. S4 is built and released WITH S2 (S1's evidence and this check travel in S2's PR), not
+`--settings` file still applied. And the one case that could make safe mode LESS safe (risk consult 958e430d): safe mode
+also switches off the person's USER hooks (managed hooks stay), so a canary read denied ONLY by a user `PreToolUse` hook
+is tried with and without the flag — denied before and readable after is recorded as the trade, the card note says that
+user hooks do not apply to a safe-mode reviewer, and coai's own confinement (plan mode + `--disallowedTools`) is what
+the claim rests on, never a user hook. S4 is built and released WITH S2 (S1's evidence and this check travel in S2's PR), not
 after it. Recorded in
 `research/RESULTS_claude_reviewer_safe_mode.md` with the CLI version. The card's and the docs' claim is limited to the
 versions where the effect was observed; on any other version the S2 note says the effect is not measured there (a note,
