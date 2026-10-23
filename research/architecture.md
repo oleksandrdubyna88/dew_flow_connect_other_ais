@@ -892,6 +892,19 @@ outside a round and on consultation, question, probe and chat lines, which are n
 (`usage.ts`). Nothing crosses a new seam: the field was already a trailing, defaulted `UsageEntry` column, and no diagram labels it
 ([module_runners.md](module_runners.md)).
 
+**The ledger-field contract between `coai-mcp` and the extension (E3, 2026-10-21).** E3 added keys to `usage.jsonl` lines, all of them
+trailing and defaulted so an older reader ignores them and an older line reads empty: `consultation` (the id of the consultation a consult
+line belongs to; empty on a check, a refused new consultation and every non-consult line), the **S1 labels** `cli`, `cliVersion`, `effort`,
+`effortFrom`, `tier` (what a consult, check, question or probe line ran with, written from the launch's own record of what it sent,
+`ReviewerInvocation.Sent`, never re-derived by the reader; the extension writes the same five on its chat and probe lines), and the **local
+`endCause`** words `roundClock` and `unknown` (`EndCauses.LocalOnly`) on the last line of a cancelled local turn, beside the server's
+four. An empty value on disk means "not recorded" and the extension's `parseUsageLine` reads it as absent. Each side has its own suite and
+each compares its side against its own idea of the names, so a key spelled differently on the two sides leaves both green while every figure
+built on it reads empty: the leg `scripts/seam-ledger-fields.mjs` (`npm run test:seam`) runs the real `coai-mcp` over stdio against
+`FakeCli` (a consultation that answers and a local round whose reviewer outlives the round's one-minute clock), reads the lines it wrote
+through the extension's own parser, and fails both when a key does not come back equal and when no line wrote it at all. `withdrawn` and
+`hostStopped` cannot be driven live (no review tool takes the request's token) and are pinned by the C# tests only. No diagram labels these fields.
+
 ### A setting whose ABSENCE must mean something (2026-09-08)
 
 `COAI_ENABLED_<ROLE>` crosses the same seam and is shaped by the same lesson, pushed one step

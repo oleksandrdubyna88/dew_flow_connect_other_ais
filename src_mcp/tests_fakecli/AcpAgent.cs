@@ -40,6 +40,7 @@ namespace CoaiMcp.FakeCli;
 ///     {"kind":"request","method":"fs/write_text_file","params":{…}}   any other client request; the reply is logged
 ///     {"kind":"stray","text":"not json"}               a line that is not JSON-RPC
 ///     {"kind":"spew","chars":N}                        one line of N characters
+///     {"kind":"stderr","chars":N}                      N characters on STDERR, no newline — what drives the client's stderr capture and its truncation flag
 ///     {"kind":"awaitCancel"}                           reads stdin until session/cancel arrives, then goes on (the prompt ends cancelled)
 ///     {"kind":"sleep","ms":100}
 ///     {"kind":"hang"}                                  never returns: the kill path
@@ -335,6 +336,11 @@ internal static class AcpAgent
             case "spew":
                 // One line of N characters and no newline among them: the shape a line reader must bound.
                 Write(new string('x', (int)Number(step, "chars")));
+                break;
+            case "stderr":
+                // Stderr only: the protocol stream stays clean, so the turn still answers.
+                Console.Error.Write(new string('e', (int)Number(step, "chars")));
+                Console.Error.Flush();
                 break;
             case "awaitCancel":
                 AwaitCancel();

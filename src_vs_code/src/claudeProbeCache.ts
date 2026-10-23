@@ -186,6 +186,8 @@ export class ClaudeProbeCache {
             (args) => capture(unquoted(executable), args, false, PROBE_CAP_MS, () => !this.watched()),
             probeUsagePath(this.dataDir.fsPath),
             Date.now,
+            // The version asked just above — each line names what it ran under (E3.S3).
+            cliVersion,
           ),
           cliVersion: async () => cliVersion,
           executable,

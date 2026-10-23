@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Threading.Channels;
 using CoaiMcp.Core.Feature;
 using CoaiMcp.Core.Findings;
 using CoaiMcp.Core.Rounds;
@@ -634,8 +636,36 @@ public sealed class AReviewerThatAsksForSourceIsAskedAgainTests : IAsyncLifetime
         }
     }
 
-    private static async Task WaitingForAsync(Task task, string what) =>
-        await WaitingForAsync(task.ContinueWith(_ => true, TaskScheduler.Default), what);
+    /// <summary>The same bounded wait for a task with no result. The task's OWN fault is kept: only a guard that ran out while it was still pending becomes the "gave up" sentence.</summary>
+    private static async Task WaitingForAsync(Task task, string what)
+    {
+        try
+        {
+            await task.WaitAsync(Guard, TestContext.Current.CancellationToken);
+        }
+        catch (TimeoutException) when (!task.IsCompleted)
+        {
+            throw new TimeoutException($"gave up after {Guard.TotalSeconds:0} s waiting for {what}");
+        }
+    }
+
+    /// <summary>
+    /// CodeRabbit round: the bounded wait must not swallow the fault of the task it awaits. A wait on <c>ManualClock.WhenTimersAsync</c> that
+    /// faulted with its own named <see cref="TimeoutException"/> (the timers were never armed) used to be turned into "done" and the test went on
+    /// to advance a clock nothing was waiting on, reporting an unrelated failure 30 s later.
+    /// </summary>
+    [Fact]
+    public async Task TheBoundedWait_PropagatesTheFaultOfTheTaskItAwaits_NamedTimeoutIncluded()
+    {
+        var named = new TimeoutException("expected at least 2 timer(s) armed within 30s; 1 are armed");
+
+        var timeout = async () => await WaitingForAsync(Task.FromException(named), "the timers");
+        var other = async () => await WaitingForAsync(Task.FromException(new InvalidOperationException("boom")), "the timers");
+
+        (await timeout.Should().ThrowAsync<TimeoutException>()).WithMessage("expected at least 2 timer(s) armed within 30s; 1 are armed");
+        await other.Should().ThrowAsync<InvalidOperationException>().WithMessage("boom");
+        await WaitingForAsync(Task.CompletedTask, "nothing");
+    }
 
     /// <summary>
     /// A continuation that always asks for another turn — the same launch again — unless <paramref name="stopsAtTheFollowUps"/>, which makes it
@@ -685,7 +715,7 @@ public sealed class AReviewerThatAsksForSourceIsAskedAgainTests : IAsyncLifetime
         var turn = RunAsync(Work(resolver: resolver), ct: stop.Token);
         try
         {
-            await WaitingForAsync(clock.WhenTimersAsync(2), "the read deadline AND the slow read's delay to be armed on the clock");
+            await WaitingForAsync(clock.WhenTimersAsync(2, within: Guard - TimeSpan.FromSeconds(5)), "the read deadline AND the slow read's delay to be armed on the clock");
             clock.Advance(TimeSpan.FromMilliseconds(301));
 
             (await WaitingForAsync(slow.TokenCancelled, "the slow read's token to be cancelled by the advance")).Should().BeTrue(

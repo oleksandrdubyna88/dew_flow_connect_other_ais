@@ -65,6 +65,7 @@ public sealed class EveryBudgetInAClockedClassReadsItsClockTests
         new(BoundedScheduler, "var queued = System.Diagnostics.Stopwatch.StartNew(); Report(", "how long the reviewer queued for a shared resource: reported, decides nothing"),
         new(BoundedScheduler, "Stopwatch.StartNew(); var loop = new TurnLoop(", "the conversation's elapsed as REPORTED; the loop's own cap reads the clock the scheduler hands it (S4)"),
         new(BoundedScheduler, "Stopwatch.StartNew(); var attempts = 1;", "DEFERRED (Q4): the 429 ladder's elapsed, judged against the ladder's budget — named, not moved, until a 429-ladder failure is kept (D5)"),
+        new(BoundedScheduler, "Stopwatch.GetTimestamp(); } public sealed class BoundedScheduler(", "a report's LandedAt is a MOMENT, compared only with RoundCancellation's own Stopwatch stamps to name a local end cause (E3.S2); a manual clock would make the two incomparable, and it bounds no wait"),
         new(BoundedScheduler, "await Task.Delay(wait, ct);", "DEFERRED (Q4): the 429 ladder's wait — named, not moved, until a 429-ladder failure is kept (D5)"),
         new(AcpClientFile, "reading.WaitAsync(AcpTransport.DrainGrace)", "TEARDOWN (E4 plan §5.1, the lead's Q1): the drain grace after the agent's tree was killed bounds a real pipe a survivor may hold; on a manual clock nobody advances it would hang, and it decides nothing the test races"),
         new(ReviewerExecutorFile, "new CancellationTokenSource(AbandonBudget)", "TEARDOWN — real cleanup I/O (the adapter's courtesy cancel after a kill, for the remote runtime an HTTP cancel); a manual clock nobody advances would park it for ever, and it runs after the outcome is decided and decides nothing the test races"),
@@ -256,13 +257,13 @@ public sealed class EveryBudgetInAClockedClassReadsItsClockTests
     }
 
     [Fact]
-    public void TheScan_FindsTheFiveSitesOfBoundedScheduler_ThatTheAllowListNames()
+    public void TheScan_FindsTheSixSitesOfBoundedScheduler_ThatTheAllowListNames()
     {
         var sites = SitesOf([BoundedScheduler]);
 
         sites.Select(site => site.Kind).Should().BeEquivalentTo(
-            ["Stopwatch", "Stopwatch", "Stopwatch", "Stopwatch", "Task.Delay"],
-            "the scheduler has four Stopwatch reads and the ladder's Task.Delay, and nothing else the scan judges (slot.WaitAsync(ct) is a token alone)");
+            ["Stopwatch", "Stopwatch", "Stopwatch", "Stopwatch", "Stopwatch", "Task.Delay"],
+            "the scheduler has four Stopwatch reads, the report's LandedAt stamp (E3.S2) and the ladder's Task.Delay, and nothing else the scan judges (slot.WaitAsync(ct) is a token alone)");
     }
 
     [Fact]

@@ -19,6 +19,12 @@ internal sealed record TurnConsultant(IConsultantRuntime Runtime, ProviderSettin
     /// <summary>The turn's one refund: whichever failure path claims it first, and none after.</summary>
     public SingleUseTake Refund { get; } = new(Caller.Take);
 
+    /// <summary>
+    /// What this turn's launch RAN WITH, as its ledger line says it (<see cref="RowLaunchOptions.Answering"/>, then the release its launches
+    /// asked) — <see cref="LaunchOptions.None"/> until the launch is built, which is what a turn refused before it bills.
+    /// </summary>
+    public LaunchOptions RanWith { get; init; } = LaunchOptions.None;
+
     /// <summary>What THIS turn consumed — <see cref="ConsultationBilling.ThisTurnsShare"/>, for this consultant's reporting.</summary>
     public Usage ShareOf(ConsultationRecord record, Usage reported) =>
         ConsultationBilling.ThisTurnsShare(Runtime.UsageIsCumulative, record, reported);
@@ -129,8 +135,8 @@ internal sealed class ConsultationFailedTurns(
             ConsultationFailing.FaultIs(killedAs, fault));
 
     /// <summary>The turn's ledger row (<see cref="ConsultantTurnBooks.Billed"/>), role <c>consult</c>.</summary>
-    public void Billed(TurnConsultant consultant, string outcome, TimeSpan elapsed, Usage usage, string resetsUtc = "") =>
-        ConsultantTurnBooks.Billed(ledger, consultant.Row, consultant.Model, ConsultantRoles.Consult, outcome, elapsed, usage, resetsUtc);
+    public void Billed(TurnConsultant consultant, string outcome, TimeSpan elapsed, Usage usage, string consultation, string resetsUtc = "") =>
+        ConsultantTurnBooks.Billed(ledger, consultant.Row, consultant.Model, ConsultantRoles.Consult, outcome, elapsed, usage, consultant.RanWith, consultation: consultation, resetsUtc: resetsUtc);
 
     /// <summary>A best-effort write on a path that is already failing — it must not mask what failed.</summary>
     public void Quietly(Action write)
@@ -167,7 +173,8 @@ internal sealed class ConsultationFailedTurns(
     private string Applied(TurnConsultant consultant, TimeSpan elapsed, ConsultationFailed failed, string unrecorded)
     {
         var gaveBack = GaveBack(consultant, failed.Failure);
-        Billed(consultant, failed.LedgerOutcome, elapsed, failed.Share, failed.ResetsUtc);
+        // The record's id — emptied by RefusedBeforeTheLaunch when no record was ever written, so such a line names no consultation.
+        Billed(consultant, failed.LedgerOutcome, elapsed, failed.Share, failed.Next.Id, failed.ResetsUtc);
         health.Failed(ConsultHealth.FailureOf(failed));
 
         return refuse(ConsultationFailing.Answer(failed, gaveBack, unrecorded), $"consult:{failed.Failure.Kind}");

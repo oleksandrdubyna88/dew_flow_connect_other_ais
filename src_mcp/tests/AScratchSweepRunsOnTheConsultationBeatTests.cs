@@ -44,7 +44,8 @@ public sealed class AScratchSweepRunsOnTheConsultationBeatTests : IDisposable
             default,
             _launcher,
             Logger.None,
-            Noticing.None);
+            Noticing.None,
+            CancellationToken.None);
     }
 
     [Fact]
