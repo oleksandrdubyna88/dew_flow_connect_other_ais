@@ -45,7 +45,7 @@ public sealed class HostAdmissionOnNativeLinuxTests
     [Fact]
     public void TheProductsSet_AdmitsVibe_AndNotKimi_OnAReadNativeLinuxHost()
     {
-        HostAdmission.MeasuredOnNativeLinux.Should().BeEquivalentTo(["Vibe"], "E2 adds Vibe and only Vibe: Kimi is E3's one entry");
+        HostAdmission.MeasuredOnNativeLinux.Select(name => name.ToLowerInvariant()).Should().Equal(["vibe"], "E2 adds Vibe and only Vibe: Kimi is E3's one entry (the names are the shared file's, compared case-insensitively)");
         HostAdmission.Refusal("Vibe", HostKind.Linux, "vibe", WslGeneration.None).Should().BeEmpty("a read native Linux banner should admit Vibe now that it is measured");
         HostAdmission.Refusal("Kimi", HostKind.Linux, "kimi", WslGeneration.None).Should().Be(Wsl2OnlyKimi);
     }

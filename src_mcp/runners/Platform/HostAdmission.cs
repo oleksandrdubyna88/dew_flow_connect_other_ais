@@ -22,11 +22,11 @@ public static class HostAdmission
     /// <summary>
     /// The runtimes (<c>Vibe</c>, <c>Kimi</c>) measured on a native Linux host. <c>Vibe</c> is in it, on the evidence of research/RESULTS_vibe_confinement.md §32 (Vibe 2.26.1, ubuntu-claude, 2026-10-22: N-V1–N-V6 all passed with the
     /// keyring road closed in every launch); <c>Kimi</c> is not (E3 adds it: one entry plus its texts, never a second admission). Membership is asked FIRST, so a runtime outside the set gets the WSL2-only sentence whatever the banner says.
-    /// The ABSENCE of a fact is a refusal: no entry, no admission; no read banner, no admission (DN6). There is no default member, no settings switch and no environment switch — a runtime enters by an edit to THIS line that names the
+    /// The ABSENCE of a fact is a refusal: no entry, no admission; no read banner, no admission (DN6). There is no default member, no settings switch and no environment switch — a runtime enters by an edit to <c>shared/native-linux-admission.json</c> (the names of <see cref="NativeLinuxAdmission.Since"/>) that names the
     /// RESULTS section its cells are in; and a keyring-session fact (<c>KeyringSessionFacts</c>) is recorded by <c>--host-facts</c> and decides nothing here (DN10): a fact added to this arm is a REFUSAL condition on a member, never a road into the set.
     /// Compared case-insensitively, as <see cref="Refusal(string, HostKind, string, WslGeneration)"/> receives the names.
     /// </summary>
-    public static IReadOnlySet<string> MeasuredOnNativeLinux { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Vibe" };
+    public static IReadOnlySet<string> MeasuredOnNativeLinux { get; } = new HashSet<string>(NativeLinuxAdmission.Since.Keys, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Empty when <paramref name="runtime"/> (<c>Vibe</c>, <c>Kimi</c>) may start on this host, else the sentence. <paramref name="executable"/> is the CLI the launch would start; <paramref name="wsl"/> is

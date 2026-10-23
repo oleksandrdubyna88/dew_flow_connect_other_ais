@@ -13250,10 +13250,11 @@ flowchart TD
 - **Not here / open**: the limitation row (`shared/consultant-limitations.json`, `vibe`/`linux`) is S4's, in *Vibe on a native Linux host — the limitation row and what the panel may say* above; the server's own sentences are S2's (`module_runners.md`);
   the unmeasured-Vibe-version warning on a native host is the server's (S-N22).
 
-### The native-Linux table is pinned to the server's set (2026-10-22, the E2 code gate G1 of `todo/PLAN_kimi_and_vibe_on_native_linux_E2.md`)
+### The native-Linux table is held to ONE shared file (2026-10-22, the E2 code gate G1 of `todo/PLAN_kimi_and_vibe_on_native_linux_E2.md`; reshaped by PR #922's CI round)
 
-`ON_NATIVE_LINUX_SINCE` (`runtimeSince.ts`: from which coai-mcp the panel PROMISES a runtime on a native Linux host) and `HostAdmission.MeasuredOnNativeLinux` (`module_runners.md`: which runtimes the server ADMITS there) encode
-different facts — a version cannot be derived from a set — but they must name the same runtimes, or a card would promise a launch the server refuses (or the reverse). The C# test `NativeLinuxAdmissionTablesAgreeTests`
-reads the real server set and the keys of this table and fails naming the side that lacks a runtime; it also requires each named runtime's `linux` row in `shared/consultant-limitations.json` to be `confined` with a
-`measured` field. Adding Kimi (E3) is therefore ONE edit on each side plus its measured row, or a red test. Why C# and not node: the server side is read as the real set and the real loaded rows, and only this small
-flat object literal is read as text.
+`ON_NATIVE_LINUX_SINCE` (`runtimeSince.ts`: from which coai-mcp the panel PROMISES a runtime on a native Linux host) and `HostAdmission.MeasuredOnNativeLinux` (`module_runners.md`: which runtimes the server ADMITS there) are two readings of
+ONE fact, so the fact lives in ONE file, `shared/native-linux-admission.json` (`runtimes[]`: `runtime`, `since`, `source` — today `vibe`, `0.64.0`, RESULTS §32). The server LOADS it (embedded; `NativeLinuxAdmission`, whose names ARE the
+set); the extension cannot read `shared/` at run time (an installed VSIX has none, and a generator would be a second artefact for a three-line table), so it keeps its constant and `src/test/nativeLinuxAdmissionFile.test.ts`
+holds it to the file: the same runtimes, and the same release for each. The first version of this guard was a C# test that parsed `runtimeSince.ts` with a regular expression; `NothingReadsAnotherProgramsSourceTests` refused it (a
+test that parses another program's source goes quiet rather than red), and no test reads the other side's source now. The C# test `NativeLinuxAdmissionFileTests` also requires each named runtime's `linux` row in
+`shared/consultant-limitations.json` to be `confined` with a `measured` field. Adding Kimi (E3) is therefore ONE edit to the shared file, ONE to `ON_NATIVE_LINUX_SINCE`, plus its measured row — or a red test naming the side that lacks it.
