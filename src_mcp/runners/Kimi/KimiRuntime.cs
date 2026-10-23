@@ -319,10 +319,13 @@ public sealed class KimiRuntime(string id, KimiHost host, KimiSeams seams, Seril
 
         var quoted = Quoted(said, report);
 
-        return RateLimit.Hopeless(quoted) ? quoted : $"{quoted} ({KimiAcpProfile.SpentPhrasesOf(report.Failure)})";
+        return RateLimit.Hopeless(quoted) ? quoted : Quoted($"{said}; {KimiAcpProfile.SpentPhrasesOf(report.Failure)}", report);
     }
 
     /// <summary><paramref name="said"/> followed by the line of the agent's stderr the shim matched, quoted, when the reason itself did not hold the sentence; unchanged otherwise.</summary>
     private static string Quoted(string said, KimiReport report) =>
-        report.FailureLine.Length > 0 ? $"{said} (Kimi said: {report.FailureLine})" : said;
+        report.FailureLine.Length > 0 ? $"{said}{SaidLead}{report.FailureLine}" : said;
+
+    /// <summary>What stands between the shim's words and the vendor's line: no bracket, so nothing of ours closes after the vendor's last character (the line is the LAST thing in the reason).</summary>
+    private const string SaidLead = "; Kimi said: ";
 }

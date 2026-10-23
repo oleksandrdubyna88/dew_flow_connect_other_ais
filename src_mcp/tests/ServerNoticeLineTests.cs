@@ -148,12 +148,25 @@ public sealed class ServerNoticeLineTests
     [InlineData("token=abcdefgh", "token=[redacted]")]
     [InlineData("x-auth-token: abcdefghijkl", "x-auth-token: [redacted]")]
     [InlineData("Your account org-0a1b2c3d4e5f6a7b <ak-9z8y7x6w5v4u3t2s> is suspended", "Your account org-[redacted] <ak-[redacted]> is suspended")]
+    [InlineData("Your account org-0a1b_2c3d_4e5f <ak-9z8y-7x6w-5v4u> is suspended", "Your account org-[redacted] <ak-[redacted]> is suspended")]
+    [InlineData("Your account org-0a1b2c3d4e5f_6a7b8c9d is suspended", "Your account org-[redacted] is suspended")]
     public void EachShape_IsRedactedExactlyAsTheExtensionRedactsIt(string given, string expected)
     {
         // `Authorization: Bearer …` comes back with TWO [redacted]: the bearer pattern takes the
         // value, then the labelled pass sees `Authorization: Bearer` and takes that too. The
         // extension's docstring claims the opposite; its code does this, and the code is the contract.
         Safe(given).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("org-", 140)]
+    [InlineData("ak-", 300)]
+    public void AMoonshotIdLongerThanTheOldBound_IsMaskedWhole_NotLeftWithAReadableSuffix(string prefix, int length)
+    {
+        // A digit early in the run, then a long run of the id's own characters: the rule used to stop at 128 and leave the rest of the id readable.
+        var id = prefix + "1" + new string('a', length - 1) + "_b-c";
+
+        Safe($"Your account {id} is suspended").Should().Be($"Your account {prefix}[redacted] is suspended");
     }
 
     [Theory]
@@ -166,6 +179,7 @@ public sealed class ServerNoticeLineTests
     [InlineData("password     =x")]
     [InlineData("the org-wide setting")]
     [InlineData("org-settings-panel")]
+    [InlineData("the org-settings_panel and ak-sorted-words")]
     [InlineData("Slovak-language")]
     [InlineData("peak-hours")]
     public void AnOrdinaryString_IsLeftExactlyAlone(string given)
