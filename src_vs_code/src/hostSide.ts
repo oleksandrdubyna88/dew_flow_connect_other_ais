@@ -140,9 +140,10 @@ async function answered(underWsl: () => Promise<boolean>): Promise<boolean> {
  * WSL1 is refused, macOS is not measured, Windows is as it always was. One union, one source —
  * `process.platform` alone cannot tell WSL from a desktop Linux, and a POSIX path family cannot tell either from a Mac.
  *
- * <p>A native Linux host RUNS Vibe from coai-mcp 0.64.0 (E2 of research/PLAN_kimi_and_vibe_on_native_linux_E2.md), so a Linux host
- * whose kernel banner could not be read — or read blank — is its own member, <b>`linux-unread`</b>: the server cannot tell it from WSL1
- * (`ProcVersion.ReadFrom`: whitespace is not a read banner) and refuses a member on it, so the extension must not promise a row there.
+ * <p>A native Linux host RUNS Vibe from coai-mcp 0.64.0 (E2 of research/PLAN_kimi_and_vibe_on_native_linux_E2.md) and Kimi from the same release —
+ * unmeasured, by the owner's decision of 2026-10-23 — so a Linux host whose kernel banner could not be read — or read blank — is its own
+ * member, <b>`linux-unread`</b>: the server cannot tell it from WSL1
+ * (`ProcVersion.ReadFrom`: whitespace is not a read banner) and refuses a member on it (an ambiguity refusal, which stays), so the extension must not promise a row there.
  * It is a member of the union, not a flag beside it, so that every exhaustive table over the union fails to COMPILE until it says what
  * an unread host is told. Nothing persists it: it travels only inside the panel state (`hostKindConsumers.test.ts`).</p>
  */

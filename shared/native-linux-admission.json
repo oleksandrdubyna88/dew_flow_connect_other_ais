@@ -1,16 +1,24 @@
 {
   "why": [
-    "The runtimes coai-mcp runs on a NATIVE Linux host (a Linux kernel that is not WSL), and for each the first coai-mcp release that does (E2 of research/PLAN_kimi_and_vibe_on_native_linux_E2.md, DN1).",
-    "ONE file, read by BOTH sides: the server embeds it (CoaiMcp.Runners.native-linux-admission.json; HostAdmission.MeasuredOnNativeLinux IS its runtime names) and the extension's ON_NATIVE_LINUX_SINCE in src/runtimeSince.ts is held to it by its own test (nothing parses the other side's source).",
-    "A runtime with NO entry is REFUSED on a native Linux host: an absent fact refuses. An entry is added by an edit to THIS file in the change that carries the measurement; `source` names the RESULTS section whose cells are the evidence,",
-    "and the runtime must also hold a confined, measured `linux` row in shared/consultant-limitations.json (a test holds that). `since` is the next minor after the newest released src_mcp when the entry was made; whoever cuts the release keeps it level with the tag (DL14).",
-    "Kimi has no entry until E3 measures it."
+    "The runtimes coai-mcp runs on a NATIVE Linux host (a Linux kernel that is not WSL), and for each the first coai-mcp release that does (E2 of research/PLAN_kimi_and_vibe_on_native_linux_E2.md, DN1) and WHY it is admitted: `basis`.",
+    "ONE file, read by BOTH sides: the server embeds it (CoaiMcp.Runners.native-linux-admission.json; HostAdmission.AdmittedOnNativeLinux IS its runtime names) and the extension's ON_NATIVE_LINUX_SINCE in src/runtimeSince.ts is held to it by its own test (nothing parses the other side's source).",
+    "A runtime with NO entry is REFUSED on a native Linux host: an absent fact refuses. An entry is added by an edit to THIS file. `basis` is `measured` (`source` names the RESULTS section whose cells are the evidence, and the runtime must also hold a confined, measured `linux` row in shared/consultant-limitations.json) or",
+    "`owner-decision` (the owner's decision of 2026-10-23, todo/PLAN_kimi_and_vibe_on_native_linux_E2.md, DN1 of E2: \"unmeasured\" is a NOTE, never a refusal). An owner-decision runtime runs WITHOUT a measurement, so it carries a one-sentence `note` the person is shown on its card and its launch (KimiLaunch.HostNote),",
+    "and its `linux` row in shared/consultant-limitations.json must say `unmeasured` and name the decision (a test holds both). Only a runtime whose launch carries that note may use `owner-decision` (today Kimi's). `since` is the next minor after the newest released src_mcp when the entry was made; whoever cuts the release keeps it level with the tag (DL14)."
   ],
   "runtimes": [
     {
       "runtime": "vibe",
       "since": "0.64.0",
+      "basis": "measured",
       "source": "research/RESULTS_vibe_confinement.md §32 (Vibe 2.26.1, 2026-10-22)"
+    },
+    {
+      "runtime": "kimi",
+      "since": "0.64.0",
+      "basis": "owner-decision",
+      "source": "The owner's decision of 2026-10-23 (todo/PLAN_kimi_and_vibe_on_native_linux_E2.md, DN1 of E2); E3's measurement is optional evidence, not a gate",
+      "note": "Kimi is not measured on a native Linux host; it is admitted here by the owner's decision of 2026-10-23, so what it can read or write here is not claimed."
     }
   ]
 }

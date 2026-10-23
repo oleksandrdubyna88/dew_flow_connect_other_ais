@@ -193,13 +193,12 @@ public sealed class KimiLaunchChecksTests
             .And.Contain("Windows and WSL2 only");
     }
 
-    /// <summary>DL1: a native Linux host stays refused, with the sentence that says Kimi is measured on WSL2 only.</summary>
+    /// <summary>DL1, superseded by the owner's decision of 2026-10-23 (DN1 of E2): a native Linux host whose banner was READ admits Kimi (with a note); one whose banner could not be read stays refused — coai cannot tell it from WSL1.</summary>
     [Fact]
-    public void ANativeLinuxHost_IsRefused_WithTheWsl2OnlySentence()
+    public void ANativeLinuxHost_IsAdmitted_WhenItsBannerWasRead_AndRefusedWhenItWasNot()
     {
-        KimiLaunch.HostRefusal(HostKind.Linux, "kimi", WslGeneration.None).Should()
-            .Contain("Kimi runs on WSL2 only for now — it is measured on WSL2 and not yet on a native Linux host", "a native Linux host should still be refused with the WSL2-only sentence, but Kimi started")
-            .And.Contain("DL1");
+        KimiLaunch.HostRefusal(HostKind.Linux, "kimi", WslGeneration.None).Should().BeEmpty("Kimi was refused on a native Linux host only because it was not measured there");
+        KimiLaunch.HostRefusal(HostKind.Linux, "kimi", WslGeneration.Unreadable).Should().Contain("the kernel banner /proc/version could not be read").And.Contain("DN6");
     }
 
     [Fact]
@@ -220,19 +219,22 @@ public sealed class KimiLaunchChecksTests
     }
 
     /// <summary>
-    /// S-K20: every banner of <c>shared/wsl-banner-vectors.json</c> — the ONE rule for which WSL a kernel is, which Vibe's admission and the extension's tests read too — through the generation predicate;
-    /// only a WSL2 banner starts a Kimi row. A WSL2 kernel with no marker reads as none (the vector says so).
+    /// S-K20, as the owner's decision of 2026-10-23 left it: every banner of <c>shared/wsl-banner-vectors.json</c> — the ONE rule for which WSL a kernel is, which Vibe's admission and the extension's tests read too — read the way the PRODUCT
+    /// reads a kernel banner (<see cref="ProcVersion.ReadFrom"/> then <see cref="WslGenerations.Of(bool, BannerReading)"/>). Only a WSL2 banner or a READ banner naming no WSL starts a Kimi row (a native Linux host, admitted unmeasured with a note); WSL1 and a
+    /// banner that was not read (the empty vector: could be WSL1, DN6) are refused.
     /// </summary>
     [Theory]
     [MemberData(nameof(WslBannerVectors.Ids), MemberType = typeof(WslBannerVectors))]
-    public void OnlyAWsl2Banner_StartsKimi(string id)
+    public void AWsl2OrAReadNativeBanner_StartsKimi_AnUnreadOrWsl1OneDoesNot(string id)
     {
         var vector = WslBannerVectors.Named(id);
-        var generation = WslGenerations.Of(vector.Banner);
-        var kind = HostKinds.Of(windows: false, linux: true, macOs: false, wsl: VendorDiagnosis.NamesWsl(vector.Banner));
+        var reading = ProcVersion.ReadFrom(() => vector.Banner);
+        var generation = WslGenerations.Of(onLinux: true, reading);
+        var kind = HostKinds.Of(windows: false, linux: true, macOs: false, wsl: VendorDiagnosis.NamesWsl(reading.Text));
 
-        generation.Should().Be(vector.Generation, $"vector '{id}': the server's rule and the shared vectors differ");
-        (KimiLaunch.HostRefusal(kind, "kimi", generation).Length == 0).Should().Be(vector.Generation == WslGeneration.Wsl2, $"vector '{id}': only a WSL2 banner starts a Kimi row: a WSL1 banner was admitted as WSL2 for a Kimi row, or a WSL2 banner was refused");
+        generation.Should().Be(reading.Read ? vector.Generation : WslGeneration.Unreadable, $"vector '{id}': the server's rule and the shared vectors differ");
+        var starts = vector.Generation == WslGeneration.Wsl2 || (kind == HostKind.Linux && reading.Read);
+        (KimiLaunch.HostRefusal(kind, "kimi", generation).Length == 0).Should().Be(starts, $"vector '{id}': a WSL2 banner and a read native banner start a Kimi row; a WSL1 or unread one must not");
     }
 
     [Theory]

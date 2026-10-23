@@ -22,11 +22,21 @@ public static class KimiLaunch
     public static string ModelRefusal(string model) => KimiModels.RefusalFor(model, KimiModels.Curated);
 
     /// <summary>
-    /// D18, lifted for WSL2 by DL1 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c> (E6): Kimi only where it was measured — a Windows host starting a Windows <c>kimi</c>, or a WSL2 host. WSL1 is not WSL2 and a native
-    /// Linux host is not measured at all, each refused with its own sentence; a WSL bridge named as the executable of a Windows host is the Linux side by another door. The very sentences Vibe's launch control
+    /// D18, lifted for WSL2 by DL1 of <c>research/PLAN_kimi_and_vibe_on_linux.md</c> (E6) and for a native Linux host by the owner's decision of 2026-10-23 (<see cref="HostNote"/>): a Windows host starting a Windows <c>kimi</c>, a WSL2 host,
+    /// or a native Linux host whose kernel banner was READ. WSL1 (a syscall translation layer), a Linux host whose banner could not be read (coai cannot tell it from WSL1) and every other host are refused, each with its own sentence;
+    /// a WSL bridge named as the executable of a Windows host is the Linux side by another door. The very sentences Vibe's launch control
     /// answers (<see cref="HostAdmission"/>), with Kimi's name.
     /// </summary>
     public static string HostRefusal(HostKind host, string executable, WslGeneration wsl) => HostAdmission.Refusal("Kimi", host, executable, wsl);
+
+    /// <summary>
+    /// What the person should know about the HOST a launch runs on, or empty: on a native Linux host with a read banner, that Kimi is NOT MEASURED there and runs by the owner's decision of 2026-10-23 (DN1 of
+    /// <c>todo/PLAN_kimi_and_vibe_on_native_linux_E2.md</c>) — a note, never a refusal. The same sentence on the launch (<see cref="LaunchTurn.Warning"/>) and on the row's card (<see cref="CardWarning"/>).
+    /// </summary>
+    public static string HostNote(KimiHost host) => HostAdmission.Note("Kimi", host.Kind, host.Wsl);
+
+    /// <summary>The card's warning: the host note and the version warning (<see cref="VersionWarning"/>) — the two things the person should know before a round, on one line each side of a separator.</summary>
+    public static string CardWarning(KimiHost host, string printedVersion) => Joined(HostNote(host), VersionWarning(printedVersion));
 
     /// <summary>The model the request names (<c>--model</c>).</summary>
     public static string ModelOf(ProcessRequest request) => KimiEnvironment.FlagOf(request, AcpWords.ModelFlag);
@@ -93,7 +103,7 @@ public static class KimiLaunch
             return LaunchTurn.Refused(survivors, RefusalCause.LaunchControl);
         }
 
-        return await InsideAsync(places, request, prepared.Expected, NetworkWarning(host, places, allowNetworkSignIn), new Attempt(turn, taken.Stream), launcher, ct);
+        return await InsideAsync(places, request, prepared.Expected, Joined(HostNote(host), NetworkWarning(host, places, allowNetworkSignIn)), new Attempt(turn, taken.Stream), launcher, ct);
     }
 
     /// <summary>

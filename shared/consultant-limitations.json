@@ -283,8 +283,8 @@
       "runtime": "kimi",
       "platform": "linux",
       "standing": "unmeasured",
-      "text": "Not run here: Kimi is measured on WSL2 only for now, so coai refuses it on a native Linux host.",
-      "source": "Not measured on native Linux: every Linux Kimi cell is WSL2 (section 29 of research/RESULTS_kimi_confinement.md); the launch is refused until one native-Linux run is recorded (DL1 of research/PLAN_kimi_and_vibe_on_linux.md)."
+      "text": "Not measured here: coai runs Kimi on a native Linux host by the owner's decision of 2026-10-23, not by a measurement, so nothing is claimed about what it can read or write here.",
+      "source": "Not measured on native Linux: every Linux Kimi cell is WSL2 (section 29 of research/RESULTS_kimi_confinement.md). Kimi is admitted on a native Linux host by the owner's decision of 2026-10-23 (todo/PLAN_kimi_and_vibe_on_native_linux_E2.md, DN1 of E2) with a note, never a refusal; the wsl row says what was measured."
     },
     {
       "runtime": "kimi",

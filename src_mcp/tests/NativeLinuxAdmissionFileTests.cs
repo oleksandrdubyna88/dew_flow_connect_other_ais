@@ -8,13 +8,14 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// E2 code gate G1 (findings 0 and 2), as PR #922's CI round left it: "which runtime runs on a native Linux host, and from which <c>coai-mcp</c>" is ONE file, <c>shared/native-linux-admission.json</c>, and each
-/// side reads or is held to THAT file — the server LOADS it (<see cref="NativeLinuxAdmission"/>; <see cref="HostAdmission.MeasuredOnNativeLinux"/> is its runtime names) and the extension's
+/// side reads or is held to THAT file — the server LOADS it (<see cref="NativeLinuxAdmission"/>; <see cref="HostAdmission.AdmittedOnNativeLinux"/> is its runtime names) and the extension's
 /// <c>ON_NATIVE_LINUX_SINCE</c> is asserted against it by <c>src_vs_code/src/test/nativeLinuxAdmissionFile.test.ts</c>. No test parses the other side's source (<c>NothingReadsAnotherProgramsSourceTests</c>): that
 /// shape goes quiet rather than red, which is what the first draft of this guard did.
 /// </summary>
 /// <remarks>
-/// Every runtime the file names must also have a measured, confined <c>linux</c> row in <c>shared/consultant-limitations.json</c> — an admission needs the cells it was measured by. A name added to the file
-/// without that row (Kimi, before E3) is a red test here, naming the runtime.
+/// Every runtime the file names must also have a <c>linux</c> row in <c>shared/consultant-limitations.json</c> that says the SAME thing the file does: a <c>measured</c> basis needs a confined, measured row (an admission
+/// needs the cells it was measured by); an <c>owner-decision</c> basis (the owner's decision of 2026-10-23: unmeasured is a note, not a refusal) needs a row that says it was NOT measured and why the runtime runs anyway, and the
+/// file must carry the one-sentence <c>note</c> the person is shown. A name added without its row is a red test here, naming the runtime.
 /// </remarks>
 public sealed class NativeLinuxAdmissionFileTests
 {
@@ -31,28 +32,55 @@ public sealed class NativeLinuxAdmissionFileTests
     public void TheServersSet_IsExactlyTheRuntimesTheSharedFileNames()
     {
         var file = NamesOnDisk();
-        var server = HostAdmission.MeasuredOnNativeLinux.Select(name => name.ToLowerInvariant()).Order().ToList();
+        var server = HostAdmission.AdmittedOnNativeLinux.Select(name => name.ToLowerInvariant()).Order().ToList();
 
         file.Should().NotBeEmpty("shared/native-linux-admission.json names no runtime — an empty file would make the comparison vacuous");
-        server.Should().Equal(file, "HostAdmission.MeasuredOnNativeLinux must be exactly the runtimes shared/native-linux-admission.json names — the server loads that embedded file, so a difference means the embedded copy is not the file on disk");
+        server.Should().Equal(file, "HostAdmission.AdmittedOnNativeLinux must be exactly the runtimes shared/native-linux-admission.json names — the server loads that embedded file, so a difference means the embedded copy is not the file on disk");
     }
 
     [Fact]
-    public void EveryRuntimeTheFileNames_HasAConfinedMeasuredLinuxRow()
+    public void EveryMeasuredRuntimeTheFileNames_HasAConfinedMeasuredLinuxRow()
     {
-        foreach (var runtime in NamesOnDisk())
+        foreach (var runtime in NativeLinuxAdmission.Entries.Values.Where(entry => entry.Basis == AdmissionBasis.Measured).Select(entry => entry.Runtime.ToLowerInvariant()))
         {
             var row = ConsultantLimitations.Lookup(HostKind.Linux, runtime);
 
-            row.Standing.Should().Be(LimitationStanding.Confined, $"{runtime} is admitted on a native Linux host by shared/native-linux-admission.json, so shared/consultant-limitations.json must hold a `linux` row for it that says `confined` (found: {row.Standing})");
-            row.Evidence.Should().BeOfType<LimitationEvidence.Measured>($"{runtime}'s `linux` row in shared/consultant-limitations.json carries no `measured` field — an admission needs the cells it was measured by");
+            row.Standing.Should().Be(LimitationStanding.Confined, $"{runtime} is admitted on its MEASUREMENT on a native Linux host by shared/native-linux-admission.json, so shared/consultant-limitations.json must hold a `linux` row for it that says `confined` (found: {row.Standing})");
+            row.Evidence.Should().BeOfType<LimitationEvidence.Measured>($"{runtime}'s `linux` row in shared/consultant-limitations.json carries no `measured` field — a measured admission needs the cells it was measured by");
         }
+    }
+
+    /// <summary>The owner's decision of 2026-10-23: the row says NOT measured (a note, never a refusal — nothing reads a standing to refuse) and names the decision; the file carries the note the launch shows.</summary>
+    [Fact]
+    public void EveryOwnerDecisionRuntimeTheFileNames_HasAnUnmeasuredLinuxRowThatSaysSo_AndAFileNote()
+    {
+        var owner = NativeLinuxAdmission.Entries.Values.Where(entry => entry.Basis == AdmissionBasis.OwnerDecision).ToList();
+
+        owner.Should().NotBeEmpty("Kimi is admitted on a native Linux host by the owner's decision of 2026-10-23 — if none is, this guard is vacuous and the decision was dropped");
+        foreach (var entry in owner)
+        {
+            var row = ConsultantLimitations.Lookup(HostKind.Linux, entry.Runtime);
+
+            row.Standing.Should().Be(LimitationStanding.Unmeasured, $"{entry.Runtime} is admitted on a native Linux host by the owner's decision, not a measurement, so its `linux` row must say `unmeasured` (found: {row.Standing})");
+            row.Evidence.Should().BeOfType<LimitationEvidence.Sourced>($"{entry.Runtime}'s `linux` row says what was measured, so it carries `source`, not `measured`");
+            row.Text.Should().Contain("owner's decision", $"{entry.Runtime}'s `linux` row must say why it runs here although it is not measured");
+            entry.Note.Should().Contain("not measured").And.Contain("owner's decision", $"{entry.Runtime}'s `note` in shared/native-linux-admission.json is the sentence the person is shown");
+        }
+    }
+
+    /// <summary>Only Kimi's launch carries the note (KimiLaunch.HostNote); a runtime whose launch does not must stay on a measurement, or the owner's note would never reach the person.</summary>
+    [Fact]
+    public void VibeIsAdmittedOnItsMeasurement_BecauseItsLaunchCarriesNoHostNote()
+    {
+        NativeLinuxAdmission.Entries["vibe"].Basis.Should().Be(AdmissionBasis.Measured);
+        NativeLinuxAdmission.Entries["kimi"].Basis.Should().Be(AdmissionBasis.OwnerDecision);
+        NativeLinuxAdmission.Entries["kimi"].Since.Should().Be("0.64.0");
     }
 
     [Fact]
     public void TheNamesAreMatchedCaseInsensitively_AsTheAdmissionAsksThem()
     {
-        HostAdmission.MeasuredOnNativeLinux.Should().Contain("VIBE").And.Contain("vibe");
+        HostAdmission.AdmittedOnNativeLinux.Should().Contain("VIBE").And.Contain("vibe");
         NativeLinuxAdmission.Since["VIBE"].Should().Be(NativeLinuxAdmission.Since["vibe"]);
     }
 
@@ -68,10 +96,13 @@ public sealed class NativeLinuxAdmissionFileTests
     [Theory]
     [InlineData("{}", "no `runtimes` array")]
     [InlineData("{\"runtimes\": []}", "names no runtime")]
-    [InlineData("{\"runtimes\": [{\"runtime\": \"vibe\", \"source\": \"x\"}]}", "no `since`")]
-    [InlineData("{\"runtimes\": [{\"since\": \"0.64.0\", \"source\": \"x\"}]}", "no `runtime`")]
-    [InlineData("{\"runtimes\": [{\"runtime\": \"vibe\", \"since\": \"0.64.0\"}]}", "no `source`")]
-    [InlineData("{\"runtimes\": [{\"runtime\": \" \", \"since\": \"0.64.0\", \"source\": \"x\"}]}", "no `runtime`")]
+    [InlineData("{\"runtimes\": [{\"runtime\": \"vibe\", \"source\": \"x\", \"basis\": \"measured\"}]}", "no `since`")]
+    [InlineData("{\"runtimes\": [{\"since\": \"0.64.0\", \"source\": \"x\", \"basis\": \"measured\"}]}", "no `runtime`")]
+    [InlineData("{\"runtimes\": [{\"runtime\": \"vibe\", \"since\": \"0.64.0\", \"basis\": \"measured\"}]}", "no `source`")]
+    [InlineData("{\"runtimes\": [{\"runtime\": \" \", \"since\": \"0.64.0\", \"source\": \"x\", \"basis\": \"measured\"}]}", "no `runtime`")]
+    [InlineData("{\"runtimes\": [{\"runtime\": \"vibe\", \"since\": \"0.64.0\", \"source\": \"x\"}]}", "no `basis`")]
+    [InlineData("{\"runtimes\": [{\"runtime\": \"vibe\", \"since\": \"0.64.0\", \"source\": \"x\", \"basis\": \"trust-me\"}]}", "basis `trust-me`")]
+    [InlineData("{\"runtimes\": [{\"runtime\": \"kimi\", \"since\": \"0.64.0\", \"source\": \"x\", \"basis\": \"owner-decision\"}]}", "no `note`")]
     public void ADocumentThatIsLostOrBlanked_IsRefusedByName_NotRead_AsAnEmptyAdmission(string json, string sentence)
     {
         var parse = () => NativeLinuxAdmission.Parse(json);
@@ -82,7 +113,7 @@ public sealed class NativeLinuxAdmissionFileTests
     [Fact]
     public void ADocumentThatNamesTwoRuntimes_AdmitsBothWithTheirOwnRelease()
     {
-        var since = NativeLinuxAdmission.Parse("{\"runtimes\": [{\"runtime\": \"vibe\", \"since\": \"0.64.0\", \"source\": \"a\"}, {\"runtime\": \"kimi\", \"since\": \"0.65.0\", \"source\": \"b\"}]}");
+        var since = NativeLinuxAdmission.Parse("{\"runtimes\": [{\"runtime\": \"vibe\", \"since\": \"0.64.0\", \"source\": \"a\", \"basis\": \"measured\"}, {\"runtime\": \"kimi\", \"since\": \"0.65.0\", \"source\": \"b\", \"basis\": \"owner-decision\", \"note\": \"n\"}]}");
 
         since["Kimi"].Should().Be("0.65.0");
         since["vibe"].Should().Be("0.64.0");

@@ -18,6 +18,9 @@ public sealed class HostAdmissionOnNativeLinuxTests
     private const string UnreadableVibe =
         "Vibe is refused on this Linux host — the kernel banner /proc/version could not be read, so coai cannot tell a native Linux host from WSL1 (DN6 of todo/PLAN_kimi_and_vibe_on_native_linux.md)";
 
+    private const string UnreadableKimi =
+        "Kimi is refused on this Linux host — the kernel banner /proc/version could not be read, so coai cannot tell a native Linux host from WSL1 (DN6 of todo/PLAN_kimi_and_vibe_on_native_linux.md)";
+
     private static readonly IReadOnlySet<string> VibeMeasured = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Vibe" };
 
     // ---------- S-N16 : the per-runtime set ----------
@@ -41,17 +44,31 @@ public sealed class HostAdmissionOnNativeLinuxTests
             $"an injected measured set {{{entry}}} did not admit Vibe on a read native Linux host — the names are compared case-sensitively");
     }
 
-    /// <summary>S-N16 / S-N6 (E2.S2; the flipped E1 case): the PRODUCT's set holds Vibe (research/RESULTS_vibe_confinement.md §32) and not Kimi (E3's).</summary>
+    /// <summary>
+    /// S-N16 / S-N6 (E2.S2) and the owner's decision of 2026-10-23 (DN1 of E2): the PRODUCT's set holds Vibe (measured, research/RESULTS_vibe_confinement.md §32) AND Kimi (admitted by the owner's decision, not measured) —
+    /// "unmeasured" is a note, never a refusal.
+    /// </summary>
     [Fact]
-    public void TheProductsSet_AdmitsVibe_AndNotKimi_OnAReadNativeLinuxHost()
+    public void TheProductsSet_AdmitsVibeAndKimi_OnAReadNativeLinuxHost()
     {
-        HostAdmission.MeasuredOnNativeLinux.Select(name => name.ToLowerInvariant()).Should().Equal(["vibe"], "E2 adds Vibe and only Vibe: Kimi is E3's one entry (the names are the shared file's, compared case-insensitively)");
+        HostAdmission.AdmittedOnNativeLinux.Select(name => name.ToLowerInvariant()).Order().Should().Equal(["kimi", "vibe"], "Vibe is admitted on its measurement and Kimi on the owner's decision of 2026-10-23 (the names are the shared file's, compared case-insensitively)");
         HostAdmission.Refusal("Vibe", HostKind.Linux, "vibe", WslGeneration.None).Should().BeEmpty("a read native Linux banner should admit Vibe now that it is measured");
-        HostAdmission.Refusal("Kimi", HostKind.Linux, "kimi", WslGeneration.None).Should().Be(Wsl2OnlyKimi);
+        HostAdmission.Refusal("Kimi", HostKind.Linux, "kimi", WslGeneration.None).Should().BeEmpty("Kimi was refused on a native Linux host only because it was not measured there — the owner's decision of 2026-10-23 turned that into a note");
+    }
+
+    /// <summary>The note (never a refusal) a runtime admitted by the owner's decision carries on a native Linux host; a measured runtime, and every other host, carry none.</summary>
+    [Fact]
+    public void KimiOnANativeLinuxHost_CarriesTheNotMeasuredNote_AndNothingElseDoes()
+    {
+        HostAdmission.Note("Kimi", HostKind.Linux, WslGeneration.None).Should().Contain("not measured").And.Contain("owner's decision of 2026-10-23").And.NotContain("\n");
+        HostAdmission.Note("Vibe", HostKind.Linux, WslGeneration.None).Should().BeEmpty("Vibe is admitted on its measurement: nothing to say");
+        HostAdmission.Note("Kimi", HostKind.Wsl, WslGeneration.Wsl2).Should().BeEmpty("Kimi is measured on WSL2");
+        HostAdmission.Note("Kimi", HostKind.Windows, WslGeneration.None).Should().BeEmpty("Kimi is measured on Windows");
+        HostAdmission.Note("Kimi", HostKind.Linux, WslGeneration.Unreadable).Should().BeEmpty("a launch refused for an unreadable banner says the refusal, not a note");
     }
 
     /// <summary>
-    /// S-N6: runtime x host, through the callers' own entry points. Only Windows, WSL2 and a native Linux host with a read banner start Vibe; Kimi starts on Windows and WSL2 only.
+    /// S-N6: runtime x host, through the callers' own entry points. Only Windows, WSL2 and a native Linux host with a read banner start either runtime (Kimi's native admission is the owner's decision, with a note).
     /// </summary>
     [Theory]
     [InlineData("Vibe", HostKind.Windows, WslGeneration.None, true)]
@@ -63,10 +80,10 @@ public sealed class HostAdmissionOnNativeLinuxTests
     [InlineData("Kimi", HostKind.Windows, WslGeneration.None, true)]
     [InlineData("Kimi", HostKind.Wsl, WslGeneration.Wsl2, true)]
     [InlineData("Kimi", HostKind.Wsl, WslGeneration.Wsl1, false)]
-    [InlineData("Kimi", HostKind.Linux, WslGeneration.None, false)]
+    [InlineData("Kimi", HostKind.Linux, WslGeneration.None, true)]
     [InlineData("Kimi", HostKind.Linux, WslGeneration.Unreadable, false)]
     [InlineData("Kimi", HostKind.MacOs, WslGeneration.None, false)]
-    public void TheMatrix_StartsVibeOnWindowsWsl2AndAReadNativeLinux_AndKimiOnWindowsAndWsl2Only(string runtime, HostKind host, WslGeneration generation, bool starts)
+    public void TheMatrix_StartsVibeAndKimiOnWindowsWsl2AndAReadNativeLinux_AndNowhereElse(string runtime, HostKind host, WslGeneration generation, bool starts)
     {
         var refusal = runtime == "Vibe"
             ? CoaiMcp.Runners.Vibe.VibeLaunch.HostRefusal(host, "vibe", generation)
@@ -75,12 +92,11 @@ public sealed class HostAdmissionOnNativeLinuxTests
         (refusal.Length == 0).Should().Be(starts, $"{runtime} on {host}/{generation}: {refusal}");
     }
 
-    /// <summary>S-N6: the sentences of the native Linux answers through the product's set — Vibe's unreadable-banner one, Kimi's WSL2-only one (whatever the banner says, membership is asked first).</summary>
+    /// <summary>S-N6: the sentence of the native Linux answer through the product's set, for both runtimes: an unreadable banner is refused — the DN6 ambiguity refusal (coai cannot tell native Linux from WSL1), which is a SAFETY refusal and stays.</summary>
     [Theory]
     [InlineData("Vibe", "vibe", WslGeneration.Unreadable, UnreadableVibe)]
-    [InlineData("Kimi", "kimi", WslGeneration.None, Wsl2OnlyKimi)]
-    [InlineData("Kimi", "kimi", WslGeneration.Unreadable, Wsl2OnlyKimi)]
-    public void TheNativeLinuxSentences_AreTheBannerOneForVibe_AndTheWsl2OnlyOneForKimi(string runtime, string executable, WslGeneration generation, string sentence)
+    [InlineData("Kimi", "kimi", WslGeneration.Unreadable, UnreadableKimi)]
+    public void TheNativeLinuxSentence_OfAnUnreadableBanner_IsTheBannerOne_ForBothRuntimes(string runtime, string executable, WslGeneration generation, string sentence)
     {
         HostAdmission.Refusal(runtime, HostKind.Linux, executable, generation).Should().Be(sentence);
     }

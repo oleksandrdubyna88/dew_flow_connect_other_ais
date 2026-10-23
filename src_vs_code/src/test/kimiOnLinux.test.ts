@@ -6,7 +6,8 @@ import { test } from 'node:test';
 import { compareVersions } from '../coaiInstall';
 import { HELP_ARTICLES, HELP_LANGUAGES, bodyFor } from '../helpContent';
 import type { HostKind } from '../hostSide';
-import { KIMI_ON_LINUX_SINCE, KIMI_RUNTIME_SINCE, ON_LINUX_SINCE, runtimeOnLinuxSide, runtimeSkewNote } from '../runtimeSince';
+import { KIMI_NATIVE_LINUX } from '../kimiLinuxLine';
+import { KIMI_ON_LINUX_SINCE, KIMI_ON_NATIVE_LINUX_SINCE, KIMI_RUNTIME_SINCE, ON_LINUX_SINCE, runtimeOnLinuxSide, runtimeSkewNote } from '../runtimeSince';
 import { kimiNoteFor, vendorInstall, vendorUpdate } from '../vendorTerminal';
 import { VENDOR_PRESETS, type Vendor } from '../vendors';
 
@@ -16,8 +17,9 @@ import { VENDOR_PRESETS, type Vendor } from '../vendors';
  * `kimiClearMarker.test.ts`'s.
  *
  * <p>Per host kind (E3's union, `hostSide.ts`: windows, wsl2, wsl1, linux, darwin): Windows is as it
- * was; WSL2 runs the row from KIMI_ON_LINUX_SINCE; WSL1 is refused ("measured on WSL2, and this is WSL1"); native Linux is
- * "measured on WSL2 only for now"; macOS is not measured.</p>
+ * was; WSL2 runs the row from KIMI_ON_LINUX_SINCE; WSL1 is refused ("measured on WSL2, and this is WSL1"); native Linux RUNS the row from
+ * KIMI_ON_NATIVE_LINUX_SINCE although it is not measured there (the owner’s decision of 2026-10-23: "unmeasured" is a note the server puts on the
+ * row, never a refusal); a host whose banner was not read is refused (coai cannot tell it from WSL1); macOS is not measured.</p>
  */
 
 const KIMI: Vendor = {
@@ -48,7 +50,8 @@ test('a Linux or WSL side whose server is older than KIMI_ON_LINUX_SINCE does no
   assert.ok(note.includes('0.58.0') && note.includes(KIMI_ON_LINUX_SINCE), note);
   assert.equal(runtimeSkewNote('0.58.0', [KIMI], 'windows'), '', 'on Windows a 0.58.0 server runs Kimi');
   assert.equal(runtimeSkewNote(KIMI_ON_LINUX_SINCE, [KIMI], 'wsl2'), '', 'a server at KIMI_ON_LINUX_SINCE runs it on WSL2');
-  assert.match(runtimeSkewNote(KIMI_ON_LINUX_SINCE, [KIMI], 'linux'), /refuses a kimi row on a native Linux host for now — Kimi is measured on WSL2 only/u, 'native Linux: refused at ANY version, never "update"');
+  assert.match(runtimeSkewNote(KIMI_ON_LINUX_SINCE, [KIMI], 'linux'), /update coai-mcp to run Kimi here/iu, 'native Linux: the WSL2 release does not run a native host — update');
+  assert.equal(runtimeSkewNote(KIMI_ON_NATIVE_LINUX_SINCE, [KIMI], 'linux'), '', 'a server at KIMI_ON_NATIVE_LINUX_SINCE runs Kimi on a native host: no refusal, the server puts the not-measured note on the row');
   assert.match(runtimeSkewNote(KIMI_ON_LINUX_SINCE, [KIMI], 'wsl1'), /This is WSL1, and coai-mcp runs Kimi on WSL2 only/u);
   assert.match(runtimeSkewNote('0.56.0', [KIMI], 'wsl2'), new RegExp(KIMI_RUNTIME_SINCE.replaceAll('.', '\\.'), 'u'), 'a server that does not know Kimi at all speaks first, once');
   assert.doesNotMatch(runtimeSkewNote('0.56.0', [KIMI], 'wsl2'), /run Kimi here/iu);
@@ -56,14 +59,15 @@ test('a Linux or WSL side whose server is older than KIMI_ON_LINUX_SINCE does no
 
 // ---------------------------------------------------------------- the card hint
 
-test('the Kimi hint names Windows, WSL2 from KIMI_ON_LINUX_SINCE, native Linux as measured on WSL2 only, and the wait for your own open kimi', () => {
+test('the Kimi hint names Windows, WSL2 from KIMI_ON_LINUX_SINCE, native Linux from KIMI_ON_NATIVE_LINUX_SINCE as not measured, and the wait for your own open kimi', () => {
   const hint = VENDOR_PRESETS.find((one) => one.runtime === 'kimi')?.hint ?? '';
 
   assert.doesNotMatch(hint, /Windows only/u);
   assert.match(hint, /WSL2/u);
   assert.ok(hint.includes(KIMI_ON_LINUX_SINCE), hint);
   assert.ok(hint.includes(KIMI_RUNTIME_SINCE), 'the runtime gate stays in the hint');
-  assert.match(hint, /On a native Linux host coai-mcp refuses Kimi for now — it is measured on WSL2 only/u);
+  assert.ok(hint.includes(KIMI_NATIVE_LINUX), `the hint does not say what the server does on a native Linux host: ${hint}`);
+  assert.doesNotMatch(hint, /refuses Kimi for now/u, 'the old refusal is gone');
   assert.match(hint, /when coai-mcp itself runs there/u);
   assert.match(hint, /your own kimi is open, coai’s Kimi turns wait for it and then answer busy/u, 'Q3');
   assert.match(hint, /kimi login/u);
@@ -77,7 +81,8 @@ test('⤓ for Kimi says, per host kind, whether coai-mcp runs the row there', ()
 
   assert.match(note('wsl2'), new RegExp(`runs on this side, WSL2, from coai-mcp ${KIMI_ON_LINUX_SINCE.replaceAll('.', '\\.')}`, 'u'));
   assert.match(note('wsl2'), /your own `kimi` is open on this side, coai’s Kimi turns wait for it to close and then answer busy/u, 'Q3');
-  assert.match(note('linux'), /On a native Linux host coai-mcp refuses Kimi for now — it is measured on WSL2 only/u);
+  assert.ok(note('linux').includes(KIMI_NATIVE_LINUX));
+  assert.doesNotMatch(note('linux'), /refuses Kimi for now/u);
   assert.match(note('wsl1'), /This is WSL1, and coai-mcp runs Kimi on WSL2 only/u);
   assert.match(note('wsl1'), /wsl --set-version <distro> 2/u, 'what helps on WSL1 is moving the distro, not updating coai-mcp');
   assert.match(note('darwin'), /does not run Kimi on macOS/u);
@@ -111,7 +116,7 @@ test('⤓ and ⟳ take the host kind: the note follows it, the line is one for e
     assert.equal(vendorInstall(KIMI, platformOf(host), host).note, kimiNoteFor(host), host);
   }
   assert.equal(vendorUpdate(KIMI, 'linux', '2.2.0', 'wsl2').note, kimiNoteFor('wsl2'));
-  assert.equal(vendorInstall(KIMI, 'linux').note, kimiNoteFor('linux'), 'no host on Linux is native: the safe answer, which only ever shows a refusal');
+  assert.equal(vendorInstall(KIMI, 'linux').note, kimiNoteFor('linux'), 'no host given on Linux: the native answer');
   assert.equal(vendorInstall(KIMI, 'darwin').note, kimiNoteFor('darwin'));
   const line = vendorInstall(KIMI, 'linux', 'wsl2').command;
   for (const host of ['wsl1', 'linux'] as const) {
@@ -119,11 +124,14 @@ test('⤓ and ⟳ take the host kind: the note follows it, the line is one for e
   }
 });
 
-test('Kimi stays refused on a native Linux host after E2 (E3 measures it), and a host whose banner was not read is told the same refusal', () => {
-  const nativeSentence = 'On a native Linux host coai-mcp refuses Kimi for now — it is measured on WSL2 only — so a Kimi row is refused on this side.';
+test('Kimi RUNS on a native Linux host, not measured there (the owner’s decision of 2026-10-23); a host whose banner was not read is still refused, with its own sentence', () => {
+  const nativeSentence = `On a native Linux host coai-mcp runs Kimi from coai-mcp ${KIMI_ON_NATIVE_LINUX_SINCE}, although Kimi is not measured there: it is admitted by the owner’s decision of 2026-10-23, and the row carries a note that says so.`;
 
-  assert.ok(kimiNoteFor('linux').includes(nativeSentence), 'Kimi’s native note moved with Vibe’s');
-  assert.equal(kimiNoteFor('linux-unread'), kimiNoteFor('linux'), 'an unread banner is refused for Kimi with its native sentence: Kimi is refused on native Linux anyway');
+  assert.equal(KIMI_NATIVE_LINUX, nativeSentence, 'the one English sentence is the pinned one, with the release interpolated');
+  assert.ok(kimiNoteFor('linux').includes(nativeSentence));
+  assert.notEqual(kimiNoteFor('linux-unread'), kimiNoteFor('linux'), 'an unread banner is NOT told Kimi runs: the server cannot tell it from WSL1 and refuses (an ambiguity refusal, which stays)');
+  assert.match(kimiNoteFor('linux-unread'), /could not read this host’s kernel banner, so it cannot tell a native Linux host from WSL1 and refuses a Kimi row on this side/u);
+  assert.doesNotMatch(kimiNoteFor('linux-unread'), /runs Kimi from/u);
   assert.equal(vendorInstall(KIMI, 'linux', 'linux-unread').note, kimiNoteFor('linux-unread'));
   assert.equal(vendorUpdate(KIMI, 'linux', '2.2.0', 'linux-unread').note, kimiNoteFor('linux-unread'));
   assert.equal(vendorInstall(KIMI, 'linux', 'linux-unread').command, vendorInstall(KIMI, 'linux', 'wsl2').command, 'the same line on every Linux kind');
@@ -144,11 +152,20 @@ const SAID: Record<string, readonly string[]> = {
 
 /** The sentences this release replaced: none may survive in any language. */
 const GONE: Record<string, readonly string[]> = {
-  en: ['runs it on Windows only for now, it needs coai-mcp 0.57.0', 'Moonshot’s own script on Linux and macOS, and on Windows one line'],
-  de: ['führt sie vorerst nur unter Windows aus, sie braucht coai-mcp 0.57.0', 'Moonshots eigenes Skript unter Linux und macOS und unter Windows eine Zeile'],
-  es: ['la ejecuta por ahora solo en Windows, necesita coai-mcp 0.57.0', 'script propio de Moonshot en Linux y macOS, y en Windows una sola línea'],
-  ru: ['пока запускает его только на Windows, ему нужен coai-mcp 0.57.0', 'скрипт Moonshot на Linux и macOS, а на Windows — одна строка'],
-  uk: ['поки що запускає його лише на Windows, йому потрібен coai-mcp 0.57.0', 'скрипт Moonshot на Linux і macOS, а на Windows — один рядок'],
+  en: ['runs it on Windows only for now, it needs coai-mcp 0.57.0', 'Moonshot’s own script on Linux and macOS, and on Windows one line', 'On a native Linux host coai-mcp refuses Kimi for now'],
+  de: ['führt sie vorerst nur unter Windows aus, sie braucht coai-mcp 0.57.0', 'Moonshots eigenes Skript unter Linux und macOS und unter Windows eine Zeile', 'Auf einem nativen Linux-Host lehnt coai-mcp Kimi vorerst ab'],
+  es: ['la ejecuta por ahora solo en Windows, necesita coai-mcp 0.57.0', 'script propio de Moonshot en Linux y macOS, y en Windows una sola línea', 'En un host Linux nativo coai-mcp rechaza Kimi por ahora'],
+  ru: ['пока запускает его только на Windows, ему нужен coai-mcp 0.57.0', 'скрипт Moonshot на Linux и macOS, а на Windows — одна строка', 'На нативном Linux-хосте coai-mcp пока отказывается запускать Kimi'],
+  uk: ['поки що запускає його лише на Windows, йому потрібен coai-mcp 0.57.0', 'скрипт Moonshot на Linux і macOS, а на Windows — один рядок', 'На нативному Linux-хості coai-mcp поки що відмовляється запускати Kimi'],
+};
+
+/** The one sentence about Kimi on a native Linux host, per language: the release, that Kimi is not measured there, and the owner’s decision of 2026-10-23. */
+const SAID_NATIVE: Record<string, string> = {
+  en: `On a native Linux host coai-mcp runs Kimi from coai-mcp ${KIMI_ON_NATIVE_LINUX_SINCE}, although Kimi is not measured there: it is admitted by the owner’s decision of 2026-10-23, and the row carries a note that says so.`,
+  de: `Auf einem nativen Linux-Host führt coai-mcp Kimi ab coai-mcp ${KIMI_ON_NATIVE_LINUX_SINCE} aus, obwohl Kimi dort nicht gemessen ist: Es ist durch die Entscheidung des Eigentümers vom 2026-10-23 zugelassen, und die Zeile trägt einen Hinweis, der das sagt.`,
+  es: `En un host Linux nativo coai-mcp ejecuta Kimi desde coai-mcp ${KIMI_ON_NATIVE_LINUX_SINCE}, aunque Kimi no está medido allí: está admitido por la decisión del propietario del 2026-10-23, y la fila lleva una nota que lo dice.`,
+  ru: `На нативном Linux-хосте coai-mcp запускает Kimi начиная с coai-mcp ${KIMI_ON_NATIVE_LINUX_SINCE}, хотя Kimi там не измерен: он допущен решением владельца от 2026-10-23, и строка несёт заметку об этом.`,
+  uk: `На нативному Linux-хості coai-mcp запускає Kimi починаючи з coai-mcp ${KIMI_ON_NATIVE_LINUX_SINCE}, хоча Kimi там не виміряно: його допущено рішенням власника від 2026-10-23, і рядок має примітку про це.`,
 };
 
 test('the five languages say the same about Kimi on Linux: WSL2 from KIMI_ON_LINUX_SINCE, native Linux and WSL1 not, the wait for your own kimi, the install line', () => {
@@ -161,7 +178,7 @@ test('the five languages say the same about Kimi on Linux: WSL2 from KIMI_ON_LIN
     const said = `${body.setup} ${body.usage}`;
 
     assert.equal(fallback, false, `the ${language} article is missing, so a reader gets English`);
-    for (const word of SAID[language]!) {
+    for (const word of [...SAID[language]!, SAID_NATIVE[language]!]) {
       assert.ok(said.includes(word), `the ${language} article never says ${word} about Kimi on Linux`);
     }
     for (const old of GONE[language]!) {
@@ -203,11 +220,13 @@ test('the Kimi wsl row is measured on WSL2 and says what section 29 measured —
   assert.match(row.text, /WSL2/u);
 });
 
-test('the Kimi linux row says measured on WSL2 only and claims nothing about native Linux', () => {
+test('the Kimi linux row says NOT measured, names the owner’s decision of 2026-10-23 and claims nothing about native Linux — and never says it refuses', () => {
   const row = kimiRow('linux');
 
   assert.equal(row.standing, 'unmeasured');
-  assert.match(row.text, /measured on WSL2 only/u);
-  assert.match(row.source ?? '', /WSL2/u);
+  assert.match(row.text, /Not measured here/u);
+  assert.match(row.text, /owner's decision of 2026-10-23/u);
+  assert.doesNotMatch(row.text, /refuses/u, 'a limitation row is a note; nothing here refuses a runtime for being unmeasured');
+  assert.match(row.source ?? '', /WSL2/u, 'the source says where the cells ARE');
   assert.ok(row.measured === undefined);
 });

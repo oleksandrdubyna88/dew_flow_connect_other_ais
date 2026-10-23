@@ -11,6 +11,8 @@
 > per-runtime admission in `src_mcp/runners/Platform/HostAdmission.cs`, Vibe's closed keyring road (DN10), the extension's host notes
 > and help, `shared/consultant-limitations.json`, and the RESULTS documents.
 >
+> **Changed by the owner on 2026-10-23 (DN1 of [the E2 plan](PLAN_kimi_and_vibe_on_native_linux_E2.md)): "unmeasured" is a note, never a refusal.** Kimi is admitted on a native Linux host NOW, without the E3 measurement, with a visible note (`basis` `owner-decision` in `shared/native-linux-admission.json`, first release 0.64.0); "measure first, no admission ships before its cells" no longer holds for Kimi. E3's measurement is optional evidence, not a gate. Every safety refusal stays.
+>
 > Parent (implemented): [PLAN_kimi_and_vibe_on_linux.md](../research/PLAN_kimi_and_vibe_on_linux.md) — DL1 refused a native Linux host
 > "until one native-Linux run of L-V9 is recorded" (§2 item 1, DL1, §5 row L-V10, and its open tail). Evidence it rests on:
 > [RESULTS_vibe_confinement.md](../research/RESULTS_vibe_confinement.md) §30–§31, [RESULTS_kimi_confinement.md](../research/RESULTS_kimi_confinement.md)
@@ -656,7 +658,7 @@ process — the admission is a branch in a pure function.
 - [ ] A live round on the LOCALLY BUILT binary answered before each release was tagged (DN13); the rollback line is in the release notes.
 - [ ] N-H1, N-V0 and every Vibe cell recorded in RESULTS_vibe §32 with predictions, the commit, the spend; `~/.vibe` unchanged.
 - [ ] Vibe admitted on native Linux ONLY if every Vibe cell passed; else the failure recorded and nothing admitted.
-- [ ] N-K0 and every Kimi cell recorded in RESULTS_kimi §33 (after the owner's install and sign-in); Kimi admitted only if all passed.
+- [ ] Optional since 2026-10-23 (Kimi is already admitted, with a note, by the owner's decision — DN1 of the E2 plan): N-K0 and every Kimi cell recorded in RESULTS_kimi §33 (after the owner's install and sign-in); a pass turns the Kimi row's `basis` to `measured`.
 - [ ] An unreadable banner is refused (S-N7, teeth proven), on the server and in the extension.
 - [ ] Limitation rows, hints, install notes, help in five languages and `ON_NATIVE_LINUX_SINCE` match what the server does.
 - [ ] `module_runners.md`, `module_extension.md` and the parent's open tail updated.
@@ -829,6 +831,8 @@ Scouts are Sonnet, ⌈1.5N⌉ per epic.
   the keyring sentence (S-N8, S-N11 pin the words); a release before the local-binary round (P7's order is the gate).
 
 ### E3 — Kimi measured, then conditionally admitted
+
+- **Status change (2026-10-23): E3 is no longer a gate.** The owner decided that nothing is refused only because it is not measured (DN1 of the E2 plan). Kimi is admitted on native Linux already, with a note; this epic is now the optional measurement that can turn the Kimi row's `basis` from `owner-decision` to `measured`. The text below describes that measurement as it was planned.
 
 - **Goal.** After the owner installs Kimi and signs in on `ubuntu-claude`, Kimi is measured in the risk order (instruments → normal
   launch and tree hold → killed agent, descendant teardown and the NEXT launch's recovery → write/read boundaries → inventory), and — only

@@ -225,8 +225,8 @@ public sealed class KimiRuntime(string id, KimiHost host, KimiSeams seams, Seril
         }
     }
 
-    /// <summary>The card's warning for the version <c>providers</c> read — the launch control's own sentence (empty for a measured version).</summary>
-    public string VersionWarning(string printedVersion) => KimiLaunch.VersionWarning(printedVersion);
+    /// <summary>The card's warning for the version <c>providers</c> read — the launch control's own sentences: this host's note (Kimi is not measured on a native Linux host; the owner's decision of 2026-10-23) and the version's (empty for a measured one).</summary>
+    public string VersionWarning(string printedVersion) => KimiLaunch.CardWarning(host, printedVersion);
 
     /// <summary>
     /// The card's one line when the sign-in folder is on network storage — what <c>coai.kimiAllowNetworkSignIn</c> (DL6) turns the refusal into. The CALLER asks only when the override is on: with it off, the launch's refusal says

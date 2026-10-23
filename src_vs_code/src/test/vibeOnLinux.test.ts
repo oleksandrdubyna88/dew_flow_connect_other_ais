@@ -8,7 +8,7 @@ import { HELP_ARTICLES, HELP_LANGUAGES, bodyFor } from '../helpContent';
 import { type HostKind, hostKind, hostKindOf, hostKindOfPlatform } from '../hostSide';
 import { cardContextFor, type PanelState } from '../panelView';
 import {
-  KIMI_ON_LINUX_SINCE, ON_LINUX_SINCE, ON_NATIVE_LINUX_SINCE, VIBE_ON_LINUX_SINCE, VIBE_ON_NATIVE_LINUX_SINCE, VIBE_RUNTIME_SINCE,
+  KIMI_ON_LINUX_SINCE, KIMI_ON_NATIVE_LINUX_SINCE, ON_LINUX_SINCE, ON_NATIVE_LINUX_SINCE, VIBE_ON_LINUX_SINCE, VIBE_ON_NATIVE_LINUX_SINCE, VIBE_RUNTIME_SINCE,
   runtimeOnLinuxSide, runtimeOnNativeLinux, runtimeSkewNote,
 } from '../runtimeSince';
 import { VIBE_NATIVE_LINUX, vendorInstall, vendorUpdate, vibeNoteFor } from '../vendorTerminal';
@@ -51,10 +51,12 @@ test('the Vibe-on-Linux release is its own table, beside the one that says which
   assert.deepEqual(Object.keys(ON_LINUX_SINCE).sort(), ['kimi', 'vibe']);
 });
 
-test('the native-Linux release is its own table: Vibe only, and Kimi has no entry until E3 measures it', () => {
+test('the native-Linux release is its own table: Vibe (measured) and Kimi (admitted by the owner’s decision of 2026-10-23, no measurement), both 0.64.0', () => {
   assert.equal(VIBE_ON_NATIVE_LINUX_SINCE, '0.64.0', 'the next minor after the newest released src_mcp (0.63.0) — DL14: the second merger re-checks');
   assert.equal(ON_NATIVE_LINUX_SINCE['vibe'], VIBE_ON_NATIVE_LINUX_SINCE);
-  assert.deepEqual(Object.keys(ON_NATIVE_LINUX_SINCE), ['vibe']);
+  assert.equal(ON_NATIVE_LINUX_SINCE['kimi'], KIMI_ON_NATIVE_LINUX_SINCE);
+  assert.equal(KIMI_ON_NATIVE_LINUX_SINCE, '0.64.0', 'the release that carries the owner’s decision: the next minor after the newest released src_mcp (0.63.0)');
+  assert.deepEqual(Object.keys(ON_NATIVE_LINUX_SINCE).sort(), ['kimi', 'vibe']);
 });
 
 test(`a native Linux host whose server is older than ${VIBE_ON_NATIVE_LINUX_SINCE} does not run Vibe; a newer or an unknown server does; no entry is a refusal`, () => {
@@ -64,8 +66,9 @@ test(`a native Linux host whose server is older than ${VIBE_ON_NATIVE_LINUX_SINC
   assert.equal(runtimeOnNativeLinux('vibe', '0.64.1'), true);
   assert.equal(runtimeOnNativeLinux('vibe', '1.0.0'), true);
   assert.equal(runtimeOnNativeLinux('vibe', ''), true, 'an unknown server is not called old');
-  assert.equal(runtimeOnNativeLinux('kimi', '0.64.0'), false, 'Kimi has no native entry: absence is a refusal, not "met"');
-  assert.equal(runtimeOnNativeLinux('kimi', ''), false, 'and an unknown server does not change that');
+  assert.equal(runtimeOnNativeLinux('kimi', BEFORE_NATIVE), false);
+  assert.equal(runtimeOnNativeLinux('kimi', KIMI_ON_NATIVE_LINUX_SINCE), true, 'Kimi runs on a native host from the owner’s decision, unmeasured');
+  assert.equal(runtimeOnNativeLinux('kimi', ''), true, 'an unknown server is not called old');
   assert.equal(runtimeOnNativeLinux('codex', '0.1.0'), false, 'a runtime with no native entry is not admitted by the table (it never reaches it)');
 });
 
@@ -165,14 +168,19 @@ test(`a native Linux host with a server older than ${VIBE_ON_NATIVE_LINUX_SINCE}
   }
 });
 
-test('Kimi on a native Linux host keeps today’s refusal at every server version: it has no native entry (E3)', () => {
-  for (const version of ['0.57.0', '0.61.0', VIBE_ON_NATIVE_LINUX_SINCE, '1.0.0', ''] as const) {
-    const note = runtimeSkewNote(version, [{ ...VIBE, id: 'kimi', runtime: 'kimi' }], 'linux');
+test('Kimi on a native Linux host is no longer refused for being unmeasured: an old server is told to update, a current or unknown one hears nothing (the owner’s decision of 2026-10-23)', () => {
+  const kimi = { ...VIBE, id: 'kimi', runtime: 'kimi' };
 
-    assert.equal(
-      note, 'coai-mcp refuses a kimi row on a native Linux host for now — Kimi is measured on WSL2 only.',
-      `server "${version}": Kimi's native refusal moved`,
-    );
+  for (const version of ['0.57.0', '0.61.0', BEFORE_NATIVE] as const) {
+    const note = runtimeSkewNote(version, [kimi], 'linux');
+
+    assert.match(note, /update coai-mcp to run Kimi here/iu, `server "${version}"`);
+    assert.ok(note.includes(`${KIMI_ON_NATIVE_LINUX_SINCE} is the first release that runs it there`), note);
+    assert.ok(note.includes('not measured there — admitted by the owner’s decision of 2026-10-23'), `Kimi's detail is the decision, not Vibe's keyring: ${note}`);
+    assert.doesNotMatch(note, /keyring/u, `server "${version}"`);
+  }
+  for (const version of [KIMI_ON_NATIVE_LINUX_SINCE, '1.0.0', ''] as const) {
+    assert.equal(runtimeSkewNote(version, [kimi], 'linux'), '', `server "${version}": nothing refuses Kimi here any more; the server's own note rides the row's warning`);
   }
 });
 

@@ -286,7 +286,8 @@ public sealed class ConsultantLimitationsTests
         ConsultantLimitations.Lookup(HostKind.Windows, "vibe").Standing.Should().Be(LimitationStanding.Confined);
         ConsultantLimitations.Lookup(HostKind.MacOs, "vibe").Standing.Should().Be(LimitationStanding.Unmeasured);
         ConsultantLimitations.Lookup(HostKind.Linux, "kimi").Standing.Should().Be(LimitationStanding.Unmeasured,
-            "Kimi is still refused on a native Linux host (E3)");
+            "Kimi is not measured on a native Linux host; it runs there by the owner's decision of 2026-10-23, so the row says unmeasured and says why it runs");
+        ConsultantLimitations.Lookup(HostKind.Linux, "kimi").Text.Should().Contain("owner's decision of 2026-10-23").And.NotContain("refuses");
     }
 
     // ---------- the evidence is real ----------

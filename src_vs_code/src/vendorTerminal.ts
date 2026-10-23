@@ -1,6 +1,6 @@
 import { CliStatus, updateAvailable } from './cliVersions';
 import { type HostKind, Platform, hostExecutableSide, hostKindOfPlatform } from './hostSide';
-import { KIMI_LINUX_LINE, KIMI_NATIVE_LINUX, KIMI_ON_WSL1, KIMI_OWN_OPEN, KIMI_RUNS_ON_WSL, KIMI_TOOLS_NOTE } from './kimiLinuxLine';
+import { KIMI_LINUX_LINE, KIMI_LINUX_UNREAD, KIMI_NATIVE_LINUX, KIMI_ON_WSL1, KIMI_OWN_OPEN, KIMI_RUNS_ON_WSL, KIMI_TOOLS_NOTE } from './kimiLinuxLine';
 import { executableOf, type ExecutableSide } from './pathFamily';
 import { VIBE_NATIVE_LINUX, VIBE_ON_LINUX_SINCE } from './runtimeSince';
 import { Vendor } from './vendors';
@@ -639,6 +639,9 @@ const KIMI_NOTE_WSL = `${KIMI_LINUX_SHARED} ${KIMI_RUNS_ON_WSL} ${KIMI_OWN_OPEN}
 
 const KIMI_NOTE_LINUX = `${KIMI_LINUX_SHARED} ${KIMI_NATIVE_LINUX}`;
 
+/** A host whose kernel banner could not be read is refused (the server cannot tell it from WSL1): the note says so instead of promising a run. */
+const KIMI_NOTE_LINUX_UNREAD = `${KIMI_LINUX_SHARED} ${KIMI_LINUX_UNREAD}`;
+
 /** WSL1 is not WSL2 (DL1, F0; S-K20): the install line is the same, the row is refused. */
 const KIMI_NOTE_WSL1 = `${KIMI_LINUX_SHARED} ${KIMI_ON_WSL1}`;
 
@@ -654,14 +657,14 @@ const KIMI_NOTES: Readonly<Record<HostKind, string>> = {
   wsl2: KIMI_NOTE_WSL,
   wsl1: KIMI_NOTE_WSL1,
   linux: KIMI_NOTE_LINUX,
-  'linux-unread': KIMI_NOTE_LINUX,
+  'linux-unread': KIMI_NOTE_LINUX_UNREAD,
   darwin: KIMI_NOTE_MACOS,
 };
 
 /**
  * Which note ⤓ and ⟳ show for Kimi on this host (DL1 of research/PLAN_kimi_and_vibe_on_linux.md) — the same host-kind union Vibe's note
- * is chosen by (`hostSide.ts`): WSL2 runs the row, WSL1 and a native Linux host (and a host whose kernel banner could not be read, which
- * is told the native sentence — Kimi is refused on native Linux until E3) are refused, macOS is not measured, Windows is as it was.
+ * is chosen by (`hostSide.ts`): WSL2 runs the row, and so does a native Linux host from coai-mcp 0.64.0 — not measured there, by the owner's decision of
+ * 2026-10-23; WSL1 and a host whose kernel banner could not be read are refused, macOS is not measured, Windows is as it was.
  */
 export function kimiNoteFor(host: HostKind): string {
   return KIMI_NOTES[host];
