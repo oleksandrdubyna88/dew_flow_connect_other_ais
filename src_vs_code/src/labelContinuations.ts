@@ -59,6 +59,7 @@ const BEFORE_JOINER_GAP = 4;
 const QUOTE_RUN = 3;
 const TRIPLE_DOUBLE = '"""';
 const TRIPLE_SINGLE = "'''";
+const CASE_KEYWORD = 'case';
 
 /** One line: where it starts, where its text ends (the break, or the end of the text) and where the next one starts. */
 interface Line {
@@ -71,8 +72,8 @@ interface Line {
 type Opening = 'plain' | 'indicator' | 'triple-double' | 'triple-single';
 
 /**
- * What a label's line ends with: the opening, whether a `\` ended it, and whether the separator was `=` — a code or
- * config ASSIGNMENT, which never opens a block (see `continueAfter`).
+ * What a label's line ends with: the opening, whether a `\` ended it, and whether it is a CODE assignment — a separator of
+ * `=` with something other than indentation and quotes before the label — which never opens a block (see `continueAfter`).
  */
 interface Ending {
   readonly opening: Opening;
@@ -152,10 +153,45 @@ function readEnding(text: string, line: Line): Ending | undefined {
   }
   const beforeGap = skipBack(text, separator.at, floor, BEFORE_JOINER_GAP, isBlank);
   const labelEnd = skipBack(text, beforeGap, floor, QUOTE_RUN, isQuote);
+  const start = credentialLabelStart(text, floor, labelEnd);
 
-  return namesACredentialBefore(text, floor, labelEnd)
-    ? { opening: tail.opening, backslash: tail.backslash, assignment: separator.assignment }
+  return start >= 0 && isLabelHere(text, floor, start, separator)
+    ? { opening: tail.opening, backslash: tail.backslash, assignment: isCodeAssignment(text, floor, start, separator) }
     : undefined;
+}
+
+/** A `case X:` label of a switch is not a mapping key; every `=` label and every other `:` label is. */
+function isLabelHere(text: string, floor: number, start: number, separator: Separator): boolean {
+  return separator.assignment || !isSwitchLabel(text, floor, start);
+}
+
+/**
+ * A separator of `=` with an identifier before the label (`const string TheRoundsKey = """`, `type KeyRead =`) is CODE;
+ * with only indentation and quotes before it (`password = """`) it is CONFIG — TOML, INI, dotenv — and keeps its blocks.
+ */
+function isCodeAssignment(text: string, floor: number, start: number, separator: Separator): boolean {
+  return separator.assignment && !startsTheLine(text, floor, start);
+}
+
+function startsTheLine(text: string, floor: number, labelStart: number): boolean {
+  return skipBack(text, labelStart, floor, labelStart - floor, isBlankOrQuote) === floor;
+}
+
+/** The keyword `case` (a whole word) stands before the label, past its quotes and blanks. */
+function isSwitchLabel(text: string, floor: number, labelStart: number): boolean {
+  const quoted = skipBack(text, labelStart, floor, QUOTE_RUN, isQuote);
+
+  return endsWithCase(text, floor, skipBack(text, quoted, floor, quoted - floor, isBlank));
+}
+
+function endsWithCase(text: string, floor: number, at: number): boolean {
+  const from = at - CASE_KEYWORD.length;
+
+  return from >= floor && text.slice(from, at) === CASE_KEYWORD && wordStartsAt(text, floor, from);
+}
+
+function wordStartsAt(text: string, floor: number, from: number): boolean {
+  return from === floor || !isLabelCharacter(text[from - 1]);
 }
 
 /** The trailing blanks, an optional backslash and the opening: where they begin, and what they were. */
@@ -207,11 +243,11 @@ function tripleOpening(quote: string, run: number): Opening {
   return quote === '"' ? 'triple-double' : 'triple-single';
 }
 
-/** Whether the label ending at `labelEnd` — its last 64 label characters, cut to begin at a letter — names a credential. */
-function namesACredentialBefore(text: string, floor: number, labelEnd: number): boolean {
+/** Where the label ending at `labelEnd` — its last 64 label characters, cut to begin at a letter — starts, when it names a credential; else -1. */
+function credentialLabelStart(text: string, floor: number, labelEnd: number): number {
   const start = skipForward(text, skipBack(text, labelEnd, floor, LABEL_LIMIT, isLabelCharacter), labelEnd, (character) => !isAsciiLetter(character));
 
-  return start < labelEnd && namesACredential(text.slice(start, labelEnd));
+  return start < labelEnd && namesACredential(text.slice(start, labelEnd)) ? start : -1;
 }
 
 // ---------- the plain continuation ----------
@@ -483,6 +519,10 @@ function stepBack(text: string, floor: number, at: number, accepts: (character: 
 
 function isBreak(character: string): boolean {
   return character === '\n' || character === '\r';
+}
+
+function isBlankOrQuote(character: string): boolean {
+  return isBlank(character) || isQuote(character);
 }
 
 function isBlank(character: string): boolean {

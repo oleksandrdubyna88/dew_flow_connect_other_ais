@@ -132,6 +132,17 @@ const NEXT_LINE_SHAPES: readonly string[] = [
   lines('password = """', 'FAKE-CANARY-EQ1', '"""'),
   lines("secret = '''", '  FAKE-FIRST', '  FAKE-SECOND', "'''"),
   lines("secret: '''", '  FAKE-FIRST', '', "  FAKE-SECOND'''  # note", 'after: 1'),
+  // S2c: an `=` label at the START of its line is config (blocks), with an identifier before it it is code (one line).
+  lines('password = """', 'FAKE-FIRST', 'FAKE-SECOND', '"""', 'after = 1'),
+  lines('  "password" = """', 'FAKE-FIRST', 'FAKE-SECOND'),
+  lines('password = |', '  FAKE-FIRST', '  FAKE-SECOND', 'name = x'),
+  lines("const secret = '''", '  FAKE-FIRST', '  FAKE-SECOND', "'''"),
+  lines('var token =', '    (await Load(key)).Value;'),
+  // S2c: a switch case label is not a credential label.
+  lines('switch (outcome)', '{', '    case ApiOutcome.KeyRefused:', '        return Refused(body);', '}'),
+  lines('switch (name) {', "  case 'setBugsKey':", '    await this.setBugsKey();', '    break;', '}'),
+  lines('    case Keys.Token:', '        Use(token);'),
+  lines('showcase_token:', '  FAKE-CANARY-CASE', 'case_token:', '  FAKE-CANARY-CASE2'),
 ];
 
 /** A PEM header, ASSEMBLED rather than written down for the reason `privateKey()` gives. */

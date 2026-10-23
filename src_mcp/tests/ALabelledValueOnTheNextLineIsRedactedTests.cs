@@ -366,11 +366,62 @@ public sealed class ALabelledValueOnTheNextLineIsRedactedTests
     }
 
     [Fact]
-    public void AnAssignment_TakesAtMostTheOneNextLine_AndNeverOpensABlock()
+    public void ACodeAssignment_TakesAtMostTheOneNextLine_AndNeverOpensABlock()
     {
-        var given = Lines("secret = '''", "  FAKE-FIRST", "  FAKE-SECOND", "'''");
+        // An identifier (a type, a keyword) before the label makes it CODE (S2c); the same line with nothing before it is config.
+        var given = Lines("const secret = '''", "  FAKE-FIRST", "  FAKE-SECOND", "'''");
 
-        Source(given).Should().Be(Lines("secret = '''", "  [redacted]", "  FAKE-SECOND", "'''"));
+        Source(given).Should().Be(Lines("const secret = '''", "  [redacted]", "  FAKE-SECOND", "'''"));
+    }
+
+    // ---------- S2c: an `=` label at the START of its line is a CONFIG assignment, and keeps its blocks ----------
+
+    [Fact]
+    public void ATomlTripleQuotedSecret_OfSeveralLines_IsMaskedWhole()
+    {
+        var given = Lines("secret = '''", "  FAKE-FIRST", "", "  FAKE-SECOND'''  # note", "after = 1");
+
+        var safe = Source(given);
+
+        safe.Should().NotContain("FAKE-");
+        safe.Should().Be(Lines("secret = '''", "  [redacted]", "", "  [redacted]'''  # note", "after = 1"));
+    }
+
+    [Theory]
+    [InlineData("password = \"\"\"\nFAKE-FIRST\nFAKE-SECOND\n\"\"\"\nafter = 1", "password = \"\"\"\n[redacted]\n[redacted]\n\"\"\"\nafter = 1")]
+    [InlineData("  \"password\" = \"\"\"\nFAKE-FIRST\nFAKE-SECOND", "  \"password\" = \"\"\"\n[redacted]\n[redacted]")]
+    [InlineData("password = |\n  FAKE-FIRST\n  FAKE-SECOND\nname = x", "password = [redacted]\n  [redacted]\n  [redacted]\nname = x")]
+    public void AConfigAssignment_OpensItsBlocks(string given, string expected)
+    {
+        Source(given).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("var token =\n    (await Load(key)).Value;", "var")]
+    [InlineData("internal const string TheRoundsKey = \"\"\"\n    ALTER TABLE rounds ADD COLUMN round_key TEXT;\n    \"\"\";", "a type and a modifier")]
+    public void AnAssignmentWithSomethingBeforeItsLabel_IsCode(string given, string what)
+    {
+        Source(given).Should().Be(given, what);
+    }
+
+    // ---------- S2c: a `case X:` label is not a credential label ----------
+
+    [Theory]
+    [InlineData("switch (outcome)\n{\n    case ApiOutcome.KeyRefused:\n        return Refused(body);\n}")]
+    [InlineData("switch (name) {\n  case 'setBugsKey':\n    await this.setBugsKey();\n    break;\n}")]
+    [InlineData("    case Keys.Token:\n        Use(token);")]
+    public void ASwitchCaseLabel_IsNotACredentialLabel(string given)
+    {
+        Source(given).Should().Be(given);
+        Redaction.FirstSecretClass(given).Should().Be(string.Empty);
+    }
+
+    [Fact]
+    public void AColonLabelThatMerelyContainsTheWordCase_IsStillALabel()
+    {
+        var given = Lines("showcase_token:", "  FAKE-CANARY-CASE", "case_token:", "  FAKE-CANARY-CASE2");
+
+        Source(given).Should().NotContain("FAKE-CANARY-CASE");
     }
 
     [Fact]

@@ -61,6 +61,7 @@ internal static class LabelContinuations
     private const int QuoteRun = 3;
     private const string TripleDouble = "\"\"\"";
     private const string TripleSingle = "'''";
+    private const string CaseKeyword = "case";
 
     /// <summary>One line: where it starts, where its text ends (the break, or the end of the text) and where the next one starts.</summary>
     private readonly record struct Line(int Start, int End, int Next)
@@ -78,8 +79,8 @@ internal static class LabelContinuations
     }
 
     /// <summary>
-    /// What a label's line ends with: the opening, whether a <c>\</c> ended it, and whether the separator was <c>=</c> — a code or
-    /// config ASSIGNMENT, which never opens a block (see <see cref="Continue"/>).
+    /// What a label's line ends with: the opening, whether a <c>\</c> ended it, and whether it is a CODE assignment — a separator of
+    /// <c>=</c> with something other than indentation and quotes before the label — which never opens a block (see <see cref="Continue"/>).
     /// </summary>
     private readonly record struct Ending(Opening Opening, bool Backslash, bool Assignment);
 
@@ -106,7 +107,7 @@ internal static class LabelContinuations
 
     /// <summary>Applies the evidence of one label's line and answers where the scan goes on.</summary>
     /// <remarks>
-    /// A label whose separator is <c>=</c> is an ASSIGNMENT — <c>WithoutTheKey =</c>, <c>type KeyRead =</c>,
+    /// A label whose separator is <c>=</c> with an identifier before it is a CODE assignment — <c>WithoutTheKey =</c>, <c>type KeyRead =</c>,
     /// <c>TheRoundsKey = """</c> — and what follows it in code is an expression, not a secret scalar. It never opens a
     /// block: it takes AT MOST the one next line, and only when that line is shaped like a value
     /// (<see cref="IsValueShaped"/>); an opening indicator or triple quote on its line then counts as evidence, since
@@ -147,14 +148,33 @@ internal static class LabelContinuations
         var assignment = text[at - 1] == '=';
         at = SkipBack(text, at - 1, floor, BeforeJoinerGap, IsBlank);
         at = SkipBack(text, at, floor, QuoteRun, IsQuote);
-        if (!NamesACredential(text, floor, at))
+        var start = CredentialLabelStart(text, floor, at);
+        if (start < 0 || (!assignment && IsSwitchLabel(text, floor, start)))
         {
             return false;
         }
 
-        ending = new Ending(opening, backslash, assignment);
+        ending = new Ending(opening, backslash, assignment && !StartsTheLine(text, floor, start));
 
         return true;
+    }
+
+    /// <summary>
+    /// Whether only indentation and quotes stand before the label on its line: then an <c>=</c> label is CONFIG (TOML, INI, dotenv —
+    /// <c>password = """</c>) and keeps its blocks; with an identifier before it (<c>const string TheRoundsKey = """</c>, <c>type KeyRead =</c>) it is CODE.
+    /// </summary>
+    private static bool StartsTheLine(string text, int floor, int labelStart) =>
+        SkipBack(text, labelStart, floor, labelStart - floor, c => IsBlank(c) || IsQuote(c)) == floor;
+
+    /// <summary>A <c>case X:</c> label of a switch: the keyword <c>case</c> (a whole word) stands before the label, past its quotes and blanks. It is not a mapping key.</summary>
+    private static bool IsSwitchLabel(string text, int floor, int labelStart)
+    {
+        var at = SkipBack(text, labelStart, floor, QuoteRun, IsQuote);
+        at = SkipBack(text, at, floor, at - floor, IsBlank);
+
+        return at - floor >= CaseKeyword.Length
+            && string.CompareOrdinal(text, at - CaseKeyword.Length, CaseKeyword, 0, CaseKeyword.Length) == 0
+            && (at - CaseKeyword.Length == floor || !IsLabelCharacter(text[at - CaseKeyword.Length - 1]));
     }
 
     /// <summary>A block indicator (<c>[|&gt;][-+]?[0-9]?</c>) or an opening quote run at the end; moves <paramref name="at"/> before it.</summary>
@@ -187,8 +207,8 @@ internal static class LabelContinuations
         return run < QuoteRun ? Opening.Plain : quote == '"' ? Opening.TripleDouble : Opening.TripleSingle;
     }
 
-    /// <summary>Whether the label ending at <paramref name="labelEnd"/> — its last 64 label characters, cut to begin at a letter — names a credential.</summary>
-    private static bool NamesACredential(string text, int floor, int labelEnd)
+    /// <summary>Where the label ending at <paramref name="labelEnd"/> — its last 64 label characters, cut to begin at a letter — starts, when it names a credential; else -1.</summary>
+    private static int CredentialLabelStart(string text, int floor, int labelEnd)
     {
         var start = labelEnd;
         while (start > floor && labelEnd - start < LabelLimit && IsLabelCharacter(text[start - 1]))
@@ -201,7 +221,7 @@ internal static class LabelContinuations
             start++;
         }
 
-        return start < labelEnd && CredentialWords.NamesACredential(text.Substring(start, labelEnd - start));
+        return start < labelEnd && CredentialWords.NamesACredential(text.Substring(start, labelEnd - start)) ? start : -1;
     }
 
     // ---------- the plain continuation ----------

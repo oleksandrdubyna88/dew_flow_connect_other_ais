@@ -220,7 +220,37 @@ test('S2b: an assignment with a value-shaped next line is still redacted, and ta
   assert.equal(source('client_secret =\n  FAKE-CANARY-EQ1'), 'client_secret =\n  [redacted]');
   assert.equal(source('password =\n\t"FAKE-CANARY-EQ1",'), 'password =\n\t"[redacted]",');
   assert.equal(source('password = """\nFAKE-CANARY-EQ1\n"""'), 'password = """\n[redacted]\n"""');
-  assert.equal(source(lines("secret = '''", '  FAKE-FIRST', '  FAKE-SECOND', "'''")), lines("secret = '''", '  [redacted]', '  FAKE-SECOND', "'''"));
+  assert.equal(
+    source(lines("const secret = '''", '  FAKE-FIRST', '  FAKE-SECOND', "'''")),
+    lines("const secret = '''", '  [redacted]', '  FAKE-SECOND', "'''"),
+    'an identifier before the label makes it code',
+  );
+});
+
+test('S2c: an = label at the start of its line is config and keeps its blocks', () => {
+  assert.equal(
+    source(lines("secret = '''", '  FAKE-FIRST', '', "  FAKE-SECOND'''  # note", 'after = 1')),
+    lines("secret = '''", '  [redacted]', '', "  [redacted]'''  # note", 'after = 1'),
+  );
+  assert.equal(
+    source(lines('password = """', 'FAKE-FIRST', 'FAKE-SECOND', '"""', 'after = 1')),
+    lines('password = """', '[redacted]', '[redacted]', '"""', 'after = 1'),
+  );
+  assert.equal(source(lines('  "password" = """', 'FAKE-FIRST', 'FAKE-SECOND')), lines('  "password" = """', '[redacted]', '[redacted]'));
+  assert.equal(source(lines('internal const string TheRoundsKey = """', '    ALTER TABLE rounds ADD COLUMN round_key TEXT;', '    """;')),
+    lines('internal const string TheRoundsKey = """', '    ALTER TABLE rounds ADD COLUMN round_key TEXT;', '    """;'));
+});
+
+test('S2c: a switch case label is not a credential label, and a YAML key still is', () => {
+  for (const given of [
+    'switch (outcome)\n{\n    case ApiOutcome.KeyRefused:\n        return Refused(body);\n}',
+    "switch (name) {\n  case 'setBugsKey':\n    await this.setBugsKey();\n    break;\n}",
+    '    case Keys.Token:\n        Use(token);',
+  ]) {
+    assert.equal(source(given), given, given);
+  }
+  assert.ok(!source(lines('showcase_token:', '  FAKE-CANARY-CASE', 'case_token:', '  FAKE-CANARY-CASE2')).includes('FAKE-CANARY-CASE'));
+  assert.equal(source(lines('api_key:', '  FAKE-CANARY-Y')), lines('api_key:', '  [redacted]'));
 });
 
 test('S-11: a block scalar of 262 144 characters has no canary anywhere, and the line after it survives', () => {
