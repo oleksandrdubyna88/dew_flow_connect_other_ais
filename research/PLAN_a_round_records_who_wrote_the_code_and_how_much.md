@@ -619,6 +619,8 @@ hand-over — peers on EVERY round, from the peers' session files, `ReadFrom` be
 
 Side changes that shipped beside this work: #868 (a session file keeps the members a newer server wrote, [PLAN_a_session_file_keeps_what_a_newer_server_wrote.md](PLAN_a_session_file_keeps_what_a_newer_server_wrote.md)); #866 (a typed-field parse fix: one bad field in a reviewer row costs that row only); #861 (one named constant for Windows' path limits); #896 (`--round-authors --table` and its refusals print no terminal-unsafe character, filtered by Unicode rune).
 
+**Released 2026-10-21:** `mcp-v0.63.0` and `extension-v0.83.0` carry E3–E7, #868 and #896 (checked by `git merge-base --is-ancestor` for `bc5b367df`, `20c35f026`, `42eb3a95a` and `9134099c0`). `server-v0.14.1`, released the same day, carries none of this work: the Team server was not changed.
+
 ### Deviations from the plan
 
 Each epic records its own deviations: E1 and E2 in their *Promotion record*, E3 in §5.1, E4 in §12, E5 in §12 and §12.1, E6 in §5 and §5.1, E7 in §11 to §11.3. These changed what this plan says:
@@ -627,10 +629,17 @@ Each epic records its own deviations: E1 and E2 in their *Promotion record*, E3 
 2. **The authors are schema step 24.** The plan gate's epic E2 took step 23 (#837, #841).
 3. **E1 refuted the read-time prediction by two orders of magnitude.** The largest session is 650 MB. E3's reader skips a line before it decodes it, and the byte budget applies to the slice (§5, §16 D7).
 4. **A meta without `model` is `observed`**, with a diagnostics count. The first text said `partial` (§5).
-5. **E7's code goes first and the run follows, as D16 planned, but the WSL build step is gone.** The WSL side installs the released `linux-x64` asset (E7 §6 O1). No release contains E7 yet.
+5. **E7's code goes first and the run follows, as D16 planned, but the WSL build step is gone.** The WSL side installs the released `linux-x64` asset (E7 §6 O1). E7 shipped in `mcp-v0.63.0` (2026-10-21).
 6. **The backfill is stricter than the plan.** A result from an older reader never replaces a newer row. A deferral stops the whole round. The fingerprint hashes whole rows. Each backup folder carries `check.json` (E7 §11 deviations 5, 14–16).
 7. **This plan is promoted before the live run, not after it.** E7 O5 planned the promotion for the end. The code is finished and merged, so the plan moves now and the run becomes a new plan.
 8. **Two scripts and one test oracle were not built.** `scripts/backfill-preflight-servers.ps1` and `.sh`, `scripts/round-authors-dump.mjs`, and the `--round-authors` JSON oracle in the S4 scenario do not exist. The live-backfill plan builds them (N1–N3).
+
+### Feature gate (2026-10-22)
+
+The coai feature gate (`review_feature`) read the whole feature once, after the release: the plan, the seven epics with their branches and pull requests, the implementer's lessons, and every file changed from `fdf40afc7` (the parent of E1's merge) to `25db741c5` (`main` that day).
+
+- **Verdict: `proceed`.** One reviewer answered (`codex-2`). It said that its source budget ran out before it read the live authors step, the association ladder and the backfill writer, so those three seams were not inspected by this gate. They were inspected by each epic's own code gate.
+- **One finding, rejected with a reason.** *A message that starts before round N and grows during N's review has its later usage counted in N.* That is this plan's stated limitation (§16 D6, as E4 decision 7 refined it on 2026-10-16): a message, its launches and its writes are one unit, placed by the message's first line, and *"a straddling message's tokens are the one stated limitation"*. Splitting one message's usage by fragment would put its writes in a window where its tokens are not. Live and backfilled totals can differ only for a message that was still streaming at the live read (E1: the lines of one message span 50 s at p99). The backfill never replaces a row that the live path wrote at the same reader version. If the hand-check of the live-backfill plan (N9) shows a material difference, it becomes a fix story there (N6).
 
 ### Boundary with the live-backfill plan
 
@@ -660,7 +669,7 @@ The check boxes below were not ticked as work landed. This table is the authorit
 | The backfill saves the snapshot first; exit codes 0 / 65 / 74 / 75, never 64 | Met in code and tests (E7). |
 | A code round records its size by scope, coverage and kind | Met (E2). |
 | `reviewers.effort` persisted | Met (E2). |
-| Every round records `authors_state`; no field is filled by a guess | Met only by a server that carries E5. None was released when this was written, 2026-10-21: the newest tag, `mcp-v0.62.0`, predates E5, and `mcp-v0.63.0` is being released now. **Not met for older rounds** until the live backfill runs. |
+| Every round records `authors_state`; no field is filled by a guess | Met by a server that carries E5: `mcp-v0.63.0`, released 2026-10-21. A server on an older release still records no authors. **Not met for older rounds** until the live backfill runs. |
 | Attribution passes every acceptance case | Met (E4.S5). |
 | No text stored or printed; sentinel test | Met (E3.S5, E5.S5, E7). |
 | No test reads the developer's `~/.claude`; `severe` and `gate_count` named apart | Met (E3, E6). |
