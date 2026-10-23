@@ -1,6 +1,6 @@
 # PLAN — Redaction reaches a value on the next line
 
-> Status: **partly built, 2026-10-23 — S1, S2 and S2b are built (see *S1+S2 — status* and *S2b — status* after the build order); S3 (the product
+> Status: **partly built, 2026-10-23 — S1, S2, S2b and S2c are built (see *S1+S2*, *S2b* and *S2c — status* after the build order); S3 (the product
 > checks, the docs, Q6) and S4 (the gated swallow) are open.** Revised the same day after the coai plan round (a0bc0720,
 > proceed) and two consults (cadence a1c21b20, risk f1d48728); every point verified against the code and folded (see the
 > last section). Scope: `src_mcp/core/Notices/Redaction.cs` (one new procedural pass beside `PrivateKeyBlocks`, one
@@ -540,7 +540,7 @@ A `case X:` label is the one remaining class worth a narrowing (a label whose li
 mapping key); not built — the lead said `:` labels keep today's behaviour.
 
 **Deviations and consequences.**
-1. **A multi-line TOML triple-quoted secret under `=` is no longer fully masked.** `secret = '''` LF `  FAKE-FIRST` LF `  FAKE-SECOND`
+1. **(Cured by S2c, below.) A multi-line TOML triple-quoted secret under `=` is no longer fully masked.** `secret = '''` LF `  FAKE-FIRST` LF `  FAKE-SECOND`
    masks the first line only; the second stays (measured: parity row `secret = '''…`, and `AnAssignment_TakesAtMostTheOneNextLine_…`
    pins it). This is the price of the lead's rule: `TheRoundsKey = """` and `password = """` are the same shape to a line reader.
    A line that STARTS with the label (only indentation or a quote before it) is a config assignment, a line with a type or a keyword
@@ -564,6 +564,55 @@ mapping key); not built — the lead said `:` labels keep today's behaviour.
 passed, 0 failed, 121 skipped, 19 min 18 s (an earlier run of this series ended without a summary — another session stopped
 it by PID — and was rerun alone). `npm test`: 6 532 tests, 6 530 passed, 0 failed, 2 skipped; `npm run lint`: clean;
 `npm run test:parity`: 1 090 shapes at both limits, 5 records, 17 codes, byte for byte; `plan-lifecycle.mjs`: clean.
+
+### S2c — status: built 2026-10-23 (the lead's answer to S2b's open question; S3 and S4 not started)
+
+1. **An `=` label is CONFIG or CODE by what precedes it on its line.** With only indentation and quotes before the label
+   (`password = """`, `  "password" = """`, `secret = '''`, `password = |`) it is a config assignment — TOML, INI, dotenv — and
+   keeps its blocks, so a multi-line triple-quoted secret is masked whole again (S2b's deviation 1 is cured). With anything else
+   before it — a type, a modifier, a keyword, `export` (`internal const string TheRoundsKey = """`, `type KeyRead =`, `var x =`,
+   `const secret =`) — it is a code assignment and keeps S2b's narrow rule: at most the one next line, only when value-shaped.
+   (`Ending.Assignment` now means "code assignment"; `StartsTheLine` decides.)
+2. **A `case X:` label is not a credential label.** A `:` label with the keyword `case` (a whole word) before it, past its
+   quotes and blanks, is a switch label and is skipped (`IsSwitchLabel`). `default:` is not special-cased: `default` does not
+   name a credential, so it never reached the pass. A label that merely contains the word (`showcase_token:`, `case_token:`)
+   is still a label (a test pins it).
+
+**RED first, on the S2b code (exact messages).**
+
+| Test | Seen red as |
+|---|---|
+| `ATomlTripleQuotedSecret_OfSeveralLines_IsMaskedWhole` | `Did not expect safe "secret = '''\n  [redacted]\n\n  FAKE-SECOND'''  # note\nafter = 1" to contain "FAKE-".` |
+| `AConfigAssignment_OpensItsBlocks` ×3 (`password = """`, `  "password" = """`, `password = |`) | `Expected Source(given) to be the same string, but they differ on line 3 and column 1 (index 26): ".\"\"\"\n[redacted]\nFAKE-." / ".\"\"\"\n[redacted]\n[reda."`; the `|` row `… line 3 and column 3 (index 37): ". [redacted]\n  FAKE-S." / ". [redacted]\n  [redac."` |
+| `ASwitchCaseLabel_IsNotACredentialLabel` ×3 | `… line 4 and column 9 (index 59): ".       [redacted]." / ".       return Refuse."`; `… line 3 and column 5 (index 41): ".Key':\n    [redacted]." / ".Key':\n    await."`; `… line 2 and column 9 (index 29): ".       [redacted]);" / ".       Use(token);"` |
+| `ACodeAssignment_IsServedByteForByte` (`KeyVault.cs`, `type KeyRead =`, `TheRoundsKey = """`, …), `AnAssignmentWithSomethingBeforeItsLabel_IsCode`, the `client_secret =` control, `AColonLabel_KeepsItsBlocks`, `AColonLabelThatMerelyContainsTheWordCase_…` | **green before and after** — the controls |
+| `labelContinuations.test.ts` S2c rows (S2b port) | `actual: "secret = '''\n  [redacted]\n\n  FAKE-SECOND'''  # note\nafter = 1"`; `actual: 'switch (outcome)\n{\n    case ApiOutcome.KeyRefused:\n        [redacted] Refused(body);\n}'` |
+
+**Break-its (restored by writing the file and rebuilding, byte for byte).** (13) every `=` label is code again: 4 red (the TOML
+row and the three config rows). (14) the `case` rule removed: 3 red (the three switch rows). (15) every `=` label is config:
+8 red (the five shapes of `ACodeAssignment_…`, two of `AnAssignmentWithSomethingBeforeItsLabel_IsCode`, and `ACodeAssignment_TakesAtMostTheOneNextLine_…`: `KeyVault.cs`, `Schema.cs`, `type KeyRead =` among them).
+(16) one-sided parity, the S2b TypeScript port against the new corpus: `safeText at
+1000 … differs` — `secret = '''\n  FAKE-FIRST\n\n  FAKE-SECOND'''…` TypeScript `secret = '''  [redacted]  FAKE-SECOND'''…`, C#
+`secret = '''  [redacted]  [redacted]'''…`.
+
+**Moved on purpose.** `AnAssignment_TakesAtMostTheOneNextLine_…` (S2b) now reads `const secret = '''` (code); the same three lines
+with `secret = '''` at the start are the config row and are masked whole. Corpus: 1 090 → 1 189 shapes (9 new shapes × 11 wraps).
+
+**Repository-wide re-measure** (the same probe): 5 files before S2c, **3** now. The two `case` labels are gone
+(`AskApiMode.cs:227`, `panelProvider.ts:2795`). What remains, all `:` labels that are object properties or a string:
+`claudeAdapter.ts:114` (`tokensIn:` LF `count(usage[…])`), `help.ts:178` (`credsKey:` LF a quoted sentence),
+`ProbeApiModeTests.cs:64` (a string literal ending `Authorization: "` before a `+` continuation).
+
+**Consequence to know.** The config test is "only indentation and quotes before the LABEL RUN", and a label run includes dots:
+a statement `this.secret =` LF `compute(a, b);` at the start of a line is therefore CONFIG, not code, and its next line is masked
+by token. Over-masking, never a leak; not pinned by a test.
+
+**Suites (the committed code, as executables).** `CoaiMcp.Tests.exe` whole through `low-priority.mjs`: 13 753 tests, 13 632 passed,
+0 failed, 121 skipped, 17 min 49 s. `npm run lint`: clean. `npm test`: 6 534 tests, 6 532 passed, 0 failed, 2 skipped. **One
+first `npm test` run failed one test**, `chatTestsLeaveNoTemp.test.mjs` ("chatStoreLock.test.js removes every temp folder it makes"),
+because `chatStoreLock.test.js` hit \`EPERM: operation not permitted, open …\\a1.lock\` in the Windows temp folder; the same two
+files pass alone (16 of 16, 4 of 4) and a second whole run passed everything — an environment error of that run (the file system,
+not this change). \`npm run test:parity\`: 1 189 shapes at both limits, 5 records, 17 codes, byte for byte. \`plan-lifecycle.mjs\`: clean.
 
 Releases: one coai-mcp release and one extension release carry S1–S3 together (the notice road is shared, D9); the
 server release is the one that closes R1 on the served-file and stderr roads.

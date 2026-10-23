@@ -5669,4 +5669,13 @@ every line break in a fixture is a REAL one. Every test was seen red on the unfi
 | `labelContinuations.test.ts` S2b rows | *actual: 'api_key:\n  [redacted] FAKE-CANARY-L1\n  - FAKE-CANARY-L2\nname: visible'* | — |
 | `npm run test:parity` (list, code-assignment and `=`-control shapes) | green before only as an unbuilt corpus; red with the S1+S2 port: the `api_key:` list and `secret = '''…` rows differ | the S1+S2 TypeScript port against the new corpus |
 
+**S2c (2026-10-23): config versus code, and the switch label.** The same class (79 rows), `labelContinuations.test.ts` (25), 99 more parity rows (1 189 shapes).
+
+| Test | Seen red as | Break-it (went red) |
+|---|---|---|
+| `ATomlTripleQuotedSecret_OfSeveralLines_IsMaskedWhole`, `AConfigAssignment_OpensItsBlocks` ×3 | *Did not expect safe "secret = '''\n  [redacted]\n\n  FAKE-SECOND'''  # note\nafter = 1" to contain "FAKE-".*; *… differ on line 3 and column 1 (index 26): ".\"\"\"\n[redacted]\nFAKE-." / ".\"\"\"\n[redacted]\n[reda."* | every `=` label code again: 4 red |
+| `ASwitchCaseLabel_IsNotACredentialLabel` ×3 | *… line 4 and column 9 (index 59): ".       [redacted]." / ".       return Refuse."* | the `case` rule removed: 3 red |
+| `ACodeAssignment_IsServedByteForByte`, `AnAssignmentWithSomethingBeforeItsLabel_IsCode`, `ACodeAssignment_TakesAtMostTheOneNextLine_…`, the `client_secret =` control, `AColonLabel…` | green before and after — the controls | every `=` label config: 8 red |
+| `npm run test:parity` (TOML multi-line, `const secret = '''`, switch shapes) | red with the S2b port: the `secret = '''…` rows differ | the S2b TypeScript port against the new corpus |
+
 NOT covered here (S3): the product legs — an ACP stderr of 64 Ki through `TheStderrLineIsQuotedSafelyTests`, and `ServerNoticeLine` written / the extension's parser read.
