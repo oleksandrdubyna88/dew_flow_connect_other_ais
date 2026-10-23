@@ -484,6 +484,14 @@ Windows first, then WSL/Linux (unmeasured by the bench), recorded in `research/R
 with versions; a vendor that fails is switched to `inherit` by the setting and the missing name is added to the list in a
 follow-up story — never by widening the default blind.
 
+**S5 — the setting reaches the launch, end to end (plan gate b2b81e47, finding 1).** The S1–S3 tests hold the helper and a
+fake child; a wiring error could still leave the panel showing `inherit` while launches stay allow-listed, or the probe and
+the round run in different modes. RED: a scenario-harness flow `TheEnvironmentSettingReachesTheProbeAndTheRound` — change
+the vendor's `EnvironmentMode` through the same settings path the panel writes, run a `providers` probe and a reviewer
+launch against the fake CLI that prints its environment, and assert for BOTH modes that the effective environment (the
+sentinel absent/present) and the recorded mode (ledger line, probe note) agree. Break-it: read the mode from a default
+instead of the stored setting → red. Docs: the flow is catalogued in `research/module_tests.md`.
+
 Cornerstones: 0 of 2 — E4.S1, E4.S2.
 
 ### E5 — the Claude reviewer is not steered by the branch it reviews, and the cards say who is (R7)
@@ -525,6 +533,16 @@ is absent, what reaches it), `TheAgyRowSaysItReadsTheBranchThroughAddDir_AndAGem
 `VersionWarning` `:373`) folded into `VendorHealth.Note` by the probe; the card draws it as it draws `runtimeNote`
 (`modelCard.ts:188-203`) — a sentence, never a held switch. Break-it: return empty for codex → red. Docs:
 `module_runners.md` and `module_extension.md` (the card's notes).
+
+**S4 — the effect observed, not only the flag (plan gate b2b81e47, finding 0).** The S2 tests prove `--safe-mode` is in
+the argv; they do not prove a branch's hook stops running under coai's exact invocation. The lead runs ONE real Claude turn
+(paid, cheap) in a scratch `testsToDelete-` worktree whose `.claude/settings.json` registers a harmless canary
+`SessionStart` hook that writes a marker file inside that same folder: once with coai's shipped reviewer argv (with
+`--permission-mode plan`, `--disallowedTools` and `--safe-mode`) → the marker must be ABSENT; once as a control without
+`--safe-mode` → the marker present (a control that does not fire makes the run prove nothing). Recorded in
+`research/RESULTS_claude_reviewer_safe_mode.md` with the CLI version. The card's and the docs' claim is limited to the
+versions where the effect was observed; on any other version the S2 note says the effect is not measured there (a note,
+never a refusal). Only the canary's own `testsToDelete-` folder is removed afterwards.
 
 **Open tail (not built now):** the sanitised snapshot for codex and claude — `NeedsASanitisedSnapshot => true` on both
 adapters (`ReviewerRuntime.cs:410`), `.codex/`, `.claude/`, `CLAUDE.md`, `AGENTS.md`, `.gemini/` excluded, every finding's
