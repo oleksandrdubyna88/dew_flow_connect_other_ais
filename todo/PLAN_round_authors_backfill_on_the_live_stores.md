@@ -6,6 +6,62 @@
 >
 > **How this plan is built.** Nothing in this plan is built in the promotion PR. Before any code of this plan is built, the plan is split into epics. Fable does the split, after it asks the question consultant. Each epic gets its own coai plan gate and its own code gate. Every live run needs the owner's written approval (§4 rule 1).
 
+## 0. Where it stands and how to resume (2026-10-23)
+
+This section is the hand-over. A session on another machine starts here and needs nothing outside the repository.
+
+**Done.**
+
+- All seven epics of the parent plan are merged (#828, #829, #867, #862, #863, #864, #865), with the side fixes #868 and #896, and are released in `mcp-v0.63.0` and `extension-v0.83.0` (2026-10-21).
+- The plans are promoted (#908).
+- The coai feature gate passed on 2026-10-22 (`proceed`). Its record is in the parent's *Promotion record → Feature gate*.
+
+**This plan's gate history.**
+
+| Gate | Result |
+|---|---|
+| Plan round (2026-10-21) | `good_enough`. All 13 findings were accepted and are applied in this text (N1 start-time check, `--version` timeout, LF scripts, one SQLite reader, redirection proof, deferred path, zero writes and zero heals, the judge through `claude`, N9a adjudication, the build order, private exports). |
+| Code round over the promotion branch | `proceed`. 4 findings rejected: 3 broken-link claims that were false, and 1 request to replace the boundary table with a link, which the planning convention forbids. |
+| CodeRabbit on #908 | 4 findings, all true and fixed: the `readUtc` normalisation (N3/N7), deferrals reported as counts per reason only (N7), one WSL export per selection (N8/N10), the `module_server.md` status. |
+
+**Nothing of this plan is built or run.** No epic split, no script, no rehearsal, and no live store has been opened.
+
+**The question consultant, 2026-10-22** (one row of three answered: Gemini 3.8 Flash, *Projects on this disk*). Its answers are advice. Each one was checked against the repository before it was written here.
+
+| Question | Advice | Status |
+|---|---|---|
+| Start the preparation that writes no live store (epic split, N1–N5)? | Yes, now, in its own worktree: the forward path is shipped, so the backfill is next ("forward first, backfill second"). | Waits for the owner (§9 item 5). |
+| One written approval per live run, although the owner said "make a backup" on 2026-10-15? | Yes. The backup is a precondition, not an approval, and the Windows and WSL stores are two separate environments. | Kept as §9 items 1 and 2. |
+| The five older E7 questions (below) | All five are settled by this plan's accepted plan-gate findings. | Waits for the owner to confirm (§9 item 6). |
+
+**The five older E7 questions (raised 2026-10-18), and where this plan settles each.**
+
+| # | Question | Settled by |
+|---|---|---|
+| 1 | The exception to "a weaker result never replaces a stronger one" | Only a correcting version bump (`CorrectedBelow`) lets a newer reader replace rows of a defective version. It happens only after a confirmed defect (N9 → N9a → N6). |
+| 2 | The server check script | N1, which checks each running process's start time, not the binary on disk. |
+| 3 | The rehearsal on a copy | N5, with the redirection proof. |
+| 4 | Who removes the dated backup folders | The owner, by hand. The tool never deletes, and each writing run adds a backup about the size of the store (§5). |
+| 5 | A session deferred on two runs in a row | The run continues and the session stays unfilled. The summary counts it by reason; it names no session (N7). |
+
+**How to resume, in order.**
+
+1. Read this section, §4 (the safety model) and §6 (the stories).
+2. Get the owner's answers to §9 items 5 and 6.
+3. On a yes to item 5: Fable splits this plan into epics after it asks the question consultant (the build note at the top). Each epic goes through its own coai plan gate and code gate.
+4. Build N1–N4, then run N5 on a copy. N5 writes no live store.
+5. Show the owner the rehearsal and dry-run results of one side, and ask for that side's written approval (§9 items 1 and 2). Only then run N7 or N8.
+6. N9 (with N9a), then N10. Promote this plan when its DoD is met.
+
+**Side items found during this work. They are not part of this plan, and each waits for the owner.**
+
+| Item | What it is | Consultant | Proposal |
+|---|---|---|---|
+| `COAI_PROMPTS_PER_ROUND` | An environment variable parsed at `src_mcp/src/Server/PanelSettings.cs:1063`. A bad value is ignored with no message: the same defect class as the typed-field fix #866. | Put it in an existing backlog. But the plan it named is already implemented (`research/PLAN_the_commands_and_the_config_are_yours.md`). | A small PR of its own, RED test first. |
+| The help text "259" | An extension help text names the Windows path limit as a bare 259. Since #861 there is one constant: file 259, folder 247. | A string edit, not a plan. | One text edit in all five languages, in the next UI PR. |
+| `AgentLog.ReadFile` and `AgentLog.Said` | Older methods above the cyclomatic-complexity limit of 4. This work did not change them. | Keep it as debt in `todo/PLAN_two_files_outgrew_the_rule.md`. | Add a row there. Do not refactor them as a side effect. |
+| An absent `securityLane` setting | It is read as the default lane. | A safe default; only document it. | Document it, if the owner confirms that it is intended. |
+
 ## 1. The goal, before any solution
 
 The owner asked on 2026-10-14: *is the code better or worse since coders moved to Sonnet?* The round-authors plan builds the data to answer that. The data exists only for rounds that run after the live path shipped. Older rounds have no authors and, for code rounds before 2026-10-15, no size.
@@ -16,7 +72,7 @@ Today the answer cannot be given, for these reasons:
 2. **The report has never read a real store.** `coai-mcp --round-authors` ([E6](../research/PLAN_a_round_records_who_wrote_the_code_and_how_much_E6.md), #864) is merged. Its cells for the older rounds are empty or `provisional` until the backfill runs.
 3. **Nobody has checked a backfilled row against a transcript.** The plan asks for ten rounds per side, checked by a judge who wrote none of the code, before any number is published.
 4. **Two scripts that the runs need do not exist.** `git ls-files` shows no `scripts/backfill-preflight-servers.ps1`, no `.sh`, and no `scripts/round-authors-dump.mjs`.
-5. **No release carries the code.** On 2026-10-21 the newest `mcp-v*` tag is `mcp-v0.62.0` (2026-10-19). `git merge-base --is-ancestor` says it contains neither E5 (`bc5b367df`) nor E7 (`42eb3a95a`). A live run needs a released binary on both sides.
+5. **The release exists, but no running server is proved to be on it.** *(Updated 2026-10-23.)* `mcp-v0.63.0` and `extension-v0.83.0` (2026-10-21) contain E5 (`bc5b367df`), E6 (`20c35f026`), E7 (`42eb3a95a`) and #896 (`9134099c0`), checked by `git merge-base --is-ancestor`. Nothing yet shows that every running `coai-mcp` on each side was started from that release, which is N1's job. *(Before the release, 2026-10-21:)* A live run needs a released binary on both sides.
 
 The goal of this plan: **the owner's question is answered from a `research/RESULTS_who_wrote_the_code_under_review.md` file, every figure of which traces to a kept output of the two modes, after a backfill that changed no live row it should not change.**
 
@@ -242,8 +298,10 @@ Run C# tests from the executable, never `dotnet test`: `dotnet build dew_flow_co
 
 1. Approval of the Windows run (N7), before it starts.
 2. Approval of the WSL run (N8), before it starts.
-3. The release date: N5 waits for a release that contains E5, E6 and E7.
+3. ~~The release date: N5 waits for a release that contains E5, E6 and E7.~~ **Settled 2026-10-21:** `mcp-v0.63.0` and `extension-v0.83.0` carry them.
 4. Whether the `;`-in-path question of §7 becomes its own plan.
+5. Whether to start the preparation that writes no live store (the epic split and N1–N5) before items 1 and 2 are given. The question consultant said yes (§0).
+6. Whether the five older E7 questions are closed by this plan as §0 lists them. The question consultant said they are.
 
 ## Definition of Done
 
@@ -251,7 +309,7 @@ Run C# tests from the executable, never `dotnet test`: `dotnet build dew_flow_co
 - [ ] N1 and N2 are committed with their tests green; N3 is committed with its RED run reported.
 - [ ] N1 checks the running process: every running `coai-mcp` started after the installed binary's last-write time, and an unreadable start time exits 1. Every `--version` call has a 5-second timeout that kills only the script's own child by process id. The `.sh` scripts are LF-only (`scripts/*.sh text eol=lf` in `.gitattributes`, and a first-line CR guard), and a test covers the hung binary, the stale process and the CRLF copy.
 - [ ] N2 uses the Python 3 `sqlite3` module, read-only, on both sides, with the invocation contract (arguments, output file, exit codes 0, 65, 74) tested.
-- [ ] A release carrying E5, E6 and E7 exists. Its tag and `coai-mcp --version` per side are in the RESULTS file.
+- [ ] A release carrying E5, E6 and E7 exists (`mcp-v0.63.0`, 2026-10-21 — this half is met). Its tag and `coai-mcp --version` per side are in the RESULTS file.
 - [ ] N1 exited 0 on each side before that side's first write.
 - [ ] The rehearsal on a copy passed on each side, in parts a to e: the redirection variable `COAI_DATA_DIR` was proved by code and by a read-only one-shot that reported the copy's round count; the live store's last-write times and `data_version` did not change; the writing rehearsal and its second run passed; the deferred-session path was exercised. The shaper-regime decision is written. The predictions and the sample rule were written before the first run.
 - [ ] Each live run had the owner's written approval, a dry run of the same binary over the same store the same day, and a verified backup made by the run itself before it wrote.
