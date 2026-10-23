@@ -1,6 +1,6 @@
 # PLAN — E5 stories: tests that wait for an event (the last epic)
 
-> Status: **plan only, nothing implemented yet, 2026-10-22.** Epic E5 — the last — of
+> Status: **in progress, 2026-10-23 — S2–S12 built and merged on `docs/suite-e5-stories` (checkpoint 1 code round passed and its fixes are in; S2–S12 each built RED-first with their status blocks below); S1 (C22) built on `feat/suite-e5-s1` (its own PR); open: the checkpoint 2 code round over S4–S12, S13 (the diagnosis loops, needs a quiet machine), the final code gate, the E5 PR, the five-epic feature gate; nothing of E5 is on `main` yet.** (Planned 2026-10-22.) Epic E5 — the last — of
 > [PLAN_the_suite_is_deterministic_and_leaves_no_temp.md](PLAN_the_suite_is_deterministic_and_leaves_no_temp.md) (its
 > `### E5`, including the "E5 intake" paragraph the E4 judge round added and the cadence consult for epics 4-5, `15f733c7`).
 > Branch `docs/suite-e5-stories`, cut from `feat/suite-e4-clock` at `78d91db55` (E1–E4; E4 is PR #916, not yet merged —
