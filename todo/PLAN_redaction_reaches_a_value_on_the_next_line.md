@@ -1,6 +1,6 @@
 # PLAN — Redaction reaches a value on the next line
 
-> Status: **partly built, 2026-10-23 — S1 and S2 are built (see *S1+S2 — status* after the build order); S3 (the product
+> Status: **partly built, 2026-10-23 — S1, S2 and S2b are built (see *S1+S2 — status* and *S2b — status* after the build order); S3 (the product
 > checks, the docs, Q6) and S4 (the gated swallow) are open.** Revised the same day after the coai plan round (a0bc0720,
 > proceed) and two consults (cadence a1c21b20, risk f1d48728); every point verified against the code and folded (see the
 > last section). Scope: `src_mcp/core/Notices/Redaction.cs` (one new procedural pass beside `PrivateKeyBlocks`, one
@@ -463,7 +463,7 @@ loop, and `EveryPattern_IsNonBacktrackingOrSaysWhyNot` stays green with six patt
 Nothing exceeds 100 ms — the "130 ms or less over 200 KB" class of the existing patterns. `SafeText` costs more than the other two
 on line-heavy text because it builds the printable string twice (the two strips).
 
-**Residuals found while building, not in D11.** (a) A YAML LIST under a credential-named key (`api_key:` LF `  - FAKE-1`):
+**Residuals found while building, not in D11 (a and c were then cured by S2b, below).** (a) A YAML LIST under a credential-named key (`api_key:` LF `  - FAKE-1`):
 the first token of the next line is the dash, so the pass masks the dash and leaves `FAKE-1` — measured, `SafeSource` answers
 `api_key:` LF `  [redacted] FAKE-1` LF `  - FAKE-2`; the one-line rule has always masked the dash of `api_key: - FAKE` too. A list
 item is a plausible continuation; skipping a leading `- ` is a one-line change in both halves if the lead wants it.
@@ -484,6 +484,86 @@ byte. `plan-lifecycle.mjs`: clean. **An earlier whole run failed four tests** (`
 wall-clock bound, a "started by now" bound, a shared temp folder). Measured cause: I had started TWO whole suites of this
 worktree at once, on a machine where a third session was running its own. The four passed alone (30 of 30) and the clean whole
 run above passed all of them; recorded so the failure is not read as a property of the change.
+
+### S2b — status: built 2026-10-23 (the lead's two decisions on the S1+S2 findings; S3 and S4 not started)
+
+Two findings of the S1+S2 build were decided by the lead and built on this branch, same method (RED on the code before, GREEN,
+break-its restored by writing the file and rebuilding, both halves, parity corpus). **They change what S1+S2 recorded above:**
+residuals (a) and (c) of that block are CURED, and D3's two block evidences are narrower for an `=` label (see 2 and deviation 1).
+
+1. **A YAML list under a credential key.** A plain continuation line whose first non-blank is `- ` masks the VALUE after the dash
+   and keeps the dash — and so does every CONSECUTIVE item of the same indentation after it (`MaskListItems`): `api_key:` LF
+   `  - FAKE-CANARY-L1` LF `  - FAKE-CANARY-L2` → `  - [redacted]` twice. An item that is itself an assignment (`- name: ci`) ends the
+   list and is left to the labelled rule; a deeper or non-item line ends it. The evidence is still S1's (deeper indent, quote,
+   backslash): the list must be indented under its key.
+2. **A label whose separator is `=` never opens a block.** `WithoutTheKey =`, `type KeyRead =`, `TheRoundsKey = """` are code
+   assignments. The pass takes AT MOST the one next line after such a label, and only when it is value-shaped (`IsValueShaped`): one
+   token, optionally quoted, no space, quote, bracket, brace or parenthesis inside, not starting with `|` or `<`, at most a trailing
+   `,` or `;` — so never `new X(…)`, `| { … }`, `[a, b]`, `(expr)`, a heredoc or a raw-string body. An indicator or a triple quote
+   on the `=` label's line counts as the evidence (`password = """` LF `FAKE` is still masked). `:` labels (YAML, JSON, headers,
+   `password: """`) keep their blocks. No look-ahead: the rule is procedural, the regex is unchanged and stays `NonBacktracking`.
+
+**RED first, on the S1+S2 code (exact messages).**
+
+| Test | Seen red as |
+|---|---|
+| `AYamlList_UnderACredentialKey_…` | `Did not expect source "api_key:\n  [redacted] FAKE-CANARY-L1\n  - FAKE-CANARY-L2\nname: visible" to contain "FAKE-CANARY-L".` |
+| `AListItem_WithAQuotedValue_…` | `Expected Source(quoted) to be the same string, but they differ on line 2 and column 3 (index 10): "tokens:\n  [redacted]." / "tokens:\n  - "[redact."` |
+| `AListThatStopsBeingAList_EndsTheMasking` | `Did not expect safe "api_key:\n  [redacted] FAKE-CANARY-L1\n    nested continuation\n  - FAKE-CANARY-L2\nother: x" to contain "FAKE-CANARY-L1".` |
+| `ACodeAssignment_IsServedByteForByte` — `WithoutTheKey =` (the `KeyVault.cs` shape) | `Expected Source(given) to be the same string because KeyVault.cs, but they differ on line 2 and column 5 (index 81): ".=\n    [redacted]." / ".=\n    new Dictionary."` |
+| the same — `type KeyRead =` (`chatStoreImport.ts`) | `… but they differ on line 2 and column 3 (index 17): ".KeyRead =\n  [redacted] {." / ".KeyRead =\n  | { readonly."` |
+| the same — `TheRoundsKey = """` (`Schema.cs`, the SQL body) | `… but they differ on line 2 and column 5 (index 45): ".= """\n    [redacted]\n   ." / ".= """\n    ALTER TABLE."` |
+| the same — `var token =` LF `(await …)`, `const secret =` LF `[first, second];` | `… ".token =\n    [redacted]." / ".token =\n    (await."`; `… ".secret =\n  [redacted],." / ".secret =\n  [first,."` |
+| `AnAssignment_TakesAtMostTheOneNextLine_AndNeverOpensABlock` | `Expected Source(given) to be the same string, but they differ on line 3 and column 3 (index 28): ". [redacted]\n  [redac." / ". [redacted]\n  FAKE-S."` |
+| `AnAssignmentWithAValueShapedNextLine_IsStillRedacted` (4 rows, the `client_secret =` LF `  FAKE-CANARY-EQ1` control), `AColonLabel_KeepsItsBlocks` | **green before and after** — the controls |
+| `labelContinuations.test.ts` S2b rows (the S1+S2 port against the new tests) | `actual: 'api_key:\n  [redacted] FAKE-CANARY-L1\n  - FAKE-CANARY-L2\nname: visible'`; `actual: 'private static readonly … WithoutTheKey =\n    [redacted] Dictionary<string, string?> { [KeyVariable] = null };'`; `actual: "secret = '''\n  [redacted]\n  [redacted]\n'''"` |
+
+**Break-its (the file restored by writing it and rebuilding, checked byte for byte).** (9) the list branch disabled: 3 red
+(the list, the quoted list, the broken list). (10) an `=` label opens its blocks again: 2 red (`Schema.cs`, the one-next-line row).
+(11) the value-shape test removed: 5 red (the five code shapes). (12) one-sided parity, the S1+S2 TypeScript port against the new
+corpus: `safeText at 1000` differs — first diffs `api_key:\n  - FAKE-CANARY-L1\n  - FAKE-CANARY-L2\nname: visible` (TypeScript
+`api_key:  [redacted] FAKE-CANARY-L1  - FAKE-CANARY-L2name: visible`, C# `api_key:  [redacted] [redacted]  - [redacted]name: visible`) and
+`secret = '''…` (TypeScript masks the second line, C# does not).
+
+**Moved on purpose (the plan's "pins that move").** `ATripleQuotedValue_OfSeveralLines_…` and `AnUnclosedTripleQuote_…` (and the
+TypeScript twin) now use a `:` label — the block behaviour they pin; the `=` TOML shape of S-16 (`password = """` LF one token
+LF `"""`) is unchanged and green. The hang shape `unclosed-triple-quote` uses `password: """`; two shapes were added
+(`assignment-lines`, `list-items`) at both sizes through the three entry points, under the `Ceiling`.
+
+**Repository-wide re-measure** (the same probe, the 2 885 `.cs`, `.ts`, `.md`, `.json` files of `src_mcp`, `src_vs_code/src`,
+`research`): the pass changed **11** files before S2b and changes **5** now. The three `=` shapes are gone (`KeyVault.cs`,
+`chatStoreImport.ts`, `Schema.cs`), and so is the rest of the `=` class. What remains, all `:` labels:
+`AskApiMode.cs:227` (`case ApiOutcome.KeyRefused:` — a switch label), `panelProvider.ts:2795` (`case 'setBugsKey':`),
+`claudeAdapter.ts:114` (`tokensIn:` LF `count(usage[…])` — an object property), `help.ts:178` (`credsKey:` LF a quoted sentence — an
+object property), and `ProbeApiModeTests.cs:64` (a string literal ending `Authorization: "` before a `+` continuation).
+A `case X:` label is the one remaining class worth a narrowing (a label whose line begins with `case ` is a switch label, never a
+mapping key); not built — the lead said `:` labels keep today's behaviour.
+
+**Deviations and consequences.**
+1. **A multi-line TOML triple-quoted secret under `=` is no longer fully masked.** `secret = '''` LF `  FAKE-FIRST` LF `  FAKE-SECOND`
+   masks the first line only; the second stays (measured: parity row `secret = '''…`, and `AnAssignment_TakesAtMostTheOneNextLine_…`
+   pins it). This is the price of the lead's rule: `TheRoundsKey = """` and `password = """` are the same shape to a line reader.
+   A line that STARTS with the label (only indentation or a quote before it) is a config assignment, a line with a type or a keyword
+   before it is code — a narrowing that would keep multi-line TOML and still spare `TheRoundsKey`. Not built; the lead decides.
+2. **"The one next non-blank line" is the immediate next line.** A blank line after an `=` label declines (S1's one-break rule,
+   D3), as for every plain continuation.
+3. **A list item at the label's own indentation** (`key:` LF `- a`, valid YAML) is not evidence — the evidence is S1's, so only an
+   item indented under its key is reached. On the notice road the strip glues the list into `api_key:  - [redacted]  - [redacted]`
+   and the labelled rule masks the first dash as well; the canaries are gone either way.
+4. **Only the first token of an item** (`- FAKE one two`) is its value, as everywhere else.
+
+5. **CI found what the local runs did not: `eslint` holds `src/**` to a cyclomatic complexity of 4.** The first push of S1+S2
+   (run 40004943400) was green on every .NET job and red on `extension · typecheck · test · package`, step *Lint*: ten functions of
+   `labelContinuations.ts` over the limit (`readOpening` 16, `isAssignment` 20, `maskPlain` 11…). `npm test` does not lint; `npm run
+   lint` does, and was not in this plan's test list. `labelContinuations.ts` is rewritten as small functions (nothing over 4,
+   `eslint-suppressions.json` untouched — new code is held to the rule); the C# half keeps its longer methods, which no rule
+   limits. The two answer identically: parity 1 090 shapes byte for byte, `labelContinuations.test.ts` 23 of 23. **`npm run lint`
+   belongs in the extension's Definition of Done for any story that adds a `.ts` file.**
+
+**Suites (the committed code, as executables).** `CoaiMcp.Tests.exe` whole through `low-priority.mjs`: 13 743 tests, 13 622
+passed, 0 failed, 121 skipped, 19 min 18 s (an earlier run of this series ended without a summary — another session stopped
+it by PID — and was rerun alone). `npm test`: 6 532 tests, 6 530 passed, 0 failed, 2 skipped; `npm run lint`: clean;
+`npm run test:parity`: 1 090 shapes at both limits, 5 records, 17 codes, byte for byte; `plan-lifecycle.mjs`: clean.
 
 Releases: one coai-mcp release and one extension release carry S1–S3 together (the notice road is shared, D9); the
 server release is the one that closes R1 on the served-file and stderr roads.

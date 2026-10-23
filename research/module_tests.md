@@ -5658,4 +5658,15 @@ every line break in a fixture is a REAL one. Every test was seen red on the unfi
 | `labelContinuations.test.ts` (S-1 … S-16 through `safeText` and the pass alone, S-11, the linearity row) | *AssertionError … {  "nested": {    "api_key":        "FAKE-CANARY-0002"  }}*; *X-Api-Key:     FAKE-CANARY-0006*; 8 of its first 9 red | the TypeScript evidence moved: S-3, S-15 and the base64 row red |
 | `npm run test:parity` (R1–R11, the child container, blank lines in a block, a two-line scalar, control bytes and Unicode spaces beside a label, the 4 096 token bound, a record with R1 and R4b) | green before (both halves leave the shapes alone) and after | the pass not called in `safeText` only: *safeText at 1000: 101 of 936 cases differ — one half of this product would write a secret the other would have taken out* |
 
+**S2b (2026-10-23): a YAML list, and a code assignment is not a block.** The same class (69 rows now), `labelContinuations.test.ts` (23), 154 more parity rows (1 090 shapes), two hang shapes (`assignment-lines`, `list-items`).
+
+| Test | Seen red as | Break-it (went red) |
+|---|---|---|
+| `AYamlList_UnderACredentialKey_…`, `AListItem_WithAQuotedValue_…`, `AListThatStopsBeingAList_…` | *Did not expect source "api_key:\n  [redacted] FAKE-CANARY-L1\n  - FAKE-CANARY-L2\nname: visible" to contain "FAKE-CANARY-L".* | the list branch disabled: 3 red |
+| `ACodeAssignment_IsServedByteForByte` (`WithoutTheKey =`, `type KeyRead =`, `TheRoundsKey = """`, `var token =` LF `(…)`, `const secret =` LF `[…]`) | *Expected Source(given) to be the same string because KeyVault.cs, but they differ on line 2 and column 5 (index 81): ".=\n    [redacted]." / ".=\n    new Dictionary."* (one row each) | the value-shape test removed: 5 red |
+| `AnAssignment_TakesAtMostTheOneNextLine_AndNeverOpensABlock` | *… differ on line 3 and column 3 (index 28): ". [redacted]\n  [redac." / ". [redacted]\n  FAKE-S."* | an `=` label opening its blocks again: 2 red (this and the `Schema.cs` row) |
+| `AnAssignmentWithAValueShapedNextLine_IsStillRedacted` ×4 (`client_secret =` LF `  FAKE-CANARY-EQ1`), `AColonLabel_KeepsItsBlocks` | green before and after — the controls | — |
+| `labelContinuations.test.ts` S2b rows | *actual: 'api_key:\n  [redacted] FAKE-CANARY-L1\n  - FAKE-CANARY-L2\nname: visible'* | — |
+| `npm run test:parity` (list, code-assignment and `=`-control shapes) | green before only as an unbuilt corpus; red with the S1+S2 port: the `api_key:` list and `secret = '''…` rows differ | the S1+S2 TypeScript port against the new corpus |
+
 NOT covered here (S3): the product legs — an ACP stderr of 64 Ki through `TheStderrLineIsQuotedSafelyTests`, and `ServerNoticeLine` written / the extension's parser read.
