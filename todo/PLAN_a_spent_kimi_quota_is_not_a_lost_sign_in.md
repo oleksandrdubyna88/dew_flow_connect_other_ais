@@ -1,6 +1,6 @@
 # PLAN — a spent Kimi quota is not a lost sign-in
 
-> Status: **partly built, 2026-10-21: stories 1–4 merged in #900 (released in coai-mcp 0.63.0); story 5 (the MONTHLY quota, seen 2026-10-21) is CODED 2026-10-21 (D8–D10, S10–S13; see "Story 5 — built" below); the capture step (§5 step 1) has NOT run, so the real ACP sentence is
+> Status: **partly built, 2026-10-23: stories 1–4 merged in #900 (released in coai-mcp 0.63.0); story 5 (the MONTHLY quota) merged in #915; the feature gate ran its two rounds — round 1 blocking security fix merged in #917, round 2 proceed; its three tails are PR #921 (its CodeRabbit round is fixed: module_tests.md records 11 cases, and AcpAgent.Step dispatches through a handler table); none of #915/#917/#921 is released yet; the capture step (§5 step 1) has NOT run (the owner's Kimi quota is spent until ~2026-11-13), so the real ACP sentence is
 > still unmeasured, and the plan is NOT promoted.** Deviations are in §8 (story 3). The 0.61.0 and 0.62.0 releases shipped (tags
 > `extension-v0.61.0`, `extension-v0.62.0`), so the owner's "release first, fix after" block is lifted. The plan gate ran once
 > (session def84902, `good_enough`, 11 findings, all accepted), an Opus judge read it (12 findings, all verified by the lead)
@@ -564,3 +564,33 @@ Every case asserts no fragment of the secret in the diagnosis line, the shim's r
   is passed LAST through `Redaction.SafeText(window, LineCap)` — this supersedes "no second `SafeText`" in the build note above. The second pass reads at most `LineCap` characters of already-redacted text and can only take more out.
 - **`AcpClient` copying `StdErrTruncated` had no test.** Added through the real client and the fake agent. The finding proposed `FakeAcpAgent.Spew`, but `spew` writes on STDOUT (the protocol stream), so the fake agent gained a `stderr` step.
 - **`research/module_tests.md` said `WindowLeadIn` and `LineCap` were "both public now".** At HEAD, `WindowLeadIn` is `internal const` (T5) and `LineCap` is `public const`; corrected.
+
+## The feature gate (round 2, the last, 2026-10-22, verdict proceed) — 2 minor findings, both accepted; fixed in a new PR
+
+Round 2 read the whole plan again over the review view with #917 in it (base `9134099c0`); the blocking finding of round 1 is closed.
+Two minor findings, verified against `151cc6526` and accepted:
+
+- **T1 — a NON-spent diagnosis found only on stderr loses its evidence.** `AskAcpMode`'s `DiagnosedNote` (`src_mcp/src/Acp/AskAcpMode.cs`
+  ~:323) builds the shim's note from `outcome.Reason` alone. When the reason names no row (`Internal error`) and stderr holds
+  `Authentication required: 503 Service Unavailable`, the diagnosis is `provider_error` with a matched line, but the note — which the
+  executor keeps and `ReviewerSummaryFactory` prefers — says only `Internal error`; the summary, ledger and log lose the provider's
+  sentence. The same for a Refused diagnosis found only on stderr. **Fix:** when `diagnosis.Line` is non-empty (already redacted and
+  cut by `LineWith`), the reason handed to `diagnosis.Note` carries it (`<reason> (the agent's stderr: <line>)` or the neighbouring
+  wording), the cure still LAST so `WithoutCure` keeps working. RED: a product scenario — reason `Internal error`, stderr `Authentication
+  required: 503 Service Unavailable` — whose summary/ledger/log today lack the 503 sentence; and a Refused (`not_signed_in`) twin.
+- **T2 — a reset clause quoted from a stderr-only line swallows the runtime's closing parenthesis.** `KimiRuntime.Quoted` wraps the
+  matched line as `(Kimi said: <line>)`; `KimiQuotaWords.ClauseOf` ends a clause at a period FOLLOWED BY WHITESPACE (`~:64`), so a line
+  ending `Your quota will reset at 14:00 UTC.` yields `Your quota will reset at 14:00 UTC.)`. **Fix:** take the clause from the vendor's
+  own words (the reason and the matched line, unwrapped) before any runtime punctuation is added — or end a clause at a period followed by
+  whitespace OR the end of the text OR a closing parenthesis the runtime added; the first is preferred (no punctuation guessing). RED: a
+  stderr-only `… Your quota will reset at 14:00 UTC.` at the line's end → the quoted clause has no `)`.
+
+Docs with the fix: `research/module_runners.md` (the note carries the matched line for every diagnosis found on stderr), `research/module_tests.md`.
+After this PR merges the plan's open items are only the capture step (§5 step 1, waiting for the owner's Kimi quota) and the promotion.
+
+
+**Plan-round addition (coai ac5234cb, accepted) — T3, security: the Moonshot id rule.** The capture step (§5 step 1) writes Kimi's vendor line to the ledger and the log BEFORE the lead reads it, and the rule masked only `org-`/`ak-` plus letters and digits, so an id with an underscore or a hyphen in it (`org-0a1b_2c3d_4e5f`: every segment shorter than the 8-character body) stayed readable, and `org-0a1b2c3d4e5f_6a7b8c9d` left its tail. **Fix:** the body is any run of `[A-Za-z0-9_-]`, 8–128, with at least one digit (the digit still tells an id from a word: `org-settings_panel`, `ak-sorted-words` stay), in `Redaction.cs` AND the extension's `notifications.ts` (the two halves are compared byte for byte by `run-parity.mjs`), each with its own test.
+
+**Built 2026-10-22** (branch `fix/kimi-evidence-tails`, on main after #917). T1: `AcpDiagnosis.Said(reason)` quotes the matched stderr line as `<reason> (the agent's stderr: <line>)` and `AskAcpMode.DiagnosedNote` hands that to `Note`, the cure still LAST; `KimiRuntime` reads the report, not the note, so no road quotes a line twice. T2: `KimiQuotaWords.ClauseOf` ends a clause at a period followed by whitespace, before a closing parenthesis the clause did not open (counted, `ClauseEnd`), or at the end of the text. **Deviation:** not the plan's first-preferred "clause from the vendor's unwrapped words" — the clause is computed in `VendorDiagnosis.CureOn` from composed strings (the scheduler's reason and the shim's stderr tail), where no unwrapped text exists, so the plan's second option was built, exact by depth rather than by guessing punctuation; the open edge (a vendor clause with its own unbalanced `(` ahead of our wrapper) is named in `research/module_runners.md`. T3 as above; the extension mirrors the rule and was changed. REDs, break-its and counts: `research/module_tests.md` (feature gate's round 2).
+
+**Code gate (ac5234cb, 2026-10-22, proceed; 8 of 12 — Gemini's quota out): 8 findings, 7 accepted, 1 rejected.** Accepted, each RED first (`research/module_tests.md`): **G-A (findings 1, 2, 7, one root cause)** — the runtime's own parentheses around the vendor's line made every parenthesis-counting rule in `ClauseOf` break on vendor parentheses; the fix is at the root: `KimiRuntime.Quoted` is `<said>; Kimi said: <line>`, `AcpDiagnosis.Said` is `<reason>; the agent's stderr: <line>` (the cure still LAST; `; ` because ` — ` is the cure separator `WithoutCure`/`CurelessReason` read by, and a bracket could be closed or confused by the vendor's own), `SpentReason` puts the table's phrases before the quoted line, and `ClauseOf` is back to "a period followed by whitespace, or the end of the text". The statement above that the clause stops at an unopened `)` is superseded. **G-B (3, 4)** — `AcpDiagnosis.Said` passes the line through `Redaction.SafeText(Line, LineCap)` again. **G-C (6, security)** — the Moonshot id body is bounded at 4096, not 128, so a longer id is masked whole (both halves, parity). **G-D (0)** — checked: `run-parity.mjs` runs in the required `build · test · family checks` job; nothing to add. Rejected: dropping the digit requirement (`org-settings-panel` and `org-settings_panel` would be masked; the plan's capture step already says to widen the pattern if the first real id has none).

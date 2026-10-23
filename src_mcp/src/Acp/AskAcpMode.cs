@@ -319,9 +319,12 @@ internal static class AskAcpMode
     private static bool Diagnosed(AcpEnd end, AcpDiagnosis diagnosis) =>
         diagnosis.Known && end is not (AcpEnd.Deadline or AcpEnd.Cancelled or AcpEnd.ModelNotOffered);
 
-    /// <summary>A known failure's sentence: its name, the agent's reason, and the cure — when there is one (a known shape with no cure ends at the reason).</summary>
+    /// <summary>
+    /// A known failure's sentence: its name, the agent's reason, the stderr line the failure was found in (when the reason did not hold it — <see cref="AcpDiagnosis.Said"/>), and the cure — when there is one
+    /// (a known shape with no cure ends at the reason). The cure stays LAST, so <see cref="AcpDiagnosis.WithoutCure"/> reads the note back.
+    /// </summary>
     private static string DiagnosedNote(AcpOutcome outcome, AcpDiagnosis diagnosis) =>
-        diagnosis.Note(outcome.Reason);
+        diagnosis.Note(diagnosis.Said(outcome.Reason));
 
     /// <summary>A known failure's exit: a spent allowance, the agent's own failure in a known shape, or a refusal.</summary>
     private static int DiagnosedExit(AcpFailureKind kind) => kind switch
