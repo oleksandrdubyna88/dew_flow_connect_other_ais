@@ -1,0 +1,366 @@
+# PLAN — the codex, agy and claude reviewers get what Kimi got: a failure is classified from the CLI's own words, and what the person reads is whole, cured and redacted
+
+> Status: **plan only, nothing implemented yet, 2026-10-23.** Scope: `src_mcp/runners/Reviewers/ReviewerExecutor.cs`
+> (`RateLimit`, the stderr tail, the kept evidence), `ReviewerRuntime.cs` (`CodexRuntime`), `ClaudeRuntime.cs`,
+> `AntigravityRuntime.cs`, `BoundedScheduler.cs` (the summary line), `VendorDiagnosis.cs`, `VendorProbe.cs`,
+> `src_mcp/runners/Files/EvidenceFile.cs`, `src_mcp/core/Notices/Redaction.cs` with its mirror
+> `src_vs_code/src/notifications.ts` (one story, ordered AFTER the redaction plan on `docs/redaction-across-lines`),
+> their tests, `research/module_runners.md` and `research/module_core.md`. Exactly six items — R1, R3, R4, R5, R6, R8 —
+> in three epics. Two owner questions (R2 the environment, R7 the branch's own configuration) are **not in scope**: they
+> are listed in §9 with options and a recommendation only, and no story here builds on them. **This plan adds NO new
+> refusal of any kind** (owner decision 2026-10-23: nothing may be refused only because it is unmeasured — a note, never
+> a refusal).
+>
+> Related docs: [module_runners.md](../research/module_runners.md) (§*What counts as hopeless* :1193, §*A stated reset is
+> never waited out locally* :1229, §*WSL, measured* :874), [module_core.md](../research/module_core.md) (`Redaction`, :58–60),
+> [PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md](PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md) (the Kimi work this
+> plan mirrors), [PLAN_the_claude_reviewer_is_confined_by_an_allowlist.md](PLAN_the_claude_reviewer_is_confined_by_an_allowlist.md)
+> (R2/R7 touch the same reviewer), `todo/PLAN_redaction_reaches_a_value_on_the_next_line.md` (on branch
+> `docs/redaction-across-lines`, not on `main` yet — E3.S5 lands after it; see §4).
+
+## 1. The symptom, and the goal
+
+The owner asked: Codex and Antigravity (agy) were added much faster than Kimi and Vibe — do they need any of the work
+Kimi and Vibe got? A read-only scout read `origin/main` (151cc652) and ranked eight gaps; every line below was then
+re-read in the code before it was cited (§2 records where the scout was off).
+
+**The headline (R1) breaks work and spends money.** `RateLimit.Hit` (`ReviewerExecutor.cs:333-334`) says a launch
+was rate limited when the exit is non-zero AND a phrase or a status code appears **anywhere in stdout or stderr**
+(`:336-337`; the phrases `:301-302`: *rate limit*, *usage limit*, *quota*, *unavailable*, *high demand*, …). The
+executor asks the adapter first (`:1010`) — but only Kimi overrides it (`KimiRuntime.cs:277-285`); codex, claude and
+agy fall to the default `RateLimitVerdict.ByText` (`ReviewerRuntime.cs:535`, `ReviewerExecutor.cs:275-276`).
+
+For those three, stdout is not an error channel:
+
+| CLI | what stdout holds on a failed launch | where its real failure is |
+|---|---|---|
+| codex (`--json`, `ReviewerRuntime.cs:660`) | the whole event stream — agent messages, command output, up to megabytes (`:712-713`) | `{"type":"error"}` / `{"type":"turn.failed"}` events, already parsed by `CodexRuntime.WhyItFailed` (`:707-729`); stderr |
+| claude (`--output-format json`, `ClaudeRuntime.cs:93`) | the envelope, whose `result` is the review's own text | `is_error: true` with `result` as the sentence, already parsed by `ClaudeRuntime.WhyItFailed` (`:153-174`); stderr |
+| agy (`--output-format stream-json`, `AntigravityRuntime.cs:54`) | NDJSON events including the model's text | stderr (`AGY_ERROR: {"short_error":"RESOURCE_EXHAUSTED (code 429) … Resets in 88h49m9s"}`, fixture `src_mcp/tests/fixtures/antigravity/consult-quota.stderr.txt`) |
+
+A review of coai's own code says *quota*, *rate limit* and *usage limit* often — this repository is about them. So any
+non-zero exit of a codex, claude or agy reviewer whose stdout mentions one of these words is reported as **rate
+limited**; the ladder (`BoundedScheduler.cs:617-669`, `RetryLadder.Default` `:28-34`: 5 s, 30 s, 60 s, 120 s) relaunches
+it **up to four more times**, each a paid launch, each with its own repair launch possible; and `RateLimit.Reason`
+(`:394-402`) quotes the first marked line of stdout — for codex a whole JSON event line, for claude the whole envelope
+— as *the reason*, cut at 160 characters for the cell (`:804`) and 4 000 for the ledger. If that stdout line happens to
+hold *exhausted* or *daily*, `Hopeless` (`:373-374`) stops the ladder and the consultation path files it as a
+**Quota** (`ConsultFailures.cs:88`) — a wrong class said with confidence. Kimi got exactly this fix on 2026-10-20
+(E4.4 of the Kimi runtime plan: a path named `quota.cs` in the trace is not a rate limit, `ReviewerRuntime.cs:530-532`).
+
+**The goal.** For codex, claude and agy, as for Kimi:
+
+1. a launch is rate limited only when the CLI's **own error channel** says so (E1);
+2. the words that are known to be a limit are in the lists — codex's *session limit* and claude's *monthly spend
+   limit*, both already recorded in this repository, are not (E1);
+3. what the person reads is whole where it matters (agy's stated reset is cut mid-number in the cell), carries a
+   cure for the one agy failure that has none, and warns about an unmeasured agy version the way Vibe's does (E2);
+4. every vendor line that reaches a note, a file or a card is redacted before it is cut, on every road (E3).
+
+Two questions the owner has to answer (R2, R7) are written down in §9 with options and a recommendation; they are not
+in this plan's scope and get their own plan if the owner says yes.
+
+This plan creates no growth surface: no table, directory, cache or spawned process is added.
+
+## 2. What was verified, and where the scout was off
+
+Every reference below was read in the worktree at 151cc652. Three scout claims needed correction:
+
+| # | scout said | verified |
+|---|---|---|
+| R1 | `RateLimit.Hit` ~:333-336, `Reason` ~:394 scan all stdout; Kimi override ~:277; codex parser ~:707; claude `is_error` ~:153 | all as stated: `Hit` `:333-334`, `Marked` `:336-337`, `Reason` `:394-402`, `KimiRuntime.RateLimited` `:277-285`, `CodexRuntime.WhyItFailed` `:707-729` (`CodexRuntime` is declared at `ReviewerRuntime.cs:587`; `DeepseekRuntime` `:805` inherits it, so it gets the fix for free), `ClaudeRuntime.WhyItFailed` `:153-164`, `SaysItFailed` `:173-174`. The seam exists: `IReviewerRuntime.RateLimited` `:535`, asked at `ReviewerExecutor.cs:1010` |
+| R3 | 160-char cut `BoundedScheduler.cs` ~:804, loss recorded `VendorReason.cs` ~:11 | `ReasonLength = 160` `:804`, used by `Describe` `:747`; the ledger/log road `DescribeWhole` `:763-764` is already whole (4 000). `VendorReason.cs:9-12` records *…Resets in 110h12m4…*. The cell cut is in `Because` → `Quote` `:914-915` → `Cut` `:881` |
+| R4 | *session limit · resets 9:30pm* ~:204, claude *monthly spend limit* ~:143 not in `Phrases`/`Spent` | `CooldownParser.cs:203-204` (codex, captured 2026-09-05 on the VM) and `ClaudeRuntime.cs:142-145` (measured 2026-09-29, 44 benchmark cells lost). Neither phrase is in `Phrases` `:301-302` nor `Spent` `:357`. The claude envelope's `"api_error_status":429` does NOT match `StatusCode` `:325-331` either (`\bstatus\b` needs a boundary and `_status` has none) — so today that failure is an `exit 1` with the sentence as `FailureReason`, never a limit, never a quota |
+| R5 | no not-signed-in row for agy; observed *authentication timed out* `module_runners.md` ~:931; install command `VendorDiagnosis.cs` ~:347 | `module_runners.md:928-935`; `VendorDiagnosis.InstallCure` `:347-348`; the `Known` table `:55-125` has no agy row at all. **Nuance the scout missed:** `AntigravityOnLinuxTests.cs:85-99` pins that no vendor-table string contains `agy.exe` (refuted advice is offered nowhere) — the new cure must respect that |
+| R6 | redact before the cut in `OpeningOfLastLine` ~:474-480; `VendorProbe.cs` ~:272-274; evidence `:521` + `EvidenceFile.cs` ~:43-48; `e.Message` ~:534; shapes `Redaction.cs` ~:83 | `OpeningOfLastLine` `:474-480` cuts with `VendorReason.Capped` and redacts nothing (the redaction happens later, in `Quote` `:914-915`, on the already-cut text — the opposite of the rule `:909` states); `VendorProbe.Refused` `:264-275` puts `said` (uncapped, unredacted) into the health note; `KeepIn` `:516-525` hands raw text to `EvidenceFile.Keep` `:43-61`, whose `Bounded` `:64-67` only cuts; the empty-answer transcript `Transcript` `:729-730` is whole stdout+stderr (`:1072`). **The `e.Message` note is at `:525`, not ~:534.** `VendorPattern` `:83-84`. **The scout named only the C# side: `Redaction.cs:9-14` is a byte-for-byte PORT of `src_vs_code/src/notifications.ts` (`:183` holds the same vendor list), held by a parity corpus — a new shape lands in both halves or in neither** |
+| R8 | agy has no `VersionWarning` (~:373 default empty); model pinned ~:37; nothing checks which model ran | `ReviewerRuntime.cs:373` default; `AntigravityRuntime.cs` overrides neither `VersionWarning`, `WhyItFailed`, `RateLimited` nor `Disowned`; `DefaultModel` `:37`; the probe applies the warning `VendorProbe.cs:234`; the card draws it `modelCard.ts:202` (`versionWarningNote` reads `providers[].warning`, `module_extension.md:13023`). `VersionWarnings.Unmeasured` `:23-24` is the one builder. The research names agy 1.3.2 and 1.3.3 as measured (`RESULTS_vendor_quota_gauges.md:222,238`) |
+| R2 | codex/agy/claude inherit the whole server environment (`ProcessLauncher.cs` ~:99, comment ~:86-98) | `InheritsEnvironment = true` `:99`, comment `:85-98`; none of the three `Build` methods sets it (`ReviewerRuntime.cs:646-677`, `ClaudeRuntime.cs:89-113`, `AntigravityRuntime.cs:47-71`). Kimi (`KimiEnvironment.cs:67-68`), Vibe (`VibeLaunch.cs:99-100`) and question consultants (`ConsultantLaunches.cs:79`) start from `ProcessEnvironment.Minimal`. **The Team server already confines its reviewers** (`src_server/src/Jobs/Confinement.cs:38`: `InheritsEnvironment = !Confined`) — R2 is about the LOCAL `coai-mcp` only, and the server's `Confinement` is the shape to reuse |
+| R7 | codex and claude run inside the reviewed branch | codex: `-C worktreePath` and cwd `worktreePath` (`ReviewerRuntime.cs:654,672`); claude: `--add-dir` and cwd `worktreePath` (`ClaudeRuntime.cs:98,104`). **agy does NOT**: it runs from `AntigravityReadOnly.Home()` with `--add-dir` only when the tree is non-empty (`AntigravityRuntime.cs:62-64,125-128`). The sanitised snapshot is opt-in per adapter (`NeedsASanitisedSnapshot => false`, `ReviewerRuntime.cs:410`; `ReviewSnapshots.cs:13-17` says what it removes). Whether headless `claude -p` runs project hooks is NOT recorded anywhere (`RESULTS_claude_consultant_confinement.md` has no "hook") — a fact to establish |
+
+## 3. What this plan does NOT do (the owner's decision of 2026-10-23)
+
+- **No `HostAdmission` / `MeasuredOnNativeLinux` rows for codex or agy** (`src_mcp/runners/Platform/HostAdmission.cs:25`).
+  An unmeasured host is a note on the card, never a refusal.
+- **No `WslBridge`-style refusal for a Windows `agy.exe` reached from WSL.** It is measured not to finish its sign-in
+  (`module_runners.md:928-935`) — that is a cure row and an optional note (E2.S2), not a door.
+- **No waiting for a "captured real sentence".** R4 and R5 use sentences this repository already recorded
+  (`CooldownParser.cs:204`, `ClaudeRuntime.cs:143`, `module_runners.md:931`).
+- **No copy of Kimi's survivor marker, subreaper or survivor gate** (`KimiSurvivorMarker.cs`, `LinuxSubreaper.cs`,
+  `KimiSurvivorGate.cs`), **no owned-home sign-in copies**, **no sibling-lens stand-down** — those cure Kimi's ACP shim's
+  shape, which these three CLIs do not have.
+- **No "never wait even when a reset is stated".** `RetryLadder.ResetOutlasts` (`:90-91`) is right: a stated reset beyond
+  the budget stops the ladder; one inside it is waited out.
+
+## 4. The boundary with the redaction plan (both sides)
+
+`todo/PLAN_redaction_reaches_a_value_on_the_next_line.md` (branch `docs/redaction-across-lines`, plan only, 2026-10-23)
+changes `Redaction.cs` heavily: a new procedural `LabelContinuations` pass, a widened joiner, the pass ORDER of both roads,
+its mirror and the parity corpus. Two plans editing the same file in the same month need the table the planning
+convention asks for — written here now, and **to be written into that plan's own file when it is on `main`** (its author
+is told through this plan's gate; a boundary named on one side is not a boundary):
+
+| item | which plan builds it | the other's part |
+|---|---|---|
+| a new pass, the pass order, the joiner, the parity corpus's shape | the redaction plan | this plan does not touch them |
+| three new one-line vendor shapes in `VendorPattern` and `notifications.ts:183` (`AIza…`, `ya29.…`, JWT) | **this plan, E3.S5 — after the redaction plan merges** | the redaction plan adds no shape |
+| callers that redact before they cut (`OpeningOfLastLine`, the probe note, kept evidence, the keep-failure note) | this plan, E3.S1–S4 — they call the redactor and do not edit it, so they can land **before** the redaction plan | none |
+
+Order: the redaction plan first for `Redaction.cs` itself; E3.S1–S4 of this plan are independent of it. What is disjoint:
+the redaction plan never changes a caller of the redactor; this plan never changes a pass.
+
+## 5. Build order
+
+1. **E1** — classification. S1 codex, S2 claude, S3 agy (the three overrides), then S4 the phrases. Ships in one coai-mcp
+   release; the Team server's reviewer path uses the same executor (`src_server/src/Jobs/ReviewLauncher.cs`), so it ships
+   there with the next deploy.
+2. **E2** — what the person reads. S1 the stated reset in the cell, S2 the agy cure row (+ optional note), S3 the agy
+   version warning (+ the model fact).
+3. **E3.S1–S4** — redact-before-cut on the four roads. Independent of `Redaction.cs`.
+4. **E3.S5** — the three shapes, both halves, after `docs/redaction-across-lines` is merged. Rebase, then build.
+
+R2 and R7 (§9) are outside this order: an owner's *yes* opens a new `todo/` plan; a *no* is recorded here as a non-item.
+
+Each epic goes through the coai plan gate before its code and the code gate after it, as the Kimi quota plan did.
+
+## 6. Test plan
+
+Tests are xUnit v3 on the Microsoft Testing Platform — **run the executable, never `dotnet test`**:
+
+```bash
+dotnet build dew_flow_connect_other_ais.slnx -c Debug -m:4
+./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-class "*ACodexReviewerIsRateLimitedOnlyByItsOwnErrorEvent*"
+./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-class "*AClaudeReviewerIsRateLimitedOnlyWhenItsEnvelopeSaysError*"
+./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-class "*AnAntigravityReviewerIsRateLimitedByItsStderrOnly*"
+./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-class "*ASessionLimitAndASpendLimitAreLimits*"
+./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-class "*AStatedResetSurvivesTheSummaryCut*"
+./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-class "*AnAntigravityThatTimedOutSigningInIsToldTheCure*"
+./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-class "*AnAntigravityVersionIsWarnedNotRefused*"
+./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-class "*IsRedactedBeforeItIsCut*"
+# the whole suite, through the family wrapper (what CI runs)
+node .agents/conventions/tools/low-priority.mjs ./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe
+# E3.S5 only: the extension's half and the parity corpus
+cd src_vs_code && npm ci && npm test
+node .agents/conventions/tools/plan-lifecycle.mjs
+```
+
+Every story follows RED → GREEN → break-it: the test is written first and watched fail with the real symptom (not a
+setup error); after the fix it passes; then the fix is reverted once to prove the test has teeth, and restored. Both
+observations go into the story's commit message. No story runs a vendor CLI: every test feeds a `ProcessResult` or a
+fixture file. The one measurement in scope (E2.S3's model fact) is a recorded run under the real CLI, done by the
+builder of that story in a scratch repository, written to `research/RESULTS_*.md` before any code depends on it. The
+`claude -p` hook fact (§9) belongs to R7's own plan, not to this one.
+
+## 7. Definition of Done
+
+- [ ] A codex, claude or agy reviewer whose stdout mentions *quota*/*rate limit*/*usage limit* but whose own error
+      channel says nothing is an `exit n` with its real reason — never `rate limited`, never a second launch
+      (`ACodexReviewerIsRateLimitedOnlyByItsOwnErrorEventTests` and its two siblings green; break-it recorded).
+- [ ] Codex's *session limit* and claude's *monthly spend limit* are limits; the spend limit is hopeless (one launch);
+      the session limit's stated clock reaches `CooldownParser.StatedReset` and the ledger's `statedReset`.
+- [ ] agy's stated reset is whole in the round summary's cell, redacted before it is cut.
+- [ ] *authentication timed out* has a cure row; on WSL/Linux it names the Linux install; no vendor-table string says
+      `agy.exe` (the existing pin test extended, green).
+- [ ] An unmeasured agy version is warned about in the shared sentence and run; the measured one gets no warning.
+- [ ] The four redaction roads redact before they cut; the keep-failure note is redacted.
+- [ ] `AIza…`, `ya29.…` and JWT shapes are redacted in both halves with the parity corpus green — landed after the
+      redaction plan, not beside it.
+- [ ] No new refusal of any kind was added for codex, agy or claude; every unmeasured condition is a note.
+- [ ] `research/module_runners.md` (the codex/claude/agy failure reading, the hopeless words, the WSL section, the
+      stated-reset section) and `research/module_core.md` (the shapes) match the code; Mermaid renders.
+- [ ] The boundary table of §4 is also in the redaction plan's file once it is on `main`.
+- [ ] The owner's answers to §9 (R2, R7) are recorded here; a "yes" opens its own `todo/` plan, a "no" closes the
+      question as a recorded non-item. Neither is built by this plan.
+- [ ] `node .agents/conventions/tools/plan-lifecycle.mjs` clean; the whole `CoaiMcp.Tests.exe` suite green; this plan
+      promoted with its deviations when the last built epic ships.
+
+## 8. Risks
+
+- **A structured override hides a limit the CLI says only on stdout as plain text.** Codex's error event carries the
+  limit sentence (measured 2026-09-09, `ReviewerExecutor.cs:365-368`) and claude's envelope carries it (2026-09-29); agy's
+  is on stderr (fixture). If a CLI release moves it, the reviewer is reported as `exit n: <reason>` with the sentence
+  visible — a worse class but a true sentence, and the ledger line keeps the whole text. Mitigation: E1 keeps the
+  stderr scan for all three; only the stdout scan is replaced by the adapter's parser.
+- **`session limit` as a phrase could match a reviewer's own text** — but after E1 the phrase is matched only against the
+  parsed error sentence and stderr, which is the whole point of doing E1 before E1.S4.
+- **A JWT shape on the `SafeSource` road** redacts a sample token inside a served test fixture. Accepted: three dotted
+  base64url segments starting `eyJ` are unmistakable, and a reviewer does not need a token's body to review the code
+  around it. Named in the module docs.
+- **Redacting kept evidence costs time on a 64 KB transcript.** The redactor is measured at ≤130 ms over 200 KB
+  (`Redaction.cs:110-112`); the whole-call ceiling is about four seconds in the adversarial worst case (`:152-158`). Evidence
+  is written on the failure path only.
+- **The agy "measured version" constant goes stale** the next time agy is measured. Same risk Vibe and Kimi carry; the
+  constant's doc names the RESULTS record it came from, and the warning says *re-run the probe*, never *refused*.
+- **R2 built with a wrong allowlist breaks a sign-in that lives in an env var nobody listed.** That is why it is an
+  owner question outside this plan, with the setting OFF by default as the recommendation, and a measured round per
+  vendor before any default flips.
+
+## 9. Open owner questions — NOT in scope (listed with options and a recommendation only)
+
+**R2 — should the LOCAL codex, claude and agy reviewers stop inheriting the whole environment?** Today a local
+`coai-mcp` reviewer is started with the developer's entire environment (`ProcessLauncher.cs:99`; the comment `:85-98`
+says this is deliberate: that is where sign-ins, proxies and PATH live). Kimi, Vibe and every question consultant start
+from `ProcessEnvironment.Minimal`; the Team server confines every reviewer (`src_server/src/Jobs/Confinement.cs:38`).
+A read-anywhere reviewer (claude unconfined keeps `Bash`; codex `exec -s read-only` can still run commands) handed a
+prompt-injected diff could print `env` into its answer, which the person then reads and the ledger keeps (redacted by
+shape only — a secret with no recognisable shape passes).
+
+| option | what it is | cost |
+|---|---|---|
+| A — keep as is | nothing changes; the comment's reasoning stands | the exposure above stays on local runs |
+| B — a visible setting, **off by default** (recommended) | `InheritsEnvironment = false` + `ProcessEnvironment.Passthrough` + each CLI's own names (`OPENAI_API_KEY`, `CODEX_HOME`, `ANTHROPIC_API_KEY`, `CLAUDE_CONFIG_DIR`, `ANTIGRAVITY_API_KEY`, the proxy and certificate names), reusing the server's `Confinement` shape; `providers` probes with the same confinement so the card shows a broken sign-in BEFORE a round | an env-var sign-in not on the list breaks when the person switches it on — visible at once on the card |
+| C — the setting on by default | as B, flipped | the same break, silently, on the first round after the release |
+
+Recommendation: **B**, then one measured round per vendor with it on (Windows and WSL), recorded in `research/`, and
+only then a decision on C. The claude allowlist plan (`PLAN_the_claude_reviewer_is_confined_by_an_allowlist.md`) is the
+sibling decision about tools; this one is about the environment, and the two should be decided together.
+
+**R7 — the reviewed branch configures two of its own reviewers.** codex and claude run with the worktree as their
+working directory (`ReviewerRuntime.cs:654,672`; `ClaudeRuntime.cs:98,104`), so the branch's `AGENTS.md`, `CLAUDE.md`,
+`.codex/` and `.claude/` apply to the review of that branch — the thing being reviewed can steer its reviewer. agy does
+not run inside it (`AntigravityRuntime.cs:62-64`). Vibe and Kimi get a sanitised snapshot (`ReviewSnapshots.cs`), but that
+snapshot is a block for them only because their reads are bounded to the working folder — codex and claude can read any
+path they are told, so a snapshot alone is not a block for them.
+
+| option | size | what it is |
+|---|---|---|
+| a — a card note now | S | the codex and claude rows say *reads the branch's own CLI configuration*; agy's says *reads the branch through `--add-dir`; whether it honours a `.gemini/` there is not measured* (`runtimeNote` on the card already draws such a sentence, `modelCard.ts:188-203`) |
+| b — the sanitised snapshot for codex and claude too | M | `NeedsASanitisedSnapshot => true` on both adapters, with `.codex/`, `.claude/`, `CLAUDE.md`, `AGENTS.md`, `.gemini/` in the exclusion list — removes the configuration from the tree they are pointed at, not from a path they can still be told |
+| c — nothing | — | recorded as a non-item with this reasoning |
+
+Recommendation: **a** (it is a sentence, and a small plan of its own), **b as its own plan** after the owner says
+whether a review must be blind to the branch's agent configuration — the same question the Vibe snapshot answered
+*yes* for. Neither is built here.
+
+**A fact to establish before R7.b: does headless `claude -p` run project hooks** (`.claude/settings.json` →
+`hooks`)? Not measured anywhere in this repository. A canary hook in a scratch repository, one `claude -p` launch under
+the reviewer's exact argv (`ClaudeRuntime.cs:91-103`), recorded in `research/RESULTS_*.md`. If it does, R7 is a
+security question and b moves up; if it does not, R7 is only about instructions the model reads.
+
+## Epics
+
+### E1 — a limit is read from the CLI's own error channel (R1 + R4)
+
+Goal: codex, claude and agy classify a rate limit the way Kimi does — from the structured failure and stderr, never from
+the whole of stdout — and the two recorded limit sentences are in the lists. Depends on nothing. Done when the four
+stories' tests are green with their break-it recorded and `module_runners.md` §*What counts as hopeless* says how each
+CLI is read.
+
+**S1 — codex.** RED: `ACodexReviewerIsRateLimitedOnlyByItsOwnErrorEventTests` —
+`AQuotaWordInsideAnAgentMessage_WithExitOne_IsAnExitNotALimit` (stdout: an `item.completed` agent message whose text
+says *the rate limit check in quota.cs is exhausted*, exit 1 → `NonZeroExit`, `Attempts == 1`, the ladder never waits),
+`AnErrorEventSayingUsageLimit_IsALimit_AndHopeless` (`{"type":"error","message":"You've hit your usage limit…"}` →
+`RateLimited`, `Hopeless`), `AStderrLineSayingHighDemand_StillCounts`, `TheReasonIsTheEventsSentence_NotAStdoutLine`.
+Fix: `CodexRuntime.RateLimited` override = `RateLimitVerdict.ByText(result with { StdOut = WhyItFailed(invocation, result) })`
+— the existing parser (`:707-729`) is the only reader of stdout; no new API on `RateLimit`. `DeepseekRuntime` inherits it.
+Break-it: delete the override → the first test reads `rate limited (after 5 attempts)`. Docs: `module_runners.md` :1193.
+
+**S2 — claude.** RED: `AClaudeReviewerIsRateLimitedOnlyWhenItsEnvelopeSaysErrorTests` —
+`AReviewTextMentioningQuota_WithExitOne_IsAnExitNotALimit` (envelope `is_error:false`, `result` is a review that says
+*quota*), `AnIsErrorEnvelopeSayingRateLimit_IsALimit`, `TheReasonIsTheEnvelopesResult_WithItsHttpStatus`.
+Fix: `ClaudeRuntime.RateLimited` = `ByText(result with { StdOut = WhyItFailed(invocation, result) })` (`:153-164`,
+`SaysItFailed` `:173-174` decides). Break-it as S1. Docs: the same section; `AClaudeReasonInItsEnvelopeTests` gains the
+cross-reference.
+
+**S3 — agy.** RED: `AnAntigravityReviewerIsRateLimitedByItsStderrOnlyTests` —
+`AModelLineSayingQuota_OnStdout_IsAnExitNotALimit` (a stream-json `assistant` line whose text says *quota*, exit 1),
+`TheAgyErrorOnStderr_IsALimit_WithItsStatedReset` (fixture `consult-quota.stderr.txt` → `RateLimited`,
+`CooldownParser.StatedReset` non-null), `AnEmptyStderr_WithAQuotaWordOnStdout_IsAnExit`.
+Fix: `AntigravityRuntime.RateLimited` = `ByText(result with { StdOut = string.Empty })`. **Fact to establish in the
+story:** whether agy ever writes `RESOURCE_EXHAUSTED` into a stream-json `result` event on stdout (the only recorded form
+is stderr); if a captured stdout form exists in the fixtures or the research, that event's error field is read as codex's
+is — otherwise stderr only, said in the adapter's doc as what was checked. Break-it as S1. Docs: the same section.
+
+**S4 — the two recorded sentences.** RED: `ASessionLimitAndASpendLimitAreLimitsTests` —
+`CodexsSessionLimit_IsALimit_WhoseClockIsRead` (`You've hit your session limit · resets 9:30pm (UTC)` as a codex error
+event → `RateLimited`; `RetryLadder.ResetOutlasts` true when 9:30pm lies past the budget, false inside it),
+`ClaudesMonthlySpendLimit_IsALimit_AndHopeless` (the `is_error` envelope with `You've hit your monthly spend limit`,
+`api_error_status` 429 → `RateLimited`, `Hopeless`, `Attempts == 1`), `AConsultationOnASpendLimit_IsAQuota`
+(`ConsultFailures.cs:88` → `ConsultFailure.Quota`), `TheLedgerLineCarriesTheStatedReset` (`UsageLedger.StatedResetOf`
+`:438-439`). Fix: `Phrases` += `session limit`, `spend limit`; `Spent` += `monthly spend limit`; the doc comment names both
+sources (`CooldownParser.cs:204`, `ClaudeRuntime.cs:143`) as the rule at `:346` requires. The Team server parks a slot on the
+same parser (`CooldownParser.cs:73-81`), so a parked session limit follows. Break-it: remove one phrase → `expected
+RateLimited, got NonZeroExit`. Docs: `module_runners.md` :1208 (the `Spent` list is quoted there and must change with it).
+
+Cornerstones: 0 of 2 — E1.S1, E1.S4.
+
+### E2 — what the person reads is whole, cured and warned (R3 + R5 + R8)
+
+Goal: the cell, the card and the diagnosis table say for agy what they say for Kimi. Depends on E1.S3 for the agy reason
+to be the stderr line. Done when the three stories are green and the WSL and stated-reset sections of
+`module_runners.md` are updated.
+
+**S1 — the stated reset leads the cell (R3).** RED: `AStatedResetSurvivesTheSummaryCutTests` —
+`AnAgyRefusal_ShowsItsResetClauseWhole_InTheCell` (`ReviewerSummaryFactory.Describe` of a `RateLimited` whose reason is
+the 290-character agy line → the cell contains `Resets in 110h12m4s` whole), `TheClauseIsRedactedBeforeItIsCut` (a
+`Bearer …` inside the clause → `[redacted]`, never a head), `AReasonWithNoStatedClause_IsCutAsBefore`,
+`TheLedgerLineIsUnchanged` (`DescribeWhole` byte for byte as today).
+Fix: in `Described` for `RateLimited` (`BoundedScheduler.cs:774-775`) quote the vendor's reset clause FIRST — the
+quotation rule `KimiQuotaWords` set (`:10`: a quotation, never a parsed time, in a cell) — through one new pure reader
+`CooldownParser.StatedClause(reason)` that returns the text the existing `Duration`/`ClockTime`/`OnDate` patterns
+(`:206-224`) matched, so the clause list is the parser's and nothing copies it; then `Because(...)` as today. The parsed
+instant stays where it is (the ledger's `statedReset`). Break-it: revert the lead → the cell ends `110h12m4…`. Docs:
+`module_runners.md` :1229; `VendorReason.cs:9-12` remark updated to say the cell now leads with the clause.
+
+**S2 — the agy sign-in cure, per host (R5).** RED: `AnAntigravityThatTimedOutSigningInIsToldTheCureTests` —
+`AuthenticationTimedOut_OnStderr_HasACure` (`VendorDiagnosis.Classify("Error: authentication timed out")` is `Refused`
+with a cure), `OnWindows_TheCureIsToRunAgyOnceAsTheUser`, `OnWslAndLinux_TheCureNamesTheLinuxInstall` (the cure contains
+`antigravity.google/cli/install.sh` and says a Windows Antigravity binary reached through interop cannot finish its
+sign-in), `TheRefutedAdviceIsStillOfferedNowhere` — `AntigravityOnLinuxTests.cs:85-99` extended with the new row's cure on
+both hosts: no string contains `agy.exe`. Fix: a `Known` row (`"authentication timed out"`, `DiagnosisKind.Refused`) with a
+`CureOn` arm by host (`:220-225`, the Mistral precedent). **Optional note, never a refusal:** when the configured
+antigravity `executablePath` ends in `.exe` and the host is WSL, `VendorHealth.Note` says so with the Linux install
+(`VendorProbe.cs:231-234`, a pure `AntigravityNotes.WindowsBinaryFromWsl(exe, host)`); RED
+`AWindowsAgyPathOnWsl_GetsANote_AndStaysEnabled` asserts `Enabled` and `CliFound` unchanged — break-it: flip `Enabled` →
+red, which is the owner's rule pinned. Docs: `module_runners.md` :925-935.
+
+**S3 — the agy version is warned about, not refused (R8).** RED: `AnAntigravityVersionIsWarnedNotRefusedTests` —
+`AnUnmeasuredVersion_GetsTheSharedSentence` (`VersionWarnings.Unmeasured` opening), `TheMeasuredVersion_GetsNoWarning`,
+`NoVersionPrinted_GetsNoWarning`, `TheWarningReachesTheProbesHealth` (`VendorProbe.cs:234`). Fix:
+`AntigravityRuntime.VersionWarning` through `VersionWarnings.Unmeasured("antigravity", running, measured, …)`; `measured`
+is the newest version a `research/RESULTS_*.md` names as run (1.3.3 at `RESULTS_vendor_quota_gauges.md:238` today — read at
+build time, cited in the constant's doc). The card needs no code (`module_extension.md:13023`). **Fact to establish:** does
+agy's `result` event name the model that answered? If yes, reuse `IReviewerRuntime.Disowned` (`ReviewerRuntime.cs:444`) as
+Vibe does — a launch answered by another model than the row's is disowned with the sentence; if no, the adapter's doc
+says *checked: the result event's fields on 1.3.3 — no model name; not checked: later versions*. Break-it: return
+`string.Empty` → red. Docs: `module_runners.md` (the agy adapter section) and the research record.
+
+Cornerstones: 0 of 1 — E2.S1.
+
+### E3 — redact before you cut, on every road (R6)
+
+Goal: no vendor text reaches a note, a file, a card or a summary cut before it is redacted, and three more key shapes are
+known to both halves. S1–S4 depend on nothing; S5 depends on the redaction plan being on `main` (§4). Done when the
+roads' tests are green and `module_core.md` :58-60 lists the new shapes with their parity.
+
+**S1 — the long last line.** RED: `AStderrLineIsRedactedBeforeItIsCutTests` —
+`ASecretStraddlingTheSafetyCap_LeavesNoHead` (a 4 100-character single stderr line with `sk-` + 40 characters placed at
+offset 3 995 → `TailOf` holds no `sk-`), `AShortTail_IsUnchanged`. Fix: `OpeningOfLastLine` (`:474-480`) returns
+`VendorReason.Written(line)` (redact, then cap) instead of `VendorReason.Capped(line)`. Break-it: swap back → the head
+`sk-ab` survives. Docs: `module_runners.md` :779 (*a reason is never half a line*).
+
+**S2 — the probe note.** RED: `AProbeNoteIsRedactedBeforeItIsCutTests` — `AVersionRefusalCarryingABearer_IsRedactedInTheNote`,
+`AKilobyteRefusal_IsCappedAtTheSafetyCap`. Fix: `VendorProbe.Refused` (`:264-275`) passes `said` through
+`VendorReason.Written`. Break-it as S1.
+
+**S3 — kept evidence.** RED: `KeptEvidenceIsRedactedBeforeItIsBoundedTests` — `ATranscriptWithAnAuthorizationHeader_IsKeptRedacted`,
+`AnEmptyAnswersTranscript_IsKeptRedacted` (`Transcript` `:729-730` via `:1072`), `ALayoutIsKept` (line count unchanged —
+the `SafeSource` road, `module_core.md:59`), `ATranscriptPastTheCap_IsRedactedThenCut`. Fix: `EvidenceFile.Keep` writes
+`Bounded(Redaction.SafeSource(text))` — one change covers the reviewer's evidence and the consultation's (`:519`). Break-it:
+drop the pass → the header is on disk.
+
+**S4 — the keep-failure note.** RED: `AKeepFailureNoteIsRedactedTests` — `AnIoExceptionMessageInTheNote_IsRedacted` (an
+`IOException` whose message carries a `token …` → the note says `[redacted]`). Fix: `ReviewerExecutor.cs:525` wraps
+`e.Message` in `Redaction.SafeText(…, Redaction.DetailLimit)`. Break-it as S1.
+
+**S5 — three shapes, both halves (after the redaction plan).** RED, C#: `AGoogleKeyAJwtAndAnOauthTokenAreRedactedTests`
+— `AnAizaKey_IsRedacted` (`AIza` + 35 of `[0-9A-Za-z_-]`), `AYa29Token_IsRedacted` (`ya29.` + 20–512), `AJwt_IsRedacted`
+(three dotted base64url segments, the first `eyJ`, each 8+, the last ≤512), `AWordStartingEyJ_IsKept` (`eyJust` with no
+dots), `TheShapesAreOnTheSafeSourceRoadToo`. RED, TS: the same four in `notifications.test.ts`, and the parity corpus
+`noticeShapes.ts` carries all three so `run-parity.mjs` proves the halves agree. Fix: `VendorPattern` (`Redaction.cs:83-84`)
+and `notifications.ts:183` gain the three alternations, every quantifier bounded, no `IgnoreCase` (the file's rule `:25-27`);
+`module_core.md:58` lists them as the fifth–seventh secret shapes in `Patterns`, `Secrets` and `Shapes`. Break-it: add the
+shape to one half only → parity red. Lands by rebase onto the merged redaction plan; its status line is the gate.
+
+Cornerstones: 0 of 1 — E3.S3.
+
+There is no fourth epic: R2 and R7 are §9's open questions, outside this plan's scope by the owner's instruction.
