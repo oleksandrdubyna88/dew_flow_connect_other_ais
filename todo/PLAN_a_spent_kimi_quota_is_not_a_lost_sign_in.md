@@ -1,6 +1,6 @@
 # PLAN — a spent Kimi quota is not a lost sign-in
 
-> Status: **partly built, 2026-10-23: stories 1–4 merged in #900 (released in coai-mcp 0.63.0); story 5 (the MONTHLY quota) merged in #915; the feature gate ran its two rounds — round 1 blocking security fix merged in #917, round 2 proceed; its three tails are PR #921 (two CodeRabbit threads still to fix: a test count in module_tests.md, and AcpAgent.Step over the complexity limit); none of #915/#917/#921 is released yet; the capture step (§5 step 1) has NOT run (the owner's Kimi quota is spent until ~2026-11-13), so the real ACP sentence is
+> Status: **partly built, 2026-10-23: stories 1–4 merged in #900 (released in coai-mcp 0.63.0); story 5 (the MONTHLY quota) merged in #915; the feature gate ran its two rounds — round 1 blocking security fix merged in #917, round 2 proceed; its three tails are PR #921 (its CodeRabbit round is fixed: module_tests.md records 11 cases, and AcpAgent.Step dispatches through a handler table); none of #915/#917/#921 is released yet; the capture step (§5 step 1) has NOT run (the owner's Kimi quota is spent until ~2026-11-13), so the real ACP sentence is
 > still unmeasured, and the plan is NOT promoted.** Deviations are in §8 (story 3). The 0.61.0 and 0.62.0 releases shipped (tags
 > `extension-v0.61.0`, `extension-v0.62.0`), so the owner's "release first, fix after" block is lifted. The plan gate ran once
 > (session def84902, `good_enough`, 11 findings, all accepted), an Opus judge read it (12 findings, all verified by the lead)
