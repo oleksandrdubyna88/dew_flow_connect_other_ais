@@ -1261,6 +1261,12 @@ Assumed where possible, and said:
   Linux host, rather than run with the warning and its new clause (§2.5)? The keyring closure is measured on Vibe 2.26.1 with keyring
   25.7.0 only; a later Vibe could reach a keyring by a road the variable does not close. E2 keeps the owner's 2026-10-13 decision
   (warn, never refuse) and ships the clause; a "refuse" answer is one arm in `VibeLaunch.Verdict` for `HostKind.Linux`, a follow-up.
+  **Asked of the question consultant 2026-10-22 (consult 86973bb1, gpt-6-astra; the other two rows were rate-limited): keep
+  warn-and-run.** Its reasons, checked against the code: the fifth name is added on every native launch whatever the version
+  (`VibeLaunch.BuiltEnvironment`), so an unmeasured version loses only the PROOF, not the closure; refusing would stop every new Vibe
+  version on this host until a ~20-turn re-measurement, and the vendor CLI still runs for its own `--version` before `Verdict`, so a
+  refusal is not a full boundary either; refusing only when a keyring daemon is SEEN (`KeyringSessionFacts`) is not a sound boundary
+  (a snapshot of process names). The owner can still choose "refuse"; until then E2 ships warn-and-run with the clause.
 
 ## 10. Definition of Done — epic E2
 
