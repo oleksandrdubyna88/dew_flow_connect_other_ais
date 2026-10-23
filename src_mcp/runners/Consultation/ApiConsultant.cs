@@ -100,7 +100,12 @@ public sealed class ApiConsultant(IReviewerRuntime inner, string vendor, string 
     /// <summary>The plan a launch carries, when it is a <c>none</c> question row — or a <c>web</c> one, which runs with no web tool (flagged unmeasured, owner decision 2026-10-23) — anything else is refused by name.</summary>
     private static Confinement.Planned QuestionRowOf(ConsultantLaunch launch) => launch.Confinement switch
     {
-        LaunchConfinement.Planned { Plan.Grant.Capability: Capability.None or Capability.Web } planned => planned.Plan,
+        LaunchConfinement.Planned { Plan.Grant.Capability: Capability.None } planned => planned.Plan,
+        // A web row runs with no web tool ONLY as the unmeasured pair the matrix flagged: without that flag the launch and the answer would lose the caveat that web was not measured and the answer may come without it.
+        LaunchConfinement.Planned { Plan: { Grant.Capability: Capability.Web, Flag: AdmissionFlag.Unmeasured } } planned => planned.Plan,
+        LaunchConfinement.Planned { Plan.Grant.Capability: Capability.Web } => throw new ArgumentException(
+            "the api runtime runs a 'web' row only as the unmeasured pair the matrix flagged (AdmissionFlag.Unmeasured): this plan does not carry that flag, so the caveat that web was not measured would be lost",
+            nameof(launch)),
         LaunchConfinement.Planned planned => throw new ArgumentException(
             $"the api runtime cannot do '{planned.Plan.Grant.Capability.Spelled()}': a hosted completion has no process and no tools — a 'none' prompt runs on 'api', and a 'web' prompt runs without the web (flagged unmeasured); a 'disk' prompt cannot",
             nameof(launch)),

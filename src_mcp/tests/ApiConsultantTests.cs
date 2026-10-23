@@ -167,11 +167,22 @@ public sealed class ApiConsultantTests : IAsyncLifetime
         invocation.SharedResource.Should().BeEmpty("a hosted vendor's fleet is bounded by its rate limit, not by a card here");
     }
 
+    /// <summary>A programming-path guard, not a measurement refusal: a web plan that does not carry the unmeasured flag would lose the caveat "web was not measured, the answer may come without it" from the launch and the answer.</summary>
+    [Fact]
+    public void AWebPlan_WithoutTheUnmeasuredFlag_IsRefused_SoTheCaveatCannotBeLost()
+    {
+        var unflagged = new Confinement.Planned("api", CapabilityGrant.Web, [], [], CwdKind.Scratch, [], AdmissionFlag.None);
+
+        var build = () => Consultant().Build(Launch(plan: unflagged));
+
+        build.Should().Throw<ArgumentException>().WithMessage("*api*'web'*Unmeasured*");
+    }
+
     [Fact]
     public void Disk_IsRefusedByName_WebRunsFlagged_AndTheStuckConsultantsShapeBuilds()
     {
         var disk = new Confinement.Planned("api", CapabilityGrant.Disk("D:/x"), [], [], CwdKind.Root, ["D:/x"], AdmissionFlag.None);
-        var web = new Confinement.Planned("api", CapabilityGrant.Web, [], [], CwdKind.Scratch, [], AdmissionFlag.None);
+        var web = new Confinement.Planned("api", CapabilityGrant.Web, [], [], CwdKind.Scratch, [], AdmissionFlag.Unmeasured);
 
         var buildDisk = () => Consultant().Build(Launch(plan: disk));
         var buildWeb = () => Consultant().Build(Launch(plan: web));
