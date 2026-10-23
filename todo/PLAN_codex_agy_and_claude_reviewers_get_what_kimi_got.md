@@ -133,7 +133,9 @@ reciprocal table is written into the redaction plan's own file on its branch bef
    self-install observed (2026-10-14)*), and coai's Claude reviewer runs with the reviewed worktree as its working
    directory (`ClaudeRuntime.cs:104`) — so a branch under review can run a command inside its own reviewer today. The fix
    is one flag the detector already in `ClaudeCapability` can confirm from `--help`, declared by both recorded help texts
-   (2.1.258 and 2.1.197). E1–E3 cost money and truth; this one costs trust. One story, one release, before the rest.
+   (2.1.258 and 2.1.197). E1–E3 cost money and truth; this one costs trust. One PR, one release, before the rest — and
+   that PR carries **E5.S1** (the fact's record, which S2 needs first) and **E5.S4** (the canary and behaviour check),
+   plus S2's new reviewer-path probe preparation and its `SafeMode` setting (cadence consult 5119c081).
 1. **E1** — classification. S1 codex, S2 claude, S3 agy (the three overrides), then S4 the phrases. Ships in one coai-mcp
    release; the Team server's reviewer path uses the same executor (`src_server/src/Jobs/ReviewLauncher.cs`), so it ships
    there with the next deploy.
@@ -144,7 +146,7 @@ reciprocal table is written into the redaction plan's own file on its branch bef
 5. **E4** — the allow-list environment for the three local reviewers, after E1–E3: its last step is a manual, paid
    sign-in smoke of the three real CLIs by the owner or the lead after the release (§6), and that step should not wait
    on the cheaper epics.
-6. **E5.S1, S3** — the fact's record and the card note; **E5's `--restricted` verification** is the lead's one-turn launch,
+6. **E5.S3** — the card note; **E5's `--restricted` verification** is the lead's one-turn launch,
    after S2 ships, and decides whether a second flag follows in its own story.
 
 Each epic goes through the coai plan gate before its code and the code gate after it, as the Kimi quota plan did.
@@ -490,14 +492,18 @@ back works), `AProxyNameIsPresentEitherWay`. Three vendors × two modes through 
 **S3 — the record says which mode ran, and nothing retries.** RED: `ALaunchLineSaysItsEnvironmentModeTests` —
 `TheLedgerLineCarriesAllowlistOrInherit` (`LaunchOptions`, `LaunchOptions.cs:133-141`, gains `Environment = "allowlist" |
 "inherit"`, written by the same path that writes `Cli`/`CliVersion` — story 3.4 of the round counter, `module_runners.md`
-:1740), `TheProbeRunsInTheSameMode` (`VendorProbe` builds its `--version` request through the same helper, so the card
-shows a broken sign-in before a round), `AFailureUnderTheAllowlist_IsReportedInThatMode_AndNotRelaunched` (the executor
+:1740), `TheProbeRunsInTheSameMode` (`VendorProbe` builds its `--version` request through the same helper, so the probe
+and the round never differ in mode — it does NOT prove a sign-in: `VendorProbe.cs:250` returns the configured auth label
+on a version success without validating credentials, so a sign-in the allow-list breaks shows first as the round's own
+classified failure, which is why E1 lands first and S4 exists — cadence consult 5119c081), `AFailureUnderTheAllowlist_IsReportedInThatMode_AndNotRelaunched` (the executor
 makes one launch; the outcome's sentence ends *(allow-listed environment — switch the vendor's environment setting to
 inherit to compare)*). Break-it: add a second launch on failure → red. Docs: `module_runners.md` :1740 and the extension's
 usage view if it lists launch options (`module_extension.md`).
 
-**S4 — the post-release sign-in smoke (manual, paid, owner/lead).** One round per vendor on the allow-list default,
-Windows first, then WSL/Linux (unmeasured by the bench), recorded in `research/RESULTS_reviewer_allowlist_sign_in.md`
+**S4 — the post-release sign-in smoke (manual, paid, owner/lead).** One AUTHENTICATED review round per vendor on the
+allow-list default, Windows first, then WSL/Linux and macOS (all unmeasured by the bench; names such as a D-Bus/keyring
+or npm-prefix variable are measurement questions, not added blind; `SSL_CERT_FILE` already rides `Passthrough`). This is
+recovery evidence, not pre-release compatibility evidence — the `inherit` switch is the way back meanwhile, recorded in `research/RESULTS_reviewer_allowlist_sign_in.md`
 with versions; a vendor that fails is switched to `inherit` by the setting and the missing name is added to the list in a
 follow-up story — never by widening the default blind.
 
@@ -535,7 +541,15 @@ reviewed branch's CLAUDE.md, hooks and MCP servers reach this reviewer*), `ADecl
 reviewer's). Fix: `ClaudeCapability` grows a second declaration (`SafeModeIn(helpText)`, same ANSI-stripping line scan,
 same *flag, not flag-with-value* rule) read by the SAME `ProbeAsync` (`:111`, one `--help` per launch, never a second
 process); `ClaudeRuntime.Build` takes the capability (as the consultant's planner does) and emits `--safe-mode` when
-declared; the card's existing `versionWarningNote`/`runtimeNote` carries the absent-flag note through `providers`. The
+declared. **The reviewer paths do not probe today** (verified, cadence consult 5119c081: `ProbeAsync` is called only by
+`ClaudeConsultant.cs:76` and `ConsultantsReadMode.cs:137`; `RosterBuilder.SettingsFor` `:524` and the Team server's
+`ReviewLauncher.cs:375` leave `ClaudeCli` at `Unprobed`), so S2 adds an asynchronous preparation step on BOTH reviewer
+paths that fills `ClaudeCli` before `Build`, plus RED `ARealReviewFromNormalSettingsCarriesSafeMode` — a scenario test
+that starts from ordinary settings, runs the local round path against the fake CLI whose `--help` declares the flag, and
+observes `--safe-mode` in the eventual argv (and the Team-server twin in its job test). A help that timed out, was cut
+or failed is UNKNOWN, not "does not declare": the launch goes without the flag and its note says the capability could
+not be read (`AnUnreadableHelp_IsUnknown_AndSaysSo`). A visible per-vendor setting `SafeMode` (`on` default, `off`) is
+the way back the §1 promise needs — E4's environment switch cannot remove an argv flag (`TheSafeModeSettingOff_DropsTheFlag_AndSaysSo`); the card's existing `versionWarningNote`/`runtimeNote` carries the absent-flag note through `providers`. The
 `--restricted --strict-mcp-config` pair is NOT added here: after S2 ships, the lead runs one turn of coai's exact argv
 plus those two flags and records whether they conflict with `--permission-mode plan`/`--disallowedTools` and whether
 `--add-dir` reads survive; a *yes, compatible* opens its own story (it would also close part of
@@ -556,7 +570,12 @@ the argv; they do not prove a branch's hook stops running under coai's exact inv
 (paid, cheap) in a scratch `testsToDelete-` worktree whose `.claude/settings.json` registers a harmless canary
 `SessionStart` hook that writes a marker file inside that same folder: once with coai's shipped reviewer argv (with
 `--permission-mode plan`, `--disallowedTools` and `--safe-mode`) → the marker must be ABSENT; once as a control without
-`--safe-mode` → the marker present (a control that does not fire makes the run prove nothing). Recorded in
+`--safe-mode` → the marker present (a control that does not fire makes the run prove nothing). The same pair of runs also
+observes that the review is not quietly worse (cadence consult 5119c081; the recorded help says permissions and built-in
+tools work normally, which is a claim, not an observation): an allowed file read in the worktree, a read through the
+`--add-dir` directory, a user permission denial still enforced, a prohibited write still refused, and the fast-mode
+`--settings` file still applied. S4 is built and released WITH S2 (S1's evidence and this check travel in S2's PR), not
+after it. Recorded in
 `research/RESULTS_claude_reviewer_safe_mode.md` with the CLI version. The card's and the docs' claim is limited to the
 versions where the effect was observed; on any other version the S2 note says the effect is not measured there (a note,
 never a refusal). Only the canary's own `testsToDelete-` folder is removed afterwards.
