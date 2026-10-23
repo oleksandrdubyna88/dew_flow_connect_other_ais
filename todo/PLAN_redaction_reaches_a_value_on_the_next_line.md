@@ -1,10 +1,13 @@
 # PLAN — Redaction reaches a value on the next line
 
-> Status: **plan only, nothing implemented yet, 2026-10-23.** Scope: `src_mcp/core/Notices/Redaction.cs` (one new
-> procedural pass beside `PrivateKeyBlocks`, one widened quantifier in the labelled rule), its mirror
-> `src_vs_code/src/notifications.ts` (the quantifier only), the parity corpus `src_vs_code/src/test/noticeShapes.ts`,
-> the tests on both sides, `research/module_core.md` and `research/module_tests.md`. No new caller, no new road: every
-> call of `SafeText`, `SafeSource` and `FirstSecretClass` gets the cure by running the same passes.
+> Status: **plan only, nothing implemented yet, 2026-10-23 — revised the same day after the coai plan round (a0bc0720,
+> proceed) and two consults (cadence a1c21b20, risk f1d48728); every point verified against the code and folded (see the
+> last section).** Scope: `src_mcp/core/Notices/Redaction.cs` (one new procedural pass beside `PrivateKeyBlocks`, one
+> widened joiner in the labelled rule, the pass order of BOTH roads), its mirror `src_vs_code/src/notifications.ts` and a
+> new `src_vs_code/src/labelContinuations.ts` (the pass, ported byte for byte), the parity corpus
+> `src_vs_code/src/test/noticeShapes.ts`, the tests on both sides, `research/module_core.md` and
+> `research/module_tests.md`. No new caller, no new road: every call of `SafeText`, `SafeSource` and `FirstSecretClass`
+> gets the cure by running the same passes.
 >
 > Found 2026-10-22 by the risk consult 722eeb66 (R1) on the spent-Kimi-quota work and verified with a RED there — recorded in
 > [PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md](PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md) § *The feature
@@ -34,7 +37,8 @@ and the plan has to cure both:
   line break is still there when the labelled rule runs, so EVERY next-line shape leaks.
 - **`SafeText` drops every control character first** (`Redaction.cs:391`, `notifications.ts:237`). The line break is
   gone and the label and value are glued together WITH the next line's indentation between them. The joiner allows four
-  spaces or tabs after the `:`/`=` — so an indentation of five or more spaces leaks (a tab is dropped and cannot leak).
+  spaces or tabs after the `:`/`=` — so an indentation of five or more spaces leaks (a tab is dropped and cannot leak) —
+  and a value of SEVERAL lines (a block scalar) keeps every line but the first readable, because the rule masks one token.
 
 | # | Shape (canaries are fake) | `SafeSource` road | `SafeText` road |
 |---|---|---|---|
@@ -42,26 +46,31 @@ and the plan has to cure both:
 | R2 | JSON nested, 8-space indent: `"api_key":` LF `        "FAKE-CANARY-0002"` | **leaks** | **leaks** (gap 8 > 4) |
 | R3 | YAML, top-level key, value indented: `api_key:` LF `  FAKE-CANARY-0003` | **leaks** | masked |
 | R4 | YAML block scalar: `password: >` LF `  FAKE-CANARY-0004` | **leaks** (`>` is taken as the value) | **leaks** (same) |
+| R4b | YAML block scalar of TWO lines: `password: \|` LF `  FAKE-FIRST` LF `  FAKE-SECOND` | **leaks** both | **leaks** both; with the gap cure alone (D6) still leaks the second (cadence C1) |
 | R5 | Folded header (RFC 7230 obs-fold), one space or a tab: `X-Api-Key:` LF ` FAKE-CANARY-0005` | **leaks** | masked |
 | R6 | Folded header, five spaces: `X-Api-Key:` LF `     FAKE-CANARY-0006` | **leaks** | **leaks** |
 | R7 | Shell continuation: `export TOKEN=\` LF `FAKE-CANARY-0007` | **leaks** (the `\` is redacted as the value) | masked |
 | R8 | Label, CRLF, value: `client_secret=` CR LF `FAKE-CANARY-0008` | **leaks** | masked |
 | R9 | A value split by CRLF (a wrapped line): `client_secret=FAKE-CANA` CR LF `RY-0009` | **leaks** the remainder `RY-0009` | masked |
 | R10 | YAML nested under an ordinary key: `service:` LF `  api_key:` LF `    FAKE-CANARY-0010` | **leaks** | **leaks** |
+| R11 | TOML triple-quoted: `password = """` LF `FAKE-CANARY-0011` LF `"""` | **leaks** | **leaks** (`"""` is not the joiner's one optional quote) |
 
-Two findings beside the defect, recorded here because the measurement produced them:
+Three findings beside the defect, recorded here because the measurement produced them:
 
 - **A folded `Authorization:` header is already masked on both roads when its scheme word is `Bearer`, `Basic` or
   `Token`** — the bearer rule (`Redaction.cs:80-81`) matches `Bearer FAKE…` on its own line. The header shape leaks only
   for other header names (R5/R6) or another scheme word; a scheme word the rule does not know (`ApiKey FAKE…`) leaks on
   ONE line today as well (the labelled rule takes one token), which is a limit of the one-line rule and not of this plan.
 - **R10 leaks on the `SafeText` road for a second reason, and so does the COMMON nested YAML `service:` LF
-  `  api_key: FAKE-CANARY-0011` (value on the same line as its key).** After the line breaks are dropped the text is
-  `service:  api_key: FAKE-CANARY-0011`; the leftmost match starts at `service`, an ordinary word, and its value
+  `  api_key: FAKE-CANARY-0012` (value on the same line as its key).** After the line breaks are dropped the text is
+  `service:  api_key: FAKE-CANARY-0012`; the leftmost match starts at `service`, an ordinary word, and its value
   `api_key:` swallows the credential's label, which is then never seen on its own. This is the mechanism the German
   row of `ServerNoticeLineTests.cs:197-198` pins as the one-line CONTRACT (`Fehler: password=letmein` is kept). It is
   not a line-bound defect; it is the one-line rule's leftmost-match defect, made frequent by the strip gluing lines.
   §3 D10 proposes its cure as a lead-gated story.
+- **A single- or triple-quoted value on ONE line is not masked today either:** `password='FAKE'` and
+  `password = """FAKE"""` — the joiner admits one `"`, the value class excludes `"` and `'`, so the match fails at the
+  quote. One-line, both halves; folded into D6 because R11's cure needs the same quote handling.
 
 ### Which callers carry such text today (verified call sites)
 
@@ -69,7 +78,7 @@ Two findings beside the defect, recorded here because the measurement produced t
 
 | Call site | What it feeds | Bound on the input |
 |---|---|---|
-| `src_mcp/runners/Feature/SourceResolver.cs:188` | a file served to a feature reviewer on demand — `appsettings*.json`, `config.yaml`, `docker-compose.yml`, a `.http` file with folded headers, a shell script; the NAME filter (`CredentialFiles`) refuses `.env*`, `*.pem`… and deliberately not these | `SourceBudget.WholeFileBytes` 16 Ki a file, 64 Ki a turn (`SourceBudget.cs:23,32`) |
+| `src_mcp/runners/Feature/SourceResolver.cs:188` | a file served to a feature reviewer on demand — `appsettings*.json`, `config.yaml`, `docker-compose.yml`, a `.http` file with folded headers, a shell script, a `.toml`; the NAME filter (`CredentialFiles`) refuses `.env*`, `*.pem`… and deliberately not these | `SourceBudget.WholeFileBytes` 16 Ki a file, 64 Ki a turn (`SourceBudget.cs:23,32`) |
 | `src_mcp/runners/Feature/FeatureOutlineBuilder.cs:189,248` | a changed file's blob at head and its hunks | the blob |
 | `src_mcp/core/Feature/FeatureContext.cs:58-61,134` | the feature context's plan, epics, lessons and gate history | `FeatureBudget` |
 | `src_mcp/core/Security/SecuritySignals.cs:49,108` | every file text of the security lane | **`MaxFileCharacters` 262 144** (`:18`) — the largest real input any road gets |
@@ -79,7 +88,10 @@ Two findings beside the defect, recorded here because the measurement produced t
 | `src_mcp/src/Server/WorkspaceLookup.cs:389` | one search-hit LINE, cut at `LineChars` — a single line, so no next-line shape can occur here | one line |
 | `src_mcp/core/QuestionConsult/SecretCheck.cs:63` → `Redaction.FirstSecretClass` (`Redaction.cs:349-359`) | the consultant context bound for an internet row — a secret on the next line is NOT recognised, so the context is SENT instead of refused | the context |
 
-`SafeText` — one line; leaks R2, R4, R6 and R10 (and its same-line sibling):
+`SafeText` — one line; leaks R2, R4, R4b, R6, R10, R11 (and R10's same-line sibling). **Every server notice reaches the
+extension's page on this road**: the server writes `server-notices.jsonl` through `ServerNoticeLine` and the extension
+reads it back with its own parser (`notificationsFile.ts:108-110`, `readServerNotices`) and renders it — the page
+escapes HTML and redacts nothing again, so what `SafeText` lets through is what the person sees (cadence C1).
 
 | Call site | What it feeds |
 |---|---|
@@ -98,24 +110,32 @@ Two findings beside the defect, recorded here because the measurement produced t
 1. **The value class forbids a line break.** `[^\s"',;)}]{1,4096}` (`Redaction.cs:103`, spelled with `JsSpace` which
    holds LF and CR, `:69`) must match at least one character right after the joiner. On the `SafeSource` road the
    character after `api_key:` is LF, so the match fails at that label and the engine moves on; nothing later names the
-   value. The joiner `"?[ \t]{0,4}[:=][ \t]{0,4}"?` admits only spaces and tabs around the `:`/`=`.
-2. **`SafeText` drops the break and keeps the indentation.** `Passes` (`Redaction.cs:388-394`) filters with `IsPrintable`
-   (`:255`: code unit ≥ 32 and ≠ 127) before any pass; `safeText` does the same (`notifications.ts:237`). LF, CR and TAB
-   vanish, SPACES stay. The line break's indentation becomes the gap after the joiner, and `[ \t]{0,4}` is the bound the
-   author chose so that `password     =x` (five spaces BEFORE the `=`) stays, pinned at `ServerNoticeLineTests.cs:166`.
+   value. The joiner `"?[ \t]{0,4}[:=][ \t]{0,4}"?` admits only spaces and tabs around the `:`/`=`, and one `"`.
+2. **`SafeText` drops the break and keeps the indentation — and the information that there WAS a break.** `Passes`
+   (`Redaction.cs:388-394`) filters with `IsPrintable` (`:255`: code unit ≥ 32 and ≠ 127) before any pass; `safeText`
+   does the same (`notifications.ts:237`). LF, CR and TAB vanish, SPACES stay. The line break's indentation becomes the
+   gap after the joiner, and `[ \t]{0,4}` is the bound the author chose so that `password     =x` (five spaces BEFORE
+   the `=`) stays, pinned at `ServerNoticeLineTests.cs:166`. A value of several lines becomes several tokens, of which the
+   rule masks the first — once the breaks are gone no pass can tell the second line of a block scalar from prose.
 3. **The redactor has exactly one multi-line shape and it is procedural.** `PrivateKeyBlocks` (`PrivateKeyBlocks.cs:36`)
-   exists because "the five redaction patterns are ONE-LINE shapes" (`:9`); it runs first, keeps every line break and
-   turns each body line into its indentation plus `[redacted]` (`:154-179`) so a served file's line count survives.
-   Nothing like it exists for a label.
+   exists because "the five redaction patterns are ONE-LINE shapes" (`:9`); it keeps every line break and turns each body
+   line into its indentation plus `[redacted]` (`:154-179`) so a served file's line count survives. On the `SafeSource`
+   road it runs first on the raw text; on the `SafeText` road it runs AFTER the strip (`:391` then `:408`), on one glued
+   line. Nothing like it exists for a label.
 4. **The documentation says so.** `Redaction.SafeSource`'s remark: "the labelled pass therefore stops at each line's end
    exactly as it does in a notice" (`Redaction.cs:316-317`). The limit was known as a property and never measured as a
    leak until R1.
+5. **`ClassOf` has no deadline between its passes.** `Redaction.cs:362-376` runs the block pass, the parameter pass, the
+   shapes and the labelled pass with no `StopIfOverdue` — the per-pattern ceilings are the only bound there (risk R3).
 
 ## 3. Decisions
 
-**D1 — Two roads, two symptoms, two cures.** On the `SafeSource` road the symptom is the LINE BREAK; on the `SafeText`
-road the line break is gone and the symptom is the GAP it left. One procedural pass cures the break (D2–D5); one widened
-quantifier cures the gap (D6). Both run in the same pass list, so a caller changes nothing.
+**D1 — Two roads, one symptom seen twice, one pass that runs BEFORE the strip.** On the `SafeSource` road the line break
+is present when the regexes run; on the `SafeText` road it is gone and only its indentation is left. The first draft
+cured the second face with a wider regex gap alone, and the cadence consult (C1) showed that cannot work for a value of
+SEVERAL lines (R4b): once the breaks are stripped the second line is a token like any other. So the procedural pass
+(D2–D5) runs on BOTH roads before the strip, in both halves (D9), and the regex gap (D6) stays as the cure for text a
+caller glued BEFORE handing it over (`AskApiMode.cs:394`, `ProbeApiMode.cs:373`) and for one-line gaps.
 
 **D2 — The break is cured by a PROCEDURAL pass, `LabelContinuations`, not by letting the regex joiner cross a line.**
 The tempting cure — `[:=][ \t]{0,4}(?:\r?\n[ \t]{0,32})?` in the joiner — was evaluated and REJECTED for a regression
@@ -123,12 +143,12 @@ it causes on the most common served shape, nested YAML with the value on its key
 
 ```
 service:
-  api_key: FAKE-CANARY-0011
+  api_key: FAKE-CANARY-0012
 ```
 
 Today `SafeSource` masks this (`service:` fails at the LF; `api_key: FAKE…` matches on its own). With a joiner that
 crosses the line, the leftmost match starts at `service`, crosses the break, takes `api_key:` as its VALUE, keeps it
-(`service` is no credential) and the scan resumes after it — `FAKE-CANARY-0011` is never seen. A regex cannot know
+(`service` is no credential) and the scan resumes after it — `FAKE-CANARY-0012` is never seen. A regex cannot know
 that the label is a credential (that is the callback's job) and cannot compare indentation. The procedural pass can do
 both: it reaches across the line ONLY for a label `CredentialWords.NamesACredential` admits, so an ordinary label never
 swallows the next line. It follows `PrivateKeyBlocks` (`IndexOf`-driven, linear, layout kept) and the hand-rolled
@@ -136,149 +156,218 @@ swallows the next line. It follows `PrivateKeyBlocks` (`IndexOf`-driven, linear,
 repository's stated reason for procedural scanning over text nobody chose.
 
 **D3 — The matching model: a credential label that ENDS a line continues onto the next line only with continuation
-EVIDENCE.** At every line break the pass reads backwards over at most `[ \t]{0,4}`, an optional `\` or a YAML block
-indicator `[|>][-+]?`, then `[ \t]{0,4}`, then `[:=]`, an optional `"`, `[ \t]{0,4}`, and the label — the LAST 64
-label characters of the run `[A-Za-z0-9_.-]`, cut on the left to begin at a letter (what the regex's leftmost start
-produces for `9key:`, which it masks as `key`). The label must name a credential. The next line continues the label when
-at least one of these holds:
+EVIDENCE, and never onto a child that is itself an assignment.** At every line break the pass examines the line just
+passed: at most `[ \t]{0,4}` of trailing space, an optional `\`, an optional YAML block indicator `[|>][-+]?[0-9]?`, an
+optional opening quote run `"{1,3}` or `'{1,3}`, `[ \t]{0,32}`, `[:=]`, an optional `"`, `[ \t]{0,4}`, and the label —
+the LAST 64 label characters of the run `[A-Za-z0-9_.-]`, cut on the left to begin at a letter (what the regex's
+leftmost start produces for `9key:`, which it masks as `key`). The label must name a credential. Five kinds of evidence:
 
-| Evidence | Covers |
-|---|---|
-| the next line is indented DEEPER than the label's line (`[ \t]` count, a tab counting one) | YAML (R3, R10's inner pair), nested JSON (R2), folded headers (R5, R6) |
-| the next line begins, after its indentation, with `"` or `'` | pretty JSON with no indent — R1's exact shape (`{"api_key":` LF `"FAKE…"`) |
-| the label's line ended with `\` | shell continuation (R7) |
-| the label's line ended with `\|` or `>` (`[-+]?`) | a YAML block scalar (R4): every following line indented deeper than the label's line is value, until the first that is not or until `BlockLimit` characters |
+| Evidence | Kind | Covers |
+|---|---|---|
+| the next line is indented DEEPER than the label's line (`[ \t]` count, a tab counting one) | plain | YAML (R3, R10's inner pair), nested JSON (R2), folded headers (R5, R6) |
+| the next line begins, after its indentation, with `"` or `'` | plain | pretty JSON with no indent — R1's exact shape (`{"api_key":` LF `"FAKE…"`) |
+| the label's line ended with `\` | plain | shell continuation (R7) |
+| the label's line ended with `\|` or `>` (`[-+]?[0-9]?`) | block | a YAML block scalar (R4, R4b): every following line that is BLANK or indented deeper than the label's line is value, until the first non-blank line that is not deeper, or the end of the text (risk R2: a blank line inside a block continues it; `ordinary: visible` after the block survives) |
+| the label's line ended with `"""` or `'''` | block | TOML / Python triple-quoted (R11): every following line is value until the line holding the closing triple quote (kept, its text before the quotes masked), or the end of the text |
+
+**The child-assignment rule (risk R1).** A PLAIN continuation declines when the next line, after its indentation and an
+optional quote, is itself a label assignment — `[A-Za-z][A-Za-z0-9_.-]{0,63}"?[ \t]{0,4}[:=]`. The reason is a
+credential-NAMED container: `credentials:` LF `  password: FAKE-CANARY-CHILD` — `credentials` names a credential and
+the child is deeper, so without this rule the pass would mask the TOKEN `password:` and leave the canary without the
+label the labelled rule needs; today the one-line rule masks it. With the rule the pass leaves the child to the labelled
+rule, which masks `password: [redacted]`. Inside a BLOCK (indicator or triple quote) every line is value, assignment-shaped
+or not — `password: |` LF `  user=x` LF `  pass=y` is a secret of two lines.
 
 Without evidence the pass declines and the text is untouched: `password:` LF `the one you chose last week` (a label
-then prose), `the key` LF `to this is patience` (a label WORD with no joiner), a blank next line, no next line, a next
-line that is itself a label with no deeper indent. Exactly ONE line break is crossed (`\r`, `\n` or `\r\n`); two in a
-row decline. The declined case R8 (`client_secret=` CR LF `FAKE…`, no indent, no quote) is a recorded residual (§7, Q3).
+then prose), `the key` LF `to this is patience` (a label WORD with no joiner), a blank next line after a plain joiner,
+no next line, a next line that is a label with no deeper indent. A PLAIN continuation crosses exactly ONE line break
+(`\r`, `\n` or `\r\n`); two in a row decline. The declined case R8 (`client_secret=` CR LF `FAKE…`, no indent, no
+quote) is a recorded residual (§7, Q3).
 
-**D4 — What is replaced, and how the layout survives.** On the continuation line the pass keeps the indentation and the
-opening quote, replaces the VALUE TOKEN — the run of `[^JsSpace"',;)}]`, at most 4 096 characters, the regex's own
-class and bound, so the tail past 4 096 stays "where both halves leave the tail behind" — with `[redacted]`, and keeps
-the rest of the line. `"api_key":` LF `    "FAKE-CANARY-0001",` becomes `"api_key":` LF `    "[redacted]",`. A block
-scalar's lines become indentation plus `[redacted]` each, as `PrivateKeyBlocks.AppendRedactedLines` does. No line
-break is added or removed: `FeatureOutlineBuilder.SafeHunks` (`:248-249`) compares line counts, and the outline's spans
-are counted in lines. An R7 shell line reads `export TOKEN=\` LF `[redacted]`; the labelled rule then also masks the `\`
-(as today) — two placeholders, nothing readable.
+**D4 — What is replaced, how the layout survives, and the fail-closed end of a block (plan round P1).** On a plain
+continuation line the pass keeps the indentation and the opening quote, replaces the VALUE TOKEN — the run of
+`[^JsSpace"',;)}]`, at most 4 096 characters, the regex's own class and bound, so the tail past 4 096 stays "where both
+halves leave the tail behind" — with `[redacted]`, and keeps the rest of the line. `"api_key":` LF `    "FAKE-CANARY-0001",`
+becomes `"api_key":` LF `    "[redacted]",`. A block's lines become indentation plus `[redacted]` each (a blank line
+stays blank), as `PrivateKeyBlocks.AppendRedactedLines` does. **A block has NO length bound of its own and therefore no
+overflow:** the first draft stopped a block at `BlockLimit` 65 536 characters and the plan round showed the tail of a
+longer scalar inside a 262 144-character security-lane file would stay readable. A block is ended by its STRUCTURE — the
+first non-blank line not indented deeper, the closing triple quote — or by the end of the text, and a cursor that
+consumes every line once needs no cap to stay linear (D7). There is no "bound reached" state to fail closed from; the
+assertion that pins it is S-11 (no canary anywhere past the old boundary). No line break is added or removed:
+`FeatureOutlineBuilder.SafeHunks` (`:248-249`) compares line counts, and the outline's spans are counted in lines. An R7
+shell line reads `export TOKEN=\` LF `[redacted]`; the labelled rule then also masks the `\` (as today) — two placeholders,
+nothing readable.
 
-**D5 — Order: after `PrivateKeyBlocks`, before the parameter pass, in `SecretsTaken` (`Redaction.cs:406-421`) — for
-both roads and for `ClassOf` (`:362-376`).** After the block pass, so `"private_key":` LF `"-----BEGIN PRIVATE KEY-----`
-has already lost its body before the pass takes `-----BEGIN` as a token (the 2026-09-26 defect, `PrivateKeyBlocks.cs:12`,
-cannot recur). Before the regexes, so the placeholder is what they read (the labelled rule fails at the LF and does not
-mask twice). On the `SafeText` road the text holds no line break by then (`Passes` strips first, `:391`), so the pass is
-one `IndexOfAny` and a no-op — no branch per road, one order. `ClassOf` answers **`labelled`** when the pass changes the
-text: it is the labelled rule's reach, not a new shape; `SecretCheckTests` pins the class. Under the same
-`StopIfOverdue` as every pass (`:429-436`).
-
-**D6 — The gap is cured in the regex, in both halves, byte for byte.** The joiner becomes
+**D5 — Order: after `PrivateKeyBlocks`, before the strip, before the parameter pass — on BOTH roads, in BOTH halves, and
+in `ClassOf`.** The pass order of `SafeText` becomes the pass order of `SafeSource` with the strip in the middle:
 
 ```
-"?[ \t]{0,4}[:=][ \t]{0,32}(?:[|>][-+]?[ \t]{0,32})?"?
+PrivateKeyBlocks → LabelContinuations → [SafeText only: drop every control character] → parameter → the four shapes → labelled → [SafeText only: the cut]
 ```
 
-The gap AFTER the joiner widens from 4 to 32 (eight JSON levels at four spaces; the bound is a bound, not a measurement
-— D7 says what is measured); the gap BEFORE it stays `{0,4}` so `password     =x` stays as pinned; the optional block
-indicator makes `password: >  FAKE-CANARY-0004` (R4 after the strip) mask the value instead of the `>`. This is what
-cures R2, R4 and R6 on the `SafeText` road, and the only part of the plan the extension carries (D9). The pattern
-stays `NonBacktracking` — the labelled pattern built in 1 ms (`Redaction.cs:202`), the automaton's problem was the
-bearer rule's alternation in front of its loop (`:195-197`), and this joiner has no alternation. If the generator
-refuses it at build, the fallback is the backtracking engine with `BacktrackingCeilingMs` and a reason beginning
-`NOT NonBacktracking because:` (the audit `EveryPattern_IsNonBacktrackingOrSaysWhyNot` admits either) — stated, not
-assumed, in the story's summary.
+After the block pass, so `"private_key":` LF `"-----BEGIN PRIVATE KEY-----` has already lost its body before the pass
+could take `-----BEGIN` as a token (the 2026-09-26 defect, `PrivateKeyBlocks.cs:12`, cannot recur). Before the strip, so
+the pass sees the line breaks on the notice road too (C1). Before the regexes, so the placeholder is what they read (the
+labelled rule fails at the LF and does not mask twice). **One deliberate output change follows:** the block pass moves
+ahead of the strip on the `SafeText` road, so a private key with REAL line breaks quoted in a notice becomes its header,
+the body's indentation and one `[redacted]` PER BODY LINE glued together, then the footer — instead of one placeholder
+between the markers. No test pins the single placeholder (`APrivateKeyBlockIsNeverServedTests.cs:249,303` and
+`privateKeyBlocks.test.ts:110,131` assert only that the body marker is gone); the parity corpus row
+`privateKey('RSA ', '\n')` changes identically in both halves; an escaped one-line block (`\n` as two characters) is
+unchanged. `ClassOf` (`Redaction.cs:362-376`) takes the same order — block, continuation, parameter, shapes, labelled —
+and answers **`labelled`** when the continuation pass changes the text: it is the labelled rule's reach, not a new
+shape; `SecretCheckTests` pins the class. Precedence, pinned as rows (risk R3): a PEM block whose label continues
+(`"private_key":` LF `"-----BEGIN…`) answers `private-key`; a continuation beside a query credential answers
+`labelled`; a query credential alone answers `parameter`. **`ClassOf` also gains the clock** (`Stopwatch` +
+`StopIfOverdue` between its passes, as `SecretsTaken` has at `:409-418`), closing the gap §2.5 names — the whole-call
+promise of `:152-158` then holds for `FirstSecretClass` too.
 
-**D7 — Linear and bounded, measured where it matters.** The pass has no regex: one forward scan for line breaks; at each
-break at most ~80 characters are read backwards (bounded by the label's 64 and the joiner's gaps) and the continuation
-line forward, each character of a consumed continuation or block visited once; a block is bounded by `BlockLimit` =
-65 536 characters — `PrivateKeyBlocks.BodyLimit`'s value (`:48`), made ONE shared constant rather than a second copy
-(reuse-first, step 2.4). Measured, as `TheRedactorCannotBeMadeToHangTests` measures (`Ceiling` 10 s, `:32`; the
-corpus at `:34-58`), with new adversarial shapes: 200 KB of `key:` LF lines (every label declines, each once); `key: |`
-LF then 200 KB of indented lines (one block, consumed once); 50 000 `key:` LF `  v` pairs; a 200 KB text with no line
-break (the no-op road). And on the sizes the roads really see: `StdErrChars` 64 Ki (R1's road) and
-`SecuritySignals.MaxFileCharacters` 262 144 — the largest real `SafeSource` input — both well under the existing
-"130 ms or less over 200 KB" class (`Redaction.cs:111`). The whole-call promise ("about four seconds in the worst
-case", `:152-158`) is unchanged.
+**D6 — The gap and the quotes are cured in the regex, in both halves, byte for byte.** The joiner becomes
+
+```
+["']{0,3}[ \t]{0,4}[:=][ \t]{0,32}(?:[|>][-+]?[0-9]?[ \t]{0,32})?["']{0,3}
+```
+
+The gap AFTER the joiner widens from 4 to 32 (eight JSON levels at four spaces; the bound is a bound, not a
+measurement — D7 says what is measured); the gap BEFORE it stays `{0,4}` so `password     =x` stays as pinned; the
+optional block indicator makes `password: >  FAKE-CANARY-0004` (R4 after a caller's own gluing) mask the value instead
+of the `>`; the quote run `["']{0,3}` masks `password='FAKE'`, `password = """FAKE"""` and `'client_secret': 'FAKE'`,
+which the one `"?` left whole (§1, third finding). This cures the pre-glued API quotes and one-line gaps; with D5 in
+place it is no longer what the notice road relies on for a line break. The pattern stays `NonBacktracking` — the
+labelled pattern built in 1 ms (`Redaction.cs:202`), the automaton's problem was the bearer rule's alternation in front
+of its loop (`:195-197`), and this joiner has no alternation. If the generator refuses it at build, the fallback is the
+backtracking engine with `BacktrackingCeilingMs` and a reason beginning `NOT NonBacktracking because:` (the audit
+`EveryPattern_IsNonBacktrackingOrSaysWhyNot` admits either) — stated, not assumed, in the story's summary.
+
+**D7 — Linear and bounded by construction, measured at the real sizes (risk R3).** The pass has no regex and ONE cursor
+that only advances: it walks the text once; at each line start it counts the indentation and remembers it for that line
+(computed once, never recomputed — a line of 100 000 spaces costs 100 000 steps once); at each line break it re-reads a
+window of at most ~100 characters of the line just passed (the label's 64, the joiner's gaps, the quotes and indicator —
+a bounded re-read of a bounded window, not a rescan); a consumed continuation or block is walked once and the cursor
+resumes after it; a declined line is never read again. Every character is visited at most a small constant number of
+times whatever the text is shaped like. It needs no deadline for its own bound — `PrivateKeyBlocks` has none either —
+and runs under the between-pass `StopIfOverdue` in `SecretsTaken` and (D5) in `ClassOf`. Measured, as
+`TheRedactorCannotBeMadeToHangTests` measures (`Ceiling` 10 s, `:32`; the corpus at `:34-58`), with new adversarial
+shapes through ALL THREE entry points (`SafeText`, `SafeSource`, `FirstSecretClass`) at **262 144 characters** —
+`SecuritySignals.MaxFileCharacters`, the largest real input — and at `StdErrChars` 64 Ki (R1's road): 262 144 characters
+of `key:` LF lines (every label declines, each once); `key: |` LF then 262 000 characters of indented lines (one block,
+consumed once — S-11's confidentiality row doubles as its timing row); a blank-heavy block (every other line empty);
+lines indented by 100 000 spaces then a label; 50 000 `key:` LF `  v` pairs; a 262 144-character text with no line break
+(the no-op road). Expected well under the existing "130 ms or less over 200 KB" class (`Redaction.cs:111`); the
+whole-call promise ("about four seconds in the worst case", `:152-158`) is unchanged.
 
 **D8 — Fail-closed is unchanged.** `WhenRedactionTimesOut` (`:294-304`) still answers `[redacted]` for a regex ceiling
 and `StopIfOverdue` still throws between passes; the new pass itself throws nothing — it cannot time out and therefore
-has nothing to fail closed on, exactly like `PrivateKeyBlocks`. `FirstSecretClass` still answers `unredactable` on a
-ceiling.
+has nothing to fail closed on, exactly like `PrivateKeyBlocks`, and (D4) it has no bound to overflow. `FirstSecretClass`
+still answers `unredactable` on a ceiling.
 
-**D9 — The extension mirror and parity.** `notifications.ts:206` takes the D6 joiner byte for byte, and
-`noticeShapes.ts` `SHAPES` gains R1–R10 with REAL line breaks and the two deep-indent shapes, so `run-parity.mjs`
-compares `safeText` of both halves over them (the harness already carries real-LF shapes: `privateKey('RSA ', '\n')`).
-The procedural pass is **server-only**, and that is a decision, not an omission: the extension has no layout-keeping
-road — `safeText` is called from one place (`notifications.ts:324`) and strips every line break first, and
-`redactPrivateKeyBlocks` is called only from `safeText` — so a TypeScript port would run only to be stripped. The
-header remark of `Redaction.cs` ("this file is a PORT, not a re-design", `:9-14`) gets one paragraph naming the pass as
-the one server-only step and why; `NoticeTool` is unchanged (`safe-text` already exercises `SecretsTaken` end to end on
-real-LF inputs, where the pass is active before the strip removes nothing — see Q2 for the alternative).
+**D9 — The extension mirror and parity: the pass is ported, byte for byte.** The first draft kept the pass server-only
+because the extension has no layout-keeping road; C1 showed the notice road is the SAME road on both sides and the pass
+has to run before the strip there too. So: `src_vs_code/src/labelContinuations.ts` is the port of
+`LabelContinuations.cs`, as `privateKeyBlocks.ts` is of `PrivateKeyBlocks.cs` — same evidence, same declines, same
+replacement, same block end — and `safeText` calls it after `redactPrivateKeyBlocks` and before its printable filter
+(`notifications.ts:237-241` reordered). `notifications.ts:206` takes the D6 joiner byte for byte. `noticeShapes.ts`
+`SHAPES` gains R1–R11 with REAL line breaks, the child-container shape, the blank-line block and the two-line scalar, so
+`run-parity.mjs` compares `safeText` of both halves over them (the harness already carries real-LF shapes:
+`privateKey('RSA ', '\n')`). `NoticeTool` is unchanged (`safe-text` already exercises `Passes` end to end). The
+`SafeSource` road stays server-only, as it is today — the pass under it is the parity-tested one.
 
-**D10 — The swallow (R10 on the `SafeText` road, the German row) — a lead-gated story, S4.** Cure: a negative
-lookahead before the value, `(?!"?[A-Za-z][A-Za-z0-9_.-]{0,63}"?[ \t]{0,4}[:=])` — "the value is not itself a
-label" — so the match at `service` or `Fehler` fails and the engine finds `api_key:`/`password=` on its own. It FLIPS
-the pinned German row (`password=letmein` becomes `password=[redacted]`, the better direction) and keeps every other
-pinned case (`Set-Cookie: session=abc`: `Set-Cookie`'s value `session=` is a label, the match fails, `session` is no
-credential, unchanged; `?sig=abc&author=me` unchanged, its value begins with `[`). Cost: a lookaround takes the pattern
-off `NonBacktracking` (unsupported there, as the Moonshot rule's look-ahead already is, `:190-192`), so it gains
-`BacktrackingCeilingMs` and a reason; the backtracking cost stays one try per start (label characters never contain
-`:`/`=`, the value is greedy with nothing after it), measured on the corpus. Both halves, parity, the German row's test
-rewritten with the reason. Recommended; gated on Q1 because it changes a pinned contract and an engine.
+**D10 — The swallow (R10 on the `SafeText` road, the German row) — a lead-gated story, S4, redesigned after cadence C2.**
+The first draft put a negative lookahead ("the value is not itself a label") in the one labelled pattern, and C2 showed
+it UN-MASKS `password=abc=def`: the lookahead rejects the value `abc=def` because `abc=` looks like a label, the match
+at `password` fails, and the scan resumes at the ordinary label `abc` — whole. The ambiguity is real (`abc=def` is both
+a value and an assignment) and only the word list resolves it, which a lookahead cannot consult. Cure: **two labelled
+passes.** The first is the D6 rule exactly as it is, which masks every value whose OUTER label names a credential
+(`password=abc=def` → `password=[redacted]`, `password: abc=def` likewise). The second — the *inner-label pass* — is
+the same rule with the lookahead `(?!["']?[A-Za-z][A-Za-z0-9_.-]{0,63}["']?[ \t]{0,4}[:=])` before the value, run over
+the first pass's output: on `Fehler: password=letmein` the match at `Fehler` fails and `password=letmein` is found on
+its own; on `service:  api_key: FAKE` likewise; on the first pass's own output it is idempotent (`password=[redacted]`:
+the value begins with `[`, no label); `Set-Cookie: session=abc` (`Set-Cookie` fails, `session` is no credential) and
+`?sig=[redacted]&author=me` (the value begins with `[`) stay as pinned. It FLIPS the German row (`password=letmein`
+becomes `password=[redacted]`, the better direction) and nothing else that is pinned. Cost: a lookaround takes the
+second pattern off `NonBacktracking` (unsupported there, as the Moonshot rule's look-ahead already is, `:190-192`), so it
+carries `BacktrackingCeilingMs` and a reason; its backtracking cost stays one try per start (label characters never
+contain `:`/`=`, the value is greedy with nothing after it); measured on the corpus. Regression rows in both halves and
+in `FirstSecretClass`: `password=abc=def`, `password: abc=def`, `token=a==` (base64 padding), and the German row.
+Both halves, parity. Recommended; gated on Q1 because it changes a pinned contract and adds a pattern.
 
 **D11 — Residuals this plan records and does not cure.** (a) R9, a value WRAPPED mid-way: the remainder on the next
 line is indistinguishable from the next line of a file; no evidence, no reach. (b) R8 without indent or quote. (c) The
 two API quote sites that replace line breaks by a SPACE before `SafeText` (`AskApiMode.cs:394`, `ProbeApiMode.cs:373`)
-get D6's cure only (the gap is indentation + 1). (d) A scheme word the bearer rule does not know after `Authorization:`
-(one-line limit). (e) Two line breaks between label and value.
+get D6's cure only (the gap is indentation + 1; a two-line block scalar glued by the CALLER keeps its second line) —
+one line each to drop the replace and let `SafeText` see the breaks is proposed as Q6. (d) A scheme word the bearer
+rule does not know after `Authorization:` (one-line limit). (e) Two line breaks between a label and a PLAIN
+continuation. (f) A child assignment under a credential-named container whose own label is NOT a credential
+(`credentials:` LF `  user: FAKE`) — the container's rule declines the child, the child's label is ordinary; masking
+it would be the container-wide masking this plan does not attempt.
 
 ## 4. Scenarios (each RED is the message before the fix)
 
-C# through `Redaction.SafeSource` / `SafeText` / `FirstSecretClass` and, for S-9, the product (`TheStderrLineIsQuotedSafelyTests.ThroughTheProduct`).
+C# through `Redaction.SafeSource` / `SafeText` / `FirstSecretClass` and, for S-9 and S-12, the product
+(`TheStderrLineIsQuotedSafelyTests.ThroughTheProduct`; `ServerNoticeLine` → `notificationLine`/`parseNotificationLine`).
 
 | # | Given | Expected | RED today |
 |---|---|---|---|
 | S-1 | R1 through `SafeSource` | `{` LF `  "api_key":` LF `    "[redacted]",` LF `}` — same line count | `Did not expect text "{\n  \"api_key\":\n    \"FAKE-CANARY-0001\",\n}" to contain "FAKE-CANARY-0001".` |
 | S-2 | R2 through `SafeText` (DetailLimit) | `{  "nested": {    "api_key":        "[redacted]"  }}` | `Expected text to be "…\"api_key\":        \"[redacted]\"…", but "…\"api_key\":        \"FAKE-CANARY-0002\"…" differs near "FAK" (index 46).` |
 | S-3 | R3, R5, R6, R7, R10's inner pair through `SafeSource` | each value `[redacted]`, indentation kept, `\` kept | `Did not expect … to contain "FAKE-CANARY-0003"` (one row per shape) |
-| S-4 | R4 through `SafeSource` and through `SafeText` | `password: >` LF `  [redacted]`; `password: >  [redacted]` | `Did not expect "password: [redacted]\n  FAKE-CANARY-0004\n" to contain "FAKE-CANARY-0004".` |
-| S-5 | the declines: `password:` LF `the one you chose last week`; `the key` LF `to this is patience`; `api_key:` LF LF `  x`; `api_key:` at end of text; `service:` LF `  api_key: FAKE-CANARY-0011` | first four UNCHANGED; the fifth `service:` LF `  api_key: [redacted]` | green today and MUST stay green — the fifth is the test that goes red under a crossing joiner (D2): `Did not expect … to contain "FAKE-CANARY-0011".` |
+| S-4 | R4 through `SafeSource` and through `SafeText`; R4b through both | `password: >` LF `  [redacted]`; `password: >  [redacted]`; R4b: two placeholders, no `FAKE-SECOND` on either road | `Did not expect "password: [redacted]\n  FAKE-CANARY-0004\n" to contain "FAKE-CANARY-0004".`; R4b on `SafeText`: `Did not expect "password: \|  [redacted]  FAKE-SECOND" to contain "FAKE-SECOND".` |
+| S-5 | the declines: `password:` LF `the one you chose last week`; `the key` LF `to this is patience`; `api_key:` LF LF `  x`; `api_key:` at end of text; `service:` LF `  api_key: FAKE-CANARY-0012` | first four UNCHANGED; the fifth `service:` LF `  api_key: [redacted]` | green today and MUST stay green — the fifth is the test that goes red under a crossing joiner (D2): `Did not expect … to contain "FAKE-CANARY-0012".` |
 | S-6 | every pinned row of `ServerNoticeLineTests` (`:131-213`), `password     =x` included | unchanged | green before and after |
-| S-7 | R1 through `FirstSecretClass` | `labelled` | `Expected text to be "labelled" with a length of 8, but "" has length 0.` |
-| S-8 | the D7 adversarial shapes through `SafeText`/`SafeSource` | answered under `Ceiling`; a 262 144-character YAML of `key:` LF `  v` pairs under 1 s | green before (the pass does not exist) — the row is the guard the pass ships under |
+| S-7 | R1 through `FirstSecretClass`; the precedence rows: `"private_key":` LF `"-----BEGIN…` → `private-key`; `api_key:` LF `  FAKE` + `?access_token=x` → `labelled`; `?access_token=x` alone → `parameter` | as named | `Expected text to be "labelled" with a length of 8, but "" has length 0.` |
+| S-8 | the D7 adversarial shapes through all three entry points at 262 144 and 64 Ki | answered under `Ceiling`, each elapsed time printed | green before (the pass does not exist) — the row is the guard the pass ships under |
 | S-9 | an ACP stderr of 64 Ki whose first lines are R1 and whose last holds the monthly phrase, through the product | no canary fragment in the diagnosis line, the report JSON, the summary, the ledger, the log | `Did not expect seen.Report "…" to contain "FAKE-CANARY-0001" (the shim's report JSON).` |
-| S-10 | (S4, gated) the German row and `service:  api_key: FAKE-CANARY-0011` through `SafeText` | `Fehler: password=[redacted] …`; `service:  api_key: [redacted]` | `Expected text to be "Fehler: password=[redacted] für …", but "Fehler: password=letmein für …" differs near "let" (index 17).` |
+| S-10 | (S4, gated) the German row, `service:  api_key: FAKE-CANARY-0012`, `password=abc=def`, `password: abc=def`, `token=a==` through `SafeText` and `FirstSecretClass` | `Fehler: password=[redacted] …`; `service:  api_key: [redacted]`; `password=[redacted]`; `password: [redacted]`; `token=[redacted]`; class `labelled` for each | `Expected text to be "Fehler: password=[redacted] für …", but "Fehler: password=letmein für …" differs near "let" (index 17).` — and the C2 guard: under the single-lookahead design `Did not expect "password=abc=def" to contain "abc=def".` |
+| S-11 | **P1, confidentiality past the old bound:** a 262 144-character text — `password: \|` LF then 262 000 characters of indented lines whose every 1 000th line carries `FAKE-CANARY-DEEP-<n>`, then `ordinary: visible` — through `SafeSource` and `FirstSecretClass` | no `FAKE-CANARY-DEEP` anywhere, `ordinary: visible` present, line count unchanged, class `labelled` | `Did not expect text to contain "FAKE-CANARY-DEEP-66"` (the first canary past 65 536 characters) — the row an elapsed-time test cannot write |
+| S-12 | **C1, through the notice road both halves:** a server notice whose `detail` is R4b, written by `ServerNoticeLine`, read by the extension's `parseNotificationLine`; and the extension's own `notificationLine` of the same record | neither line carries `FAKE-FIRST` or `FAKE-SECOND`; `safeText` and `SafeText` agree byte for byte (parity) | `Did not expect line "…\"detail\":\"password: \|  [redacted]  FAKE-SECOND\"…" to contain "FAKE-SECOND".` |
+| S-13 | **R1 (risk), the child label kept:** `credentials:` LF `  password: FAKE-CANARY-CHILD` through `SafeSource` and `SafeText` | `credentials:` LF `  password: [redacted]` — the child label present, the canary gone | green today (the one-line rule masks the child) and MUST stay green; under D4 without the child rule: `Expected text to contain "password:" but found "credentials:\n  [redacted] FAKE-CANARY-CHILD"` |
+| S-14 | **R2 (risk), blank lines inside a block:** `password: \|` LF `  FAKE-FIRST` LF `` LF `  FAKE-SECOND` LF `ordinary: visible` | `password: \|` LF `  [redacted]` LF `` LF `  [redacted]` LF `ordinary: visible`; five lines in, five out | `Did not expect … to contain "FAKE-SECOND".` |
+| S-15 | compound labels as continuation labels: `db_password:` LF `  FAKE`, `apiKey:` LF `  "FAKE"`, `X-Api-Key:` LF ` FAKE`, `"client_secret":` LF `    "FAKE"` | each masked | `Did not expect … to contain "FAKE"` (one row each) |
+| S-16 | R11 TOML through `SafeSource`; `password='FAKE'` and `password = """FAKE"""` on one line through `SafeText` | `password = """` LF `[redacted]` LF `"""`; `password='[redacted]'`; `password = """[redacted]"""` | `Did not expect … to contain "FAKE"` (three rows) |
 
-TypeScript (`notifications.test.ts`, `safeText`): R2 and R4 as S-2/S-4 — RED `assert.ok(!safe.includes('FAKE-CANARY-0002'))`
-fails with the glued text; `noticeShapes.ts` corpus rows for R1–R10 and the two deep-indent shapes — `run-parity.mjs`
-RED on a one-sided change: `safeText at 4096: N of M cases differ — one half of this product would write a secret the
-other would have taken out`.
+TypeScript (`notifications.test.ts`, `labelContinuations.test.ts`): S-2, S-4, S-12, S-13, S-14, S-16's one-line rows as
+`assert.ok(!safe.includes('FAKE-…'))` — RED with the glued text; `noticeShapes.ts` corpus rows for R1–R11, the child
+container, the blank-line block and the two-line scalar — `run-parity.mjs` RED on a one-sided change: `safeText at
+4096: N of M cases differ — one half of this product would write a secret the other would have taken out`.
 
 ## 5. Build order
 
-One epic, four stories. **S1 is the cornerstone**: the matching model and its declines (D3) are the whole security
-argument, and a wrong decline is a leak while a wrong reach is a regression on served files.
+Four stories, no epics. **S1 is the only cornerstone**: the matching model, its declines and the child rule (D3) are the
+whole security argument — a wrong decline is a leak, a wrong reach is a regression on served files, and a wrong child
+rule takes a label away from the rule that needed it. **S1 and S2 are interdependent and land together**: S1 changes the
+server's `safeText` output on real-LF shapes, S2 ports the same change to the extension, and `run-parity.mjs` is red
+until BOTH halves agree — so they are one pull request (or S2 lands first behind nothing and the parity red is the
+proof, then S1).
 
-1. **S1 — `LabelContinuations` (server).** RED: S-1, S-3, S-4 (`SafeSource` half), S-5 (all five, the fifth as the
-   regression guard), S-7, S-8. New file `src_mcp/core/Notices/LabelContinuations.cs` (procedural, `internal static`,
-   the shared `BlockLimit`), wired into `SecretsTaken` and `ClassOf` after the block pass; `PrivateKeyBlocks.BodyLimit`
-   reads the shared constant. Test file `src_mcp/tests/ALabelledValueOnTheNextLineIsRedactedTests.cs`; rows in
-   `TheRedactorCannotBeMadeToHangTests` and `SecretCheckTests`. GREEN; break-it: remove the deeper-indent evidence and
-   watch S-3's YAML row go red; remove the credential check and watch S-5's fifth row go red.
-2. **S2 — the joiner's gap and block indicator (both halves).** RED: S-2, S-4 (`SafeText` half) in C#; the two
-   `notifications.test.ts` cases; the corpus rows, with `run-parity.mjs` red when only one half has changed. Change
-   `LabelledPattern` and `LABELLED`, byte for byte; confirm the `NonBacktracking` build (D6) or record the fallback.
-   GREEN on `CoaiMcp.Tests`, `npm test`, `npm run test:parity`.
-3. **S3 — the product check and the docs.** S-9 through `TheStderrLineIsQuotedSafelyTests`; `research/module_core.md`:
-   a `LabelContinuations` row beside `PrivateKeyBlocks`, the `Redaction.SafeSource` row's "stops at each line's end"
-   corrected, the labelled rule's new joiner in the `Redaction` rows; `research/module_tests.md` rows for the new
-   tests with their RED messages; the `SafeSource` remark at `Redaction.cs:316-317` rewritten; one pointer from the
-   Kimi plan's R1 bullet to this plan. Promote this plan (`/promote-plan`) when S1–S3 ship and Q1 is answered.
-4. **S4 — the swallow (gated on Q1).** RED: S-10, the German row's expectation flipped; `EveryPattern_…` sees the
-   pattern leave `NonBacktracking` with its reason; the hang test's labelled row re-measured. Both halves, parity.
+1. **S1 — `LabelContinuations` (server) and the pass order of both roads.** RED: S-1, S-3, S-4, S-5 (all five, the fifth
+   as the regression guard), S-7 (with the precedence rows), S-8, S-11, S-13, S-14, S-15, S-16's R11 row. New file
+   `src_mcp/core/Notices/LabelContinuations.cs` (procedural, one advancing cursor, `internal static`), wired into
+   `SecretsTaken` after the block pass; `Passes` reordered (block → continuation → strip → …); `ClassOf` reordered and
+   given the clock. Test file `src_mcp/tests/ALabelledValueOnTheNextLineIsRedactedTests.cs`; rows in
+   `TheRedactorCannotBeMadeToHangTests`, `SecretCheckTests`, `APrivateKeyBlockIsNeverServedTests` (the real-LF notice
+   output of D5, now N placeholders). GREEN; break-its: remove the deeper-indent evidence and watch S-3's YAML row go
+   red; remove the credential check and watch S-5's fifth row go red; remove the child rule and watch S-13 go red;
+   reinstate a 65 536 block cap and watch S-11 go red.
+2. **S2 — the extension's port, the joiner, the corpus (both halves).** RED: `labelContinuations.test.ts` (S-4, S-13,
+   S-14 through `safeText`), `notifications.test.ts` (S-2, S-12, S-16's one-line rows), S-2 and S-16's one-line rows in
+   C#; the corpus rows, with `run-parity.mjs` red while only one half has changed. Port the pass byte for byte; reorder
+   `safeText`; change `LabelledPattern` and `LABELLED` identically; confirm the `NonBacktracking` build (D6) or record
+   the fallback. GREEN on `CoaiMcp.Tests`, `npm test`, `npm run test:parity`.
+3. **S3 — the product checks and the docs.** S-9 through `TheStderrLineIsQuotedSafelyTests`; S-12 through
+   `ServerNoticeLine` and the extension's parser; `research/module_core.md`: a `LabelContinuations` row beside
+   `PrivateKeyBlocks`, the `Redaction.SafeSource` row's "stops at each line's end" corrected, the new pass order and the
+   joiner in the `Redaction` rows, the real-LF notice output change; `research/module_tests.md` rows for the new tests
+   with their RED messages; the `SafeSource` remark at `Redaction.cs:316-317` and the "control characters go first"
+   remark at `:264-270` rewritten; the header remark of `Redaction.cs` (`:9-14`) and of `notifications.ts` naming the
+   pass as the second procedural port; one pointer from the Kimi plan's R1 bullet to this plan; Q6's two one-line
+   changes if the lead agrees. Promote this plan (`/promote-plan`) when S1–S3 ship and Q1 is answered.
+4. **S4 — the swallow (gated on Q1).** RED: S-10 (the German row's expectation flipped; the C2 guard rows);
+   `EveryPattern_…` sees a seventh pattern with its reason; the hang test's labelled rows re-measured. Both halves,
+   parity.
 
-Releases: one coai-mcp release carries S1–S3 (the server masks every served and quoted shape); one extension release
-carries S2's mirror. The server release is the one that closes R1; the extension's cures only R2/R4/R6 in its own notices.
+Releases: one coai-mcp release and one extension release carry S1–S3 together (the notice road is shared, D9); the
+server release is the one that closes R1 on the served-file and stderr roads.
 
 ## 6. Test plan
 
@@ -287,56 +376,93 @@ carries S2's mirror. The server release is the one that closes R1; the extension
   `dotnet build dew_flow_connect_other_ais.slnx` then
   `./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-class "*ALabelledValueOnTheNextLine*"`,
   `… --filter-class "*ServerNoticeLineTests"`, `… --filter-class "*TheRedactorCannotBeMadeToHang*"`,
-  `… --filter-class "*SecretCheckTests"`, `… --filter-class "*TheStderrLineIsQuotedSafely*"`; then the whole
-  executable once, at lowered priority if other suites run on the machine (the Kimi plan's note on wall-clock tests).
+  `… --filter-class "*SecretCheckTests"`, `… --filter-class "*APrivateKeyBlockIsNeverServed*"`,
+  `… --filter-class "*TheStderrLineIsQuotedSafely*"`; then the whole executable once, at lowered priority if other
+  suites run on the machine (the Kimi plan's note on wall-clock tests).
 - **Extension:** `cd src_vs_code && npm test` (compiles, then `scripts/run-tests.mjs` over `out/test`);
   `npm run test:parity` (BUILDS `NoticeTool` first — `run-parity.mjs` says why a found DLL is not enough — then
   compares `safeText` over the corpus byte for byte and the notice lines through the parser).
 - **RED-GREEN-RED on both sides.** Every scenario's RED message is observed on the unfixed code and recorded in
-  `module_tests.md`; after GREEN, the break-its of S1 (D3's evidence removed; the credential check removed) and the
-  one-sided parity red of S2 are run and recorded. S-5 and S-6 are the regression guards and must be green BEFORE the
-  change too — a guard that was red before proves the wrong thing.
-- **Measurement** (D7): the adversarial rows' elapsed time printed in the test's own message, at the two real sizes.
+  `module_tests.md`; after GREEN, the four S1 break-its and S2's one-sided parity red are run and recorded. S-5, S-6 and
+  S-13 are the regression guards and must be green BEFORE the change too — a guard that was red before proves the wrong
+  thing.
+- **Confidentiality beyond the boundary (P1):** S-11 asserts content, not time — no canary past 65 536 — through
+  `SafeSource` and `FirstSecretClass`; a byte-position assertion, so a future cap cannot return unnoticed.
+- **Measurement** (D7): the adversarial rows' elapsed time printed in the test's own message, at 262 144 and 64 Ki,
+  through all three entry points.
 
 ## 7. Risks
 
 | Risk | Mitigation |
 |---|---|
-| Performance on large text — a 262 144-character file of label lines, or a block scalar that never ends | the pass is linear by construction (each character consumed once, backward reads bounded to ~80), the block bounded by `BlockLimit`; S-8 measures at the two real sizes under the existing hang ceiling; the whole-call ceiling stands |
+| Performance on large text — a 262 144-character file of label lines, a block scalar that never ends, lines of enormous indentation | one advancing cursor, indentation counted once per line, a bounded re-read window at a line's end, no rescans (D7); S-8 measures at the two real sizes through all three entry points under the existing hang ceiling; the whole-call ceiling stands, now in `ClassOf` too |
+| A block's tail past a cap stays readable | the cap is gone (D4): a block ends by structure or at the end of the text; S-11 pins content past the old boundary |
 | False positives on served files — an ordinary word before a colon at a line's end, a markdown heading `## API key:` followed by indented prose | reach only for a credential-named label AND with evidence (D3); `## API key:` LF `Here is …` declines (no indent, no quote). A credential label followed by an indented paragraph masks the paragraph's first token — the same one token the one-line rule masks today, recorded as expected |
+| A credential-named CONTAINER takes its child's label away (risk R1) | the child-assignment rule (D3); S-13 is the permanent guard, green before and after |
 | A regression on the most common served shape (nested YAML) | D2 rejected the crossing joiner for exactly this; S-5's fifth row is the permanent guard |
-| The parity mirror drifting — a server-only pass is a second place where the two halves legitimately differ | the pass runs BEFORE the strip only in effect, never in the extension's road; the corpus rows exercise both halves' `safeText` over real-LF shapes so an extension-side change to the strip or the regex is caught; the header remark names the asymmetry (D9) |
+| The notice road differs between halves — the pass runs before the strip on one side only | the pass is ported (D9) and the corpus carries real-LF rows, so `run-parity.mjs` is red on any one-sided change; S1 and S2 land together |
+| The parity mirror drifting over time — two procedural ports (`privateKeyBlocks.ts`, `labelContinuations.ts`) | the corpus rows exercise both through `safeText`; the header remarks name both ports; `NoticeTool` unchanged |
+| The real-LF PEM-in-a-notice output changes (D5) | still fully masked; no test pins the single placeholder; both halves change identically; recorded in `module_core.md` |
 | `NonBacktracking` refuses the widened joiner at build | the fallback is the backtracking engine with the ceiling and a reason (D6); the audit test admits it; decided at build time and written in the summary |
-| D6 masks more one-line text (`key:        value`-style aligned tables where a credential word labels a value) | that is the rule's purpose; the pre-joiner gap keeps the pinned negative; the corpus rows show every new positive |
-| S4 flips a pinned contract and moves a pattern off `NonBacktracking` | gated on Q1; its own RED, its own measurement, both halves at once |
+| D6 masks more one-line text (`key:        value`-style aligned tables; single-quoted values) | that is the rule's purpose; the pre-joiner gap keeps the pinned negative; the corpus rows show every new positive |
+| S4 flips a pinned contract and adds a backtracking pattern | gated on Q1; its own RED, its own measurement, both halves at once; the C2 guard rows (`password=abc=def`) pin that the second pass never un-masks the first's work |
 
 ## 8. Questions for the lead (assumed where marked)
 
 - **Q1 — Fold S4 (the swallow, D10) into this epic?** It is the `SafeText` road's REAL everyday leak (nested YAML on one
   glued line) and changes the German row's pinned contract. *Assumed: planned as a gated story; not built until answered.*
-- **Q2 — Mirror `LabelContinuations` into TypeScript although nothing there keeps a layout?** A port that runs only to be
-  stripped is drift waiting to happen; a comment naming the asymmetry is the cheaper guard. *Assumed: server-only (D9).*
-- **Q3 — Reach without evidence for `label=` CR LF `value` (R8)?** Dotenv never writes it; a `.http`/JSON/YAML writer
+- **Q2 — (answered by C1) the pass IS ported to TypeScript** and runs before the strip on both sides. No question left.
+- **Q3 — Reach without evidence for `label=` CR LF `value` (R8)?** Dotenv never writes it; a `.http`/JSON/YAML/TOML writer
   always indents or quotes. *Assumed: declined and recorded (D11 b).*
 - **Q4 — The post-joiner gap bound: 32 or 64?** 32 is eight JSON levels at four spaces. *Assumed: 32.*
 - **Q5 — Class name for the secret check: `labelled` or a new `labelled-continuation`?** One rule reaching one line
   further argues for one class; a separate class would let `SecretCheckTests` tell them apart. *Assumed: `labelled`.*
+- **Q6 — Drop the `\r`/`\n` → space replace at `AskApiMode.cs:394` and `ProbeApiMode.cs:373`** so the API quote road
+  gets the pass instead of only D6's gap (D11 c)? One line each; the only visible change is that glued words lose the
+  space between them, which `SafeText` does to every other caller already. *Assumed: yes, in S3, unless the lead objects.*
 
 ## 9. Definition of Done
 
-- [ ] S-1…S-9 written RED first, each RED message observed on the unfixed code and recorded in `research/module_tests.md`;
-      then GREEN; then the two S1 break-its and S2's one-sided parity red observed and recorded (RED-GREEN-RED, both sides).
-- [ ] S-5 and S-6 green before AND after — no pinned negative changed, nested YAML with the value on its key's line still
-      masked on the `SafeSource` road.
-- [ ] `LabelContinuations` is procedural, after `PrivateKeyBlocks`, before the parameter pass, in `SecretsTaken` and
-      `ClassOf`; `BlockLimit` is one shared constant; the hang test's new rows run under `Ceiling` at 64 Ki and 262 144.
-- [ ] The labelled joiner is identical in `Redaction.cs` and `notifications.ts`; `npm run test:parity` green over the
-      corpus with R1–R10 and the deep-indent rows; the `NonBacktracking` outcome of D6 stated in the story summary.
+- [ ] S-1…S-9 and S-11…S-16 written RED first, each RED message observed on the unfixed code and recorded in
+      `research/module_tests.md`; then GREEN; then the four S1 break-its and S2's one-sided parity red observed and
+      recorded (RED-GREEN-RED, both sides).
+- [ ] S-5, S-6 and S-13 green before AND after — no pinned negative changed, nested YAML with the value on its key's
+      line still masked on the `SafeSource` road, a credential-named container's child keeps its label.
+- [ ] S-11 asserts no canary past 65 536 characters in a 262 144-character block scalar through `SafeSource` and
+      `FirstSecretClass` — content, not time.
+- [ ] `LabelContinuations` is procedural with one advancing cursor, after `PrivateKeyBlocks`, before the strip and the
+      parameter pass, on both roads and in `ClassOf`; `ClassOf` carries the clock; the hang test's new rows run under
+      `Ceiling` at 64 Ki and 262 144 through all three entry points.
+- [ ] `labelContinuations.ts` is the byte-for-byte port and `safeText` runs it before its printable filter; the labelled
+      joiner is identical in `Redaction.cs` and `notifications.ts`; `npm run test:parity` green over the corpus with
+      R1–R11, the child container, the blank-line block and the two-line scalar; the `NonBacktracking` outcome of D6
+      stated in the story summary.
+- [ ] S-12 proves a two-line scalar in a server notice reaches the extension's parser with neither line readable.
 - [ ] `CoaiMcp.Tests.exe` (whole), `npm test`, `npm run test:parity` green; run as executables, never `dotnet test`.
-- [ ] `research/module_core.md`: `LabelContinuations` row, the `Redaction.SafeSource` row and the `Redaction.cs:316-317`
-      remark no longer say the labelled pass stops at a line's end; the joiner documented; the server-only asymmetry
-      named. `research/module_tests.md` rows for every new test.
+- [ ] `research/module_core.md`: `LabelContinuations` row, the new pass order of both roads, the real-LF notice output
+      change, the joiner; the `Redaction.SafeSource` row and the `Redaction.cs:316-317` remark no longer say the labelled
+      pass stops at a line's end; the header remarks of both halves name the second procedural port.
+      `research/module_tests.md` rows for every new test.
 - [ ] The Kimi plan's R1 bullet points here; `node .agents/conventions/tools/plan-lifecycle.mjs` clean.
-- [ ] Q1 answered; S4 built or extracted into its own `todo/` plan; this plan promoted to `research/` with its
-      deviations and residuals (D11) recorded.
+- [ ] Q1 answered; S4 built or extracted into its own `todo/` plan; Q6 decided; this plan promoted to `research/` with
+      its deviations and residuals (D11) recorded.
 - [ ] No real-looking secret in any fixture (fake canaries only); the hygiene scan on the diff prints nothing.
+
+## The plan round (a0bc0720) and the two consults (a1c21b20 cadence, f1d48728 risk), 2026-10-23
+
+Each point was verified against the code on `main` 151cc6526 (the reviewers ran isolated replays of the regexes, not the
+unbuilt pass) before it was folded. All six hold; two of them found a design error, not only a gap.
+
+| Point | Verified | Folded |
+|---|---|---|
+| **P1 (plan round, blocking)** — a block scalar longer than `BlockLimit` 65 536 inside a 262 144-character `SecuritySignals` input (`SecuritySignals.cs:18`) leaves its tail readable | Yes. The first draft's D3 ended a block "until `BlockLimit` characters"; everything after was ordinary text to the labelled rule, which cannot see the label. | D4: the cap is removed — a block ends by its structure or at the end of the text; there is no bound-reached state to fail closed from, which is the stronger fail-closed. S-11 asserts content past the old boundary through `SafeSource` and `FirstSecretClass`; a break-it reinstates the cap and watches it go red. |
+| **C1 (cadence)** — `SafeText` strips line breaks before any pass on both halves (`Redaction.cs:391`, `notifications.ts:237`), so under D6 alone `password: \|` LF `  FAKE-FIRST` LF `  FAKE-SECOND` becomes `password: \|  [redacted]  FAKE-SECOND` on BOTH sides — parity, not safety — and server notices reach the extension's page through `notificationsFile.ts:108-110` with no second redaction | Yes, replayed: the glued text has two tokens and the rule masks one. The first draft's D5 declared the pass a no-op on the `SafeText` road and D9 kept it server-only — wrong for the notice road, which is one road with two writers. | D1/D5: the pass runs BEFORE the strip on both roads; D9: ported to `labelContinuations.ts`, `safeText` reordered, parity rows with real line breaks; S-12 through notice serialisation and the extension's parser; §5 says S1 and S2 are interdependent and land together. One consequence named: the block pass also moves ahead of the strip (it must precede the continuation pass), so a real-LF PEM in a notice becomes one placeholder per body line — nothing pins the single placeholder. |
+| **C2 (cadence)** — D10's lookahead un-masks `password=abc=def`: the lookahead rejects the value `abc=def` (`abc=` looks like a label), the match at `password` fails, scanning resumes at the ordinary label `abc` | Yes, replayed. D6 alone masks it (`password=[redacted]`); D6 with the lookahead in the one pattern leaves it whole. | D10 redesigned as two labelled passes: the plain D6 rule first (every credential OUTER label masked), then the inner-label pass with the lookahead over its output (idempotent on `[redacted]`). Regression rows `password=abc=def`, `password: abc=def`, `token=a==` in both halves and `FirstSecretClass` (S-10). TOML triple-quoted values: covered — R11 and D3's fifth evidence kind (block until the closing `"""`), and D6's `["']{0,3}` for the one-line form (S-16). |
+| **R1 (risk)** — a credential-NAMED container: `credentials:` LF `  password: FAKE-CANARY-CHILD`; `credentials` passes `NamesACredential` (`credential` is an *anywhere* word), the child is deeper, D4 replaces the token `password:`, the canary loses its label and survives every later pass — masked today by the one-line rule | Yes. A regression the first draft would have shipped. | D3's child-assignment rule: a PLAIN continuation declines when the next line is itself a label assignment, leaving it to the labelled rule; inside a block every line is value. S-13 pins "child label kept, canary gone", green before and after; a break-it removes the rule. D11 (f) records the ordinary-named child under a credential container as out of scope. |
+| **R2 (risk)** — a blank line inside a block scalar ended the first draft's block early: `password: \|` LF `  FAKE-FIRST` LF `` LF `  FAKE-SECOND` LF `ordinary: visible` exposed `FAKE-SECOND` | Yes: the draft said "every following line indented deeper", and a blank line has no indentation. | D3/D4: a block continues through blank lines (left blank) and ends at the first NON-BLANK line not indented deeper; `ordinary: visible` survives; every line break kept. S-14. |
+| **R3 (risk)** — boundedness: an advancing cursor, per-line indentation computed once, no rescans; measure all three entry points at 262 144 characters including long indentation and blank-heavy blocks; `ClassOf` (`Redaction.cs:362-376`) has NO `StopIfOverdue`, so a between-pass deadline cannot interrupt a procedural pass there; keep the precedence proofs; pin compound labels | Yes: `ClassOf` runs five steps with no clock (zero `StopIfOverdue` calls in `:362-376`); the draft's D7 measured only `SafeText`/`SafeSource` at 64 Ki and 262 144. | D7 rewritten around the cursor invariant and the once-per-line indentation; the adversarial corpus runs through `SafeText`, `SafeSource` and `FirstSecretClass` at 262 144 with the long-indent and blank-heavy shapes (S-8); the pass needs no deadline for its own bound — and `ClassOf` gets the clock anyway (D5), so the whole-call promise holds there. Precedence rows in S-7 (PEM + continuation → `private-key`; continuation + query credential → `labelled`; query credential alone → `parameter`). Compound labels `db_password`, `apiKey`, `X-Api-Key`, `client_secret` pinned as continuation labels (S-15). |
+
+Kept from the first draft, because the round and the consults did not move them: the rejection of a crossing regex
+joiner (D2, with S-5's fifth row as the guard), the evidence model for a plain continuation (D3), the layout and line
+count kept (D4), the regex gap in both halves (D6), the fail-closed answers (D8), the residuals (D11), the four
+stories with S1 as the only cornerstone, and the lead questions Q1, Q3–Q5 (Q2 is answered by C1; Q6 is new).
