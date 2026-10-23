@@ -44,27 +44,119 @@ public sealed class TheClaudeReviewerRunsInSafeModeTests
         public Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default) => Task.FromResult(result);
     }
 
+    private sealed class Recording(ProcessResult result) : IProcessLauncher
+    {
+        public List<ProcessRequest> Requests { get; } = [];
+
+        public Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
+        {
+            Requests.Add(request);
+
+            return Task.FromResult(result);
+        }
+    }
+
     // ---------- sent when declared ----------
+
+    /// <summary>The release the effect was observed on (research/RESULTS_claude_reviewer_safe_mode.md §5) — the fixtures' help texts are older releases', so the version is named here.</summary>
+    private const string ObservedRelease = "2.1.309";
+
+    private static async Task<ClaudeCapability> ProbedOn(string help, string version) => (await ProbedHelp(help)) with { Version = version };
 
     [Fact]
     public async Task WhenHelpDeclaresSafeMode_TheArgvCarriesIt()
     {
-        var launch = Reviewer(await ProbedHelp(Help("help-2.1.258-windows.txt")));
+        var launch = Reviewer(await ProbedOn(Help("help-2.1.258-windows.txt"), ObservedRelease));
 
         var argv = Argv(launch);
         argv.Should().Contain("--safe-mode");
         argv.ToList().IndexOf("--safe-mode").Should().BeLessThan(argv.ToList().IndexOf("--permission-mode"),
             "the flag rides with the CLI's own switches, before the permission mode the review is confined by");
-        launch.Note.Should().BeEmpty("a launch that sent the flag has nothing to apologise for");
+        launch.Note.Should().BeEmpty("a launch that sent the flag, on a release where its effect was observed, has nothing to apologise for");
     }
 
     [Fact]
     public async Task WhenHelpDeclaresIt_OnTheOlderCli_Too()
     {
-        var launch = Reviewer(await ProbedHelp(Help("help-2.1.197-wsl.txt")));
+        var launch = Reviewer(await ProbedOn(Help("help-2.1.197-wsl.txt"), "2.1.197"));
 
         Argv(launch).Should().Contain("--safe-mode", "2.1.197 declares it at line 166, though it has no --restricted");
+    }
+
+    // ---------- sent, but is the effect observed on this release? ----------
+
+    [Fact]
+    public async Task ADeclaredFlagOnAnUnobservedVersion_IsSentWithANote()
+    {
+        var launch = Reviewer(await ProbedOn(Help("help-2.1.258-windows.txt"), "2.1.258"));
+
+        Argv(launch).Should().Contain("--safe-mode", "never a refusal: the flag is still sent");
+        launch.Note.Should().Contain("--safe-mode is sent").And.Contain("observed on claude 2.1.309 only").And.Contain("not on 2.1.258")
+            .And.Contain("CLAUDE.md").And.Contain("hooks");
+        (await new ClaudeRuntime().TakeTurnAsync(launch, new Printing(default!), TestContext.Current.CancellationToken)).Refusal.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task TheObservedVersion_CarriesNoNote()
+    {
+        var launch = Reviewer(await ProbedOn(Help("help-2.1.258-windows.txt"), ObservedRelease));
+
+        Argv(launch).Should().Contain("--safe-mode");
         launch.Note.Should().BeEmpty();
+        ClaudeSafeMode.ObservedVersions.Should().Contain(ObservedRelease, "the list is the one place the observed releases live");
+    }
+
+    [Fact]
+    public async Task AnUnknownVersion_SaysTheEffectIsNotObserved()
+    {
+        var launch = Reviewer(await ProbedOn(Help("help-2.1.258-windows.txt"), string.Empty));
+
+        Argv(launch).Should().Contain("--safe-mode", "an unknown release is a note, never a refusal");
+        launch.Note.Should().Contain("--safe-mode is sent").And.Contain("observed on claude 2.1.309 only").And.Contain("not known")
+            .And.Contain("not observed for it");
+    }
+
+    [Theory]
+    [InlineData("2.1.309 (Claude Code)\n", "2.1.309")]
+    [InlineData("2.1.309", "2.1.309")]
+    [InlineData("claude 2.1.309 (Claude Code)\r\n", "2.1.309")]
+    [InlineData("", "")]
+    [InlineData("no release here", "")]
+    [InlineData("wrapper 1.0.0\n2.1.309 (Claude Code)\n", "")]
+    [InlineData("2.1.309.4", "")]
+    public void TheVersionIsReadFromWhatTheCliPrinted_AndOnlyWhenItNamesOne(string printed, string expected)
+    {
+        ClaudeCapability.VersionIn(printed).Should().Be(expected);
+    }
+
+    [Fact]
+    public async Task TheVersionIsAskedOnce_AndOnlyWhenTheHelpDeclaredTheFlag()
+    {
+        var asked = new Recording(new ProcessResult(0, "2.1.309 (Claude Code)\n", string.Empty, TimedOut: false));
+        var declared = await ProbedHelp(Help("help-2.1.258-windows.txt"));
+        var absent = await ProbedHelp(HelpWithoutTheFlag);
+
+        var withVersion = await declared.WithVersionAsync(asked, "claude", Path.GetTempPath(), TestContext.Current.CancellationToken);
+        var skipped = await absent.WithVersionAsync(asked, "claude", Path.GetTempPath(), TestContext.Current.CancellationToken);
+
+        withVersion.Version.Should().Be("2.1.309");
+        skipped.Version.Should().BeEmpty("nothing else reads the release: no spawn for a CLI without the flag");
+        asked.Requests.Should().ContainSingle().Which.Arguments.Should().Equal("--version");
+    }
+
+    [Fact]
+    public async Task AVersionThatDidNotAnswer_LeavesItEmpty()
+    {
+        var declared = await ProbedHelp(Help("help-2.1.258-windows.txt"));
+
+        foreach (var unreadable in (ProcessResult[])[
+            new(1, "2.1.309", string.Empty, TimedOut: false),
+            new(0, string.Empty, string.Empty, TimedOut: true),
+            new(0, "banner", string.Empty, TimedOut: false)])
+        {
+            (await declared.WithVersionAsync(new Printing(unreadable), "claude", Path.GetTempPath(), TestContext.Current.CancellationToken))
+                .Version.Should().BeEmpty();
+        }
     }
 
     // ---------- absent: a note, never a refusal ----------

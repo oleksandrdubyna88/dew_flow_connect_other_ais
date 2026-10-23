@@ -59,6 +59,10 @@ The owner signs in to every CLI through the browser (plan §9). `--bare` skips k
 
 * `--safe-mode`, placed before `--permission-mode`, when the installed claude's help declares it as a flag (not a flag that takes a value) **and**
   the row's `safeMode` setting is on (the default). Every other flag of the reviewer's argv is unchanged.
+* **Sent is not observed.** When the installed `claude --version` is not one of `ClaudeSafeMode.ObservedVersions` (`2.1.309`, §5), the flag is still sent and the
+  launch carries a note: *`--safe-mode` is sent; its effect … was observed on claude 2.1.309 only, not on <version>* — or, when the version could not be read,
+  that the release is not known so the effect is not observed for it. The release is asked with ONE `--version` per round per executable, only where the help
+  declared the flag (the roster's probe; the Team server uses the version its catalog already saw and spawns none).
 * Never `--bare`. Never `--restricted` (see §6). Never a retry without the flag after a failure.
 * When the help declares no such flag: the launch goes without it and carries a **note** (never a refusal) naming the branch's `CLAUDE.md` and
   hooks. MCP servers are not named: `--strict-mcp-config` is already sent, so they do not reach the reviewer.
@@ -92,9 +96,26 @@ for "a `--settings` file is still read".
 | 6 | create `WRITE-TEST.txt` | not attempted (plan mode), no file | not attempted (plan mode), no file |
 | 8′ | a read denied ONLY by a `PreToolUse` hook in a `--settings` file | **readable** — the hook did not run | denied — "PreToolUse:Read hook error: … blocked by the canary PreToolUse hook" |
 
+**Which source carried which hook — said once, so row 1 is not read as more than it is.**
+
+| what | where it lived | rows |
+|---|---|---|
+| the `SessionStart` canary hook (writes `canary-marker.txt`) | the scratch worktree's OWN `.claude/settings.json` — the project path, the one a reviewed branch controls. Arm B's marker being **present** proves that path fires in a headless run here; arm A's marker being **absent** is therefore the flag's effect on a branch's own hook | 1 |
+| `permissions.deny` for `Read(./DENIED.txt)` and the `PreToolUse` hook (matcher `Read`) | a scratch `--settings <file>` given to both arms — NOT the branch's project path, NOT the owner's user settings | 5′, 8′ |
+
+So the claim "a branch's hook does not run under `--safe-mode`" rests on row 1 alone (project path, `SessionStart`). Rows 5′ and 8′ say what safe mode does to the
+`--settings` channel — they do not say it for a project-path `PreToolUse` hook, which was not run.
+
 **What it shows, on 2.1.309 only.** The reviewed branch's project hook does not run in a `--safe-mode` reviewer (row 1), and nothing the review
 needs was lost (rows 2–4, 6). Permission rules survive safe mode (5′). Hooks do NOT — not even a hook handed in by `--settings` (8′); a user-settings
-hook was not tried and is assumed to go the same way, which is the trade the card states. coai's read-only claim therefore rests on plan mode and
+hook was not tried and is assumed to go the same way, which is the trade the card states.
+
+**Observed on one release, so the launch says so on every other.** The list of releases whose effect was observed is ONE constant,
+`ClaudeSafeMode.ObservedVersions` (`runners/Reviewers/ClaudeSafeMode.cs`), currently `2.1.309` — this section. A release is added to it only by a new run recorded
+here; a version bump is not evidence. A launch whose claude declares `--safe-mode` always SENDS it (never a refusal), and carries no note only when the installed
+`claude --version` is on that list. On any other release the launch carries the note *`--safe-mode` is sent; its effect (the reviewed branch's hooks and CLAUDE.md do
+not apply) was observed on claude 2.1.309 only, not on <version>*; when the version could not be read, the note says the installed release is not known, so the
+effect is not observed for it. coai's read-only claim therefore rests on plan mode and
 `--disallowedTools`, never on a hook. Both scratch folders were removed afterwards; nothing else was.
 
 ### The setup the plan wrote before the run
@@ -159,7 +180,9 @@ run without it.
 
 ## 7. What this record does not say
 
-* That the effect holds under coai's invocation — §5 does.
-* That another claude version behaves like 2.1.258, 2.1.197 or 2.1.309 — the flag is *declared* by the first two, and reported declared by the third.
+* That the effect holds under coai's invocation — §5 does, on 2.1.309 only, and for a project-path `SessionStart` hook (row 1).
+* That a project-path `PreToolUse` hook, or a user-settings hook, is switched off — §5 ran the `PreToolUse` hook through `--settings`, not the project path.
+* That another claude version behaves like 2.1.309 — 2.1.258 and 2.1.197 *declare* the flag in their help, and that is all that is known of them; a launch on them (or on any
+  unread release) sends the flag with a note that the effect is not observed there.
 * That the Team server's claude declares the flag — `POST_DEPLOY.md` has the one-line check.
 * Anything about codex and agy: they have no such flag, and their card note is E5.S3's.

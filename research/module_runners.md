@@ -1580,9 +1580,16 @@ hook ([RESULTS_claude_reviewer_safe_mode.md](RESULTS_claude_reviewer_safe_mode.m
   timed out, was cut short or exited non-zero is unknown, never "does not declare"), `Unprobed` (*was not asked … for this launch*), and the row's switch off
   (*safe mode is switched off for this claude row*). **Never a refusal, never `--bare`** (it skips the keychain read the browser sign-in lives in), and an
   unsupported-flag failure is **never retried without the flag**: the executor has no second launch of that kind.
+- **Sent is not observed (F-B of the code gate, 2026-10-23).** A launch that SENDS the flag carries no note only when the installed release is in
+  `ClaudeSafeMode.ObservedVersions` (one constant, `2.1.309` — the canary of RESULTS §5, where the effect was seen); on any other release the note says
+  *`--safe-mode` is sent; its effect (the reviewed branch's hooks and CLAUDE.md do not apply) was observed on claude 2.1.309 only, not on <version>*, and on a release
+  that could not be read, that the release is not known so the effect is not observed for it. Never a refusal. The release is `ClaudeCapability.Version`, filled by
+  `WithVersionAsync` — ONE `--version` per round per executable, only when the help declared the flag, in `ClaudeCapabilities.AskAsync` (the help does not print the
+  release, and nothing else at roster time knows it); `VersionIn` takes the one `x.y.z` the answer names (none or two → empty). The Team server has no extra spawn: it
+  reads the version its catalog already saw (`versionOf`), and has no warning channel to carry the note.
 - **`ClaudeCapability` grew a second declaration read from the SAME `--help`**: `SafeModeSupport SafeMode` beside `Support`, and
   `SafeModeIn(helpText)` — the `RestrictedIn` rule (ANSI stripped, option column format, every long name read, a flag and not a flag that takes a value,
-  `--safe-mode <x>` and `--safe-mode=<x>` are not support). `Unknown(reason)` sets both. One `--help` per probe, never a second process. The consultants'
+  `--safe-mode <x>` and `--safe-mode=<x>` are not support). `Unknown(reason)` sets both. One `--help` per probe, never a second process for the declaration (the release is the opt-in `WithVersionAsync` above). The consultants'
   argv and their `Unknown` → refusal for `--restricted` are exactly as they were (`TheConsultantsArgvIsUnchanged`, `TheConsultantsUnknownStaysARefusal`).
   `ProbeAsync(…, Func<ProcessRequest, ProcessRequest> shape, ct)` is the overload the Team server uses to ask under the job's own request.
 - **Both reviewer paths ask — they did not before.** `ProbeAsync` was called only by the consultant (`ClaudeConsultant.PrepareAsync`) and the consultants' read mode, so
@@ -1600,9 +1607,11 @@ hook ([RESULTS_claude_reviewer_safe_mode.md](RESULTS_claude_reviewer_safe_mode.m
   flag AND removes an inherited `CLAUDE_CODE_SAFE_MODE` from the child's environment (a null entry in the request's environment, which the launcher applies last), or the
   switch would not be a way back for a shell that already sets it. An Off row is not probed. The Team server has no per-row setting and keeps the default, on.
 - **The one trade.** `--safe-mode` also switches off the person's own USER hooks for the reviewer (managed hooks stay). What keeps the reviewer read-only is
-  `--permission-mode plan` and `--disallowedTools`, never a user hook; the card says so beside the setting. **What is claimed:** the flag is SENT when declared.
-  That a branch's hook then does not run under this exact argv is the lead's paid canary run (E5.S4, RESULTS §5) and is not claimed until it is recorded.
-- Tests: `TheClaudeReviewerRunsInSafeModeTests` (argv, notes, the way back, `BareIsNeverSent`, the consultants), `ARealReviewFromNormalSettingsCarriesSafeModeTests` (plan, code
+  `--permission-mode plan` and `--disallowedTools`, never a user hook; the card says so beside the setting. **What is claimed:** the flag is SENT when declared. That a branch's project `SessionStart` hook then does not run under this exact
+  argv was observed by the lead's paid canary (E5.S4, 2026-10-23, RESULTS §5) on claude 2.1.309 only — see *Sent is not observed* above; the canary's hook lived in the
+  scratch worktree's own `.claude/settings.json`, while the `permissions.deny` and `PreToolUse` rows came through a scratch `--settings` file.
+- Tests: `TheClaudeReviewerRunsInSafeModeTests` (argv, notes, the way back, `BareIsNeverSent`, the consultants; the observed-version trio `ADeclaredFlagOnAnUnobservedVersion_IsSentWithANote`,
+  `TheObservedVersion_CarriesNoNote`, `AnUnknownVersion_SaysTheEffectIsNotObserved`; `VersionIn`; the one `--version`, only when declared), `ARealReviewFromNormalSettingsCarriesSafeModeTests` (plan, code
   and document rounds from ordinary settings through the real service against the fake CLI; `ASwappedCliBetweenRounds_IsReadAgain`; the env removal as the child saw it),
   `AFeatureIsReviewedEndToEndTests.AFeatureRound_AsksItsClaudeBeforeItBuilds_AndSendsSafeMode`, `TheTeamClaudeReviewerRunsInSafeModeTests` (the Team twin and the confined probe).
 

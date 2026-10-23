@@ -2995,7 +2995,8 @@ the flag) or a help without it, and the child records its own argv and environme
 | An in-place swap of the CLI between rounds | `ASwappedCliBetweenRounds_IsReadAgain` (declares, then not: the second round goes without the flag) | yes |
 | A claude without the flag; a help that never answers | `AClaudeWithoutTheFlag_RunsWithoutIt_AndTheRoundSaysSo`, `AHelpThatNeverAnswers_RunsWithoutTheFlag_AndSaysItCouldNotBeRead` (the round's reviewer line carries the note) | yes |
 | The way back (row `safeMode: off`) | `ARowThatSwitchedSafeModeOff_IsLaunchedWithoutIt_AndWithoutTheInheritedVariable` with its control `ARowOnSafeMode_LeavesTheInheritedVariableToTheCli` (the recorder sees an inherited name) | yes |
-| Who is asked | `TheRoundAsksEachClaudeExecutableOnce_AndNoOtherRuntime`, `ARowThatSwitchedSafeModeOff_IsNeverAsked` | yes |
+| Who is asked | `TheRoundAsksEachClaudeExecutableOnce_AndNoOtherRuntime` (a `--help`, then — the flag declared — one `--version`; a codex row nothing), `ARowThatSwitchedSafeModeOff_IsNeverAsked` | yes |
+| Sent, and is the effect observed on THIS release? (F-B) | `ADeclaredFlagOnAnUnobservedVersion_IsSentWithANote`, `TheObservedVersion_CarriesNoNote`, `AnUnknownVersion_SaysTheEffectIsNotObserved` (argv level); `AnObservedRelease_CarriesTheFlag_AndNoNote`, `AnUnobservedRelease_CarriesTheFlag_AndTheRoundSaysTheEffectWasNotObserved`, `AVersionThatCannotBeRead_CarriesTheFlag_AndTheRoundSaysItIsNotKnown` (through the service, the fake CLI's `FAKECLI_VERSION_STDOUT`); `TheVersionIsReadFromWhatTheCliPrinted_AndOnlyWhenItNamesOne`, `TheVersionIsAskedOnce_AndOnlyWhenTheHelpDeclaredTheFlag`, `AVersionThatDidNotAnswer_LeavesItEmpty` | yes |
 | The argv, notes and the consultants unchanged | `TheClaudeReviewerRunsInSafeModeTests` (both real help fixtures, an unreadable help, a value-taking flag, `BareIsNeverSent`, `TheConsultantsArgvIsUnchanged`, `TheConsultantsUnknownStaysARefusal` fresh, resumed and question) | yes |
 | Team server job (the twin) and its confined probe | `TheTeamClaudeReviewerRunsInSafeModeTests` (`ARealTeamReview_FromNormalSettings_CarriesSafeMode`, `TheTeamProbeRunsUnderTheJobsConfinement`, `ASwappedCliBetweenJobs_IsReadAgain`) | yes |
 | The extension's switch | `aClaudeRowHasASafeModeSwitch.test.ts` (stored as `off` only, crosses only to a binary that lists `safeMode`, the select writes the row, the user-hooks sentence, the skew note) | yes |
@@ -3007,7 +3008,7 @@ the flag) or a help without it, and the child records its own argv and environme
 ```
 
 **What it does NOT prove.** That a branch's hook stops running under coai's exact argv: the tests assert what is SENT. The effect is the lead's paid canary run, recorded in
-`research/RESULTS_claude_reviewer_safe_mode.md` §5 and pending. Nor that a real claude 2.1.309 declares the flag as the fixtures do (its text is the lead's report, no fixture).
+`research/RESULTS_claude_reviewer_safe_mode.md` §5 (observed on claude 2.1.309 only; the note of `ClaudeSafeMode.ObservedVersions` says so on every other release). Nor that a real claude 2.1.309 declares the flag as the fixtures do (its text is the lead's report, no fixture).
 The server tests' existing `Scripted` launcher now answers the probe's `--help` without counting it as a launch.
 
 ## An older build's edit after the move is a revision (2026-10-07, R7 of `research/PLAN_one_model_catalog.md` epic 5)

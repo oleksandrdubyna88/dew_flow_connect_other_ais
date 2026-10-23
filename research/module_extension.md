@@ -12241,7 +12241,10 @@ row that never set it and one set to on read alike; no other runtime has the fla
 (`modelCardFields.safeModeField`: On — the branch cannot steer it, Off — the branch's CLAUDE.md and hooks apply; help `safeMode`, the "new" tag `model.safeMode`) in a claude
 CLI row's tuning, with the one recorded trade beside it: *safe mode also switches off your own user hooks for this reviewer; coai's own limits keep it read-only, never a
 hook* (`aClaudeRowHasASafeModeSwitch.test.ts` holds the sentence). The seam is the panel's one vendor write (`data-setting="safeMode"`); the claude row's `providers` health
-is unchanged. The absent-flag note is the round's, not the card's (the card note for it is E5.S3's `ConfigurationNote`, not built here).
+is unchanged. The absent-flag note is the round's, not the card's (the card note for it is E5.S3's `ConfigurationNote`, not built here). **The same channel carries the
+observed-version note (F-B, 2026-10-23):** the effect of `--safe-mode` was observed on claude 2.1.309 only (`ClaudeSafeMode.ObservedVersions`, RESULTS §5), so a round on
+another release — or one whose `claude --version` could not be read — sends the flag AND says so on its reviewer line (the existing `; warned — claude/…` channel, nothing new
+in the extension); the select's help text says the same in one sentence.
 
 ## A chat runs on its row's fast mode (2026-10-07, research/PLAN_fast_mode.md, Story C)
 

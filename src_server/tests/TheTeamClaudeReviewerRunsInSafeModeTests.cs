@@ -117,7 +117,7 @@ public sealed class TheTeamClaudeReviewerRunsInSafeModeTests
     [Fact]
     public async Task TheTeamProbeRunsUnderTheJobsConfinement()
     {
-        var slot = SlotEnvironment.For("claude", Path.Combine(Path.GetTempPath(), "coai-slot-a"), token: "not-a-real-token");
+        var slot = SlotEnvironment.For("claude", Path.Combine(Path.GetTempPath(), "testsToDelete-slot-a"), token: "not-a-real-token");
         using var cancellation = new CancellationTokenSource();
         var claude = new Claude(HelpDeclaring);
 

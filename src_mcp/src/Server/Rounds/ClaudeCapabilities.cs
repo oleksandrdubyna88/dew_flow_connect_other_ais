@@ -42,14 +42,21 @@ internal sealed record ClaudeCapabilities(IReadOnlyDictionary<string, ClaudeCapa
         CancellationToken ct)
     {
         string[] executables = [.. rows.Where(row => Asks(row.Provider, row.Runtime)).Select(row => ExecutableOf(row.Provider, row.Runtime)).Distinct(StringComparer.Ordinal)];
-        var answers = await Task.WhenAll(executables.Select(exe => ClaudeCapability.ProbeAsync(launcher, exe, workingDirectory, ct)));
+        var answers = await Task.WhenAll(executables.Select(exe => AskOneAsync(launcher, exe, workingDirectory, ct)));
         foreach (var (exe, answer) in executables.Zip(answers))
         {
-            log.Information("claude safe-mode probe: {Executable} — {Answer}: {Reason}", exe, answer.SafeMode, answer.Reason);
+            log.Information("claude safe-mode probe: {Executable} — {Answer}, release {Version}: {Reason}", exe, answer.SafeMode, answer.Version.Length > 0 ? answer.Version : "not read", answer.Reason);
         }
 
         return new ClaudeCapabilities(executables.Zip(answers).ToDictionary(pair => pair.First, pair => pair.Second, StringComparer.Ordinal));
     }
+
+    /// <summary>
+    /// One executable: its help, then — only when the help declares <c>--safe-mode</c> — its <c>--version</c>, so the reviewer's note can say whether the
+    /// flag's effect was observed on THIS release (<see cref="ClaudeSafeMode.ObservedVersions"/>). Two spawns at most, once per round, never per launch.
+    /// </summary>
+    private static async Task<ClaudeCapability> AskOneAsync(IProcessLauncher launcher, string executable, string workingDirectory, CancellationToken ct) =>
+        await (await ClaudeCapability.ProbeAsync(launcher, executable, workingDirectory, ct)).WithVersionAsync(launcher, executable, workingDirectory, ct);
 
     /// <summary>A claude row whose safe mode is on — the only one whose argv the answer can change.</summary>
     private static bool Asks(ProviderSettings provider, IReviewerRuntime runtime) =>

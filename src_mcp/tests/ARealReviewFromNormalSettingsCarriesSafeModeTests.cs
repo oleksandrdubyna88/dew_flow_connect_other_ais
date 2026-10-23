@@ -41,12 +41,12 @@ public sealed class ARealReviewFromNormalSettingsCarriesSafeModeTests : IAsyncLi
     private const string HelpWithoutTheFlag = "Usage: claude [options]\n\nOptions:\n  -p, --print                           Print response and exit\n  --strict-mcp-config                   Only use MCP servers\n";
 
     private static readonly string[] Steering =
-        ["FAKECLI_MODE", "FAKECLI_STDOUT", "FAKECLI_RECORD_DIR", "FAKECLI_HELP_STDOUT", "FAKECLI_RECORD_ENV", "CLAUDE_CODE_SAFE_MODE"];
+        ["FAKECLI_MODE", "FAKECLI_STDOUT", "FAKECLI_RECORD_DIR", "FAKECLI_HELP_STDOUT", "FAKECLI_RECORD_ENV", "CLAUDE_CODE_SAFE_MODE", "FAKECLI_VERSION_STDOUT"];
 
     private readonly ProcessLauncher _launcher = new();
-    private readonly string _repo = Directory.CreateTempSubdirectory("coai-safemode-repo-").FullName;
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-safemode-data-").FullName;
-    private readonly string _record = Directory.CreateTempSubdirectory("coai-safemode-record-").FullName;
+    private readonly string _repo = Directory.CreateTempSubdirectory("testsToDelete-safemode-repo-").FullName;
+    private readonly string _data = Directory.CreateTempSubdirectory("testsToDelete-safemode-data-").FullName;
+    private readonly string _record = Directory.CreateTempSubdirectory("testsToDelete-safemode-record-").FullName;
 
     private static string FakeCliExe => Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "FakeCli.exe" : "FakeCli");
 
@@ -68,6 +68,8 @@ public sealed class ARealReviewFromNormalSettingsCarriesSafeModeTests : IAsyncLi
         Environment.SetEnvironmentVariable("FAKECLI_STDOUT", Envelope);
         Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", _record);
         Environment.SetEnvironmentVariable("FAKECLI_HELP_STDOUT", Help("help-2.1.258-windows.txt"));
+        // The release the effect was OBSERVED on (ClaudeSafeMode.ObservedVersions): the help fixture is an older release's, the version is a separate answer.
+        Environment.SetEnvironmentVariable("FAKECLI_VERSION_STDOUT", "2.1.309 (Claude Code)\n");
     }
 
     public ValueTask DisposeAsync()
@@ -202,6 +204,44 @@ public sealed class ARealReviewFromNormalSettingsCarriesSafeModeTests : IAsyncLi
     }
 
     [Fact]
+    public async Task AnObservedRelease_CarriesTheFlag_AndNoNote()
+    {
+        var service = Service();
+        await service.OpenAsync(_repo, "feature");
+
+        var reply = Answered(await service.ReviewPlanAsync(_repo, "feature", "the plan"));
+
+        EveryLaunchCarries(Launches(), "--safe-mode", carries: true);
+        reply.Should().NotContain("observed on claude", "2.1.309 is the release the effect was observed on");
+    }
+
+    [Fact]
+    public async Task AnUnobservedRelease_CarriesTheFlag_AndTheRoundSaysTheEffectWasNotObserved()
+    {
+        Environment.SetEnvironmentVariable("FAKECLI_VERSION_STDOUT", "2.1.258 (Claude Code)\n");
+        var service = Service();
+        await service.OpenAsync(_repo, "feature");
+
+        var reply = Answered(await service.ReviewPlanAsync(_repo, "feature", "the plan"));
+
+        EveryLaunchCarries(Launches(), "--safe-mode", carries: true);
+        reply.Should().Contain("observed on claude 2.1.309 only").And.Contain("not on 2.1.258");
+    }
+
+    [Fact]
+    public async Task AVersionThatCannotBeRead_CarriesTheFlag_AndTheRoundSaysItIsNotKnown()
+    {
+        Environment.SetEnvironmentVariable("FAKECLI_VERSION_STDOUT", "no release in this line\n");
+        var service = Service();
+        await service.OpenAsync(_repo, "feature");
+
+        var reply = Answered(await service.ReviewPlanAsync(_repo, "feature", "the plan"));
+
+        EveryLaunchCarries(Launches(), "--safe-mode", carries: true);
+        reply.Should().Contain("not observed for it");
+    }
+
+    [Fact]
     public async Task AHelpThatNeverAnswers_RunsWithoutTheFlag_AndSaysItCouldNotBeRead()
     {
         Environment.SetEnvironmentVariable("FAKECLI_HELP_STDOUT", string.Empty);
@@ -266,9 +306,11 @@ public sealed class ARealReviewFromNormalSettingsCarriesSafeModeTests : IAsyncLi
 
         var claude = await service.Roster.ClaudeCapabilitiesAsync(watched, TestContext.Current.CancellationToken);
 
-        watched.Requests.Should().ContainSingle("two rows on one executable are one installed release; a codex row asks nothing")
-            .Which.Arguments.Should().Equal("--help");
-        claude.ByExecutable.Values.Should().ContainSingle().Which.SafeMode.Should().Be(CoaiMcp.Runners.Reviewers.SafeModeSupport.Declared);
+        watched.Requests.Select(request => request.Arguments.Single()).Should().Equal(["--help", "--version"],
+            "two rows on one executable are one installed release, asked its help once and — it declares the flag — its version once; a codex row asks nothing");
+        var answer = claude.ByExecutable.Values.Should().ContainSingle().Subject;
+        answer.SafeMode.Should().Be(CoaiMcp.Runners.Reviewers.SafeModeSupport.Declared);
+        answer.Version.Should().Be("2.1.309");
     }
 
     [Fact]

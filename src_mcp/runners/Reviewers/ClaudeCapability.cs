@@ -49,6 +49,10 @@ public enum SafeModeSupport
 /// </param>
 /// <param name="SafeMode">What the SAME help said about <c>--safe-mode</c> — read from the one <c>--help</c> this probe runs, never
 /// from a second process. Only the claude REVIEWER reads it; the consultants' argv and their refusals are <see cref="Support"/>'s, unchanged.</param>
+/// <param name="Version">The release the installed claude named for <c>--version</c> (<c>2.1.309</c>) — empty when nobody asked or it did not name exactly one.
+/// Not part of the help probe: a caller that wants it asks <see cref="WithVersionAsync"/> (the local server, once per round per executable) or sets it from a
+/// version already seen (the Team server). The reviewer's safe-mode note reads it, to say whether the flag's EFFECT was observed on this release
+/// (<see cref="ClaudeSafeMode.ObservedVersions"/>).</param>
 /// <remarks>
 /// <para><b>Why the argv has to ask.</b> Measured 2026-10-02 (research/RESULTS_claude_consultant_confinement.md,
 /// harness scripts/probe-claude-consultant-confinement.mjs): claude 2.1.258 on Windows, launched with
@@ -69,7 +73,7 @@ public enum SafeModeSupport
 /// (todo/PLAN_the_claude_reviewer_is_confined_by_an_allowlist.md) and reads the same fact through
 /// <see cref="ReviewerSettings.ClaudeCli"/>.</para>
 /// </remarks>
-public sealed partial record ClaudeCapability(RestrictedSupport Support, string Reason, bool CouldNotStart = false, SafeModeSupport SafeMode = SafeModeSupport.Unprobed)
+public sealed partial record ClaudeCapability(RestrictedSupport Support, string Reason, bool CouldNotStart = false, SafeModeSupport SafeMode = SafeModeSupport.Unprobed, string Version = "")
 {
     /// <summary>The default of <see cref="ReviewerSettings.ClaudeCli"/> — which the consultant's builder refuses.</summary>
     public static ClaudeCapability Unprobed { get; } = new(RestrictedSupport.Unprobed, "the installed claude was never asked");
@@ -157,6 +161,39 @@ public sealed partial record ClaudeCapability(RestrictedSupport Support, string 
 
         return second.Support == RestrictedSupport.Unknown ? second with { Reason = $"asked twice: {second.Reason}" } : second;
     }
+
+    /// <summary>
+    /// This capability with the installed release added — asked with ONE <c>--version</c>, and only when the help declared <c>--safe-mode</c>
+    /// (nothing else reads the release). A version that did not come back — a timeout, a non-zero exit, a CLI that would not start, an answer
+    /// naming no release or two — leaves <see cref="Version"/> empty, which the reviewer's note says in so many words; never a refusal.
+    /// </summary>
+    /// <remarks>Once per ROUND per executable (the roster's ask), never per launch: the help probe's own cadence, one spawn longer only where the flag is declared.</remarks>
+    public async Task<ClaudeCapability> WithVersionAsync(IProcessLauncher launcher, string executable, string workingDirectory, CancellationToken ct)
+    {
+        if (SafeMode != SafeModeSupport.Declared)
+        {
+            return this;
+        }
+
+        try
+        {
+            var result = await launcher.RunAsync(new ProcessRequest(executable, ["--version"], workingDirectory) { Timeout = ProbeTimeout }, ct);
+            ct.ThrowIfCancellationRequested();
+
+            return this with { Version = result is { ExitCode: 0, TimedOut: false } ? VersionIn(result.StdOut) : string.Empty };
+        }
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or IOException or InvalidOperationException)
+        {
+            return this;
+        }
+    }
+
+    /// <summary>
+    /// The one release a <c>--version</c> answer names (<c>2.1.309 (Claude Code)</c> is <c>2.1.309</c>), or empty — when it names none, or two that
+    /// cannot be told apart (a wrapper's banner beside the CLI's own line), neither is believed.
+    /// </summary>
+    public static string VersionIn(string printed) =>
+        Release().Matches(printed).Select(named => named.Value).Distinct().ToArray() is [var only] ? only : string.Empty;
 
     /// <summary>Whether a help text DECLARES <c>--restricted</c> as a flag — never a word in prose, never one taking a value.</summary>
     /// <remarks>
@@ -268,4 +305,8 @@ public sealed partial record ClaudeCapability(RestrictedSupport Support, string 
     /// <summary>An ANSI CSI sequence — colour, bold, reset.</summary>
     [GeneratedRegex(@"\x1b\[[0-9;]*[A-Za-z]", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
     private static partial Regex Ansi();
+
+    /// <summary>A release number — three dotted parts, not part of a longer dotted run.</summary>
+    [GeneratedRegex(@"(?<![\d.])\d+\.\d+\.\d+(?![\d.])", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex Release();
 }
