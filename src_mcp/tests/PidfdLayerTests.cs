@@ -474,40 +474,10 @@ public sealed class PidfdLayerTests
     {
         Assert.SkipUnless(OperatingSystem.IsLinux(), "zombies and pidfd are Linux's");
         using var road = PidfdLayer.Using(wrapperPresent: false);
-        var info = new ProcessStartInfo("/bin/sh") { UseShellExecute = false, RedirectStandardOutput = true, ArgumentList = { "-c", "sleep 600 & echo $!; exec sleep 600" } };
-        using var parent = Process.Start(info)!;
-        try
-        {
-            var pid = int.Parse((await parent.StandardOutput.ReadLineAsync(TestContext.Current.CancellationToken))!.Trim());
-            var identity = new ProcessIdentity(pid, ProcessTracking.StartedAt(pid)!.Value);
-            using (var child = Process.GetProcessById(pid))
-            {
-                child.Kill();
-            }
+        using var zombie = await ZombieMaker.StartAsync();
 
-            await BecomesZombieAsync(pid);
+        await zombie.KillToZombieAsync();
 
-            TreeSignals.Kill([identity], ((PidfdSupport.Raw)PidfdLayer.Current).Calls).Should().Equal(new Signalled.Gone(identity, "exited (zombie)"));
-        }
-        finally
-        {
-            EndAnyway(parent);
-        }
-    }
-
-    private static async Task BecomesZombieAsync(int pid)
-    {
-        var until = DateTime.UtcNow.AddSeconds(10);
-        while (DateTime.UtcNow < until)
-        {
-            if (ProcStat.ReadFor(pid, ProcReads.Real) is ProcStatRead.Read { Line.State: "Z" })
-            {
-                return;
-            }
-
-            await Task.Delay(50, TestContext.Current.CancellationToken);
-        }
-
-        Assert.Fail("the outer sleep never reaps, so the killed child should have stayed a zombie");
+        TreeSignals.Kill([zombie.Identity], ((PidfdSupport.Raw)PidfdLayer.Current).Calls).Should().Equal(new Signalled.Gone(zombie.Identity, "exited (zombie)"));
     }
 }

@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using CoaiMcp.Runners.Processes;
 using FluentAssertions;
 using Xunit;
@@ -14,9 +13,8 @@ namespace CoaiMcp.Tests;
 /// reaped it, and a check by pid and start time alone called it alive. Under a parent that never reaps — a server
 /// running as a container's first process is one — that entry stays for ever, and the slot would stay unavailable for
 /// ever over a process that has already exited.</para>
-/// <para>The zombie is made the plain way: a shell starts a background <c>sleep</c> and then <c>exec</c>s another
-/// <c>sleep</c>, which never waits for children. Killing the background one leaves it a zombie for as long as the
-/// outer one lives.</para>
+/// <para>The zombie is made by <see cref="ZombieMaker"/> (the one helper, C21/C29): the fake CLI's <c>unreaped-child</c> verb forks a child and never waits for it. An executable and an argv — the shell script
+/// this test first ran (E5 checkpoint 2, F0) broke the rule to launch external processes as an executable plus argv, and had a race of its own: a shell that has not yet exec'd may reap the dead child itself.</para>
 /// </remarks>
 public sealed class AZombieIsNotAliveTests
 {
@@ -24,48 +22,12 @@ public sealed class AZombieIsNotAliveTests
     public async Task AKilledButUnreapedProcess_IsNotAlive()
     {
         Assert.SkipUnless(OperatingSystem.IsLinux(), "a zombie is read from /proc, which Linux alone has");
-        var start = new ProcessStartInfo("/bin/sh") { UseShellExecute = false, RedirectStandardOutput = true };
-        foreach (var arg in new[] { "-c", "sleep 600 & echo $!; exec sleep 600" })
-        {
-            start.ArgumentList.Add(arg);
-        }
+        using var zombie = await ZombieMaker.StartAsync();
+        ProcessTree.IsAlive(zombie.Identity).Should().BeTrue("the child is running until it is killed");
 
-        using var parent = Process.Start(start)!;
-        try
-        {
-            var pid = int.Parse((await parent.StandardOutput.ReadLineAsync())!.Trim());
-            var identity = new ProcessIdentity(pid, ProcessTracking.StartedAt(pid)!.Value);
-            ProcessTree.IsAlive(identity).Should().BeTrue("the background sleep is running");
+        await zombie.KillToZombieAsync();
 
-            using (var child = Process.GetProcessById(pid))
-            {
-                child.Kill();
-            }
-
-            (await BecomesZombieAsync(pid)).Should().BeTrue("the outer sleep never reaps, so the killed child stays a zombie");
-            ProcessTree.IsAlive(identity).Should().BeFalse("a zombie has exited; only its table entry is left");
-            (await ProcessTree.ConfirmGoneAsync([identity])).Should().BeEmpty("a zombie is confirmed gone, not reported as a survivor");
-        }
-        finally
-        {
-            parent.Kill(entireProcessTree: true);
-        }
-    }
-
-    private static async Task<bool> BecomesZombieAsync(int pid)
-    {
-        var until = DateTime.UtcNow.AddSeconds(10);
-        while (DateTime.UtcNow < until)
-        {
-            var stat = await File.ReadAllTextAsync($"/proc/{pid}/stat");
-            if (stat[(stat.LastIndexOf(')') + 1)..].TrimStart().StartsWith('Z'))
-            {
-                return true;
-            }
-
-            await Task.Delay(50);
-        }
-
-        return false;
+        ProcessTree.IsAlive(zombie.Identity).Should().BeFalse("a zombie has exited; only its table entry is left");
+        (await ProcessTree.ConfirmGoneAsync([zombie.Identity])).Should().BeEmpty("a zombie is confirmed gone, not reported as a survivor");
     }
 }

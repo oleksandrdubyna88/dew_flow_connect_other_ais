@@ -110,8 +110,8 @@ public sealed class AReviewerThatAsksForSourceIsAskedAgainTests : IAsyncLifetime
         Environment.SetEnvironmentVariable(prefix + "SLEEP_MS", sleepMs == 0 ? null : sleepMs.ToString());
     }
 
-    private SourceResolver Resolver() =>
-        new(new GitHistory(_launcher), new TreeSitterOutliner(), _git.Path, _head);
+    private SourceResolver Resolver(TimeProvider? clock = null) =>
+        new(new GitHistory(_launcher), new TreeSitterOutliner(), _git.Path, _head, clock: clock);
 
     /// <summary>One reviewer's work, composed as `RosterBuilder.Add` composes it: base + tail, and the repair from the same.</summary>
     private ReviewerWork Work(string provider = "codex", int followUps = 3, TimeSpan? timeout = null, SourceResolver? resolver = null)
@@ -338,18 +338,31 @@ public sealed class AReviewerThatAsksForSourceIsAskedAgainTests : IAsyncLifetime
 
     // ---------- time ----------
 
+    /// <remarks>
+    /// On a manual clock (E5 S8, C30): turn 1 "runs" 400 ms and answers; turn 2 "runs" 10 s against the 2 s it was given and is ended as timed
+    /// out — by the arithmetic of the stand-in, not by a cold child's start against a real 2 s deadline. The real scheduler, its one slot and
+    /// the second reviewer waiting behind it stay (the slot's release is the subject). The stand-in proves what each turn is HANDED; the real
+    /// launcher's deadline on a sleeping child is <c>ProcessLauncherTests.AChildThatNeverReadsItsStdinIsStillKilledOnTime</c>.
+    /// </remarks>
     [Fact]
     public async Task ATurnThatTimesOut_IsOneTerminalFailure_AndTheSlotIsReleased()
     {
-        Turn(1, AsksForAdd, stdout: OneThousandIn);
-        Turn(2, Clean, sleepMs: 10_000);
-        var scheduler = new BoundedScheduler(globalCap: 1, perProviderCap: 1);
+        var clock = new ManualClock(Epoch);
+        var launcher = new ClockedLauncher(
+        [
+            new(TimeSpan.FromMilliseconds(400), OneThousandIn, AsksForAdd),
+            new(TimeSpan.FromSeconds(10)),
+            new(TimeSpan.Zero, FakeCliInvocations.CleanReview),
+        ]);
+        var scheduler = new BoundedScheduler(globalCap: 1, perProviderCap: 1, clock: clock);
         var progress = new List<ReviewerProgress>();
-        var slow = Work(timeout: TimeSpan.FromSeconds(2));
-        var next = new ReviewerWork(FakeCliInvocations.Invoke("codex", ["emit", FakeCliInvocations.CleanReview]));
+        var slow = Work(timeout: TimeSpan.FromSeconds(2), resolver: Resolver(clock));
+        var next = new ReviewerWork(FakeCliInvocations.Invoke("codex", []));
 
-        var results = await scheduler.RunAllAsync([slow, next], _executor, TestContext.Current.CancellationToken, p => { lock (progress) { progress.Add(p); } });
+        var results = await ConversationsAsync([slow, next], scheduler, clock, launcher, progress, TestContext.Current.CancellationToken);
 
+        launcher.Timeouts.Take(2).Should().Equal([TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2)], "each turn is launched under the reviewer's own 2 s");
+        (clock.GetUtcNow() - Epoch).Should().Be(TimeSpan.FromMilliseconds(2400), "400 ms for turn 1 and the 2 s turn 2 was allowed before it was ended");
         var timedOut = results[0].Outcome;
         timedOut.Should().BeOfType<ReviewerOutcome.TimedOut>("each turn runs under the reviewer's own deadline");
         timedOut.EarlierTurns.Should().ContainSingle().Which.Usage.TokensIn.Should().Be(1000, "every turn's usage is kept");
@@ -365,16 +378,26 @@ public sealed class AReviewerThatAsksForSourceIsAskedAgainTests : IAsyncLifetime
     [Fact]
     public async Task ATurnWhoseRepairTimesOut_KeepsTheMalformedAttemptsCost_AsOneTerminalFailure_AndReleasesTheSlot()
     {
-        Turn(1, AsksForAdd, stdout: OneThousandIn);
-        Turn(2, "this is not JSON at all", stdout: SevenHundredIn);
-        Turn(2, Clean, sleepMs: 10_000, repair: true);
-        var scheduler = new BoundedScheduler(globalCap: 1, perProviderCap: 1);
+        // On a manual clock (E5 S8, C30): turn 2's first launch "runs" 300 ms and answers junk; the repair is handed the 1.7 s that is left
+        // of the 2 s and "runs" 10 s — so it is ended as timed out, with the executor and the scheduler reading the same clock the driver moves.
+        var clock = new ManualClock(Epoch);
+        var launcher = new ClockedLauncher(
+        [
+            new(TimeSpan.FromMilliseconds(400), OneThousandIn, AsksForAdd),
+            new(TimeSpan.FromMilliseconds(300), SevenHundredIn, "this is not JSON at all"),
+            new(TimeSpan.FromSeconds(10)),
+            new(TimeSpan.Zero, FakeCliInvocations.CleanReview),
+        ]);
+        var scheduler = new BoundedScheduler(globalCap: 1, perProviderCap: 1, clock: clock);
         var progress = new List<ReviewerProgress>();
-        var slow = Work(timeout: TimeSpan.FromSeconds(2));
-        var next = new ReviewerWork(FakeCliInvocations.Invoke("codex", ["emit", FakeCliInvocations.CleanReview]));
+        var slow = Work(timeout: TimeSpan.FromSeconds(2), resolver: Resolver(clock));
+        var next = new ReviewerWork(FakeCliInvocations.Invoke("codex", []));
 
-        var results = await scheduler.RunAllAsync([slow, next], _executor, TestContext.Current.CancellationToken, p => { lock (progress) { progress.Add(p); } });
+        var results = await ConversationsAsync([slow, next], scheduler, clock, launcher, progress, TestContext.Current.CancellationToken);
 
+        launcher.Timeouts.Take(3).Should().Equal(
+            [TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2), TimeSpan.FromMilliseconds(1700)],
+            "turn 2's repair is handed what is LEFT of the turn's 2 s after the 300 ms malformed launch");
         var timedOut = results[0].Outcome;
         timedOut.Should().BeOfType<ReviewerOutcome.TimedOut>("turn 2's repair ran out of the turn's deadline");
         timedOut.EarlierTurns.Should().ContainSingle().Which.Usage.TokensIn.Should().Be(1000, "turn 1 answered and was billed");
@@ -482,7 +505,7 @@ public sealed class AReviewerThatAsksForSourceIsAskedAgainTests : IAsyncLifetime
     public async Task AConversationThatOutlivesItsCap_IsOneTerminalTimeout_WithEveryTurnsUsageKept()
     {
         var clock = new ManualClock(Epoch);
-        var launcher = new ClockedLauncher(TimeSpan.FromMilliseconds(400), SevenIn);
+        var launcher = ClockedLauncher.RepeatingOneAnswer(TimeSpan.FromMilliseconds(400), SevenIn);
         var turn = new ReviewerWork(FakeCliInvocations.Invoke("gemini", [], timeout: TimeSpan.FromMilliseconds(700)));
         var work = turn with { Continue = new Endless(turn, followUps: 1) };
         var progress = new List<ReviewerProgress>();
@@ -514,7 +537,7 @@ public sealed class AReviewerThatAsksForSourceIsAskedAgainTests : IAsyncLifetime
     public async Task AConversationCapOnTheWork_EndsTheConversation_BeforeTheDerivedOneWould()
     {
         var clock = new ManualClock(Epoch);
-        var launcher = new ClockedLauncher(TimeSpan.FromMilliseconds(300), SevenIn);
+        var launcher = ClockedLauncher.RepeatingOneAnswer(TimeSpan.FromMilliseconds(300), SevenIn);
         var turn = new ReviewerWork(FakeCliInvocations.Invoke("gemini", [], timeout: TimeSpan.FromSeconds(2)));
         var work = turn with { Continue = new Endless(turn, followUps: 3), ConversationCap = TimeSpan.FromMilliseconds(900) };
 
@@ -544,7 +567,7 @@ public sealed class AReviewerThatAsksForSourceIsAskedAgainTests : IAsyncLifetime
         var turn = new ReviewerWork(FakeCliInvocations.Invoke("gemini", [], timeout: TimeSpan.FromSeconds(2)));
 
         var wholeClock = new ManualClock(Epoch);
-        var whole = new ClockedLauncher(TimeSpan.FromMilliseconds(700), SevenIn);
+        var whole = ClockedLauncher.RepeatingOneAnswer(TimeSpan.FromMilliseconds(700), SevenIn);
         var answered = await ConversationAsync(
             turn with { Continue = new Endless(turn, followUps: 3, stopsAtTheFollowUps: true) }, wholeClock, whole, [], TestContext.Current.CancellationToken);
 
@@ -554,7 +577,7 @@ public sealed class AReviewerThatAsksForSourceIsAskedAgainTests : IAsyncLifetime
         (wholeClock.GetUtcNow() - Epoch).Should().Be(TimeSpan.FromMilliseconds(2800), "four turns of exactly 700 ms");
 
         var cutClock = new ManualClock(Epoch);
-        var cut = new ClockedLauncher(TimeSpan.FromMilliseconds(700), SevenIn);
+        var cut = ClockedLauncher.RepeatingOneAnswer(TimeSpan.FromMilliseconds(700), SevenIn);
         var capped = await ConversationAsync(
             turn with { Continue = new Endless(turn, followUps: 3, stopsAtTheFollowUps: true), ConversationCap = TimeSpan.FromSeconds(2) },
             cutClock, cut, [], TestContext.Current.CancellationToken);
@@ -573,12 +596,21 @@ public sealed class AReviewerThatAsksForSourceIsAskedAgainTests : IAsyncLifetime
     /// the DRIVER — this test's thread, never the launcher's — moves it once per launch.
     /// </summary>
     private static async Task<ReviewerOutcome> ConversationAsync(
-        ReviewerWork work, ManualClock clock, ClockedLauncher launcher, List<ReviewerProgress> progress, CancellationToken ct)
+        ReviewerWork work, ManualClock clock, ClockedLauncher launcher, List<ReviewerProgress> progress, CancellationToken ct) =>
+        (await ConversationsAsync([work], new BoundedScheduler(clock: clock), clock, launcher, progress, ct)).Single().Outcome;
+
+    /// <summary>
+    /// Several reviewers through one scheduler, the same way. ONE clock instance goes to all three that read time (E5 plan §3.14, rule 1): the
+    /// scheduler the caller built with it, the executor built here, and the driver — an executor built without it would read system time while
+    /// the stand-in spends none, and a repair would be handed the whole budget.
+    /// </summary>
+    private static async Task<IReadOnlyList<(ReviewerInvocation Invocation, ReviewerOutcome Outcome)>> ConversationsAsync(
+        IReadOnlyList<ReviewerWork> works, BoundedScheduler scheduler, ManualClock clock, ClockedLauncher launcher, List<ReviewerProgress> progress, CancellationToken ct)
     {
         using var guard = CancellationTokenSource.CreateLinkedTokenSource(ct);
         guard.CancelAfter(Guard);
-        var run = new BoundedScheduler(clock: clock).RunAllAsync(
-            [work], new ReviewerExecutor(launcher), guard.Token, p => { lock (progress) { progress.Add(p); } });
+        var run = scheduler.RunAllAsync(
+            works, new ReviewerExecutor(launcher, clock: clock), guard.Token, p => { lock (progress) { progress.Add(p); } });
         try
         {
             await launcher.DriveAsync(run, clock, guard.Token);
@@ -588,7 +620,7 @@ public sealed class AReviewerThatAsksForSourceIsAskedAgainTests : IAsyncLifetime
             launcher.ReleaseAll();
         }
 
-        return (await run).Single().Outcome;
+        return await run;
     }
 
     /// <summary>A bounded wait that says WHAT it waited for when it gives up: the guard is a bound on the test, never a decision.</summary>
@@ -633,84 +665,6 @@ public sealed class AReviewerThatAsksForSourceIsAskedAgainTests : IAsyncLifetime
         (await timeout.Should().ThrowAsync<TimeoutException>()).WithMessage("expected at least 2 timer(s) armed within 30s; 1 are armed");
         await other.Should().ThrowAsync<InvalidOperationException>().WithMessage("boom");
         await WaitingForAsync(Task.CompletedTask, "nothing");
-    }
-
-    /// <summary>
-    /// An in-process launcher that costs no time and spends none: it never advances the clock (§5.4 point 6 — an advance from the
-    /// launcher's thread would run the clock's callbacks on it). Each launch records the request's timeout, signals ITS OWN handshake
-    /// (a <see cref="ClockHandshake"/> is single-shot) and waits; the test's driver advances by what the launch would have been allowed to
-    /// run, <c>min(turn, timeout)</c>, and releases it. Released, it answers the scripted text when the turn fits its timeout and
-    /// <c>TimedOut</c> when it does not. Past <c>ceiling</c> launches it answers a failure naming the count, so a loop nothing ends
-    /// finishes red instead of hanging.
-    /// </summary>
-    private sealed class ClockedLauncher(TimeSpan turn, string stdout, int ceiling = 20) : IProcessLauncher
-    {
-        private sealed record Arrival(ClockHandshake Handshake, TimeSpan Timeout);
-
-        private readonly Channel<Arrival> _arrivals = Channel.CreateUnbounded<Arrival>();
-        private readonly ConcurrentQueue<ClockHandshake> _handshakes = [];
-        private readonly ConcurrentQueue<TimeSpan> _timeouts = [];
-        private int _count;
-
-        public int Count => Volatile.Read(ref _count);
-
-        /// <summary>The timeout every launch was given, in launch order.</summary>
-        public IReadOnlyList<TimeSpan> Timeouts => [.. _timeouts];
-
-        public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
-        {
-            var launches = Interlocked.Increment(ref _count);
-            if (launches > ceiling)
-            {
-                return new ProcessResult(1, string.Empty, $"the stand-in was launched {launches} times, past its ceiling of {ceiling}: nothing ended the conversation", TimedOut: false);
-            }
-
-            var handshake = new ClockHandshake();
-            _handshakes.Enqueue(handshake);
-            _timeouts.Enqueue(request.Timeout);
-            _arrivals.Writer.TryWrite(new Arrival(handshake, request.Timeout));
-            handshake.Signal();
-            await handshake.WaitForReleaseAsync(ct);
-
-            return turn <= request.Timeout
-                ? new ProcessResult(0, stdout, string.Empty, TimedOut: false)
-                : new ProcessResult(-1, string.Empty, string.Empty, TimedOut: true);
-        }
-
-        /// <summary>The test's side: for each launch, wait until it is there, move the clock by what it was allowed to run, release it — until the run is over.</summary>
-        public async Task DriveAsync(Task run, ManualClock clock, CancellationToken ct)
-        {
-            using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            try
-            {
-                while (!run.IsCompleted)
-                {
-                    var next = _arrivals.Reader.ReadAsync(stop.Token).AsTask();
-                    if (await Task.WhenAny(run, next) == run)
-                    {
-                        return;
-                    }
-
-                    var arrival = await next;
-                    await arrival.Handshake.Reached;
-                    clock.Advance(TimeSpan.FromTicks(Math.Min(turn.Ticks, arrival.Timeout.Ticks)));
-                    arrival.Handshake.Release();
-                }
-            }
-            finally
-            {
-                await stop.CancelAsync();
-            }
-        }
-
-        /// <summary>Lets every parked launch go — in the test's <c>finally</c>, so a failing test never leaves a product thread waiting.</summary>
-        public void ReleaseAll()
-        {
-            foreach (var handshake in _handshakes)
-            {
-                handshake.Release();
-            }
-        }
     }
 
     /// <summary>

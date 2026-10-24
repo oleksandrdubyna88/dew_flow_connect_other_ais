@@ -1,7 +1,7 @@
 # PLAN — the suite is deterministic and leaves no temp
 
-> Status: **in progress, 2026-10-21.** E1 (no run sees another) and C2 (E3 S1) are **merged** in #893
-> (`e86fe17f8`, 2026-10-20); **E2 (one temp folder per run) is merged** in #897 (`215170c4b`, 2026-10-21); **E3 (product defects) is merged** (squashed to `main` as `0426984a1`, 2026-10-21); **E4 (the clock) has S1–S5 built and its docs pass done on `feat/suite-e4-clock`, the code gate pending; S6 (C4) is gated on a kept failure (D5)** — see [PLAN_the_suite_is_deterministic_and_leaves_no_temp_E4.md](PLAN_the_suite_is_deterministic_and_leaves_no_temp_E4.md) and `### E4` below (its plan round `67791431`, risk consult `d4afeda2` and the cadence consult for epics 4-5 `15f733c7` were folded on 2026-10-21; `### E5` was restructured by that consult: C23 moved to E4 S2, C24, C26 and the new C27 given sections and owners); E5 is open; the §10 CI watch of E1 and C2 is running. Scope: the fake CLI's steering files
+> Status: **in progress, 2026-10-23.** E1 (no run sees another) and C2 (E3 S1) are **merged** in #893
+> (`e86fe17f8`, 2026-10-20); **E2 (one temp folder per run) is merged** in #897 (`215170c4b`, 2026-10-21); **E3 (product defects) is merged** (squashed to `main` as `0426984a1`, 2026-10-21); **E4 (the clock) is merged** in #916 (`d5694bab7`, 2026-10-22; S6 (C4) gated on a kept failure, D5); **E5 (the last epic) has its coded stories S1–S12 built** on `docs/suite-e5-stories` (S1 on `feat/suite-e5-s1`), the checkpoint 2 code round, S13 and the final gate open (2026-10-23) — see [PLAN_the_suite_is_deterministic_and_leaves_no_temp_E4.md](PLAN_the_suite_is_deterministic_and_leaves_no_temp_E4.md) and `### E4` below (its plan round `67791431`, risk consult `d4afeda2` and the cadence consult for epics 4-5 `15f733c7` were folded on 2026-10-21; `### E5` was restructured by that consult: C23 moved to E4 S2, C24, C26 and the new C27 given sections and owners); E5 is open; the §10 CI watch of E1 and C2 is running. Scope: the fake CLI's steering files
 > (`src_mcp/tests_fakecli`), the fixed-name temp paths of the C# and extension tests, the flaky cases found in CI and
 > locally between 2026-09-26 and 2026-10-19 (product code where the cause is in the product), and the `coai-*` folders
 > the suites leave in `%TEMP%`. The owner put this "tail" at the very end of the queue; it was written so the causes
@@ -1660,6 +1660,16 @@ handing the loop its `_clock` (C13). S5: tests only — the pure `RoundDeadline.
 B16 also turns the end-to-end smoke test red on a real machine. The docs pass is done (`module_tests.md`, `module_runners.md`, `module_server.md`, the tails note); promotion of the E4 document waits for the code gate and the CI watch.
 
 ### E5 — Tests that wait for an event
+
+> **Stories: [PLAN_the_suite_is_deterministic_and_leaves_no_temp_E5.md](PLAN_the_suite_is_deterministic_and_leaves_no_temp_E5.md)
+> (written 2026-10-22 by Fable; self-contained, so a gate reviewer reads it instead of this file). Status: plan only,
+> nothing implemented yet.** Thirteen stories over the twenty cases E5 owns (the nine below and the intake C28–C38), no
+> cornerstone; it folds the NEW C24 evidence of CI run 39760284371 (the fake's pid file read while EMPTY — exit 97 is the
+> fake CLI's "a managed exception escaped" exit, `tests_fakecli/Program.cs:45` — a torn `File.WriteAllText` at
+> `SupervisionVerbs.cs:43` behind a wait on `File.Exists` alone at `:204`; the `R` arm stays gated), finds C28's two
+> PowerShell spawns (`kimiWindowsInstall.test.ts:55`, `vibeWindowsInstall.test.ts:52`), measures C36 on this checkout
+> (12.7 s, 3,561 files, 73 outlined) and names the one clock seam E5 lands (`ReviewerExecutor`, C35, under D3).
+> Where it re-read the code at `78d91db55` it supersedes the lines below.
 
 > **Restructured 2026-10-21 by the cadence consult for epics 4-5 (`15f733c7`) — its four points, each verified against
 > the code at `d9cdccf0e`, are folded at the end of this section.** The story list below is the fresher one; where §9

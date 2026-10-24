@@ -124,6 +124,210 @@ public sealed class HeldFileInheritableOnLinuxTests : IDisposable
         HeldFile.Probe(LockFile).Should().Be(LockProbe.Free, "the descriptor leaked with its flock: nobody else can take the file until this process exits");
     }
 
+    /// <summary>C26 arm (a): a child the host forks AND EXECS while the take's descriptor is open (a sibling test starting a process is exactly that) must not carry the lock away.</summary>
+    [Fact]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public void AForkDuringTheTakesFailure_DoesNotCarryTheLockAway()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "the native take is Linux's");
+
+        var hold = LinuxHeldFile.TakeInheritable(LockFile, handle =>
+        {
+            GC.KeepAlive(handle);
+            _ = Start("sleep", "30000");
+            throw new IOException("the stream could not be made");
+        });
+
+        hold.Should().BeOfType<Hold.Unusable>();
+        HeldFile.Probe(LockFile).Should().Be(LockProbe.Free, "a descriptor opened inheritable and then closed must not survive in a child the host forked meanwhile");
+    }
+
+    [System.Runtime.InteropServices.DllImport("libc", EntryPoint = "fcntl")]
+    private static extern int Fcntl(int descriptor, int command);
+
+    private const int FGetFd = 1;
+    private const int FdCloexec = 1;
+
+    /// <summary>
+    /// C26, the flag itself: while the take is still open — the stream is being made — the descriptor is close-on-exec, so a child that is forked AND exec'd in that window closes its copy. With the failure path's explicit
+    /// unlock (arm b) the lock state alone cannot tell whether the flag was ever set, so the flag is read directly: deterministic, and no inheritable descriptor outlives the call.
+    /// </summary>
+    [Fact]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public void TheDescriptor_IsCloseOnExec_UntilTheTakeHasSucceeded()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "the native take is Linux's");
+        var flags = -1;
+
+        _ = LinuxHeldFile.TakeInheritable(LockFile, handle =>
+        {
+            flags = Fcntl((int)handle.DangerousGetHandle(), FGetFd);
+            throw new IOException("the stream could not be made");
+        });
+
+        flags.Should().BeGreaterThanOrEqualTo(0, "the flags were read");
+        (flags & FdCloexec).Should().Be(FdCloexec, "the descriptor was inheritable while the take was still open: a child exec'd by another thread in that window would keep a copy of it (O_CLOEXEC)");
+    }
+
+    /// <summary>C26 arm (b): a child forked after the flock and kept BEFORE its exec holds the open file description; the failed take must release the lock itself, not leave it to that child's exit.</summary>
+    [Fact]
+    public async Task AFailureWithAPreExecChild_StillLeavesTheFileFree()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "the native take is Linux's");
+        var taker = Start("hold-file", "fork-fail", LockFile);
+
+        var forked = await taker.StandardOutput.ReadLineAsync().WaitAsync(Patience, TestContext.Current.CancellationToken);
+        forked.Should().StartWith("forked ", $"the helper forks its pre-exec child before the stream fails (stderr: {await ReadErrorIfEndedAsync(taker)})");
+        var child = Process.GetProcessById(int.Parse(forked![7..]));
+        _children.Add(child);
+        (await taker.StandardOutput.ReadLineAsync().WaitAsync(Patience, TestContext.Current.CancellationToken)).Should().Be("unusable");
+
+        child.HasExited.Should().BeFalse("the precondition: the pre-exec child is alive, holding its copy of the descriptor");
+        HeldFile.Probe(LockFile).Should().Be(LockProbe.Free, "a pre-exec child the failed take's process forked still holds the flock after the failure: the abort path must flock(LOCK_UN) before it closes");
+    }
+
+    /// <summary>C26 arm (c): clearing FD_CLOEXEC is CHECKED — a failure is an Unusable that names the errno, and the lock is released, not leaked with the descriptor.</summary>
+    [Fact]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public void AnFcntlThatFails_IsUnusable_AndLeavesNoLock()
+    {
+        const int Ebadf = 9;
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "the native take is Linux's");
+
+        var hold = LinuxHeldFile.TakeInheritable(LockFile, handle => new FileStream(handle, FileAccess.ReadWrite, bufferSize: 0), _ => Ebadf);
+
+        hold.Should().BeOfType<Hold.Unusable>().Which.Cause.Message.Should().Contain($"errno {Ebadf}", "the failed fcntl is named by its errno");
+        HeldFile.Probe(LockFile).Should().Be(LockProbe.Free, "a take whose descriptor could not be made inheritable leaves no lock behind");
+    }
+
+    [System.Runtime.InteropServices.DllImport("libc", EntryPoint = "dup")]
+    private static extern int Dup(int descriptor);
+
+    [System.Runtime.InteropServices.DllImport("libc", EntryPoint = "close")]
+    private static extern int Close(int descriptor);
+
+    private const int Eintr = 4;
+    private const int Einval = 22;
+
+    /// <summary>
+    /// C26, the unlock's result (E5 checkpoint 1, F1 + F4). A <c>dup</c> of the descriptor stands for the child that forked but has not exec'd: it keeps the open file description alive, so CLOSING the take's own descriptor frees
+    /// nothing — only an explicit, SUCCESSFUL <c>flock(LOCK_UN)</c> does. An unlock the kernel interrupted (<c>EINTR</c>) is therefore retried: ignoring it would leave the lock held by that copy.
+    /// </summary>
+    [Fact]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public void AnUnlockThatIsInterrupted_IsRetried_AndTheFileIsFreeWhileACopyOfTheDescriptorLives()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "the native take is Linux's");
+        var calls = 0;
+        var copy = -1;
+
+        try
+        {
+            var hold = LinuxHeldFile.TakeInheritable(
+                LockFile,
+                handle =>
+                {
+                    copy = Dup((int)handle.DangerousGetHandle());
+                    throw new IOException("the stream could not be made");
+                },
+                _ => 0,
+                descriptor => ++calls == 1 ? Eintr : LinuxHeldFile.Unlock(descriptor));
+
+            hold.Should().BeOfType<Hold.Unusable>().Which.Cause.Message.Should().Contain("the stream could not be made");
+            calls.Should().Be(2, "the first unlock answered EINTR and was asked again");
+            HeldFile.Probe(LockFile).Should().Be(LockProbe.Free, "the retried unlock released the open file description, which the copy of the descriptor would otherwise have kept locked");
+        }
+        finally
+        {
+            if (copy >= 0)
+            {
+                _ = Close(copy);
+            }
+        }
+    }
+
+    /// <summary>An unlock that fails for any other reason is SURFACED — the Unusable names the unlock's errno beside the original failure — and the descriptor is still closed.</summary>
+    [Fact]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public void AnUnlockThatFails_IsNamedByItsErrno_BesideTheOriginalFailure_AndTheDescriptorIsStillClosed()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "the native take is Linux's");
+        Microsoft.Win32.SafeHandles.SafeFileHandle? taken = null;
+        var calls = 0;
+
+        var hold = LinuxHeldFile.TakeInheritable(
+            LockFile,
+            handle =>
+            {
+                taken = handle;
+                throw new IOException("the stream could not be made");
+            },
+            _ => 0,
+            _ =>
+            {
+                calls++;
+
+                return Einval;
+            });
+
+        var message = hold.Should().BeOfType<Hold.Unusable>().Subject.Cause.Message;
+        message.Should().Contain("the stream could not be made", "the original failure is not lost").And.Contain("flock(LOCK_UN)").And.Contain($"errno {Einval}", "the unlock's own errno is named");
+        calls.Should().Be(1, "only EINTR is retried: another errno is final");
+        taken.Should().NotBeNull();
+        taken!.IsClosed.Should().BeTrue("a failed unlock still closes the descriptor, exactly once, by its owner");
+    }
+
+    /// <summary>The same when the take aborted on the failed <c>fcntl</c> instead: both errnos are named, the stream's descriptor is closed.</summary>
+    [Fact]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public void AnUnlockThatFailsAfterAFailedFcntl_NamesBothErrnos_AndClosesTheDescriptor()
+    {
+        const int Ebadf = 9;
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "the native take is Linux's");
+        Microsoft.Win32.SafeHandles.SafeFileHandle? taken = null;
+
+        var hold = LinuxHeldFile.TakeInheritable(
+            LockFile,
+            handle =>
+            {
+                taken = handle;
+
+                return new FileStream(handle, FileAccess.ReadWrite, bufferSize: 0);
+            },
+            _ => Ebadf,
+            _ => Einval);
+
+        var message = hold.Should().BeOfType<Hold.Unusable>().Subject.Cause.Message;
+        message.Should().Contain($"errno {Ebadf}").And.Contain($"errno {Einval}");
+        taken!.IsClosed.Should().BeTrue();
+    }
+
+    /// <summary>An unlock that is interrupted every time cannot loop for ever: it is asked <see cref="LinuxHeldFile.UnlockAttempts"/> times, then reported as the failure it is.</summary>
+    [Fact]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public void AnUnlockInterruptedEveryTime_IsAskedAFewTimes_ThenReported()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "the native take is Linux's");
+        var calls = 0;
+
+        var hold = LinuxHeldFile.TakeInheritable(
+            LockFile,
+            _ => throw new IOException("the stream could not be made"),
+            _ => 0,
+            _ =>
+            {
+                calls++;
+
+                return Eintr;
+            });
+
+        hold.Should().BeOfType<Hold.Unusable>().Which.Cause.Message.Should().Contain($"errno {Eintr}");
+        calls.Should().Be(LinuxHeldFile.UnlockAttempts);
+    }
+
+    private static async Task<string> ReadErrorIfEndedAsync(Process process) =>
+        process.HasExited ? await process.StandardError.ReadToEndAsync() : "(still running)";
+
     [Fact]
     public async Task L_N1a_ANonInheritableTake_BesideAnInheritableHold_IsBusy()
     {

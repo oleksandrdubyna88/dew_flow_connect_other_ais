@@ -32,10 +32,16 @@ internal static class TreeHoldVerb
     /// <summary>The tree hold, taken for the sleeping grandchild to inherit; null (and said) when it could not be.</summary>
     private static IDisposable? TakeTree(string mode, string target, string home)
     {
-        if (mode == "tree-probed")
+        switch (mode)
         {
-            // A disposal's probe meets the shim: the per-home file is held for a moment between the two takes (M1).
-            KimiCredentialsLock.BeforeTheHomeHold = MeetADisposalsProbe;
+            case "tree-probed":
+                // A disposal's probe meets the shim: the per-home file is held between the two takes (M1), and let go when the shim's first look finds it busy.
+                MeetADisposalsProbe(letGoWhenMet: true);
+                break;
+            case "tree-probed-forever":
+                // The other side of it: the probe never lets go, so the shim waits its HomeWait out and gives up (exit 69) — no timer in the test.
+                MeetADisposalsProbe(letGoWhenMet: false);
+                break;
         }
 
         var holding = KimiCredentialsLock.HoldTree(target, home, TimeSpan.FromSeconds(1));
@@ -51,11 +57,18 @@ internal static class TreeHoldVerb
         return null;
     }
 
-    /// <summary>Holds the per-home file for a quarter of a second, as a probe does, and returns once it is held.</summary>
-    private static void MeetADisposalsProbe(string path)
+    /// <summary>
+    /// A disposal's probe holds the per-home file between the shim's two takes, as <see cref="KimiCredentialsLock.HomeProbe"/> does for the length of one open. When <paramref name="letGoWhenMet"/>
+    /// it is released FROM the shim's seam — the first busy answer — so the shim provably met a busy file and waited it out, with no clock in the outcome.
+    /// </summary>
+    private static void MeetADisposalsProbe(bool letGoWhenMet)
     {
-        var probe = (Hold.Taken)HeldFile.Take(path);
-        _ = Task.Delay(250).ContinueWith(_ => probe.Stream.Dispose(), TaskScheduler.Default);
+        Stream probe = Stream.Null;
+        KimiCredentialsLock.BeforeTheHomeHold = path => probe = ((Hold.Taken)HeldFile.Take(path)).Stream;
+        if (letGoWhenMet)
+        {
+            KimiCredentialsLock.WhenTheHomeFileIsBusy = _ => probe.Dispose();
+        }
     }
 
     /// <summary>The server's gate alone — NOT inheritable — the control arm.</summary>
