@@ -363,6 +363,37 @@ public sealed class AFeatureIsReviewedEndToEndTests : IAsyncLifetime
             $"codex {release} with fast Off is told {(sent.Length == 0 ? "no tier" : sent[0])} on every launch");
     }
 
+    /// <summary>
+    /// The feature round asks the installed claude's help before it builds, as every review round does (todo/PLAN_codex_agy_and_claude_reviewers_get_what_kimi_got.md,
+    /// E5.S2; the other rounds are <see cref="ARealReviewFromNormalSettingsCarriesSafeModeTests"/>): a claude row from ORDINARY settings is launched with
+    /// <c>--safe-mode</c> when its help declares it.
+    /// </summary>
+    [Fact]
+    public async Task AFeatureRound_AsksItsClaudeBeforeItBuilds_AndSendsSafeMode()
+    {
+        Environment.SetEnvironmentVariable("FAKECLI_HELP_STDOUT",
+            File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "fixtures", "claude", "help-2.1.258-windows.txt")));
+        Environment.SetEnvironmentVariable("FAKECLI_STDOUT", JsonSerializer.Serialize(new { type = "result", is_error = false, result = Clean }));
+        var service = new PanelService(
+            new PanelSettings
+            {
+                Providers = [new("claude") { ExecutablePath = FakeCliExe, Feature = true }],
+                Rounds = new PanelConfig(PanelConfig.AllRoles.ToDictionary(r => r, _ => new RoleGate(2, 5)), StagePolicy.Human),
+                DataDir = _data,
+                ReviewerTimeout = TimeSpan.FromSeconds(30),
+                RateLimitBackoff = TimeSpan.FromMilliseconds(5),
+                FeatureMinEpics = 3,
+                FeatureSourceFollowUps = 0,
+            },
+            VaultKeys.None("no vault in tests"), default, _launcher, Logger.None, Noticing.None);
+
+        await ReviewAsync(service);
+
+        var launches = Launches().Select(launch => launch.Split('\0')[..^1]).Where(argv => argv.Contains("-p")).ToList();
+        launches.Should().NotBeEmpty().And.OnlyContain(argv => argv.Contains("--safe-mode"),
+            "the feature stage asks the claude's help too — a stage that forgets leaves the reviewer without the flag and with a note");
+    }
+
     // ---------- S3.2: a reviewer that asks for source is served it and asked again ----------
 
     [Fact]

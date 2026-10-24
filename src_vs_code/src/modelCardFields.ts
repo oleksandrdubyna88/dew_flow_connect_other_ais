@@ -137,6 +137,22 @@ export function fastField(vendor: Vendor, id: string, mark = ''): string {
     + `<select id="fast-${id}" data-setting="fast" data-vendor="${id}">${options}</select></div>`;
 }
 
+const SAFE_MODE_STATES: readonly (readonly [string, string])[] = [['', 'On — the branch cannot steer it'], ['off', 'Off — the branch\u2019s CLAUDE.md and hooks apply']];
+
+/**
+ * A claude row's safe-mode switch for its REVIEWER launches (todo/PLAN_codex_agy_and_claude_reviewers_get_what_kimi_got.md, E5.S2) — drawn
+ * by the Settings page's card only, on a claude row. A setting, not an action. The hint carries the one recorded trade: safe mode also
+ * switches off the person's own USER hooks for this reviewer, so what keeps it read-only is coai's own limits and never a user hook.
+ */
+export function safeModeField(vendor: Vendor, id: string, mark = ''): string {
+  const chosen = vendor.safeMode ?? '';
+  const options = SAFE_MODE_STATES.map(([value, label]) => `<option value="${value}"${value === chosen ? ' selected' : ''}>${escapeHtml(label)}</option>`).join('');
+
+  return `<div class="field"><label for="safemode-${id}">Reviewer safe mode${mark}${help('safeMode')}</label>`
+    + `<select id="safemode-${id}" data-setting="safeMode" data-vendor="${id}">${options}</select>`
+    + `<div class="hint">Safe mode also switches off your own user hooks for this reviewer; coai\u2019s own limits — plan mode, no write tools — keep it read-only, never a hook.</div></div>`;
+}
+
 /** An api row's stream switch (research/PLAN_api_streaming.md) — drawn by the Settings page's card only. */
 export function streamField(vendor: Vendor, id: string, mark = ''): string {
   return `<div class="check-row"><label class="check"><input type="checkbox" data-setting="stream" data-vendor="${id}"${vendor.stream === true ? ' checked' : ''}>`

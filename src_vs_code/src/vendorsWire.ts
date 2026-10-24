@@ -145,6 +145,7 @@ export function rowOnTheWire(
     ...cliEffortOnTheWire(v, features),
     ...streamOnTheWire(v, features),
     ...fastOnTheWire(v, features),
+    ...safeModeOnTheWire(v, features),
   };
 }
 
@@ -154,6 +155,14 @@ export function rowOnTheWire(
  */
 function fastOnTheWire(v: Vendor, features: readonly string[]): { fast?: 'on' | 'cli' } {
   return v.fast !== undefined && features.includes(FEATURES.fastMode) ? { fast: v.fast } : {};
+}
+
+/**
+ * A claude row's safe-mode switch, to a binary that lists `safeMode` — and to no other: an older binary skips the member and has
+ * no safe mode to switch, so the card would say off over a launch that never had the flag. Only `off` crosses; on is the binary's own default.
+ */
+function safeModeOnTheWire(v: Vendor, features: readonly string[]): { safeMode?: 'off' } {
+  return v.safeMode === 'off' && features.includes(FEATURES.safeMode) ? { safeMode: 'off' } : {};
 }
 
 /**

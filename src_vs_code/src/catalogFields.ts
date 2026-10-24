@@ -27,6 +27,7 @@ export interface CatalogFields {
   chatStartingPrompt?: string;
   stream?: boolean;
   fast?: FastSetting;
+  safeMode?: 'off';
 }
 
 /** A fast mode that is not the default (research/PLAN_fast_mode.md): On, or As the CLI is set. Off is stored as nothing. */
@@ -46,6 +47,7 @@ export function catalogFields(v: Record<string, unknown>): CatalogFields {
     ...promptField('chatStartingPrompt', v['chatStartingPrompt']),
     ...streamField(v['runtime'], v['stream']),
     ...fastField(v),
+    ...safeModeField(v['runtime'], v['safeMode']),
   };
 }
 
@@ -79,6 +81,15 @@ const FAST_SETTINGS: readonly FastSetting[] = ['on', 'cli'];
 /** What decides a row's tier, off the stored row: its runtime, its model, and whether it is on somebody else's endpoint. */
 function launchOf(v: Record<string, unknown>): { readonly runtime: string; readonly model: string; readonly baseUrl: string } {
   return { runtime: saidText(v['runtime']) ?? '', model: saidText(v['model']) ?? '', baseUrl: saidText(v['baseUrl']) ?? '' };
+}
+
+/**
+ * A claude row's safe mode for its REVIEWER launches (todo/PLAN_codex_agy_and_claude_reviewers_get_what_kimi_got.md, E5.S2) — kept
+ * only as `off`, the one state a person chose; ON, the default, is kept as nothing, so a row that never set it and one set to on read
+ * alike. Only a claude row has the switch: the other runtimes have no flag for it.
+ */
+function safeModeField(runtime: unknown, raw: unknown): CatalogFields {
+  return runtime === 'claude' && raw === 'off' ? { safeMode: 'off' } : {};
 }
 
 /** An api row's stream switch (research/PLAN_api_streaming.md) — kept only when ON, so a switched-off row reads as one that never had it. */

@@ -1467,11 +1467,11 @@ fresh and resumed, sign-in intact; WSL 2.1.197 refuses any launch carrying it (`
 '--restricted'`, exit 1). Without it the allowlist held 9 of 9 in WSL but leaked on Windows on 2026-10-01, so it is
 never called confinement. The golden argv tests (`ClaudeConsultantArgvTests`, supported/unsupported × fresh,
 resumed, model) assert what is SENT; the evidence of effect is the committed probe,
-`scripts/probe-claude-consultant-confinement.mjs`. The claude REVIEWER (`ClaudeRuntime`) did not change — its own
-allowlist is [PLAN_the_claude_reviewer_is_confined_by_an_allowlist.md](../todo/PLAN_the_claude_reviewer_is_confined_by_an_allowlist.md).
+`scripts/probe-claude-consultant-confinement.mjs`. The claude REVIEWER (`ClaudeRuntime`) did not change **at that epic** — its own
+allowlist is [PLAN_the_claude_reviewer_is_confined_by_an_allowlist.md](../todo/PLAN_the_claude_reviewer_is_confined_by_an_allowlist.md); since 2026-10-23 it is sent `--safe-mode` (the sub-section at the end of this section).
 
 - **`ClaudeCapability`** (`runners/Reviewers/ClaudeCapability.cs`, a record `(RestrictedSupport Support, string
-  Reason, bool CouldNotStart = false)`). Since the whole-branch review (L): a help the launcher cut short (`Truncated`)
+  Reason, bool CouldNotStart = false, SafeModeSupport SafeMode = Unprobed)`; the `SafeMode` half is the REVIEWER's, read from the same help — see *The claude REVIEWER is not steered by the branch it reviews* below). Since the whole-branch review (L): a help the launcher cut short (`Truncated`)
   is `Unknown` before anything is read from it — fail closed, a `--restricted` line further down is simply not in the
   head — and an executable that could not be STARTED is `Unknown` with `CouldNotStart`, which
   `ClaudeConsultant.PrepareAsync` refuses as `cli-not-found` with the install cure rather than `vendor-refused`. `ProbeAsync(launcher, executable, workingDirectory, ct)` — the one public probe — runs `<claude> --help`
@@ -1562,6 +1562,58 @@ skipped), and only a PATH with none falls back to `$HOME/.local/bin/agy` when it
 it, and the binary every WSL measurement ran; so a server whose PATH lacks `~/.local/bin` no longer fails to start
 an `agy` that is right there, and the person's own install is never overridden by a stale one — and bare `agy`
 otherwise, macOS included (nothing here has run agy on a Mac).
+
+### The claude REVIEWER is not steered by the branch it reviews: `--safe-mode`, probed per round (2026-10-23, E5.S1–S2 of `todo/PLAN_codex_agy_and_claude_reviewers_get_what_kimi_got.md`)
+
+The consultant above is confined by an allowlist; the claude **reviewer** (`ClaudeRuntime`) runs in the reviewed worktree, so the branch's own
+`CLAUDE.md` and `.claude/` hooks apply to its review — a headless claude in a worktree is observed to run that worktree's project `SessionStart`
+hook ([RESULTS_claude_reviewer_safe_mode.md](RESULTS_claude_reviewer_safe_mode.md) §2.1). It now starts in the CLI's own safe mode.
+
+```
+-p --output-format json [--safe-mode] --permission-mode plan --disallowedTools <write tools> --strict-mcp-config --add-dir <worktree> [--model <m>] [--effort <e>] [--settings <fast file>]
+```
+
+- **The decision is one pure value, `ClaudeSafeMode.For(ReviewerSettings)`** (`runners/Reviewers/ClaudeSafeMode.cs`): `--safe-mode` when
+  `ReviewerSettings.SafeMode` is on (the default) and `ClaudeCli.SafeMode == Declared`; otherwise no flag and a NOTE. The four reasons for no flag each
+  have their own sentence, all naming only *the reviewed branch's CLAUDE.md and hooks* (never MCP — `--strict-mcp-config` is already sent):
+  `NotDeclared` (*the installed claude does not declare --safe-mode*), `Unknown` (*… capability could not be read (<reason>), so it was not sent*; a help that
+  timed out, was cut short or exited non-zero is unknown, never "does not declare"), `Unprobed` (*was not asked … for this launch*), and the row's switch off
+  (*safe mode is switched off for this claude row*). **Never a refusal, never `--bare`** (it skips the keychain read the browser sign-in lives in), and an
+  unsupported-flag failure is **never retried without the flag**: the executor has no second launch of that kind.
+- **Sent is not observed (F-B of the code gate, 2026-10-23).** A launch that SENDS the flag carries no note only when the installed release is in
+  `ClaudeSafeMode.ObservedVersions` (one constant of typed `ClaudeRelease` values, `2.1.309` — the canary of RESULTS §5, where the effect was seen for the project-path `SessionStart` hook and, in a second run, the `PreToolUse` hook; other hook events such as `PostToolUse`, `Stop` and `UserPromptSubmit` were not tried); on any other release the note says
+  *`--safe-mode` is sent; its effect (the reviewed branch's hooks and CLAUDE.md do not apply) was observed on claude 2.1.309 only, not on <version>*, and on a release
+  that could not be read, that the release is not known so the effect is not observed for it. Never a refusal. The release is `ClaudeCapability.Version`, a `ClaudeRelease` (`runners/Reviewers/ClaudeRelease.cs`: `Unknown` / `IsKnown` / `Parse`; its default is `Unknown`, never a raw string), filled by
+  `WithVersionAsync` — ONE `--version` per round per executable, only when the help declared the flag, in `ClaudeCapabilities.AskAsync` (the help does not print the
+  release, and nothing else at roster time knows it); `ClaudeRelease.Parse` takes the one `x.y.z` the answer names (none or two → `Unknown`). The Team server has no extra spawn: it
+  reads the version its catalog already saw (`versionOf`), and has no warning channel to carry the note.
+- **`ClaudeCapability` grew a second declaration read from the SAME `--help`**: `SafeModeSupport SafeMode` beside `Support`, and
+  `SafeModeIn(helpText)` — the `RestrictedIn` rule (ANSI stripped, option column format, every long name read, a flag and not a flag that takes a value,
+  `--safe-mode <x>` and `--safe-mode=<x>` are not support). `Unknown(reason)` sets both. One `--help` per probe, never a second process for the declaration (the release is the opt-in `WithVersionAsync` above). The consultants'
+  argv and their `Unknown` → refusal for `--restricted` are exactly as they were (`TheConsultantsArgvIsUnchanged`, `TheConsultantsUnknownStaysARefusal`).
+  `ProbeAsync(…, Func<ProcessRequest, ProcessRequest> shape, ct)` is the overload the Team server uses to ask under the job's own request.
+- **Both reviewer paths ask — they did not before.** `ProbeAsync` was called only by the consultant (`ClaudeConsultant.PrepareAsync`) and the consultants' read mode, so
+  the reviewer's `ClaudeCli` stayed `Unprobed` and a flag in `Build` alone would never have been sent. Local: `RosterBuilder.ClaudeCapabilitiesAsync` (beside
+  `CodexTiersAsync`; `Server/Rounds/ClaudeCapabilities.cs`) asks every distinct claude executable whose row has safe mode ON, once each, **every round, never
+  cached** (a cache would still need a version spawn to see an in-place update), in the coai DATA folder and never in the worktree under review; the plan, code,
+  document and feature stages pass the answer into `BuildWork(…, claude:)`, `FrameFor` puts it on the `RosterFrame`, and `SettingsFor` copies it onto each
+  claude row's `ClaudeCli` — the security lane's rows included. Team server: `ReviewLauncher.RunAsync` probes just before `Confined(…)`, per job, through
+  `Shaped(request, slot, work)` — the SAME step that shapes the launch (`Confinement.OfEveryJob`, the slot's `HOME` and configuration, the job's folder as
+  `TMPDIR`/`TMP`/`TEMP`) — within the job's cancellation, in the job's own folder (`TheTeamProbeRunsUnderTheJobsConfinement`).
+- **Where the note goes.** `ReviewerInvocation.Note` (made by the pure `Build`) is carried by `ClaudeRuntime.TakeTurnAsync` → `LaunchTurn.Noting` → the outcome's
+  `Warning` → the round's reviewer line (`; warned — claude/PlanCritique: …`, `RoundWarnings`), as the Vibe/Kimi unmeasured-version warning travels. The Team server
+  has no per-launch warning channel (`ReviewAttempt` carries none), so there the probe's answer is the box's `claude --help` and `POST_DEPLOY.md` says how to read it.
+- **The way back is the row's `safeMode` setting** (`on` default, `off`; `ProviderSettings.SafeMode`, `VendorDto.SafeMode`, `--features` lists `safeMode`). Off sends no
+  flag AND removes an inherited `CLAUDE_CODE_SAFE_MODE` from the child's environment (a null entry in the request's environment, which the launcher applies last), or the
+  switch would not be a way back for a shell that already sets it. An Off row is not probed. The Team server has no per-row setting and keeps the default, on.
+- **The one trade.** `--safe-mode` also switches off the person's own USER hooks for the reviewer (managed hooks stay). What keeps the reviewer read-only is
+  `--permission-mode plan` and `--disallowedTools`, never a user hook; the card says so beside the setting. **What is claimed:** the flag is SENT when declared. That a branch's project `SessionStart` hook, and in a second run its `PreToolUse` hook, then do not run under this exact
+  argv was observed by the lead's paid canary (E5.S4, 2026-10-23, RESULTS §5) on claude 2.1.309 only, for those two hook events only — see *Sent is not observed* above; the canary's hook lived in the
+  scratch worktree's own `.claude/settings.json`, while the `permissions.deny` and `PreToolUse` rows came through a scratch `--settings` file.
+- Tests: `TheClaudeReviewerRunsInSafeModeTests` (argv, notes, the way back, `BareIsNeverSent`, the consultants; the observed-version trio `ADeclaredFlagOnAnUnobservedVersion_IsSentWithANote`,
+  `TheObservedVersion_CarriesNoNote`, `AnUnknownVersion_SaysTheEffectIsNotObserved`; `ClaudeRelease.Parse` and `AnUnknownRelease_IsNotKnown`; the one `--version`, only when declared), `ARealReviewFromNormalSettingsCarriesSafeModeTests` (plan, code
+  and document rounds from ordinary settings through the real service against the fake CLI; `ASwappedCliBetweenRounds_IsReadAgain`; the env removal as the child saw it),
+  `AFeatureIsReviewedEndToEndTests.AFeatureRound_AsksItsClaudeBeforeItBuilds_AndSendsSafeMode`, `TheTeamClaudeReviewerRunsInSafeModeTests` (the Team twin and the confined probe).
 
 ## The consultant's health is read and checked — the runners' half (2026-10-03, epic 4)
 

@@ -168,6 +168,11 @@ export interface Vendor {
   readonly stream?: boolean | undefined;
   /** The row's fast mode (research/PLAN_fast_mode.md): `on` or `cli`; absent = Off, the default — forces the standard tier. */
   readonly fast?: FastSetting | undefined;
+  /**
+   * A claude row's safe mode for its reviewer launches (E5.S2 of todo/PLAN_codex_agy_and_claude_reviewers_get_what_kimi_got.md): `off`
+   * lets the reviewed branch's CLAUDE.md and hooks steer the reviewer again; absent = on, the default.
+   */
+  readonly safeMode?: 'off' | undefined;
 }
 
 /** The model an Antigravity row starts on: flash at high effort, the CLI's own active model. */

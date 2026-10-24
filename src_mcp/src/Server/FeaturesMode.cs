@@ -47,6 +47,9 @@ internal static class FeaturesMode
         // A row's `maxPromptKib`: the most its reviewer is sent in a first prompt; an over-cap reviewer is left out of the round, said
         // in the reply (research/PLAN_a_reviewer_is_not_sent_more_than_it_can_read.md). `providers` carries it back when set.
         "maxPromptKib",
+        // A claude row's `safeMode` (`on` default, `off`): whether its REVIEWER starts in the CLI's own safe mode, so the reviewed branch's CLAUDE.md and hooks do not steer it
+        // (todo/PLAN_codex_agy_and_claude_reviewers_get_what_kimi_got.md, E5.S2). An older binary skips the member and has no safe mode to switch.
+        "safeMode",
     ];
 
     internal static async Task<int> RunAsync()

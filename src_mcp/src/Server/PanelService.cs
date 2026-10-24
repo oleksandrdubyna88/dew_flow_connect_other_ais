@@ -714,6 +714,8 @@ public sealed class PanelService
                 // Asked before the roster is built, every round: an Off codex row on 0.110–0.130 must be sent no tier
                 // (research/PLAN_codex_tier_floor.md).
                 var tiers = await _roster.CodexTiersAsync(_launcher, workingDir, roundToken);
+                // And each claude's --safe-mode (todo/PLAN_codex_agy_and_claude_reviewers_get_what_kimi_got.md, E5.S2): asked every round, never remembered.
+                var claude = await _roster.ClaudeCapabilitiesAsync(_launcher, roundToken);
 
                 return WithNothingSkippedByRule(
                     _roster.BuildWork(
@@ -725,7 +727,7 @@ public sealed class PanelService
                         seed: StableSeed(session.State.SessionId, round),
                         planPrompts: _settings.DealPlanLenses ? UnspentPlanLenses(session, roles) : null,
                         deal: _settings.DealPlanLenses,
-                        codexTiers: tiers,
+                        codexTiers: tiers, claude: claude,
                         // The round's own scratch (D17's homes); a plan round mounts no checkout, so no snapshot.
                         scratch: await _roster.ScratchAsync(_launcher, Stage.PlanReview, workingDir, readsCheckout: false, roundToken))).WithUnreviewed(plan.Unreviewed);
             })
@@ -897,12 +899,14 @@ public sealed class PanelService
                         new Normalizer.TreeSitterOutliner(), repoPath, sha), roundToken);
                 // The ordinary reviewers' codex and the security lane's alike (research/PLAN_codex_tier_floor.md).
                 var tiers = await _roster.CodexTiersAsync(_launcher, workingDir, roundToken);
+                // And each claude's --safe-mode (todo/PLAN_codex_agy_and_claude_reviewers_get_what_kimi_got.md, E5.S2): asked every round, never remembered.
+                var claude = await _roster.ClaudeCapabilitiesAsync(_launcher, roundToken);
                 var built = WithSkippedByRule(
                     _roster.BuildWork(roles, workingDir, context, round,
                         stage: Stage.CodeReview, readsCheckout: true,
                         seed: StableSeed(session.State.SessionId, round),
                         deal: _settings.DealCodeLenses, securityFiles: collected.Files, securitySources: securitySources,
-                        codexTiers: tiers,
+                        codexTiers: tiers, claude: claude,
                         // The round's own scratch: D17's homes, and D6's sanitised snapshot of the pinned tree for a runtime
                         // that must not start in the checkout — made here, once, because BuildWork cannot await.
                         scratch: await _roster.ScratchAsync(_launcher, Stage.CodeReview, workingDir, readsCheckout: true, roundToken)),
@@ -1253,13 +1257,15 @@ public sealed class PanelService
                     var roles = _settings.Rounds.RolesForRound(Stage.DocumentReview, round);
                     // As every review stage does before it builds (research/PLAN_codex_tier_floor.md).
                     var tiers = await _roster.CodexTiersAsync(_launcher, workingDir, roundToken);
+                    // And each claude's --safe-mode (todo/PLAN_codex_agy_and_claude_reviewers_get_what_kimi_got.md, E5.S2): asked every round, never remembered.
+                    var claude = await _roster.ClaudeCapabilitiesAsync(_launcher, roundToken);
 
                     return WithNothingSkippedByRule(
                         _roster.BuildWork(
                             roles, workingDir, DocumentContext(purposeText, document, rules), round,
                             stage: Stage.DocumentReview, readsCheckout: false,
                             seed: StableSeed(running.State.SessionId, round),
-                            codexTiers: tiers,
+                            codexTiers: tiers, claude: claude,
                             // The round's own scratch (D17's homes); a document round mounts no checkout.
                             scratch: await _roster.ScratchAsync(_launcher, Stage.DocumentReview, workingDir, readsCheckout: false, roundToken)));
                 })

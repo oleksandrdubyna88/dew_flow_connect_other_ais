@@ -36,6 +36,8 @@ export const FEATURES = {
   consultantRow: 'consultantRow',
   /** A row's `fast`: its fast mode for codex and claude launches, Off by default (research/PLAN_fast_mode.md). */
   fastMode: 'fastMode',
+  /** A claude row's `safeMode`: whether its reviewer starts in the CLI's own safe mode, on by default (E5.S2 of todo/PLAN_codex_agy_and_claude_reviewers_get_what_kimi_got.md). */
+  safeMode: 'safeMode',
   /**
    * `--providers` carries `settingProblems` — which setting and which stored value a refusal is about, by kind
    * (research/PLAN_paths_per_side.md E5.2). The page prefers that answer to its own probe of the roots only from a server
