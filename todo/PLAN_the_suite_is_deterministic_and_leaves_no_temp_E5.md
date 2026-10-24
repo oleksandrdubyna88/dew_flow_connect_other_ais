@@ -899,6 +899,83 @@ message. Fable: none (no cornerstone).
   Accepted on its own evidence — never waits for or blocks another story; its job is `continue-on-error`, so its merge is
   on the harness's reviewers.
 
+### S1 — status: built 2026-10-22 (the spec above governed, deviations listed)
+
+**Built.** Branch `feat/suite-e5-s1` (cut from `7bf97015b`), its own PR. RED commit `4ecc993ef` → fix commit `f64519712`. Files: `src_vs_code/scripts/run-host.mjs`
+(the launch extracted into `runHostScenarios`), `src_vs_code/scripts/host-job-streak.mjs`, `src_vs_code/src/test/host/scenarios.ts` (one `console.log`),
+`src_vs_code/scripts/fixtures/stubEditor.mjs` (new), `src_vs_code/src/test/runHost.test.mjs` (new, 15 cases) and 7 added cases in `hostJobStreak.test.mjs`
+(22 → 29). No product code, no C#, no workflow file. The job's budgets are unchanged: `LAUNCH_MS` is still 10 minutes (a test pins it) and the download, which used
+to share it, has its own `DOWNLOAD_MS` of the same 10 minutes.
+
+**RED, seen on today's launch (the harness extracted with its behaviour unchanged, driven by the stub editor with `STUB_MODE=exit-before-host`).** Arm (a), the three
+messages of §3.1, verbatim:
+
+1. `expected the sentence to name an editor that exited before the host ran a scenario, got "the extension host: Test run failed with code 1"`
+2. `expected 2 launches, got 1`
+3. `expected a ::warning:: line, got []`
+
+Seven more cases were red with them (the no-`[main]`-line wording, "first start failed, second ran", "a launch not marked for a retry", the three download cases, and the
+`scenarios.ts` line); the arm (b) guard, the hang sentence, the budget pin, the pattern case and "quotes the LAST line" (trivially: nothing was quoted) were green before and after.
+Green after: all 15. The extension suite (`npm test`, which runs `run-tests.mjs`): 6623 tests, 6599 passed, 0 failed (24 skipped, as before), exit 0.
+
+**What shipped.**
+
+1. *The sentence.* An editor that exits non-zero without the host-started line fails as `the editor exited (code 1) before the extension host ran a scenario — VS Code's last
+   [main] line: "[main 2026-10-22T10:00:00.000Z] CodeWindow: detected unresponsive"`; with no `[main]` line printed it says `VS Code printed no [main] line`; a signal reads
+   `(signal SIGKILL)`. The harness now TEES the editor's output (it was only passed through to the CI log before), which is what lets it quote the line — so the plan's
+   "the editor's output the harness already holds" was not true, and the tee is part of this change (deviation 2). A scenario failure keeps `the extension host: Test run
+   failed with code 1` byte for byte; a hang keeps `the extension host: the extension host did not finish within 600s`.
+2. *The download leaves the launch budget.* `downloadAndUnzipVSCode()` runs first under `DOWNLOAD_MS`; its path goes to every launch as `vscodeExecutablePath`. Its own
+   sentences: `the editor download failed: <reason>` and `the editor download did not finish within 600s`.
+3. *One retry of the FIRST launch, only on proof.* `scenarios.ts` prints `  host started: N scenarios` before its loop (`scenarios.ts:982`, after the empty-list assert at `:978`). The
+   first launch is started once more when the editor exited (a code or a signal) AND that line was never seen. An exit after the line, a hang (budget), and the second
+   launch of the harness (the missing-data-root one) are never retried. The retry's outcome is said: `the editor did not start the first time; started on the second`, or, when the
+   second start fails the same way, `… — and it did not start the second time either (the editor exited (code 1) before … )`, or, when the second start reached the host and
+   then failed, its own sentence followed by `(the first start had failed: …)`.
+4. *Never silent.* `::warning::the editor exited (code 1) before the extension host ran a scenario — VS Code's last [main] line: "…"` is written the moment the first start
+   fails, before the second start is made (so it survives whatever the second does; `%`, CR and LF are escaped as GitHub requires). `host-job-streak.mjs` prints, beside the
+   streak: `extension-host first-launch warnings in the last N runs of main: k` — N the runs whose host job was found, k the `warning`-level annotations of THAT job
+   (`JOB_NAME`) whose message carries `before the extension host ran a scenario` (the constant `run-host.mjs` writes and the streak reads: one place). A failed annotations
+   request says `… in the last runs of main: UNKNOWN — <reason>` and the job stays green; the streak line is printed either way.
+
+**Why the new failure sentence is at least as strong as the old (the paragraph for the PR).** The old sentence, `the extension host: Test run failed with code 1`, carried one
+fact: a non-zero exit code. It was the same sentence for a failed scenario, an editor that never started and a window VS Code gave up on, so a reader had to dig through the
+surrounding log to tell them apart — which is how C22 first got misread. The new sentence for the case the old one could not tell apart keeps that fact (`the editor exited (code 1)`)
+and adds three: that the extension host never ran a scenario (proved by the absent `host started: N scenarios` line, not inferred), the last line VS Code's main process printed
+(`CodeWindow: detected unresponsive` — the cause, quoted, not described), and what the harness did about it (`did not start the second time either`, or the `::warning::` and
+`started on the second`). Every other failure is worded exactly as before, so nothing that was named is renamed. No budget is lengthened and no assertion weakened: the harness exits
+non-zero on every failure it exited non-zero on, except one — a first start that exited before the host ran — which now passes only if the second start runs every scenario and
+passes it, the same scenarios under the same assertions; and that pass is never silent, because the `::warning::` is written first and counted by the streak step.
+
+**Break-its (each seen red, then restored by writing the file back, and green again).**
+
+- **B-E5-1** (the FIRST `[main …]` line quoted instead of the last): 3 of 15 red — `expected the sentence to name an editor that exited before the host ran a scenario, got "… VS Code's
+  last [main] line: "[main 2026-10-22T09:59:44.000Z] CodeWindow: created" …"`, the quoted-the-first-line case, and the `::warning::` equality.
+- **B-E5-2** (the download left inside the launch budget): 3 of 15 red — `a download that outlasted the LAUNCH budget failed the launch`; `a download that fails names the download,
+  not the launch` (the sentence is the launch's, `the extension host: the extension host did not finish within 1s`); and the never-finishing download (the launch's budget fires, not the download's).
+- **B-E5-3** (the streak counting every job's annotations): 1 of 29 red — `another job's annotations were counted as the editor's` (the count was 5, not 2).
+- **Arm (b)** (retry regardless of the line, `neverStarted` = any exit): 1 of 15 red — `expected 1 launch, got 2`.
+
+**Deviations from the spec.**
+
+1. **The test file is `src_vs_code/src/test/runHost.test.mjs`, not `src_vs_code/scripts/run-host.test.mjs`.** `run-tests.mjs` discovers `.test.mjs` files only in `src/test`
+   (`discover`, and `testDiscovery.test.mjs` pins it); a file in `scripts/` would never run in `npm test`, which is exactly the "a test that exists is a test that runs" defect that file was
+   written for. The stub editor stays under `scripts/fixtures/` as specified. The streak's cases went into the existing `hostJobStreak.test.mjs`.
+2. **The harness tees the editor's output** (see 1 above); and the editor is driven through the real `runTests` of `@vscode/test-electron` with `process.execPath` as the
+   "executable" and the stub as its first argument, so the real spawn, the real output stream and the real `TestRunFailedError` are exercised.
+3. **`run-host.mjs` removes its two temp folders on every exit path.** Its `process.exit(0)` in the `.then` ran before the `.finally` that deleted them, so the workspace and
+   data folders leaked on every run; they now sit in a `try/finally` inside `main()`. (A side effect; no assertion depends on it.) The top-level side effects (the two `mkdtempSync`
+   calls, the `@vscode/test-electron` import, `main()`) moved into `main()` / the entry guard so a test can import the module.
+4. **The warning is written for the first launch only** (the launch marked `retry: true`), once, at its first no-start exit. The second launch of the harness is not a cold start;
+   its no-start exit is a failure with the new sentence and no warning. So `k` is at most one per run, and "first-launch warnings" is exact.
+5. **The annotations are read per run with one request each** (`GET /repos/{repo}/check-runs/{job id}/annotations`, one page of 100 — the host job writes at most one). Not verified
+   against the live API in tests (a fixture server serves the runs, the jobs and the annotations); the workflow's job permissions (`actions: read`, `contents: read`, `ci.yml:399-400`)
+   do not name `checks: read`, which GitHub lists for this endpoint on private repositories; on a public repository it answers without it, and if it ever answered 403 the
+   line would read `UNKNOWN`, never a false 0. Left to the lead: add `checks: read` to the job's permissions if the first run on `main` prints `UNKNOWN`.
+6. **The pattern is anchored** (`^\s*host started: \d+ scenarios\s*$`, multiline). The plan reports the host's own lines (`ok`, `FAIL`, `N/N scenarios passed`) as appearing unprefixed in the
+   CI log, so the new line is assumed to appear the same way; if VS Code ever prefixed host output, a scenario failure would be retried once (and fail the same way, with both starts
+   named) — a wasted start, not a wrong verdict.
+
 ### S2 — the Linux process-lifecycle group: C21 → C29 → C24 (the torn pid write; the `R` arm gated) → C26 (group A)
 
 - **Goal.** One zombie-making helper that kills only once the parent is `sleep` and polls `/proc` through `ProcStat`; the
