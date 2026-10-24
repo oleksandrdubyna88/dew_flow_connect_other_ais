@@ -780,7 +780,7 @@ consultant or the confined reviewer ships was moved (A12: a tails-plan item of i
 
 ```mermaid
 flowchart LR
-  seed["shared/runtime-capabilities.json<br/>18 rows (6 runtimes × 3), each citing its probe cells"] --> RC[RuntimeCapabilities.Builtin<br/>refused whole if a pair is undecided]
+  seed["shared/runtime-capabilities.json<br/>21 rows (7 runtimes × 3), each citing its probe cells"] --> RC[RuntimeCapabilities.Builtin<br/>refused whole if a pair is undecided]
   RC --> CM["CapabilityMatrix.Admit(runtime, capability)<br/>confined → admit · unconfined / default-deny → admit FLAGGED · unsupported / unmeasured → refuse"]
   CM --> CP["ConfinementPlanner.Plan(runtime, grant)<br/>Leading · Flags · CwdKind · AddDirs · Flag"]
   CP -->|Planned| AD[adapters compose, add nothing]
@@ -825,6 +825,17 @@ flowchart LR
   read cell itself — and `web` `unmeasured` (no Vibe cell exercises the web), so the matrix refuses it. Those rows
   cite the Vibe record and its `M-V…` cells, dated 2026-10-12, and `CapabilityMatrixTests` holds each row to the
   record it cites (`Records`), not to one record for all. **An unmeasured pair's refusal names the record its own row cites** (before the S3 gate): `CapabilityMatrix.RecordOf` reads the `research/RESULTS_….md` its `resultRef` names (the first run's record when it names none), and `capabilityAdmission.ts`'s `recordOf` is its twin — so `vibe × web` sends a person to research/RESULTS_vibe_confinement.md, and the first five runtimes' sentences are byte for byte what they were.
+- **Kimi's arm (E5.6 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md`, 2026-10-16).** `kimi` is the seventh runtime of the table
+  (`RuntimeCapabilities.Runtimes`, hand-written, and the seed's `runtimes`) and of the planner: `disk` stands in a `Snapshot` of its
+  roots (`SnapshotSources` = the roots — a branch's `AGENTS.md`, skills, sub-agents and `.mcp.json` load from disk with no client call,
+  M-K9), `none` in an EMPTY `Scratch` folder, and **no flag on either, ever** — Kimi's confinement is coai's ACP shim (D15), not its argv,
+  so the sandbox vocabulary gains nothing (and `KimiConsultant` refuses a plan that carries one). The rows, on
+  research/RESULTS_kimi_confinement.md's `M-K…` cells dated 2026-10-13 (kimi 2.1.1): **`none` and `disk` both `unconfined`** — `Read` is
+  bounded by the shim, but `Grep` and `Glob` read an outside file by absolute path 3 of 3 (M-K6), and the cwd plays no part in that, so an
+  empty folder confines nothing (unlike Vibe's `none`); `disk` also cites M-K9 and M-K9 (e) (why the roots are COPIED), both cite M-K3/M-K4
+  (0 of 15 writes); each note names the version and says `WebSearch`/`FetchURL` are announced and unmeasured. `web` is `unmeasured`
+  (RESULTS §7, §14), so the matrix refuses it naming the Kimi record. Both admitted rows are FLAGGED `unconfined` (D13) — a person sees
+  **Can read this machine**.
 - **Refuse, never redact — and the refusal never quotes what it refused.** A web row's model may be
   unconfined (codex, F2), so what the row is GIVEN is the only thing ours to control, and a question
   with a hole where a path was still says there was a path. The sanitiser answers ONE class — the first

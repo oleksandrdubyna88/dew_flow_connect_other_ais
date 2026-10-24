@@ -12982,3 +12982,10 @@ flowchart LR
 - **Waits on E5.4's seed:** S5.7.5 (`kimiIsOfferedAsAConsultant`) and the lists that pin `CONSULTING` (`consultant.test.ts`,
   `kimiRuntime.test.ts`, and E5.4's own `featureAvailability.test.ts`) are green only once `features.consultant` holds `kimi` and
   `featureAvailability.generated.ts` is regenerated — which is E5.4's change (S5.4.12), not this story's.
+- **The question row's half (E5.6, 2026-10-16).** `shared/runtime-capabilities.json` gained the three `kimi` rows, and
+  `runtimeCapabilities.generated.ts` was regenerated (`node scripts/generate-runtime-capabilities.mjs`; 21 rows over 7 runtimes, `--check`
+  clean): `RUNTIMES` and `QuestionRuntime` name `kimi`, and `capabilityAdmission.admit` — no code change — admits `kimi × none` and
+  `kimi × disk` FLAGGED `unconfined` (the row's **Can read this machine** tick on and disabled, its reason `Kimi has no setting that limits
+  what it reads …` from `qconsultView.whyItStaysOn`) and refuses `kimi × web`, naming research/RESULTS_kimi_confinement.md; the picker
+  disables that pair with the table's reason. Tests: `capabilityAdmission.test.ts` (S5.6.8 and the three vectors), `qconsultSection.test.ts`
+  (`VENDOR_OF` gains `kimi`, so the A3 picker test walks the Kimi vectors).
