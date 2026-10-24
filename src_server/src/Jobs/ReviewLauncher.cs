@@ -417,7 +417,8 @@ public sealed class ReviewLauncher(
         runtime is ClaudeRuntime
             ? (await ClaudeCapability.ProbeAsync(launcher, runtime.DefaultExecutable, work, request => Shaped(request, slot, work), ct))
                 // The release a probe somebody already ran saw (the class's <c>versionOf</c>) — never a <c>--version</c> of this job's own.
-                with { Version = ClaudeRelease.Parse(_versionOf(runtime.Provider)) }
+                with
+            { Version = ClaudeRelease.Parse(_versionOf(runtime.Provider)) }
             : ClaudeCapability.Unprobed;
 
     /// <summary>
