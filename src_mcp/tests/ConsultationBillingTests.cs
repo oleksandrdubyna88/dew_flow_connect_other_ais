@@ -43,6 +43,31 @@ public sealed class ConsultationBillingTests
             .Should().Be(0.45);
     }
 
+    /// <summary>
+    /// The review's B1, its migration: a record written before <c>LastReported</c> existed measures its next report against <c>Billed</c> — what
+    /// the old rule measured against, so that turn bills what it always would have, never its whole history — and from then on against the
+    /// vendor's own counter, written with the record.
+    /// </summary>
+    [Fact]
+    public void ARecordWrittenBeforeTheCounter_UsesWhatWasBilled_ThenTheVendorsOwnCounter()
+    {
+        var json = System.Text.Json.JsonSerializer.Serialize(SecondTurnOf(turnOneCost: 0.40) with { Billed = new Core.Consultation.ConsultationBilled(100, 10, 0.40) }, ConsultationJsonContext.Default.ConsultationRecord);
+        json.Should().Contain("\"lastReported\"", "the counter is a field of the record file");
+        var node = System.Text.Json.Nodes.JsonNode.Parse(json)!.AsObject();
+        node.Remove("lastReported");
+        var old = System.Text.Json.JsonSerializer.Deserialize(node.ToJsonString(), ConsultationJsonContext.Default.ConsultationRecord)!;
+
+        var second = ConsultationBilling.ThisTurnsBill(cumulative: true, old, new Usage(250, 25, null), mayRestart: true);
+        var billed = ConsultationBilling.Billing(old, second);
+        var read = System.Text.Json.JsonSerializer.Deserialize(System.Text.Json.JsonSerializer.Serialize(billed, ConsultationJsonContext.Default.ConsultationRecord), ConsultationJsonContext.Default.ConsultationRecord)!;
+        var third = ConsultationBilling.ThisTurnsBill(cumulative: true, read, new Usage(400, 40, null), mayRestart: true);
+
+        (second.Share.TokensIn, second.Share.TokensOut).Should().Be((150L, 15L), "the first turn after the upgrade is measured against what was billed");
+        read.LastReported.Should().Be(new Core.Consultation.ConsultationBilled(250, 25), "the vendor's counter is written with the record");
+        (third.Share.TokensIn, third.Share.TokensOut).Should().Be((150L, 15L), "and the next turn is measured against it — billed once");
+        read.Billed.TokensIn.Should().Be(250, "billed stays the sum of the shares");
+    }
+
     [Fact]
     public void TheReplyAndTheRecord_AreBilledByOneRule()
     {

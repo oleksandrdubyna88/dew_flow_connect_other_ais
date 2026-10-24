@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Consultation;
 using CoaiMcp.Core.Findings;
 using CoaiMcp.Runners.Consultation;
 
@@ -25,6 +26,16 @@ internal sealed record TurnFailure(ConsultationRecord Record, string Vendor, str
 
     /// <summary>A conversation that had already gone on before this turn: a follow-up, not a first turn.</summary>
     public bool WentOn => StatusBefore is ConsultationStatuses.Open or ConsultationStatuses.Interrupted;
+
+    /// <summary>
+    /// The vendor's counter after this turn's launches reported (<see cref="CumulativeShare.Counter"/>), or null when none reported one —
+    /// then the record's counter stays where it was (the E5.4 review's B1).
+    /// </summary>
+    public ConsultationBilled? Counter { get; init; }
+
+    /// <summary>The record with this turn billed: its share added, and the counter moved when the launches reported one.</summary>
+    public ConsultationRecord Billed() =>
+        Counter is { } counter ? ConsultationBilling.Billing(Record, new CumulativeShare(Share, counter)) : ConsultationBilling.Billing(Record, Share);
 }
 
 /// <summary>A failed turn, decided: the record to write, the ledger's outcome word, and whether it can be resumed.</summary>
@@ -36,8 +47,12 @@ internal sealed record TurnFailure(ConsultationRecord Record, string Vendor, str
 /// The reset the refusal STATED, for the ledger row — empty unless the turn's final launch was a rate limit that named a
 /// time (epic 5's code round of todo/PLAN_every_round_is_counted.md).
 /// </param>
+/// <param name="KeptOpen">
+/// Nothing was launched and the conversation had already gone on, so the record went back to its status: the answer says the conversation is
+/// still open and never "do not retry this consultation" (the E5.4 review's M1).
+/// </param>
 internal sealed record ConsultationFailed(
-    ConsultationRecord Next, string LedgerOutcome, ConsultFailure Failure, bool Resumable, string Vendor, Usage Share, string ResetsUtc = "");
+    ConsultationRecord Next, string LedgerOutcome, ConsultFailure Failure, bool Resumable, string Vendor, Usage Share, string ResetsUtc = "", bool KeptOpen = false);
 
 /// <summary>
 /// The ways a consultation turn ends without advice, as pure builders the service applies.
@@ -90,10 +105,25 @@ internal static class ConsultationFailing
     {
         ConsultFailure.ConversationDropped => new(Ended(turn, failure, "the vendor no longer holds this conversation") with { Handle = string.Empty },
             ledgerOutcome, failure, Resumable: false, turn.Vendor, turn.Share),
-        ConsultFailure.LaunchRefused when turn.WentOn => new(Classified(turn, failure) with { Status = turn.StatusBefore },
-            ledgerOutcome, failure, Resumable: false, turn.Vendor, turn.Share),
+        ConsultFailure.LaunchRefused when turn.WentOn => Kept(turn, failure, ledgerOutcome),
         _ => Resolved(turn, failure, ledgerOutcome),
     };
+
+    /// <summary>
+    /// The turn's deadline struck before ANYTHING was launched (the E5.4 review's B2) — for Kimi, the wait for the sign-in's gate, which another
+    /// coai Kimi launch on the same sign-in held (E5.3 decision e). Deviation 22's rule: nothing ran, so a conversation that had already gone on
+    /// goes back to its status, the failure recorded beside it; a first turn ends as before (<see cref="AfterTheLaunch"/>).
+    /// </summary>
+    public static ConsultationFailed NothingLaunched(TurnFailure turn, ConsultFailure.Deadline failure)
+    {
+        var said = failure with { NothingLaunched = true };
+
+        return turn.WentOn ? Kept(turn, said, said.Kind) : Resolved(turn, said, said.Kind);
+    }
+
+    /// <summary>A turn that launched nothing on a conversation that had gone on: the record back to its status, the failure beside it.</summary>
+    private static ConsultationFailed Kept(TurnFailure turn, ConsultFailure failure, string ledgerOutcome) =>
+        new(Classified(turn, failure) with { Status = turn.StatusBefore }, ledgerOutcome, failure, Resumable: false, turn.Vendor, turn.Share, KeptOpen: true);
 
     /// <summary>
     /// The adapter refused before anything was launched — claude whose <c>--help</c> never answered. Nothing ran, so
@@ -152,10 +182,18 @@ internal static class ConsultationFailing
     public static string Answer(ConsultationFailed failed, bool gaveBack, string unrecorded = "") =>
         string.Join(" — ", (string[])
         [
-            failed.Resumable ? Resumable(failed) : failed.Failure.What(failed.Vendor),
+            Lead(failed),
             $"(failure: {failed.Failure.Kind}) {failed.Failure.Cure}",
-            .. Facts(failed.Failure, gaveBack, unrecorded),
+            .. Facts(failed, gaveBack, unrecorded),
         ]);
+
+    /// <summary>What happened: a turn that was not started on a conversation that stays open, a resumable one, or the failure's own clause.</summary>
+    private static string Lead(ConsultationFailed failed) =>
+        failed.KeptOpen ? StillOpen(failed) : failed.Resumable ? Resumable(failed) : failed.Failure.What(failed.Vendor);
+
+    /// <summary>Nothing ran, and the conversation goes on (the E5.4 review's M1): a neutral sentence, never "do not retry this consultation".</summary>
+    private static string StillOpen(ConsultationFailed failed) =>
+        $"this turn was not started: {failed.Failure.What(failed.Vendor)}; the conversation is still open (consultationId {failed.Next.Id})";
 
     private static ConsultationFailed Resolved(TurnFailure turn, ConsultFailure failure, string ledgerOutcome) =>
         failure.Transient && turn.TurnsHandle.Length > 0
@@ -181,7 +219,7 @@ internal static class ConsultationFailing
 
     /// <summary>The fields every answered failure writes: the classification, the evidence, the bill, the time.</summary>
     private static ConsultationRecord Classified(TurnFailure turn, ConsultFailure failure) =>
-        ConsultationBilling.Billing(turn.Record, turn.Share) with
+        turn.Billed() with
         {
             FailureKind = failure.Kind,
             FailureCure = failure.Cure,
@@ -195,11 +233,11 @@ internal static class ConsultationFailing
         + $"the turn was NOT counted — call consult again with consultationId {failed.Next.Id} and the consultant will pick the conversation up";
 
     /// <summary>The optional sentences, in the order a caller acts on them.</summary>
-    private static string[] Facts(ConsultFailure failure, bool gaveBack, string unrecorded) =>
+    private static string[] Facts(ConsultationFailed failed, bool gaveBack, string unrecorded) =>
     [
-        .. When(failure.Evidence.Length > 0, $"its transcript is kept at {failure.Evidence}"),
+        .. When(failed.Failure.Evidence.Length > 0, $"its transcript is kept at {failed.Failure.Evidence}"),
         .. When(gaveBack, "this call was not counted against your consult cap"),
-        .. When(failure.DoNotRetry, NextMove(failure)),
+        .. When(failed.Failure.DoNotRetry && !failed.KeptOpen, NextMove(failed.Failure)),
         .. When(unrecorded.Length > 0, $"and the record could not be updated to say so: {unrecorded}"),
     ];
 

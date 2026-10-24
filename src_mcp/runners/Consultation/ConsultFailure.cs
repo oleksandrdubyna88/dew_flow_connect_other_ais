@@ -222,15 +222,22 @@ public abstract record ConsultFailure
     }
 
     /// <summary>The TURN ran past its own deadline — the backstop beyond the launch's timeout.</summary>
-    public sealed record Deadline(TimeSpan Budget) : ConsultFailure
+    /// <param name="NothingLaunched">
+    /// The deadline struck while coai's launch control was still waiting, before anything was launched — for Kimi, the sign-in's gate, held by
+    /// another coai Kimi launch on the same sign-in (E5.3 decision e; the E5.4 review's B2). Said as what it is; the kind is the same word.
+    /// </param>
+    public sealed record Deadline(TimeSpan Budget, bool NothingLaunched = false) : ConsultFailure
     {
         public override string Kind => ConsultFailureKinds.Deadline;
 
-        public override string What(string vendor) =>
-            $"the turn with the consultant ({vendor}) ran past its {Budget.TotalMinutes:0.#}-minute deadline without an answer being recorded";
+        public override string What(string vendor) => NothingLaunched
+            ? $"the turn with the consultant ({vendor}) waited past its {Budget.TotalMinutes:0.#}-minute deadline before anything was launched — coai's launch "
+              + "check was still waiting; for Kimi, another Kimi launch on the same sign-in (a review round's reviewer, or another consultation) held the sign-in"
+            : $"the turn with the consultant ({vendor}) ran past its {Budget.TotalMinutes:0.#}-minute deadline without an answer being recorded";
 
-        public override string Cure =>
-            "consult again; if it repeats, check `providers` — something around the launch is not finishing";
+        public override string Cure => NothingLaunched
+            ? "consult again once that launch has ended — a consult turn waits inside its own deadline for the one Kimi a sign-in runs at a time"
+            : "consult again; if it repeats, check `providers` — something around the launch is not finishing";
 
         public override bool Transient => true;
     }

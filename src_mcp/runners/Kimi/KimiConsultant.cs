@@ -33,6 +33,9 @@ public sealed class KimiConsultant(KimiRuntime inner, string vendor = "kimi") : 
     /// <summary>M-K5b (RESULTS §23), and three turns of one session in M-K16 (d): <c>/usage</c> is the session's running total.</summary>
     public bool UsageIsCumulative => true;
 
+    /// <summary>Both of Kimi's totals are cumulative (M-K5b, M-K16 (d)), so a captured pair below the last is a restarted counter (decision 12).</summary>
+    public bool UsageCounterMayRestart => true;
+
     /// <summary>D6: Kimi loads a project <c>.kimi-code</c>, <c>AGENTS.md</c>, skills and <c>.mcp.json</c> from its working folder.</summary>
     public bool NeedsASanitisedSnapshot => true;
 

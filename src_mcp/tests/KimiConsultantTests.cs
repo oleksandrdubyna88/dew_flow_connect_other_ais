@@ -159,6 +159,7 @@ public sealed class KimiConsultantTests : IDisposable
 
         consultant.Memory.Should().BeOfType<ConsultantMemory.VendorRemembers>("a loaded session remembered (M-K5)");
         consultant.UsageIsCumulative.Should().BeTrue("M-K5b: /usage is the session's running total");
+        consultant.UsageCounterMayRestart.Should().BeTrue("both totals are cumulative, so a pair below the last is a restart (decision 12)");
         consultant.NeedsASanitisedSnapshot.Should().BeTrue("D6");
         consultant.HomesFolder.Should().Be(ConsultantHomes.Kimi, "one owned home per conversation under coai-kimi (J3)");
         consultant.Toolbox.Should().Contain("Read").And.Contain("Grep").And.Contain("Glob").And.Contain("refused");

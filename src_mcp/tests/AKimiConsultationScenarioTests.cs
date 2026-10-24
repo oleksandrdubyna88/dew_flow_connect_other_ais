@@ -61,8 +61,8 @@ public sealed class AKimiConsultationScenarioTests : ConsultScenarioBase
         KimiSeams.Using(HostKind.Windows, new KimiSeams(person.PlacesAt, () => (PlayedKimi.Shim, []))),
         CallingAs("CLAUDE_CODE_SESSION_ID"));
 
-    private PanelService Kimi(PlayedKimi played, Serilog.ILogger? log = null) =>
-        Service(providers: [], consultants: OnKimi, launcher: played, homes: Homes, log: log);
+    private PanelService Kimi(PlayedKimi played, Serilog.ILogger? log = null, TimeSpan? timeout = null) =>
+        Service(providers: [], consultants: OnKimi, launcher: played, homes: Homes, log: log, reviewerTimeout: timeout);
 
     private static string IdOf(JsonElement reply) => reply.GetProperty("consultationId").GetString()!;
 
@@ -152,6 +152,24 @@ public sealed class AKimiConsultationScenarioTests : ConsultScenarioBase
         Tokens(lines[1]).In.Should().Be(5_000L, "Expected the second turn's billed TokensIn to be the reset report's own (decision 12)");
         Tokens(lines[1]).Should().Be((5_000L, 9L));
         Tokens(Record(id).GetProperty("billed")).Should().Be((25_000L, 39L), "the record's total advances by the share");
+    }
+
+    /// <summary>
+    /// The review's B1: after a reset is billed whole, the RESTARTED session's next total is measured against that reset report — the vendor's
+    /// last captured total — never against the sum of what was billed, which a reset leaves inflated (every later turn would read as a reset).
+    /// </summary>
+    [Fact]
+    public async Task AfterAReset_TheRestartedSessionsNextTotal_IsBilledOnlyItsDelta()
+    {
+        using var person = new KimiFixture();
+        using var stood = StandIn(person);
+
+        var (_, id) = await ThreeTurnsAsync((20_000, 30), (5_000, 9), (9_000, 15));
+
+        var lines = LedgerLines().Select(Tokens).ToList();
+        lines[2].Should().Be((4_000L, 6L), "the third turn spent 4 000 / 6 past the restarted counter's 5 000 / 9, and is billed that — not its whole total again");
+        lines.Should().Equal([(20_000L, 30L), (5_000L, 9L), (4_000L, 6L)]);
+        Tokens(Record(id).GetProperty("billed")).Should().Be((29_000L, 45L), "billed stays the sum of the shares");
     }
 
     // ---------- S5.4.9 and S5.4.15 ----------
@@ -397,7 +415,59 @@ public sealed class AKimiConsultationScenarioTests : ConsultScenarioBase
         Answered(reply);
         var started = played.Shims.Single().StartUtc;
         started.Should().BeOnOrAfter(released, "Expected the shim to start after the gate was released, not while the gate was held");
-        (started - released).Should().BeLessThan(TimeSpan.FromSeconds(2), "the gate is waited for in one-second slices");
+        // The review's M5: the gate is waited for in one-second slices, behind a Task.Run, so a loaded machine may take longer than one slice
+        // to notice the release; the claim is that the turn went on at the release — well inside the 30 s turn it would otherwise wait out.
+        (started - released).Should().BeLessThan(GateSlice + TimeSpan.FromSeconds(4), "the turn starts at the release, not at its deadline");
+    }
+
+    /// <summary>The sign-in gate's wait slice (<c>KimiCredentialsLock</c>): a release is noticed within one.</summary>
+    private static readonly TimeSpan GateSlice = TimeSpan.FromSeconds(1);
+
+    // ---------- the review's B2: a turn that waited for the gate past its deadline ----------
+
+    /// <summary>The gate taken in this host (another Kimi on the same sign-in) for the rest of the test.</summary>
+    private static FileStream HoldTheGate(KimiFixture person)
+    {
+        Directory.CreateDirectory(Path.Combine(person.Folder, "locks"));
+
+        return ((Hold.Taken)HeldFile.Take(KimiCredentialsLock.PathFor(person.Credentials))).Stream;
+    }
+
+    [Fact]
+    public async Task AFollowUpThatWaitsForTheGatePastItsDeadline_LaunchesNothing_AndTheConversationStaysOpen()
+    {
+        using var person = new KimiFixture();
+        using var stood = StandIn(person);
+        var played = new PlayedKimi(_launcher);
+        var service = Kimi(played, timeout: TimeSpan.FromSeconds(2));
+        var first = await Consult(service, "why is the count wrong");
+        Answered(first);
+        var id = IdOf(first);
+        using var gate = HoldTheGate(person);
+
+        var said = Refusal(await Consult(service, "and now?", id));
+
+        played.Shims.Should().HaveCount(1, "the follow-up launched nothing: it waited for the gate until its deadline");
+        Record(id).GetProperty("status").GetString().Should().Be(ConsultationStatuses.Open,
+            "nothing ran, so the conversation is still open — a follow-up that never started does not end it");
+        said.Should().Contain("before anything was launched").And.Contain("same sign-in").And.Contain("still open");
+        said.Should().NotContain("do not retry this consultation", "the conversation goes on");
+    }
+
+    [Fact]
+    public async Task AFirstTurnThatWaitsForTheGatePastItsDeadline_EndsAsItDidBefore()
+    {
+        using var person = new KimiFixture();
+        using var stood = StandIn(person);
+        var played = new PlayedKimi(_launcher);
+        using var gate = HoldTheGate(person);
+
+        var said = Refusal(await Consult(Kimi(played, timeout: TimeSpan.FromSeconds(2)), "why is the count wrong"));
+
+        played.Shims.Should().BeEmpty();
+        said.Should().Contain($"(failure: {ConsultFailureKinds.Deadline})");
+        Directory.EnumerateFiles(Path.Combine(_data, "consultations"), "*.json").Select(file => JsonDocument.Parse(File.ReadAllText(file)).RootElement.GetProperty("status").GetString())
+            .Should().Equal([ConsultationStatuses.Failed], "a first turn has no conversation to keep: it ends, as before");
     }
 
     // ---------- S5.4.20 ----------

@@ -195,6 +195,17 @@ public interface IConsultantRuntime : IAnsweringRuntime
     bool UsageIsCumulative => false;
 
     /// <summary>
+    /// This vendor's cumulative counters can RESTART — a captured report below the last one is a new counter, billed whole rather than floored
+    /// to a flat zero (decision 12 of E5.4, <c>todo/PLAN_vibe_and_kimi_runtimes_E5.md</c>; <c>ConsultationUsage.IsAReset</c>).
+    /// </summary>
+    /// <remarks>
+    /// Declared only by an adapter whose input AND output totals are both measured cumulative (Kimi: M-K5b, M-K16 (d)) — the rule judges the
+    /// pair. antigravity does not: only its input is measured cumulative (research/RESULTS_agy_consult_follow_up.md §3), so an output below the
+    /// last one is no restart. Meaningless unless <see cref="UsageIsCumulative"/>.
+    /// </remarks>
+    bool UsageCounterMayRestart => false;
+
+    /// <summary>
     /// What a QUESTION ROW's failure report adds, beyond the launch's own reason, about `reason` — the vendor's sentence for why the launch
     /// stopped. Empty for every vendor but one: only a question has files it was meant to name, so a conversation turn or a check, which
     /// reports the same stop, never carries this advice (D6 of <c>research/PLAN_vibe_live_round_fixes.md</c>).

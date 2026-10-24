@@ -23,21 +23,31 @@ namespace CoaiMcp.Server;
 internal static class ConsultationBilling
 {
     /// <summary>
-    /// What THIS turn consumed: for a vendor that reports the whole conversation's total every time, what it
-    /// said less what the conversation was already billed; for any other, what it said.
+    /// What THIS turn consumed, and the vendor's counter after it: for a vendor that reports the whole conversation's total
+    /// every time, what it said less its counter as it last reported it (<see cref="ConsultationRecord.LastReported"/>); for
+    /// any other, what it said, the counter untouched.
     /// </summary>
     /// <remarks>
-    /// The subtraction is <see cref="ConsultationUsage.Less"/>, in the core — every field floored at zero,
-    /// money only when this report names some — so the test exercises the rule rather than a copy of it.
+    /// The subtraction is <see cref="ConsultationUsage.Next"/>, in the core — every field floored at zero, money only when
+    /// this report names some, a restart billed whole only for a vendor that declares one possible (<paramref name="mayRestart"/>)
+    /// — so the test exercises the rule rather than a copy of it.
     /// </remarks>
-    public static Usage ThisTurnsShare(bool cumulative, ConsultationRecord record, Usage reported) =>
-        cumulative ? ConsultationUsage.Less(reported, record.Billed) : reported;
+    public static CumulativeShare ThisTurnsBill(bool cumulative, ConsultationRecord record, Usage reported, bool mayRestart = false) =>
+        cumulative ? ConsultationUsage.Next(reported, record.LastReported, mayRestart) : new CumulativeShare(reported, record.LastReported);
 
-    /// <summary>The record once this turn's share is billed — the running total advanced, whatever the outcome.</summary>
+    /// <summary>The share of <see cref="ThisTurnsBill"/>.</summary>
+    public static Usage ThisTurnsShare(bool cumulative, ConsultationRecord record, Usage reported, bool mayRestart = false) =>
+        ThisTurnsBill(cumulative, record, reported, mayRestart).Share;
+
+    /// <summary>The record once this turn is billed — the sum of the shares advanced, and the vendor's counter moved to what it reported.</summary>
+    public static ConsultationRecord Billing(ConsultationRecord record, CumulativeShare bill) =>
+        record with { Billed = record.Billed.Plus(bill.Share), LastReported = bill.Counter };
+
+    /// <summary>The record once a share that reported no counter (nothing launched) is billed — the counter where it was.</summary>
     public static ConsultationRecord Billing(ConsultationRecord record, Usage share) =>
-        record with { Billed = record.Billed.Plus(share) };
+        Billing(record, new CumulativeShare(share, record.LastReported));
 
     /// <summary>What the caller's answer says this turn cost: its SHARE, the figure the record and the ledger get.</summary>
-    public static double? ReplyCost(bool cumulative, ConsultationRecord record, ConsultantTurnResult turned) =>
-        ThisTurnsShare(cumulative, record, turned.TurnUsage).CostUsd;
+    public static double? ReplyCost(bool cumulative, ConsultationRecord record, ConsultantTurnResult turned, bool mayRestart = false) =>
+        ThisTurnsShare(cumulative, record, turned.TurnUsage, mayRestart).CostUsd;
 }

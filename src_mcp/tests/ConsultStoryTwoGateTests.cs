@@ -214,9 +214,42 @@ public sealed class CumulativeUsageTests
     }
 
     /// <summary>
-    /// S5.4.14 (decision 12 of E5.4, <c>todo/PLAN_vibe_and_kimi_runtimes_E5.md</c>): a CAPTURED total below what the conversation was already
-    /// billed is a counter that RESTARTED — this turn is billed what the report said, whole, never a flat zero. Both totals are judged together
-    /// (one counter below means the pair restarted); an uncaptured report is zeros that are not a counter, never a reset.
+    /// The review's B1, antigravity's half: only agy's INPUT counter is measured cumulative (research/RESULTS_agy_consult_follow_up.md §3 — its output
+    /// is not settled), so an output below what was billed is no restarted counter: the input is billed as its delta, the output floored.
+    /// </summary>
+    [Fact]
+    public void AnAgyReport_WhoseOutputIsBelowWhatWasBilled_IsNoReset_AndItsInputIsADelta()
+    {
+        IConsultantRuntime agy = new AntigravityConsultant(new AntigravityRuntime());
+
+        var share = ConsultationUsage.Less(Reported(30_843, 50), new ConsultationBilled(14_138, 1_342), agy.UsageCounterMayRestart);
+
+        agy.UsageCounterMayRestart.Should().BeFalse("only agy's input is measured cumulative, so it declares no restart");
+        share.TokensIn.Should().Be(16_705, "the input counter moved on by 16 705; billing its whole 30 843 again would count turn 1 twice");
+        share.TokensOut.Should().Be(0);
+    }
+
+    /// <summary>
+    /// The review's B1: three reports of a vendor that declares a restart — a total, a restarted total, the restarted session's next total.
+    /// The third is measured against the SECOND report (the counter), never against the sum of the shares (25 000 / 39), which would bill it whole.
+    /// </summary>
+    [Fact]
+    public void AfterAReset_TheNextReportIsMeasuredAgainstTheRestartedCounter()
+    {
+        var first = ConsultationUsage.Next(Reported(20_000, 30), new ConsultationBilled(), mayRestart: true);
+        var second = ConsultationUsage.Next(Reported(5_000, 9), first.Counter, mayRestart: true);
+        var third = ConsultationUsage.Next(Reported(9_000, 15), second.Counter, mayRestart: true);
+
+        (second.Share.TokensIn, second.Share.TokensOut).Should().Be((5_000L, 9L), "the restart is billed whole");
+        (third.Share.TokensIn, third.Share.TokensOut).Should().Be((4_000L, 6L), "the restarted session's next total is billed its delta");
+        third.Counter.Should().Be(new ConsultationBilled(9_000, 15), "the counter is the vendor's own last report");
+        ConsultationUsage.Next(Usage.Unknown, third.Counter, mayRestart: true).Counter.Should().Be(third.Counter, "an uncaptured report moves no counter");
+    }
+
+    /// <summary>
+    /// S5.4.14 (decision 12 of E5.4, <c>todo/PLAN_vibe_and_kimi_runtimes_E5.md</c>): for a vendor that declares its counters can restart, a CAPTURED
+    /// total below its counter's last report is a counter that RESTARTED — this turn is billed what the report said, whole, never a flat zero. Both
+    /// totals are judged together (one counter below means the pair restarted); an uncaptured report is zeros that are not a counter, never a reset.
     /// </summary>
     [Theory]
     [InlineData(5_000, 9, false, 5_000, 9)]
@@ -226,7 +259,7 @@ public sealed class CumulativeUsageTests
     {
         var reported = notCaptured ? Usage.Unknown : new Usage(reportedIn, reportedOut, null, TokensCached: 7);
 
-        var share = ConsultationUsage.Less(reported, new ConsultationBilled(20_000, 30, 0, 100));
+        var share = ConsultationUsage.Less(reported, new ConsultationBilled(20_000, 30, 0, 100), mayRestart: true);
 
         share.TokensIn.Should().Be(shareIn, "Expected the second turn's billed TokensIn to be the reset report's own");
         share.TokensOut.Should().Be(shareOut);
