@@ -1,0 +1,49 @@
+window since 2026-09-21; findings loaded 17791; rounds 2328; multi-vendor rounds 1137
+thresholds T_TEXT=0.3 T_ANCH=0.12
+
+== share of a finding also raised by ANOTHER VENDOR in the same round (multi-vendor rounds) ==
+('CodeReview', 'ALL') 29.3% (2442/8344)
+('CodeReview', 'google') 30.9% (914/2962)
+('CodeReview', 'local') 24.8% (645/2604)
+('CodeReview', 'mistral') 27.9% (233/834)
+('CodeReview', 'moonshot') 54.0% (27/50)
+('CodeReview', 'openai') 32.9% (623/1894)
+('DocumentReview', 'ALL') 34.2% (50/146)
+('DocumentReview', 'google') 35.5% (22/62)
+('DocumentReview', 'local') 23.4% (11/47)
+('DocumentReview', 'openai') 45.9% (17/37)
+('PlanReview', 'ALL') 20.6% (1037/5028)
+('PlanReview', 'google') 20.2% (396/1958)
+('PlanReview', 'local') 18.5% (204/1100)
+('PlanReview', 'mistral') 17.0% (64/376)
+('PlanReview', 'moonshot') 25.7% (35/136)
+('PlanReview', 'openai') 23.2% (338/1458)
+
+== pairwise: A's findings matched by provider of B (same round), aggregated ==
+('google', 'local', 'cross-vendor') 27.0% (468/1734)
+('google', 'mistral', 'cross-vendor') 30.7% (197/642)
+('google', 'moonshot', 'cross-vendor') 26.7% (31/116)
+('google', 'openai', 'cross-vendor') 16.3% (780/4793)
+('local', 'google', 'cross-vendor') 17.6% (634/3602)
+('local', 'openai', 'cross-vendor') 10.3% (348/3367)
+('mistral', 'google', 'cross-vendor') 20.6% (209/1017)
+('mistral', 'openai', 'cross-vendor') 10.5% (122/1164)
+('moonshot', 'google', 'cross-vendor') 19.9% (34/171)
+('moonshot', 'openai', 'cross-vendor') 16.3% (30/184)
+('openai', 'google', 'cross-vendor') 21.6% (709/3289)
+('openai', 'local', 'cross-vendor') 18.6% (246/1325)
+('openai', 'mistral', 'cross-vendor') 26.7% (120/449)
+('anthropic', 'anthropic', 'same-vendor') 50.4% (141/280)
+('qwen', 'qwen', 'same-vendor') 35.3% (48/136)
+
+pairwise totals: {'cross-vendor': '18.0% (3991/22130)', 'same-vendor': '45.4% (189/416)'}
+same role only: {'cross-vendor': '12.5% (2756/22130)', 'same-vendor': '36.1% (150/416)'}
+same provider, other role (lens control): 34.2% (2718/7952)
+
+== acceptance by caller ==
+('alone', 'CodeReview') 34.8% (2042/5866)
+('alone', 'DocumentReview') 65.6% (63/96)
+('alone', 'PlanReview') 59.7% (2376/3982)
+('shared', 'CodeReview') 48.0% (1156/2409)
+('shared', 'DocumentReview') 86.0% (43/50)
+('shared', 'PlanReview') 68.5% (710/1036)
