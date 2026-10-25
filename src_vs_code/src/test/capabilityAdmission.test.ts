@@ -174,6 +174,7 @@ test('kimi rows admit flagged, web refuses naming its record', () => {
     assert.equal(admission.admitted, true, `kimi × ${capability}: ${admission.reason}`);
     assert.equal(admission.flag, 'unconfined');
     assert.match(admission.caveat, /can read this machine/u, 'Grep and Glob read the disk directly (M-K6)');
+    assert.doesNotMatch(admission.caveat, /shell/iu, "Kimi's shim refuses every shell command (M-K3, M-K4): the caveat must not name one");
   }
   const web = admit('kimi', 'web');
   assert.equal(web.admitted, false);

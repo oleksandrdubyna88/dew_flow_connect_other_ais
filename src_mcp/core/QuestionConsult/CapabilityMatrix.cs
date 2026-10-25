@@ -30,7 +30,7 @@ public static class AdmissionFlags
     /// <summary>The sentence a flagged row is shown beside — in the settings, the sidebar and the log (D13).</summary>
     public static string Caveat(this AdmissionFlag flag) => flag switch
     {
-        AdmissionFlag.Unconfined => "unconfined: can read this machine — a shell is always there, and no flag removes it",
+        AdmissionFlag.Unconfined => "unconfined: can read this machine — its tools reach outside the folder coai gives it, and no flag removes that",
         AdmissionFlag.DefaultDeny => "held only by the CLI's headless permission default, which nobody configured",
         _ => string.Empty,
     };

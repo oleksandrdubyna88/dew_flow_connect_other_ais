@@ -57,7 +57,7 @@ function recordOf(row: RuntimeCapabilityRow): string {
 
 const CAVEATS: Readonly<Record<AdmissionFlag, string>> = {
   '': '',
-  unconfined: 'unconfined: can read this machine — a shell is always there, and no flag removes it',
+  unconfined: 'unconfined: can read this machine — its tools reach outside the folder coai gives it, and no flag removes that',
   'default-deny': "held only by the CLI's headless permission default, which nobody configured",
 };
 

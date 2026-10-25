@@ -233,6 +233,19 @@ public sealed class CapabilityMatrixTests
         }
     }
 
+    /// <summary>R1: the caveat beside a Kimi row must be true of Kimi — its shim refuses every shell command (M-K3, M-K4), so a sentence naming a shell is false there.</summary>
+    [Fact]
+    public void TheUnconfinedCaveat_NamesNoShell_SoItIsTrueOfKimiToo()
+    {
+        foreach (var capability in (Capability[])[Capability.None, Capability.Disk])
+        {
+            var flag = CapabilityMatrix.Admit("kimi", capability).Should().BeOfType<Admission.Admitted>().Which.Flag;
+
+            flag.Caveat().Should().Contain("can read this machine", $"kimi × {capability}")
+                .And.NotContainEquivalentOf("shell", "Kimi's tools reach outside its folder through Grep and Glob (M-K6), not through a shell");
+        }
+    }
+
     /// <summary>D13's two refusals kept apart: the flags are what the data says, never what a runtime name suggests.</summary>
     [Fact]
     public void TheFlags_AreD13s_CodexUnconfinedEverywhere_AgyDefaultDeny_NothingElseFlagged()
