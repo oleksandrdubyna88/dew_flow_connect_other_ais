@@ -143,6 +143,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
         var before = person.Hash();
         var unlinked = new List<string>();
         var copy = string.Empty;
+        var scratch = string.Empty;
         var played = new PlayedKimi(_launcher)
         {
             Turn = (_, request) => PlayedKimi.Answered(PlayedKimi.SessionOf(request), 10, 5, PlayedKimi.Advice),
@@ -150,6 +151,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
             {
                 // The copy exists only while the shim is alive: name it now.
                 var cwd = After(request.Arguments, "--cwd");
+                scratch = Path.GetDirectoryName(cwd) ?? string.Empty;
                 var file = Directory.EnumerateFiles(cwd, "Mailer.cs", SearchOption.AllDirectories).FirstOrDefault();
                 copy = file is null ? string.Empty : Path.Combine(cwd, Path.GetRelativePath(cwd, file).Split(Path.DirectorySeparatorChar)[0]);
                 if (ending == "cancelled")
@@ -182,9 +184,22 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
         }
 
         TheShimWas(ending, played, copy);
+        TheRowsScratchIsGone(ending, scratch);
         TheHomesFolderIsEmpty();
         unlinked.Should().BeEmpty("the deleter's unlink recorder must not be invoked, because KimiHome unlinks the junction first");
         person.Hash().Should().Equal(before, "the person's folder is whole");
+    }
+
+    /// <summary>The copies are made in the row's own <c>coai-question-*</c> scratch, and the scratch goes with the row, whatever ended it.</summary>
+    private static void TheRowsScratchIsGone(string ending, string scratch)
+    {
+        if (ending == "refused")
+        {
+            return;
+        }
+
+        Path.GetFileName(scratch).Should().StartWith("coai-question-", "the shim stood in a folder of the row's own scratch");
+        Directory.Exists(scratch).Should().BeFalse("the row's scratch, and the copies in it, go when the row ends, whatever ended it");
     }
 
     private void TheShimWas(string ending, PlayedKimi played, string copy)

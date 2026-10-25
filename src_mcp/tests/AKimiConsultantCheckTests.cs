@@ -1,5 +1,6 @@
 using System.Text.Json;
 using CoaiMcp.Runners.Acp;
+using CoaiMcp.Runners.Consultation;
 using CoaiMcp.Runners.Files;
 using CoaiMcp.Runners.Kimi;
 using CoaiMcp.Runners.Platform;
@@ -144,8 +145,9 @@ public sealed class AKimiConsultantCheckTests : IDisposable
             ? new PlayedKimi(new ProcessLauncher()) { Turn = (_, _) => new ProcessResult(70, string.Empty, "the agent failed", TimedOut: false) }
             : Played();
 
-        await CheckAsync(KimiSettings(_homes), played, TestContext.Current.CancellationToken);
+        var (_, said) = await CheckAsync(KimiSettings(_homes), played, TestContext.Current.CancellationToken);
 
+        said.GetProperty("state").GetString().Should().Be(theTurnFails ? ConsultCheckStates.Failed : ConsultCheckStates.Answered, said.ToString());
         played.Shims.Should().ContainSingle("the check launched its one turn");
         Directory.EnumerateFileSystemEntries(OneShotFolder).Should().BeEmpty("the home's folder goes when the check ends, whatever ended it");
         TheHomeWasDisposedJunctionFirst(before);
@@ -169,14 +171,10 @@ public sealed class AKimiConsultantCheckTests : IDisposable
             },
         };
 
-        try
-        {
-            await CheckAsync(KimiSettings(_homes), played, caller.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            // The check may end by raising its cancellation or by recording it; either way its home is owed back.
-        }
+        var (_, said) = await CheckAsync(KimiSettings(_homes), played, caller.Token);
+
+        said.GetProperty("state").GetString().Should().Be(ConsultCheckStates.Failed, said.ToString());
+        said.GetProperty("failureKind").GetString().Should().Be(ConsultFailureKinds.Cancelled, "the check records its cancellation, it does not raise it");
 
         played.Shims.Should().ContainSingle("the turn was started, then cancelled");
         Directory.EnumerateFileSystemEntries(OneShotFolder).Should().BeEmpty("the home's folder goes when the check is cancelled");

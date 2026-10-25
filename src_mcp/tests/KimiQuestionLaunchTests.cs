@@ -35,8 +35,9 @@ public sealed class KimiQuestionLaunchTests
     };
 
     // A fake person's paths, so building reads nothing of this machine: the request names the places, it does not open them.
-    private static KimiConsultant Consultant() => new(new KimiRuntime("kimi", HostKind.Windows,
-        new KimiSeams(root => KimiPlaces.ForShim(root, Path.Combine(RowFolder, "persons-bin")), () => ("coai-mcp", []))));
+    private static KimiConsultant Consultant() => new(new KimiRuntime("kimi", HostKind.Windows, new KimiSeams(Places, () => ("coai-mcp", []))));
+
+    private static KimiPlaces Places(string home) => KimiPlaces.ForShim(home, Path.Combine(RowFolder, "persons-bin"));
 
     private static string After(IReadOnlyList<string> args, string flag) => args[args.ToList().IndexOf(flag) + 1];
 
@@ -50,7 +51,10 @@ public sealed class KimiQuestionLaunchTests
         disk.WorkingDirectory.Should().Be(RowTree, "a disk row stands in the copy of its roots (D6)");
         foreach (var request in (Runners.Processes.ProcessRequest[])[none, disk])
         {
-            Path.GetDirectoryName(After(request.Arguments, AcpWords.HomeFlag)).Should().Be(RowFolder, "the row's home lives in the row's own folder, gone with it");
+            var home = After(request.Arguments, AcpWords.HomeFlag);
+
+            Path.GetDirectoryName(home).Should().Be(RowFolder, "the row's home lives in the row's own folder, gone with it");
+            KimiEnvironment.Refusal(request, Places(home)).Should().BeEmpty("the one launch control admits exactly what the adapter builds, for a none row as for a disk row");
             request.Arguments.Should().NotContain(AcpWords.SessionFlag, "a question row is one shot");
             request.Arguments.Should().NotContain(argument => argument.Contains(RootA) || argument.Contains(RootB), "the roots are read through their copy, never named");
             request.InheritsEnvironment.Should().BeFalse();
