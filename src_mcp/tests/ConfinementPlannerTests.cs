@@ -364,6 +364,7 @@ public sealed class ConfinementPlannerTests
             .Which.Reason.Should().Contain("not been measured").And.Contain("RESULTS_kimi_confinement.md");
     }
 
+    /// <summary>A fake person's paths, so building reads nothing of this machine: the request names the places, it does not open them.</summary>
     private static Runners.Kimi.KimiConsultant KimiQuestionConsultant() =>
         new(new Runners.Kimi.KimiRuntime("kimi", Runners.Platform.HostKind.Windows,
             new Runners.Kimi.KimiSeams(root => Runners.Kimi.KimiPlaces.ForShim(root, Path.Combine(RowFolder, "persons-bin")), () => ("coai-mcp", []))));
@@ -531,7 +532,6 @@ public sealed class ConfinementPlannerTests
         ("antigravity", new AntigravityConsultant(new AntigravityRuntime())),
         ("vibe", new Runners.Vibe.VibeConsultant(new Runners.Vibe.VibeRuntime("vibe", Runners.Platform.HostKind.Windows))),
         // A fake person's paths, so building reads nothing of this machine: the request names the places, it does not open them.
-        ("kimi", new Runners.Kimi.KimiConsultant(new Runners.Kimi.KimiRuntime("kimi", Runners.Platform.HostKind.Windows,
-            new Runners.Kimi.KimiSeams(root => Runners.Kimi.KimiPlaces.ForShim(root, Path.Combine(RowFolder, "persons-bin")), () => ("coai-mcp", []))))),
+        ("kimi", KimiQuestionConsultant()),
     ];
 }

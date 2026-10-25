@@ -32,7 +32,6 @@ internal sealed class PlayedKimi(IProcessLauncher inner) : IProcessLauncher
     public ConcurrentQueue<Launch> Shims { get; } = new();
 
     public ConcurrentQueue<ProcessRequest> Versions { get; } = new();
-
     /// <summary>The most shims ever running at once.</summary>
     public int Peak => _peak;
 
@@ -42,13 +41,19 @@ internal sealed class PlayedKimi(IProcessLauncher inner) : IProcessLauncher
     /// <summary>Runs while a shim is "alive", after its start is stamped — a test's seam for what holds at that moment.</summary>
     public Func<ProcessRequest, CancellationToken, Task> During { get; init; } = static (_, _) => Task.CompletedTask;
 
+    /// <summary>What <c>kimi --version</c> answers — a test's seam for a launch the control refuses AFTER the owned home and its junction exist.</summary>
+    public Func<ProcessRequest, ProcessResult> Version { get; init; } = Installed;
+
+    /// <summary>The measured CLI, installed: its version, exit 0.</summary>
+    public static ProcessResult Installed(ProcessRequest request) => new(0, "kimi 2.1.1\r\n", string.Empty, TimedOut: false);
+
     public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
     {
         if (request.Arguments is ["--version"])
         {
             Versions.Enqueue(request);
 
-            return new ProcessResult(0, "kimi 2.1.1\r\n", string.Empty, TimedOut: false);
+            return Version(request);
         }
 
         return string.Equals(request.Executable, Shim, StringComparison.Ordinal) ? await ShimAsync(request, ct) : await inner.RunAsync(request, ct);

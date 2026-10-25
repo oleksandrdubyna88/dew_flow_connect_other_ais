@@ -36,8 +36,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
     public async ValueTask InitializeAsync()
     {
         Directory.CreateDirectory(Path.Combine(Repo, "src"));
-        await File.WriteAllTextAsync(Path.Combine(Repo, "src", "Mailer.cs"), "void Send() { }\n", TestContext.Current.CancellationToken);
-        foreach (var args in (string[][])[["init", "-b", "main"], ["config", "user.email", "t@example.com"], ["config", "user.name", "t"], ["add", "."], ["commit", "-m", "base"]])
+        await File.WriteAllTextAsync(Path.Combine(Repo, "src", "Mailer.cs"), "void Send() { }\n", TestContext.Current.CancellationToken);        foreach (var args in (string[][])[["init", "-b", "main"], ["config", "user.email", "t@example.com"], ["config", "user.name", "t"], ["add", "."], ["commit", "-m", "base"]])
         {
             var result = await _launcher.RunAsync(new ProcessRequest("git", args, Repo), TestContext.Current.CancellationToken);
             result.ExitCode.Should().Be(0, string.Join(' ', args) + ": " + result.StdErr);
@@ -91,6 +90,21 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
         return answers.EnumerateArray().Should().ContainSingle().Subject;
     }
 
+    /// <summary>
+    /// The row's own <c>coai-question-*</c> scratch is gone: the folder the shim's <c>--cwd</c> copy stood in, and not only the copy. The service does not hand the
+    /// scratch's path out, so a row that never launches the shim (a refusal) has no scratch to look for here.
+    /// </summary>
+    private static void TheRowsScratchIsGone(string cwd)
+    {
+        var scratch = cwd;
+        while (!Path.GetFileName(scratch).StartsWith(QuestionRowLaunch.ScratchPrefix, StringComparison.Ordinal))
+        {
+            scratch = Path.GetDirectoryName(scratch) ?? throw new InvalidOperationException($"{cwd} is not inside a {QuestionRowLaunch.ScratchPrefix}* folder");
+        }
+
+        Directory.Exists(scratch).Should().BeFalse("the row's scratch is removed on every way out, not only the copy in it");
+    }
+
     private void NothingIsLeftBehind(IReadOnlyList<string> before)
     {
         Directory.EnumerateFileSystemEntries(Path.Combine(Homes, VibeHomes.OneShotFolder)).Should().BeEmpty("the row's folder under coai-vh is deleted on every way out");
@@ -102,14 +116,18 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
     [Theory]
     [InlineData("answered")]
     [InlineData("refused")]
+    [InlineData("launch-refused")]
     [InlineData("cancelled")]
     public async Task AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind(string ending)
     {
         GitScratch.AfterUnlink = _unlinkedByTheDeleter.Add;
         var before = _person.Hash();
         using var caller = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        // "launch-refused": the control refuses once the one-shot home and its junction to the person's sign-in exist (the version probe is after both),
+        // so this is the arm whose disposal must go junction-first; "refused" never gets as far as a home's junction.
         var played = new PlayedKimi(_launcher)
         {
+            Version = ending == "launch-refused" ? static _ => new ProcessResult(1, string.Empty, "no version", TimedOut: false) : PlayedKimi.Installed,
             During = async (_, ct) =>
             {
                 if (ending == "cancelled")
@@ -130,19 +148,27 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
         else
         {
             var reply = await asking();
-            TheRow(reply).GetProperty("status").GetString().Should().Be(ending == "answered" ? RowOutcomes.Answered : RowOutcomes.Refused, reply.ToString());
+            // A root that cannot be copied is the row's own input refused; a launch the control refuses is a row that ended without an answer.
+            var status = ending switch { "answered" => RowOutcomes.Answered, "launch-refused" => RowOutcomes.Failed, _ => RowOutcomes.Refused };
+            TheRow(reply).GetProperty("status").GetString().Should().Be(status, reply.ToString());
         }
 
         NothingIsLeftBehind(before);
-        if (ending == "refused")
+        if (ending is "refused" or "launch-refused")
         {
-            played.Shims.Should().BeEmpty("a root that cannot be copied launches nothing");
+            played.Shims.Should().BeEmpty("a root that cannot be copied, and a launch the control refuses, start nothing");
+            if (ending == "launch-refused")
+            {
+                played.Versions.Should().ContainSingle("the refusal came from the version probe, after the owned home and its junction were made");
+            }
+
             return;
         }
 
         var request = played.Shims.Should().ContainSingle().Subject.Request;
         var cwd = KimiEnvironment.FlagOf(request, "--cwd");
         Directory.Exists(cwd).Should().BeFalse("the copy is gone with the row's scratch");
+        TheRowsScratchIsGone(cwd);
         request.StdIn.Should().Contain(cwd, "the prompt names the copies' paths")
             .And.NotContain(Path.Combine(Repo, "src"), "never the root itself");
     }
