@@ -19,27 +19,33 @@ public sealed class AKimiConsultantCheckTests : IDisposable
 {
     private const string OneShotFolder = "coai-vh";
 
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-kcheck-data-").FullName;
-    private readonly string _temp = Directory.CreateTempSubdirectory("coai-kcheck-temp-").FullName;
+    private readonly TempDir _dataDir = TempDir.For("testsToDelete-kcheck-data-");
+    private readonly TempDir _tempDir = TempDir.For("testsToDelete-kcheck-temp-");
     private readonly List<string> _warned = [];
     private readonly List<string> _unlinked = [];
+    private readonly List<string> _linked = [];
 
-    public AKimiConsultantCheckTests() => GitScratch.AfterUnlink = _unlinked.Add;
+    private string _data => _dataDir.Path;
+
+    private string _temp => _tempDir.Path;
 
     public void Dispose()
     {
         GitScratch.AfterUnlink = null;
-        foreach (var dir in (string[])[_data, _temp])
-        {
-            try
-            {
-                Directory.Delete(dir, recursive: true);
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                // A leftover temp directory is not a failing test.
-            }
-        }
+        KimiHome.AfterUnlink = null;
+        _dataDir.Dispose();
+        _tempDir.Dispose();
+    }
+
+    /// <summary>
+    /// Set at the top of each test, not in the constructor: the hooks are per async flow, and what the check does runs in the test's own.
+    /// <see cref="_linked"/> is the positive half — a home's credentials junction was unlinked — so "the deleter's recorder never fired" cannot pass
+    /// because no home was made.
+    /// </summary>
+    private void Recording()
+    {
+        GitScratch.AfterUnlink = _unlinked.Add;
+        KimiHome.AfterUnlink = _linked.Add;
     }
 
     private sealed class Scopes(params IDisposable[] scopes) : IDisposable
@@ -110,6 +116,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     [Fact]
     public async Task AKimiCheck_RunsInACopy_OnAOneShotHome()
     {
+        Recording();
         using var person = new KimiFixture();
         using var stood = StandIn(person);
         using var homes = TempDir.For("testsToDelete-vh-check-");
@@ -136,6 +143,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     [InlineData(true)]
     public async Task AfterTheCheck_TheHomeIsGone_JunctionFirst(bool theTurnFails)
     {
+        Recording();
         using var person = new KimiFixture();
         using var stood = StandIn(person);
         using var homes = TempDir.For("testsToDelete-vh-check-");
@@ -148,6 +156,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
 
         played.Shims.Should().ContainSingle("the check ran its one turn");
         Entries(Path.Combine(homes, OneShotFolder)).Should().BeEmpty("the home's folder goes when the check ends");
+        _linked.Should().ContainSingle("a home was made, and KimiHome unlinked its credentials junction once");
         _unlinked.Should().BeEmpty("the deleter's unlink recorder must not be invoked, because KimiHome unlinks the junction first");
         person.Hash().Should().Equal(before, "the person's folder: the same names, bytes and read-only bits as before");
         if (theTurnFails)
@@ -162,6 +171,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     [Fact]
     public async Task ACheckCancelledMidTurn_StillDisposesItsHome()
     {
+        Recording();
         using var person = new KimiFixture();
         using var stood = StandIn(person);
         using var homes = TempDir.For("testsToDelete-vh-check-");
@@ -180,17 +190,14 @@ public sealed class AKimiConsultantCheckTests : IDisposable
         var checking = Check(Settings(homes), played, stop.Token);
         await started.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
         await stop.CancelAsync();
-        try
-        {
-            await checking;
-        }
-        catch (OperationCanceledException)
-        {
-            // A cancelled check may end by its record or by the token: the home is what this test pins.
-        }
+        var (code, said, _) = await checking;
 
+        code.Should().Be(0, said.ToString());
+        Text(said, "state").Should().Be("failed", said.ToString());
+        Text(said, "failureKind").Should().Be("cancelled", "a cancelled check says so, as the one cancelled while its scratch is made does");
         Entries(Path.Combine(homes, OneShotFolder)).Should().BeEmpty("a cancelled check gives its home back");
-        _unlinked.Should().BeEmpty();
+        _linked.Should().ContainSingle("a home was made, and KimiHome unlinked its credentials junction once");
+        _unlinked.Should().BeEmpty("the deleter's unlink recorder must not be invoked, because KimiHome unlinks the junction first");
         person.Hash().Should().Equal(before);
     }
 
@@ -200,6 +207,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     [Fact]
     public async Task ARootlessCheck_KeepsTheHomeInItsScratch_AndDisposesItJunctionFirst()
     {
+        Recording();
         using var person = new KimiFixture();
         using var stood = StandIn(person);
         var home = string.Empty;
@@ -211,6 +219,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
         home.Should().Contain(Path.Combine("own", "kh-"), "rootless, the home lives in the check's own scratch");
         Directory.Exists(Path.GetDirectoryName(home)).Should().BeFalse("the scratch is gone");
         Directory.EnumerateDirectories(_temp, "coai-check-*").Should().BeEmpty();
+        _linked.Should().ContainSingle("a home was made, and KimiHome unlinked its credentials junction once");
         _unlinked.Should().BeEmpty("the scratch's deleter never met the junction");
     }
 }

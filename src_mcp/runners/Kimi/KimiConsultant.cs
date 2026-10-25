@@ -59,7 +59,8 @@ public sealed class KimiConsultant(KimiRuntime inner, string vendor = "kimi") : 
     /// <summary>Kimi's confinement is the shim's (D15): a planned row's plan carries no flag, and one that does was not made for Kimi.</summary>
     private static void MustCarryNoFlag(ConsultantLaunch launch)
     {
-        if (launch.Confinement is LaunchConfinement.Planned planned && (planned.Plan.Flags.Count > 0 || planned.Plan.Leading.Count > 0))
+        if (launch.Confinement is LaunchConfinement.Planned planned
+            && (planned.Plan.Flags.Count > 0 || planned.Plan.Leading.Count > 0 || planned.Plan.AddDirs.Count > 0))
         {
             throw new ArgumentException("a Kimi row's confinement is the shim's; a plan with flags is not one coai made for kimi", nameof(launch));
         }

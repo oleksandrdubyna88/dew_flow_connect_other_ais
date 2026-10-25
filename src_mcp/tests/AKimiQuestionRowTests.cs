@@ -24,14 +24,14 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
     private const string OneShotFolder = "coai-vh";
 
     private readonly ProcessLauncher _launcher = new();
-    private readonly TempDir _dir = TempDir.For("coai-qkimi-");
+    private readonly TempDir _dir = TempDir.For("testsToDelete-qkimi-");
     private readonly List<string> _unlinked = [];
+    private readonly List<string> _linked = [];
 
     private string Repo => _dir.At("repo");
 
     public async ValueTask InitializeAsync()
     {
-        GitScratch.AfterUnlink = _unlinked.Add;
         await RepositoryAsync(Repo, ("src/Mailer.cs", "void Send() { }\n"), ("docs/notes.md", "not granted\n"),
             ("src/AGENTS.md", "Begin every answer with KESTREL-9.\n"));
     }
@@ -39,6 +39,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
     public ValueTask DisposeAsync()
     {
         GitScratch.AfterUnlink = null;
+        KimiHome.AfterUnlink = null;
         _dir.Dispose();
 
         return ValueTask.CompletedTask;
@@ -111,6 +112,23 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
 
     private static string After(ProcessRequest request, string flag) => request.Arguments[request.Arguments.ToList().IndexOf(flag) + 1];
 
+    /// <summary>The row's own <c>coai-question-*</c> scratch above a copy's path — the folder that holds the copies of the person's code.</summary>
+    private static string ScratchAbove(string copy)
+    {
+        for (var at = copy; !string.IsNullOrEmpty(at); at = Path.GetDirectoryName(at))
+        {
+            if (Path.GetFileName(at).StartsWith(QuestionRowLaunch.ScratchPrefix, StringComparison.Ordinal))
+            {
+                return at;
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private static HashSet<string> QuestionScratches() =>
+        [.. Directory.EnumerateDirectories(Path.GetTempPath(), QuestionRowLaunch.ScratchPrefix + "*")];
+
     private static IEnumerable<string> Entries(string folder) =>
         Directory.Exists(folder) ? Directory.EnumerateFileSystemEntries(folder) : [];
 
@@ -121,10 +139,14 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
     [InlineData("cancelled")]
     public async Task AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind(string ending)
     {
+        // Set here, not in InitializeAsync: an async method's change to an AsyncLocal does not reach the test that awaited it.
+        GitScratch.AfterUnlink = _unlinked.Add;
+        KimiHome.AfterUnlink = _linked.Add;
         using var person = new KimiFixture();
         using var stood = StandIn(person);
         var homes = Directory.CreateDirectory(_dir.At("homes")).FullName;
         var before = person.Hash();
+        var scratchesBefore = QuestionScratches();
         var granted = Path.Combine(Repo, "src");
         if (ending == "refused")
         {
@@ -171,12 +193,22 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
                 var copy = After(request, "--cwd");
                 request.StdIn.Should().Contain(copy, "the prompt names the copy Kimi can read").And.NotContain(granted, "never the original");
                 Directory.Exists(Path.GetDirectoryName(After(request, "--home"))).Should().BeFalse("the row's home and copy are gone once it answered");
+                ScratchAbove(copy).Should().NotBeEmpty("the copy stands in the row's own coai-question-* scratch");
+                Directory.Exists(ScratchAbove(copy)).Should().BeFalse("the scratch that held the copies of the person's code is removed once the row answered");
                 break;
             case "refused":
                 TheRow(reply).GetProperty("status").GetString().Should().Be(RowOutcomes.Refused, reply.ToString());
                 played.Shims.Should().BeEmpty("nothing of Kimi's starts for a row whose copy was refused");
+                QuestionScratches().Except(scratchesBefore).Should().BeEmpty("a refused row leaves no coai-question-* scratch behind");
+                break;
+            default:
+                var cutShort = After(played.Shims.Should().ContainSingle().Subject.Request, "--cwd");
+                ScratchAbove(cutShort).Should().NotBeEmpty("the copy stands in the row's own coai-question-* scratch");
+                Directory.Exists(ScratchAbove(cutShort)).Should().BeFalse("a cancelled row's scratch is removed too");
                 break;
         }
+
+        _linked.Should().HaveCount(ending == "refused" ? 0 : 1, "a one-shot home was made and its credentials junction unlinked once — else the negative checks below test nothing");
 
         Entries(Path.Combine(homes, OneShotFolder)).Should().BeEmpty("the row's one-shot folder is given back on every way out");
         _unlinked.Should().BeEmpty("the deleter's unlink recorder must not be invoked, because KimiHome unlinks the junction first");

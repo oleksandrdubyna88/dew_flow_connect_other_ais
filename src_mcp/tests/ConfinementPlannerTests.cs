@@ -509,10 +509,19 @@ public sealed class ConfinementPlannerTests
     }
 
     /// <summary>S5.6.6: Kimi's confinement is the shim's, so a plan that carries a flag is not one coai made for it.</summary>
-    [Fact]
-    public void APlanWithFlags_IsRefusedForKimi()
+    [Theory]
+    [InlineData("Flags")]
+    [InlineData("Leading")]
+    [InlineData("AddDirs")]
+    public void APlanWithFlags_IsRefusedForKimi(string carried)
     {
-        var plan = Plan("kimi", CapabilityGrant.None) with { Flags = ["--yolo"] };
+        var plan = Plan("kimi", CapabilityGrant.None);
+        plan = carried switch
+        {
+            "Flags" => plan with { Flags = ["--yolo"] },
+            "Leading" => plan with { Leading = ["--yolo"] },
+            _ => plan with { AddDirs = [RowFolder] },
+        };
         var launch = Planned("kimi", CapabilityGrant.None) with { Confinement = new LaunchConfinement.Planned(plan) };
 
         var act = () => Kimi().Build(launch);
