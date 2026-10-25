@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 not started.** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.7 implemented; E5.5–E5.6 implemented 2026-10-25 (Sonnet), not yet reviewed; live checks (J2) and M-K17 not run.** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -1085,6 +1085,34 @@ Numbered from 40, apart from the lists above, so the stories built in parallel d
 45. **Decision (e)'s sentence lives in *The consultant* article** (*What can go wrong*, five languages), because it is about a `consult` turn;
     the question-consultant article says only that a Kimi row's launches wait for one another and for a Kimi review on the same sign-in.
 46. **`CONSULTANT_SINCE` gates a note, so `consultantsWire.ts` is unchanged.** S5.7.3 was green before any code, as the row said.
+
+### E5.5–E5.6 as built (Sonnet, 2026-10-25)
+
+Numbered from 50, apart from the lists above. Run on Linux (WSL2); the service-level rows run through `WindowsStandIn`, as E5.4's do.
+
+50. **E5.5 needed no product code** (decision 1). `AKimiConsultantCheckTests` (S5.5.1–S5.5.4) went green on arrival, since E5.3 g and E5.4 had landed; the table's
+    "expected red today" was written before them. The teeth: S5.5.1 red with `NeedsASanitisedSnapshot = false` (the check failed, no shim launched);
+    S5.5.2, S5.5.3 and S5.5.4 red with `OneShotHome`'s `DisposeAllUnder` aimed at a folder that does not exist and `ConsultCheckScratch.Delete`'s
+    `KimiHomesDisposed` skipped — each *Expected _unlinkedByTheDeleter to be empty … found …/kh-…/home/credentials*, the table's recorder red. Both breaks reverted.
+51. **S5.5.3 asserts `failureKind == "cancelled"`, not `state`.** A cancelled check ends `state: failed` with `failureKind: cancelled`; the table's "the record says
+    cancelled" is that field.
+52. **S5.6.1 and S5.6.4 were watched red with the table's messages.** S5.6.3, S5.6.5 and S5.6.6 use the existing `Plan(...)` helper, which asserts `Planned`, so their red
+    was *Expected type to be Confinement+Planned, but found Confinement+Refused* (the default arm refuses an unknown runtime), not the table's `Cwd` / `WorkingDirectory`
+    / "no exception" wording. S5.6.5 and S5.6.6 got their own teeth: the planned cwd ignored (*Expected none.Request.WorkingDirectory to be …, but they differ*) and
+    `MustCarryNoFlag` removed (*Expected a <System.ArgumentException> to be thrown, but no exception was thrown*). S5.6.7 went green on arrival (E5.3 g); its teeth are the same
+    `DisposeAllUnder` break as deviation 50 (*Expected _unlinkedByTheDeleter to be empty …*, answered and cancelled arms). The "refused" arm launches nothing and
+    leaves `coai-vh` empty; it has no junction to unlink, so the break does not redden it.
+53. **S5.6.2 is the existing test, red once the seed held `kimi` and the vectors did not** (the `RuntimeCapabilities.Runtimes` list and the three rows first, the vectors
+    after). Its sibling `EveryRow_CitesTheRecord_AndACellOrSaysWhyThereIsNone` went red too — its `Records` table names the record each runtime's rows may cite — so it
+    gained `("RESULTS_kimi_confinement.md", "2026-10-13", "M-K")`. Nothing in the plan named it.
+54. **The `kimi` rows cite the date of the cells (2026-10-13)** and `M-K9 (e)` is a cell id as written, with a space, beside `M-K9`. `none` and `disk` carry the
+    `WebSearch`/`FetchURL` sentence the decision asks for. M-K17 decides whether it stays.
+55. **S5.6.6's refusal also covers `Leading` and `AddDirs`**, not only `Flags` — a plan "that carries ANY flag" (decision 3). `MustCarryNoFlag` stands before the build, beside
+    `MustBeLaunchable`.
+56. **Where the tests live.** S5.6.3, S5.6.5 and S5.6.6 are in `ConfinementPlannerTests` (S5.6.5 builds its own `KimiConsultant` over a fake persons-bin, the shape of `Adapters()`),
+    S5.6.1 and S5.6.4 in `CapabilityMatrixTests`, S5.6.7 in a new `AKimiQuestionRowTests` (a Theory of three endings; the question row is driven by the real service).
+    S5.6.7's prompt check asserts the prompt names the copy the shim stood in (`--cwd`), and never the root.
+57. **Not run:** the whole extension suite's tag test (`the baseline names no release that was never tagged`, red at the start) and the live checks (J2).
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 
