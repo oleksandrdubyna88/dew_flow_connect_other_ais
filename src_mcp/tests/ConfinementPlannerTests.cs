@@ -143,6 +143,29 @@ public sealed class ConfinementPlannerTests
         ConfinementPlanner.VibeReadOnly.Should().Equal(disk.Flags, "the reviewer and the planner spell D2 once");
     }
 
+    /// <summary>
+    /// Kimi (E5.6 decision 1): no flag, ever — its confinement is the shim's (D15), not its argv. A none row stands in an EMPTY
+    /// scratch folder; a disk row in the COPY of its roots (D6), and <c>web</c> is refused naming the Kimi record.
+    /// </summary>
+    [Fact]
+    public void ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb()
+    {
+        var none = Plan("kimi", CapabilityGrant.None);
+        none.Flags.Should().BeEmpty("Kimi's confinement is the shim's, not its argv");
+        none.Leading.Should().BeEmpty();
+        none.Cwd.Should().Be(CwdKind.Scratch);
+
+        var disk = Plan("kimi", CapabilityGrant.Disk(RootA, RootB));
+        disk.Flags.Should().BeEmpty();
+        disk.Leading.Should().BeEmpty();
+        disk.Cwd.Should().Be(CwdKind.Snapshot, "Kimi's cwd is never the checkout (D6): the copy of the roots");
+        disk.SnapshotSources.Should().Equal([RootA, RootB]);
+        disk.AddDirs.Should().BeEmpty();
+
+        ConfinementPlanner.Plan("kimi", CapabilityGrant.Web).Should().BeOfType<Confinement.Refused>().Which.Reason
+            .Should().Contain("not been measured").And.Contain("RESULTS_kimi_confinement.md");
+    }
+
     // ---------- refusals ----------
 
     [Theory]
@@ -338,6 +361,48 @@ public sealed class ConfinementPlannerTests
                 "the row's home lives in the row's own folder, gone with it");
             Runners.Vibe.VibeLaunch.EnvironmentRefusal(request).Should().BeEmpty("the one launch control admits it (D17)");
         }
+    }
+
+    /// <summary>
+    /// A Kimi question row (E5.6 decision 3): the shim's request, one shot, in the row's empty folder or in its copy, on a
+    /// home under the row's own folder — never a root, never a session.
+    /// </summary>
+    [Fact]
+    public void AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome()
+    {
+        var consultant = Adapters().Single(a => a.Runtime == "kimi").Consultant;
+
+        var none = consultant.Build(Planned("kimi", CapabilityGrant.None));
+        none.Request.WorkingDirectory.Should().Be(Scratch, "a none row stands in an empty folder of its own");
+
+        var disk = consultant.Build(Planned("kimi", CapabilityGrant.Disk(RootA, RootB)));
+        disk.Request.WorkingDirectory.Should().Be(RowTree, "Kimi reads the copy of the roots, never a root (D6)");
+
+        foreach (var built in (ReviewerInvocation[])[none, disk])
+        {
+            var request = built.Request;
+            built.Role.Should().Be(ConsultantRoles.Question);
+            request.Arguments.Should().Contain("--ask-acp").And.NotContain("--session", "one shot")
+                .And.NotContain(RootA).And.NotContain(RootB, "the roots are read through their copy, never named to Kimi");
+            var home = request.Arguments[request.Arguments.ToList().IndexOf("--home") + 1];
+            home.Should().StartWith(RowFolder + Path.DirectorySeparatorChar, "the row's home lives in the row's own folder, gone with it");
+            request.InheritsEnvironment.Should().BeFalse();
+            Runners.Kimi.KimiEnvironment.Refusal(request, Runners.Kimi.KimiPlaces.ForShim(home, Path.Combine(RowFolder, "persons-bin")))
+                .Should().BeEmpty("the one launch control admits it");
+        }
+    }
+
+    /// <summary>A plan that carries any flag is not one coai made for Kimi — its confinement is the shim's (E5.6 decision 3).</summary>
+    [Fact]
+    public void APlanWithFlags_IsRefusedForKimi()
+    {
+        var consultant = Adapters().Single(a => a.Runtime == "kimi").Consultant;
+        var flagged = new Confinement.Planned("kimi", CapabilityGrant.None, [], ["--yolo"], CwdKind.Scratch, [], AdmissionFlag.Unconfined);
+        var launch = Planned("kimi", CapabilityGrant.None) with { Confinement = new LaunchConfinement.Planned(flagged) };
+
+        var build = () => consultant.Build(launch);
+
+        build.Should().Throw<ArgumentException>().WithMessage("*shim*");
     }
 
     /// <summary>No Vibe launch carries <c>--add-dir</c>, whatever the grant (D3: <c>--add-dir</c> trusts its folder).</summary>
