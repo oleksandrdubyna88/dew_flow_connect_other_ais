@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 not started.** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 built 2026-10-25 (Sonnet), not yet reviewed (deviations 50–55).** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -1085,6 +1085,17 @@ Numbered from 40, apart from the lists above, so the stories built in parallel d
 45. **Decision (e)'s sentence lives in *The consultant* article** (*What can go wrong*, five languages), because it is about a `consult` turn;
     the question-consultant article says only that a Kimi row's launches wait for one another and for a Kimi review on the same sign-in.
 46. **`CONSULTANT_SINCE` gates a note, so `consultantsWire.ts` is unchanged.** S5.7.3 was green before any code, as the row said.
+
+### E5.5–E5.6 as built (Sonnet, 2026-10-25)
+
+Numbered from 50. Built on a Linux host (WSL2): the service, check and row scenarios run there through `WindowsStandIn` and `KimiSeams.Using`; Windows was not run.
+
+50. **The reds of S5.6.1, S5.6.3, S5.6.4 are the matrix's refusal, not the plan's wording.** The tests' own helper `Plan("kimi", …)` asserts `Planned`, and the matrix refuses `kimi` before the planner's default arm: *Expected type to be Confinement+Planned, but found Confinement+Refused.* (S5.6.3, S5.6.5, S5.6.6); *Expected var none = RuntimeCapabilities.Builtin.Of("kimi", None) not to be <null>* (S5.6.1); *Expected type to be Admission+Admitted, but found Admission+Refused* (S5.6.4). S5.6.2 went red only once the three rows were in the file and the vectors were not (*Expected Vectors … to contain …kimi*). The existing "unknown runtime" test and the TS list assertions now name `kimi` last.
+51. **S5.6.6's refusal is in `KimiConsultant.Build`** (`MustCarryNoFlags`), for any plan with `Leading`, `Flags` or `AddDirs`; red as the row says (*Expected a <System.ArgumentException> to be thrown*). In the service the row's `ArgumentException` catch reports it as a failed row with that sentence.
+52. **S5.6.5 and S5.5.1–S5.5.4 and S5.6.7 were green on arrival**, because E5.3 and E5.4 had landed the code (the "before E5.4" reds cannot be produced). Each was given teeth by a temporary break, run red and reverted: `KimiHome.DisposeAllUnder` skipped in `VibeHomes.EmptiedUnderItsLock` — the recorder red *Expected _unlinkedByTheDeleter to be empty … found …/home/credentials* in S5.5.2 (both arms), S5.5.3, S5.6.7 (answered, cancelled); the same call skipped in `ConsultCheckScratch.KimiHomesDisposed` — S5.5.4; the `finally` `Dispose` of the check's reservation removed — *Expected …coai-vh to be empty … found …* in S5.5.2/S5.5.3; `Release(homes)` removed in `QuestionRowLaunch` — S5.6.7, all three arms; `NeedsASanitisedSnapshot = false` — S5.5.1 (and every check test) fails `record-failed`.
+53. **The check scenarios run through `ConsultantCheckMode.AnswerAsync`** with a Kimi row (`Runtime: "kimi"`) and the played shim reading `CHECK.md` from its `--cwd`. S5.5.2's two arms are one Theory; S5.5.3 cancels from inside the shim's `During`. The rootless arm (S5.5.4) uses an empty `ConsultantHomesRoot`.
+54. **S5.6.7's "refused before the launch" arm** is a root outside any git work tree: the row has already reserved its one-shot folder (as Vibe's), so the arm proves the folder is given back; no home was made, so the junction recorder has nothing to see there.
+55. **The Kimi rows' dates and cells.** `date` is 2026-10-13 (the day of M-K3, M-K4, M-K6, M-K9), `version` 2.1.1. `CapabilityMatrixTests.Records` gained `RESULTS_kimi_confinement.md` with the `M-K` prefix. The `web` row's `resultRef` cites §14 and says M-K17 admits nothing by itself.
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 
