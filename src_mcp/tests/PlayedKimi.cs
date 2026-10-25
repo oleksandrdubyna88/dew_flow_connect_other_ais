@@ -33,6 +33,15 @@ internal sealed class PlayedKimi(IProcessLauncher inner) : IProcessLauncher
 
     public ConcurrentQueue<ProcessRequest> Versions { get; } = new();
 
+    /// <summary>
+    /// Whether the folder each <c>--version</c> ran in (the owned home) was there at that moment — what a launch-control refusal after the home was made is
+    /// asserted by.
+    /// </summary>
+    public ConcurrentQueue<bool> VersionHomesThere { get; } = new();
+
+    /// <summary>The exit code <c>kimi --version</c> answers with — 0 unless a scenario needs the launch control to refuse after the home exists.</summary>
+    public int VersionExit { get; init; }
+
     /// <summary>The most shims ever running at once.</summary>
     public int Peak => _peak;
 
@@ -47,8 +56,11 @@ internal sealed class PlayedKimi(IProcessLauncher inner) : IProcessLauncher
         if (request.Arguments is ["--version"])
         {
             Versions.Enqueue(request);
+            VersionHomesThere.Enqueue(Directory.Exists(request.WorkingDirectory));
 
-            return new ProcessResult(0, "kimi 2.1.1\r\n", string.Empty, TimedOut: false);
+            return VersionExit == 0
+                ? new ProcessResult(0, "kimi 2.1.1\r\n", string.Empty, TimedOut: false)
+                : new ProcessResult(VersionExit, string.Empty, "kimi: cannot report a version", TimedOut: false);
         }
 
         return string.Equals(request.Executable, Shim, StringComparison.Ordinal) ? await ShimAsync(request, ct) : await inner.RunAsync(request, ct);

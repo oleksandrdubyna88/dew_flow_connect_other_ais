@@ -220,7 +220,7 @@ public sealed class CapabilityMatrixTests
 
     /// <summary>E5.6 decision 2: both Kimi rows that can run are FLAGGED, since an empty folder bounds <c>Read</c> and nothing else.</summary>
     [Fact]
-    public void AdmissionFlagsBothKimiRows()
+    public void AdmissionFlagsBothRows()
     {
         foreach (var capability in (Capability[])[Capability.None, Capability.Disk])
         {

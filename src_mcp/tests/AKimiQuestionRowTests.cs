@@ -124,7 +124,8 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
 
     [Theory]
     [InlineData("answered")]
-    [InlineData("refused before the launch")]
+    [InlineData("refused at the copy")]
+    [InlineData("refused by the launch control")]
     [InlineData("cancelled mid-turn")]
     public async Task AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind(string ending)
     {
@@ -132,6 +133,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
         using var caller = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         var kimi = new PlayedKimi(_launcher)
         {
+            VersionExit = ending == "refused by the launch control" ? 1 : 0,
             Turn = (_, request) => PlayedKimi.Answered(PlayedKimi.SessionOf(request), 100, 5, Advice),
             During = async (_, ct) =>
             {
@@ -144,7 +146,8 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
         };
         var granted = Path.Combine(Repo, "src");
         var plain = Directory.CreateDirectory(_dir.At("plain")).FullName;
-        var service = Service(kimi, ending == "refused before the launch" ? plain : granted);
+        var service = Service(kimi, ending == "refused at the copy" ? plain : granted);
+        var refused = ending.StartsWith("refused", StringComparison.Ordinal);
 
         if (ending == "cancelled mid-turn")
         {
@@ -154,11 +157,18 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
         else
         {
             var row = TheRow(await AskAsync(service));
-            row.GetProperty("status").GetString().Should().Be(ending == "answered" ? RowOutcomes.Answered : RowOutcomes.Refused, row.ToString());
+            row.GetProperty("status").GetString().Should().Be(ending switch { "answered" => RowOutcomes.Answered, "refused at the copy" => RowOutcomes.Refused, _ => RowOutcomes.Failed }, row.ToString());
+        }
+
+        if (ending == "refused by the launch control")
+        {
+            // The refusal comes AFTER the owned home and its junction were made: `--version` ran in that home and failed.
+            kimi.VersionHomesThere.Should().ContainSingle().Which.Should().BeTrue("the home was made before the launch control asked the version");
+            Directory.Exists(kimi.Versions.Single().WorkingDirectory).Should().BeFalse("the refused row's home goes with it");
         }
 
         var shim = kimi.Shims.SingleOrDefault()?.Request;
-        (shim is null).Should().Be(ending == "refused before the launch", "a refused row never reaches the shim");
+        (shim is null).Should().Be(refused, "a refused row never reaches the shim");
         if (shim is not null)
         {
             var copy = After(shim, "--cwd");
