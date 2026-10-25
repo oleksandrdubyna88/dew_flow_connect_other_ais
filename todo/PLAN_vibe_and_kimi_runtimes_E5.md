@@ -1102,7 +1102,9 @@ Numbered from 50, apart from the lists above. Not yet reviewed; the live checks 
     table says: `ConfinementPlanner.Plan` returned `Refused` (the matrix asks first), so `BeOfType<Confinement.Planned>` failed, never the
     `Cwd` assertion the table predicts for the default arm. S5.6.6 was then watched red as the table says (`Expected a <System.ArgumentException>
     to be thrown, but no exception was thrown.`) with the `MustCarryNoFlags` call removed. S5.6.2 (the vectors) cannot be red this way: the
-    existing coverage test walks the table's own rows and was green with the table stashed. S5.6.8 (TS) was not watched red.
+    existing coverage test walks the table's own rows and was green with the table stashed. S5.6.8 (TS) was watched red with the generated file
+    put back to `b4e2ea96`: `AssertionError: none is admitted — false !== true` (not the table's `deepStrictEqual` message on the runtimes
+    list; that assertion sits in another test, edited to include `kimi`, and it failed too, as did the generated-file and vector tests).
 52. **`EveryRow_CitesTheRecord_AndACellOrSaysWhyThereIsNone` pins a list of records** (`CapabilityMatrixTests.cs`): it went red on the new rows
     ("a row cites exactly one record"), and its list gained `RESULTS_kimi_confinement.md`, `2026-10-13`, cell prefix `M-K`.
 53. **The Kimi rows cite the cells by the ids the plan names** (`M-K6`, `M-K3`, `M-K4`; disk adds `M-K9` and `M-K9 (e)`), version `2.1.1`, date
