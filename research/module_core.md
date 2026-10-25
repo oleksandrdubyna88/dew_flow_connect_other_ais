@@ -780,7 +780,7 @@ consultant or the confined reviewer ships was moved (A12: a tails-plan item of i
 
 ```mermaid
 flowchart LR
-  seed["shared/runtime-capabilities.json<br/>18 rows (6 runtimes × 3), each citing its probe cells"] --> RC[RuntimeCapabilities.Builtin<br/>refused whole if a pair is undecided]
+  seed["shared/runtime-capabilities.json<br/>21 rows (7 runtimes × 3), each citing its probe cells"] --> RC[RuntimeCapabilities.Builtin<br/>refused whole if a pair is undecided]
   RC --> CM["CapabilityMatrix.Admit(runtime, capability)<br/>confined → admit · unconfined / default-deny → admit FLAGGED · unsupported / unmeasured → refuse"]
   CM --> CP["ConfinementPlanner.Plan(runtime, grant)<br/>Leading · Flags · CwdKind · AddDirs · Flag"]
   CP -->|Planned| AD[adapters compose, add nothing]
@@ -825,6 +825,16 @@ flowchart LR
   read cell itself — and `web` `unmeasured` (no Vibe cell exercises the web), so the matrix refuses it. Those rows
   cite the Vibe record and its `M-V…` cells, dated 2026-10-12, and `CapabilityMatrixTests` holds each row to the
   record it cites (`Records`), not to one record for all. **An unmeasured pair's refusal names the record its own row cites** (before the S3 gate): `CapabilityMatrix.RecordOf` reads the `research/RESULTS_….md` its `resultRef` names (the first run's record when it names none), and `capabilityAdmission.ts`'s `recordOf` is its twin — so `vibe × web` sends a person to research/RESULTS_vibe_confinement.md, and the first five runtimes' sentences are byte for byte what they were.
+- **Kimi's arm (E5.6, 2026-10-13).** `kimi` is the seventh runtime of the table and takes **no flags at all**: the planner
+  (`ConfinementPlanner`) gives it neither a mode, a trust flag nor `--add-dir`. `none` stands in an EMPTY `Scratch` folder; `disk`
+  stands in a `Snapshot` — a coai-owned sanitised copy of the granted roots, named in `Planned.SnapshotSources` — so the roots
+  are copied, never read in place. Both rows are `unconfined`, and the matrix flags them: M-K6 found that Kimi's `Read` is
+  bounded to its working folder but `Grep` and `Glob` read an outside file by absolute path 3 of 3, so a copy covers what the
+  branch could supply and does not bound what Kimi can reach. `web` is `unmeasured` (no Kimi cell exercises the web), so the
+  matrix refuses it, naming its own record, research/RESULTS_kimi_confinement.md. `KimiConsultant.Build` refuses a plan that
+  carries flags (`Leading`, `Flags` or `AddDirs` not empty) with an `ArgumentException` — a flag has no meaning for Kimi, and a
+  launch that dropped it silently would run with less confinement than the plan said. `CapabilityMatrixTests.Records` holds
+  each Kimi row to its own record (prefix `M-K`).
 - **Refuse, never redact — and the refusal never quotes what it refused.** A web row's model may be
   unconfined (codex, F2), so what the row is GIVEN is the only thing ours to control, and a question
   with a hole where a path was still says there was a path. The sanitiser answers ONE class — the first

@@ -3229,7 +3229,7 @@ D14 `insufficient balance` (`balance_spent`).
 
 **Not covered, and said so (RESULTS §2.3).** `Grep` and `Glob` do not go through the client, so a Kimi read in general
 has the codex standing; the boundary covers `Read` and the instruction-file search, the sanitised snapshot (D6) covers
-what the branch could supply, and the question-consultant `disk` standing for `kimi` will be `unconfined` (S5). ACP
+what the branch could supply, and the question-consultant `disk` standing for `kimi` is `unconfined` (built in E5.6, flagged in the matrix). ACP
 `mode: plan` changes nothing here (§2.4). Kimi's session store under `~/.kimi-code/sessions` is a permitted vendor write.
 
 **What E4.3 adds (2026-10-15, `todo/PLAN_vibe_and_kimi_runtimes_E4.md`).** A profile that `NeedsAHome` (Kimi) runs only on an owned home, and the shim is the
