@@ -143,6 +143,31 @@ public sealed class ConfinementPlannerTests
         ConfinementPlanner.VibeReadOnly.Should().Equal(disk.Flags, "the reviewer and the planner spell D2 once");
     }
 
+    /// <summary>
+    /// Kimi (E5.6 of todo/PLAN_vibe_and_kimi_runtimes_E5.md): no flag, ever — its confinement is the shim's (D15), not its argv. A disk row
+    /// stands in a COPY of its roots (D6); a none row in an empty folder; a web row is refused, because no cell measured it.
+    /// </summary>
+    [Fact]
+    public void ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb()
+    {
+        var none = Plan("kimi", CapabilityGrant.None);
+        none.Cwd.Should().Be(CwdKind.Scratch, "a none row stands in an empty folder");
+        none.Flags.Should().BeEmpty("Kimi's confinement is the shim's, never its argv (D15)");
+        none.Leading.Should().BeEmpty();
+        none.AddDirs.Should().BeEmpty();
+        none.SnapshotSources.Should().BeEmpty();
+
+        var disk = Plan("kimi", CapabilityGrant.Disk(RootA, RootB));
+        disk.Cwd.Should().Be(CwdKind.Snapshot, "a disk row reads the copy of its roots (D6)");
+        disk.SnapshotSources.Should().Equal([RootA, RootB], "the roots it reads through their copies");
+        disk.Flags.Should().BeEmpty("Kimi's confinement is the shim's, never its argv (D15)");
+        disk.Leading.Should().BeEmpty();
+        disk.AddDirs.Should().BeEmpty();
+
+        ConfinementPlanner.Plan("kimi", CapabilityGrant.Web).Should().BeOfType<Confinement.Refused>()
+            .Which.Reason.Should().Contain("not been measured").And.Contain("RESULTS_kimi_confinement.md", "the matrix refuses an unmeasured pair and names its record");
+    }
+
     // ---------- refusals ----------
 
     [Theory]

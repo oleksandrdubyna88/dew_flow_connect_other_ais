@@ -158,6 +158,7 @@ public sealed class CapabilityMatrixTests
     [
         ("RESULTS_question_consultant_capabilities.md", "2026-10-01", "01a0f8c7-18e4-"),
         ("RESULTS_vibe_confinement.md", "2026-10-12", "M-V"),
+        ("RESULTS_kimi_confinement.md", "2026-10-13", "M-K"),
     ];
 
     [Fact]
@@ -195,6 +196,39 @@ public sealed class CapabilityMatrixTests
             "denied writes do not prove bounded READS — the disk row rests on the read cell itself");
         CapabilityMatrix.Admit("vibe", Capability.Web).Should().BeOfType<Admission.Refused>()
             .Which.Reason.Should().Contain("not been measured", "no Vibe cell exercises the web");
+    }
+
+    [Fact]
+    public void KimiHasThreeRows_EachCitingItsCells()
+    {
+        var none = RuntimeCapabilities.Builtin.Of("kimi", Capability.None);
+        var disk = RuntimeCapabilities.Builtin.Of("kimi", Capability.Disk);
+        var web = RuntimeCapabilities.Builtin.Of("kimi", Capability.Web);
+
+        none.Should().NotBeNull("the table holds a kimi × none row");
+        disk.Should().NotBeNull("the table holds a kimi × disk row");
+        web.Should().NotBeNull("the table holds a kimi × web row");
+        none!.Standing.Should().Be(CapabilityStanding.Unconfined, "Grep and Glob read the disk directly, so an empty folder confines nothing (M-K6)");
+        none.MeasuredWith.Cells.Should().Contain("M-K6");
+        disk!.Standing.Should().Be(CapabilityStanding.Unconfined);
+        disk.MeasuredWith.Cells.Should().Contain(["M-K6", "M-K9"]);
+        web!.Standing.Should().Be(CapabilityStanding.Unmeasured, "WebSearch and FetchURL are announced and no cell exercised them");
+
+        foreach (var row in (RuntimeCapabilityRow[])[none, disk, web])
+        {
+            row.MeasuredWith.Version.Should().Be("2.1.1");
+            row.MeasuredWith.ResultRef.Should().Contain("RESULTS_kimi_confinement.md");
+        }
+    }
+
+    [Fact]
+    public void AdmissionFlagsBothRows()
+    {
+        foreach (var capability in (Capability[])[Capability.None, Capability.Disk])
+        {
+            CapabilityMatrix.Admit("kimi", capability).Should().BeOfType<Admission.Admitted>()
+                .Which.Flag.Should().Be(AdmissionFlag.Unconfined, $"kimi × {capability} can read this machine, so it is flagged");
+        }
     }
 
     /// <summary>D13's two refusals kept apart: the flags are what the data says, never what a runtime name suggests.</summary>
