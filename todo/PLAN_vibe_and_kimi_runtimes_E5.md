@@ -1112,7 +1112,7 @@ Numbered from 50, apart from the lists above. Run on Linux (WSL2); the service-l
 56. **Where the tests live.** S5.6.3, S5.6.5 and S5.6.6 are in `ConfinementPlannerTests` (S5.6.5 builds its own `KimiConsultant` over a fake persons-bin, the shape of `Adapters()`),
     S5.6.1 and S5.6.4 in `CapabilityMatrixTests`, S5.6.7 in a new `AKimiQuestionRowTests` (a Theory of three endings; the question row is driven by the real service).
     S5.6.7's prompt check asserts the prompt names the copy the shim stood in (`--cwd`), and never the root.
-57. **Not run:** the whole extension suite's tag test (`the baseline names no release that was never tagged`, red at the start) and the live checks (J2).
+57. **Whole suites (Linux):** MCP 10555 tests, 3 failed — the two known Kimi tests and `TheRoundsNumstatsAreCountedTests.AnUnknownCommit_IsGitFailed_NeverAThrow`, which also fails at `b4e2ea96` on this host (a 1 ms deadline test; checked in a clean worktree). Extension 6290 tests, 1 failed — the known tag test. Live checks (J2) not run.
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 
