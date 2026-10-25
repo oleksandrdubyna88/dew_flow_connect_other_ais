@@ -152,12 +152,13 @@ public sealed class CapabilityMatrixTests
     /// <summary>
     /// The records a row may cite, each with the day it was measured and the shape of its cell ids: the question
     /// consultant's full run for the first five runtimes, and the Vibe probe for vibe (S3 of
-    /// todo/PLAN_vibe_and_kimi_runtimes.md) — whose cells are named <c>M-V…</c>, not numbered.
+    /// todo/PLAN_vibe_and_kimi_runtimes.md) — whose cells are named <c>M-V…</c>, not numbered — and the Kimi probe for kimi (<c>M-K…</c>, E5.6).
     /// </summary>
     private static readonly IReadOnlyList<(string Record, string Date, string CellPrefix)> Records =
     [
         ("RESULTS_question_consultant_capabilities.md", "2026-10-01", "01a0f8c7-18e4-"),
         ("RESULTS_vibe_confinement.md", "2026-10-12", "M-V"),
+        ("RESULTS_kimi_confinement.md", "2026-10-13", "M-K"),
     ];
 
     [Fact]
@@ -195,6 +196,41 @@ public sealed class CapabilityMatrixTests
             "denied writes do not prove bounded READS — the disk row rests on the read cell itself");
         CapabilityMatrix.Admit("vibe", Capability.Web).Should().BeOfType<Admission.Refused>()
             .Which.Reason.Should().Contain("not been measured", "no Vibe cell exercises the web");
+    }
+
+    /// <summary>S5.6.1 (E5.6): Kimi's Read is bounded by the shim, but Grep and Glob read the disk (M-K6) — so none and disk are both unconfined.</summary>
+    [Fact]
+    public void KimiHasThreeRows_EachCitingItsCells()
+    {
+        var none = RuntimeCapabilities.Builtin.Of("kimi", Capability.None);
+        var disk = RuntimeCapabilities.Builtin.Of("kimi", Capability.Disk);
+        var web = RuntimeCapabilities.Builtin.Of("kimi", Capability.Web);
+
+        none.Should().NotBeNull();
+        disk.Should().NotBeNull();
+        web.Should().NotBeNull();
+        none!.Standing.Should().Be(CapabilityStanding.Unconfined, "an empty folder bounds Read, and Grep and Glob took an outside file by path 3 of 3 (M-K6)");
+        none.MeasuredWith.Cells.Should().Contain("M-K6");
+        disk!.Standing.Should().Be(CapabilityStanding.Unconfined);
+        disk.MeasuredWith.Cells.Should().Contain(["M-K6", "M-K9"]);
+        web!.Standing.Should().Be(CapabilityStanding.Unmeasured, "WebSearch and FetchURL are announced and no cell exercised them");
+        foreach (var row in (RuntimeCapabilityRow[])[none, disk, web])
+        {
+            row.MeasuredWith.Version.Should().Be("2.1.1");
+            row.MeasuredWith.ResultRef.Should().Contain("RESULTS_kimi_confinement.md");
+        }
+    }
+
+    /// <summary>S5.6.4 (E5.6): both measured rows admit FLAGGED — the person is told this row can read this machine (D13).</summary>
+    [Fact]
+    public void AdmissionFlagsBothRows()
+    {
+        foreach (var capability in (Capability[])[Capability.None, Capability.Disk])
+        {
+            var admission = CapabilityMatrix.Admit("kimi", capability);
+
+            admission.Should().BeOfType<Admission.Admitted>($"kimi × {capability}").Which.Flag.Should().Be(AdmissionFlag.Unconfined);
+        }
     }
 
     /// <summary>D13's two refusals kept apart: the flags are what the data says, never what a runtime name suggests.</summary>

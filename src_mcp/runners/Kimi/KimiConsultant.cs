@@ -47,6 +47,7 @@ public sealed class KimiConsultant(KimiRuntime inner, string vendor = "kimi") : 
     public ReviewerInvocation Build(ConsultantLaunch launch)
     {
         ConsultantLaunches.MustBeLaunchable(launch);
+        MustCarryNoFlag(launch);
         var settings = launch.Settings with { OwnedScratch = OwnedFolder(launch), Model = ModelOf(launch.Settings) };
         var built = inner.Build(ConsultantLaunches.RoleOf(launch), launch.Prompt, Cwd(launch), string.Empty, launch.OutputDir, settings);
         var request = built.Request with { Arguments = [.. built.Request.Arguments, .. SessionOf(launch)] };
@@ -54,6 +55,18 @@ public sealed class KimiConsultant(KimiRuntime inner, string vendor = "kimi") : 
 
         return built with { Request = launch.Confinement is LaunchConfinement.Planned ? ConsultantLaunches.ForQuestion(request) : request };
     }
+
+    /// <summary>Kimi's confinement is the shim's (D15), never its argv (E5.6 decision 3): a plan that carries a flag was not made by coai for kimi.</summary>
+    private static void MustCarryNoFlag(ConsultantLaunch launch)
+    {
+        if (launch.Confinement is LaunchConfinement.Planned planned && CarriesAFlag(planned.Plan))
+        {
+            throw new ArgumentException(
+                "a Kimi row's confinement is the shim's; a plan with flags is not one coai made for kimi", nameof(launch));
+        }
+    }
+
+    private static bool CarriesAFlag(Confinement.Planned plan) => plan.Flags.Count + plan.Leading.Count + plan.AddDirs.Count > 0;
 
     /// <summary>The row's model, or Kimi's default when it names none — resolved here so the shim and the ledger name the same one.</summary>
     private static string ModelOf(ReviewerSettings settings) => settings.Model.Length > 0 ? settings.Model : KimiModels.Default;
