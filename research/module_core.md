@@ -825,6 +825,13 @@ flowchart LR
   read cell itself — and `web` `unmeasured` (no Vibe cell exercises the web), so the matrix refuses it. Those rows
   cite the Vibe record and its `M-V…` cells, dated 2026-10-12, and `CapabilityMatrixTests` holds each row to the
   record it cites (`Records`), not to one record for all. **An unmeasured pair's refusal names the record its own row cites** (before the S3 gate): `CapabilityMatrix.RecordOf` reads the `research/RESULTS_….md` its `resultRef` names (the first run's record when it names none), and `capabilityAdmission.ts`'s `recordOf` is its twin — so `vibe × web` sends a person to research/RESULTS_vibe_confinement.md, and the first five runtimes' sentences are byte for byte what they were.
+- **Kimi's arm (E5.6 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md`, 2026-10-25).** `kimi` is the seventh runtime of the table
+  (`RuntimeCapabilities.Runtimes` and the seed's `runtimes` both name it). `ConfinementPlanner.Fragments` has a `Kimi` arm that carries **no flag at all** — the
+  shim is the confinement (D15) — so `disk` stands in a `Snapshot` of its roots (`SnapshotSources` names them) and `none` in an EMPTY `Scratch`; `KimiConsultant.Build`
+  refuses a planned row whose plan carries any flag (`Flags`, `Leading` or `AddDirs`: a plan like that was not made for Kimi). The three rows cite the M-K cells of
+  research/RESULTS_kimi_confinement.md (Windows, kimi 2.1.1, dated 2026-10-13): `none` and `disk` are **`unconfined`** — the shim bounds Read and refuses every write
+  and shell command, but Grep and Glob read the disk directly (M-K6) — so both are admitted FLAGGED (D13); `web` is `unmeasured` (no cell exercises it) and is refused,
+  naming the Kimi record. The one-shot home and the copies of a row end junction-first, the row's `coai-question-*` scratch included.
 - **Refuse, never redact — and the refusal never quotes what it refused.** A web row's model may be
   unconfined (codex, F2), so what the row is GIVEN is the only thing ours to control, and a question
   with a hole where a path was still says there was a path. The sanitiser answers ONE class — the first

@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 implemented 2026-10-25 (Sonnet; deviations 50–56, not yet reviewed).** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 implemented 2026-10-25 (on Sonnet, not on the Opus §0.2 names — deviation 58; deviations 50–56, reviewed, fixes in deviation 57).** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -1108,6 +1108,19 @@ Numbered from 50. All twelve scenarios are green on this host (Linux, through th
     `resultRef` texts against RESULTS beyond the headings (§2, §6, §7, §9, §12, §14, §21).
 56. **S5.6.7** runs `ask_consultants` through the real service with the played shim; the "cancelled" arm cancels the ask while the shim is held, and accepts
     either an `OperationCanceledException` or a reply. No server-side change was needed.
+57. **The review of E5.5–E5.6 (2026-10-25, Sonnet) — fixes.** (R3) The junction-first tests of S5.5.2–S5.5.4 and S5.6.7 had never been seen red, and none proved a home was
+    made. Each now also asserts that `KimiHome.AfterUnlink` fired once (none for the refused arm), and the two recorders are set in the test body — they are per async
+    flow, and an assignment in the async `InitializeAsync` does not reach the test. Teeth: `KimiHome.DisposeAllUnder` was disabled in
+    `VibeHomes.EmptiedUnderItsLock` and in `ConsultCheckScratch.KimiHomesDisposed`; six of eight tests went red (*Expected _linked to contain a single item because a home
+    was made, and KimiHome unlinked its credentials junction once, but the collection is empty.*; the question row: *… to contain 1 item(s) … but found 0: {empty}.*),
+    S5.5.1 and the refused arm stayed green as they should. Reverted. (R2) S5.6.7 now takes the `coai-question-*` ancestor of the shim's `--cwd` in the answered and
+    cancelled arms and asserts it is gone; the refused arm compares the temp root's `coai-question-*` folders before and after (no seam names the scratch there, so a
+    concurrent test class could in theory disturb it). (R4) S5.5.3 awaits the check without a catch and asserts `failed` / `cancelled`. (R5) The temp folders are
+    `testsToDelete-…` `TempDir`s. (R6) `MustCarryNoFlag` also refuses `AddDirs` (red first: *Expected a <System.ArgumentException> to be thrown, but no exception was
+    thrown.*), and `APlanWithFlags_IsRefusedForKimi` is a Theory over `Flags`, `Leading` and `AddDirs` — the `Leading` arm of deviation 53 had no test. (R1) `research/module_core.md`
+    has Kimi's arm and `research/module_tests.md` the new tests.
+58. **Who built E5.5–E5.6.** §0.2 names Opus for these stories; E5.5–E5.6 and the fixes of deviation 57 were built on Sonnet (the model's own identity: Sonnet 5.5). The repository does not
+    record who decided this; the operator's task brief named the model, and the deviation is listed here so that the operator can confirm it or order a rebuild on Opus.
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 

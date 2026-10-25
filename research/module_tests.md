@@ -4454,3 +4454,22 @@ saw it).
 
 `CumulativeUsageTests.AVendorReportingLESSThanBeforeFloorsAtZero_NeverNegative` became `ACountBelowWhatWasBilled_FloorsAtZero_NeverNegative`: its old case (both totals below
 what was billed) is now a reset by decision 12, so the floor is pinned where it still applies — totals that moved on, cached and reasoning counts that did not.
+
+### The Kimi check and the Kimi question row — E5.5 and E5.6 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md` (2026-10-25)
+
+E5.5's four scenarios were green on their first run (E5.3 g and E5.4 were already in the branch; deviation 50), so the junction-first tests were given teeth afterwards
+(deviation 57). Each of them also asserts the POSITIVE half — `KimiHome.AfterUnlink` fired once for the home's credentials link — so "the deleter's recorder never fired"
+cannot pass because no home was made. The hooks are set in the test body: they are per async flow.
+
+| Test | What it pins | Red seen against |
+|---|---|---|
+| `AKimiConsultantCheckTests.AKimiCheck_RunsInACopy_OnAOneShotHome` (S5.5.1) | the check's `--cwd` is a copy under its own scratch, `--home` a `kh-` folder under the short homes root, the marker read from the copy | green on first run |
+| `…AfterTheCheck_TheHomeIsGone_JunctionFirst` (S5.5.2, 2 arms) | passed or failed, the home's folder is empty, one unlink by `KimiHome`, none by the deleter, the person's folder byte-identical | teeth (both `DisposeAllUnder` calls of the check's path removed): *Expected _linked to contain a single item because a home was made … but the collection is empty.* |
+| `…ACheckCancelledMidTurn_StillDisposesItsHome` (S5.5.3) | the record says `failed` / `cancelled`, the home is given back | same teeth, same message |
+| `…ARootlessCheck_KeepsTheHomeInItsScratch_AndDisposesItJunctionFirst` (S5.5.4) | without a homes root the home lives in `own\kh-…` and goes with the scratch | same teeth, same message |
+| `AKimiQuestionRowTests.AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind` (S5.6.7, 3 arms) | answered / refused / cancelled: the prompt names the copy, never the root; the row's home, its `coai-question-*` scratch and `coai-vh` entries are gone; the person's folder whole | teeth, answered and cancelled arms: *Expected _linked to contain 1 item(s) because a one-shot home was made … but found 0: {empty}.* |
+| `ConfinementPlannerTests.APlanWithFlags_IsRefusedForKimi` (S5.6.6; Theory: `Flags`, `Leading`, `AddDirs`) | a plan with any launch flag is refused as not made for Kimi | `AddDirs` arm, before the fix: *Expected a <System.ArgumentException> to be thrown, but no exception was thrown.* |
+| `CapabilityMatrixTests` (S5.6.1, S5.6.4), `ConfinementPlannerTests` (S5.6.3, S5.6.5), `capabilityAdmission.test.ts` (S5.6.8) | three `kimi` rows citing their cells; the planner arm; flagged admission of `none` and `disk`, `web` refused naming its record | see deviations 51–55 |
+
+The refused arm of S5.6.7 compares the `coai-question-*` folders of the temp root before and after the ask; a concurrent test class that makes one in that window could
+fail it, which is the one weakness of that arm (the scratch is made inside the service, with no seam to name it).

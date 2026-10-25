@@ -17,7 +17,8 @@
     "",
     "Every cell id of the first five runtimes is from run 01a0f8c7-18db-739b-8b83-3165e82cd42c (105 cells,",
     "2026-10-01), recorded in research/RESULTS_question_consultant_capabilities.md; the vibe rows cite the M-V",
-    "cells of research/RESULTS_vibe_confinement.md (Windows, 3 of 3, vibe 2.26.1). `cells` may be empty only",
+    "cells of research/RESULTS_vibe_confinement.md (Windows, 3 of 3, vibe 2.26.1); the kimi rows cite the M-K cells",
+    "of research/RESULTS_kimi_confinement.md (Windows, kimi 2.1.1). `cells` may be empty only",
     "when `note` says why (a standing that holds by construction, or a pair nobody measured)."
   ],
   "runtimes": ["claude", "codex", "antigravity", "local", "api", "vibe", "kimi"],
