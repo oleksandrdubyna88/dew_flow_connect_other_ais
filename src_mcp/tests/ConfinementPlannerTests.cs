@@ -143,6 +143,27 @@ public sealed class ConfinementPlannerTests
         ConfinementPlanner.VibeReadOnly.Should().Equal(disk.Flags, "the reviewer and the planner spell D2 once");
     }
 
+    /// <summary>S5.6.3: a Kimi row's plan carries no flag; disk stands in a copy of its roots, none in an empty folder, web is refused.</summary>
+    [Fact]
+    public void ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb()
+    {
+        var none = Plan("kimi", CapabilityGrant.None);
+        none.Cwd.Should().Be(CwdKind.Scratch);
+        none.Flags.Should().BeEmpty();
+        none.Leading.Should().BeEmpty();
+        none.AddDirs.Should().BeEmpty();
+
+        var disk = Plan("kimi", CapabilityGrant.Disk(RootA, RootB));
+        disk.Cwd.Should().Be(CwdKind.Snapshot);
+        disk.SnapshotSources.Should().Equal([RootA, RootB]);
+        disk.Flags.Should().BeEmpty();
+        disk.Leading.Should().BeEmpty();
+        disk.AddDirs.Should().BeEmpty();
+
+        ConfinementPlanner.Plan("kimi", CapabilityGrant.Web).Should().BeOfType<Confinement.Refused>()
+            .Which.Reason.Should().Contain("not been measured").And.Contain("RESULTS_kimi_confinement.md");
+    }
+
     // ---------- refusals ----------
 
     [Theory]
@@ -456,6 +477,47 @@ public sealed class ConfinementPlannerTests
             consultant.Build(inTheSnapshot).Request.WorkingDirectory.Should().Be(RowTree, consultant.Vendor);
             consultant.Build(inTheSnapshot).Role.Should().Be(ConsultantRoles.Consult, consultant.Vendor);
         }
+    }
+
+    private static Runners.Kimi.KimiPlaces PersonsPlaces(string root) => Runners.Kimi.KimiPlaces.ForShim(root, Path.Combine(RowFolder, "persons-bin"));
+
+    private static Runners.Kimi.KimiConsultant Kimi() => new(new Runners.Kimi.KimiRuntime("kimi", Runners.Platform.HostKind.Windows,
+        new Runners.Kimi.KimiSeams(PersonsPlaces, () => ("coai-mcp", []))));
+
+    private static string After(IReadOnlyList<string> arguments, string flag) => arguments[arguments.ToList().IndexOf(flag) + 1];
+
+    /// <summary>S5.6.5: a Kimi question launch is the shim request, in its folder or its copy, on the row's own home.</summary>
+    [Fact]
+    public void AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome()
+    {
+        var none = Kimi().Build(Planned("kimi", CapabilityGrant.None));
+        var disk = Kimi().Build(Planned("kimi", CapabilityGrant.Disk(RootA, RootB)));
+
+        none.Request.WorkingDirectory.Should().Be(Scratch);
+        disk.Request.WorkingDirectory.Should().Be(RowTree);
+        foreach (var built in (Runners.Reviewers.ReviewerInvocation[])[none, disk])
+        {
+            var request = built.Request;
+            var home = After(request.Arguments, "--home");
+            request.Arguments.Should().Contain("--ask-acp").And.NotContain("--session");
+            request.Arguments.Should().NotContain(RootA).And.NotContain(RootB);
+            home.Should().StartWith(RowFolder + Path.DirectorySeparatorChar);
+            request.InheritsEnvironment.Should().BeFalse();
+            Runners.Kimi.KimiEnvironment.Refusal(request, PersonsPlaces(home)).Should().BeEmpty();
+            built.Role.Should().Be(ConsultantRoles.Question);
+        }
+    }
+
+    /// <summary>S5.6.6: Kimi's confinement is the shim's, so a plan that carries a flag is not one coai made for it.</summary>
+    [Fact]
+    public void APlanWithFlags_IsRefusedForKimi()
+    {
+        var plan = Plan("kimi", CapabilityGrant.None) with { Flags = ["--yolo"] };
+        var launch = Planned("kimi", CapabilityGrant.None) with { Confinement = new LaunchConfinement.Planned(plan) };
+
+        var act = () => Kimi().Build(launch);
+
+        act.Should().Throw<ArgumentException>().WithMessage("*shim*");
     }
 
     private static IEnumerable<(string Runtime, IConsultantRuntime Consultant)> Adapters() =>
