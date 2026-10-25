@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 not started.** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 implemented 2026-10-25 (Sonnet; deviations 50–56, not yet reviewed).** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -1085,6 +1085,29 @@ Numbered from 40, apart from the lists above, so the stories built in parallel d
 45. **Decision (e)'s sentence lives in *The consultant* article** (*What can go wrong*, five languages), because it is about a `consult` turn;
     the question-consultant article says only that a Kimi row's launches wait for one another and for a Kimi review on the same sign-in.
 46. **`CONSULTANT_SINCE` gates a note, so `consultantsWire.ts` is unchanged.** S5.7.3 was green before any code, as the row said.
+
+### E5.5–E5.6 as built (Sonnet, 2026-10-25)
+
+Numbered from 50. All twelve scenarios are green on this host (Linux, through the Windows stand-in); the live checks (J2) and M-K17 are not run.
+
+50. **S5.5.1–S5.5.4 were green on their first run.** E5.4 and E5.3 g are already in this branch, so the "red today" column of E5.5 (the check refusing a
+    Kimi row; the recorder invoked) could not be seen. The tests were written, and run against the code as it is; no production line of the
+    check changed (decision 1 of E5.5).
+51. **The planner reds read earlier than the table says.** For S5.6.3, S5.6.5 and S5.6.6 the red is `Expected type to be Confinement+Planned, but
+    found Confinement+Refused`: the matrix refuses `kimi` before the planner's default arm is reached, so no plan is made at all. S5.6.4's red is
+    `Expected type to be Admission+Admitted, but found Admission+Refused`. S5.6.1's red is the table's (`Expected none not to be <null>`).
+52. **S5.6.2 and the row-shape guard.** The existing `EveryRow_CitesTheRecord_AndACellOrSaysWhyThereIsNone` (`CapabilityMatrixTests.cs`) failed on `kimi × none`
+    ("a row cites exactly one record") until its list of records gained `RESULTS_kimi_confinement.md`, `2026-10-13`, cell prefix `M-K`. S5.6.2's own test
+    (`TheVectorsActuallyLoaded_…`) was green after the three vectors were added; the vectors and the table went in together.
+53. **`MustCarryNoFlag` refuses `Leading` as well as `Flags`.** S5.6.6 names flags; a plan with a leading flag (codex's `--search`) is no more a plan coai made
+    for Kimi. The check lives in `KimiConsultant.Build`, after `MustBeLaunchable`.
+54. **`RuntimeCapabilities.Runtimes` and the seed's `runtimes` list both gain `kimi`** (the hand-written list is not read from the seed), and the TS test's
+    two runtime lists (`capabilityAdmission.test.ts`) say so. The refusal for an unknown runtime now spells `…, vibe, kimi`.
+55. **Row dates and cells.** The three rows are dated 2026-10-13 (the day M-K6, M-K3 and M-K4 were measured, E5.4 decision 8), version `2.1.1`. `none` cites
+    `M-K6`, `M-K3`, `M-K4`; `disk` adds `M-K9` and `M-K9 (e)`; `web` cites no cell and says why. I did not check the section numbers in the
+    `resultRef` texts against RESULTS beyond the headings (§2, §6, §7, §9, §12, §14, §21).
+56. **S5.6.7** runs `ask_consultants` through the real service with the played shim; the "cancelled" arm cancels the ask while the shim is held, and accepts
+    either an `OperationCanceledException` or a reply. No server-side change was needed.
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 
