@@ -297,6 +297,81 @@ public sealed class RoundCountsTests : IDisposable
         Version().Should().Be(before.Version);
     }
 
+    private static readonly string KeyOne = new('1', 32);
+    private static readonly string KeyTwo = new('2', 32);
+    private static readonly string KeyThree = new('3', 32);
+
+    /// <summary>
+    /// Every row names the DISTINCT rounds it counted by their keys (E6.S1): the extension's launches-per-round figure and the merge of two
+    /// stores both stand on them. A round written before step 21, or a skipped one, has none — and is counted apart, never listed as an empty key.
+    /// </summary>
+    [Fact]
+    public void EveryRow_CarriesItsDistinctRoundKeys_AndTheCountWithoutOne()
+    {
+        using (var db = RoundsDb.Open(_dir, _log)!)
+        {
+            RoundCountsSnapshotFixtures.Record(db, "a", nameof(Stage.PlanReview), Now.AddHours(-1), KeyTwo, Ran(Codex, Luna), Ran(Gemini, FlashMedium));
+            RoundCountsSnapshotFixtures.Record(db, "b", nameof(Stage.CodeReview), Now.AddHours(-1), KeyOne, Ran(Codex, Luna), Ran(Codex, Luna, "SecurityReliability"), Ran(Codex, Luna, "UxDxPerformance"));
+            RoundCountsSnapshotFixtures.Record(db, "c", nameof(Stage.CodeReview), Now.AddHours(-2), string.Empty, Ran(Codex, Luna));
+            RoundCountsSnapshotFixtures.Record(db, "d", nameof(Stage.CodeReview), Now.AddHours(-30), KeyThree, Ran(Codex, Luna));
+        }
+
+        var answer = RoundCounts.Read(_dir, Now);
+
+        Row(answer, "5h", Codex).RoundKeys.Should().Equal([KeyOne, KeyTwo], "distinct, non-empty, in ordinal order — three reviewers of round b are one key");
+        Row(answer, "5h", Codex).RoundsWithoutKey.Should().Be(1);
+        Row(answer, "5h", Gemini).RoundKeys.Should().Equal([KeyTwo]);
+        Row(answer, "5h", Gemini).RoundsWithoutKey.Should().Be(0);
+        Row(answer, "24h", Codex).RoundKeys.Should().Equal([KeyOne, KeyTwo], "the round 30 h ago is in the week only");
+        Row(answer, "7d", Codex).RoundKeys.Should().Equal([KeyOne, KeyTwo, KeyThree]);
+        Row(answer, "7d", Codex).Rounds.Should().Be(new RoundsByStage(Plan: 1, Code: 3, Document: 0, Feature: 0), "the counts themselves are what they were");
+    }
+
+    /// <summary>A file from before step 21 has no <c>round_key</c>: the reader must not ask for it (a reader never migrates), and every round is keyless.</summary>
+    [Fact]
+    public void ADatabaseWithoutTheKeyColumn_CountsItsRounds_KnowsNoKeys_AndSaysSo()
+    {
+        var stopBefore = Array.FindIndex(Schema.Steps, step => step.Contains("ALTER TABLE rounds ADD COLUMN round_key", StringComparison.Ordinal));
+        stopBefore.Should().BeGreaterThan(0, "the step that adds the column is what this test stops before");
+        Directory.CreateDirectory(_dir);
+        using (var make = new SqliteConnection($"Data Source={Database};Pooling=False"))
+        {
+            make.Open();
+            using var sql = make.CreateCommand();
+            sql.CommandText = string.Join(";\n", Schema.Steps[..stopBefore]) + $"; PRAGMA user_version={stopBefore};"
+                + "INSERT INTO sessions (id, repo_path, branch, opened_utc) VALUES ('s', 'D:/repo', 'main', '2026-10-01T00:00:00.0000000Z');"
+                + $"INSERT INTO rounds (id, session_id, stage, number, status, verdict, started_utc, completed_utc) VALUES (1, 's', 'CodeReview', 1, 'done', 'proceed', '{Now.AddHours(-1):O}', '{Now:O}');"
+                + $"INSERT INTO rounds (id, session_id, stage, number, status, verdict, started_utc, completed_utc) VALUES (2, 's', 'CodeReview', 2, 'done', 'proceed', '{Now.AddHours(-2):O}', '{Now:O}');"
+                + "INSERT INTO reviewers (round_id, provider, role, status) VALUES (1, 'codex', 'Architecture', 'done');"
+                + "INSERT INTO reviewers (round_id, provider, role, status) VALUES (2, 'codex', 'Architecture', 'done');";
+            sql.ExecuteNonQuery();
+        }
+
+        var answer = RoundCounts.Read(_dir, Now);
+
+        Row(answer, "5h", Codex).Rounds.Code.Should().Be(2, "two rounds with the same (absent) key are still two rounds");
+        Row(answer, "5h", Codex).RoundKeys.Should().BeEmpty();
+        Row(answer, "5h", Codex).RoundsWithoutKey.Should().Be(2);
+        Version().Should().Be(stopBefore, "and the read did not migrate it on the way");
+    }
+
+    /// <summary>The snapshot is written by a ROUND, never by a reader: a plain read leaves none behind, in a store that has rounds or one that has none.</summary>
+    [Fact]
+    public void TheRead_LeavesNoSnapshotBehind()
+    {
+        Fixture();
+        // The first read of a WAL database makes SQLite's own -wal and -shm beside it, as it always has; what is asked is that a SECOND read adds nothing,
+        // and that the first made no snapshot.
+        RoundCounts.Read(_dir, Now);
+        SqliteConnection.ClearAllPools();
+        var before = Directory.EnumerateFileSystemEntries(_dir).Select(Path.GetFileName).Order(StringComparer.Ordinal).ToList();
+
+        RoundCounts.Read(_dir, Now);
+
+        File.Exists(Path.Combine(_dir, RoundCountsSnapshot.FileName)).Should().BeFalse();
+        Directory.EnumerateFileSystemEntries(_dir).Select(Path.GetFileName).Order(StringComparer.Ordinal).Should().Equal(before);
+    }
+
     private long Version()
     {
         using var db = new SqliteConnection($"Data Source={Database};Pooling=False;Mode=ReadOnly");

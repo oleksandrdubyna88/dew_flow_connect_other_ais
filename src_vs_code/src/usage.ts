@@ -471,6 +471,10 @@ export interface Estimate {
   readonly known: boolean;
   readonly floor: boolean;
   readonly estimated: boolean;
+  /** Present (true) when some of the estimate is a line from ANOTHER store priced at the published list rate (E6.S2) — said beside the figure. */
+  readonly listPrice?: boolean;
+  /** Present (true) when some line from ANOTHER store could not be priced at all — no list carries its model (E6.S2). */
+  readonly costUnknown?: boolean;
 }
 
 /** Nothing priced it: a dash, and — when added to something that is priced — a floor. */
@@ -490,6 +494,8 @@ export function totalCost(parts: readonly Estimate[]): Estimate {
     known: parts.some((part) => part.known),
     floor: parts.some((part) => part.floor),
     estimated: parts.some((part) => part.estimated),
+    ...(parts.some((part) => part.listPrice === true) ? { listPrice: true } : {}),
+    ...(parts.some((part) => part.costUnknown === true) ? { costUnknown: true } : {}),
   };
 }
 

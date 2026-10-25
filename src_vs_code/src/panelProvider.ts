@@ -80,7 +80,8 @@ import { WATCH_DEBOUNCE_MS, debounced, type Debounced } from './debounced';
 import { RoundsLogCache } from './roundsLogCache';
 import { finishedRounds, RoundCountsCache } from './roundCountsCache';
 import { PLAN_PRICES_SETTING, type PlanPriceRefusal, planPricesFrom, savePlanPrice } from './planPrice';
-import { otherStores, roundsLoader } from './roundCountsRead';
+import { roundsLoader } from './roundCountsRead';
+import { refreshCountsAndReach, refreshCountsThenReach, StoreReach } from './storeReach';
 import { PROBE_USAGE_FILE, probeUsagePath } from './probeUsageFile';
 import { ranOnOf, roundsBlock } from './roundsBlock';
 import { chatLedgerLines } from './roundMoney';
@@ -226,7 +227,6 @@ import {
 import { TeamServerState, slotSentence } from './teamServerView';
 import { access } from 'node:fs/promises';
 import { join, relative } from 'node:path';
-import { existsSync } from 'node:fs';
 import { asText } from './asText';
 import { notify, notifyAndAsk, notifyOnce } from './notify';
 import { chosenRoot, coaiDataDir, dataSideName, serverEnv, whereData, type DataLocation } from './dataDir';
@@ -387,6 +387,11 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    */
   private readonly roundCounts: RoundCountsCache;
 
+  /**
+   * Whether the other installations' stores are there (E6.S4) — a CACHED answer the render reads, refreshed off the loop by the
+   * panel's own `reachable` probe and raced against a deadline, so a share that is down never blocks a draw.
+   */
+  private readonly storeReach = new StoreReach(reachable);
 
   private codexModels: ModelChoice[] = [];
   /**
@@ -425,6 +430,12 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       this.onTeamUsageChanged();
     },
   });
+
+  /**
+   * Told when a background reach probe changed what the Rounds block names (a store found, lost, or not answering). The Review
+   * rounds page wires its repaint here; that repaint is a no-op once the page is closed, so a late probe cannot paint a disposed webview.
+   */
+  onStoreReachChanged: () => void = () => undefined;
 
   /** Told when a Team-server answer lands. The Review rounds page wires its repaint here. */
   onTeamUsageChanged: () => void = () => undefined;
@@ -581,7 +592,10 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   private roundCountsOf(dataDir: vscode.Uri): RoundCountsCache {
     return new RoundCountsCache(roundsLoader(
       () => serverPath(this.context.globalStorageUri)?.fsPath ?? '', join(dataDir.fsPath, 'usage.jsonl'), undefined,
-      [probeUsagePath(dataDir.fsPath)]));
+      [probeUsagePath(dataDir.fsPath)],
+      // The other installations this window was told about (E6): their snapshots go to the merged call and their ledger tails
+      // are read beside this side's — an append-only file, never their coai.db.
+      () => otherDirectories(dataDir.fsPath)));
   }
 
   /** The consultant and model checks' host: the caller kinds' checks, and each catalog row's (PLAN_one_model_catalog.md E3.3). */
@@ -675,7 +689,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
 
   /** Read the round counts if due — never per render, see `roundCountsCache.ts` — and repaint when a read landed. */
   private async refreshRoundCounts(): Promise<void> {
-    if (await this.roundCounts.refresh()) {
+    // The reach probe runs beside the counts, off the render: a dead share costs one bounded check and a repaint, never a stall.
+    if (await refreshCountsAndReach(this.roundCounts, this.storeReach, otherDirectories(this.dataDir.fsPath))) {
       void this.render();
     }
   }
@@ -683,23 +698,27 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   /**
    * The Rounds block for the Spending tab (story 2.3): the cached counts, the ledger's seven days, the chat ledger, every
    * model they name priced by `priceOfLine`, and the store — this side's, plus any other installation's store this window
-   * was told about, named by the existence of its file and never opened.
+   * was told about, named from the CACHED reach (`storeReach.ts`): a probe of the store file's existence run off the loop,
+   * never while drawing, so a share that is down reads *not answering* and cannot stall the host.
    */
   private async roundsBlockHtml(vendors: readonly Vendor[]): Promise<string> {
     const snapshot = this.roundCounts.current();
     const chat = chatLedgerLines(await this.chatLines(), vendorOfPreset(chatModelsAndPresets()));
     const prices = await this.modelPrices(vendors, [...(snapshot?.ledger ?? []), ...chat].map((line) => line.model));
-    const others = usableDirs(watchedDirs(this.dataDir.fsPath, alsoWatchDataDirectories(), process.platform)).slice(1);
+    const reach = this.storeReach.current(otherDirectories(this.dataDir.fsPath));
 
     return roundsBlock({
       snapshot,
       chat,
       rateOf: (provider, model) => priceOfLine(provider, model, vendors, (id) => prices[id]),
+      // A line from another store is never priced at this side's typed override: the list rate, with no vendor row (E6.S2).
+      listRateOf: (provider, model) => priceOfLine(provider, model, [], (id) => prices[id]),
       ranOn: ranOnOf(vendors),
       store: {
         side: sideLabel(vscode.env.remoteName, process.env['WSL_DISTRO_NAME']),
         directory: this.dataDir.fsPath,
-        others: otherStores(others, existsSync),
+        others: reach.filter((one) => one.reach === 'here').map((one) => one.directory),
+        notAnswering: reach.filter((one) => one.reach === 'not-answering').map((one) => one.directory),
       },
     });
   }
@@ -885,8 +904,11 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   async usageTab(): Promise<string> {
     const vendors = this.vendorsHere();
     const usage = this.remembered(await this.readUsage());
-    // The page's own tick: a read when due (at most once a minute, sooner after an ending), never per tick.
-    await this.roundCounts.refresh();
+    // The page's own tick: a read when due (at most once a minute, sooner after an ending), never per tick. The reach of the other
+    // stores is refreshed beside the counts — `refreshRoundCounts` runs only while Settings is open, and this page must not draw an
+    // empty cache — but NOT awaited: a store on a dead share would hold the page back for the probe's 2 s deadline. The page draws
+    // from the cache as it stands and `onStoreReachChanged` repaints it when the probe changes that cache.
+    await refreshCountsThenReach(this.roundCounts, this.storeReach, otherDirectories(this.dataDir.fsPath), () => { this.onStoreReachChanged(); });
     const rounds = await this.roundsBlockHtml(vendors);
 
     return usageTabHtml(
@@ -4863,6 +4885,11 @@ async function probeWatched(own: string): Promise<readonly WatchedDir[]> {
         ...dir,
         refusal: 'this window cannot read that folder — check the path, and that the machine or share holding it is up',
       })));
+}
+
+/** The other installations' data directories this window was told about, usable from this host — the window's own is left out. */
+function otherDirectories(own: string): readonly string[] {
+  return usableDirs(watchedDirs(own, alsoWatchDataDirectories(), process.platform)).slice(1);
 }
 
 /** Whether a path is there, without ever throwing and without blocking the host. */

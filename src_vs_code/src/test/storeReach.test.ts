@@ -1,0 +1,230 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { test } from 'node:test';
+
+import { refreshCountsAndReach, refreshCountsThenReach, STORE_REACH_DEADLINE_MS, StoreReach } from '../storeReach';
+import { roundsBlock } from '../roundsBlock';
+import { counted, snapshot } from './roundCountsFixtures';
+
+/**
+ * Whether the other installations' stores are THERE, asked off the render path (E6.S4, "the RENDER path" of the risk paragraph
+ * of todo/PLAN_the_round_counter_tail_E6.md): `panelProvider.ts` used to ask `existsSync` while drawing, and a synchronous
+ * probe against a share that is not answering (WSL stopped, a NAS unplugged) blocks the extension host for the SMB timeout —
+ * which the 8 s spawn cap cannot bound. The render now reads a CACHED answer; the probe runs in the background and loses a
+ * race against a deadline.
+ */
+
+const WSL = '\\\\wsl.localhost\\Ubuntu\\home\\me\\.local\\share\\coai-mcp';
+const NAS = 'D:\\coai-nas';
+
+/** A probe that never answers — a dead share — and counts how often it was asked. */
+function deadShare(): { asked: string[]; probe: (path: string) => Promise<boolean> } {
+  const asked: string[] = [];
+
+  return { asked, probe: (path) => { asked.push(path); return new Promise<boolean>(() => undefined); } };
+}
+
+test('ADeadShare_NeverBlocksTheRender — a probe that never returns reads the store as not answering, and the page draws', async () => {
+  const dead = deadShare();
+  const reach = new StoreReach(dead.probe, { deadlineMs: 20 });
+
+  // The render's part: a synchronous read of what is cached. It cannot wait on a probe — it is not async.
+  const before = reach.current([WSL]);
+  assert.deepEqual(before, [], 'a store nobody has probed yet was named before the probe answered');
+
+  const changed = await reach.refresh([WSL]);
+  const after = reach.current([WSL]);
+
+  assert.equal(changed, true, 'a probe that lost its race changed what the panel knows, so it must repaint');
+  assert.deepEqual(after, [{ directory: WSL, reach: 'not-answering' }]);
+  const html = roundsBlock({
+    snapshot: snapshot(counted()), chat: [], rateOf: () => undefined, ranOn: () => '',
+    store: { side: '', directory: 'C:\\coai', others: after.filter((one) => one.reach === 'here').map((one) => one.directory),
+      notAnswering: after.filter((one) => one.reach === 'not-answering').map((one) => one.directory) },
+  });
+  assert.match(html, /rounds-block/u, 'the page did not draw');
+});
+
+test('a dead share costs one bounded check — a refresh while its probe is pending starts no second one', async () => {
+  const dead = deadShare();
+  const reach = new StoreReach(dead.probe, { deadlineMs: 10, maxAgeMs: 0 });
+
+  await reach.refresh([WSL]);
+  await reach.refresh([WSL]);
+  await reach.refresh([WSL]);
+
+  assert.equal(dead.asked.length, 1, 'every refresh started another probe against a share that is not answering');
+});
+
+test('a probe that settles after its deadline is used by the next refresh — the share came back', async () => {
+  let settle: (here: boolean) => void = () => undefined;
+  let asked = 0;
+  const reach = new StoreReach(() => { asked += 1; return new Promise<boolean>((resolve) => { settle = resolve; }); }, { deadlineMs: 10, maxAgeMs: 0 });
+
+  await reach.refresh([WSL]);
+  assert.deepEqual(reach.current([WSL]), [{ directory: WSL, reach: 'not-answering' }]);
+  settle(true);
+  // The probe has SETTLED once its answer has been delivered; a refresh in the very same tick still sees it in flight.
+  await new Promise<void>((resolve) => { setTimeout(resolve, 5); });
+  await reach.refresh([WSL]);
+
+  assert.deepEqual(reach.current([WSL]), [{ directory: WSL, reach: 'here' }]);
+  assert.equal(asked, 1);
+});
+
+test('a second refresh while the first probe still hangs waits no second deadline and starts no second probe', async () => {
+  const dead = deadShare();
+  const deadlineMs = 300;
+  const reach = new StoreReach(dead.probe, { deadlineMs });
+
+  assert.equal(await reach.refresh([WSL]), true, 'the first refresh lost its race, which is a change');
+  const startedAt = Date.now();
+  const changed = await reach.refresh([WSL]);
+  const waitedMs = Date.now() - startedAt;
+
+  assert.equal(changed, false, 'the same unanswered probe reported another change');
+  assert.ok(waitedMs < deadlineMs / 2, `the second refresh waited ${waitedMs} ms for the SAME probe: every refresh costs a whole deadline against a dead share`);
+  assert.equal(dead.asked.length, 1, 'a second probe was started while the first was still in flight');
+  assert.deepEqual(reach.current([WSL]), [{ directory: WSL, reach: 'not-answering' }]);
+});
+
+test('a probe that answers after its deadline is in the cache after the next refresh, not a cache age later', async () => {
+  let settle: (here: boolean) => void = () => undefined;
+  let asked = 0;
+  // The default 60 s age: only consuming the settled probe can put the answer in the cache before it expires.
+  const reach = new StoreReach(() => { asked += 1; return new Promise<boolean>((resolve) => { settle = resolve; }); }, { deadlineMs: 10 });
+
+  await reach.refresh([WSL]);
+  assert.deepEqual(reach.current([WSL]), [{ directory: WSL, reach: 'not-answering' }]);
+  settle(true);
+  await new Promise<void>((resolve) => { setTimeout(resolve, 5); });
+  const changed = await reach.refresh([WSL]);
+
+  assert.deepEqual(reach.current([WSL]), [{ directory: WSL, reach: 'here' }], 'the late answer waited for the cache to expire');
+  assert.equal(changed, true, 'the late answer changed the cache, so the panel must repaint');
+  assert.equal(asked, 1, 'the late answer was thrown away and asked again');
+});
+
+test('the store file is what is probed — coai.db, never read; absent and present are told apart', async () => {
+  const asked: string[] = [];
+  const reach = new StoreReach(async (path) => { asked.push(path); return path.includes('wsl.localhost'); }, { deadlineMs: 1_000 });
+
+  await reach.refresh([NAS, WSL]);
+
+  assert.deepEqual(asked.map((one) => one.endsWith('coai.db')), [true, true], 'something other than the store file\'s existence was asked');
+  assert.deepEqual(reach.current([NAS, WSL]), [{ directory: NAS, reach: 'absent' }, { directory: WSL, reach: 'here' }]);
+});
+
+test('an answer is held for its age — a second refresh inside it asks nothing, and a directory the window dropped is forgotten', async () => {
+  let now = 1_000;
+  let asked = 0;
+  const reach = new StoreReach(async () => { asked += 1; return true; }, { deadlineMs: 100, maxAgeMs: 60_000, clock: () => now });
+
+  await reach.refresh([WSL]);
+  now += 30_000;
+  assert.equal(await reach.refresh([WSL]), false);
+  assert.equal(asked, 1);
+  now += 31_000;
+  await reach.refresh([WSL]);
+  assert.equal(asked, 2, 'a stale answer was kept for ever');
+  assert.deepEqual(reach.current([]), [], 'a directory the setting no longer lists was still named');
+});
+
+test('refreshCountsAndReach refreshes the counts AND the reach, and says to repaint when either changed', async () => {
+  const asked: string[] = [];
+  const reach = new StoreReach(async (path) => { asked.push(path); return true; });
+  const counts = (changed: boolean): { refresh(): Promise<boolean>; asked: number } => {
+    const one = { asked: 0, refresh: async () => { one.asked += 1; return changed; } };
+
+    return one;
+  };
+  const still = counts(false);
+
+  assert.equal(await refreshCountsAndReach(still, reach, [WSL]), true, 'a store found for the first time changed what the page knows');
+  assert.deepEqual(reach.current([WSL]), [{ directory: WSL, reach: 'here' }], 'the reach cache stayed empty');
+  assert.equal(still.asked, 1);
+  assert.equal(await refreshCountsAndReach(still, reach, [WSL]), false, 'nothing changed, so there is nothing to repaint');
+  assert.equal(await refreshCountsAndReach(counts(true), reach, [WSL]), true, 'a read that landed changed what the page knows');
+  assert.equal(asked.length, 1, 'a held answer was probed again');
+});
+
+test('OpeningTheRoundsPage_WithAProbeThatNeverAnswers_DrawsBeforeTheProbeSettles — the page waits for the counts, a later reach result repaints once', async () => {
+  let settle: (here: boolean) => void = () => undefined;
+  let asked = 0;
+  // A deadline far beyond the test: only the page's own behaviour, not the race's timeout, may end the wait.
+  const reach = new StoreReach(() => { asked += 1; return new Promise<boolean>((resolve) => { settle = resolve; }); }, { deadlineMs: 60_000 });
+  const counts = { refresh: async () => true };
+  let repaints = 0;
+  let repainted: () => void = () => undefined;
+  const repaintedOnce = new Promise<void>((resolve) => { repainted = resolve; });
+  const repaint = (): void => { repaints += 1; repainted(); };
+
+  const never = Symbol('the page was still waiting on the reach probe');
+  const outcome = await Promise.race([
+    refreshCountsThenReach(counts, reach, [WSL], repaint),
+    new Promise<symbol>((resolve) => { setTimeout(() => resolve(never), 50); }),
+  ]);
+
+  assert.notEqual(outcome, never, 'the page waited for a reach probe that never answers: opening it on a dead share stalls for the probe\'s deadline');
+  assert.equal(outcome, true, 'the counts changed, so the page must draw');
+  assert.equal(asked, 1, 'the reach refresh must still START when the page opens');
+  assert.deepEqual(reach.current([WSL]), [], 'the page draws from the cache as it stands, with the store not yet known');
+  assert.equal(repaints, 0, 'a repaint before the probe answered');
+
+  settle(true);
+  await repaintedOnce;
+
+  assert.deepEqual(reach.current([WSL]), [{ directory: WSL, reach: 'here' }]);
+  assert.equal(repaints, 1, 'a reach result that changed the cache must repaint the page exactly once');
+});
+
+test('a reach refresh that changed nothing repaints nothing — the page does not loop on its own probe', async () => {
+  const reach = new StoreReach(async () => true);
+  let repaints = 0;
+  const repaint = (): void => { repaints += 1; };
+
+  await refreshCountsThenReach({ refresh: async () => false }, reach, [WSL], repaint);
+  await new Promise<void>((resolve) => { setTimeout(resolve, 20); });
+  assert.equal(repaints, 1, 'the first answer for a store is a change');
+  await refreshCountsThenReach({ refresh: async () => false }, reach, [WSL], repaint);
+  await new Promise<void>((resolve) => { setTimeout(resolve, 20); });
+
+  assert.equal(repaints, 1, 'a held, unchanged answer repainted the page again');
+});
+
+test('the Rounds page never awaits the reach probe — it awaits the counts and hands the reach a repaint (wiring)', () => {
+  const text = readFileSync(join(__dirname, '..', '..', 'src', 'panelProvider.ts'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//gu, ' ')
+    .replace(/(^|[^:])\/\/.*$/gmu, '$1');
+  const page = /async usageTab\(\)[\s\S]*?\r?\n {2}\}\r?\n/u.exec(text)?.[0] ?? '';
+
+  assert.ok(page.length > 0, 'usageTab was renamed, and this guard is asserting nothing');
+  assert.doesNotMatch(page, /await\s+(refreshCountsAndReach|this\.storeReach\.refresh)\(/u, 'usageTab awaits the reach probe: a store on a dead share holds the Rounds page back for the probe deadline');
+  assert.match(page, /refreshCountsThenReach\(/u, 'usageTab does not use the counts-then-background-reach refresh');
+});
+
+test('OpeningTheRoundsPage_WithSettingsNeverOpened_RefreshesTheReach — the page\'s own tick asks the stores, not only the counts (wiring)', () => {
+  // The Rounds page is `usageTab()`. The reach cache used to be refreshed only beside the counts in `refreshRoundCounts`, which a render
+  // starts only while the Settings page is open — so with Settings never opened the page read an EMPTY cache: another installation's store
+  // and a store that is not answering were both missing from the sentence that names the stores.
+  const text = readFileSync(join(__dirname, '..', '..', 'src', 'panelProvider.ts'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//gu, ' ')
+    .replace(/(^|[^:])\/\/.*$/gmu, '$1');
+  const page = /async usageTab\(\)[\s\S]*?\r?\n {2}\}\r?\n/u.exec(text)?.[0] ?? '';
+
+  assert.ok(page.length > 0, 'usageTab was renamed, and this guard is asserting nothing');
+  assert.match(page, /\b(refreshCountsThenReach|refreshCountsAndReach|storeReach\.refresh)\(/u, 'the Rounds page refreshes the counts but never the reach of the other stores: with Settings closed it draws an empty cache');
+});
+
+test('the panel no longer probes existence while it draws — the Rounds block reads the cached reach (wiring)', () => {
+  const text = readFileSync(join(__dirname, '..', '..', 'src', 'panelProvider.ts'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//gu, ' ')
+    .replace(/(^|[^:])\/\/.*$/gmu, '$1');
+  const draw = /private async roundsBlockHtml[\s\S]*?\r?\n {2}\}\r?\n/u.exec(text)?.[0] ?? '';
+
+  assert.ok(draw.length > 0, 'roundsBlockHtml was renamed, and this guard is asserting nothing');
+  assert.doesNotMatch(draw, /existsSync|statSync|accessSync/u, 'the render probes the other side\'s store synchronously: a dead share blocks the host');
+  assert.match(draw, /this\.storeReach\.current\(/u, 'the render does not read the cached reach');
+  assert.ok(STORE_REACH_DEADLINE_MS > 0 && STORE_REACH_DEADLINE_MS < 8_000, 'the probe\'s race must end well inside the 8 s spawn cap');
+});

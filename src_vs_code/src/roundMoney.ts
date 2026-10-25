@@ -39,7 +39,12 @@ import { costText, Estimate, LineRate, lineCost, shortNumber, totalCost, uncaptu
 
 /** One ledger line as this module reads it — a parsed `usage.jsonl` line, or a chat turn read into the same shape. */
 export type LedgerLine = Pick<UsageEntry, 'utc' | 'provider' | 'model' | 'tokensIn' | 'tokensOut' | 'costUsd' | 'outcome'
-  | 'usageNote' | 'tokensCached' | 'tokensReasoning' | 'kind' | 'attempt' | 'cli' | 'consultation'> & Partial<Pick<UsageEntry, 'role'>>;
+  | 'usageNote' | 'tokensCached' | 'tokensReasoning' | 'kind' | 'attempt' | 'cli' | 'consultation'> & Partial<Pick<UsageEntry, 'role' | 'round'>> & {
+    /** In memory only (E6.S2): the store the line was read from — a location, named by the merged answer's id. */
+    readonly store?: string;
+    /** True for a line read from ANOTHER store: with no reported cost it is priced at the published list rate, never at this side's override. */
+    readonly foreign?: boolean;
+  };
 
 /**
  * The attempts coai-mcp writes for ONE local launch (`LaunchAttempts`, `src_mcp/runners/Reviewers/LaunchParts.cs:22–37`): the
@@ -169,6 +174,9 @@ export interface PerUnit {
 /** The unit of a figure that could not be divided by what the kind counts: one ledger line. */
 export const PER_RECORDED_TURN = 'recorded turn';
 
+/** What the launches-per-round figure is called, beside {@link PER_LAUNCH} (E6.S3). */
+export const LAUNCHES_PER_ROUND = 'launches per round';
+
 /** The unit of a figure whose every line is one launch ({@link isLaunchLine}) — a review line written since coai-mcp 0.48.0. */
 export const PER_LAUNCH = 'launch';
 
@@ -217,14 +225,33 @@ const UNIT_OF: Readonly<Record<string, string>> = {
 };
 
 /** The lines inside the window, grouped per vendor row × model × kind, rows and models in name order. */
-export function moneyGroups(lines: readonly LedgerLine[], window: TimeWindow, rateOf: RateOf): MoneyGroup[] {
+export function moneyGroups(lines: readonly LedgerLine[], window: TimeWindow, rateOf: RateOf, listRateOf?: RateOf): MoneyGroup[] {
   const groups = new Map<string, LedgerLine[]>();
   for (const one of lines.filter((candidate) => inside(candidate, window))) {
     const key = groupKey(one);
     groups.set(key, [...(groups.get(key) ?? []), one]);
   }
 
-  return [...groups.values()].map((members) => group(members, rateOf)).sort(byRowModelKind);
+  return [...groups.values()].map((members) => group(members, rateOf, listRateOf)).sort(byRowModelKind);
+}
+
+/**
+ * One line's money. A line from ANOTHER store with no reported cost is estimated at the published LIST rate — the typed
+ * override on this side's vendor row is a fact about this side's account, not about that store's — and marked as such; a model
+ * no list carries is *cost unknown*. A local line, and a foreign one when no list lookup was handed in, is priced as ever.
+ */
+function lineMoney(line: LedgerLine, rateOf: RateOf, listRateOf: RateOf | undefined): Estimate {
+  if (line.foreign !== true || listRateOf === undefined) {
+    return lineCost(line, rateOf(line.provider, line.model));
+  }
+  const money = lineCost(line, listRateOf(line.provider, line.model));
+
+  return money.estimated ? { ...money, listPrice: true } : unpricedForeign(line, money);
+}
+
+/** A reported cost is a fact in any store; only a line nothing priced — and that consumed something — is *cost unknown*. */
+function unpricedForeign(line: LedgerLine, money: Estimate): Estimate {
+  return !money.known && money.floor && typeof line.costUsd !== 'number' ? { ...money, costUnknown: true } : money;
 }
 
 /** Whether a line falls inside the window — the one test the groups and the Models card line both use. */
@@ -242,7 +269,7 @@ function groupKey(line: LedgerLine): string {
   return JSON.stringify([line.provider, line.model, kindOf(line)]);
 }
 
-function group(members: readonly LedgerLine[], rateOf: RateOf): MoneyGroup {
+function group(members: readonly LedgerLine[], rateOf: RateOf, listRateOf: RateOf | undefined): MoneyGroup {
   const [first] = members as readonly [LedgerLine, ...LedgerLine[]];
   const captured = members.filter((one) => !uncaptured(one));
 
@@ -255,7 +282,7 @@ function group(members: readonly LedgerLine[], rateOf: RateOf): MoneyGroup {
     tokens: tokenTotals(members),
     medianIn: median(captured.map((one) => one.tokensIn)),
     medianOut: median(captured.map((one) => one.tokensOut)),
-    money: totalCost(members.map((one) => lineCost(one, rateOf(one.provider, one.model)))),
+    money: totalCost(members.map((one) => lineMoney(one, rateOf, listRateOf))),
     linesAreLaunches: members.length > 0 && members.every(isLaunchLine),
     consultations: kindOf(first) === 'consult' ? consultationsOf(members) : NO_CONSULTATIONS,
   };
