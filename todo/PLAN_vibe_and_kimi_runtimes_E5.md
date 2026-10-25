@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 not started.** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 implemented 2026-10-25 (deviations 50–56, not yet reviewed; live checks J2 and M-K17 not run).** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -1085,6 +1085,32 @@ Numbered from 40, apart from the lists above, so the stories built in parallel d
 45. **Decision (e)'s sentence lives in *The consultant* article** (*What can go wrong*, five languages), because it is about a `consult` turn;
     the question-consultant article says only that a Kimi row's launches wait for one another and for a Kimi review on the same sign-in.
 46. **`CONSULTANT_SINCE` gates a note, so `consultantsWire.ts` is unchanged.** S5.7.3 was green before any code, as the row said.
+
+### E5.5–E5.6 as built (Sonnet coder, 2026-10-25)
+
+Numbered from 50, apart from the lists above. Not yet reviewed; the live checks (J2) and M-K17 are not run.
+
+50. **Most reds the tables predicted were gone before this story began, because E5.3 and E5.4 had landed.** S5.5.1–S5.5.4 and S5.6.7 were
+    GREEN on their first run (no red was ever seen for them): the check and the question row are generic, and `KimiConsultant`, the one-shot
+    disposal and the registration were already in. Their assertions are not vacuous — each arm asserts the played shim launched exactly once, and
+    S5.5.1 asserts `state: answered` with the marker read from the copy — but a deleted disposal was not tried against them here.
+51. **S5.6.1–S5.6.6 were watched red by stashing the table.** With the seed rows, the `Runtimes` list and the generated file stashed, the reds
+    were: S5.6.1 and S5.6.4 as the table says (`not to be <null>`; `Admitted` vs `Refused`); S5.6.3, S5.6.5 and S5.6.6 failed EARLIER than the
+    table says: `ConfinementPlanner.Plan` returned `Refused` (the matrix asks first), so `BeOfType<Confinement.Planned>` failed, never the
+    `Cwd` assertion the table predicts for the default arm. S5.6.6 therefore watched red only through that precondition: with the arm in place
+    but without `MustCarryNoFlags`, it was not run red. S5.6.2 (the vectors) cannot be red this way: the existing coverage test was green with
+    the table stashed, because it walks the table's own rows. S5.6.8 (TS) was not watched red.
+52. **`EveryRow_CitesTheRecord_AndACellOrSaysWhyThereIsNone` pins a list of records** (`CapabilityMatrixTests.cs`): it went red on the new rows
+    ("a row cites exactly one record"), and its list gained `RESULTS_kimi_confinement.md`, `2026-10-13`, cell prefix `M-K`.
+53. **The Kimi rows cite the cells by the ids the plan names** (`M-K6`, `M-K3`, `M-K4`; disk adds `M-K9` and `M-K9 (e)`), version `2.1.1`, date
+    `2026-10-13`; `none` is `unconfined` as decision 2 says. The `web` row says no Kimi cell exercises the web.
+54. **The TS runtimes list in `capabilityAdmission.test.ts` gained `kimi`** (the `deepStrictEqual` on `RUNTIMES`); the refusal-message test
+    (`claude, codex, antigravity, local, api, vibe`) still matches as a prefix of the new list and was left alone.
+55. **`MustCarryNoFlags` is its own private method of `KimiConsultant`**, called right after `MustBeLaunchable`, so a plan with `Flags` or
+    `Leading` is refused before anything is built. The new tests are `KimiQuestionLaunchTests` (S5.6.5, S5.6.6), `AKimiQuestionRowTests`
+    (S5.6.7), `AKimiConsultantCheckTests` (S5.5.1–S5.5.4); S5.5.2 is a Theory over (answered, failed turn).
+56. **The S5.5.3 cancelled check may end by raising or by recording**: the test catches `OperationCanceledException` and asserts the cleanup
+    either way; it does not assert which.
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 
