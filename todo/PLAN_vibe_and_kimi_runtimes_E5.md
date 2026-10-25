@@ -1091,15 +1091,18 @@ Numbered from 40, apart from the lists above, so the stories built in parallel d
 Numbered from 50, apart from the lists above. Not yet reviewed; the live checks (J2) and M-K17 are not run.
 
 50. **Most reds the tables predicted were gone before this story began, because E5.3 and E5.4 had landed.** S5.5.1–S5.5.4 and S5.6.7 were
-    GREEN on their first run (no red was ever seen for them): the check and the question row are generic, and `KimiConsultant`, the one-shot
-    disposal and the registration were already in. Their assertions are not vacuous — each arm asserts the played shim launched exactly once, and
-    S5.5.1 asserts `state: answered` with the marker read from the copy — but a deleted disposal was not tried against them here.
+    GREEN on their first run (no natural red): the check and the question row are generic, and `KimiConsultant`, the one-shot disposal and
+    the registration were already in. To show they are not vacuous, the disposal was broken by hand and the tests rerun (then restored, tree
+    clean): with `OneShotHome.Emptied` returning true and `QuestionRowLaunch.KimiHomesDisposed` doing nothing, S5.5.2 (both arms), S5.5.3 and
+    S5.6.7 (`answered`, `cancelled`) went red with "Expected … unlinked to be empty … found …/credentials"; with
+    `ConsultCheckScratch.KimiHomesDisposed` doing nothing, S5.5.4 went red with the same sentence. S5.5.1 and the `refused` arm of S5.6.7 have
+    no disposal assertion that can fail this way (S5.5.1 asserts the copy, the home's shape and that the scratch is gone).
 51. **S5.6.1–S5.6.6 were watched red by stashing the table.** With the seed rows, the `Runtimes` list and the generated file stashed, the reds
-    were: S5.6.1 and S5.6.4 as the table says (`not to be <null>`; `Admitted` vs `Refused`); S5.6.3, S5.6.5 and S5.6.6 failed EARLIER than the
+    were: S5.6.1 and S5.6.4 as the table says (`not to be <null>`; `Admitted` vs `Refused`); S5.6.3 and S5.6.5 failed EARLIER than the
     table says: `ConfinementPlanner.Plan` returned `Refused` (the matrix asks first), so `BeOfType<Confinement.Planned>` failed, never the
-    `Cwd` assertion the table predicts for the default arm. S5.6.6 therefore watched red only through that precondition: with the arm in place
-    but without `MustCarryNoFlags`, it was not run red. S5.6.2 (the vectors) cannot be red this way: the existing coverage test was green with
-    the table stashed, because it walks the table's own rows. S5.6.8 (TS) was not watched red.
+    `Cwd` assertion the table predicts for the default arm. S5.6.6 was then watched red as the table says (`Expected a <System.ArgumentException>
+    to be thrown, but no exception was thrown.`) with the `MustCarryNoFlags` call removed. S5.6.2 (the vectors) cannot be red this way: the
+    existing coverage test walks the table's own rows and was green with the table stashed. S5.6.8 (TS) was not watched red.
 52. **`EveryRow_CitesTheRecord_AndACellOrSaysWhyThereIsNone` pins a list of records** (`CapabilityMatrixTests.cs`): it went red on the new rows
     ("a row cites exactly one record"), and its list gained `RESULTS_kimi_confinement.md`, `2026-10-13`, cell prefix `M-K`.
 53. **The Kimi rows cite the cells by the ids the plan names** (`M-K6`, `M-K3`, `M-K4`; disk adds `M-K9` and `M-K9 (e)`), version `2.1.1`, date
