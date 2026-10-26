@@ -210,10 +210,12 @@ public static class ConfinementPlanner
     private static Confinement.Planned Kimi(CapabilityGrant grant, AdmissionFlag flag)
     {
         // QWEN-FILL-BEGIN s56-planner-kimi prod
-        // Disk: `new("kimi", grant, [], [], CwdKind.Snapshot, [], flag) { SnapshotSources = grant.Roots }`.
-        // Anything else (None; `web` never reaches here, the matrix refuses it): `new("kimi", grant, [], [], CwdKind.Scratch, [], flag)`.
-        // Use a switch on grant.Capability as Vibe(...) does. No flags, no leading flags, no AddDirs.
-        throw new NotImplementedException("s56-planner-kimi");
+        return grant.Capability switch
+        {
+            Capability.Disk => new("kimi", grant, [], [], CwdKind.Snapshot, [], flag) { SnapshotSources = grant.Roots },
+            // `web` never reaches here: the matrix refuses it (no Kimi cell exercises the web).
+            _ => new("kimi", grant, [], [], CwdKind.Scratch, [], flag),
+        };
         // QWEN-FILL-END s56-planner-kimi
     }
 

@@ -64,10 +64,10 @@ public sealed class KimiConsultant(KimiRuntime inner, string vendor = "kimi") : 
     private static void MustCarryNoFlag(Confinement.Planned plan)
     {
         // QWEN-FILL-BEGIN s56-kimi-noflags prod
-        // `Build` calls this only for a planned launch (a conversation's launch never gets here). When `plan.Leading`, `plan.Flags` or `plan.AddDirs` is non-empty:
-        // throw new ArgumentException("a Kimi row's confinement is the shim's; a plan with flags is not one coai made for kimi", nameof(plan)).
-        // A flag-free plan: return without effect. (`Confinement.Planned` is in CoaiMcp.Core.QuestionConsult, already imported.)
-        throw new NotImplementedException("s56-kimi-noflags");
+        if (plan.Leading.Count > 0 || plan.Flags.Count > 0 || plan.AddDirs.Count > 0)
+        {
+            throw new ArgumentException("a Kimi row's confinement is the shim's; a plan with flags is not one coai made for kimi", nameof(plan));
+        }
         // QWEN-FILL-END s56-kimi-noflags
     }
 
