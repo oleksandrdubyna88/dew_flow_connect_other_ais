@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 not started.** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.7 implemented (E5.5–E5.6 on 2026-10-26); not yet promoted — the live runs (J2, RESULTS §31) are owed.** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -9,6 +9,7 @@
 > **E5.7 implemented 2026-10-16 (Opus)**, built on its own branch beside E5.4 and merged into this one: the consultant-runtime gate
 > (`CONSULTANT_SINCE`, a note, never a withheld entry), the guard over both tables, the homes folder naming both CLIs, and the help in
 > five languages; deviations 40–46, *E5.7 as built*. With E5.4's seed (`features.consultant` gains `kimi`) merged, S5.7.5 is green.
+> **E5.5–E5.6 implemented 2026-10-26**: the consultant check proved for Kimi (no new branch, E5.5 decision 1), and the question consultant's Kimi row — three capability rows, the planner arm, the one-shot row; deviations 31–39, *E5.5–E5.6 as built*.
 >
 > Parent plan: [PLAN_vibe_and_kimi_runtimes.md](PLAN_vibe_and_kimi_runtimes.md), §4 **S5** (decisions D1, D6, D15, D19, D20).
 > Built on S4, which is merged and released as coai-mcp 0.57.0: [PLAN_vibe_and_kimi_runtimes_E4.md](PLAN_vibe_and_kimi_runtimes_E4.md)
@@ -1011,6 +1012,66 @@ homes live, in all five languages.
     list) changed here, at the coordinator's word; `consultant.test.ts`'s `CONSULTING` list and `kimiRuntime.test.ts` ("neither a consultant") are E5.7's, and
     stay red on this branch until E5.7 merges.
 30. **`KimiReport.SessionId` is a trailing, defaulted field** (one construction site, `From`), so nothing else changed shape (decision 3).
+
+### E5.5–E5.6 as built (Opus, 2026-10-26)
+
+Numbered from 31, after E5.4's list and before E5.7's 40.
+
+31. **The task split (judge's decision, 2026-10-26): five tasks, not the two stories.** t1 the capability rows, the vectors and the generated
+    table (commit `64e8bf48`); t3 the consultant check's tests (`44bea5fe`, E5.5); t2 the planner arm and `KimiConsultant`'s refusal of a planned
+    launch with flags (`26f08710`); t4 the question row's test (`53d1bff1`, and its review fix `fb24643c`); t5 these documents. Each task had its
+    own file set, so the tasks could run in parallel. The coder notes are in `notes/T4-t1-code.md` … `T4-t4-code.md`.
+32. **E5.5 needed no production change (decision 1).** t3 changed one file, `src_mcp/tests/AKimiConsultantCheckTests.cs`; no file under `src_mcp/src`
+    or `src_mcp/runners` changed in it, and `PlayedKimi.cs` was not widened. The only runner change in this epic is `KimiConsultant.cs:50` and
+    `:63-70` (`MustCarryNoPlannedFlag`, E5.6 decision 3, t2).
+33. **The rows green on arrival, and their teeth.** S5.5.1–S5.5.4 passed when written (E5.3 g and E5.4 were in). Each was given teeth by a temporary
+    break, reverted after the red. S5.5.1, break `ConsultantCheck.PlaceAsync`'s `NeedsASanitisedSnapshot` → `false`: the check ends `failed`
+    ("…a Kimi consultant stands in the conversation's sanitised snapshot (Workdir), and none was made — the checkout is never its working folder (D6)");
+    the `--cwd` assertion is never reached (see item 36). S5.5.2 (both arms) and S5.5.3, break `VibeHomes.cs:223` (the `DisposeAllUnder` call guarded
+    off): *Expected _unlinkedByTheDeleter to be empty because KimiHome unlinked the junction first, so the deleter never met it, but found at least one
+    item {…/coai-vh/<8>/kh-dd693ddaf6/home/credentials}.* (S5.5.3 says "…junction-first on a cancel too"). S5.5.2 and S5.5.3, break `ConsultantCheck.cs:232`
+    (`held.Home.Dispose()` removed): *Expected Directory.Exists(Path.GetDirectoryName(home)) to be False because coai-vh/<8> goes when the check ends,
+    but found True.* S5.5.4, break `ConsultCheckScratch.cs:131` (only `root` iterated): *Expected _unlinkedByTheDeleter to be empty because
+    ConsultCheckScratch.Delete disposed <root>/own junction-first (E5.3 g, R6), but found at least one item {…/own/kh-dd693ddaf6/home/credentials}.*
+    The "before E5.3 g" reds that the table names were not produced, because E5.3 g was already in.
+    S5.6.7's Answered and Cancelled arms also passed on arrival (the planner arm and E5.3 g were in). Teeth: planner arm `"kimi" => Kimi(...)` removed,
+    *Expected copies to contain a single item because one copy per granted root, but the collection is empty.* (Cancelled: the same without the reason);
+    `VibeHomes.EmptiedUnderItsLock` with the `KimiHome.DisposeAllUnder` block removed, *Expected recorded to be empty because the junction was unlinked by
+    KimiHome first, never met by the bare deleter (E5.3 decision g), but found at least one item {…/home/credentials}.* (all three arms red under this break).
+34. **S5.6.5 was NOT green on arrival.** The table says it was, because `KimiConsultant.Build` took the plan's cwd at `b4e2ea96`. At t2's start, the
+    `disk` arm failed: *Expected disk.Request.WorkingDirectory to be the same string … they differ at index 10*, actual `/tmp/coai-scratch-…`, expected
+    `/tmp/coai-question-…` (the row's tree). The cause was the planner's default arm (`ConfinementPlanner.cs:158` at `b4e2ea96`), which planned `Scratch` for `disk`,
+    not `Build`. The `none` arm passed then. t2's planner arm (`ConfinementPlanner.cs:157`, `:211-216`) made it green.
+35. **S5.6.7's Refused arm: its premise did not hold, and its seam is a private decorator.** The contract expects a re-login before the row to make
+    `KimiLaunch` refuse ("config.toml is not what coai writes"). It does not: a fresh one-shot home is written by `KimiHome.Made` from the person's
+    CURRENT sign-in just before the check, so the arm answered (`answered`, not `failed`; the coder's note records that only, the verbatim message is
+    not recorded). The fix (`fb24643c`, the t4 review) removed the re-login and added a private `TamperedAtVersion(IProcessLauncher inner)` decorator in
+    `AKimiQuestionRowTests.cs`, which rewrites the home's `config.toml` while `kimi --version` runs, after the home is made and before
+    `KimiLaunch.VerdictAsync`. `Service` now takes `IProcessLauncher` (only the Refused arm wraps it). `PlayedKimi.cs` and the production code were not
+    changed. The refusal is then the real one, and the junction exists at that point, so the junction-first cleanup is exercised in this arm too.
+    (The contract's "no seam" was the reason; a seam was needed, and this one is in the test file.)
+36. **The consultant check's first break gave another red, and the contract's Directory.Exists red for S5.6.7 was not produced.** With
+    `NeedsASanitisedSnapshot` forced false, the check refuses before any launch, so the expected `--cwd` assertion is unreachable; S5.5.3 then waited
+    60 s for a shim that never started. The S5.6.7 red *Expected Directory.Exists("…\coai-vh\<8>") to be False, but found True.* was not produced;
+    the reds recorded for that row are the two recorder reds in item 33.
+37. **Where the tests run.** This epic's host was Linux (WSL2). `AKimiConsultantCheckTests` (5 cases) and `AKimiQuestionRowTests` (3 cases) run on
+    every OS: both stand Windows in through `KimiSeams.Using(HostKind.Windows, …)` (E5.4 deviation 23), with no `Assert.SkipUnless`. Here: 5 of 5 and 3 of 3
+    passed. `CapabilityMatrixTests`, `ConfinementPlannerTests`, the `ConfinementPlannerTests` and `CapabilityMatrixTests` facts and the TS test run on every OS (no skip). **No
+    Windows run was done for this epic**, so the Windows-only rows of the older suites (e.g. `AVibeQuestionRowReadsACopyOfItsRootsTests`, 12 skipped
+    here) were not run in the Windows configuration.
+38. **The failures that were there at `b4e2ea96`, or seen during this epic, and not this epic's.** On Linux, two named failures:
+    `KimiRuntimeTests.ALaunchThatNamesItsHome_GoesThroughTheLaunchControl_WhichReadsThePersonsSignIn` and
+    `KimiHomeTests.AHomeWhoseDataPathPasses260_IsCheckedAndDisposed`. The extension test `the baseline names no release that was never tagged` fails in a
+    clone with no git tags. Three more were seen in full-suite runs and NOT verified at `b4e2ea96`: `TheRoundsNumstatsAreCountedTests.AnUnknownCommit_IsGitFailed_NeverAThrow`
+    (a 1 ms git deadline; it failed in one full run and once alone, then passed 10 of 10 alone); `QuestionRowLookupScenarioTests` (cross-test
+    interference in one full run, which passed alone); `AVibeReviewerRunsThroughAFakeVibeTests` (one full run, passed alone). `dotnet format --verify-no-changes`
+    reports IL2026/IL3050 analyzer errors in `src_server`, `src_bugs` and other untouched projects; the change's own files are clean.
+39. **Other differences from the decisions and the table.** (a) The build was by Haiku-model coders (the commit trailers), not Opus, as the story
+    header says; the header here keeps the contract's wording. (b) `web` never reaches `ConfinementPlanner.Kimi`: the matrix refuses it, and the
+    planner's `web` refusal is the matrix-refusal `InlineData` in `ConfinementPlannerTests`, not a planner branch. (c) The seed's `none` and `disk`
+    notes and cells are as the table says (`M-K6`, `M-K3`, `M-K4`; plus `M-K9`, `M-K9 (e)` for disk). (d) The S5.6.1–S5.6.6 reds are the coders' own
+    messages (item 33 and the notes); S5.6.2 names only the first missing pair (`kimi × none`), not all three. (e) The `KimiConsultant` refusal and the
+    planner's "not been measured" sentence are as Contracts 1–2 of t2 give them.
 
 ### E5.1–E5.2 as built (Opus, 2026-10-16)
 
