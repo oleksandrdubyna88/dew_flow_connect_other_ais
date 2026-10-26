@@ -780,7 +780,7 @@ consultant or the confined reviewer ships was moved (A12: a tails-plan item of i
 
 ```mermaid
 flowchart LR
-  seed["shared/runtime-capabilities.json<br/>18 rows (6 runtimes × 3), each citing its probe cells"] --> RC[RuntimeCapabilities.Builtin<br/>refused whole if a pair is undecided]
+  seed["shared/runtime-capabilities.json<br/>21 rows (7 runtimes × 3), each citing its probe cells"] --> RC[RuntimeCapabilities.Builtin<br/>refused whole if a pair is undecided]
   RC --> CM["CapabilityMatrix.Admit(runtime, capability)<br/>confined → admit · unconfined / default-deny → admit FLAGGED · unsupported / unmeasured → refuse"]
   CM --> CP["ConfinementPlanner.Plan(runtime, grant)<br/>Leading · Flags · CwdKind · AddDirs · Flag"]
   CP -->|Planned| AD[adapters compose, add nothing]
@@ -825,6 +825,11 @@ flowchart LR
   read cell itself — and `web` `unmeasured` (no Vibe cell exercises the web), so the matrix refuses it. Those rows
   cite the Vibe record and its `M-V…` cells, dated 2026-10-12, and `CapabilityMatrixTests` holds each row to the
   record it cites (`Records`), not to one record for all. **An unmeasured pair's refusal names the record its own row cites** (before the S3 gate): `CapabilityMatrix.RecordOf` reads the `research/RESULTS_….md` its `resultRef` names (the first run's record when it names none), and `capabilityAdmission.ts`'s `recordOf` is its twin — so `vibe × web` sends a person to research/RESULTS_vibe_confinement.md, and the first five runtimes' sentences are byte for byte what they were.
+- **Kimi's arm (E5.6, 2026-10-26).** `kimi` is the seventh runtime of the table and the planner, and its confinement is the SHIM's, never its argv: a plan for `kimi` carries
+  no flags and no leading words (`KimiConsultant.Build` throws `ArgumentException` on a plan that carries any). `none` stands in an empty `Scratch` folder and `disk` in a
+  `Snapshot` of its roots (like Vibe's), `--home` under the row's own folder. The rows (kimi 2.1.1, research/RESULTS_kimi_confinement.md): `none` and `disk` are
+  `unconfined` — admitted FLAGGED, because `Grep` and `Glob` search the disk directly and the working folder plays no part in that (M-K6, M-K9) — and `web` is
+  `unmeasured` (no Kimi cell searches or fetches the web, M-K17), so the matrix refuses it, naming the record.
 - **Refuse, never redact — and the refusal never quotes what it refused.** A web row's model may be
   unconfined (codex, F2), so what the row is GIVEN is the only thing ours to control, and a question
   with a hole where a path was still says there was a path. The sanitiser answers ONE class — the first

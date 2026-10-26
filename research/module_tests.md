@@ -4454,3 +4454,28 @@ saw it).
 
 `CumulativeUsageTests.AVendorReportingLESSThanBeforeFloorsAtZero_NeverNegative` became `ACountBelowWhatWasBilled_FloorsAtZero_NeverNegative`: its old case (both totals below
 what was billed) is now a reset by decision 12, so the floor is pinned where it still applies — totals that moved on, cached and reasoning counts that did not.
+
+### The Kimi consultant check and the Kimi question row — E5.5–E5.6 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md` (2026-10-26)
+
+`AKimiConsultantCheckTests` runs `--check-consultant` for a Kimi row in process (`ConsultantCheckMode.AnswerAsync`, git for real, the real launch control over `KimiFixture`'s
+fake person, only the shim played by `PlayedKimi`); `AKimiQuestionRowTests` runs a Kimi `disk` row through the question service the same way. No test starts the real `kimi`. The
+four E5.5 tests were green on arrival (E5.3 g and E5.4 were already in), so each got teeth by a temporary break of its deciding line, run red, and the break reverted (`git checkout`,
+so the rebuild saw it). The S5.6 tests were run red against the code of `b4e2ea96` with its data restored too, so the planner and launch tests saw the matrix's `Refused`, not the default
+arm's `Scratch` the plan's table names.
+
+| Suite (scenario) | What it holds | Seen red as |
+|---|---|---|
+| `AKimiConsultantCheckTests.AKimiCheck_RunsInACopy_OnAOneShotHome` (S5.5.1) | the check passes; `--cwd` is under `own/tree` inside the check's temp folder; `--home` is `<root>/coai-vh/<8>/kh-<10 hex>`; the scratch is gone | green on arrival; the plan's red is E5.4's (not reproducible); no break of its own |
+| `…AfterTheCheck_TheHomeIsGone_JunctionFirst` (S5.5.2, Theory: passed; exit 70) | a home was made (`Shims` not empty); `coai-vh/<8>` gone; the deleter's unlink recorder never invoked; the fake person's folder whole | break 1, `VibeHomes.EmptiedUnderItsLock` without `KimiHome.DisposeAllUnder`: *Expected _unlinkedByTheDeleter to be empty because … KimiHome unlinks the junction first, but found at least one item {…/coai-vh/…/kh-…/home/credentials}* (both arms); break 2, `held.Home.Dispose()` skipped in `ConsultantCheck.TurnAsync`'s `finally`: *Expected … to be empty because coai-vh\<8> is gone …, but found at least one item {…/coai-vh/…}* (both arms) |
+| `…ACheckCancelledMidTurn_StillDisposesItsHome` (S5.5.3) | the check prints its record: `state` `failed`, `failureKind` `cancelled`; one launch was made; `coai-vh/<8>` gone, recorder never invoked, the person whole | both breaks above (recorder; *found at least one item {…/coai-vh/…}*). The first version accepted a thrown cancellation and unread fields — a review finding, fixed |
+| `…ARootlessCheck_KeepsTheHomeInItsScratch_AndDisposesItJunctionFirst` (S5.5.4) | `--home` is `<scratch>/own/kh-…`; the scratch gone; the recorder never invoked | break 3, `ConsultCheckScratch.Delete` without `KimiHomesDisposed`: *Expected _unlinkedByTheDeleter to be empty because KimiHome unlinks the junction first, but found at least one item {…/own/kh-…/home/credentials}* |
+| `CapabilityMatrixTests.KimiHasThreeRows_EachCitingItsCells` (S5.6.1) | `none` and `disk` `unconfined`, `web` `unmeasured`; version `2.1.1`; cells cited | *Expected none not to be <null> because kimi × none must have a row* |
+| `…TheVectorsCoverKimi` (S5.6.2) | the shared vectors hold `kimi × none`, `× disk`, `× web` | *Expected Vectors to contain a single item matching kimi × none* |
+| `ConfinementPlannerTests.ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb` (S5.6.3) | `none` `Scratch`, `disk` `Snapshot` of both roots, no flags either way; `web` refused naming the record | *Expected type to be Planned, but found Refused* (the matrix refused first) |
+| `CapabilityMatrixTests.AdmissionFlagsBothRows` (S5.6.4) | `none` and `disk` `Admitted` with `AdmissionFlag.Unconfined` | *Expected Admitted, but found Refused* |
+| `ConfinementPlannerTests.AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome` (S5.6.5) | the shim request in the row's folder or its copy, `--home` under the row's folder, no `--session`, no root named, environment not inherited | *Expected Planned, but found Refused* |
+| `…APlanWithFlags_IsRefusedForKimi` (S5.6.6) | a hand-made plan with `--yolo` makes `Build` throw `ArgumentException` naming the shim | break 4, the `MustCarryNoFlags` call in `KimiConsultant.Build` removed: *Expected a <System.ArgumentException> to be thrown, but no exception was thrown.* |
+| `AKimiQuestionRowTests.AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind` (S5.6.7, Theory: answered; refused before the launch; cancelled mid-turn) | the prompt names the copy (`<cwd>/snapshot-<hex>`), never the grant; after each ending the row's folder and `coai-vh/<8>` are gone | *Expected status to be answered / refused*; *Expected OperationCanceledException … no exception* (against the old code) |
+| TS `capabilityAdmission.test.ts` — *kimi rows admit flagged, web refuses naming its record* (S5.6.8) | `none`/`disk` admitted with the unconfined caveat; `web` refused, naming `RESULTS_kimi_confinement.md` | *Expected values to be strictly deep-equal* on the runtimes list; then *'kimi' is not a runtime the question consultant can launch* |
+
+NOT covered: the live checks (J2) and the Kimi web cells (M-K17 — `kimi × web` stays `unmeasured` and refused).
