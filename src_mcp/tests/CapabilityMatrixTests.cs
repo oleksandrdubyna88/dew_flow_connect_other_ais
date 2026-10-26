@@ -199,13 +199,21 @@ public sealed class CapabilityMatrixTests
             .Which.Reason.Should().Contain("not been measured", "no Vibe cell exercises the web");
     }
 
+    private static RuntimeCapabilityRow KimiRow(Capability capability)
+    {
+        var row = RuntimeCapabilities.Builtin.Of("kimi", capability);
+        row.Should().NotBeNull($"the table has a row for kimi × {capability}");
+
+        return row!;
+    }
+
     /// <summary>S5.6.1 (E5.6 of <c>todo/PLAN_vibe_and_kimi_runtimes_E5.md</c>): kimi has its three rows, each citing its own cells of the Kimi record.</summary>
     [Fact]
     public void KimiHasThreeRows_EachCitingItsCells()
     {
-        var none = RuntimeCapabilities.Builtin.Of("kimi", Capability.None)!;
-        var disk = RuntimeCapabilities.Builtin.Of("kimi", Capability.Disk)!;
-        var web = RuntimeCapabilities.Builtin.Of("kimi", Capability.Web)!;
+        var none = KimiRow(Capability.None);
+        var disk = KimiRow(Capability.Disk);
+        var web = KimiRow(Capability.Web);
 
         none.Standing.Should().Be(CapabilityStanding.Unconfined, "Grep and Glob took an outside file by absolute path whatever the working folder (M-K6)");
         none.MeasuredWith.Cells.Should().Contain("M-K6");
