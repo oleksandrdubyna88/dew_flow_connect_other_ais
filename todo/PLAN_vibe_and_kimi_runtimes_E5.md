@@ -11,7 +11,7 @@
 > five languages; deviations 40–46, *E5.7 as built*. With E5.4's seed (`features.consultant` gains `kimi`) merged, S5.7.5 is green.
 > **E5.5–E5.6 implemented 2026-10-26** (built from tasks of the split by a smaller model; not yet reviewed by Opus): the Kimi rows of the capability table
 > (`unconfined` for none and disk, `unmeasured` for web), the planner arm, `KimiConsultant`'s refusal of a plan with flags, the question row and the consultant
-> check proved through the service on a one-shot home disposed junction-first; deviations 50–58, *E5.5–E5.6 as built*.
+> check proved through the service on a one-shot home disposed junction-first; deviations 50–57, *E5.5–E5.6 as built*.
 >
 > Parent plan: [PLAN_vibe_and_kimi_runtimes.md](PLAN_vibe_and_kimi_runtimes.md), §4 **S5** (decisions D1, D6, D15, D19, D20).
 > Built on S4, which is merged and released as coai-mcp 0.57.0: [PLAN_vibe_and_kimi_runtimes_E4.md](PLAN_vibe_and_kimi_runtimes_E4.md)
@@ -1101,8 +1101,7 @@ Numbered from 50, apart from the lists above, so the stories built in parallel d
 54. **Decision 3's refusal is a production change in `KimiConsultant.Build`.** `MustCarryNoFlagsOfAPlan` refuses a planned launch whose plan carries `Leading`, `Flags` or `AddDirs` (S5.6.6 is a Theory over the three shapes), with "a Kimi row's confinement is the shim's; a plan with flags is not one coai made for kimi".
 55. **The refusal sentence that lists the runtimes** now ends `…, local, api, vibe, kimi` (the C# planner and matrix tests, and the TypeScript test, were widened), because `RuntimeCapabilities.Runtimes` and the seed's `runtimes` gained `kimi` after `vibe`.
 56. **S5.6.7's row-scratch assertion** finds the row's scratch as the nearest ancestor of the launch's working folder named `QuestionRowLaunch.ScratchPrefix` (`coai-question-`), so tests that run beside it cannot make it flaky; it was seen green on arrival and red under a temporary break of `QuestionRowLaunch`'s `Release(homes)` (`finally`).
-57. **The TypeScript mirror is regenerated, and it was not in the split's list.** `src_vs_code/src/runtimeCapabilities.generated.ts` carries the three `kimi` rows and the widened `runtimes` list, as `generate-runtime-capabilities.mjs` writes them from the shared table.
-58. **`MustCarryNoFlagsOfAPlan` is above the complexity rule.** Its cyclomatic complexity is 5 (one `if`, one `&&`, two `||`, plus the base 1), where every story's rule is ≤ 4 (line 89). It is written as item 54 gives it; the code was not reshaped, so this stays open for the Opus review.
+57. **The TypeScript mirror is regenerated.** `src_vs_code/src/runtimeCapabilities.generated.ts` carries the three `kimi` rows and the widened `runtimes` list, as `generate-runtime-capabilities.mjs` writes them from the shared table, which E5.6 decision 4 requires; the split's list names it (E5.6 Files).
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 
