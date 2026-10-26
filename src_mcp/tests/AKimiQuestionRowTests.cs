@@ -153,17 +153,21 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
             row.GetProperty("status").GetString().Should().Be(ending == "answered" ? RowOutcomes.Answered : RowOutcomes.Refused, row.ToString());
         }
 
-        if (ending == "answered")
+        if (ending == "refused")
+        {
+            played.Shims.Should().BeEmpty("a root outside any Git work tree is refused before anything is launched");
+        }
+        else
         {
             var request = played.Shims.Should().ContainSingle().Subject.Request;
             var cwd = KimiEnvironment.FlagOf(request, "--cwd");
-            request.StdIn.Should().Contain(cwd, "the prompt names the copy Kimi can read").And.NotContain(granted, "never the original");
-            request.Arguments.Should().NotContain(AcpWords.SessionFlag, "one shot");
-            Directory.Exists(cwd).Should().BeFalse("the row's copy goes with its scratch");
-        }
-        else if (ending == "refused")
-        {
-            played.Shims.Should().BeEmpty("a root outside any Git work tree is refused before anything is launched");
+            Directory.Exists(cwd).Should().BeFalse("the row's copy goes with its scratch, whichever way the turn ended");
+
+            if (ending == "answered")
+            {
+                request.StdIn.Should().Contain(cwd, "the prompt names the copy Kimi can read").And.NotContain(granted, "never the original");
+                request.Arguments.Should().NotContain(AcpWords.SessionFlag, "one shot");
+            }
         }
 
         Directory.EnumerateFileSystemEntries(Path.Combine(Homes, VibeHomes.OneShotFolder)).Should().BeEmpty("the row's one-shot home goes on every way out");
