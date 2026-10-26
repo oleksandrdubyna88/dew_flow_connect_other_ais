@@ -169,8 +169,8 @@ evidence of nothing.
 
 **For the plan gate, two vendors: Claude Sonnet 4.6 and GPT-5.5.**
 
-Sonnet for stability — 7 and 7, no spread, and the highest finding count in the set at about 70 %
-of Opus's price ($0.114 against $0.165 per run). GPT-5.5 as the second vendor because it is the other model that reached the top and it
+Sonnet for stability — 7 and 7, no spread, and the highest mean score in the set (7.0, tied with Opus
+and GPT-5.5) at about 70 % of Opus's price ($0.114 against $0.165 per run). GPT-5.5 as the second vendor because it is the other model that reached the top and it
 is a genuinely different family; its own instability is the argument for pairing it with a stable
 one rather than for dropping it.
 
