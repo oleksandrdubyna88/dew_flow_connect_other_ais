@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 not started.** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 implemented 2026-10-26: the Kimi consultant check proven on the played shim, and the question consultant's kimi row (none and disk admitted FLAGGED unconfined, web unmeasured); deviations 47–51, *E5.5–E5.6 as built*; the live checks (J2) not run — RESULTS §31 not written.** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -1086,6 +1086,25 @@ Numbered from 40, apart from the lists above, so the stories built in parallel d
     the question-consultant article says only that a Kimi row's launches wait for one another and for a Kimi review on the same sign-in.
 46. **`CONSULTANT_SINCE` gates a note, so `consultantsWire.ts` is unchanged.** S5.7.3 was green before any code, as the row said.
 
+### E5.5–E5.6 as built (2026-10-26)
+
+Numbered from 47, apart from the lists above, so the stories built in parallel do not collide on a number.
+
+47. **S5.6.5 and S5.6.6 are in `KimiConsultantTests`, not `ConfinementPlannerTests`.** That class holds the fake person and the consultant the two
+    scenarios need (`src_mcp/tests/KimiConsultantTests.cs`). The refused plan is one with `Flags` OR `Leading`: `MustCarryNoFlags` at
+    `src_mcp/runners/Kimi/KimiConsultant.cs:64-66` tests both, so a plan that only leads is refused too.
+48. **The kimi rows' cells.** `none` = M-K6, M-K3, M-K4; `disk` = M-K6, M-K3, M-K4, M-K9, M-K9 (e); `web` = none. Version 2.1.1, date 2026-10-13: the
+    probe's run, RESULTS §3 (`shared/runtime-capabilities.json:340-388`).
+49. **The flagged caveat both halves show for `unconfined` still says "a shell is always there"**, written for codex. For Kimi the reason is Grep and
+    Glob (M-K6), and the row's `note` says it (`shared/runtime-capabilities.json:340-388`). The shared caveat sentence is unchanged
+    (`shared/runtime-capabilities.json:11`, `src_mcp/core/QuestionConsult/CapabilityMatrix.cs:33`, `src_vs_code/src/capabilityAdmission.ts:60`) —
+    an open item for the review.
+50. **S5.6.7's "refused before the launch" arm is a person with no credentials folder** (the launch control refuses, D19:
+    `src_mcp/runners/Kimi/KimiLaunch.cs:194`). The test removes that folder before the snapshot, not a file inside it
+    (`src_mcp/tests/AKimiQuestionRowTests.cs`).
+51. **S5.5's tests needed no production change (decision 1 held).** The four tests are in `src_mcp/tests/AKimiConsultantCheckTests.cs`. The one red
+    was in the test, not the production code: `PlayedKimi.During` is init-only, so `Turn` and `During` are set in one object initializer.
+
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 
 The coai plan gate on this document passed (verdict `proceed`). Its operator commands: the SPLIT is Fable's judgement (§0.2); a story
@@ -1128,6 +1147,7 @@ that touches authentication or security is built on Fable, an ordinary one on Op
    Not renamed here (E5.3 decision i, E5.7 decision 6).
 6. **Kimi reviewer homes under TEMP** (E4 deviation 68) stay open. Moving them into `coai-vh` would reuse E5.3 decision g's
    disposal as is. That is a follow-up, not S5.
+- J2 for E5.5–E5.6: the live `--check-consultant` on Kimi and the live kimi none/disk rows are not run; RESULTS §31 is not written.
 
 ## Definition of Done (this epic)
 
