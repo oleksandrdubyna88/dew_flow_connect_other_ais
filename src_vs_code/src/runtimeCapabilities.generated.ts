@@ -6,7 +6,7 @@
 // `generatedFilesAreCurrent.test.ts` fails if this file and the generator do.
 
 /** The runtimes the question consultant can launch, in the file's order. */
-export type QuestionRuntime = 'claude' | 'codex' | 'antigravity' | 'local' | 'api' | 'vibe';
+export type QuestionRuntime = 'claude' | 'codex' | 'antigravity' | 'local' | 'api' | 'vibe' | 'kimi';
 
 /** What a prompt needs of its runtime. */
 export type Capability = 'none' | 'disk' | 'web';
@@ -32,7 +32,7 @@ export interface RuntimeCapabilityRow {
   readonly measuredWith: MeasuredWith;
 }
 
-export const RUNTIMES: readonly QuestionRuntime[] = ['claude', 'codex', 'antigravity', 'local', 'api', 'vibe'];
+export const RUNTIMES: readonly QuestionRuntime[] = ['claude', 'codex', 'antigravity', 'local', 'api', 'vibe', 'kimi'];
 
 export const CAPABILITIES: readonly Capability[] = ['none', 'disk', 'web'];
 
@@ -350,6 +350,55 @@ export const RUNTIME_CAPABILITIES: readonly RuntimeCapabilityRow[] = [
       resultRef: 'research/RESULTS_vibe_confinement.md §20 — no cell of the Vibe probe exercises a web tool, and the shipped flags enable read_file alone',
       cells: [],
       note: 'not measured: no Vibe cell fetches or searches the web',
+    },
+  },
+  {
+    runtime: 'kimi',
+    capability: 'none',
+    standing: 'unconfined',
+    measuredWith: {
+      cli: 'kimi',
+      version: '2.1.1',
+      date: '2026-10-13',
+      resultRef: "research/RESULTS_kimi_confinement.md §9 M-K6 — `Grep` with an outside file's absolute path and `Glob` on the outside folder returned the marker 3 of 3, whatever the working folder; `Read` outside it was refused 3 of 3; §6 M-K3 — 0 of 9 writes through the shim; §7 M-K4 — nothing writes without a permission request, and the shim refuses every one",
+      cells: [
+        'M-K6',
+        'M-K3',
+        'M-K4',
+      ],
+      note: 'kimi 2.1.1: the shim bounds `Read` and refuses every write and shell command, but an EMPTY working folder confines nothing — `Grep` and `Glob` read the disk directly (D15), so the row can read this machine; `WebSearch` and `FetchURL` are announced and unmeasured (M-K17 decides whether this sentence stays)',
+    },
+  },
+  {
+    runtime: 'kimi',
+    capability: 'disk',
+    standing: 'unconfined',
+    measuredWith: {
+      cli: 'kimi',
+      version: '2.1.1',
+      date: '2026-10-13',
+      resultRef: "research/RESULTS_kimi_confinement.md §9 M-K6 — `Read` bounded to the working folder 3 of 3, `Grep` and `Glob` read an outside file 3 of 3; §6 M-K3 and §7 M-K4 — writes refused; §12 M-K9 and §21 M-K9 (e) — a branch's `AGENTS.md`, skills, sub-agents and `.mcp.json` load from the working folder on disk, so the roots are COPIED, never granted",
+      cells: [
+        'M-K6',
+        'M-K3',
+        'M-K4',
+        'M-K9',
+        'M-K9 (e)',
+      ],
+      note: 'kimi 2.1.1: the working folder is a coai-made sanitised COPY of the granted roots (D6) and the shim bounds `Read` to it, but `Grep` and `Glob` search the disk directly (D15), so the row can read this machine; `WebSearch` and `FetchURL` are announced and unmeasured (M-K17 decides whether this sentence stays)',
+    },
+  },
+  {
+    runtime: 'kimi',
+    capability: 'web',
+    standing: 'unmeasured',
+    measuredWith: {
+      cli: 'kimi',
+      version: '2.1.1',
+      date: '2026-10-13',
+      resultRef: 'research/RESULTS_kimi_confinement.md §14 — `WebSearch` and `FetchURL` are announced on this plan and no cell exercised them; M-K17 asks whether they ask, and does not admit `web`',
+      cells: [],
+      note: 'not measured: no Kimi cell fetches or searches the web',
     },
   },
 ];
