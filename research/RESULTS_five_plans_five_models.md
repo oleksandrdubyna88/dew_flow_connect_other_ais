@@ -59,9 +59,12 @@ defect naming the models that raised it, and every assignment can be checked aga
 | Claude Sonnet 5 (native) | 4/6 | 3/6 | 3/4 | 3/6 | 5/8 | **60 %** |
 | GPT-5.6-Luna | 2/5 | 3/6 | 4/5 | 3/6 | 4/7 | **55 %** |
 
-**32 distinct defects across the five plans. 31 of them were raised by two models or more; 14 by
+**32 defect clusters across the five plans. 31 of them were raised by two models or more; 14 by
 three or more; one by all five** — that a seed alone does not make a dealt assignment reproducible,
-on the per-role-gate plan.
+on the per-role-gate plan. These are the defects the models SHARED, not every distinct defect: 32 more
+findings were raised by one model only and are in no cluster (`_unshared` in
+[evidence-2026-09-02-five-plans-clusters.json](evidence-2026-09-02-five-plans-clusters.json)), which is
+why the table above puts 83 of the 129 findings, not all of them, in a cluster with another model.
 
 **The local models are not outliers.** Gemma has the highest agreement in the set and Sonnet the
 second lowest — which is not a quality ranking. A high figure means a model says what others say; a

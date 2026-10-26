@@ -69,8 +69,8 @@ at each date in the table is not known — story 3.4 of the plan adds it:
 | gemini | `agy` | `gemini-3.8-flash-low` | 2026-09-21 → 10-02 | 506 – 1 352 |
 | gemini | `agy` | `gemini-3.8-flash-medium` | **2026-10-02** → 10-09 | **32 635 – 40 717** |
 
-- **Gemini's output per reviewer went up roughly 25–45× the day the row moved to `flash-medium`** (Windows medians
-  above; WSL 1 297 → 35 551, 27×). The quota ran out the next day (2026-10-03, a weekly quota, ~87 h), and again on
+- **Gemini's output per reviewer went up roughly 24–80× the day the row moved to `flash-medium`** (Windows medians
+  above: 32 635 / 1 352 at the least, 40 717 / 506 at the most; WSL 1 297 → 35 551, 27×). The quota ran out the next day (2026-10-03, a weekly quota, ~87 h), and again on
   2026-10-09: an antigravity consultant asked at ~17:00 UTC answered `RESOURCE_EXHAUSTED (code 429): Individual quota
   reached … Resets in 110h25m`. Google does not publish how that quota is computed, so this is a correlation with a
   timing, not a proof — but it is the largest single change in the record.
@@ -128,7 +128,7 @@ Local `usage.jsonl`, codex only (all on `codex exec`; consultations and question
 - **Settled:** the Team server is not the cause. It is at most a quarter to two fifths of codex rounds, flat per day,
   and it runs the cheaper models.
 - **Settled for Gemini, as a correlation:** the row moved to `flash-medium` on 2026-10-02; output per reviewer went up
-  25–45×; the weekly quota ran out the next day and again a week later.
+  24–80×; the weekly quota ran out the next day and again a week later.
 - **Consistent with, not proven, for codex:** half of this week's codex tokens went to consultations and questions on
   `gpt-6-astra`, which no round count sees; the reviewers moved to `gpt-6-luna` with an inherited `high` effort and,
   until about 2026-10-06, the `priority` tier. Which of these the vendor weighs most cannot be read from tokens.
