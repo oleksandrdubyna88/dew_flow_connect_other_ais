@@ -832,7 +832,7 @@ junction-first on success, refusal and cancellation.
 | S5.6.3 `ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb` | grants `None`, `Disk(RootA, RootB)`, `Web` | `ConfinementPlanner.Plan("kimi", …)` | `Planned` `Scratch`, no flags; `Planned` `Snapshot`, `SnapshotSources` = both roots, no flags, `AddDirs` empty; `Refused` containing "not been measured" and `RESULTS_kimi_confinement.md` | *Expected plan.Cwd to be CwdKind.Snapshot, but found CwdKind.Scratch.* (the default arm, `:158`) |
 | S5.6.4 `AdmissionFlagsBothRows` | — | `CapabilityMatrix.Admit("kimi", none)`, `(…, disk)` | `Admitted` with `AdmissionFlag.Unconfined` both | *Expected Admission to be Admitted, but found Refused "'kimi' is not a runtime the question consultant can launch …".* |
 | S5.6.5 `AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome` (the `ConfinementPlannerTests.cs:316-337` shape) | `Planned("kimi", None)` and `Planned("kimi", Disk(RootA, RootB))` with `OwnedScratch = RowFolder` | `KimiConsultant.Build` | `none`: `WorkingDirectory` is the row's empty folder; `disk`: the row's tree; `--home` under `RowFolder`; no `--session`; neither root named; `InheritsEnvironment` false; `KimiEnvironment.Refusal` empty | *Expected Request.WorkingDirectory to be "<Scratch>", but found …* (against a stub ignoring the plan) |
-| S5.6.6 `APlanWithFlags_IsRefusedForKimi` | a hand-made `Planned("kimi", …, Flags: ["--yolo"])` | `Build` | `ArgumentException` naming the shim | *Expected a <System.ArgumentException> to be thrown, but no exception was thrown.* |
+| S5.6.6 `APlanWithLeadingOrFlags_IsRefusedForKimi` | a hand-made `Planned("kimi", …, Leading: ["--search"] or Flags: ["--yolo"])` | `Build` | `ArgumentException` naming the shim | *Expected a <System.ArgumentException> to be thrown, but no exception was thrown.* |
 | S5.6.7 `AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind` (`QuestionRowLaunch` with `PlayedKimi`; Theory: answered; refused before the launch; cancelled mid-turn) | a `disk` row on a git root in the test's folder | the row runs | the prompt names the copies' paths and never the root; after each ending the row's scratch and `coai-vh\<8>` are gone, the recorder never invoked, the fake person's folder intact | *Expected Directory.Exists("…\coai-vh\<8>") to be False, but found True.* / the recorder red (before E5.3 g) |
 | S5.6.8 TS `kimi rows admit flagged, web refuses naming its record` (`capabilityAdmission.test.ts`; `:143`'s list gains `kimi`) | the regenerated table | `admit('kimi', 'none' / 'disk' / 'web')` | `none`/`disk` admitted with the unconfined caveat; `web` refused with `/not been measured/` and `RESULTS_kimi_confinement.md` | `AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal` on the runtimes list; then *'kimi' is not a runtime the question consultant can launch* for `admit` |
 
@@ -1013,7 +1013,7 @@ homes live, in all five languages.
     stay red on this branch until E5.7 merges.
 30. **`KimiReport.SessionId` is a trailing, defaulted field** (one construction site, `From`), so nothing else changed shape (decision 3).
 
-### E5.5–E5.6 as built (Opus, 2026-10-26)
+### E5.5–E5.6 as built (Opus is the plan's attribution; Haiku 5.5 built it, Sonnet 5.5 made the review fixes — 2026-10-26)
 
 Numbered from 31, after E5.4's list and before E5.7's 40.
 
@@ -1038,7 +1038,7 @@ Numbered from 31, after E5.4's list and before E5.7's 40.
     *Expected copies to contain a single item because one copy per granted root, but the collection is empty.* (Cancelled: the same without the reason);
     `VibeHomes.EmptiedUnderItsLock` with the `KimiHome.DisposeAllUnder` block removed, *Expected recorded to be empty because the junction was unlinked by
     KimiHome first, never met by the bare deleter (E5.3 decision g), but found at least one item {…/home/credentials}.* (all three arms red under this break).
-34. **S5.6.5 was NOT green on arrival.** The table says it was, because `KimiConsultant.Build` took the plan's cwd at `b4e2ea96`. At t2's start, the
+34. **S5.6.5 was NOT green on arrival.** The table's red was against a stub that ignores the plan; the real red came from the planner's default arm (Scratch for `disk`), not from `Build`, which took the plan's cwd at `b4e2ea96`. At t2's start, the
     `disk` arm failed: *Expected disk.Request.WorkingDirectory to be the same string … they differ at index 10*, actual `/tmp/coai-scratch-…`, expected
     `/tmp/coai-question-…` (the row's tree). The cause was the planner's default arm (`ConfinementPlanner.cs:158` at `b4e2ea96`), which planned `Scratch` for `disk`,
     not `Build`. The `none` arm passed then. t2's planner arm (`ConfinementPlanner.cs:157`, `:211-216`) made it green.
@@ -1046,8 +1046,8 @@ Numbered from 31, after E5.4's list and before E5.7's 40.
     `KimiLaunch` refuse ("config.toml is not what coai writes"). It does not: a fresh one-shot home is written by `KimiHome.Made` from the person's
     CURRENT sign-in just before the check, so the arm answered (`answered`, not `failed`; the coder's note records that only, the verbatim message is
     not recorded). The fix (`fb24643c`, the t4 review) removed the re-login and added a private `TamperedAtVersion(IProcessLauncher inner)` decorator in
-    `AKimiQuestionRowTests.cs`, which rewrites the home's `config.toml` while `kimi --version` runs, after the home is made and before
-    `KimiLaunch.VerdictAsync`. `Service` now takes `IProcessLauncher` (only the Refused arm wraps it). `PlayedKimi.cs` and the production code were not
+    `AKimiQuestionRowTests.cs`, which rewrites the home's `config.toml` during the version probe inside `KimiLaunch.VerdictAsync`, after the first shape check and before the
+    second. `Service` now takes `IProcessLauncher` (only the Refused arm wraps it). `PlayedKimi.cs` and the production code were not
     changed. The refusal is then the real one, and the junction exists at that point, so the junction-first cleanup is exercised in this arm too.
     (The contract gave no seam; one was needed, and this one is in the test file.)
 36. **The consultant check's first break gave another red, and the contract's Directory.Exists red for S5.6.7 was not produced.** With
@@ -1067,7 +1067,7 @@ Numbered from 31, after E5.4's list and before E5.7's 40.
     interference in one full run, which passed alone); `AVibeReviewerRunsThroughAFakeVibeTests` (one full run, passed alone). `dotnet format --verify-no-changes`
     reports IL2026/IL3050 analyzer errors in `src_server`, `src_bugs` and other untouched projects; the change's own files are clean.
 39. **Other differences from the decisions and the table.** (a) The build was by Haiku-model coders (the commit trailers), not Opus, as the story
-    header says; the header here keeps the contract's wording. (b) `web` never reaches `ConfinementPlanner.Kimi`: the matrix refuses it, and the
+    header says; the header here keeps the contract's wording. The review fixes (`fb24643c`, `ab94c7da`) were made by Sonnet, not by the model that built the story. (b) `web` never reaches `ConfinementPlanner.Kimi`: the matrix refuses it, and the
     planner's `web` refusal is the matrix-refusal `InlineData` in `ConfinementPlannerTests`, not a planner branch. (c) The seed's `none` and `disk`
     notes and cells are as the table says (`M-K6`, `M-K3`, `M-K4`; plus `M-K9`, `M-K9 (e)` for disk). (d) The S5.6.1–S5.6.6 reds are the coders' own
     messages (item 33 and the notes); S5.6.2 names only the first missing pair (`kimi × none`), not all three. (e) The `KimiConsultant` refusal and the
