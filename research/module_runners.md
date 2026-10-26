@@ -3714,8 +3714,7 @@ scratch driver outside the repository, so it cannot be re-run from the repositor
 ## The Kimi consultant — `KimiConsultant` (2026-10-16, E5.4 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md`)
 
 A `kimi` row answers `consult`. `ConsultantResolution.OnACli` gains `"kimi" => KimiOn(vendor)` — `VibeOn`'s shape: the `KimiRuntime` the row resolves to, else a
-new one, never another runtime — and `features.consultant` names `kimi`, so `Consulting` and `QuestionResolution.Answering` hold it (a question row on Kimi is
-and a question row on Kimi is admitted by the capability matrix since E5.6).
+new one, never another runtime — and `features.consultant` names `kimi`, so `Consulting` and `QuestionResolution.Answering` hold it, and since E5.6 the capability matrix admits a Kimi question row (none and disk, flagged unconfined; web refused).
 
 ```mermaid
 flowchart LR

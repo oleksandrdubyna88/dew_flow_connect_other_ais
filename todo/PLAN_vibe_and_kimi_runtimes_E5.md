@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 code in 2026-10-26 (see "E5.5–E5.6 as built"); NOT yet green: the MCP run has one red beyond the known three (`AnUnknownCommit_IsGitFailed_NeverAThrow`).** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 implemented 2026-10-26 (see "E5.5–E5.6 as built"); NOT yet green: the two known MCP failures and the known extension failure (no git tags) remain.** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -1090,12 +1090,12 @@ Numbered from 40, apart from the lists above, so the stories built in parallel d
 
 Numbered from 50, apart from 13–46, so the stories built in parallel do not collide on a number.
 
-50. **S5.5.1–S5.5.4 are one new class, `AKimiConsultantCheckTests`, and no production change.** The check already copies, reserves a one-shot home and disposes junction-first; the rows were green on arrival, so each got teeth by a temporary break (recorded in the task report).
+50. **S5.5.1–S5.5.4 are one new class, `AKimiConsultantCheckTests`, and no production change.** The check already copies, reserves a one-shot home and disposes junction-first; the rows were green on arrival. No temporary break and no red message is recorded in the repository or in a commit, so their teeth are NOT proven yet (an open item in `research/module_tests.md`, the E5.5–E5.6 table).
 51. **S5.6.5 and S5.6.6 are in `KimiConsultantTests`, not `ConfinementPlannerTests`** (the fake person's fixture is there; `KimiEnvironment.Refusal` needs real places). S5.6.3 is in `ConfinementPlannerTests`.
 52. **Adding `kimi` to `RuntimeCapabilities.Runtimes` changes every refusal sentence** to end `…, api, vibe, kimi`: three pins moved (`CapabilityMatrixTests`, `ConfinementPlannerTests.AnUnknownRuntime_IsRefused_NamingTheOnesItKnows`, `capabilityAdmission.test.ts`). `CapabilityMatrixTests.Records` gained the Kimi record (`RESULTS_kimi_confinement.md`, 2026-10-13, cell prefix `M-K`).
 53. **The three rows:** `none` and `disk` are `unconfined`, `web` `unmeasured`; cells `M-K6, M-K3, M-K4` (+ `M-K9`, `M-K9 (e)` for disk); version 2.1.1, date 2026-10-13. The notes say `WebSearch`/`FetchURL` are announced and unmeasured (M-K17 not run).
 54. **`KimiConsultant.Build` refuses a plan that carries any flag or leading argument** with `ArgumentException` ("a Kimi row's confinement is the shim's; a plan with flags is not one coai made for kimi"); the planner arm itself gives none.
-55. **S5.6.7 is `AKimiQuestionRowTests`** (a Theory: answered, refused, cancelled); green on arrival, teeth by temporary breaks. The row's scratch is made in the system TEMP as for Vibe.
+55. **S5.6.7 is `AKimiQuestionRowTests`** (a Theory: answered, refused, cancelled); green on arrival; its teeth are NOT recorded (open item, `research/module_tests.md`). The row's scratch is made in the system TEMP as for Vibe, as `coai-question-*`, not under `testsToDelete-`: a crashed run leaves it outside the sweep (open item, same place).
 
 Verified by (2026-10-26, Haiku 5.5, on the tree at `3fd76fcc` plus this doc change):
 - `plan-lifecycle.mjs`: `plan-lifecycle: clean.`
