@@ -780,7 +780,7 @@ consultant or the confined reviewer ships was moved (A12: a tails-plan item of i
 
 ```mermaid
 flowchart LR
-  seed["shared/runtime-capabilities.json<br/>18 rows (6 runtimes × 3), each citing its probe cells"] --> RC[RuntimeCapabilities.Builtin<br/>refused whole if a pair is undecided]
+  seed["shared/runtime-capabilities.json<br/>21 rows (7 runtimes × 3), each citing its probe cells"] --> RC[RuntimeCapabilities.Builtin<br/>refused whole if a pair is undecided]
   RC --> CM["CapabilityMatrix.Admit(runtime, capability)<br/>confined → admit · unconfined / default-deny → admit FLAGGED · unsupported / unmeasured → refuse"]
   CM --> CP["ConfinementPlanner.Plan(runtime, grant)<br/>Leading · Flags · CwdKind · AddDirs · Flag"]
   CP -->|Planned| AD[adapters compose, add nothing]
@@ -825,6 +825,12 @@ flowchart LR
   read cell itself — and `web` `unmeasured` (no Vibe cell exercises the web), so the matrix refuses it. Those rows
   cite the Vibe record and its `M-V…` cells, dated 2026-10-12, and `CapabilityMatrixTests` holds each row to the
   record it cites (`Records`), not to one record for all. **An unmeasured pair's refusal names the record its own row cites** (before the S3 gate): `CapabilityMatrix.RecordOf` reads the `research/RESULTS_….md` its `resultRef` names (the first run's record when it names none), and `capabilityAdmission.ts`'s `recordOf` is its twin — so `vibe × web` sends a person to research/RESULTS_vibe_confinement.md, and the first five runtimes' sentences are byte for byte what they were.
+- **Kimi's rows (E5.6, 2026-10-26).** `kimi` is the seventh runtime of the table and the question consultant's Kimi row. Its rows
+  cite research/RESULTS_kimi_confinement.md (kimi 2.1.1, measured 2026-10-13): `none` and `disk` are `unconfined`, and `web` is
+  `unmeasured` (M-K17 not run, so the matrix refuses it). `none` is unconfined too, not `confined`, because Grep and Glob read the
+  disk by absolute path whatever the working folder is (M-K6, 3 of 3); Read alone is bounded by the shim. The planner arm gives
+  Kimi no flags (D15): the cwd comes from the plan, and `KimiConsultant.Build` refuses a plan that carries any flag or leading
+  argument with `ArgumentException`, because a Kimi row's confinement is the shim's. The refusal sentence now ends `…, vibe, kimi`.
 - **Refuse, never redact — and the refusal never quotes what it refused.** A web row's model may be
   unconfined (codex, F2), so what the row is GIVEN is the only thing ours to control, and a question
   with a hole where a path was still says there was a path. The sanitiser answers ONE class — the first
@@ -860,7 +866,7 @@ flowchart LR
 
 Tests, each watched red for the real reason before the type existed (`CS0234`/`CS0246` naming the
 missing namespace or type): `CapabilityMatrixTests` (the vectors, the seed row for row, the broken-table
-refusals over a full fixture of every pair — fifteen rows then, eighteen since S3 — and the Vibe rows' record), `ConfinementPlannerTests` (the fragments, the refusals, the
+refusals over a full fixture of every pair — fifteen rows then, eighteen since S3, twenty-one since E5.6 — and the Vibe and Kimi rows' records), `ConfinementPlannerTests` (the fragments, the refusals, the
 adapter goldens, the structural subtraction, the AsShipped argv pinned byte for byte),
 `WebQuestionSanitiserTests` (one test per class, the class list pinned, a clean question unchanged),
 `SecretCheckTests` (a path and a fence pass, each class refused without quoting the value, the

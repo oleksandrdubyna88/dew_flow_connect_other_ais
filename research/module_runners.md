@@ -3715,7 +3715,7 @@ scratch driver outside the repository, so it cannot be re-run from the repositor
 
 A `kimi` row answers `consult`. `ConsultantResolution.OnACli` gains `"kimi" => KimiOn(vendor)` — `VibeOn`'s shape: the `KimiRuntime` the row resolves to, else a
 new one, never another runtime — and `features.consultant` names `kimi`, so `Consulting` and `QuestionResolution.Answering` hold it (a question row on Kimi is
-still refused by the capability matrix until E5.6).
+and a question row on Kimi is admitted by the capability matrix since E5.6).
 
 ```mermaid
 flowchart LR
@@ -3732,7 +3732,7 @@ flowchart LR
   `KimiModels.Default`, so the shim, the invocation's `Model` and the ledger name the same one — E4 decision 75), calls `inner.Build(RoleOf(launch), prompt, cwd, "",
   OutputDir, settings)` and appends `AcpWords.SessionFlag <handle>` LAST when the launch carries a handle. The invocation's adapter is `inner`, so the executor asks
   `KimiLaunch` (the host, the tools, the model, the built environment, the sign-in, the home's shape, the gate) exactly as for a reviewer. A planned launch goes through
-  `ConsultantLaunches.ForQuestion` (idempotent on Kimi's built environment) and stands where its plan says — E5.6's business.
+  `ConsultantLaunches.ForQuestion` (idempotent on Kimi's built environment) and stands where its plan says.
 - **The cwd and the home are both required** (decision 2). The cwd is `Workdir` — the conversation's ONE stable snapshot (D6; a loaded session resolves paths against the
   folder it was made in, M-K5) — and the home is `KimiHome.HomeFor(OwnedScratch, …)` = `<folder>\kh-<10 hex>`, never the folder itself (E5.3 decision a). A missing
   `Workdir` or `OwnedScratch` is an `ArgumentException` naming it: never the checkout, never TEMP or the answers folder (D19).
@@ -3748,6 +3748,8 @@ flowchart LR
 - **The limitation rows** (decision 8, `shared/consultant-limitations.json`): Windows `unconfined` — `Read` bounded to coai's copy, `Grep`/`Glob` read any file this user
   can, every write and shell command refused — `measured` 2026-10-13 on kimi 2.1.1 (M-K6, M-K3, M-K4, M-K5, M-K5b); Linux, WSL and macOS `unmeasured` with a `source`
   naming D18, as Vibe's rows do.
+
+On a planned (question-row) launch the cwd comes from the plan, there is no `--session`, and `KimiConsultant.Build` refuses a plan with flags (E5.6, D15).
 
 Tests: `KimiConsultantTests` (S5.4.1–S5.4.6 and the declarations), `ConfinementPlannerTests` (S5.4.13), `ConsultantLimitationsTests` (S5.4.11), `FeatureAvailabilityTests`
 (S5.4.12), `CumulativeUsageTests` (S5.4.14, pure) and the service arms in `AKimiConsultationScenarioTests` — listed in [module_tests.md](module_tests.md).

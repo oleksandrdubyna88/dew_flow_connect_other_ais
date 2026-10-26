@@ -4454,3 +4454,16 @@ saw it).
 
 `CumulativeUsageTests.AVendorReportingLESSThanBeforeFloorsAtZero_NeverNegative` became `ACountBelowWhatWasBilled_FloorsAtZero_NeverNegative`: its old case (both totals below
 what was billed) is now a reset by decision 12, so the floor is pinned where it still applies — totals that moved on, cached and reasoning counts that did not.
+
+### The consultant check and the Kimi question row — E5.5–E5.6 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md` (2026-10-26)
+
+| Suite (scenario) | What it holds | Status |
+|---|---|---|
+| `AKimiConsultantCheckTests` (S5.5.1–S5.5.4) | `--check-consultant` on a Kimi row runs in a copy of the checkout, uses one one-shot home, and disposes it junction-first on pass, fail, cancel and a root-less checkout | `covered` — green on arrival, teeth by temporary breaks (task report). Proves the check's own path with the fake person. Does not prove a real `kimi`, no paid turn; the live runs are RESULTS §31 |
+| `AKimiQuestionRowTests` (S5.6.7, a Theory: answered, refused, cancelled) | a disk question row reads copies of its roots and leaves nothing behind; the row's scratch is made in the system TEMP, as for Vibe | `covered` — green on arrival, teeth by temporary breaks. Does not prove a real `kimi`, no paid turn; the live runs are RESULTS §31 |
+| `KimiConsultantTests` (S5.6.5, S5.6.6) | S5.6.5: a Kimi question launch is the shim request in its folder or its copy, on the row's home (the fake person's fixture lives here, since `KimiEnvironment.Refusal` needs real places). S5.6.6: a plan with flags is refused for Kimi, a leading argument included (Theory) | `covered` with the fake person only |
+| `ConfinementPlannerTests` (S5.6.3, and `AnUnknownRuntime_IsRefused_NamingTheOnesItKnows`, moved to `…, vibe, kimi`) | the Kimi planner arm gives no flags; the refusal sentence ends `…, vibe, kimi` | `covered` |
+| `CapabilityMatrixTests` (the Kimi record, cell prefix `M-K`; three pins moved) | every Kimi row cites `RESULTS_kimi_confinement.md` (2026-10-13) and its cells; `none` and `disk` unconfined, `web` unmeasured | `covered` |
+| `capabilityAdmission.test.ts` (S5.6.8; pin moved) | the TS admission test knows the `kimi` runtime, and its refusal sentence ends `…, vibe, kimi` | `covered` |
+
+Not covered by these: a real `kimi` process, a paid turn, and the live question-row runs (RESULTS §31, still owed).

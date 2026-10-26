@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 not started.** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 code in 2026-10-26 (see "E5.5–E5.6 as built"); NOT yet green: the MCP run has one red beyond the known three (`AnUnknownCommit_IsGitFailed_NeverAThrow`).** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -1085,6 +1085,24 @@ Numbered from 40, apart from the lists above, so the stories built in parallel d
 45. **Decision (e)'s sentence lives in *The consultant* article** (*What can go wrong*, five languages), because it is about a `consult` turn;
     the question-consultant article says only that a Kimi row's launches wait for one another and for a Kimi review on the same sign-in.
 46. **`CONSULTANT_SINCE` gates a note, so `consultantsWire.ts` is unchanged.** S5.7.3 was green before any code, as the row said.
+
+### E5.5–E5.6 as built
+
+Numbered from 50, apart from 13–46, so the stories built in parallel do not collide on a number.
+
+50. **S5.5.1–S5.5.4 are one new class, `AKimiConsultantCheckTests`, and no production change.** The check already copies, reserves a one-shot home and disposes junction-first; the rows were green on arrival, so each got teeth by a temporary break (recorded in the task report).
+51. **S5.6.5 and S5.6.6 are in `KimiConsultantTests`, not `ConfinementPlannerTests`** (the fake person's fixture is there; `KimiEnvironment.Refusal` needs real places). S5.6.3 is in `ConfinementPlannerTests`.
+52. **Adding `kimi` to `RuntimeCapabilities.Runtimes` changes every refusal sentence** to end `…, api, vibe, kimi`: three pins moved (`CapabilityMatrixTests`, `ConfinementPlannerTests.AnUnknownRuntime_IsRefused_NamingTheOnesItKnows`, `capabilityAdmission.test.ts`). `CapabilityMatrixTests.Records` gained the Kimi record (`RESULTS_kimi_confinement.md`, 2026-10-13, cell prefix `M-K`).
+53. **The three rows:** `none` and `disk` are `unconfined`, `web` `unmeasured`; cells `M-K6, M-K3, M-K4` (+ `M-K9`, `M-K9 (e)` for disk); version 2.1.1, date 2026-10-13. The notes say `WebSearch`/`FetchURL` are announced and unmeasured (M-K17 not run).
+54. **`KimiConsultant.Build` refuses a plan that carries any flag or leading argument** with `ArgumentException` ("a Kimi row's confinement is the shim's; a plan with flags is not one coai made for kimi"); the planner arm itself gives none.
+55. **S5.6.7 is `AKimiQuestionRowTests`** (a Theory: answered, refused, cancelled); green on arrival, teeth by temporary breaks. The row's scratch is made in the system TEMP as for Vibe.
+
+Verified by (2026-10-26, Haiku 5.5, on the tree at `3fd76fcc` plus this doc change):
+- `plan-lifecycle.mjs`: `plan-lifecycle: clean.`
+- `dotnet build dew_flow_connect_other_ais.slnx -c Debug -m:4 --disable-build-servers`: Build succeeded, 0 warnings, 0 errors.
+- `CoaiMcp.Tests`: on Linux the built test assembly is `CoaiMcp.Tests.dll`, and the named `.exe` does not exist (`ENOENT`), so it was run as `dotnet test --project src_mcp/tests/CoaiMcp.Tests.csproj --no-build -c Debug`. Result: 10470 succeeded, 84 skipped, 3 failed: `KimiRuntimeTests.ALaunchThatNamesItsHome_GoesThroughTheLaunchControl_WhichReadsThePersonsSignIn` and `KimiHomeTests.AHomeWhoseDataPathPasses260_IsCheckedAndDisposed` (both known), and `TheRoundsNumstatsAreCountedTests.AnUnknownCommit_IsGitFailed_NeverAThrow` (NOT in the known list; the assertion is an empty-numstat check).
+- `generate-runtime-capabilities.mjs --check`: `up to date … (21 rows over 7 runtimes × 3 capabilities)`.
+- `npm test` (src_vs_code): 6290 tests, 6270 pass, 1 fail: `the baseline names no release that was never tagged` (the known one; the checkout carries no tags).
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 
