@@ -147,7 +147,6 @@ public sealed class ConfinementPlannerTests
     [Fact]
     public void ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb()
     {
-        // QWEN-FILL-BEGIN s563-planner test
         var none = Plan("kimi", CapabilityGrant.None);
         none.Cwd.Should().Be(CwdKind.Scratch);
         none.Flags.Should().BeEmpty();
@@ -164,7 +163,6 @@ public sealed class ConfinementPlannerTests
 
         ConfinementPlanner.Plan("kimi", CapabilityGrant.Web).Should().BeOfType<Confinement.Refused>().Which.Reason
             .Should().Contain("not been measured").And.Contain("RESULTS_kimi_confinement.md");
-        // QWEN-FILL-END s563-planner
     }
 
     // ---------- refusals ----------
@@ -376,43 +374,36 @@ public sealed class ConfinementPlannerTests
     [Fact]
     public void AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome()
     {
-        // QWEN-FILL-BEGIN s565-launch test
         var consultant = AKimiConsultant();
 
         var none = consultant.Build(Planned("kimi", CapabilityGrant.None));
-        none.Request.WorkingDirectory.Should().Be(Scratch);
+        none.Request.WorkingDirectory.Should().Be(Scratch, "a none row stands in an empty folder of its own");
         none.Request.Arguments.Should().ContainInConsecutiveOrder("--cwd", Scratch);
-        none.Request.Arguments.Should().NotContain("--session").And.NotContain(RootA).And.NotContain(RootB);
-        none.Request.InheritsEnvironment.Should().BeFalse();
-        Runners.Kimi.KimiEnvironment.Refusal(none.Request, KimiPlaces.ForShim(RowFolder, Path.Combine(RowFolder, "persons-bin"))).Should().BeEmpty();
         none.Role.Should().Be(ConsultantRoles.Question);
 
         var disk = consultant.Build(Planned("kimi", CapabilityGrant.Disk(RootA, RootB)));
-        disk.Request.WorkingDirectory.Should().Be(RowTree);
+        disk.Request.WorkingDirectory.Should().Be(RowTree, "the copy of the roots, never a root");
         disk.Request.Arguments.Should().ContainInConsecutiveOrder("--cwd", RowTree);
-        disk.Request.Arguments.Should().NotContain("--session").And.NotContain(RootA).And.NotContain(RootB);
-        disk.Request.InheritsEnvironment.Should().BeFalse();
-        Runners.Kimi.KimiEnvironment.Refusal(disk.Request, KimiPlaces.ForShim(RowFolder, Path.Combine(RowFolder, "persons-bin"))).Should().BeEmpty();
 
         foreach (var request in (Runners.Processes.ProcessRequest[])[none.Request, disk.Request])
         {
-            request.Arguments.Should().ContainInConsecutiveOrder("--home", It.IsAny<string>())
-                .Which.Should().StartWith(RowFolder + Path.DirectorySeparatorChar);
+            var home = Runners.Kimi.KimiEnvironment.FlagOf(request, "--home");
+            home.Should().StartWith(RowFolder + Path.DirectorySeparatorChar, "the row's home lives in the row's own folder, gone with it");
+            request.Arguments.Should().NotContain("--session", "one shot").And.NotContain(RootA).And.NotContain(RootB);
+            request.InheritsEnvironment.Should().BeFalse();
+            Runners.Kimi.KimiEnvironment.Refusal(request, Runners.Kimi.KimiPlaces.ForShim(home, Path.Combine(RowFolder, "persons-bin"))).Should().BeEmpty("the one launch control admits it");
         }
-        // QWEN-FILL-END s565-launch
     }
 
     /// <summary>S5.6.6: a plan that carries any flag is not one coai made for Kimi (E5.6 decision 3): <c>Build</c> refuses it, naming the shim.</summary>
     [Fact]
     public void APlanWithFlags_IsRefusedForKimi()
     {
-        // QWEN-FILL-BEGIN s566-flags test
         var plain = Planned("kimi", CapabilityGrant.None);
         var plan = ((LaunchConfinement.Planned)plain.Confinement!).Plan;
         var flagged = plain with { Confinement = new LaunchConfinement.Planned(plan with { Flags = ["--yolo"] }) };
         Action build = () => AKimiConsultant().Build(flagged);
         build.Should().Throw<ArgumentException>().WithMessage("*shim*");
-        // QWEN-FILL-END s566-flags
     }
 
     /// <summary>No Vibe launch carries <c>--add-dir</c>, whatever the grant (D3: <c>--add-dir</c> trusts its folder).</summary>

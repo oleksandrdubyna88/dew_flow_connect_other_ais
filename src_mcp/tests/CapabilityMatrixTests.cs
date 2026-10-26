@@ -152,12 +152,14 @@ public sealed class CapabilityMatrixTests
     /// <summary>
     /// The records a row may cite, each with the day it was measured and the shape of its cell ids: the question
     /// consultant's full run for the first five runtimes, and the Vibe probe for vibe (S3 of
-    /// todo/PLAN_vibe_and_kimi_runtimes.md) — whose cells are named <c>M-V…</c>, not numbered.
+    /// todo/PLAN_vibe_and_kimi_runtimes.md) — whose cells are named <c>M-V…</c>, not numbered — and the Kimi probe for kimi (E5.6), whose cells
+    /// are <c>M-K…</c>.
     /// </summary>
     private static readonly IReadOnlyList<(string Record, string Date, string CellPrefix)> Records =
     [
         ("RESULTS_question_consultant_capabilities.md", "2026-10-01", "01a0f8c7-18e4-"),
         ("RESULTS_vibe_confinement.md", "2026-10-12", "M-V"),
+        ("RESULTS_kimi_confinement.md", "2026-10-16", "M-K"),
     ];
 
     [Fact]
@@ -201,7 +203,6 @@ public sealed class CapabilityMatrixTests
     [Fact]
     public void KimiHasThreeRows_EachCitingItsCells()
     {
-        // QWEN-FILL-BEGIN s561-rows test
         foreach (var capability in (Capability[])[Capability.None, Capability.Disk, Capability.Web])
         {
             var row = RuntimeCapabilities.Builtin.Of("kimi", capability)!;
@@ -219,20 +220,17 @@ public sealed class CapabilityMatrixTests
 
         var web = RuntimeCapabilities.Builtin.Of("kimi", Capability.Web)!;
         web.Standing.Should().Be(CapabilityStanding.Unmeasured);
-        // QWEN-FILL-END s561-rows
     }
 
     /// <summary>S5.6.4: both of Kimi's admitted rows are FLAGGED unconfined — <c>Grep</c> and <c>Glob</c> read the disk (M-K6) whatever the working folder.</summary>
     [Fact]
     public void AdmissionFlagsBothRows()
     {
-        // QWEN-FILL-BEGIN s564-admit test
         foreach (var capability in (Capability[])[Capability.None, Capability.Disk])
         {
             CapabilityMatrix.Admit("kimi", capability).Should().BeOfType<Admission.Admitted>()
                 .Which.Flag.Should().Be(AdmissionFlag.Unconfined, $"kimi × {capability}: Grep and Glob read the disk (M-K6) whatever the working folder");
         }
-        // QWEN-FILL-END s564-admit
     }
 
     /// <summary>D13's two refusals kept apart: the flags are what the data says, never what a runtime name suggests.</summary>

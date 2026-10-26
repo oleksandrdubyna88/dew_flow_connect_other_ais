@@ -1,5 +1,6 @@
 using System.Text.Json;
 using CoaiMcp.Runners.Acp;
+using CoaiMcp.Runners.Consultation;
 using CoaiMcp.Runners.Files;
 using CoaiMcp.Runners.Kimi;
 using CoaiMcp.Runners.Platform;
@@ -47,9 +48,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     /// <summary>The check's panel settings: a Kimi consultant for the caller <c>claude</c>, the data folder and, unless it is empty, the homes root.</summary>
     private PanelSettings Settings(string homesRoot)
     {
-        // QWEN-FILL-BEGIN s555-settings test
         return new PanelSettings { Providers = [], DataDir = _data.Path, ReviewerTimeout = TimeSpan.FromSeconds(60), ConsultEnabled = true, ConsultantHomesRoot = homesRoot, Consultants = new Dictionary<string, ConsultantChoice> { [CallerIdentity.Claude] = new("my-kimi", Runtime: "kimi") } };
-        // QWEN-FILL-END s555-settings
     }
 
     /// <summary>
@@ -58,56 +57,25 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     /// </summary>
     private async Task<(int Code, JsonElement Said)> CheckAsync(PanelSettings settings, PlayedKimi played, CancellationToken ct)
     {
-        // QWEN-FILL-BEGIN s555-check test
         using var standIn = WindowsStandIn.Begin();
         using var locks = KimiCredentialsLock.RootFor(Path.Combine(_person.Folder, "locks"));
         using var seams = KimiSeams.Using(HostKind.Windows, new KimiSeams(_person.PlacesAt, () => (PlayedKimi.Shim, [])));
         var (code, stdout, _) = await ConsultantCheckMode.AnswerAsync(settings, ["--check-consultant", "--caller", "claude"], played, _temp.Path, _warned.Add, Noticing.None, ct);
         return (code, stdout.Length > 0 ? JsonDocument.Parse(stdout).RootElement.Clone() : default);
-        // QWEN-FILL-END s555-check
     }
 
     /// <summary>The played Kimi that answers the check: it reads CHECK.md in the shim request's <c>--cwd</c> and answers the two lines the check asks for.</summary>
     private PlayedKimi PlayedThatReadsTheMarker()
     {
-        // QWEN-FILL-BEGIN s555-played test
-        var cwd = After(new ProcessRequest("", [], ""), "--cwd"); // placeholder to get the index logic right, but we need to capture it in the lambda
-        // Actually, we need to extract cwd from the request passed to Turn.
-        // The instruction says: `word` is the LAST space-separated word of CHECK.md in the folder after "--cwd" in request.Arguments
-        // File.ReadAllText(Path.Combine(cwd, "CHECK.md")).Trim().Split(' ')[^1].TrimEnd('.')
-        
-        // We need to find the cwd from the request arguments.
-        // request.Arguments contains "--cwd", <path>.
-        
-        string GetCwd(ProcessRequest req) {
-            var args = req.Arguments.ToList();
-            var idx = args.IndexOf("--cwd");
-            if (idx >= 0 && idx + 1 < args.Count) return args[idx + 1];
-            return "";
-        }
-
-        string cwd = ""; // Will be set in the lambda closure if needed, but we can just compute it inside.
-        
-        // However, the lambda captures variables. We can just compute `word` inside the lambda.
-        
-        return new PlayedKimi(new ProcessLauncher()) 
-        { 
-            Turn = (_, request) => 
+        return new PlayedKimi(new ProcessLauncher())
+        {
+            Turn = (_, request) =>
             {
-                var args = request.Arguments.ToList();
-                var cwdIndex = args.IndexOf("--cwd");
-                string cwdPath = cwdIndex >= 0 && cwdIndex + 1 < args.Count ? args[cwdIndex + 1] : "";
-                
-                string checkMdPath = Path.Combine(cwdPath, "CHECK.md");
-                string content = File.ReadAllText(checkMdPath).Trim();
-                string[] words = content.Split(' ');
-                string word = words[^1].TrimEnd('.');
-                
-                string answer = $"marker: {word}{Environment.NewLine}canary: CANNOT";
-                return PlayedKimi.Answered(PlayedKimi.SessionOf(request), 100, 10, answer);
-            } 
+                var word = File.ReadAllText(Path.Combine(After(request, "--cwd"), "CHECK.md")).Trim().Split(' ')[^1].TrimEnd('.');
+
+                return PlayedKimi.Answered(PlayedKimi.SessionOf(request), 100, 10, $"marker: {word}{Environment.NewLine}canary: CANNOT");
+            },
         };
-        // QWEN-FILL-END s555-played
     }
 
     /// <summary>The value after <paramref name="flag"/> in a shim request's argument list.</summary>
@@ -124,7 +92,6 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     [Fact]
     public async Task AKimiCheck_RunsInACopy_OnAOneShotHome()
     {
-        // QWEN-FILL-BEGIN s551-copy test
         var played = PlayedThatReadsTheMarker();
         var settings = Settings(_homes.Path);
         RecordingTheDeleter();
@@ -139,19 +106,17 @@ public sealed class AKimiConsultantCheckTests : IDisposable
         Path.GetFileName(home).Should().MatchRegex("^kh-[0-9a-f]{10}$");
         Path.GetFileName(Path.GetDirectoryName(home)!).Should().HaveLength(8);
         Directory.EnumerateDirectories(_temp.Path, "coai-check-*").Should().BeEmpty("the copy goes with the check's scratch");
-        said.GetProperty("canary").GetString().Should().Be(ConsultCheckStates.NotAttempted);
-        // QWEN-FILL-END s551-copy
+        said.GetProperty("canary").GetString().Should().Be(CanaryReadings.NotAttempted);
     }
 
     /// <summary>S5.5.2: after the check — passed, and again with the turn failing (exit 70) — <c>coai-vh\&lt;8&gt;</c> is gone, junction-first, the person's folder whole.</summary>
     [Fact]
     public async Task AfterTheCheck_TheHomeIsGone_JunctionFirst()
     {
-        // QWEN-FILL-BEGIN s552-gone test
         var before = _person.Hash();
         RecordingTheDeleter();
 
-        foreach (var played in new[] { PlayedThatReadsTheMarker(), new PlayedKimi(new ProcessLauncher()) { Turn = (_, request) => PlayedKimi.Lost(PlayedKimi.Minted) } })
+        foreach (var played in new[] { PlayedThatReadsTheMarker(), new PlayedKimi(new ProcessLauncher()) { Turn = (_, _) => PlayedKimi.Lost(PlayedKimi.Minted) } })
         {
             await CheckAsync(Settings(_homes.Path), played, TestContext.Current.CancellationToken);
 
@@ -159,29 +124,26 @@ public sealed class AKimiConsultantCheckTests : IDisposable
             TheDeleterNeverMetTheJunction();
             _person.Hash().Should().Equal(before, "the person's folder: the same names, bytes and read-only bits as before");
         }
-        // QWEN-FILL-END s552-gone
     }
 
     /// <summary>S5.5.3: a check cancelled while the played shim is blocked says cancelled and still disposes its home junction-first.</summary>
     [Fact]
     public async Task ACheckCancelledMidTurn_StillDisposesItsHome()
     {
-        // QWEN-FILL-BEGIN s553-cancel test
         using var cts = new CancellationTokenSource();
         RecordingTheDeleter();
         var played = new PlayedKimi(new ProcessLauncher()) { During = async (_, ct) => { cts.Cancel(); await Task.Delay(Timeout.Infinite, ct); } };
         var (_, said) = await CheckAsync(Settings(_homes.Path), played, cts.Token);
-        said.GetProperty("state").GetString().Should().Be(ConsultCheckStates.Unavailable);
+        said.GetProperty("state").GetString().Should().Be(ConsultCheckStates.Failed, said.ToString());
+        said.GetProperty("failureKind").GetString().Should().Be(ConsultFailureKinds.Cancelled);
         TheOneShotFolderIsGone();
         TheDeleterNeverMetTheJunction();
-        // QWEN-FILL-END s553-cancel
     }
 
     /// <summary>S5.5.4: settings built by hand (no homes root) keep the home in the check's scratch, <c>&lt;scratch&gt;\own\kh-…</c>, and the scratch goes junction-first.</summary>
     [Fact]
     public async Task ARootlessCheck_KeepsTheHomeInItsScratch_AndDisposesItJunctionFirst()
     {
-        // QWEN-FILL-BEGIN s554-rootless test
         var played = PlayedThatReadsTheMarker();
         var settings = Settings(string.Empty);
         RecordingTheDeleter();
@@ -194,6 +156,5 @@ public sealed class AKimiConsultantCheckTests : IDisposable
         Directory.EnumerateDirectories(_temp.Path, "coai-check-*").Should().BeEmpty("the scratch is gone");
         Directory.Exists(home).Should().BeFalse();
         TheDeleterNeverMetTheJunction();
-        // QWEN-FILL-END s554-rootless
     }
 }

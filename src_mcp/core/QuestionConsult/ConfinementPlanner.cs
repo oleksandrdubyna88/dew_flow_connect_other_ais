@@ -208,13 +208,11 @@ public static class ConfinementPlanner
     /// </remarks>
     private static Confinement.Planned Kimi(CapabilityGrant grant, AdmissionFlag flag)
     {
-        // QWEN-FILL-BEGIN s56-planner prod
         return grant.Capability switch
         {
             Capability.Disk => new Confinement.Planned("kimi", grant, [], [], CwdKind.Snapshot, [], flag) { SnapshotSources = grant.Roots },
             _ => new Confinement.Planned("kimi", grant, [], [], CwdKind.Scratch, [], flag),
         };
-        // QWEN-FILL-END s56-planner
     }
 
     private static IEnumerable<string> AddDirs(string flag, IReadOnlyList<string> roots) =>
