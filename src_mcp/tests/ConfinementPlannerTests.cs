@@ -151,15 +151,26 @@ public sealed class ConfinementPlannerTests
     public void ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb()
     {
         // QWEN-FILL-BEGIN s563-planner-arm test
-        // Arrange/Act: `var none = Plan("kimi", CapabilityGrant.None);` and `var disk = Plan("kimi", CapabilityGrant.Disk(RootA, RootB));`.
-        // Assert none: `none.Cwd.Should().Be(CwdKind.Scratch)`, `none.Flags` / `none.Leading` / `none.AddDirs` / `none.SnapshotSources` each `.Should().BeEmpty()`,
-        //   `none.Flag.Should().Be(AdmissionFlag.Unconfined)`.
-        // Assert disk: `disk.Cwd.Should().Be(CwdKind.Snapshot)`, `disk.SnapshotSources.Should().Equal([RootA, RootB])`, `disk.Flags` / `disk.Leading` /
-        //   `disk.AddDirs` each empty, `disk.Flag.Should().Be(AdmissionFlag.Unconfined)`.
-        // Web: `ConfinementPlanner.Plan("kimi", new CapabilityGrant(Capability.Web, []))` is `Confinement.Refused` whose `.Reason` contains
-        //   "not been measured" and "RESULTS_kimi_confinement.md".
-        // Fails before the arm: the default arm gives CwdKind.Scratch for disk too ("Expected plan.Cwd to be CwdKind.Snapshot, but found CwdKind.Scratch.").
-        throw new NotImplementedException("s563-planner-arm");
+        var none = Plan("kimi", CapabilityGrant.None);
+        var disk = Plan("kimi", CapabilityGrant.Disk(RootA, RootB));
+
+        none.Cwd.Should().Be(CwdKind.Scratch);
+        none.Flags.Should().BeEmpty();
+        none.Leading.Should().BeEmpty();
+        none.AddDirs.Should().BeEmpty();
+        none.SnapshotSources.Should().BeEmpty();
+        none.Flag.Should().Be(AdmissionFlag.Unconfined);
+
+        disk.Cwd.Should().Be(CwdKind.Snapshot);
+        disk.SnapshotSources.Should().Equal([RootA, RootB]);
+        disk.Flags.Should().BeEmpty();
+        disk.Leading.Should().BeEmpty();
+        disk.AddDirs.Should().BeEmpty();
+        disk.Flag.Should().Be(AdmissionFlag.Unconfined);
+
+        ConfinementPlanner.Plan("kimi", new CapabilityGrant(Capability.Web, []))
+            .Should().BeOfType<Confinement.Refused>()
+            .Which.Reason.Should().Contain("not been measured").And.Contain("RESULTS_kimi_confinement.md");
         // QWEN-FILL-END s563-planner-arm
     }
 
@@ -372,17 +383,28 @@ public sealed class ConfinementPlannerTests
     public void AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome()
     {
         // QWEN-FILL-BEGIN s565-kimi-launch test
-        // Arrange: `var consultant = KimiForQuestions();`.
-        // Act: `var none = consultant.Build(Planned("kimi", CapabilityGrant.None));` and `var disk = consultant.Build(Planned("kimi", CapabilityGrant.Disk(RootA, RootB)));`
-        //   (`Planned` is the helper above; it sets Workdir = RowTree, ScratchDir = Scratch, OwnedScratch = RowFolder).
-        // Assert: `none.Request.WorkingDirectory.Should().Be(Scratch)`; `disk.Request.WorkingDirectory.Should().Be(RowTree)`.
-        //   For each of `none.Request` and `disk.Request`: `Arguments.Should().ContainInConsecutiveOrder("--home", <value>)` where the value is the argument
-        //   after "--home" and `.Should().StartWith(RowFolder + Path.DirectorySeparatorChar)`; `Arguments` contains no "--session", no RootA, no RootB;
-        //   `request.InheritsEnvironment.Should().BeFalse()`; `Runners.Kimi.KimiEnvironment.Refusal(request, places)` is empty where
-        //   `places = Runners.Kimi.KimiPlaces.ForShim(<the --home value>, Path.Combine(RowFolder, "persons-bin"))` (the context pack gives the exact signature).
-        //   `none.Role.Should().Be(ConsultantRoles.Question)`.
-        // Fails against a stub that ignores the plan: "Expected Request.WorkingDirectory to be <Scratch>, but found ...".
-        throw new NotImplementedException("s565-kimi-launch");
+        var consultant = KimiForQuestions();
+        var none = consultant.Build(Planned("kimi", CapabilityGrant.None));
+        var disk = consultant.Build(Planned("kimi", CapabilityGrant.Disk(RootA, RootB)));
+
+        none.Request.WorkingDirectory.Should().Be(Scratch);
+        disk.Request.WorkingDirectory.Should().Be(RowTree);
+
+        foreach (var request in (Runners.Processes.ProcessRequest[])[none.Request, disk.Request])
+        {
+            var args = request.Arguments.ToList();
+            var home = args[args.IndexOf("--home") + 1];
+
+            request.Arguments.Should().ContainInConsecutiveOrder("--home", home);
+            home.Should().StartWith(RowFolder + Path.DirectorySeparatorChar);
+            request.Arguments.Should().NotContain("--session").And.NotContain(RootA).And.NotContain(RootB);
+            request.InheritsEnvironment.Should().BeFalse();
+
+            var places = Runners.Kimi.KimiPlaces.ForShim(home, Path.Combine(RowFolder, "persons-bin"));
+            Runners.Kimi.KimiEnvironment.Refusal(request, places).Should().BeEmpty();
+        }
+
+        none.Role.Should().Be(ConsultantRoles.Question);
         // QWEN-FILL-END s565-kimi-launch
     }
 

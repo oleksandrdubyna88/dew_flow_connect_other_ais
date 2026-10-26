@@ -203,13 +203,24 @@ public sealed class CapabilityMatrixTests
     public void KimiHasThreeRows_EachCitingItsCells()
     {
         // QWEN-FILL-BEGIN s561-kimi-rows test
-        // For each of Capability.None and Capability.Disk: `var row = RuntimeCapabilities.Builtin.Of("kimi", capability);` → `row.Should().NotBeNull()`;
-        //   `row!.Standing.Should().Be(CapabilityStanding.Unconfined)`; `row.MeasuredWith.Version.Should().Be("2.1.1")`;
-        //   `row.MeasuredWith.Cells.Should().Contain("M-K6")`; `row.MeasuredWith.ResultRef.Should().Contain("RESULTS_kimi_confinement.md")`.
-        //   For Disk also `Cells.Should().Contain("M-K9")`.
-        // For Capability.Web: Standing is `CapabilityStanding.Unmeasured` and Version "2.1.1".
-        // Fails before the row exists: "Expected RuntimeCapabilities.Builtin.Of(\"kimi\", Capability.None) not to be <null>." (the context pack names the exact types).
-        throw new NotImplementedException("s561-kimi-rows");
+        foreach (var capability in (Capability[])[Capability.None, Capability.Disk])
+        {
+            var row = RuntimeCapabilities.Builtin.Of("kimi", capability);
+            row.Should().NotBeNull($"kimi × {capability} is a row of the table");
+            row!.Standing.Should().Be(CapabilityStanding.Unconfined, $"kimi × {capability}");
+            row.MeasuredWith.Version.Should().Be("2.1.1", $"kimi × {capability}");
+            row.MeasuredWith.Cells.Should().Contain("M-K6", $"kimi × {capability} reads the disk (M-K6)");
+            row.MeasuredWith.ResultRef.Should().Contain("RESULTS_kimi_confinement.md", $"kimi × {capability}");
+            if (capability == Capability.Disk)
+            {
+                row.MeasuredWith.Cells.Should().Contain("M-K9", "kimi × disk stands on the M-K9 cell too");
+            }
+        }
+
+        var web = RuntimeCapabilities.Builtin.Of("kimi", Capability.Web);
+        web.Should().NotBeNull("kimi × web is a row of the table");
+        web!.Standing.Should().Be(CapabilityStanding.Unmeasured, "kimi × web has no measured cell");
+        web.MeasuredWith.Version.Should().Be("2.1.1", "kimi × web");
         // QWEN-FILL-END s561-kimi-rows
     }
 

@@ -77,15 +77,14 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     private async Task<(int Code, JsonElement Said)> CheckAsync(PanelSettings settings, PlayedKimi played, CancellationToken ct)
     {
         // QWEN-FILL-BEGIN s55-check-helper test
-        // Run the check as the Vibe check test does (`ConsultantCheckTests.Check`): `ConsultantCheckMode.AnswerAsync(settings, ["--check-consultant", "--caller", "claude"],
-        //   played, _temp, _warned.Add, Noticing.None, ct)` returns `(int Code, string Out, string Err)`; parse `Out` with `JsonDocument.Parse(Out).RootElement.Clone()`
-        //   (empty Out → `default`) and return `(Code, said)`.
-        // It must run INSIDE the stand-ins (the same four as `AKimiConsultationScenarioTests.StandIn`, minus `CallingAs`):
-        //   `using var _ = WindowsStandIn.Begin();`
-        //   `using var _lock = KimiCredentialsLock.RootFor(Path.Combine(_person.Folder, "locks"));`
-        //   `using var _seams = KimiSeams.Using(HostKind.Windows, new KimiSeams(_person.PlacesAt, () => (PlayedKimi.Shim, [])));`
-        // (the seams are async-local, so they reach the awaited call). Give each `using` its own distinct variable name.
-        throw new NotImplementedException("s55-check-helper");
+        using var _ = WindowsStandIn.Begin();
+        using var _lock = KimiCredentialsLock.RootFor(Path.Combine(_person.Folder, "locks"));
+        using var _seams = KimiSeams.Using(HostKind.Windows, new KimiSeams(_person.PlacesAt, () => (PlayedKimi.Shim, [])));
+
+        var (code, stdout, _) = await ConsultantCheckMode.AnswerAsync(
+            settings, ["--check-consultant", "--caller", "claude"], played, _temp, _warned.Add, Noticing.None, ct);
+
+        return (code, stdout.Length > 0 ? JsonDocument.Parse(stdout).RootElement.Clone() : default);
         // QWEN-FILL-END s55-check-helper
     }
 
@@ -93,10 +92,8 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     private static ProcessResult AnswersFromTheCopy(ProcessRequest request)
     {
         // QWEN-FILL-BEGIN s55-answer test
-        // The check's prompt wants two lines: `marker: <the marker>` and `canary: CANNOT`. The marker is the last word of the copy's `CHECK.md` with its
-        // trailing '.' trimmed: `File.ReadAllText(Path.Combine(request.WorkingDirectory, "CHECK.md")).Trim().Split(' ')[^1].TrimEnd('.')`
-        // (the same read `ConsultantCheckTests` does). Return `PlayedKimi.Answered(PlayedKimi.SessionOf(request), 19973, 31, $"marker: {marker}{Environment.NewLine}canary: CANNOT")`.
-        throw new NotImplementedException("s55-answer");
+        var marker = File.ReadAllText(Path.Combine(request.WorkingDirectory, "CHECK.md")).Trim().Split(' ')[^1].TrimEnd('.');
+        return PlayedKimi.Answered(PlayedKimi.SessionOf(request), 19973, 31, $"marker: {marker}{Environment.NewLine}canary: CANNOT");
         // QWEN-FILL-END s55-answer
     }
 
@@ -106,17 +103,26 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     public async Task AKimiCheck_RunsInACopy_OnAOneShotHome()
     {
         // QWEN-FILL-BEGIN s551-copy-oneshot test
-        // Arrange: `var played = new PlayedKimi(new ProcessLauncher()) { Turn = (_, request) => AnswersFromTheCopy(request) };`, `RecordingTheDeleter()`,
-        //   `var before = _person.Hash();`.
-        // Act: `var (code, said) = await CheckAsync(Settings(_homes), played, TestContext.Current.CancellationToken);` (`_homes` converts to its path string).
-        // Assert: `code.Should().Be(0)`; `said.GetProperty("state").GetString().Should().Be("answered", said.ToString())`; `said.GetProperty("markerRead").GetBoolean()` true
-        //   (the copy holds the scratch's CHECK.md); `played.Shims` holds exactly one launch (`.Should().ContainSingle().Subject.Request`): its `WorkingDirectory`
-        //   `.Should().Contain(Path.Combine("own", "tree"))` (a copy in the check's own scratch, never the repository); `HomeOf(request)` `.Should().StartWith(
-        //   Path.Combine(_homes, VibeHomes.OneShotFolder) + Path.DirectorySeparatorChar)` and `Path.GetFileName(...)` `.Should().StartWith("kh-")` with 13 characters (`kh-` + 10 hex);
-        //   the arguments hold no "--session"; `ThePersonsFolderIsWhole(before)`.
-        //   `Directory.EnumerateDirectories(_temp, "coai-check-*")` `.Should().BeEmpty("the copy goes with the check's scratch")`.
-        // Needs `using CoaiMcp.Runners.Vibe;` for `VibeHomes.OneShotFolder`. Before E5.4 the check refused the row ("cannot hold a consultation in this build"); after it only a wrong cwd or home breaks it.
-        throw new NotImplementedException("s551-copy-oneshot");
+        var played = new PlayedKimi(new ProcessLauncher()) { Turn = (_, request) => AnswersFromTheCopy(request) };
+        RecordingTheDeleter();
+        var before = _person.Hash();
+
+        var (code, said) = await CheckAsync(Settings(_homes), played, TestContext.Current.CancellationToken);
+
+        code.Should().Be(0);
+        said.GetProperty("state").GetString().Should().Be("answered", said.ToString());
+        said.GetProperty("markerRead").GetBoolean().Should().BeTrue("the copy holds the scratch's CHECK.md");
+
+        var request = played.Shims.Should().ContainSingle().Subject.Request;
+        request.WorkingDirectory.Should().Contain(Path.Combine("own", "tree"), "a copy in the check's own scratch, never the repository");
+
+        var home = HomeOf(request);
+        home.Should().StartWith(Path.Combine(_homes, CoaiMcp.Runners.Vibe.VibeHomes.OneShotFolder) + Path.DirectorySeparatorChar);
+        Path.GetFileName(home).Should().StartWith("kh-").And.HaveLength(13);
+
+        request.Arguments.Should().NotContain("--session");
+        ThePersonsFolderIsWhole(before);
+        Directory.EnumerateDirectories(_temp, "coai-check-*").Should().BeEmpty("the copy goes with the check's scratch");
         // QWEN-FILL-END s551-copy-oneshot
     }
 
@@ -129,13 +135,20 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     {
         _ = theTurnFails; // the parameter is read by the body below; this line only keeps the skeleton building
         // QWEN-FILL-BEGIN s552-home-gone test
-        // Arrange: `RecordingTheDeleter()`, `var before = _person.Hash();`; `var played = new PlayedKimi(new ProcessLauncher())` whose `Turn` is `AnswersFromTheCopy(request)`,
-        //   or — when `theTurnFails` — `PlayedKimi.Lost(PlayedKimi.SessionOf(request))` (exit 70, a played failure).
-        // Act: `await CheckAsync(Settings(_homes), played, TestContext.Current.CancellationToken)`.
-        // Assert: the shim was launched (`played.Shims.Should().ContainSingle()`); `Directory.EnumerateFileSystemEntries(Path.Combine(_homes, VibeHomes.OneShotFolder))`
-        //   `.Should().BeEmpty("the home's folder goes when the check ends, whatever ended it")` — `coai-vh\<8>` gone; `TheDeleterNeverMetTheJunction()`; `ThePersonsFolderIsWhole(before)`.
-        // Needs `using CoaiMcp.Runners.Vibe;`. Fails before E5.3 g: "Expected the deleter's unlink recorder not to be invoked …".
-        throw new NotImplementedException("s552-home-gone");
+        RecordingTheDeleter();
+        var before = _person.Hash();
+
+        var played = theTurnFails
+            ? new PlayedKimi(new ProcessLauncher()) { Turn = (_, request) => PlayedKimi.Lost(PlayedKimi.SessionOf(request)) }
+            : new PlayedKimi(new ProcessLauncher()) { Turn = (_, request) => AnswersFromTheCopy(request) };
+
+        await CheckAsync(Settings(_homes), played, TestContext.Current.CancellationToken);
+
+        played.Shims.Should().ContainSingle();
+        Directory.EnumerateFileSystemEntries(Path.Combine(_homes, VibeHomes.OneShotFolder))
+            .Should().BeEmpty("the home's folder goes when the check ends, whatever ended it");
+        TheDeleterNeverMetTheJunction();
+        ThePersonsFolderIsWhole(before);
         // QWEN-FILL-END s552-home-gone
     }
 
@@ -145,15 +158,37 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     public async Task ACheckCancelledMidTurn_StillDisposesItsHome()
     {
         // QWEN-FILL-BEGIN s553-cancelled test
-        // Arrange: `RecordingTheDeleter()`, `var before = _person.Hash();`, `using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);`,
-        //   `var started = new TaskCompletionSource();`; `var played = new PlayedKimi(new ProcessLauncher())` whose `During` is
-        //   `async (_, ct) => { started.TrySetResult(); await Task.Delay(Timeout.Infinite, ct); }` (the played shim blocks until cancelled; `During`'s token is the launch's).
-        // Act: `var check = CheckAsync(Settings(_homes), played, cts.Token);` then `await started.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);`
-        //   then `await cts.CancelAsync();` then `var (_, said) = await check;`.
-        // Assert: the record says cancelled — `said.GetProperty("state").GetString()` is not "answered" and `said.ToString()` contains "cancel" (case-insensitive; read the real word off the first run
-        //   and write it down in the notes); `Directory.EnumerateFileSystemEntries(Path.Combine(_homes, VibeHomes.OneShotFolder))` is empty; `TheDeleterNeverMetTheJunction()`; `ThePersonsFolderIsWhole(before)`.
-        // If `CheckAsync` throws OperationCanceledException instead of returning a record, assert that with `await Assert.ThrowsAnyAsync<OperationCanceledException>(() => check)` and still check the three folder facts.
-        throw new NotImplementedException("s553-cancelled");
+        RecordingTheDeleter();
+        var before = _person.Hash();
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var started = new TaskCompletionSource();
+        var played = new PlayedKimi(new ProcessLauncher())
+        {
+            During = async (_, ct) =>
+            {
+                started.TrySetResult();
+                await Task.Delay(Timeout.Infinite, ct);
+            },
+        };
+
+        var check = CheckAsync(Settings(_homes), played, cts.Token);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        await cts.CancelAsync();
+
+        try
+        {
+            var (_, said) = await check;
+            said.GetProperty("state").GetString().Should().NotBe("answered", said.ToString());
+            said.ToString().Should().ContainEquivalentOf("cancel");
+        }
+        catch (OperationCanceledException)
+        {
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => check);
+        }
+
+        Directory.EnumerateFileSystemEntries(Path.Combine(_homes, VibeHomes.OneShotFolder)).Should().BeEmpty("the home's folder goes when a cancelled check ends");
+        TheDeleterNeverMetTheJunction();
+        ThePersonsFolderIsWhole(before);
         // QWEN-FILL-END s553-cancelled
     }
 
@@ -163,13 +198,17 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     public async Task ARootlessCheck_KeepsTheHomeInItsScratch_AndDisposesItJunctionFirst()
     {
         // QWEN-FILL-BEGIN s554-rootless test
-        // Arrange: `RecordingTheDeleter()`, `var before = _person.Hash();`, `var played = new PlayedKimi(new ProcessLauncher()) { Turn = (_, request) => AnswersFromTheCopy(request) };`.
-        // Act: `await CheckAsync(Settings(string.Empty), played, TestContext.Current.CancellationToken)` — settings built by hand, no homes root.
-        // Assert: one shim launch; `HomeOf(request)` contains `Path.Combine("own", "kh-")` (a Kimi home under `<scratch>\own\kh-…`, E5.5 decision 2); after the check `Directory.EnumerateDirectories(_temp, "coai-check-*")`
-        //   is empty (the scratch is gone); `TheDeleterNeverMetTheJunction()`; `ThePersonsFolderIsWhole(before)`.
-        // Needs the `home` path read from the request BEFORE the check ends (it is in `played.Shims`' request, which stays after the check).
-        // Fails before E5.3 g: "Expected the deleter's unlink recorder not to be invoked …".
-        throw new NotImplementedException("s554-rootless");
+        RecordingTheDeleter();
+        var before = _person.Hash();
+        var played = new PlayedKimi(new ProcessLauncher()) { Turn = (_, request) => AnswersFromTheCopy(request) };
+
+        await CheckAsync(Settings(string.Empty), played, TestContext.Current.CancellationToken);
+
+        var request = played.Shims.Should().ContainSingle().Subject.Request;
+        HomeOf(request).Should().Contain(Path.Combine("own", "kh-"), "a root-less check keeps its Kimi home under its own scratch");
+        Directory.EnumerateDirectories(_temp, "coai-check-*").Should().BeEmpty("the scratch is gone after the check");
+        TheDeleterNeverMetTheJunction();
+        ThePersonsFolderIsWhole(before);
         // QWEN-FILL-END s554-rootless
     }
 }

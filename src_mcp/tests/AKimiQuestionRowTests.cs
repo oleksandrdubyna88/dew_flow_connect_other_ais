@@ -62,9 +62,19 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
     private async Task RepositoryAsync(string at, params (string Path, string Text)[] files)
     {
         // QWEN-FILL-BEGIN s567-repo-helper test
-        // Copy `AVibeQuestionRowReadsACopyOfItsRootsTests.RepositoryAsync` (the context pack has it whole): create each file under `at`, then run
-        // `git init -b main`, `config user.email`, `config user.name`, `add .`, `commit -m base` with `_launcher`, each exit code 0.
-        throw new NotImplementedException("s567-repo-helper");
+        Directory.CreateDirectory(at);
+        foreach (var (path, text) in files)
+        {
+            var full = Path.Combine([at, .. path.Split('/')]);
+            Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+            await File.WriteAllTextAsync(full, text, TestContext.Current.CancellationToken);
+        }
+
+        foreach (var args in (string[][])[["init", "-b", "main"], ["config", "user.email", "t@example.com"], ["config", "user.name", "t"], ["add", "."], ["commit", "-m", "base"]])
+        {
+            var result = await _launcher.RunAsync(new ProcessRequest("git", args, at), TestContext.Current.CancellationToken);
+            result.ExitCode.Should().Be(0, string.Join(' ', args) + ": " + result.StdErr);
+        }
         // QWEN-FILL-END s567-repo-helper
     }
 
@@ -72,10 +82,26 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
     private PanelService ServiceOn(PlayedKimi played, params string[] roots)
     {
         // QWEN-FILL-BEGIN s567-service test
-        // Copy `AVibeQuestionRowReadsACopyOfItsRootsTests.ServiceFor` (the context pack has it whole), with: `ConsultantHomesRoot = Homes`, `DataDir = _dir.At("data")`,
-        //   the row `new QuestionRow("kimi-disk", "my-kimi", "kimi", string.Empty, string.Empty, string.Empty, string.Empty, "question-disk", Enabled: true)`, `Roots = roots`,
-        //   and `played` as the launcher argument of `new PanelService(settings, VaultKeys.None("no vault in tests"), default, played, Logger.None, Noticing.None)`.
-        throw new NotImplementedException("s567-service");
+        return new PanelService(
+            new PanelSettings
+            {
+                ConsultantHomesRoot = Homes,
+                Providers = [],
+                Rounds = PanelConfig.Uniform(3, 2, StagePolicy.Human),
+                DataDir = _dir.At("data"),
+                ReviewerTimeout = TimeSpan.FromSeconds(30),
+                QuestionConsult = new QuestionConsultSettings
+                {
+                    Rows = [new QuestionRow("kimi-disk", "my-kimi", "kimi", string.Empty, string.Empty, string.Empty, string.Empty, "question-disk", Enabled: true)],
+                    Roots = roots,
+                    RowBudget = TimeSpan.FromSeconds(30),
+                },
+            },
+            VaultKeys.None("no vault in tests"),
+            default,
+            played,
+            Logger.None,
+            Noticing.None);
         // QWEN-FILL-END s567-service
     }
 
@@ -83,10 +109,10 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
     private IDisposable StandIn()
     {
         // QWEN-FILL-BEGIN s567-standin test
-        // The same four stand-ins `AKimiConsultationScenarioTests.StandIn` composes (its private `Scopes` class is not reachable; write a small private nested `Scopes(params IDisposable[])`
-        // that disposes in reverse): `WindowsStandIn.Begin()`, `KimiCredentialsLock.RootFor(Path.Combine(_person.Folder, "locks"))`,
-        // `KimiSeams.Using(HostKind.Windows, new KimiSeams(_person.PlacesAt, () => (PlayedKimi.Shim, [])))`. (No `CallingAs`: a question row needs no caller kind.)
-        throw new NotImplementedException("s567-standin");
+        return new Scopes(
+            WindowsStandIn.Begin(),
+            KimiCredentialsLock.RootFor(Path.Combine(_person.Folder, "locks")),
+            KimiSeams.Using(HostKind.Windows, new KimiSeams(_person.PlacesAt, () => (PlayedKimi.Shim, []))));
         // QWEN-FILL-END s567-standin
     }
 
@@ -111,22 +137,72 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
     {
         _ = ending; // the parameter is read by the body below; this line only keeps the skeleton building
         // QWEN-FILL-BEGIN s567-disk-row test
-        // Arrange: `using var stood = StandIn();`, `GitScratch.AfterUnlink = _unlinkedByTheDeleter.Add;`, `var before = _person.Hash();`, `var granted = Path.Combine(Repo, "src");`,
-        //   `using var caller = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);`.
-        //   `var played = new PlayedKimi(_launcher) { Turn = (_, request) => PlayedKimi.Answered(PlayedKimi.SessionOf(request), 19973, 31, Advice) }`; for `Ending.CancelledMidTurn`
-        //   its `During` is `async (_, ct) => { await caller.CancelAsync(); ct.ThrowIfCancellationRequested(); }`.
-        //   The roots: `[granted]`, except `Ending.RefusedBeforeTheLaunch` where the root is a plain folder outside any git work tree — `Directory.CreateDirectory(_dir.At("plain"))` with a
-        //   file in it (the Vibe test `ARowRefusedAtItsCopy_GivesItsOneShotFolderBack` does this) — so the copy is refused and nothing launches.
-        // Act: `var reply = await AskAsync(ServiceOn(played, roots), caller.Token)`; for the cancelled ending the call throws `OperationCanceledException`
-        //   (`await asking.Should().ThrowAsync<OperationCanceledException>()` with `asking = async () => await AskAsync(...)`).
-        // Assert, per ending: Answered → `TheRow(reply).GetProperty("status").GetString()` is `RowOutcomes.Answered`, one shim launch (`played.Shims`), whose stdin/argv prompt names the COPY's path
-        //   (`request.StdIn` contains the row's `tree` folder `Path.Combine(<row folder>, "tree")` where the row folder is the parent of `--home`'s value) and NEVER `granted`; Refused → status
-        //   `RowOutcomes.Refused` or `RowOutcomes.Failed` (read the real one off the first run and write it into the notes), `played.Shims` empty; Cancelled → the throw above, one launch.
-        //   After EACH ending: `Directory.EnumerateFileSystemEntries(Path.Combine(Homes, VibeHomes.OneShotFolder))` is empty (the row's `coai-vh\<8>` is gone) — if the folder does not exist
-        //   that counts as empty; for Answered/Cancelled the row folder (parent of the shim's `--home` value) does not exist; `_unlinkedByTheDeleter` is empty;
-        //   `_person.Hash().Should().Equal(before)`.
-        // Fails before E5.3 g: "Expected Directory.Exists(\"…\\coai-vh\\<8>\") to be False, but found True." or the recorder not empty.
-        throw new NotImplementedException("s567-disk-row");
+        using var stood = StandIn();
+        GitScratch.AfterUnlink = _unlinkedByTheDeleter.Add;
+        var before = _person.Hash();
+        string granted = Path.Combine(Repo, "src");
+        using var caller = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+
+        string plain = _dir.At("plain");
+        if (ending == Ending.RefusedBeforeTheLaunch)
+        {
+            Directory.CreateDirectory(plain);
+            await File.WriteAllTextAsync(Path.Combine(plain, "notes.txt"), "not a repository", TestContext.Current.CancellationToken);
+        }
+
+        string[] roots = ending == Ending.RefusedBeforeTheLaunch ? new[] { plain } : new[] { granted };
+
+        Func<ProcessRequest, CancellationToken, Task> during = ending == Ending.CancelledMidTurn
+            ? async (_, ct) => { await caller.CancelAsync(); ct.ThrowIfCancellationRequested(); }
+            : (_, _) => Task.CompletedTask;
+        var played = new PlayedKimi(_launcher)
+        {
+            Turn = (_, request) => PlayedKimi.Answered(PlayedKimi.SessionOf(request), 19973, 31, Advice),
+            During = during,
+        };
+
+        JsonElement reply = default;
+        if (ending == Ending.CancelledMidTurn)
+        {
+            var asking = async () => await AskAsync(ServiceOn(played, roots), caller.Token);
+            await asking.Should().ThrowAsync<OperationCanceledException>();
+        }
+        else
+        {
+            reply = await AskAsync(ServiceOn(played, roots), caller.Token);
+        }
+
+        if (ending == Ending.RefusedBeforeTheLaunch)
+        {
+            // First run: read the real refusal word and keep only that one in the check below.
+            string status = TheRow(reply).GetProperty("status").GetString() ?? string.Empty;
+            (status == RowOutcomes.Refused || status == RowOutcomes.Failed).Should().BeTrue(status);
+            played.Shims.Should().BeEmpty();
+        }
+        else
+        {
+            var launch = played.Shims.Should().ContainSingle("the shim is launched once").Subject;
+            var args = launch.Request.Arguments;
+            var rowFolder = Path.GetDirectoryName(args[args.ToList().IndexOf("--home") + 1])!;
+
+            if (ending == Ending.Answered)
+            {
+                TheRow(reply).GetProperty("status").GetString().Should().Be(RowOutcomes.Answered);
+                launch.Request.StdIn.Should().Contain(Path.Combine(rowFolder, "tree"));
+                launch.Request.StdIn.Should().NotContain(granted);
+            }
+
+            Directory.Exists(rowFolder).Should().BeFalse("the row folder goes with its one-shot home");
+        }
+
+        var oneShot = Path.Combine(Homes, VibeHomes.OneShotFolder);
+        if (Directory.Exists(oneShot))
+        {
+            Directory.EnumerateFileSystemEntries(oneShot).Should().BeEmpty("the row's folder under coai-vh is deleted on every way out");
+        }
+
+        _unlinkedByTheDeleter.Should().BeEmpty();
+        _person.Hash().Should().Equal(before);
         // QWEN-FILL-END s567-disk-row
     }
 }

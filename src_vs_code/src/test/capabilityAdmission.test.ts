@@ -177,11 +177,25 @@ test('a flagged admission carries the caveat a person must acknowledge (D13)', (
 
 test('kimi rows admit flagged, web refuses naming its record', () => {
   // QWEN-FILL-BEGIN s568-kimi-admit test
-  // For 'none' and 'disk': `const admission = admit('kimi', capability);` → `assert.equal(admission.admitted, true, admission.reason)`,
-  //   `assert.equal(admission.standing, 'unconfined')`, `assert.equal(admission.flag, 'unconfined')`, `assert.match(admission.caveat, /can read this machine/u)`.
-  // For 'web': `const refusal = admit('kimi', 'web');` → `assert.equal(refusal.admitted, false)`, `assert.match(refusal.reason, /not been measured/u)`,
-  //   `assert.match(refusal.reason, /RESULTS_kimi_confinement\.md/u)` and `assert.ok(!refusal.reason.includes('RESULTS_question_consultant_capabilities.md'))`.
-  // Before the table holds kimi: "'kimi' is not a runtime the question consultant can launch". (The runtimes-list assertion of the 'words are the file's words' test already gained 'kimi'.)
-  throw new Error('s568-kimi-admit');
+  const none = admit('kimi', 'none');
+
+  assert.equal(none.admitted, true, none.reason);
+  assert.equal(none.standing, 'unconfined');
+  assert.equal(none.flag, 'unconfined');
+  assert.match(none.caveat, /can read this machine/u);
+
+  const disk = admit('kimi', 'disk');
+
+  assert.equal(disk.admitted, true, disk.reason);
+  assert.equal(disk.standing, 'unconfined');
+  assert.equal(disk.flag, 'unconfined');
+  assert.match(disk.caveat, /can read this machine/u);
+
+  const refusal = admit('kimi', 'web');
+
+  assert.equal(refusal.admitted, false);
+  assert.match(refusal.reason, /not been measured/u);
+  assert.match(refusal.reason, /RESULTS_kimi_confinement\.md/u);
+  assert.ok(!refusal.reason.includes('RESULTS_question_consultant_capabilities.md'));
   // QWEN-FILL-END s568-kimi-admit
 });
