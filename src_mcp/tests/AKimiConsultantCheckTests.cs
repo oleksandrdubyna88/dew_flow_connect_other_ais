@@ -34,9 +34,9 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     private static readonly string[] CallerVariables =
         ["COAI_CALLER_SESSION", "CLAUDE_CODE_SESSION_ID", "CODEX_SESSION_ID", "GEMINI_CLI_SESSION_ID"];
 
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-checktest-data-").FullName;
-    private readonly string _temp = Directory.CreateTempSubdirectory("coai-checktest-temp-").FullName;
-    private readonly string _record = Directory.CreateTempSubdirectory("coai-checktest-argv-").FullName;
+    private readonly string _data = Directory.CreateTempSubdirectory("testsToDelete-kimi-check-data-").FullName;
+    private readonly string _temp = Directory.CreateTempSubdirectory("testsToDelete-kimi-check-temp-").FullName;
+    private readonly string _record = Directory.CreateTempSubdirectory("testsToDelete-kimi-check-argv-").FullName;
     private readonly List<string> _warned = [];
 
     private static string FakeCliExe => Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "FakeCli.exe" : "FakeCli");
@@ -293,7 +293,9 @@ public sealed class AKimiConsultantCheckTests : IDisposable
         using var person = new KimiFixture();
         using var stood = StandIn(person);
         var played = new PlayedKimi(new ProcessLauncher()) { Turn = (_, request) => AnswerFor(request) };
+        var unlinked = new ConcurrentQueue<string>();
         var homeUnlinked = new ConcurrentQueue<string>();
+        GitScratch.AfterUnlink = unlinked.Enqueue;
         KimiHome.AfterUnlink = homeUnlinked.Enqueue;
         try
         {
@@ -304,12 +306,14 @@ public sealed class AKimiConsultantCheckTests : IDisposable
         }
         finally
         {
+            GitScratch.AfterUnlink = null;
             KimiHome.AfterUnlink = null;
         }
 
         var shim = played.Shims.Should().ContainSingle().Subject.Request;
         ValueOf(shim, "--home").Should().Contain(Path.Combine("own", "kh-"), "with no homes root the home is the scratch's own folder");
         Directory.EnumerateDirectories(_temp, "coai-check-*").Should().BeEmpty("the scratch goes with the check");
+        unlinked.Should().BeEmpty("the git deleter's recorder is never invoked on a rootless check (S5.5.4)");
         homeUnlinked.Should().ContainSingle().Which.Should().EndWith(Path.Combine("home", "credentials"), "the home's one junction is unlinked before its folder is deleted (E5.3 g)");
     }
 }

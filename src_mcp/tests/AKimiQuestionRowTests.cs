@@ -30,7 +30,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
     private const string Advice = "Retry with a jittered backoff, three attempts.";
 
     private readonly ProcessLauncher _launcher = new();
-    private readonly TempDir _dir = TempDir.For("coai-qkimi-");
+    private readonly TempDir _dir = TempDir.For("testsToDelete-kimi-qrow-");
     private readonly TempDir _homesDir = TempDir.For("testsToDelete-kimi-question-");
 
     private string Repo => _dir.At("repo");
