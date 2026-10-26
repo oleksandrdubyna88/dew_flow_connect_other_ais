@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 not started.** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6: skeleton only (2026-10-26) — the Kimi rows, the vectors, the generated table and the planner arm are in; the 12 scenarios are test shells whose bodies still throw (deviations 50–55).** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -1085,6 +1085,17 @@ Numbered from 40, apart from the lists above, so the stories built in parallel d
 45. **Decision (e)'s sentence lives in *The consultant* article** (*What can go wrong*, five languages), because it is about a `consult` turn;
     the question-consultant article says only that a Kimi row's launches wait for one another and for a Kimi review on the same sign-in.
 46. **`CONSULTANT_SINCE` gates a note, so `consultantsWire.ts` is unchanged.** S5.7.3 was green before any code, as the row said.
+
+### E5.5–E5.6 skeleton (2026-10-26) — where it deviates from the spec above
+
+Numbered from 50. This is the skeleton step only: the scenarios exist as tests with their table names, and their bodies are placeholders.
+
+50. **The runtimes list changed in two places, not one.** `RuntimeCapabilities.Runtimes` (`:84`) and the `runtimes` array of `shared/runtime-capabilities.json` both gain `kimi`; the generator reads the second. `capabilityAdmission.test.ts:143` (the `RUNTIMES` list) gains `kimi` too, so the existing test stays right. The existing refusal assertions that match "claude, codex, antigravity, local, api, vibe" still pass, because that text is a prefix of the new list.
+51. **The planner arm is written in full, and so is `KimiConsultant`'s refusal of a plan with flags** (`MustCarryNoPlanFlags`, three lines, decision 3). Both are too short to be a fill region. So S5.6.3 and S5.6.6 may be green as soon as their bodies are filled; their "expected red today" needs the arms removed, as for E5.4's pins.
+52. **The `kimi` rows' `date` is 2026-10-13** (the date of M-K6, M-K3 and M-K4 in RESULTS), and `version` is `2.1.1`. The `web` row cites RESULTS §14.
+53. **S5.5.2 is a `[Theory]` over `theTurnFails`** (false: passed; true: exit 70), as the table's "second arm" says. S5.6.7 is a `[Theory]` over `ending` (`answered`, `refused-before-the-launch`, `cancelled-mid-turn`).
+54. **A small helper, `KimiScenarioScopes.StandIn(KimiFixture)`** (`src_mcp/tests/KimiScenarioScopes.cs`), gives the check and the question row the same four stand-ins `AKimiConsultationScenarioTests` keeps private (the host, the fake person, the lock root, the played shim's name). The older class is not changed.
+55. **S5.6.2 (`TheVectorsCoverKimi`) and the planner's `MustCarryNoPlanFlags` have no fill region.** The first is a 3-line loop over the vectors; the existing `TheVectorsActuallyLoaded_AndCoverEveryPairOfTheTable` already fails for a missing pair, so this test is a named pin for Kimi.
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 

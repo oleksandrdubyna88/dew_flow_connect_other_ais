@@ -76,11 +76,11 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
     }
 
     /// <summary>What S5.6.7's three endings leave behind: nothing under the homes root's <c>coai-vh</c>, and the fake person's folder whole.</summary>
-    private void NothingIsLeftBehind(KimiFixture person, ProcessRequest? shim)
+    private void NothingIsLeftBehind(KimiFixture person, IReadOnlyList<string> personBefore, IReadOnlyList<string> unlinked, ProcessRequest? shim)
     {
         // QWEN-FILL-BEGIN s567-clean test
         // See regions/s567-clean.md.
-        throw new NotImplementedException("s567-clean");
+        throw new NotImplementedException($"s567-clean {person} {personBefore} {unlinked} {shim}");
         // QWEN-FILL-END s567-clean
     }
 
