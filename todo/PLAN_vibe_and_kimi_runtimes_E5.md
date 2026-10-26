@@ -1089,7 +1089,7 @@ Numbered from 40, apart from the lists above, so the stories built in parallel d
 ### E5.5–E5.6 skeleton (Sonnet, 2026-10-26) — where it deviates from the spec above
 
 Numbered from 47. The SKELETON step only: the data and the signatures are final, the method bodies of the 12 scenarios and of two
-production methods are placeholders that throw (`QWEN-FILL` regions), and no test has been run red or green yet.
+production methods are placeholders that throw (fill regions), and no test has been run red or green yet.
 
 47. **The data is written and final:** the three `kimi` rows (`shared/runtime-capabilities.json`; `none` and `disk` `unconfined`, `web` `unmeasured`,
     version 2.1.1, `date` 2026-10-16 — the day of the plan's evidence), the three vectors, `RuntimeCapabilities.Runtimes` and the regenerated
