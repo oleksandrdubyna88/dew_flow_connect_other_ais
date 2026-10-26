@@ -89,7 +89,9 @@ public sealed class AKimiConsultantCheckTests : IDisposable
         Text(said, "state").Should().Be("answered", "an answered check is one whose scratch repository and canary were left as they were: " + said);
         said.GetProperty("markerRead").GetBoolean().Should().BeTrue("the copy holds the scratch's CHECK.md");
         Text(said, "canary").Should().Be("not-attempted");
-        var turn = played.Shims.Should().ContainSingle().Subject.Request;
+        var launch = played.Shims.Should().ContainSingle().Subject;
+        launch.CredentialsLinked.Should().BeTrue("the one-shot home held its credentials link during the turn");
+        var turn = launch.Request;
         After(turn, "--cwd").Should().Contain(Path.Combine("own", "tree"), "a copy in the check's own scratch, never the repository");
         var home = After(turn, AcpWords.HomeFlag);
         Path.GetDirectoryName(Path.GetDirectoryName(home)).Should().Be(Path.Combine(_homes, VibeHomes.OneShotFolder), "`<root>/coai-vh/<8>/kh-<10 hex>`");
@@ -111,7 +113,8 @@ public sealed class AKimiConsultantCheckTests : IDisposable
         var (_, said, _) = await Check(Settings(_homes), played, TestContext.Current.CancellationToken);
 
         Text(said, "state").Should().Be(theTurnFails ? "failed" : "answered", said.ToString());
-        played.Shims.Should().ContainSingle("the turn really ran, so a home really stood");
+        played.Shims.Should().ContainSingle("the turn really ran, so a home really stood")
+            .Which.CredentialsLinked.Should().BeTrue("the home held its credentials link during the turn, so an empty deleter list means the home took it away");
         Directory.EnumerateFileSystemEntries(Path.Combine(_homes, VibeHomes.OneShotFolder)).Should().BeEmpty("the home's folder goes when the check ends, whatever ended it");
         _unlinkedByTheDeleter.Should().BeEmpty("the home's junction was unlinked by KimiHome, never met by the deleter");
         _person.Hash().Should().Equal(before, "the person's folder: the same names, bytes and read-only bits as before");
@@ -133,7 +136,8 @@ public sealed class AKimiConsultantCheckTests : IDisposable
         // The check answers a failed record whose kind is `cancelled` (deviation 53), not a state of that name.
         Text(said, "state").Should().Be("failed", said.ToString());
         Text(said, "failureKind").Should().Be("cancelled");
-        played.Shims.Should().ContainSingle("the turn had started when it was cancelled");
+        played.Shims.Should().ContainSingle("the turn had started when it was cancelled")
+            .Which.CredentialsLinked.Should().BeTrue("the home held its credentials link when the turn was cancelled");
         Directory.EnumerateFileSystemEntries(Path.Combine(_homes, VibeHomes.OneShotFolder)).Should().BeEmpty();
         _unlinkedByTheDeleter.Should().BeEmpty();
         _person.Hash().Should().Equal(before);
@@ -152,7 +156,9 @@ public sealed class AKimiConsultantCheckTests : IDisposable
         var (_, said, _) = await Check(Settings(string.Empty), played, TestContext.Current.CancellationToken);
 
         Text(said, "state").Should().Be("answered", said.ToString());
-        var home = After(played.Shims.Should().ContainSingle().Subject.Request, AcpWords.HomeFlag);
+        var launch = played.Shims.Should().ContainSingle().Subject;
+        launch.CredentialsLinked.Should().BeTrue("the rootless home held its credentials link during the turn");
+        var home = After(launch.Request, AcpWords.HomeFlag);
         Path.GetDirectoryName(home).Should().EndWith("own", "with no homes root the home stays in the check's scratch");
         Path.GetFileName(home).Should().MatchRegex("^kh-[0-9a-f]{10}$");
         Directory.EnumerateDirectories(_temp, "coai-check-*").Should().BeEmpty("the scratch is gone, and the deleter never met the home's junction");

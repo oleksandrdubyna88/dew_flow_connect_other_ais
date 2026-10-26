@@ -148,7 +148,9 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
         }
         else
         {
-            var turn = played.Shims.Should().ContainSingle().Subject.Request;
+            var launch = played.Shims.Should().ContainSingle().Subject;
+            launch.CredentialsLinked.Should().BeTrue("the row's home held its credentials link during the turn, so an empty deleter list means the home took it away");
+            var turn = launch.Request;
             turn.StdIn.Should().Contain(turn.WorkingDirectory, "the prompt names the copy Kimi reads");
             turn.StdIn.Should().NotContain(granted, "never the root");
             Directory.Exists(turn.WorkingDirectory).Should().BeFalse("the row's scratch is gone");

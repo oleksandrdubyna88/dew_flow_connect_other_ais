@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 using CoaiMcp.Runners.Acp;
+using CoaiMcp.Runners.Files;
+using CoaiMcp.Runners.Kimi;
 using CoaiMcp.Runners.Processes;
 
 namespace CoaiMcp.Tests;
@@ -26,8 +28,8 @@ internal sealed class PlayedKimi(IProcessLauncher inner) : IProcessLauncher
     private int _running;
     private int _peak;
 
-    /// <summary>One shim launch: what it was asked, and when it ran.</summary>
-    public sealed record Launch(ProcessRequest Request, DateTime StartUtc, DateTime EndUtc);
+    /// <summary>One shim launch: what it was asked, when it ran, and whether its home's <c>credentials</c> was a link when it started.</summary>
+    public sealed record Launch(ProcessRequest Request, DateTime StartUtc, DateTime EndUtc, bool CredentialsLinked);
 
     public ConcurrentQueue<Launch> Shims { get; } = new();
 
@@ -58,6 +60,7 @@ internal sealed class PlayedKimi(IProcessLauncher inner) : IProcessLauncher
     {
         var index = Interlocked.Increment(ref _started) - 1;
         var start = DateTime.UtcNow;
+        var linked = CredentialsLinked(request);
         InterlockedMax(Interlocked.Increment(ref _running));
         try
         {
@@ -68,8 +71,16 @@ internal sealed class PlayedKimi(IProcessLauncher inner) : IProcessLauncher
         finally
         {
             Interlocked.Decrement(ref _running);
-            Shims.Enqueue(new Launch(request, start, DateTime.UtcNow));
+            Shims.Enqueue(new Launch(request, start, DateTime.UtcNow, linked));
         }
+    }
+
+    /// <summary>The positive companion of every "nothing was left" assertion: the launch's own home really held the link the disposal is to take away.</summary>
+    private static bool CredentialsLinked(ProcessRequest request)
+    {
+        var at = request.Arguments.ToList().IndexOf(AcpWords.HomeFlag);
+
+        return at >= 0 && OwnedPaths.IsLinkIfThere(KimiPlaces.ForShim(request.Arguments[at + 1], string.Empty).Link);
     }
 
     private void InterlockedMax(int value)
