@@ -143,6 +143,25 @@ public sealed class ConfinementPlannerTests
         ConfinementPlanner.VibeReadOnly.Should().Equal(disk.Flags, "the reviewer and the planner spell D2 once");
     }
 
+    [Fact]
+    public void ThePlannerArm_ForKimi_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb()
+    {
+        var none = Plan("kimi", CapabilityGrant.None);
+        none.Flags.Should().BeEmpty("E5.6 decision 1: Kimi's confinement is the shim's (D15), never the argv's");
+        none.Cwd.Should().Be(CwdKind.Scratch);
+        none.Flag.Should().Be(AdmissionFlag.Unconfined);
+
+        var disk = Plan("kimi", CapabilityGrant.Disk(RootA, RootB));
+        disk.Flags.Should().BeEmpty();
+        disk.Cwd.Should().Be(CwdKind.Snapshot, "M-K9 (e): a branch's own AGENTS.md, skills and sub-agents load from disk, so the roots are copied");
+        disk.SnapshotSources.Should().Equal([RootA, RootB]);
+        disk.AddDirs.Should().BeEmpty();
+
+        ConfinementPlanner.Plan("kimi", new CapabilityGrant(Capability.Web, []))
+            .Should().BeOfType<Confinement.Refused>()
+            .Which.Reason.Should().Contain("not been measured").And.Contain("RESULTS_kimi_confinement.md");
+    }
+
     // ---------- refusals ----------
 
     [Theory]
@@ -338,6 +357,40 @@ public sealed class ConfinementPlannerTests
                 "the row's home lives in the row's own folder, gone with it");
             Runners.Vibe.VibeLaunch.EnvironmentRefusal(request).Should().BeEmpty("the one launch control admits it (D17)");
         }
+    }
+
+    [Fact]
+    public void AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome()
+    {
+        var consultant = Adapters().Single(a => a.Runtime == "kimi").Consultant;
+
+        var none = consultant.Build(Planned("kimi", CapabilityGrant.None));
+        none.Request.WorkingDirectory.Should().Be(Scratch, "a none row stands in its empty folder");
+        var noneHome = none.Request.Arguments.SkipWhile(a => a != "--home").Skip(1).First();
+        noneHome.Should().StartWith(RowFolder + Path.DirectorySeparatorChar, "the row's home lives in the row's own folder, gone with it");
+
+        var disk = consultant.Build(Planned("kimi", CapabilityGrant.Disk(RootA, RootB)));
+        disk.Request.WorkingDirectory.Should().Be(RowTree, "the copy of the roots (D6)");
+        disk.Request.Arguments.Should().NotContain(RootA).And.NotContain(RootB, "the roots are read through their copy, never named to Kimi");
+
+        foreach (var request in (Runners.Processes.ProcessRequest[])[none.Request, disk.Request])
+        {
+            request.Arguments.Should().NotContain(Runners.Acp.AcpWords.SessionFlag, "one shot: a question row never resumes a session");
+            request.InheritsEnvironment.Should().BeFalse();
+            request.Passthrough.Should().BeEquivalentTo(Runners.Processes.ProcessEnvironment.Minimal, "the question row's road (ForQuestion)");
+        }
+    }
+
+    [Fact]
+    public void APlanWithFlags_IsRefusedForKimi_NamingTheShim()
+    {
+        var consultant = Adapters().Single(a => a.Runtime == "kimi").Consultant;
+        var flagged = Plan("kimi", CapabilityGrant.None) with { Flags = ["--yolo"] };
+        var launch = Planned("kimi", CapabilityGrant.None) with { Confinement = new LaunchConfinement.Planned(flagged) };
+
+        var build = () => consultant.Build(launch);
+
+        build.Should().Throw<ArgumentException>().WithMessage("*the shim*");
     }
 
     /// <summary>No Vibe launch carries <c>--add-dir</c>, whatever the grant (D3: <c>--add-dir</c> trusts its folder).</summary>
