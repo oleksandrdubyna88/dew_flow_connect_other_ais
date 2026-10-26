@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 not started.** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 implemented 2026-10-26 (Opus): the Kimi check proved in a copy on a one-shot home; three capability rows, the planner arm, the one-shot row; deviations 31–43, *E5.5–E5.6 as built*.** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -1085,6 +1085,39 @@ Numbered from 40, apart from the lists above, so the stories built in parallel d
 45. **Decision (e)'s sentence lives in *The consultant* article** (*What can go wrong*, five languages), because it is about a `consult` turn;
     the question-consultant article says only that a Kimi row's launches wait for one another and for a Kimi review on the same sign-in.
 46. **`CONSULTANT_SINCE` gates a note, so `consultantsWire.ts` is unchanged.** S5.7.3 was green before any code, as the row said.
+
+### E5.5–E5.6 as built (Opus, 2026-10-26)
+
+Numbered from 31, apart from the lists above, so the stories built in parallel do not collide on a number.
+
+31. **`none` is `unconfined` for Kimi.** E5.6 decision 2, on the same M-K6 evidence. `CapabilityMatrix.Admit("kimi", Capability.None)` admits
+    with `AdmissionFlag.Unconfined`.
+32. **The unconfined caveat is shared, and its shell clause does not describe Kimi exactly.** `AdmissionFlag.Unconfined` keeps the sentence
+    "can read this machine — a shell is always there …", unchanged. A Kimi-specific caveat is left open.
+33. **`MustCarryNoFlags` refuses `Leading` as well as `Flags`.** A planned Kimi launch with a leading argument is refused, as one with a flag is
+    (`KimiConsultant.cs:60`).
+34. **E5.5 and S5.6.7 add tests only, and their green was not observed on any host.** Both skip on Linux (D18). The coders of t3 and t4 ran on
+    Linux: every case skipped, and no red or green was seen. The mutation proof of S5.5 was not run; it needs Windows.
+35. **S5.6.5 was red before the planner arm, not green.** Its disk request kept the scratch folder, because the plan was Scratch. The `disk`
+    arm (a snapshot) made it green. The web InlineData was green before the change: the matrix refuses `web` before the planner runs.
+36. **`Records` in `CapabilityMatrixTests` gains `RESULTS_kimi_confinement.md`.** The citation test names the records a row may cite. The Kimi
+    rows failed with "the collection is empty" until the record was listed. The spec does not name this change.
+37. **S5.6.7's one-shot folder check reads `coai-vh` as the spec does.** The first version guarded with `Directory.Exists`; commit `38ebb5f3`
+    removed the guard. Whether a refused row reserves the folder is not yet seen on Windows.
+38. **The S5.5 one-shot check treats an absent `coai-vh` as empty.** `OneShotEntries` in `AKimiConsultantCheckTests` returns no entries for a
+    folder that is not there, because then the home is gone. The spec's enumerate call would throw there.
+39. **Some red messages differed in wording from the spec.** FluentAssertions names the variable (`Expected none not to be <null>`), and
+    S5.6.3 names `disk`, not `plan`. The coder notes list each one (`T3-t1-code.md`, `T3-t2-code.md`).
+40. **The suite is not green except for the two known failures.** On a full run, t1 and t4 saw `QuestionRowOnAgyScenarioTests` fail: t1
+    `ACallerWhoGivesUpBetweenTheLaunches_…` and `AFollowUpCutShortByTheCaller_…`, t4 `ADeniedCommand_…` and `AFollowUpCutShortByTheCaller_…`.
+    Each class passes alone. t3 saw `TheRoundsNumstatsAreCountedTests.AnUnknownCommit_IsGitFailed_NeverAThrow` fail when run alone; it is not
+    explained. None of these was checked against `b4e2ea96`.
+41. **`dotnet format --verify-no-changes` on the solution exits 2.** Every finding is an analyzer error (IL2026, IL3050) in `src_server` or
+    `src_bugs`. With `--include`, each new file passes.
+42. **The test host here has no `.exe`.** On this Linux host the test host is `./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests`; the commands
+    in `common.md` name the `.exe`, which does not exist here.
+43. **The S5.6.7 theory keeps each ending in a helper,** so every method stays at complexity 4, and its homes root is a disposed field
+    (`_homes`); the spec does not list that field.
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 
