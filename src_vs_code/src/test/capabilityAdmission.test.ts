@@ -177,11 +177,16 @@ test('a flagged admission carries the caveat a person must acknowledge (D13)', (
 
 test('kimi rows admit flagged, web refuses naming its record', () => {
   // QWEN-FILL-BEGIN s568-ts test
-  // With node:assert/strict as in the tests above. For 'none' and 'disk': const a = admit('kimi', cap); assert.equal(a.admitted, true);
-  // assert.equal(a.standing, 'unconfined'); assert.match(a.caveat, /can read this machine/u).
-  // For 'web': const w = admit('kimi', 'web'); assert.equal(w.admitted, false); assert.match(w.reason, /not been measured/u);
-  // assert.match(w.reason, /RESULTS_kimi_confinement\.md/u). Field names: see the pack (they are those admit() returns in capabilityAdmission.ts).
-  // Fails before the table knows kimi: admit('kimi', ...) is refused as 'not a runtime the question consultant can launch'.
-  throw new Error('s568-ts');
+  const caps = ['none', 'disk', 'web'] as const;
+  for (const cap of caps) {
+    const a = admit('kimi', cap);
+    assert.equal(a.admitted, true);
+    assert.equal(a.standing, 'unconfined');
+    assert.match(a.caveat, /can read this machine/u);
+  }
+  const w = admit('kimi', 'web');
+  assert.equal(w.admitted, false);
+  assert.match(w.reason, /not been measured/u);
+  assert.match(w.reason, /RESULTS_kimi_confinement\.md/u);
   // QWEN-FILL-END s568-ts
 });

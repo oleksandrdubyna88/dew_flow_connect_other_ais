@@ -148,14 +148,22 @@ public sealed class ConfinementPlannerTests
     public void ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb()
     {
         // QWEN-FILL-BEGIN s563-planner test
-        // Arrange: nothing. Act/Assert:
-        //  var none = Plan("kimi", CapabilityGrant.None);  none.Cwd.Should().Be(CwdKind.Scratch); none.Flags.Should().BeEmpty(); none.Leading.Should().BeEmpty(); none.AddDirs.Should().BeEmpty();
-        //  var disk = Plan("kimi", CapabilityGrant.Disk(RootA, RootB));  disk.Cwd.Should().Be(CwdKind.Snapshot, "...");
-        //    disk.SnapshotSources.Should().Equal([RootA, RootB]); disk.Flags.Should().BeEmpty(); disk.AddDirs.Should().BeEmpty();
-        //  ConfinementPlanner.Plan("kimi", CapabilityGrant.Web).Should().BeOfType<Confinement.Refused>().Which.Reason
-        //    .Should().Contain("not been measured").And.Contain("RESULTS_kimi_confinement.md");
-        // Before the arm: the default arm gives Scratch for disk too — "Expected plan.Cwd to be CwdKind.Snapshot, but found CwdKind.Scratch."
-        throw new NotImplementedException("s563-planner");
+        var none = Plan("kimi", CapabilityGrant.None);
+        none.Cwd.Should().Be(CwdKind.Scratch);
+        none.Flags.Should().BeEmpty();
+        none.Leading.Should().BeEmpty();
+        none.AddDirs.Should().BeEmpty();
+        none.Flag.Should().Be(AdmissionFlag.Unconfined);
+
+        var disk = Plan("kimi", CapabilityGrant.Disk(RootA, RootB));
+        disk.Cwd.Should().Be(CwdKind.Snapshot, "the shim's copy of the roots");
+        disk.SnapshotSources.Should().Equal([RootA, RootB]);
+        disk.Flags.Should().BeEmpty();
+        disk.AddDirs.Should().BeEmpty();
+        disk.Flag.Should().Be(AdmissionFlag.Unconfined);
+
+        ConfinementPlanner.Plan("kimi", CapabilityGrant.Web).Should().BeOfType<Confinement.Refused>().Which.Reason
+            .Should().Contain("not been measured").And.Contain("RESULTS_kimi_confinement.md");
         // QWEN-FILL-END s563-planner
     }
 
@@ -369,18 +377,28 @@ public sealed class ConfinementPlannerTests
     public void AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome()
     {
         // QWEN-FILL-BEGIN s565-launch test
-        // Arrange: var consultant = AKimiConsultant(); the launches are Planned("kimi", CapabilityGrant.None) and Planned("kimi", CapabilityGrant.Disk(RootA, RootB)).
-        // The helper Planned sets ScratchDir = Scratch, Workdir = RowTree and OwnedScratch = RowFolder; the none row's cwd is ConsultantLaunches.Cwd(launch, plan) = Scratch.
-        // Act: var none = consultant.Build(...); var disk = consultant.Build(...).
-        // Assert, for the argv `request.Arguments` (a list of strings holding "--cwd", <path>, "--home", <path> pairs):
-        //  none.Request.WorkingDirectory.Should().Be(Scratch) AND Arguments.Should().ContainInConsecutiveOrder("--cwd", Scratch);
-        //  disk.Request.WorkingDirectory.Should().Be(RowTree) AND ContainInConsecutiveOrder("--cwd", RowTree);
-        //  both: the value after "--home" StartsWith(RowFolder + Path.DirectorySeparatorChar); Arguments.Should().NotContain("--session") (AcpWords.SessionFlag),
-        //  .And.NotContain(RootA).And.NotContain(RootB); request.InheritsEnvironment.Should().BeFalse();
-        //  Runners.Kimi.KimiEnvironment.Refusal(request) (see the pack for its exact signature) .Should().BeEmpty();
-        //  none.Role.Should().Be(ConsultantRoles.Question).
-        // Against a Build that ignored the plan: "Expected Request.WorkingDirectory to be "<Scratch>", but found ...".
-        throw new NotImplementedException("s565-launch");
+        var consultant = AKimiConsultant();
+
+        var none = consultant.Build(Planned("kimi", CapabilityGrant.None));
+        none.Request.WorkingDirectory.Should().Be(Scratch);
+        none.Request.Arguments.Should().ContainInConsecutiveOrder("--cwd", Scratch);
+        none.Request.Arguments.Should().NotContain("--session").And.NotContain(RootA).And.NotContain(RootB);
+        none.Request.InheritsEnvironment.Should().BeFalse();
+        Runners.Kimi.KimiEnvironment.Refusal(none.Request, KimiPlaces.ForShim(RowFolder, Path.Combine(RowFolder, "persons-bin"))).Should().BeEmpty();
+        none.Role.Should().Be(ConsultantRoles.Question);
+
+        var disk = consultant.Build(Planned("kimi", CapabilityGrant.Disk(RootA, RootB)));
+        disk.Request.WorkingDirectory.Should().Be(RowTree);
+        disk.Request.Arguments.Should().ContainInConsecutiveOrder("--cwd", RowTree);
+        disk.Request.Arguments.Should().NotContain("--session").And.NotContain(RootA).And.NotContain(RootB);
+        disk.Request.InheritsEnvironment.Should().BeFalse();
+        Runners.Kimi.KimiEnvironment.Refusal(disk.Request, KimiPlaces.ForShim(RowFolder, Path.Combine(RowFolder, "persons-bin"))).Should().BeEmpty();
+
+        foreach (var request in (Runners.Processes.ProcessRequest[])[none.Request, disk.Request])
+        {
+            request.Arguments.Should().ContainInConsecutiveOrder("--home", It.IsAny<string>())
+                .Which.Should().StartWith(RowFolder + Path.DirectorySeparatorChar);
+        }
         // QWEN-FILL-END s565-launch
     }
 
@@ -389,12 +407,11 @@ public sealed class ConfinementPlannerTests
     public void APlanWithFlags_IsRefusedForKimi()
     {
         // QWEN-FILL-BEGIN s566-flags test
-        // Arrange: var plain = Planned("kimi", CapabilityGrant.None); the plan is `((LaunchConfinement.Planned)plain.Confinement!).Plan`
-        // (a Confinement.Planned record: use `with { Flags = ["--yolo"] }`); build the launch `plain with { Confinement = new LaunchConfinement.Planned(plan with { Flags = ["--yolo"] }) }`.
-        // Act: Action build = () => AKimiConsultant().Build(flagged);
-        // Assert: build.Should().Throw<ArgumentException>().WithMessage("*shim*") — the message is "a Kimi row's confinement is the shim's; a plan with flags is not one coai made for kimi".
-        // Before the guard: "Expected a <System.ArgumentException> to be thrown, but no exception was thrown."
-        throw new NotImplementedException("s566-flags");
+        var plain = Planned("kimi", CapabilityGrant.None);
+        var plan = ((LaunchConfinement.Planned)plain.Confinement!).Plan;
+        var flagged = plain with { Confinement = new LaunchConfinement.Planned(plan with { Flags = ["--yolo"] }) };
+        Action build = () => AKimiConsultant().Build(flagged);
+        build.Should().Throw<ArgumentException>().WithMessage("*shim*");
         // QWEN-FILL-END s566-flags
     }
 
