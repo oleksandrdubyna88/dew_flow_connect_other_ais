@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 not started.** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.7 implemented 2026-10-16 (E5.5–E5.6: Opus-split, built as four tasks).** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -1085,6 +1085,20 @@ Numbered from 40, apart from the lists above, so the stories built in parallel d
 45. **Decision (e)'s sentence lives in *The consultant* article** (*What can go wrong*, five languages), because it is about a `consult` turn;
     the question-consultant article says only that a Kimi row's launches wait for one another and for a Kimi review on the same sign-in.
 46. **`CONSULTANT_SINCE` gates a note, so `consultantsWire.ts` is unchanged.** S5.7.3 was green before any code, as the row said.
+
+### E5.5–E5.6 as built (2026-10-16)
+
+Numbered from 50, apart from the lists above, so the stories built in parallel do not collide on a number.
+
+50. **S5.5.1–S5.5.4 are one new test class, `AKimiConsultantCheckTests`, and NO production change.** The check already gave a copy and a one-shot home to a runtime that asks (E5.4 decision 6 + E5.3 decision g). Teeth runs (t4, each reverted): `KimiConsultant.HomesFolder` set to `string.Empty` (S5.5.1–S5.5.3 red, S5.5.4 green: it is the rootless path); the `held.Home.Dispose()` line in `ConsultantCheck` commented out (S5.5.2 and S5.5.3 red); the Kimi disposal loop in `ConsultCheckScratch` emptied (S5.5.4 red). With no reserved home, S5.5.2 and S5.5.3 fail with `DirectoryNotFoundException` on `coai-vh`, not with items found.
+51. **S5.6.1, S5.6.2, S5.6.4 and S5.6.8 landed with the table:** `shared/runtime-capabilities.json` has three `kimi` rows, `shared/capability-matrix-vectors.json` has three `kimi` vectors, `RuntimeCapabilities.Runtimes` lists `kimi`, and `runtimeCapabilities.generated.ts` is regenerated (`--check` exits 0). The runtime lists spelled by `ConfinementPlannerTests`, `CapabilityMatrixTests` and `capabilityAdmission.test.ts` gained `, kimi`.
+52. **The planner arm and the flag refusal (S5.6.3, S5.6.5, S5.6.6).** `ConfinementPlanner.Kimi` (`"kimi" => Kimi(grant, flag)`): a disk grant gets a snapshot of its roots, any other grant an empty scratch folder; `SandboxVocabulary` is unchanged. `KimiConsultant.MustCarryNoFlags`, called from `Build`, refuses a planned launch with a flag or a leading argument: "a Kimi row's confinement is the shim's; a plan with flags is not one coai made for kimi". Teeth run (t2, reverted): the `MustCarryNoFlags` call removed, S5.6.6 red.
+53. **S5.6.7 is `AKimiQuestionRowTests`, one theory with three arms (answered, refused, cancelled), and NO production change.** Teeth runs (t3, each reverted): `Release(homes)` removed in `QuestionRowLaunch.cs:135` (all three arms red); `KimiConsultant.HomesFolder` set to `string.Empty` (answered and cancelled red; refused stays green, as it refuses before any launch). The answered arm's red reason is the row's `failed` status, not a path assertion.
+54. **Deviations the tasks reported.**
+    - t1: the S5.6.4 red reads `Expected type to be …Admission+Admitted, but found …Refused` (no refusal reason); the TypeScript Kimi test's red is its own message, `kimi × none is admitted`. The `EveryRow_CitesTheRecord…` test's `Records` list gained `RESULTS_kimi_confinement.md` (M-K): data only. Teeth run: `kimi × none` set to `confined` made `AdmissionFlagsBothRows` red, then reverted.
+    - t2: the S5.6.5 optional `KimiEnvironment.Refusal` assertion is NOT added (it needs a `KimiFixture`, which the planner tests do not use). The line ~167 test (`AnUnknownRuntime…`) was already green when its expected text gained `, kimi`, because t1 had landed first.
+    - t3: the test's `Other` property is unused (dead code), kept for contract fidelity; a reviewer may ask for its removal.
+    - t4: fixture folders `_data` and `_temp` are `TempDir`, so one deleter disposes them with `_homes`.
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 
