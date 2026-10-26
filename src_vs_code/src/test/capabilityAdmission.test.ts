@@ -179,7 +179,7 @@ test('kimi rows admit flagged, web refuses naming its record', () => {
   for (const capability of ['none', 'disk']) {
     const admission = admit('kimi', capability);
 
-    assert.equal(admission.admitted, true, `kimi × ${capability} is admitted, because the person's own sign-in is flagged unconfined`);
+    assert.equal(admission.admitted, true, `kimi × ${capability} is admitted flagged unconfined, because Grep and Glob read the disk directly (M-K6)`);
     assert.equal(admission.flag, 'unconfined', 'D13: an admitted kimi pair is flagged unconfined');
     assert.match(admission.caveat, /can read this machine/u, 'the caveat tells the person what an unconfined pair can read');
   }

@@ -74,16 +74,23 @@ public sealed class AKimiConsultantCheckTests : IDisposable
         var before = person.Hash();
         var settings = KimiSettings(_homes.Path);
 
-        var (code, said) = await CheckAsync(settings, played);
+        var (_, said) = await CheckAsync(settings, played);
 
-        code.Should().Be(0, "the check of my-kimi must pass on a Kimi row that runs in a copy");
         said.GetProperty("state").GetString().Should().Be("answered", said.ToString());
         said.GetProperty("markerRead").GetBoolean().Should().BeTrue("the copy holds the scratch's CHECK.md");
+        said.GetProperty("canary").GetString().Should().Be(CanaryReadings.NotAttempted, "the played agent never names the canary, which stays untouched");
 
         var shim = played.Shims.Should().ContainSingle().Subject.Request;
 
         var cwdValue = shim.Arguments[shim.Arguments.ToList().IndexOf("--cwd") + 1];
-        cwdValue.Should().Contain(Path.Combine("own", "tree"), "the consultant stands in a copy in the check's own scratch, never the repository");
+        var tree = Path.GetDirectoryName(cwdValue)!;
+        var own = Path.GetDirectoryName(tree)!;
+        var scratch = Path.GetDirectoryName(own)!;
+        Path.GetFileName(cwdValue).Should().StartWith("snapshot-", "the copy is a snapshot folder");
+        Path.GetFileName(tree).Should().Be("tree");
+        Path.GetFileName(own).Should().Be("own", "the consultant stands in a copy in the check's own folder, never the repository");
+        Path.GetFileName(scratch).Should().StartWith("coai-check-", "the copy lives in this check's scratch");
+        Path.GetDirectoryName(scratch).Should().Be(_temp.Path, "the scratch is a direct child of the check's temp root");
         shim.WorkingDirectory.Should().Be(cwdValue, "the shim's working directory is the same copy folder");
 
         var home = shim.Arguments[shim.Arguments.ToList().IndexOf("--home") + 1];

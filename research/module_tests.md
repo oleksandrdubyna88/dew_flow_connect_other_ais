@@ -4454,3 +4454,28 @@ saw it).
 
 `CumulativeUsageTests.AVendorReportingLESSThanBeforeFloorsAtZero_NeverNegative` became `ACountBelowWhatWasBilled_FloorsAtZero_NeverNegative`: its old case (both totals below
 what was billed) is now a reset by decision 12, so the floor is pinned where it still applies — totals that moved on, cached and reasoning counts that did not.
+
+### Kimi's check and question rows — E5.5 and E5.6 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md` (2026-10-26)
+
+`AKimiConsultantCheckTests` runs the whole `--check-consultant` mode in process (`ConsultantCheckMode.AnswerAsync`, git for real, `PlayedKimi` for the shim, `KimiFixture`
+for the person, `KimiScenarioScopes.StandIn` for the four stand-ins). `AKimiQuestionRowTests` runs a Kimi question row through the real service the same way. No test
+starts the real `kimi`. The reds were seen against the production of `b4e2ea96` in a temporary worktree (plan deviations 56–58): the check tests (S5.5.1–S5.5.4) are
+PINS, because E5.3 and E5.4 had already built the copy, the one-shot home and the junction-first disposal; the planner, matrix, admission and question-row tests were red.
+
+| Suite (scenario) | What it holds | Seen red as |
+|---|---|---|
+| `AKimiConsultantCheckTests.AKimiCheck_RunsInACopy_OnAOneShotHome` (S5.5.1) | state `answered`, marker read, canary `not-attempted`; the shim's `--cwd` is a `snapshot-*` folder in `own/tree` of this check's `coai-check-*` scratch, a direct child of the temp root; `--home` is `coai-vh\<8>\kh-<10 hex>`, never under TEMP; the scratch is gone; the person's hash is the same | a pin (green on arrival) |
+| `…AfterTheCheck_TheHomeIsGone_JunctionFirst` (S5.5.2, Theory over `theTurnFails`) | home gone, unlink recorder never invoked, the person whole — turn passed and turn failed (exit 70) | a pin |
+| `…ACheckCancelledMidTurn_StillDisposesItsHome` (S5.5.3) | the scratch and the home gone after a cancelled caller | a pin |
+| `…ARootlessCheck_KeepsTheHomeInItsScratch_AndDisposesItJunctionFirst` (S5.5.4) | no homes root: the home is in `<scratch>\own`, gone with the scratch | a pin |
+| `CapabilityMatrixTests.KimiHasThreeRows_EachCitingItsCells` (S5.6.1) | `none` and `disk` `unconfined`, `web` `unmeasured`, each citing `RESULTS_kimi_confinement.md` and its `M-K` cells | *Expected none not to be <null> because the table holds kimi × None.* |
+| `…TheVectorsCoverKimi` (S5.6.2) | a vector for each kimi pair | *vectors hold no `kimi × none`* |
+| `ConfinementPlannerTests.ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb` (S5.6.3) | `none` `Scratch`, `disk` `Snapshot` with both roots in `SnapshotSources`, no flags, `AddDirs` empty; `web` refused naming the record | rows absent: *Expected type to be Planned, but found Refused*; arm absent: *Expected disk.Cwd to be CwdKind.Snapshot … but found Scratch* |
+| `CapabilityMatrixTests.AdmissionFlagsBothRows` (S5.6.4) | `none` and `disk` admitted, flagged unconfined; `web` refused | *Expected type to be Admission+Admitted … but found Admission+Refused* |
+| `ConfinementPlannerTests.AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome` (S5.6.5) | the empty folder or the copy as cwd, a `kh-` home under the row's folder, no `--session`, the roots never named, the explicit environment, and `KimiEnvironment.Refusal` empty (the launch control admits what the row builds) | arm absent: the disk `WorkingDirectory` is not the row's copy |
+| `…APlanWithFlags_IsRefusedForKimi` (S5.6.6) | a plan with a flag or an add-dir throws naming the shim | arm absent: *Expected a <System.ArgumentException> to be thrown, but no exception was thrown.* |
+| `AKimiQuestionRowTests.AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind` (S5.6.7, Theory over `answered`, `refused-before-the-launch`, `cancelled-mid-turn`) | the copy holds neither `.kimi-code` nor `AGENTS.md` while the shim runs; the one-shot folder, the shim's `--cwd` and `--home` are gone, the unlink recorder never ran, the person's folder is whole — on all three endings | `answered`: the prompt names the root; `refused…`: status `answered` (a plain folder is only a note); `cancelled…` a pin |
+| `capabilityAdmission.test.ts` — `kimi rows admit flagged, web refuses naming its record` (S5.6.8) | the generated table admits kimi `none` and `disk` flagged unconfined, with the caveat; `web` refuses naming its record | with the old generated table: the kimi vectors, the `RUNTIMES`-list test and this test all fail |
+
+NOT covered: the real `kimi` (the live checks J2 and M-K17 are owed), the real `RESULTS_kimi_confinement.md` rows beyond what `CapabilityMatrixTests.Records` reads, and a
+reds-first run of S5.5.1–S5.5.4 (they pin what E5.3 and E5.4 built).

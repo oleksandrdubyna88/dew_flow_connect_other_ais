@@ -394,6 +394,8 @@ public sealed class ConfinementPlannerTests
             request.Arguments.Should().NotContain("--session", "a planned launch is one shot");
             request.Arguments.Should().NotContain(RootA).And.NotContain(RootB, "the roots are read through their copy, never named to Kimi");
             request.InheritsEnvironment.Should().BeFalse("the question row's environment is the explicit one only");
+            Runners.Kimi.KimiEnvironment.Refusal(request, Runners.Kimi.KimiPlaces.ForShim(home, Path.Combine(RowFolder, "persons-bin")))
+                .Should().BeEmpty("the one launch control admits exactly what the question row builds");
         }
     }
 
