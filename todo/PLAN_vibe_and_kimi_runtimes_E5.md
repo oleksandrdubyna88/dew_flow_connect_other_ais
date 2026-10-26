@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **implemented — E5.1–E5.7 in; E5.4–E5.6 not yet reviewed; the live checks (J2, RESULTS §31) and M-K17 not run.** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.7 in; E5.4–E5.6 not yet reviewed; the live checks (J2, RESULTS §31) and M-K17 not run.** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. E5.5–E5.6 (Opus split, implemented 2026-10-26): the consultant check proved on Kimi with tests only, and the question consultant's three kimi rows, the planner arm and KimiConsultant's refusal of a plan with flags; deviations 47–55, *E5.5–E5.6 as built*. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
