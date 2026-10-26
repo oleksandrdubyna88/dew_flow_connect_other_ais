@@ -114,7 +114,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
         return arguments[arguments.IndexOf(flag) + 1];
     }
 
-    /// <summary>S5.6.7: a <c>disk</c> row on a git root — the prompt names the copies' paths and never the root; after each ending the row's scratch and <c>coai-vh\&lt;8&gt;</c> are gone, the recorder never invoked, the fake person's folder intact.</summary>
+    /// <summary>S5.6.7: a <c>disk</c> row on a git root — the prompt names the copies' paths and never the root; after each ending the one-shot folder under <c>coai-vh</c> is gone and, for each launch, the row's scratch too (a refusal before the launch has none to name — plan deviation 59), the recorder never invoked, the fake person's folder intact.</summary>
     [Theory]
     [InlineData(Ending.Answered)]
     [InlineData(Ending.RefusedBeforeTheLaunch)]

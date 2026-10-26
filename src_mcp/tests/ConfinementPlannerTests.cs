@@ -406,6 +406,18 @@ public sealed class ConfinementPlannerTests
         building.Should().Throw<ArgumentException>().WithMessage("*shim*");
     }
 
+    /// <summary>S5.6.6: leading arguments ahead of the subcommand are a plan's flags too — refused the same way (deviation 51).</summary>
+    [Fact]
+    public void APlanWithLeadingArguments_IsRefusedForKimi()
+    {
+        using var person = new KimiFixture();
+        var consultant = new Runners.Kimi.KimiConsultant(new Runners.Kimi.KimiRuntime("kimi", Runners.Platform.HostKind.Windows, new Runners.Kimi.KimiSeams(person.PlacesAt, () => ("coai-mcp", []))), "kimi");
+
+        var withLeading = Planned("kimi", CapabilityGrant.None) with { Confinement = new LaunchConfinement.Planned(Plan("kimi", CapabilityGrant.None) with { Leading = ["--search"] }) };
+        var building = () => consultant.Build(withLeading);
+        building.Should().Throw<ArgumentException>().WithMessage("*shim*");
+    }
+
     /// <summary>No Vibe launch carries <c>--add-dir</c>, whatever the grant (D3: <c>--add-dir</c> trusts its folder).</summary>
     [Fact]
     public void NoVibeLaunch_CarriesAddDir_WhateverTheGrant()
