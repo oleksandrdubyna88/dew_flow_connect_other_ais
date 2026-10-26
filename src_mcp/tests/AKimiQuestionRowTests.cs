@@ -127,14 +127,9 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
         ct.ThrowIfCancellationRequested();
     };
 
-    /// <summary>The row's one-shot folder under <c>coai-vh</c> is empty — or was never made, which is empty too.</summary>
-    private static void TheOneShotFolderIsEmpty(string homes)
-    {
-        var oneShot = Path.Combine(homes, VibeHomes.OneShotFolder);
-        var entries = Directory.Exists(oneShot) ? Directory.EnumerateFileSystemEntries(oneShot).ToList() : [];
-
-        entries.Should().BeEmpty("Expected Directory.Exists(\"…\\coai-vh\\<8>\") to be False");
-    }
+    /// <summary>The row's one-shot folder under <c>coai-vh</c> is empty: the row reserves it before any launch, so <c>coai-vh</c> itself is there on every ending.</summary>
+    private static void TheOneShotFolderIsEmpty(string homes) =>
+        Directory.EnumerateFileSystemEntries(Path.Combine(homes, VibeHomes.OneShotFolder)).Should().BeEmpty("Expected Directory.Exists(\"…\\coai-vh\\<8>\") to be False");
 
     [Theory]
     [InlineData("answered")]
