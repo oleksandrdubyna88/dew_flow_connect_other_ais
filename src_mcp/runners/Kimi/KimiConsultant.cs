@@ -23,6 +23,7 @@ namespace CoaiMcp.Runners.Kimi;
 /// bills each turn its share of the session's running total, guarded against a counter that restarted (decision 12).</para>
 /// <para><b>A dropped session is the report's END word</b> (decisions 5 and 11): <c>session_lost</c>, never the agent's text — and the service
 /// then REFUSES the turn with its cure; nothing here starts a fresh session in its place.</para>
+/// <para><b>A question row</b> (E5.6 decision 3): the plan's cwd — the row's empty folder or its copy — the home in the row's folder, one shot, and no flags ever.</para>
 /// </remarks>
 public sealed class KimiConsultant(KimiRuntime inner, string vendor = "kimi") : IConsultantRuntime
 {
@@ -47,12 +48,26 @@ public sealed class KimiConsultant(KimiRuntime inner, string vendor = "kimi") : 
     public ReviewerInvocation Build(ConsultantLaunch launch)
     {
         ConsultantLaunches.MustBeLaunchable(launch);
+        MustCarryNoFlags(launch);
         var settings = launch.Settings with { OwnedScratch = OwnedFolder(launch), Model = ModelOf(launch.Settings) };
         var built = inner.Build(ConsultantLaunches.RoleOf(launch), launch.Prompt, Cwd(launch), string.Empty, launch.OutputDir, settings);
         var request = built.Request with { Arguments = [.. built.Request.Arguments, .. SessionOf(launch)] };
         ConsultantLaunches.MustCarryNoLineBreak(request.Arguments);
 
         return built with { Request = launch.Confinement is LaunchConfinement.Planned ? ConsultantLaunches.ForQuestion(request) : request };
+    }
+
+    /// <summary>
+    /// A Kimi row's confinement is the shim's (D15, E5.6 decision 3), never its argv: the planner gives kimi no flags, so a plan that carries one
+    /// was not made by coai for kimi and is refused, never spliced or dropped.
+    /// </summary>
+    private static void MustCarryNoFlags(ConsultantLaunch launch)
+    {
+        if (launch.Confinement is LaunchConfinement.Planned { Plan: { } plan } && (plan.Flags.Count > 0 || plan.Leading.Count > 0))
+        {
+            throw new ArgumentException(
+                "a Kimi row's confinement is the shim's; a plan with flags is not one coai made for kimi", nameof(launch));
+        }
     }
 
     /// <summary>The row's model, or Kimi's default when it names none — resolved here so the shim and the ledger name the same one.</summary>

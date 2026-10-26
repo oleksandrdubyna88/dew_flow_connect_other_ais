@@ -1,3 +1,4 @@
+using CoaiMcp.Core.QuestionConsult;
 using CoaiMcp.Runners.Acp;
 using CoaiMcp.Runners.Consultation;
 using CoaiMcp.Runners.Kimi;
@@ -163,5 +164,68 @@ public sealed class KimiConsultantTests : IDisposable
         consultant.HomesFolder.Should().Be(ConsultantHomes.Kimi, "one owned home per conversation under coai-kimi (J3)");
         consultant.Toolbox.Should().Contain("Read").And.Contain("Grep").And.Contain("Glob").And.Contain("refused");
         consultant.Toolbox.Should().NotContain("bounded", "Grep and Glob read the disk directly (M-K6): never claimed bounded");
+    }
+
+    // ---------- S5.6.5 / S5.6.6 ----------
+
+    /// <summary>A question row's own folder (<c>coai-question-*</c>) and the copy of its roots in it.</summary>
+    private string RowFolder => Path.Combine(_person.Folder, "coai-question-row");
+
+    private string RowTree => Path.Combine(RowFolder, "tree");
+
+    private string RowScratch => Path.Combine(RowFolder, "cwd");
+
+    private const string RootA = "D:/projects/alpha";
+
+    private const string RootB = "D:/projects/beta";
+
+    /// <summary>A planned launch as <c>QuestionRowLaunch</c> hands it: the plan, the row's empty folder, its copy, its home folder.</summary>
+    private ConsultantLaunch Row(Confinement.Planned plan) =>
+        new(Repo, "which helper retries a send?", string.Empty, Answers,
+            new ReviewerSettings("kimi") { Timeout = TimeSpan.FromMinutes(5), OwnedScratch = RowFolder })
+        {
+            Confinement = new LaunchConfinement.Planned(plan),
+            ScratchDir = RowScratch,
+            Workdir = RowTree,
+        };
+
+    /// <summary>S5.6.5: a Kimi question row is the shim request in its empty folder (none) or its copy (disk), on the row's own home, one shot.</summary>
+    [Fact]
+    public void AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome()
+    {
+        var none = Consultant().Build(Row(new Confinement.Planned("kimi", CapabilityGrant.None, [], [], CwdKind.Scratch, [], AdmissionFlag.Unconfined)));
+        none.Request.WorkingDirectory.Should().Be(RowScratch, "a none row stands in its empty folder");
+        none.Request.Arguments.Should().ContainInConsecutiveOrder("--cwd", RowScratch);
+
+        var disk = Consultant().Build(Row(new Confinement.Planned("kimi", CapabilityGrant.Disk(RootA, RootB), [], [], CwdKind.Snapshot, [], AdmissionFlag.Unconfined)
+            { SnapshotSources = [RootA, RootB] }));
+        disk.Request.WorkingDirectory.Should().Be(RowTree, "a disk row stands in the copy of its roots (D6)");
+        disk.Request.Arguments.Should().ContainInConsecutiveOrder("--cwd", RowTree);
+
+        foreach (var invocation in (ReviewerInvocation[])[none, disk])
+        {
+            var request = invocation.Request;
+            var home = After(request.Arguments, AcpWords.HomeFlag);
+            Path.GetDirectoryName(home).Should().Be(RowFolder, "the row's home is a child of the row's own folder, gone with it");
+            Path.GetFileName(home).Should().MatchRegex("^kh-[0-9a-f]{10}$");
+            request.Arguments.Should().NotContain(AcpWords.SessionFlag, "a question row is one shot");
+            request.Arguments.Should().NotContain(argument => argument.Contains(RootA) || argument.Contains(RootB), "the roots are read through their copy, never named");
+            request.Arguments.Should().NotContain(argument => argument.Contains(Repo, StringComparison.OrdinalIgnoreCase), "never the checkout");
+            request.InheritsEnvironment.Should().BeFalse("the question row's road (ForQuestion)");
+            request.Passthrough.Should().BeEquivalentTo(ProcessEnvironment.Minimal);
+            KimiEnvironment.Refusal(request, _person.PlacesAt(home)).Should().BeEmpty("the one launch control admits exactly what the adapter builds");
+            invocation.Role.Should().Be(ConsultantRoles.Question);
+        }
+    }
+
+    /// <summary>S5.6.6: a plan that carries a flag or a leading argv is not one coai makes for kimi, so it is refused, never spliced.</summary>
+    [Fact]
+    public void APlanWithFlags_IsRefusedForKimi()
+    {
+        var flagged = new Confinement.Planned("kimi", CapabilityGrant.None, [], ["--yolo"], CwdKind.Scratch, [], AdmissionFlag.Unconfined);
+
+        var building = () => Consultant().Build(Row(flagged));
+
+        building.Should().Throw<ArgumentException>().WithMessage("*confinement is the shim's*");
     }
 }
