@@ -158,7 +158,42 @@ public sealed class CapabilityMatrixTests
     [
         ("RESULTS_question_consultant_capabilities.md", "2026-10-01", "01a0f8c7-18e4-"),
         ("RESULTS_vibe_confinement.md", "2026-10-12", "M-V"),
+        ("RESULTS_kimi_confinement.md", "2026-10-13", "M-K"),
     ];
+
+    /// <summary>S5.6.1 (E5.6 of todo/PLAN_vibe_and_kimi_runtimes_E5.md): the three Kimi rows, each citing the cells it stands on.</summary>
+    [Fact]
+    public void KimiHasThreeRows_EachCitingItsCells()
+    {
+        // QWEN-FILL-BEGIN s561-rows test
+        // For Capability.None and Capability.Disk: var row = RuntimeCapabilities.Builtin.Of("kimi", capability); row Should NotBeNull;
+        //   row!.Standing Should Be CapabilityStanding.Unconfined; row.MeasuredWith.Version Be "2.1.1";
+        //   row.MeasuredWith.Cells Contain "M-K6"; for Disk also Contain "M-K9".
+        // For Capability.Web: Of("kimi", Capability.Web)!.Standing Be CapabilityStanding.Unmeasured; its MeasuredWith.Cells BeEmpty.
+        // Fails before the rows: "Expected RuntimeCapabilities.Builtin.Of("kimi", Capability.None) not to be <null>."
+        throw new NotImplementedException("s561-rows");
+        // QWEN-FILL-END s561-rows
+    }
+
+    /// <summary>S5.6.2: the vectors decide every Kimi pair, so the table's own coverage test cannot pass over one.</summary>
+    [Fact]
+    public void TheVectorsCoverKimi()
+    {
+        Vectors.Where(v => v.Runtime == "kimi").Select(v => v.Capability).Should()
+            .BeEquivalentTo(["none", "disk", "web"], "every kimi pair needs a vector");
+    }
+
+    /// <summary>S5.6.4: both Kimi rows that run are admitted FLAGGED — Grep and Glob read the disk (M-K6).</summary>
+    [Fact]
+    public void AdmissionFlagsBothRows()
+    {
+        // QWEN-FILL-BEGIN s564-admit test
+        // For Capability.None and Capability.Disk: CapabilityMatrix.Admit("kimi", capability) Should BeOfType<Admission.Admitted>()
+        //   .Which.Flag Should Be AdmissionFlag.Unconfined (message: $"kimi × {capability}").
+        // Fails before the rows: Admit returns Refused "'kimi' is not a runtime the question consultant can launch …".
+        throw new NotImplementedException("s564-admit");
+        // QWEN-FILL-END s564-admit
+    }
 
     [Fact]
     public void EveryRow_CitesTheRecord_AndACellOrSaysWhyThereIsNone()

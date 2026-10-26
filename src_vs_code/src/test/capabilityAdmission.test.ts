@@ -140,7 +140,7 @@ for (const vector of VECTORS) {
 test('the words are the file’s words, and a word outside them is refused rather than defaulted', () => {
   assert.deepStrictEqual([...CAPABILITIES], ['none', 'disk', 'web']);
   assert.deepStrictEqual([...STANDINGS], ['confined', 'unconfined', 'default-deny', 'unsupported', 'unmeasured']);
-  assert.deepStrictEqual([...RUNTIMES], ['claude', 'codex', 'antigravity', 'local', 'api', 'vibe']);
+  assert.deepStrictEqual([...RUNTIMES], ['claude', 'codex', 'antigravity', 'local', 'api', 'vibe', 'kimi']);
   assert.equal(isCapability('disk'), true);
   assert.equal(isCapability('Disk'), false, 'the panel writes the file’s spelling, lower case, and nothing else');
   assert.equal(isCapability('shell'), false);
@@ -173,4 +173,18 @@ test('a flagged admission carries the caveat a person must acknowledge (D13)', (
   assert.match(admit('antigravity', 'disk').caveat, /headless/u);
   assert.equal(admit('claude', 'web').caveat, '', 'a confined pair has nothing to acknowledge');
   assert.equal(admit('vibe', 'disk').caveat, '', 'vibe reads its working folder only — a snapshot of the roots (M-V6)');
+});
+
+// S5.6.8 (E5.6 of todo/PLAN_vibe_and_kimi_runtimes_E5.md): Kimi's none and disk rows are flagged — Grep and Glob read the disk (M-K6) — and web is unmeasured.
+test('kimi rows admit flagged, web refuses naming its record', () => {
+  // QWEN-FILL-BEGIN s568-kimi-admit test
+  // Arrange/Act: const none = admit('kimi', 'none'); const disk = admit('kimi', 'disk'); const web = admit('kimi', 'web').
+  // Assert (node:assert/strict, as the tests above):
+  //   - for none and disk: assert.equal(x.admitted, true, x.reason); assert.equal(x.standing, 'unconfined'); assert.equal(x.flag, 'unconfined');
+  //     assert.match(x.caveat, /can read this machine/u).
+  //   - web: assert.equal(web.admitted, false); assert.equal(web.standing, 'unmeasured'); assert.match(web.reason, /not been measured/u);
+  //     assert.match(web.reason, /RESULTS_kimi_confinement\.md/u); assert.ok(!web.reason.includes('RESULTS_question_consultant_capabilities.md')).
+  // Fails before the change: 'kimi' is absent from the table, so admit() refuses it as "not a runtime the question consultant can launch".
+  throw new Error('s568-kimi-admit');
+  // QWEN-FILL-END s568-kimi-admit
 });
