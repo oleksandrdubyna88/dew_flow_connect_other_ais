@@ -376,8 +376,11 @@ public sealed class CapabilityMatrixTests
         var disk = RuntimeCapabilities.Builtin.Of("kimi", Capability.Disk)!;
         disk.Standing.Should().Be(CapabilityStanding.Unconfined);
         disk.MeasuredWith.Cells.Should().Contain(["M-K6", "M-K9"]);
+        disk.MeasuredWith.Version.Should().Be("2.1.1");
 
-        RuntimeCapabilities.Builtin.Of("kimi", Capability.Web)!.Standing.Should().Be(CapabilityStanding.Unmeasured);
+        var web = RuntimeCapabilities.Builtin.Of("kimi", Capability.Web)!;
+        web.Standing.Should().Be(CapabilityStanding.Unmeasured);
+        web.MeasuredWith.Version.Should().Be("2.1.1");
     }
 
     /// <summary>E5.6 S5.6.4: the none and disk rows are admitted FLAGGED unconfined (D13); the web row is refused by its record.</summary>
@@ -391,6 +394,6 @@ public sealed class CapabilityMatrixTests
         }
 
         CapabilityMatrix.Admit("kimi", Capability.Web).Should().BeOfType<Admission.Refused>()
-            .Which.Reason.Should().Contain("not been measured");
+            .Which.Reason.Should().Contain("not been measured").And.Contain("RESULTS_kimi_confinement.md");
     }
 }
