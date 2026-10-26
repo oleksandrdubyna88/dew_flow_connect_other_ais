@@ -1,3 +1,4 @@
+using CoaiMcp.Core.QuestionConsult;
 using CoaiMcp.Runners.Acp;
 using CoaiMcp.Runners.Consultation;
 using CoaiMcp.Runners.Kimi;
@@ -148,6 +149,60 @@ public sealed class KimiConsultantTests : IDisposable
         var result = new ProcessResult(70, KimiShimScripts.Report(AcpEnd.AgentFailed, string.Empty, "the agent said session_lost", tokens: false), string.Empty, TimedOut: false);
 
         Consultant().DroppedTheConversation(result).Should().BeFalse("the reason is the agent's text, and text is never read for a verdict");
+    }
+
+    // ---------- S5.6.5 ----------
+
+    [Fact]
+    public void AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome()
+    {
+        ConsultantLaunch Planned(CapabilityGrant grant) => Turn() with
+        {
+            Confinement = new LaunchConfinement.Planned(
+                (Confinement.Planned)ConfinementPlanner.Plan("kimi", grant)),
+            ScratchDir = Path.Combine(Folder, "cwd"),
+        };
+
+        var none = Consultant().Build(Planned(CapabilityGrant.None));
+        var disk = Consultant().Build(Planned(CapabilityGrant.Disk("D:/projects/alpha", "D:/projects/beta")));
+
+        none.Request.WorkingDirectory.Should().Be(Path.Combine(Folder, "cwd"), "a none row stands in its own empty scratch folder");
+        disk.Request.WorkingDirectory.Should().Be(Tree, "a disk row stands in the copy of its roots, the conversation's snapshot (D6)");
+
+        foreach (var invocation in new[] { none, disk })
+        {
+            var request = invocation.Request;
+            var home = After(request.Arguments, AcpWords.HomeFlag);
+            Path.GetDirectoryName(home).Should().Be(Folder, "the home is a CHILD of the conversation folder (E5.3 decision a)");
+            Path.GetFileName(home).Should().MatchRegex("^kh-[0-9a-f]{10}$");
+            request.Arguments.Should().NotContain("--session", "a planned launch has no handle to continue");
+            request.Arguments.Should().NotContain(argument => argument.Contains("D:/projects/alpha") || argument.Contains("D:/projects/beta"),
+                "the roots are copied, never named to the shim");
+            request.InheritsEnvironment.Should().BeFalse();
+            request.Passthrough.Should().BeEquivalentTo(ProcessEnvironment.Minimal);
+            KimiEnvironment.Refusal(request, _person.PlacesAt(home)).Should().BeEmpty("the one launch control admits exactly what the adapter builds");
+            invocation.Role.Should().Be(ConsultantRoles.Question);
+        }
+    }
+
+    // ---------- S5.6.6 ----------
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void APlanWithFlags_IsRefusedForKimi(bool flagInLeading)
+    {
+        IReadOnlyList<string> leading = flagInLeading ? ["--search"] : [];
+        IReadOnlyList<string> flags = flagInLeading ? [] : ["--yolo"];
+        var plan = new Confinement.Planned("kimi", CapabilityGrant.None, leading, flags, CwdKind.Scratch, [], AdmissionFlag.Unconfined);
+        var launch = Turn() with
+        {
+            Confinement = new LaunchConfinement.Planned(plan),
+            ScratchDir = Path.Combine(Folder, "cwd"),
+        };
+
+        FluentActions.Invoking(() => Consultant().Build(launch)).Should().Throw<ArgumentException>()
+            .WithMessage("*the shim's*", "a Kimi row's confinement is the shim's (D15), never a flag of coai's");
     }
 
     // ---------- decisions 4, 6, 7 ----------
