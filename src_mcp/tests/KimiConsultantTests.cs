@@ -223,15 +223,18 @@ public sealed class KimiConsultantTests : IDisposable
         }
     }
 
-    /// <summary>S5.6.6 (E5.6 decision 3): a plan with a flag was not made for kimi — refused by name, never spliced.</summary>
+    /// <summary>S5.6.6 (E5.6 decision 3): a plan with a flag — after the subcommand or before it — was not made for kimi: refused by name, never spliced.</summary>
     [Theory]
-    [InlineData(Capability.None)]
-    [InlineData(Capability.Disk)]
-    public void APlanWithFlags_IsRefusedForKimi(Capability capability)
+    [InlineData(Capability.None, false)]
+    [InlineData(Capability.Disk, false)]
+    [InlineData(Capability.None, true)]
+    [InlineData(Capability.Disk, true)]
+    public void APlanWithFlags_IsRefusedForKimi(Capability capability, bool leading)
     {
         var grant = capability == Capability.Disk ? CapabilityGrant.Disk(RootA) : CapabilityGrant.None;
+        var plan = leading ? KimiPlan(grant) with { Leading = ["--search"] } : KimiPlan(grant, "--yolo");
 
-        var build = () => Consultant().Build(Question(KimiPlan(grant, "--yolo")));
+        var build = () => Consultant().Build(Question(plan));
 
         build.Should().Throw<ArgumentException>().WithMessage("*shim*");
     }

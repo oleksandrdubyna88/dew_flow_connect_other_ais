@@ -158,29 +158,34 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
         switch (ending)
         {
             case "answered":
-            {
-                TheRow(reply).GetProperty("status").GetString().Should().Be(RowOutcomes.Answered, reply.ToString());
-                var shim = played.Shims.Should().ContainSingle().Subject.Request;
-                var cwd = After(shim.Arguments, "--cwd");
-                shim.StdIn.Should().Contain(cwd, "the prompt names the copies' paths — what the row can read");
-                shim.StdIn.Should().NotContain(granted, "never the root itself (D6)");
-                Directory.Exists(cwd).Should().BeFalse("the copy goes when the row ends");
-                Directory.Exists(Path.GetDirectoryName(After(shim.Arguments, AcpWords.HomeFlag))).Should().BeFalse("the row's one-shot folder goes with it");
-                break;
-            }
+                {
+                    TheRow(reply).GetProperty("status").GetString().Should().Be(RowOutcomes.Answered, reply.ToString());
+                    var shim = played.Shims.Should().ContainSingle().Subject.Request;
+                    var cwd = After(shim.Arguments, "--cwd");
+                    shim.StdIn.Should().Contain(cwd, "the prompt names the copies' paths — what the row can read");
+                    shim.StdIn.Should().NotContain(granted, "never the root itself (D6)");
+                    Directory.Exists(cwd).Should().BeFalse("the copy goes when the row ends");
+                    Directory.Exists(Path.GetDirectoryName(After(shim.Arguments, AcpWords.HomeFlag))).Should().BeFalse("the row's one-shot folder goes with it");
+                    break;
+                }
 
             case "refused before the launch":
-                TheRow(reply).GetProperty("status").GetString().Should().NotBe(RowOutcomes.Answered, reply.ToString());
-                played.Shims.Should().BeEmpty("a model the launch control refuses never starts the shim");
-                break;
+                {
+                    var row = TheRow(reply);
+                    row.GetProperty("status").GetString().Should().Be(RowOutcomes.Failed, reply.ToString());
+                    row.GetProperty("reason").GetString().Should().Contain(KimiModels.RefusalFor(model, KimiModels.Curated), "the launch control's sentence for the model, not another refusal");
+                    played.Shims.Should().BeEmpty("a model the launch control refuses never starts the shim");
+                    Directory.Exists(OneShotRoot).Should().BeTrue("the refusal came after the row's one-shot folder was reserved, so the cleanup is what is proved below");
+                    break;
+                }
 
             case "cancelled mid-turn":
-            {
-                var shim = played.Shims.Should().ContainSingle().Subject.Request;
-                Directory.Exists(After(shim.Arguments, "--cwd")).Should().BeFalse();
-                Directory.Exists(Path.GetDirectoryName(After(shim.Arguments, AcpWords.HomeFlag))).Should().BeFalse("finally, whatever ended it");
-                break;
-            }
+                {
+                    var shim = played.Shims.Should().ContainSingle().Subject.Request;
+                    Directory.Exists(After(shim.Arguments, "--cwd")).Should().BeFalse();
+                    Directory.Exists(Path.GetDirectoryName(After(shim.Arguments, AcpWords.HomeFlag))).Should().BeFalse("finally, whatever ended it");
+                    break;
+                }
         }
 
         (Directory.Exists(OneShotRoot) ? Directory.EnumerateFileSystemEntries(OneShotRoot) : []).Should().BeEmpty("coai-vh/<8> is gone after every ending");
