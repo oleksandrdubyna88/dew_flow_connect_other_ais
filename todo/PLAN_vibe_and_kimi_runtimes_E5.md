@@ -1119,7 +1119,7 @@ Numbered from 52. The 12 scenarios and the two production regions are filled and
     `EveryRow_CitesTheRecord_AndACellOrSaysWhyThereIsNone` keeps a list of the records a row may cite, and the three new rows turned it red.
 56. **S5.5.1–S5.5.4 and the `cancelled` arm of S5.6.7 are green against the code before this story** (E5.3 g and E5.4 are in), so their teeth are a temporary break
     of the deciding line, each run red and reverted: the check's `Home.Dispose()`, the row's `Release`, and `ConsultCheckScratch.Delete` without `KimiHomesDisposed`.
-    S5.5.1 has none of its own. S5.6.3, S5.6.5, S5.6.6 and the answered arm of S5.6.7 were red against `ConfinementPlanner.cs` and `KimiConsultant.cs` at `b4e2ea96`
+    S5.5.1's is `NeedsASanitisedSnapshot => false` (the check then fails, so its red reads `state` "failed", not the `--cwd` sentence). S5.6.3, S5.6.5, S5.6.6 and the answered arm of S5.6.7 were red against `ConfinementPlanner.cs` and `KimiConsultant.cs` at `b4e2ea96`
     with the data in place, for the table's reasons; S5.6.8 against the base generated table.
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
