@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 not started.** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 implemented 2026-10-26 (Sonnet, deviations 50–58, not yet reviewed).** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -1011,6 +1011,40 @@ homes live, in all five languages.
     list) changed here, at the coordinator's word; `consultant.test.ts`'s `CONSULTING` list and `kimiRuntime.test.ts` ("neither a consultant") are E5.7's, and
     stay red on this branch until E5.7 merges.
 30. **`KimiReport.SessionId` is a trailing, defaulted field** (one construction site, `From`), so nothing else changed shape (decision 3).
+
+**E5.5–E5.6 as built (Sonnet, 2026-10-26) — where it deviates from the spec above** (numbered from 50, apart from the lists above):
+
+50. **S5.5.1–S5.5.4 and S5.6.7 were green on arrival.** E5.4's `KimiConsultant` and E5.3 decision g were already in, so the reds the tables name ("before
+    E5.4", "before E5.3 g") could not be produced by the tests alone. Each got its teeth by a temporary break of its deciding line, run red and reverted:
+    `KimiConsultant.HomesFolder` empty (S5.5.1: *Expected … to be the one-shot folder …, but they differ*; S5.5.2 *Expected Directory.Exists(OneShotFolder) …*);
+    `OneShotHome.Emptied` on the bare deleter (S5.5.2, S5.5.3, S5.6.7: *Expected _unlinkedByTheDeleter to be empty … but found … credentials*);
+    `ConsultCheckScratch.Delete` without `KimiHomesDisposed` (S5.5.4, the same message); the check's `finally` skipping `Home.Dispose()` on cancel (S5.5.3:
+    *Expected … OneShotFolder to be empty … whatever ended it*); `QuestionRowLaunch`'s `Release(homes)` removed (S5.6.7: *Expected … coai-vh\<8> is deleted
+    on every way out*) and its `Remove(scratch)` removed (S5.6.7: *Expected Directory.Exists(…scratch) to be False*).
+51. **The first reds of S5.6.3, S5.6.5 and S5.6.6 read differently from their rows.** Before the seed rows existed, `ConfinementPlanner.Plan("kimi", …)` was refused
+    by the matrix first (*Expected type to be Confinement+Planned, but found Confinement+Refused*), not routed to the default arm of `Fragments` the rows
+    assume. With the seed rows in and no planner arm, the rows' own reds appeared (S5.6.3 *Expected disk.Cwd to be CwdKind.Snapshot … but found Scratch*;
+    S5.6.5 *Expected disk.Request.WorkingDirectory to be the copy …*; S5.6.6 *Expected a <ArgumentException> to be thrown, but no exception was thrown*).
+    S5.6.1 (*Expected none not to be <null>*), S5.6.4 (*Expected type to be Admission+Admitted, but found Admission+Refused*), S5.6.2 (the loader's
+    own *Expected Vectors … to contain …* for the three pairs) and S5.6.8 (*'kimi' is not a runtime the question consultant can launch …*, and the
+    runtimes list) read as the rows say. S5.6.8's red was seen with the generated file restored to the committed one, then regenerated.
+52. **The seed rows' dates are 2026-10-13** (the day M-K3, M-K4, M-K6 and M-K9 ran, RESULTS §3), and `CapabilityMatrixTests.Records` gained
+    `("RESULTS_kimi_confinement.md", "2026-10-13", "M-K")`, which `EveryRow_CitesTheRecord_AndACellOrSaysWhyThereIsNone` needs to accept a row that cites it.
+    The `disk` row's cells are `M-K6`, `M-K3`, `M-K4`, `M-K9`, `M-K9 (e)`; `none` cites `M-K6`, `M-K3`, `M-K4`; `web` cites none and says why.
+53. **Two refusal sentences list the runtimes** (`RuntimeCapabilities.Runtimes` is spelled in them): `CapabilityMatrixTests` and `ConfinementPlannerTests` (the
+    unknown-runtime refusal) and `capabilityAdmission.test.ts` now expect `…, vibe, kimi`.
+54. **Decision 3's refusal lives in `KimiConsultant.Build`** (`MustCarryNoFlag`, after `MustBeLaunchable`): a planned launch whose plan has any `Leading` or
+    `Flags` entry is refused with the sentence "a Kimi row's confinement is the shim's; a plan with flags is not one coai made for kimi". `AddDirs` is not
+    judged: it only records roots the flags already spell.
+55. **S5.6.7's "refused before the launch" arm is a root outside any Git work tree** (the row's copy is refused, as `AVibeQuestionRow…` does), so no shim is
+    started and no home was made; its assertions are the empty `coai-vh\<8>`, the recorder never invoked and the person's folder whole. A refusal by the launch
+    control itself (a sign-in change) is covered at the control by E5.3's `KimiLaunchControlTests` and through the service by S5.4.16.
+56. **S5.5.2's failing arm is `PlayedKimi.Lost`** (end `session_lost`, exit 70): the played shim has no plain exit-70 helper, and the check's disposal does not
+    depend on which failure ended the turn.
+57. **S5.5.1 asserts the home's shape from the shim's own argv** (`<root>\coai-vh\<8>\kh-<10 hex>`), and S5.5.4 that the home existed when the shim ran and
+    is gone with the scratch; the five tests run on every OS through `WindowsStandIn` and `KimiSeams.Using` (E5.4 deviation 23). Only Linux was run here.
+58. **`dotnet format … --verify-no-changes --no-restore` on the whole `.slnx` prints IL2026/IL3050 errors for `src_server`** on this host (AOT analyzers, files this
+    story does not touch). Limited with `--include` to the files this story changed, it is clean.
 
 ### E5.1–E5.2 as built (Opus, 2026-10-16)
 
