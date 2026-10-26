@@ -18,9 +18,11 @@
     "Every cell id of the first five runtimes is from run 01a0f8c7-18db-739b-8b83-3165e82cd42c (105 cells,",
     "2026-10-01), recorded in research/RESULTS_question_consultant_capabilities.md; the vibe rows cite the M-V",
     "cells of research/RESULTS_vibe_confinement.md (Windows, 3 of 3, vibe 2.26.1). `cells` may be empty only",
-    "when `note` says why (a standing that holds by construction, or a pair nobody measured)."
+    "when `note` says why (a standing that holds by construction, or a pair nobody measured).",
+    "",
+    "The kimi rows cite the M-K cells of research/RESULTS_kimi_confinement.md (Windows, kimi 2.1.1, measured 2026-10-13): Read is bounded by coai's shim, but Grep and Glob read the disk directly, so a kimi row can read this machine in both none and disk (unconfined). Web is unmeasured."
   ],
-  "runtimes": ["claude", "codex", "antigravity", "local", "api", "vibe"],
+  "runtimes": ["claude", "codex", "antigravity", "local", "api", "vibe", "kimi"],
   "capabilities": ["none", "disk", "web"],
   "rows": [
     {
@@ -333,6 +335,55 @@
         "resultRef": "research/RESULTS_vibe_confinement.md §20 — no cell of the Vibe probe exercises a web tool, and the shipped flags enable read_file alone",
         "cells": [],
         "note": "not measured: no Vibe cell fetches or searches the web"
+      }
+    },
+    {
+      "runtime": "kimi",
+      "capability": "none",
+      "standing": "unconfined",
+      "measuredWith": {
+        "cli": "kimi",
+        "version": "2.1.1",
+        "date": "2026-10-13",
+        "resultRef": "research/RESULTS_kimi_confinement.md §9 M-K6 — Read bounded to the working folder by the shim 3 of 3, but Grep and Glob took a file OUTSIDE it by absolute path 3 of 3 (an empty working folder plays no part in that); §6 M-K3 — 0 of 9 writes; §7 M-K4 — 0 of 6 writes",
+        "cells": [
+          "M-K6",
+          "M-K3",
+          "M-K4"
+        ],
+        "note": "mechanism: the shim refuses every write and shell permission and serves Read only inside the working folder, but Grep and Glob search the disk directly, so an empty working folder confines nothing - the row can read this machine; WebSearch and FetchURL are announced on this plan (RESULTS §7) and no cell exercised them"
+      }
+    },
+    {
+      "runtime": "kimi",
+      "capability": "disk",
+      "standing": "unconfined",
+      "measuredWith": {
+        "cli": "kimi",
+        "version": "2.1.1",
+        "date": "2026-10-13",
+        "resultRef": "research/RESULTS_kimi_confinement.md §9 M-K6 — Read inside the working folder 3 of 3, outside it refused 3 of 3, but Grep and Glob took an outside file 3 of 3; §12 M-K9 and §21 M-K9 (e) — a branch's AGENTS.md, skills, sub-agents and .mcp.json load from disk, which is why the roots are COPIED and never granted; §6 M-K3 and §7 M-K4 — 0 of 15 writes",
+        "cells": [
+          "M-K6",
+          "M-K3",
+          "M-K4",
+          "M-K9",
+          "M-K9 (e)"
+        ],
+        "note": "mechanism: the working folder is a coai-made sanitised COPY of the granted roots and the shim serves Read only inside it, but Grep and Glob search the disk directly - the row can read this machine; WebSearch and FetchURL are announced on this plan (RESULTS §7) and no cell exercised them"
+      }
+    },
+    {
+      "runtime": "kimi",
+      "capability": "web",
+      "standing": "unmeasured",
+      "measuredWith": {
+        "cli": "kimi",
+        "version": "2.1.1",
+        "date": "2026-10-13",
+        "resultRef": "research/RESULTS_kimi_confinement.md §7 and §14 — WebSearch and FetchURL are announced on this plan and no cell of the Kimi probe exercises either",
+        "cells": [],
+        "note": "not measured: no Kimi cell searches or fetches the web"
       }
     }
   ]
