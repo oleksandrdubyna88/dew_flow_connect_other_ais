@@ -129,11 +129,13 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
         using var caller = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         var granted = Path.Combine(Repo, "src");
         var copies = new List<string>();
+        var copiedEntries = new List<string>();
         var kimi = new PlayedKimi(_launcher)
         {
             Turn = (_, request) =>
             {
                 copies.AddRange(Directory.GetDirectories(request.WorkingDirectory));
+                copiedEntries.AddRange(Directory.GetFileSystemEntries(request.WorkingDirectory, "*", SearchOption.AllDirectories));
                 return PlayedKimi.Answered(PlayedKimi.SessionOf(request), 900, 30);
             },
             During = ending == "cancelled"
@@ -142,7 +144,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
                     await caller.CancelAsync();
                     await Task.Delay(Timeout.Infinite, ct);
                 }
-                : static (_, _) => Task.CompletedTask,
+            : static (_, _) => Task.CompletedTask,
         };
         if (ending == "refused")
         {
@@ -152,12 +154,14 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
 
         var before = _person.Hash();
         GitScratch.AfterUnlink = _unlinkedByTheDeleter.Add;
+        var scratchBefore = Directory.GetDirectories(Path.GetTempPath(), "coai-question-*");
 
         if (ending == "cancelled")
         {
             var asking = async () => await AskAsync(Service(kimi, granted), caller.Token);
             await asking.Should().ThrowAsync<OperationCanceledException>();
-            kimi.Shims.Should().ContainSingle("the shim was started, then the caller cancelled mid-turn");
+            var started = kimi.Shims.Should().ContainSingle("the shim was started, then the caller cancelled mid-turn").Subject;
+            Directory.Exists(Path.GetDirectoryName(started.Request.WorkingDirectory)).Should().BeFalse("the row's folder goes whatever ended the row");
         }
         else
         {
@@ -180,11 +184,14 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
                 Path.GetDirectoryName(Path.GetDirectoryName(home)).Should().Be(OneShotRoot, "coai-vh\\<8>\\kh-… (J3)");
                 shim.Arguments.Should().NotContain(AcpWords.SessionFlag, "a question row is one shot");
                 Directory.Exists(copies[0]).Should().BeFalse("the row's copy is gone once it answered");
+                copiedEntries.Select(Path.GetFileName).Should().NotContain("AGENTS.md", "the copy Kimi reads is a sanitised snapshot")
+                    .And.NotContain(".kimi-code");
             }
             else
             {
                 row.GetProperty("status").GetString().Should().Be(RowOutcomes.Failed, reply.ToString());
                 kimi.Shims.Should().BeEmpty("a refused launch starts nothing");
+                Directory.GetDirectories(Path.GetTempPath(), "coai-question-*").Except(scratchBefore).Should().BeEmpty("the refused row's scratch is gone");
             }
         }
 

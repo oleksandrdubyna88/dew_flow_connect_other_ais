@@ -407,13 +407,19 @@ public sealed class ConfinementPlannerTests
     }
 
     /// <summary>S5.6.6: a plan with flags was not made for kimi — refused by name, never launched with the flags dropped.</summary>
-    [Fact]
-    public void APlanWithFlags_IsRefusedForKimi()
+    [Theory]
+    [InlineData("flags")]
+    [InlineData("leading")]
+    [InlineData("add-dirs")]
+    public void APlanWithArgv_IsRefusedForKimi(string carried)
     {
+        string[] flags = carried == "flags" ? ["--yolo"] : [];
+        string[] leading = carried == "leading" ? ["--yolo"] : [];
+        string[] addDirs = carried == "add-dirs" ? ["/elsewhere"] : [];
         var launch = Planned("kimi", CapabilityGrant.None) with
         {
             Confinement = new LaunchConfinement.Planned(
-                new Confinement.Planned("kimi", CapabilityGrant.None, [], ["--yolo"], CwdKind.Scratch, [], AdmissionFlag.Unconfined)),
+                new Confinement.Planned("kimi", CapabilityGrant.None, leading, flags, CwdKind.Scratch, addDirs, AdmissionFlag.Unconfined)),
         };
 
         FluentActions.Invoking(() => KimiQuestionConsultant().Build(launch)).Should().Throw<ArgumentException>().WithMessage("*shim*");

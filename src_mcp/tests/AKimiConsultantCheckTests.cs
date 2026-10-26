@@ -27,26 +27,16 @@ public sealed class AKimiConsultantCheckTests : IDisposable
 {
     private readonly KimiFixture _person = new();
     private readonly TempDir _homes = TempDir.For("testsToDelete-kimi-check-");
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-kcheck-data-").FullName;
-    private readonly string _temp = Directory.CreateTempSubdirectory("coai-kcheck-temp-").FullName;
+    private readonly TempDir _data = TempDir.For("testsToDelete-kimi-check-data-");
+    private readonly TempDir _temp = TempDir.For("testsToDelete-kimi-check-temp-");
     private readonly List<string> _warned = [];
     private readonly List<string> _unlinkedByTheDeleter = [];
 
     public void Dispose()
     {
         GitScratch.AfterUnlink = null;
-        foreach (var dir in (string[])[_data, _temp])
-        {
-            try
-            {
-                Directory.Delete(dir, recursive: true);
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                // A leftover temp directory is not a failing test.
-            }
-        }
-
+        _data.Dispose();
+        _temp.Dispose();
         _homes.Dispose();
         _person.Dispose();
     }
