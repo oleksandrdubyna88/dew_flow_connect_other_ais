@@ -39,27 +39,9 @@ public sealed class AKimiConsultationScenarioTests : ConsultScenarioBase
 
     private string FolderOf(string id) => ConsultantHomes.ConversationFolder(Homes, ConsultantHomes.Kimi, id);
 
-    /// <summary>Several scopes, given back in reverse.</summary>
-    private sealed class Scopes(params IDisposable[] scopes) : IDisposable
-    {
-        public void Dispose()
-        {
-            foreach (var scope in scopes.Reverse())
-            {
-                scope.Dispose();
-            }
-        }
-    }
-
-    /// <summary>
-    /// The person, the host and the lock root this flow's Kimi adapters see — set by a SYNCHRONOUS call, so the values reach the test's own flow
-    /// and every service call it awaits.
-    /// </summary>
-    private static Scopes StandIn(KimiFixture person) => new(
-        WindowsStandIn.Begin(),
-        KimiCredentialsLock.RootFor(Path.Combine(person.Folder, "locks")),
-        KimiSeams.Using(HostKind.Windows, new KimiSeams(person.PlacesAt, () => (PlayedKimi.Shim, []))),
-        CallingAs("CLAUDE_CODE_SESSION_ID"));
+    /// <summary>The person, the host and the lock root this flow's Kimi adapters see, and the caller the flow acts as.</summary>
+    private static IDisposable StandIn(KimiFixture person) =>
+        KimiStandIn.Begin(person, CallingAs("CLAUDE_CODE_SESSION_ID"));
 
     private PanelService Kimi(PlayedKimi played, Serilog.ILogger? log = null) =>
         Service(providers: [], consultants: OnKimi, launcher: played, homes: Homes, log: log);

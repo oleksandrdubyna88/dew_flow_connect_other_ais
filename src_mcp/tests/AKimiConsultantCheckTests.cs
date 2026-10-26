@@ -2,8 +2,6 @@ using System.Text.Json;
 using CoaiMcp.Runners.Acp;
 using CoaiMcp.Runners.Consultation;
 using CoaiMcp.Runners.Files;
-using CoaiMcp.Runners.Kimi;
-using CoaiMcp.Runners.Platform;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Vibe;
 using CoaiMcp.Server;
@@ -48,23 +46,6 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     private void TheDeleterNeverMetTheJunction() =>
         _unlinkedByTheDeleter.Should().BeEmpty("the deleter's unlink recorder must not be invoked, because KimiHome unlinks the junction first");
 
-    private sealed class Scopes(params IDisposable[] scopes) : IDisposable
-    {
-        public void Dispose()
-        {
-            foreach (var scope in scopes.Reverse())
-            {
-                scope.Dispose();
-            }
-        }
-    }
-
-    /// <summary>The person, the host and the lock root this flow's Kimi adapters see — set by a SYNCHRONOUS call, so the values reach the test's own flow.</summary>
-    private static Scopes StandIn(KimiFixture person) => new(
-        WindowsStandIn.Begin(),
-        KimiCredentialsLock.RootFor(Path.Combine(person.Folder, "locks")),
-        KimiSeams.Using(HostKind.Windows, new KimiSeams(person.PlacesAt, () => (PlayedKimi.Shim, []))));
-
     private PanelSettings Settings(string homesRoot) => new()
     {
         Providers = [],
@@ -93,19 +74,12 @@ public sealed class AKimiConsultantCheckTests : IDisposable
         return PlayedKimi.Answered(PlayedKimi.SessionOf(request), 19973, 31, $"marker: {marker}{Environment.NewLine}canary: CANNOT");
     }
 
-    private static string ArgAfter(PlayedKimi.Launch launch, string flag)
-    {
-        var args = launch.Request.Arguments.ToList();
-
-        return args[args.IndexOf(flag) + 1];
-    }
-
     // ---------- S5.5.1 ----------
 
     [Fact]
     public async Task AKimiCheck_RunsInACopy_OnAOneShotHome()
     {
-        using var stood = StandIn(_person);
+        using var stood = KimiStandIn.Begin(_person);
         var played = new PlayedKimi(new ProcessLauncher()) { Turn = TheMarkerRead };
         RecordingTheDeleter();
 
@@ -115,8 +89,8 @@ public sealed class AKimiConsultantCheckTests : IDisposable
         said.GetProperty("state").GetString().Should().Be(ConsultCheckStates.Answered, said.ToString());
         said.GetProperty("markerRead").GetBoolean().Should().BeTrue("the copy holds the scratch's CHECK.md");
         var launch = played.Shims.Should().ContainSingle().Subject;
-        ArgAfter(launch, "--cwd").Should().Contain(Path.Combine("own", "tree"), "a copy in the check's own scratch, never the repository");
-        var home = ArgAfter(launch, "--home");
+        launch.ArgAfter("--cwd").Should().Contain(Path.Combine("own", "tree"), "a copy in the check's own scratch, never the repository");
+        var home = launch.ArgAfter("--home");
         home.Should().StartWith(TheOneShotFolder + Path.DirectorySeparatorChar, "D1: under the homes root's coai-vh, never under TEMP");
         Path.GetFileName(Path.GetDirectoryName(home)).Should().MatchRegex("^[0-9a-f]{8}$");
         Path.GetFileName(home).Should().MatchRegex("^kh-[0-9a-f]{10}$");
@@ -130,7 +104,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     [InlineData(true)]
     public async Task AfterTheCheck_TheHomeIsGone_JunctionFirst(bool theTurnFails)
     {
-        using var stood = StandIn(_person);
+        using var stood = KimiStandIn.Begin(_person);
         var played = new PlayedKimi(new ProcessLauncher())
         {
             Turn = theTurnFails
@@ -154,7 +128,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     [Fact]
     public async Task ACheckCancelledMidTurn_StillDisposesItsHome()
     {
-        using var stood = StandIn(_person);
+        using var stood = KimiStandIn.Begin(_person);
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var played = new PlayedKimi(new ProcessLauncher())
@@ -183,7 +157,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     [Fact]
     public async Task ARootlessCheck_KeepsTheHomeInItsScratch_AndDisposesItJunctionFirst()
     {
-        using var stood = StandIn(_person);
+        using var stood = KimiStandIn.Begin(_person);
         var played = new PlayedKimi(new ProcessLauncher()) { Turn = TheMarkerRead };
         var before = _person.Hash();
         RecordingTheDeleter();
@@ -191,7 +165,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
         var (_, said) = await CheckAsync(Settings(string.Empty), played, TestContext.Current.CancellationToken);
 
         said.GetProperty("state").GetString().Should().Be(ConsultCheckStates.Answered, said.ToString());
-        var home = ArgAfter(played.Shims.Should().ContainSingle().Subject, "--home");
+        var home = played.Shims.Should().ContainSingle().Subject.ArgAfter("--home");
         home.Should().Contain(Path.Combine("own", "kh-"), "no root: the home stays in the check's scratch, under own");
         Directory.EnumerateDirectories(_temp, ConsultCheckScratch.Prefix + "*").Should().BeEmpty("the scratch is gone after the check");
         TheDeleterNeverMetTheJunction();

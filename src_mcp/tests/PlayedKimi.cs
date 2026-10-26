@@ -27,7 +27,16 @@ internal sealed class PlayedKimi(IProcessLauncher inner) : IProcessLauncher
     private int _peak;
 
     /// <summary>One shim launch: what it was asked, and when it ran.</summary>
-    public sealed record Launch(ProcessRequest Request, DateTime StartUtc, DateTime EndUtc);
+    public sealed record Launch(ProcessRequest Request, DateTime StartUtc, DateTime EndUtc)
+    {
+        /// <summary>The argument that follows <paramref name="flag"/> (<c>--home</c>, <c>--cwd</c>).</summary>
+        public string ArgAfter(string flag)
+        {
+            var args = Request.Arguments.ToList();
+
+            return args[args.IndexOf(flag) + 1];
+        }
+    }
 
     public ConcurrentQueue<Launch> Shims { get; } = new();
 

@@ -2,8 +2,6 @@ using System.Text.Json;
 using CoaiMcp.Core.QuestionConsult;
 using CoaiMcp.Core.Rounds;
 using CoaiMcp.Runners.Files;
-using CoaiMcp.Runners.Kimi;
-using CoaiMcp.Runners.Platform;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Vibe;
 using CoaiMcp.Server;
@@ -65,23 +63,6 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
         }
     }
 
-    private sealed class Scopes(params IDisposable[] scopes) : IDisposable
-    {
-        public void Dispose()
-        {
-            foreach (var scope in scopes.Reverse())
-            {
-                scope.Dispose();
-            }
-        }
-    }
-
-    /// <summary>The person, the host and the lock root this flow's Kimi adapters see — set by a SYNCHRONOUS call, so the values reach the test's own flow.</summary>
-    private static Scopes StandIn(KimiFixture person) => new(
-        WindowsStandIn.Begin(),
-        KimiCredentialsLock.RootFor(Path.Combine(person.Folder, "locks")),
-        KimiSeams.Using(HostKind.Windows, new KimiSeams(person.PlacesAt, () => (PlayedKimi.Shim, []))));
-
     private PanelService Service(PlayedKimi played, params string[] roots) => new(
         new PanelSettings
         {
@@ -113,13 +94,23 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
         return answers.EnumerateArray().Should().ContainSingle().Subject;
     }
 
-    /// <summary>The row's one-shot folder under the homes root: gone, or at least empty — the reservation's own folder is given back on every way out.</summary>
-    private void TheOneShotHomeIsGone()
+    /// <summary>
+    /// The home the launch was given is <c>&lt;Homes&gt;\coai-vh\&lt;8 hex&gt;\kh-&lt;10 hex&gt;</c> — never TEMP or anywhere else — and that folder is gone,
+    /// with the reservation's own <c>&lt;8 hex&gt;</c> folder (the one-shot folder itself may remain, empty).
+    /// </summary>
+    private void TheOneShotHomeIsGone(PlayedKimi.Launch launch)
     {
+        var home = launch.ArgAfter("--home");
+        var reservation = Path.GetDirectoryName(home)!;
         var oneShot = Path.Combine(Homes, VibeHomes.OneShotFolder);
+        Path.GetDirectoryName(reservation).Should().Be(oneShot, "the row's home is under the homes root's coai-vh, never under TEMP");
+        Path.GetFileName(reservation).Should().MatchRegex("^[0-9a-f]{8}$");
+        Path.GetFileName(home).Should().MatchRegex("^kh-[0-9a-f]{10}$");
+        Directory.Exists(home).Should().BeFalse("the row's home is deleted on every way out");
+        Directory.Exists(reservation).Should().BeFalse("the reservation's own folder is given back on every way out");
         if (Directory.Exists(oneShot))
         {
-            Directory.EnumerateFileSystemEntries(oneShot).Should().BeEmpty("the row's folder under coai-vh is deleted on every way out");
+            Directory.EnumerateFileSystemEntries(oneShot).Should().BeEmpty("nothing is left under coai-vh");
         }
     }
 
@@ -131,7 +122,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
     [InlineData("cancelled")]
     public async Task AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind(string ending)
     {
-        using var stood = StandIn(_person);
+        using var stood = KimiStandIn.Begin(_person);
         var before = _person.Hash();
         GitScratch.AfterUnlink = _unlinkedByTheDeleter.Add;
         Directory.CreateDirectory(Homes);
@@ -176,10 +167,13 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
             TheRowEnded(ending, reply, played, granted, copies);
         }
 
-        var launched = played.Shims.Select(launch => launch.Request).ToList();
-        launched.Should().HaveCount(ending == "refused" ? 0 : 1);
-        launched.ForEach(request => Directory.Exists(request.WorkingDirectory).Should().BeFalse("the row's copies are gone once it ended"));
-        TheOneShotHomeIsGone();
+        played.Shims.Should().HaveCount(ending == "refused" ? 0 : 1);
+        foreach (var launch in played.Shims)
+        {
+            Directory.Exists(launch.Request.WorkingDirectory).Should().BeFalse("the row's copies are gone once it ended");
+            TheOneShotHomeIsGone(launch);
+        }
+
         _unlinkedByTheDeleter.Should().BeEmpty("the deleter's unlink recorder must not be invoked, because KimiHome unlinks the junction first");
         _person.Hash().Should().Equal(before, "the person's folder is whole: names, bytes and ReadOnly bits");
     }
