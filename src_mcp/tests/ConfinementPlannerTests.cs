@@ -402,6 +402,25 @@ public sealed class ConfinementPlannerTests
         FluentActions.Invoking(() => consultant.Build(launch)).Should().Throw<ArgumentException>().WithMessage("*shim*");
     }
 
+    /// <summary>A hand-made plan with add-dirs or the live root is refused for kimi too: the planner never makes one, and D6 forbids the root.</summary>
+    [Fact]
+    public void APlanWithAddDirsOrTheLiveRoot_IsRefusedForKimi()
+    {
+        var consultant = new Runners.Kimi.KimiConsultant(new Runners.Kimi.KimiRuntime("kimi", Runners.Platform.HostKind.Windows,
+            new Runners.Kimi.KimiSeams(root => Runners.Kimi.KimiPlaces.ForShim(root, Path.Combine(RowFolder, "persons-bin")), () => ("coai-mcp", []))));
+        var withAddDir = Planned("kimi", CapabilityGrant.None) with
+        {
+            Confinement = new LaunchConfinement.Planned(new Confinement.Planned("kimi", CapabilityGrant.None, [], [], CwdKind.Scratch, [RootA], AdmissionFlag.Unconfined)),
+        };
+        var liveRoot = Planned("kimi", CapabilityGrant.None) with
+        {
+            Confinement = new LaunchConfinement.Planned(new Confinement.Planned("kimi", CapabilityGrant.None, [], [], CwdKind.Root, [], AdmissionFlag.Unconfined)),
+        };
+
+        FluentActions.Invoking(() => consultant.Build(withAddDir)).Should().Throw<ArgumentException>().WithMessage("*shim*");
+        FluentActions.Invoking(() => consultant.Build(liveRoot)).Should().Throw<ArgumentException>().WithMessage("*shim*");
+    }
+
     /// <summary>No Vibe launch carries <c>--add-dir</c>, whatever the grant (D3: <c>--add-dir</c> trusts its folder).</summary>
     [Fact]
     public void NoVibeLaunch_CarriesAddDir_WhateverTheGrant()

@@ -81,10 +81,11 @@ public sealed class KimiConsultant(KimiRuntime inner, string vendor = "kimi") : 
                 "a Kimi consultant keeps its home in a coai-owned folder of the conversation or the row (OwnedScratch), and none was given — never TEMP or the answers folder (D19)",
                 nameof(launch));
 
-    /// <summary>A Kimi row's confinement is the shim's (D15), never its argv: a plan with flags is not one coai made for kimi (E5.6 decision 3).</summary>
+    /// <summary>A Kimi row's confinement is the shim's (D15), never its argv: a plan with flags, add-dirs or the live root is not one coai made for kimi (E5.6 decision 3, D6).</summary>
     private static void MustCarryNoFlags(ConsultantLaunch launch)
     {
-        if (launch.Confinement is LaunchConfinement.Planned { Plan: var plan } && (plan.Leading.Count > 0 || plan.Flags.Count > 0))
+        if (launch.Confinement is LaunchConfinement.Planned { Plan: var plan }
+            && (plan.Leading.Count > 0 || plan.Flags.Count > 0 || plan.AddDirs.Count > 0 || plan.Cwd == CwdKind.Root))
         {
             throw new ArgumentException(
                 "a Kimi row's confinement is the shim's; a plan with flags is not one coai made for kimi",
