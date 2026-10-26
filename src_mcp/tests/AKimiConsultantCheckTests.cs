@@ -29,18 +29,31 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     private readonly TempDir _homes = TempDir.For("testsToDelete-kimi-check-homes-");
     private readonly List<string> _warned = [];
     private readonly List<string> _unlinkedByTheDeleter = [];
+    private readonly List<string> _unlinkedByKimiHome = [];
 
     public void Dispose()
     {
         GitScratch.AfterUnlink = null;
+        KimiHome.AfterUnlink = null;
         _data.Dispose();
         _temp.Dispose();
         _homes.Dispose();
         _person.Dispose();
     }
 
-    /// <summary>The deleter's own unlink recorder — a Kimi home disposed junction-first never lets the deleter meet its junction.</summary>
-    private void RecordingTheDeleter() => GitScratch.AfterUnlink = _unlinkedByTheDeleter.Add;
+    /// <summary>
+    /// Both unlink recorders: the deleter's (a Kimi home disposed junction-first never lets the deleter meet its junction) and the Kimi home's own
+    /// (it MUST see the junction, or the first recorder is silent because there was no junction to meet).
+    /// </summary>
+    private void RecordingTheUnlinks()
+    {
+        GitScratch.AfterUnlink = _unlinkedByTheDeleter.Add;
+        KimiHome.AfterUnlink = _unlinkedByKimiHome.Add;
+    }
+
+    /// <summary>The home the check made had a <c>credentials</c> junction, and <see cref="KimiHome"/> — not the deleter — unlinked exactly that one.</summary>
+    private void KimiHomeUnlinkedItsJunction(string home) =>
+        _unlinkedByKimiHome.Should().Equal([Path.Combine(home, "home", "credentials")], "the home had a credentials junction and KimiHome unlinked it first");
 
     private void TheDeleterNeverMetTheJunction() =>
         _unlinkedByTheDeleter.Should().BeEmpty("the deleter's unlink recorder must not be invoked, because KimiHome unlinks the junction first");
@@ -110,6 +123,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     public async Task AKimiCheck_RunsInACopy_OnAOneShotHome()
     {
         using var stood = StandIn();
+        RecordingTheUnlinks();
         var played = new PlayedKimi(new ProcessLauncher()) { Turn = ReadsTheMarker };
         var before = _person.Hash();
 
@@ -126,7 +140,9 @@ public sealed class AKimiConsultantCheckTests : IDisposable
 
         var home = ArgumentAfter(request, "--home");
         Path.GetDirectoryName(Path.GetDirectoryName(home)).Should().Be(OneShotRoot);
+        Path.GetFileName(Path.GetDirectoryName(home)).Should().MatchRegex("^[0-9a-f]{8}$", "the one-shot folder is coai-vh\\<8 hex>");
         Path.GetFileName(home).Should().MatchRegex("^kh-[0-9a-f]{10}$");
+        KimiHomeUnlinkedItsJunction(home);
 
         Directory.EnumerateDirectories(_temp, "coai-check-*").Should().BeEmpty("the scratch repository is deleted at the end");
         ThePersonsFolderIsWhole(before);
@@ -140,7 +156,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     public async Task AfterTheCheck_TheHomeIsGone_JunctionFirst(bool theTurnFails)
     {
         using var stood = StandIn();
-        RecordingTheDeleter();
+        RecordingTheUnlinks();
         var before = _person.Hash();
         var played = new PlayedKimi(new ProcessLauncher())
         {
@@ -150,6 +166,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
         var (_, said, _) = await Check(Settings(_homes), played, TestContext.Current.CancellationToken);
 
         said.GetProperty("state").GetString().Should().Be(theTurnFails ? "failed" : "answered", said.ToString());
+        KimiHomeUnlinkedItsJunction(ArgumentAfter(played.Shims.Should().ContainSingle().Subject.Request, "--home"));
         TheOneShotFolderIsGone();
         TheDeleterNeverMetTheJunction();
         ThePersonsFolderIsWhole(before);
@@ -161,7 +178,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     public async Task ACheckCancelledMidTurn_StillDisposesItsHome()
     {
         using var stood = StandIn();
-        RecordingTheDeleter();
+        RecordingTheUnlinks();
         var before = _person.Hash();
         using var cancelling = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         var played = new PlayedKimi(new ProcessLauncher())
@@ -178,7 +195,8 @@ public sealed class AKimiConsultantCheckTests : IDisposable
         code.Should().Be(0);
         said.GetProperty("state").GetString().Should().Be("failed", said.ToString());
         said.GetProperty("failureKind").GetString().Should().Be("cancelled");
-        played.Shims.Should().ContainSingle("the turn had started when the check was cancelled");
+        var started = played.Shims.Should().ContainSingle("the turn had started when the check was cancelled").Subject;
+        KimiHomeUnlinkedItsJunction(ArgumentAfter(started.Request, "--home"));
         TheOneShotFolderIsGone();
         TheDeleterNeverMetTheJunction();
         ThePersonsFolderIsWhole(before);
@@ -190,7 +208,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     public async Task ARootlessCheck_KeepsTheHomeInItsScratch_AndDisposesItJunctionFirst()
     {
         using var stood = StandIn();
-        RecordingTheDeleter();
+        RecordingTheUnlinks();
         var before = _person.Hash();
         var played = new PlayedKimi(new ProcessLauncher()) { Turn = ReadsTheMarker };
 
@@ -198,6 +216,10 @@ public sealed class AKimiConsultantCheckTests : IDisposable
 
         var home = ArgumentAfter(played.Shims.Should().ContainSingle().Subject.Request, "--home");
         Path.GetFileName(Path.GetDirectoryName(home)).Should().Be("own", "no root: the home stays in the check's scratch");
+        var scratch = Path.GetDirectoryName(Path.GetDirectoryName(home))!;
+        Path.GetFileName(scratch).Should().StartWith("coai-check-", "<scratch>\\own is under the check's own scratch");
+        Path.GetDirectoryName(scratch).Should().Be(_temp.Path);
+        KimiHomeUnlinkedItsJunction(home);
         Path.GetFileName(home).Should().MatchRegex("^kh-[0-9a-f]{10}$");
         Directory.EnumerateDirectories(_temp, "coai-check-*").Should().BeEmpty("the scratch is gone with its home");
         TheDeleterNeverMetTheJunction();

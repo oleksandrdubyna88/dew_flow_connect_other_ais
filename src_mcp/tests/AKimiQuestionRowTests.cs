@@ -32,6 +32,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
     private readonly TempDir _dir = TempDir.For("testsToDelete-kimi-qrow-");
     private readonly TempDir _homes = TempDir.For("testsToDelete-kimi-qrow-homes-");
     private readonly List<string> _unlinkedByTheDeleter = [];
+    private readonly List<string> _unlinkedByKimiHome = [];
 
     private string Repo => _dir.At("repo");
 
@@ -43,6 +44,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
     public ValueTask DisposeAsync()
     {
         GitScratch.AfterUnlink = null;
+        KimiHome.AfterUnlink = null;
         _dir.Dispose();
         _homes.Dispose();
         _person.Dispose();
@@ -130,6 +132,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         using var stood = StandIn();
         GitScratch.AfterUnlink = _unlinkedByTheDeleter.Add;
+        KimiHome.AfterUnlink = _unlinkedByKimiHome.Add;
         var before = _person.Hash();
 
         var root = Path.Combine(Repo, "src");
@@ -139,11 +142,15 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
             Directory.CreateDirectory(root);
         }
 
+        var copied = new List<string>();
         var played = new PlayedKimi(_launcher)
         {
             Turn = (_, request) => PlayedKimi.Answered(PlayedKimi.SessionOf(request), 20000, 30, Advice),
-            During = async (_, ct) =>
+            During = async (request, ct) =>
             {
+                // What the agent could read, seen while it runs: the copy is gone once the row ends.
+                copied.AddRange(Directory.EnumerateFiles(request.WorkingDirectory, "*", SearchOption.AllDirectories)
+                    .Select(file => Path.GetRelativePath(request.WorkingDirectory, file).Replace('\\', '/')));
                 if (ending == Ending.CancelledMidTurn)
                 {
                     await cts.CancelAsync();
@@ -152,29 +159,25 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
             },
         };
 
-        // A cancelled row may come back as a row status or as OperationCanceledException.
-        JsonElement? reply = null;
-        try
+        if (ending == Ending.CancelledMidTurn)
         {
-            reply = await AskAsync(Service(played, root), cts.Token);
-        }
-        catch (OperationCanceledException) when (ending == Ending.CancelledMidTurn)
-        {
-            // accepted: the cancelled row ended by exception
-        }
+            var asking = async () => await AskAsync(Service(played, root), cts.Token);
 
-        if (reply is { } answered)
+            await asking.Should().ThrowAsync<OperationCanceledException>("the caller's own cancellation reaches the caller, as it does for a Vibe row");
+        }
+        else
         {
-            answered.TryGetProperty("answers", out var answers).Should().BeTrue(answered.ToString());
-            var row = answers.EnumerateArray().Should().ContainSingle().Subject;
-            var status = row.GetProperty("status").GetString();
+            var reply = await AskAsync(Service(played, root), cts.Token);
+
+            var row = reply.GetProperty("answers").EnumerateArray().Should().ContainSingle().Subject;
             if (ending == Ending.Answered)
             {
-                status.Should().Be(RowOutcomes.Answered, answered.ToString());
+                row.GetProperty("status").GetString().Should().Be(RowOutcomes.Answered, reply.ToString());
             }
             else
             {
-                status.Should().NotBe(RowOutcomes.Answered, answered.ToString());
+                row.GetProperty("status").GetString().Should().Be(RowOutcomes.Refused, reply.ToString());
+                row.GetProperty("reason").GetString().Should().Contain("not inside a Git work tree", "the row is refused for its root");
             }
         }
 
@@ -182,6 +185,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
         if (ending == Ending.RefusedBeforeTheLaunch)
         {
             played.Shims.Should().BeEmpty();
+            _unlinkedByKimiHome.Should().BeEmpty("no home was made, so no junction was unlinked");
         }
         else
         {
@@ -189,6 +193,10 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
             rowFolder = Path.GetDirectoryName(request.WorkingDirectory);
             request.StdIn.Should().Contain(Path.Combine(request.WorkingDirectory, "snapshot-"), "the prompt names the copy, never the root");
             request.StdIn.Should().NotContain(Path.Combine(Repo, "src"), "the prompt never names the granted root");
+            copied.Should().Contain(file => file.EndsWith("/Mailer.cs"), "the granted sub-folder is what was copied");
+            copied.Should().NotContain(file => file.EndsWith("AGENTS.md"), "the copy leaves out the project instructions of the root (M-K9)");
+            _unlinkedByKimiHome.Should().ContainSingle("the home the row made had a credentials junction, and KimiHome unlinked it first")
+                .Which.Should().Be(Path.Combine(request.Arguments[request.Arguments.ToList().IndexOf("--home") + 1], "home", "credentials"));
         }
 
         if (rowFolder is not null)
@@ -197,7 +205,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
         }
 
         (!Directory.Exists(OneShotRoot) || !Directory.EnumerateFileSystemEntries(OneShotRoot).Any()).Should().BeTrue("the one-shot home is gone");
-        _unlinkedByTheDeleter.Should().BeEmpty();
+        _unlinkedByTheDeleter.Should().BeEmpty("the deleter never met the junction: KimiHome unlinked it first");
         _person.Hash().Should().Equal(before);
     }
 }
