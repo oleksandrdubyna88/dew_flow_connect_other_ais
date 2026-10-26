@@ -61,7 +61,6 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
 
     private async Task RepositoryAsync(string at, params (string Path, string Text)[] files)
     {
-        // QWEN-FILL-BEGIN s567-repo-helper test
         Directory.CreateDirectory(at);
         foreach (var (path, text) in files)
         {
@@ -75,13 +74,11 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
             var result = await _launcher.RunAsync(new ProcessRequest("git", args, at), TestContext.Current.CancellationToken);
             result.ExitCode.Should().Be(0, string.Join(' ', args) + ": " + result.StdErr);
         }
-        // QWEN-FILL-END s567-repo-helper
     }
 
     /// <summary>The service with the homes root and one <c>disk</c> Kimi row — <see cref="PlayedKimi"/> is its launcher; the fake person is NOT yet standing in (see <see cref="StandIn"/>).</summary>
     private PanelService ServiceOn(PlayedKimi played, params string[] roots)
     {
-        // QWEN-FILL-BEGIN s567-service test
         return new PanelService(
             new PanelSettings
             {
@@ -102,18 +99,15 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
             played,
             Logger.None,
             Noticing.None);
-        // QWEN-FILL-END s567-service
     }
 
     /// <summary>The fake person's sign-in, the measured host and the lock root this flow's Kimi adapters see — set by a SYNCHRONOUS call so it reaches every awaited service call.</summary>
     private IDisposable StandIn()
     {
-        // QWEN-FILL-BEGIN s567-standin test
         return new Scopes(
             WindowsStandIn.Begin(),
             KimiCredentialsLock.RootFor(Path.Combine(_person.Folder, "locks")),
             KimiSeams.Using(HostKind.Windows, new KimiSeams(_person.PlacesAt, () => (PlayedKimi.Shim, []))));
-        // QWEN-FILL-END s567-standin
     }
 
     private async Task<JsonElement> AskAsync(PanelService service, CancellationToken? ct = null) =>
@@ -135,8 +129,6 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
     [InlineData(Ending.CancelledMidTurn)]
     public async Task AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind(Ending ending)
     {
-        _ = ending; // the parameter is read by the body below; this line only keeps the skeleton building
-        // QWEN-FILL-BEGIN s567-disk-row test
         using var stood = StandIn();
         GitScratch.AfterUnlink = _unlinkedByTheDeleter.Add;
         var before = _person.Hash();
@@ -174,10 +166,10 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
 
         if (ending == Ending.RefusedBeforeTheLaunch)
         {
-            // First run: read the real refusal word and keep only that one in the check below.
-            string status = TheRow(reply).GetProperty("status").GetString() ?? string.Empty;
-            (status == RowOutcomes.Refused || status == RowOutcomes.Failed).Should().BeTrue(status);
-            played.Shims.Should().BeEmpty();
+            var row = TheRow(reply);
+            row.GetProperty("status").GetString().Should().Be(RowOutcomes.Refused, reply.ToString());
+            row.GetProperty("reason").GetString().Should().Contain("not inside a Git work tree");
+            played.Shims.Should().BeEmpty("nothing is launched for a row whose copy was refused");
         }
         else
         {
@@ -187,12 +179,13 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
 
             if (ending == Ending.Answered)
             {
-                TheRow(reply).GetProperty("status").GetString().Should().Be(RowOutcomes.Answered);
-                launch.Request.StdIn.Should().Contain(Path.Combine(rowFolder, "tree"));
-                launch.Request.StdIn.Should().NotContain(granted);
+                TheRow(reply).GetProperty("status").GetString().Should().Be(RowOutcomes.Answered, reply.ToString());
+                launch.Request.StdIn.Should().Contain(launch.Request.WorkingDirectory, "the prompt names the copies, which stand in the row's tree");
+                launch.Request.StdIn.Should().NotContain(granted, "never the original root");
             }
 
             Directory.Exists(rowFolder).Should().BeFalse("the row folder goes with its one-shot home");
+            Directory.Exists(Path.GetDirectoryName(launch.Request.WorkingDirectory)).Should().BeFalse("the row's scratch, with its copies, is gone");
         }
 
         var oneShot = Path.Combine(Homes, VibeHomes.OneShotFolder);
@@ -203,6 +196,5 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
 
         _unlinkedByTheDeleter.Should().BeEmpty();
         _person.Hash().Should().Equal(before);
-        // QWEN-FILL-END s567-disk-row
     }
 }

@@ -202,7 +202,6 @@ public sealed class CapabilityMatrixTests
     [Fact]
     public void KimiHasThreeRows_EachCitingItsCells()
     {
-        // QWEN-FILL-BEGIN s561-kimi-rows test
         foreach (var capability in (Capability[])[Capability.None, Capability.Disk])
         {
             var row = RuntimeCapabilities.Builtin.Of("kimi", capability);
@@ -221,7 +220,6 @@ public sealed class CapabilityMatrixTests
         web.Should().NotBeNull("kimi × web is a row of the table");
         web!.Standing.Should().Be(CapabilityStanding.Unmeasured, "kimi × web has no measured cell");
         web.MeasuredWith.Version.Should().Be("2.1.1", "kimi × web");
-        // QWEN-FILL-END s561-kimi-rows
     }
 
     /// <summary>S5.6.2: the vectors decide every pair of the table's kimi rows — the existing cover test names a missing pair, this one names kimi.</summary>

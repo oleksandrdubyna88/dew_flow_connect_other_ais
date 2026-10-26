@@ -176,7 +176,6 @@ test('a flagged admission carries the caveat a person must acknowledge (D13)', (
 });
 
 test('kimi rows admit flagged, web refuses naming its record', () => {
-  // QWEN-FILL-BEGIN s568-kimi-admit test
   const none = admit('kimi', 'none');
 
   assert.equal(none.admitted, true, none.reason);
@@ -197,5 +196,4 @@ test('kimi rows admit flagged, web refuses naming its record', () => {
   assert.match(refusal.reason, /not been measured/u);
   assert.match(refusal.reason, /RESULTS_kimi_confinement\.md/u);
   assert.ok(!refusal.reason.includes('RESULTS_question_consultant_capabilities.md'));
-  // QWEN-FILL-END s568-kimi-admit
 });

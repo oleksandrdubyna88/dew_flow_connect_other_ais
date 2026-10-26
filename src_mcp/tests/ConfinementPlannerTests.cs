@@ -150,7 +150,6 @@ public sealed class ConfinementPlannerTests
     [Fact]
     public void ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb()
     {
-        // QWEN-FILL-BEGIN s563-planner-arm test
         var none = Plan("kimi", CapabilityGrant.None);
         var disk = Plan("kimi", CapabilityGrant.Disk(RootA, RootB));
 
@@ -171,7 +170,6 @@ public sealed class ConfinementPlannerTests
         ConfinementPlanner.Plan("kimi", new CapabilityGrant(Capability.Web, []))
             .Should().BeOfType<Confinement.Refused>()
             .Which.Reason.Should().Contain("not been measured").And.Contain("RESULTS_kimi_confinement.md");
-        // QWEN-FILL-END s563-planner-arm
     }
 
     // ---------- refusals ----------
@@ -382,7 +380,6 @@ public sealed class ConfinementPlannerTests
     [Fact]
     public void AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome()
     {
-        // QWEN-FILL-BEGIN s565-kimi-launch test
         var consultant = KimiForQuestions();
         var none = consultant.Build(Planned("kimi", CapabilityGrant.None));
         var disk = consultant.Build(Planned("kimi", CapabilityGrant.Disk(RootA, RootB)));
@@ -405,7 +402,6 @@ public sealed class ConfinementPlannerTests
         }
 
         none.Role.Should().Be(ConsultantRoles.Question);
-        // QWEN-FILL-END s565-kimi-launch
     }
 
     /// <summary>A plan that carries a flag is not one coai made for kimi (E5.6 decision 3, S5.6.6): refused, naming the shim.</summary>

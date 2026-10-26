@@ -207,17 +207,12 @@ public static class ConfinementPlanner
     /// snapshot it stands in (a branch's AGENTS.md, skills, sub-agents and .mcp.json load from disk, M-K9); a none row stands in an empty
     /// folder. Both are <c>unconfined</c> (<c>Grep</c> and <c>Glob</c> read the disk, M-K6), so the matrix flags them.
     /// </remarks>
-    private static Confinement.Planned Kimi(CapabilityGrant grant, AdmissionFlag flag)
+    private static Confinement.Planned Kimi(CapabilityGrant grant, AdmissionFlag flag) => grant.Capability switch
     {
-        // QWEN-FILL-BEGIN s56-planner-kimi prod
-        return grant.Capability switch
-        {
-            Capability.Disk => new("kimi", grant, [], [], CwdKind.Snapshot, [], flag) { SnapshotSources = grant.Roots },
-            // `web` never reaches here: the matrix refuses it (no Kimi cell exercises the web).
-            _ => new("kimi", grant, [], [], CwdKind.Scratch, [], flag),
-        };
-        // QWEN-FILL-END s56-planner-kimi
-    }
+        Capability.Disk => new("kimi", grant, [], [], CwdKind.Snapshot, [], flag) { SnapshotSources = grant.Roots },
+        // `web` never reaches here: the matrix refuses it (no Kimi cell exercises the web).
+        _ => new("kimi", grant, [], [], CwdKind.Scratch, [], flag),
+    };
 
     private static IEnumerable<string> AddDirs(string flag, IReadOnlyList<string> roots) =>
         roots.SelectMany(root => (string[])[flag, root]);

@@ -39,18 +39,6 @@ public sealed class AKimiConsultationScenarioTests : ConsultScenarioBase
 
     private string FolderOf(string id) => ConsultantHomes.ConversationFolder(Homes, ConsultantHomes.Kimi, id);
 
-    /// <summary>Several scopes, given back in reverse.</summary>
-    private sealed class Scopes(params IDisposable[] scopes) : IDisposable
-    {
-        public void Dispose()
-        {
-            foreach (var scope in scopes.Reverse())
-            {
-                scope.Dispose();
-            }
-        }
-    }
-
     /// <summary>
     /// The person, the host and the lock root this flow's Kimi adapters see — set by a SYNCHRONOUS call, so the values reach the test's own flow
     /// and every service call it awaits.
