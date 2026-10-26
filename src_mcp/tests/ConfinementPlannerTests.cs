@@ -150,7 +150,6 @@ public sealed class ConfinementPlannerTests
     [Fact]
     public void ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb()
     {
-        // QWEN-FILL-BEGIN s563-planner test
         var none = Plan("kimi", CapabilityGrant.None);
         var disk = Plan("kimi", CapabilityGrant.Disk(RootA, RootB));
         var web = ConfinementPlanner.Plan("kimi", CapabilityGrant.Web);
@@ -173,7 +172,6 @@ public sealed class ConfinementPlannerTests
         // A web row is refused by the matrix before the planner's arm runs.
         web.Should().BeOfType<Confinement.Refused>()
             .Which.Reason.Should().Contain("not been measured").And.Contain("RESULTS_kimi_confinement.md");
-        // QWEN-FILL-END s563-planner
     }
 
     // ---------- refusals ----------
@@ -381,7 +379,6 @@ public sealed class ConfinementPlannerTests
     [Fact]
     public void AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome()
     {
-        // QWEN-FILL-BEGIN s565-launch test
         var consultant = Adapters().Single(a => a.Runtime == "kimi").Consultant;
 
         var none = consultant.Build(Planned("kimi", CapabilityGrant.None));
@@ -406,14 +403,12 @@ public sealed class ConfinementPlannerTests
 
         none.Role.Should().Be(ConsultantRoles.Question);
         disk.Role.Should().Be(ConsultantRoles.Question);
-        // QWEN-FILL-END s565-launch
     }
 
     /// <summary>A plan that carries a flag is not one coai made for kimi (E5.6 decision 3): refused by the consultant, naming the shim.</summary>
     [Fact]
     public void APlanWithFlags_IsRefusedForKimi()
     {
-        // QWEN-FILL-BEGIN s566-flags test
         var plan = Plan("kimi", CapabilityGrant.None) with { Flags = ["--yolo"] };
         var launch = Planned("kimi", CapabilityGrant.None) with { Confinement = new LaunchConfinement.Planned(plan) };
         var consultant = Adapters().Single(a => a.Runtime == "kimi").Consultant;
@@ -421,7 +416,6 @@ public sealed class ConfinementPlannerTests
         var build = () => consultant.Build(launch);
 
         build.Should().Throw<ArgumentException>().WithMessage("*shim*");
-        // QWEN-FILL-END s566-flags
     }
 
     /// <summary>No Vibe launch carries <c>--add-dir</c>, whatever the grant (D3: <c>--add-dir</c> trusts its folder).</summary>

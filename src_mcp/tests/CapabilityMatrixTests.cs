@@ -165,11 +165,10 @@ public sealed class CapabilityMatrixTests
     [Fact]
     public void KimiHasThreeRows_EachCitingItsCells()
     {
-        // QWEN-FILL-BEGIN s561-rows test
         foreach (var capability in (Capability[])[Capability.None, Capability.Disk])
         {
             var row = RuntimeCapabilities.Builtin.Of("kimi", capability);
-            row.Should().NotBeNull($"Expected RuntimeCapabilities.Builtin.Of(\"kimi\", Capability.{capability}) not to be <null>.");
+            row.Should().NotBeNull($"kimi × {capability} is a row of the table");
             row!.Standing.Should().Be(CapabilityStanding.Unconfined, $"kimi × {capability}");
             row.MeasuredWith.Version.Should().Be("2.1.1", $"kimi × {capability}");
             row.MeasuredWith.ResultRef.Should().Contain("RESULTS_kimi_confinement.md", $"kimi × {capability}");
@@ -180,11 +179,10 @@ public sealed class CapabilityMatrixTests
             "kimi × disk also stands on the disk cell M-K9");
 
         var web = RuntimeCapabilities.Builtin.Of("kimi", Capability.Web);
-        web.Should().NotBeNull("Expected RuntimeCapabilities.Builtin.Of(\"kimi\", Capability.Web) not to be <null>.");
+        web.Should().NotBeNull("kimi × web is a row of the table");
         web!.Standing.Should().Be(CapabilityStanding.Unmeasured, "kimi × web has no measured cell");
         web.MeasuredWith.Cells.Should().BeEmpty("kimi × web has no measured cell");
         web.MeasuredWith.ResultRef.Should().Contain("RESULTS_kimi_confinement.md", "kimi × web");
-        // QWEN-FILL-END s561-rows
     }
 
     /// <summary>S5.6.2: the vectors decide every Kimi pair, so the table's own coverage test cannot pass over one.</summary>
@@ -199,13 +197,11 @@ public sealed class CapabilityMatrixTests
     [Fact]
     public void AdmissionFlagsBothRows()
     {
-        // QWEN-FILL-BEGIN s564-admit test
         foreach (var capability in (Capability[])[Capability.None, Capability.Disk])
         {
             CapabilityMatrix.Admit("kimi", capability).Should().BeOfType<Admission.Admitted>()
                 .Which.Flag.Should().Be(AdmissionFlag.Unconfined, $"kimi × {capability}");
         }
-        // QWEN-FILL-END s564-admit
     }
 
     [Fact]

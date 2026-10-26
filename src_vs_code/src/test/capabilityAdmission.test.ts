@@ -177,7 +177,6 @@ test('a flagged admission carries the caveat a person must acknowledge (D13)', (
 
 // S5.6.8 (E5.6 of todo/PLAN_vibe_and_kimi_runtimes_E5.md): Kimi's none and disk rows are flagged — Grep and Glob read the disk (M-K6) — and web is unmeasured.
 test('kimi rows admit flagged, web refuses naming its record', () => {
-  // QWEN-FILL-BEGIN s568-kimi-admit test
   const none = admit('kimi', 'none');
   const disk = admit('kimi', 'disk');
   const web = admit('kimi', 'web');
@@ -194,5 +193,4 @@ test('kimi rows admit flagged, web refuses naming its record', () => {
   assert.match(web.reason, /not been measured/u);
   assert.match(web.reason, /RESULTS_kimi_confinement\.md/u);
   assert.ok(!web.reason.includes('RESULTS_question_consultant_capabilities.md'));
-  // QWEN-FILL-END s568-kimi-admit
 });

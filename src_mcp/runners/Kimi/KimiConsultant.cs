@@ -63,13 +63,11 @@ public sealed class KimiConsultant(KimiRuntime inner, string vendor = "kimi") : 
     /// <summary>A Kimi row's confinement is the shim's (D15, E5.6 decision 3), so a plan that carries any flag is refused — it is not one coai made for kimi.</summary>
     private static void MustCarryNoFlags(Confinement.Planned plan)
     {
-        // QWEN-FILL-BEGIN s566-noflags prod
         if (plan.Leading.Count > 0 || plan.Flags.Count > 0 || plan.AddDirs.Count > 0)
         {
             throw new ArgumentException(
                 "a Kimi row's confinement is the shim's; a plan with flags is not one coai made for kimi", nameof(plan));
         }
-        // QWEN-FILL-END s566-noflags
     }
 
     /// <summary>The row's model, or Kimi's default when it names none — resolved here so the shim and the ledger name the same one.</summary>

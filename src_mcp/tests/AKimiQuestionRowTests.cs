@@ -52,7 +52,6 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
 
     private async Task RepositoryAsync(string at, params (string Path, string Text)[] files)
     {
-        // QWEN-FILL-BEGIN s567-repo test
         Directory.CreateDirectory(at);
         foreach (var (path, text) in files)
         {
@@ -66,7 +65,6 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
             var result = await _launcher.RunAsync(new ProcessRequest("git", args, at), TestContext.Current.CancellationToken);
             result.ExitCode.Should().Be(0, string.Join(' ', args) + ": " + result.StdErr);
         }
-        // QWEN-FILL-END s567-repo
     }
 
     /// <summary>The person, the host and the lock root this flow's Kimi adapters see — set by a SYNCHRONOUS call, as the service scenarios do.</summary>
@@ -129,8 +127,6 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
     [InlineData(Ending.CancelledMidTurn)]
     public async Task AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind(Ending ending)
     {
-        _ = ending; // the body below reads it (it is the arm); drop this line once it does
-        // QWEN-FILL-BEGIN s567-copies test
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         using var stood = StandIn();
         GitScratch.AfterUnlink = _unlinkedByTheDeleter.Add;
@@ -146,15 +142,15 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
         var played = new PlayedKimi(_launcher)
         {
             Turn = (_, request) => PlayedKimi.Answered(PlayedKimi.SessionOf(request), 20000, 30, Advice),
-        };
-        if (ending == Ending.CancelledMidTurn)
-        {
-            played.During = async (_, ct) =>
+            During = async (_, ct) =>
             {
-                cts.Cancel();
-                await Task.Delay(Timeout.Infinite, ct);
-            };
-        }
+                if (ending == Ending.CancelledMidTurn)
+                {
+                    await cts.CancelAsync();
+                    await Task.Delay(Timeout.Infinite, ct);
+                }
+            },
+        };
 
         // A cancelled row may come back as a row status or as OperationCanceledException.
         JsonElement? reply = null;
@@ -191,7 +187,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
         {
             var request = played.Shims.Should().ContainSingle().Subject.Request;
             rowFolder = Path.GetDirectoryName(request.WorkingDirectory);
-            request.StdIn.Should().Contain(Path.Combine(request.WorkingDirectory, "src"), "the prompt names the copy, never the root");
+            request.StdIn.Should().Contain(Path.Combine(request.WorkingDirectory, "snapshot-"), "the prompt names the copy, never the root");
             request.StdIn.Should().NotContain(Path.Combine(Repo, "src"), "the prompt never names the granted root");
         }
 
@@ -202,7 +198,6 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
 
         (!Directory.Exists(OneShotRoot) || !Directory.EnumerateFileSystemEntries(OneShotRoot).Any()).Should().BeTrue("the one-shot home is gone");
         _unlinkedByTheDeleter.Should().BeEmpty();
-        _person.Hash().Should().Be(before);
-        // QWEN-FILL-END s567-copies
+        _person.Hash().Should().Equal(before);
     }
 }
