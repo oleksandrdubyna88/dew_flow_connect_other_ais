@@ -197,6 +197,41 @@ public sealed class CapabilityMatrixTests
             .Which.Reason.Should().Contain("not been measured", "no Vibe cell exercises the web");
     }
 
+    /// <summary>Kimi (E5.6 of todo/PLAN_vibe_and_kimi_runtimes_E5.md, S5.6.1): `none` and `disk` are <c>unconfined</c> (`Grep`/`Glob` read the disk, M-K6), `web` is unmeasured.</summary>
+    [Fact]
+    public void KimiHasThreeRows_EachCitingItsCells()
+    {
+        // QWEN-FILL-BEGIN s561-kimi-rows test
+        // For each of Capability.None and Capability.Disk: `var row = RuntimeCapabilities.Builtin.Of("kimi", capability);` → `row.Should().NotBeNull()`;
+        //   `row!.Standing.Should().Be(CapabilityStanding.Unconfined)`; `row.MeasuredWith.Version.Should().Be("2.1.1")`;
+        //   `row.MeasuredWith.Cells.Should().Contain("M-K6")`; `row.MeasuredWith.ResultRef.Should().Contain("RESULTS_kimi_confinement.md")`.
+        //   For Disk also `Cells.Should().Contain("M-K9")`.
+        // For Capability.Web: Standing is `CapabilityStanding.Unmeasured` and Version "2.1.1".
+        // Fails before the row exists: "Expected RuntimeCapabilities.Builtin.Of(\"kimi\", Capability.None) not to be <null>." (the context pack names the exact types).
+        throw new NotImplementedException("s561-kimi-rows");
+        // QWEN-FILL-END s561-kimi-rows
+    }
+
+    /// <summary>S5.6.2: the vectors decide every pair of the table's kimi rows — the existing cover test names a missing pair, this one names kimi.</summary>
+    [Fact]
+    public void TheVectorsCoverKimi()
+    {
+        foreach (var capability in (string[])["none", "disk", "web"])
+        {
+            Vectors.Should().Contain(v => v.Runtime == "kimi" && v.Capability == capability, $"kimi × {capability} must have a vector deciding it");
+        }
+    }
+
+    /// <summary>S5.6.4: both admitted kimi rows are FLAGGED unconfined — the row says it can read this machine.</summary>
+    [Fact]
+    public void AdmissionFlagsBothRows()
+    {
+        foreach (var capability in (Capability[])[Capability.None, Capability.Disk])
+        {
+            CapabilityMatrix.Admit("kimi", capability).Should().BeOfType<Admission.Admitted>().Which.Flag.Should().Be(AdmissionFlag.Unconfined, $"kimi × {capability}");
+        }
+    }
+
     /// <summary>D13's two refusals kept apart: the flags are what the data says, never what a runtime name suggests.</summary>
     [Fact]
     public void TheFlags_AreD13s_CodexUnconfinedEverywhere_AgyDefaultDeny_NothingElseFlagged()
