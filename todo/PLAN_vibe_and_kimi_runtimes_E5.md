@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 implemented 2026-10-26: the Kimi consultant check proven on the played shim, and the question consultant's kimi row (none and disk admitted FLAGGED unconfined, web unmeasured); deviations 47–51, *E5.5–E5.6 as built*; the live checks (J2) not run — RESULTS §31 not written.** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 implemented 2026-10-26: the Kimi consultant check proven on the played shim, and the question consultant's kimi row (none and disk admitted FLAGGED unconfined, web unmeasured); deviations 47–52, *E5.5–E5.6 as built*; the live checks (J2) not run — RESULTS §31 not written.** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -1104,6 +1104,9 @@ Numbered from 47, apart from the lists above, so the stories built in parallel d
     (`src_mcp/tests/AKimiQuestionRowTests.cs`).
 51. **S5.5's tests needed no production change (decision 1 held).** The four tests are in `src_mcp/tests/AKimiConsultantCheckTests.cs`. The one red
     was in the test, not the production code: `PlayedKimi.During` is init-only, so `Turn` and `During` are set in one object initializer.
+52. **`CapabilityMatrixTests` keeps a list of the records a row may cite, and it gained the Kimi record.** `EveryRow_CitesTheRecord_AndACellOrSaysWhyThereIsNone`
+    failed once the kimi rows cited `RESULTS_kimi_confinement.md`, so `Records` has the line `("RESULTS_kimi_confinement.md", "2026-10-13", "M-K")`
+    (`src_mcp/tests/CapabilityMatrixTests.cs:158-164`). Test data only; no production code changed for it.
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 
