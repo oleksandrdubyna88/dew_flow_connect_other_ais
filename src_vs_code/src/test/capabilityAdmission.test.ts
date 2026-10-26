@@ -140,7 +140,7 @@ for (const vector of VECTORS) {
 test('the words are the file’s words, and a word outside them is refused rather than defaulted', () => {
   assert.deepStrictEqual([...CAPABILITIES], ['none', 'disk', 'web']);
   assert.deepStrictEqual([...STANDINGS], ['confined', 'unconfined', 'default-deny', 'unsupported', 'unmeasured']);
-  assert.deepStrictEqual([...RUNTIMES], ['claude', 'codex', 'antigravity', 'local', 'api', 'vibe']);
+  assert.deepStrictEqual([...RUNTIMES], ['claude', 'codex', 'antigravity', 'local', 'api', 'vibe', 'kimi']);
   assert.equal(isCapability('disk'), true);
   assert.equal(isCapability('Disk'), false, 'the panel writes the file’s spelling, lower case, and nothing else');
   assert.equal(isCapability('shell'), false);
@@ -166,6 +166,16 @@ test('a refusal says what cures it: a measurement for an unmeasured pair, anothe
   assert.match(admit('gemini', 'none').reason, /claude, codex, antigravity, local, api, vibe/u);
   assert.match(admit('vibe', 'web').reason, /not been measured/u, 'no Vibe cell exercises the web (S3 of PLAN_vibe_and_kimi_runtimes.md)');
   assert.match(admit('claude', 'shell').reason, /none, disk, web/u);
+});
+
+test('kimi rows admit flagged, web refuses naming its record', () => {
+  // QWEN-FILL-BEGIN s568 test
+  // For each of 'none' and 'disk': const admission = admit('kimi', capability); assert.equal(admission.admitted, true, ...); assert.match(admission.caveat, /can read this machine/u)
+  // (the same caveat codex has - look at how the test 'a flagged admission carries the caveat' reads admit('codex', 'web').caveat; use the same field names).
+  // For 'web': const refused = admit('kimi', 'web'); assert.equal(refused.admitted, false); assert.match(refused.reason, /not been measured/u); assert.match(refused.reason, /RESULTS_kimi_confinement\.md/u).
+  // Red today: "Expected values to be strictly deep-equal" on the runtimes list, then "'kimi' is not a runtime the question consultant can launch" for admit.
+  throw new Error('s568');
+  // QWEN-FILL-END s568
 });
 
 test('a flagged admission carries the caveat a person must acknowledge (D13)', () => {

@@ -154,6 +154,7 @@ public static class ConfinementPlanner
         "codex" => Codex(grant, flag),
         "antigravity" => Antigravity(grant, flag),
         "vibe" => Vibe(grant, flag),
+        "kimi" => Kimi(grant, flag),
         // A completion has no tools, so it has no sandbox flag: the question alone, from nowhere.
         _ => new Confinement.Planned(runtime, grant, [], [], CwdKind.Scratch, [], flag),
     };
@@ -200,6 +201,21 @@ public static class ConfinementPlanner
         // `web` never reaches here: the matrix refuses it (no Vibe cell exercises the web).
         _ => new("vibe", grant, [], VibeReadOnly, CwdKind.Scratch, [], flag),
     };
+
+    /// <remarks>
+    /// No flags, ever (E5.6 decision 1): Kimi's confinement is the shim's read boundary (D15), not its argv. A disk row stands in a
+    /// COPY of its roots (M-K9 (e): a branch's <c>AGENTS.md</c>, skills, sub-agents and <c>.mcp.json</c> load from disk); a none row stands
+    /// in an empty folder, which bounds <c>Read</c> and nothing else (M-K6) — hence the matrix flags both rows.
+    /// </remarks>
+    private static Confinement.Planned Kimi(CapabilityGrant grant, AdmissionFlag flag)
+    {
+        // QWEN-FILL-BEGIN s56-planner-arm prod
+        // Return, by grant.Capability: Capability.Disk => new Confinement.Planned("kimi", grant, [], [], CwdKind.Snapshot, [], flag) { SnapshotSources = grant.Roots };
+        // anything else (None; web never gets here, the matrix refuses it) => new Confinement.Planned("kimi", grant, [], [], CwdKind.Scratch, [], flag).
+        // Leading, Flags and AddDirs stay EMPTY on both. The sibling Vibe(...) above is the shape; do not add flags or a constant.
+        throw new NotImplementedException("s56-planner-arm");
+        // QWEN-FILL-END s56-planner-arm
+    }
 
     private static IEnumerable<string> AddDirs(string flag, IReadOnlyList<string> roots) =>
         roots.SelectMany(root => (string[])[flag, root]);
