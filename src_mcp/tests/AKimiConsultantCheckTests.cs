@@ -40,104 +40,87 @@ public sealed class AKimiConsultantCheckTests : IDisposable
         _data.Dispose();
     }
 
+    private string TheOneShotFolder => Path.Combine(_homes, VibeHomes.OneShotFolder);
+
     /// <summary>The deleter's own unlink recorder — a Kimi home disposed junction-first never lets the deleter meet its junction.</summary>
     private void RecordingTheDeleter() => GitScratch.AfterUnlink = _unlinkedByTheDeleter.Add;
 
     private void TheDeleterNeverMetTheJunction() =>
         _unlinkedByTheDeleter.Should().BeEmpty("the deleter's unlink recorder must not be invoked, because KimiHome unlinks the junction first");
 
-    private static IDisposable StandIn(KimiFixture person)
+    private sealed class Scopes(params IDisposable[] scopes) : IDisposable
     {
-        // QWEN-FILL-BEGIN s55-standin test
-        private sealed class Scopes(params IDisposable[] scopes) : IDisposable
+        public void Dispose()
         {
-            public void Dispose()
+            foreach (var scope in scopes.Reverse())
             {
-                foreach (var scope in scopes.Reverse())
-                {
-                    scope.Dispose();
-                }
+                scope.Dispose();
             }
         }
-
-        private static Scopes StandIn(KimiFixture person) => new(
-            WindowsStandIn.Begin(),
-            KimiCredentialsLock.RootFor(Path.Combine(person.Folder, "locks")),
-            KimiSeams.Using(HostKind.Windows, new KimiSeams(person.PlacesAt, () => (PlayedKimi.Shim, [])))
-        );
-        // QWEN-FILL-END s55-standin
     }
 
-    private PanelSettings Settings(string homesRoot)
+    /// <summary>The person, the host and the lock root this flow's Kimi adapters see — set by a SYNCHRONOUS call, so the values reach the test's own flow.</summary>
+    private static Scopes StandIn(KimiFixture person) => new(
+        WindowsStandIn.Begin(),
+        KimiCredentialsLock.RootFor(Path.Combine(person.Folder, "locks")),
+        KimiSeams.Using(HostKind.Windows, new KimiSeams(person.PlacesAt, () => (PlayedKimi.Shim, []))));
+
+    private PanelSettings Settings(string homesRoot) => new()
     {
-        // QWEN-FILL-BEGIN s55-settings test
-        return new PanelSettings
+        Providers = [],
+        DataDir = _data,
+        ReviewerTimeout = TimeSpan.FromSeconds(60),
+        ConsultEnabled = true,
+        ConsultantHomesRoot = homesRoot,
+        Consultants = new Dictionary<string, ConsultantChoice>
         {
-            Providers = [],
-            DataDir = _data.Path,
-            ReviewerTimeout = TimeSpan.FromSeconds(60),
-            ConsultEnabled = true,
-            ConsultantHomesRoot = homesRoot,
-            Consultants = new Dictionary<string, ConsultantChoice>
-            {
-                [CallerIdentity.Claude] = new ConsultantChoice("my-kimi", Runtime: "kimi"),
-            },
-        };
-        // QWEN-FILL-END s55-settings
+            [CallerIdentity.Claude] = new("my-kimi", Runtime: "kimi"),
+        },
+    };
+
+    private async Task<(int Code, JsonElement Said)> CheckAsync(PanelSettings settings, PlayedKimi played, CancellationToken ct)
+    {
+        var (code, stdout, _) = await ConsultantCheckMode.AnswerAsync(settings, ["--check-consultant", "--caller", "claude"], played, _temp, _warned.Add, Noticing.None, ct);
+
+        return (code, stdout.Length > 0 ? JsonDocument.Parse(stdout).RootElement.Clone() : default);
     }
 
-    private Task<(int Code, JsonElement Said)> CheckAsync(PanelSettings settings, PlayedKimi played, CancellationToken ct)
+    /// <summary>The turn the check plays: the marker word the check planted in the copy's CHECK.md, read while the check is still running, and a canary it could not read.</summary>
+    private static ProcessResult TheMarkerRead(int turn, ProcessRequest request)
     {
-        // QWEN-FILL-BEGIN s55-check test
-        var (code, stdout, stderr) = await ConsultantCheckMode.AnswerAsync(settings, ["--check-consultant", "--caller", "claude"], played, _temp, _warned.Add, Noticing.None, ct);
-        return (code, stdout.Length > 0 ? JsonDocument.Parse(stdout).RootElement.Clone() : default);
-        // QWEN-FILL-END s55-check
+        var marker = File.ReadAllText(Path.Combine(request.WorkingDirectory, "CHECK.md")).Trim().Split(' ')[^1].TrimEnd('.');
+
+        return PlayedKimi.Answered(PlayedKimi.SessionOf(request), 19973, 31, $"marker: {marker}{Environment.NewLine}canary: CANNOT");
+    }
+
+    private static string ArgAfter(PlayedKimi.Launch launch, string flag)
+    {
+        var args = launch.Request.Arguments.ToList();
+
+        return args[args.IndexOf(flag) + 1];
     }
 
     // ---------- S5.5.1 ----------
 
     [Fact]
-    public Task AKimiCheck_RunsInACopy_OnAOneShotHome()
+    public async Task AKimiCheck_RunsInACopy_OnAOneShotHome()
     {
-        // QWEN-FILL-BEGIN s551 test
         using var stood = StandIn(_person);
-        var played = new PlayedKimi(new ProcessLauncher())
-        {
-            Turn = (n, request) =>
-            {
-                var checkMd = File.ReadAllText(Path.Combine(request.WorkingDirectory, "CHECK.md"));
-                var lastWord = checkMd.Split(' ', StringSplitOptions.RemoveEmptyEntries).Last().TrimEnd('.');
-                var answer = $"marker: {lastWord}{Environment.NewLine}canary: CANNOT";
-                return PlayedKimi.Answered(PlayedKimi.SessionOf(request), 19973, 31, answer);
-            }
-        };
+        var played = new PlayedKimi(new ProcessLauncher()) { Turn = TheMarkerRead };
         RecordingTheDeleter();
-        var settings = Settings(_homes.Path);
-        var (code, said) = await CheckAsync(settings, played, TestContext.Current.CancellationToken);
-        
+
+        var (code, said) = await CheckAsync(Settings(_homes), played, TestContext.Current.CancellationToken);
+
         code.Should().Be(0);
-        said.GetProperty("state").GetString().Should().Be(CoaiMcp.Server.ConsultCheckStates.Answered);
-        said.GetProperty("markerRead").GetBoolean().Should().BeTrue();
-        
-        played.Shims.Should().ContainSingle();
-        var launch = played.Shims.First();
-        var args = launch.Request.Arguments.ToList();
-        
-        var cwdIndex = args.IndexOf("--cwd");
-        cwdIndex.Should().BeGreaterOrEqualTo(0);
-        var cwdValue = args[cwdIndex + 1];
-        cwdValue.Should().Contain(Path.Combine("own", "tree"));
-        
-        var homeIndex = args.IndexOf("--home");
-        homeIndex.Should().BeGreaterOrEqualTo(0);
-        var homeValue = args[homeIndex + 1];
-        var expectedHomePrefix = Path.Combine(_homes.Path, VibeHomes.OneShotFolder);
-        homeValue.Should().StartWith(expectedHomePrefix);
-        var homeName = Path.GetFileName(homeValue);
-        homeName.Should().MatchRegex("^kh-[0-9a-f]{10}$");
-        
-        Directory.EnumerateDirectories(_temp.Path, "coai-check-*").Should().BeEmpty();
-        // QWEN-FILL-END s551
+        said.GetProperty("state").GetString().Should().Be(ConsultCheckStates.Answered, said.ToString());
+        said.GetProperty("markerRead").GetBoolean().Should().BeTrue("the copy holds the scratch's CHECK.md");
+        var launch = played.Shims.Should().ContainSingle().Subject;
+        ArgAfter(launch, "--cwd").Should().Contain(Path.Combine("own", "tree"), "a copy in the check's own scratch, never the repository");
+        var home = ArgAfter(launch, "--home");
+        home.Should().StartWith(TheOneShotFolder + Path.DirectorySeparatorChar, "D1: under the homes root's coai-vh, never under TEMP");
+        Path.GetFileName(Path.GetDirectoryName(home)).Should().MatchRegex("^[0-9a-f]{8}$");
+        Path.GetFileName(home).Should().MatchRegex("^kh-[0-9a-f]{10}$");
+        Directory.EnumerateDirectories(_temp, ConsultCheckScratch.Prefix + "*").Should().BeEmpty("the scratch repository went with the check");
     }
 
     // ---------- S5.5.2 ----------
@@ -145,55 +128,34 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public Task AfterTheCheck_TheHomeIsGone_JunctionFirst(bool theTurnFails)
+    public async Task AfterTheCheck_TheHomeIsGone_JunctionFirst(bool theTurnFails)
     {
-        // QWEN-FILL-BEGIN s552 test
         using var stood = StandIn(_person);
-        var played = new PlayedKimi(new ProcessLauncher());
-        if (theTurnFails)
+        var played = new PlayedKimi(new ProcessLauncher())
         {
-            played.Turn = (_, _) => new ProcessResult(70, KimiShimScripts.Report(AcpEnd.SessionLost, string.Empty, "lost", tokens: false, session: PlayedKimi.Minted), string.Empty, TimedOut: false);
-        }
-        else
-        {
-            played.Turn = (n, request) =>
-            {
-                var checkMd = File.ReadAllText(Path.Combine(request.WorkingDirectory, "CHECK.md"));
-                var lastWord = checkMd.Trim().Split(' ')[^1].TrimEnd('.');
-                return PlayedKimi.Answered(PlayedKimi.SessionOf(request), 19973, 31, $"{lastWord}{Environment.NewLine}canary: CANNOT");
-            };
-        }
-
+            Turn = theTurnFails
+                ? (_, _) => new ProcessResult(70, KimiShimScripts.Report(AcpEnd.SessionLost, string.Empty, "lost", tokens: false, session: PlayedKimi.Minted), string.Empty, TimedOut: false)
+                : TheMarkerRead,
+        };
         var before = _person.Hash();
         RecordingTheDeleter();
-        var settings = Settings(_homes);
-        var ct = TestContext.Current.CancellationToken;
-        var (code, said) = await CheckAsync(settings, played, ct);
 
-        var oneShotPath = Path.Combine(_homes, VibeHomes.OneShotFolder);
-        Directory.EnumerateFileSystemEntries(oneShotPath).Should().BeEmpty("the one-shot home folder is gone or empty after the check");
+        var (_, said) = await CheckAsync(Settings(_homes), played, TestContext.Current.CancellationToken);
+
+        said.GetProperty("state").GetString().Should().Be(theTurnFails ? ConsultCheckStates.Failed : ConsultCheckStates.Answered, said.ToString());
+        played.Shims.Should().ContainSingle("the turn ran, so there was a home to be gone");
+        Directory.EnumerateFileSystemEntries(TheOneShotFolder).Should().BeEmpty("the one-shot home's folder goes when the check ends, whatever ended it");
         TheDeleterNeverMetTheJunction();
-        _person.Hash().Should().Equal(before, "the person's folder remains unchanged");
-
-        if (theTurnFails)
-        {
-            said.GetProperty("state").GetString().Should().Be(CoaiMcp.Server.ConsultCheckStates.Failed, "the check state is failed when the turn fails");
-        }
-        else
-        {
-            said.GetProperty("state").GetString().Should().Be(CoaiMcp.Server.ConsultCheckStates.Answered, "the check state is answered on success");
-        }
-        // QWEN-FILL-END s552
+        _person.Hash().Should().Equal(before, "the person's folder is whole: names, bytes and ReadOnly bits");
     }
 
     // ---------- S5.5.3 ----------
 
     [Fact]
-    public Task ACheckCancelledMidTurn_StillDisposesItsHome()
+    public async Task ACheckCancelledMidTurn_StillDisposesItsHome()
     {
-        // QWEN-FILL-BEGIN s553 test
         using var stood = StandIn(_person);
-        var cts = new CancellationTokenSource();
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var played = new PlayedKimi(new ProcessLauncher())
         {
@@ -201,53 +163,38 @@ public sealed class AKimiConsultantCheckTests : IDisposable
             {
                 started.SetResult();
                 await Task.Delay(Timeout.Infinite, ct);
-            }
+            },
         };
         RecordingTheDeleter();
 
         var running = CheckAsync(Settings(_homes), played, cts.Token);
-        await started.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
         await cts.CancelAsync();
         var (_, said) = await running;
 
-        said.GetProperty("state").GetString().Should().Be(CoaiMcp.Server.ConsultCheckStates.Failed);
-        said.GetProperty("failureKind").GetString().Should().Be(CoaiMcp.Runners.Consultation.ConsultFailureKinds.Cancelled);
-        Directory.EnumerateFileSystemEntries(Path.Combine(_homes, VibeHomes.OneShotFolder)).Should().BeEmpty("the home's folder goes when the check ends");
+        said.GetProperty("state").GetString().Should().Be(ConsultCheckStates.Failed, said.ToString());
+        said.GetProperty("failureKind").GetString().Should().Be(ConsultFailureKinds.Cancelled);
+        Directory.EnumerateFileSystemEntries(TheOneShotFolder).Should().BeEmpty("the home's folder goes when the check ends");
         TheDeleterNeverMetTheJunction();
-        // QWEN-FILL-END s553
     }
 
     // ---------- S5.5.4 ----------
 
     [Fact]
-    public Task ARootlessCheck_KeepsTheHomeInItsScratch_AndDisposesItJunctionFirst()
+    public async Task ARootlessCheck_KeepsTheHomeInItsScratch_AndDisposesItJunctionFirst()
     {
-        // QWEN-FILL-BEGIN s554 test
         using var stood = StandIn(_person);
-        var played = new PlayedKimi(new ProcessLauncher())
-        {
-            Turn = (n, request) =>
-            {
-                var checkMd = File.ReadAllText(Path.Combine(request.WorkingDirectory, "CHECK.md"));
-                var marker = checkMd.Split(' ')[^1].TrimEnd('.');
-                return PlayedKimi.Answered(PlayedKimi.SessionOf(request), 19973, 31, $"marker: {marker}{Environment.NewLine}canary: CANNOT");
-            }
-        };
+        var played = new PlayedKimi(new ProcessLauncher()) { Turn = TheMarkerRead };
+        var before = _person.Hash();
         RecordingTheDeleter();
-        var settings = Settings(string.Empty);
-        var ct = TestContext.Current.CancellationToken;
-        var (code, said) = await CheckAsync(settings, played, ct);
-        code.Should().Be(0, "the check succeeds");
-        said.GetProperty("state").GetString().Should().Be(CoaiMcp.Server.ConsultCheckStates.Answered, said.ToString());
-        played.Shims.Should().ContainSingle("the shim launches exactly once");
-        var launch = played.Shims.Single();
-        var homeIndex = launch.Request.Arguments.IndexOf("--home");
-        homeIndex.Should().BeGreaterOrEqualTo(0, "--home must be present");
-        var homeArg = launch.Request.Arguments[homeIndex + 1];
-        homeArg.Should().Contain(Path.Combine("own", "kh-"), "the home is under <scratch>\\own\\kh-<10 hex>");
-        Directory.EnumerateDirectories(_temp, "coai-check-*").Should().BeEmpty("the scratch is gone after the check");
+
+        var (_, said) = await CheckAsync(Settings(string.Empty), played, TestContext.Current.CancellationToken);
+
+        said.GetProperty("state").GetString().Should().Be(ConsultCheckStates.Answered, said.ToString());
+        var home = ArgAfter(played.Shims.Should().ContainSingle().Subject, "--home");
+        home.Should().Contain(Path.Combine("own", "kh-"), "no root: the home stays in the check's scratch, under own");
+        Directory.EnumerateDirectories(_temp, ConsultCheckScratch.Prefix + "*").Should().BeEmpty("the scratch is gone after the check");
         TheDeleterNeverMetTheJunction();
-        _person.Hash().Should().Equal(_person.Hash(), "the person's folder is unchanged");
-        // QWEN-FILL-END s554
+        _person.Hash().Should().Equal(before, "the person's folder is whole");
     }
 }

@@ -176,7 +176,6 @@ test('a flagged admission carries the caveat a person must acknowledge (D13)', (
 });
 
 test('kimi rows admit flagged, web refuses naming its record', () => {
-  // QWEN-FILL-BEGIN s568 test
   for (const capability of ['none', 'disk']) {
     const admission = admit('kimi', capability);
     assert.equal(admission.admitted, true, `${capability}: expected admitted`);
@@ -190,5 +189,4 @@ test('kimi rows admit flagged, web refuses naming its record', () => {
   assert.equal(refused.standing, 'unmeasured', 'web: expected unmeasured standing');
   assert.match(refused.reason, /not been measured/u, 'web: expected not been measured reason');
   assert.match(refused.reason, /RESULTS_kimi_confinement\.md/u, 'web: expected results reference');
-  // QWEN-FILL-END s568
 });

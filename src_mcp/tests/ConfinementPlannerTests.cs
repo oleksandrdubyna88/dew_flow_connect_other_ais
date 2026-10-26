@@ -150,7 +150,6 @@ public sealed class ConfinementPlannerTests
     [Fact]
     public void ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb()
     {
-        // QWEN-FILL-BEGIN s563 test
         var none = Plan("kimi", CapabilityGrant.None);
         none.Leading.Should().BeEmpty();
         none.Flags.Should().BeEmpty();
@@ -167,10 +166,8 @@ public sealed class ConfinementPlannerTests
         disk.SnapshotSources.Should().Equal([RootA, RootB]);
         disk.Flag.Should().Be(AdmissionFlag.Unconfined);
 
-        var web = ConfinementPlanner.Plan("kimi", CapabilityGrant.Web);
-        web.Should().BeOfType<Confinement.Refused>();
-        web.Reason.Should().Contain("not been measured").And.Contain("RESULTS_kimi_confinement.md");
-        // QWEN-FILL-END s563
+        ConfinementPlanner.Plan("kimi", CapabilityGrant.Web).Should().BeOfType<Confinement.Refused>()
+            .Which.Reason.Should().Contain("not been measured").And.Contain("RESULTS_kimi_confinement.md");
     }
 
     // ---------- refusals ----------
@@ -381,7 +378,6 @@ public sealed class ConfinementPlannerTests
     [Fact]
     public void AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome()
     {
-        // QWEN-FILL-BEGIN s565 test
         var consultant = KimiRow();
 
         var none = consultant.Build(Planned("kimi", CapabilityGrant.None));
@@ -408,14 +404,12 @@ public sealed class ConfinementPlannerTests
             var places = Runners.Kimi.KimiPlaces.ForShim(home, Path.Combine(RowFolder, "persons-bin"));
             Runners.Kimi.KimiEnvironment.Refusal(request, places).Should().BeEmpty("the one launch control admits exactly what the adapter builds");
         }
-        // QWEN-FILL-END s565
     }
 
     /// <summary>A Kimi row's confinement is the shim's: a plan that carries ANY flag is not one coai made for kimi, and is refused by name (decision 3).</summary>
     [Fact]
     public void APlanWithFlags_IsRefusedForKimi()
     {
-        // QWEN-FILL-BEGIN s566 test
         var planWithYolo = new Confinement.Planned("kimi", CapabilityGrant.None, [], ["--yolo"], CwdKind.Scratch, [], AdmissionFlag.Unconfined);
         var launchWithYolo = Planned("kimi", CapabilityGrant.None) with { Confinement = new LaunchConfinement.Planned(planWithYolo) };
         var build = () => KimiRow().Build(launchWithYolo);
@@ -425,7 +419,6 @@ public sealed class ConfinementPlannerTests
         var launchWithLeading = Planned("kimi", CapabilityGrant.None) with { Confinement = new LaunchConfinement.Planned(planWithLeading) };
         build = () => KimiRow().Build(launchWithLeading);
         build.Should().Throw<ArgumentException>().WithMessage("*shim*");
-        // QWEN-FILL-END s566
     }
 
     /// <summary>No Vibe launch carries <c>--add-dir</c>, whatever the grant (D3: <c>--add-dir</c> trusts its folder).</summary>

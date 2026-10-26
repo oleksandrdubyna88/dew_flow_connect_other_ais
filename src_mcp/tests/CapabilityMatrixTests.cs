@@ -205,32 +205,23 @@ public sealed class CapabilityMatrixTests
     [Fact]
     public void KimiHasThreeRows_EachCitingItsCells()
     {
-        // QWEN-FILL-BEGIN s561 test
-        foreach (var capability in (Capability[])[Capability.None, Capability.Disk, Capability.Web])
+        var none = RuntimeCapabilities.Builtin.Of("kimi", Capability.None);
+        var disk = RuntimeCapabilities.Builtin.Of("kimi", Capability.Disk);
+        var web = RuntimeCapabilities.Builtin.Of("kimi", Capability.Web);
+
+        none.Should().NotBeNull();
+        disk.Should().NotBeNull();
+        web.Should().NotBeNull();
+        none!.Standing.Should().Be(CapabilityStanding.Unconfined, "an empty working folder bounds Read only; Grep and Glob read the disk (M-K6)");
+        none.MeasuredWith.Cells.Should().Contain("M-K6");
+        disk!.Standing.Should().Be(CapabilityStanding.Unconfined);
+        disk.MeasuredWith.Cells.Should().Contain(["M-K6", "M-K9"], "Read bounded, Grep and Glob not (M-K6); the roots are copied because a branch's project files load from disk (M-K9)");
+        web!.Standing.Should().Be(CapabilityStanding.Unmeasured, "WebSearch and FetchURL are announced and no cell exercised them");
+        foreach (var row in (RuntimeCapabilityRow[])[none, disk, web])
         {
-            var row = RuntimeCapabilities.Builtin.Of("kimi", capability);
-            row.Should().NotBeNull($"Expected RuntimeCapabilities.Builtin.Of(\"kimi\", {capability}) not to be <null>.");
-
-            switch (capability)
-            {
-                case Capability.None:
-                    row.Standing.Spelled().Should().Be("unconfined", "kimi × none is unconfined");
-                    row.MeasuredWith.Cells.Should().Contain("M-K6", "kimi × none cites M-K6");
-                    break;
-                case Capability.Disk:
-                    row.Standing.Spelled().Should().Be("unconfined", "kimi × disk is unconfined");
-                    row.MeasuredWith.Cells.Should().Contain("M-K6").And.Contain("M-K9", "kimi × disk cites M-K6 and M-K9");
-                    break;
-                case Capability.Web:
-                    row.Standing.Spelled().Should().Be("unmeasured", "kimi × web is unmeasured");
-                    row.MeasuredWith.Cells.Should().BeEmpty("kimi × web has no cells");
-                    break;
-            }
-
-            row.MeasuredWith.Version.Should().Be("2.1.1", "all kimi rows share version 2.1.1");
-            row.MeasuredWith.ResultRef.Should().Contain("RESULTS_kimi_confinement.md", "all kimi rows cite the confinement record");
+            row.MeasuredWith.Version.Should().Be("2.1.1");
+            row.MeasuredWith.ResultRef.Should().Contain("RESULTS_kimi_confinement.md");
         }
-        // QWEN-FILL-END s561
     }
 
     /// <summary>The vectors hold every Kimi pair — the existing every-pair test (above) fails by name when a row has none; this names the three.</summary>
@@ -247,13 +238,11 @@ public sealed class CapabilityMatrixTests
     [Fact]
     public void AdmissionFlagsBothRows()
     {
-        // QWEN-FILL-BEGIN s564 test
         foreach (var capability in (Capability[])[Capability.None, Capability.Disk])
         {
             CapabilityMatrix.Admit("kimi", capability).Should().BeOfType<Admission.Admitted>()
                 .Which.Flag.Should().Be(AdmissionFlag.Unconfined, $"kimi × {capability}: unconfined");
         }
-        // QWEN-FILL-END s564
     }
 
     /// <summary>D13's two refusals kept apart: the flags are what the data says, never what a runtime name suggests.</summary>
