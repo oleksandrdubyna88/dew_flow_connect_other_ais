@@ -229,6 +229,10 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
             $"no folder above \"{cwd}\" is named {QuestionRowLaunch.ScratchPrefix}*: the row's scratch naming moved — report it, do not guess");
     }
 
+    /// <summary>What D6 and M-K9 keep out of the copy: the granted tree's own AGENTS.md and Kimi's folder, when either is in the copy.</summary>
+    private static IEnumerable<string> GuidanceIn(string copy) =>
+        new[] { "AGENTS.md", ".kimi-code" }.Where(name => File.Exists(Path.Combine(copy, name)) || Directory.Exists(Path.Combine(copy, name)));
+
     /// <summary>Whatever ended the row: the one-shot folder, the launch's home folder and scratch, the deleter and the person's folder.</summary>
     private void TheRowLeftNothingBehind(PlayedKimi played, IReadOnlyList<string> before)
     {
@@ -257,9 +261,10 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
     {
         using var scopes = StandIn();
         using var caller = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var guidance = new List<string>();
         var played = ending == "cancelled"
             ? new PlayedKimi(_launcher) { During = async (_, ct) => { await caller.CancelAsync(); ct.ThrowIfCancellationRequested(); } }
-            : new PlayedKimi(_launcher);
+            : new PlayedKimi(_launcher) { During = (request, _) => { guidance.AddRange(GuidanceIn(request.WorkingDirectory)); return Task.CompletedTask; } };
         var granted = ending == "refused" ? await PlainFolderAsync() : Path.Combine(Repo, "src");
         var before = _person.Hash();
         RecordingTheDeleter();
@@ -282,6 +287,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
                 request.StdIn.Should().Contain(request.WorkingDirectory, "the prompt names the copy the row can read");
                 request.StdIn.Should().NotContain(granted, "never the original root, which the row cannot read");
                 request.WorkingDirectory.Should().NotBe(Repo);
+                guidance.Should().BeEmpty("the copy the row reads carries neither AGENTS.md nor .kimi-code (D6, M-K9), while the row plays");
             }
             else
             {
