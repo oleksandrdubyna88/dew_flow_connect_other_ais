@@ -1,10 +1,13 @@
 using System.Text.Json;
 using CoaiMcp.Core.QuestionConsult;
 using CoaiMcp.Core.Rounds;
+using CoaiMcp.Runners.Acp;
+using CoaiMcp.Runners.Consultation;
 using CoaiMcp.Runners.Files;
 using CoaiMcp.Runners.Kimi;
 using CoaiMcp.Runners.Platform;
 using CoaiMcp.Runners.Processes;
+using CoaiMcp.Runners.Vibe;
 using CoaiMcp.Server;
 using FluentAssertions;
 using Serilog.Core;

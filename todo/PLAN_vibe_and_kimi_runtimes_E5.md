@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 not started.** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6: skeleton written 2026-10-26 (rows, vectors, generated table, planner arm, the 12 scenario tests with their bodies still to fill); not yet red/green.** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -1085,6 +1085,21 @@ Numbered from 40, apart from the lists above, so the stories built in parallel d
 45. **Decision (e)'s sentence lives in *The consultant* article** (*What can go wrong*, five languages), because it is about a `consult` turn;
     the question-consultant article says only that a Kimi row's launches wait for one another and for a Kimi review on the same sign-in.
 46. **`CONSULTANT_SINCE` gates a note, so `consultantsWire.ts` is unchanged.** S5.7.3 was green before any code, as the row said.
+
+### E5.5–E5.6 skeleton (Sonnet, 2026-10-26)
+
+Numbered from 50, apart from the lists above. The skeleton is data and signatures; the scenario bodies are filled in a later step.
+
+50. **The data and the planner arm are written whole, so S5.6.1–S5.6.4 may already pass.** The three `kimi` rows, the three vectors, the regenerated table, `RuntimeCapabilities.Runtimes`
+    and `ConfinementPlanner.Kimi` are in. The reds of the table (*Expected … not to be <null>*, *'kimi' is not a runtime …*) exist only against the commit before this one.
+51. **`CapabilityMatrixTests.Records` gains the Kimi record** (`RESULTS_kimi_confinement.md`, date `2026-10-13`, cell prefix `M-K`), because `EveryRow_CitesTheRecord_…` reads each row's record from it.
+52. **S5.6.2 is a new test, `TheVectorsCoverKimi`**, three lines: it names the three pairs, beside the existing every-pair test that already covers them.
+53. **S5.6.6's guard is a separate method, `KimiConsultant.MustCarryNoFlags`, not wired into `Build` yet.** Wiring it from the skeleton would make every existing Kimi consultant test throw.
+    The region `s566-guard` fills the method and adds the call.
+54. **`ConfinementPlannerTests.KimiRow()`** is the one place the fake-person Kimi consultant is built; `Adapters()` uses it too.
+55. **S5.5.2 is a Theory** (`theTurnFails`: passed / exit 70) and **S5.6.7 a Theory** over `answered` / `refused` / `cancelled`, as the tables say.
+56. **Skeleton-only placeholders:** the async tests are `Task`, not `async Task` (CS1998 is an error here), and two Theory bodies read their parameter on one line (`xUnit1026`). Each region says so.
+57. **`dotnet format … --verify-no-changes` on the whole solution fails on this host** with the `src_server` AOT analyzers (IL2026, IL3050); `dotnet format whitespace` on the changed files is clean.
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 
