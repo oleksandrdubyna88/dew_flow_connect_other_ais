@@ -359,12 +359,11 @@ public sealed class ConfinementPlannerTests
     public void AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome()
     {
         // QWEN-FILL-BEGIN s565 test
-        // var consultant = new Runners.Kimi.KimiConsultant(new Runners.Kimi.KimiRuntime(...)) - see the context pack for KimiRuntime's constructor.
+        // using var person = new KimiFixture(); var consultant = new Runners.Kimi.KimiConsultant(new Runners.Kimi.KimiRuntime("my-kimi", Runners.Platform.HostKind.Windows, new Runners.Kimi.KimiSeams(person.PlacesAt, () => ("coai-mcp", []))), "my-kimi");
         // var none = consultant.Build(Planned("kimi", CapabilityGrant.None)); var disk = consultant.Build(Planned("kimi", CapabilityGrant.Disk(RootA, RootB)));
         // none.Request.WorkingDirectory Be Scratch (the plan's Scratch cwd is launch.ScratchDir); disk.Request.WorkingDirectory Be RowTree.
         // For both requests: Arguments Contain "--home" followed by a value that StartsWith(RowFolder + Path.DirectorySeparatorChar); Arguments NotContain "--session" (one shot);
-        //   Arguments NotContain RootA and RootB (neither root is named); request.InheritsEnvironment Be false; Runners.Kimi.KimiEnvironment.Refusal(request, <places>) Be empty - see the pack for how
-        //   S5.4.2's test in KimiConsultantTests computes the places; role: built.Role Be ConsultantRoles.Question.
+        //   Arguments NotContain RootA and RootB (neither root is named); request.InheritsEnvironment Be false; Runners.Kimi.KimiEnvironment.Refusal(request, person.PlacesAt(<the value after Runners.Acp.AcpWords.HomeFlag>)) Be empty (as KimiConsultantTests S5.4.2); role: built.Role Be ConsultantRoles.Question.
         // Red today: "Expected Request.WorkingDirectory to be <Scratch>, but found ..." (against a stub that ignores the plan).
         throw new NotImplementedException("s565");
         // QWEN-FILL-END s565
@@ -376,7 +375,7 @@ public sealed class ConfinementPlannerTests
     {
         // QWEN-FILL-BEGIN s566 test
         // var withFlags = Planned("kimi", CapabilityGrant.None) with { Confinement = new LaunchConfinement.Planned(Plan("kimi", CapabilityGrant.None) with { Flags = ["--yolo"] }) };
-        // var building = () => consultant.Build(withFlags) (consultant built as in S5.6.5); building.Should().Throw<ArgumentException>().WithMessage("*shim*").
+        // var building = () => consultant.Build(withFlags) (person and consultant built as in S5.6.5); building.Should().Throw<ArgumentException>().WithMessage("*shim*").
         // Red today: "Expected a <System.ArgumentException> to be thrown, but no exception was thrown."
         throw new NotImplementedException("s566");
         // QWEN-FILL-END s566

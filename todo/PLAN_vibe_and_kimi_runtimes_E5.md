@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 not started.** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6: skeleton only (rows, vectors, generated table, planner arm, 12 scenario tests as fill regions; deviations 47–52) — bodies not yet filled, nothing red-checked.** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -1085,6 +1085,19 @@ Numbered from 40, apart from the lists above, so the stories built in parallel d
 45. **Decision (e)'s sentence lives in *The consultant* article** (*What can go wrong*, five languages), because it is about a `consult` turn;
     the question-consultant article says only that a Kimi row's launches wait for one another and for a Kimi review on the same sign-in.
 46. **`CONSULTANT_SINCE` gates a note, so `consultantsWire.ts` is unchanged.** S5.7.3 was green before any code, as the row said.
+
+### E5.5–E5.6 skeleton (Sonnet, 2026-10-26) — deviations 47–52
+
+The skeleton is written: the three `kimi` rows and vectors, `runtimeCapabilities.generated.ts` regenerated, `RuntimeCapabilities.Runtimes` and the
+planner's `"kimi"` arm, the 12 scenario tests with their exact names, and a refusal of a plan that carries flags. Method bodies of the new tests and of
+two production methods are fill regions (`QWEN-FILL-BEGIN … END`); no test was run, red or green.
+
+47. **S5.6.2 and S5.6.4's neighbours are existing tests.** `TheVectorsActuallyLoaded_AndCoverEveryPairOfTheTable` needs no new method: the three vectors make it cover `kimi`. S5.6.4 `AdmissionFlagsBothRows` is a new test in `CapabilityMatrixTests`. The test's `Records` list gains `("RESULTS_kimi_confinement.md", "2026-10-13", "M-K")`, which `EveryRow_CitesTheRecord_AndACellOrSaysWhyThereIsNone` needs.
+48. **The `disk` row's cells are `M-K6`, `M-K3`, `M-K4`, `M-K9`.** `M-K9 (e)` is named in the `resultRef` and the `note`, not as a cell id, because a cell id must start with the record's prefix `M-K` and the table's tests take it whole. The row's date is `2026-10-13` (the day the probe ran), its version `2.1.1`.
+49. **`resultRef` section numbers.** The rows cite `§M-K6`, `§M-K3/M-K4`, `§M-K9` and `§14` by cell name where the plan names RESULTS sections, since RESULTS is out of scope in this step. The web row cites `§14` as the plan says. The wording may need to follow RESULTS §31 once J2 is recorded.
+50. **A new helper `KimiStandIn.Of(KimiFixture)`** (`src_mcp/tests/KimiStandIn.cs`) is the person, host and lock-root stand-in of `AKimiConsultationScenarioTests.StandIn`, which is private to that class. It is shared by `AKimiConsultantCheckTests` and `AKimiQuestionRowTests`; the old private copy was left alone.
+51. **`KimiConsultant.MustCarryNoPlanFlags`** refuses a plan whose `Flags` OR `Leading` is not empty (decision 3 names "ANY flag"). It is a private method called first in `Build`, so S5.6.6 is a pure test.
+52. **The two theory classes keep the plan's names.** S5.5.2 is a `[Theory]` over the turn's exit (0 and 70, the table's "second arm"); S5.6.7 is a `[Theory]` over `AKimiQuestionRowTests.Ending` (answered, refused before the launch, cancelled mid-turn). Both classes are in the `fakecli-env` collection because `GitScratch.AfterUnlink` is a static recorder.
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 
