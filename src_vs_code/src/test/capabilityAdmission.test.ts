@@ -177,15 +177,16 @@ test('a flagged admission carries the caveat a person must acknowledge (D13)', (
 
 test('kimi rows admit flagged, web refuses naming its record', () => {
   // QWEN-FILL-BEGIN s568-ts test
-  // Arrange: nothing — `admit` (from '../capabilityAdmission') and the generated table are imported at the top of this file.
-  // Act and assert, in this order:
-  //   1. for each capability of ['none', 'disk']: `const admission = admit('kimi', capability);` then
-  //      `assert.equal(admission.admitted, true, admission.reason);`, `assert.equal(admission.standing, 'unconfined');`,
-  //      `assert.equal(admission.flag, 'unconfined');` and `assert.match(admission.caveat, /can read this machine/u);`.
-  //   2. `const web = admit('kimi', 'web');` then `assert.equal(web.admitted, false);`, `assert.match(web.reason, /not been measured/u);`
-  //      and `assert.match(web.reason, /RESULTS_kimi_confinement\.md/u);`.
-  // Fails before the change with: AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal (the runtimes list), and
-  // "'kimi' is not a runtime the question consultant can launch" from admit('kimi', ...).
-  throw new Error('s568-ts');
+  for (const capability of ['none', 'disk']) {
+    const admission = admit('kimi', capability);
+    assert.equal(admission.admitted, true, admission.reason);
+    assert.equal(admission.standing, 'unconfined');
+    assert.equal(admission.flag, 'unconfined');
+    assert.match(admission.caveat, /can read this machine/u);
+  }
+  const web = admit('kimi', 'web');
+  assert.equal(web.admitted, false);
+  assert.match(web.reason, /not been measured/u);
+  assert.match(web.reason, /RESULTS_kimi_confinement\.md/u);
   // QWEN-FILL-END s568-ts
 });

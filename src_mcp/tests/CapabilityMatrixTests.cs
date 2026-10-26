@@ -202,14 +202,28 @@ public sealed class CapabilityMatrixTests
     public void KimiHasThreeRows_EachCitingItsCells()
     {
         // QWEN-FILL-BEGIN s561-rows test
-        // Arrange: nothing — `RuntimeCapabilities.Builtin.Of("kimi", Capability.None)` is `RuntimeCapabilityRow?`.
-        // Act/Assert: for none, disk, web take `row = RuntimeCapabilities.Builtin.Of("kimi", capability)`; `row.Should().NotBeNull()` first (the red:
-        // "Expected RuntimeCapabilities.Builtin.Of(\"kimi\", Capability.None) not to be <null>.").
-        //   none: row.Standing Should().Be(CapabilityStanding.Unconfined); row.MeasuredWith.Cells Should().Contain("M-K6").
-        //   disk: Standing Unconfined; Cells Should().Contain("M-K6").And.Contain("M-K9").
-        //   web: Standing Should().Be(CapabilityStanding.Unmeasured); Cells Should().BeEmpty() (its note says why).
-        //   every row: row.MeasuredWith.Version Should().Be("2.1.1"); row.MeasuredWith.ResultRef Should().Contain("RESULTS_kimi_confinement.md").
-        throw new NotImplementedException("s561-rows");
+        foreach (var capability in (Capability[])[Capability.None, Capability.Disk, Capability.Web])
+        {
+            var row = RuntimeCapabilities.Builtin.Of("kimi", capability);
+            row.Should().NotBeNull();
+            if (capability == Capability.None)
+            {
+                row.Standing.Should().Be(CapabilityStanding.Unconfined);
+                row.MeasuredWith.Cells.Should().Contain("M-K6");
+            }
+            else if (capability == Capability.Disk)
+            {
+                row.Standing.Should().Be(CapabilityStanding.Unconfined);
+                row.MeasuredWith.Cells.Should().Contain("M-K6").And.Contain("M-K9");
+            }
+            else
+            {
+                row.Standing.Should().Be(CapabilityStanding.Unmeasured);
+                row.MeasuredWith.Cells.Should().BeEmpty();
+            }
+            row.MeasuredWith.Version.Should().Be("2.1.1");
+            row.MeasuredWith.ResultRef.Should().Contain("RESULTS_kimi_confinement.md");
+        }
         // QWEN-FILL-END s561-rows
     }
 
@@ -218,11 +232,14 @@ public sealed class CapabilityMatrixTests
     public void AdmissionFlagsBothRows()
     {
         // QWEN-FILL-BEGIN s564-admit test
-        // Act/Assert: for each capability of (Capability[])[Capability.None, Capability.Disk]:
-        //   `CapabilityMatrix.Admit("kimi", capability).Should().BeOfType<Admission.Admitted>().Which.Flag.Should().Be(AdmissionFlag.Unconfined, ...)`
-        // and `CapabilityMatrix.Admit("kimi", Capability.Web).Should().BeOfType<Admission.Refused>().Which.Reason.Should().Contain("not been measured")`.
-        // Fails before the change: Refused "'kimi' is not a runtime the question consultant can launch ...".
-        throw new NotImplementedException("s564-admit");
+        foreach (var capability in (Capability[])[Capability.None, Capability.Disk])
+        {
+            CapabilityMatrix.Admit("kimi", capability).Should().BeOfType<Admission.Admitted>()
+                .Which.Flag.Should().Be(AdmissionFlag.Unconfined, $"kimi × {capability}: unconfined");
+        }
+
+        CapabilityMatrix.Admit("kimi", Capability.Web).Should().BeOfType<Admission.Refused>()
+            .Which.Reason.Should().Contain("not been measured");
         // QWEN-FILL-END s564-admit
     }
 
