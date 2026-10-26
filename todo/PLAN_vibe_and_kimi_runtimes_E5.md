@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6: skeleton written 2026-10-26 (data, planner arm, flag guard, 12 scenario tests with bodies still to fill; not yet red or green).** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 implemented 2026-10-26 (Sonnet): the `kimi` rows, vectors and generated table, the planner arm, the flag guard and the 12 scenario tests, all green (the whole MCP suite: 2 known host failures only; the extension: 1 known); deviations 50–62, not yet reviewed; the live checks (J2) not run.** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -1088,8 +1088,8 @@ Numbered from 40, apart from the lists above, so the stories built in parallel d
 
 ### E5.5–E5.6 skeleton (Sonnet, 2026-10-26)
 
-Numbered from 50. The skeleton only: the three `kimi` rows, the vectors and the regenerated table are complete; the 12 scenario tests exist by name
-and their bodies are placeholders; the tests have not been run.
+Numbered from 50. The skeleton: the three `kimi` rows, the vectors and the regenerated table; the 12 scenario tests by name. The bodies were filled
+and polished afterwards — see *E5.5–E5.6 as built* below (57–62).
 
 50. **The planner arm and the flag guard are written, not placeholders.** `ConfinementPlanner.Kimi` (two lines) and `KimiConsultant.MustCarryNoFlags`
     (three) are inside the three-line limit, and a placeholder in `Build` would have turned every green Kimi consult test red. So S5.6.3, S5.6.4, S5.6.1,
@@ -1105,6 +1105,30 @@ and their bodies are placeholders; the tests have not been run.
 55. **The runtime list sentence in the table's `why`** names the kimi rows' record, as the vibe sentence does for its own.
 56. **Kimi rows' date is 2026-10-13**, the date E5.4's decision 8 gives to M-K6, M-K3, M-K4 (M-K9 is cited from its own section); M-K17 may
     change the `none`/`disk` note's WebSearch sentence.
+
+### E5.5–E5.6 as built (Sonnet, 2026-10-26)
+
+57. **The 12 scenarios run on every host, Windows or not.** The Kimi stand-in (`WindowsStandIn`: a symbolic link where Windows has a junction, the
+    host stood in as Windows) is what E5.4's service tests already use, so S5.5.1–S5.5.4 and S5.6.7 use it too and none is marked Windows-only.
+    A `SkipUnless(IsWindows)` would have hidden them, and every red below, on a Linux or WSL host.
+58. **S5.5.1–S5.5.4 have no red at `b4e2ea96`, and the table's own reds name states from before E5.4 and E5.3 g.** The adapter, its registration and
+    the junction-first disposal are in, so the four tests (five cases) pass against that code; the table calls S5.5.3 "green after E5.3 g". Their
+    teeth were shown by mutating production, one mutation each, each watched red and put back: the check's `finally` without the home's disposal
+    (S5.5.2, S5.5.3), `ConsultCheckScratch.Delete` without the Kimi homes first (S5.5.4 — the deleter's unlink recorder is invoked), the adapter
+    without `NeedsASanitisedSnapshot` or without its `HomesFolder` (S5.5.1).
+59. **S5.5.1's "scratch repository and canary unchanged" is the record's own `state: answered` and `canary: not-attempted`.** The check ends a broken
+    invariant as `state: failed`, `failureKind: tree-changed`; there is no other field to read, and S5.5.3 reads `failed` / `cancelled` the same way (53).
+60. **The reds of S5.6.3, S5.6.5 and S5.6.6 read as the table's only once the table and `Runtimes` are in.** With ALL of S5.6's production out, the
+    planner's `Plan` helper answers `Refused` (the matrix refuses an unknown runtime before the arm), so those three fail with *Expected type to be
+    Planned, but found Refused*. With the table in and only the arm and the guard out they fail as predicted (`Cwd` Scratch for Snapshot; the
+    `WorkingDirectory`; *no exception was thrown*). S5.6.7's red at `b4e2ea96` is *the row is `blocked`: 'kimi' is not a runtime the question
+    consultant can launch*, not the `coai-vh` sentence, which E5.3 g has already settled; its disposal assertions were shown by mutation (the
+    row's `Release` without the home's disposal).
+61. **`CapabilityMatrixTests.EveryRow_CitesTheRecord_AndACellOrSaysWhyThereIsNone` lists the records a row may cite, and had no Kimi record.**
+    One entry added: `RESULTS_kimi_confinement.md`, `2026-10-13`, cells `M-K…` (deviation 56's date). The skeleton had not run the suite.
+62. **Found, not fixed: the extension's `unconfined` caveat says "a shell is always there".** For Kimi every shell command is refused (M-K3, M-K4);
+    the reach is `Grep` and `Glob`. `capabilityAdmission.ts` has one caveat per flag, so S5.6.8 asserts only "can read this machine", which is true
+    of both. A sentence per row, or a wording that fits both, is for E5.7's owner.
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 
