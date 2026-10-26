@@ -47,12 +47,29 @@ public sealed class KimiConsultant(KimiRuntime inner, string vendor = "kimi") : 
     public ReviewerInvocation Build(ConsultantLaunch launch)
     {
         ConsultantLaunches.MustBeLaunchable(launch);
+        if (launch.Confinement is LaunchConfinement.Planned)
+        {
+            MustCarryNoFlag(launch);
+        }
+
         var settings = launch.Settings with { OwnedScratch = OwnedFolder(launch), Model = ModelOf(launch.Settings) };
         var built = inner.Build(ConsultantLaunches.RoleOf(launch), launch.Prompt, Cwd(launch), string.Empty, launch.OutputDir, settings);
         var request = built.Request with { Arguments = [.. built.Request.Arguments, .. SessionOf(launch)] };
         ConsultantLaunches.MustCarryNoLineBreak(request.Arguments);
 
         return built with { Request = launch.Confinement is LaunchConfinement.Planned ? ConsultantLaunches.ForQuestion(request) : request };
+    }
+
+    /// <summary>A planned launch carries no flag of its own: Kimi's confinement is the shim's (D15), not its argv (E5.6 decision 3).</summary>
+    private static void MustCarryNoFlag(ConsultantLaunch launch)
+    {
+        // QWEN-FILL-BEGIN s56-noflags prod
+        // When launch.Confinement is LaunchConfinement.Planned planned and planned.Plan.Flags, planned.Plan.Leading or planned.Plan.AddDirs
+        // is non-empty (planned.Plan is a Confinement.Planned; the three are IReadOnlyList<string>), throw
+        // new ArgumentException("a Kimi row's confinement is the shim's; a plan with flags is not one coai made for kimi", nameof(launch)).
+        // Otherwise return: an unplanned consultation launch, or a plan with no flags, is fine.
+        throw new NotImplementedException("s56-noflags");
+        // QWEN-FILL-END s56-noflags
     }
 
     /// <summary>The row's model, or Kimi's default when it names none — resolved here so the shim and the ledger name the same one.</summary>
