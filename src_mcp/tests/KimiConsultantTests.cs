@@ -1,3 +1,4 @@
+using CoaiMcp.Core.QuestionConsult;
 using CoaiMcp.Runners.Acp;
 using CoaiMcp.Runners.Consultation;
 using CoaiMcp.Runners.Kimi;
@@ -163,5 +164,75 @@ public sealed class KimiConsultantTests : IDisposable
         consultant.HomesFolder.Should().Be(ConsultantHomes.Kimi, "one owned home per conversation under coai-kimi (J3)");
         consultant.Toolbox.Should().Contain("Read").And.Contain("Grep").And.Contain("Glob").And.Contain("refused");
         consultant.Toolbox.Should().NotContain("bounded", "Grep and Glob read the disk directly (M-K6): never claimed bounded");
+    }
+
+    // ---------- E5.6: a question row ----------
+
+    private const string RootA = "D:/projects/alpha";
+
+    private const string RootB = "D:/projects/beta";
+
+    /// <summary>The row's one-shot folder (coai-vh\&lt;8&gt; in the product): where its home is made.</summary>
+    private string RowFolder => Path.Combine(_person.Folder, "homes", "coai-vh", "0123abcd");
+
+    /// <summary>The row's EMPTY folder a none row stands in (QuestionRowLaunch's `cwd`, beside the home).</summary>
+    private string RowScratch => Path.Combine(_person.Folder, "coai-question-0123abcd", "cwd");
+
+    /// <summary>The copy of the roots a disk row stands in.</summary>
+    private string RowTree => Path.Combine(_person.Folder, "coai-question-0123abcd", "tree");
+
+    private static Confinement.Planned KimiPlan(CapabilityGrant grant, params string[] flags) =>
+        grant.Capability == Capability.Disk
+            ? new("kimi", grant, [], flags, CwdKind.Snapshot, [], AdmissionFlag.Unconfined) { SnapshotSources = grant.Roots }
+            : new("kimi", grant, [], flags, CwdKind.Scratch, [], AdmissionFlag.Unconfined);
+
+    private ConsultantLaunch Question(Confinement.Planned plan) =>
+        new(Repo, "Which helper retries an outbound send?", string.Empty, Answers,
+            new ReviewerSettings("my-kimi") { Timeout = TimeSpan.FromMinutes(5), OwnedScratch = RowFolder })
+        {
+            Confinement = new LaunchConfinement.Planned(plan),
+            ScratchDir = RowScratch,
+            Workdir = RowTree,
+        };
+
+    /// <summary>S5.6.5 (E5.6 decision 3): a none row in its empty folder, a disk row in the copy of its roots — the home in the row's folder, one shot, the minimal child.</summary>
+    [Fact]
+    public void AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome()
+    {
+        var none = Consultant().Build(Question(KimiPlan(CapabilityGrant.None)));
+        none.Request.WorkingDirectory.Should().Be(RowScratch, "a none row stands in an empty folder of its own");
+        none.Request.Arguments.Should().ContainInConsecutiveOrder("--cwd", RowScratch);
+
+        var disk = Consultant().Build(Question(KimiPlan(CapabilityGrant.Disk(RootA, RootB))));
+        disk.Request.WorkingDirectory.Should().Be(RowTree, "a disk row reads the copy of its roots (D6)");
+        disk.Request.Arguments.Should().ContainInConsecutiveOrder("--cwd", RowTree);
+
+        foreach (var invocation in new[] { none, disk })
+        {
+            var request = invocation.Request;
+            var home = After(request.Arguments, AcpWords.HomeFlag);
+            Path.GetDirectoryName(home).Should().Be(RowFolder, "the row's home lives in the row's own one-shot folder, gone with it");
+            Path.GetFileName(home).Should().MatchRegex("^kh-[0-9a-f]{10}$");
+            request.Arguments.Should().NotContain(AcpWords.SessionFlag, "a question row is one shot");
+            request.Arguments.Should().NotContain(argument => argument.Contains(RootA, StringComparison.OrdinalIgnoreCase)
+                || argument.Contains(RootB, StringComparison.OrdinalIgnoreCase), "the roots are read through their copy, never named");
+            request.InheritsEnvironment.Should().BeFalse();
+            request.Passthrough.Should().BeEquivalentTo(ProcessEnvironment.Minimal, "the question row's road (ForQuestion)");
+            KimiEnvironment.Refusal(request, _person.PlacesAt(home)).Should().BeEmpty("the one launch control admits it");
+            invocation.Role.Should().Be(ConsultantRoles.Question);
+        }
+    }
+
+    /// <summary>S5.6.6 (E5.6 decision 3): a plan with a flag was not made for kimi — refused by name, never spliced.</summary>
+    [Theory]
+    [InlineData(Capability.None)]
+    [InlineData(Capability.Disk)]
+    public void APlanWithFlags_IsRefusedForKimi(Capability capability)
+    {
+        var grant = capability == Capability.Disk ? CapabilityGrant.Disk(RootA) : CapabilityGrant.None;
+
+        var build = () => Consultant().Build(Question(KimiPlan(grant, "--yolo")));
+
+        build.Should().Throw<ArgumentException>().WithMessage("*shim*");
     }
 }
