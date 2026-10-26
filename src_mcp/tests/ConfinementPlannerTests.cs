@@ -144,17 +144,22 @@ public sealed class ConfinementPlannerTests
     }
 
     [Fact]
-    public void KimiPlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb()
+    public void ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb()
     {
         var none = Plan("kimi", CapabilityGrant.None);
         none.Cwd.Should().Be(CwdKind.Scratch);
-        none.Flags.Should().BeEmpty(); none.Leading.Should().BeEmpty(); none.AddDirs.Should().BeEmpty(); none.SnapshotSources.Should().BeEmpty();
+        none.Flags.Should().BeEmpty();
+        none.Leading.Should().BeEmpty();
+        none.AddDirs.Should().BeEmpty();
+        none.SnapshotSources.Should().BeEmpty();
         none.Flag.Should().Be(AdmissionFlag.Unconfined);
 
         var disk = Plan("kimi", CapabilityGrant.Disk(RootA, RootB));
         disk.Cwd.Should().Be(CwdKind.Snapshot, "Kimi's roots are copied, never its cwd (D6)");
         disk.SnapshotSources.Should().Equal([RootA, RootB]);
-        disk.Flags.Should().BeEmpty(); disk.Leading.Should().BeEmpty(); disk.AddDirs.Should().BeEmpty();
+        disk.Flags.Should().BeEmpty();
+        disk.Leading.Should().BeEmpty();
+        disk.AddDirs.Should().BeEmpty();
         disk.Flag.Should().Be(AdmissionFlag.Unconfined);
 
         ConfinementPlanner.Plan("kimi", CapabilityGrant.Web).Should().BeOfType<Confinement.Refused>()
