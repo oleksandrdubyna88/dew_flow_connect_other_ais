@@ -1100,7 +1100,7 @@ Numbered from 50, apart from 13–46, so the stories built in parallel do not co
 Verified by (2026-10-26, Haiku 5.5, on the tree at `3fd76fcc` plus this doc change):
 - `plan-lifecycle.mjs`: `plan-lifecycle: clean.`
 - `dotnet build dew_flow_connect_other_ais.slnx -c Debug -m:4 --disable-build-servers`: Build succeeded, 0 warnings, 0 errors.
-- `CoaiMcp.Tests`: on Linux the built test assembly is `CoaiMcp.Tests.dll`, and the named `.exe` does not exist (`ENOENT`), so it was run as `dotnet test --project src_mcp/tests/CoaiMcp.Tests.csproj --no-build -c Debug`. Result: 10470 succeeded, 84 skipped, 3 failed: `KimiRuntimeTests.ALaunchThatNamesItsHome_GoesThroughTheLaunchControl_WhichReadsThePersonsSignIn` and `KimiHomeTests.AHomeWhoseDataPathPasses260_IsCheckedAndDisposed` (both known), and `TheRoundsNumstatsAreCountedTests.AnUnknownCommit_IsGitFailed_NeverAThrow` (NOT in the known list; the assertion is an empty-numstat check).
+- `CoaiMcp.Tests`: run as the MTP executable, `node .agents/conventions/tools/low-priority.mjs ./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests` (on Linux the executable has no `.exe`). Result: total 10557, succeeded 10471, skipped 84, failed 2, both known: `KimiRuntimeTests.ALaunchThatNamesItsHome_GoesThroughTheLaunchControl_WhichReadsThePersonsSignIn` and `KimiHomeTests.AHomeWhoseDataPathPasses260_IsCheckedAndDisposed`.
 - `generate-runtime-capabilities.mjs --check`: `up to date … (21 rows over 7 runtimes × 3 capabilities)`.
 - `npm test` (src_vs_code): 6290 tests, 6270 pass, 1 fail: `the baseline names no release that was never tagged` (the known one; the checkout carries no tags).
 
