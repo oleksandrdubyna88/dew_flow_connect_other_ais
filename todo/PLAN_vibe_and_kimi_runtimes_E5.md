@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 not started.** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 implemented 2026-10-26 (Haiku, the coder; deviations H1–H8, *E5.5–E5.6 as built*); the live checks (J2) and M-K17 not run.** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -1085,6 +1085,29 @@ Numbered from 40, apart from the lists above, so the stories built in parallel d
 45. **Decision (e)'s sentence lives in *The consultant* article** (*What can go wrong*, five languages), because it is about a `consult` turn;
     the question-consultant article says only that a Kimi row's launches wait for one another and for a Kimi review on the same sign-in.
 46. **`CONSULTANT_SINCE` gates a note, so `consultantsWire.ts` is unchanged.** S5.7.3 was green before any code, as the row said.
+
+### E5.5–E5.6 as built (Haiku, 2026-10-26) — where it deviates from the spec above
+
+H1. **Most of E5.5 was green on arrival.** S5.5.1–S5.5.4 were written as the table says, and the check path they test (the one-shot home from
+    `ConsultantCheck`, the junction-first disposal from E5.3 g, `KimiConsultant` from E5.4) already existed, so the red "before E5.4" / "before E5.3 g"
+    named in the table was no longer reachable. Teeth were given by a temporary break of the one-shot reservation (`KimiConsultant.HomesFolder` emptied):
+    S5.5.1 went red, the home landed under the check's scratch. S5.5.2 has no separate tooth; its junction-first pin rests on E5.3's own tests.
+H2. **S5.5.3's record field.** The cancelled check's record is `state: failed` with `failureKind: cancelled` (and `failureWhat` says so). The test asserts
+    `failureKind`, which is what the table means by "the record says cancelled". The test also accepts an `OperationCanceledException`, which is the other way
+    a cancel can end; the home must be gone either way.
+H3. **S5.6.3, S5.6.5 and S5.6.6 went red on the matrix, not the planner arm.** `kimi` was not in the table yet, so `ConfinementPlanner.Plan` refused it
+    with "not a runtime the question consultant can launch" before the arm was reached. With the rows in place, the teeth (H5) showed the table's own red.
+H4. **S5.6.7 is in a new class, `AKimiQuestionRowTests`, not in `AVibeQuestionRow…`**, because its Kimi harness (the fake person's sign-in and the seams) is not
+    the Vibe one. It was green on arrival; its teeth are the same planner break (H5).
+H5. **Teeth for E5.6.** Two temporary breaks: the planner's disk arm (`CwdKind.Snapshot` → `Scratch`) and the Kimi homes folder (H1). Red with the break: S5.6.3,
+    S5.6.5, S5.5.1, S5.5.2 (both arms), S5.5.3, S5.6.7 (answered and cancelled). Both breaks reverted. `ARowRefusedBeforeItsLaunch` also went red under the
+    homes-folder break; that is the homes folder's effect on the row's refusal status, not a tooth for the refusal itself.
+H6. **S5.6.5's `KimiEnvironment.Refusal` assertion is not made.** It needs a `KimiPlaces` built from the fake person, which the planner test does not have.
+    The launch control's own green path is covered by S5.6.7, which runs the real launch control.
+H7. **The existing `EveryRow_CitesTheRecord` test needed a new record** (`RESULTS_kimi_confinement.md`, 2026-10-13, cell prefix `M-K`) in its list. S5.6.2 is
+    that test: its red is the missing record and the missing vectors, not the words in the table.
+H8. **`KimiConsultant.Build` refuses a plan with any flag** (E5.6 decision 3), through a private `MustCarryNoFlag` beside `MustBeLaunchable`. The S5.6.6 message
+    names the shim.
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 
