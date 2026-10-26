@@ -825,6 +825,14 @@ flowchart LR
   read cell itself — and `web` `unmeasured` (no Vibe cell exercises the web), so the matrix refuses it. Those rows
   cite the Vibe record and its `M-V…` cells, dated 2026-10-12, and `CapabilityMatrixTests` holds each row to the
   record it cites (`Records`), not to one record for all. **An unmeasured pair's refusal names the record its own row cites** (before the S3 gate): `CapabilityMatrix.RecordOf` reads the `research/RESULTS_….md` its `resultRef` names (the first run's record when it names none), and `capabilityAdmission.ts`'s `recordOf` is its twin — so `vibe × web` sends a person to research/RESULTS_vibe_confinement.md, and the first five runtimes' sentences are byte for byte what they were.
+- **Kimi's arm (E5.6, 2026-10-16).** `kimi` is the seventh runtime of the table and the planner, and the first whose plan carries **no argv at all**: its
+  confinement is the shim's (D15), so `ConfinementPlanner.Kimi` gives `none` an empty `Scratch` folder and `disk` a `Snapshot` of its roots (`SnapshotSources`),
+  both with empty `Leading`, `Flags` and `AddDirs`, and `SandboxVocabulary` gains nothing. `KimiConsultant.MustCarryNoFlags` refuses a plan that carries a
+  flag OR a leading argument (`ArgumentException`, never spliced or dropped). The rows `none` and `disk` are `unconfined` — Grep and Glob read this
+  machine (M-K6); the shim refuses every shell (M-K4) — and `web` is `unmeasured`, so the matrix refuses it. Because the caveat sentence is shared by every
+  unconfined runtime, it names no shell (`AdmissionFlags.Caveat`, and `capabilityAdmission.ts`'s twin): "unconfined: can read this machine, and no flag
+  removes it". A Kimi question row reads its copies and leaves nothing behind — no copy, no one-shot `coai-vh/<8>` folder, no unlink of the person's sign-in
+  (`AKimiQuestionRowTests`), and `--check-consultant` runs one turn as a consultation makes it, in a copy of the check's scratch (`AKimiConsultantCheckTests`).
 - **Refuse, never redact — and the refusal never quotes what it refused.** A web row's model may be
   unconfined (codex, F2), so what the row is GIVEN is the only thing ours to control, and a question
   with a hole where a path was still says there was a path. The sanitiser answers ONE class — the first

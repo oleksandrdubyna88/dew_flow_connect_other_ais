@@ -4454,3 +4454,16 @@ saw it).
 
 `CumulativeUsageTests.AVendorReportingLESSThanBeforeFloorsAtZero_NeverNegative` became `ACountBelowWhatWasBilled_FloorsAtZero_NeverNegative`: its old case (both totals below
 what was billed) is now a reset by decision 12, so the floor is pinned where it still applies — totals that moved on, cached and reasoning counts that did not.
+
+### The Kimi check and the Kimi question row — E5.5 and E5.6 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md` (2026-10-16)
+
+Only the shim is played (`PlayedKimi`); git runs for real, the launch control and the sign-in lock are the real ones over `KimiFixture`'s fake person, and the host is
+stood in as Windows (`WindowsStandIn`). No test starts the real `kimi`. Every folder these classes make is named `testsToDelete-…`, and the check's data and scratch
+folders are `TempDir`s, so a crashed run leaves nothing the sweep cannot find.
+
+| Suite (scenario) | What it holds | Does NOT cover |
+|---|---|---|
+| `AKimiConsultantCheckTests` (S5.5.1–S5.5.4) | `--check-consultant` on a Kimi row runs one turn in a COPY of the check's scratch, on a one-shot home it owns; after the check (passed, failed exit 70, cancelled mid-turn) the home is gone, disposed junction-first (the unlink recorder never invoked), the person's sign-in whole; with no homes root the home stays in the check's scratch | a live turn; a real `kimi` |
+| `AKimiQuestionRowTests` (S5.6.7, Theory: answered, refused before the launch, cancelled mid-turn) | a `disk` row reads its copies, the prompt names them and never the root; no copy, no `coai-vh/<8>` folder and no unlink of the sign-in are left; the refused arm fails with the launch control's refusal, which names the person's missing sign-in folder | that no `coai-question-*` scratch is left on the refused arm: the temp root is shared by every test in the process, so a scan of it would flake — the scratch is removed in `finally`, which the answered and cancelled arms observe through the row's copy |
+| `KimiConsultantTests.APlanWithFlags_IsRefusedForKimi` (S5.6.6, Theory: `Flags`, `Leading`) | a plan with a flag, and a plan with only a leading argument, are each refused by name | |
+| `CapabilityMatrixTests.TheUnconfinedCaveat_NamesNoShell_BecauseKimiHasNone` and `capabilityAdmission.test.ts` (the same line) | the caveat shared by every unconfined runtime names no shell | |
