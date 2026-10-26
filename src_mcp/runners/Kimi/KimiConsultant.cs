@@ -64,10 +64,10 @@ public sealed class KimiConsultant(KimiRuntime inner, string vendor = "kimi") : 
     private static void MustCarryNoFlags(Confinement.Planned plan)
     {
         // QWEN-FILL-BEGIN s56-no-flags prod
-        // When `plan.Flags` or `plan.Leading` holds ANY entry, throw an ArgumentException (second argument nameof(plan)) whose message is
-        // exactly: "a Kimi row's confinement is the shim's; a plan with flags is not one coai made for kimi".
-        // A plan with both lists empty returns without doing anything. (`using System.Linq` is implicit; use `.Count > 0` on the lists.)
-        throw new NotImplementedException("s56-no-flags");
+        if (plan.Flags.Count > 0 || plan.Leading.Count > 0)
+        {
+            throw new ArgumentException("a Kimi row's confinement is the shim's; a plan with flags is not one coai made for kimi", nameof(plan));
+        }
         // QWEN-FILL-END s56-no-flags
     }
 

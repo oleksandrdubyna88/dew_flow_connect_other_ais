@@ -210,11 +210,12 @@ public static class ConfinementPlanner
     private static Confinement.Planned Kimi(CapabilityGrant grant, AdmissionFlag flag)
     {
         // QWEN-FILL-BEGIN s56-planner-kimi prod
-        // Return a Confinement.Planned for runtime "kimi": Leading [], Flags [], AddDirs [], the given grant and flag.
-        // Capability.Disk -> Cwd = CwdKind.Snapshot and `SnapshotSources = grant.Roots` (object initializer, as Vibe(...) above does).
-        // Every other capability (None; Web never arrives, the matrix refuses it) -> Cwd = CwdKind.Scratch, no SnapshotSources.
-        // Pattern: copy the shape of Vibe(...) above, with empty flag lists instead of VibeReadOnly.
-        throw new NotImplementedException("s56-planner-kimi");
+        return grant.Capability switch
+        {
+            Capability.Disk => new("kimi", grant, [], [], CwdKind.Snapshot, [], flag) { SnapshotSources = grant.Roots },
+            // `web` never reaches here: the matrix refuses it (no Kimi cell exercises the web).
+            _ => new("kimi", grant, [], [], CwdKind.Scratch, [], flag),
+        };
         // QWEN-FILL-END s56-planner-kimi
     }
 
