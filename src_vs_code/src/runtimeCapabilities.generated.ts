@@ -359,14 +359,14 @@ export const RUNTIME_CAPABILITIES: readonly RuntimeCapabilityRow[] = [
     measuredWith: {
       cli: 'kimi',
       version: '2.1.1',
-      date: '2026-10-16',
+      date: '2026-10-13',
       resultRef: "research/RESULTS_kimi_confinement.md §9 M-K6 — `Grep` and `Glob` took an OUTSIDE file's marker by absolute path 3 of 3, whatever the working folder; §6 M-K3 and §7 M-K4 — every write refused",
       cells: [
         'M-K6',
         'M-K3',
         'M-K4',
       ],
-      note: "mechanism: the shim bounds `Read` and refuses every write and shell command, but `Grep` and `Glob` read the disk directly, so an empty working folder confines nothing (D15) — the row says Can read this machine, as codex's none does. `WebSearch` and `FetchURL` are announced and no cell exercised them (RESULTS §14, §25): M-K17 decides whether this sentence stays.",
+      note: "mechanism: the shim bounds `Read` and refuses every write and shell command, but `Grep` and `Glob` read the disk directly, so an empty working folder confines nothing (D15) — the row says Can read this machine, as codex's none does. `WebSearch` and `FetchURL` are announced and no cell exercised them (RESULTS §7, §14): M-K17 decides whether this sentence stays.",
     },
   },
   {
@@ -376,7 +376,7 @@ export const RUNTIME_CAPABILITIES: readonly RuntimeCapabilityRow[] = [
     measuredWith: {
       cli: 'kimi',
       version: '2.1.1',
-      date: '2026-10-16',
+      date: '2026-10-13',
       resultRef: "research/RESULTS_kimi_confinement.md §9 M-K6 — `Read` bounded by the shim, `Grep` and `Glob` read the disk directly 3 of 3; §12 M-K9 and §21 M-K9 (e) — a branch's AGENTS.md, skills, sub-agents and .mcp.json load from the working folder, so the roots are COPIED, never granted; §6 M-K3 and §7 M-K4 — every write refused",
       cells: [
         'M-K6',
@@ -385,7 +385,7 @@ export const RUNTIME_CAPABILITIES: readonly RuntimeCapabilityRow[] = [
         'M-K9',
         'M-K9 (e)',
       ],
-      note: 'mechanism: the working folder is a coai-made sanitised SNAPSHOT of the granted roots (D6) and the shim bounds `Read` to it, but `Grep` and `Glob` read the disk directly (D15) — allowed, flagged unconfined. `WebSearch` and `FetchURL` are announced and no cell exercised them (RESULTS §14, §25): M-K17 decides whether this sentence stays.',
+      note: 'mechanism: the working folder is a coai-made sanitised SNAPSHOT of the granted roots (D6) and the shim bounds `Read` to it, but `Grep` and `Glob` read the disk directly (D15) — allowed, flagged unconfined. `WebSearch` and `FetchURL` are announced and no cell exercised them (RESULTS §7, §14): M-K17 decides whether this sentence stays.',
     },
   },
   {
@@ -395,8 +395,8 @@ export const RUNTIME_CAPABILITIES: readonly RuntimeCapabilityRow[] = [
     measuredWith: {
       cli: 'kimi',
       version: '2.1.1',
-      date: '2026-10-16',
-      resultRef: 'research/RESULTS_kimi_confinement.md §14 and §25 — `WebSearch` and `FetchURL` are announced and no cell exercises them; M-K17 finds only whether they ask, so it does not admit `web`',
+      date: '2026-10-13',
+      resultRef: 'research/RESULTS_kimi_confinement.md §7 and §14 — `WebSearch` and `FetchURL` are announced and no cell exercises them; M-K17 finds only whether they ask, so it does not admit `web`',
       cells: [],
       note: 'not measured: no Kimi cell fetches or searches the web',
     },

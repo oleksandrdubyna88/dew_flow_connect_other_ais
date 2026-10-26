@@ -1092,9 +1092,10 @@ Numbered from 47. The SKELETON step only: the data and the signatures are final,
 production methods are placeholders that throw (fill regions), and no test has been run red or green yet.
 
 47. **The data is written and final:** the three `kimi` rows (`shared/runtime-capabilities.json`; `none` and `disk` `unconfined`, `web` `unmeasured`,
-    version 2.1.1, `date` 2026-10-16 — the day of the plan's evidence), the three vectors, `RuntimeCapabilities.Runtimes` and the regenerated
-    `runtimeCapabilities.generated.ts` (`--check` is green). The rows cite RESULTS §9 (M-K6), §6 (M-K3), §7 (M-K4), §12 (M-K9), §21 (M-K9 (e)), §14 and
-    §25 (the web). The plan text above says "(RESULTS §7)" for the announced web tools; §7 is M-K4, so the rows do not repeat it.
+    version 2.1.1, `date` 2026-10-13 — the day the M-K cells they cite were measured, RESULTS §3 and §16; review R1 corrected it from 2026-10-16, the M-K16 day), the three vectors, `RuntimeCapabilities.Runtimes` and the regenerated
+    `runtimeCapabilities.generated.ts` (`--check` is green). The rows cite RESULTS §9 (M-K6), §6 (M-K3), §7 (M-K4), §12 (M-K9), §21 (M-K9 (e)), §7 and
+    §14 (the web). The plan text above says "(RESULTS §7)" for the announced web tools, and §7 is right: it lists them as announced and §14 names what is
+    not measured. The first fill cited §25, which does not name them (review R2).
 48. **S5.6.2 has no new test.** It is the existing `TheVectorsActuallyLoaded_AndCoverEveryPairOfTheTable`; the new vectors are its data. The existing
     TS list assertion over `RUNTIMES` gained `'kimi'` (the plan's `:143`).
 49. **Where the 12 scenarios live.** S5.5.1–S5.5.4 → `AKimiConsultantCheckTests` (new); S5.6.1, S5.6.4 → `CapabilityMatrixTests`; S5.6.3, S5.6.5, S5.6.6 →
@@ -1115,7 +1116,7 @@ Numbered from 52. The 12 scenarios and the two production regions are filled and
     **The `cancelled` arm throws:** a cancelled `ask_consultants` raises `OperationCanceledException` (the Vibe twin's test says the same), it does not answer.
 54. **"The row's scratch is gone" is asserted through the copy** (the shim's `--cwd`, which sits in the row's scratch) and "`coai-vh\<8>` is gone" through the
     folder `coai-vh` being EMPTY, as the Vibe twin does: the folder `coai-vh` itself stays, its entries go.
-55. **`CapabilityMatrixTests.Records` gained the Kimi record** (`RESULTS_kimi_confinement.md`, `2026-10-16`, cell prefix `M-K`): the existing test
+55. **`CapabilityMatrixTests.Records` gained the Kimi record** (`RESULTS_kimi_confinement.md`, `2026-10-13`, cell prefix `M-K`): the existing test
     `EveryRow_CitesTheRecord_AndACellOrSaysWhyThereIsNone` keeps a list of the records a row may cite, and the three new rows turned it red.
 56. **S5.5.1–S5.5.4 and the `cancelled` arm of S5.6.7 are green against the code before this story** (E5.3 g and E5.4 are in), so their teeth are a temporary break
     of the deciding line, each run red and reverted: the check's `Home.Dispose()`, the row's `Release`, and `ConsultCheckScratch.Delete` without `KimiHomesDisposed`.

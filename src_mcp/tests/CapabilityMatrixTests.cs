@@ -159,7 +159,7 @@ public sealed class CapabilityMatrixTests
     [
         ("RESULTS_question_consultant_capabilities.md", "2026-10-01", "01a0f8c7-18e4-"),
         ("RESULTS_vibe_confinement.md", "2026-10-12", "M-V"),
-        ("RESULTS_kimi_confinement.md", "2026-10-16", "M-K"),
+        ("RESULTS_kimi_confinement.md", "2026-10-13", "M-K"),
     ];
 
     [Fact]
