@@ -143,6 +143,33 @@ public sealed class ConfinementPlannerTests
         ConfinementPlanner.VibeReadOnly.Should().Equal(disk.Flags, "the reviewer and the planner spell D2 once");
     }
 
+    /// <summary>
+    /// S5.6.3 of todo/PLAN_vibe_and_kimi_runtimes_E5.md: Kimi's arm — an empty folder for none, the copy of the roots for disk, no
+    /// flags either time (the shim confines it, D15), and web refused by the matrix naming the Kimi record.
+    /// </summary>
+    [Fact]
+    public void ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb()
+    {
+        var none = Plan("kimi", CapabilityGrant.None);
+        none.Cwd.Should().Be(CwdKind.Scratch, "a none row stands in an empty folder of its own");
+        none.Flags.Should().BeEmpty("Kimi's confinement is the shim's, never its argv (D15)");
+        none.Leading.Should().BeEmpty();
+        none.AddDirs.Should().BeEmpty();
+        none.SnapshotSources.Should().BeEmpty();
+        none.Flag.Should().Be(AdmissionFlag.Unconfined, "Grep and Glob read the disk whatever the cwd (M-K6)");
+
+        var disk = Plan("kimi", CapabilityGrant.Disk(RootA, RootB));
+        disk.Cwd.Should().Be(CwdKind.Snapshot, "Read is bounded to the working folder, so the roots are copied into it (D6)");
+        disk.SnapshotSources.Should().Equal([RootA, RootB], "the roots it reads through their copies");
+        disk.Flags.Should().BeEmpty();
+        disk.Leading.Should().BeEmpty();
+        disk.AddDirs.Should().BeEmpty("a root is never named to Kimi");
+        disk.Flag.Should().Be(AdmissionFlag.Unconfined);
+
+        ConfinementPlanner.Plan("kimi", CapabilityGrant.Web).Should().BeOfType<Confinement.Refused>()
+            .Which.Reason.Should().Contain("not been measured").And.Contain("RESULTS_kimi_confinement.md");
+    }
+
     // ---------- refusals ----------
 
     [Theory]
@@ -164,7 +191,7 @@ public sealed class ConfinementPlannerTests
     public void AnUnknownRuntime_IsRefused_NamingTheOnesItKnows()
     {
         ConfinementPlanner.Plan("gemini", CapabilityGrant.None).Should().BeOfType<Confinement.Refused>()
-            .Which.Reason.Should().Contain("gemini").And.Contain("claude, codex, antigravity, local, api, vibe");
+            .Which.Reason.Should().Contain("gemini").And.Contain("claude, codex, antigravity, local, api, vibe, kimi");
     }
 
     [Fact]
@@ -338,6 +365,58 @@ public sealed class ConfinementPlannerTests
                 "the row's home lives in the row's own folder, gone with it");
             Runners.Vibe.VibeLaunch.EnvironmentRefusal(request).Should().BeEmpty("the one launch control admits it (D17)");
         }
+    }
+
+    /// <summary>A fake person's places for a home — building reads nothing of this machine; the request names the places, it does not open them.</summary>
+    private static Runners.Kimi.KimiPlaces KimiPlacesAt(string home) =>
+        Runners.Kimi.KimiPlaces.ForShim(home, Path.Combine(RowFolder, "persons-bin"));
+
+    private static Runners.Kimi.KimiConsultant KimiQuestionConsultant() =>
+        new(new Runners.Kimi.KimiRuntime("kimi", Runners.Platform.HostKind.Windows, new Runners.Kimi.KimiSeams(KimiPlacesAt, () => ("coai-mcp", []))));
+
+    private static string After(IReadOnlyList<string> args, string flag) => args[args.ToList().IndexOf(flag) + 1];
+
+    /// <summary>
+    /// S5.6.5: a Kimi question row is the shim's request — a none row in its EMPTY scratch, a disk row in the copy of its roots, never a
+    /// root — on the row's own home, one shot, through the question row's minimal environment.
+    /// </summary>
+    [Fact]
+    public void AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome()
+    {
+        var none = KimiQuestionConsultant().Build(Planned("kimi", CapabilityGrant.None));
+        none.Request.WorkingDirectory.Should().Be(Scratch, "a none row stands in an empty folder of its own");
+        none.Request.Arguments.Should().ContainInConsecutiveOrder("--cwd", Scratch);
+
+        var disk = KimiQuestionConsultant().Build(Planned("kimi", CapabilityGrant.Disk(RootA, RootB)));
+        disk.Request.WorkingDirectory.Should().Be(RowTree, "Read is bounded to its cwd — the copy of the roots (D6)");
+        disk.Request.Arguments.Should().ContainInConsecutiveOrder("--cwd", RowTree);
+
+        foreach (var invocation in (Runners.Reviewers.ReviewerInvocation[])[none, disk])
+        {
+            var request = invocation.Request;
+            var home = After(request.Arguments, Runners.Acp.AcpWords.HomeFlag);
+            home.Should().StartWith(RowFolder + Path.DirectorySeparatorChar, "the row's home lives in the row's own folder, gone with it");
+            Path.GetFileName(home).Should().MatchRegex("^kh-[0-9a-f]{10}$");
+            request.Arguments.Should().NotContain(Runners.Acp.AcpWords.SessionFlag, "a question row is one shot");
+            request.Arguments.Should().NotContain(a => a.Contains(RootA) || a.Contains(RootB), "the roots are read through their copy, never named");
+            request.InheritsEnvironment.Should().BeFalse();
+            request.Passthrough.Should().BeEquivalentTo(Runners.Processes.ProcessEnvironment.Minimal, "the question row's road (ForQuestion)");
+            Runners.Kimi.KimiEnvironment.Refusal(request, KimiPlacesAt(home)).Should().BeEmpty("the one launch control admits it");
+            invocation.Role.Should().Be(ConsultantRoles.Question);
+        }
+    }
+
+    /// <summary>S5.6.6: a plan with flags was not made for kimi — refused by name, never launched with the flags dropped.</summary>
+    [Fact]
+    public void APlanWithFlags_IsRefusedForKimi()
+    {
+        var launch = Planned("kimi", CapabilityGrant.None) with
+        {
+            Confinement = new LaunchConfinement.Planned(
+                new Confinement.Planned("kimi", CapabilityGrant.None, [], ["--yolo"], CwdKind.Scratch, [], AdmissionFlag.Unconfined)),
+        };
+
+        FluentActions.Invoking(() => KimiQuestionConsultant().Build(launch)).Should().Throw<ArgumentException>().WithMessage("*shim*");
     }
 
     /// <summary>No Vibe launch carries <c>--add-dir</c>, whatever the grant (D3: <c>--add-dir</c> trusts its folder).</summary>
