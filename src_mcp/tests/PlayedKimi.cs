@@ -39,6 +39,9 @@ internal sealed class PlayedKimi(IProcessLauncher inner) : IProcessLauncher
     /// <summary>What the n-th shim launch (0-based) prints — by default an answered turn of the default totals.</summary>
     public Func<int, ProcessRequest, ProcessResult> Turn { get; init; } = static (_, request) => Answered(SessionOf(request), 19973, 31);
 
+    /// <summary>What <c>kimi --version</c> prints — by default a measured version; a test's seam for a probe that fails after the launch control made the home.</summary>
+    public Func<ProcessRequest, ProcessResult> Version { get; init; } = static _ => new ProcessResult(0, "kimi 2.1.1\r\n", string.Empty, TimedOut: false);
+
     /// <summary>Runs while a shim is "alive", after its start is stamped — a test's seam for what holds at that moment.</summary>
     public Func<ProcessRequest, CancellationToken, Task> During { get; init; } = static (_, _) => Task.CompletedTask;
 
@@ -48,7 +51,7 @@ internal sealed class PlayedKimi(IProcessLauncher inner) : IProcessLauncher
         {
             Versions.Enqueue(request);
 
-            return new ProcessResult(0, "kimi 2.1.1\r\n", string.Empty, TimedOut: false);
+            return Version(request);
         }
 
         return string.Equals(request.Executable, Shim, StringComparison.Ordinal) ? await ShimAsync(request, ct) : await inner.RunAsync(request, ct);

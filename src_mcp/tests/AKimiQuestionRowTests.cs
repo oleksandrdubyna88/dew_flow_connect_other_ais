@@ -120,16 +120,24 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
         _person.Hash().Should().Equal(personBefore, "the person's folder: the same names, bytes and read-only bits as before");
     }
 
-    private static void ThePromptNamesTheCopy(ProcessRequest shim, string root)
+    private static void ThePromptNamesTheCopy(ProcessRequest shim, string root, IReadOnlyList<string> copied)
     {
-        shim.StdIn.Should().Contain(shim.WorkingDirectory, "the prompt names the copy Kimi reads");
+        var copies = copied.Select(name => Path.Combine(shim.WorkingDirectory, name.Split('/')[0])).Distinct().ToList();
+        copies.Should().ContainSingle("one copy for the one granted root");
+        copied.Should().Contain(name => name.EndsWith("/Mailer.cs", StringComparison.Ordinal), "the granted root's files are in its copy");
+        copied.Should().NotContain(name => name.EndsWith("/AGENTS.md", StringComparison.OrdinalIgnoreCase), "the copy leaves the root's AGENTS.md out (M-K9, D6)");
+        shim.StdIn.Should().Contain(copies[0], "the prompt names the copy Kimi reads");
         shim.StdIn.Should().NotContain(root, "never the original root");
         Directory.Exists(Path.GetDirectoryName(shim.WorkingDirectory)).Should().BeFalse("the row's scratch and its copies are gone once it ended");
     }
 
+    private static List<string> FilesUnder(string folder) =>
+        [.. Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories).Select(file => Path.GetRelativePath(folder, file).Replace('\\', '/'))];
+
     [Theory]
     [InlineData("answered")]
     [InlineData("refused before the launch")]
+    [InlineData("refused by the launch control")]
     [InlineData("cancelled mid-turn")]
     public async Task AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind(string ending)
     {
@@ -137,11 +145,23 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
         var granted = Path.Combine(Repo, "src");
         var plain = Directory.CreateDirectory(_dir.At("plain")).FullName;
         using var caller = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        List<string> copied = [];
+        var homeWhenProbed = false;
         var kimi = new PlayedKimi(_launcher)
         {
             Turn = (_, request) => PlayedKimi.Answered(PlayedKimi.Minted, 1200, 34, Advice),
-            During = async (_, ct) =>
+            Version = _ =>
             {
+                // The launch control makes the one-shot home before it asks the version, so a failed probe is a refusal AFTER the home exists.
+                homeWhenProbed = Directory.Exists(OneShotFolder) && Directory.EnumerateFileSystemEntries(OneShotFolder).Any();
+
+                return ending == "refused by the launch control"
+                    ? new ProcessResult(1, string.Empty, "kimi: the played version probe failed", TimedOut: false)
+                    : new ProcessResult(0, "kimi 2.1.1\r\n", string.Empty, TimedOut: false);
+            },
+            During = async (request, ct) =>
+            {
+                copied = FilesUnder(request.WorkingDirectory);
                 if (ending == "cancelled mid-turn")
                 {
                     await caller.CancelAsync();
@@ -161,17 +181,30 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
         else
         {
             var row = TheRow(await AskAsync(service, caller.Token));
-            row.GetProperty("status").GetString().Should().Be(ending == "answered" ? RowOutcomes.Answered : RowOutcomes.Refused, row.ToString());
+            // A copy refused by the row is `refused`; a launch the control refused after the home was made is `failed`, "not started".
+            row.GetProperty("status").GetString().Should().Be(
+                ending switch { "answered" => RowOutcomes.Answered, "refused by the launch control" => RowOutcomes.Failed, _ => RowOutcomes.Refused }, row.ToString());
+            if (ending == "refused by the launch control")
+            {
+                row.GetProperty("reason").GetString().Should().Contain("answered no version", row.ToString());
+            }
         }
 
         TheRowLeftNothingBehind(before);
-        if (ending == "refused before the launch")
+        switch (ending)
         {
-            kimi.Shims.Should().BeEmpty("a row whose copy was refused never reaches the shim");
-        }
-        else
-        {
-            ThePromptNamesTheCopy(kimi.Shims.Should().ContainSingle().Subject.Request, granted);
+            case "refused before the launch":
+                kimi.Shims.Should().BeEmpty("a row whose copy was refused never reaches the shim");
+                kimi.Versions.Should().BeEmpty("and never reaches the launch control either, so no home was made");
+                break;
+            case "refused by the launch control":
+                kimi.Versions.Should().ContainSingle("the control asked the version once, and that probe failed");
+                homeWhenProbed.Should().BeTrue("the one-shot home was made before the probe, so this refusal comes after it");
+                kimi.Shims.Should().BeEmpty("a refused launch never reaches the shim");
+                break;
+            default:
+                ThePromptNamesTheCopy(kimi.Shims.Should().ContainSingle().Subject.Request, granted, copied);
+                break;
         }
     }
 }
