@@ -59,10 +59,10 @@ public sealed class KimiConsultant(KimiRuntime inner, string vendor = "kimi") : 
     internal static void MustCarryNoFlags(ConsultantLaunch launch)
     {
         // QWEN-FILL-BEGIN s566-guard prod
-        // When `launch.Confinement is LaunchConfinement.Planned planned` and `planned.Plan` has ANY entry in `Leading` or in `Flags` (both IReadOnlyList<string> on Confinement.Planned),
-        // throw `new ArgumentException("a Kimi row's confinement is the shim's; a plan with flags is not one coai made for kimi", nameof(launch))` — the message must contain "shim".
-        // Anything else (a conversation's launch, a plan with no flag): return. Then call it as the SECOND line of Build, right after `ConsultantLaunches.MustBeLaunchable(launch);`.
-        throw new NotImplementedException("s566-guard");
+        if (launch.Confinement is LaunchConfinement.Planned { Plan: var plan } && (plan.Leading.Count > 0 || plan.Flags.Count > 0))
+        {
+            throw new ArgumentException("a Kimi row's confinement is the shim's; a plan with flags is not one coai made for kimi", nameof(launch));
+        }
         // QWEN-FILL-END s566-guard
     }
 
