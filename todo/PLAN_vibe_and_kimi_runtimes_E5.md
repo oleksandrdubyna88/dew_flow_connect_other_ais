@@ -1086,7 +1086,7 @@ Numbered from 40, apart from the lists above, so the stories built in parallel d
     the question-consultant article says only that a Kimi row's launches wait for one another and for a Kimi review on the same sign-in.
 46. **`CONSULTANT_SINCE` gates a note, so `consultantsWire.ts` is unchanged.** S5.7.3 was green before any code, as the row said.
 
-### E5.5–E5.6 as built (2026-10-26)
+### E5.5–E5.6 as built (Haiku 5.5 and Sonnet 5.5, not Opus — a deviation from the plan gate's command, 2026-10-26)
 
 Numbered from 47, apart from the lists above, so the stories built in parallel do not collide on a number.
 
@@ -1098,7 +1098,7 @@ Numbered from 47, apart from the lists above, so the stories built in parallel d
 49. **The flagged caveat both halves show for `unconfined` still says "a shell is always there"**, written for codex. For Kimi the reason is Grep and
     Glob (M-K6), and the row's `note` says it (`shared/runtime-capabilities.json:340-388`). The shared caveat sentence is unchanged
     (`shared/runtime-capabilities.json:11`, `src_mcp/core/QuestionConsult/CapabilityMatrix.cs:33`, `src_vs_code/src/capabilityAdmission.ts:60`) —
-    an open item for the review.
+    an open item for the review. **Closed by the review (53):** the sentence is now "unconfined: can read this machine, and no flag removes it" in both halves.
 50. **S5.6.7's "refused before the launch" arm is a person with no credentials folder** (the launch control refuses, D19:
     `src_mcp/runners/Kimi/KimiLaunch.cs:194`). The test removes that folder before the snapshot, not a file inside it
     (`src_mcp/tests/AKimiQuestionRowTests.cs`).
@@ -1107,6 +1107,38 @@ Numbered from 47, apart from the lists above, so the stories built in parallel d
 52. **`CapabilityMatrixTests` keeps a list of the records a row may cite, and it gained the Kimi record.** `EveryRow_CitesTheRecord_AndACellOrSaysWhyThereIsNone`
     failed once the kimi rows cited `RESULTS_kimi_confinement.md`, so `Records` has the line `("RESULTS_kimi_confinement.md", "2026-10-13", "M-K")`
     (`src_mcp/tests/CapabilityMatrixTests.cs:158-164`). Test data only; no production code changed for it.
+
+**Who built it.** The commits of E5.5–E5.6 carry Haiku 5.5 (`86531ca2`, `112b5ecd`, `f2332902`, `dac76033`, `617326f4`, `f2913e9f`) and Sonnet 5.5 (`e6f68b17`,
+`97b571a9`) as their authors. §0 and §0.2 give both stories to Opus. This is a deviation from the plan gate's command, recorded here; whether Opus rebuilds or
+confirms the stories is the operator's decision and is not made by this document.
+
+**The review round (2026-10-26, fixed on Sonnet 5.5):**
+
+53. **The unconfined caveat names no shell.** It is shared by every unconfined runtime, and Kimi's shim refuses every shell (M-K4); the reach is Grep and Glob
+    (M-K6). `CapabilityMatrixTests.TheUnconfinedCaveat_NamesNoShell_BecauseKimiHasNone` and a line in `capabilityAdmission.test.ts` hold it on each side.
+    Deviation 49 is closed by this.
+54. **`AKimiConsultantCheckTests` folders are `TempDir`s named `testsToDelete-kimi-check-data-` and `testsToDelete-kimi-check-temp-`**, so a crashed run leaves
+    a Kimi home junction where the sweep finds it (test-leftovers.md).
+55. **S5.6.7's refused arm asserts the reason** — the launch control's "not signed in to Kimi Code … run `kimi login`" — so a failed snapshot cannot pass it.
+    It does not scan for a left-over `coai-question-*` folder: the temp root is shared by every test in the process, so such a scan would flake. `finally`
+    in `QuestionRowLaunch.RunAsync` removes the scratch; the answered and cancelled arms observe it through the row's copy.
+    Seen red: *Expected _reason "not started: not signed in to Kimi Code — …/.kimi-code has no credentials folder; run `kimi login` …" to contain
+    ".../.kimi-code/credentials"* — the first draft of the assertion named the wrong thing, which showed the reason is read.
+56. **S5.6.6 is a Theory over `Flags` and over `Leading`**, since deviation 47 says both halves of `MustCarryNoFlags` refuse.
+57. **`ConfinementPlanner`'s `SandboxVocabulary` comment** no longer says "six runtimes"; **`research/module_core.md`** and **`research/module_tests.md`** hold
+    the kimi arm and the two scenario classes, with what they do not cover. `dotnet format` is clean for the files of this work.
+58. **Teeth runs of the review round (each break reverted by `git checkout`, then rebuilt and green).**
+    - `MustCarryNoFlags` without its `Leading` half → *`APlanWithFlags_IsRefusedForKimi(flags: [], leading: ["--search"])`: Expected a
+      <System.ArgumentException> to be thrown, but no exception was thrown.* (the old single-case test stayed green under this break).
+    - The kimi disk plan given `Flags ["--yolo"]` → *`ThePlannerArm_IsACopyForDisk_…`: Expected disk.Flags to be empty, but found at least one item
+      {"--yolo"}*; `NoAdapter_SendsASandboxFlag_ThePlanDidNotGiveIt` red; S5.6.7 red on all three endings — answered *Expected …"status" to be "answered"*,
+      cancelled *Expected a <System.OperationCanceledException> to be thrown*, refused *Expected _reason "a Kimi row's confinement is the shim's; a plan with
+      flags is not one coai made for kimi …" to contain "not signed in to Kimi Code"* (this last is what the new reason assertion adds: a refusal for the
+      wrong cause no longer passes).
+    - `ConsultantCheck`'s `finally` without `held.Home.Dispose()` → S5.5.2 (both arms) and S5.5.3 red: *Expected (!Directory.Exists(OneShotRoot) ||
+      !Directory.EnumerateFileSystemEntries(OneShotRoot).Any()) to be True because coai-vh/<8> goes when the check ends, but found False.*
+    - **Still owed:** a bare delete in `OneShotHome` instead of junction-first (S5.5.2's recorder), `MustCarryNoFlags` removed whole, and the kimi rows removed
+      from the seed (S5.6.1/S5.6.2/S5.6.4). The red messages of deviations 47–52 for these are not recorded.
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 
