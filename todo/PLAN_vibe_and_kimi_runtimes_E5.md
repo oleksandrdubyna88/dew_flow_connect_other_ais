@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 not started.** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 implemented 2026-10-26; deviations 47–57, *E5.5–E5.6 as built*, not yet reviewed.** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -1085,6 +1085,24 @@ Numbered from 40, apart from the lists above, so the stories built in parallel d
 45. **Decision (e)'s sentence lives in *The consultant* article** (*What can go wrong*, five languages), because it is about a `consult` turn;
     the question-consultant article says only that a Kimi row's launches wait for one another and for a Kimi review on the same sign-in.
 46. **`CONSULTANT_SINCE` gates a note, so `consultantsWire.ts` is unchanged.** S5.7.3 was green before any code, as the row said.
+
+### E5.5–E5.6 as built (Haiku, 2026-10-26)
+
+Numbered from 47, as the E5.7 list is. The live checks (J2, RESULTS §31) are NOT done: no live or paid Kimi run was made for these stories.
+
+47. **E5.5 is tests only (`AKimiConsultantCheckTests`).** Decision 1 held: no branch in `ConsultantCheck`, and no production file changed.
+48. **The check's and the question row's scenarios also record `KimiHome.AfterUnlink` beside `GitScratch.AfterUnlink`.**
+49. **`KimiConsultant` refuses a plan whose `Leading` OR `Flags` is non-empty.** Decision 3 named only flags; `Leading` is a flag list too (`MustCarryNoFlags`).
+50. **S5.6.5 was NOT green before the planner arm, contrary to the row.** E5.4 already read the plan's cwd, but the disk row's `WorkingDirectory` was the scratch folder, not the copy, so the test failed there until `"kimi" => Kimi(…)` was added. It pins the shape from then on.
+51. **S5.5.1–S5.5.4 were green at first; no red was seen.** The mutation check (`held.Home.Dispose()` removed from `ConsultantCheck.TurnAsync`) turned S5.5.1, S5.5.2 (both arms) and S5.5.3 red. S5.5.4 stayed green, because its home is in the scratch folder that is removed with it.
+52. **S5.6.5 names the flag as `Runners.Acp.AcpWords.SessionFlag`.** The bare name did not compile in the test namespace.
+53. **`CapabilityMatrixTests` gains a kimi record.** Its `Records` table had none for kimi, so `EveryRow_CitesTheRecord_AndACellOrSaysWhyThereIsNone` failed. `("RESULTS_kimi_confinement.md", "2026-10-13", "M-K")` is added and the doc comment extended.
+54. **Two E5.6 red messages differ from the row's quoted text.** S5.6.1 failed with `NullReferenceException` at the `.Of(...)!` line, not FluentAssertions' "not to be <null>" (the `!` skips the null check). S5.6.4 failed with "Expected type … Admitted, but found … Refused", not the quoted refusal. Both failed for the row's reason: no kimi row.
+55. **`KimiHome.AfterUnlink` is not "never invoked" (S5.5.2, S5.6.7).** It fires on every normal junction-first unlink of the home's `credentials` junction, which is the behaviour the row asserts. So the assertion is exactly one link ending `home/credentials` for `answered` and `cancelled`, and empty for `refused` (no home was made). `GitScratch.AfterUnlink` is empty on every ending. The first `BeEmpty` assertion was wrong and was changed.
+56. **S5.6.7's `refused` arm does not change the sign-in.** Changing the person's sign-in before the ask did not refuse: a one-shot question row rebuilds its home from the current config, so the row was answered. The arm uses a root outside any Git work tree (`PlainFolder()`), refused before any launch with `not inside a Git work tree`, the same shape as Vibe's `ARowRefusedAtItsCopy_GivesItsOneShotFolderBack`. The launch control is therefore not exercised by this arm; a refusal there needs a seam that does not exist.
+57. **S5.6.7, smaller points.** `CallingAs` is not used, because `ask_consultants` takes no caller. The scratch check runs only when a shim launched. The copies are read in the `Turn` callback, because they exist only while the row runs.
+
+**Open, not explained.** Two failures outside the known list appeared in the t1–t3 runs and were not investigated: `TheRoundsNumstatsAreCountedTests.AnUnknownCommit_IsGitFailed_NeverAThrow` (t1 and t2; passes alone; timing-sensitive; not checked on the base commit) and `AReviewerThatAsksForSourceIsAskedAgainTests` (2 cases, t3; passes alone). The t4 full run showed only the two known failures (`KimiHomeTests.AHomeWhoseDataPathPasses260_…`, `KimiRuntimeTests.ALaunchThatNamesItsHome_…`).
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 
