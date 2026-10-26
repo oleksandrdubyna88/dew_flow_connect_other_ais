@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 implemented 2026-10-26 (Opus): the Kimi check proved in a copy on a one-shot home; three capability rows, the planner arm, the one-shot row; deviations 31–43, *E5.5–E5.6 as built*.** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 implemented 2026-10-26 (Opus): the Kimi check proved in a copy on a one-shot home; three capability rows, the planner arm, the one-shot row; deviations 31–45, *E5.5–E5.6 as built*.** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -1117,7 +1117,17 @@ Numbered from 31, apart from the lists above, so the stories built in parallel d
 42. **The test host here has no `.exe`.** On this Linux host the test host is `./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests`; the commands
     in `common.md` name the `.exe`, which does not exist here.
 43. **The S5.6.7 theory keeps each ending in a helper,** so every method stays at complexity 4, and its homes root is a disposed field
-    (`_homes`); the spec does not list that field.
+    (`_homes`); the spec does not list that field. Its cancelled ending keeps the asking task in a named local, `asking`, because a lambda cannot
+    take `.Should()`.
+44. **Two more tests went red with the Kimi rows, and `shared/runtime-capabilities.json` splits one `why` string.** The refusal text of an
+    unknown runtime now lists `kimi`, so `AnUnknownRuntimeOrCapability_IsRefused_NamingWhatIsKnown` (`CapabilityMatrixTests.cs:273`) and the
+    TS regex at `capabilityAdmission.test.ts:166` changed with the list; the spec's red list did not name them. `ConfinementPlannerTests.cs:167`
+    stayed green (its substring still occurs), and t2 changed its list string for exactness. The "`cells` may be empty…" sentence is now its own
+    `why` string beside the new Kimi sentence.
+45. **S5.5's fixture makes small choices the spec leaves open.** `_data` is created in the constructor beside `_temp`; `Scopes` is a private
+    nested class copied from `AKimiConsultationScenarioTests`; `Marked()` factors out the `PlayedKimi` expression used in three cases; `Check`
+    returns `(int Code, JsonElement Said, string Err)` and parses stdout as `ConsultantCheckTests.Check` does; no `[Collection("fakecli-env")]`,
+    because no case sets a fake-CLI variable.
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 
