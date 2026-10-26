@@ -1,7 +1,9 @@
 using System.Text.Json;
+using CoaiMcp.Runners.Consultation;
 using CoaiMcp.Runners.Files;
 using CoaiMcp.Runners.Kimi;
 using CoaiMcp.Runners.Processes;
+using CoaiMcp.Runners.Vibe;
 using CoaiMcp.Server;
 using FluentAssertions;
 using Xunit;
@@ -32,7 +34,6 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     /// <summary>The settings of a check of a Kimi consultant row <c>my-kimi</c> for the caller <c>claude</c>, with <paramref name="homesRoot"/> as the homes root (empty: a hand-built one).</summary>
     private PanelSettings KimiSettings(string homesRoot)
     {
-        // QWEN-FILL-BEGIN s55-settings test
         return new PanelSettings
         {
             Providers = [],
@@ -45,7 +46,6 @@ public sealed class AKimiConsultantCheckTests : IDisposable
                 [CallerIdentity.Claude] = new("my-kimi", Runtime: "kimi"),
             },
         };
-        // QWEN-FILL-END s55-settings
     }
 
     /// <summary>One <c>--check-consultant --caller claude</c> in process: the exit code and the JSON it said.</summary>
@@ -60,7 +60,6 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     [Fact]
     public async Task AKimiCheck_RunsInACopy_OnAOneShotHome()
     {
-        // QWEN-FILL-BEGIN s551-copy test
         using var person = new KimiFixture();
         using var stood = KimiScenarioScopes.StandIn(person);
         var played = new PlayedKimi(new ProcessLauncher())
@@ -88,7 +87,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
         shim.WorkingDirectory.Should().Be(cwdValue, "the shim's working directory is the same copy folder");
 
         var home = shim.Arguments[shim.Arguments.ToList().IndexOf("--home") + 1];
-        var oneShotRoot = Path.Combine(_homes.Path, CoaiMcp.Runners.Vibe.VibeHomes.OneShotFolder) + Path.DirectorySeparatorChar;
+        var oneShotRoot = Path.Combine(_homes.Path, VibeHomes.OneShotFolder) + Path.DirectorySeparatorChar;
         home.Should().StartWith(oneShotRoot, "the one-shot home lives under the short homes root");
         Path.GetFileName(Path.GetDirectoryName(home)!).Should().HaveLength(8, "the one-shot folder is named with 8 hex digits");
         Path.GetFileName(home).Should().StartWith("kh-", "the home is a Kimi home folder");
@@ -97,7 +96,6 @@ public sealed class AKimiConsultantCheckTests : IDisposable
 
         Directory.EnumerateDirectories(_temp.Path, "coai-check-*").Should().BeEmpty("the copy goes with the check's scratch");
         person.Hash().Should().Equal(before, "the person's folder: the same names, bytes and read-only bits as before");
-        // QWEN-FILL-END s551-copy
     }
 
     [Theory]
@@ -105,7 +103,6 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     [InlineData(true)]
     public async Task AfterTheCheck_TheHomeIsGone_JunctionFirst(bool theTurnFails)
     {
-        // QWEN-FILL-BEGIN s552-gone test
         using var person = new KimiFixture();
         using var stood = KimiScenarioScopes.StandIn(person);
         var before = person.Hash();
@@ -135,7 +132,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
 
             played.Shims.Should().ContainSingle("the shim was launched once, so the home was made");
 
-            var oneShot = Path.Combine(_homes, CoaiMcp.Runners.Vibe.VibeHomes.OneShotFolder);
+            var oneShot = Path.Combine(_homes, VibeHomes.OneShotFolder);
             if (Directory.Exists(oneShot))
                 Directory.EnumerateFileSystemEntries(oneShot).Should().BeEmpty("the home's folder goes when the check ends, whatever ended it");
 
@@ -146,13 +143,11 @@ public sealed class AKimiConsultantCheckTests : IDisposable
         {
             GitScratch.AfterUnlink = null;
         }
-        // QWEN-FILL-END s552-gone
     }
 
     [Fact]
     public async Task ACheckCancelledMidTurn_StillDisposesItsHome()
     {
-        // QWEN-FILL-BEGIN s553-cancel test
         using var person = new KimiFixture();
         using var stood = KimiScenarioScopes.StandIn(person);
         var before = person.Hash();
@@ -186,13 +181,11 @@ public sealed class AKimiConsultantCheckTests : IDisposable
         {
             GitScratch.AfterUnlink = null;
         }
-        // QWEN-FILL-END s553-cancel
     }
 
     [Fact]
     public async Task ARootlessCheck_KeepsTheHomeInItsScratch_AndDisposesItJunctionFirst()
     {
-        // QWEN-FILL-BEGIN s554-rootless test
         using var person = new KimiFixture();
         using var stood = KimiScenarioScopes.StandIn(person);
         var before = person.Hash();
@@ -232,6 +225,5 @@ public sealed class AKimiConsultantCheckTests : IDisposable
         {
             GitScratch.AfterUnlink = null;
         }
-        // QWEN-FILL-END s554-rootless
     }
 }

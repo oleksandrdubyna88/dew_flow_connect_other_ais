@@ -202,21 +202,20 @@ public sealed class CapabilityMatrixTests
     [Fact]
     public void KimiHasThreeRows_EachCitingItsCells()
     {
-        // QWEN-FILL-BEGIN s561-rows test
         var none = RuntimeCapabilities.Builtin.Of("kimi", Capability.None);
         var disk = RuntimeCapabilities.Builtin.Of("kimi", Capability.Disk);
         var web = RuntimeCapabilities.Builtin.Of("kimi", Capability.Web);
 
-        none.Should().NotBeNull("Expected RuntimeCapabilities.Builtin.Of(\"kimi\", Capability.None) not to be null.");
-        disk.Should().NotBeNull("Expected RuntimeCapabilities.Builtin.Of(\"kimi\", Capability.Disk) not to be null.");
-        web.Should().NotBeNull("Expected RuntimeCapabilities.Builtin.Of(\"kimi\", Capability.Web) not to be null.");
+        none.Should().NotBeNull("the table holds kimi × None");
+        disk.Should().NotBeNull("the table holds kimi × Disk");
+        web.Should().NotBeNull("the table holds kimi × Web");
 
         none!.Standing.Should().Be(CapabilityStanding.Unconfined, "kimi × none is measured as unconfined");
         none.MeasuredWith.Cells.Should().Contain("M-K6", "kimi × none rests on the Grep and Glob cell M-K6");
 
         disk!.Standing.Should().Be(CapabilityStanding.Unconfined, "kimi × disk is measured as unconfined");
         disk.MeasuredWith.Cells.Should().Contain("M-K6", "kimi × disk rests on the read cell M-K6");
-        disk.MeasuredWith.Cells.Should().Contain("M-K9", "kimi × disk rests on the write cell M-K9");
+        disk.MeasuredWith.Cells.Should().Contain("M-K9", "kimi × disk rests on M-K9, why the roots are copied and not granted");
 
         web!.Standing.Should().Be(CapabilityStanding.Unmeasured, "kimi × web has not been measured");
 
@@ -225,7 +224,6 @@ public sealed class CapabilityMatrixTests
             row!.MeasuredWith.Version.Should().Be("2.1.1", "the Kimi rows were measured with kimi 2.1.1");
             row.MeasuredWith.ResultRef.Should().Contain("RESULTS_kimi_confinement.md", "every Kimi row cites the Kimi probe record");
         }
-        // QWEN-FILL-END s561-rows
     }
 
     /// <summary>E5.6 (S5.6.2): the vectors decide every Kimi pair — the table's own coverage test (above) names a missing one; this one names it for Kimi.</summary>
@@ -242,7 +240,6 @@ public sealed class CapabilityMatrixTests
     [Fact]
     public void AdmissionFlagsBothRows()
     {
-        // QWEN-FILL-BEGIN s564-admit test
         foreach (var capability in (Capability[])[Capability.None, Capability.Disk])
         {
             var admitted = CapabilityMatrix.Admit("kimi", capability).Should().BeOfType<Admission.Admitted>(
@@ -250,7 +247,6 @@ public sealed class CapabilityMatrixTests
             admitted.Flag.Should().Be(AdmissionFlag.Unconfined, $"kimi × {capability}: Grep and Glob read the disk on their own (M-K6)");
             admitted.Standing.Should().Be(CapabilityStanding.Unconfined, $"kimi × {capability}: the row can read this machine (M-K6)");
         }
-        // QWEN-FILL-END s564-admit
     }
 
     /// <summary>D13's two refusals kept apart: the flags are what the data says, never what a runtime name suggests.</summary>

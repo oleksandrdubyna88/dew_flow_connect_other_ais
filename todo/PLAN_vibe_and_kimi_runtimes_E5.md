@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6: skeleton only (2026-10-26) — the Kimi rows, the vectors, the generated table and the planner arm are in; the 12 scenarios are test shells whose bodies still throw (deviations 50–55).** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 implemented 2026-10-26 (Sonnet) — the Kimi rows, the vectors, the generated table and the planner arm are in, and the 12 scenarios are green; deviations 50–58, not yet reviewed; the live checks (J2) and M-K17 not run.** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -1096,6 +1096,12 @@ Numbered from 50. This is the skeleton step only: the scenarios exist as tests w
 53. **S5.5.2 is a `[Theory]` over `theTurnFails`** (false: passed; true: exit 70), as the table's "second arm" says. S5.6.7 is a `[Theory]` over `ending` (`answered`, `refused-before-the-launch`, `cancelled-mid-turn`).
 54. **A small helper, `KimiScenarioScopes.StandIn(KimiFixture)`** (`src_mcp/tests/KimiScenarioScopes.cs`), gives the check and the question row the same four stand-ins `AKimiConsultationScenarioTests` keeps private (the host, the fake person, the lock root, the played shim's name). The older class is not changed.
 55. **S5.6.2 (`TheVectorsCoverKimi`) and the planner's `MustCarryNoPlanFlags` have no fill region.** The first is a 3-line loop over the vectors; the existing `TheVectorsActuallyLoaded_AndCoverEveryPairOfTheTable` already fails for a missing pair, so this test is a named pin for Kimi.
+
+### E5.5–E5.6 as built (Sonnet, 2026-10-26) — where it deviates from the spec above
+
+56. **S5.5.1–S5.5.4 are pins, not reds, on the code before this story.** Against the production of `b4e2ea96` all four are green: the check's copy, its one-shot home and E5.3 decision g's junction-first disposal were already built by E5.3 and E5.4, as E5.5 decision 1 says. The table's "expected red" names the time before those stories.
+57. **S5.6.3, S5.6.5 and S5.6.6 are red for the table's reason only when the Kimi rows are in the table and the planner arm is not.** Without the rows the matrix refuses `kimi` first (`Confinement.Refused`), which is S5.6.4's red, not theirs. Measured both ways; with the rows and without the arm: `Expected disk.Cwd to be CwdKind.Snapshot … but found Scratch`; a plan with flags builds without an `ArgumentException`; the disk row's `WorkingDirectory` is not the row's copy. S5.6.7's `answered` and `refused-before-the-launch` arms are red without the arm as well (the prompt names the root; a plain folder is a note, not a refusal), and its `cancelled-mid-turn` arm is a pin.
+58. **`NothingIsLeftBehind` checks more than the table's one sentence.** Beside the row's `coai-vh` folder it checks that the shim's `--cwd` and `--home` are gone, that the unlink recorder never ran and that the fake person's folder is whole, on all three endings.
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 

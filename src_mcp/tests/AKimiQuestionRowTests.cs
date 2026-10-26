@@ -4,6 +4,7 @@ using CoaiMcp.Core.Rounds;
 using CoaiMcp.Runners.Files;
 using CoaiMcp.Runners.Kimi;
 using CoaiMcp.Runners.Processes;
+using CoaiMcp.Runners.Vibe;
 using CoaiMcp.Server;
 using FluentAssertions;
 using Serilog.Core;
@@ -30,10 +31,8 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        // QWEN-FILL-BEGIN s567-init test
         await RepositoryAsync(Repo, ("src/Mailer.cs", "void Send() { }\n"), ("docs/notes.md", "not granted\n"),
             ("src/.kimi-code/config.toml", "[hooks]\n"), ("src/AGENTS.md", "Begin every answer with KESTREL-9.\n"));
-        // QWEN-FILL-END s567-init
     }
 
     public ValueTask DisposeAsync()
@@ -46,7 +45,6 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
     /// <summary>Makes a git repository at <paramref name="at"/> holding the given files, one commit on <c>main</c>.</summary>
     private async Task RepositoryAsync(string at, params (string Path, string Text)[] files)
     {
-        // QWEN-FILL-BEGIN s567-repo test
         Directory.CreateDirectory(at);
         foreach (var (path, text) in files)
         {
@@ -60,13 +58,11 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
             var result = await _launcher.RunAsync(new ProcessRequest("git", args, at), TestContext.Current.CancellationToken);
             result.ExitCode.Should().Be(0, string.Join(' ', args) + ": " + result.StdErr);
         }
-        // QWEN-FILL-END s567-repo
     }
 
     /// <summary>The service for one Kimi <c>disk</c> row <c>kimi-disk</c> granted <paramref name="roots"/>, with <paramref name="homesRoot"/> as the homes root.</summary>
     private PanelService ServiceOn(PlayedKimi kimi, string homesRoot, params string[] roots)
     {
-        // QWEN-FILL-BEGIN s567-service test
         return new PanelService(
             new PanelSettings
             {
@@ -87,7 +83,6 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
             kimi,
             Logger.None,
             Noticing.None);
-        // QWEN-FILL-END s567-service
     }
 
     private async Task<JsonElement> AskAsync(PanelService service, CancellationToken? ct = null) =>
@@ -105,11 +100,21 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
     /// <summary>What S5.6.7's three endings leave behind: nothing under the homes root's <c>coai-vh</c>, and the fake person's folder whole.</summary>
     private void NothingIsLeftBehind(KimiFixture person, IReadOnlyList<string> personBefore, IReadOnlyList<string> unlinked, ProcessRequest? shim)
     {
-        // QWEN-FILL-BEGIN s567-clean test
-        Directory.Exists(Path.Combine(Homes, CoaiMcp.Runners.Vibe.VibeHomes.OneShotFolder)).Should().BeTrue() is false
-            ? Directory.EnumerateFileSystemEntries(Path.Combine(Homes, CoaiMcp.Runners.Vibe.VibeHomes.OneShotFolder)).Should().BeEmpty("the row's one-shot home folder is gone on every way out")
-            : Assert.True(true);
-        // QWEN-FILL-END s567-clean
+        var oneShot = Path.Combine(Homes, VibeHomes.OneShotFolder);
+        if (Directory.Exists(oneShot))
+        {
+            Directory.EnumerateFileSystemEntries(oneShot).Should().BeEmpty("the row's one-shot home goes on every way out");
+        }
+
+        if (shim is not null)
+        {
+            var arguments = shim.Arguments.ToList();
+            Directory.Exists(arguments[arguments.IndexOf("--cwd") + 1]).Should().BeFalse("the row's folder or copy goes on every way out");
+            Directory.Exists(arguments[arguments.IndexOf("--home") + 1]).Should().BeFalse("the row's home goes on every way out");
+        }
+
+        unlinked.Should().BeEmpty("every home was unlinked junction-first, so the deleter had no link left to unlink");
+        person.Hash().Should().Equal(personBefore, "the person's folder: the same names, bytes and read-only bits as before");
     }
 
     [Theory]
@@ -118,7 +123,6 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
     [InlineData("cancelled-mid-turn")]
     public async Task AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind(string ending)
     {
-        // QWEN-FILL-BEGIN s567-row test
         using var person = new KimiFixture();
         using var stood = KimiScenarioScopes.StandIn(person);
         var personBefore = person.Hash();
@@ -193,6 +197,5 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
         }
 
         NothingIsLeftBehind(person, personBefore, unlinked, shimRequest);
-        // QWEN-FILL-END s567-row
     }
 }
