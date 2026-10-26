@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6: SKELETON written 2026-10-26 (rows, vectors, signatures, the 12 tests as placeholders — deviations 47–51), bodies not filled, nothing run.** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 implemented 2026-10-26 (Sonnet): the 12 scenarios are green (S5.5.1–S5.5.4, S5.6.1–S5.6.8), the kimi rows, vectors, planner arm and flag guard are in; deviations 47–56; not yet reviewed; the live checks (J2, RESULTS §31) and M-K17 are not run.** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -1103,6 +1103,24 @@ production methods are placeholders that throw (`QWEN-FILL` regions), and no tes
 50. **The flag guard is called only for a planned launch** (`KimiConsultant.Build`: `if (launch.Confinement is LaunchConfinement.Planned)`), so the stuck
     consultant's turns do not meet it. Its body (`MustCarryNoFlag`) and the planner's `Kimi` method are the two production fill regions.
 51. **The tests of S5.5 and S5.6.7 run on every OS** through `WindowsStandIn` and `KimiSeams.Using` (the E5.4 precedent, deviation 23), not Windows only.
+
+### E5.5–E5.6 polish (Sonnet, 2026-10-26) — where the built code deviates from the spec above
+
+Numbered from 52. The 12 scenarios and the two production regions are filled and the markers are gone.
+
+52. **A cancelled check is `failed`, not `unavailable`** (S5.5.3). The record's `state` is `failed` and its `failureKind` is `cancelled`
+    (`ConsultFailureKinds.Cancelled`); the row's "the record says cancelled" reads as that pair.
+53. **S5.6.7's `refused` arm is a granted root outside any Git work tree**, refused at the copy AFTER the one-shot folder was reserved — the row's own `refused`
+    status, with nothing launched. A launch-control refusal (the sign-in removed) is a `failed` row, not a refusal "before the launch", so it is not this arm.
+    **The `cancelled` arm throws:** a cancelled `ask_consultants` raises `OperationCanceledException` (the Vibe twin's test says the same), it does not answer.
+54. **"The row's scratch is gone" is asserted through the copy** (the shim's `--cwd`, which sits in the row's scratch) and "`coai-vh\<8>` is gone" through the
+    folder `coai-vh` being EMPTY, as the Vibe twin does: the folder `coai-vh` itself stays, its entries go.
+55. **`CapabilityMatrixTests.Records` gained the Kimi record** (`RESULTS_kimi_confinement.md`, `2026-10-16`, cell prefix `M-K`): the existing test
+    `EveryRow_CitesTheRecord_AndACellOrSaysWhyThereIsNone` keeps a list of the records a row may cite, and the three new rows turned it red.
+56. **S5.5.1–S5.5.4 and the `cancelled` arm of S5.6.7 are green against the code before this story** (E5.3 g and E5.4 are in), so their teeth are a temporary break
+    of the deciding line, each run red and reverted: the check's `Home.Dispose()`, the row's `Release`, and `ConsultCheckScratch.Delete` without `KimiHomesDisposed`.
+    S5.5.1 has none of its own. S5.6.3, S5.6.5, S5.6.6 and the answered arm of S5.6.7 were red against `ConfinementPlanner.cs` and `KimiConsultant.cs` at `b4e2ea96`
+    with the data in place, for the table's reasons; S5.6.8 against the base generated table.
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 
