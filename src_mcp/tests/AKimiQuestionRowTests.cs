@@ -72,7 +72,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
         }
     }
 
-    private PanelService Service(PlayedKimi played) => new(
+    private PanelService Service(IProcessLauncher played) => new(
         new PanelSettings
         {
             ConsultantHomesRoot = Homes,
@@ -133,6 +133,24 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
         return false;
     }
 
+    /// <summary>
+    /// The played Kimi with one change: the home's <c>config.toml</c> is rewritten while <c>kimi --version</c> runs — after the home was made and
+    /// checked, before the shape is asked AGAIN. A fresh one-shot home is always written from the person's CURRENT sign-in, so a re-login before the
+    /// row starts is never a mismatch; this is the one point inside a single row where the launch control meets a config it did not write.
+    /// </summary>
+    private sealed class TamperedAtVersion(IProcessLauncher inner) : IProcessLauncher
+    {
+        public Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
+        {
+            if (request.Arguments is ["--version"])
+            {
+                File.WriteAllText(Path.Combine(request.WorkingDirectory, "config.toml"), "default_model = \"somebody-elses\"\n");
+            }
+
+            return inner.RunAsync(request, ct);
+        }
+    }
+
     /// <summary>Several scopes, given back in reverse.</summary>
     private sealed class Scopes(params IDisposable[] scopes) : IDisposable
     {
@@ -153,12 +171,6 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
     {
         using var person = new KimiFixture();
         using var stood = StandIn(person);
-        if (ending == Ending.RefusedBeforeTheLaunch)
-        {
-            // A re-login since coai last wrote the slot: KimiLaunch refuses before any shim starts (D19; the S5.4.16 shape, AKimiConsultationScenarioTests.cs:244).
-            File.WriteAllText(person.PersonsConfig, KimiFixture.OwnerConfig().Replace(KimiFixture.SlotKey, "oauth/kimi-code-env-y"));
-        }
-
         var before = person.Hash();
         using var caller = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         var copies = new List<string>();
@@ -179,7 +191,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
         JsonElement? reply = null;
         try
         {
-            var asking = async () => reply = await AskAsync(Service(played), caller.Token);
+            var asking = async () => reply = await AskAsync(Service(ending == Ending.RefusedBeforeTheLaunch ? new TamperedAtVersion(played) : played), caller.Token);
             if (ending == Ending.CancelledMidTurn)
             {
                 await asking.Should().ThrowAsync<OperationCanceledException>();
