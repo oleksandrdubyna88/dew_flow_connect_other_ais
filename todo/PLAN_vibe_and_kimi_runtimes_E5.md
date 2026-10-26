@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 not started.** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.7 implemented; E5.5–E5.6 built 2026-10-26 (Sonnet, deviations 50–57, not yet reviewed); the live checks (J2) and M-K17 are not run.** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -1085,6 +1085,38 @@ Numbered from 40, apart from the lists above, so the stories built in parallel d
 45. **Decision (e)'s sentence lives in *The consultant* article** (*What can go wrong*, five languages), because it is about a `consult` turn;
     the question-consultant article says only that a Kimi row's launches wait for one another and for a Kimi review on the same sign-in.
 46. **`CONSULTANT_SINCE` gates a note, so `consultantsWire.ts` is unchanged.** S5.7.3 was green before any code, as the row said.
+
+### E5.5–E5.6 as built (Sonnet, 2026-10-26)
+
+Numbered from 50, apart from the lists above. All of E5.4 and E5.3 decision g were already in the code, so E5.5 needed no production change.
+
+50. **E5.5: all four scenarios were green on arrival**, so each was given teeth by a temporary break of the line it depends on, each run red and reverted:
+    (A) `VibeHomes.EmptiedUnderItsLock` not calling `KimiHome.DisposeAllUnder` — S5.5.2 (both arms) and S5.5.3 red with *Expected _unlinkedByTheDeleter to be
+    empty because the deleter's unlink recorder must not be invoked … found …\coai-vh\<8>\kh-…\home\credentials*, which is the table's red; (B)
+    `ConsultCheckScratch.Delete` not calling `KimiHomesDisposed` — S5.5.4 red with the same recorder message; (C) the check's `finally` not disposing the
+    one-shot home — S5.5.2 and S5.5.3 red with *Expected Directory.EnumerateFileSystemEntries(…coai-vh) to be empty … found …\coai-vh\<8>*; (D)
+    `KimiConsultant.NeedsASanitisedSnapshot = false` — all five tests red (no copy, the check fails).
+51. **S5.5.1 asserts the cwd is UNDER `<scratch>\own\tree\`**, not at it: the copy is `tree\snapshot-<id>`. S5.5.2 is a Theory (passed; and a turn that ends exit 70, played
+    by `PlayedKimi.Lost`). S5.5.3's "the record says cancelled" is `failureKind` `cancelled` (the state is `failed`). The tests run on every OS through
+    `WindowsStandIn` and `KimiSeams.Using`, as E5.4's service arms do; the Vibe check tests skip off Windows.
+52. **E5.6's reds, against the table's last column.** S5.6.1 and S5.6.6 are exactly as predicted. S5.6.3 and S5.6.5 read *Expected type to be Confinement+Planned, but found
+    Confinement+Refused* — the planner asks the matrix first, so a runtime outside it is refused before the default arm the table names is reached. S5.6.4 reads
+    *Expected type to be Admission+Admitted, but found Admission+Refused*. S5.6.2 had two reds once the rows were in: its own (the vectors) and
+    `EveryRow_CitesTheRecord_AndACellOrSaysWhyThereIsNone`, whose list of citable records had to gain the Kimi record (`RESULTS_kimi_confinement.md`, 2026-10-13, cells `M-K…`) —
+    a test that repeats a list the code also holds. S5.6.7 was red because the row was refused as an unknown runtime; its teeth are two breaks, reverted: the one-shot
+    disposal skipped (the recorder, as the table says) and `QuestionRowLaunch`'s scratch removal dropped (*Expected Directory.Exists(<scratch>) to be False … found True*).
+    S5.6.5 got a third break (the planned cwd ignored: the none row stood in the tree). S5.6.8's red, run against the stale generated table (18 rows against the file's 21), was the table's deep-equal and the four
+    kimi vector tests, not the runtimes-list message.
+53. **S5.6.5 and S5.6.6 live in `KimiConsultantTests`**, not `ConfinementPlannerTests`: they need the fake person's places (`KimiFixture`) to build the shim request.
+    S5.6.7 is its own class, `AKimiQuestionRowTests` (the `AVibeQuestionRow…` shape, `PlayedKimi`, the service, git for real); its "refused before the launch" arm
+    grants a plain folder (refused at the copy), so it launches no shim and has no scratch to look for — the home folder, the recorder and the person's folder are asserted for it.
+54. **The three rows' `resultRef` cite sections of the Kimi record**: §9 (M-K6), §6 (M-K3), §7 (M-K4), §12 and §21 (M-K9, M-K9 (e)); the disk row's cells are `M-K6`, `M-K3`, `M-K4`,
+    `M-K9` ((e) is in the text); the web row's §14. All date 2026-10-13, version 2.1.1. The `why` of the file names the Kimi record beside the Vibe one.
+55. **`KimiConsultant.MustCarryNoFlags` also refuses a plan's `Leading`** (codex's `--search` shape), beside its `Flags` — "any flag" (decision 3). The sentence names the shim.
+56. **The `unconfined` caveat says "a shell is always there, and no flag removes it"** (`capabilityAdmission.ts`, shared with codex). For Kimi the shim refuses every shell command
+    (M-K4), so the sentence is wrong for it; the S5.6.8 test pins only "can read this machine". Not changed here — the text is shared and the owner should decide whether it splits.
+57. **Not done, by the brief:** M-K17, the live checks of J2 (RESULTS §31), `research/module_tests.md` (the catalogue of these flows), merging `main`, any push. The `note` of the
+    `none` and `disk` rows carries "announced and no cell exercised them" until M-K17 decides.
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 
