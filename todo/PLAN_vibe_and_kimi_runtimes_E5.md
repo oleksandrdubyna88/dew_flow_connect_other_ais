@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 not started.** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5 (S5.5.1, S5.5.2, S5.5.4) and E5.6 (S5.6.1–S5.6.6, S5.6.8) implemented 2026-10-26 by the Haiku coder (deviations H1–H9, *E5.5–E5.6 as built*); S5.5.3 and S5.6.7 not yet written.** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -1085,6 +1085,18 @@ Numbered from 40, apart from the lists above, so the stories built in parallel d
 45. **Decision (e)'s sentence lives in *The consultant* article** (*What can go wrong*, five languages), because it is about a `consult` turn;
     the question-consultant article says only that a Kimi row's launches wait for one another and for a Kimi review on the same sign-in.
 46. **`CONSULTANT_SINCE` gates a note, so `consultantsWire.ts` is unchanged.** S5.7.3 was green before any code, as the row said.
+
+### E5.5–E5.6 as built (Haiku coder, 2026-10-26) — where it deviates from the spec above
+
+H1. **The Kimi rows are in the seed's `runtimes` key too** (`shared/runtime-capabilities.json`), not only in the rows: the generator refuses a row whose runtime the seed's list does not name.
+H2. **`CapabilityMatrixTests` gained a record for `RESULTS_kimi_confinement.md`** (date 2026-10-13, cell prefix `M-K`). The citation rule reads a fixed list of records, and the table named none for Kimi.
+H3. **S5.6.3, S5.6.5 and S5.6.6 sit in `ConfinementPlannerTests`, not in an `AKimiQuestionRowTests` file.** That class does not exist; the planner tests already hold the `Planned` and `Plan` helpers those scenarios use. S5.6.1 and S5.6.4 sit in `CapabilityMatrixTests`, as the table says.
+H4. **Red reasons differ from the table for S5.6.5 and S5.6.6.** Without the Kimi arm the `Planned` helper itself refused (*Expected type Planned, but found Refused*), before the adapter assertion ran. The arms were watched red at that point; their own assertions were then watched green.
+H5. **S5.6.2 was not watched red on its own.** Its existing test passes while the table and the vectors both lack `kimi`; with `kimi` in the table alone it fails. The arm was green once both files had it.
+H6. **S5.5.1, S5.5.2 and S5.5.4 were green on arrival**, because the adapter and the one-shot homes of E5.3 and E5.4 were already in place. Their red column was the state before E5.4. The teeth were checked by breaking `KimiConsultant.HomesFolder` to empty: S5.5.1 and S5.5.2 went red (the home was not under `coai-vh`), S5.5.4 stayed green, which is right, since it pins the rootless fallback. The break was reverted before the commit.
+H7. **`KimiConsultant.Build` refuses a planned launch with flags** (S5.6.6, E5.6 decision 3). This is the one production change in the adapter.
+H8. **Not written in this pass:** S5.5.3 (a check cancelled mid-turn), the `GitScratch.AfterUnlink` recorder of S5.5.2, and S5.6.7 (the disk row through `QuestionRowLaunch` with `PlayedKimi`, three arms). Each needs a harness larger than this pass allowed.
+H9. **The `none` and `disk` notes still say the web is unmeasured.** M-K17 is not recorded, so the sentence stays, as E5.6 decision 2 says.
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 
