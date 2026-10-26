@@ -1120,7 +1120,9 @@ Numbered from 47, a range no other list in this file uses (E5.1–E5.2 use B1–
 56. **The suite was not green except for the two known failures.** On a full run the coders saw four `QuestionRowOnAgyScenarioTests` cases
     fail (`ACallerWhoGivesUpBetweenTheLaunches_…`, `AFollowUpCutShortByTheCaller_…`, `ADeniedCommand_…`); each class passes alone. One of them
     also saw `TheRoundsNumstatsAreCountedTests.AnUnknownCommit_IsGitFailed_NeverAThrow` fail when run alone, unexplained. None of these was
-    checked against `b4e2ea96`. The result of the review's final run is in the next deviation.
+    checked against `b4e2ea96`. After the review's fixes, a full run of 10557 tests had three failures: the two known Kimi ones
+    (`KimiRuntimeTests.ALaunchThatNamesItsHome_…`, `KimiHomeTests.AHomeWhoseDataPathPasses260_…`) and the `TheRoundsNumstatsAreCountedTests` case
+    above, which also fails alone and does not touch Kimi; the `QuestionRowOnAgyScenarioTests` cases passed.
 57. **`dotnet format --verify-no-changes` on the solution exits 2.** Every finding is an analyzer error (IL2026, IL3050) in `src_server` or
     `src_bugs`. With `--include`, each new file passes.
 58. **The test host here has no `.exe`.** On this Linux host the test host is `./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests`; the commands
