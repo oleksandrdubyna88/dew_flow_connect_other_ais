@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 not started.** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6: skeleton written 2026-10-26 (data, planner arm, flag guard, 12 scenario tests with bodies still to fill; not yet red or green).** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -1085,6 +1085,26 @@ Numbered from 40, apart from the lists above, so the stories built in parallel d
 45. **Decision (e)'s sentence lives in *The consultant* article** (*What can go wrong*, five languages), because it is about a `consult` turn;
     the question-consultant article says only that a Kimi row's launches wait for one another and for a Kimi review on the same sign-in.
 46. **`CONSULTANT_SINCE` gates a note, so `consultantsWire.ts` is unchanged.** S5.7.3 was green before any code, as the row said.
+
+### E5.5–E5.6 skeleton (Sonnet, 2026-10-26)
+
+Numbered from 50. The skeleton only: the three `kimi` rows, the vectors and the regenerated table are complete; the 12 scenario tests exist by name
+and their bodies are placeholders; the tests have not been run.
+
+50. **The planner arm and the flag guard are written, not placeholders.** `ConfinementPlanner.Kimi` (two lines) and `KimiConsultant.MustCarryNoFlags`
+    (three) are inside the three-line limit, and a placeholder in `Build` would have turned every green Kimi consult test red. So S5.6.3, S5.6.4, S5.6.1,
+    S5.6.2 and S5.6.8 are born green once their bodies are filled: their expected red needs the production change taken out.
+51. **A plan's `Leading` is refused with its `Flags`.** Decision 3 says "ANY flag"; the guard refuses a plan with a leading word too, since the
+    planner gives Kimi neither.
+52. **S5.5.2 is a Theory over the two arms** (`theTurnFails` false/true), as the table's "a second arm" says, with one test name. S5.6.7 is a Theory
+    over `answered`, `refused`, `cancelled`.
+53. **A cancelled check answers a record, not `cancelled`.** The existing check answers `state` `failed` with `failureKind` `cancelled`; S5.5.3's
+    assertion is written that way, not as the table's word "cancelled".
+54. **`AKimiConsultationScenarioTests.StandIn` and its `Scopes` are `internal`** (were `private`) so `AKimiQuestionRowTests` and
+    `AKimiConsultantCheckTests` reuse the one stand-in instead of a copy.
+55. **The runtime list sentence in the table's `why`** names the kimi rows' record, as the vibe sentence does for its own.
+56. **Kimi rows' date is 2026-10-13**, the date E5.4's decision 8 gives to M-K6, M-K3, M-K4 (M-K9 is cited from its own section); M-K17 may
+    change the `none`/`disk` note's WebSearch sentence.
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 

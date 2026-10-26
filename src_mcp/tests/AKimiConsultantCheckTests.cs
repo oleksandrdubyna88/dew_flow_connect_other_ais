@@ -131,7 +131,8 @@ public sealed class AKimiConsultantCheckTests : IDisposable
         // ct.ThrowIfCancellationRequested(); } }` (so the shim "blocks" until cancelled). Windows only: SkipUnless first.
         // Act: `var (_, said, _) = await Check(Settings(_homes), played, caller.Token);` — the check answers a cancelled RECORD rather than throwing (see
         // ConsultantCheckTests.ACheckCancelledWhileItsScratchIsMade_IsCancelled_NotUnavailable in the pack for the exact state word and the call shape).
-        // Assert: Text(said, "state") Should().Be("cancelled", said.ToString()); `Directory.EnumerateFileSystemEntries(Path.Combine(_homes, VibeHomes.OneShotFolder))`
+        // Assert: Text(said, "state") Should().Be("failed", said.ToString()) and Text(said, "failureKind") Should().Be("cancelled") (the words the existing cancelled
+        // check test uses); `Directory.EnumerateFileSystemEntries(Path.Combine(_homes, VibeHomes.OneShotFolder))`
         // Should().BeEmpty(); `_unlinkedByTheDeleter` Should().BeEmpty(); `_person.Hash()` Should().Equal(before).
         // Green after E5.3 g (it pins the `finally`); not red against the present tree.
         throw new NotImplementedException("s553-cancel");
