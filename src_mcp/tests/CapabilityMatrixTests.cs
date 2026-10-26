@@ -199,27 +199,32 @@ public sealed class CapabilityMatrixTests
             .Which.Reason.Should().Contain("not been measured", "no Vibe cell exercises the web");
     }
 
+    private static RuntimeCapabilityRow KimiRow(Capability capability)
+    {
+        var row = RuntimeCapabilities.Builtin.Of("kimi", capability);
+        row.Should().NotBeNull($"kimi × {capability} is a row of the table");
+
+        return row!;
+    }
+
     /// <summary>S5.6.1 (E5.6 of <c>todo/PLAN_vibe_and_kimi_runtimes_E5.md</c>): Kimi's three rows, each citing the cells it stands on.</summary>
     [Fact]
     public void KimiHasThreeRows_EachCitingItsCells()
     {
-        foreach (var capability in (Capability[])[Capability.None, Capability.Disk, Capability.Web])
+        var none = KimiRow(Capability.None);
+        var disk = KimiRow(Capability.Disk);
+        var web = KimiRow(Capability.Web);
+
+        none.Standing.Should().Be(CapabilityStanding.Unconfined);
+        none.MeasuredWith.Cells.Should().Contain("M-K6");
+        disk.Standing.Should().Be(CapabilityStanding.Unconfined);
+        disk.MeasuredWith.Cells.Should().Contain("M-K6").And.Contain("M-K9");
+        web.Standing.Should().Be(CapabilityStanding.Unmeasured);
+        foreach (var row in (RuntimeCapabilityRow[])[none, disk, web])
         {
-            var row = RuntimeCapabilities.Builtin.Of("kimi", capability)!;
             row.MeasuredWith.Version.Should().Be("2.1.1");
             row.MeasuredWith.ResultRef.Should().Contain("RESULTS_kimi_confinement.md");
         }
-
-        var none = RuntimeCapabilities.Builtin.Of("kimi", Capability.None)!;
-        none.Standing.Should().Be(CapabilityStanding.Unconfined);
-        none.MeasuredWith.Cells.Should().Contain("M-K6");
-
-        var disk = RuntimeCapabilities.Builtin.Of("kimi", Capability.Disk)!;
-        disk.Standing.Should().Be(CapabilityStanding.Unconfined);
-        disk.MeasuredWith.Cells.Should().Contain("M-K6").And.Contain("M-K9");
-
-        var web = RuntimeCapabilities.Builtin.Of("kimi", Capability.Web)!;
-        web.Standing.Should().Be(CapabilityStanding.Unmeasured);
     }
 
     /// <summary>S5.6.4: both of Kimi's admitted rows are FLAGGED unconfined — <c>Grep</c> and <c>Glob</c> read the disk (M-K6) whatever the working folder.</summary>
