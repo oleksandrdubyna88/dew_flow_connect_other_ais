@@ -24,7 +24,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
     private const string Advice = "Retry with a jittered backoff, three attempts.";
 
     private readonly ProcessLauncher _launcher = new();
-    private readonly TempDir _dir = TempDir.For("coai-qkimi-");
+    private readonly TempDir _dir = TempDir.For("testsToDelete-kimi-question-");
     private readonly KimiFixture _person = new();
 
     private string Repo => _dir.At("repo");
@@ -37,6 +37,8 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
 
     public ValueTask DisposeAsync()
     {
+        GitScratch.AfterUnlink = null;
+        KimiHome.AfterUnlink = null;
         _person.Dispose();
         _dir.Dispose();
 
@@ -133,7 +135,9 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
         var before = PersonsFiles();
         var seen = new List<Seen>();
         var unlinkedByTheDeleter = new List<string>();
+        var unlinkedByKimiHome = new List<string>();
         GitScratch.AfterUnlink = unlinkedByTheDeleter.Add;
+        KimiHome.AfterUnlink = unlinkedByKimiHome.Add;
         try
         {
             var kimi = new PlayedKimi(_launcher)
@@ -160,12 +164,14 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
             kimi.Shims.Single().Request.StdIn.Should().NotContain(Path.Combine(Repo, "src"), "never the granted root itself");
             Directory.Exists(turn.Request.WorkingDirectory).Should().BeFalse("the row's copy is gone once it answered");
             TheHomesFolderIsEmpty();
+            unlinkedByKimiHome.Should().NotBeEmpty("KimiHome unlinked the row's home junction, so the next check means something");
             unlinkedByTheDeleter.Should().BeEmpty("the deleter never met a junction: KimiHome unlinked it first");
             PersonsFiles().Should().BeEquivalentTo(before, "the fake person's folder is intact");
         }
         finally
         {
             GitScratch.AfterUnlink = null;
+            KimiHome.AfterUnlink = null;
         }
     }
 
@@ -175,6 +181,9 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
         var plain = Directory.CreateDirectory(_dir.At("plain")).FullName;
         await File.WriteAllTextAsync(Path.Combine(plain, "notes.txt"), "not a repository", TestContext.Current.CancellationToken);
         using var stand = StandIn();
+        var before = PersonsFiles();
+        var unlinkedByTheDeleter = new List<string>();
+        GitScratch.AfterUnlink = unlinkedByTheDeleter.Add;
         var kimi = new PlayedKimi(_launcher);
 
         var reply = await AskAsync(Service(kimi, Homes, plain), TestContext.Current.CancellationToken);
@@ -184,6 +193,8 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
         row.GetProperty("reason").GetString().Should().Contain("not inside a Git work tree");
         kimi.Shims.Should().BeEmpty("nothing of Kimi's starts for a row whose copy was refused");
         TheHomesFolderIsEmpty();
+        unlinkedByTheDeleter.Should().BeEmpty("a refused row goes without a junction to meet");
+        PersonsFiles().Should().BeEquivalentTo(before, "the fake person's folder is intact");
     }
 
     [Fact]
@@ -191,6 +202,9 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
     {
         using var stand = StandIn();
         using var caller = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var before = PersonsFiles();
+        var unlinkedByTheDeleter = new List<string>();
+        GitScratch.AfterUnlink = unlinkedByTheDeleter.Add;
         var kimi = new PlayedKimi(_launcher)
         {
             During = async (_, ct) =>
@@ -204,5 +218,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
 
         await asking.Should().ThrowAsync<OperationCanceledException>();
         TheHomesFolderIsEmpty();
+        unlinkedByTheDeleter.Should().BeEmpty("the home is unlinked junction-first on a cancelled row too");
+        PersonsFiles().Should().BeEquivalentTo(before, "the fake person's folder is intact");
     }
 }

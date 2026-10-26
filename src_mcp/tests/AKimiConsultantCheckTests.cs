@@ -124,8 +124,10 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     {
         using var stand = StandIn();
         var unlinkedByTheDeleter = new List<string>();
+        var unlinkedByKimiHome = new List<string>();
         var before = PersonsFiles();
         GitScratch.AfterUnlink = unlinkedByTheDeleter.Add;
+        KimiHome.AfterUnlink = unlinkedByKimiHome.Add;
         try
         {
             var played = turnFails
@@ -145,12 +147,14 @@ public sealed class AKimiConsultantCheckTests : IDisposable
             }
 
             Directory.EnumerateFileSystemEntries(OneShotFolder).Should().BeEmpty("coai-vh\\<8> goes with the check");
+            unlinkedByKimiHome.Should().NotBeEmpty("KimiHome unlinked the home's junction, so the next check means something");
             unlinkedByTheDeleter.Should().BeEmpty("the deleter never met the junction: KimiHome unlinked it first");
             PersonsFiles().Should().BeEquivalentTo(before, "the fake person's folder is intact, bytes and attributes");
         }
         finally
         {
             GitScratch.AfterUnlink = null;
+            KimiHome.AfterUnlink = null;
         }
     }
 
@@ -160,6 +164,9 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     {
         using var stand = StandIn();
         using var caller = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var before = PersonsFiles();
+        var unlinkedByTheDeleter = new List<string>();
+        GitScratch.AfterUnlink = unlinkedByTheDeleter.Add;
         var played = new PlayedKimi(new ProcessLauncher())
         {
             During = async (_, ct) =>
@@ -171,16 +178,19 @@ public sealed class AKimiConsultantCheckTests : IDisposable
 
         try
         {
-            var (_, said) = await Check(Settings(_homes.Path), played, caller.Token);
+            var (code, said) = await Check(Settings(_homes.Path), played, caller.Token);
 
+            code.Should().Be(0);
+            said.GetProperty("state").GetString().Should().Be("failed", said.ToString());
             said.GetProperty("failureKind").GetString().Should().Be("cancelled", said.ToString());
+            Directory.EnumerateFileSystemEntries(OneShotFolder).Should().BeEmpty("the home is disposed in finally, whatever ended the check");
+            unlinkedByTheDeleter.Should().BeEmpty("the deleter never met the junction: KimiHome unlinked it first");
+            PersonsFiles().Should().BeEquivalentTo(before, "the fake person's folder is intact, bytes and attributes");
         }
-        catch (OperationCanceledException)
+        finally
         {
-            // A cancelled check may end by throwing instead of answering with its record; either way the home must be gone.
+            GitScratch.AfterUnlink = null;
         }
-
-        Directory.EnumerateFileSystemEntries(OneShotFolder).Should().BeEmpty("the home is disposed in finally, whatever ended the check");
     }
 
     /// <summary>S5.5.4: settings built by hand have no homes root, so the home stays in the check's own scratch, and it is disposed junction-first.</summary>
@@ -189,7 +199,9 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     {
         using var stand = StandIn();
         var unlinkedByTheDeleter = new List<string>();
+        var unlinkedByKimiHome = new List<string>();
         GitScratch.AfterUnlink = unlinkedByTheDeleter.Add;
+        KimiHome.AfterUnlink = unlinkedByKimiHome.Add;
         try
         {
             var played = Answering();
@@ -200,11 +212,13 @@ public sealed class AKimiConsultantCheckTests : IDisposable
             var home = Argument(played.Shims.Should().ContainSingle().Subject.Request, "--home");
             home.Should().Contain(Path.Combine("own", "kh-"), "with no homes root the home is kept under the check's own scratch");
             Directory.EnumerateDirectories(_temp.Path, "coai-check-*").Should().BeEmpty("the scratch goes with the check");
+            unlinkedByKimiHome.Should().NotBeEmpty("KimiHome unlinked the home's junction, so the next check means something");
             unlinkedByTheDeleter.Should().BeEmpty("the deleter never met the junction");
         }
         finally
         {
             GitScratch.AfterUnlink = null;
+            KimiHome.AfterUnlink = null;
         }
     }
 }
