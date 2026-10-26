@@ -140,7 +140,7 @@ for (const vector of VECTORS) {
 test('the words are the file’s words, and a word outside them is refused rather than defaulted', () => {
   assert.deepStrictEqual([...CAPABILITIES], ['none', 'disk', 'web']);
   assert.deepStrictEqual([...STANDINGS], ['confined', 'unconfined', 'default-deny', 'unsupported', 'unmeasured']);
-  assert.deepStrictEqual([...RUNTIMES], ['claude', 'codex', 'antigravity', 'local', 'api', 'vibe']);
+  assert.deepStrictEqual([...RUNTIMES], ['claude', 'codex', 'antigravity', 'local', 'api', 'vibe', 'kimi']);
   assert.equal(isCapability('disk'), true);
   assert.equal(isCapability('Disk'), false, 'the panel writes the file’s spelling, lower case, and nothing else');
   assert.equal(isCapability('shell'), false);
@@ -173,4 +173,19 @@ test('a flagged admission carries the caveat a person must acknowledge (D13)', (
   assert.match(admit('antigravity', 'disk').caveat, /headless/u);
   assert.equal(admit('claude', 'web').caveat, '', 'a confined pair has nothing to acknowledge');
   assert.equal(admit('vibe', 'disk').caveat, '', 'vibe reads its working folder only — a snapshot of the roots (M-V6)');
+});
+
+test('kimi rows admit flagged, web refuses naming its record', () => {
+  // QWEN-FILL-BEGIN s568-ts test
+  // Arrange: nothing — `admit` (from '../capabilityAdmission') and the generated table are imported at the top of this file.
+  // Act and assert, in this order:
+  //   1. for each capability of ['none', 'disk']: `const admission = admit('kimi', capability);` then
+  //      `assert.equal(admission.admitted, true, admission.reason);`, `assert.equal(admission.standing, 'unconfined');`,
+  //      `assert.equal(admission.flag, 'unconfined');` and `assert.match(admission.caveat, /can read this machine/u);`.
+  //   2. `const web = admit('kimi', 'web');` then `assert.equal(web.admitted, false);`, `assert.match(web.reason, /not been measured/u);`
+  //      and `assert.match(web.reason, /RESULTS_kimi_confinement\.md/u);`.
+  // Fails before the change with: AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal (the runtimes list), and
+  // "'kimi' is not a runtime the question consultant can launch" from admit('kimi', ...).
+  throw new Error('s568-ts');
+  // QWEN-FILL-END s568-ts
 });

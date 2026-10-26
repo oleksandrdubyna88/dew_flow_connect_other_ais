@@ -143,6 +143,64 @@ public sealed class ConfinementPlannerTests
         ConfinementPlanner.VibeReadOnly.Should().Equal(disk.Flags, "the reviewer and the planner spell D2 once");
     }
 
+    // ---------- Kimi (E5.6 of todo/PLAN_vibe_and_kimi_runtimes_E5.md) ----------
+
+    /// <summary>S5.6.3: the planner's Kimi arm carries NO flags (decision 1) — a copy of the roots for disk, an empty folder for none, a refusal for web.</summary>
+    [Fact]
+    public void ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb()
+    {
+        // QWEN-FILL-BEGIN s563-planner test
+        // Arrange: nothing (RootA and RootB are this class's constants; `Plan(runtime, grant)` is this class's helper and asserts Planned).
+        // Act/Assert:
+        //   none = Plan("kimi", CapabilityGrant.None): none.Cwd Should().Be(CwdKind.Scratch); none.Leading and none.Flags and none.AddDirs and
+        //   none.SnapshotSources Should().BeEmpty(); none.Flag Should().Be(AdmissionFlag.Unconfined) (D13: the none row is unconfined too).
+        //   disk = Plan("kimi", CapabilityGrant.Disk(RootA, RootB)): disk.Cwd Should().Be(CwdKind.Snapshot); disk.SnapshotSources Should().Equal([RootA, RootB]);
+        //   disk.Leading, disk.Flags, disk.AddDirs Should().BeEmpty(); disk.Flag Should().Be(AdmissionFlag.Unconfined).
+        //   web = ConfinementPlanner.Plan("kimi", CapabilityGrant.Web).Should().BeOfType<Confinement.Refused>().Which.Reason: Should().Contain("not been measured")
+        //   and Should().Contain("RESULTS_kimi_confinement.md").
+        // Fails before the change: the default arm of ConfinementPlanner.Fragments gives an unknown runtime a Scratch cwd and the matrix refuses
+        // kimi by name ("'kimi' is not a runtime the question consultant can launch ..."), so the first `Plan("kimi", ...)` fails its BeOfType<Planned>.
+        throw new NotImplementedException("s563-planner");
+        // QWEN-FILL-END s563-planner
+    }
+
+    private static Runners.Kimi.KimiConsultant KimiConsultant() => (Runners.Kimi.KimiConsultant)Adapters().Single(a => a.Runtime == "kimi").Consultant;
+
+    /// <summary>S5.6.5: a Kimi question launch is the shim's request, in the row's folder or its copy, on the row's own home, one shot (the Vibe launch's shape).</summary>
+    [Fact]
+    public void AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome()
+    {
+        // QWEN-FILL-BEGIN s565-launch test
+        // Arrange: `var consultant = KimiConsultant();` (this class's helper, above); the launches are `Planned("kimi", CapabilityGrant.None)` and
+        // `Planned("kimi", CapabilityGrant.Disk(RootA, RootB))` (this class's `Planned(runtime, grant, model = "")` helper: OwnedScratch = RowFolder,
+        // ScratchDir = Scratch, Workdir = RowTree).
+        // Act: `var none = consultant.Build(...)` and `var disk = consultant.Build(...)` (both ReviewerInvocation).
+        // Assert: none.Request.WorkingDirectory Should().Be(Scratch); disk.Request.WorkingDirectory Should().Be(RowTree).
+        //   For each of none.Request and disk.Request: Arguments Should().NotContain("--session") and Should().NotContain(RootA) and Should().NotContain(RootB);
+        //   the value after "--home" (find with `request.Arguments.ToList().IndexOf("--home") + 1`; the constant is CoaiMcp.Runners.Acp.AcpWords.HomeFlag)
+        //   Should().StartWith(RowFolder + Path.DirectorySeparatorChar); request.InheritsEnvironment Should().BeFalse();
+        //   Runners.Kimi.KimiEnvironment.Refusal(request, <the places of the home>) Should().BeEmpty() — see the pack for how the existing KimiConsultantTests
+        //   build `places`; if that cannot be done inside this class without a KimiFixture, skip that single assertion and say so in a comment.
+        //   none.Role Should().Be(ConsultantRoles.Question).
+        // Fails before the change: against a stub that ignores the plan, WorkingDirectory is the checkout, not Scratch / RowTree.
+        throw new NotImplementedException("s565-launch");
+        // QWEN-FILL-END s565-launch
+    }
+
+    /// <summary>S5.6.6: a plan that carries any flag is not one coai made for kimi (decision 3) — refused naming the shim.</summary>
+    [Fact]
+    public void APlanWithFlags_IsRefusedForKimi()
+    {
+        // QWEN-FILL-BEGIN s566-flags test
+        // Arrange: `var plan = Plan("kimi", CapabilityGrant.None) with { Flags = ["--yolo"] };` and
+        // `var launch = Planned("kimi", CapabilityGrant.None) with { Confinement = new LaunchConfinement.Planned(plan) };`.
+        // Act: `var build = () => KimiConsultant().Build(launch);`.
+        // Assert: `build.Should().Throw<ArgumentException>().WithMessage("*the shim's*")`.
+        // Fails before the change: no exception is thrown (Build ignores the flags).
+        throw new NotImplementedException("s566-flags");
+        // QWEN-FILL-END s566-flags
+    }
+
     // ---------- refusals ----------
 
     [Theory]
