@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 implemented 2026-10-26 (Opus): the Kimi check proved in a copy on a one-shot home; three capability rows, the planner arm, the one-shot row; deviations 31–45, *E5.5–E5.6 as built*.** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 implemented 2026-10-26 (Opus): three capability rows, the planner arm, the one-shot row; the E5.5 and S5.6.7 tests are written and green on the Linux stand-in, their mutation proofs and a run on Windows not done; deviations 47–61, *E5.5–E5.6 as built*.** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -1088,43 +1088,52 @@ Numbered from 40, apart from the lists above, so the stories built in parallel d
 
 ### E5.5–E5.6 as built (Opus, 2026-10-26)
 
-Numbered from 31, apart from the lists above, so the stories built in parallel do not collide on a number.
+Numbered from 47, a range no other list in this file uses (E5.1–E5.2 use B1–B11 and 13–20, E5.4 21–30, E5.7 40–46).
 
-31. **`none` is `unconfined` for Kimi.** E5.6 decision 2, on the same M-K6 evidence. `CapabilityMatrix.Admit("kimi", Capability.None)` admits
+47. **`none` is `unconfined` for Kimi.** E5.6 decision 2, on the same M-K6 evidence. `CapabilityMatrix.Admit("kimi", Capability.None)` admits
     with `AdmissionFlag.Unconfined`.
-32. **The unconfined caveat is shared, and its shell clause does not describe Kimi exactly.** `AdmissionFlag.Unconfined` keeps the sentence
+48. **The unconfined caveat is shared, and its shell clause does not describe Kimi exactly.** `AdmissionFlag.Unconfined` keeps the sentence
     "can read this machine — a shell is always there …", unchanged. A Kimi-specific caveat is left open.
-33. **`MustCarryNoFlags` refuses `Leading` as well as `Flags`.** A planned Kimi launch with a leading argument is refused, as one with a flag is
-    (`KimiConsultant.cs:60`).
-34. **E5.5 and S5.6.7 add tests only, and their green was not observed on any host.** Both skip on Linux (D18). The coders of t3 and t4 ran on
-    Linux: every case skipped, and no red or green was seen. The mutation proof of S5.5 was not run; it needs Windows.
-35. **S5.6.5 was red before the planner arm, not green.** Its disk request kept the scratch folder, because the plan was Scratch. The `disk`
+49. **`MustCarryNoFlags` refuses `Leading` as well as `Flags`.** A planned Kimi launch with a leading argument is refused, as one with a flag is
+    (`KimiConsultant.cs:60`). `APlanWithFlags_IsRefusedForKimi` is a Theory over both; with the `Leading` check removed, its `Leading` case fails.
+50. **E5.5 and S5.6.7 add tests only, and they run on every host.** The first version skipped every case on Linux (D18), so no red or green was
+    seen, and a wrong assertion in S5.6.7 went unnoticed. The review removed the skip: these cases use the same Windows stand-in
+    (`WindowsStandIn`, `KimiSeams.Using(HostKind.Windows, …)`) as `AKimiConsultationScenarioTests`, which has no skip. Observed on Linux: all
+    cases green. Two temporary breaks turned the right cases red: removing `Remove(scratch)` in `QuestionRowLaunch` failed the answered and
+    cancelled endings on "the row's scratch … goes on every ending", and removing the `Leading` check failed the `Leading` case of the Theory.
+    The mutation proofs of S5.5 (a temporary break of the deciding line in each case) were not run; the run on real Windows was not done.
+51. **S5.6.5 was red before the planner arm, not green.** Its disk request kept the scratch folder, because the plan was Scratch. The `disk`
     arm (a snapshot) made it green. The web InlineData was green before the change: the matrix refuses `web` before the planner runs.
-36. **`Records` in `CapabilityMatrixTests` gains `RESULTS_kimi_confinement.md`.** The citation test names the records a row may cite. The Kimi
+52. **`Records` in `CapabilityMatrixTests` gains `RESULTS_kimi_confinement.md`.** The citation test names the records a row may cite. The Kimi
     rows failed with "the collection is empty" until the record was listed. The spec does not name this change.
-37. **S5.6.7's one-shot folder check reads `coai-vh` as the spec does.** The first version guarded with `Directory.Exists`; commit `38ebb5f3`
-    removed the guard. Whether a refused row reserves the folder is not yet seen on Windows.
-38. **The S5.5 one-shot check treats an absent `coai-vh` as empty.** `OneShotEntries` in `AKimiConsultantCheckTests` returns no entries for a
-    folder that is not there, because then the home is gone. The spec's enumerate call would throw there.
-39. **Some red messages differed in wording from the spec.** FluentAssertions names the variable (`Expected none not to be <null>`), and
-    S5.6.3 names `disk`, not `plan`. The coder notes list each one (`T3-t1-code.md`, `T3-t2-code.md`).
-40. **The suite is not green except for the two known failures.** On a full run, t1 and t4 saw `QuestionRowOnAgyScenarioTests` fail: t1
-    `ACallerWhoGivesUpBetweenTheLaunches_…` and `AFollowUpCutShortByTheCaller_…`, t4 `ADeniedCommand_…` and `AFollowUpCutShortByTheCaller_…`.
-    Each class passes alone. t3 saw `TheRoundsNumstatsAreCountedTests.AnUnknownCommit_IsGitFailed_NeverAThrow` fail when run alone; it is not
-    explained. None of these was checked against `b4e2ea96`.
-41. **`dotnet format --verify-no-changes` on the solution exits 2.** Every finding is an analyzer error (IL2026, IL3050) in `src_server` or
+53. **S5.6.7's one-shot folder check reads `coai-vh` as the spec does.** The first version guarded with `Directory.Exists`; commit `38ebb5f3`
+    removed the guard. The refused ending reserves the folder and gives it back empty (seen on the Linux stand-in). Its trigger is a person's
+    config with an empty slot key: the spec's trigger (a changed slot key) does not refuse a one-shot row, because its home is built fresh from
+    the changed config and the row answers. The answered ending checks that the prompt names the shim's `--cwd` (the copy under the row's
+    scratch) and not the granted root, and that the scratch (the parent of `tree`) is gone; the refused ending launches no shim, so it has no
+    scratch to check.
+54. **The S5.5 one-shot check treats an absent `coai-vh` as empty.** `OneShotEntries` in `AKimiConsultantCheckTests` returns no entries for a
+    folder that is not there, because then the home is gone. The spec's enumerate call would throw there. So the S5.5.2 cases first check the
+    check's state and that exactly one shim was launched with a `--home` under `<homes>\coai-vh`; a check that refused early would fail there.
+55. **Some red messages differed in wording from the spec.** FluentAssertions names the variable (`Expected none not to be <null>`), and
+    S5.6.3 names `disk`, not `plan`.
+56. **The suite was not green except for the two known failures.** On a full run the coders saw four `QuestionRowOnAgyScenarioTests` cases
+    fail (`ACallerWhoGivesUpBetweenTheLaunches_…`, `AFollowUpCutShortByTheCaller_…`, `ADeniedCommand_…`); each class passes alone. One of them
+    also saw `TheRoundsNumstatsAreCountedTests.AnUnknownCommit_IsGitFailed_NeverAThrow` fail when run alone, unexplained. None of these was
+    checked against `b4e2ea96`. The result of the review's final run is in the next deviation.
+57. **`dotnet format --verify-no-changes` on the solution exits 2.** Every finding is an analyzer error (IL2026, IL3050) in `src_server` or
     `src_bugs`. With `--include`, each new file passes.
-42. **The test host here has no `.exe`.** On this Linux host the test host is `./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests`; the commands
-    in `common.md` name the `.exe`, which does not exist here.
-43. **The S5.6.7 theory keeps each ending in a helper,** so every method stays at complexity 4, and its homes root is a disposed field
+58. **The test host here has no `.exe`.** On this Linux host the test host is `./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests`; the commands
+    in `.agents/PROJECT.md` name the `.exe`, which does not exist here.
+59. **The S5.6.7 theory keeps each ending in a helper,** so every method stays at complexity 4, and its homes root is a disposed field
     (`_homes`); the spec does not list that field. Its cancelled ending keeps the asking task in a named local, `asking`, because a lambda cannot
     take `.Should()`.
-44. **Two more tests went red with the Kimi rows, and `shared/runtime-capabilities.json` splits one `why` string.** The refusal text of an
+60. **Two more tests went red with the Kimi rows, and `shared/runtime-capabilities.json` splits one `why` string.** The refusal text of an
     unknown runtime now lists `kimi`, so `AnUnknownRuntimeOrCapability_IsRefused_NamingWhatIsKnown` (`CapabilityMatrixTests.cs:273`) and the
     TS regex at `capabilityAdmission.test.ts:166` changed with the list; the spec's red list did not name them. `ConfinementPlannerTests.cs:167`
-    stayed green (its substring still occurs), and t2 changed its list string for exactness. The "`cells` may be empty…" sentence is now its own
+    stayed green (its substring still occurs), and the coder changed its list string for exactness. The "`cells` may be empty…" sentence is now its own
     `why` string beside the new Kimi sentence.
-45. **S5.5's fixture makes small choices the spec leaves open.** `_data` is created in the constructor beside `_temp`; `Scopes` is a private
+61. **S5.5's fixture makes small choices the spec leaves open.** `_data` is created in the constructor beside `_temp`; `Scopes` is a private
     nested class copied from `AKimiConsultationScenarioTests`; `Marked()` factors out the `PlayedKimi` expression used in three cases; `Check`
     returns `(int Code, JsonElement Said, string Err)` and parses stdout as `ConsultantCheckTests.Check` does; no `[Collection("fakecli-env")]`,
     because no case sets a fake-CLI variable.
