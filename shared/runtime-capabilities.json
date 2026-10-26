@@ -344,7 +344,7 @@
         "cli": "kimi",
         "version": "2.1.1",
         "date": "2026-10-13",
-        "resultRef": "research/RESULTS_kimi_confinement.md §17 M-K6 — an empty working folder bounds `Read`, but `Grep` and `Glob` took an OUTSIDE file's marker by absolute path 3 of 3, and the cwd plays no part in that; M-K3 and M-K4 — every write and shell command refused",
+        "resultRef": "research/RESULTS_kimi_confinement.md §9 M-K6 — an empty working folder bounds `Read`, but `Grep` and `Glob` took an OUTSIDE file's marker by absolute path 3 of 3, and the cwd plays no part in that; M-K3 and M-K4 — every write and shell command refused",
         "cells": [
           "M-K6",
           "M-K3",
@@ -361,7 +361,7 @@
         "cli": "kimi",
         "version": "2.1.1",
         "date": "2026-10-13",
-        "resultRef": "research/RESULTS_kimi_confinement.md §17 M-K6 — `Read` bounded to the working folder 3 of 3, `Grep` and `Glob` outside it 3 of 3; M-K3 and M-K4 — writes refused; M-K9 and M-K9 (e) — a branch's AGENTS.md, skills, sub-agents and .mcp.json load from disk, so the roots are COPIED, not granted",
+        "resultRef": "research/RESULTS_kimi_confinement.md §9 M-K6 — `Read` bounded to the working folder 3 of 3, `Grep` and `Glob` outside it 3 of 3; M-K3 and M-K4 — writes refused; M-K9 (§12) and M-K9 (e) (§21) — a branch's AGENTS.md, skills, sub-agents and .mcp.json load from disk, so the roots are COPIED, not granted",
         "cells": [
           "M-K6",
           "M-K3",
