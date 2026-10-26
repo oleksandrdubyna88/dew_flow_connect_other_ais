@@ -178,13 +178,21 @@ test('a flagged admission carries the caveat a person must acknowledge (D13)', (
 // S5.6.8 (E5.6 of todo/PLAN_vibe_and_kimi_runtimes_E5.md): Kimi's none and disk rows are flagged — Grep and Glob read the disk (M-K6) — and web is unmeasured.
 test('kimi rows admit flagged, web refuses naming its record', () => {
   // QWEN-FILL-BEGIN s568-kimi-admit test
-  // Arrange/Act: const none = admit('kimi', 'none'); const disk = admit('kimi', 'disk'); const web = admit('kimi', 'web').
-  // Assert (node:assert/strict, as the tests above):
-  //   - for none and disk: assert.equal(x.admitted, true, x.reason); assert.equal(x.standing, 'unconfined'); assert.equal(x.flag, 'unconfined');
-  //     assert.match(x.caveat, /can read this machine/u).
-  //   - web: assert.equal(web.admitted, false); assert.equal(web.standing, 'unmeasured'); assert.match(web.reason, /not been measured/u);
-  //     assert.match(web.reason, /RESULTS_kimi_confinement\.md/u); assert.ok(!web.reason.includes('RESULTS_question_consultant_capabilities.md')).
-  // Fails before the change: 'kimi' is absent from the table, so admit() refuses it as "not a runtime the question consultant can launch".
-  throw new Error('s568-kimi-admit');
+  const none = admit('kimi', 'none');
+  const disk = admit('kimi', 'disk');
+  const web = admit('kimi', 'web');
+
+  for (const x of [none, disk]) {
+    assert.equal(x.admitted, true, x.reason);
+    assert.equal(x.standing, 'unconfined');
+    assert.equal(x.flag, 'unconfined');
+    assert.match(x.caveat, /can read this machine/u);
+  }
+
+  assert.equal(web.admitted, false);
+  assert.equal(web.standing, 'unmeasured');
+  assert.match(web.reason, /not been measured/u);
+  assert.match(web.reason, /RESULTS_kimi_confinement\.md/u);
+  assert.ok(!web.reason.includes('RESULTS_question_consultant_capabilities.md'));
   // QWEN-FILL-END s568-kimi-admit
 });

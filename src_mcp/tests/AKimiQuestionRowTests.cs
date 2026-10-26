@@ -53,12 +53,19 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
     private async Task RepositoryAsync(string at, params (string Path, string Text)[] files)
     {
         // QWEN-FILL-BEGIN s567-repo test
-        // Same as AVibeQuestionRowReadsACopyOfItsRootsTests.RepositoryAsync: Directory.CreateDirectory(at); write each (path, text) under `at`
-        // (path.Split('/') joined with Path.Combine, parent folders created, File.WriteAllTextAsync(full, text, TestContext.Current.CancellationToken));
-        // then for each of [["init","-b","main"],["config","user.email","t@example.com"],["config","user.name","t"],["add","."],["commit","-m","base"]]
-        // run `_launcher.RunAsync(new ProcessRequest("git", args, at), TestContext.Current.CancellationToken)` and assert result.ExitCode Be 0 with
-        // string.Join(' ', args) + ": " + result.StdErr as the message.
-        throw new NotImplementedException("s567-repo");
+        Directory.CreateDirectory(at);
+        foreach (var (path, text) in files)
+        {
+            var full = Path.Combine([at, .. path.Split('/')]);
+            Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+            await File.WriteAllTextAsync(full, text, TestContext.Current.CancellationToken);
+        }
+
+        foreach (var args in (string[][])[["init", "-b", "main"], ["config", "user.email", "t@example.com"], ["config", "user.name", "t"], ["add", "."], ["commit", "-m", "base"]])
+        {
+            var result = await _launcher.RunAsync(new ProcessRequest("git", args, at), TestContext.Current.CancellationToken);
+            result.ExitCode.Should().Be(0, string.Join(' ', args) + ": " + result.StdErr);
+        }
         // QWEN-FILL-END s567-repo
     }
 
@@ -124,23 +131,78 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
     {
         _ = ending; // the body below reads it (it is the arm); drop this line once it does
         // QWEN-FILL-BEGIN s567-copies test
-        // Arrange: using var stood = StandIn(); GitScratch.AfterUnlink = _unlinkedByTheDeleter.Add; var before = _person.Hash();
-        //   the granted root: Path.Combine(Repo, "src") (Answered, CancelledMidTurn) or a plain folder outside any git work tree, _dir.At("plain") created
-        //   (RefusedBeforeTheLaunch — the refusal comes before any launch). var played = new PlayedKimi(_launcher)
-        //   { Turn = (_, request) => PlayedKimi.Answered(PlayedKimi.SessionOf(request), 20000, 30, Advice) }; for CancelledMidTurn:
-        //   using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken) and
-        //   During = async (_, ct) => { cts.Cancel(); await Task.Delay(Timeout.Infinite, ct); } (the shim blocks until it is cancelled).
-        // Act: var reply = await AskAsync(Service(played, root), cts?.Token) — ask_consultants answers a cancelled row as a row status, or throws
-        //   OperationCanceledException: if it throws, catch it with Assert.ThrowsAnyAsync<OperationCanceledException> and go on to the asserts.
-        // Assert: Answered — the row's status is RowOutcomes.Answered (reply.GetProperty("answers") has one element, its "status"); the ONE shim request's StdIn
-        //   (played.Shims.Should().ContainSingle().Subject.Request.StdIn) Contain the copy's path (the folder Path.GetDirectoryName of --cwd ... precisely: the
-        //   request's WorkingDirectory + a first segment of the copy) and NotContain the root (Path.Combine(Repo, "src")) — the prompt names the copies' paths and never the root.
-        //   RefusedBeforeTheLaunch — played.Shims BeEmpty. For every ending: Directory.Exists(OneShotRoot) is false or has no entries (coai-vh\<8> gone);
-        //   the row's scratch is gone (Directory.EnumerateDirectories(Path.GetTempPath(), "coai-question-*") may hold other runs' folders — assert on the
-        //   WorkingDirectory/--home paths the played shim saw instead: Directory.Exists(Path.GetDirectoryName(home)) Be false for the Answered and Cancelled arms);
-        //   _unlinkedByTheDeleter BeEmpty; _person.Hash() Equal before.
-        // Fails before E5.3 g: "Expected Directory.Exists("…\coai-vh\<8>") to be False, but found True." / the recorder red.
-        throw new NotImplementedException("s567-copies");
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        using var stood = StandIn();
+        GitScratch.AfterUnlink = _unlinkedByTheDeleter.Add;
+        var before = _person.Hash();
+
+        var root = Path.Combine(Repo, "src");
+        if (ending == Ending.RefusedBeforeTheLaunch)
+        {
+            root = _dir.At("plain");
+            Directory.CreateDirectory(root);
+        }
+
+        var played = new PlayedKimi(_launcher)
+        {
+            Turn = (_, request) => PlayedKimi.Answered(PlayedKimi.SessionOf(request), 20000, 30, Advice),
+        };
+        if (ending == Ending.CancelledMidTurn)
+        {
+            played.During = async (_, ct) =>
+            {
+                cts.Cancel();
+                await Task.Delay(Timeout.Infinite, ct);
+            };
+        }
+
+        // A cancelled row may come back as a row status or as OperationCanceledException.
+        JsonElement? reply = null;
+        try
+        {
+            reply = await AskAsync(Service(played, root), cts.Token);
+        }
+        catch (OperationCanceledException) when (ending == Ending.CancelledMidTurn)
+        {
+            // accepted: the cancelled row ended by exception
+        }
+
+        if (reply is { } answered)
+        {
+            answered.TryGetProperty("answers", out var answers).Should().BeTrue(answered.ToString());
+            var row = answers.EnumerateArray().Should().ContainSingle().Subject;
+            var status = row.GetProperty("status").GetString();
+            if (ending == Ending.Answered)
+            {
+                status.Should().Be(RowOutcomes.Answered, answered.ToString());
+            }
+            else
+            {
+                status.Should().NotBe(RowOutcomes.Answered, answered.ToString());
+            }
+        }
+
+        string? rowFolder = null;
+        if (ending == Ending.RefusedBeforeTheLaunch)
+        {
+            played.Shims.Should().BeEmpty();
+        }
+        else
+        {
+            var request = played.Shims.Should().ContainSingle().Subject.Request;
+            rowFolder = Path.GetDirectoryName(request.WorkingDirectory);
+            request.StdIn.Should().Contain(Path.Combine(request.WorkingDirectory, "src"), "the prompt names the copy, never the root");
+            request.StdIn.Should().NotContain(Path.Combine(Repo, "src"), "the prompt never names the granted root");
+        }
+
+        if (rowFolder is not null)
+        {
+            Directory.Exists(rowFolder).Should().BeFalse("the row's folder is gone once the row ends");
+        }
+
+        (!Directory.Exists(OneShotRoot) || !Directory.EnumerateFileSystemEntries(OneShotRoot).Any()).Should().BeTrue("the one-shot home is gone");
+        _unlinkedByTheDeleter.Should().BeEmpty();
+        _person.Hash().Should().Be(before);
         // QWEN-FILL-END s567-copies
     }
 }
