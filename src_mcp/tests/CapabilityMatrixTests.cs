@@ -88,6 +88,18 @@ public sealed class CapabilityMatrixTests
         }
     }
 
+    /// <summary>S5.6.2 (E5.6 of <c>todo/PLAN_vibe_and_kimi_runtimes_E5.md</c>): the shared vectors carry kimi's three pairs, two admitted flagged and web refused.</summary>
+    [Fact]
+    public void TheVectorsCoverKimi()
+    {
+        var kimi = Vectors.Where(v => v.Runtime == "kimi").ToList();
+
+        kimi.Select(v => v.Capability).Should().BeEquivalentTo(Enum.GetValues<Capability>().Select(c => c.Spelled()), "one vector for each of kimi's pairs");
+        kimi.Where(v => v.Admitted).Should().OnlyContain(v => v.Standing == "unconfined" && v.Flag == "unconfined", "Grep and Glob read the disk directly (M-K6)")
+            .And.HaveCount(2);
+        kimi.Single(v => v.Capability == "web").Admitted.Should().BeFalse("no Kimi cell exercised the web");
+    }
+
     [Theory]
     [MemberData(nameof(Cases))]
     public void EveryVector_IsAdmittedOrRefused_AsMeasured(int index)
@@ -236,6 +248,17 @@ public sealed class CapabilityMatrixTests
             CapabilityMatrix.Admit("kimi", capability).Should().BeOfType<Admission.Admitted>()
                 .Which.Flag.Should().Be(AdmissionFlag.Unconfined, $"kimi × {capability}: Grep and Glob read the disk directly (M-K6)");
         }
+    }
+
+    /// <summary>
+    /// The one `unconfined` sentence is shown beside Codex AND Kimi rows, so it names no mechanism only one of them has: Codex reads through a shell,
+    /// but every shell command of Kimi is refused (M-K3, M-K4) and it reads through Grep and Glob (M-K6). Review R2 of Q3.
+    /// </summary>
+    [Fact]
+    public void TheUnconfinedCaveat_NamesNoShell_ForKimiRefusesEveryShellCommand()
+    {
+        AdmissionFlag.Unconfined.Caveat().Should().Contain("can read this machine").And.NotContainEquivalentOf("shell",
+            "a Kimi row shows this sentence, and no shell command of Kimi runs (M-K3, M-K4)");
     }
 
     /// <summary>D13's two refusals kept apart: the flags are what the data says, never what a runtime name suggests.</summary>

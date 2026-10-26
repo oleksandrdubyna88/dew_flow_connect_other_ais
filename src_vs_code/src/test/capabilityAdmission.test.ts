@@ -182,6 +182,7 @@ test('kimi rows admit flagged, web refuses naming its record', () => {
     assert.equal(admission.standing, 'unconfined', `kimi × ${capability}: Grep and Glob read the disk directly (M-K6)`);
     assert.equal(admission.flag, 'unconfined');
     assert.match(admission.caveat, /can read this machine/u);
+    assert.doesNotMatch(admission.caveat, /shell/iu, 'no shell command of Kimi runs (M-K3, M-K4): it reads through Grep and Glob (M-K6)');
   }
   const web = admit('kimi', 'web');
   assert.equal(web.admitted, false);
