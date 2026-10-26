@@ -148,7 +148,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
                 status.Should().Be(RowOutcomes.Answered, reply.ToString());
                 var request = kimi.Shims.Should().ContainSingle().Subject.Request;
                 var cwd = request.Arguments[request.Arguments.ToList().IndexOf("--cwd") + 1];
-                request.StdIn.Should().Contain(cwd, "the prompt names the copy Kimi can read");
+                request.StdIn.Should().MatchRegex(System.Text.RegularExpressions.Regex.Escape(Path.Combine(cwd, "snapshot-")) + "[0-9a-f]+", "the prompt names the copy of the granted folder, which is under the working folder - not the working folder alone");
                 request.StdIn.Should().NotContain(granted, "never the original, which it cannot read");
             }
             else

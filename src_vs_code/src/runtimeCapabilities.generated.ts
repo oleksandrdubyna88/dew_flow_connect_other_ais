@@ -398,7 +398,7 @@ export const RUNTIME_CAPABILITIES: readonly RuntimeCapabilityRow[] = [
       date: '2026-10-13',
       resultRef: 'research/RESULTS_kimi_confinement.md §14 — WebSearch and FetchURL are announced (§7) and no cell exercises them',
       cells: [],
-      note: 'not measured: no Kimi cell searches or fetches the web',
+      note: 'kimi 2.1.1: not measured: no Kimi cell searches or fetches the web',
     },
   },
 ];

@@ -124,6 +124,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
 
         var (_, said) = await CheckAsync(Settings(Homes), played, TestContext.Current.CancellationToken);
 
+        played.Shims.Should().NotBeEmpty("a home was made before the end, so the disposal assertions below can see it go");
         var oneShot = Path.Combine(Homes, VibeHomes.OneShotFolder);
         (Directory.Exists(oneShot) ? Directory.EnumerateFileSystemEntries(oneShot) : Enumerable.Empty<string>())
             .Should().BeEmpty("coai-vh\\<8> is gone; the folder coai-vh itself may exist");
@@ -153,31 +154,16 @@ public sealed class AKimiConsultantCheckTests : IDisposable
             },
         };
 
-        var said = default(JsonElement);
-        try
-        {
-            (_, said) = await CheckAsync(Settings(Homes), played, caller.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            // The check may throw instead of answering a record. The asserts below still apply.
-        }
+        var (code, said) = await CheckAsync(Settings(Homes), played, caller.Token);
 
-        if (said.ValueKind == JsonValueKind.Object && said.TryGetProperty("state", out var state))
-        {
-            state.GetString().Should().NotBe("answered", said.ToString());
-            if (said.TryGetProperty("failureKind", out var kind))
-            {
-                kind.GetString().Should().Be("cancelled", said.ToString());
-            }
-        }
+        said.ValueKind.Should().Be(JsonValueKind.Object, "the check prints its record when the caller cancels");
+        said.GetProperty("state").GetString().Should().Be(ConsultCheckStates.Failed, said.ToString());
+        said.GetProperty("failureKind").GetString().Should().Be("cancelled", said.ToString());
+        played.Shims.Should().ContainSingle("a home with its junction was made before the cancel");
 
         var oneShot = Path.Combine(Homes, VibeHomes.OneShotFolder);
-        if (Directory.Exists(oneShot))
-        {
-            Directory.EnumerateFileSystemEntries(oneShot).Should().BeEmpty();
-        }
-
+        (Directory.Exists(oneShot) ? Directory.EnumerateFileSystemEntries(oneShot) : Enumerable.Empty<string>())
+            .Should().BeEmpty("coai-vh\\<8> is gone");
         _unlinkedByTheDeleter.Should().BeEmpty();
         _person.Hash().Should().Equal(before);
     }
