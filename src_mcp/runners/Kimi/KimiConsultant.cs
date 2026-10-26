@@ -47,7 +47,11 @@ public sealed class KimiConsultant(KimiRuntime inner, string vendor = "kimi") : 
     public ReviewerInvocation Build(ConsultantLaunch launch)
     {
         ConsultantLaunches.MustBeLaunchable(launch);
-        MustCarryNoFlag(launch);
+        if (launch.Confinement is LaunchConfinement.Planned planned)
+        {
+            MustCarryNoFlag(planned.Plan);
+        }
+
         var settings = launch.Settings with { OwnedScratch = OwnedFolder(launch), Model = ModelOf(launch.Settings) };
         var built = inner.Build(ConsultantLaunches.RoleOf(launch), launch.Prompt, Cwd(launch), string.Empty, launch.OutputDir, settings);
         var request = built.Request with { Arguments = [.. built.Request.Arguments, .. SessionOf(launch)] };
@@ -57,12 +61,12 @@ public sealed class KimiConsultant(KimiRuntime inner, string vendor = "kimi") : 
     }
 
     /// <summary>E5.6 decision 3: a planned launch whose plan carries ANY flag (leading, trailing or an added directory) is not one coai made for kimi — refused.</summary>
-    private static void MustCarryNoFlag(ConsultantLaunch launch)
+    private static void MustCarryNoFlag(Confinement.Planned plan)
     {
         // QWEN-FILL-BEGIN s56-kimi-noflags prod
-        // Only when `launch.Confinement is LaunchConfinement.Planned planned` and `planned.Plan` has any of `Leading`, `Flags`, `AddDirs` non-empty:
-        // throw new ArgumentException("a Kimi row's confinement is the shim's; a plan with flags is not one coai made for kimi", nameof(launch)).
-        // Every other launch (a conversation's, a flag-free plan): return without effect.
+        // `Build` calls this only for a planned launch (a conversation's launch never gets here). When `plan.Leading`, `plan.Flags` or `plan.AddDirs` is non-empty:
+        // throw new ArgumentException("a Kimi row's confinement is the shim's; a plan with flags is not one coai made for kimi", nameof(plan)).
+        // A flag-free plan: return without effect. (`Confinement.Planned` is in CoaiMcp.Core.QuestionConsult, already imported.)
         throw new NotImplementedException("s56-kimi-noflags");
         // QWEN-FILL-END s56-kimi-noflags
     }
