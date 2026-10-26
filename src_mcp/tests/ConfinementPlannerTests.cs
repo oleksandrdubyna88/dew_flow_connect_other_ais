@@ -401,10 +401,16 @@ public sealed class ConfinementPlannerTests
     }
 
     /// <summary>E5.6 decision 3: the planner gives Kimi no flags, so a plan that carries one was not made by coai for kimi.</summary>
-    [Fact]
-    public void APlanWithFlags_IsRefusedForKimi()
+    [Theory]
+    [InlineData("--search", "")]
+    [InlineData("", "--yolo")]
+    public void APlanWithLeadingOrFlags_IsRefusedForKimi(string leading, string flag)
     {
-        var plan = Plan("kimi", CapabilityGrant.None) with { Flags = ["--yolo"] };
+        var plan = Plan("kimi", CapabilityGrant.None) with
+        {
+            Leading = leading.Length > 0 ? [leading] : [],
+            Flags = flag.Length > 0 ? [flag] : [],
+        };
         var launch = Planned("kimi", CapabilityGrant.None) with { Confinement = new LaunchConfinement.Planned(plan) };
 
         var build = () => new Runners.Kimi.KimiConsultant(new Runners.Kimi.KimiRuntime("kimi", Runners.Platform.HostKind.Windows,
