@@ -158,6 +158,7 @@ public sealed class CapabilityMatrixTests
     [
         ("RESULTS_question_consultant_capabilities.md", "2026-10-01", "01a0f8c7-18e4-"),
         ("RESULTS_vibe_confinement.md", "2026-10-12", "M-V"),
+        ("RESULTS_kimi_confinement.md", "2026-10-13", "M-K"),
     ];
 
     [Fact]
@@ -195,6 +196,44 @@ public sealed class CapabilityMatrixTests
             "denied writes do not prove bounded READS — the disk row rests on the read cell itself");
         CapabilityMatrix.Admit("vibe", Capability.Web).Should().BeOfType<Admission.Refused>()
             .Which.Reason.Should().Contain("not been measured", "no Vibe cell exercises the web");
+    }
+
+    /// <summary>
+    /// S5.6.1 of todo/PLAN_vibe_and_kimi_runtimes_E5.md: Kimi's three rows, each on its own cells — none and disk UNCONFINED
+    /// (Grep and Glob read the disk directly, M-K6), web unmeasured.
+    /// </summary>
+    [Fact]
+    public void KimiHasThreeRows_EachCitingItsCells()
+    {
+        var none = RuntimeCapabilities.Builtin.Of("kimi", Capability.None);
+        none.Should().NotBeNull("the table names kimi × none (E5.6 decision 2)");
+        none!.Standing.Should().Be(CapabilityStanding.Unconfined, "an empty folder bounds Read only — Grep and Glob read outside it (M-K6)");
+        none.MeasuredWith.Cells.Should().Contain("M-K6");
+        none.MeasuredWith.Version.Should().Be("2.1.1");
+
+        var disk = RuntimeCapabilities.Builtin.Of("kimi", Capability.Disk)!;
+        disk.Standing.Should().Be(CapabilityStanding.Unconfined);
+        disk.MeasuredWith.Cells.Should().Contain(["M-K6", "M-K9"], "the read cell, and why the roots are copied");
+        disk.MeasuredWith.Version.Should().Be("2.1.1");
+
+        var web = RuntimeCapabilities.Builtin.Of("kimi", Capability.Web)!;
+        web.Standing.Should().Be(CapabilityStanding.Unmeasured);
+        web.MeasuredWith.ResultRef.Should().Contain("RESULTS_kimi_confinement.md");
+        web.MeasuredWith.Version.Should().Be("2.1.1");
+    }
+
+    /// <summary>S5.6.4: both admitted Kimi rows carry D13's flag — the person sees "Can read this machine".</summary>
+    [Fact]
+    public void AdmissionFlagsBothRows()
+    {
+        foreach (var capability in (Capability[])[Capability.None, Capability.Disk])
+        {
+            CapabilityMatrix.Admit("kimi", capability).Should().BeOfType<Admission.Admitted>()
+                .Which.Flag.Should().Be(AdmissionFlag.Unconfined, $"kimi × {capability}: Grep and Glob read the disk directly (M-K6)");
+        }
+
+        CapabilityMatrix.Admit("kimi", Capability.Web).Should().BeOfType<Admission.Refused>()
+            .Which.Reason.Should().Contain("not been measured").And.Contain("RESULTS_kimi_confinement.md");
     }
 
     /// <summary>D13's two refusals kept apart: the flags are what the data says, never what a runtime name suggests.</summary>
@@ -270,7 +309,7 @@ public sealed class CapabilityMatrixTests
     public void AnUnknownRuntimeOrCapability_IsRefused_NamingWhatIsKnown()
     {
         var runtime = CapabilityMatrix.Admit("gemini", "none").Should().BeOfType<Admission.Refused>().Which;
-        runtime.Reason.Should().Contain("gemini").And.Contain("claude, codex, antigravity, local, api, vibe",
+        runtime.Reason.Should().Contain("gemini").And.Contain("claude, codex, antigravity, local, api, vibe, kimi",
             "an unknown name fails naming the legal values");
 
         var capability = CapabilityMatrix.Admit("claude", "shell").Should().BeOfType<Admission.Refused>().Which;
