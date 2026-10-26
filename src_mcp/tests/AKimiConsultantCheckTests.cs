@@ -150,6 +150,43 @@ public sealed class AKimiConsultantCheckTests : IDisposable
             .ToDictionary(file => Path.GetRelativePath(folder, file), File.ReadAllBytes);
 
     [Fact]
+    public async Task ACheckCancelledMidTurn_StillDisposesItsHome()
+    {
+        using var person = new KimiFixture();
+        using var homes = TempDir.For("testsToDelete-kimicheck-cancelled-");
+        using var scope = StandIn(person);
+        using var cancel = new CancellationTokenSource();
+        var played = new PlayedKimi(new ProcessLauncher())
+        {
+            During = async (_, ct) =>
+            {
+                cancel.Cancel();
+                await Task.Delay(Timeout.Infinite, ct);
+            },
+        };
+        var unlinked = new List<string>();
+
+        (int Code, string Out, string Err) result;
+        GitScratch.AfterUnlink = unlinked.Add;
+        try
+        {
+            result = await ConsultantCheckMode.AnswerAsync(
+                Settings(homes.Path), ["--check-consultant", "--caller", "claude"], played, _temp, _warned.Add, Noticing.None, cancel.Token);
+        }
+        finally
+        {
+            GitScratch.AfterUnlink = null;
+        }
+
+        result.Out.Should().Contain("cancelled", "the record says the check was cancelled, not answered");
+        played.Shims.Should().ContainSingle("the turn had started when the check was cancelled");
+        Directory.EnumerateFileSystemEntries(Path.Combine(homes.Path, Runners.Vibe.VibeHomes.OneShotFolder)).Should().BeEmpty(
+            "the finally in the check disposes its home junction-first, whatever ended the turn");
+        Directory.EnumerateDirectories(_temp, "coai-check-*").Should().BeEmpty("the check's scratch goes with the check");
+        unlinked.Should().BeEmpty("KimiHome unlinked the junction first, so the deleter never met it");
+    }
+
+    [Fact]
     public async Task ARootlessCheck_KeepsTheHomeInItsScratch_AndDisposesItJunctionFirst()
     {
         using var person = new KimiFixture();
