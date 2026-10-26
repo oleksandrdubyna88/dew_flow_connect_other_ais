@@ -62,12 +62,14 @@ public sealed class KimiConsultant(KimiRuntime inner, string vendor = "kimi") : 
     /// </summary>
     private static void MustBeTheShimsConfinement(ConsultantLaunch launch)
     {
-        if (launch.Confinement is LaunchConfinement.Planned { Plan: var plan } && (plan.Flags.Count > 0 || plan.Leading.Count > 0 || plan.AddDirs.Count > 0))
+        if (launch.Confinement is LaunchConfinement.Planned { Plan: var plan } && CarriesArgv(plan))
         {
             throw new ArgumentException(
                 "a Kimi row's confinement is the shim's; a plan with flags is not one coai made for kimi", nameof(launch));
         }
     }
+
+    private static bool CarriesArgv(Confinement.Planned plan) => plan.Flags.Count + plan.Leading.Count + plan.AddDirs.Count > 0;
 
     /// <summary>The row's model, or Kimi's default when it names none — resolved here so the shim and the ledger name the same one.</summary>
     private static string ModelOf(ReviewerSettings settings) => settings.Model.Length > 0 ? settings.Model : KimiModels.Default;
