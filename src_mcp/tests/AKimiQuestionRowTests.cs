@@ -151,9 +151,15 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
 
         string[] roots = ending == Ending.RefusedBeforeTheLaunch ? [plain] : [granted];
 
+        // The row's scratch goes with the row, so the copy is read while the turn is alive.
+        string? copy = null;
         var played = new PlayedKimi(_launcher)
         {
-            Turn = (_, request) => PlayedKimi.Answered(PlayedKimi.SessionOf(request), 19973, 31, Advice),
+            Turn = (_, request) =>
+            {
+                copy = Directory.EnumerateDirectories(request.WorkingDirectory).Single();
+                return PlayedKimi.Answered(PlayedKimi.SessionOf(request), 19973, 31, Advice);
+            },
             During = ending == Ending.CancelledMidTurn ? Cancelling(caller) : static (_, _) => Task.CompletedTask,
         };
 
@@ -184,7 +190,8 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
             if (ending == Ending.Answered)
             {
                 TheRow(reply).GetProperty("status").GetString().Should().Be(RowOutcomes.Answered, reply.ToString());
-                launch.Request.StdIn.Should().Contain(launch.Request.WorkingDirectory, "the prompt names the copies, which stand in the row's tree");
+                copy.Should().NotBeNull("the turn ran and found the one copy in the row's tree");
+                launch.Request.StdIn.Should().Contain(copy, "the prompt names the copy itself, not only the tree it stands in");
                 launch.Request.StdIn.Should().NotContain(granted, "never the original root");
             }
 

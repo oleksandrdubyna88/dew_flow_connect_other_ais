@@ -136,8 +136,9 @@ public sealed class AKimiConsultantCheckTests : IDisposable
             ? new PlayedKimi(new ProcessLauncher()) { Turn = (_, request) => PlayedKimi.Lost(PlayedKimi.SessionOf(request)) }
             : new PlayedKimi(new ProcessLauncher()) { Turn = (_, request) => AnswersFromTheCopy(request) };
 
-        await CheckAsync(Settings(_homes), played, TestContext.Current.CancellationToken);
+        var (_, said) = await CheckAsync(Settings(_homes), played, TestContext.Current.CancellationToken);
 
+        said.GetProperty("state").GetString().Should().Be(theTurnFails ? "failed" : "answered", said.ToString());
         played.Shims.Should().ContainSingle();
         Directory.EnumerateFileSystemEntries(Path.Combine(_homes, VibeHomes.OneShotFolder))
             .Should().BeEmpty("the home's folder goes when the check ends, whatever ended it");
@@ -167,16 +168,10 @@ public sealed class AKimiConsultantCheckTests : IDisposable
         await started.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
         await cts.CancelAsync();
 
-        try
-        {
-            var (_, said) = await check;
-            said.GetProperty("state").GetString().Should().NotBe("answered", said.ToString());
-            said.ToString().Should().ContainEquivalentOf("cancel");
-        }
-        catch (OperationCanceledException)
-        {
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => check);
-        }
+        var (_, said) = await check;
+
+        said.GetProperty("state").GetString().Should().Be("failed", said.ToString());
+        said.GetProperty("failureKind").GetString().Should().Be("cancelled");
 
         Directory.EnumerateFileSystemEntries(Path.Combine(_homes, VibeHomes.OneShotFolder)).Should().BeEmpty("the home's folder goes when a cancelled check ends");
         TheDeleterNeverMetTheJunction();
