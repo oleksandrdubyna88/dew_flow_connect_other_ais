@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 not started.** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 SKELETON written 2026-10-26 (rows, vectors, planner arm, 12 scenarios as tests with bodies still to fill; deviations 50–55 below).** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -1085,6 +1085,19 @@ Numbered from 40, apart from the lists above, so the stories built in parallel d
 45. **Decision (e)'s sentence lives in *The consultant* article** (*What can go wrong*, five languages), because it is about a `consult` turn;
     the question-consultant article says only that a Kimi row's launches wait for one another and for a Kimi review on the same sign-in.
 46. **`CONSULTANT_SINCE` gates a note, so `consultantsWire.ts` is unchanged.** S5.7.3 was green before any code, as the row said.
+
+### E5.5–E5.6 skeleton (Sonnet, 2026-10-26)
+
+Numbered from 50, apart from the lists above. The skeleton builds; no test was run (the fill regions throw).
+
+50. **The production of E5.6 is written whole, not as fill regions:** the `kimi` arm of `ConfinementPlanner` (a 3-line expression), `Runtimes` gains `kimi`, the three rows
+    and the three vectors, and the regenerated `runtimeCapabilities.generated.ts`. The one body that is a fill region is `KimiConsultant.MustCarryNoFlags` (decision 3, S5.6.6).
+51. **`CapabilityMatrixTests.Records` gains the Kimi record** (`RESULTS_kimi_confinement.md`, `2026-10-13`, cell prefix `M-K`); without it `EveryRow_CitesTheRecord_…` would refuse the new rows.
+    The cell of M-K9 (e) is spelled `M-K9e`, as the probe's `--cells` flag spells it.
+52. **S5.6.2 is a named test, `TheVectorsCoverKimi`,** beside the existing coverage test (the table says "the existing test"): it asserts the three `kimi` pairs have a vector, so the scenario has a name of its own.
+53. **S5.6.8's list at `capabilityAdmission.test.ts:143` gained `kimi`;** the new test is the last in the file. The three `refusals` theory rows gained `kimi × web`.
+54. **S5.5 and S5.6.7 are new classes** (`AKimiConsultantCheckTests`, `AKimiQuestionRowTests`) with their own fake person and `StandIn()` (the shape of `AKimiConsultationScenarioTests`), so they run on every OS through `WindowsStandIn`.
+55. **Spec points left open for the filler (written in each region's comment):** the exact `failureKind` word of a cancelled check; whether `ask_consultants` answers a cancelled row as a status or throws; S5.5.2's failing arm uses `PlayedKimi.Lost`.
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 
