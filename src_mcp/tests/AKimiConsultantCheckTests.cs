@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using CoaiMcp.Runners.Acp;
 using CoaiMcp.Runners.Files;
 using CoaiMcp.Runners.Kimi;
@@ -43,72 +44,69 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     /// <summary>Settings for the caller <c>claude</c> consulting <c>my-kimi</c> (runtime <c>kimi</c>); <paramref name="homesRoot"/> empty is the hand-built, root-less case.</summary>
     private PanelSettings Settings(string homesRoot)
     {
-        // QWEN-FILL-BEGIN s55-settings test
-        return new PanelSettings { Providers = [], DataDir = _data.Path, ReviewerTimeout = TimeSpan.FromSeconds(60), ConsultEnabled = true,
-          ConsultantHomesRoot = homesRoot,
-          Consultants = new Dictionary<string, ConsultantChoice> { [CallerIdentity.Claude] = new("my-kimi", Runtime: "kimi") } };
-        // QWEN-FILL-END s55-settings
+        return new PanelSettings
+        {
+            Providers = [],
+            DataDir = _data.Path,
+            ReviewerTimeout = TimeSpan.FromSeconds(60),
+            ConsultEnabled = true,
+            ConsultantHomesRoot = homesRoot,
+            Consultants = new Dictionary<string, ConsultantChoice> { [CallerIdentity.Claude] = new("my-kimi", Runtime: "kimi") },
+        };
     }
 
     /// <summary>Runs <c>--check-consultant --caller claude</c> through <c>ConsultantCheckMode.AnswerAsync</c> with <paramref name="played"/> as the launcher.</summary>
     private async Task<(int Code, JsonElement Said, string Err)> CheckAsync(PanelSettings settings, PlayedKimi played, CancellationToken ct)
     {
-        // QWEN-FILL-BEGIN s55-check test
-        var (code, stdout, stderr) = await ConsultantCheckMode.AnanswerAsync(settings, ["--check-consultant", "--caller", "claude"], played, _temp.Path, _warned.Add, Noticing.None, ct);
+        var (code, stdout, stderr) = await ConsultantCheckMode.AnswerAsync(
+            settings, ["--check-consultant", "--caller", "claude"], played, _temp.Path, _warned.Add, Noticing.None, ct);
+
         return (code, stdout.Length > 0 ? JsonDocument.Parse(stdout).RootElement.Clone() : default, stderr);
-        // QWEN-FILL-END s55-check
     }
 
     /// <summary>A played Kimi whose answer reads the marker out of the CHECK.md of the cwd it was given — the check's own question — and says it cannot read the canary.</summary>
     private static PlayedKimi PlayedThatReadsTheMarker(IProcessLauncher inner, int exit = 0)
     {
-        // QWEN-FILL-BEGIN s55-played test
-        var played = new PlayedKimi(inner)
+        return new PlayedKimi(inner)
         {
             Turn = (_, request) =>
             {
-                var content = File.ReadAllText(Path.Combine(request.WorkingDirectory, "CHECK.md"));
-                var marker = content.Trim().Split(' ')[^1].TrimEnd('.');
                 if (exit != 0)
                 {
                     return new ProcessResult(exit, KimiShimScripts.Report(AcpEnd.AgentFailed, string.Empty, "the agent failed", tokens: false), "the agent failed", TimedOut: false);
                 }
+
+                var marker = File.ReadAllText(Path.Combine(request.WorkingDirectory, "CHECK.md")).Trim().Split(' ')[^1].TrimEnd('.');
+
                 return PlayedKimi.Answered(PlayedKimi.SessionOf(request), 100, 10, $"marker: {marker}{Environment.NewLine}canary: CANNOT");
-            }
+            },
         };
-        return played;
-        // QWEN-FILL-END s55-played
     }
 
     /// <summary>The shim's argument after <paramref name="flag"/> (<c>--cwd</c>, <c>--home</c>) of the one launch the played Kimi saw.</summary>
     private static string ArgumentAfter(PlayedKimi played, string flag)
     {
-        // QWEN-FILL-BEGIN s55-arg test
         var arguments = played.Shims.Should().ContainSingle().Subject.Request.Arguments.ToList();
+
         return arguments[arguments.IndexOf(flag) + 1];
-        // QWEN-FILL-END s55-arg
     }
 
     /// <summary>S5.5.1: the check passes in a copy, on a one-shot home under <c>&lt;root&gt;\coai-vh\&lt;8&gt;\kh-&lt;10 hex&gt;</c>, and leaves the scratch repository and its canary as they were.</summary>
     [Fact]
     public async Task AKimiCheck_RunsInACopy_OnAOneShotHome()
     {
-        // QWEN-FILL-BEGIN s551 test
         using var stood = KimiStandIn.Of(_person);
         var played = PlayedThatReadsTheMarker(new ProcessLauncher());
-        var settings = Settings(_homes.Path);
-        var (code, said, _) = await CheckAsync(settings, played, TestContext.Current.CancellationToken);
+
+        var (code, said, _) = await CheckAsync(Settings(_homes.Path), played, TestContext.Current.CancellationToken);
+
         code.Should().Be(0);
-        said.GetProperty("state").GetString().Should().Be("answered");
-        said.GetProperty("markerRead").GetBoolean().Should().BeTrue();
-        ArgumentAfter(played, "--cwd").Should().Contain(Path.Combine("own", "tree"));
-        var homeArg = ArgumentAfter(played, "--home");
-        var escapedRoot = Regex.Escape(_homes.Path);
-        homeArg.Should().MatchRegex($"^{escapedRoot}[/\\\\]coai-vh[/\\\\][0-9a-f]{{8}}[/\\\\]kh-[0-9a-f]{{10}}$");
-        Directory.EnumerateDirectories(_temp.Path, "coai-check-*").Should().BeEmpty();
-        var canary = said.GetProperty("canary").GetString();
-        canary.Should().NotBe("read");
-        // QWEN-FILL-END s551
+        said.GetProperty("state").GetString().Should().Be("answered", said.ToString());
+        said.GetProperty("markerRead").GetBoolean().Should().BeTrue("the copy holds the scratch's CHECK.md");
+        said.GetProperty("canary").GetString().Should().Be("not-attempted");
+        ArgumentAfter(played, "--cwd").Should().Contain(Path.Combine("own", "tree"), "a copy in the check's own scratch, never the repository");
+        ArgumentAfter(played, "--home").Should().MatchRegex($"^{Regex.Escape(Path.Combine(_homes.Path, VibeHomes.OneShotFolder))}[/\\\\][0-9a-f]{{8}}[/\\\\]kh-[0-9a-f]{{10}}$");
+        Directory.EnumerateDirectories(_temp.Path, "coai-check-*").Should().BeEmpty("the copy goes with the check's scratch");
     }
 
     /// <summary>S5.5.2: the check ends (passed; and a second arm where the turn fails exit 70) — the one-shot folder is gone, the deleter met no link, the person's folder is whole.</summary>
@@ -117,68 +115,64 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     [InlineData(70)]
     public async Task AfterTheCheck_TheHomeIsGone_JunctionFirst(int turnExit)
     {
-        _ = turnExit; // read by the body below
-        // QWEN-FILL-BEGIN s552 test
         using var stood = KimiStandIn.Of(_person);
         var before = _person.Hash();
         GitScratch.AfterUnlink = _unlinkedByTheDeleter.Add;
         var played = PlayedThatReadsTheMarker(new ProcessLauncher(), turnExit);
-        var settings = Settings(_homes.Path);
-        await CheckAsync(settings, played, TestContext.Current.CancellationToken);
-        
-        var homeArg = ArgumentAfter(played, "--home");
-        var homeParent = Path.GetDirectoryName(homeArg);
-        var eightHex = Path.GetFileName(homeParent);
-        var oneShotPath = Path.Combine(_homes.Path, VibeHomes.OneShotFolder, eightHex);
-        oneShotPath.Should().NotBeNullOrEmpty();
-        Directory.Exists(oneShotPath).Should().BeFalse();
-        
-        var coaiVhPath = Path.Combine(_homes.Path, VibeHomes.OneShotFolder);
-        if (Directory.Exists(coaiVhPath))
-        {
-            Directory.EnumerateFileSystemEntries(coaiVhPath).Should().BeEmpty();
-        }
-        
-        _unlinkedByTheDeleter.Should().BeEmpty();
-        _person.Hash().Should().Equal(before);
-        // QWEN-FILL-END s552
+
+        var (_, said, _) = await CheckAsync(Settings(_homes.Path), played, TestContext.Current.CancellationToken);
+
+        said.GetProperty("state").GetString().Should().Be(turnExit == 0 ? "answered" : "failed", said.ToString());
+        var oneShot = Path.GetDirectoryName(ArgumentAfter(played, "--home"))!;
+        oneShot.Should().StartWith(Path.Combine(_homes.Path, VibeHomes.OneShotFolder));
+        Directory.Exists(oneShot).Should().BeFalse("the check's one-shot folder goes when the check ends, whatever ended it");
+        _unlinkedByTheDeleter.Should().BeEmpty("the deleter's unlink recorder must not be invoked, because KimiHome unlinks the junction first");
+        _person.Hash().Should().Equal(before, "the person's folder: the same names, bytes and read-only bits as before");
     }
 
     /// <summary>S5.5.3: the played shim blocks, the token is cancelled — the record says cancelled, and the home is gone junction-first (pins the check's <c>finally</c>).</summary>
     [Fact]
     public async Task ACheckCancelledMidTurn_StillDisposesItsHome()
     {
-        // QWEN-FILL-BEGIN s553 test
-        // Arrange: using var stood = KimiStandIn.Of(_person); using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        using var stood = KimiStandIn.Of(_person);
+        using var cancelled = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var before = _person.Hash();
         GitScratch.AfterUnlink = _unlinkedByTheDeleter.Add;
-        var played = new PlayedKimi(new ProcessLauncher()) { During = async (_, ct) => { await cts.CancelAsync(); ct.ThrowIfCancellationRequested(); } };
+        var played = new PlayedKimi(new ProcessLauncher())
+        {
+            During = async (_, ct) =>
+            {
+                await cancelled.CancelAsync();
+                ct.ThrowIfCancellationRequested();
+            },
+        };
 
-        // Act: CheckAsync throws OperationCanceledException when cancelled mid-turn (ConsultantCheckMode's catch block rethrows).
-        var running = () => CheckAsync(Settings(_homes.Path), played, cts.Token);
-        await running.Should().ThrowAsync<OperationCanceledException>();
+        var (_, said, _) = await CheckAsync(Settings(_homes.Path), played, cancelled.Token);
 
-        // Assert: the one-shot folder is gone junction-first, and the deleter met no link.
-        Directory.EnumerateFileSystemEntries(Path.Combine(_homes.Path, VibeHomes.OneShotFolder)).Should().BeEmpty();
-        _unlinkedByTheDeleter.Should().BeEmpty();
-        // QWEN-FILL-END s553
+        said.GetProperty("failureKind").GetString().Should().Be("cancelled", said.ToString());
+        var oneShot = Path.GetDirectoryName(ArgumentAfter(played, "--home"))!;
+        Directory.Exists(oneShot).Should().BeFalse("a cancelled check gives its one-shot folder back");
+        _unlinkedByTheDeleter.Should().BeEmpty("the deleter's unlink recorder must not be invoked, because KimiHome unlinks the junction first");
+        _person.Hash().Should().Equal(before, "the person's folder: the same names, bytes and read-only bits as before");
     }
 
     /// <summary>S5.5.4: settings built by hand have no homes root — the home stays in the check's scratch (<c>&lt;scratch&gt;\own\kh-…</c>) and goes with it, junction-first.</summary>
     [Fact]
     public async Task ARootlessCheck_KeepsTheHomeInItsScratch_AndDisposesItJunctionFirst()
     {
-        // QWEN-FILL-BEGIN s554 test
         using var stood = KimiStandIn.Of(_person);
-        GitScratch.AfterUnlink = _unlinkedByTheDeleter.Add;
         var before = _person.Hash();
+        GitScratch.AfterUnlink = _unlinkedByTheDeleter.Add;
         var played = PlayedThatReadsTheMarker(new ProcessLauncher());
-        var settings = Settings(string.Empty);
-        await CheckAsync(settings, played, TestContext.Current.CancellationToken);
-        ArgumentAfter(played, "--home").Should().Contain(Path.Combine("own", "kh-"));
-        Directory.EnumerateDirectories(_temp.Path, "coai-check-*").Should().BeEmpty();
-        Directory.Exists(ArgumentAfter(played, "--home")).Should().BeFalse();
-        _unlinkedByTheDeleter.Should().BeEmpty();
-        _person.Hash().Should().Equal(before);
-        // QWEN-FILL-END s554
+
+        var (_, said, _) = await CheckAsync(Settings(string.Empty), played, TestContext.Current.CancellationToken);
+
+        said.GetProperty("state").GetString().Should().Be("answered", said.ToString());
+        var home = ArgumentAfter(played, "--home");
+        home.Should().Contain(Path.Combine("own", "kh-"), "with no homes root the home stays in the check's own scratch");
+        Directory.EnumerateDirectories(_temp.Path, "coai-check-*").Should().BeEmpty("the scratch goes with the home inside it");
+        Directory.Exists(home).Should().BeFalse();
+        _unlinkedByTheDeleter.Should().BeEmpty("the deleter's unlink recorder must not be invoked, because KimiHome unlinks the junction first");
+        _person.Hash().Should().Equal(before, "the person's folder: the same names, bytes and read-only bits as before");
     }
 }

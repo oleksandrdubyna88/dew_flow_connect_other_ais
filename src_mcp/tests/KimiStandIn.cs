@@ -11,25 +11,20 @@ namespace CoaiMcp.Tests;
 internal static class KimiStandIn
 {
     /// <summary>The fake person's places, the Windows host, the lock root beside the person's folder, and <see cref="PlayedKimi.Shim"/> as the shim.</summary>
-    public static IDisposable Of(KimiFixture person)
+    public static IDisposable Of(KimiFixture person) => new Scopes(
+        WindowsStandIn.Begin(),
+        KimiCredentialsLock.RootFor(Path.Combine(person.Folder, "locks")),
+        KimiSeams.Using(HostKind.Windows, new KimiSeams(person.PlacesAt, () => (PlayedKimi.Shim, []))));
+
+    /// <summary>Several scopes, given back in reverse.</summary>
+    private sealed class Scopes(params IDisposable[] scopes) : IDisposable
     {
-        // QWEN-FILL-BEGIN s56-standin test
-        private sealed class Scopes(params IDisposable[] scopes) : IDisposable
+        public void Dispose()
         {
-            public void Dispose()
+            foreach (var scope in scopes.Reverse())
             {
-                foreach (var scope in scopes.Reverse())
-                {
-                    scope.Dispose();
-                }
+                scope.Dispose();
             }
         }
-
-        return new Scopes(
-            WindowsStandIn.Begin(),
-            KimiCredentialsLock.RootFor(Path.Combine(person.Folder, "locks")),
-            KimiSeams.Using(HostKind.Windows, new KimiSeams(person.PlacesAt, () => (PlayedKimi.Shim, [])))
-        );
-        // QWEN-FILL-END s56-standin
     }
 }

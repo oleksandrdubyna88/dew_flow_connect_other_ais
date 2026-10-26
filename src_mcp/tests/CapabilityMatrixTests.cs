@@ -202,7 +202,6 @@ public sealed class CapabilityMatrixTests
     [Fact]
     public void KimiHasThreeRows_EachCitingItsCells()
     {
-        // QWEN-FILL-BEGIN s561 test
         foreach (var capability in (Capability[])[Capability.None, Capability.Disk])
         {
             var row = RuntimeCapabilities.Builtin.Of("kimi", capability);
@@ -220,20 +219,17 @@ public sealed class CapabilityMatrixTests
         var webRow = RuntimeCapabilities.Builtin.Of("kimi", Capability.Web)!;
         webRow.Standing.Should().Be(CapabilityStanding.Unmeasured);
         webRow.MeasuredWith.Cells.Should().BeEmpty();
-        // QWEN-FILL-END s561
     }
 
     /// <summary>S5.6.4: both Kimi rows are ADMITTED, and FLAGGED — they can read this machine (M-K6).</summary>
     [Fact]
     public void AdmissionFlagsBothRows()
     {
-        // QWEN-FILL-BEGIN s564 test
         foreach (var capability in (Capability[])[Capability.None, Capability.Disk])
         {
             CapabilityMatrix.Admit("kimi", capability).Should().BeOfType<Admission.Admitted>()
                 .Which.Flag.Should().Be(AdmissionFlag.Unconfined, $"kimi × {capability}");
         }
-        // QWEN-FILL-END s564
     }
 
     /// <summary>D13's two refusals kept apart: the flags are what the data says, never what a runtime name suggests.</summary>

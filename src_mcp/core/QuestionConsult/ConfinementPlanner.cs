@@ -207,16 +207,12 @@ public static class ConfinementPlanner
     /// COPY of its roots (M-K9 (e): a branch's <c>AGENTS.md</c>, skills, sub-agents and <c>.mcp.json</c> load from disk); a none row stands
     /// in an empty folder, which bounds <c>Read</c> and nothing else (M-K6) — hence the matrix flags both rows.
     /// </remarks>
-    private static Confinement.Planned Kimi(CapabilityGrant grant, AdmissionFlag flag)
+    private static Confinement.Planned Kimi(CapabilityGrant grant, AdmissionFlag flag) => grant.Capability switch
     {
-        // QWEN-FILL-BEGIN s56-planner-arm prod
-        return grant.Capability switch
-        {
-            Capability.Disk => new Confinement.Planned("kimi", grant, [], [], CwdKind.Snapshot, [], flag) { SnapshotSources = grant.Roots },
-            _ => new Confinement.Planned("kimi", grant, [], [], CwdKind.Scratch, [], flag),
-        };
-        // QWEN-FILL-END s56-planner-arm
-    }
+        Capability.Disk => new("kimi", grant, [], [], CwdKind.Snapshot, [], flag) { SnapshotSources = grant.Roots },
+        // `web` never reaches here: the matrix refuses it (no Kimi cell exercises the web tools).
+        _ => new("kimi", grant, [], [], CwdKind.Scratch, [], flag),
+    };
 
     private static IEnumerable<string> AddDirs(string flag, IReadOnlyList<string> roots) =>
         roots.SelectMany(root => (string[])[flag, root]);

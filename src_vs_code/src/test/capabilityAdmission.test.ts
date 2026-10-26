@@ -169,7 +169,6 @@ test('a refusal says what cures it: a measurement for an unmeasured pair, anothe
 });
 
 test('kimi rows admit flagged, web refuses naming its record', () => {
-  // QWEN-FILL-BEGIN s568 test
   for (const capability of ['none', 'disk']) {
     const admission = admit('kimi', capability);
     assert.equal(admission.admitted, true, `'${capability}' should be admitted for kimi`);
@@ -180,7 +179,6 @@ test('kimi rows admit flagged, web refuses naming its record', () => {
   assert.equal(refused.admitted, false);
   assert.match(refused.reason, /not been measured/u);
   assert.match(refused.reason, /RESULTS_kimi_confinement\.md/u);
-  // QWEN-FILL-END s568
 });
 
 test('a flagged admission carries the caveat a person must acknowledge (D13)', () => {
