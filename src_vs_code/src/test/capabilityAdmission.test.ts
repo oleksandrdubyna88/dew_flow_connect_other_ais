@@ -140,7 +140,7 @@ for (const vector of VECTORS) {
 test('the words are the file’s words, and a word outside them is refused rather than defaulted', () => {
   assert.deepStrictEqual([...CAPABILITIES], ['none', 'disk', 'web']);
   assert.deepStrictEqual([...STANDINGS], ['confined', 'unconfined', 'default-deny', 'unsupported', 'unmeasured']);
-  assert.deepStrictEqual([...RUNTIMES], ['claude', 'codex', 'antigravity', 'local', 'api', 'vibe']);
+  assert.deepStrictEqual([...RUNTIMES], ['claude', 'codex', 'antigravity', 'local', 'api', 'vibe', 'kimi']);
   assert.equal(isCapability('disk'), true);
   assert.equal(isCapability('Disk'), false, 'the panel writes the file’s spelling, lower case, and nothing else');
   assert.equal(isCapability('shell'), false);
@@ -173,4 +173,16 @@ test('a flagged admission carries the caveat a person must acknowledge (D13)', (
   assert.match(admit('antigravity', 'disk').caveat, /headless/u);
   assert.equal(admit('claude', 'web').caveat, '', 'a confined pair has nothing to acknowledge');
   assert.equal(admit('vibe', 'disk').caveat, '', 'vibe reads its working folder only — a snapshot of the roots (M-V6)');
+});
+
+test('kimi rows admit flagged, web refuses naming its record', () => {
+  for (const capability of ['none', 'disk'] as const) {
+    const admission = admit('kimi', capability);
+    assert.equal(admission.admitted, true, `kimi × ${capability}`);
+    assert.match(admission.caveat, /can read this machine/u, `kimi × ${capability}: Grep and Glob read the disk directly (M-K6)`);
+  }
+  const web = admit('kimi', 'web');
+  assert.equal(web.admitted, false);
+  assert.match(web.reason, /not been measured/u);
+  assert.ok(web.reason.includes('RESULTS_kimi_confinement.md'), web.reason);
 });

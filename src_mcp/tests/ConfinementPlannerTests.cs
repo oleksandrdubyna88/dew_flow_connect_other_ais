@@ -143,6 +143,29 @@ public sealed class ConfinementPlannerTests
         ConfinementPlanner.VibeReadOnly.Should().Equal(disk.Flags, "the reviewer and the planner spell D2 once");
     }
 
+    /// <summary>S5.6.3 (E5.6 decision 1): Kimi's arm — a copy for disk, an empty folder for none, no flags ever (the shim confines, D15); web refused by the matrix.</summary>
+    [Fact]
+    public void ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb()
+    {
+        var none = Plan("kimi", CapabilityGrant.None);
+        none.Cwd.Should().Be(CwdKind.Scratch);
+        none.Flags.Should().BeEmpty();
+        none.Leading.Should().BeEmpty();
+        none.AddDirs.Should().BeEmpty();
+        none.Flag.Should().Be(AdmissionFlag.Unconfined);
+
+        var disk = Plan("kimi", CapabilityGrant.Disk(RootA, RootB));
+        disk.Cwd.Should().Be(CwdKind.Snapshot, "Kimi loads a branch's AGENTS.md, skills and .mcp.json from its cwd (M-K9) — so it reads a copy (D6)");
+        disk.SnapshotSources.Should().Equal([RootA, RootB]);
+        disk.Flags.Should().BeEmpty("Kimi's confinement is the shim's, never its argv (D15)");
+        disk.Leading.Should().BeEmpty();
+        disk.AddDirs.Should().BeEmpty();
+        disk.Flag.Should().Be(AdmissionFlag.Unconfined);
+
+        ConfinementPlanner.Plan("kimi", CapabilityGrant.Web).Should().BeOfType<Confinement.Refused>()
+            .Which.Reason.Should().Contain("not been measured").And.Contain("RESULTS_kimi_confinement.md");
+    }
+
     // ---------- refusals ----------
 
     [Theory]
@@ -152,6 +175,7 @@ public sealed class ConfinementPlannerTests
     [InlineData("local", Capability.Disk, "cannot do 'disk'")]
     [InlineData("local", Capability.Web, "cannot do 'web'")]
     [InlineData("vibe", Capability.Web, "not been measured")]
+    [InlineData("kimi", Capability.Web, "not been measured")]
     public void APairTheMatrixRefuses_IsRefusedByThePlannerToo_WithTheMatrixsOwnSentence(string runtime, Capability capability, string says)
     {
         var grant = capability == Capability.Disk ? CapabilityGrant.Disk(RootA) : new CapabilityGrant(capability, []);
