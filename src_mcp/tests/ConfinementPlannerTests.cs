@@ -143,6 +143,22 @@ public sealed class ConfinementPlannerTests
         ConfinementPlanner.VibeReadOnly.Should().Equal(disk.Flags, "the reviewer and the planner spell D2 once");
     }
 
+    /// <summary>
+    /// Kimi (E5.6 of <c>todo/PLAN_vibe_and_kimi_runtimes_E5.md</c>): NO flags, ever — its confinement is the shim's (D15), not its argv. A none row
+    /// stands in an EMPTY scratch folder; a disk row stands in a SNAPSHOT of its roots (D6); a web row is refused (no cell measured it).
+    /// </summary>
+    [Fact]
+    public void ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb()
+    {
+        // QWEN-FILL-BEGIN s563-plan test
+        // See regions/s563-plan.md. Use the helper Plan("kimi", grant) for CapabilityGrant.None and CapabilityGrant.Disk(RootA, RootB);
+        // assert Cwd (Scratch / Snapshot), Leading, Flags and AddDirs empty, SnapshotSources (empty / [RootA, RootB]).
+        // For CapabilityGrant.Web: ConfinementPlanner.Plan("kimi", CapabilityGrant.Web) is a Confinement.Refused whose Reason contains
+        // "not been measured" and "RESULTS_kimi_confinement.md". Fails before the change: the default arm gives Scratch for disk.
+        throw new NotImplementedException("s563-plan");
+        // QWEN-FILL-END s563-plan
+    }
+
     // ---------- refusals ----------
 
     [Theory]
@@ -339,6 +355,33 @@ public sealed class ConfinementPlannerTests
             Runners.Vibe.VibeLaunch.EnvironmentRefusal(request).Should().BeEmpty("the one launch control admits it (D17)");
         }
     }
+
+    /// <summary>
+    /// A Kimi question row (E5.6): the shim request, in the row's EMPTY folder (none) or in the copy of its roots (disk), on a home under the
+    /// row's own folder, one shot (no <c>--session</c>), the roots never named, the built environment, no flag of the plan's.
+    /// </summary>
+    [Fact]
+    public void AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome()
+    {
+        // QWEN-FILL-BEGIN s565-launch test
+        // See regions/s565-launch.md. Build the consultant with KimiConsultantOf() (the fake-person helper below), then Build(Planned("kimi", ...)).
+        throw new NotImplementedException("s565-launch");
+        // QWEN-FILL-END s565-launch
+    }
+
+    /// <summary>E5.6 decision 3: a plan that carries any flag is not one coai made for kimi — refused, naming the shim.</summary>
+    [Fact]
+    public void APlanWithFlags_IsRefusedForKimi()
+    {
+        // QWEN-FILL-BEGIN s566-flags test
+        // See regions/s566-flags.md. Hand-made plan with a flag, Build must throw ArgumentException naming the shim.
+        throw new NotImplementedException("s566-flags");
+        // QWEN-FILL-END s566-flags
+    }
+
+    /// <summary>A Kimi consultant over a fake person's paths, so building reads nothing of this machine (the same one <c>Adapters()</c> holds).</summary>
+    private static Runners.Kimi.KimiConsultant KimiConsultantOf() => new(new Runners.Kimi.KimiRuntime("kimi", Runners.Platform.HostKind.Windows,
+        new Runners.Kimi.KimiSeams(root => Runners.Kimi.KimiPlaces.ForShim(root, Path.Combine(RowFolder, "persons-bin")), () => ("coai-mcp", []))));
 
     /// <summary>No Vibe launch carries <c>--add-dir</c>, whatever the grant (D3: <c>--add-dir</c> trusts its folder).</summary>
     [Fact]

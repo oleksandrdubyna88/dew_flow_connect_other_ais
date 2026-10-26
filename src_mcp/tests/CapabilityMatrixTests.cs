@@ -197,6 +197,41 @@ public sealed class CapabilityMatrixTests
             .Which.Reason.Should().Contain("not been measured", "no Vibe cell exercises the web");
     }
 
+    /// <summary>E5.6 (S5.6.1): the three Kimi rows, each resting on the cells of <c>research/RESULTS_kimi_confinement.md</c>.</summary>
+    [Fact]
+    public void KimiHasThreeRows_EachCitingItsCells()
+    {
+        // QWEN-FILL-BEGIN s561-rows test
+        // See regions/s561-rows.md. Arrange: nothing. Act: RuntimeCapabilities.Builtin.Of("kimi", Capability.None / Disk / Web).
+        // Assert: none -> Standing.Should().Be(CapabilityStanding.Unconfined), Cells contain "M-K6"; disk -> Unconfined, Cells contain "M-K6" and "M-K9";
+        // web -> Unmeasured; every row's MeasuredWith.Version is "2.1.1" and its ResultRef contains "RESULTS_kimi_confinement.md".
+        // Fails before the change: Of("kimi", ...) is null (no kimi row).
+        throw new NotImplementedException("s561-rows");
+        // QWEN-FILL-END s561-rows
+    }
+
+    /// <summary>E5.6 (S5.6.2): the vectors decide every Kimi pair — the table's own coverage test (above) names a missing one; this one names it for Kimi.</summary>
+    [Fact]
+    public void TheVectorsCoverKimi()
+    {
+        foreach (var capability in (string[])["none", "disk", "web"])
+        {
+            Vectors.Should().Contain(v => v.Runtime == "kimi" && v.Capability == capability, $"the vectors must decide kimi × {capability}");
+        }
+    }
+
+    /// <summary>E5.6 (S5.6.4): <c>none</c> and <c>disk</c> are admitted FLAGGED — Kimi can read this machine through <c>Grep</c> and <c>Glob</c> (M-K6).</summary>
+    [Fact]
+    public void AdmissionFlagsBothRows()
+    {
+        // QWEN-FILL-BEGIN s564-admit test
+        // See regions/s564-admit.md. For Capability.None and Capability.Disk: CapabilityMatrix.Admit("kimi", capability) is an Admission.Admitted
+        // whose Flag is AdmissionFlag.Unconfined and whose Standing is CapabilityStanding.Unconfined.
+        // Fails before the change: Admit returns Refused "'kimi' is not a runtime the question consultant can launch ...".
+        throw new NotImplementedException("s564-admit");
+        // QWEN-FILL-END s564-admit
+    }
+
     /// <summary>D13's two refusals kept apart: the flags are what the data says, never what a runtime name suggests.</summary>
     [Fact]
     public void TheFlags_AreD13s_CodexUnconfinedEverywhere_AgyDefaultDeny_NothingElseFlagged()
