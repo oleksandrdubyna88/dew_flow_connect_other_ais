@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 SKELETON written 2026-10-26 (rows, vectors, planner arm, 12 scenarios as tests with bodies still to fill; deviations 50–55 below).** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 implemented 2026-10-26 (rows, vectors, planner arm, the flag refusal, 12 scenarios green; deviations 50–60 below); the live checks (J2) and M-K17 not run.** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -1098,6 +1098,14 @@ Numbered from 50, apart from the lists above. The skeleton builds; no test was r
 53. **S5.6.8's list at `capabilityAdmission.test.ts:143` gained `kimi`;** the new test is the last in the file. The three `refusals` theory rows gained `kimi × web`.
 54. **S5.5 and S5.6.7 are new classes** (`AKimiConsultantCheckTests`, `AKimiQuestionRowTests`) with their own fake person and `StandIn()` (the shape of `AKimiConsultationScenarioTests`), so they run on every OS through `WindowsStandIn`.
 55. **Spec points left open for the filler (written in each region's comment):** the exact `failureKind` word of a cancelled check; whether `ask_consultants` answers a cancelled row as a status or throws; S5.5.2's failing arm uses `PlayedKimi.Lost`.
+
+### E5.5–E5.6 polish (Sonnet, 2026-10-26)
+
+56. **Settled: a cancelled check is `state: failed`, `failureKind: cancelled`, exit 0** (`ConsultantCheck.cs:186-188`, as `ACheckCancelledWhileItsScratchIsMade_IsCancelled_NotUnavailable` already pins). S5.5.3 asserts it exactly; it does not accept an exception in its place.
+57. **Settled: `ask_consultants` on a cancelled row either answers a non-`answered` row status or lets `OperationCanceledException` out; S5.6.7 accepts both** and asserts what is the same either way: the row folder, `coai-vh\<8>` and the person's folder.
+58. **The prompt names the copy as `<tree>\snapshot-<hash>`, never `<tree>\<root's name>`.** S5.6.7 asserts `<WorkingDirectory>\snapshot-` in the prompt and the granted root's path absent.
+59. **`coai-vh` itself stays; its `<8>` child goes.** "`coai-vh\<8>` gone" in S5.5.2–S5.5.4 and S5.6.7 is asserted as "`coai-vh` has no entries", not as "`coai-vh` does not exist".
+60. **The table's "expected red today" for S5.5.1, S5.5.4 and the check's and row's junction-first arms cannot be seen at this base:** E5.3 decision g and E5.4 are already in, so S5.5.1–S5.5.4 and the refused arm of S5.6.7 run green against the production code of `b4e2ea96`. S5.6.1–S5.6.6, S5.6.7 (answered and cancelled arms) and S5.6.8 are red there, each for a missing `kimi` row, vector, planner arm or flag refusal. The red the table names for the first group was not reproduced, and no mutation of the junction-first disposal was tried to show that the recorder assertions bite.
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 
