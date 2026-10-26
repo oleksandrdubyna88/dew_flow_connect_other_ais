@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6: skeleton only (rows, vectors, generated table, planner arm, 12 scenario tests as fill regions; deviations 47–52) — bodies not yet filled, nothing red-checked.** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 implemented 2026-10-26 (rows, vectors, generated table, planner arm, the flags refusal, 12 scenario tests green; deviations 47–58) — not yet reviewed; the live checks (J2) and M-K17 are not run.** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -1098,6 +1098,17 @@ two production methods are fill regions (`QWEN-FILL-BEGIN … END`); no test was
 50. **A new helper `KimiStandIn.Of(KimiFixture)`** (`src_mcp/tests/KimiStandIn.cs`) is the person, host and lock-root stand-in of `AKimiConsultationScenarioTests.StandIn`, which is private to that class. It is shared by `AKimiConsultantCheckTests` and `AKimiQuestionRowTests`; the old private copy was left alone.
 51. **`KimiConsultant.MustCarryNoPlanFlags`** refuses a plan whose `Flags` OR `Leading` is not empty (decision 3 names "ANY flag"). It is a private method called first in `Build`, so S5.6.6 is a pure test.
 52. **The two theory classes keep the plan's names.** S5.5.2 is a `[Theory]` over the turn's exit (0 and 70, the table's "second arm"); S5.6.7 is a `[Theory]` over `AKimiQuestionRowTests.Ending` (answered, refused before the launch, cancelled mid-turn). Both classes are in the `fakecli-env` collection because `GitScratch.AfterUnlink` is a static recorder.
+
+### E5.5–E5.6 polish (Sonnet, 2026-10-26) — deviations 53–58
+
+The 12 scenarios compile and pass on this host (Linux, the Windows host stood in by `WindowsStandIn`).
+
+53. **S5.5.1–S5.5.4 are green on the code before E5.5–E5.6.** E5.3 g and E5.4 are in that code, so the tables' "expected red" (*before E5.4*, *before E5.3 g*) is history. Their reds were shown by mutation: with `VibeHomes.EmptiedUnderItsLock` not calling `KimiHome.DisposeAllUnder`, S5.5.2 (both exits), S5.5.3 and S5.6.7 (answered, cancelled) fail with *Expected `_unlinkedByTheDeleter` to be empty …*; with `ConsultCheckScratch.KimiHomesDisposed` not disposing, S5.5.4 fails the same way. Both mutations are reverted.
+54. **S5.5.3 reads a record, not an exception.** A cancelled check does not throw: it writes the record with `failureKind` `cancelled` (`ConsultantCheck.cs:186`), and the test asserts that, then the home gone and the recorder silent.
+55. **The `kimi` rows' reds differ from the tables.** Against the code at `b4e2ea96` the planner tests fail with *Expected type to be Planned, but found Refused* (the matrix refuses an unknown runtime first), and S5.6.7 with the row `blocked` — *'kimi' is not a runtime the question consultant can launch*. With the table back and only the planner arm and `KimiConsultant` at `b4e2ea96`, S5.6.3 fails as the table says (*Expected disk.Cwd to be Snapshot … found Scratch*), S5.6.6 as the table says (*no exception was thrown*), and S5.6.5 on the working directory.
+56. **S5.6.7's refused and cancelled arms pin `finally`.** The refused arm (a plain folder, refused at its copy) and the cancelled arm already clean up in `QuestionRowLaunch`; their value is that they stay so. The answered arm is the one the recorder turns red.
+57. **S5.6.7 names the row's scratch as the parent of the shim's `--cwd`** (`<scratch>\tree`, `ConversationSnapshots.TreeName`), and the one-shot folder as the parent of `--home`; both must be gone. The test does not sweep the machine's temp folder for `coai-question-*`.
+58. **The `KimiStandIn` scope class is a private nested class of the helper**, a copy of the one in `AKimiConsultationScenarioTests` (deviation 50), which stays private to its class.
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 

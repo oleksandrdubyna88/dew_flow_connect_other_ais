@@ -218,7 +218,8 @@ public sealed class CapabilityMatrixTests
 
         var webRow = RuntimeCapabilities.Builtin.Of("kimi", Capability.Web)!;
         webRow.Standing.Should().Be(CapabilityStanding.Unmeasured);
-        webRow.MeasuredWith.Cells.Should().BeEmpty();
+        webRow.MeasuredWith.Version.Should().Be("2.1.1");
+        webRow.MeasuredWith.Cells.Should().BeEmpty("no Kimi cell exercises the web tools");
     }
 
     /// <summary>S5.6.4: both Kimi rows are ADMITTED, and FLAGGED — they can read this machine (M-K6).</summary>
