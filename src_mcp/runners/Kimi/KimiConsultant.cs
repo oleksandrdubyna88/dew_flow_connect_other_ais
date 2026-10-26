@@ -60,10 +60,10 @@ public sealed class KimiConsultant(KimiRuntime inner, string vendor = "kimi") : 
     private static void MustCarryNoPlanFlags(ConsultantLaunch launch)
     {
         // QWEN-FILL-BEGIN s566-noflags prod
-        // When launch.Confinement is LaunchConfinement.Planned planned and planned.Plan.Flags.Count > 0 OR planned.Plan.Leading.Count > 0
-        // throw new ArgumentException("a Kimi row's confinement is the shim's; a plan with flags is not one coai made for kimi", nameof(launch)).
-        // Otherwise return. (Confinement.Planned is CoaiMcp.Core.QuestionConsult.Confinement.Planned; its Flags and Leading are IReadOnlyList<string>.)
-        throw new NotImplementedException("s566-noflags");
+        if (launch.Confinement is LaunchConfinement.Planned planned && (planned.Plan.Flags.Count > 0 || planned.Plan.Leading.Count > 0))
+        {
+            throw new ArgumentException("a Kimi row's confinement is the shim's; a plan with flags is not one coai made for kimi", nameof(launch));
+        }
         // QWEN-FILL-END s566-noflags
     }
 

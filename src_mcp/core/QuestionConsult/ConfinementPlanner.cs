@@ -210,10 +210,11 @@ public static class ConfinementPlanner
     private static Confinement.Planned Kimi(CapabilityGrant grant, AdmissionFlag flag)
     {
         // QWEN-FILL-BEGIN s56-planner-arm prod
-        // Return, by grant.Capability: Capability.Disk => new Confinement.Planned("kimi", grant, [], [], CwdKind.Snapshot, [], flag) { SnapshotSources = grant.Roots };
-        // anything else (None; web never gets here, the matrix refuses it) => new Confinement.Planned("kimi", grant, [], [], CwdKind.Scratch, [], flag).
-        // Leading, Flags and AddDirs stay EMPTY on both. The sibling Vibe(...) above is the shape; do not add flags or a constant.
-        throw new NotImplementedException("s56-planner-arm");
+        return grant.Capability switch
+        {
+            Capability.Disk => new Confinement.Planned("kimi", grant, [], [], CwdKind.Snapshot, [], flag) { SnapshotSources = grant.Roots },
+            _ => new Confinement.Planned("kimi", grant, [], [], CwdKind.Scratch, [], flag),
+        };
         // QWEN-FILL-END s56-planner-arm
     }
 
