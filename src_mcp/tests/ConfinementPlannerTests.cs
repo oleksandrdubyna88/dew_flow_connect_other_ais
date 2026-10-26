@@ -372,6 +372,8 @@ public sealed class ConfinementPlannerTests
         var disk = consultant.Build(Planned("kimi", CapabilityGrant.Disk(RootA, RootB)));
         disk.Request.WorkingDirectory.Should().Be(RowTree, "the copy of the roots (D6)");
         disk.Request.Arguments.Should().NotContain(RootA).And.NotContain(RootB, "the roots are read through their copy, never named to Kimi");
+        var diskHome = disk.Request.Arguments.SkipWhile(a => a != "--home").Skip(1).First();
+        diskHome.Should().StartWith(RowFolder + Path.DirectorySeparatorChar, "the disk row's home lives in the row's own folder, gone with it");
 
         foreach (var request in (Runners.Processes.ProcessRequest[])[none.Request, disk.Request])
         {
@@ -381,11 +383,20 @@ public sealed class ConfinementPlannerTests
         }
     }
 
-    [Fact]
-    public void APlanWithFlags_IsRefusedForKimi_NamingTheShim()
+    [Theory]
+    [InlineData("flags")]
+    [InlineData("leading")]
+    [InlineData("addDirs")]
+    public void APlanWithFlags_IsRefusedForKimi_NamingTheShim(string argv)
     {
         var consultant = Adapters().Single(a => a.Runtime == "kimi").Consultant;
-        var flagged = Plan("kimi", CapabilityGrant.None) with { Flags = ["--yolo"] };
+        var plan = Plan("kimi", CapabilityGrant.None);
+        var flagged = argv switch
+        {
+            "flags" => plan with { Flags = ["--yolo"] },
+            "leading" => plan with { Leading = ["--search"] },
+            _ => plan with { AddDirs = [RootA] },
+        };
         var launch = Planned("kimi", CapabilityGrant.None) with { Confinement = new LaunchConfinement.Planned(flagged) };
 
         var build = () => consultant.Build(launch);

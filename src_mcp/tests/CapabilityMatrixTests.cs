@@ -198,7 +198,6 @@ public sealed class CapabilityMatrixTests
             .Which.Reason.Should().Contain("not been measured", "no Vibe cell exercises the web");
     }
 
-    /// <summary>D13's two refusals kept apart: the flags are what the data says, never what a runtime name suggests.</summary>
     [Fact]
     public void KimiHasThreeRows_EachCitingItsCells()
     {
@@ -230,6 +229,7 @@ public sealed class CapabilityMatrixTests
         }
     }
 
+    /// <summary>D13's two refusals kept apart: the flags are what the data says, never what a runtime name suggests.</summary>
     [Fact]
     public void TheFlags_AreD13s_CodexUnconfinedEverywhere_AgyDefaultDeny_NothingElseFlagged()
     {

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using CoaiMcp.Runners.Acp;
+using CoaiMcp.Runners.Files;
 using CoaiMcp.Runners.Kimi;
 using CoaiMcp.Runners.Platform;
 using CoaiMcp.Runners.Processes;
@@ -115,20 +116,31 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     }
 
     [Fact]
-    public async Task AfterTheCheck_TheOneShotHomeIsGone_AndThePersonsFolderIsIntact()
+    public async Task AfterTheCheck_TheHomeIsGone_JunctionFirst()
     {
         using var person = new KimiFixture();
         using var homes = TempDir.For("testsToDelete-kimicheck-gone-");
         using var scope = StandIn(person);
         var played = Answering(new ProcessLauncher());
         var before = Bytes(person.PersonsHome);
+        var unlinked = new List<string>();
 
-        var (code, said) = await Check(Settings(homes.Path), played);
+        (int Code, JsonElement Said) result;
+        GitScratch.AfterUnlink = unlinked.Add;
+        try
+        {
+            result = await Check(Settings(homes.Path), played);
+        }
+        finally
+        {
+            GitScratch.AfterUnlink = null;
+        }
 
-        code.Should().Be(0, said.ToString());
+        result.Code.Should().Be(0, result.Said.ToString());
         Directory.EnumerateFileSystemEntries(Path.Combine(homes.Path, Runners.Vibe.VibeHomes.OneShotFolder)).Should().BeEmpty(
             "the check disposes its home junction-first when it ends");
         Directory.EnumerateDirectories(_temp, "coai-check-*").Should().BeEmpty("the check's scratch goes with the check");
+        unlinked.Should().BeEmpty("KimiHome unlinked the junction first, so the deleter never met it");
         Bytes(person.PersonsHome).Should().BeEquivalentTo(before, "the person's own sign-in is never written through the link");
     }
 
@@ -138,17 +150,28 @@ public sealed class AKimiConsultantCheckTests : IDisposable
             .ToDictionary(file => Path.GetRelativePath(folder, file), File.ReadAllBytes);
 
     [Fact]
-    public async Task ARootlessCheck_KeepsTheHomeInItsScratch_AndDisposesItWithIt()
+    public async Task ARootlessCheck_KeepsTheHomeInItsScratch_AndDisposesItJunctionFirst()
     {
         using var person = new KimiFixture();
         using var scope = StandIn(person);
         var played = Answering(new ProcessLauncher());
+        var unlinked = new List<string>();
 
-        var (code, said) = await Check(Settings(string.Empty), played);
+        (int Code, JsonElement Said) result;
+        GitScratch.AfterUnlink = unlinked.Add;
+        try
+        {
+            result = await Check(Settings(string.Empty), played);
+        }
+        finally
+        {
+            GitScratch.AfterUnlink = null;
+        }
 
-        code.Should().Be(0, said.ToString());
+        result.Code.Should().Be(0, result.Said.ToString());
         var turn = played.Shims.Should().ContainSingle().Subject.Request;
         HomeOf(turn).Should().Contain(Path.Combine("own", "kh-"), "with no root the home stays in the check's own scratch");
         Directory.EnumerateDirectories(_temp, "coai-check-*").Should().BeEmpty("after the check the scratch, and the home in it, are gone");
+        unlinked.Should().BeEmpty("KimiHome unlinked the junction first, so the deleter never met it");
     }
 }
