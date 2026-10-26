@@ -151,13 +151,14 @@ public sealed class CapabilityMatrixTests
 
     /// <summary>
     /// The records a row may cite, each with the day it was measured and the shape of its cell ids: the question
-    /// consultant's full run for the first five runtimes, and the Vibe probe for vibe (S3 of
-    /// todo/PLAN_vibe_and_kimi_runtimes.md) — whose cells are named <c>M-V…</c>, not numbered.
+    /// consultant's full run for the first five runtimes, the Vibe probe for vibe (S3 of
+    /// todo/PLAN_vibe_and_kimi_runtimes.md) — whose cells are named <c>M-V…</c>, not numbered — and the Kimi probe for kimi (<c>M-K…</c>).
     /// </summary>
     private static readonly IReadOnlyList<(string Record, string Date, string CellPrefix)> Records =
     [
         ("RESULTS_question_consultant_capabilities.md", "2026-10-01", "01a0f8c7-18e4-"),
         ("RESULTS_vibe_confinement.md", "2026-10-12", "M-V"),
+        ("RESULTS_kimi_confinement.md", "2026-10-13", "M-K"),
     ];
 
     [Fact]
