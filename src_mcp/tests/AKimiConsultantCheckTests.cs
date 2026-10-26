@@ -20,8 +20,8 @@ namespace CoaiMcp.Tests;
 [Collection("fakecli-env")]
 public sealed class AKimiConsultantCheckTests : IDisposable
 {
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-checktest-data-").FullName;
-    private readonly string _temp = Directory.CreateTempSubdirectory("coai-checktest-temp-").FullName;
+    private readonly TempDir _data = TempDir.For("testsToDelete-kimi-check-data-");
+    private readonly TempDir _temp = TempDir.For("testsToDelete-kimi-check-temp-");
     private readonly List<string> _warned = [];
     private readonly List<string> _unlinkedByTheDeleter = [];
     private readonly KimiFixture _person = new();
@@ -32,18 +32,8 @@ public sealed class AKimiConsultantCheckTests : IDisposable
         GitScratch.AfterUnlink = null;
         _homes.Dispose();
         _person.Dispose();
-
-        foreach (var dir in (string[])[_data, _temp])
-        {
-            try
-            {
-                Directory.Delete(dir, recursive: true);
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                // A leftover temp directory is not a failing test.
-            }
-        }
+        _temp.Dispose();
+        _data.Dispose();
     }
 
     /// <summary>A Kimi consultant row; <paramref name="homesRoot"/> empty is the settings built by hand (no root).</summary>

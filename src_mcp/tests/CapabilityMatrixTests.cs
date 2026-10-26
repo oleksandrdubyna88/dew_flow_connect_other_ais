@@ -226,7 +226,20 @@ public sealed class CapabilityMatrixTests
     }
 
     /// <summary>
-    /// S5.6.1 of todo/PLAN_vibe_and_kimi_runtimes_E5.md: admission admits kimi's none and disk flagged unconfined,
+    /// Deviation 49 of todo/PLAN_vibe_and_kimi_runtimes_E5.md: the caveat is shared by every runtime that is flagged unconfined, so it
+    /// names no cause that is true of only one of them — Kimi's shim refuses every shell (M-K4), and its reach is Grep and Glob (M-K6).
+    /// </summary>
+    [Fact]
+    public void TheUnconfinedCaveat_NamesNoShell_BecauseKimiHasNone()
+    {
+        var caveat = AdmissionFlag.Unconfined.Caveat();
+
+        caveat.Should().Contain("can read this machine").And.Contain("no flag removes it");
+        caveat.Should().NotContain("shell", "a shell is true of codex and false of kimi, and the sentence is shown beside both");
+    }
+
+    /// <summary>
+    /// S5.6.4 of todo/PLAN_vibe_and_kimi_runtimes_E5.md: admission admits kimi's none and disk flagged unconfined,
     /// and refuses kimi's web, naming the record that says it is unmeasured.
     /// </summary>
     [Fact]

@@ -170,6 +170,7 @@ test('a refusal says what cures it: a measurement for an unmeasured pair, anothe
 
 test('a flagged admission carries the caveat a person must acknowledge (D13)', () => {
   assert.match(admit('codex', 'web').caveat, /can read this machine/u);
+  assert.doesNotMatch(admit('codex', 'web').caveat, /shell/u, 'the sentence is shown beside kimi too, whose shim refuses every shell (M-K4)');
   assert.match(admit('antigravity', 'disk').caveat, /headless/u);
   assert.equal(admit('claude', 'web').caveat, '', 'a confined pair has nothing to acknowledge');
   assert.equal(admit('vibe', 'disk').caveat, '', 'vibe reads its working folder only — a snapshot of the roots (M-V6)');

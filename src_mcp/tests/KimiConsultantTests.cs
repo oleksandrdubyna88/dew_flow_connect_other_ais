@@ -198,7 +198,7 @@ public sealed class KimiConsultantTests : IDisposable
         none.Request.Arguments.Should().ContainInConsecutiveOrder("--cwd", RowScratch);
 
         var disk = Consultant().Build(Row(new Confinement.Planned("kimi", CapabilityGrant.Disk(RootA, RootB), [], [], CwdKind.Snapshot, [], AdmissionFlag.Unconfined)
-            { SnapshotSources = [RootA, RootB] }));
+        { SnapshotSources = [RootA, RootB] }));
         disk.Request.WorkingDirectory.Should().Be(RowTree, "a disk row stands in the copy of its roots (D6)");
         disk.Request.Arguments.Should().ContainInConsecutiveOrder("--cwd", RowTree);
 
@@ -219,10 +219,12 @@ public sealed class KimiConsultantTests : IDisposable
     }
 
     /// <summary>S5.6.6: a plan that carries a flag or a leading argv is not one coai makes for kimi, so it is refused, never spliced.</summary>
-    [Fact]
-    public void APlanWithFlags_IsRefusedForKimi()
+    [Theory]
+    [InlineData(new string[] { "--yolo" }, new string[0])]
+    [InlineData(new string[0], new string[] { "--search" })]
+    public void APlanWithFlags_IsRefusedForKimi(string[] flags, string[] leading)
     {
-        var flagged = new Confinement.Planned("kimi", CapabilityGrant.None, [], ["--yolo"], CwdKind.Scratch, [], AdmissionFlag.Unconfined);
+        var flagged = new Confinement.Planned("kimi", CapabilityGrant.None, leading, flags, CwdKind.Scratch, [], AdmissionFlag.Unconfined);
 
         var building = () => Consultant().Build(Row(flagged));
 

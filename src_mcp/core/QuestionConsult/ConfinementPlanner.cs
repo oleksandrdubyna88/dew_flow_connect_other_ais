@@ -85,7 +85,7 @@ public static class ConfinementPlanner
     public static IReadOnlyList<string> VibeReadOnly { get; } = ["--agent", "plan", "--enabled-tools", "read_file"];
 
     /// <summary>
-    /// Every argument that decides a sandbox on any of the six runtimes — what a planned launch may
+    /// Every argument that decides a sandbox on any runtime that has one in its argv (Kimi's is the shim's and adds nothing, D15) — what a planned launch may
     /// carry ONLY from a plan. The structural test in <c>ConfinementPlannerTests</c> reads it.
     /// </summary>
     private static readonly string[] SandboxVocabulary =

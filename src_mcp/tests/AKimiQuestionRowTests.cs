@@ -31,6 +31,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
     private readonly TempDir _dir = TempDir.For("testsToDelete-kimi-qrow-");
     private readonly KimiFixture _person = new();
     private readonly List<string> _unlinkedByTheDeleter = [];
+    private string _reason = string.Empty;
 
     private string Repo => _dir.At("repo");
 
@@ -151,7 +152,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
                     await caller.CancelAsync();
                     ct.ThrowIfCancellationRequested();
                 }
-                : static (_, _) => Task.CompletedTask,
+            : static (_, _) => Task.CompletedTask,
         };
 
         if (ending == Ending.CancelledMidTurn)
@@ -166,11 +167,13 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
 
             TheRow(reply).GetProperty("status").GetString().Should().Be(
                 ending == Ending.Answered ? RowOutcomes.Answered : RowOutcomes.Failed, reply.ToString());
+            _reason = TheRow(reply).GetProperty("reason").GetString() ?? string.Empty;
         }
 
         if (ending == Ending.RefusedBeforeTheLaunch)
         {
             played.Shims.Should().BeEmpty("the launch control refused before any shim started");
+            _reason.Should().Contain("not signed in to Kimi Code").And.Contain("kimi login", "the failure is the launch control's refusal of the missing sign-in, not a failed snapshot");
         }
         else
         {
