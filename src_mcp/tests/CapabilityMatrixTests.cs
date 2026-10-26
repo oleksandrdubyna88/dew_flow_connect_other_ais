@@ -158,6 +158,7 @@ public sealed class CapabilityMatrixTests
     [
         ("RESULTS_question_consultant_capabilities.md", "2026-10-01", "01a0f8c7-18e4-"),
         ("RESULTS_vibe_confinement.md", "2026-10-12", "M-V"),
+        ("RESULTS_kimi_confinement.md", "2026-10-13", "M-K"),
     ];
 
     [Fact]
@@ -195,6 +196,43 @@ public sealed class CapabilityMatrixTests
             "denied writes do not prove bounded READS — the disk row rests on the read cell itself");
         CapabilityMatrix.Admit("vibe", Capability.Web).Should().BeOfType<Admission.Refused>()
             .Which.Reason.Should().Contain("not been measured", "no Vibe cell exercises the web");
+    }
+
+    /// <summary>
+    /// Kimi (E5.6 of todo/PLAN_vibe_and_kimi_runtimes_E5.md): <c>none</c> and <c>disk</c> are <c>unconfined</c> — <c>Read</c> is bounded by the shim,
+    /// but <c>Grep</c> and <c>Glob</c> read the disk directly (M-K6) — and <c>web</c> is <c>unmeasured</c>. Each row cites its cells.
+    /// </summary>
+    [Fact]
+    public void KimiHasThreeRows_EachCitingItsCells()
+    {
+        // QWEN-FILL-BEGIN s561 test
+        // For none, disk, web: `var row = RuntimeCapabilities.Builtin.Of("kimi", capability);` assert `row.Should().NotBeNull()` first (the red message of the plan: "Expected
+        // RuntimeCapabilities.Builtin.Of(\"kimi\", Capability.None) not to be <null>."). Then: none → row.Standing is the Unconfined standing (see the pack for the enum's name and
+        // `Spelled()`), Cells contain "M-K6"; disk → Unconfined, Cells contain "M-K6" and "M-K9"; web → Unmeasured, Cells empty; all three: MeasuredWith.Version is "2.1.1",
+        // MeasuredWith.ResultRef contains "RESULTS_kimi_confinement.md".
+        throw new NotImplementedException("s561");
+        // QWEN-FILL-END s561
+    }
+
+    /// <summary>The vectors hold every Kimi pair — the existing every-pair test (above) fails by name when a row has none; this names the three.</summary>
+    [Fact]
+    public void TheVectorsCoverKimi()
+    {
+        foreach (var capability in Enum.GetValues<Capability>())
+        {
+            Vectors.Should().Contain(v => v.Runtime == "kimi" && v.Capability == capability.Spelled(), $"the kimi × {capability.Spelled()} pair must have a vector deciding it");
+        }
+    }
+
+    /// <summary>Both admitted Kimi rows are admitted FLAGGED — a person is told the row can read this machine (D13, D15).</summary>
+    [Fact]
+    public void AdmissionFlagsBothRows()
+    {
+        // QWEN-FILL-BEGIN s564 test
+        // For Capability.None and Capability.Disk: `CapabilityMatrix.Admit("kimi", capability).Should().BeOfType<Admission.Admitted>().Which.Flag.Should().Be(AdmissionFlag.Unconfined, ...)`.
+        // Before the change the answer is Admission.Refused "'kimi' is not a runtime the question consultant can launch …".
+        throw new NotImplementedException("s564");
+        // QWEN-FILL-END s564
     }
 
     /// <summary>D13's two refusals kept apart: the flags are what the data says, never what a runtime name suggests.</summary>

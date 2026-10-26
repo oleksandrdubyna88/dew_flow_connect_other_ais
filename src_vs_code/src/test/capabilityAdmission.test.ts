@@ -140,7 +140,7 @@ for (const vector of VECTORS) {
 test('the words are the file’s words, and a word outside them is refused rather than defaulted', () => {
   assert.deepStrictEqual([...CAPABILITIES], ['none', 'disk', 'web']);
   assert.deepStrictEqual([...STANDINGS], ['confined', 'unconfined', 'default-deny', 'unsupported', 'unmeasured']);
-  assert.deepStrictEqual([...RUNTIMES], ['claude', 'codex', 'antigravity', 'local', 'api', 'vibe']);
+  assert.deepStrictEqual([...RUNTIMES], ['claude', 'codex', 'antigravity', 'local', 'api', 'vibe', 'kimi']);
   assert.equal(isCapability('disk'), true);
   assert.equal(isCapability('Disk'), false, 'the panel writes the file’s spelling, lower case, and nothing else');
   assert.equal(isCapability('shell'), false);
@@ -173,4 +173,14 @@ test('a flagged admission carries the caveat a person must acknowledge (D13)', (
   assert.match(admit('antigravity', 'disk').caveat, /headless/u);
   assert.equal(admit('claude', 'web').caveat, '', 'a confined pair has nothing to acknowledge');
   assert.equal(admit('vibe', 'disk').caveat, '', 'vibe reads its working folder only — a snapshot of the roots (M-V6)');
+});
+
+test('kimi rows admit flagged, web refuses naming its record', () => {
+  // QWEN-FILL-BEGIN s568 test
+  // For 'none' and 'disk': const admission = admit('kimi', capability); assert admission.admitted is true, admission.flag is 'unconfined', admission.standing is 'unconfined'
+  // and admission.caveat matches /can read this machine/u (the unconfined caveat, CAVEATS in capabilityAdmission.ts).
+  // For 'web': const refused = admit('kimi', 'web'); admitted false, standing 'unmeasured', refused.reason matches /not been measured/u and /RESULTS_kimi_confinement\.md/u.
+  // Fails before the regenerated table: kimi is not a runtime the question consultant can launch.
+  throw new Error('s568');
+  // QWEN-FILL-END s568
 });
