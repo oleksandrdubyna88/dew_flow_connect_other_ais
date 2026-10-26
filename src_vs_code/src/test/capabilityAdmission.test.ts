@@ -161,13 +161,21 @@ test('an unmeasured pair names the record its row cites: the Vibe probe for vibe
 
 test('kimi rows admit flagged, web refuses naming its record', () => {
   // QWEN-FILL-BEGIN s568-kimi test
-  // E5.6 S5.6.8. For 'none' and 'disk': `const admission = admit('kimi', capability)`; assert `admission.admitted === true`, `admission.standing === 'unconfined'`,
-  // `admission.flag === 'unconfined'` and `admission.caveat` matches /can read this machine/u (the unconfined caveat, as codex's row has — see the
-  // test 'a flagged admission carries the caveat a person must acknowledge (D13)' below for the call shape).
-  // For 'web': `const refused = admit('kimi', 'web')`; assert `refused.admitted === false`, `refused.reason` matches /not been measured/u and
-  // /RESULTS_kimi_confinement\.md/u, and does NOT include 'RESULTS_question_consultant_capabilities.md' (the record is read off the row's resultRef).
-  // Fails before the change: runtimes list without 'kimi', and `admit('kimi', …)` refuses "'kimi' is not a runtime the question consultant can launch".
-  throw new Error('s568-kimi');
+  for (const capability of ['none', 'disk']) {
+    const admission = admit('kimi', capability);
+
+    assert.equal(admission.admitted, true, admission.reason);
+    assert.equal(admission.standing, 'unconfined', 'kimi × ' + capability + ' is unconfined');
+    assert.equal(admission.flag, 'unconfined', 'D13: an unconfined pair is flagged');
+    assert.match(admission.caveat, /can read this machine/u);
+  }
+
+  const refused = admit('kimi', 'web');
+
+  assert.equal(refused.admitted, false, 'kimi × web is not admitted until measured');
+  assert.match(refused.reason, /not been measured/u);
+  assert.match(refused.reason, /RESULTS_kimi_confinement\.md/u);
+  assert.ok(!refused.reason.includes('RESULTS_question_consultant_capabilities.md'), refused.reason);
   // QWEN-FILL-END s568-kimi
 });
 
