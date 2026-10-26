@@ -150,7 +150,6 @@ public sealed class ConfinementPlannerTests
     [Fact]
     public void ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb()
     {
-        // QWEN-FILL-BEGIN s563-arm test
         var none = Plan("kimi", CapabilityGrant.None);
         none.Cwd.Should().Be(CwdKind.Scratch, "a none row stands in an empty folder");
         none.Flags.Should().BeEmpty("kimi has no sandbox flag; the shim confines it (D15)");
@@ -170,7 +169,6 @@ public sealed class ConfinementPlannerTests
         ConfinementPlanner.Plan("kimi", CapabilityGrant.Web).Should().BeOfType<Confinement.Refused>()
             .Which.Reason.Should().Contain("not been measured")
             .And.Contain("RESULTS_kimi_confinement.md");
-        // QWEN-FILL-END s563-arm
     }
 
     // ---------- refusals ----------
@@ -377,7 +375,6 @@ public sealed class ConfinementPlannerTests
     [Fact]
     public void AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome()
     {
-        // QWEN-FILL-BEGIN s565-launch test
         using var person = new KimiFixture();
         var consultant = new Runners.Kimi.KimiConsultant(new Runners.Kimi.KimiRuntime("my-kimi", Runners.Platform.HostKind.Windows,
             new Runners.Kimi.KimiSeams(person.PlacesAt, () => ("coai-mcp", []))), "my-kimi");
@@ -404,14 +401,12 @@ public sealed class ConfinementPlannerTests
             Runners.Kimi.KimiEnvironment.Refusal(request, person.PlacesAt(home)).Should().BeEmpty();
             invocation.Role.Should().Be(ConsultantRoles.Question);
         }
-        // QWEN-FILL-END s565-launch
     }
 
     /// <summary>E5.6 decision 3 (S5.6.6): a plan that carries a flag is not one coai made for Kimi — refused by name, never launched.</summary>
     [Fact]
     public void APlanWithFlags_IsRefusedForKimi()
     {
-        // QWEN-FILL-BEGIN s566-flags test
         using var person = new KimiFixture();
         var consultant = new Runners.Kimi.KimiConsultant(new Runners.Kimi.KimiRuntime("my-kimi", Runners.Platform.HostKind.Windows,
             new Runners.Kimi.KimiSeams(person.PlacesAt, () => ("coai-mcp", []))), "my-kimi");
@@ -420,7 +415,6 @@ public sealed class ConfinementPlannerTests
         var launch = Planned("kimi", CapabilityGrant.None) with { Confinement = new LaunchConfinement.Planned(thatPlan) };
 
         FluentActions.Invoking(() => consultant.Build(launch)).Should().Throw<ArgumentException>().WithMessage("*shim*");
-        // QWEN-FILL-END s566-flags
     }
 
     /// <summary>No Vibe launch carries <c>--add-dir</c>, whatever the grant (D3: <c>--add-dir</c> trusts its folder).</summary>

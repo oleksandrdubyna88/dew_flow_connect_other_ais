@@ -160,7 +160,6 @@ test('an unmeasured pair names the record its row cites: the Vibe probe for vibe
 });
 
 test('kimi rows admit flagged, web refuses naming its record', () => {
-  // QWEN-FILL-BEGIN s568-kimi test
   for (const capability of ['none', 'disk']) {
     const admission = admit('kimi', capability);
 
@@ -176,7 +175,6 @@ test('kimi rows admit flagged, web refuses naming its record', () => {
   assert.match(refused.reason, /not been measured/u);
   assert.match(refused.reason, /RESULTS_kimi_confinement\.md/u);
   assert.ok(!refused.reason.includes('RESULTS_question_consultant_capabilities.md'), refused.reason);
-  // QWEN-FILL-END s568-kimi
 });
 
 test('a refusal says what cures it: a measurement for an unmeasured pair, another prompt for an unsupported one', () => {

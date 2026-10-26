@@ -45,7 +45,6 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     /// <summary>The panel settings of a check of a Kimi row; <paramref name="homesRoot"/> is empty for the rootless arm (S5.5.4).</summary>
     private PanelSettings Settings(string homesRoot)
     {
-        // QWEN-FILL-BEGIN s55-settings test
         return new PanelSettings
         {
             Providers = [],
@@ -58,13 +57,11 @@ public sealed class AKimiConsultantCheckTests : IDisposable
                 [CallerIdentity.Claude] = new("my-kimi", Runtime: "kimi"),
             },
         };
-        // QWEN-FILL-END s55-settings
     }
 
     /// <summary>The played shim: it reads the marker from the copy's CHECK.md and answers <c>marker: …</c> and <c>canary: CANNOT</c>, as the check wants.</summary>
     private static PlayedKimi Played()
     {
-        // QWEN-FILL-BEGIN s55-played test
         return new PlayedKimi(new ProcessLauncher())
         {
             Turn = (_, request) =>
@@ -74,16 +71,13 @@ public sealed class AKimiConsultantCheckTests : IDisposable
                 return PlayedKimi.Answered(PlayedKimi.SessionOf(request), 19973, 31, answer);
             },
         };
-        // QWEN-FILL-END s55-played
     }
 
     /// <summary>Runs the check as the CLI mode does, with <paramref name="launcher"/> in front of the shim: the exit code, the printed JSON, and the cancellation token it was given.</summary>
     private async Task<(int Code, JsonElement Said)> CheckAsync(PanelSettings settings, PlayedKimi launcher, CancellationToken ct)
     {
-        // QWEN-FILL-BEGIN s55-check test
         var (code, stdout, _) = await ConsultantCheckMode.AnswerAsync(settings, ["--check-consultant", "--caller", "claude"], launcher, Temp, _warned.Add, Noticing.None, ct);
         return (code, stdout.Length > 0 ? JsonDocument.Parse(stdout).RootElement.Clone() : default);
-        // QWEN-FILL-END s55-check
     }
 
     // ---------- S5.5.1 ----------
@@ -91,7 +85,6 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     [Fact]
     public async Task AKimiCheck_RunsInACopy_OnAOneShotHome()
     {
-        // QWEN-FILL-BEGIN s551-copy test
         using var stood = AKimiConsultationScenarioTests.StandIn(_person);
         var played = Played();
 
@@ -106,14 +99,13 @@ public sealed class AKimiConsultantCheckTests : IDisposable
 
         var cwd = args[args.IndexOf("--cwd") + 1];
         cwd.Should().Contain(Path.Combine("own", "tree"), "a copy in the check's own scratch, never the repository");
-        Path.GetFullPath(cwd).Should().StartWith(Path.GetFullPath(Temp), StringComparison.OrdinalIgnoreCase);
+        Path.GetFullPath(cwd).StartsWith(Path.GetFullPath(Temp), StringComparison.OrdinalIgnoreCase).Should().BeTrue("the copy lives in the check's temp folder: {0}", cwd);
 
         var home = args[args.IndexOf("--home") + 1];
         Path.GetFileName(home).Should().MatchRegex("^kh-[0-9a-f]{10}$");
         Path.GetDirectoryName(Path.GetDirectoryName(home)).Should().Be(Path.Combine(Homes, VibeHomes.OneShotFolder));
 
         Directory.EnumerateDirectories(Temp, "coai-check-*").Should().BeEmpty("the copy goes with the check's scratch");
-        // QWEN-FILL-END s551-copy
     }
 
     // ---------- S5.5.2 ----------
@@ -124,7 +116,6 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     public async Task AfterTheCheck_TheHomeIsGone_JunctionFirst(string ending)
     {
         ending.Should().NotBeNullOrEmpty("the arm's name");
-        // QWEN-FILL-BEGIN s552-gone test
         using var stood = AKimiConsultationScenarioTests.StandIn(_person);
         var before = _person.Hash();
         var played = ending == "passed"
@@ -143,7 +134,6 @@ public sealed class AKimiConsultantCheckTests : IDisposable
         {
             said.GetProperty("state").GetString().Should().Be("answered");
         }
-        // QWEN-FILL-END s552-gone
     }
 
     // ---------- S5.5.3 ----------
@@ -151,7 +141,6 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     [Fact]
     public async Task ACheckCancelledMidTurn_StillDisposesItsHome()
     {
-        // QWEN-FILL-BEGIN s553-cancel test
         using var stood = AKimiConsultationScenarioTests.StandIn(_person);
         var before = _person.Hash();
         using var caller = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
@@ -191,7 +180,6 @@ public sealed class AKimiConsultantCheckTests : IDisposable
 
         _unlinkedByTheDeleter.Should().BeEmpty();
         _person.Hash().Should().Equal(before);
-        // QWEN-FILL-END s553-cancel
     }
 
     // ---------- S5.5.4 ----------
@@ -199,7 +187,6 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     [Fact]
     public async Task ARootlessCheck_KeepsTheHomeInItsScratch_AndDisposesItJunctionFirst()
     {
-        // QWEN-FILL-BEGIN s554-rootless test
         using var stood = AKimiConsultationScenarioTests.StandIn(_person);
         var before = _person.Hash();
         var played = Played();
@@ -217,6 +204,5 @@ public sealed class AKimiConsultantCheckTests : IDisposable
         Directory.EnumerateDirectories(Temp, "coai-check-*").Should().BeEmpty("the check's scratch goes whole");
         _unlinkedByTheDeleter.Should().BeEmpty("KimiHome unlinks the junction first");
         _person.Hash().Should().Equal(before, "the person's folder is whole");
-        // QWEN-FILL-END s554-rootless
     }
 }

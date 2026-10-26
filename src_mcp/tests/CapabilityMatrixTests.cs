@@ -204,7 +204,6 @@ public sealed class CapabilityMatrixTests
     [Fact]
     public void KimiHasThreeRows_EachCitingItsCells()
     {
-        // QWEN-FILL-BEGIN s561-rows test
         var none = RuntimeCapabilities.Builtin.Of("kimi", Capability.None);
         var disk = RuntimeCapabilities.Builtin.Of("kimi", Capability.Disk);
         var web = RuntimeCapabilities.Builtin.Of("kimi", Capability.Web);
@@ -229,14 +228,12 @@ public sealed class CapabilityMatrixTests
             row!.MeasuredWith.Version.Should().Be("2.1.1", $"kimi × {row.Capability} was measured with CLI 2.1.1");
             row.MeasuredWith.ResultRef.Should().Contain("RESULTS_kimi_confinement.md", $"kimi × {row.Capability} cites the Kimi record");
         }
-        // QWEN-FILL-END s561-rows
     }
 
     /// <summary>S5.6.2 — the golden vectors decide every Kimi pair, so the other half (the extension) answers the same three.</summary>
     [Fact]
     public void TheVectorsCoverKimi()
     {
-        // QWEN-FILL-BEGIN s562-vectors test
         foreach (var capability in new[] { "none", "disk", "web" })
         {
             Vectors.Should().ContainSingle(v => v.Runtime == "kimi" && v.Capability == capability, $"kimi × {capability} must have a vector");
@@ -254,14 +251,12 @@ public sealed class CapabilityMatrixTests
                 vector.Flag.Should().Be("unconfined", $"kimi × {capability}: {vector.Why}");
             }
         }
-        // QWEN-FILL-END s562-vectors
     }
 
     /// <summary>S5.6.4 — the matrix admits both readable Kimi rows FLAGGED (D13): it can read this machine.</summary>
     [Fact]
     public void AdmissionFlagsBothRows()
     {
-        // QWEN-FILL-BEGIN s564-admit test
         foreach (var capability in (Capability[])[Capability.None, Capability.Disk])
         {
             CapabilityMatrix.Admit("kimi", capability).Should().BeOfType<Admission.Admitted>()
@@ -269,7 +264,6 @@ public sealed class CapabilityMatrixTests
             CapabilityMatrix.Admit("kimi", capability).Should().BeOfType<Admission.Admitted>()
                 .Which.Standing.Should().Be(CapabilityStanding.Unconfined, $"kimi × {capability}");
         }
-        // QWEN-FILL-END s564-admit
     }
 
     /// <summary>D13's two refusals kept apart: the flags are what the data says, never what a runtime name suggests.</summary>

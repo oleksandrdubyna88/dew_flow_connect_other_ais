@@ -53,7 +53,6 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
     /// <summary>A git repository at <paramref name="at"/> holding the files, committed — as the Vibe row test makes its roots.</summary>
     private async Task RepositoryAsync(string at, params (string Path, string Text)[] files)
     {
-        // QWEN-FILL-BEGIN s567-repo test
         Directory.CreateDirectory(at);
         foreach (var (path, text) in files)
         {
@@ -67,13 +66,11 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
             var result = await _launcher.RunAsync(new ProcessRequest("git", args, at), TestContext.Current.CancellationToken);
             result.ExitCode.Should().Be(0, string.Join(' ', args) + ": " + result.StdErr);
         }
-        // QWEN-FILL-END s567-repo
     }
 
     /// <summary>The service with one Kimi <c>question-disk</c> row over <paramref name="roots"/>, the shim played by <paramref name="kimi"/>, the homes root set.</summary>
     private PanelService Service(PlayedKimi kimi, params string[] roots)
     {
-        // QWEN-FILL-BEGIN s567-service test
         return new PanelService(
             new PanelSettings
             {
@@ -94,15 +91,12 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
             kimi,
             Logger.None,
             Noticing.None);
-        // QWEN-FILL-END s567-service
     }
 
     /// <summary>One <c>ask_consultants</c> call over the repository, as the Vibe row test makes it.</summary>
     private async Task<JsonElement> AskAsync(PanelService service, CancellationToken? ct = null)
     {
-        // QWEN-FILL-BEGIN s567-ask test
         return JsonDocument.Parse(await service.AskConsultantsAsync(Repo, "Which helper retries an outbound send?", "I tried a fixed wait.", ct: ct ?? TestContext.Current.CancellationToken)).RootElement;
-        // QWEN-FILL-END s567-ask
     }
 
     // ---------- S5.6.7 ----------
@@ -114,7 +108,6 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
     public async Task AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind(string ending)
     {
         ending.Should().NotBeNullOrEmpty("the arm's name");
-        // QWEN-FILL-BEGIN s567-copies test
         using var stood = AKimiConsultationScenarioTests.StandIn(_person);
         var before = _person.Hash();
         var granted = Path.Combine(Repo, "src");
@@ -182,6 +175,5 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
 
         _unlinkedByTheDeleter.Should().BeEmpty();
         _person.Hash().Should().Equal(before);
-        // QWEN-FILL-END s567-copies
     }
 }
