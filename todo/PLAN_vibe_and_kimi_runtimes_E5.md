@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 not started.** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 implemented 2026-10-27 (Haiku, deviations 47–56, not yet reviewed; the live checks J2 and M-K17 not run).** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -1085,6 +1085,36 @@ Numbered from 40, apart from the lists above, so the stories built in parallel d
 45. **Decision (e)'s sentence lives in *The consultant* article** (*What can go wrong*, five languages), because it is about a `consult` turn;
     the question-consultant article says only that a Kimi row's launches wait for one another and for a Kimi review on the same sign-in.
 46. **`CONSULTANT_SINCE` gates a note, so `consultantsWire.ts` is unchanged.** S5.7.3 was green before any code, as the row said.
+
+### E5.5–E5.6 as built (Haiku, 2026-10-27)
+
+Numbered from 47. Scenarios and classes as the tables name them, except where a deviation says otherwise.
+
+47. **Red was not kept first for the E5.6 code.** The seed rows, the vectors, the planner arm, the flag refusal and the generated table were
+    written before their tests. Afterwards two deciding lines were broken on purpose and each went red, then was reverted: S5.6.3 (the disk arm
+    to `Scratch`: *Expected disk.Cwd to be CwdKind.Snapshot … but found CwdKind.Scratch*) and S5.6.6 (the `MustBeFlagless` call removed: *no
+    exception was thrown*). S5.6.8's red was not watched. The E5.5 scenarios were green on arrival (see 48); no teeth were run for them.
+48. **E5.5 is green on arrival.** S5.5.1–S5.5.4 pass on this branch. Their table reds ("before E5.4", "before E5.3 g") describe code that
+    is already in. Class: `AKimiConsultantCheckTests` (new). S5.5.2 is a Theory: passed, and exit 70 (`PlayedKimi.Lost`, state `failed`).
+49. **The record table of the matrix's citation test gained the Kimi record.** `CapabilityMatrixTests.EveryRow_CitesTheRecord_…` lists each
+    record with its day and cell prefix; `RESULTS_kimi_confinement.md`, 2026-10-13, `M-K`, was added. It was the one existing test the seed
+    turned red (`ContainSingle`).
+50. **The cells and their sections, checked against the RESULTS headings.** The plan's anchor for M-K6 said §5; the record has it at §9. The
+    Kimi rows cite: `none` — `M-K6` (§9), `M-K3` (§6), `M-K4` (§7); `disk` — the same three, `M-K9` (§12) and `M-K9 (e)` (§21); `web` — no cells,
+    the note cites §14, and `cells` is empty with a `note`. Version `2.1.1`, date `2026-10-13` (E5.4 decision 8).
+51. **S5.6.5 builds from a hand-made plan**, not from the planner, so it pins `KimiConsultant.Build` alone. The planner arm is pinned by S5.6.3.
+52. **S5.6.5 and S5.6.6 are in `AKimiQuestionRowTests`; S5.6.7 is in `AKimiQuestionRowScenarioTests`.** The scenario file follows the Vibe
+    question-row file's shape. Its Theory covers three endings: answered (the prompt names `…\tree\snapshot-<hash>`, never the root), refused
+    at its copy (no launch: the row's "not inside a Git work tree"), and cancelled mid-turn. In each the home and scratch are gone, the recorder
+    is not invoked, and the person's folder is intact. The plan's "refused before the launch" is read as "refused at its copy".
+53. **S5.6.8 names its record through the row, not a second sentence.** `admit('kimi', 'web')` names `RESULTS_kimi_confinement.md` because the
+    row's `resultRef` cites it (`recordOf` reads it). The two lists in `capabilityAdmission.test.ts` (`:143`, `:166`) gained `kimi`.
+54. **The planner's Kimi arm** (`ConfinementPlanner.Kimi`): `disk` is `CwdKind.Snapshot` with `SnapshotSources`, `none` is `CwdKind.Scratch`, both
+    with no flags and no `Leading`. The flag refusal is `KimiConsultant.MustBeFlagless`, its own method, so `Build` keeps complexity ≤ 4.
+55. **The Kimi rows' standing is what the plan's cells support, and the `none` row says so in its note.** `none` and `disk` are `unconfined` and
+    flagged, because `Grep` and `Glob` read the disk (M-K6). The `none` row's empty folder bounds `Read` and nothing else. `web` is `unmeasured`.
+56. **Checks.** `dotnet build` (solution) is clean, 0 warnings. `dotnet format --verify-no-changes` reports no finding under `src_mcp`; its
+    exit 2 comes from the AOT analyzer output of `src_server` and `src_bugs`, which this work does not touch.
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 
