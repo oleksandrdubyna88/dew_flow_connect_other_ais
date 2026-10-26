@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 not started.** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.7 implemented 2026-10-16/-26; the live checks (RESULTS §31) and the review of E5.5–E5.6 not done.** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -9,6 +9,9 @@
 > **E5.7 implemented 2026-10-16 (Opus)**, built on its own branch beside E5.4 and merged into this one: the consultant-runtime gate
 > (`CONSULTANT_SINCE`, a note, never a withheld entry), the guard over both tables, the homes folder naming both CLIs, and the help in
 > five languages; deviations 40–46, *E5.7 as built*. With E5.4's seed (`features.consultant` gains `kimi`) merged, S5.7.5 is green.
+> **E5.5–E5.6 implemented 2026-10-26** (built from tasks of the split by a smaller model; not yet reviewed by Opus): the Kimi rows of the capability table
+> (`unconfined` for none and disk, `unmeasured` for web), the planner arm, `KimiConsultant`'s refusal of a plan with flags, the question row and the consultant
+> check proved through the service on a one-shot home disposed junction-first; deviations 50–58, *E5.5–E5.6 as built*.
 >
 > Parent plan: [PLAN_vibe_and_kimi_runtimes.md](PLAN_vibe_and_kimi_runtimes.md), §4 **S5** (decisions D1, D6, D15, D19, D20).
 > Built on S4, which is merged and released as coai-mcp 0.57.0: [PLAN_vibe_and_kimi_runtimes_E4.md](PLAN_vibe_and_kimi_runtimes_E4.md)
@@ -1086,6 +1089,21 @@ Numbered from 40, apart from the lists above, so the stories built in parallel d
     the question-consultant article says only that a Kimi row's launches wait for one another and for a Kimi review on the same sign-in.
 46. **`CONSULTANT_SINCE` gates a note, so `consultantsWire.ts` is unchanged.** S5.7.3 was green before any code, as the row said.
 
+### E5.5–E5.6 as built (smaller model, 2026-10-26)
+
+Numbered from 50, apart from the lists above, so the stories built in parallel do not collide on a number.
+
+50. **E5.5 is tests only, and green on arrival.** The check had no Kimi branch to add (decision 1): `AKimiConsultantCheckTests` (S5.5.1–S5.5.4) went green against
+    the code as merged after E5.3 g and E5.4, so the "expected red today" column describes a time before them. Each assertion was given teeth by a temporary break of its deciding line, run red and reverted (the copy: `PlaceAsync`; the owner's `Dispose`; the one-shot disposal; `ConsultCheckScratch.Delete`). S5.5.2 is a Theory over a passed check and a turn that fails with exit 70.
+51. **The three `kimi` rows all carry the date `2026-10-13`**, the day of the limitations row (E5.4 decision 8), and the version `2.1.1`. `CapabilityMatrixTests.Records` gained the record `RESULTS_kimi_confinement.md` with the cell prefix `M-K`, because the existing test `EveryRow_CitesTheRecord_AndACellOrSaysWhyThereIsNone` needs it. The cell `M-K9 (e)` is spelled with its space, as the plan writes it.
+52. **`web` stays `unmeasured`**, as decided (decision 2); its refusal names `research/RESULTS_kimi_confinement.md` through `CapabilityMatrix.RecordOf`, read off the row's `resultRef`. M-K17 was not run, so the `none` and `disk` notes still say that `WebSearch` and `FetchURL` are announced and unmeasured.
+53. **S5.6.5, S5.6.6 and S5.6.7 live in a new class, `AKimiQuestionRowTests`**, not in `ConfinementPlannerTests` (the Kimi consultant is built with a played launcher and a fake person there, which the planner's test class does not carry). S5.6.3 is in `ConfinementPlannerTests`; S5.6.1 and S5.6.4 in `CapabilityMatrixTests`; S5.6.2 is the existing coverage test, red on purpose between the seed and the vectors; S5.6.8 in `capabilityAdmission.test.ts`.
+54. **Decision 3's refusal is a production change in `KimiConsultant.Build`.** `MustCarryNoFlagsOfAPlan` refuses a planned launch whose plan carries `Leading`, `Flags` or `AddDirs` (S5.6.6 is a Theory over the three shapes), with "a Kimi row's confinement is the shim's; a plan with flags is not one coai made for kimi".
+55. **The refusal sentence that lists the runtimes** now ends `…, local, api, vibe, kimi` (the C# planner and matrix tests, and the TypeScript test, were widened), because `RuntimeCapabilities.Runtimes` and the seed's `runtimes` gained `kimi` after `vibe`.
+56. **S5.6.7's row-scratch assertion** finds the row's scratch as the nearest ancestor of the launch's working folder named `QuestionRowLaunch.ScratchPrefix` (`coai-question-`), so tests that run beside it cannot make it flaky; it was seen green on arrival and red under a temporary break of `QuestionRowLaunch`'s `Release(homes)` (`finally`).
+57. **The TypeScript mirror is regenerated, and it was not in the split's list.** `src_vs_code/src/runtimeCapabilities.generated.ts` carries the three `kimi` rows and the widened `runtimes` list, as `generate-runtime-capabilities.mjs` writes them from the shared table.
+58. **`MustCarryNoFlagsOfAPlan` is above the complexity rule.** Its cyclomatic complexity is 5 (one `if`, one `&&`, two `||`, plus the base 1), where every story's rule is ≤ 4 (line 89). It is written as item 54 gives it; the code was not reshaped, so this stays open for the Opus review.
+
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 
 The coai plan gate on this document passed (verdict `proceed`). Its operator commands: the SPLIT is Fable's judgement (§0.2); a story
@@ -1144,3 +1162,4 @@ that touches authentication or security is built on Fable, an ordinary one on Op
 - [ ] The parent's S5 block records this document's deviations (§"Where the parent plan and the code disagree") when the
       stories land, and the parent, E4 and this document promote together (planning-docs.md, *A plan split into epics and
       stories*).
+- Open after E5.5–E5.6: the Opus review of both stories; the live check and the live question rows (J2) in RESULTS §31; the module docs.
