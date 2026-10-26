@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.7 implemented; E5.5–E5.6 built 2026-10-26 (Sonnet, deviations 50–57, not yet reviewed); the live checks (J2) and M-K17 are not run.** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.7 implemented; E5.5–E5.6 built 2026-10-26 (Sonnet, deviations 50–59; reviewed, the fixes are in; `research/module_tests.md` still owes the two flows); the live checks (J2) and M-K17 are not run.** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -1118,6 +1118,15 @@ Numbered from 50, apart from the lists above. All of E5.4 and E5.3 decision g we
 57. **Not done, by the brief:** M-K17, the live checks of J2 (RESULTS §31), `research/module_tests.md` (the catalogue of these flows), merging `main`, any push. The `note` of the
     `none` and `disk` rows carries "announced and no cell exercised them" until M-K17 decides.
 
+### E5.5–E5.6, after the review (Sonnet, 2026-10-26)
+
+58. **The version is in `measuredWith.version`, not in the notes** — decision 2's "each row's `note` carries the version (2.1.1)" is not built. No row in
+    `shared/runtime-capabilities.json` names its version in a note (Claude, Codex, Vibe and the Kimi rows all keep it in `measuredWith.version`), and a second copy
+    in the text would drift from the first. The Kimi rows follow the file's shape. The sentence that `WebSearch` and `FetchURL` are announced and unmeasured is in the
+    `none` and `disk` notes, as decision 2 says.
+59. **E5.5 and E5.6 were built on Sonnet, not on Opus** (§0, §0.2: E5.5 and E5.6 are Opus stories). The fixes after the review are by the same model, as §0 says. The coder's
+    brief did not give the reason, and none is written here. **Open: the operator confirms the change of model, or has the two stories rebuilt on Opus.**
+
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 
 The coai plan gate on this document passed (verdict `proceed`). Its operator commands: the SPLIT is Fable's judgement (§0.2); a story
@@ -1160,6 +1169,10 @@ that touches authentication or security is built on Fable, an ordinary one on Op
    Not renamed here (E5.3 decision i, E5.7 decision 6).
 6. **Kimi reviewer homes under TEMP** (E4 deviation 68) stay open. Moving them into `coai-vh` would reuse E5.3 decision g's
    disposal as is. That is a follow-up, not S5.
+7. **The `unconfined` caveat is false for Kimi (owner).** It says "a shell is always there, and no flag removes it"
+   (`capabilityAdmission.ts`; the C# twin is `CapabilityMatrix.cs`, shared with codex). For Kimi the shim refuses every shell command (M-K4), so a Kimi
+   `none` or `disk` row tells the person something untrue (deviation 56). Either split the caveat per runtime, or reword it to "can read this machine"
+   alone. The TS and C# sentences change together, and the S5.6.8 test pins only the second wording.
 
 ## Definition of Done (this epic)
 
