@@ -1023,7 +1023,7 @@ Numbered from 31, after E5.4's list and before E5.7's 40.
     own file set, so the tasks could run in parallel. The coder notes are in `notes/T4-t1-code.md` … `T4-t4-code.md`.
 32. **E5.5 needed no production change (decision 1).** t3 changed one file, `src_mcp/tests/AKimiConsultantCheckTests.cs`; no file under `src_mcp/src`
     or `src_mcp/runners` changed in it, and `PlayedKimi.cs` was not widened. The only runner change in this epic is `KimiConsultant.cs:50` and
-    `:63-70` (`MustCarryNoPlannedFlag`, E5.6 decision 3, t2).
+    `:63-69` (`MustCarryNoPlannedFlag`, E5.6 decision 3, t2).
 33. **The rows green on arrival, and their teeth.** S5.5.1–S5.5.4 passed when written (E5.3 g and E5.4 were in). Each was given teeth by a temporary
     break, reverted after the red. S5.5.1, break `ConsultantCheck.PlaceAsync`'s `NeedsASanitisedSnapshot` → `false`: the check ends `failed`
     ("…a Kimi consultant stands in the conversation's sanitised snapshot (Workdir), and none was made — the checkout is never its working folder (D6)");
@@ -1049,14 +1049,14 @@ Numbered from 31, after E5.4's list and before E5.7's 40.
     `AKimiQuestionRowTests.cs`, which rewrites the home's `config.toml` while `kimi --version` runs, after the home is made and before
     `KimiLaunch.VerdictAsync`. `Service` now takes `IProcessLauncher` (only the Refused arm wraps it). `PlayedKimi.cs` and the production code were not
     changed. The refusal is then the real one, and the junction exists at that point, so the junction-first cleanup is exercised in this arm too.
-    (The contract's "no seam" was the reason; a seam was needed, and this one is in the test file.)
+    (The contract gave no seam; one was needed, and this one is in the test file.)
 36. **The consultant check's first break gave another red, and the contract's Directory.Exists red for S5.6.7 was not produced.** With
     `NeedsASanitisedSnapshot` forced false, the check refuses before any launch, so the expected `--cwd` assertion is unreachable; S5.5.3 then waited
     60 s for a shim that never started. The S5.6.7 red *Expected Directory.Exists("…\coai-vh\<8>") to be False, but found True.* was not produced;
-    the reds recorded for that row are the two recorder reds in item 33.
+    the reds recorded for that row are the two in item 33 (the empty `copies`, and the recorder).
 37. **Where the tests run.** This epic's host was Linux (WSL2). `AKimiConsultantCheckTests` (5 cases) and `AKimiQuestionRowTests` (3 cases) run on
     every OS: both stand Windows in through `KimiSeams.Using(HostKind.Windows, …)` (E5.4 deviation 23), with no `Assert.SkipUnless`. Here: 5 of 5 and 3 of 3
-    passed. `CapabilityMatrixTests`, `ConfinementPlannerTests`, the `ConfinementPlannerTests` and `CapabilityMatrixTests` facts and the TS test run on every OS (no skip). **No
+    passed. The new facts of `CapabilityMatrixTests` and `ConfinementPlannerTests`, and the TS test, run on every OS (no skip). **No
     Windows run was done for this epic**, so the Windows-only rows of the older suites (e.g. `AVibeQuestionRowReadsACopyOfItsRootsTests`, 12 skipped
     here) were not run in the Windows configuration.
 38. **The failures that were there at `b4e2ea96`, or seen during this epic, and not this epic's.** On Linux, two named failures:
