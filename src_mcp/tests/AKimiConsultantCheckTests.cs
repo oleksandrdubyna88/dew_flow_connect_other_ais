@@ -18,7 +18,7 @@ namespace CoaiMcp.Tests;
 /// the real launch control runs over a fake person (<see cref="KimiFixture"/>).
 /// </summary>
 /// <remarks>
-/// Every case starts with <c>Assert.SkipUnless</c> on Windows (D18): Kimi is refused on every other host, so on Linux these cases SKIP.
+/// The cases run on every host: the Windows stand-in (<see cref="WindowsStandIn"/>, <see cref="KimiSeams"/>) is what lets the launch start.
 /// </remarks>
 public sealed class AKimiConsultantCheckTests : IDisposable
 {
@@ -104,7 +104,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
         Turn = (_, request) => PlayedKimi.Answered(PlayedKimi.SessionOf(request), 10, 1, MarkerAnswer(request)),
     };
 
-    /// <summary>What is left in the one-shot folder under the homes root — an absent folder is empty.</summary>
+    /// <summary>What is left in the one-shot folder under the homes root — an absent folder is empty (the cases check a launch happened first).</summary>
     private static List<string> OneShotEntries(string homes)
     {
         var folder = Path.Combine(homes, VibeHomes.OneShotFolder);
@@ -120,7 +120,6 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     [Fact]
     public async Task AKimiCheck_RunsInACopy_OnAOneShotHome()
     {
-        Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Kimi is refused on every host but Windows");
         using var homes = TempDir.For("testsToDelete-kimi-vh-");
         using var scope = StandIn(_person);
         var played = Marked();
@@ -144,7 +143,6 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     [InlineData("exit70")]
     public async Task AfterTheCheck_TheHomeIsGone_JunctionFirst(string ending)
     {
-        Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Kimi is refused on every host but Windows");
         using var homes = TempDir.For("testsToDelete-kimi-vh-");
         using var scope = StandIn(_person);
         var played = ending == "passed"
@@ -152,8 +150,11 @@ public sealed class AKimiConsultantCheckTests : IDisposable
             : new PlayedKimi(new ProcessLauncher()) { Turn = (_, request) => PlayedKimi.Lost(PlayedKimi.SessionOf(request)) };
         var before = _person.Hash();
 
-        await Check(Settings(homes.Path), played, TestContext.Current.CancellationToken);
+        var (_, said, _) = await Check(Settings(homes.Path), played, TestContext.Current.CancellationToken);
 
+        said.GetProperty("state").GetString().Should().Be(ending == "passed" ? "answered" : "failed", said.ToString());
+        ArgOf(played.Shims.Should().ContainSingle("the check launched its shim once, so there was a home to dispose").Subject.Request, "--home")
+            .Should().StartWith(Path.Combine(homes.Path, VibeHomes.OneShotFolder) + Path.DirectorySeparatorChar);
         OneShotEntries(homes.Path).Should().BeEmpty("the home's folder goes when the check ends, whatever ended it");
         _unlinked.Should().BeEmpty("the deleter never met the junction");
         ThePersonsFolderIsWhole(before);
@@ -164,7 +165,6 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     [Fact]
     public async Task ACheckCancelledMidTurn_StillDisposesItsHome()
     {
-        Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Kimi is refused on every host but Windows");
         using var homes = TempDir.For("testsToDelete-kimi-vh-");
         using var scope = StandIn(_person);
         using var caller = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
@@ -190,7 +190,6 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     [Fact]
     public async Task ARootlessCheck_KeepsTheHomeInItsScratch_AndDisposesItJunctionFirst()
     {
-        Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Kimi is refused on every host but Windows");
         using var scope = StandIn(_person);
         var played = Marked();
 

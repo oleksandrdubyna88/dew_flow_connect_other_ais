@@ -20,7 +20,8 @@ namespace CoaiMcp.Tests;
 /// </summary>
 /// <remarks>
 /// The whole <c>ask_consultants</c> flow through the service, git for real, the Kimi shim played in process (<see cref="PlayedKimi"/>) over a fake
-/// person (<see cref="KimiFixture"/>). Windows only where a launch must start (D18); the production code is the generic question-row launch, unchanged.
+/// person (<see cref="KimiFixture"/>), on every host: the Windows stand-in (<see cref="WindowsStandIn"/>, <see cref="KimiSeams"/>) is what lets the launch start.
+/// The production code is the generic question-row launch, unchanged.
 /// </remarks>
 public sealed class AKimiQuestionRowTests : IAsyncLifetime
 {
@@ -129,7 +130,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
 
     /// <summary>The row's one-shot folder under <c>coai-vh</c> is empty: the row reserves it before any launch, so <c>coai-vh</c> itself is there on every ending.</summary>
     private static void TheOneShotFolderIsEmpty(string homes) =>
-        Directory.EnumerateFileSystemEntries(Path.Combine(homes, VibeHomes.OneShotFolder)).Should().BeEmpty("Expected Directory.Exists(\"…\\coai-vh\\<8>\") to be False");
+        Directory.EnumerateFileSystemEntries(Path.Combine(homes, VibeHomes.OneShotFolder)).Should().BeEmpty("the row's one-shot folder goes on every ending, junction-first");
 
     [Theory]
     [InlineData("answered")]
@@ -137,27 +138,35 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
     [InlineData("cancelled")]
     public async Task AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind(string ending)
     {
-        Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Kimi is refused on every host but Windows");
         using var scope = StandIn(_person);
         using var caller = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         var played = new PlayedKimi(_launcher) { During = ending == "cancelled" ? CancelDuringTurn(caller) : static (_, _) => Task.CompletedTask };
         if (ending == "refused")
         {
-            File.WriteAllText(_person.PersonsConfig, KimiFixture.OwnerConfig().Replace(KimiFixture.SlotKey, "oauth/kimi-code-env-y"));
+            // A one-shot home is built fresh, so a changed slot would only be built from; a config with no usable sign-in is what the launch control refuses.
+            File.WriteAllText(_person.PersonsConfig, KimiFixture.OwnerConfig().Replace($"key = \"{KimiFixture.SlotKey}\"", "key = \"\""));
         }
 
         var before = _person.Hash();
         var homes = Homes;
 
-        await AskTheRowAsync(ending, played, ServiceFor(played, homes, Path.Combine(Repo, "src")), homes, caller.Token);
+        var scratch = await AskTheRowAsync(ending, played, ServiceFor(played, homes, Path.Combine(Repo, "src")), caller.Token);
 
         TheOneShotFolderIsEmpty(homes);
+        if (scratch.Length > 0)
+        {
+            Directory.Exists(scratch).Should().BeFalse("the row's scratch, which holds the copies, goes on every ending");
+        }
+
         _unlinked.Should().BeEmpty("the deleter never met the junction");
         _person.Hash().Should().Equal(before, "the fake person's folder is whole");
     }
 
-    /// <summary>The three endings: an answer names the copy and never the root; a refusal starts nothing; a cancellation ends the ask.</summary>
-    private async Task AskTheRowAsync(string ending, PlayedKimi played, PanelService service, string homes, CancellationToken ct)
+    /// <summary>
+    /// The three endings: an answer names the copy and never the root; a refusal starts nothing; a cancellation ends the ask.
+    /// Gives back the row's scratch folder — the parent of the shim's <c>--cwd</c> (<c>&lt;scratch&gt;\tree</c>) — or empty when no shim was launched.
+    /// </summary>
+    private async Task<string> AskTheRowAsync(string ending, PlayedKimi played, PanelService service, CancellationToken ct)
     {
         if (ending == "cancelled")
         {
@@ -165,7 +174,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
 
             await asking.Should().ThrowAsync<OperationCanceledException>();
 
-            return;
+            return ScratchOf(played);
         }
 
         var reply = await AskAsync(service, ct);
@@ -175,12 +184,20 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
             row.GetProperty("status").GetString().Should().Be(RowOutcomes.Failed, reply.ToString());
             played.Shims.Should().BeEmpty();
 
-            return;
+            return string.Empty;
         }
 
         row.GetProperty("status").GetString().Should().Be(RowOutcomes.Answered, reply.ToString());
-        var prompt = played.Shims.Should().ContainSingle().Subject.Request.StdIn;
-        prompt.Should().Contain(Path.Combine(homes, VibeHomes.OneShotFolder), "the prompt names the copy, under the row's folder");
-        prompt.Should().NotContain(Path.Combine(Repo, "src"), "never the granted root, which the row cannot read");
+        var request = played.Shims.Should().ContainSingle().Subject.Request;
+        request.StdIn.Should().Contain(ArgOf(request, "--cwd"), "the prompt names the copy, under the row's own scratch folder");
+        request.StdIn.Should().NotContain(Path.Combine(Repo, "src"), "never the granted root, which the row cannot read");
+
+        return ScratchOf(played);
     }
+
+    private static string ArgOf(ProcessRequest request, string flag) => request.Arguments[request.Arguments.ToList().IndexOf(flag) + 1];
+
+    /// <summary>The row's scratch folder: the parent of the <c>tree</c> the shim stood in.</summary>
+    private static string ScratchOf(PlayedKimi played) =>
+        played.Shims.TryPeek(out var launch) ? Path.GetDirectoryName(ArgOf(launch.Request, "--cwd"))! : string.Empty;
 }

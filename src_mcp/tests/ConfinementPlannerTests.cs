@@ -400,13 +400,18 @@ public sealed class ConfinementPlannerTests
     }
 
     /// <summary>S5.6.6: a plan that carries a flag is not one coai made for Kimi, and the consultant refuses it before it builds.</summary>
-    [Fact]
-    public void APlanWithFlags_IsRefusedForKimi()
+    [Theory]
+    [InlineData("Flags")]
+    [InlineData("Leading")]
+    public void APlanWithFlags_IsRefusedForKimi(string carried)
     {
         var consultant = Adapters().Single(a => a.Runtime == "kimi").Consultant;
         var launch = Planned("kimi", CapabilityGrant.None);
         var planned = (LaunchConfinement.Planned)launch.Confinement;
-        var flagged = launch with { Confinement = planned with { Plan = planned.Plan with { Flags = ["--yolo"] } } };
+        var flagged = launch with
+        {
+            Confinement = planned with { Plan = carried == "Flags" ? planned.Plan with { Flags = ["--yolo"] } : planned.Plan with { Leading = ["--yolo"] } },
+        };
 
         var act = () => consultant.Build(flagged);
 
