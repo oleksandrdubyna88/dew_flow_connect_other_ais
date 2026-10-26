@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 skeleton written 2026-10-26 (the capability rows, vectors and generated table are final; the planner arm, the flags refusal and the 12 scenarios are fill regions, not yet red or green — deviations 47–51, *E5.5–E5.6 skeleton*).** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 implemented 2026-10-26 — the 12 scenarios green, the planner arm and the flags refusal in (deviations 47–54, *E5.5–E5.6 skeleton* and *polish*); the live checks (J2) and M-K17 not run.** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -1093,6 +1093,12 @@ Numbered from 40, apart from the lists above, so the stories built in parallel d
 49. **The flags refusal (decision 3) is called for a planned launch only**, so no existing consult test reaches the new method. The planner arm and that refusal are `prod` fill regions (`s56-planner-kimi`, `s56-no-flags`); E5.5 needs no production code at all (decision 1), so its four tests may be green as soon as they are filled.
 50. **S5.6.2 is a new test `TheVectorsCoverKimi`**, beside the existing `TheVectorsActuallyLoaded_AndCoverEveryPairOfTheTable`, which already covers every pair of the table by itself and stays as it is.
 51. **One shared helper widened, not copied:** `AKimiConsultationScenarioTests.StandIn` and its `Scopes` are `internal` now, so `AKimiConsultantCheckTests` and `AKimiQuestionRowTests` reuse the one stand-in of the fake person, the host and the lock root. S5.5.3 and S5.6.7's cancelled arm use `PlayedKimi.During` (the Vibe tests' seam) for the cancellation.
+
+### E5.5–E5.6 polish (Sonnet, 2026-10-26)
+
+52. **The scenario tests were run red against the code of `b4e2ea96`** (the planner, `KimiConsultant`, `RuntimeCapabilities.Runtimes` and the two shared JSON files restored for the run). S5.6.1–S5.6.5 and S5.6.7 failed, but the planner and launch tests saw `Refused` ("not a runtime the question consultant can launch") from the matrix, not the default arm's `Scratch` — the data was out too. S5.6.6 failed the same way (a `Refused` plan before `Build` is reached), so the table's *no exception was thrown* was not seen. The four E5.5 tests are green on that code too: E5.4 and E5.3 g are already in, so they pin the path and the table's red is not reproducible here.
+53. **The prod fills were right and kept as they were** — `Kimi` in the planner (now an expression body, as `Vibe`'s is) and `MustCarryNoFlags` (it also refuses a non-empty `Leading`, which is a flag too). One test fill did not compile: S5.5.1 called `StartWith(string, StringComparison)`, which FluentAssertions reads as a reason; it is now `StartsWith(…, OrdinalIgnoreCase).Should().BeTrue(…)`.
+54. **Not done:** the live checks (J2) and M-K17. `dotnet format` over the whole solution reports `IL2026`/`IL3050` in `src_server` on this host, so it was run over the changed files only.
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 
