@@ -206,11 +206,30 @@ public sealed class CapabilityMatrixTests
     public void KimiHasThreeRows_EachCitingItsCells()
     {
         // QWEN-FILL-BEGIN s561 test
-        // For none, disk, web: `var row = RuntimeCapabilities.Builtin.Of("kimi", capability);` assert `row.Should().NotBeNull()` first (the red message of the plan: "Expected
-        // RuntimeCapabilities.Builtin.Of(\"kimi\", Capability.None) not to be <null>."). Then: none → row.Standing is the Unconfined standing (see the pack for the enum's name and
-        // `Spelled()`), Cells contain "M-K6"; disk → Unconfined, Cells contain "M-K6" and "M-K9"; web → Unmeasured, Cells empty; all three: MeasuredWith.Version is "2.1.1",
-        // MeasuredWith.ResultRef contains "RESULTS_kimi_confinement.md".
-        throw new NotImplementedException("s561");
+        foreach (var capability in (Capability[])[Capability.None, Capability.Disk, Capability.Web])
+        {
+            var row = RuntimeCapabilities.Builtin.Of("kimi", capability);
+            row.Should().NotBeNull($"Expected RuntimeCapabilities.Builtin.Of(\"kimi\", {capability}) not to be <null>.");
+
+            switch (capability)
+            {
+                case Capability.None:
+                    row.Standing.Spelled().Should().Be("unconfined", "kimi × none is unconfined");
+                    row.MeasuredWith.Cells.Should().Contain("M-K6", "kimi × none cites M-K6");
+                    break;
+                case Capability.Disk:
+                    row.Standing.Spelled().Should().Be("unconfined", "kimi × disk is unconfined");
+                    row.MeasuredWith.Cells.Should().Contain("M-K6").And.Contain("M-K9", "kimi × disk cites M-K6 and M-K9");
+                    break;
+                case Capability.Web:
+                    row.Standing.Spelled().Should().Be("unmeasured", "kimi × web is unmeasured");
+                    row.MeasuredWith.Cells.Should().BeEmpty("kimi × web has no cells");
+                    break;
+            }
+
+            row.MeasuredWith.Version.Should().Be("2.1.1", "all kimi rows share version 2.1.1");
+            row.MeasuredWith.ResultRef.Should().Contain("RESULTS_kimi_confinement.md", "all kimi rows cite the confinement record");
+        }
         // QWEN-FILL-END s561
     }
 
@@ -229,9 +248,11 @@ public sealed class CapabilityMatrixTests
     public void AdmissionFlagsBothRows()
     {
         // QWEN-FILL-BEGIN s564 test
-        // For Capability.None and Capability.Disk: `CapabilityMatrix.Admit("kimi", capability).Should().BeOfType<Admission.Admitted>().Which.Flag.Should().Be(AdmissionFlag.Unconfined, ...)`.
-        // Before the change the answer is Admission.Refused "'kimi' is not a runtime the question consultant can launch …".
-        throw new NotImplementedException("s564");
+        foreach (var capability in (Capability[])[Capability.None, Capability.Disk])
+        {
+            CapabilityMatrix.Admit("kimi", capability).Should().BeOfType<Admission.Admitted>()
+                .Which.Flag.Should().Be(AdmissionFlag.Unconfined, $"kimi × {capability}: unconfined");
+        }
         // QWEN-FILL-END s564
     }
 

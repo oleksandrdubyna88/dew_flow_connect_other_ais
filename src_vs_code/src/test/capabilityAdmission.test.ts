@@ -177,10 +177,18 @@ test('a flagged admission carries the caveat a person must acknowledge (D13)', (
 
 test('kimi rows admit flagged, web refuses naming its record', () => {
   // QWEN-FILL-BEGIN s568 test
-  // For 'none' and 'disk': const admission = admit('kimi', capability); assert admission.admitted is true, admission.flag is 'unconfined', admission.standing is 'unconfined'
-  // and admission.caveat matches /can read this machine/u (the unconfined caveat, CAVEATS in capabilityAdmission.ts).
-  // For 'web': const refused = admit('kimi', 'web'); admitted false, standing 'unmeasured', refused.reason matches /not been measured/u and /RESULTS_kimi_confinement\.md/u.
-  // Fails before the regenerated table: kimi is not a runtime the question consultant can launch.
-  throw new Error('s568');
+  for (const capability of ['none', 'disk']) {
+    const admission = admit('kimi', capability);
+    assert.equal(admission.admitted, true, `${capability}: expected admitted`);
+    assert.equal(admission.standing, 'unconfined', `${capability}: expected unconfined standing`);
+    assert.equal(admission.flag, 'unconfined', `${capability}: expected unconfined flag`);
+    assert.match(admission.caveat, /can read this machine/u, `${capability}: expected unconfined caveat`);
+  }
+
+  const refused = admit('kimi', 'web');
+  assert.equal(refused.admitted, false, 'web: expected refused');
+  assert.equal(refused.standing, 'unmeasured', 'web: expected unmeasured standing');
+  assert.match(refused.reason, /not been measured/u, 'web: expected not been measured reason');
+  assert.match(refused.reason, /RESULTS_kimi_confinement\.md/u, 'web: expected results reference');
   // QWEN-FILL-END s568
 });
