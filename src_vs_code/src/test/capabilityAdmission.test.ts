@@ -177,8 +177,18 @@ test('a flagged admission carries the caveat a person must acknowledge (D13)', (
 
 test('kimi rows admit flagged, web refuses naming its record', () => {
   // QWEN-FILL-BEGIN s568-ts test
-  // See regions/s568-ts.md: 'none' and 'disk' admitted with flag 'unconfined' and a caveat matching /can read this machine/u;
-  // 'web' refused, the reason matching /not been measured/u and /RESULTS_kimi_confinement\.md/u.
-  throw new Error('s568-ts');
+  for (const capability of ['none', 'disk']) {
+    const admission = admit('kimi', capability);
+
+    assert.equal(admission.admitted, true, `kimi × ${capability} is admitted, because the person's own sign-in is flagged unconfined`);
+    assert.equal(admission.flag, 'unconfined', 'D13: an admitted kimi pair is flagged unconfined');
+    assert.match(admission.caveat, /can read this machine/u, 'the caveat tells the person what an unconfined pair can read');
+  }
+
+  const web = admit('kimi', 'web');
+
+  assert.equal(web.admitted, false, 'kimi × web stays refused until a measured cell admits it');
+  assert.match(web.reason, /not been measured/u, 'the refusal says the pair is unmeasured');
+  assert.match(web.reason, /RESULTS_kimi_confinement\.md/u, 'the refusal names the record that would admit the pair');
   // QWEN-FILL-END s568-ts
 });
