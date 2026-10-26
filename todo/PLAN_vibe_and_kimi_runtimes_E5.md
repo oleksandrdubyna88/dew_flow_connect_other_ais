@@ -1126,9 +1126,30 @@ and polished afterwards — see *E5.5–E5.6 as built* below (57–62).
     row's `Release` without the home's disposal).
 61. **`CapabilityMatrixTests.EveryRow_CitesTheRecord_AndACellOrSaysWhyThereIsNone` lists the records a row may cite, and had no Kimi record.**
     One entry added: `RESULTS_kimi_confinement.md`, `2026-10-13`, cells `M-K…` (deviation 56's date). The skeleton had not run the suite.
-62. **Found, not fixed: the extension's `unconfined` caveat says "a shell is always there".** For Kimi every shell command is refused (M-K3, M-K4);
-    the reach is `Grep` and `Glob`. `capabilityAdmission.ts` has one caveat per flag, so S5.6.8 asserts only "can read this machine", which is true
-    of both. A sentence per row, or a wording that fits both, is for E5.7's owner.
+62. **The `unconfined` caveat said "a shell is always there" — fixed in the review of E5.5–E5.6 (Q3, R2).** For Kimi every shell command is refused
+    (M-K3, M-K4); the reach is `Grep` and `Glob`. `capabilityAdmission.ts` has one caveat per flag, so S5.6.8 asserted only "can read this machine",
+    which is true of both. The one sentence is now *unconfined: can read this machine — no flag bounds what it reads*, in both twins
+    (`CapabilityMatrix.Caveat`, `CAVEATS`). Red first: `TheUnconfinedCaveat_NamesNoShell_ForKimiRefusesEveryShellCommand` failed with *Did not expect
+    AdmissionFlag.Unconfined.Caveat() to contain equivalent of "shell" … but found "unconfined: can read this machine — a shell is always there, and no
+    flag removes it"*; the TypeScript twin's `doesNotMatch(…, /shell/iu)` sits in the Kimi test of `capabilityAdmission.test.ts`. Not changed: the
+    generated table's legend line (`shared/runtime-capabilities.json`, "`unconfined` - … (a shell is always there)") and the codex row's note, which
+    describe codex and are true of it.
+63. **Reds of S5.6.1, S5.6.2, S5.6.4 and S5.6.8 (review R3).** Deviation 60 gave reds for S5.6.3, S5.6.5, S5.6.6 and S5.6.7 only; the run with ALL of
+    S5.6's production at `b4e2ea96` had already shown these: S5.6.1 *Expected row not to be <null> because the table has a row for kimi × None*; S5.6.4
+    *Expected Admitted, found Refused*; S5.6.8 (`capabilityAdmission.test.js` with the generated table at `b4e2ea96`) failed on the runtimes list
+    (`actual [… 'vibe']`, expected `[… 'vibe', 'kimi']`) and on `admit('kimi', …)`. S5.6.2 is deviation 64.
+64. **S5.6.2 is two tests (review R6).** The existing `TheVectorsActuallyLoaded_AndCoverEveryPairOfTheTable` was red with the vectors out (run C: the missing
+    `kimi` pairs) and still covers kimi by the table's own rows; the table's name `TheVectorsCoverKimi` was never a test until the review added it, asserting
+    the three kimi vectors (one per capability, two admitted `unconfined`/`unconfined`, web refused). It was not watched red separately: it passes with
+    the vectors in and a missing vector would fail its first assertion.
+65. **The coder model of E5.5–E5.6 is Sonnet, and the table says Opus (review R4).** §0 and §0.2 mark E5.5 and E5.6 for Opus. The stories were built and
+    fixed on Sonnet (the commits are co-authored by it). No document in this repository records who changed the marking or why, and this deviation
+    cannot supply that authority: **the plan owner confirms the change, or has the two stories rebuilt on Opus, per `subagent-models.md`.** Open.
+66. **The "nothing was left" assertions now have a positive companion (review R5).** `PlayedKimi.Launch.CredentialsLinked` records, when the shim starts,
+    that the launch's `<--home>/home/credentials` was a link (`KimiPlaces.ForShim(home, …).Link`); S5.5.1–S5.5.4 and S5.6.7 assert it before they assert that
+    the deleter met no junction. Teeth: with `KimiHome.Fill` making a real folder instead of the link, all five check tests go red — but earlier than
+    the new assertion, at `ContainSingle` (the launch control refuses a home with no link, so no shim ever starts: *Expected played.Shims to contain a
+    single item … but the collection is empty*). The assertion is the record that the home HELD the link; it is not the first line to fail.
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 
