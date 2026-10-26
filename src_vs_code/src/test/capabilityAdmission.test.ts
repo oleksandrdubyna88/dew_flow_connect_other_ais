@@ -170,11 +170,16 @@ test('a refusal says what cures it: a measurement for an unmeasured pair, anothe
 
 test('kimi rows admit flagged, web refuses naming its record', () => {
   // QWEN-FILL-BEGIN s568 test
-  // For each of 'none' and 'disk': const admission = admit('kimi', capability); assert.equal(admission.admitted, true, ...); assert.match(admission.caveat, /can read this machine/u)
-  // (the same caveat codex has - look at how the test 'a flagged admission carries the caveat' reads admit('codex', 'web').caveat; use the same field names).
-  // For 'web': const refused = admit('kimi', 'web'); assert.equal(refused.admitted, false); assert.match(refused.reason, /not been measured/u); assert.match(refused.reason, /RESULTS_kimi_confinement\.md/u).
-  // Red today: "Expected values to be strictly deep-equal" on the runtimes list, then "'kimi' is not a runtime the question consultant can launch" for admit.
-  throw new Error('s568');
+  for (const capability of ['none', 'disk']) {
+    const admission = admit('kimi', capability);
+    assert.equal(admission.admitted, true, `'${capability}' should be admitted for kimi`);
+    assert.match(admission.caveat, /can read this machine/u);
+  }
+
+  const refused = admit('kimi', 'web');
+  assert.equal(refused.admitted, false);
+  assert.match(refused.reason, /not been measured/u);
+  assert.match(refused.reason, /RESULTS_kimi_confinement\.md/u);
   // QWEN-FILL-END s568
 });
 

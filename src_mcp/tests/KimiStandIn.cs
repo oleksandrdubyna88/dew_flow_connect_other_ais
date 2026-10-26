@@ -14,12 +14,22 @@ internal static class KimiStandIn
     public static IDisposable Of(KimiFixture person)
     {
         // QWEN-FILL-BEGIN s56-standin test
-        // Return a composite IDisposable that disposes, in REVERSE order, the four scopes of AKimiConsultationScenarioTests.StandIn minus CallingAs:
-        //   WindowsStandIn.Begin(),
-        //   KimiCredentialsLock.RootFor(Path.Combine(person.Folder, "locks")),
-        //   KimiSeams.Using(HostKind.Windows, new KimiSeams(person.PlacesAt, () => (PlayedKimi.Shim, []))).
-        // Write a small private nested sealed class Scopes(params IDisposable[] scopes) : IDisposable whose Dispose walks scopes.Reverse().
-        throw new NotImplementedException("s56-standin");
+        private sealed class Scopes(params IDisposable[] scopes) : IDisposable
+        {
+            public void Dispose()
+            {
+                foreach (var scope in scopes.Reverse())
+                {
+                    scope.Dispose();
+                }
+            }
+        }
+
+        return new Scopes(
+            WindowsStandIn.Begin(),
+            KimiCredentialsLock.RootFor(Path.Combine(person.Folder, "locks")),
+            KimiSeams.Using(HostKind.Windows, new KimiSeams(person.PlacesAt, () => (PlayedKimi.Shim, [])))
+        );
         // QWEN-FILL-END s56-standin
     }
 }

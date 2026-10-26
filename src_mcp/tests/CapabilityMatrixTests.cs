@@ -203,11 +203,23 @@ public sealed class CapabilityMatrixTests
     public void KimiHasThreeRows_EachCitingItsCells()
     {
         // QWEN-FILL-BEGIN s561 test
-        // For none and disk: var row = RuntimeCapabilities.Builtin.Of("kimi", capability); row.Should().NotBeNull(); row!.Standing is CapabilityStanding.Unconfined;
-        //   row.MeasuredWith.Version is "2.1.1"; row.MeasuredWith.ResultRef contains "RESULTS_kimi_confinement.md"; row.MeasuredWith.Cells contains "M-K6" (disk: also "M-K9").
-        // web: Of("kimi", Capability.Web)!.Standing is CapabilityStanding.Unmeasured and its Cells are empty (its Note says why).
-        // Red today: "Expected RuntimeCapabilities.Builtin.Of("kimi", Capability.None) not to be <null>."
-        throw new NotImplementedException("s561");
+        foreach (var capability in (Capability[])[Capability.None, Capability.Disk])
+        {
+            var row = RuntimeCapabilities.Builtin.Of("kimi", capability);
+            row.Should().NotBeNull();
+            row!.Standing.Should().Be(CapabilityStanding.Unconfined);
+            row.MeasuredWith.Version.Should().Be("2.1.1");
+            row.MeasuredWith.ResultRef.Should().Contain("RESULTS_kimi_confinement.md");
+            row.MeasuredWith.Cells.Should().Contain("M-K6");
+            if (capability == Capability.Disk)
+            {
+                row.MeasuredWith.Cells.Should().Contain("M-K9");
+            }
+        }
+
+        var webRow = RuntimeCapabilities.Builtin.Of("kimi", Capability.Web)!;
+        webRow.Standing.Should().Be(CapabilityStanding.Unmeasured);
+        webRow.MeasuredWith.Cells.Should().BeEmpty();
         // QWEN-FILL-END s561
     }
 
@@ -216,9 +228,11 @@ public sealed class CapabilityMatrixTests
     public void AdmissionFlagsBothRows()
     {
         // QWEN-FILL-BEGIN s564 test
-        // For capability in [Capability.None, Capability.Disk]: CapabilityMatrix.Admit("kimi", capability).Should().BeOfType<Admission.Admitted>().Which.Flag.Should().Be(AdmissionFlag.Unconfined, $"kimi × {capability}").
-        // Red today: "Expected Admission to be Admitted, but found Refused "'kimi' is not a runtime the question consultant can launch ...".
-        throw new NotImplementedException("s564");
+        foreach (var capability in (Capability[])[Capability.None, Capability.Disk])
+        {
+            CapabilityMatrix.Admit("kimi", capability).Should().BeOfType<Admission.Admitted>()
+                .Which.Flag.Should().Be(AdmissionFlag.Unconfined, $"kimi × {capability}");
+        }
         // QWEN-FILL-END s564
     }
 

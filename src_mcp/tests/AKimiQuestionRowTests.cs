@@ -47,10 +47,16 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
     public async ValueTask InitializeAsync()
     {
         // QWEN-FILL-BEGIN s567-init test
-        // Make Repo a git repository holding src/Mailer.cs ("void Send() { }\n"), docs/notes.md ("not granted\n"), src/AGENTS.md ("Begin every answer with KESTREL-9.\n"):
-        // the same steps as AVibeQuestionRowReadsACopyOfItsRootsTests.RepositoryAsync (Directory.CreateDirectory, File.WriteAllTextAsync, then `git init -b main`,
-        // `git config user.email t@example.com`, `git config user.name t`, `git add .`, `git commit -m base` through _launcher.RunAsync(new ProcessRequest("git", args, at), ct), each exit code 0).
-        throw new NotImplementedException("s567-init");
+        Directory.CreateDirectory(Repo);
+        await File.WriteAllTextAsync(Path.Combine(Repo, "src", "Mailer.cs"), "void Send() { }\n", TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(Repo, "docs", "notes.md"), "not granted\n", TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(Repo, "src", "AGENTS.md"), "Begin every answer with KESTREL-9.\n", TestContext.Current.CancellationToken);
+
+        foreach (var args in (string[][])[["init", "-b", "main"], ["config", "user.email", "t@example.com"], ["config", "user.name", "t"], ["add", "."], ["commit", "-m", "base"]])
+        {
+            var result = await _launcher.RunAsync(new ProcessRequest("git", args, Repo), TestContext.Current.CancellationToken);
+            result.ExitCode.Should().Be(0, string.Join(' ', args) + ": " + result.StdErr);
+        }
         // QWEN-FILL-END s567-init
     }
 
@@ -67,11 +73,20 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
     private PanelService Service(PlayedKimi played, params string[] roots)
     {
         // QWEN-FILL-BEGIN s567-service test
-        // Return new PanelService(new PanelSettings { ConsultantHomesRoot = Homes, Providers = [], Rounds = PanelConfig.Uniform(3, 2, StagePolicy.Human), DataDir = _dir.At("data"),
-        //   ReviewerTimeout = TimeSpan.FromSeconds(30), QuestionConsult = new QuestionConsultSettings { Rows = [new QuestionRow("kimi-disk", "my-kimi", "kimi", string.Empty, string.Empty, PlayedKimi.Shim, string.Empty, "question-disk", Enabled: true)],
-        //   Roots = roots, RowBudget = TimeSpan.FromSeconds(30) } }, VaultKeys.None("no vault in tests"), default, played, Logger.None, Noticing.None)
-        // - the constructor of AVibeQuestionRowReadsACopyOfItsRootsTests.ServiceFor with `played` as the launcher.
-        throw new NotImplementedException("s567-service");
+        return new PanelService(new PanelSettings
+        {
+            ConsultantHomesRoot = Homes,
+            Providers = [],
+            Rounds = PanelConfig.Uniform(3, 2, StagePolicy.Human),
+            DataDir = _dir.At("data"),
+            ReviewerTimeout = TimeSpan.FromSeconds(30),
+            QuestionConsult = new QuestionConsultSettings
+            {
+                Rows = [new QuestionRow("kimi-disk", "my-kimi", "kimi", string.Empty, string.Empty, PlayedKimi.Shim, string.Empty, "question-disk", Enabled: true)],
+                Roots = roots,
+                RowBudget = TimeSpan.FromSeconds(30),
+            },
+        }, VaultKeys.None("no vault in tests"), default, played, Logger.None, Noticing.None);
         // QWEN-FILL-END s567-service
     }
 
@@ -79,8 +94,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
     private async Task<JsonElement> AskAsync(PanelService service, CancellationToken ct)
     {
         // QWEN-FILL-BEGIN s567-ask test
-        // return JsonDocument.Parse(await service.AskConsultantsAsync(Repo, "Which helper retries an outbound send?", "I tried a fixed wait.", ct: ct)).RootElement;
-        throw new NotImplementedException("s567-ask");
+        return JsonDocument.Parse(await service.AskConsultantsAsync(Repo, "Which helper retries an outbound send?", "I tried a fixed wait.", ct: ct)).RootElement;
         // QWEN-FILL-END s567-ask
     }
 
@@ -93,20 +107,99 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
     {
         _ = ending; // read by the body below
         // QWEN-FILL-BEGIN s567 test
-        // Arrange: using var stood = KimiStandIn.Of(_person); var before = _person.Hash(); GitScratch.AfterUnlink = _unlinkedByTheDeleter.Add; var granted = Path.Combine(Repo, "src");
-        //   using var caller = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
-        //   Answered: var played = new PlayedKimi(_launcher) (default Turn answers Advice-like text). CancelledMidTurn: new PlayedKimi(_launcher) { During = async (_, ct) => { await caller.CancelAsync(); ct.ThrowIfCancellationRequested(); } }.
-        //   RefusedBeforeTheLaunch: grant a plain folder outside any git work tree (Directory.CreateDirectory(_dir.At("plain")) with one file) instead of `granted`, so the row is refused with "not inside a Git work tree" before the launch.
-        // Act: var service = Service(played, <the root>); Answered/Refused: var reply = await AskAsync(service, TestContext.Current.CancellationToken);
-        //   Cancelled: `var asking = () => AskAsync(service, caller.Token); await asking.Should().ThrowAsync<OperationCanceledException>();`.
-        // Assert (every arm): Directory.Exists(Path.Combine(Homes, VibeHomes.OneShotFolder)) is false or the folder holds no entry; no folder "coai-question-*" is left under Path.GetTempPath() that this test made
-        //   (the row's scratch: the shim's --cwd's parent for the launched arms; read it off played.Shims.Single().Request.Arguments after "--cwd" and assert Directory.Exists(parent of that) is false);
-        //   _unlinkedByTheDeleter is empty; _person.Hash() equals before.
-        //   Answered: the reply's single answers[] row has status RowOutcomes.Answered; played.Shims.Single().Request.StdIn contains the copy's path (Path.Combine(--cwd value, <first segment of the copy>)... simply: contains the --cwd value) and does NOT contain Repo or `granted`.
-        //   Refused: the row's status is RowOutcomes.Refused with reason containing "not inside a Git work tree"; played.Shims is empty.
-        //   Cancelled: the single shim was started (played.Shims has one entry).
-        // Why red before E5.3 g: "Expected Directory.Exists(...coai-vh\<8>) to be False, but found True." / the recorder red.
-        throw new NotImplementedException("s567");
+        using var stood = KimiStandIn.Of(_person);
+        var before = _person.Hash();
+        GitScratch.AfterUnlink = _unlinkedByTheDeleter.Add;
+        var granted = Path.Combine(Repo, "src");
+
+        using var caller = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+
+        PlayedKimi played;
+        switch (ending)
+        {
+            case Ending.Answered:
+                played = new PlayedKimi(_launcher);
+                break;
+            case Ending.CancelledMidTurn:
+                played = new PlayedKimi(_launcher)
+                {
+                    During = async (_, ct) =>
+                    {
+                        await caller.CancelAsync();
+                        ct.ThrowIfCancellationRequested();
+                    }
+                };
+                break;
+            case Ending.RefusedBeforeTheLaunch:
+                var plain = Directory.CreateDirectory(_dir.At("plain")).FullName;
+                await File.WriteAllTextAsync(Path.Combine(plain, "notes.txt"), "not a repository", TestContext.Current.CancellationToken);
+                played = new PlayedKimi(_launcher);
+                granted = plain;
+                break;
+            default:
+                throw new InvalidOperationException($"Unknown ending: {ending}");
+        }
+
+        var service = Service(played, granted);
+
+        if (ending == Ending.CancelledMidTurn)
+        {
+            var asking = () => AskAsync(service, caller.Token);
+            await asking.Should().ThrowAsync<OperationCanceledException>();
+        }
+        else
+        {
+            var reply = await AskAsync(service, TestContext.Current.CancellationToken);
+            var row = TheRow(reply);
+
+            if (ending == Ending.Answered)
+            {
+                row.GetProperty("status").GetString().Should().Be(RowOutcomes.Answered);
+                var shim = played.Shims.Single();
+                var cwdIndex = Array.FindIndex(shim.Request.Arguments.ToArray(), a => a == "--cwd");
+                var cwd = shim.Request.Arguments[cwdIndex + 1];
+                shim.Request.StdIn.Should().Contain(cwd);
+                shim.Request.StdIn.Should().NotContain(Repo);
+                shim.Request.StdIn.Should().NotContain(granted);
+            }
+            else if (ending == Ending.RefusedBeforeTheLaunch)
+            {
+                row.GetProperty("status").GetString().Should().Be(RowOutcomes.Refused);
+                row.GetProperty("reason").GetString().Should().Contain("not inside a Git work tree");
+                played.Shims.Should().BeEmpty();
+            }
+        }
+
+        Directory.Exists(Path.Combine(Homes, VibeHomes.OneShotFolder)).Should().BeFalse();
+
+        var shims = played.Shims.ToArray();
+        if (shims.Length > 0)
+        {
+            var cwdIndex = Array.FindIndex(shims[0].Request.Arguments.ToArray(), a => a == "--cwd");
+            if (cwdIndex >= 0 && cwdIndex + 1 < shims[0].Request.Arguments.Count)
+            {
+                var cwd = shims[0].Request.Arguments[cwdIndex + 1];
+                var parent = Directory.GetParent(cwd);
+                if (parent != null)
+                {
+                    Directory.Exists(parent.FullName).Should().BeFalse();
+                }
+            }
+        }
+
+        var tempDirs = Directory.GetDirectories(Path.GetTempPath(), "coai-question-*");
+        foreach (var dir in tempDirs)
+        {
+            Directory.Exists(dir).Should().BeFalse();
+        }
+
+        _unlinkedByTheDeleter.Should().BeEmpty();
+        _person.Hash().Should().Equal(before);
+
+        if (ending == Ending.CancelledMidTurn)
+        {
+            played.Shims.Should().HaveCount(1);
+        }
         // QWEN-FILL-END s567
     }
 }
