@@ -151,13 +151,15 @@ public sealed class CapabilityMatrixTests
 
     /// <summary>
     /// The records a row may cite, each with the day it was measured and the shape of its cell ids: the question
-    /// consultant's full run for the first five runtimes, and the Vibe probe for vibe (S3 of
-    /// todo/PLAN_vibe_and_kimi_runtimes.md) — whose cells are named <c>M-V…</c>, not numbered.
+    /// consultant's full run for the first five runtimes, the Vibe probe for vibe (S3 of
+    /// todo/PLAN_vibe_and_kimi_runtimes.md) — whose cells are named <c>M-V…</c>, not numbered — and the Kimi probe for kimi
+    /// (S5, E5.6), whose cells are <c>M-K…</c>.
     /// </summary>
     private static readonly IReadOnlyList<(string Record, string Date, string CellPrefix)> Records =
     [
         ("RESULTS_question_consultant_capabilities.md", "2026-10-01", "01a0f8c7-18e4-"),
         ("RESULTS_vibe_confinement.md", "2026-10-12", "M-V"),
+        ("RESULTS_kimi_confinement.md", "2026-10-13", "M-K"),
     ];
 
     [Fact]
@@ -195,6 +197,47 @@ public sealed class CapabilityMatrixTests
             "denied writes do not prove bounded READS — the disk row rests on the read cell itself");
         CapabilityMatrix.Admit("vibe", Capability.Web).Should().BeOfType<Admission.Refused>()
             .Which.Reason.Should().Contain("not been measured", "no Vibe cell exercises the web");
+    }
+
+    /// <summary>
+    /// The three Kimi rows (E5.6 of todo/PLAN_vibe_and_kimi_runtimes_E5.md, decision 2), each citing its own cells: <c>none</c> and <c>disk</c> are
+    /// UNCONFINED — <c>Read</c> is bounded by the shim, but <c>Grep</c> and <c>Glob</c> took an outside file by absolute path 3 of 3 (M-K6) — and
+    /// <c>web</c> is <c>unmeasured</c>, because no cell exercised <c>WebSearch</c> or <c>FetchURL</c>.
+    /// </summary>
+    [Fact]
+    public void KimiHasThreeRows_EachCitingItsCells()
+    {
+        var none = RuntimeCapabilities.Builtin.Of("kimi", Capability.None);
+        var disk = RuntimeCapabilities.Builtin.Of("kimi", Capability.Disk);
+        var web = RuntimeCapabilities.Builtin.Of("kimi", Capability.Web);
+
+        none.Should().NotBeNull("the table holds a kimi × none row");
+        disk.Should().NotBeNull("the table holds a kimi × disk row");
+        web.Should().NotBeNull("the table holds a kimi × web row");
+        none!.Standing.Should().Be(CapabilityStanding.Unconfined, "an empty folder bounds Read, and Grep and Glob read the disk anyway (M-K6)");
+        none.MeasuredWith.Cells.Should().Contain("M-K6");
+        disk!.Standing.Should().Be(CapabilityStanding.Unconfined);
+        disk.MeasuredWith.Cells.Should().Contain(["M-K6", "M-K9"], "the read boundary, and why the roots are copied");
+        web!.Standing.Should().Be(CapabilityStanding.Unmeasured, "WebSearch and FetchURL are announced and no cell exercised them");
+        foreach (var row in (RuntimeCapabilityRow[])[none, disk, web])
+        {
+            row.MeasuredWith.Version.Should().Be("2.1.1", $"kimi × {row.Capability}");
+            row.MeasuredWith.ResultRef.Should().Contain("RESULTS_kimi_confinement.md");
+        }
+    }
+
+    /// <summary>Both measured Kimi rows are admitted FLAGGED (D13): the row says <b>Can read this machine</b>, because it can.</summary>
+    [Fact]
+    public void AdmissionFlagsBothRows()
+    {
+        foreach (var capability in (Capability[])[Capability.None, Capability.Disk])
+        {
+            CapabilityMatrix.Admit("kimi", capability).Should().BeOfType<Admission.Admitted>()
+                .Which.Flag.Should().Be(AdmissionFlag.Unconfined, $"kimi × {capability}: Grep and Glob read the disk directly");
+        }
+
+        CapabilityMatrix.Admit("kimi", Capability.Web).Should().BeOfType<Admission.Refused>()
+            .Which.Reason.Should().Contain("not been measured").And.Contain("RESULTS_kimi_confinement.md");
     }
 
     /// <summary>D13's two refusals kept apart: the flags are what the data says, never what a runtime name suggests.</summary>

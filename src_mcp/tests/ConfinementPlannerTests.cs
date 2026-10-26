@@ -143,6 +143,32 @@ public sealed class ConfinementPlannerTests
         ConfinementPlanner.VibeReadOnly.Should().Equal(disk.Flags, "the reviewer and the planner spell D2 once");
     }
 
+    /// <summary>
+    /// Kimi (E5.6 of todo/PLAN_vibe_and_kimi_runtimes_E5.md, decision 1): NO flags on any capability — Kimi's confinement is the shim's (D15), never its argv.
+    /// A disk row stands in a SNAPSHOT of its roots, because a branch's <c>AGENTS.md</c>, skills, sub-agents and <c>.mcp.json</c> load from the disk
+    /// (M-K9); a none row stands in an empty folder; a web row never reaches the arm — the matrix refuses it, naming the Kimi record (M-K17 admits nothing).
+    /// </summary>
+    [Fact]
+    public void ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb()
+    {
+        var none = Plan("kimi", CapabilityGrant.None);
+        none.Flags.Should().BeEmpty("the shim confines Kimi, not its argv (D15)");
+        none.Leading.Should().BeEmpty();
+        none.Cwd.Should().Be(CwdKind.Scratch);
+        none.SnapshotSources.Should().BeEmpty();
+        none.AddDirs.Should().BeEmpty();
+
+        var disk = Plan("kimi", CapabilityGrant.Disk(RootA, RootB));
+        disk.Flags.Should().BeEmpty();
+        disk.Leading.Should().BeEmpty();
+        disk.Cwd.Should().Be(CwdKind.Snapshot, "M-K9: a branch's AGENTS.md, skills, sub-agents and .mcp.json load from the disk, so the roots are COPIED, not granted");
+        disk.SnapshotSources.Should().Equal([RootA, RootB]);
+        disk.AddDirs.Should().BeEmpty("no launch flag ever grants a root to Kimi");
+
+        ConfinementPlanner.Plan("kimi", CapabilityGrant.Web).Should().BeOfType<Confinement.Refused>().Which.Reason
+            .Should().Contain("not been measured").And.Contain("RESULTS_kimi_confinement.md");
+    }
+
     // ---------- refusals ----------
 
     [Theory]

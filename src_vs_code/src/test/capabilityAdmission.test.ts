@@ -140,7 +140,7 @@ for (const vector of VECTORS) {
 test('the words are the file’s words, and a word outside them is refused rather than defaulted', () => {
   assert.deepStrictEqual([...CAPABILITIES], ['none', 'disk', 'web']);
   assert.deepStrictEqual([...STANDINGS], ['confined', 'unconfined', 'default-deny', 'unsupported', 'unmeasured']);
-  assert.deepStrictEqual([...RUNTIMES], ['claude', 'codex', 'antigravity', 'local', 'api', 'vibe']);
+  assert.deepStrictEqual([...RUNTIMES], ['claude', 'codex', 'antigravity', 'local', 'api', 'vibe', 'kimi']);
   assert.equal(isCapability('disk'), true);
   assert.equal(isCapability('Disk'), false, 'the panel writes the file’s spelling, lower case, and nothing else');
   assert.equal(isCapability('shell'), false);
@@ -157,6 +157,20 @@ test('an unmeasured pair names the record its row cites: the Vibe probe for vibe
   assert.equal(admit('api', 'web').reason,
     "'api' has not been measured for 'web' (not measured; vendor-specific (a tails-plan item)) — a measured cell in "
     + 'research/RESULTS_question_consultant_capabilities.md is what admits it; until then give this row a prompt of another capability');
+});
+
+test('kimi rows admit flagged, web refuses naming its record', () => {
+  for (const capability of ['none', 'disk']) {
+    const admission = admit('kimi', capability);
+    assert.equal(admission.admitted, true, `kimi × ${capability}: ${admission.reason}`);
+    assert.equal(admission.flag, 'unconfined', `kimi × ${capability}: Grep and Glob read the disk directly (M-K6)`);
+    assert.match(admission.caveat, /can read this machine/u);
+  }
+  const web = admit('kimi', 'web');
+  assert.equal(web.admitted, false, 'no Kimi cell exercises WebSearch or FetchURL');
+  assert.match(web.reason, /not been measured/u);
+  assert.match(web.reason, /RESULTS_kimi_confinement\.md/u);
+  assert.ok(!web.reason.includes('RESULTS_question_consultant_capabilities.md'), 'no cell of the first run could admit a Kimi pair');
 });
 
 test('a refusal says what cures it: a measurement for an unmeasured pair, another prompt for an unsupported one', () => {
