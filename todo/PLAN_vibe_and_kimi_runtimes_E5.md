@@ -1038,7 +1038,10 @@ homes live, in all five languages.
     judged: it only records roots the flags already spell.
 55. **S5.6.7's "refused before the launch" arm is a root outside any Git work tree** (the row's copy is refused, as `AVibeQuestionRow…` does), so no shim is
     started and no home was made; its assertions are the empty `coai-vh\<8>`, the recorder never invoked and the person's folder whole. A refusal by the launch
-    control itself (a sign-in change) is covered at the control by E5.3's `KimiLaunchControlTests` and through the service by S5.4.16.
+    control AFTER the one-shot home is made is a fourth arm, "refused by the launch control" (the C3 review's R1): `PlayedKimi.Version` fails the `--version` probe, the
+    test sees that `coai-vh\<8>` held the home when the probe ran, and the row ends `failed` ("not started: … answered no version"), not `refused`, with the same three
+    assertions. S5.4.16 is about a conversation's `coai-kimi` home, not a one-shot one. The same test now lists the copy's files from inside the shim and asserts
+    that the copy holds `Mailer.cs`, leaves out `AGENTS.md` (R2), and that the prompt names the copy's own path.
 56. **S5.5.2's failing arm is `PlayedKimi.Lost`** (end `session_lost`, exit 70): the played shim has no plain exit-70 helper, and the check's disposal does not
     depend on which failure ended the turn.
 57. **S5.5.1 asserts the home's shape from the shim's own argv** (`<root>\coai-vh\<8>\kh-<10 hex>`), and S5.5.4 that the home existed when the shim ran and
