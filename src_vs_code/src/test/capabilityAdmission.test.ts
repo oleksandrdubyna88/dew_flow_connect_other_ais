@@ -176,17 +176,15 @@ test('a flagged admission carries the caveat a person must acknowledge (D13)', (
 });
 
 test('kimi rows admit flagged, web refuses naming its record', () => {
-  // QWEN-FILL-BEGIN s568-ts test
   for (const capability of ['none', 'disk']) {
     const admission = admit('kimi', capability);
     assert.equal(admission.admitted, true, admission.reason);
-    assert.equal(admission.standing, 'unconfined');
+    assert.equal(admission.standing, 'unconfined', `kimi × ${capability}: Grep and Glob read the disk directly (M-K6)`);
     assert.equal(admission.flag, 'unconfined');
     assert.match(admission.caveat, /can read this machine/u);
   }
   const web = admit('kimi', 'web');
   assert.equal(web.admitted, false);
   assert.match(web.reason, /not been measured/u);
-  assert.match(web.reason, /RESULTS_kimi_confinement\.md/u);
-  // QWEN-FILL-END s568-ts
+  assert.match(web.reason, /RESULTS_kimi_confinement\.md/u, 'the refusal names the record a measurement would land in');
 });

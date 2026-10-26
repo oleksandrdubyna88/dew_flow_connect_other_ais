@@ -68,45 +68,32 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     private static string After(ProcessRequest request, string flag) => request.Arguments[request.Arguments.ToList().IndexOf(flag) + 1];
 
     /// <summary>A played Kimi whose answer reads the check's marker in the folder the shim stood in — what a consultation's turn does (see <c>AVibeCheck_…</c>).</summary>
-    private PlayedKimi Played(Func<ProcessRequest, ProcessResult>? turn = null)
+    private static PlayedKimi Played(Func<ProcessRequest, ProcessResult>? turn = null) => new(new ProcessLauncher())
     {
-        // QWEN-FILL-BEGIN s55-played test
-        return new PlayedKimi(new ProcessLauncher()) { Turn = turn is null ? (_, request) =>
-        {
-            var marker = File.ReadAllText(Path.Combine(request.WorkingDirectory, "CHECK.md")).Trim().Split(' ')[^1].TrimEnd('.');
-            return PlayedKimi.Answered(PlayedKimi.SessionOf(request), 19973, 31, $"marker: {marker}{Environment.NewLine}canary: CANNOT");
-        } : (_, request) => turn(request) };
-        // QWEN-FILL-END s55-played
-    }
+        Turn = (_, request) => turn?.Invoke(request) ?? PlayedKimi.Answered(
+            PlayedKimi.SessionOf(request), 19973, 31,
+            $"marker: {File.ReadAllText(Path.Combine(request.WorkingDirectory, "CHECK.md")).Trim().Split(' ')[^1].TrimEnd('.')}{Environment.NewLine}canary: CANNOT"),
+    };
 
     // ---------- S5.5.1 ----------
 
     [Fact]
     public async Task AKimiCheck_RunsInACopy_OnAOneShotHome()
     {
-        // QWEN-FILL-BEGIN s551-check test
-        Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Kimi is refused on every host but Windows");
         using var stood = AKimiConsultationScenarioTests.StandIn(_person);
         var played = Played();
+
         var (code, said, _) = await Check(Settings(_homes), played, TestContext.Current.CancellationToken);
+
         code.Should().Be(0);
-        Text(said, "state").Should().Be("answered", said.ToString());
-        said.GetProperty("markerRead").GetBoolean().Should().BeTrue();
+        Text(said, "state").Should().Be("answered", "an answered check is one whose scratch repository and canary were left as they were: " + said);
+        said.GetProperty("markerRead").GetBoolean().Should().BeTrue("the copy holds the scratch's CHECK.md");
+        Text(said, "canary").Should().Be("not-attempted");
         var turn = played.Shims.Should().ContainSingle().Subject.Request;
-        After(turn, "--cwd").Should().Contain(Path.Combine("own", "tree"));
+        After(turn, "--cwd").Should().Contain(Path.Combine("own", "tree"), "a copy in the check's own scratch, never the repository");
         var home = After(turn, AcpWords.HomeFlag);
-        home.Should().StartWith(Path.Combine(_homes, VibeHomes.OneShotFolder) + Path.DirectorySeparatorChar);
+        Path.GetDirectoryName(Path.GetDirectoryName(home)).Should().Be(Path.Combine(_homes, VibeHomes.OneShotFolder), "`<root>/coai-vh/<8>/kh-<10 hex>`");
         Path.GetFileName(home).Should().MatchRegex("^kh-[0-9a-f]{10}$");
-        Path.GetDirectoryName(Path.GetDirectoryName(home)).Should().Be(Path.Combine(_homes, VibeHomes.OneShotFolder));
-        if (said.TryGetProperty("canaryTouched", out var canaryTouched) && canaryTouched.GetBoolean())
-        {
-            Assert.Fail("Expected the check of my-kimi to pass, but it failed: the vendor 'my-kimi' runs on 'kimi', which cannot hold a consultation in this build.");
-        }
-        if (said.TryGetProperty("treeChanged", out var treeChanged) && treeChanged.GetBoolean())
-        {
-            Assert.Fail("Expected the check of my-kimi to pass, but it failed: the vendor 'my-kimi' runs on 'kimi', which cannot hold a consultation in this build.");
-        }
-        // QWEN-FILL-END s551-check
     }
 
     // ---------- S5.5.2 ----------
@@ -116,17 +103,18 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     [InlineData(true)]
     public async Task AfterTheCheck_TheHomeIsGone_JunctionFirst(bool theTurnFails)
     {
-        // QWEN-FILL-BEGIN s552-gone test
         using var stood = AKimiConsultationScenarioTests.StandIn(_person);
-        var played = Played(theTurnFails ? (_, _) => new ProcessResult(70, string.Empty, "the played shim failed" + Environment.NewLine, TimedOut: false) : null);
-        Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Kimi is refused on every host but Windows");
+        var played = Played(theTurnFails ? _ => new ProcessResult(70, string.Empty, "the played shim failed" + Environment.NewLine, TimedOut: false) : null);
         var before = _person.Hash();
         RecordingTheDeleter();
-        await Check(Settings(_homes), played, TestContext.Current.CancellationToken);
+
+        var (_, said, _) = await Check(Settings(_homes), played, TestContext.Current.CancellationToken);
+
+        Text(said, "state").Should().Be(theTurnFails ? "failed" : "answered", said.ToString());
+        played.Shims.Should().ContainSingle("the turn really ran, so a home really stood");
         Directory.EnumerateFileSystemEntries(Path.Combine(_homes, VibeHomes.OneShotFolder)).Should().BeEmpty("the home's folder goes when the check ends, whatever ended it");
-        _unlinkedByTheDeleter.Should().BeEmpty("the deleter's unlink recorder must not be invoked, because KimiHome unlinks the junction first");
+        _unlinkedByTheDeleter.Should().BeEmpty("the home's junction was unlinked by KimiHome, never met by the deleter");
         _person.Hash().Should().Equal(before, "the person's folder: the same names, bytes and read-only bits as before");
-        // QWEN-FILL-END s552-gone
     }
 
     // ---------- S5.5.3 ----------
@@ -134,20 +122,21 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     [Fact]
     public async Task ACheckCancelledMidTurn_StillDisposesItsHome()
     {
-        // QWEN-FILL-BEGIN s553-cancel test
         using var stood = AKimiConsultationScenarioTests.StandIn(_person);
-        RecordingTheDeleter();
-        var before = _person.Hash();
         using var caller = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         var played = new PlayedKimi(new ProcessLauncher()) { During = async (_, ct) => { await caller.CancelAsync(); ct.ThrowIfCancellationRequested(); } };
-        Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Kimi is refused on every host but Windows");
+        var before = _person.Hash();
+        RecordingTheDeleter();
+
         var (_, said, _) = await Check(Settings(_homes), played, caller.Token);
+
+        // The check answers a failed record whose kind is `cancelled` (deviation 53), not a state of that name.
         Text(said, "state").Should().Be("failed", said.ToString());
         Text(said, "failureKind").Should().Be("cancelled");
+        played.Shims.Should().ContainSingle("the turn had started when it was cancelled");
         Directory.EnumerateFileSystemEntries(Path.Combine(_homes, VibeHomes.OneShotFolder)).Should().BeEmpty();
         _unlinkedByTheDeleter.Should().BeEmpty();
         _person.Hash().Should().Equal(before);
-        // QWEN-FILL-END s553-cancel
     }
 
     // ---------- S5.5.4 ----------
@@ -155,21 +144,19 @@ public sealed class AKimiConsultantCheckTests : IDisposable
     [Fact]
     public async Task ARootlessCheck_KeepsTheHomeInItsScratch_AndDisposesItJunctionFirst()
     {
-        // QWEN-FILL-BEGIN s554-rootless test
         using var stood = AKimiConsultationScenarioTests.StandIn(_person);
-        RecordingTheDeleter();
-        var before = _person.Hash();
         var played = Played();
-        Assert.SkipUnless(OperatingSystem.IsWindows(), "D18: Kimi is refused on every host but Windows");
-        var (code, said, _) = await Check(Settings(string.Empty), played, TestContext.Current.CancellationToken);
-        code.Should().Be(0);
-        var turn = played.Shims.Should().ContainSingle().Subject.Request;
-        var home = After(turn, AcpWords.HomeFlag);
-        home.Should().Contain(Path.Combine("own", "kh-"));
+        var before = _person.Hash();
+        RecordingTheDeleter();
+
+        var (_, said, _) = await Check(Settings(string.Empty), played, TestContext.Current.CancellationToken);
+
+        Text(said, "state").Should().Be("answered", said.ToString());
+        var home = After(played.Shims.Should().ContainSingle().Subject.Request, AcpWords.HomeFlag);
+        Path.GetDirectoryName(home).Should().EndWith("own", "with no homes root the home stays in the check's scratch");
         Path.GetFileName(home).Should().MatchRegex("^kh-[0-9a-f]{10}$");
-        Directory.EnumerateDirectories(_temp, "coai-check-*").Should().BeEmpty("the scratch is gone");
+        Directory.EnumerateDirectories(_temp, "coai-check-*").Should().BeEmpty("the scratch is gone, and the deleter never met the home's junction");
         _unlinkedByTheDeleter.Should().BeEmpty();
         _person.Hash().Should().Equal(before);
-        // QWEN-FILL-END s554-rootless
     }
 }

@@ -151,13 +151,15 @@ public sealed class CapabilityMatrixTests
 
     /// <summary>
     /// The records a row may cite, each with the day it was measured and the shape of its cell ids: the question
-    /// consultant's full run for the first five runtimes, and the Vibe probe for vibe (S3 of
-    /// todo/PLAN_vibe_and_kimi_runtimes.md) — whose cells are named <c>M-V…</c>, not numbered.
+    /// consultant's full run for the first five runtimes, the Vibe probe for vibe (S3 of
+    /// todo/PLAN_vibe_and_kimi_runtimes.md) — whose cells are named <c>M-V…</c>, not numbered — and the Kimi probe for kimi
+    /// (E5.6 of todo/PLAN_vibe_and_kimi_runtimes_E5.md), whose cells are <c>M-K…</c>.
     /// </summary>
     private static readonly IReadOnlyList<(string Record, string Date, string CellPrefix)> Records =
     [
         ("RESULTS_question_consultant_capabilities.md", "2026-10-01", "01a0f8c7-18e4-"),
         ("RESULTS_vibe_confinement.md", "2026-10-12", "M-V"),
+        ("RESULTS_kimi_confinement.md", "2026-10-13", "M-K"),
     ];
 
     [Fact]
@@ -201,46 +203,31 @@ public sealed class CapabilityMatrixTests
     [Fact]
     public void KimiHasThreeRows_EachCitingItsCells()
     {
-        // QWEN-FILL-BEGIN s561-rows test
-        foreach (var capability in (Capability[])[Capability.None, Capability.Disk, Capability.Web])
+        var none = RuntimeCapabilities.Builtin.Of("kimi", Capability.None)!;
+        var disk = RuntimeCapabilities.Builtin.Of("kimi", Capability.Disk)!;
+        var web = RuntimeCapabilities.Builtin.Of("kimi", Capability.Web)!;
+
+        none.Standing.Should().Be(CapabilityStanding.Unconfined, "Grep and Glob took an outside file by absolute path whatever the working folder (M-K6)");
+        none.MeasuredWith.Cells.Should().Contain("M-K6");
+        disk.Standing.Should().Be(CapabilityStanding.Unconfined, "Read is bounded by the shim, but Grep and Glob read the disk directly (M-K6)");
+        disk.MeasuredWith.Cells.Should().Contain(["M-K6", "M-K9"], "the roots are COPIED because a branch's configuration loads from disk (M-K9)");
+        web.Standing.Should().Be(CapabilityStanding.Unmeasured, "no Kimi cell exercised WebSearch or FetchURL");
+        foreach (var row in new[] { none, disk, web })
         {
-            var row = RuntimeCapabilities.Builtin.Of("kimi", capability);
-            row.Should().NotBeNull();
-            if (capability == Capability.None)
-            {
-                row.Standing.Should().Be(CapabilityStanding.Unconfined);
-                row.MeasuredWith.Cells.Should().Contain("M-K6");
-            }
-            else if (capability == Capability.Disk)
-            {
-                row.Standing.Should().Be(CapabilityStanding.Unconfined);
-                row.MeasuredWith.Cells.Should().Contain("M-K6").And.Contain("M-K9");
-            }
-            else
-            {
-                row.Standing.Should().Be(CapabilityStanding.Unmeasured);
-                row.MeasuredWith.Cells.Should().BeEmpty();
-            }
             row.MeasuredWith.Version.Should().Be("2.1.1");
             row.MeasuredWith.ResultRef.Should().Contain("RESULTS_kimi_confinement.md");
         }
-        // QWEN-FILL-END s561-rows
     }
 
     /// <summary>S5.6.4: both admitted Kimi rows are FLAGGED unconfined — they can read this machine (D13).</summary>
     [Fact]
     public void AdmissionFlagsBothRows()
     {
-        // QWEN-FILL-BEGIN s564-admit test
         foreach (var capability in (Capability[])[Capability.None, Capability.Disk])
         {
             CapabilityMatrix.Admit("kimi", capability).Should().BeOfType<Admission.Admitted>()
-                .Which.Flag.Should().Be(AdmissionFlag.Unconfined, $"kimi × {capability}: unconfined");
+                .Which.Flag.Should().Be(AdmissionFlag.Unconfined, $"kimi × {capability}: Grep and Glob read the disk directly (M-K6)");
         }
-
-        CapabilityMatrix.Admit("kimi", Capability.Web).Should().BeOfType<Admission.Refused>()
-            .Which.Reason.Should().Contain("not been measured");
-        // QWEN-FILL-END s564-admit
     }
 
     /// <summary>D13's two refusals kept apart: the flags are what the data says, never what a runtime name suggests.</summary>
