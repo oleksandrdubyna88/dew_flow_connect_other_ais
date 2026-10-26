@@ -140,7 +140,7 @@ for (const vector of VECTORS) {
 test('the words are the file’s words, and a word outside them is refused rather than defaulted', () => {
   assert.deepStrictEqual([...CAPABILITIES], ['none', 'disk', 'web']);
   assert.deepStrictEqual([...STANDINGS], ['confined', 'unconfined', 'default-deny', 'unsupported', 'unmeasured']);
-  assert.deepStrictEqual([...RUNTIMES], ['claude', 'codex', 'antigravity', 'local', 'api', 'vibe']);
+  assert.deepStrictEqual([...RUNTIMES], ['claude', 'codex', 'antigravity', 'local', 'api', 'vibe', 'kimi']);
   assert.equal(isCapability('disk'), true);
   assert.equal(isCapability('Disk'), false, 'the panel writes the file’s spelling, lower case, and nothing else');
   assert.equal(isCapability('shell'), false);
@@ -163,9 +163,21 @@ test('a refusal says what cures it: a measurement for an unmeasured pair, anothe
   assert.match(admit('api', 'web').reason, /not been measured/u);
   assert.match(admit('api', 'web').reason, /RESULTS_question_consultant_capabilities\.md/u);
   assert.match(admit('antigravity', 'web').reason, /cannot fetch a page headless/u);
-  assert.match(admit('gemini', 'none').reason, /claude, codex, antigravity, local, api, vibe/u);
+  assert.match(admit('gemini', 'none').reason, /claude, codex, antigravity, local, api, vibe, kimi/u);
   assert.match(admit('vibe', 'web').reason, /not been measured/u, 'no Vibe cell exercises the web (S3 of PLAN_vibe_and_kimi_runtimes.md)');
   assert.match(admit('claude', 'shell').reason, /none, disk, web/u);
+});
+
+test('kimi rows admit flagged, web refuses naming its record', () => {
+  for (const capability of ['none', 'disk'] as const) {
+    const admission = admit('kimi', capability);
+    assert.equal(admission.admitted, true, `kimi × ${capability} is admitted, flagged (M-K6)`);
+    assert.match(admission.caveat, /can read this machine/u);
+  }
+  const web = admit('kimi', 'web');
+  assert.equal(web.admitted, false);
+  assert.match(web.reason, /not been measured/u);
+  assert.match(web.reason, /RESULTS_kimi_confinement\.md/u);
 });
 
 test('a flagged admission carries the caveat a person must acknowledge (D13)', () => {
