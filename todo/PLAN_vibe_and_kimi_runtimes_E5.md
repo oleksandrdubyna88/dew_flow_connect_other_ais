@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6: skeleton written 2026-10-26 (rows, vectors, generated table, planner arm, the 12 scenario tests with their bodies still to fill); not yet red/green.** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 implemented 2026-10-26 (rows, vectors, generated table, planner arm, the flag guard, the 12 scenario tests; deviations 58–63, not yet reviewed).** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -1100,6 +1100,25 @@ Numbered from 50, apart from the lists above. The skeleton is data and signature
 55. **S5.5.2 is a Theory** (`theTurnFails`: passed / exit 70) and **S5.6.7 a Theory** over `answered` / `refused` / `cancelled`, as the tables say.
 56. **Skeleton-only placeholders:** the async tests are `Task`, not `async Task` (CS1998 is an error here), and two Theory bodies read their parameter on one line (`xUnit1026`). Each region says so.
 57. **`dotnet format … --verify-no-changes` on the whole solution fails on this host** with the `src_server` AOT analyzers (IL2026, IL3050); `dotnet format whitespace` on the changed files is clean.
+
+### E5.5–E5.6 as built (Sonnet, 2026-10-26)
+
+Numbered from 58, after the skeleton's list.
+
+58. **The reds of S5.6.1–S5.6.6 were watched against the code of `b4e2ea96`** (rows, vectors, planner arm, `Runtimes` and the guard restored to it). S5.6.1 and S5.6.2 and S5.6.4 and the TS test read as the table says
+    (*Expected none not to be <null>*, the missing `kimi` pairs, *Expected … Admitted, but found Refused*, the runtimes list). S5.6.3, S5.6.5 and S5.6.6 read *Expected type to be Confinement+Planned, but found
+    Confinement+Refused* instead of *plan.Cwd … Scratch*: the matrix refuses `kimi` before the planner's default arm is reached, so the table's wording needs the data in and the arm out. S5.6.6 with the data in and the guard
+    unwired reads the table's *Expected a <System.ArgumentException> to be thrown, but no exception was thrown.*
+59. **S5.5.1–S5.5.4 and S5.6.7 are green on arrival** (E5.3 g and E5.4 are in), so their reds are teeth runs, each reverted: `OneShotHome.Emptied` deleting through the bare deleter turned S5.5.2 (both arms), S5.5.3 and S5.6.7
+    (answered, cancelled) red with *Expected _unlinkedByTheDeleter to be empty … found … coai-vh/<8>/kh-<10 hex>/home/credentials*; `ConsultCheckScratch.Delete` without `KimiHomesDisposed` turned S5.5.4 red with the same message
+    for `…/own/kh-<10 hex>/home/credentials`. S5.6.7's refused arm launches nothing, so it has no teeth of that kind; it was red against `b4e2ea96` (the row refused the runtime).
+60. **S5.6.7's cancelled arm ends as Vibe's does**: the played shim cancels the caller's token and throws, `AskConsultantsAsync` throws `OperationCanceledException`, and the shim WAS launched once. The table's "after each ending" is read as: the
+    copy the shim stood in, the `coai-vh` folder and the junction are gone. The copies are listed at the turn (they exist only while the row runs), and the prompt is asserted to name that copy and never the granted root.
+61. **`KimiConsultant.MustCarryNoFlags` refuses a plan's `Leading` as well as its `Flags`** (decision 3: ANY flag), and is called from `Build` right after `MustBeLaunchable`.
+62. **S5.5.1's "the scratch repository and its canary unchanged"** is asserted through the check's own judgement (`state` is `answered`: a changed repository or canary would have made it a breach) and the scratch's removal; the shim's cwd is
+    asserted to be under `own/tree`, never the scratch repository.
+63. **The test bodies of the first fill did not build** (a nested class inside a method, `await` in a `Task` method, `Reason` read off `Confinement`, an init-only `Turn` assigned); the check and question-row classes were rewritten whole
+    on the Vibe tests' shape, with `Scopes` and `StandIn` as `AKimiConsultationScenarioTests` has them. The other five test regions were kept or fixed in place.
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 
