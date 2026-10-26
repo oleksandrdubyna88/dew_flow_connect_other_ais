@@ -1104,8 +1104,9 @@ Numbered from 47, after E5.7's list.
     home's `Dispose`, `ConsultCheckScratch.Delete`'s Kimi-first step, `NeedsASanitisedSnapshot`, `QuestionRowLaunch`'s
     `Release`).
 51. **S5.6.7's "refused before the launch" arm is a model the launch control refuses** (`not-a-kimi-model`, `KimiModels.RefusalFor`):
-    the one refusal reachable before the shim with a played Kimi. No home is made in that arm, so its recorder assertion is
-    trivially true; the junction-first proof is in the answered and cancelled arms.
+    the one refusal reachable before the shim with a played Kimi. The row's one-shot folder IS reserved before that refusal
+    (the arm asserts it exists, and goes red when `Release(homes)` is removed), so the cleanup is proved in all three arms; the
+    arm also pins the `failed` status and the `KimiModels.RefusalFor` sentence in the reason.
 52. **The `kimi` rows' date is 2026-10-13** (the M-K6/M-K3/M-K4 cells, as E5.4 decision 8's limitation rows) and they cite
     `M-K9 (e)` as a cell id with its letter, as the plan's text does.
 53. **The matrix test's record list gains the Kimi record.** `CapabilityMatrixTests.Records` (the records a row may cite, each with

@@ -4454,3 +4454,32 @@ saw it).
 
 `CumulativeUsageTests.AVendorReportingLESSThanBeforeFloorsAtZero_NeverNegative` became `ACountBelowWhatWasBilled_FloorsAtZero_NeverNegative`: its old case (both totals below
 what was billed) is now a reset by decision 12, so the floor is pinned where it still applies — totals that moved on, cached and reasoning counts that did not.
+
+### The Kimi consultant check and question row — E5.5–E5.6 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md` (2026-10-26)
+
+`AKimiConsultantCheckTests` and `AKimiQuestionRowTests` run the REAL check and the REAL `ask_consultants` fan-out and row launch. The copies are made by git for real;
+the launch control runs for real over `KimiFixture`'s fake person (a symbolic link stands in for the junction off Windows, through `WindowsStandIn`); only the shim is played
+(`PlayedKimi`). No test starts the real `kimi`, and every person lives outside the homes root. E5.3 g and E5.4 were already in, so most of these arms went green on their first
+run (plan deviation 50): each was given teeth by a temporary break of the deciding line, run red and reverted. The red messages are recorded only where the as-built notes hold them.
+
+| Suite (scenario) | What it holds | Seen red as |
+|---|---|---|
+| `AKimiConsultantCheckTests.AKimiCheck_RunsInACopy_OnAOneShotHome` (S5.5.1) | the check answers; the marker is read from a copy in the check's own scratch, never the repository; `--home` is `<root>/coai-vh/<8>/kh-<10 hex>`; no `--session` | a pin, green on arrival (deviation 50) |
+| `…AfterTheCheck_TheHomeIsGone_JunctionFirst` (S5.5.2, Theory: answered, failed) | `coai-vh/<8>` is gone whichever way the turn ended; the deleter's unlink recorder is never called (`KimiHome` unlinks the junction first); the person's folder has the same names, bytes and read-only bits; no `coai-check-*` is left | teeth, the one-shot home's `Dispose` removed (deviation 50). Which arms went red and the message are not recorded |
+| `…ACheckCancelledMidTurn_StillDisposesItsHome` (S5.5.3) | a cancel mid-turn ends `failed` / `cancelled`; the folder, the recorder, the person's hash and the scratch as above | the same teeth (deviation 50); message not recorded |
+| `…ARootlessCheck_KeepsTheHomeInItsScratch_AndDisposesItJunctionFirst` (S5.5.4) | no homes root: the home stays in the check's own scratch, which is taken whole; nothing is reserved under a root | teeth, `ConsultCheckScratch.Delete`'s Kimi-first step removed (deviation 50). Message not recorded |
+| `AKimiQuestionRowTests.AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind` (S5.6.7, Theory: answered, refused before the launch, cancelled mid-turn) | the prompt names the copy's path and never the root (D6); the copy and the row's one-shot folder are gone after each ending; `coai-vh/<8>` is empty; the recorder is never called; the person's hash is the same. The refused arm (`not-a-kimi-model`) ends `failed` with the `KimiModels.RefusalFor` sentence in its reason, never starts the shim, and has reserved its one-shot folder before the launch control refuses | teeth, `Release(homes)` removed from `QuestionRowLaunch`'s `finally`: all three arms red — answered *the row's one-shot folder goes with it*, cancelled *finally, whatever ended it*, refused *coai-vh/<8> is gone after every ending*. The refusal sentence and the status of the refused arm were pinned in the review of E5.5–E5.6 (R3) |
+| `KimiConsultantTests.AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome` (S5.6.5) | a none row stands in its empty folder, a disk row in the copy of its roots; `--home` in the row's one-shot folder; no `--session`, no root named, the minimal child, role `question`, the launch control admits it | not recorded |
+| `…APlanWithFlags_IsRefusedForKimi` (S5.6.6, Theory: none and disk, each with a trailing flag and with a leading flag) | an `ArgumentException` naming the shim, never a dropped or spliced flag | teeth, `|| planned.Plan.Leading.Count > 0` removed from `MustCarryNoFlags`: the two `leading: True` cases red, *Expected a <System.ArgumentException> to be thrown, but no exception was thrown.* (review of E5.5–E5.6, R4) |
+| `CapabilityMatrixTests.KimiHasThreeRows_EachCitingItsCells` (S5.6.1) and `…AdmissionFlagsBothRows` (S5.6.4) | none and disk `Unconfined` citing `M-K6` (disk also `M-K9`), web `Unmeasured`; version `2.1.1`, record `RESULTS_kimi_confinement.md`; both admitted rows flagged `Unconfined` | not recorded |
+| `ConfinementPlannerTests.ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb` (S5.6.3) and the `kimi` row of its refusal Theory | none: scratch, no flag; disk: a snapshot of both roots, no `Flags`, `Leading` or `AddDirs`; web refused, naming "not been measured" and the record | not recorded |
+| `ConfinementPlannerTests.NoAdapter_SendsASandboxFlag_ThePlanDidNotGiveIt` | the Kimi adapter is built through `Adapters()` and adds no flag of its own | a pin (deviation 47) |
+| `capabilityAdmission.test.ts`: the runtimes list and `kimi rows admit flagged, web refuses naming its record` | the generated TS table holds `kimi` last; none and disk admit with the "can read this machine" caveat; web refuses naming the record | not recorded |
+
+`CapabilityMatrixTests.Records` gains `RESULTS_kimi_confinement.md` / `2026-10-13` / `M-K` (deviation 53), so the vector test accepts the `M-K…` cells.
+
+**Not covered.**
+- A Kimi `none` row through `QuestionRowLaunch`. S5.6.7 runs the `disk` row only; the none row's launch is pinned at the adapter (S5.6.5), not through the fan-out.
+- The live check and the live rows (RESULTS §31, J2): no test starts the real `kimi`.
+- M-K17 (the live measurement the plan leaves open).
+- That the row's scratch (`coai-question-*`) is gone after a refusal. It lives in the process-wide temp folder, which other classes write in parallel, so a scan would be flaky. `QuestionRowLaunch`'s `finally` removes it, and the copy inside it is checked in the answered and cancelled arms.
