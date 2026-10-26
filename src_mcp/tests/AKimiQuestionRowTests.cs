@@ -121,6 +121,13 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
         return answers.EnumerateArray().Should().ContainSingle().Subject;
     }
 
+    /// <summary>The caller cancels while the played shim is alive: the turn is cut mid-way.</summary>
+    private static Func<ProcessRequest, CancellationToken, Task> Cancelling(CancellationTokenSource caller) => async (_, ct) =>
+    {
+        await caller.CancelAsync();
+        ct.ThrowIfCancellationRequested();
+    };
+
     // ---------- S5.6.7 ----------
 
     [Theory]
@@ -142,15 +149,12 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
             await File.WriteAllTextAsync(Path.Combine(plain, "notes.txt"), "not a repository", TestContext.Current.CancellationToken);
         }
 
-        string[] roots = ending == Ending.RefusedBeforeTheLaunch ? new[] { plain } : new[] { granted };
+        string[] roots = ending == Ending.RefusedBeforeTheLaunch ? [plain] : [granted];
 
-        Func<ProcessRequest, CancellationToken, Task> during = ending == Ending.CancelledMidTurn
-            ? async (_, ct) => { await caller.CancelAsync(); ct.ThrowIfCancellationRequested(); }
-            : (_, _) => Task.CompletedTask;
         var played = new PlayedKimi(_launcher)
         {
             Turn = (_, request) => PlayedKimi.Answered(PlayedKimi.SessionOf(request), 19973, 31, Advice),
-            During = during,
+            During = ending == Ending.CancelledMidTurn ? Cancelling(caller) : static (_, _) => Task.CompletedTask,
         };
 
         JsonElement reply = default;

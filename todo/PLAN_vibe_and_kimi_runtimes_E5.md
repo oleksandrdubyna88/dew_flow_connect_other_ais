@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 skeleton written 2026-10-26 (rows, vectors, generated table, the twelve scenario tests, fill regions for the bodies; the tests are not yet red or green — deviations 50–55).** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 implemented 2026-10-26 (rows, vectors, generated table, the planner arm, the flag refusal and the twelve scenario tests, all green; deviations 50–60, not yet reviewed).** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -1104,6 +1104,21 @@ placeholders that throw, so the scenarios are not yet watched red or green.
     root outside any git work tree (refused at its copy), as the Vibe twin does; no launch is made. S5.5.2 is a Theory over `theTurnFails` (passed; the played turn ends exit 70).
 55. **Two Theory parameters are consumed by a `_ = parameter;` line before the fill region**, because xUnit1026 is an error under `TreatWarningsAsErrors` while the body is a placeholder.
     The line stays harmlessly when the body is filled.
+
+**E5.5–E5.6 as built (Sonnet, 2026-10-26) — where it deviates from the spec above:**
+
+56. **The `_ = parameter;` lines of deviation 55 are gone** — both parameters are read by the bodies.
+57. **S5.5.1–S5.5.4 were green on arrival**, so the "before E5.4" red of S5.5.1 cannot be seen: `KimiConsultant` (E5.4) and the one-shot disposal (E5.3 decision g) are in the code they run on. They were given teeth by two
+    mutations, each reverted: `ConsultCheckScratch.Delete` without `KimiHomesDisposed` turned S5.5.4 red (*Expected _unlinkedByTheDeleter to be empty because the deleter's unlink recorder must not be invoked …*); `VibeHomes.EmptiedUnderItsLock`
+    without its `KimiHome.DisposeAllUnder` turned S5.5.2 (both arms), S5.5.3 and S5.6.7 (`Answered`, `CancelledMidTurn`) red with the same recorder message. The `RefusedBeforeTheLaunch` arm of S5.6.7 launches nothing and so has no home to
+    dispose; it is red only against a code that launches. S5.5.1 also asserts the check's canary reading (`not-attempted`: the played agent said `CANNOT`), as the table's "canary unchanged" asks.
+58. **S5.6.7 names the copies through the row's tree, not through the home's folder.** The copies stand under the row's own scratch (`<scratch>\tree\snapshot-<id>`, in TEMP), the home under `<root>\coai-vh\<8>`; the two folders are not nested.
+    The `Answered` arm asserts that the prompt contains the shim request's working directory and never the root, and that both the home's folder and the row's scratch are gone. The `RefusedBeforeTheLaunch` arm asserts the real
+    word (`RowOutcomes.Refused`, reason "not inside a Git work tree") instead of "refused or failed".
+59. **`Scopes` is lifted out of `AKimiConsultationScenarioTests`** to the internal `src_mcp/tests/Scopes.cs`, because `AKimiQuestionRowTests.StandIn` needs it too (reuse-first, move 1).
+60. **The reds that differ from the tables.** S5.6.3 (*Expected disk.Cwd to be CwdKind.Snapshot, but found CwdKind.Scratch*), S5.6.6 (*Expected a <System.ArgumentException> to be thrown, but no exception was thrown*), S5.6.1, S5.6.2 and S5.6.4 were red as the tables say
+    (S5.6.1, S5.6.2, S5.6.4 against the old data; the rest against the old planner and consultant over the new data). S5.6.5 failed one line earlier than the table says: *Expected disk.Request.WorkingDirectory to be …, but they differ* (a scratch, not the copy).
+    S5.6.7 `Answered` failed on the prompt (it names no copy), not on `Directory.Exists(coai-vh\<8>)`, which was already false. S5.6.8 failed on the generated table without `kimi` (*one row per runtime × capability*, and the missing rows by name), not on the runtimes list.
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 

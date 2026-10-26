@@ -108,6 +108,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
         code.Should().Be(0);
         said.GetProperty("state").GetString().Should().Be("answered", said.ToString());
         said.GetProperty("markerRead").GetBoolean().Should().BeTrue("the copy holds the scratch's CHECK.md");
+        said.GetProperty("canary").GetString().Should().Be("not-attempted", "the played agent said CANNOT, and the canary outside the copy was untouched");
 
         var request = played.Shims.Should().ContainSingle().Subject.Request;
         request.WorkingDirectory.Should().Contain(Path.Combine("own", "tree"), "a copy in the check's own scratch, never the repository");
