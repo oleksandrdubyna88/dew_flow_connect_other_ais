@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 not started.** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6: SKELETON written 2026-10-26 (rows, vectors, signatures, the 12 tests as placeholders — deviations 47–51), bodies not filled, nothing run.** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -1085,6 +1085,24 @@ Numbered from 40, apart from the lists above, so the stories built in parallel d
 45. **Decision (e)'s sentence lives in *The consultant* article** (*What can go wrong*, five languages), because it is about a `consult` turn;
     the question-consultant article says only that a Kimi row's launches wait for one another and for a Kimi review on the same sign-in.
 46. **`CONSULTANT_SINCE` gates a note, so `consultantsWire.ts` is unchanged.** S5.7.3 was green before any code, as the row said.
+
+### E5.5–E5.6 skeleton (Sonnet, 2026-10-26) — where it deviates from the spec above
+
+Numbered from 47. The SKELETON step only: the data and the signatures are final, the method bodies of the 12 scenarios and of two
+production methods are placeholders that throw (`QWEN-FILL` regions), and no test has been run red or green yet.
+
+47. **The data is written and final:** the three `kimi` rows (`shared/runtime-capabilities.json`; `none` and `disk` `unconfined`, `web` `unmeasured`,
+    version 2.1.1, `date` 2026-10-16 — the day of the plan's evidence), the three vectors, `RuntimeCapabilities.Runtimes` and the regenerated
+    `runtimeCapabilities.generated.ts` (`--check` is green). The rows cite RESULTS §9 (M-K6), §6 (M-K3), §7 (M-K4), §12 (M-K9), §21 (M-K9 (e)), §14 and
+    §25 (the web). The plan text above says "(RESULTS §7)" for the announced web tools; §7 is M-K4, so the rows do not repeat it.
+48. **S5.6.2 has no new test.** It is the existing `TheVectorsActuallyLoaded_AndCoverEveryPairOfTheTable`; the new vectors are its data. The existing
+    TS list assertion over `RUNTIMES` gained `'kimi'` (the plan's `:143`).
+49. **Where the 12 scenarios live.** S5.5.1–S5.5.4 → `AKimiConsultantCheckTests` (new); S5.6.1, S5.6.4 → `CapabilityMatrixTests`; S5.6.3, S5.6.5, S5.6.6 →
+    `ConfinementPlannerTests` (the Vibe question-launch tests' home, with an `AKimiConsultant()` helper); S5.6.7 → `AKimiQuestionRowTests` (new, a Theory of
+    `answered` / `refused` / `cancelled`); S5.6.8 → `capabilityAdmission.test.ts`.
+50. **The flag guard is called only for a planned launch** (`KimiConsultant.Build`: `if (launch.Confinement is LaunchConfinement.Planned)`), so the stuck
+    consultant's turns do not meet it. Its body (`MustCarryNoFlag`) and the planner's `Kimi` method are the two production fill regions.
+51. **The tests of S5.5 and S5.6.7 run on every OS** through `WindowsStandIn` and `KimiSeams.Using` (the E5.4 precedent, deviation 23), not Windows only.
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 
