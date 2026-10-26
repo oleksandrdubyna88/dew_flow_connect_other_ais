@@ -1,9 +1,9 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 not started.** E5.1: M-K16 recorded as RESULTS §29
+> Status: **implemented — E5.1–E5.7 in; E5.4–E5.6 not yet reviewed; the live checks (J2, RESULTS §31) and M-K17 not run.** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
-> each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
+> each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. E5.5–E5.6 (Opus split, implemented 2026-10-26): the consultant check proved on Kimi with tests only, and the question consultant's three kimi rows, the planner arm and KimiConsultant's refusal of a plan with flags; deviations 47–55, *E5.5–E5.6 as built*. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
 > its security judgement. The plan gate passed (proceed), and its findings are folded in (§"Plan gate 2026-10-16").
 > The coder of each story follows the gate's command (§0.2): E5.3 on Fable, every other story on Opus.
 > **E5.7 implemented 2026-10-16 (Opus)**, built on its own branch beside E5.4 and merged into this one: the consultant-runtime gate
@@ -1085,6 +1085,50 @@ Numbered from 40, apart from the lists above, so the stories built in parallel d
 45. **Decision (e)'s sentence lives in *The consultant* article** (*What can go wrong*, five languages), because it is about a `consult` turn;
     the question-consultant article says only that a Kimi row's launches wait for one another and for a Kimi review on the same sign-in.
 46. **`CONSULTANT_SINCE` gates a note, so `consultantsWire.ts` is unchanged.** S5.7.3 was green before any code, as the row said.
+
+### E5.5–E5.6 as built (2026-10-26)
+
+Numbered from 47, after E5.7's 46. Items 47–51 are the decisions the judge fixed for these stories; items 52–55 are the differences the
+four coder reports (t1–t4) name, each with the observed message. The E5.5 and E5.6 code is in `e0ecaac1` and its four ancestors.
+
+47. **E5.5 is tests only** — `AKimiConsultantCheckTests` (S5.5.1–S5.5.4); `ConsultantCheck` and `ConsultCheckScratch` unchanged
+    (decision 1). Its class is `src_mcp/tests/AKimiConsultantCheckTests.cs:26`. Its reds were shown by reverted mutations:
+    `held.Home.Dispose();` removed at `src_mcp/src/Server/Consultation/ConsultantCheck.cs:232` (S5.5.2 both arms and S5.5.3 red,
+    `Expected Directory.Exists(Path.GetDirectoryName(home)) to be False`), and `KimiHomesDisposed(root, warn)` replaced by `true` at
+    `src_mcp/src/Server/Consultation/ConsultCheckScratch.cs:116` (S5.5.4 red). S5.5.1 was green at its first run: it pins E5.4's
+    registration. The class runs on every host through `WindowsStandIn`, and shares the `fakecli-env` collection (`:25`) because
+    `GitScratch.AfterUnlink` is static.
+48. **S5.6.7 is one theory in `AKimiQuestionRowTests`**, its three arms answered / refused before the launch (a re-login, D19) /
+    cancelled mid-turn (`src_mcp/tests/AKimiQuestionRowTests.cs:122`); `QuestionRowLaunch` unchanged (decision 5). Its red was a reverted
+    mutation of the row's `finally` (`src_mcp/src/Server/QuestionConsult/QuestionRowLaunch.cs:132`, `Release(homes)` commented out): all
+    three arms went red with `found at least one item {.../homes/coai-vh/<8>}`.
+49. **`KimiConsultant` refuses a plan that carries Flags, Leading OR AddDirs**, not only `Flags` (decision 3 named "any flag"): all three
+    are argv a Kimi row never gets. The guard is `MustBeTheShimsConfinement` (`src_mcp/runners/Kimi/KimiConsultant.cs:63`), called second
+    in `Build` (`:50`); the planner's Kimi arm is `src_mcp/core/QuestionConsult/ConfinementPlanner.cs:157`, with no flags either time
+    (`:206`).
+50. **The kimi rows cite `research/RESULTS_kimi_confinement.md` by section**: §9 M-K6, §6 M-K3, §7 M-K4, §12 M-K9, §21 M-K9 (e), §14 for
+    `web`; dated 2026-10-13, kimi 2.1.1; the table's `why` names the M-K cells (`shared/runtime-capabilities.json:340–360`). The `none`
+    and `disk` notes say that `WebSearch` and `FetchURL` are announced and unmeasured (`:353`, decision 2) — M-K17 decides whether that
+    sentence stays.
+51. **The runtime-list pins moved with `Runtimes`**: `Runtimes` gains `kimi` (`src_mcp/core/QuestionConsult/RuntimeCapabilities.cs:84`);
+    `CapabilityMatrixTests` (`AnUnknownRuntimeOrCapability_IsRefused_NamingWhatIsKnown`, `:312`), `ConfinementPlannerTests` (`:194`, where
+    the brief had `:167`), and `capabilityAdmission.test.ts` (`:143`, `:166`) now spell `…, vibe, kimi`.
+52. **The record table gained the kimi record.** `CapabilityMatrixTests` has a `Records` table (`:157–161`) that
+    `EveryRow_CitesTheRecord_AndACellOrSaysWhyThereIsNone` reads; the document did not name that test. Its first red was `Expected
+    cited to contain a single item because kimi × none: a row cites exactly one record, but the collection is empty.` Every kimi row
+    would fail it, so `("RESULTS_kimi_confinement.md", "2026-10-13", "M-K")` was added as test data; no contract changed.
+53. **The S5.6.3 and S5.6.5 reds name the variable `disk`, not `plan`, and an `After` helper was added.** The observed messages were
+    `Expected disk.Cwd to be CwdKind.Snapshot … but found CwdKind.Scratch.` and `Expected disk.Request.WorkingDirectory to be RowTree,
+    but they differ`; the reason is the same as the brief's. The helpers `KimiPlacesAt` and `KimiQuestionConsultant` were added, and
+    `After` did not exist, so it was added once (`src_mcp/tests/ConfinementPlannerTests.cs:147–153`).
+54. **S5.5 needs `using CoaiMcp.Server;`, and two mutation lines moved.** `ConsultantCheck.OwnName`, `ConsultantCheckMode` and
+    `PanelSettings` live in that namespace, which the brief's using list omitted (`AKimiConsultantCheckTests.cs:9`). The mutation lines
+    are `ConsultantCheck.cs:232` (brief: 225) and `ConsultCheckScratch.cs:116` (brief: 111); both were matched by content.
+55. **S5.6.7's refused arm and answered arm differ from the brief.** A re-login (slot key replaced) does not refuse a one-shot row,
+    because the row writes a fresh home at launch; the arm replaces the managed `oauth` table with `gone` instead
+    (`AKimiQuestionRowTests.cs:150`), and the reply shows `failed` with `not started: not signed in to Kimi Code …`. The answered arm's
+    shim working folder is the row's own snapshot (`/tmp/coai-question-*/tree`), not under the one-shot folder, so its assertion is
+    `NotStartWith(Homes, …)` (`:168`); the home-under-`OneShotRoot` assertion stays as written.
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 
