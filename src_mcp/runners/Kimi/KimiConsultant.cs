@@ -47,12 +47,28 @@ public sealed class KimiConsultant(KimiRuntime inner, string vendor = "kimi") : 
     public ReviewerInvocation Build(ConsultantLaunch launch)
     {
         ConsultantLaunches.MustBeLaunchable(launch);
+        if (launch.Confinement is LaunchConfinement.Planned planned)
+        {
+            MustCarryNoFlags(planned.Plan);
+        }
+
         var settings = launch.Settings with { OwnedScratch = OwnedFolder(launch), Model = ModelOf(launch.Settings) };
         var built = inner.Build(ConsultantLaunches.RoleOf(launch), launch.Prompt, Cwd(launch), string.Empty, launch.OutputDir, settings);
         var request = built.Request with { Arguments = [.. built.Request.Arguments, .. SessionOf(launch)] };
         ConsultantLaunches.MustCarryNoLineBreak(request.Arguments);
 
         return built with { Request = launch.Confinement is LaunchConfinement.Planned ? ConsultantLaunches.ForQuestion(request) : request };
+    }
+
+    /// <summary>A plan that carries any flag is not one coai made for Kimi (E5.6 decision 3): its confinement is the shim's, never its argv.</summary>
+    private static void MustCarryNoFlags(Confinement.Planned plan)
+    {
+        // QWEN-FILL-BEGIN s56-no-flags prod
+        // When `plan.Flags` or `plan.Leading` holds ANY entry, throw an ArgumentException (second argument nameof(plan)) whose message is
+        // exactly: "a Kimi row's confinement is the shim's; a plan with flags is not one coai made for kimi".
+        // A plan with both lists empty returns without doing anything. (`using System.Linq` is implicit; use `.Count > 0` on the lists.)
+        throw new NotImplementedException("s56-no-flags");
+        // QWEN-FILL-END s56-no-flags
     }
 
     /// <summary>The row's model, or Kimi's default when it names none — resolved here so the shim and the ledger name the same one.</summary>

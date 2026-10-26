@@ -158,6 +158,7 @@ public sealed class CapabilityMatrixTests
     [
         ("RESULTS_question_consultant_capabilities.md", "2026-10-01", "01a0f8c7-18e4-"),
         ("RESULTS_vibe_confinement.md", "2026-10-12", "M-V"),
+        ("RESULTS_kimi_confinement.md", "2026-10-13", "M-K"),
     ];
 
     [Fact]
@@ -195,6 +196,51 @@ public sealed class CapabilityMatrixTests
             "denied writes do not prove bounded READS — the disk row rests on the read cell itself");
         CapabilityMatrix.Admit("vibe", Capability.Web).Should().BeOfType<Admission.Refused>()
             .Which.Reason.Should().Contain("not been measured", "no Vibe cell exercises the web");
+    }
+
+    // ---------- Kimi (E5.6 of todo/PLAN_vibe_and_kimi_runtimes_E5.md) ----------
+
+    /// <summary>S5.6.1 — each Kimi row stands on its measured cells; `none` and `disk` are unconfined (Grep and Glob read the disk), `web` unmeasured.</summary>
+    [Fact]
+    public void KimiHasThreeRows_EachCitingItsCells()
+    {
+        // QWEN-FILL-BEGIN s561-rows test
+        // Arrange/Act: `RuntimeCapabilities.Builtin.Of("kimi", Capability.None)`, `(…, Capability.Disk)`, `(…, Capability.Web)`.
+        // Assert (FluentAssertions): each row `.Should().NotBeNull()`; none.Standing == CapabilityStanding.Unconfined and none.MeasuredWith.Cells
+        // contains "M-K6"; disk.Standing == Unconfined and its Cells contain "M-K6" and "M-K9"; web.Standing == CapabilityStanding.Unmeasured
+        // (its Cells are empty and its MeasuredWith.Note is not empty); all three rows' MeasuredWith.Version == "2.1.1" and
+        // MeasuredWith.ResultRef contains "RESULTS_kimi_confinement.md".
+        // Fails before the change: Of("kimi", None) is null (the table has no kimi row).
+        throw new NotImplementedException("s561-rows");
+        // QWEN-FILL-END s561-rows
+    }
+
+    /// <summary>S5.6.2 — the golden vectors decide every Kimi pair, so the other half (the extension) answers the same three.</summary>
+    [Fact]
+    public void TheVectorsCoverKimi()
+    {
+        // QWEN-FILL-BEGIN s562-vectors test
+        // Use the class's `Vectors` array (elements have Runtime, Capability, Admitted, Standing, Flag, Why — see the context pack).
+        // For each capability in ["none", "disk", "web"] (the vector's `Capability` is a STRING, not the enum): `Vectors` must hold exactly one vector with
+        // Runtime == "kimi" and that Capability (`Vectors.Should().ContainSingle(v => v.Runtime == "kimi" && v.Capability == capability, $"kimi × {capability} must have a vector")`).
+        // Then: none and disk vectors are Admitted with Standing "unconfined" and Flag "unconfined"; the web vector is not Admitted, Standing "unmeasured".
+        // Fails before the change: no kimi vectors in shared/capability-matrix-vectors.json (the file is data written in the skeleton, so this
+        // test is green once the body is filled; its red is the missing-vector message when the data is reverted).
+        throw new NotImplementedException("s562-vectors");
+        // QWEN-FILL-END s562-vectors
+    }
+
+    /// <summary>S5.6.4 — the matrix admits both readable Kimi rows FLAGGED (D13): it can read this machine.</summary>
+    [Fact]
+    public void AdmissionFlagsBothRows()
+    {
+        // QWEN-FILL-BEGIN s564-admit test
+        // For capability in [Capability.None, Capability.Disk]:
+        //   `CapabilityMatrix.Admit("kimi", capability).Should().BeOfType<Admission.Admitted>().Which.Flag.Should().Be(AdmissionFlag.Unconfined, $"kimi × {capability}")`
+        // Also Standing: `.Which.Standing.Should().Be(CapabilityStanding.Unconfined)` on each.
+        // Fails before the change: Admit returns Admission.Refused "'kimi' is not a runtime the question consultant can launch …".
+        throw new NotImplementedException("s564-admit");
+        // QWEN-FILL-END s564-admit
     }
 
     /// <summary>D13's two refusals kept apart: the flags are what the data says, never what a runtime name suggests.</summary>
@@ -270,7 +316,7 @@ public sealed class CapabilityMatrixTests
     public void AnUnknownRuntimeOrCapability_IsRefused_NamingWhatIsKnown()
     {
         var runtime = CapabilityMatrix.Admit("gemini", "none").Should().BeOfType<Admission.Refused>().Which;
-        runtime.Reason.Should().Contain("gemini").And.Contain("claude, codex, antigravity, local, api, vibe",
+        runtime.Reason.Should().Contain("gemini").And.Contain("claude, codex, antigravity, local, api, vibe, kimi",
             "an unknown name fails naming the legal values");
 
         var capability = CapabilityMatrix.Admit("claude", "shell").Should().BeOfType<Admission.Refused>().Which;

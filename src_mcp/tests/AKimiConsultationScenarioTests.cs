@@ -40,7 +40,7 @@ public sealed class AKimiConsultationScenarioTests : ConsultScenarioBase
     private string FolderOf(string id) => ConsultantHomes.ConversationFolder(Homes, ConsultantHomes.Kimi, id);
 
     /// <summary>Several scopes, given back in reverse.</summary>
-    private sealed class Scopes(params IDisposable[] scopes) : IDisposable
+    internal sealed class Scopes(params IDisposable[] scopes) : IDisposable
     {
         public void Dispose()
         {
@@ -55,7 +55,7 @@ public sealed class AKimiConsultationScenarioTests : ConsultScenarioBase
     /// The person, the host and the lock root this flow's Kimi adapters see — set by a SYNCHRONOUS call, so the values reach the test's own flow
     /// and every service call it awaits.
     /// </summary>
-    private static Scopes StandIn(KimiFixture person) => new(
+    internal static Scopes StandIn(KimiFixture person) => new(
         WindowsStandIn.Begin(),
         KimiCredentialsLock.RootFor(Path.Combine(person.Folder, "locks")),
         KimiSeams.Using(HostKind.Windows, new KimiSeams(person.PlacesAt, () => (PlayedKimi.Shim, []))),
