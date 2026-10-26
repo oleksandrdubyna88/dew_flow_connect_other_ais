@@ -158,6 +158,7 @@ public sealed class CapabilityMatrixTests
     [
         ("RESULTS_question_consultant_capabilities.md", "2026-10-01", "01a0f8c7-18e4-"),
         ("RESULTS_vibe_confinement.md", "2026-10-12", "M-V"),
+        ("RESULTS_kimi_confinement.md", "2026-10-13", "M-K"),
     ];
 
     [Fact]
@@ -361,5 +362,35 @@ public sealed class CapabilityMatrixTests
             table.Of("codex", Capability.Web).Should().NotBeNull();
             table.Of("gemini", Capability.Web).Should().BeNull("a runtime outside the matrix has no row to answer with");
         }
+    }
+
+    /// <summary>E5.6 S5.6.1: Kimi's three rows, each standing on its own cells (decision 2).</summary>
+    [Fact]
+    public void KimiHasThreeRows_EachCitingItsCells()
+    {
+        var none = RuntimeCapabilities.Builtin.Of("kimi", Capability.None)!;
+        none.Standing.Should().Be(CapabilityStanding.Unconfined);
+        none.MeasuredWith.Cells.Should().Contain("M-K6");
+        none.MeasuredWith.Version.Should().Be("2.1.1");
+
+        var disk = RuntimeCapabilities.Builtin.Of("kimi", Capability.Disk)!;
+        disk.Standing.Should().Be(CapabilityStanding.Unconfined);
+        disk.MeasuredWith.Cells.Should().Contain(["M-K6", "M-K9"]);
+
+        RuntimeCapabilities.Builtin.Of("kimi", Capability.Web)!.Standing.Should().Be(CapabilityStanding.Unmeasured);
+    }
+
+    /// <summary>E5.6 S5.6.4: the none and disk rows are admitted FLAGGED unconfined (D13); the web row is refused by its record.</summary>
+    [Fact]
+    public void KimiAdmissionFlagsBothRows_AndRefusesWeb()
+    {
+        foreach (var capability in (Capability[])[Capability.None, Capability.Disk])
+        {
+            CapabilityMatrix.Admit("kimi", capability).Should().BeOfType<Admission.Admitted>()
+                .Which.Flag.Should().Be(AdmissionFlag.Unconfined, $"kimi × {capability}: Grep and Glob read the disk (M-K6)");
+        }
+
+        CapabilityMatrix.Admit("kimi", Capability.Web).Should().BeOfType<Admission.Refused>()
+            .Which.Reason.Should().Contain("not been measured");
     }
 }
