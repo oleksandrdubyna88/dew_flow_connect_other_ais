@@ -209,10 +209,11 @@ public static class ConfinementPlanner
     private static Confinement.Planned Kimi(CapabilityGrant grant, AdmissionFlag flag)
     {
         // QWEN-FILL-BEGIN s56-planner prod
-        // Decision 1 of E5.6, shaped like Vibe just above but with EMPTY flag lists (no VibeReadOnly). A switch on grant.Capability:
-        //   Capability.Disk => new Confinement.Planned("kimi", grant, [], [], CwdKind.Snapshot, [], flag) { SnapshotSources = grant.Roots }
-        //   _ (None; `web` never reaches here, the matrix refuses it as unmeasured) => new Confinement.Planned("kimi", grant, [], [], CwdKind.Scratch, [], flag)
-        throw new NotImplementedException("s56-planner");
+        return grant.Capability switch
+        {
+            Capability.Disk => new Confinement.Planned("kimi", grant, [], [], CwdKind.Snapshot, [], flag) { SnapshotSources = grant.Roots },
+            _ => new Confinement.Planned("kimi", grant, [], [], CwdKind.Scratch, [], flag),
+        };
         // QWEN-FILL-END s56-planner
     }
 
