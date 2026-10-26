@@ -1,6 +1,6 @@
 # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
 
-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 not started.** E5.1: M-K16 recorded as RESULTS §29
+> Status: **in progress — E5.1–E5.7 implemented (E5.5–E5.6 on 2026-10-26); the live J2 rows and RESULTS §31 not yet recorded.** E5.1: M-K16 recorded as RESULTS §29
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
 > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
@@ -8,7 +8,7 @@
 > The coder of each story follows the gate's command (§0.2): E5.3 on Fable, every other story on Opus.
 > **E5.7 implemented 2026-10-16 (Opus)**, built on its own branch beside E5.4 and merged into this one: the consultant-runtime gate
 > (`CONSULTANT_SINCE`, a note, never a withheld entry), the guard over both tables, the homes folder naming both CLIs, and the help in
-> five languages; deviations 40–46, *E5.7 as built*. With E5.4's seed (`features.consultant` gains `kimi`) merged, S5.7.5 is green.
+> five languages; deviations 40–46, *E5.7 as built*. With E5.4's seed (`features.consultant` gains `kimi`) merged, S5.7.5 is green. E5.5 (the consultant check) and E5.6 (the question consultant's Kimi row) built from five tasks; deviations 47–53, *E5.5–E5.6 as built*.
 >
 > Parent plan: [PLAN_vibe_and_kimi_runtimes.md](PLAN_vibe_and_kimi_runtimes.md), §4 **S5** (decisions D1, D6, D15, D19, D20).
 > Built on S4, which is merged and released as coai-mcp 0.57.0: [PLAN_vibe_and_kimi_runtimes_E4.md](PLAN_vibe_and_kimi_runtimes_E4.md)
@@ -1085,6 +1085,31 @@ Numbered from 40, apart from the lists above, so the stories built in parallel d
 45. **Decision (e)'s sentence lives in *The consultant* article** (*What can go wrong*, five languages), because it is about a `consult` turn;
     the question-consultant article says only that a Kimi row's launches wait for one another and for a Kimi review on the same sign-in.
 46. **`CONSULTANT_SINCE` gates a note, so `consultantsWire.ts` is unchanged.** S5.7.3 was green before any code, as the row said.
+
+### E5.5–E5.6 as built (2026-10-26)
+
+Numbered from 47, after E5.7's list.
+
+47. **S5.6.5 and S5.6.6 live in `KimiConsultantTests`, not `ConfinementPlannerTests`.** They build the planned launch by
+    hand, so the adapter's task did not wait for the matrix rows; `ConfinementPlannerTests` still builds a Kimi plan through
+    `Adapters()` (`NoAdapter_SendsASandboxFlag_ThePlanDidNotGiveIt`).
+48. **The flag refusal counts `Leading` as well as `Flags`.** Decision 3 says "ANY flag"; a leading flag is one. `AddDirs` is
+    not checked: a Kimi plan never has one, and the adapter never reads it.
+49. **The unconfined caveat is the matrix's generic sentence.** `AdmissionFlag.Unconfined` reads "can read this machine — a
+    shell is always there"; for Kimi the cause is `Grep` and `Glob` (M-K6), not a shell. The row's `note` says the true cause;
+    the shared caveat text was not changed (it is every unconfined row's).
+50. **S5.5.2's red is shown by a mutation, not by the old code.** E5.3 g and E5.4 were in before E5.5, so the four check
+    scenarios and S5.6.7 were green at their first run; each was proved able to fail by a reverted mutation (the one-shot
+    home's `Dispose`, `ConsultCheckScratch.Delete`'s Kimi-first step, `NeedsASanitisedSnapshot`, `QuestionRowLaunch`'s
+    `Release`).
+51. **S5.6.7's "refused before the launch" arm is a model the launch control refuses** (`not-a-kimi-model`, `KimiModels.RefusalFor`):
+    the one refusal reachable before the shim with a played Kimi. No home is made in that arm, so its recorder assertion is
+    trivially true; the junction-first proof is in the answered and cancelled arms.
+52. **The `kimi` rows' date is 2026-10-13** (the M-K6/M-K3/M-K4 cells, as E5.4 decision 8's limitation rows) and they cite
+    `M-K9 (e)` as a cell id with its letter, as the plan's text does.
+53. **The matrix test's record list gains the Kimi record.** `CapabilityMatrixTests.Records` (the records a row may cite, each with
+    its date and cell-id prefix) gains `RESULTS_kimi_confinement.md`, `2026-10-13`, `M-K`, so the vector test accepts the `M-K…`
+    cells. The plan's S5.6.2 names the test but not this list.
 
 ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
 
