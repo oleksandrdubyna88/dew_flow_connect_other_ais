@@ -187,16 +187,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
         code.Should().Be(0);
         Text(said, "state").Should().Be("failed", said.ToString());
         Text(said, "failureKind").Should().Be("cancelled");
-        if (played.Shims.IsEmpty)
-        {
-            // Shims records only the launches that finished; a cancelled one is not kept. The home's folder was reserved before the turn.
-            Directory.Exists(OneShotRoot).Should().BeTrue("the home's folder is reserved before the turn runs");
-        }
-        else
-        {
-            played.Shims.Should().ContainSingle();
-        }
-
+        played.Shims.Should().ContainSingle("PlayedKimi keeps a launch in its finally, so a cancelled one is kept too");
         TheHomesAreGone();
         TheDeleterNeverMetTheJunction();
         _person.Hash().Should().Equal(before, "the person's folder: the same names, bytes and read-only bits");
