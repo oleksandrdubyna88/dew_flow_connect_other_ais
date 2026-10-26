@@ -143,6 +143,31 @@ public sealed class ConfinementPlannerTests
         ConfinementPlanner.VibeReadOnly.Should().Equal(disk.Flags, "the reviewer and the planner spell D2 once");
     }
 
+    /// <summary>S5.6.3: a Kimi plan carries no flags (D15); a none row stands in an empty folder, a disk row in the copy of its roots, and web is refused by name.</summary>
+    [Fact]
+    public void ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb()
+    {
+        var none = Plan("kimi", CapabilityGrant.None);
+        none.Flags.Should().BeEmpty("Kimi's confinement is the shim's (D15), not its argv");
+        none.Leading.Should().BeEmpty();
+        none.Cwd.Should().Be(CwdKind.Scratch, "an empty folder bounds nothing for Kimi, but it is the row's own");
+        none.AddDirs.Should().BeEmpty();
+        none.SnapshotSources.Should().BeEmpty();
+        none.Flag.Should().Be(AdmissionFlag.Unconfined);
+
+        var disk = Plan("kimi", CapabilityGrant.Disk(RootA, RootB));
+        disk.Flags.Should().BeEmpty();
+        disk.Leading.Should().BeEmpty();
+        disk.Cwd.Should().Be(CwdKind.Snapshot, "the roots are COPIED (M-K9 (e)), never granted");
+        disk.SnapshotSources.Should().Equal([RootA, RootB]);
+        disk.AddDirs.Should().BeEmpty();
+        disk.Flag.Should().Be(AdmissionFlag.Unconfined);
+
+        ConfinementPlanner.Plan("kimi", new CapabilityGrant(Capability.Web, []))
+            .Should().BeOfType<Confinement.Refused>()
+            .Which.Reason.Should().Contain("not been measured").And.Contain("RESULTS_kimi_confinement.md");
+    }
+
     // ---------- refusals ----------
 
     [Theory]

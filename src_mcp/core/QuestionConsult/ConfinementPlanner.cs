@@ -154,6 +154,7 @@ public static class ConfinementPlanner
         "codex" => Codex(grant, flag),
         "antigravity" => Antigravity(grant, flag),
         "vibe" => Vibe(grant, flag),
+        "kimi" => Kimi(grant, flag),
         // A completion has no tools, so it has no sandbox flag: the question alone, from nowhere.
         _ => new Confinement.Planned(runtime, grant, [], [], CwdKind.Scratch, [], flag),
     };
@@ -199,6 +200,17 @@ public static class ConfinementPlanner
         Capability.Disk => new("vibe", grant, [], VibeReadOnly, CwdKind.Snapshot, [], flag) { SnapshotSources = grant.Roots },
         // `web` never reaches here: the matrix refuses it (no Vibe cell exercises the web).
         _ => new("vibe", grant, [], VibeReadOnly, CwdKind.Scratch, [], flag),
+    };
+
+    /// <remarks>
+    /// No flags, ever: Kimi's confinement is the shim's (D15), not its argv, so the plan carries none. A disk row's roots are COPIED into the
+    /// snapshot (M-K9 (e): a branch's <c>.agents/agents/</c> and <c>.mcp.json</c> load from disk) and a none row stands in an empty folder. Both
+    /// are UNCONFINED (M-K6: <c>Grep</c> and <c>Glob</c> read the disk directly, whatever the cwd). <c>web</c> never reaches here: the matrix refuses it.
+    /// </remarks>
+    private static Confinement.Planned Kimi(CapabilityGrant grant, AdmissionFlag flag) => grant.Capability switch
+    {
+        Capability.Disk => new("kimi", grant, [], [], CwdKind.Snapshot, [], flag) { SnapshotSources = grant.Roots },
+        _ => new("kimi", grant, [], [], CwdKind.Scratch, [], flag),
     };
 
     private static IEnumerable<string> AddDirs(string flag, IReadOnlyList<string> roots) =>
