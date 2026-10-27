@@ -585,7 +585,10 @@ export function acpTurn({ exe, args = ['acp'], cwd, env, deadlineMs, model = '',
       finished = true;
       state.error ||= why;
       clearTimeout(timer);
-      (endLikeTheShim ? likeTheShim() : stdinFirst()).then(() => { state.stderrTail = stderr.slice(-1500); done(state); });
+      // Not awaited (finish runs from timers and stream events); an ending that throws still ends the turn, so done() is always called.
+      void (endLikeTheShim ? likeTheShim() : stdinFirst())
+        .catch((e) => { state.error ||= `the ending failed: ${e?.message ?? e}`; })
+        .then(() => { state.stderrTail = stderr.slice(-1500); done(state); });
     };
     const timer = setTimeout(() => finish(`deadline ${deadlineMs} ms`), deadlineMs);
     const send = (obj) => { const line = JSON.stringify(obj); state.lines.push(`> ${line}`); child.stdin.write(`${line}\n`); };

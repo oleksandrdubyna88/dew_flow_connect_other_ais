@@ -219,13 +219,14 @@ public static class VibeHomes
     /// </summary>
     internal static bool EmptiedUnderItsLock(string folder, Action<string> kept, HomeIo io)
     {
-        var stopped = false;
-        KimiHome.DisposeAllUnder(folder, said =>
+        var stops = new List<string>();
+        KimiHome.DisposeAllUnder(folder, stops.Add);
+        foreach (var said in stops)
         {
-            stopped = true;
             kept(said);
-        });
-        if (stopped)
+        }
+
+        if (stops.Count > 0)
         {
             return false;
         }
