@@ -233,6 +233,12 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
 
         status.Should().Be(StatusOf[ending], $"the {capability} row {ending}");
         seen.JunctionThere.Should().ContainSingle().Which.Should().BeTrue("the home's junction was made before this ending, so its disposal had one to unlink");
+        TheHomeIsGoneJunctionFirst(played, ending, before);
+    }
+
+    /// <summary>S5.6.7's Thens after any ending: the home was <c>&lt;root&gt;\coai-vh\&lt;8&gt;\kh-&lt;10 hex&gt;</c>; it, the scratch and the copies are gone, junction-first; the person is whole.</summary>
+    private void TheHomeIsGoneJunctionFirst(PlayedKimi played, string ending, IReadOnlyList<string> before)
+    {
         // `kimi --version` runs IN <root>\coai-vh\<8>\kh-<10 hex>\home.
         var ownedRoot = Path.GetDirectoryName(played.Versions.Should().ContainSingle().Subject.WorkingDirectory)!;
         var oneShot = Path.GetDirectoryName(ownedRoot)!;
