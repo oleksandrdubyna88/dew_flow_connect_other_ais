@@ -520,7 +520,8 @@ public sealed class KimiHomeTests : IDisposable
         using var standIn = WindowsStandIn.Begin();
         var before = _person.Hash();
         var places = Made();
-        var cwdName = new string('w', Math.Max(4, 300 - places.Home.Length));
+        // Linux allows 255 bytes per path component, so the name is capped at 239 ('wd_' + name + '_0123456789ab'); the total still passes 300 because the rest of Kimi's session shape follows.
+        var cwdName = new string('w', Math.Min(239, Math.Max(4, 300 - places.Home.Length)));
         var wire = Path.Combine(places.Home, "sessions", $"wd_{cwdName}_0123456789ab", "session_" + new string('s', 36), "agents", "main", "wire.jsonl");
         wire.Length.Should().BeGreaterThan(300, "the shape of RESULTS §11, placed past 300 characters");
         Write(wire, "{}");
