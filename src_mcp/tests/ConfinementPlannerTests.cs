@@ -143,6 +143,25 @@ public sealed class ConfinementPlannerTests
         ConfinementPlanner.VibeReadOnly.Should().Equal(disk.Flags, "the reviewer and the planner spell D2 once");
     }
 
+    /// <summary>S5.6.3: Kimi's plan carries NO flags — its confinement is the shim's (D15) — and a disk row is a copy of its roots.</summary>
+    [Fact]
+    public void ThePlannerArm_IsAnEmptyFolderForNone_ACopyForDisk_AndRefusesWeb()
+    {
+        var none = Plan("kimi", CapabilityGrant.None);
+        none.Flags.Should().BeEmpty("Kimi's confinement is the shim's, not its argv (D15)");
+        none.Leading.Should().BeEmpty();
+        none.Cwd.Should().Be(CwdKind.Scratch);
+
+        var disk = Plan("kimi", CapabilityGrant.Disk(RootA, RootB));
+        disk.Flags.Should().BeEmpty("no flags, ever: SandboxVocabulary gains nothing for kimi");
+        disk.Cwd.Should().Be(CwdKind.Snapshot, "M-K9 (e): the roots are COPIED, because a branch's skills and sub-agents load from disk");
+        disk.SnapshotSources.Should().Equal([RootA, RootB]);
+        disk.AddDirs.Should().BeEmpty();
+
+        ConfinementPlanner.Plan("kimi", new CapabilityGrant(Capability.Web, [])).Should().BeOfType<Confinement.Refused>()
+            .Which.Reason.Should().Contain("not been measured").And.Contain("RESULTS_kimi_confinement.md");
+    }
+
     // ---------- refusals ----------
 
     [Theory]
@@ -456,6 +475,39 @@ public sealed class ConfinementPlannerTests
             consultant.Build(inTheSnapshot).Request.WorkingDirectory.Should().Be(RowTree, consultant.Vendor);
             consultant.Build(inTheSnapshot).Role.Should().Be(ConsultantRoles.Consult, consultant.Vendor);
         }
+    }
+
+    /// <summary>S5.6.5: a Kimi question launch is the shim request, in the row's empty folder (none) or its copy (disk), on the row's own home, naming no root.</summary>
+    [Fact]
+    public void AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome()
+    {
+        var kimi = Adapters().Single(a => a.Runtime == "kimi").Consultant;
+
+        var none = (Confinement.Planned)ConfinementPlanner.Plan("kimi", CapabilityGrant.None);
+        var noneRequest = kimi.Build(Planned("kimi", CapabilityGrant.None) with { Confinement = new LaunchConfinement.Planned(none) }).Request;
+        noneRequest.WorkingDirectory.Should().Be(Scratch, "a none row stands in an empty scratch folder, never the checkout");
+        noneRequest.Arguments.Should().NotContain("--session", "a question row is one shot");
+
+        var disk = (Confinement.Planned)ConfinementPlanner.Plan("kimi", CapabilityGrant.Disk(RootA, RootB));
+        var diskLaunch = Planned("kimi", CapabilityGrant.Disk(RootA, RootB)) with { Workdir = RowTree, Confinement = new LaunchConfinement.Planned(disk) };
+        var diskRequest = kimi.Build(diskLaunch).Request;
+        diskRequest.WorkingDirectory.Should().Be(RowTree, "a disk row runs in the copy of its roots, never the roots themselves");
+        diskRequest.Arguments.Should().NotContain(RootA).And.NotContain(RootB, "the prompt and the argv never name a root");
+
+        var home = diskRequest.Arguments[Array.IndexOf(diskRequest.Arguments.ToArray(), "--home") + 1];
+        home.Should().StartWith(RowFolder + Path.DirectorySeparatorChar, "the row's one-shot home, never the checkout or TEMP");
+    }
+
+    /// <summary>S5.6.6: a plan that carries a flag is refused for Kimi — its confinement is the shim's, not its argv (D15).</summary>
+    [Fact]
+    public void APlanWithFlags_IsRefusedForKimi()
+    {
+        var kimi = Adapters().Single(a => a.Runtime == "kimi").Consultant;
+        var withFlags = new Confinement.Planned("kimi", CapabilityGrant.None, [], ["--yolo"], CwdKind.Scratch, [], AdmissionFlag.Unconfined);
+
+        var build = () => kimi.Build(Planned("kimi", CapabilityGrant.None) with { Confinement = new LaunchConfinement.Planned(withFlags) });
+
+        build.Should().Throw<ArgumentException>().WithMessage("*shim*", "the refusal names the shim, which holds Kimi's confinement");
     }
 
     private static IEnumerable<(string Runtime, IConsultantRuntime Consultant)> Adapters() =>
