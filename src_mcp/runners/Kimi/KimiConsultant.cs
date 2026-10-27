@@ -47,6 +47,7 @@ public sealed class KimiConsultant(KimiRuntime inner, string vendor = "kimi") : 
     public ReviewerInvocation Build(ConsultantLaunch launch)
     {
         ConsultantLaunches.MustBeLaunchable(launch);
+        MustCarryNoFlags(launch);
         var settings = launch.Settings with { OwnedScratch = OwnedFolder(launch), Model = ModelOf(launch.Settings) };
         var built = inner.Build(ConsultantLaunches.RoleOf(launch), launch.Prompt, Cwd(launch), string.Empty, launch.OutputDir, settings);
         var request = built.Request with { Arguments = [.. built.Request.Arguments, .. SessionOf(launch)] };
@@ -72,6 +73,15 @@ public sealed class KimiConsultant(KimiRuntime inner, string vendor = "kimi") : 
             : throw new ArgumentException(
                 "a Kimi consultant stands in the conversation's sanitised snapshot (Workdir), and none was made — the checkout is never its working folder (D6)",
                 nameof(launch));
+
+    /// <summary>A planned row carries no flag for Kimi — its confinement is the shim's (E5.6 decision 3); a plan that has one was not made by coai for kimi.</summary>
+    private static void MustCarryNoFlags(ConsultantLaunch launch)
+    {
+        if (launch.Confinement is LaunchConfinement.Planned { Plan: var plan } && plan.Leading.Count + plan.Flags.Count + plan.AddDirs.Count > 0)
+        {
+            throw new ArgumentException("a Kimi row's confinement is the shim's; a plan with flags is not one coai made for kimi", nameof(launch));
+        }
+    }
 
     private static string OwnedFolder(ConsultantLaunch launch) =>
         launch.Settings.OwnedScratch.Length > 0
