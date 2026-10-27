@@ -144,7 +144,13 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
         var granted = Path.Combine(Repo, "src");
         if (ending == "refused")
         {
-            File.WriteAllText(person.PersonsConfig, KimiFixture.OwnerConfig().Replace(KimiFixture.SlotKey, "oauth/kimi-code-env-y"));
+            // A fresh row makes its home from the sign-in, so a changed slot key is not seen before its launch; a missing credentials folder is.
+            foreach (var file in Directory.EnumerateFiles(person.Credentials))
+            {
+                File.SetAttributes(file, FileAttributes.Normal);
+            }
+
+            Directory.Delete(person.Credentials, recursive: true);
         }
 
         var before = person.Hash();
