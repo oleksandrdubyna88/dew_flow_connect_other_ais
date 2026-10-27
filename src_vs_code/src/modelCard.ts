@@ -33,6 +33,8 @@ export interface ModelCardFacts {
   readonly binary: BinarySays;
   /** The row's last ✓ Check, from its durable record (`modelCardWorld.ts`). */
   readonly check: CheckFacts;
+  /** The installed coai-mcp's version — empty when it is not known — which a ✓ Check on a runtime it cannot consult on yet is held by. */
+  readonly serverVersion: string;
   /** The Team servers this side knows — what a remote row's contract note reads. */
   readonly teamServers: readonly TeamServerState[];
   /** When each new control was first seen, and the clock its "new" mark is measured against. */
@@ -146,7 +148,7 @@ function actions(vendor: Vendor, id: string, facts: ModelCardFacts, locked: stri
     body: removeBody(vendor, facts.references), ...(locked.length > 0 ? { refused: locked, describedBy: lockLineId(vendor) } : {}),
   });
 
-  return `<div class="actions">${checkButton(id, vendor.runtime, facts.check)}<button type="button" class="link" data-command="duplicateModel" data-id="${id}" title="Add a copy with its own id">⧉ Duplicate</button>${remove}</div>`;
+  return `<div class="actions">${checkButton(id, vendor.runtime, facts.check, facts.serverVersion)}<button type="button" class="link" data-command="duplicateModel" data-id="${id}" title="Add a copy with its own id">⧉ Duplicate</button>${remove}</div>`;
 }
 
 /** What this side's coai-mcp ignores on a row, asked through the one `skew` road — by capability (E3's plan round). */

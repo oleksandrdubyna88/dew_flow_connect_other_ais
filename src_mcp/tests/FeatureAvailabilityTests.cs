@@ -67,15 +67,19 @@ public sealed class FeatureAvailabilityTests
         FeatureAvailability.Builtin.ThinkingOf("llama.cpp").Source.Should().Be("none");
     }
 
-    /// <summary>S4.13 of <c>todo/PLAN_vibe_and_kimi_runtimes_E4.md</c>: Kimi is a runtime; its effort and thinking are unmeasured (M-K7: the k3 models carry levels, nothing shows one taking effect), it has no fast tier, and it is NOT a consultant yet (S5).</summary>
+    /// <summary>
+    /// S4.13 of <c>todo/PLAN_vibe_and_kimi_runtimes_E4.md</c>: Kimi is a runtime; its effort and thinking are unmeasured (M-K7: the k3 models carry
+    /// levels, nothing shows one taking effect), it has no fast tier — and, since E5.4 of <c>todo/PLAN_vibe_and_kimi_runtimes_E5.md</c> (S5.4.12),
+    /// it IS a consultant.
+    /// </summary>
     [Fact]
-    public void TheSeedsKnowKimi_EffortAndThinkingUnmeasured_NoFastTier_NoConsultant()
+    public void TheSeedsKnowKimi_EffortAndThinkingUnmeasured_NoFastTier_AndAConsultant()
     {
         Words(Shared().GetProperty("runtimes")).Should().Contain("kimi");
         FeatureAvailability.Builtin.EffortOf("kimi").Source.Should().Be("unmeasured");
         FeatureAvailability.Builtin.ThinkingOf("kimi").Source.Should().Be("unmeasured");
         FeatureAvailability.Builtin.FastModeOf("kimi").Source.Should().Be("none");
-        FeatureAvailability.Builtin.Consultant.Should().NotContain("kimi", "Kimi as a consultant and as a question row is S5's");
+        FeatureAvailability.Builtin.Consultant.Should().Contain("kimi", "Kimi consults since E5.4 (S5.4.12)");
     }
 
     [Fact]

@@ -12,13 +12,18 @@ namespace CoaiMcp.Runners.Kimi;
 /// Classification reads these FIELDS and the exit, never the text of the trace: the report carries every path the agent read and every tool it titled,
 /// and a path named <c>quota.cs</c> is not a rate limit (risk consultation <c>ba5f661a</c>).
 /// </remarks>
-/// <param name="End">The shim's end word (<see cref="AcpWords.AnsweredWord"/>, <see cref="AcpWords.NotStartedWord"/>, <see cref="AcpWords.ModelNotOfferedWord"/>, <c>agent_failed</c>, <c>deadline</c>, <c>protocol</c>, <c>cancelled</c>); empty for an unreadable report.</param>
+/// <param name="End">The shim's end word (<see cref="AcpWords.AnsweredWord"/>, <see cref="AcpWords.NotStartedWord"/>, <see cref="AcpWords.ModelNotOfferedWord"/>, <see cref="AcpWords.SessionLostWord"/> — the agent no longer holds the <c>--session</c> a continued turn named, exit 70 (E5.2) —, <c>agent_failed</c>, <c>deadline</c>, <c>protocol</c>, <c>cancelled</c>); empty for an unreadable report.</param>
 /// <param name="Failure">A known failure's NAME (<c>not_signed_in</c>, <c>subscription_model</c>, <c>balance_spent</c>), or empty.</param>
 /// <param name="Reason">The shim's own sentence for how the turn ended.</param>
 /// <param name="Answer">The agent's answer — empty unless the turn was answered.</param>
 /// <param name="Usage">The session's tokens when <c>/usage</c> gave them; unknown otherwise, never a guess and never a cost (D9).</param>
+/// <param name="SessionId">
+/// The session the turn ran in (<c>sessionId</c>): the one the agent minted on a first turn, the one <c>--session</c> asked for on a continued
+/// one — on EVERY exit that prints a report (E5.2's review). What a consultation continues next turn (E5.4 decision 3); empty when the report
+/// named none or is unreadable.
+/// </param>
 /// <param name="FailureLine">The line of the agent's stderr that held the matched row's phrase — empty when the reason held it, when nothing matched, and for a report from a shim that predates the field.</param>
-public sealed record KimiReport(string End, string Failure, string Reason, string Answer, Usage Usage, string FailureLine = "")
+public sealed record KimiReport(string End, string Failure, string Reason, string Answer, Usage Usage, string SessionId = "", string FailureLine = "")
 {
     /// <summary>A stdout that is not the shim's report (a crash before it printed, a launcher's own text).</summary>
     public static KimiReport Unreadable { get; } = new(string.Empty, string.Empty, string.Empty, string.Empty, Usage.Unknown);
@@ -56,7 +61,8 @@ public sealed record KimiReport(string End, string Failure, string Reason, strin
 
         return end.Length == 0
             ? Unreadable
-            : new KimiReport(end, Text(root, "failure"), Text(root, "reason"), Text(root, "answer"), UsageOf(root, end), Text(root, "failureLine"));
+            : new KimiReport(end, Text(root, "failure"), Text(root, "reason"), Text(root, "answer"), UsageOf(root, end), Text(root, "sessionId"),
+                Text(root, "failureLine"));
     }
 
     /// <summary>

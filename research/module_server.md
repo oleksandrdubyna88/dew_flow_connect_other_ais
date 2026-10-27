@@ -7804,7 +7804,8 @@ folder's turn or any home's turn in it is held (`VibeHomeTurns.TryTake`, zero wa
 never by a stamp). Before the delete the process's snapshot of it is released (its bytes back to the budget); the delete is
 `GitScratch.DeleteEvenIfReadOnly`, which unlinks a junction by its own name and never walks through it — so a Kimi home's
 `credentials` junction goes and the person's folder keeps every file (Kimi's own junction-first-and-verify disposal is S4's,
-in its home's owner; this sweep is the backstop). The deleter also checks, around each unlink, that the folder the link pointed
+in its home's owner; this sweep is the backstop — and since E4.2 it runs `KimiHome.DisposeAllUnder` itself, under its locks, on the folder
+and every `kh-*` child; the conversation shape `coai-kimi\<id>\kh-<10 hex>` is E5.3's, below). The deleter also checks, around each unlink, that the folder the link pointed
 at lost nothing — a lost name throws `LinkTargetLostException`, the walk stops, the sweep warns with the name, and because a
 conversation folder's own files (its stamp, in particular) are deleted LAST the folder stays recognisably this store's and the
 next beat finishes it (E4.1 of `todo/PLAN_vibe_and_kimi_runtimes_E4.md`). A folder that cannot be listed, read or removed is logged and skipped —
@@ -7958,3 +7959,114 @@ parent folder was expanded and copied (~30 s including git's confirmations, 411 
   disposes the round's scratch (and its reservation) when the snapshot is cancelled, since the engine disposes only a scratch it was handed.
 - `SweepOneShot` says a `coai-vh` that is a link to nothing (`Directory.Exists` is false for a dangling symlink; on Windows a dangling junction still
   reaches `PrivateFolder`, whose refusal now says "link").
+
+### The Kimi conversation's home and every one-shot Kimi home's disposal — E5.3 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md` (2026-10-16)
+
+Built on Fable (the plan gate's command for an authentication story). The runners' half — the lock order, `VibeHomes.EmptiedUnderItsLock`, the
+re-resolved sign-in — is in [module_runners.md](module_runners.md), *The owned Kimi homes*. The server's half:
+
+```mermaid
+sequenceDiagram
+  participant S as ConsultationService (E5.4)
+  participant P as ConsultantPlaces
+  participant L as KimiLaunch (via KimiRuntime.TakeTurnAsync)
+  participant W as ConsultantHomeSweep / close_consult
+  S->>P: ForConversationAsync(kimi, id) — A the folder's turn, B coai-turn.lock, the stamp
+  P-->>S: place.Folder = coai-kimi/id (OwnedScratch)
+  S->>L: TakeTurnAsync(--home coai-kimi/id/kh-…) — C the kh turn, D the sign-in gate
+  L-->>S: Holding (the gate held until the launch is read)
+  W->>W: RemoveNow / Sweep: B then A and every kh turn with NO wait, KimiHome.DisposeAllUnder, then the rest, the lock file last
+```
+
+- **The conversation's folder** `<homes root>\coai-kimi\<id>` holds `tree\`, the stamp and `coai-turn.lock` — all coai's; the ONLY junction is in its `kh-<10 hex>` child
+  (`KimiRuntime.Build` roots there over `OwnedScratch = place.Folder`, `ConsultationService.cs`). `DisposeAllUnder`'s "the folder itself" branch is dead for this shape and
+  harmless; `AllTaken` takes `tree`'s turn too, which nobody holds. The folder is deleted only by `close_consult` (`RemoveNow`) and D20's sweep — both through
+  `Removed`, which runs `KimiHome.DisposeAllUnder` under the folder lock and every turn and KEEPS the folder on a `Stopped`. E5.3 adds no code there; it adds the
+  CONVERSATION-shaped tests (`kh-x` beside `tree\`, the stamp and the lock): `close_consult` removes it junction-first; the kh root's held in-process turn keeps it; a held
+  `kh-x\coai-tree.lock` (a tree alive after a crash, R10 (v)) keeps it with the junction intact and the next beat finishes it; `close_consult` during a live turn (the
+  folder's lock held in another process, R10 (i)) touches nothing and says nothing, and the beat removes it once free (`ConsultantHomeSweepTests`, four rows).
+- **The owner/sweep races** (R10): the sweep holds B for microseconds and a place waits for B at most 10 s; two servers' sweeps on one folder — B is cross-process, one wins;
+  a one-shot owner against `SweepOneShot` — the owner holds the lock for its life, the sweep takes with no wait and skips; after R5 the only window is between the owner's
+  release and its delete of the lock file and the folder, where the sweep may take the (now empty) folder first and the owner's last delete finds it gone and says nothing.
+- **The root-less fallbacks** (R6; settings built by hand, no homes root): `QuestionRowLaunch.RemoveScratch` runs `KimiHome.DisposeAllUnder(scratch)` before the bare deleter
+  and KEEPS the scratch on a stop (`a question row's scratch directory at {Path} is kept for the scratch sweep: {Reason}`, a Warning); `ConsultCheckScratch.Delete(root)` disposes
+  `<root>\own` — the check's home is one level DOWN (`ConsultantCheck.OwnName`, now on the public static class) — and the root, and keeps the scratch on a stop
+  (`consultant check: the scratch {root} is kept for the scratch sweep: {said}`). Both scratches live under TEMP, so the six-hour scratch sweep finishes a kept one with the same probe.
+- **`PrivateFolder`'s re-ACL never crosses a junction inside `coai-kimi`** (R9, Windows): the walk skips a reparse point and Windows' own propagation of the inheritable
+  entries does not follow one — pinned by `PrivateFolderWindowsTests.AReAclOfCoaiKimi_NeverCrossesTheJunction_IntoTheSignIn` (the person's folder's and its file's descriptors byte-equal).
+- **Not in E5.3:** `KimiConsultant` and the service arms (E5.4) — the record left open on a re-login refusal, two consultations through `ConsultationService`, the two-turn
+  canary; renames of `VibeHomes`/`OneShotHome`/`coai-vh`/`VibeHomeTurns` (decision i, the operator's).
+
+### A Kimi consultation through the service — E5.4 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md` (2026-10-16)
+
+The runners' half — `KimiConsultant`, its registration, the seam — is in [module_runners.md](module_runners.md), *The Kimi consultant*. The server needed no new
+branch for Kimi: the place (`ConsultantPlaces.ForConversationAsync`) already makes `coai-kimi\<id>` with its snapshot for a runtime that declares
+`NeedsASanitisedSnapshot` and `HomesFolder`, and hands `OwnedScratch = place.Folder`; the adapter roots the home at `<folder>\kh-<10 hex>` (S5.4.20). What changed
+is shared by every vendor:
+
+```mermaid
+stateDiagram-v2
+  [*] --> asking: turn 1 (new record)
+  asking --> open: answered — billed Less(total, Billed)
+  open --> asking: follow-up, --session id
+  asking --> open: launch-refused (KimiLaunch said no; nothing launched) — failure recorded beside it
+  asking --> failed: session_lost → conversation-dropped, handle cleared
+  open --> closed: close_consult — RemoveNow, junction-first
+  failed --> [*]: the next sweep takes the home (D20)
+```
+
+- **A counter that restarted is billed whole — for Kimi only** (decision 12 as changed by E5.4 deviation 31; `ConsultationUsage.IsAReset` in the core, used by `Less`
+  only when the adapter declares `IConsultantRuntime.UsageCounterMayRestart`): a report that CARRIES a counter (`ConsultationUsage.CarriesACounter` — captured, and not
+  zero in both totals) whose input OR output total is below the vendor's counter as it last reported it (`ConsultationRecord.LastReported`) bills the report itself,
+  every field — never the flat zero the floor gave. Both totals are judged together. An uncaptured report (`Usage.Unknown`) is never a reset, so its turn is billed
+  unknown and the next captured share carries its spend (decision 4's stated limit); a report of nothing (`Usage.None`, a turn that reached no model) is billed nothing
+  and moves no counter. antigravity declares no restart — only its input is measured cumulative — so its output below the last report is floored. Every share is
+  measured against `LastReported` (`ConsultationUsage.Next`), not against the sum of the shares (`Billed`), through `ConsultationBilling.ThisTurnsBill`
+  and `TurnConsultant.BillOf` / `ReplyCost`.
+- **A launch coai's own control refused leaves a conversation as it was** (E5.3 decision c; S5.4.16). `ConsultationFailing.Terminal` returns a `launch-refused` failure on a
+  record that had already gone on (`TurnFailure.StatusBefore` `open` or `interrupted`, passed from the service's pre-`asking` record through
+  `ConsultationFailedTurns.Decided`) to that status, with the failure kind and cure recorded beside it and the handle kept — nothing was launched, so nothing about the
+  conversation went wrong (the rule `RefusedBeforeTheLaunch` already applied to an adapter's own refusal). A first turn refused so is ended as before. For Kimi this is the
+  re-login between turns (D19's "config.toml is not what coai writes … (a re-login)"): the record stays `open`, and `close_consult` then removes `coai-kimi\<id>`
+  junction-first. The call is given back and the ledger line is written as for any failure.
+- **A dropped session is refused with its cure, never restarted** (decision 11). `session_lost` → `ConsultFailure.ConversationDropped` → the record `failed`, its handle
+  cleared, not resumable. The cure now reads "start a new consultation — this one has ended, and whatever coai kept for it (a consultant's home) goes with the next sweep":
+  `close_consult` refuses a failed record (`ConsultationClosing.Refusal`), so the spec's "close_consult this one" would send the caller into a refusal; the D20 sweep takes a
+  failed record's folder on its next beat, junction-first.
+- **One sign-in, one shim** (decision k, S5.4.18–S5.4.19): two consultations in two checkouts on one sign-in, started together through the service, never overlap — the
+  gate file is the only thing that serialises them (with it keyed apart, the peak is 2) — and a gate another process holds delays the shim until its release.
+
+Not covered by a test: a live three-turn consult through the released binary (the parent's DoD, RESULTS §35).
+
+### A Kimi question row and a Kimi consultant check — E5.5–E5.6 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md` (2026-10-27)
+
+Neither needed a server change: `QuestionRowLaunch` and `ConsultantCheck` were already generic over a runtime that declares `HomesFolder` and
+`NeedsASanitisedSnapshot` (decision 5 of E5.6, decision 1 of E5.5), and E5.3 decision g made every one-shot owner junction-first. What changed is the
+table, the planner arm and `KimiConsultant`'s flag guard ([module_core.md](module_core.md), [module_runners.md](module_runners.md)). The paths, proved
+through the real code with the shim played:
+
+```mermaid
+sequenceDiagram
+  participant F as QuestionFanOut / ConsultantCheck
+  participant V as VibeHomes.ReserveOneShot
+  participant P as ConsultantPlaces.OneShotAsync
+  participant K as KimiConsultant + KimiLaunch
+  participant D as the disposers
+  F->>V: coai-vh\8-hex folder (locked, private) — or none (no root)
+  F->>P: the copy: row → scratch\tree\copy · check → scratch\own\tree\copy
+  F->>K: Build · TakeTurn — the home kh-10-hex made, junction to the sign-in
+  K-->>F: answered · refused (after the home was made) · cancelled
+  F->>D: finally — OneShotHome.Dispose (junction-first, under its lock)
+  F->>D: RemoveScratch / ConsultCheckScratch.Delete (the root-less home junction-first, then the copy)
+```
+
+- **A question row on Kimi** (E5.6): `none` and `disk` are admitted and run FLAGGED `unconfined` — the reply's `flag` and the sidebar say *can read this
+  machine* — and `web` is refused at admission, naming research/RESULTS_kimi_confinement.md. A `disk` row stands among COPIES of its granted roots; the
+  fan-out's prompt names the copies and never the roots. ONE-SHOT: the row's `coai-vh\<8>` folder (home and junction), its scratch and its copies are gone
+  on an answer, on a launch the control refused after the home was made (the row is `failed`), and on a cancellation mid-turn — the deleter never meets the
+  junction (S5.6.7). A `none` row runs the same three endings: its scratch is only the empty `cwd` folder it stands in, and it goes the same way.
+- **`--check-consultant` on a Kimi row** (E5.5): the turn stands in `<scratch>\own\tree\<copy>` on `<root>\coai-vh\<8>\kh-<10 hex>`; the check passes on
+  the marker read in the copy, and the folder goes junction-first whatever ended the check (an answer, an agent failure with exit 70, a cancellation). With
+  settings built by hand (no homes root) the home sits at `<scratch>\own\kh-*` and `ConsultCheckScratch.Delete` disposes it by name before the scratch.
+
+Not covered by a test: a live question row per admitted capability and a live `--check-consultant` through the released binary (RESULTS §35).

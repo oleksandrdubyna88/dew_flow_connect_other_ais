@@ -130,7 +130,7 @@ test('the mark beside a value carries the word missing in red, or "could not be 
   assert.match(markSentence(UNKNOWN), /^could not be checked on this machine \(Windows\)/u);
 });
 
-test('the server saying COAI_CONSULTANT_HOMES is missing becomes a finding on the Vibe homes folder, which the page marks and the notice names', () => {
+test('the server saying COAI_CONSULTANT_HOMES is missing becomes a finding on the Vibe and Kimi homes folder, which the page marks and the notice names', () => {
   const found = agreed([], [{ key: 'COAI_CONSULTANT_HOMES', kind: 'missing-folder', value: 'D:\\homes ', sentence: 'x' }], 'windows');
 
   assert.equal(found.length, 1);
@@ -138,6 +138,6 @@ test('the server saying COAI_CONSULTANT_HOMES is missing becomes a finding on th
   assert.equal(found[0]?.place, 'consultants/consultant');
   assert.equal(found[0]?.value, 'D:\\homes');
   assert.equal(found[0]?.state, 'missing');
-  assert.match(missingTitle(found[0]!), /^The Vibe homes folder D:\\homes was not found on this machine \(Windows\) just now — a Vibe launch is refused until it exists/u);
+  assert.match(missingTitle(found[0]!), /^The Vibe and Kimi homes folder D:\\homes was not found on this machine \(Windows\) just now — a Vibe or Kimi launch is refused until it exists/u);
   assert.match(missingCure(found[0]!), /Create a short local folder of your own/u);
 });

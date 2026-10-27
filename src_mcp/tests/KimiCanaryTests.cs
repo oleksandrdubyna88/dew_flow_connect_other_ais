@@ -77,7 +77,7 @@ public sealed class KimiCanaryTests : IDisposable
     {
         var places = _person.Places("kh-happy");
         await LaunchAsync(places, new FakeKimi());
-        await LaunchAsync(_person.Places("kh-warned"), new FakeKimi("2.2.0"));
+        await LaunchAsync(_person.Places("kh-warned"), new FakeKimi("3.0.0"));
         await LaunchAsync(_person.Places("kh-linux"), new FakeKimi(), host: HostKind.Linux);
         await LaunchAsync(_person.Places("kh-model"), new FakeKimi(), model: "moonshot-ai/kimi-k2.6");
         await LaunchAsync(_person.Places("kh-version"), new FakeKimi(exit: 1));
@@ -321,7 +321,7 @@ public sealed class KimiCanaryTests : IDisposable
     private async Task RoundRecordsAsync()
     {
         await RecordAsync(new ScriptedKimi());
-        await RecordAsync(new ScriptedKimi(version: "2.2.0"));
+        await RecordAsync(new ScriptedKimi(version: "3.0.0"));
         await RecordAsync(new ScriptedKimi(), model: "moonshot-ai/kimi-k2.6");
         await RecordAsync(new ScriptedKimi(_ => KimiShimScripts.Ended(75, AcpEnd.AgentFailed, "insufficient balance", failure: "balance_spent", stderr: "balance_spent: insufficient balance — the Kimi allowance is spent (D14)")));
         await RecordAsync(new ScriptedKimi(_ => KimiShimScripts.Ended(77, AcpEnd.AgentFailed, "Authentication required", failure: "not_signed_in", stderr: "not_signed_in: Authentication required — run `kimi login`")));

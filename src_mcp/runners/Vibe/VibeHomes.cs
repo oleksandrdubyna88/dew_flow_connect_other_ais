@@ -1,4 +1,5 @@
 using CoaiMcp.Runners.Files;
+using CoaiMcp.Runners.Kimi;
 
 namespace CoaiMcp.Runners.Vibe;
 
@@ -173,7 +174,7 @@ public static class VibeHomes
                 return false;
             }
 
-            return Directory.Exists(entry) && RemovedUnderItsLock(entry, cutoffUtc, io);
+            return Directory.Exists(entry) && RemovedUnderItsLock(entry, cutoffUtc, warn, io);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -183,9 +184,70 @@ public static class VibeHomes
         }
     }
 
-    /// <summary>Old, and its owner gone (the lock is free): every entry but the held lock file removed, then the lock, then the folder.</summary>
-    private static bool RemovedUnderItsLock(string folder, DateTime cutoffUtc, HomeIo io) =>
-        NewestWrite(folder) < cutoffUtc && FolderLock.RemoveIfFree(folder, LockName, io.Delete);
+    /// <summary>
+    /// Old, and its owner gone (the lock is free): emptied under the lock (<see cref="EmptiedUnderItsLock"/>), then the lock given back, then
+    /// the lock file and the folder. A Kimi stop keeps the folder this pass, said with the stop's own sentence (E5.3 decision g, judgement R4).
+    /// </summary>
+    private static bool RemovedUnderItsLock(string folder, DateTime cutoffUtc, Action<string> warn, HomeIo io)
+    {
+        if (NewestWrite(folder) >= cutoffUtc || HeldFile.Take(Path.Combine(folder, LockName)) is not Hold.Taken locked)
+        {
+            return false;
+        }
+
+        bool emptied;
+        using (locked.Stream)
+        {
+            emptied = EmptiedUnderItsLock(folder, said => warn($"one-shot Vibe homes: {folder} is kept this pass: {said}"), io);
+        }
+
+        if (emptied)
+        {
+            RemovedAfterItsLock(folder, io);
+        }
+
+        return emptied;
+    }
+
+    /// <summary>
+    /// The shared half of a one-shot folder's end, run by its OWNER and by <see cref="SweepOneShot"/> alike while the folder's lock is HELD
+    /// (E5.3 decision g, judgement R5 of <c>todo/PLAN_vibe_and_kimi_runtimes_E5.md</c>): first every Kimi home in it is disposed junction-first
+    /// (<see cref="KimiHome.DisposeAllUnder"/> — the live-tree probe, the junction unlinked by its own name, the person's folder verified), and a
+    /// <see cref="Disposal.Stopped"/> ends it with FALSE and nothing more deleted — the folder and its lock file are kept for the sweep, the stop said
+    /// through <paramref name="kept"/> in its own words. Otherwise every entry but the lock file goes, under the lock, so no second deleter (another
+    /// server's sweep) can take the lock and meet this one on the same tree. TRUE: the caller gives the lock back and calls <see cref="RemovedAfterItsLock"/>.
+    /// </summary>
+    internal static bool EmptiedUnderItsLock(string folder, Action<string> kept, HomeIo io)
+    {
+        var stops = new List<string>();
+        KimiHome.DisposeAllUnder(folder, stops.Add);
+        foreach (var said in stops)
+        {
+            kept(said);
+        }
+
+        if (stops.Count > 0)
+        {
+            return false;
+        }
+
+        // The shared deleter's order at this level too: a link before its sibling folders (D19), so a lost target stops the end first.
+        foreach (var entry in GitScratch.LinksFirst(Directory.EnumerateFileSystemEntries(folder).Where(entry => !IsTheLock(entry))))
+        {
+            io.Delete(entry);
+        }
+
+        return true;
+    }
+
+    /// <summary>After the lock was given back: the lock file and the folder, together. A folder that is already gone — a sweep took it in the window — is silent.</summary>
+    internal static void RemovedAfterItsLock(string folder, HomeIo io)
+    {
+        if (Directory.Exists(folder))
+        {
+            io.Delete(folder);
+        }
+    }
 
     private static bool IsTheLock(string entry) => FolderLock.IsTheLock(entry, LockName);
 
@@ -211,8 +273,8 @@ public static class VibeHomes
 /// <param name="Delete">Removes an entry, read-only or not.</param>
 internal sealed record HomeIo(Func<string, IEnumerable<string>> List, Action<string> Delete)
 {
-    /// <summary>The real disk.</summary>
-    public static HomeIo Real { get; } = new(static folder => Directory.EnumerateFileSystemEntries(folder), GitScratch.DeleteEvenIfReadOnly);
+    /// <summary>The real disk: an entry deleted as what it is — a link by its own name, a folder whole, a file as a file.</summary>
+    public static HomeIo Real { get; } = new(static folder => Directory.EnumerateFileSystemEntries(folder), GitScratch.DeleteEntry);
 }
 
 /// <summary>The two steps of a reservation that touch the disk: entering <c>coai-vh</c> under the root, and making the home folder in it.</summary>
@@ -249,10 +311,16 @@ public abstract record OneShotReservation
 /// One one-shot folder <c>&lt;root&gt;\coai-vh\&lt;8&gt;</c>, owned by whoever reserved it: it holds the folder's lock for its life and
 /// deletes the folder, best effort and said when it fails, when it is disposed.
 /// </summary>
+/// <remarks>
+/// <b>The order of the end</b> (E5.3 decision g, judgement R5 of <c>todo/PLAN_vibe_and_kimi_runtimes_E5.md</c>): (1) UNDER the lock, every Kimi home
+/// in the folder disposed junction-first and every other entry deleted (<see cref="VibeHomes.EmptiedUnderItsLock"/>); a Kimi stop — a live tree, a
+/// target that lost a name — gives the lock back, KEEPS the folder with its lock file and says why; (2) the lock and the pin given back; (3) the lock
+/// file and the folder last. Between (2) and (3) a sweep may take the lock and remove the now-empty folder first; then (3) finds nothing and says nothing.
+/// </remarks>
 public sealed class OneShotHome(string folder, IDisposable held, Action<string> warn) : IDisposable
 {
-    /// <summary>Removes the folder; a test's seam for a folder that cannot be removed.</summary>
-    internal Action<string> Remove { get; init; } = GitScratch.DeleteEvenIfReadOnly;
+    /// <summary>The disk the disposal deletes through, entry by entry; a test's seam for an entry that cannot be removed, and for the moment each one goes.</summary>
+    internal HomeIo Io { get; init; } = HomeIo.Real;
 
     private int _disposed;
 
@@ -266,13 +334,37 @@ public sealed class OneShotHome(string folder, IDisposable held, Action<string> 
             return;
         }
 
+        var emptied = Emptied();
         held.Dispose();
+        if (emptied)
+        {
+            Removed();
+        }
+    }
+
+    /// <summary>Step (1), under the lock: true when the folder is empty but for its lock file; false when a Kimi stop or a failure keeps it for the sweep.</summary>
+    private bool Emptied()
+    {
         try
         {
-            if (Directory.Exists(folder))
-            {
-                Remove(folder);
-            }
+            return !Directory.Exists(folder) || VibeHomes.EmptiedUnderItsLock(folder, Kept, Io);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            warn($"the Vibe home folder {folder} could not be deleted ({e.Message}); the scratch sweep takes it");
+
+            return false;
+        }
+    }
+
+    private void Kept(string reason) => warn($"the Kimi home in {folder} is kept: {reason}; the scratch sweep takes it once its tree has ended");
+
+    /// <summary>Step (3), after the release: the lock file and the folder.</summary>
+    private void Removed()
+    {
+        try
+        {
+            VibeHomes.RemovedAfterItsLock(folder, Io);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {

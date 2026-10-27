@@ -72,6 +72,7 @@ public static class RuntimeVocabulary
         // The primitives themselves, which say what is being shared without saying what it means.
         "string", "int", "long", "bool", "double", "float", "decimal", "byte", "char", "object",
         "void", "var", "dynamic", "nint", "Nullable", "String", "Int32", "Int64", "Boolean", "Object",
+        "sbyte", "short", "ushort", "uint", "ulong", "nuint",
         "Exception", "OperationCanceledException", "TaskCanceledException", "TimeSpan", "DateTime",
     };
 

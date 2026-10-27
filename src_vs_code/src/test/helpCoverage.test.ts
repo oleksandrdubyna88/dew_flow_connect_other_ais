@@ -394,7 +394,7 @@ const SETTING_ALIAS: Record<string, string> = {
   'coai.qconsultRows': 'who answers',
   'coai.qconsultPrompts': 'base prompts',
   'coai.qconsultRoots': 'folders a disk row may read',
-  'coai.vibeHomesDirectory': 'vibe homes folder',
+  'coai.vibeHomesDirectory': 'vibe and kimi homes folder',
   // E6 of PLAN_kimi_and_vibe_on_linux.md (DL6): the Kimi card's tick-box, by its own label, said in the choose-reviewers article.
   'coai.kimiAllowNetworkSignIn': 'allow a kimi sign-in on network storage',
   'coai.qconsultRowMinutes': 'minutes one row may run',
@@ -727,5 +727,38 @@ test('every language says consultation money is per consultation, and what the l
     for (const reason of ID_LESS_REASONS[language] ?? []) {
       assert.ok(said.includes(reason), `the ${language} spending article never names the reason “${reason}” a consult line carries no id`);
     }
+  }
+});
+
+test('S5.7.6 theQuestionConsultantHelpNamesKimiInFiveLanguages: a Kimi row, the tick, the disabled web prompt, Windows and WSL2', () => {
+  // E5.7 decision 5. A Kimi row stands in a copy of each folder (disk) or an empty folder (none), and on BOTH it can read this machine:
+  // Grep and Glob read the disk directly (M-K6) — so the tick is on and cannot be taken off. Nothing has measured Kimi on the web. The
+  // names a person meets on the page are English in every language, so each language is asked for them inside its Kimi paragraph.
+  const article = HELP_ARTICLES.find((one) => one.id === 'the-question-consultant');
+  assert.ok(article !== undefined, 'the question consultant article has been renamed, and this test is now asserting nothing');
+  for (const language of HELP_LANGUAGES) {
+    const { body, fallback } = bodyFor(article, language);
+    const said = Object.values(body).join('\n\n');
+    assert.equal(fallback, false, `the ${language} question-consultant article is missing`);
+    const at = said.indexOf('**Kimi Code**');
+    assert.ok(at >= 0, `the ${language} question-consultant article does not mention Kimi`);
+    const kimi = said.slice(at, said.indexOf('\n\n', at) < 0 ? undefined : said.indexOf('\n\n', at));
+    for (const word of ['**none**', '**disk**', '**Can read this machine**', '**web**', 'Windows', 'WSL2', 'Vibe']) {
+      assert.ok(kimi.includes(word), `the ${language} question-consultant article's Kimi row never says ${word}: ${kimi}`);
+    }
+  }
+});
+
+test('S5.7.6 (decision e) every language says a Kimi consult turn can time out behind a Kimi review, and is then interrupted and resumable', () => {
+  // E5.3 decision e: the consultant's launches take the same sign-in gate as a round's Kimi reviewers, and the wait is inside the turn's
+  // timeout. A turn that times out there is *interrupted* — the sidebar reads *resumable* — as any killed turn is. Stated, not hidden.
+  const article = HELP_ARTICLES.find((one) => one.id === 'the-consultant');
+  assert.ok(article !== undefined, 'the consultant article has been renamed, and this test is now asserting nothing');
+  for (const language of HELP_LANGUAGES) {
+    const { body, fallback } = bodyFor(article, language);
+    assert.equal(fallback, false, `the ${language} consultant article is missing`);
+    const paragraphs = Object.values(body).join('\n\n').split('\n\n');
+    const told = paragraphs.find((one) => one.includes('Kimi') && one.includes('*interrupted*') && one.includes('*resumable*'));
+    assert.ok(told !== undefined, `the ${language} consultant article never says a Kimi consult turn that waits behind a Kimi review can time out, *interrupted* and *resumable*`);
   }
 });

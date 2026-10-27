@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { statSync as statSyncForProbe } from 'node:fs';
+import { readFileSync, statSync as statSyncForProbe } from 'node:fs';
+import * as path from 'node:path';
 import { fileAt, useFileProbe } from '../pathFamily';
 import {
   CALLER_KINDS,
@@ -11,6 +12,7 @@ import {
   DEFAULT_CONSULT,
   ResolvedConsultant,
   consultSettingsFrom,
+  consultantRuntimeSkewNote,
   consultantSkewNote,
   isDefaultConsult,
   resolveConsultant,
@@ -20,6 +22,9 @@ import {
 } from '../consultSettings';
 import { consultPromptWrite } from '../consultPrompt';
 import { consultantBody } from '../consultantView';
+import { HELP } from '../help';
+import { missingTitle } from '../pathFindings';
+import { useRefusal } from '../modelCardFields';
 import { badEndpoint, endpointAnswer, endpointConflict } from '../consultantWrite';
 import { envBlock, settingWrite, settingsFrom } from '../settingsShape';
 import { Runtime } from '../models';
@@ -606,6 +611,49 @@ test('the note is silent when nothing on the wire is a definition — a legacy e
 });
 
 // ---------------------------------------------------------------------------------------------
+// The consultant-runtime gate (E5.7 of todo/PLAN_vibe_and_kimi_runtimes_E5.md): a NOTE, never a withheld entry
+
+/** A Claude Code caller pointed at a Kimi consultant of its own — a definition, so it crosses as itself. */
+const ON_KIMI = { consultants: { claude: { vendor: 'my-kimi', runtime: 'kimi', model: 'kimi-code/k3-256k' } }, vendors: [] };
+
+test('S5.7.2 anOlderServerIsNamedOnTheConsultantSection: 0.57.0 cannot consult on kimi, and the section says so', () => {
+  const kimi = consultSettingsFrom(reader(ON_KIMI));
+
+  assert.equal(consultantRuntimeSkewNote('0.57.0', kimi),
+    'The coai-mcp you have installed (0.57.0) cannot consult on kimi; update it to 0.64.0 or later — the MCP server tab.');
+  assert.equal(consultantRuntimeSkewNote('0.64.0', kimi), '', 'the release that consults on kimi is not nagged');
+  assert.equal(consultantRuntimeSkewNote('', kimi), '', 'a server nobody has versioned is not behind');
+
+  const codex = consultSettingsFrom(reader({ consultants: { claude: { vendor: 'codex', runtime: 'codex', model: '' } }, vendors: [] }));
+  assert.equal(consultantRuntimeSkewNote('0.57.0', codex), '', 'every server consults on codex');
+});
+
+test('the note names a runtime once however many callers are on it, and each runtime an older server cannot consult on', () => {
+  const both = consultSettingsFrom(reader({
+    consultants: {
+      claude: { vendor: 'my-kimi', runtime: 'kimi', model: '' },
+      codex: { vendor: 'my-kimi', runtime: 'kimi', model: '' },
+      gemini: { vendor: 'my-vibe', runtime: 'vibe', model: '' },
+    },
+    vendors: [],
+  }));
+  const note = consultantRuntimeSkewNote('0.53.0', both);
+
+  assert.equal(note.split('cannot consult on kimi').length - 1, 1, `kimi is named more than once: ${note}`);
+  assert.match(note, /cannot consult on vibe; update it to 0\.54\.0/u);
+  assert.equal(consultantRuntimeSkewNote('0.54.0', both).includes('vibe'), false, 'from 0.54.0 only kimi is behind');
+});
+
+test('S5.7.3 theEntryStillCrosses: an older server is handed the kimi consultant, never the shipped pair in its place', () => {
+  // Decision 2: an older server REFUSES a consultant on a runtime it cannot consult with, by name. Withholding the entry would
+  // make it consult with the shipped default pair instead — silently, which is worse than the refusal.
+  const crossed = JSON.parse(envBlock(settingsFrom(reader(ON_KIMI)), [], '0.57.0')['COAI_CONSULTANTS'] ?? '{}') as Record<string, Record<string, unknown>>;
+
+  assert.equal(crossed['claude']?.['runtime'], 'kimi');
+  assert.equal(crossed['claude']?.['vendor'], 'my-kimi');
+});
+
+// ---------------------------------------------------------------------------------------------
 // Which rows may be consulted
 
 test('the offered runtimes are the ones the server can actually resolve', () => {
@@ -613,8 +661,14 @@ test('the offered runtimes are the ones the server can actually resolve', () => 
   // which has to be drawable before the server is installed — so it is a mirror, and this is the
   // list the agreement test holds against the C#.
   // `api` since PLAN_one_model_catalog.md D9 (E2.3) — the server reads the same shared file; `vibe` since S3 of
-  // PLAN_vibe_and_kimi_runtimes.md, when coai-mcp gained the Vibe consultant.
-  assert.deepEqual([...CONSULTING_RUNTIMES], ['codex', 'claude', 'antigravity', 'local', 'api', 'vibe']);
+  // PLAN_vibe_and_kimi_runtimes.md, when coai-mcp gained the Vibe consultant; `kimi` since S5 (E5.4 seeds it, E5.7 offers it).
+  assert.deepEqual([...CONSULTING_RUNTIMES], ['codex', 'claude', 'antigravity', 'local', 'api', 'vibe', 'kimi']);
+});
+
+test('S5.7.5 kimiIsOfferedAsAConsultant: a Kimi card may be ticked consultant and question consultant', () => {
+  // E5.7 decision 4: no picker code — the generated CONSULTING (from features.consultant, E5.4's seed) enables both ticks.
+  assert.equal(useRefusal('consultant', 'kimi'), '');
+  assert.equal(useRefusal('qconsult', 'kimi'), '');
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -631,6 +685,35 @@ test('the Vibe homes folder box shows what is saved, and the server\'s word that
   assert.doesNotMatch(plain, /path-note/u);
   assert.match(marked, /aria-invalid="true"/u);
   assert.match(marked, /class="hint path-note"[^>]*>.*missing — not found on this machine \(Windows\)/su);
+});
+
+test('S5.7.7 theHomesFolderNamesBothCLIs: the label, its help, the manifest and the missing-folder notice say Vibe and Kimi; the key stays', () => {
+  // E5.7 decision 6: Kimi's conversation homes (coai-kimi) and one-shot homes (coai-vh) live under the same folder, each holding a LINK to
+  // the person's Kimi sign-in. The setting key is unchanged — a rename is a migration, and not this epic's.
+  const body = consultantBody(DEFAULT_CONSULT, { vibeHomes: '' }, '');
+  // The label's own words are the text after its last child tag. Two disjoint alternatives (a non-'<' character, or a '<' that does not
+  // close the label), so the match is linear — the earlier nested alternation was CodeQL alert 34 (js/redos).
+  const inner = /<label for="vibeHomesDirectory">((?:[^<]|<(?!\/label>))*)<\/label>/u.exec(body)?.[1];
+  const label = inner?.slice(inner.lastIndexOf('>') + 1).trim();
+  assert.equal(label, 'Vibe and Kimi homes folder');
+  assert.match(body, /data-setting="vibeHomesDirectory"/u, 'the setting key is unchanged');
+  assert.match(body, /Kimi/u, 'the box’s own hint names Kimi too');
+
+  const said = HELP.vibeHomesDirectory;
+  for (const word of ['Kimi', 'coai-kimi', 'coai-vh', 'link', 'sign-in']) {
+    assert.ok(said.includes(word), `the folder’s help does not say ${word}: ${said}`);
+  }
+  assert.match(said, /156 characters is Vibe’s/u, 'the path rule is said to be Vibe’s — Kimi writes long paths without trouble');
+
+  const manifest = JSON.parse(readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8')) as {
+    contributes: { configuration: { properties: Record<string, { markdownDescription?: string }> } };
+  };
+  const described = manifest.contributes.configuration.properties['coai.vibeHomesDirectory']?.markdownDescription ?? '';
+  assert.match(described, /Kimi/u, 'the Settings editor’s description of the folder names Vibe only');
+  assert.match(described, /coai-kimi/u);
+
+  const finding = { key: 'coai.vibeHomesDirectory', place: 'consultants/consultant', value: 'D:\\homes', family: 'windows', state: 'missing', owner: '' } as const;
+  assert.match(missingTitle(finding), /^The Vibe and Kimi homes folder D:\\homes was not found .* — a Vibe or Kimi launch is refused until it exists/u);
 });
 
 test('the three caps are on screen with the numbers in force', () => {

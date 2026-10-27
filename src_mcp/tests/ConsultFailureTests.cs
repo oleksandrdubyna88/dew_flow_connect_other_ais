@@ -374,6 +374,28 @@ public sealed class ConsultFailureTests
         ConsultationFailing.Answer(failed, gaveBack: false).Should().Contain("no longer holds").And.Contain("start a new consultation");
     }
 
+    /// <summary>
+    /// S5.4.16 (E5.3 decision c of <c>todo/PLAN_vibe_and_kimi_runtimes_E5.md</c>), pure: a launch coai's own control refused on a conversation that had
+    /// already gone on returns the record to the status it had — nothing was launched — and records the failure beside it; a first turn refused so
+    /// is ended, as before, since there is no conversation to keep.
+    /// </summary>
+    [Theory]
+    [InlineData(ConsultationStatuses.Open, ConsultationStatuses.Open)]
+    [InlineData(ConsultationStatuses.Interrupted, ConsultationStatuses.Interrupted)]
+    [InlineData(ConsultationStatuses.Asking, ConsultationStatuses.Failed)]
+    [InlineData("", ConsultationStatuses.Failed)]
+    public void ALaunchTheControlRefused_LeavesAConversationAsItWas_AndEndsAFirstTurn(string before, string after)
+    {
+        var turn = new TurnFailure(Asking() with { Handle = "conv-1" }, "my-kimi", string.Empty, Usage.None, "2026-10-02T10:01:00.0000000Z") { StatusBefore = before };
+
+        var failed = ConsultationFailing.Terminal(turn, new ConsultFailure.LaunchRefused("config.toml is not what coai writes — delete C:\\h"), "not started");
+
+        failed.Next.Status.Should().Be(after);
+        failed.Next.FailureKind.Should().Be(ConsultFailureKinds.LaunchRefused, "the failure is recorded either way");
+        failed.Next.Handle.Should().Be("conv-1", "the conversation's handle is kept for a reader — and, while it goes on, for its next turn");
+        failed.Resumable.Should().BeFalse("nothing to pick up: the cure comes first");
+    }
+
     [Fact]
     public void ABreach_RecordsTheAlert_AndNeverSaysTheCallWasGivenBack()
     {
@@ -442,5 +464,18 @@ public sealed class ConsultFailureTests
         answered.FailureKind.Should().BeEmpty();
         answered.FailureCure.Should().BeEmpty();
         answered.Evidence.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// E5.4 deviation 32 (the review of 2026-10-27, R8): a deadline that struck before anything was launched names what the launch control was
+    /// waiting on only when the adapter says (Kimi's sign-in gate) — a Vibe or codex turn is never told another Kimi launch held its sign-in.
+    /// </summary>
+    [Fact]
+    public void ADeadlineBeforeAnyLaunch_NamesNoVendorsWaitItDidNotHave()
+    {
+        var failure = new ConsultFailure.Deadline(TimeSpan.FromMinutes(5), NothingLaunched: true);
+
+        failure.What("my-vibe").Should().Contain("before anything was launched").And.NotContain("Kimi");
+        failure.Cure.Should().NotContain("Kimi");
     }
 }

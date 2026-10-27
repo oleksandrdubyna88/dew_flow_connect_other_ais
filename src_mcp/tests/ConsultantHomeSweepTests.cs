@@ -266,6 +266,146 @@ public sealed class ConsultantHomeSweepTests : IAsyncLifetime
         TheSecretIsUntouched();
     }
 
+    // ---------- E5.3: the CONVERSATION shape — `kh-x` beside `tree\`, the stamp and the lock (S5.3.5, S5.3.6, S5.3.18, S5.3.19) ----------
+
+    /// <summary>
+    /// A Kimi conversation's folder as E5.3 shapes it: <c>coai-kimi\&lt;id&gt;\</c> holding <c>tree\</c>, the stamp, <c>coai-turn.lock</c> and
+    /// <c>kh-x\home\credentials</c> — a junction to the fake person's folder, which lives OUTSIDE the swept tree. Stamped by this store, its turn ended.
+    /// </summary>
+    private async Task<(string Folder, string Root, string Junction)> KimiKhConversationAsync(string id, TimeSpan? age = null)
+    {
+        var folder = ConsultantHomes.ConversationFolder(Homes, ConsultantHomes.Kimi, id);
+        var root = Path.Combine(folder, "kh-x");
+        Directory.CreateDirectory(Path.Combine(folder, "tree"));
+        File.WriteAllText(Path.Combine(folder, "tree", "Parser.cs"), "x");
+        Directory.CreateDirectory(Path.Combine(root, "home", "sessions"));
+        Directory.CreateDirectory(Path.Combine(root, "os"));
+        File.WriteAllText(Path.Combine(root, "home", "config.toml"), "coai's render");
+        File.WriteAllText(Path.Combine(root, "home", "sessions", "index.jsonl"), "x");
+        var junction = Path.Combine(root, "home", "credentials");
+        await DirectoryLink.MakeAsync(new ProcessLauncher(), junction, Persons);
+        ConversationFolder.Begin(folder, Store, DateTime.UtcNow - (age ?? Window * 2), Ceiling);
+        ConversationFolder.End(folder);
+        // The lock file as a turn leaves it: taken once and given back.
+        ConversationFolder.TakeTurn(folder).Should().BeOfType<Hold.Taken>().Which.Stream.Dispose();
+        Aged(folder, age ?? Window * 2);
+
+        return (folder, root, junction);
+    }
+
+    /// <summary>What the sweep SAID, without the one line about a temp root's homes folder being made private (a temp root passes its ACL down).</summary>
+    private List<string> Warned() => [.. _said.Where(said => !said.StartsWith("made ", StringComparison.Ordinal))];
+
+    /// <summary>S5.3.5: <c>close_consult</c> on a conversation-shaped Kimi home — the junction goes FIRST through <c>KimiHome</c>, the deleter meets none.</summary>
+    [Fact]
+    public async Task CloseConsult_RemovesAConversationShapedKimiHome_JunctionFirst()
+    {
+        var closed = Record(ConsultationStatuses.Closed);
+        _store.Write(closed);
+        var (folder, _, _) = await KimiKhConversationAsync(closed.Id, TimeSpan.Zero);
+        var unlinkedByTheDeleter = new List<string>();
+        GitScratch.AfterUnlink = unlinkedByTheDeleter.Add;
+        try
+        {
+            ConsultantHomeSweep.RemoveNow(Inputs(), closed.Id, _said.Add);
+        }
+        finally
+        {
+            GitScratch.AfterUnlink = null;
+        }
+
+        Directory.Exists(folder).Should().BeFalse("its conversation is closed: the folder goes now");
+        unlinkedByTheDeleter.Should().BeEmpty("the deleter's unlink recorder must not be invoked, because KimiHome unlinked the kh-x junction first");
+        TheSecretIsUntouched();
+        Warned().Should().BeEmpty();
+    }
+
+    /// <summary>S5.3.6: the kh root's in-process turn held — a live launch — keeps the whole folder; the next beat takes it once the turn is given back.</summary>
+    [Fact]
+    public async Task TheSweepSkipsALiveConversationsKimiHome()
+    {
+        var (folder, root, junction) = await KimiKhConversationAsync(ConsultationStore.NewId());
+        var held = await VibeHomeTurns.TakeAsync(root, TestContext.Current.CancellationToken);
+
+        Sweep().Should().Be(0, "the kh root's turn is held: a launch is live in it");
+
+        Directory.Exists(folder).Should().BeTrue("kept");
+        OwnedPaths.IsLinkIfThere(junction).Should().BeTrue("nothing was unlinked under a live launch");
+        _deleted.Should().BeEmpty();
+        held.Dispose();
+
+        Sweep().Should().Be(1, "the turn given back, the next beat removes it");
+        Directory.Exists(folder).Should().BeFalse();
+        TheSecretIsUntouched();
+    }
+
+    /// <summary>S5.3.18 (R10 (v)): a tree alive on the kh home — its <c>coai-tree.lock</c> held — keeps the folder with the junction intact; the next beat after it ends finishes junction-first.</summary>
+    [Fact]
+    public async Task TheConversationSweep_KeepsAKhHomeWhoseTreeIsAlive_AndTakesItOnceItEnds()
+    {
+        var closed = Record(ConsultationStatuses.Closed);
+        _store.Write(closed);
+        var (folder, root, junction) = await KimiKhConversationAsync(closed.Id);
+        var hold = Path.Combine(root, KimiCredentialsLock.HomeHoldName);
+        await File.WriteAllTextAsync(hold, string.Empty, TestContext.Current.CancellationToken);
+        Aged(folder, Window * 2);
+        var unlinkedByTheDeleter = new List<string>();
+        GitScratch.AfterUnlink = unlinkedByTheDeleter.Add;
+        var held = ((Hold.Taken)HeldFile.Take(hold)).Stream;
+        try
+        {
+            Sweep().Should().Be(0, "a live tree keeps its home");
+
+            OwnedPaths.IsLinkIfThere(junction).Should().BeTrue($"{junction} must still be a link because a live tree keeps its home");
+            Warned().Should().ContainSingle().Which.Should().Contain("still running").And.Contain("kept this beat");
+            Directory.Exists(folder).Should().BeTrue();
+            held.Dispose();
+
+            Sweep().Should().Be(1, "the tree ended: the next beat finishes");
+        }
+        finally
+        {
+            held.Dispose();
+            GitScratch.AfterUnlink = null;
+        }
+
+        Directory.Exists(folder).Should().BeFalse();
+        unlinkedByTheDeleter.Should().BeEmpty("the deleter met no link: KimiHome unlinked the junction first");
+        TheSecretIsUntouched();
+    }
+
+    /// <summary>S5.3.19 (R10 (i)): <c>close_consult</c> during a live turn — the folder's turn lock held in "another process" — leaves the home to the beat, untouched and unsaid.</summary>
+    [Fact]
+    public async Task CloseConsultDuringALiveTurn_LeavesTheHomeToTheBeat()
+    {
+        var closed = Record(ConsultationStatuses.Closed);
+        _store.Write(closed);
+        var (folder, _, junction) = await KimiKhConversationAsync(closed.Id, TimeSpan.Zero);
+        var elsewhere = ConversationFolder.TakeTurn(folder).Should().BeOfType<Hold.Taken>().Which.Stream;
+        var unlinkedByTheDeleter = new List<string>();
+        GitScratch.AfterUnlink = unlinkedByTheDeleter.Add;
+        try
+        {
+            ConsultantHomeSweep.RemoveNow(Inputs(), closed.Id, _said.Add);
+
+            OwnedPaths.IsLinkIfThere(junction).Should().BeTrue("the credentials junction must be untouched while the turn lock is held by another process");
+            File.Exists(Path.Combine(folder, "tree", "Parser.cs")).Should().BeTrue("nothing of the folder was touched");
+            Warned().Should().BeEmpty("no warn names a loss: a held turn is left to the beat in silence");
+            elsewhere.Dispose();
+
+            Sweep().Should().Be(1, "the record is closed: the beat removes it once the turn is free");
+        }
+        finally
+        {
+            elsewhere.Dispose();
+            GitScratch.AfterUnlink = null;
+        }
+
+        Directory.Exists(folder).Should().BeFalse();
+        unlinkedByTheDeleter.Should().BeEmpty("junction-first");
+        TheSecretIsUntouched();
+    }
+
     [Fact]
     public void AnOrphanedVibeHome_PastTheWindow_IsGone_AndOneInsideTheWindowIsKept()
     {

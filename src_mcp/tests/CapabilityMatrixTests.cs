@@ -81,11 +81,14 @@ public sealed class CapabilityMatrixTests
     {
         // Without this every assertion below would pass vacuously over an empty list.
         Vectors.Should().HaveCountGreaterThan(15, "fifteen pairs plus the refusals by name");
-        foreach (var row in Seed)
-        {
-            Vectors.Should().Contain(v => v.Runtime == row.Runtime && v.Capability == row.Capability,
-                $"the table's {row.Runtime} × {row.Capability} row must have a vector deciding it");
-        }
+
+        // The missing pairs first, so a red names them (S5.6.2) — not the whole vector list, cut at the assertion library's limit.
+        // Joined, because a collection's BeEmpty names only its first item.
+        var missing = string.Join(", ", Seed
+            .Where(row => !Vectors.Any(v => v.Runtime == row.Runtime && v.Capability == row.Capability))
+            .Select(row => $"{row.Runtime} × {row.Capability}"));
+
+        missing.Should().BeEmpty("every row of the table must have a vector deciding it, and these rows have none");
     }
 
     [Theory]
@@ -158,6 +161,8 @@ public sealed class CapabilityMatrixTests
     [
         ("RESULTS_question_consultant_capabilities.md", "2026-10-01", "01a0f8c7-18e4-"),
         ("RESULTS_vibe_confinement.md", "2026-10-12", "M-V"),
+        // E5.6 of todo/PLAN_vibe_and_kimi_runtimes_E5.md: the Kimi probe's script cells, run on 2026-10-13 (kimi 2.1.1).
+        ("RESULTS_kimi_confinement.md", "2026-10-13", "M-K"),
     ];
 
     [Fact]
@@ -195,6 +200,48 @@ public sealed class CapabilityMatrixTests
             "denied writes do not prove bounded READS — the disk row rests on the read cell itself");
         CapabilityMatrix.Admit("vibe", Capability.Web).Should().BeOfType<Admission.Refused>()
             .Which.Reason.Should().Contain("not been measured", "no Vibe cell exercises the web");
+    }
+
+    /// <summary>
+    /// S5.6.1 (E5.6 of todo/PLAN_vibe_and_kimi_runtimes_E5.md, decision 2): Kimi's three rows, each from its own cells. <c>Read</c> is bounded by the
+    /// shim, but <c>Grep</c> and <c>Glob</c> read the disk directly (M-K6, 3 of 3) — so <c>none</c> is unconfined too, not confined as Vibe's is.
+    /// </summary>
+    [Fact]
+    public void KimiHasThreeRows_EachCitingItsCells()
+    {
+        var none = RuntimeCapabilities.Builtin.Of("kimi", Capability.None);
+        none.Should().NotBeNull("E5.6 decision 2: kimi × none is a row of the table");
+        none!.Standing.Should().Be(CapabilityStanding.Unconfined, "Grep and Glob took an outside file's marker by absolute path 3 of 3 (M-K6): an empty folder confines nothing");
+        none.MeasuredWith.Cells.Should().Contain("M-K6");
+
+        var disk = RuntimeCapabilities.Builtin.Of("kimi", Capability.Disk)!;
+        disk.Standing.Should().Be(CapabilityStanding.Unconfined, "Read is bounded, Grep and Glob are not (M-K6, D15)");
+        disk.MeasuredWith.Cells.Should().Contain(["M-K6", "M-K9"], "the read cell itself, and why the roots are COPIED (M-K9)");
+
+        var web = RuntimeCapabilities.Builtin.Of("kimi", Capability.Web)!;
+        web.Standing.Should().Be(CapabilityStanding.Unmeasured, "WebSearch and FetchURL are announced and no cell exercised them (RESULTS §7, §14)");
+
+        foreach (var row in (RuntimeCapabilityRow[])[none, disk, web])
+        {
+            row.MeasuredWith.Cli.Should().Be("kimi");
+            row.MeasuredWith.Version.Should().Be("2.1.1", $"kimi × {row.Capability.Spelled()}: the version every Kimi cell ran on");
+            row.MeasuredWith.ResultRef.Should().Contain("research/RESULTS_kimi_confinement.md");
+        }
+    }
+
+    /// <summary>S5.6.4: both Kimi rows that can run are admitted FLAGGED — a person sees "can read this machine" — and its web is refused naming the record that would admit it.</summary>
+    [Fact]
+    public void AdmissionFlagsBothKimiRows()
+    {
+        foreach (var capability in (Capability[])[Capability.None, Capability.Disk])
+        {
+            var admission = CapabilityMatrix.Admit("kimi", capability);
+            admission.Should().BeOfType<Admission.Admitted>($"kimi × {capability.Spelled()} runs, flagged — but the matrix said {admission}")
+                .Which.Flag.Should().Be(AdmissionFlag.Unconfined, "D13: the flag is shown on the row and beside every answer");
+        }
+
+        CapabilityMatrix.Admit("kimi", Capability.Web).Should().BeOfType<Admission.Refused>()
+            .Which.Reason.Should().Contain("not been measured").And.Contain("a measured cell in research/RESULTS_kimi_confinement.md is what admits it");
     }
 
     /// <summary>D13's two refusals kept apart: the flags are what the data says, never what a runtime name suggests.</summary>

@@ -2499,9 +2499,10 @@ internal static class Program
         request matrix a dialect is written from; prints status codes, model ids, refused fields and
         token counts — vendor text redacted and capped, the key never. 65 bad arguments, 78 no vault.
         `--ask-acp --profile <kimi> --model <id> --cwd <folder> [--deadline-seconds n] [--executable <path>]
-        --home <owned root> --persons-bin <folder> --locks <folder>` (the last three for a profile that needs a home — Kimi)
+        [--session <id>] --home <owned root> --persons-bin <folder> --locks <folder>` (the last three for a profile that needs a home — Kimi)
         runs ONE turn of an ACP agent (`kimi acp`) as this process's child, the prompt read from stdin to
-        its end: every permission request refused, reads served only from inside --cwd and never for a
+        its end; with --session, the turn continues the session an earlier turn's report named (session/load
+        on the same --cwd; the replayed history is never the answer): every permission request refused, reads served only from inside --cwd and never for a
         vendor instruction file, the model checked against the session's own list and set before the
         prompt. The agent starts in an environment built from --home (never inherited) and under a hold
         on the sign-in (--locks) that makes a second Kimi on it wait. Prints one JSON object on stdout
@@ -2509,7 +2510,8 @@ internal static class Program
         tool calls, reads. Exits 0 answered, 65 refused before the agent starts (a bad argument, a Kimi
         without --home/--persons-bin/--locks, an environment that is not coai's, a model the session
         does not offer, a hold that cannot be taken), 69 ended before an answer (not started, another
-        Kimi still holds the sign-in, the deadline, cancelled), 70 the agent failed, 75 a known spent
+        Kimi still holds the sign-in, the deadline, cancelled), 70 the agent failed (end session_lost: the
+        agent no longer holds the --session), 75 a known spent
         sentence, 76 the stream broke, 77 a known sign-in or plan refusal. On Linux the shim is the child
         subreaper of its agent's tree and ends it by identity (pidfd); `survivors` lists what was still alive.
         `--kimi-clear-marker <path>` deletes ONE Kimi survivor marker (a *.survivors.json file under the Kimi

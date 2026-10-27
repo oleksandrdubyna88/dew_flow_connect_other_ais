@@ -64,7 +64,13 @@ public sealed record VibeHomeManifest(string PinnedPrefix, IReadOnlyList<string>
     /// platform only is an unmeasured version here: it is run with a warning, and the warning names where it was measured.
     /// </summary>
     public IReadOnlyList<VibeHomeEntry> For(string version, string platform) =>
-        [.. Versions.Where(entry => entry.Version == version && entry.Platform == platform)];
+        [.. MeasuredOn(platform).Where(entry => entry.Version == version)];
+
+    /// <summary>
+    /// The entries measured on <paramref name="platform"/> — the ONE place a platform is matched, so the home check (<see cref="For(string, string)"/>)
+    /// and the version warning (<c>VibeLaunch.VersionWarning</c>) cannot count different versions as measured here.
+    /// </summary>
+    public IEnumerable<VibeHomeEntry> MeasuredOn(string platform) => Versions.Where(entry => entry.Platform == platform);
 
     /// <summary>The versions this manifest qualifies, each with its platform, for a refusal or a warning that must name them.</summary>
     public string Known => string.Join(", ", Versions.Select(entry => $"{entry.Version} ({entry.Platform})"));

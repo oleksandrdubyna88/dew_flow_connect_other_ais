@@ -513,29 +513,82 @@ function boundaryAnswer(root, requested) {
 }
 
 /**
+ * Whether a child may still be killed by its pid: it has neither exited nor been killed. After either, the pid may already be another
+ * process's on POSIX (the E5.2 review, M3) — so a kill that comes late is skipped, never sent to whoever holds the number now.
+ */
+export const stillRunning = (child) => child.exitCode === null && child.signalCode === null;
+
+/** How much of a replayed text chunk a `loadUpdates` row keeps — enough to recognise an earlier answer, small enough to keep a row small. */
+export const LOAD_TEXT_CHARS = 120;
+
+/** One `session/update` that arrived while `session/load` was open: its kind, and for a text chunk the start of its text (E5.1 decision 1 (a)). */
+export function loadUpdate(update) {
+  const kind = String(update?.sessionUpdate ?? '');
+  return update?.content?.type === 'text' ? { kind, text: String(update.content.text ?? '').slice(0, LOAD_TEXT_CHARS) } : { kind };
+}
+
+/** How long a turn ended like the shim waits for the agent to go quiet after `session/cancel` — and the most it waits (E5.1 decision 1 (b)). */
+const QUIET_MS = 250;
+const QUIET_AT_MOST_MS = 1000;
+
+/** Resolves once the agent has written nothing for QUIET_MS, or QUIET_AT_MOST_MS after it was asked — whichever comes first. */
+function quiet(lastOutput) {
+  const started = Date.now();
+  return new Promise((done) => {
+    const look = () => (Date.now() - lastOutput() >= QUIET_MS || Date.now() - started >= QUIET_AT_MOST_MS ? done() : setTimeout(look, 25));
+    look();
+  });
+}
+
+/** Resolves when the child has exited, or after `ms` — a kill that did not land must not hold the probe. */
+const exitedWithin = (exited, ms) => Promise.race([exited, new Promise((done) => setTimeout(done, ms))]);
+
+/**
  * One ACP conversation against `kimi acp`, NOT through the shim — used only where the shim has no path yet: `session/load`
  * (M-K5; S5 adds it to the shim) and a `session/new` whose `configOptions` name the models (M-K7, no prompt, no spend).
  * It mirrors the shim's client decisions — the same `initialize` offer, `mcpServers: []`, every permission refused by kind,
  * reads served by the boundary rule, every other request an error — and records every line both ways.
  */
-export function acpTurn({ exe, cwd, env, deadlineMs, model = '', prompt = '', load = '', followUp = '' }) {
+export function acpTurn({ exe, args = ['acp'], cwd, env, deadlineMs, model = '', prompt = '', load = '', followUp = '', endLikeTheShim = false }) {
   return new Promise((done) => {
     // On POSIX the agent leads its own process group, so the end below reaches every descendant that stayed in it (plan §5).
-    const child = spawn(exe, ['acp'], { cwd, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, detached: process.platform !== 'win32' });
+    const child = spawn(exe, args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, detached: process.platform !== 'win32' });
     const state = { pid: child.pid, lines: [], answer: '', answer2: '', sessionId: load, refusals: [], reads: [], toolCalls: {}, usage: null,
-      sessionResult: null, stopReason: '', error: '', exit: null, stderrTail: '', prompting: false, second: false };
+      sessionResult: null, stopReason: '', error: '', exit: null, stderrTail: '', prompting: false, second: false, loading: false, loadUpdates: [] };
     const pending = new Map();
     let nextId = 1;
     let finished = false;
     let buffered = '';
     let stderr = '';
+    let lastOutput = Date.now();
+    const exited = new Promise((gone) => child.on('exit', gone));
+    child.stdin.on('error', () => { /* the agent is gone; its pipe with it */ });
+    // The probe's own ending (M-K5): stdin closed, 1.5 s for the agent to leave, then the tree kill.
+    const stdinFirst = () => new Promise((ended) => {
+      try { child.stdin.end(); } catch { /* already closed */ }
+      setTimeout(() => { if (stillRunning(child)) killTree(child.pid); setTimeout(ended, 300); }, 1500);
+    });
+    // The shim's ending (AcpClient + AcpTransport.EndAsync): session/cancel when a session exists, a short quiet, the tree kill while the agent
+    // is still alive, and only then stdin closed — so an agent that would leave on EOF never takes its children out of the kill's reach.
+    const likeTheShim = async () => {
+      if (state.sessionId) {
+        send({ jsonrpc: '2.0', method: 'session/cancel', params: { sessionId: state.sessionId } });
+        lastOutput = Date.now();
+        await quiet(() => lastOutput);
+      }
+      if (stillRunning(child)) killTree(child.pid);
+      try { child.stdin.end(); } catch { /* already closed */ }
+      await exitedWithin(exited, 5000);
+    };
     const finish = (why) => {
       if (finished) return;
       finished = true;
       state.error ||= why;
       clearTimeout(timer);
-      try { child.stdin.end(); } catch { /* already closed */ }
-      setTimeout(() => { if (child.pid) killTree(child.pid); state.stderrTail = stderr.slice(-1500); setTimeout(() => done(state), 300); }, 1500);
+      // Not awaited (finish runs from timers and stream events); an ending that throws still ends the turn, so done() is always called.
+      void (endLikeTheShim ? likeTheShim() : stdinFirst())
+        .catch((e) => { state.error ||= `the ending failed: ${e?.message ?? e}`; })
+        .then(() => { state.stderrTail = stderr.slice(-1500); done(state); });
     };
     const timer = setTimeout(() => finish(`deadline ${deadlineMs} ms`), deadlineMs);
     const send = (obj) => { const line = JSON.stringify(obj); state.lines.push(`> ${line}`); child.stdin.write(`${line}\n`); };
@@ -557,6 +610,7 @@ export function acpTurn({ exe, cwd, env, deadlineMs, model = '', prompt = '', lo
     };
     const onNotification = (m) => {
       const u = m.params?.update ?? {};
+      if (state.loading) state.loadUpdates.push(loadUpdate(u));
       if (u.sessionUpdate === 'agent_message_chunk' && state.prompting && u.content?.type === 'text') state[state.second ? 'answer2' : 'answer'] += u.content.text ?? '';
       if (u.sessionUpdate === 'usage_update') state.usage = { used: u.used, size: u.size };
       if ((u.sessionUpdate === 'tool_call' || u.sessionUpdate === 'tool_call_update') && u.toolCallId) {
@@ -565,6 +619,7 @@ export function acpTurn({ exe, cwd, env, deadlineMs, model = '', prompt = '', lo
       }
     };
     child.stdout.on('data', (chunk) => {
+      lastOutput = Date.now();
       buffered += chunk.toString('utf8');
       let at;
       while ((at = buffered.indexOf('\n')) >= 0) {
@@ -595,8 +650,9 @@ export function acpTurn({ exe, cwd, env, deadlineMs, model = '', prompt = '', lo
     (async () => {
       try {
         await call('initialize', { protocolVersion: 1, clientCapabilities: { fs: { readTextFile: true, writeTextFile: false }, terminal: false } });
+        state.loading = Boolean(load);
         state.sessionResult = load
-          ? await call('session/load', { sessionId: load, cwd, mcpServers: [] })
+          ? await call('session/load', { sessionId: load, cwd, mcpServers: [] }).finally(() => { state.loading = false; })
           : await call('session/new', { cwd, mcpServers: [] });
         state.sessionId = state.sessionResult?.sessionId || load;
         if (model) await call('session/set_config_option', { sessionId: state.sessionId, configId: 'model', value: model });
