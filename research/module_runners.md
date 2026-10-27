@@ -3951,8 +3951,9 @@ flowchart LR
   kernel where the target really is and refuses only a resolution that leaves the local drives.
 - **The built environment** (`KimiEnvironment.Built`, its own unit; `KimiLaunch` is the checks and the launch): not inherited, `ProcessEnvironment.Minimal`, exactly seven names — `KIMI_CODE_HOME`,
   `KIMI_CODE_NO_AUTO_UPDATE=1`, `USERPROFILE`, `HOME`, `HOMEDRIVE`, `HOMEPATH` (all into the owned `os/`) and `PATH`; `EnvironmentRefusal` admits
-  exactly what `Built` makes. The version probe is built from the LAUNCH request's own PATH (`KimiEnvironment.PathOf`), so one PATH source feeds both, and a person's home that is not on a local drive is refused by its spelling before any read, so a UNC home is never connected to. An unmeasured Kimi (`KimiAcpProfile.MeasuredVersions` = `2.1.1`) is warned about and run (`VersionWarnings`, the one
-  builder, Vibe's sentence unchanged); a version-less or unstartable one is refused.
+  exactly what `Built` makes. The version probe is built from the LAUNCH request's own PATH (`KimiEnvironment.PathOf`), so one PATH source feeds both, and a person's home that is not on a local drive is refused by its spelling before any read, so a UNC home is never connected to. An unmeasured Kimi (`KimiAcpProfile.MeasuredVersions` = `2.1.1`) is run; it is WARNED about only when its MAJOR was never
+  measured (`VersionWarnings.MajorWasMeasured`, the owner's order of 2026-10-27, E5.4 deviation 38: 2.3.3 says nothing, 3.x warns; Vibe the
+  same, against the versions measured on its own platform, `VibeHomeManifest.MeasuredOn`); a version-less or unstartable one is refused.
 - **Nothing of the sign-in is ever written by coai:** it reads only the slot's NAME and `type`/`base_url`/`storage`/`oauth_host` and the credentials
   folder's entry NAMES, and never opens a credentials file. `KimiCanaryTests` pins that no string coai composes contains a canary from the
   sign-in or from the `moonshot-ai` row's `api_key`; the agent's own stderr and error text are vendor text, outside the pin.

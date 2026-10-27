@@ -107,7 +107,7 @@ export function checkNotOffered(runtime: Runtime): string {
  * todo/PLAN_vibe_and_kimi_runtimes_E5.md) — an unknown server is never called old. The server's refusal by name stays the
  * backstop for a stale page.
  */
-export function checkButton(id: string, runtime: Runtime, check: CheckFacts, serverVersion = ''): string {
+export function checkButton(id: string, runtime: Runtime, check: CheckFacts, serverVersion: string): string {
   if (!offersCheck(runtime)) {
     return refusedCheck(checkNotOffered(runtime));
   }

@@ -34,7 +34,7 @@ export interface ModelCardFacts {
   /** The row's last ✓ Check, from its durable record (`modelCardWorld.ts`). */
   readonly check: CheckFacts;
   /** The installed coai-mcp's version — empty when it is not known — which a ✓ Check on a runtime it cannot consult on yet is held by. */
-  readonly serverVersion?: string;
+  readonly serverVersion: string;
   /** The Team servers this side knows — what a remote row's contract note reads. */
   readonly teamServers: readonly TeamServerState[];
   /** When each new control was first seen, and the clock its "new" mark is measured against. */

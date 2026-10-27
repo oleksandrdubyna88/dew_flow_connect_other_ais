@@ -331,7 +331,7 @@ public static class VibeLaunch
     /// platform (<see cref="VersionWarnings.MajorWasMeasured"/>). A version measured on another platform only still warns (S-V9).
     /// </summary>
     public static string VersionWarning(VibeHomeManifest manifest, string version, string platform) =>
-        version.Length == 0 || VersionWarnings.MajorWasMeasured(version, manifest.Versions.Where(entry => entry.Platform == platform).Select(entry => entry.Version))
+        version.Length == 0 || VersionWarnings.MajorWasMeasured(version, manifest.MeasuredOn(platform).Select(entry => entry.Version))
             ? string.Empty
             : Unmeasured(manifest, version);
 

@@ -144,7 +144,9 @@ test('a kimi card on a server older than KIMI_CONSULTANT_SINCE shows ✓ Check d
 });
 
 test('a kimi card on a server at KIMI_CONSULTANT_SINCE, or one nobody has versioned, offers ✓ Check', () => {
-  for (const server of [known(KIMI_CONSULTANT_SINCE), { kind: 'unknown', version: '', remembered: false, updateOffered: false } as PanelState['server']]) {
+  // An unknown server that still carries an old version string (a remembered read) is not called old either: only `known` is judged.
+  const unknownServer: PanelState['server'] = { kind: 'unknown', version: '0.63.0', remembered: true, updateOffered: false };
+  for (const server of [known(KIMI_CONSULTANT_SINCE), unknownServer]) {
     const check = checkOf(runningModelsPage(ROWS, undefined, server).tree, KIMI.id);
 
     assert.equal(check.attrs['data-command'], 'checkModel', `on ${server.kind} ${server.version}`);

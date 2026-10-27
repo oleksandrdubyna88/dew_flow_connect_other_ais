@@ -11795,11 +11795,14 @@ flowchart LR
   record parser; research/PLAN_local_effort_reaches_every_local_launch.md, S1.3).
 - **✓ Check is a CONSULTANT check, so it is offered only where a consultation can run (2026-10-20, D7 / S8 of
   `todo/PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md`).** `modelCardWorld.offersCheck(runtime)` asks the generated
-  `CONSULTING` list (`shared/feature-availability.json` → `features.consultant`; today codex, claude, antigravity, local,
-  api, vibe). For any other row — today **kimi, gemini and remote** — `checkButton(id, runtime, check)` draws the button
+  `CONSULTING` list (`shared/feature-availability.json` → `features.consultant`; codex, claude, antigravity, local,
+  api, vibe, and kimi since S5). For any other row — today **gemini and remote** — `checkButton(id, runtime, check, serverVersion)` draws the button
   `disabled`, WITHOUT `data-command` / `data-id` (nothing is bound, nothing is posted, no paid-turn prompt), with the title
   `checkNotOffered(runtime)` = "the consultant check is not offered for <runtime> — this runtime cannot hold a consultation".
-  The wording lives in that one function. The button stays on the card; a runtime added to `features.consultant` turns
+  The wording lives in that one function. **And on a KNOWN installed coai-mcp older than the runtime's `CONSULTANT_SINCE`**
+  (E5.4 deviation 37, 2026-10-27; kimi from 0.64.0) the button is drawn the same way with `consultantRuntimeNote` as its title — the
+  server version reaches the card as `ModelCardFacts.serverVersion`, empty unless `server.kind` is `known`, so an unknown server is never
+  called old. The button stays on the card; a runtime added to `features.consultant` turns
   its Check on with no code change. Why: the press used to ask the person to pay for a turn the server then refused by
   name (`ConsultantCheckMode.CheckRowAsync`), seen on the Kimi card 2026-10-19; that server refusal stays as the backstop
   for a stale page, and `ConsultantHealthPanel.checkModel` and its paid-turn prompt are unchanged. A reviewer-shaped
