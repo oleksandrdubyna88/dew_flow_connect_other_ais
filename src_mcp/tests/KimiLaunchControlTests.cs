@@ -495,11 +495,11 @@ public sealed class KimiLaunchControlTests : IDisposable
         using var rooted = Rooted();
         var places = _person.Places();
 
-        using var turn = await KimiLaunch.TakeAsync(HostKind.Windows, Request(places), places, new FakeKimi("2.2.0"), TestContext.Current.CancellationToken);
+        using var turn = await KimiLaunch.TakeAsync(HostKind.Windows, Request(places), places, new FakeKimi("3.0.0"), TestContext.Current.CancellationToken);
 
         turn.Refusal.Should().BeEmpty("the owner's rule: warn and run");
-        turn.Warning.Should().Contain("2.2.0").And.Contain("2.1.1").And.Contain("probe-kimi-confinement.mjs").And.Contain("probe-kimi-tree-hold.mjs").And.NotContain("re-plumbed");
-        turn.CliVersion.Should().Be("kimi 2.2.0");
+        turn.Warning.Should().Contain("3.0.0").And.Contain("2.1.1").And.Contain("probe-kimi-confinement.mjs").And.Contain("probe-kimi-tree-hold.mjs").And.NotContain("re-plumbed");
+        turn.CliVersion.Should().Be("kimi 3.0.0");
     }
 
     [Theory]

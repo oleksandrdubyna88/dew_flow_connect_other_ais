@@ -38,7 +38,7 @@ public static class KimiLaunch
     public static string VersionWarning(string printed) => WarningFor(VersionWarnings.VersionIn(printed));
 
     private static string WarningFor(string version) =>
-        version.Length == 0 || KimiAcpProfile.MeasuredVersions.Contains(version)
+        version.Length == 0 || VersionWarnings.MajorWasMeasured(version, KimiAcpProfile.MeasuredVersions)
             ? string.Empty
             : VersionWarnings.Unmeasured(
                 "Kimi", version, string.Join(", ", KimiAcpProfile.MeasuredVersions),

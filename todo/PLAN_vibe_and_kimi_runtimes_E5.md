@@ -3,7 +3,7 @@
 > Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 implemented 2026-10-27; the live runs (J2, RESULTS §35) still owed.** E5.1: M-K16 recorded as RESULTS §33
 > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
 > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
-> each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30; its review (Opus, 2026-10-27, over E5.4 and the WIP `cb9cd304` saved 2026-10-24) found 9, all fixed or recorded — deviations 31–37. M-K17 (§34) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
+> each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30; its review (Opus, 2026-10-27, over E5.4 and the WIP `cb9cd304` saved 2026-10-24) found 9, all fixed or recorded — deviations 31–37; deviation 38 is the owner's later order on version warnings. M-K17 (§34) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
 > its security judgement. The plan gate passed (proceed), and its findings are folded in (§"Plan gate 2026-10-16").
 > The coder of each story follows the gate's command (§0.2): E5.3 on Fable, every other story on Opus.
 > **E5.7 implemented 2026-10-16 (Opus)**, built on its own branch beside E5.4 and merged into this one: the consultant-runtime gate
@@ -1047,10 +1047,17 @@ homes live, in all five languages.
 37. **Merged with main, 2026-10-27** (commit `c94811e0`): RESULTS §29 (M-K16) became §33, and the plan's §30/§31 became §34/§35 (main's §29–§32 were taken);
     `KIMI_CONSULTANT_SINCE` 0.58.0 → 0.64.0; main's `Junctions.Locality` replaced `ResolvedRefusal` (decision j) for the credentials folder and the
     person's home alike; the consult path now hands a Kimi launch main's network sign-in override (DL6) as the roster and the fan-out do.
-    **A known limit, not fixed here:** main's Models card offers ✓ Check by the generated consultant list alone (D7 of
+    **Fixed the same day (the owner's order):** main's Models card offered ✓ Check by the generated consultant list alone (D7 of
     `todo/PLAN_a_spent_kimi_quota_is_not_a_lost_sign_in.md`), which now names `kimi` — so an extension newer than its server (a server below
-    `KIMI_CONSULTANT_SINCE`) offers a Kimi check that the server refuses by name. The refusal is the stated backstop for a stale page, and the
-    Consultant section names the server to update (S5.7.2); reading the server's version on the card is left to a follow-up.
+    `KIMI_CONSULTANT_SINCE`) offered a Kimi check that the server refused by name. `modelCardWorld.checkButton` now also asks
+    `consultantOnServer` with the installed version: a KNOWN older server draws the button disabled with `consultantRuntimeNote` as its title,
+    bound to nothing; an unknown server is never called old. `theCheckButtonIsNotOfferedOnAReviewerOnlyRow.test.ts` (red first), and the help
+    in five languages.
+38. **The unmeasured-version warning is said only for a MAJOR coai never measured** (the owner, 2026-10-27: "on minor versions it is nonsense").
+    `VersionWarnings.MajorWasMeasured`: Kimi 2.3.3 against the measured 2.1.1 says nothing; Kimi 3.x would. Vibe the same, per platform — a version
+    measured on another platform only still warns (S-V9). Only the sentence changes: an unmeasured version is still run, and Vibe's plugin files of
+    a version its manifest does not pin are still admitted by name only. `VersionWarningsTests` (red first); the tests that used a minor release as
+    "unmeasured" now use 3.0.0.
 
 ### E5.1–E5.2 as built (Opus, 2026-10-16)
 

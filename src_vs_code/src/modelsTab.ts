@@ -93,7 +93,7 @@ export function modelsTabHtml(shown: PanelState): string {
   const now = state.now ?? Date.now();
   const cards = rows.map((row) => modelCard(row, {
     context: contextOf(row), references: referencesOf(state, row.id), lastFor: lastStagesOf(rows, row), binary,
-    check: checkFactsOf(state.consultantHealth, row.id), teamServers,
+    check: checkFactsOf(state.consultantHealth, row.id), serverVersion: state.server.version, teamServers,
     firstSeen: state.firstSeen ?? {}, now,
     roundsLine: cardRoundsLine(state.roundsSnapshot, row.id),
     resetLine: cardResetLine(state.roundsSnapshot, row.id),

@@ -322,15 +322,18 @@ public static class VibeLaunch
     internal static HomeVerdict Verdict(VibeHomeManifest manifest, string home, string version, string platform, AdmittedLink admitted) => manifest.For(version, platform) switch
     {
         [var entry] => HomeVerdict.Refuse(VibeHome.Refusal(home, manifest, entry, admitted)),
-        _ => new HomeVerdict(string.Empty, Unmeasured(manifest, version)),
+        _ => new HomeVerdict(string.Empty, VersionWarning(manifest, version, platform)),
     };
 
     /// <summary>
     /// The warning for a Vibe version nobody measured — the same sentence on the launch (<see cref="LaunchTurn.Warning"/>)
-    /// and on the row's card (<c>VibeRuntime.VersionWarning</c>) — or empty for a measured one.
+    /// and on the row's card (<c>VibeRuntime.VersionWarning</c>) — or empty when a version of the same MAJOR was measured on this
+    /// platform (<see cref="VersionWarnings.MajorWasMeasured"/>). A version measured on another platform only still warns (S-V9).
     /// </summary>
     public static string VersionWarning(VibeHomeManifest manifest, string version, string platform) =>
-        version.Length == 0 || manifest.For(version, platform).Count > 0 ? string.Empty : Unmeasured(manifest, version);
+        version.Length == 0 || VersionWarnings.MajorWasMeasured(version, manifest.Versions.Where(entry => entry.Platform == platform).Select(entry => entry.Version))
+            ? string.Empty
+            : Unmeasured(manifest, version);
 
     private static string Unmeasured(VibeHomeManifest manifest, string version) =>
         VersionWarnings.Unmeasured(
