@@ -825,6 +825,13 @@ flowchart LR
   read cell itself — and `web` `unmeasured` (no Vibe cell exercises the web), so the matrix refuses it. Those rows
   cite the Vibe record and its `M-V…` cells, dated 2026-10-12, and `CapabilityMatrixTests` holds each row to the
   record it cites (`Records`), not to one record for all. **An unmeasured pair's refusal names the record its own row cites** (before the S3 gate): `CapabilityMatrix.RecordOf` reads the `research/RESULTS_….md` its `resultRef` names (the first run's record when it names none), and `capabilityAdmission.ts`'s `recordOf` is its twin — so `vibe × web` sends a person to research/RESULTS_vibe_confinement.md, and the first five runtimes' sentences are byte for byte what they were.
+- **Kimi's arm (S5, E5.6, 2026-10-27).** `kimi` is the seventh runtime of the table and the planner, and the question
+  consultant's Kimi row is the same arm: `none` stands in an EMPTY `Scratch` folder, with no flags, ever; `disk` stands in
+  a `Snapshot` of its roots (`Planned.SnapshotSources`), with no flags, because Kimi's sub-agent root and project MCP file
+  load from disk and the copy is the only fence (M-K9 (e)). A plan that carries a flag is refused for Kimi (D15): its
+  confinement is the shim's, not its argv. The rows are `none` and `disk` `unconfined` (M-K6, M-K3, M-K4, and M-K9 for
+  `disk`, all in research/RESULTS_kimi_confinement.md, Windows, kimi 2.1.1, 2026-10-13), and `web` `unmeasured`, so the
+  matrix refuses it. The tests prove the request and the admission, not the real kimi: the live runs are owed in RESULTS §31.
 - **Refuse, never redact — and the refusal never quotes what it refused.** A web row's model may be
   unconfined (codex, F2), so what the row is GIVEN is the only thing ours to control, and a question
   with a hole where a path was still says there was a path. The sanitiser answers ONE class — the first
