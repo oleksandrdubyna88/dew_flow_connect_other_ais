@@ -31,8 +31,6 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
 
     private string Repo => _dir.At("repo");
 
-    private string Other => _dir.At("other");
-
     /// <summary>The homes root, inside this test's own folder — removed with it.</summary>
     private string Homes => Directory.CreateDirectory(_dir.At("homes")).FullName;
 

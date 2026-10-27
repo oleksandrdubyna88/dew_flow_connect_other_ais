@@ -148,7 +148,7 @@ public sealed class ConfinementPlannerTests
     /// a none row stands in an EMPTY scratch folder and a disk row in a SNAPSHOT of its roots (D6); <c>web</c> is refused by the matrix.
     /// </summary>
     [Fact]
-    public void KimiPlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb()
+    public void ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb()
     {
         var none = Plan("kimi", CapabilityGrant.None);
         none.Flags.Should().BeEmpty("the shim confines Kimi (D15), never its argv");
@@ -372,8 +372,7 @@ public sealed class ConfinementPlannerTests
     [Fact]
     public void AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome()
     {
-        var consultant = new Runners.Kimi.KimiConsultant(new Runners.Kimi.KimiRuntime("kimi", Runners.Platform.HostKind.Windows,
-            new Runners.Kimi.KimiSeams(root => Runners.Kimi.KimiPlaces.ForShim(root, Path.Combine(RowFolder, "persons-bin")), () => ("coai-mcp", []))));
+        var consultant = KimiAt();
 
         var none = consultant.Build(Planned("kimi", CapabilityGrant.None));
         none.Request.WorkingDirectory.Should().Be(Scratch, "a none row stands in an empty folder of its own");
@@ -390,6 +389,9 @@ public sealed class ConfinementPlannerTests
             Runners.Kimi.KimiEnvironment.FlagOf(request, Runners.Acp.AcpWords.HomeFlag).Should().StartWith(RowFolder + Path.DirectorySeparatorChar,
                 "the row's home lives in the row's own folder, gone with it");
             request.InheritsEnvironment.Should().BeFalse();
+            Runners.Kimi.KimiEnvironment.Refusal(request, Runners.Kimi.KimiPlaces.ForShim(
+                Runners.Kimi.KimiEnvironment.FlagOf(request, Runners.Acp.AcpWords.HomeFlag), Path.Combine(RowFolder, "persons-bin")))
+                .Should().BeEmpty("the built shim request is the one the Kimi launch control admits (D19)");
         }
     }
 
@@ -399,8 +401,7 @@ public sealed class ConfinementPlannerTests
     [Fact]
     public void APlanWithFlags_IsRefusedForKimi()
     {
-        var consultant = new Runners.Kimi.KimiConsultant(new Runners.Kimi.KimiRuntime("kimi", Runners.Platform.HostKind.Windows,
-            new Runners.Kimi.KimiSeams(root => Runners.Kimi.KimiPlaces.ForShim(root, Path.Combine(RowFolder, "persons-bin")), () => ("coai-mcp", []))));
+        var consultant = KimiAt();
         var plan = new Confinement.Planned("kimi", CapabilityGrant.None, [], ["--yolo"], CwdKind.Scratch, [], AdmissionFlag.Unconfined);
         var launch = Planned("kimi", CapabilityGrant.None) with { Confinement = new LaunchConfinement.Planned(plan) };
 
@@ -527,14 +528,16 @@ public sealed class ConfinementPlannerTests
         }
     }
 
+    // A fake person's paths, so building reads nothing of this machine: the request names the places, it does not open them.
+    private static Runners.Kimi.KimiConsultant KimiAt() => new(new Runners.Kimi.KimiRuntime("kimi", Runners.Platform.HostKind.Windows,
+        new Runners.Kimi.KimiSeams(root => Runners.Kimi.KimiPlaces.ForShim(root, Path.Combine(RowFolder, "persons-bin")), () => ("coai-mcp", []))));
+
     private static IEnumerable<(string Runtime, IConsultantRuntime Consultant)> Adapters() =>
     [
         ("claude", new ClaudeConsultant(new ClaudeRuntime())),
         ("codex", new CodexConsultant(new CodexRuntime())),
         ("antigravity", new AntigravityConsultant(new AntigravityRuntime())),
         ("vibe", new Runners.Vibe.VibeConsultant(new Runners.Vibe.VibeRuntime("vibe", Runners.Platform.HostKind.Windows))),
-        // A fake person's paths, so building reads nothing of this machine: the request names the places, it does not open them.
-        ("kimi", new Runners.Kimi.KimiConsultant(new Runners.Kimi.KimiRuntime("kimi", Runners.Platform.HostKind.Windows,
-            new Runners.Kimi.KimiSeams(root => Runners.Kimi.KimiPlaces.ForShim(root, Path.Combine(RowFolder, "persons-bin")), () => ("coai-mcp", []))))),
+        ("kimi", KimiAt()),
     ];
 }
