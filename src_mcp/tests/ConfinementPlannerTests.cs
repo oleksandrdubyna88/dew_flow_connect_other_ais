@@ -396,14 +396,16 @@ public sealed class ConfinementPlannerTests
         }
     }
 
-    /// <summary>E5.6 decision 3: a plan that carries a flag was not made for Kimi, so the adapter refuses it rather than launch it.</summary>
-    [Fact]
-    public void APlanWithFlags_IsRefusedForKimi()
+    /// <summary>E5.6 decision 3: a plan that carries a flag or a leading argument was not made for Kimi, so the adapter refuses it rather than launch it.</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void APlanWithFlagsOrLeadingArguments_IsRefusedForKimi(bool flags)
     {
-        var launch = Planned("kimi", CapabilityGrant.None) with
-        {
-            Confinement = new LaunchConfinement.Planned(new Confinement.Planned("kimi", CapabilityGrant.None, [], ["--yolo"], CwdKind.Scratch, [], AdmissionFlag.Unconfined)),
-        };
+        var plan = flags
+            ? new Confinement.Planned("kimi", CapabilityGrant.None, [], ["--yolo"], CwdKind.Scratch, [], AdmissionFlag.Unconfined)
+            : new Confinement.Planned("kimi", CapabilityGrant.None, ["--leading"], [], CwdKind.Scratch, [], AdmissionFlag.Unconfined);
+        var launch = Planned("kimi", CapabilityGrant.None) with { Confinement = new LaunchConfinement.Planned(plan) };
 
         FluentActions.Invoking(() => KimiAdapter().Build(launch)).Should().Throw<ArgumentException>().WithMessage("*shim*");
     }
