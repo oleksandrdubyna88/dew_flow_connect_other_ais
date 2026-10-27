@@ -128,6 +128,23 @@ public sealed class TheAlphabetTests
             SourceLanguage.CSharp,
             Keywords(SourceLanguage.CSharp)).Should().BeTrue();
 
+    /// <summary>Every C# built-in integer type is admitted — not only the ones the first forty files happened to use.</summary>
+    /// <remarks>
+    /// Seen 2026-10-27: <see cref="EverySkeletonThisRepositoryProducesIsAdmitted"/> reads the first forty files in directory order, and
+    /// when a merge changed that order it reached <c>LinuxProcessListing.cs</c> and refused its <c>uint</c>. The grammar gives these as
+    /// a named type, not an anonymous keyword, so they are vocabulary — and the list had <c>int</c>, <c>long</c> and <c>nint</c> only.
+    /// </remarks>
+    [Theory]
+    [InlineData("sbyte")]
+    [InlineData("short")]
+    [InlineData("ushort")]
+    [InlineData("uint")]
+    [InlineData("ulong")]
+    [InlineData("nuint")]
+    public void EveryBuiltInIntegerTypeIsAdmitted(string type) =>
+        Alphabet.Refuse($"method_1({type} var_1) {{ {type} var_2 = 0; }}", SourceLanguage.CSharp, Keywords(SourceLanguage.CSharp))
+            .Should().BeEmpty();
+
     [Fact]
     public void AnEmptySkeletonIsRefused() =>
         Alphabet.Refuse("", SourceLanguage.CSharp, Keywords(SourceLanguage.CSharp))
