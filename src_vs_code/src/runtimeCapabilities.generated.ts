@@ -360,7 +360,7 @@ export const RUNTIME_CAPABILITIES: readonly RuntimeCapabilityRow[] = [
       cli: 'kimi',
       version: '2.1.1',
       date: '2026-10-13',
-      resultRef: 'research/RESULTS_kimi_confinement.md M-K6 — in an EMPTY coai-owned working folder the shim bounds Read, but Grep and Glob took a marker from a file outside it by absolute path 3 of 3, and the working folder plays no part in that; M-K3 and M-K4 — 0 of 9 and 0 of 6 writes',
+      resultRef: 'research/RESULTS_kimi_confinement.md M-K6 — Read was bounded to the working folder, and Grep and Glob read a file outside it by absolute path 3 of 3; M-K3 and M-K4 — 0 of 9 and 0 of 6 writes',
       cells: [
         'M-K6',
         'M-K3',

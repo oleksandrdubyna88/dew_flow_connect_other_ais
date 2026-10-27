@@ -8,7 +8,7 @@
     "each half asserts its own loader against the file, and both answer shared/capability-matrix-vectors.json.",
     "",
     "standing: `confined` - the CLI's own enforced mechanism stops what the capability does not grant;",
-    "`unconfined` - the runtime can do the capability but cannot be held to it (a shell is always there);",
+    "`unconfined` - the runtime can do the capability but cannot be held to it (it can read this machine, and no flag removes that);",
     "`default-deny` - held only by a headless permission DEFAULT nobody configured, hand-checked, not",
     "instrument-confirmed; `unsupported` - the runtime cannot do the capability at all; `unmeasured` - no",
     "cell says either way. Admission (CapabilityMatrix / capabilityAdmission.ts): confined admits; unconfined",
@@ -344,7 +344,7 @@
         "cli": "kimi",
         "version": "2.1.1",
         "date": "2026-10-13",
-        "resultRef": "research/RESULTS_kimi_confinement.md M-K6 — in an EMPTY coai-owned working folder the shim bounds Read, but Grep and Glob took a marker from a file outside it by absolute path 3 of 3, and the working folder plays no part in that; M-K3 and M-K4 — 0 of 9 and 0 of 6 writes",
+        "resultRef": "research/RESULTS_kimi_confinement.md M-K6 — Read was bounded to the working folder, and Grep and Glob read a file outside it by absolute path 3 of 3; M-K3 and M-K4 — 0 of 9 and 0 of 6 writes",
         "cells": [
           "M-K6",
           "M-K3",
